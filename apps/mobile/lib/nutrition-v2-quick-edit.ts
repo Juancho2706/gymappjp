@@ -32,8 +32,10 @@
 
 import {
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
+  NUTRITION_WEEK_ORDER,
   NutritionPlanDraftSchema,
   buildNutritionIdempotencyKey,
+  formatNutritionDayOfWeek,
   mapNutritionItemSubstitutionRow,
   type NutritionItemSubstitution,
   type NutritionMacroTargets,
@@ -281,6 +283,11 @@ export type QuickEditAction =
   | { type: 'ADD_SLOT'; variantKey: string; key: string }
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: QuickEditSlot }
+  | { type: 'ADD_VARIANT'; days: readonly number[]; source: 'clone' | 'empty' }
+  | { type: 'REMOVE_VARIANT'; variantKey: string }
+  | { type: 'RESTORE_VARIANT'; index: number; variant: QuickEditVariant }
+  | { type: 'SET_VARIANT_DAY'; variantKey: string; dayOfWeek: number }
+  | { type: 'SET_VARIANT_LABEL'; variantKey: string; value: string }
   | { type: 'RESTORE_DRAFT'; state: QuickEditState }
 
 function mapVariant(
@@ -332,6 +339,146 @@ function normalizeQuickUnit(servingUnit: string | null | undefined): string {
 function insertAt<T>(list: T[], index: number, value: T): T[] {
   const bounded = Math.max(0, Math.min(list.length, index))
   return [...list.slice(0, bounded), value, ...list.slice(bounded)]
+}
+
+// ---------------------------------------------------------------------------
+// Variantes de dia (FD5) — espejo EXACTO del quick-edit web
+// (`_quick-edit/quick-edit-state.ts`): alta multi-dia clonando el dia base (o vacia),
+// baja, cambio de dia y renombre.
+//
+// Invariantes sostenidos (los mismos de la base y del builder):
+//  - exactamente UNA variante default (`nutrition_day_variants_v2_default_unique`): las
+//    nuevas nunca son default, y la base no se elimina ni cambia de dia;
+//  - `dayOfWeek` unico entre las especificas (el snapshot resuelve "match exacto gana, si
+//    no cae al default": dos variantes del mismo dia serian un empate no determinista);
+//  - `key` de variante unica dentro de la version (`unique (version_id, variant_key)`).
+//
+// Los ids de franja/item del dia clonado se CONSERVAN a proposito: la persistencia los
+// ignora (cada publicacion inserta filas nuevas) y en RN son la llave del carry-over de
+// reemplazos autorizados (`injectSubstitutionsIntoDraft` empareja por `item.id`), asi que
+// el dia clonado hereda tambien esa capa. Las `key` de UI si se re-generan, prefijadas por
+// la key de la variante nueva, para que el reducer nunca confunda dos filas homonimas.
+// ---------------------------------------------------------------------------
+
+function weekRank(dayOfWeek: number): number {
+  const index = NUTRITION_WEEK_ORDER.indexOf(dayOfWeek as (typeof NUTRITION_WEEK_ORDER)[number])
+  return index < 0 ? NUTRITION_WEEK_ORDER.length : index
+}
+
+function isValidDow(dayOfWeek: number): boolean {
+  return Number.isInteger(dayOfWeek) && dayOfWeek >= 0 && dayOfWeek <= 6
+}
+
+/** Dias de semana ya reclamados por una variante especifica (la base no reclama ninguno). */
+export function takenDayVariantDows(state: QuickEditState): number[] {
+  const taken: number[] = []
+  for (const variant of state.variants) {
+    if (variant.dayOfWeek != null && !taken.includes(variant.dayOfWeek)) taken.push(variant.dayOfWeek)
+  }
+  return taken
+}
+
+/** Variante base (default); null si el estado no tiene ninguna (dato invalido). */
+export function defaultQuickEditVariant(state: QuickEditState): QuickEditVariant | null {
+  return state.variants.find((variant) => variant.default) ?? null
+}
+
+/** Clave de variante unica dentro de la version: 'dia-6' (y 'dia-6-2' si ya existiera). */
+export function buildDayVariantKey(existingKeys: readonly string[], dayOfWeek: number): string {
+  const base = 'dia-' + dayOfWeek
+  if (!existingKeys.includes(base)) return base
+  let suffix = 2
+  while (existingKeys.includes(base + '-' + suffix)) suffix += 1
+  return base + '-' + suffix
+}
+
+/** Etiqueta automatica del dia ("Sábado"); fallback defensivo si el dow no es valido. */
+export function autoDayVariantLabel(dayOfWeek: number): string {
+  return formatNutritionDayOfWeek(dayOfWeek) ?? 'Día específico'
+}
+
+/**
+ * Orden de lectura del multi-dia: dia base primero y despues los especificos Lu→Do.
+ * Espejo del `sortNutritionDayVariantsForDisplay` del paquete, que pide `isDefault` y no
+ * calza con la forma RN (`default`); la regla es identica.
+ */
+export function sortQuickEditVariantsForDisplay(
+  variants: readonly QuickEditVariant[],
+): QuickEditVariant[] {
+  const rank = (variant: QuickEditVariant): number => {
+    if (variant.default) return -1
+    if (variant.dayOfWeek == null) return NUTRITION_WEEK_ORDER.length + 1
+    return weekRank(variant.dayOfWeek)
+  }
+  return variants
+    .map((variant, index) => ({ variant, index }))
+    .sort((a, b) => rank(a.variant) - rank(b.variant) || a.index - b.index)
+    .map((entry) => entry.variant)
+}
+
+function cloneQuickEditItem(item: QuickEditItem, keyPrefix: string): QuickEditItem {
+  return {
+    ...item,
+    key: keyPrefix + ':' + item.key,
+    baseMacros: item.baseMacros ? { ...item.baseMacros } : null,
+    food: item.food ? { ...item.food } : null,
+  }
+}
+
+function cloneQuickEditSlot(slot: QuickEditSlot, keyPrefix: string): QuickEditSlot {
+  return {
+    ...slot,
+    key: keyPrefix + ':' + slot.key,
+    targets: { ...slot.targets },
+    items: slot.items.map((item) => cloneQuickEditItem(item, keyPrefix)),
+  }
+}
+
+/**
+ * Dias nuevos que produciria un alta, SIN aplicarla. Se expone para que la pantalla pueda
+ * clonar tambien la capa de porciones (que en RN vive en un reducer aparte, keyed por
+ * `slot.key`): con el mapeo `from -> to` de franjas puede duplicar los targets del dia
+ * base en el dia nuevo. Determinista: el reducer llama a esta MISMA funcion, asi que la
+ * pantalla y el estado no pueden divergir.
+ *
+ * Ignora en silencio los dias invalidos o ya ocupados (el picker los deshabilita).
+ */
+export function planDayVariantAdditions(
+  state: QuickEditState,
+  days: readonly number[],
+  source: 'clone' | 'empty',
+): { variants: QuickEditVariant[]; slotKeyClones: Array<{ from: string; to: string }> } {
+  const base = defaultQuickEditVariant(state)
+  if (!base) return { variants: [], slotKeyClones: [] }
+  const taken = takenDayVariantDows(state)
+  const keys = state.variants.map((variant) => variant.key)
+  const ordered = [...new Set(days)].sort((a, b) => weekRank(a) - weekRank(b))
+  const variants: QuickEditVariant[] = []
+  const slotKeyClones: Array<{ from: string; to: string }> = []
+  for (const dayOfWeek of ordered) {
+    if (!isValidDow(dayOfWeek) || taken.includes(dayOfWeek)) continue
+    const key = buildDayVariantKey(keys, dayOfWeek)
+    keys.push(key)
+    taken.push(dayOfWeek)
+    const slots = source === 'clone' ? base.slots.map((slot) => cloneQuickEditSlot(slot, key)) : []
+    if (source === 'clone') {
+      base.slots.forEach((slot, index) => {
+        slotKeyClones.push({ from: slot.key, to: slots[index].key })
+      })
+    }
+    variants.push({
+      key,
+      id: null,
+      label: autoDayVariantLabel(dayOfWeek),
+      dayOfWeek,
+      default: false,
+      // Metas heredadas del dia base (SPEC: se personalizan despues si el coach quiere).
+      targets: { ...base.targets },
+      fixedTargets: { ...base.fixedTargets },
+      slots,
+    })
+  }
+  return { variants, slotKeyClones }
 }
 
 export function quickEditReducer(state: QuickEditState, action: QuickEditAction): QuickEditState {
@@ -439,6 +586,44 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         ...variant,
         slots: insertAt(variant.slots, action.index, action.slot),
       }))
+    case 'ADD_VARIANT': {
+      const { variants } = planDayVariantAdditions(state, action.days, action.source)
+      if (variants.length === 0) return state
+      return { ...state, variants: [...state.variants, ...variants] }
+    }
+    case 'REMOVE_VARIANT':
+      // El dia base es intocable (el snapshot cae a el los dias sin plan propio).
+      return {
+        ...state,
+        variants: state.variants.filter((variant) => variant.default || variant.key !== action.variantKey),
+      }
+    case 'RESTORE_VARIANT':
+      return { ...state, variants: insertAt(state.variants, action.index, action.variant) }
+    case 'SET_VARIANT_DAY': {
+      const target = state.variants.find((variant) => variant.key === action.variantKey)
+      if (!target || target.default || !isValidDow(action.dayOfWeek)) return state
+      // Unicidad de dia: el picker deshabilita los ocupados; esto es el cinturon.
+      if (
+        state.variants.some(
+          (variant) => variant.key !== action.variantKey && variant.dayOfWeek === action.dayOfWeek,
+        )
+      ) {
+        return state
+      }
+      const previousAutoLabel = target.dayOfWeek == null ? null : autoDayVariantLabel(target.dayOfWeek)
+      return mapVariant(state, action.variantKey, (variant) => ({
+        ...variant,
+        dayOfWeek: action.dayOfWeek,
+        // El renombre manual manda: solo se re-etiqueta si la etiqueta seguia siendo la
+        // automatica del dia anterior.
+        label:
+          previousAutoLabel !== null && variant.label.trim() === previousAutoLabel
+            ? autoDayVariantLabel(action.dayOfWeek)
+            : variant.label,
+      }))
+    }
+    case 'SET_VARIANT_LABEL':
+      return mapVariant(state, action.variantKey, (variant) => ({ ...variant, label: action.value }))
     case 'RESTORE_DRAFT':
       // Rehidrata el arbol COMPLETO desde un respaldo local (AsyncStorage) — a diferencia de
       // RESTORE_ITEM/RESTORE_SLOT (undo puntual), reemplaza todo el estado. Guarda defensiva:
@@ -511,6 +696,14 @@ export function countQuickEditChanges(baseline: QuickEditState, current: QuickEd
       continue
     }
     if (targetsChanged(baseVariant, curVariant)) count += 1
+    // Encabezado del dia (FD5): renombrar o mover un dia especifico ES una edicion
+    // publicable; sin esto la barra quedaria en 0 y el coach no podria publicarla.
+    if (
+      baseVariant.label.trim() !== curVariant.label.trim() ||
+      baseVariant.dayOfWeek !== curVariant.dayOfWeek
+    ) {
+      count += 1
+    }
 
     const baseSlotsByKey = new Map(baseVariant.slots.map((slot) => [slot.key, slot]))
     const currentSlotKeys = new Set(curVariant.slots.map((slot) => slot.key))
@@ -551,13 +744,38 @@ export interface QuickEditValidation {
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
+/** Tope del contrato (`NutritionDayVariantSchema.label`: max 120 tras trim). */
+export const VARIANT_LABEL_MAX = 120
+
 export function validateQuickEditState(state: QuickEditState): QuickEditValidation {
   const errors: Record<string, string> = {}
   // Espejo del contrato (max 8000 tras trim): corta ANTES del VALIDATION generico del publish.
   if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
     errors['plan.visibleNotes'] = `Las notas superan los ${VISIBLE_NOTES_MAX} caracteres.`
   }
+  // Invariantes multi-dia (FD5, espejo web): default unico + dia de semana unico. El
+  // reducer ya los sostiene; esto corta el publish si un respaldo local viejo o un estado
+  // corrupto llegara con dos bases o dos dias iguales, en vez de dejar fallar al RPC.
+  if (state.variants.filter((variant) => variant.default).length !== 1) {
+    errors['plan.dayVariants'] = 'El plan necesita exactamente un día base.'
+  } else {
+    const seenDows: number[] = []
+    for (const variant of state.variants) {
+      if (variant.dayOfWeek == null) continue
+      if (seenDows.includes(variant.dayOfWeek)) {
+        errors['plan.dayVariants'] = 'Hay dos días del plan asignados al mismo día de la semana.'
+        break
+      }
+      seenDows.push(variant.dayOfWeek)
+    }
+  }
   for (const variant of state.variants) {
+    const label = variant.label.trim()
+    if (label.length === 0) errors['variant.' + variant.key + '.label'] = 'El día necesita un nombre.'
+    else if (label.length > VARIANT_LABEL_MAX) {
+      errors['variant.' + variant.key + '.label'] =
+        'El nombre no puede superar los ' + VARIANT_LABEL_MAX + ' caracteres.'
+    }
     let anyTarget = false
     for (const field of TARGET_FIELDS) {
       const raw = variant.targets[field].trim()
@@ -746,7 +964,9 @@ export function quickEditStateToDraft(input: {
   const dayVariants: DraftDayVariant[] = state.variants.map((variant, variantIndex) => ({
     ...(variant.id ? { id: variant.id } : {}),
     key: variant.key,
-    label: variant.label,
+    // Trim explicito (el contrato ya trimea): baseline y draft pasan por la misma
+    // proyeccion, asi que renombrar con espacios de sobra no inventa un cambio.
+    label: variant.label.trim(),
     dayOfWeek: variant.dayOfWeek,
     default: variant.default,
     targets: {

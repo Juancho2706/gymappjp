@@ -11,6 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFormStatus } from 'react-dom'
 import { saveCustomFood } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
 import { toast } from 'sonner'
+import {
+  EMPTY_FOOD_EQUIVALENCE,
+  FoodEquivalenceFields,
+  type FoodEquivalenceGroupOption,
+  type FoodEquivalenceValue,
+} from './FoodEquivalenceFields'
 
 function macroPreviewPct(calories: number, p: number, c: number, f: number) {
   const cals = Number(calories) || 0
@@ -23,7 +29,17 @@ function macroPreviewPct(calories: number, p: number, c: number, f: number) {
   }
 }
 
-export function AddFoodSheet({ coachId }: { coachId: string }) {
+export function AddFoodSheet({
+  coachId,
+  /**
+   * Catálogo de grupos de porciones VISIBLES para el coach (system + propios + team activo),
+   * resuelto server-side en la page. Vacío = el bloque de equivalencia queda sin opciones.
+   */
+  exchangeGroups = [],
+}: {
+  coachId: string
+  exchangeGroups?: FoodEquivalenceGroupOption[]
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [state, formAction] = useActionState(saveCustomFood.bind(null, coachId), { error: undefined, success: false })
@@ -52,7 +68,7 @@ export function AddFoodSheet({ coachId }: { coachId: string }) {
           <SheetTitle>Nuevo alimento custom</SheetTitle>
         </SheetHeader>
         <div className="px-6 pb-6 overflow-y-auto">
-          <AddFoodFormBody formAction={formAction} state={state} />
+          <AddFoodFormBody formAction={formAction} state={state} exchangeGroups={exchangeGroups} />
         </div>
       </SheetContent>
     </Sheet>
@@ -62,11 +78,14 @@ export function AddFoodSheet({ coachId }: { coachId: string }) {
 function AddFoodFormBody({
   formAction,
   state,
+  exchangeGroups,
 }: {
   formAction: (payload: FormData) => void
   state: { error?: string; success?: boolean }
+  exchangeGroups: FoodEquivalenceGroupOption[]
 }) {
   const [unit, setUnit] = useState<'g' | 'un'>('g')
+  const [equivalence, setEquivalence] = useState<FoodEquivalenceValue>(EMPTY_FOOD_EQUIVALENCE)
   const [calories, setCalories] = useState('')
   const [protein, setProtein] = useState('')
   const [carbs, setCarbs] = useState('')
@@ -216,6 +235,7 @@ function AddFoodFormBody({
           </div>
         )}
       </div>
+      <FoodEquivalenceFields value={equivalence} onChange={setEquivalence} groups={exchangeGroups} />
       <SubmitRow />
       {state.error && <p className="text-xs text-[var(--cta-danger)] font-bold text-center">{state.error}</p>}
     </form>

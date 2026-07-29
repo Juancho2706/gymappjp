@@ -28,6 +28,7 @@ export function QuickEditEntry({
   itemSubstitutions,
   substitutionsLoadFailed = false,
   today,
+  hasNutritionPro = false,
 }: {
   clientId: string
   clientName: string
@@ -40,6 +41,12 @@ export function QuickEditEntry({
    */
   substitutionsLoadFailed?: boolean
   today: string
+  /**
+   * Entitlement Nutricion Pro resuelto SERVER-SIDE. Solo gobierna la AFORDANCIA de los dias
+   * especificos (candado + upsell en vez del picker): el gate real lo aplica el server
+   * (`multi_variant` -> UPGRADE_REQUIRED). Default false = fail-closed.
+   */
+  hasNutritionPro?: boolean
 }) {
   const [editing, setEditing] = useState(false)
 
@@ -98,6 +105,7 @@ export function QuickEditEntry({
           itemSubstitutions={itemSubstitutions}
           substitutionsLoadFailed={substitutionsLoadFailed}
           today={today}
+          hasNutritionPro={hasNutritionPro}
           onExit={() => setEditing(false)}
         >
           <QuickEditPlanView />

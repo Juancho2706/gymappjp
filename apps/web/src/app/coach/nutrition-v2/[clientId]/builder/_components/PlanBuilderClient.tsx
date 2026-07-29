@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, History, Info, Loader2, Plus, Repeat, Search, Trash2, X } from 'lucide-react'
-import { BuilderStepList, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
+import { BuilderStepList, DayVariantWeekStrip, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
@@ -20,21 +20,29 @@ import {
 import {
   BUILDER_UNITS,
   CoachFoodInputSchema,
+  MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
+  activeVariantOf,
   assembleAndValidateDraft,
+  baseVariantOf,
   builderReducer,
+  clonedKey,
   createEmptyBuilderState,
   customMacrosOf,
-  dayTotals,
   itemMacros,
   macroEnergyMismatch,
   slotSubtotal,
   strategyUsesSlots,
+  takenDayOfWeeks,
   validateStep,
+  variantEffectiveTargets,
+  variantTotals,
   type BuilderFood,
   type BuilderItem,
   type BuilderSlot,
   type BuilderState,
+  type BuilderTargets,
+  type BuilderVariant,
   type ItemMacros,
 } from '../_lib/draft-builder'
 import {
@@ -56,9 +64,13 @@ import {
   attachPortionsAndValidate,
   combineSubtotals,
   derivePortionTotals,
+  portionsKey,
   slotPortionTotals,
+  variantPortionKeys,
   type PortionsBySlot,
 } from './portions-state'
+// Multi-dia (SPEC nutrition-multiday): barra de chips de dias + popover "Agregar dia".
+import { DayVariantBar, type DayVariantBarHandlers } from './DayVariantBar'
 // Respaldo LOCAL del wizard (W3b): store puro versionado en localStorage. El coach retoma un
 // plan a medio construir si cerró la PWA / mató la pestaña. La key incluye clientId + planId.
 import {
@@ -69,6 +81,8 @@ import {
   writeNutritionDraft,
 } from '@/lib/nutrition-coach-draft-store'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
+import type { ExchangeGroup } from '@eva/nutrition-engine'
+import { loadExchangeGroupsForBuilderAction } from './PortionsGroupsAction'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
@@ -256,25 +270,136 @@ const CUSTOM_MACRO_FIELDS: Array<{ field: keyof Pick<BuilderItem, 'customCalorie
   { field: 'customFatsG', label: 'G (g)' },
 ]
 
+/**
+ * Bloque opcional "Equivalencia de porciones" del alta rapida del builder (P-B). Colapsado
+ * por defecto; el catalogo de grupos se carga PEREZOSAMENTE al expandir, con la MISMA server
+ * action del picker de porciones (`loadExchangeGroupsForBuilderAction`): los services de
+ * intercambios jamas entran al bundle cliente.
+ */
+function FreeFoodEquivalenceBlock({
+  clientId,
+  value,
+  onChange,
+}: {
+  clientId: string
+  value: { groupId: string; grams: string; label: string }
+  onChange: (next: { groupId: string; grams: string; label: string }) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function expand() {
+    setExpanded(true)
+    if (groups || loading) return
+    setLoading(true)
+    setLoadError(null)
+    const res = await loadExchangeGroupsForBuilderAction({ clientId })
+    setLoading(false)
+    if (!res.ok) {
+      setLoadError(PORTIONS_COPY.foodEquivalence.groupsError)
+      return
+    }
+    setGroups(res.groups)
+  }
+
+  function collapse() {
+    setExpanded(false)
+    onChange({ groupId: '', grams: '', label: '' })
+  }
+
+  const copy = PORTIONS_COPY.foodEquivalence
+
+  return (
+    <div className="mt-2 border-t border-border-subtle pt-2">
+      <button
+        type="button"
+        onClick={() => (expanded ? collapse() : void expand())}
+        aria-expanded={expanded}
+        className="text-xs font-semibold text-primary transition-colors hover:underline min-h-9"
+      >
+        {expanded ? copy.collapse : copy.expand}
+      </button>
+      {expanded ? (
+        <div className="mt-1.5 space-y-2">
+          <p className="text-[11px] text-muted">{copy.sectionHint}</p>
+          {loading ? (
+            <p className="text-[11px] text-muted">{copy.groupsLoading}</p>
+          ) : loadError ? (
+            <p className="text-[11px] text-rose-600 dark:text-rose-300">{loadError}</p>
+          ) : (groups ?? []).length === 0 ? (
+            <p className="text-[11px] text-muted">{copy.groupsEmpty}</p>
+          ) : (
+            <>
+              <label className="block">
+                <span className={labelClass}>{copy.groupLabel}</span>
+                <select
+                  className={macroInputClass}
+                  value={value.groupId}
+                  onChange={(e) => onChange({ ...value, groupId: e.target.value })}
+                >
+                  <option value="">{copy.groupPlaceholder}</option>
+                  {(groups ?? []).map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.code} · {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className={labelClass}>{copy.gramsLabel}</span>
+                  <input
+                    className={macroInputClass}
+                    inputMode="numeric"
+                    placeholder={copy.gramsPlaceholder}
+                    value={value.grams}
+                    onChange={(e) => onChange({ ...value, grams: e.target.value })}
+                  />
+                </label>
+                <label className="block">
+                  <span className={labelClass}>{copy.labelLabel}</span>
+                  <input
+                    className={macroInputClass}
+                    maxLength={40}
+                    placeholder={copy.labelPlaceholder}
+                    value={value.label}
+                    onChange={(e) => onChange({ ...value, label: e.target.value })}
+                  />
+                </label>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function FreeFoodFields({
   item,
+  variantKey,
   slotKey,
   clientId,
   dispatch,
 }: {
   item: BuilderItem
+  variantKey: string
   slotKey: string
   clientId: string
   dispatch: Dispatch
 }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [equivalence, setEquivalence] = useState({ groupId: '', grams: '', label: '' })
   const macros = customMacrosOf(item)
   const showWarning = macroEnergyMismatch(macros)
   const unit = item.unit === 'ml' ? 'ml' : 'g'
 
   async function handleSave() {
     setSaveError(null)
+    const gramsRaw = equivalence.grams.trim().replace(',', '.')
     const parsed = CoachFoodInputSchema.safeParse({
       clientId,
       name: (item.customName ?? '').trim(),
@@ -284,9 +409,20 @@ function FreeFoodFields({
       proteinG: macros.proteinG,
       carbsG: macros.carbsG,
       fatsG: macros.fatsG,
+      exchangeGroupId: equivalence.groupId === '' ? null : equivalence.groupId,
+      exchangePortionGrams: gramsRaw === '' ? null : Number(gramsRaw),
+      exchangePortionLabel: equivalence.label.trim() === '' ? null : equivalence.label.trim(),
     })
     if (!parsed.success) {
-      setSaveError('Completa el nombre y macros validas (no negativas) antes de guardar.')
+      // El trio de equivalencia tiene mensajes propios (grupo sin gramos y viceversa); el
+      // resto cae al copy generico de macros.
+      const equivalenceIssue = parsed.error.issues.find((issue) =>
+        String(issue.path[0] ?? '').startsWith('exchange'),
+      )
+      setSaveError(
+        equivalenceIssue?.message ??
+          'Completa el nombre y macros validas (no negativas) antes de guardar.',
+      )
       return
     }
     setSaving(true)
@@ -298,6 +434,7 @@ function FreeFoodFields({
     }
     dispatch({
       type: 'UPDATE_ITEM',
+      variantKey,
       slotKey,
       itemKey: item.key,
       patch: {
@@ -309,6 +446,7 @@ function FreeFoodFields({
         customFatsG: '',
       },
     })
+    setEquivalence({ groupId: '', grams: '', label: '' })
   }
 
   return (
@@ -326,7 +464,9 @@ function FreeFoodFields({
               inputMode="decimal"
               placeholder="0"
               value={item[field]}
-              onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { [field]: e.target.value } })}
+              onChange={(e) =>
+                dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: { [field]: e.target.value } })
+              }
             />
           </div>
         ))}
@@ -337,6 +477,7 @@ function FreeFoodFields({
           Las kcal no cuadran con las macros (4P + 4C + 9G). Puedes guardar igual, pero revisa los valores.
         </p>
       ) : null}
+      <FreeFoodEquivalenceBlock clientId={clientId} value={equivalence} onChange={setEquivalence} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
@@ -360,11 +501,13 @@ function FreeFoodFields({
 // estas opciones; el server congela el snapshot de cada reemplazo al publicar.
 function SubstitutionsField({
   item,
+  variantKey,
   slotKey,
   clientId,
   dispatch,
 }: {
   item: BuilderItem
+  variantKey: string
   slotKey: string
   clientId: string
   dispatch: Dispatch
@@ -399,7 +542,7 @@ function SubstitutionsField({
               <button
                 type="button"
                 aria-label={`Quitar reemplazo ${sub.food.name}`}
-                onClick={() => dispatch({ type: 'REMOVE_ITEM_SUBSTITUTION', slotKey, itemKey: item.key, subKey: sub.key })}
+                onClick={() => dispatch({ type: 'REMOVE_ITEM_SUBSTITUTION', variantKey, slotKey, itemKey: item.key, subKey: sub.key })}
                 className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-card hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X aria-hidden="true" className="h-3 w-3" />
@@ -420,7 +563,7 @@ function SubstitutionsField({
           <FoodSearch
             clientId={clientId}
             onPick={(food) =>
-              dispatch({ type: 'ADD_ITEM_SUBSTITUTION', slotKey, itemKey: item.key, key: genId(), food })
+              dispatch({ type: 'ADD_ITEM_SUBSTITUTION', variantKey, slotKey, itemKey: item.key, key: genId(), food })
             }
           />
           <button type="button" onClick={() => setOpen(false)} className={secondaryButtonClass + ' min-h-9 px-3 text-xs'}>
@@ -443,12 +586,14 @@ function SubstitutionsField({
 
 function ItemRow({
   item,
+  variantKey,
   slotKey,
   clientId,
   dispatch,
   error,
 }: {
   item: BuilderItem
+  variantKey: string
   slotKey: string
   clientId: string
   dispatch: Dispatch
@@ -474,7 +619,9 @@ function ItemRow({
               aria-label="Nombre del alimento libre"
               placeholder="Nombre del alimento libre"
               value={item.customName ?? ''}
-              onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { customName: e.target.value } })}
+              onChange={(e) =>
+                dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: { customName: e.target.value } })
+              }
             />
           )}
           <PortionMacros item={item} />
@@ -482,7 +629,7 @@ function ItemRow({
         <button
           type="button"
           aria-label={`Quitar ${displayName || 'alimento'}`}
-          onClick={() => dispatch({ type: 'REMOVE_ITEM', slotKey, itemKey: item.key })}
+          onClick={() => dispatch({ type: 'REMOVE_ITEM', variantKey, slotKey, itemKey: item.key })}
           className={iconButtonClass + ' shrink-0'}
         >
           <Trash2 className="h-4 w-4" />
@@ -496,13 +643,23 @@ function ItemRow({
           aria-label="Cantidad"
           placeholder="Cantidad"
           value={item.quantity}
-          onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { quantity: e.target.value } })}
+          onChange={(e) =>
+            dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: { quantity: e.target.value } })
+          }
         />
         <select
           className={inputClass + ' max-w-24'}
           aria-label="Unidad"
           value={item.unit}
-          onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { unit: e.target.value as BuilderItem['unit'] } })}
+          onChange={(e) =>
+            dispatch({
+              type: 'UPDATE_ITEM',
+              variantKey,
+              slotKey,
+              itemKey: item.key,
+              patch: { unit: e.target.value as BuilderItem['unit'] },
+            })
+          }
         >
           {unitOptions.map((u) => (
             <option key={u} value={u}>
@@ -512,9 +669,11 @@ function ItemRow({
         </select>
       </div>
 
-      {!item.food ? <FreeFoodFields item={item} slotKey={slotKey} clientId={clientId} dispatch={dispatch} /> : null}
+      {!item.food ? (
+        <FreeFoodFields item={item} variantKey={variantKey} slotKey={slotKey} clientId={clientId} dispatch={dispatch} />
+      ) : null}
 
-      <SubstitutionsField item={item} slotKey={slotKey} clientId={clientId} dispatch={dispatch} />
+      <SubstitutionsField item={item} variantKey={variantKey} slotKey={slotKey} clientId={clientId} dispatch={dispatch} />
 
       {error?.food ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{error.food}</p> : null}
       {error?.quantity ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{error.quantity}</p> : null}
@@ -524,12 +683,15 @@ function ItemRow({
 
 function SlotEditor({
   slot,
+  variantKey,
   clientId,
   dispatch,
   errors,
   portions,
 }: {
   slot: BuilderSlot
+  /** Día (variante) al que pertenece la franja: toda mutación viaja scoped a él. */
+  variantKey: string
   clientId: string
   dispatch: Dispatch
   errors: Record<string, string>
@@ -538,8 +700,11 @@ function SlotEditor({
   // Fix QA F1-2: el subtotal de franja combina items fijos + derivado de porciones
   // (Σ porciones × ref del grupo, catálogo VIVO del picker). Catálogo sin cargar o
   // franja sin porciones ⇒ solo items, idéntico a antes (sin NaN jamás).
+  // Multi-día: la clave de porciones es `variantKey::slotKey` — dos días con una franja
+  // homónima ("Almuerzo" clonado) ya no comparten porciones.
+  const portionsSlotKey = portionsKey(variantKey, slot.key)
   const itemsSubtotal = slotSubtotal(slot)
-  const portionTotals = slotPortionTotals(portions.bySlot, slot.key, portions.groups)
+  const portionTotals = slotPortionTotals(portions.bySlot, portionsSlotKey, portions.groups)
   const subtotal = combineSubtotals(itemsSubtotal, portionTotals)
   return (
     <NutritionCard>
@@ -555,19 +720,21 @@ function SlotEditor({
           className={inputClass}
           placeholder="Desayuno, Almuerzo..."
           value={slot.name}
-          onChange={(e) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { name: e.target.value } })}
+          onChange={(e) => dispatch({ type: 'UPDATE_SLOT', variantKey, slotKey: slot.key, patch: { name: e.target.value } })}
         />
         <input
           id={`slot-time-${slot.key}`}
           className={inputClass + ' w-28'}
           type="time"
           value={slot.startTime}
-          onChange={(e) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { startTime: e.target.value } })}
+          onChange={(e) =>
+            dispatch({ type: 'UPDATE_SLOT', variantKey, slotKey: slot.key, patch: { startTime: e.target.value } })
+          }
         />
         <button
           type="button"
           aria-label={`Quitar franja ${slot.name || 'sin nombre'}`}
-          onClick={() => dispatch({ type: 'REMOVE_SLOT', slotKey: slot.key })}
+          onClick={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
           className={iconButtonClass + ' inline-flex h-11 w-11 items-center justify-center self-center'}
         >
           <Trash2 className="h-4 w-4" />
@@ -582,6 +749,7 @@ function SlotEditor({
           <ItemRow
             key={item.key}
             item={item}
+            variantKey={variantKey}
             slotKey={slot.key}
             clientId={clientId}
             dispatch={dispatch}
@@ -591,10 +759,13 @@ function SlotEditor({
       </div>
 
       <div className="mt-3">
-        <FoodSearch clientId={clientId} onPick={(food) => dispatch({ type: 'ADD_ITEM', slotKey: slot.key, key: genId(), food })} />
+        <FoodSearch
+          clientId={clientId}
+          onPick={(food) => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food })}
+        />
         <button
           type="button"
-          onClick={() => dispatch({ type: 'ADD_ITEM', slotKey: slot.key, key: genId(), food: null })}
+          onClick={() => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food: null })}
           className={secondaryButtonClass + ' mt-2'}
         >
           <Plus className="h-4 w-4" />
@@ -605,7 +776,7 @@ function SlotEditor({
       {/* NUEVO (SPEC UX-a): sección "Porciones a elección", hermana de la lista de
           alimentos, debajo de "+ Alimento". Solo existe en structured/hybrid (SlotEditor
           no se monta en planes flexibles — R1). */}
-      <PortionsSection slotKey={slot.key} slotName={slot.name} controller={portions} />
+      <PortionsSection slotKey={portionsSlotKey} slotName={slot.name} controller={portions} />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subtotal franja</span>
@@ -799,36 +970,43 @@ function TargetsStep({
 
 function DaySummary({
   state,
+  variant,
   totals,
   portions,
 }: {
   state: BuilderState
+  /** Dia en edicion: el resumen es SIEMPRE del dia que el coach tiene en pantalla. */
+  variant: BuilderVariant
   totals: ItemMacros
   portions: PortionsController
 }) {
+  // Metas contra las que se compara: las propias del dia si las personalizo, si no las del base.
+  const targets = variantEffectiveTargets(state, variant)
   return (
     <div className="space-y-3">
-      <h3 className="font-display text-base font-semibold text-strong">Resumen del dia</h3>
+      <h3 className="font-display text-base font-semibold text-strong">
+        {variant.isDefault ? 'Resumen del día base' : 'Resumen de ' + variant.label}
+      </h3>
       <MacroBudget
-        calories={{ consumed: totals.calories, target: numOr0(state.targets.calories) }}
+        calories={{ consumed: totals.calories, target: numOr0(targets.calories) }}
         macros={[
-          { macro: 'protein', consumed: totals.proteinG, target: numOr0(state.targets.proteinG) },
-          { macro: 'carbs', consumed: totals.carbsG, target: numOr0(state.targets.carbsG) },
-          { macro: 'fats', consumed: totals.fatsG, target: numOr0(state.targets.fatsG) },
+          { macro: 'protein', consumed: totals.proteinG, target: numOr0(targets.proteinG) },
+          { macro: 'carbs', consumed: totals.carbsG, target: numOr0(targets.carbsG) },
+          { macro: 'fats', consumed: totals.fatsG, target: numOr0(targets.fatsG) },
         ]}
       />
       <NutritionCard>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Por franja</p>
-        {state.slots.length === 0 ? (
+        {variant.slots.length === 0 ? (
           <p className="text-sm text-muted">Agrega una franja para ver el desglose del dia.</p>
         ) : (
           <ul className="space-y-2">
-            {state.slots.map((slot) => {
+            {variant.slots.map((slot) => {
               // El desglose "Por franja" combina items + porciones a eleccion, igual que el
               // subtotal de la card de la franja (antes mostraba solo los items).
               const s = combineSubtotals(
                 slotSubtotal(slot),
-                slotPortionTotals(portions.bySlot, slot.key, portions.groups),
+                slotPortionTotals(portions.bySlot, portionsKey(variant.key, slot.key), portions.groups),
               )
               return (
                 <li key={slot.key} className="flex items-center justify-between gap-2">
@@ -853,20 +1031,40 @@ function ConstructionStep({
   dispatch,
   errors,
   portions,
+  dayHandlers,
+  addDayLocked,
 }: {
   state: BuilderState
   clientId: string
   dispatch: Dispatch
   errors: Record<string, string>
   portions: PortionsController
+  dayHandlers: DayVariantBarHandlers
+  addDayLocked: boolean
 }) {
-  // "Total del dia" = items fijos + porciones a eleccion de TODAS las franjas vivas (paridad
-  // con RN y con el subtotal de cada franja). Antes solo sumaba items: la misma pantalla
-  // mostraba "Subtotal franja 620 kcal" y "Total del dia 180 kcal" (queja del coach).
+  // Multi-dia: se edita SIEMPRE el dia activo de la barra de chips; los totales, el resumen
+  // lateral y las porciones son de ese dia.
+  const variant = activeVariantOf(state)
+  // "Total del dia" = items fijos + porciones a eleccion de TODAS las franjas vivas del dia
+  // (paridad con RN y con el subtotal de cada franja). Antes solo sumaba items: la misma
+  // pantalla mostraba "Subtotal franja 620 kcal" y "Total del dia 180 kcal" (queja del coach).
   const portionDay = portions.groups
-    ? derivePortionTotals(state.slots.map((slot) => slot.key), portions.bySlot, portions.groups)
+    ? derivePortionTotals(
+        variant.slots.map((slot) => portionsKey(variant.key, slot.key)),
+        portions.bySlot,
+        portions.groups,
+      )
     : null
-  const totals = combineSubtotals(dayTotals(state), portionDay)
+  const totals = combineSubtotals(variantTotals(variant), portionDay)
+  // kcal por dia para los chips (items + porciones, mismo criterio que el total del dia).
+  const kcalByVariantKey: Record<string, number> = {}
+  for (const v of state.variants) {
+    const vPortions = portions.groups
+      ? derivePortionTotals(v.slots.map((slot) => portionsKey(v.key, slot.key)), portions.bySlot, portions.groups)
+      : null
+    kcalByVariantKey[v.key] = combineSubtotals(variantTotals(v), vPortions).calories
+  }
+  const slotsError = errors['variant.' + variant.key + '.slots'] ?? errors.slots
   if (!strategyUsesSlots(state.strategy)) {
     return (
       <NutritionCard tone="neutral">
@@ -880,13 +1078,30 @@ function ConstructionStep({
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-4">
-        {errors.slots ? <p className="text-sm text-rose-600 dark:text-rose-300">{errors.slots}</p> : null}
-        {state.slots.map((slot) => (
-          <SlotEditor key={slot.key} slot={slot} clientId={clientId} dispatch={dispatch} errors={errors} portions={portions} />
+        {/* Barra de dias (multi-dia): chips + "Agregar dia" + menu de dia + banner de herencia. */}
+        <DayVariantBar
+          variants={state.variants}
+          activeVariantKey={variant.key}
+          kcalByVariantKey={kcalByVariantKey}
+          baseTargets={state.targets}
+          addDayLocked={addDayLocked}
+          handlers={dayHandlers}
+        />
+        {slotsError ? <p className="text-sm text-rose-600 dark:text-rose-300">{slotsError}</p> : null}
+        {variant.slots.map((slot) => (
+          <SlotEditor
+            key={slot.key}
+            slot={slot}
+            variantKey={variant.key}
+            clientId={clientId}
+            dispatch={dispatch}
+            errors={errors}
+            portions={portions}
+          />
         ))}
         <button
           type="button"
-          onClick={() => dispatch({ type: 'ADD_SLOT', key: genId() })}
+          onClick={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genId() })}
           className={secondaryButtonClass + ' border-dashed px-4'}
         >
           <Plus className="h-4 w-4" />
@@ -894,7 +1109,9 @@ function ConstructionStep({
         </button>
 
         <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 lg:hidden">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total del dia</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            {variant.isDefault ? 'Total del día base' : 'Total de ' + variant.label}
+          </span>
           <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
           {portionDay ? (
             <p className="w-full text-xs text-muted">
@@ -906,10 +1123,102 @@ function ConstructionStep({
 
       <div className="hidden lg:block">
         <div className="lg:sticky lg:top-6">
-          <DaySummary state={state} totals={totals} portions={portions} />
+          <DaySummary state={state} variant={variant} totals={totals} portions={portions} />
         </div>
       </div>
     </div>
+  )
+}
+
+const REVIEW_TARGET_FIELDS: Array<{ field: keyof BuilderTargets; label: string }> = [
+  { field: 'calories', label: 'kcal' },
+  { field: 'proteinG', label: 'P' },
+  { field: 'carbsG', label: 'C' },
+  { field: 'fatsG', label: 'G' },
+]
+
+/**
+ * Card de UN dia en el paso Revisar (multi-dia): tira Lu-Do de los dias que le tocan,
+ * objetivos efectivos con las DIFERENCIAS vs el dia base resaltadas, total prescrito del dia
+ * y sus chips de porciones. Solo se monta cuando el plan tiene mas de un dia.
+ */
+function ReviewDayCard({
+  state,
+  variant,
+  portions,
+}: {
+  state: BuilderState
+  variant: BuilderVariant
+  portions: PortionsController
+}) {
+  const keys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
+  const dayPortions = portions.groups ? derivePortionTotals(keys, portions.bySlot, portions.groups) : null
+  const totals = combineSubtotals(variantTotals(variant), dayPortions)
+  const targets = variantEffectiveTargets(state, variant)
+  const diffs = variant.isDefault
+    ? []
+    : REVIEW_TARGET_FIELDS.filter(({ field }) => targets[field].trim() !== state.targets[field].trim())
+
+  return (
+    <NutritionCard>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-display text-base font-semibold text-strong">{variant.label}</p>
+        <span className="font-mono text-xs tabular-nums text-muted">
+          {variant.slots.length} {variant.slots.length === 1 ? 'franja' : 'franjas'}
+        </span>
+      </div>
+      <DayVariantWeekStrip variants={state.variants} variant={variant} />
+
+      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="mb-1 text-xs uppercase tracking-wide text-muted">Objetivos del dia</dt>
+          <dd className="text-body">
+            <MacroChipRow
+              calories={numOrNull(targets.calories)}
+              proteinG={numOrNull(targets.proteinG)}
+              carbsG={numOrNull(targets.carbsG)}
+              fatsG={numOrNull(targets.fatsG)}
+            />
+            {diffs.length > 0 ? (
+              <ul className="mt-1.5 flex flex-wrap gap-1">
+                {diffs.map(({ field, label }) => (
+                  <li
+                    key={field}
+                    className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary"
+                  >
+                    {label}: {targets[field].trim() === '' ? 'sin meta' : targets[field]} (base{' '}
+                    {state.targets[field].trim() === '' ? 'sin meta' : state.targets[field]})
+                  </li>
+                ))}
+              </ul>
+            ) : variant.isDefault ? null : (
+              <p className="mt-1 text-xs text-subtle">Usa los objetivos del dia base.</p>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="mb-1 text-xs uppercase tracking-wide text-muted">Total prescrito</dt>
+          <dd className="text-body">
+            <MacroChipRow
+              calories={totals.calories}
+              proteinG={totals.proteinG}
+              carbsG={totals.carbsG}
+              fatsG={totals.fatsG}
+            />
+            {dayPortions ? (
+              <p className="mt-1 text-xs text-muted">
+                {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(dayPortions.calories)))}
+              </p>
+            ) : null}
+          </dd>
+        </div>
+      </dl>
+
+      <PortionsReviewSection
+        slots={variant.slots.map((slot) => ({ key: portionsKey(variant.key, slot.key), name: slot.name }))}
+        controller={portions}
+      />
+    </NutritionCard>
   )
 }
 
@@ -925,12 +1234,13 @@ function ReviewStep({
   portions: PortionsController
 }) {
   const usesSlots = strategyUsesSlots(state.strategy)
+  const multiDay = state.variants.length > 1
+  const base = baseVariantOf(state)
+  const baseKeys = base.slots.map((slot) => portionsKey(base.key, slot.key))
   // "Total prescrito" combinado (items + porciones a eleccion): mismo criterio que el paso
   // Construccion; antes la revision mostraba un total menor al que el coach acababa de ver.
-  const portionDay = portions.groups
-    ? derivePortionTotals(state.slots.map((slot) => slot.key), portions.bySlot, portions.groups)
-    : null
-  const totals = combineSubtotals(dayTotals(state), portionDay)
+  const portionDay = portions.groups ? derivePortionTotals(baseKeys, portions.bySlot, portions.groups) : null
+  const totals = combineSubtotals(variantTotals(base), portionDay)
   const meta = state.strategy ? NUTRITION_STRATEGIES[state.strategy] : null
   return (
     <div className="max-w-3xl space-y-4">
@@ -942,7 +1252,9 @@ function ReviewStep({
         {meta ? <p className="mt-1 text-sm text-muted">{meta.description}</p> : null}
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="mb-1 text-xs uppercase tracking-wide text-muted">Metas diarias</dt>
+            <dt className="mb-1 text-xs uppercase tracking-wide text-muted">
+              {multiDay ? 'Metas del dia base' : 'Metas diarias'}
+            </dt>
             <dd className="text-body">
               <MacroChipRow
                 calories={numOrNull(state.targets.calories)}
@@ -955,7 +1267,7 @@ function ReviewStep({
           {usesSlots ? (
             <div>
               <dt className="mb-1 text-xs uppercase tracking-wide text-muted">
-                Total prescrito · {state.slots.length} {state.slots.length === 1 ? 'franja' : 'franjas'}
+                Total prescrito · {base.slots.length} {base.slots.length === 1 ? 'franja' : 'franjas'}
               </dt>
               <dd className="text-body">
                 <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
@@ -970,9 +1282,25 @@ function ReviewStep({
         </dl>
       </NutritionCard>
 
+      {/* Multi-dia: la revision se agrupa POR DIA (totales del dia + diferencias vs el base).
+          Un plan de un solo dia conserva la revision de siempre. */}
+      {usesSlots && multiDay ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Dias del plan</p>
+          {state.variants.map((variant) => (
+            <ReviewDayCard key={variant.key} state={state} variant={variant} portions={portions} />
+          ))}
+        </div>
+      ) : null}
+
       {/* NUEVO (SPEC UX-a): chips read-only portionsSummaryLabel por franja + banner de
           macros referenciales. El MacroBudget/totales existentes no se duplican. */}
-      {usesSlots ? <PortionsReviewSection slots={state.slots} controller={portions} /> : null}
+      {usesSlots && !multiDay ? (
+        <PortionsReviewSection
+          slots={base.slots.map((slot) => ({ key: portionsKey(base.key, slot.key), name: slot.name }))}
+          controller={portions}
+        />
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 md:items-start">
         <div>
@@ -1082,18 +1410,26 @@ interface BuilderDraftPayload {
 function builderHasSignificantContent(state: BuilderState): boolean {
   if (state.strategy !== null) return true
   if (state.planName.trim() !== '') return true
-  if (state.slots.length > 0) return true
+  if (state.variants.some((variant) => variant.slots.length > 0)) return true
   return (['calories', 'proteinG', 'carbsG', 'fatsG'] as const).some((f) => state.targets[f].trim() !== '')
 }
+
+/**
+ * Version del formato del borrador local. v1 = `{ slots }` (un solo dia); v2 = `{ variants }`
+ * (multi-dia). La KEY se versiona (sufijo) y al montar se migra el borrador v1 si existe: los
+ * borradores guardados de coaches reales NO se pierden al desplegar multi-dia.
+ */
+const BUILDER_DRAFT_KEY_V2_SUFFIX = ':v2'
 
 const LEAVE_GUARD_COPY = 'Tienes un borrador sin publicar. ¿Salir y descartarlo?'
 
 const MULTI_DAY_LOCK_COPY =
-  'Este plan tiene días distintos y rehacerlo aquí lo reduciría a uno. Usa Edición rápida.'
+  'No pudimos cargar los días de este plan. Rehacerlo aquí lo reduciría a uno: usa Edición rápida.'
 
 export function PlanBuilderClient({
   clientId,
   existingPlan,
+  initialDraft,
   today,
   nutritionProEnabled,
 }: {
@@ -1106,18 +1442,27 @@ export function PlanBuilderClient({
     strategy: NutritionStrategy
     effectiveFrom: string
     name: string
-    /** Variantes de día del plan vigente. > 1 bloquea el publish (ver `multiDayLocked`). */
+    /** Variantes de día del plan vigente (para el guard de respaldo si falla la rehidratación). */
     dayVariantCount: number
   } | null
+  /**
+   * Plan vigente REHIDRATADO al estado del wizard (FD1c): días, franjas, items, reemplazos y
+   * porciones. `null` con plan vigente = la rehidratación falló (lectura de reemplazos caída,
+   * read-model inesperado) y entra el guard anti-colapso de respaldo.
+   */
+  initialDraft: { state: BuilderState; portionsBySlot: PortionsBySlot } | null
   today: string
   nutritionProEnabled: boolean
 }) {
   const router = useRouter()
-  const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
-  // Porciones a elección: controller hermano del reducer (mapa slot.key → targets +
-  // catálogo de grupos con carga perezosa). Claves de franjas borradas quedan huérfanas
-  // sin efecto: attach/derive filtran por las franjas vivas de state.slots.
-  const portions = usePortionsBuilder(clientId)
+  // Estado inicial: el plan vigente rehidratado si lo hay; si no, el wizard vacío de siempre.
+  const [state, dispatch] = useReducer(builderReducer, initialDraft, (draft) =>
+    draft ? draft.state : createEmptyBuilderState(today),
+  )
+  // Porciones a elección: controller hermano del reducer (mapa `variantKey::slotKey` → targets
+  // + catálogo de grupos con carga perezosa). Claves de franjas/días borrados quedan huérfanas
+  // sin efecto: attach/derive filtran por las franjas vivas de state.variants.
+  const portions = usePortionsBuilder(clientId, initialDraft?.portionsBySlot)
   const [showErrors, setShowErrors] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [conflictOpen, setConflictOpen] = useState(false)
@@ -1139,21 +1484,37 @@ export function PlanBuilderClient({
 
   // Respaldo local del wizard (W3b): key estable por alumno+plan, banner de restauración y
   // el payload leído al montar (guardado en un ref para no re-renderizar hasta tocar Restaurar).
-  const draftKey = useMemo(() => builderDraftKey(clientId, existingPlan?.id ?? null), [clientId, existingPlan?.id])
+  // La key va versionada (`:v2`) desde multi-día; `legacyDraftKey` es la del formato viejo.
+  const legacyDraftKey = useMemo(
+    () => builderDraftKey(clientId, existingPlan?.id ?? null),
+    [clientId, existingPlan?.id],
+  )
+  const draftKey = legacyDraftKey + BUILDER_DRAFT_KEY_V2_SUFFIX
   const [showDraftBanner, setShowDraftBanner] = useState(false)
   const draftPayloadRef = useRef<BuilderDraftPayload | null>(null)
+  const migratedDraftRef = useRef(false)
   const isFirstRender = useRef(true)
+  const [dirty, setDirty] = useState(false)
 
   // Al montar: barre borradores vencidos (higiene global) y, si hay uno vigente para ESTE
   // alumno/plan, ofrece restaurarlo. Best-effort (SSR / modo privado degradan a "sin borrador").
+  // MIGRACIÓN v1 → v2: si no hay borrador nuevo pero sí uno del formato viejo (`{ slots }`), se
+  // levanta igual — el reducer lo normaliza a un día base en `RESTORE` (`migrateBuilderState`).
   useEffect(() => {
     sweepStaleNutritionDrafts(Date.now())
     const record = readNutritionDraft<BuilderDraftPayload>(draftKey, Date.now())
     if (record != null && record.payload.clientId === clientId) {
       draftPayloadRef.current = record.payload
       setShowDraftBanner(true)
+      return
     }
-  }, [draftKey, clientId])
+    const legacy = readNutritionDraft<BuilderDraftPayload>(legacyDraftKey, Date.now())
+    if (legacy != null && legacy.payload.clientId === clientId) {
+      draftPayloadRef.current = legacy.payload
+      migratedDraftRef.current = true
+      setShowDraftBanner(true)
+    }
+  }, [draftKey, legacyDraftKey, clientId])
 
   // Autosave con debounce (~2s) sobre el árbol del wizard + las porciones. Salta el primer
   // render (la hidratación inicial no es un cambio del coach). Si el borrador deja de tener
@@ -1163,6 +1524,7 @@ export function PlanBuilderClient({
       isFirstRender.current = false
       return
     }
+    setDirty(true)
     const timer = setTimeout(() => {
       if (builderHasSignificantContent(state)) {
         writeNutritionDraft<BuilderDraftPayload>(
@@ -1188,22 +1550,29 @@ export function PlanBuilderClient({
   // Espeja el leaveGuard del quick-edit: solo el aviso nativo; el respaldo real lo hace el
   // autosave de arriba.
   useEffect(() => {
-    if (!builderHasSignificantContent(state)) return
+    // `dirty`: con el plan rehidratado el wizard nace lleno; avisar al salir sin haber tocado
+    // nada seria puro ruido. Solo se avisa cuando hubo una edicion real.
+    if (!dirty || !builderHasSignificantContent(state)) return
     const handler = (event: BeforeUnloadEvent) => {
       event.preventDefault()
       event.returnValue = LEAVE_GUARD_COPY
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [state])
+  }, [state, dirty])
 
-  // Guard multi-dia (F0, quick win): el wizard NO tiene concepto de dias — `assembleDraft`
-  // emite siempre `dayVariants: [una variante "Todos los dias"]`. Si el plan vigente tiene
-  // varias (hoy solo por conversion V1->V2, que si genera una variante por dia con comidas),
-  // publicar desde aqui las colapsa a una y la perdida es irreversible y silenciosa. Se
-  // bloquea la publicacion y se empuja a "Edicion rapida", que edita por variante.
+  // Guard multi-dia — AHORA SOLO DE RESPALDO. El wizard ya edita N dias y la rehidratacion
+  // (FD1c) los carga completos, asi que el camino normal ya no colapsa nada. El guard queda
+  // vivo para el unico caso peligroso que sobrevive: la rehidratacion FALLO (`initialDraft`
+  // null con plan vigente) y el plan tiene mas de un dia — publicar desde un wizard en blanco
+  // los borraria en silencio. Ahi se bloquea y se empuja a "Edicion rapida".
   const multiDayVariantCount = existingPlan?.dayVariantCount ?? 0
-  const multiDayLocked = multiDayVariantCount > 1
+  const rehydrationFailed = existingPlan != null && initialDraft == null
+  const multiDayLocked = rehydrationFailed && multiDayVariantCount > 1
+  // Gate comercial (espejo de UI): mas de un dia exige Nutricion Pro. El servidor
+  // (`publishPlanAction`) responde UPGRADE_REQUIRED con feature `multi_variant` — esta bandera
+  // solo evita el callejon sin salida y muestra el upsell.
+  const addDayLocked = !nutritionProEnabled
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
@@ -1234,6 +1603,7 @@ export function PlanBuilderClient({
   // limpia el respaldo local antes de navegar — el plan ya está en el servidor.
   const goToPublished = () => {
     clearNutritionDraft(draftKey)
+    clearNutritionDraft(legacyDraftKey)
     router.push('/coach/nutrition-v2/' + clientId + '?published=1')
   }
 
@@ -1251,12 +1621,76 @@ export function PlanBuilderClient({
       // franjas (structured/hybrid) lo precargamos para que las filas de porciones muestren
       // nombre/color en vez del fallback (mismo camino que el flujo normal del picker).
       if (strategyUsesSlots(payload.state.strategy)) portions.ensureGroupsLoaded()
+      // Borrador del formato viejo: ya migrado en memoria por `RESTORE`. Se borra la key v1
+      // para que el proximo autosave (que escribe en la v2) no deje dos copias divergentes.
+      if (migratedDraftRef.current) {
+        clearNutritionDraft(legacyDraftKey)
+        migratedDraftRef.current = false
+      }
     }
     setShowDraftBanner(false)
   }
 
+  // ── Multi-dia: handlers de la barra de dias ───────────────────────────────────────────────
+  // Las porciones viven FUERA del reducer, asi que crear/duplicar/eliminar un dia mueve DOS
+  // piezas: el arbol (dispatch) y el mapa de porciones (controller). Las keys de las franjas
+  // clonadas son deterministas (`clonedKey`), asi que el mapa se re-etiqueta sin adivinar.
+
+  function cloneVariantPortions(sourceVariant: BuilderVariant, targetVariantKey: string) {
+    portions.cloneVariant({
+      sourceVariantKey: sourceVariant.key,
+      targetVariantKey,
+      slotKeyPairs: sourceVariant.slots.map((slot) => ({ from: slot.key, to: clonedKey(targetVariantKey, slot.key) })),
+    })
+  }
+
+  function handleAddDays(days: number[], origin: 'copy-base' | 'empty') {
+    // Se filtra aca lo mismo que rechaza el reducer (dia ocupado / tope), para que las keys
+    // generadas queden alineadas con los dias que SI se crean y el clon de porciones no
+    // apunte a una variante inexistente.
+    const taken = new Set(takenDayOfWeeks(state))
+    const accepted: number[] = []
+    for (const day of days) {
+      if (taken.has(day) || accepted.length + taken.size >= MAX_DAY_VARIANTS) continue
+      accepted.push(day)
+    }
+    if (accepted.length === 0) return
+    const keys = accepted.map(() => genId())
+    dispatch({ type: 'ADD_VARIANTS', days: accepted, keys, origin })
+    if (origin === 'copy-base') {
+      const base = baseVariantOf(state)
+      for (const key of keys) cloneVariantPortions(base, key)
+    }
+  }
+
+  function handleDuplicateVariant(sourceVariantKey: string, dayOfWeek: number) {
+    const source = state.variants.find((variant) => variant.key === sourceVariantKey)
+    if (!source || takenDayOfWeeks(state).includes(dayOfWeek)) return
+    const key = genId()
+    dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek })
+    cloneVariantPortions(source, key)
+  }
+
+  function handleRemoveVariant(variantKey: string) {
+    dispatch({ type: 'REMOVE_VARIANT', variantKey })
+    portions.dropVariant(variantKey)
+  }
+
+  const dayHandlers: DayVariantBarHandlers = {
+    onSelect: (variantKey) => dispatch({ type: 'SET_ACTIVE_VARIANT', variantKey }),
+    onAddDays: handleAddDays,
+    onRename: (variantKey, label) => dispatch({ type: 'SET_VARIANT_LABEL', variantKey, value: label }),
+    onChangeDay: (variantKey, dayOfWeek) => dispatch({ type: 'SET_VARIANT_DAY', variantKey, dayOfWeek }),
+    onDuplicate: handleDuplicateVariant,
+    onSetTargetsMode: (variantKey, mode) => dispatch({ type: 'SET_VARIANT_TARGETS_MODE', variantKey, mode }),
+    onSetVariantTarget: (variantKey, field, value) =>
+      dispatch({ type: 'SET_VARIANT_TARGETS', variantKey, field, value }),
+    onRemove: handleRemoveVariant,
+  }
+
   function handleDiscardDraft() {
     clearNutritionDraft(draftKey)
+    clearNutritionDraft(legacyDraftKey)
     draftPayloadRef.current = null
     setShowDraftBanner(false)
   }
@@ -1322,7 +1756,8 @@ export function PlanBuilderClient({
       })
       // Inyecta los targets de porciones al draft canónico (capa opcional R1): sin
       // porciones (o plan flexible, sin franjas) el draft queda byte-idéntico al de hoy.
-      draft = attachPortionsAndValidate(draft, state.slots.map((s) => s.key), portions.bySlot)
+      // Multi-día: las claves viajan POR DÍA, alineadas con `draft.dayVariants`.
+      draft = attachPortionsAndValidate(draft, variantPortionKeys(state.variants), portions.bySlot)
     } catch {
       setShowErrors(true)
       setError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
@@ -1421,7 +1856,7 @@ export function PlanBuilderClient({
     let draft
     try {
       draft = assembleAndValidateDraft(state, { clientId, planId: null })
-      draft = attachPortionsAndValidate(draft, state.slots.map((s) => s.key), portions.bySlot)
+      draft = attachPortionsAndValidate(draft, variantPortionKeys(state.variants), portions.bySlot)
     } catch {
       setConflictError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
       return
@@ -1489,9 +1924,9 @@ export function PlanBuilderClient({
         </div>
       </div>
     ) : null}
-    {/* Guard multi-dia (F0): aviso bloqueante al tope, por encima del wizard, con la salida
-        real (Edicion rapida en la ficha del alumno). No implementa multi-variante — solo
-        impide que "Rehacer" destruya los dias que el plan ya tiene. */}
+    {/* Guard multi-dia DE RESPALDO: solo si la rehidratacion fallo y el plan tiene varios
+        dias. El camino normal ya carga y edita los N dias (FD1c); esto cubre el caso en que
+        no pudimos leerlos y publicar los borraria. */}
     {multiDayLocked ? (
       <div
         role="alert"
@@ -1501,13 +1936,12 @@ export function PlanBuilderClient({
           <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
-              Este plan tiene {multiDayVariantCount} días distintos; rehacerlo aquí lo reduciría a uno.
+              No pudimos cargar los {multiDayVariantCount} días de este plan; rehacerlo aquí lo reduciría a uno.
               Usa Edición rápida.
             </p>
             <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300/90">
-              El asistente de creación arma un solo día (“Todos los días”). Para ajustar un plan con
-              días distintos, vuelve a la ficha del alumno y abre <span className="font-semibold">Edición rápida</span>,
-              que conserva cada día con sus comidas y metas.
+              Vuelve a la ficha del alumno y abre <span className="font-semibold">Edición rápida</span>, que conserva
+              cada día con sus comidas y metas. Si prefieres el asistente, recarga la página e inténtalo de nuevo.
             </p>
             <Link
               href={'/coach/nutrition-v2/' + clientId}
@@ -1546,7 +1980,8 @@ export function PlanBuilderClient({
             {/* NUEVO (SPEC UX-a / R6): con porciones en el draft, ofrece precargar los
                 target_* derivados. Solo precarga tras el tap; nunca sobrescribe sola. */}
             <PortionsDeriveCard
-              liveSlotKeys={state.slots.map((s) => s.key)}
+              /* Las metas del paso "Objetivos" son las del dia BASE: la derivacion mira sus franjas. */
+              liveSlotKeys={baseVariantOf(state).slots.map((slot) => portionsKey(baseVariantOf(state).key, slot.key))}
               controller={portions}
               onApply={(totals) => {
                 dispatch({ type: 'SET_TARGET', field: 'calories', value: String(Math.round(totals.calories)) })
@@ -1559,7 +1994,15 @@ export function PlanBuilderClient({
           </>
         ) : null}
         {state.step === 2 ? (
-          <ConstructionStep state={state} clientId={clientId} dispatch={dispatch} errors={showErrors ? validation.errors : {}} portions={portions} />
+          <ConstructionStep
+            state={state}
+            clientId={clientId}
+            dispatch={dispatch}
+            errors={showErrors ? validation.errors : {}}
+            portions={portions}
+            dayHandlers={dayHandlers}
+            addDayLocked={addDayLocked}
+          />
         ) : null}
         {state.step === 3 ? <ReviewStep state={state} dispatch={dispatch} publishError={publishError} portions={portions} /> : null}
 

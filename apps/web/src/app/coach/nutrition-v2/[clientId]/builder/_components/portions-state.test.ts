@@ -1,21 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
-import { assembleDraft, type BuilderState } from '../_lib/draft-builder'
+import {
+  BASE_VARIANT_KEY,
+  assembleDraft,
+  builderReducer,
+  clonedKey,
+  createBaseVariant,
+  type BuilderState,
+} from '../_lib/draft-builder'
 import {
   addPortionGroup,
   attachPortionsAndValidate,
+  clonePortionsForVariant,
   combineSubtotals,
   derivePortionTotals,
+  dropVariantPortions,
   esDecimal,
   formatPortionsEs,
   hasAnyPortions,
+  livePortionKeys,
   parsePortionsInput,
+  portionsKey,
   removePortionGroup,
   setPortionValue,
   slotPortionTotals,
   snapPortions,
   sortGroupsForPicker,
   stepPortionValue,
+  variantPortionKeys,
   type PortionsBySlot,
 } from './portions-state'
 
@@ -220,29 +232,37 @@ function builderState(): BuilderState {
     effectiveFrom: '2026-07-20',
     targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' },
     permissions: { canRegisterFreely: false, canAdjustPrescribedQuantity: true, canSubstitute: false },
-    slots: [
-      { key: 's1', name: 'Desayuno', startTime: '', items: [] },
-      { key: 's2', name: 'Almuerzo', startTime: '', items: [] },
+    variants: [
+      {
+        ...createBaseVariant(),
+        slots: [
+          { key: 's1', name: 'Desayuno', startTime: '', items: [] },
+          { key: 's2', name: 'Almuerzo', startTime: '', items: [] },
+        ],
+      },
     ],
+    activeVariantKey: BASE_VARIANT_KEY,
   }
 }
+
+const BASE_KEYS = [portionsKey(BASE_VARIANT_KEY, 's1'), portionsKey(BASE_VARIANT_KEY, 's2')]
 
 describe('attachPortionsAndValidate', () => {
   it('sin porciones devuelve el MISMO draft (byte-idéntico, SPEC R1/Q1)', () => {
     const draft = assembleDraft(builderState(), { clientId: CLIENT_ID })
-    const result = attachPortionsAndValidate(draft, ['s1', 's2'], {})
+    const result = attachPortionsAndValidate(draft, [BASE_KEYS], {})
     expect(result).toBe(draft)
   })
 
   it('inyecta exchangeTargets solo en las franjas con porciones, con orderIndex', () => {
     const draft = assembleDraft(builderState(), { clientId: CLIENT_ID })
     const map: PortionsBySlot = {
-      s1: [
+      [portionsKey(BASE_VARIANT_KEY, 's1')]: [
         { exchangeGroupId: ID_C, portions: 2 },
         { exchangeGroupId: ID_P, portions: 1.5 },
       ],
     }
-    const result = attachPortionsAndValidate(draft, ['s1', 's2'], map)
+    const result = attachPortionsAndValidate(draft, [BASE_KEYS], map)
     const [slot1, slot2] = result.dayVariants[0].mealSlots
     expect(slot1.exchangeTargets).toEqual([
       { exchangeGroupId: ID_C, portions: 2, notes: null, orderIndex: 0 },
@@ -255,7 +275,82 @@ describe('attachPortionsAndValidate', () => {
   it('ignora claves huérfanas de franjas borradas', () => {
     const draft = assembleDraft(builderState(), { clientId: CLIENT_ID })
     const map: PortionsBySlot = { borrada: [{ exchangeGroupId: ID_C, portions: 2 }] }
-    const result = attachPortionsAndValidate(draft, ['s1', 's2'], map)
+    const result = attachPortionsAndValidate(draft, [BASE_KEYS], map)
     expect(result).toBe(draft)
+  })
+})
+
+// ── Multi-día: claves `variantKey::slotKey` (SPEC nutrition-multiday) ────────────────────────
+
+describe('claves de porciones por día', () => {
+  it('dos días con franjas HOMÓNIMAS no comparten porciones', () => {
+    // El sábado se clona del base: misma franja "Almuerzo", key derivada.
+    const state = builderReducer(builderState(), {
+      type: 'ADD_VARIANTS',
+      days: [6],
+      keys: ['v-sa'],
+      origin: 'copy-base',
+    })
+    const map: PortionsBySlot = {
+      [portionsKey(BASE_VARIANT_KEY, 's2')]: [{ exchangeGroupId: ID_C, portions: 2 }],
+      [portionsKey('v-sa', clonedKey('v-sa', 's2'))]: [{ exchangeGroupId: ID_P, portions: 3 }],
+    }
+    const draft = assembleDraft(state, { clientId: CLIENT_ID })
+    const result = attachPortionsAndValidate(draft, variantPortionKeys(state.variants), map)
+
+    // Día base: el almuerzo lleva SOLO sus 2C.
+    expect(result.dayVariants[0].mealSlots[1].exchangeTargets).toEqual([
+      { exchangeGroupId: ID_C, portions: 2, notes: null, orderIndex: 0 },
+    ])
+    // Sábado: el almuerzo homónimo lleva SOLO sus 3P (antes se pisaban entre sí).
+    expect(result.dayVariants[1].mealSlots[1].exchangeTargets).toEqual([
+      { exchangeGroupId: ID_P, portions: 3, notes: null, orderIndex: 0 },
+    ])
+    expect('exchangeTargets' in result.dayVariants[0].mealSlots[0]).toBe(false)
+  })
+
+  it('variantPortionKeys / livePortionKeys siguen el orden de días y franjas del wizard', () => {
+    const state = builderReducer(builderState(), {
+      type: 'ADD_VARIANTS',
+      days: [6],
+      keys: ['v-sa'],
+      origin: 'copy-base',
+    })
+    expect(variantPortionKeys(state.variants)).toEqual([
+      BASE_KEYS,
+      [portionsKey('v-sa', clonedKey('v-sa', 's1')), portionsKey('v-sa', clonedKey('v-sa', 's2'))],
+    ])
+    expect(livePortionKeys(state.variants)).toHaveLength(4)
+  })
+
+  it('clonePortionsForVariant copia las porciones del día origen (valores nuevos)', () => {
+    const map: PortionsBySlot = {
+      [portionsKey(BASE_VARIANT_KEY, 's1')]: [{ exchangeGroupId: ID_C, portions: 2 }],
+    }
+    const next = clonePortionsForVariant(map, {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      targetVariantKey: 'v-sa',
+      slotKeyPairs: [
+        { from: 's1', to: clonedKey('v-sa', 's1') },
+        { from: 's2', to: clonedKey('v-sa', 's2') },
+      ],
+    })
+    const cloned = next[portionsKey('v-sa', clonedKey('v-sa', 's1'))]
+    expect(cloned).toEqual([{ exchangeGroupId: ID_C, portions: 2 }])
+    expect(cloned).not.toBe(map[portionsKey(BASE_VARIANT_KEY, 's1')])
+    // La franja sin porciones no crea entrada vacía.
+    expect(next[portionsKey('v-sa', clonedKey('v-sa', 's2'))]).toBeUndefined()
+    // Sin nada que copiar devuelve el MISMO mapa.
+    expect(clonePortionsForVariant({}, { sourceVariantKey: 'x', targetVariantKey: 'y', slotKeyPairs: [] })).toEqual({})
+  })
+
+  it('dropVariantPortions limpia solo el día eliminado', () => {
+    const map: PortionsBySlot = {
+      [portionsKey(BASE_VARIANT_KEY, 's1')]: [{ exchangeGroupId: ID_C, portions: 2 }],
+      [portionsKey('v-sa', 'x1')]: [{ exchangeGroupId: ID_P, portions: 1 }],
+    }
+    const next = dropVariantPortions(map, 'v-sa')
+    expect(Object.keys(next)).toEqual([portionsKey(BASE_VARIANT_KEY, 's1')])
+    expect(dropVariantPortions(next, 'v-do')).toBe(next)
   })
 })

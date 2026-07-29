@@ -13,10 +13,45 @@ import {
   hasNutritionProV2,
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
+import { fetchItemSubstitutionsForVersion } from '@/app/coach/nutrition-v2/_data/item-substitutions.data'
+import { fetchBuilderFoodsByIds } from './_data/plan-foods.data'
+import { collectPlanFoodIds, rehydrateBuilderState } from './_lib/rehydrate'
+import { portionsKey } from './_components/portions-state'
 import { PlanBuilderClient } from './_components/PlanBuilderClient'
 
 interface Props {
   params: Promise<{ clientId: string }>
+}
+
+type PlanReadModel = Awaited<ReturnType<typeof getNutritionClientDetailV2ForWeb>>['plan']
+
+/**
+ * Arma el estado inicial del wizard desde el plan vigente. Devuelve `null` cuando alguna
+ * lectura auxiliar falla: preferimos el guard anti-colapso a rehidratar a medias (publicar
+ * reescribe el arbol completo, asi que un dato faltante seria una perdida silenciosa).
+ */
+async function buildInitialDraft(planModel: PlanReadModel, versionId: string, today: string) {
+  const substitutionsLoad = await fetchItemSubstitutionsForVersion(versionId)
+  if (!substitutionsLoad.ok) return null
+
+  const foodsLoad = await fetchBuilderFoodsByIds(collectPlanFoodIds(planModel, substitutionsLoad.rows))
+  if (!foodsLoad.ok) return null
+
+  const substitutionsByItemId: Record<string, typeof substitutionsLoad.rows> = {}
+  for (const row of substitutionsLoad.rows) {
+    const list = substitutionsByItemId[row.prescriptionItemId] ?? []
+    list.push(row)
+    substitutionsByItemId[row.prescriptionItemId] = list
+  }
+
+  return rehydrateBuilderState({
+    planModel,
+    foods: foodsLoad.foods,
+    substitutionsByItemId,
+    // Version nueva: arranca vigente hoy (igual que un wizard en blanco).
+    effectiveFrom: today,
+    portionKeyOf: portionsKey,
+  })
 }
 
 export default async function CoachNutritionV2BuilderPage({ params }: Props) {
@@ -52,14 +87,24 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
         strategy: existing.strategy,
         effectiveFrom: existing.effectiveFrom,
         name: existing.name,
-        // Guard multi-día (F0): el wizard ensambla SIEMPRE una variante ("Todos los días"),
-        // así que republicar desde aquí colapsaría un plan con varios días — hoy solo
-        // existen por conversión V1→V2 — a uno solo, sin aviso. El builder bloquea el
-        // publish cuando esto es > 1 y empuja a Edición rápida, que sí respeta variantes.
-        // (La creación multi-variante es la feature F1, fuera de alcance.)
+        // Cuántos días tiene el plan vigente. Con la rehidratación viva (abajo) el wizard los
+        // edita todos; este número solo alimenta el guard de respaldo cuando la rehidratación
+        // falla y publicar en blanco los borraría.
         dayVariantCount: detail.plan.dayVariants.length,
       }
     : null
+
+  // REHIDRATACIÓN del plan vigente (FD1c): "Rehacer con el asistente" abre el wizard con los
+  // N días, franjas, items, reemplazos y porciones del plan — publicar sin tocar nada produce
+  // el MISMO plan. Dos lecturas auxiliares fuera del read-model hot-path:
+  //  - reemplazos autorizados congelados (no viajan en el read-model),
+  //  - alimentos del catálogo (el read-model trae macros congeladas, no las del alimento).
+  // Cualquiera de las dos en `ok:false` ⇒ NO rehidratamos (initialDraft null): la UI cae al
+  // guard anti-colapso en vez de abrir un wizard con datos mutilados.
+  let initialDraft: Awaited<ReturnType<typeof buildInitialDraft>> = null
+  if (existing) {
+    initialDraft = await buildInitialDraft(detail.plan, existing.versionId, today)
+  }
 
   // Espejo UI del addon Nutricion Pro: marca/deshabilita las opciones Pro (estrategia hibrida)
   // en el wizard. La barrera real vive en publishPlanAction (re-valida server-side).
@@ -83,6 +128,7 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
       <PlanBuilderClient
         clientId={clientId}
         existingPlan={existingPlan}
+        initialDraft={initialDraft}
         today={today}
         nutritionProEnabled={nutritionProEnabled}
       />

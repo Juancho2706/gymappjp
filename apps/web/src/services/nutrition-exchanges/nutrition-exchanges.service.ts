@@ -268,6 +268,18 @@ export async function verifyGroupsVisibleToActor(
     return { ok: missing.length === 0, missing }
 }
 
+/**
+ * Variante de 1 grupo para el alta/edición de alimentos propios (P-B, clasificar): antes de
+ * escribir `foods.exchange_group_id` hay que confirmar que ese grupo es VISIBLE para el coach
+ * (system o propio/team). El FK de `foods` acepta cualquier grupo existente — incluido el
+ * custom de OTRO coach — así que sin esta verificación un id pegado a mano clasificaría el
+ * alimento en un grupo ajeno. Misma regla, mismo techo (RLS `xg_select`).
+ */
+export async function isExchangeGroupVisibleToActor(db: DB, groupId: string): Promise<boolean> {
+    const { ok } = await verifyGroupsVisibleToActor(db, [groupId])
+    return ok
+}
+
 export async function saveMealExchangeTargets(
     db: DB,
     input: {

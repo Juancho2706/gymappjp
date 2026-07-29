@@ -31,6 +31,8 @@ import { PortionsGroupPicker } from './PortionsGroupPicker'
 import type { ExchangeGroupFormValues } from './PortionsGroupForm'
 import {
   addPortionGroup,
+  clonePortionsForVariant,
+  dropVariantPortions,
   formatPortionsEs,
   parsePortionsInput,
   removePortionGroup,
@@ -69,6 +71,18 @@ export interface PortionsController {
    */
   restoreBySlot: (map: PortionsBySlot) => void
   /**
+   * Multi-día: copia las porciones de un día a otro al clonarlo (multi-select "copiar del
+   * base" / "duplicar como otro día"). Las claves del mapa son `variantKey::slotKey`, así que
+   * clonar franjas exige re-etiquetar; sin esto el día nuevo nacería sin porciones.
+   */
+  cloneVariant: (params: {
+    sourceVariantKey: string
+    targetVariantKey: string
+    slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+  }) => void
+  /** Descarta las porciones de un día eliminado. */
+  dropVariant: (variantKey: string) => void
+  /**
    * Grupos PROPIOS del coach (porciones propias P-A). Escriben por server action; el
    * catálogo en memoria se actualiza para que el grupo recién creado quede seleccionable
    * sin cerrar el picker. Borrar además LIMPIA los targets del draft que apuntaban al
@@ -82,8 +96,10 @@ export interface PortionsController {
 
 export type GroupWriteOutcome = { ok: true } | { ok: false; error: string }
 
-export function usePortionsBuilder(clientId: string): PortionsController {
-  const [bySlot, setBySlot] = useState<PortionsBySlot>({})
+export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsBySlot): PortionsController {
+  // `initialBySlot` = porciones rehidratadas del plan vigente (FD1c). Solo se lee al montar
+  // (initializer perezoso): después manda el estado del wizard.
+  const [bySlot, setBySlot] = useState<PortionsBySlot>(() => initialBySlot ?? {})
   const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
   const [groupsLoading, setGroupsLoading] = useState(false)
   const [groupsError, setGroupsError] = useState<string | null>(null)
@@ -145,6 +161,15 @@ export function usePortionsBuilder(clientId: string): PortionsController {
       (map: PortionsBySlot) => setBySlot(map != null && typeof map === 'object' ? map : {}),
       [],
     ),
+    cloneVariant: useCallback(
+      (params: {
+        sourceVariantKey: string
+        targetVariantKey: string
+        slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+      }) => setBySlot((prev) => clonePortionsForVariant(prev, params)),
+      [],
+    ),
+    dropVariant: useCallback((variantKey: string) => setBySlot((prev) => dropVariantPortions(prev, variantKey)), []),
     createGroup: useCallback(
       async (values: ExchangeGroupFormValues): Promise<GroupWriteOutcome> => {
         const res = await createExchangeGroupAction({ clientId, ...values })

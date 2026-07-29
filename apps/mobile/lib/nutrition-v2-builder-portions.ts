@@ -41,8 +41,70 @@ export interface PortionTargetDraft {
   portions: number
 }
 
-/** Mapa `BuilderSlot.key -> targets de porciones` (estado hermano del wizard). */
+/**
+ * Mapa `clave de franja -> targets de porciones` (estado hermano del wizard).
+ *
+ * Multi-dia: la clave es COMPUESTA (`variantKey::slotKey`, ver `portionsKey`). Con la clave
+ * plana anterior, dos dias con franjas homonimas —el caso normal: el sabado se clona del base
+ * y conserva "Almuerzo"— compartian porciones y editar el sabado movia el lunes.
+ */
 export type PortionsBySlot = Record<string, PortionTargetDraft[]>
+
+/** Separador de la clave compuesta. `::` no aparece en las keys (uuid / uuid~uuid). */
+const PORTIONS_KEY_SEPARATOR = '::'
+
+/** Clave del mapa de porciones para una franja DENTRO de un dia. */
+export function portionsKey(variantKey: string, slotKey: string): string {
+  return variantKey + PORTIONS_KEY_SEPARATOR + slotKey
+}
+
+/** Forma minima de un dia del wizard para derivar sus claves (sin importar el reducer). */
+export interface PortionsVariantLike {
+  key: string
+  slots: ReadonlyArray<{ key: string }>
+}
+
+/** Claves de porciones por dia, alineadas por indice con `dayVariants` del draft. */
+export function variantPortionKeys(variants: ReadonlyArray<PortionsVariantLike>): string[][] {
+  return variants.map((variant) => variant.slots.map((slot) => portionsKey(variant.key, slot.key)))
+}
+
+/** Todas las claves VIVAS del wizard (todos los dias), para `hasAnyPortions`/derivaciones. */
+export function livePortionKeys(variants: ReadonlyArray<PortionsVariantLike>): string[] {
+  return variantPortionKeys(variants).flat()
+}
+
+/**
+ * Copia las porciones de un dia a otro al CLONAR (multi-select "copiar del base" o "duplicar
+ * como otro dia"). Las franjas clonadas tienen keys derivadas (`clonedKey`), asi que el
+ * llamador pasa los pares origen -> destino y aca solo se re-etiqueta el mapa (puro).
+ */
+export function clonePortionsForVariant(
+  map: PortionsBySlot,
+  params: {
+    sourceVariantKey: string
+    targetVariantKey: string
+    slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+  },
+): PortionsBySlot {
+  const next = { ...map }
+  let changed = false
+  for (const pair of params.slotKeyPairs) {
+    const targets = map[portionsKey(params.sourceVariantKey, pair.from)]
+    if (targets == null || targets.length === 0) continue
+    next[portionsKey(params.targetVariantKey, pair.to)] = targets.map((target) => ({ ...target }))
+    changed = true
+  }
+  return changed ? next : map
+}
+
+/** Descarta las porciones de un dia eliminado (no dejar basura en el borrador local). */
+export function dropVariantPortions(map: PortionsBySlot, variantKey: string): PortionsBySlot {
+  const prefix = variantKey + PORTIONS_KEY_SEPARATOR
+  const entries = Object.entries(map).filter(([key]) => !key.startsWith(prefix))
+  if (entries.length === Object.keys(map).length) return map
+  return Object.fromEntries(entries)
+}
 
 export const PORTIONS_STEP = 0.5
 export const PORTIONS_MIN = 0.5
@@ -209,6 +271,31 @@ function findGroupByCode(groups: ExchangeGroup[], code: string): ExchangeGroup |
  * `buildPortionTargetInsertRows` devuelve `null` y el publish corta en voz alta (jamás
  * una fila con snapshot NULL). Espejo del freeze server-side del web.
  */
+/**
+ * Grupo del catálogo -> entrada del dict del quick-edit (porciones propias, FD6a). Se usa
+ * cuando el coach CREA o EDITA un grupo desde el picker del quick-edit: la lista de ese picker
+ * habla `QuickEditPortionGroup` (dict congelado del plan), así que el grupo recién escrito hay
+ * que traducirlo. Los grupos propios nunca son compuestos (`composed_of` está prohibido en el
+ * schema de alta), por eso `composedOf` va en null sin resolver bases.
+ */
+export function toQuickEditPortionGroup(group: ExchangeGroup): QuickEditPortionGroup {
+  return {
+    exchangeGroupId: group.id,
+    groupCode: group.code,
+    groupName: group.name,
+    color: group.color,
+    ref: {
+      calories: group.refCalories,
+      proteinG: group.refProteinG,
+      carbsG: group.refCarbsG,
+      fatsG: group.refFatsG,
+    },
+    composedOf: null,
+    macrosConfirmed: group.macrosConfirmed,
+    sortOrder: group.sortOrder,
+  }
+}
+
 export function buildFrozenPortionGroups(groups: ExchangeGroup[]): Map<string, QuickEditPortionGroup> {
   const dict = new Map<string, QuickEditPortionGroup>()
   for (const group of groups) {

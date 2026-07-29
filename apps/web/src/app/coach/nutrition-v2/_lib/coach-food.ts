@@ -1,4 +1,12 @@
 import { z } from 'zod'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
+import {
+  foodExchangeEquivalenceShape,
+  normalizeFoodExchangeEquivalence,
+  refineFoodExchangeEquivalence,
+} from '@eva/schemas/nutrition-exchanges'
+import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import type { BuilderFood } from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 import {
   fail,
@@ -22,16 +30,27 @@ import {
  * Este módulo NO es 'use server': es lógica de servidor reutilizable, no un endpoint.
  */
 
-export const CoachFoodInputSchema = z.object({
-  clientId: z.string().uuid(),
-  name: z.string().trim().min(1).max(180),
-  brand: z.string().trim().max(180).nullable().default(null),
-  unit: z.enum(['g', 'ml']).default('g'),
-  calories: z.number().nonnegative().max(2000),
-  proteinG: z.number().nonnegative().max(500),
-  carbsG: z.number().nonnegative().max(500),
-  fatsG: z.number().nonnegative().max(500),
-})
+/**
+ * El bloque opcional "Equivalencia de porciones" (P-B, specs/nutrition-custom-portions) viaja
+ * en el MISMO payload del alta: `exchangeGroupId` + `exchangePortionGrams` (+ medida casera).
+ * Al vivir dentro de este schema compartido, la server action del builder, el endpoint mobile
+ * `createFood` (que solo hace `.extend({ action, workspace })`) y RN lo aceptan sin tocar el
+ * route. Zod 4 conserva la clase del objeto tras `.superRefine()`, así que ese `.extend()`
+ * sigue compilando.
+ */
+export const CoachFoodInputSchema = z
+  .object({
+    clientId: z.string().uuid(),
+    name: z.string().trim().min(1).max(180),
+    brand: z.string().trim().max(180).nullable().default(null),
+    unit: z.enum(['g', 'ml']).default('g'),
+    calories: z.number().nonnegative().max(2000),
+    proteinG: z.number().nonnegative().max(500),
+    carbsG: z.number().nonnegative().max(500),
+    fatsG: z.number().nonnegative().max(500),
+    ...foodExchangeEquivalenceShape,
+  })
+  .superRefine(refineFoodExchangeEquivalence)
 
 export type CoachFoodInput = z.infer<typeof CoachFoodInputSchema>
 
@@ -52,6 +71,20 @@ export async function insertCoachFood(input: {
   }
   const { name, brand, unit, calories, proteinG, carbsG, fatsG } = parsed.data
 
+  // Clasificación de porciones (P-B). El FK de `foods.exchange_group_id` acepta cualquier
+  // grupo existente, así que el id client-controlled se verifica contra los VISIBLES para el
+  // coach (system + propios + team activo) antes de escribir. Sin grupo no se consulta nada.
+  const equivalence = normalizeFoodExchangeEquivalence(parsed.data)
+  if (equivalence.exchangeGroupId) {
+    const visible = await isExchangeGroupVisibleToActor(
+      input.db as unknown as SupabaseClient<Database>,
+      equivalence.exchangeGroupId,
+    )
+    if (!visible) {
+      return fail('EXCHANGE_GROUP_NOT_FOUND', 'Ese grupo de porciones ya no esta disponible.')
+    }
+  }
+
   const ins = await input.db
     .from('foods')
     .insert({
@@ -70,6 +103,9 @@ export async function insertCoachFood(input: {
       country_code: 'CL',
       catalog_source: 'coach',
       verification_status: 'coach_verified',
+      exchange_group_id: equivalence.exchangeGroupId,
+      exchange_portion_grams: equivalence.exchangePortionGrams,
+      exchange_portion_label: equivalence.exchangePortionLabel,
     })
     .select('id')
     .single()

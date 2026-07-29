@@ -5,12 +5,18 @@ import {
   PORTIONS_MIN,
   addPortionGroup,
   buildFrozenPortionGroups,
+  clonePortionsForVariant,
   combineSubtotals,
   derivePortionTotals,
+  dropVariantPortions,
   esDecimal,
   formatPortionsEs,
   hasAnyPortions,
+  livePortionKeys,
+  portionsKey,
   removePortionGroup,
+  toQuickEditPortionGroup,
+  variantPortionKeys,
   setPortionValue,
   slotPortionTargets,
   slotPortionTotals,
@@ -101,9 +107,23 @@ function structuredState(): BuilderState {
     effectiveFrom: '2026-07-20',
     targets: { calories: '', proteinG: '', carbsG: '', fatsG: '' },
     permissions: { canRegisterFreely: false, canAdjustPrescribedQuantity: true, canSubstitute: false },
-    slots: [{ key: 'slot-a', name: 'Desayuno', startTime: '08:00', items: [foodItem()] }],
+    variants: [
+      {
+        key: 'default',
+        label: 'Todos los días',
+        dayOfWeek: null,
+        isDefault: true,
+        targetsMode: 'inherit',
+        targets: { calories: '', proteinG: '', carbsG: '', fatsG: '' },
+        slots: [{ key: 'slot-a', name: 'Desayuno', startTime: '08:00', items: [foodItem()] }],
+      },
+    ],
+    activeVariantKey: 'default',
   }
 }
+
+/** Clave COMPUESTA del mapa de porciones del dia base (multi-dia, FD4). */
+const BASE_SLOT_KEY = portionsKey('default', 'slot-a')
 
 describe('snap / paso-rango (espejo del CHECK y del schema)', () => {
   it('snapPortions ajusta al 0,5 mas cercano y clampa a [0,5; 99]', () => {
@@ -203,19 +223,27 @@ describe('assembleDraft cuelga exchangeTargets condicional', () => {
   })
 
   it('con ≥1 porcion: emite exchangeTargets mapeado al contrato y valida', () => {
-    const options = { clientId: CLIENT_ID, portionsBySlot: { 'slot-a': [{ exchangeGroupId: GROUP_C, portions: 2 }] } }
+    const options = { clientId: CLIENT_ID, portionsBySlot: { [BASE_SLOT_KEY]: [{ exchangeGroupId: GROUP_C, portions: 2 }] } }
     const slot = assembleDraft(structuredState(), options).dayVariants[0].mealSlots[0]
     expect(slot.exchangeTargets).toEqual([{ exchangeGroupId: GROUP_C, portions: 2, notes: null, orderIndex: 0 }])
     expect(() => assembleAndValidateDraft(structuredState(), options)).not.toThrow()
   })
 
   it('porciones en 0 no cuentan: franja sin la clave', () => {
-    const options = { clientId: CLIENT_ID, portionsBySlot: { 'slot-a': [] } }
+    const options = { clientId: CLIENT_ID, portionsBySlot: { [BASE_SLOT_KEY]: [] } }
     expect('exchangeTargets' in assembleDraft(structuredState(), options).dayVariants[0].mealSlots[0]).toBe(false)
   })
 
   it('porciones de una franja inexistente no afectan la unica franja viva', () => {
     const options = { clientId: CLIENT_ID, portionsBySlot: { 'slot-fantasma': [{ exchangeGroupId: GROUP_C, portions: 1 }] } }
+    expect('exchangeTargets' in assembleDraft(structuredState(), options).dayVariants[0].mealSlots[0]).toBe(false)
+  })
+
+  // Multi-dia (FD4): la clave PLANA (`slot-a`) ya no alcanza. Con dos dias cuyas franjas se
+  // clonaron del base, la clave plana haria que editar el sabado moviera el lunes; la compuesta
+  // (`variantKey::slotKey`) las separa.
+  it('la clave plana (sin variantKey) ya no cuelga porciones: se ignora', () => {
+    const options = { clientId: CLIENT_ID, portionsBySlot: { 'slot-a': [{ exchangeGroupId: GROUP_C, portions: 2 }] } }
     expect('exchangeTargets' in assembleDraft(structuredState(), options).dayVariants[0].mealSlots[0]).toBe(false)
   })
 })
@@ -256,3 +284,95 @@ describe('buildFrozenPortionGroups (snapshot congelado por valor)', () => {
 // NUT-005: el freeze de las porciones al publicar ocurre ahora SERVER-SIDE (el endpoint de
 // mutaciones resuelve los grupos contra `exchange_groups` con el cliente RLS del coach y congela el
 // snapshot en `plan-persistence.ts`). El dispositivo solo manda los `exchangeTargets` del draft.
+
+// ---------------------------------------------------------------------------
+// Multi-dia (FD4): clave COMPUESTA `variantKey::slotKey` + clonar/limpiar por dia.
+// Espejo 1:1 de la web `_components/portions-state.ts`.
+// ---------------------------------------------------------------------------
+
+describe('claves compuestas por dia (portionsKey / variantPortionKeys / livePortionKeys)', () => {
+  it('portionsKey separa dos dias con la MISMA franja homonima', () => {
+    const base = portionsKey('default', 'slot-a')
+    const sabado = portionsKey('sab', 'slot-a')
+    expect(base).not.toBe(sabado)
+    const map = addPortionGroup(addPortionGroup({}, base, GROUP_C), sabado, GROUP_V)
+    expect(slotPortionTargets(map, base)).toEqual([{ exchangeGroupId: GROUP_C, portions: 1 }])
+    expect(slotPortionTargets(map, sabado)).toEqual([{ exchangeGroupId: GROUP_V, portions: 1 }])
+    // Editar el sabado NO mueve el base (el bug que la clave plana provocaba).
+    const stepped = stepPortionValue(map, sabado, GROUP_V, 1)
+    expect(slotPortionTargets(stepped, base)).toEqual([{ exchangeGroupId: GROUP_C, portions: 1 }])
+    expect(slotPortionTargets(stepped, sabado)).toEqual([{ exchangeGroupId: GROUP_V, portions: 1.5 }])
+  })
+
+  it('variantPortionKeys queda alineada por indice con los dias y sus franjas', () => {
+    const variants = [
+      { key: 'default', slots: [{ key: 's1' }, { key: 's2' }] },
+      { key: 'sab', slots: [{ key: 'sab~s1' }] },
+    ]
+    expect(variantPortionKeys(variants)).toEqual([['default::s1', 'default::s2'], ['sab::sab~s1']])
+    expect(livePortionKeys(variants)).toEqual(['default::s1', 'default::s2', 'sab::sab~s1'])
+  })
+})
+
+describe('clonePortionsForVariant / dropVariantPortions', () => {
+  it('clona las porciones del dia origen a las franjas derivadas del destino', () => {
+    const map: PortionsBySlot = {
+      [portionsKey('default', 's1')]: [{ exchangeGroupId: GROUP_C, portions: 2 }],
+      [portionsKey('default', 's2')]: [],
+    }
+    const cloned = clonePortionsForVariant(map, {
+      sourceVariantKey: 'default',
+      targetVariantKey: 'sab',
+      slotKeyPairs: [
+        { from: 's1', to: 'sab~s1' },
+        { from: 's2', to: 'sab~s2' },
+      ],
+    })
+    expect(slotPortionTargets(cloned, portionsKey('sab', 'sab~s1'))).toEqual([
+      { exchangeGroupId: GROUP_C, portions: 2 },
+    ])
+    // Franja de origen SIN porciones => no se crea entrada basura en el destino.
+    expect(portionsKey('sab', 'sab~s2') in cloned).toBe(false)
+    // El clon es por VALOR: mover el destino no toca el origen.
+    const moved = stepPortionValue(cloned, portionsKey('sab', 'sab~s1'), GROUP_C, -1)
+    expect(slotPortionTargets(moved, portionsKey('default', 's1'))).toEqual([
+      { exchangeGroupId: GROUP_C, portions: 2 },
+    ])
+  })
+
+  it('sin nada que clonar devuelve el MISMO mapa (identidad, sin re-render)', () => {
+    const map: PortionsBySlot = { [portionsKey('default', 's1')]: [] }
+    const cloned = clonePortionsForVariant(map, {
+      sourceVariantKey: 'default',
+      targetVariantKey: 'sab',
+      slotKeyPairs: [{ from: 's1', to: 'sab~s1' }],
+    })
+    expect(cloned).toBe(map)
+  })
+
+  it('dropVariantPortions borra SOLO las claves del dia eliminado', () => {
+    const map: PortionsBySlot = {
+      [portionsKey('default', 's1')]: [{ exchangeGroupId: GROUP_C, portions: 1 }],
+      [portionsKey('sab', 'sab~s1')]: [{ exchangeGroupId: GROUP_V, portions: 3 }],
+    }
+    const dropped = dropVariantPortions(map, 'sab')
+    expect(Object.keys(dropped)).toEqual([portionsKey('default', 's1')])
+    // Dia inexistente => misma referencia.
+    expect(dropVariantPortions(dropped, 'dom')).toBe(dropped)
+  })
+})
+
+describe('toQuickEditPortionGroup (porciones propias FD6a)', () => {
+  it('traduce un grupo del catalogo al dict del quick-edit sin compuestos', () => {
+    expect(toQuickEditPortionGroup(CEREAL)).toEqual({
+      exchangeGroupId: GROUP_C,
+      groupCode: 'C',
+      groupName: 'Cereales',
+      color: null,
+      ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0 },
+      composedOf: null,
+      macrosConfirmed: true,
+      sortOrder: 0,
+    })
+  })
+})

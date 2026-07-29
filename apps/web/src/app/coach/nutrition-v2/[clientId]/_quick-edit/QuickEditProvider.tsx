@@ -35,6 +35,7 @@ import {
   applyQuickEditToDraft,
   buildSubstitutionMap,
   collectPortionGroups,
+  countVariantHeaderChanges,
   qeExchangeGroups,
   quickEditReducer,
   readModelToEditState,
@@ -74,6 +75,12 @@ interface QuickEditContextValue {
   strategy: NutritionStrategy
   protocolNotes: string | null
   permissions: NutritionPlanReadModel['permissions']
+  /**
+   * Entitlement Nutricion Pro (resuelto server-side). Gobierna SOLO la afordancia de los
+   * dias especificos: sin Pro el CTA "Agregar día" muestra candado + upsell. El gate real
+   * es del servidor (`multi_variant` -> UPGRADE_REQUIRED), que rechaza igual.
+   */
+  hasNutritionPro: boolean
   /**
    * Grupos de porciones que el plan ya usa (snapshots congelados del read model), para el
    * picker de la seccion "Porciones a eleccion". [] = plan sin capa de porciones (la
@@ -133,6 +140,7 @@ export function QuickEditProvider({
   itemSubstitutions,
   substitutionsLoadFailed = false,
   today,
+  hasNutritionPro = false,
   onExit,
   children,
 }: {
@@ -151,6 +159,8 @@ export function QuickEditProvider({
    */
   substitutionsLoadFailed?: boolean
   today: string
+  /** Entitlement Nutricion Pro server-side: gobierna la afordancia multi-dia. Default fail-closed. */
+  hasNutritionPro?: boolean
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
   children: ReactNode
@@ -202,7 +212,13 @@ export function QuickEditProvider({
   // sin depender de detalles de normalizacion del paquete.
   const baselineDraft = useMemo(() => applyQuickEditToDraft(baseDraft, initialState), [baseDraft, initialState])
   const currentDraft = useMemo(() => applyQuickEditToDraft(baseDraft, state), [baseDraft, state])
-  const changeCount = useMemo(() => countDraftChanges(baselineDraft, currentDraft), [baselineDraft, currentDraft])
+  // FD5: el contador del paquete no mira el ENCABEZADO de la variante (etiqueta / dia de
+  // semana), asi que renombrar o mover un dia quedaria en "0 cambios" y sin barra de
+  // publicar. Se suma el delta de encabezados calculado sobre los MISMOS drafts.
+  const changeCount = useMemo(
+    () => countDraftChanges(baselineDraft, currentDraft) + countVariantHeaderChanges(baselineDraft, currentDraft),
+    [baselineDraft, currentDraft],
+  )
   const validation = useMemo(() => validateQuickEdit(state), [state])
 
   const dispatch = useCallback(
@@ -433,6 +449,7 @@ export function QuickEditProvider({
     strategy: planModel.plan?.strategy ?? 'flexible',
     protocolNotes: planModel.protocolNotes,
     permissions: planModel.permissions,
+    hasNutritionPro,
     portionGroups,
     exchangeGroups,
     substitutionsFailed: substitutionsLoadFailed,

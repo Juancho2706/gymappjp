@@ -175,6 +175,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             itemSubstitutions={itemSubstitutions}
             substitutionsLoadFailed={substitutionsLoadFailed}
             today={today}
+            hasNutritionPro={nutritionProEnabled}
           />
         ) : (
           <Link

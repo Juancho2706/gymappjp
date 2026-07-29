@@ -8,16 +8,39 @@
  * (F1 §1.2.B.4). Light/dark y white-label via tokens del DS.
  */
 
-import { useState } from 'react'
-import { History, Info, NotebookPen, Plus, X } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import {
+  CalendarDays,
+  History,
+  Info,
+  MoreVertical,
+  NotebookPen,
+  PencilLine,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  NUTRITION_WEEK_ORDER,
+  formatNutritionDayOfWeek,
+  sortNutritionDayVariantsForDisplay,
+} from '@eva/nutrition-v2'
 import { StrategyBadge } from '@/components/nutrition-v2'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
+import { AddDayPopover } from '../builder/_components/AddDayPopover'
 import { EditableSlotCard } from './EditableSlotCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { PublishBar } from './PublishBar'
 import { PublishConfirmSheet } from './PublishConfirmSheet'
 import { StaleBaseDialog } from './StaleBaseDialog'
+import {
+  defaultQeVariant,
+  takenDayVariantDows,
+  VARIANT_LABEL_MAX,
+  type QeVariant,
+} from './quick-edit-state'
 import { QE_COPY } from './microcopy'
 
 export function QuickEditPlanView() {
@@ -37,6 +60,10 @@ export function QuickEditPlanView() {
     dismissRestore,
   } = useQuickEdit()
   const usesSlots = strategy === 'structured' || strategy === 'hybrid'
+  // FD5: orden de lectura del multi-dia (base primero, luego Lu→Do). El estado conserva el
+  // orden de alta; la presentacion usa el MISMO helper que la ficha y el alumno.
+  const orderedVariants = useMemo(() => sortNutritionDayVariantsForDisplay(state.variants), [state.variants])
+  const multiDay = orderedVariants.length > 1
 
   return (
     <div
@@ -99,11 +126,9 @@ export function QuickEditPlanView() {
           </div>
         ) : null}
 
-        {state.variants.map((variant) => (
+        {orderedVariants.map((variant) => (
           <section key={variant.key} className="space-y-4">
-            {state.variants.length > 1 ? (
-              <h2 className="font-display text-base font-semibold text-strong">{variant.label}</h2>
-            ) : null}
+            {multiDay ? <DayVariantHeader variant={variant} /> : null}
             <TargetsEditorCard variant={variant} />
             {usesSlots || variant.slots.length > 0 ? (
               <>
@@ -120,6 +145,9 @@ export function QuickEditPlanView() {
             )}
           </section>
         ))}
+
+        {/* FD5: "+ Agregar día" al final de la lista de días (multi-select Lu-Do + origen). */}
+        <AddDayButton />
 
         {/* Notas visibles EDITABLES (visible_notes); permisos siguen read-only con hint. */}
         <section className="rounded-card border border-border-subtle bg-surface-card p-4">
@@ -181,6 +209,254 @@ export function QuickEditPlanView() {
       <PublishBar />
       <PublishConfirmSheet />
       <StaleBaseDialog />
+    </div>
+  )
+}
+
+/**
+ * Bottom sheet compartido de los flujos multi-dia. Se usa Sheet (z-[71]) y NO DropdownMenu
+ * a proposito: el overlay del quick-edit vive en z-[60] y el popup del menu se posiciona en
+ * z-50, asi que en movil el sheet es la unica superficie que queda POR ENCIMA sin pelear
+ * con el stacking del overlay (ademas de ser la afordancia tactil correcta).
+ */
+function QeBottomSheet({
+  open,
+  onOpenChange,
+  title,
+  children,
+}: {
+  open: boolean
+  onOpenChange: (next: boolean) => void
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-card bg-surface-card text-body dark:bg-surface-card">
+        <SheetHeader className="border-border-subtle bg-transparent p-4 pb-2 dark:border-border-subtle">
+          <SheetTitle className="pr-10 font-display text-lg font-semibold normal-case tracking-tight text-strong">
+            {title}
+          </SheetTitle>
+        </SheetHeader>
+        <div className="space-y-3 px-4 pb-[max(env(safe-area-inset-bottom,0px),1rem)]">{children}</div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+/**
+ * Tira Lu-Do seleccionable. `taken` = dias que YA tienen plan propio (deshabilitados, salvo
+ * el dia actual de la variante que se esta cambiando, que se muestra como seleccionado).
+ */
+function DayPicker({
+  selected,
+  taken,
+  onToggle,
+}: {
+  selected: readonly number[]
+  taken: ReadonlySet<number>
+  onToggle: (dayOfWeek: number) => void
+}) {
+  return (
+    <div className="grid grid-cols-7 gap-1.5">
+      {NUTRITION_WEEK_ORDER.map((dayOfWeek) => {
+        const isSelected = selected.includes(dayOfWeek)
+        const isTaken = taken.has(dayOfWeek) && !isSelected
+        return (
+          <button
+            key={dayOfWeek}
+            type="button"
+            disabled={isTaken}
+            aria-pressed={isSelected}
+            aria-label={
+              formatNutritionDayOfWeek(dayOfWeek) + (isTaken ? ` — ${QE_COPY.dayTaken}` : '')
+            }
+            title={isTaken ? QE_COPY.dayTaken : undefined}
+            onClick={() => onToggle(dayOfWeek)}
+            className={
+              'min-h-11 rounded-control border text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+              (isSelected
+                ? 'border-primary bg-primary/15 text-primary'
+                : isTaken
+                  ? 'cursor-not-allowed border-border-subtle bg-surface-sunken text-muted opacity-60'
+                  : 'border-border-default bg-surface-card text-strong hover:bg-surface-sunken')
+            }
+          >
+            {formatNutritionDayOfWeek(dayOfWeek, { short: true })}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Encabezado de un dia del plan (FD5): etiqueta + menu (Cambiar día / Renombrar / Eliminar).
+ * El dia base es intocable — no cambia de dia ni se elimina — asi que solo ofrece renombrar.
+ */
+function DayVariantHeader({ variant }: { variant: QeVariant }) {
+  const { state, dispatch, isPending, errors, showErrors } = useQuickEdit()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [dayOpen, setDayOpen] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [nameDraft, setNameDraft] = useState(variant.label)
+  const labelError = showErrors ? errors[`variant.${variant.key}.label`] : undefined
+  const taken = takenDayVariantDows(state)
+
+  function openRename() {
+    setNameDraft(variant.label)
+    setMenuOpen(false)
+    setRenameOpen(true)
+  }
+
+  function handleRename() {
+    if (nameDraft.trim().length === 0) return
+    dispatch({ type: 'SET_VARIANT_LABEL', variantKey: variant.key, value: nameDraft.trim() })
+    setRenameOpen(false)
+  }
+
+  function handlePickDay(dayOfWeek: number) {
+    dispatch({ type: 'SET_VARIANT_DAY', variantKey: variant.key, dayOfWeek })
+    setDayOpen(false)
+  }
+
+  function handleRemove() {
+    const index = state.variants.findIndex((candidate) => candidate.key === variant.key)
+    if (index < 0) return
+    const removed = state.variants[index]
+    setMenuOpen(false)
+    dispatch({ type: 'REMOVE_VARIANT', variantKey: variant.key })
+    toast(QE_COPY.dayRemovedUndo, {
+      duration: 5000,
+      action: {
+        label: QE_COPY.undo,
+        onClick: () => dispatch({ type: 'RESTORE_VARIANT', index, variant: removed }),
+      },
+    })
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="font-mono text-[10px] font-semibold uppercase leading-4 tracking-[0.16em] text-muted">
+          {variant.isDefault ? QE_COPY.baseDayEyebrow : QE_COPY.specificDayEyebrow}
+        </p>
+        <h2 className="truncate font-display text-base font-semibold text-strong">{variant.label}</h2>
+        {variant.isDefault ? (
+          <p className="mt-0.5 text-xs leading-5 text-muted">{QE_COPY.baseDayHint}</p>
+        ) : null}
+        {labelError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{labelError}</p> : null}
+      </div>
+      <button
+        type="button"
+        aria-label={QE_COPY.dayMenu(variant.label)}
+        disabled={isPending}
+        onClick={() => setMenuOpen(true)}
+        className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      >
+        <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
+      </button>
+
+      <QeBottomSheet open={menuOpen} onOpenChange={setMenuOpen} title={variant.label}>
+        {!variant.isDefault ? (
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false)
+              setDayOpen(true)
+            }}
+            className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <CalendarDays aria-hidden="true" className="h-4 w-4 text-muted" />
+            {QE_COPY.changeDay}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={openRename}
+          className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <PencilLine aria-hidden="true" className="h-4 w-4 text-muted" />
+          {QE_COPY.renameDay}
+        </button>
+        {!variant.isDefault ? (
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-rose-300 bg-surface-card px-3 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
+          >
+            <Trash2 aria-hidden="true" className="h-4 w-4" />
+            {QE_COPY.removeDay}
+          </button>
+        ) : null}
+        {variant.isDefault ? (
+          <p className="flex items-start gap-1.5 text-xs leading-5 text-muted">
+            <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {QE_COPY.baseDayHint}
+          </p>
+        ) : null}
+      </QeBottomSheet>
+
+      <QeBottomSheet open={dayOpen} onOpenChange={setDayOpen} title={QE_COPY.changeDayTitle}>
+        <p className="text-xs leading-5 text-muted">{QE_COPY.changeDayHint}</p>
+        <DayPicker
+          selected={variant.dayOfWeek == null ? [] : [variant.dayOfWeek]}
+          taken={taken}
+          onToggle={handlePickDay}
+        />
+      </QeBottomSheet>
+
+      <QeBottomSheet open={renameOpen} onOpenChange={setRenameOpen} title={QE_COPY.renameDayTitle}>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor={`qe-day-name-${variant.key}`}>
+            {QE_COPY.dayNameLabel}
+          </label>
+          <input
+            id={`qe-day-name-${variant.key}`}
+            value={nameDraft}
+            maxLength={VARIANT_LABEL_MAX}
+            placeholder={QE_COPY.dayNamePlaceholder}
+            onChange={(event) => setNameDraft(event.target.value)}
+            className="min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-base text-strong outline-none transition-colors placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/25 md:text-sm"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleRename}
+          disabled={nameDraft.trim().length === 0}
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        >
+          {QE_COPY.renameDay}
+        </button>
+      </QeBottomSheet>
+    </div>
+  )
+}
+
+/**
+ * "+ Agregar día" (FD5): REUSA el `AddDayPopover` del builder multi-día (popover en desktop
+ * / bottom sheet en móvil, multi-select Lu-Do con los días ocupados deshabilitados y origen
+ * copiar-el-base / vacío). El import es limpio — el componente solo recibe props y no
+ * conoce el estado del builder — así que ambas superficies comparten UNA afordancia.
+ *
+ * Gate Pro: `locked` pinta candado + upsell en vez del selector. La barrera REAL es el
+ * servidor (`multi_variant` → UPGRADE_REQUIRED al publicar); esto solo evita el viaje.
+ */
+function AddDayButton() {
+  const { state, dispatch, hasNutritionPro } = useQuickEdit()
+  const takenDays = useMemo(() => [...takenDayVariantDows(state)], [state])
+  const base = useMemo(() => defaultQeVariant(state), [state])
+
+  return (
+    <div className="flex justify-center">
+      <AddDayPopover
+        takenDays={takenDays}
+        canCopyBase={(base?.slots.length ?? 0) > 0}
+        locked={!hasNutritionPro}
+        onCreate={(days, origin) =>
+          dispatch({ type: 'ADD_VARIANT', days, source: origin === 'copy-base' ? 'clone' : 'empty' })
+        }
+      />
     </div>
   )
 }

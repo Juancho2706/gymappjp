@@ -222,6 +222,101 @@ export const DeleteExchangeGroupSchema = z.object({
 })
 export type DeleteExchangeGroupInput = z.infer<typeof DeleteExchangeGroupSchema>
 
+// ─── Equivalencia de porciones de un alimento (clasificar alimentos propios — P-B) ──
+//
+// Las 3 columnas `exchange_*` de `foods` clasifican un alimento dentro de un grupo:
+// "1 porción de C = 120 g de arroz integral (≈ 1 taza)". `authenticated` ya tiene
+// INSERT+UPDATE sobre las 3 (grant de tabla verificado en LIVE) ⇒ P-B no necesita SQL.
+//
+// El read model del alumno NO cambia: `exchangeFoods` y la cobertura derivada leen `foods`
+// vivo. Ojo con el cap del read model: la vista corta las equivalencias por grupo en
+// `rn <= 40` (`20260718150000_nutrition_portions_read_models.sql:364`, replicado en
+// `20260720120000`), ordenadas por nombre — clasificar el alimento 41 de un grupo NO
+// rompe nada, pero ese alimento no aparece en el sheet del alumno hasta que se priorice
+// a los propios (F2 del SPEC).
+
+/** Tope de la medida casera ("1 taza", "1 palma"): es un hint corto, no una descripción. */
+export const EXCHANGE_PORTION_LABEL_MAX = 40
+/** Tope defensivo de gramos por porción (una porción jamás es un kilo y medio). */
+export const EXCHANGE_PORTION_GRAMS_MAX = 5000
+
+/**
+ * Trío `exchange_*` — se mezcla dentro del schema de alta/edición de alimento de cada
+ * superficie (web V2 `CoachFoodInputSchema`, alta directa del catálogo, RN). Los 3 campos
+ * son opcionales: un alimento sin clasificar es el caso normal.
+ */
+export const foodExchangeEquivalenceShape = {
+    exchangeGroupId: z.guid('Grupo de porciones inválido').nullish(),
+    exchangePortionGrams: z
+        .number({ error: 'Los gramos por porción deben ser un número' })
+        .positive('Los gramos por porción deben ser mayores a 0')
+        .max(EXCHANGE_PORTION_GRAMS_MAX, `Máximo ${EXCHANGE_PORTION_GRAMS_MAX} g por porción`)
+        .nullish(),
+    exchangePortionLabel: z
+        .string()
+        .trim()
+        .max(EXCHANGE_PORTION_LABEL_MAX, `Máximo ${EXCHANGE_PORTION_LABEL_MAX} caracteres`)
+        .nullish(),
+}
+
+export type FoodExchangeEquivalenceInput = {
+    exchangeGroupId?: string | null
+    exchangePortionGrams?: number | null
+    exchangePortionLabel?: string | null
+}
+
+/**
+ * Regla junto-o-nada: grupo ⇔ gramos. La medida casera es el único campo realmente
+ * opcional del trío, pero no tiene sentido sola (nadie ve "1 taza" sin saber de qué grupo
+ * ni cuántos gramos), así que también exige grupo. Devuelve el primer problema o `null`.
+ */
+export function foodExchangeEquivalenceIssue(
+    value: FoodExchangeEquivalenceInput
+): { path: 'exchangeGroupId' | 'exchangePortionGrams'; message: string } | null {
+    const hasGroup = typeof value.exchangeGroupId === 'string' && value.exchangeGroupId.length > 0
+    const hasGrams = value.exchangePortionGrams != null
+    const hasLabel = (value.exchangePortionLabel ?? '').trim().length > 0
+    if (hasGroup && !hasGrams) {
+        return { path: 'exchangePortionGrams', message: 'Indica cuántos gramos equivalen a 1 porción.' }
+    }
+    if (!hasGroup && (hasGrams || hasLabel)) {
+        return { path: 'exchangeGroupId', message: 'Elige el grupo de porciones al que equivale este alimento.' }
+    }
+    return null
+}
+
+/**
+ * Callback para `.superRefine()` del schema que mezcle `foodExchangeEquivalenceShape`.
+ * Zod 4 conserva la clase del schema tras refinar, así que el `.extend()` que hace el
+ * endpoint mobile sobre `CoachFoodInputSchema` sigue funcionando.
+ */
+export function refineFoodExchangeEquivalence(
+    value: FoodExchangeEquivalenceInput,
+    ctx: { addIssue: (issue: { code: 'custom'; path: string[]; message: string }) => void }
+): void {
+    const issue = foodExchangeEquivalenceIssue(value)
+    if (issue) ctx.addIssue({ code: 'custom', path: [issue.path], message: issue.message })
+}
+
+/**
+ * Normaliza el trío a lo que va a las columnas: sin grupo ⇒ los 3 en NULL (limpiar la
+ * clasificación es un caso legítimo del update); etiqueta vacía ⇒ NULL, nunca ''.
+ */
+export function normalizeFoodExchangeEquivalence(value: FoodExchangeEquivalenceInput): {
+    exchangeGroupId: string | null
+    exchangePortionGrams: number | null
+    exchangePortionLabel: string | null
+} {
+    const groupId = typeof value.exchangeGroupId === 'string' && value.exchangeGroupId.length > 0 ? value.exchangeGroupId : null
+    if (!groupId) return { exchangeGroupId: null, exchangePortionGrams: null, exchangePortionLabel: null }
+    const label = (value.exchangePortionLabel ?? '').trim()
+    return {
+        exchangeGroupId: groupId,
+        exchangePortionGrams: value.exchangePortionGrams ?? null,
+        exchangePortionLabel: label.length > 0 ? label : null,
+    }
+}
+
 export const ExchangePdfFormatSchema = z.enum(['compact', 'equivalences', 'full'])
 export type ExchangePdfFormatInput = z.infer<typeof ExchangePdfFormatSchema>
 

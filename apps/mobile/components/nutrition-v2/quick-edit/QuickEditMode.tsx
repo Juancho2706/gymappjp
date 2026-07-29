@@ -11,15 +11,31 @@ import {
   View,
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
-import { ArrowLeft, History, Info, NotebookPen, X } from 'lucide-react-native'
-import type {
-  FoodCatalogItem,
-  NutritionItemSubstitution,
-  NutritionPlanReadModel,
-  NutritionV2CoachScope,
+import { useRouter } from 'expo-router'
+import {
+  ArrowLeft,
+  CalendarDays,
+  History,
+  Info,
+  Lock,
+  MoreVertical,
+  NotebookPen,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react-native'
+import {
+  NUTRITION_WEEK_ORDER,
+  formatNutritionDayOfWeek,
+  type FoodCatalogItem,
+  type NutritionItemSubstitution,
+  type NutritionPlanReadModel,
+  type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
-import { NutritionHeader, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
+import { NutritionHeader, NutritionMotionButton, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
+import { Sheet } from '../../Sheet'
 import { useTheme } from '../../../context/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import {
@@ -35,11 +51,16 @@ import {
   countQuickEditChanges,
   loadQuickEditFoods,
   loadQuickEditSubstitutions,
+  planDayVariantAdditions,
   planModelToQuickEditState,
   quickEditReducer,
   quickEditUsesSlots,
+  sortQuickEditVariantsForDisplay,
+  takenDayVariantDows,
   validateQuickEditState,
+  VARIANT_LABEL_MAX,
   type QuickEditState,
+  type QuickEditVariant,
 } from '../../../lib/nutrition-v2-quick-edit'
 import {
   countPortionsChanges,
@@ -49,6 +70,9 @@ import {
   type QuickEditPortionsState,
   type QuickEditPortionTarget,
 } from './portions-state'
+import type { QuickEditGroupAdmin } from './EditablePortionsSection'
+import { fetchCoachExchangeGroups } from '../../../lib/nutrition-exchanges.coach'
+import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
 import { publishQuickEditRN } from '../../../lib/nutrition-v2.api'
 import {
   clearNutritionDraft,
@@ -62,7 +86,7 @@ import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar } from './PublishBar'
 import { ProUpsellSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
-import { QUICK_EDIT_COPY, discardConfirmBody } from './microcopy'
+import { QUICK_EDIT_COPY, addDayCta, discardConfirmBody, removeDayConfirmBody } from './microcopy'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 
 let keySeq = 0
@@ -114,6 +138,7 @@ export function QuickEditMode({
   planModel,
   scope,
   todayIso,
+  hasNutritionPro = false,
   onExit,
   onPublished,
   onStaleReload,
@@ -124,11 +149,18 @@ export function QuickEditMode({
   /** Workspace coach activo: viaja al endpoint de mutaciones (gate de rollout + scope). */
   scope: NutritionV2CoachScope
   todayIso: string
+  /**
+   * Entitlement Nutricion Pro del coach. Gobierna SOLO la afordancia de los dias
+   * especificos (candado + upsell en vez del selector). El gate real es server-side
+   * (`multi_variant` -> UPGRADE_REQUIRED en el endpoint de mutaciones). Default fail-closed.
+   */
+  hasNutritionPro?: boolean
   onExit: () => void
   onPublished: () => void
   onStaleReload: () => void
 }) {
   const { theme } = useTheme()
+  const router = useRouter()
   // Baseline CONGELADO al montar: se hidrata UNA vez al entrar al modo edicion (el
   // componente se monta al entrar y se desmonta al salir; una re-entrada re-hidrata
   // fresco). Si la ficha recibe un read model mas nuevo mientras se edita (carrera
@@ -148,7 +180,27 @@ export function QuickEditMode({
   const initialState = frozen.initial
   const [state, dispatch] = useReducer(quickEditReducer, initialState)
   const [portionsState, dispatchPortions] = useReducer(portionsReducer, frozen.portions.initial)
-  const portionGroups = frozen.portions.groups
+
+  // Porciones propias (FD6a): la lista del picker es el dict CONGELADO del plan. Crear un grupo
+  // agrega una entrada; editarlo reemplaza la suya en el sitio; eliminarlo lo saca de la lista
+  // (los targets ya publicados conservan su snapshot congelado — el grupo borrado no los mueve).
+  const [groupOverrides, setGroupOverrides] = useState<QuickEditPortionGroup[]>([])
+  const [removedGroupIds, setRemovedGroupIds] = useState<ReadonlySet<string>>(() => new Set<string>())
+  // Ids de grupos PROPIOS del coach: el dict congelado no distingue system de propios, así que se
+  // resuelven con UNA lectura perezosa del catálogo (RLS coach-scoped) al abrir el picker. Si falla,
+  // simplemente no aparece la afordancia de editar (crear sigue funcionando).
+  const [ownGroupIds, setOwnGroupIds] = useState<ReadonlySet<string>>(() => new Set<string>())
+  const ownGroupsRequestedRef = useRef(false)
+
+  const portionGroups = useMemo(() => {
+    const overrides = new Map(groupOverrides.map((group) => [group.exchangeGroupId, group]))
+    const merged = frozen.portions.groups.map((group) => overrides.get(group.exchangeGroupId) ?? group)
+    const known = new Set(merged.map((group) => group.exchangeGroupId))
+    for (const group of groupOverrides) {
+      if (!known.has(group.exchangeGroupId)) merged.push(group)
+    }
+    return merged.filter((group) => !removedGroupIds.has(group.exchangeGroupId))
+  }, [frozen.portions.groups, groupOverrides, removedGroupIds])
 
   const [foodsById, setFoodsById] = useState<ReadonlyMap<string, BuilderFood>>(new Map())
   // Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. Carry-over PURO:
@@ -170,6 +222,14 @@ export function QuickEditMode({
   const [upsell, setUpsell] = useState<string | null>(null)
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
   const [undo, setUndo] = useState<UndoEntry | null>(null)
+  // FD5 (multi-dia): sheets del alta de dias y del menu por dia (renombrar / cambiar dia).
+  const [addDayOpen, setAddDayOpen] = useState(false)
+  const [addDays, setAddDays] = useState<number[]>([])
+  const [addSource, setAddSource] = useState<'clone' | 'empty'>('clone')
+  const [dayMenuKey, setDayMenuKey] = useState<string | null>(null)
+  const [changeDayKey, setChangeDayKey] = useState<string | null>(null)
+  const [renameKey, setRenameKey] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
   // Respaldo local (F2) de una sesion anterior recuperado de AsyncStorage; alimenta el banner
   // "Restaurar". Guarda el payload completo (state + portions) hasta que el coach decida.
   const [pendingRestore, setPendingRestore] = useState<QuickEditDraftPayload | null>(null)
@@ -395,6 +455,53 @@ export function QuickEditMode({
     dispatchPortions({ type: 'ADD_TARGET', slotKey, key: genKey('ptarget'), group })
   }, [])
 
+  // Porciones propias (FD6a): administración de grupos desde el picker del quick-edit. La
+  // ESCRITURA vive en `ExchangeGroupFormSheet` (endpoint mobile, nunca Supabase directo); acá solo
+  // se refleja el resultado en la lista y —al eliminar— se quitan los targets que quedarían
+  // apuntando a un grupo borrado (publicar así rompería el freeze con EXCHANGE_GROUP_NOT_FOUND).
+  const portionGroupAdmin: QuickEditGroupAdmin = useMemo(
+    () => ({
+      ownGroupIds,
+      ensureLoaded: () => {
+        if (ownGroupsRequestedRef.current) return
+        ownGroupsRequestedRef.current = true
+        void fetchCoachExchangeGroups()
+          .then((groups) => {
+            if (!mountedRef.current) return
+            setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
+          })
+          .catch(() => {
+            // Best-effort: sin catálogo no hay afordancia de editar, pero crear sigue disponible.
+          })
+      },
+      onSaved: (group) => {
+        setGroupOverrides((prev) => [
+          ...prev.filter((g) => g.exchangeGroupId !== group.id),
+          toQuickEditPortionGroup(group),
+        ])
+        setRemovedGroupIds((prev) => {
+          if (!prev.has(group.id)) return prev
+          const next = new Set(prev)
+          next.delete(group.id)
+          return next
+        })
+        setOwnGroupIds((prev) => (prev.has(group.id) ? prev : new Set(prev).add(group.id)))
+      },
+      onDeleted: (groupId) => {
+        setRemovedGroupIds((prev) => new Set(prev).add(groupId))
+        setGroupOverrides((prev) => prev.filter((g) => g.exchangeGroupId !== groupId))
+        for (const [slotKey, slotTargets] of Object.entries(portionsState.bySlot)) {
+          for (const target of slotTargets) {
+            if (target.exchangeGroupId === groupId) {
+              dispatchPortions({ type: 'REMOVE_TARGET', slotKey, targetKey: target.key })
+            }
+          }
+        }
+      },
+    }),
+    [ownGroupIds, portionsState.bySlot],
+  )
+
   const handleRemoveSlot = useCallback(
     (variantKey: string, slotKey: string) => {
       const variant = state.variants.find((v) => v.key === variantKey)
@@ -428,6 +535,75 @@ export function QuickEditMode({
       )
     },
     [state, baseline, pushUndo],
+  )
+
+  // ── Multi-dia (FD5) ────────────────────────────────────────────────────────────────
+  // Dias ya reclamados por una variante especifica (el picker los deshabilita).
+  const takenDays = useMemo(() => takenDayVariantDows(state), [state])
+  // Orden de lectura: dia base primero, despues los especificos Lu→Do (espejo web).
+  const orderedVariants = useMemo(() => sortQuickEditVariantsForDisplay(state.variants), [state.variants])
+  const showVariantHeader = state.variants.length > 1
+
+  function openAddDay() {
+    setAddDays([])
+    setAddSource('clone')
+    setAddDayOpen(true)
+  }
+
+  /**
+   * Alta de uno o varios dias. Ademas del arbol principal hay que clonar la capa de
+   * PORCIONES, que en RN vive en un reducer aparte keyed por `slot.key`: sin esto el dia
+   * clonado perderia sus grupos a eleccion. El mapeo `from -> to` sale de la MISMA funcion
+   * pura que usa el reducer, asi que pantalla y estado no pueden divergir.
+   */
+  const handleAddDays = useCallback(() => {
+    if (addDays.length === 0) return
+    const plan = planDayVariantAdditions(state, addDays, addSource)
+    if (plan.variants.length === 0) {
+      setAddDayOpen(false)
+      return
+    }
+    dispatch({ type: 'ADD_VARIANT', days: addDays, source: addSource })
+    if (plan.slotKeyClones.length > 0) {
+      const bySlot = { ...portionsState.bySlot }
+      let cloned = false
+      for (const { from, to } of plan.slotKeyClones) {
+        const targets = portionsState.bySlot[from] ?? []
+        if (targets.length === 0) continue
+        // Keys de UI propias (prefijadas por la franja nueva); el `id` de la version base se
+        // conserva igual que en los items: la persistencia lo ignora e inserta filas nuevas.
+        bySlot[to] = targets.map((target) => ({ ...target, key: to + ':' + target.key }))
+        cloned = true
+      }
+      if (cloned) dispatchPortions({ type: 'RESTORE_PORTIONS', state: { bySlot } })
+    }
+    setAddDayOpen(false)
+  }, [addDays, addSource, state, portionsState])
+
+  const handleRemoveDay = useCallback(
+    (variant: QuickEditVariant) => {
+      const index = state.variants.findIndex((candidate) => candidate.key === variant.key)
+      if (index < 0 || variant.default) return
+      const removed = state.variants[index]
+      setDayMenuKey(null)
+      Alert.alert(QUICK_EDIT_COPY.removeDayTitle, removeDayConfirmBody(variant.label.trim() || 'este día'), [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            dispatch({ type: 'REMOVE_VARIANT', variantKey: variant.key })
+            // Las porciones de sus franjas quedan intactas en el estado paralelo (keyed por
+            // slot.key): el RESTORE_VARIANT las recupera solo, igual que con las franjas.
+            pushUndo({
+              message: QUICK_EDIT_COPY.dayRemovedUndo,
+              restore: () => dispatch({ type: 'RESTORE_VARIANT', index, variant: removed }),
+            })
+          },
+        },
+      ])
+    },
+    [state, pushUndo],
   )
 
   const handleSelectFood = useCallback(
@@ -589,8 +765,9 @@ export function QuickEditMode({
   }
 
   const usesSlots = quickEditUsesSlots(baseline, state)
-  const showVariantLabel = state.variants.length > 1
   const futureDate = baseline.effectiveFrom > todayIso ? baseline.effectiveFrom : null
+  const dayMenuVariant = state.variants.find((variant) => variant.key === dayMenuKey) ?? null
+  const changeDayVariant = state.variants.find((variant) => variant.key === changeDayKey) ?? null
 
   return (
     <View className="flex-1 bg-surface-app">
@@ -665,11 +842,45 @@ export function QuickEditMode({
             </View>
           ) : null}
 
-          {state.variants.map((variant) => (
+          {orderedVariants.map((variant) => (
             <View key={variant.key} className="gap-3">
+              {/* FD5: encabezado del día + menú (Cambiar día / Renombrar / Eliminar). El día
+                  base no cambia de día ni se elimina; solo se puede renombrar. */}
+              {showVariantHeader ? (
+                <View className="flex-row items-start gap-2">
+                  <View className="min-w-0 flex-1">
+                    <Text className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                      {variant.default ? QUICK_EDIT_COPY.baseDayEyebrow : QUICK_EDIT_COPY.specificDayEyebrow}
+                    </Text>
+                    <Text className="font-display text-base font-semibold text-text-strong" numberOfLines={1}>
+                      {variant.label}
+                    </Text>
+                    {variant.default ? (
+                      <Text className="mt-0.5 text-xs leading-5 text-text-muted">
+                        {QUICK_EDIT_COPY.baseDayHint}
+                      </Text>
+                    ) : null}
+                    {errors['variant.' + variant.key + '.label'] ? (
+                      <Text className="mt-1 text-xs font-medium text-danger-600">
+                        {errors['variant.' + variant.key + '.label']}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={QUICK_EDIT_COPY.dayMenuTitle + ' ' + variant.label}
+                    disabled={publishing}
+                    onPress={() => setDayMenuKey(variant.key)}
+                    hitSlop={8}
+                    className="h-11 w-11 items-center justify-center rounded-control border border-border-subtle bg-surface-card"
+                  >
+                    <MoreVertical color={theme.textSecondary} size={18} />
+                  </Pressable>
+                </View>
+              ) : null}
               <TargetsEditorCard
                 variant={variant}
-                showVariantLabel={showVariantLabel}
+                showVariantLabel={false}
                 errors={errors}
                 disabled={publishing}
                 onTargetChange={(field, value) =>
@@ -688,6 +899,7 @@ export function QuickEditMode({
                       disabled={publishing}
                       portionTargets={portionsState.bySlot[slot.key] ?? []}
                       portionGroups={portionGroups}
+                      portionGroupAdmin={portionGroupAdmin}
                       onPortionStep={(targetKey, direction) =>
                         dispatchPortions({ type: 'STEP_PORTIONS', slotKey: slot.key, targetKey, direction })
                       }
@@ -744,6 +956,25 @@ export function QuickEditMode({
               ) : null}
             </View>
           ))}
+
+          {/* FD5: "+ Agregar día" al final de la lista de días. Sin Nutrición Pro el CTA lleva
+              candado y el sheet muestra el upsell (el server rechaza igual: multi_variant). */}
+          {takenDays.length < NUTRITION_WEEK_ORDER.length ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={QUICK_EDIT_COPY.addDay}
+              disabled={publishing}
+              onPress={openAddDay}
+              className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-border-default bg-surface-card px-3"
+            >
+              {hasNutritionPro ? (
+                <Plus color={theme.textSecondary} size={16} />
+              ) : (
+                <Lock color={theme.primary} size={16} />
+              )}
+              <Text className="text-sm font-semibold text-text-muted">{QUICK_EDIT_COPY.addDay}</Text>
+            </Pressable>
+          ) : null}
 
           {/* Notas visibles EDITABLES (visible_notes, espejo web QuickEditPlanView); permisos
               siguen read-only con hint. protocolNotes read-only (carry-over del publish). */}
@@ -844,6 +1075,269 @@ export function QuickEditMode({
         }}
       />
       <ProUpsellSheet message={upsell} onClose={() => setUpsell(null)} />
+
+      {/* FD5 — alta de días: multi-select Lu-Do + origen del contenido. Sin Pro, upsell. */}
+      <Sheet
+        open={addDayOpen}
+        onClose={() => setAddDayOpen(false)}
+        nativeModal
+        dynamicSizing
+        title={QUICK_EDIT_COPY.addDayTitle}
+        accessibilityLabel={QUICK_EDIT_COPY.addDayTitle}
+      >
+        {!hasNutritionPro ? (
+          <View className="gap-3">
+            <View className="flex-row items-start gap-2">
+              <Lock color={theme.primary} size={18} />
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">
+                {QUICK_EDIT_COPY.multiDayLocked}
+              </Text>
+            </View>
+            <NutritionMotionButton
+              accessibilityLabel="Ver módulos"
+              onPress={() => {
+                setAddDayOpen(false)
+                router.push('/coach/modules')
+              }}
+            >
+              Ver módulos
+            </NutritionMotionButton>
+          </View>
+        ) : (
+          <View className="gap-3">
+            <Text className="text-xs leading-5 text-text-muted">{QUICK_EDIT_COPY.addDayHint}</Text>
+            <DayPickerRow
+              selected={addDays}
+              taken={takenDays}
+              onToggle={(dayOfWeek) =>
+                setAddDays((current) =>
+                  current.includes(dayOfWeek)
+                    ? current.filter((day) => day !== dayOfWeek)
+                    : [...current, dayOfWeek],
+                )
+              }
+            />
+            <View className="gap-1.5">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                {QUICK_EDIT_COPY.addDaySourceLabel}
+              </Text>
+              {(
+                [
+                  ['clone', QUICK_EDIT_COPY.addDaySourceClone],
+                  ['empty', QUICK_EDIT_COPY.addDaySourceEmpty],
+                ] as const
+              ).map(([value, label]) => (
+                <Pressable
+                  key={value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: addSource === value }}
+                  accessibilityLabel={label}
+                  onPress={() => setAddSource(value)}
+                  className={
+                    'min-h-12 flex-row items-center justify-center rounded-control border px-3 ' +
+                    (addSource === value
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border-default bg-surface-card')
+                  }
+                >
+                  <Text
+                    className={
+                      'text-sm font-semibold ' + (addSource === value ? 'text-primary' : 'text-text-strong')
+                    }
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <NutritionMotionButton
+              accessibilityLabel={addDayCta(addDays.length)}
+              disabled={addDays.length === 0}
+              onPress={handleAddDays}
+            >
+              {addDayCta(addDays.length)}
+            </NutritionMotionButton>
+            {addDays.length === 0 ? (
+              <Text className="text-xs leading-5 text-text-muted">
+                {QUICK_EDIT_COPY.addDayEmptySelection}
+              </Text>
+            ) : null}
+          </View>
+        )}
+      </Sheet>
+
+      {/* FD5 — menú del día: cambiar día / renombrar / eliminar (el base solo se renombra). */}
+      <Sheet
+        open={dayMenuVariant !== null}
+        onClose={() => setDayMenuKey(null)}
+        nativeModal
+        dynamicSizing
+        title={dayMenuVariant?.label ?? QUICK_EDIT_COPY.dayMenuTitle}
+        accessibilityLabel={QUICK_EDIT_COPY.dayMenuTitle}
+      >
+        <View className="gap-3">
+          {dayMenuVariant && !dayMenuVariant.default ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={QUICK_EDIT_COPY.changeDay}
+              onPress={() => {
+                setChangeDayKey(dayMenuVariant.key)
+                setDayMenuKey(null)
+              }}
+              className="min-h-12 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3"
+            >
+              <CalendarDays color={theme.textSecondary} size={16} />
+              <Text className="text-sm font-semibold text-text-strong">{QUICK_EDIT_COPY.changeDay}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={QUICK_EDIT_COPY.renameDay}
+            onPress={() => {
+              if (!dayMenuVariant) return
+              setRenameDraft(dayMenuVariant.label)
+              setRenameKey(dayMenuVariant.key)
+              setDayMenuKey(null)
+            }}
+            className="min-h-12 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3"
+          >
+            <Pencil color={theme.textSecondary} size={16} />
+            <Text className="text-sm font-semibold text-text-strong">{QUICK_EDIT_COPY.renameDay}</Text>
+          </Pressable>
+          {dayMenuVariant && !dayMenuVariant.default ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={QUICK_EDIT_COPY.removeDay}
+              onPress={() => handleRemoveDay(dayMenuVariant)}
+              className="min-h-12 flex-row items-center gap-2 rounded-control border border-danger-500/40 bg-surface-card px-3"
+            >
+              <Trash2 color={theme.destructive} size={16} />
+              <Text className="text-sm font-semibold text-danger-600">{QUICK_EDIT_COPY.removeDay}</Text>
+            </Pressable>
+          ) : null}
+          {dayMenuVariant?.default ? (
+            <View className="flex-row items-start gap-1.5">
+              <Info color={theme.textSecondary} size={14} />
+              <Text className="min-w-0 flex-1 text-xs leading-5 text-text-muted">
+                {QUICK_EDIT_COPY.baseDayHint}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </Sheet>
+
+      {/* FD5 — cambiar el día de una variante específica (días ocupados deshabilitados). */}
+      <Sheet
+        open={changeDayVariant !== null}
+        onClose={() => setChangeDayKey(null)}
+        nativeModal
+        dynamicSizing
+        title={QUICK_EDIT_COPY.changeDayTitle}
+        accessibilityLabel={QUICK_EDIT_COPY.changeDayTitle}
+      >
+        <View className="gap-3">
+          <Text className="text-xs leading-5 text-text-muted">{QUICK_EDIT_COPY.changeDayHint}</Text>
+          <DayPickerRow
+            selected={changeDayVariant?.dayOfWeek == null ? [] : [changeDayVariant.dayOfWeek]}
+            taken={takenDays}
+            onToggle={(dayOfWeek) => {
+              if (!changeDayVariant) return
+              dispatch({ type: 'SET_VARIANT_DAY', variantKey: changeDayVariant.key, dayOfWeek })
+              setChangeDayKey(null)
+            }}
+          />
+        </View>
+      </Sheet>
+
+      {/* FD5 — renombrar el día (el nombre manual gana sobre la etiqueta automática). */}
+      <Sheet
+        open={renameKey !== null}
+        onClose={() => setRenameKey(null)}
+        nativeModal
+        dynamicSizing
+        title={QUICK_EDIT_COPY.renameDayTitle}
+        accessibilityLabel={QUICK_EDIT_COPY.renameDayTitle}
+      >
+        <View className="gap-3">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            {QUICK_EDIT_COPY.dayNameLabel}
+          </Text>
+          <TextInput
+            accessibilityLabel={QUICK_EDIT_COPY.dayNameLabel}
+            value={renameDraft}
+            onChangeText={setRenameDraft}
+            maxLength={VARIANT_LABEL_MAX}
+            placeholder={QUICK_EDIT_COPY.dayNamePlaceholder}
+            placeholderTextColor={theme.mutedForeground}
+            className="min-h-12 rounded-control border border-border-default bg-surface-card px-3 text-base text-text-strong"
+          />
+          <NutritionMotionButton
+            accessibilityLabel={QUICK_EDIT_COPY.renameDay}
+            disabled={renameDraft.trim().length === 0}
+            onPress={() => {
+              if (renameKey === null || renameDraft.trim().length === 0) return
+              dispatch({ type: 'SET_VARIANT_LABEL', variantKey: renameKey, value: renameDraft.trim() })
+              setRenameKey(null)
+            }}
+          >
+            {QUICK_EDIT_COPY.renameDay}
+          </NutritionMotionButton>
+        </View>
+      </Sheet>
+    </View>
+  )
+}
+
+/**
+ * Tira Lu-Do seleccionable (FD5), espejo del `DayPicker` web. `taken` = días que ya tienen
+ * su propia variante: quedan deshabilitados salvo que sean el día actualmente seleccionado
+ * (caso "Cambiar día", donde el propio día de la variante se muestra activo).
+ */
+function DayPickerRow({
+  selected,
+  taken,
+  onToggle,
+}: {
+  selected: readonly number[]
+  taken: readonly number[]
+  onToggle: (dayOfWeek: number) => void
+}) {
+  return (
+    <View className="flex-row flex-wrap gap-1.5">
+      {NUTRITION_WEEK_ORDER.map((dayOfWeek) => {
+        const isSelected = selected.includes(dayOfWeek)
+        const isTaken = taken.includes(dayOfWeek) && !isSelected
+        return (
+          <Pressable
+            key={dayOfWeek}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected, disabled: isTaken }}
+            accessibilityLabel={
+              (formatNutritionDayOfWeek(dayOfWeek) ?? '') +
+              (isTaken ? ' — ' + QUICK_EDIT_COPY.dayTaken : '')
+            }
+            disabled={isTaken}
+            onPress={() => onToggle(dayOfWeek)}
+            className={
+              'h-12 min-w-12 flex-1 items-center justify-center rounded-control border px-2 ' +
+              (isSelected
+                ? 'border-primary bg-primary/15'
+                : isTaken
+                  ? 'border-border-subtle bg-surface-sunken opacity-60'
+                  : 'border-border-default bg-surface-card')
+            }
+          >
+            <Text
+              className={
+                'text-sm font-semibold ' +
+                (isSelected ? 'text-primary' : isTaken ? 'text-text-muted' : 'text-text-strong')
+              }
+            >
+              {formatNutritionDayOfWeek(dayOfWeek, { short: true })}
+            </Text>
+          </Pressable>
+        )
+      })}
     </View>
   )
 }

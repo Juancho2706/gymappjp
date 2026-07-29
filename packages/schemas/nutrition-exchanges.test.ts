@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
+import { z } from 'zod'
 import {
+    EXCHANGE_PORTION_GRAMS_MAX,
+    EXCHANGE_PORTION_LABEL_MAX,
+    foodExchangeEquivalenceIssue,
+    foodExchangeEquivalenceShape,
+    normalizeFoodExchangeEquivalence,
+    refineFoodExchangeEquivalence,
     PlanModeSchema,
     SetPlanModeSchema,
     SaveMealExchangeTargetsSchema,
@@ -233,5 +240,108 @@ describe('UpdateExchangeGroupSchema / DeleteExchangeGroupSchema', () => {
                 composed_of: [{ code: 'C', portions: 1 }],
             }).success
         ).toBe(false)
+    })
+})
+
+// ─── Equivalencia de porciones de un alimento (P-B, clasificar alimentos propios) ──
+
+describe('foodExchangeEquivalenceIssue / normalizeFoodExchangeEquivalence', () => {
+    it('acepta el trío vacío: un alimento sin clasificar es el caso normal', () => {
+        expect(foodExchangeEquivalenceIssue({})).toBeNull()
+        expect(
+            foodExchangeEquivalenceIssue({
+                exchangeGroupId: null,
+                exchangePortionGrams: null,
+                exchangePortionLabel: null,
+            })
+        ).toBeNull()
+    })
+
+    it('acepta grupo + gramos, con o sin medida casera', () => {
+        expect(foodExchangeEquivalenceIssue({ exchangeGroupId: GROUP_ID, exchangePortionGrams: 120 })).toBeNull()
+        expect(
+            foodExchangeEquivalenceIssue({
+                exchangeGroupId: GROUP_ID,
+                exchangePortionGrams: 120,
+                exchangePortionLabel: '1 taza',
+            })
+        ).toBeNull()
+    })
+
+    it('grupo sin gramos => pide los gramos', () => {
+        expect(foodExchangeEquivalenceIssue({ exchangeGroupId: GROUP_ID })?.path).toBe('exchangePortionGrams')
+        expect(
+            foodExchangeEquivalenceIssue({ exchangeGroupId: GROUP_ID, exchangePortionGrams: null })?.path
+        ).toBe('exchangePortionGrams')
+    })
+
+    it('gramos o medida casera sin grupo => pide el grupo', () => {
+        expect(foodExchangeEquivalenceIssue({ exchangePortionGrams: 120 })?.path).toBe('exchangeGroupId')
+        expect(foodExchangeEquivalenceIssue({ exchangePortionLabel: '1 taza' })?.path).toBe('exchangeGroupId')
+        // Etiqueta en blanco no cuenta como valor.
+        expect(foodExchangeEquivalenceIssue({ exchangePortionLabel: '   ' })).toBeNull()
+    })
+
+    it('normaliza: sin grupo limpia los 3 campos; etiqueta vacía => null', () => {
+        expect(
+            normalizeFoodExchangeEquivalence({
+                exchangeGroupId: null,
+                exchangePortionGrams: 120,
+                exchangePortionLabel: '1 taza',
+            })
+        ).toEqual({ exchangeGroupId: null, exchangePortionGrams: null, exchangePortionLabel: null })
+        expect(
+            normalizeFoodExchangeEquivalence({
+                exchangeGroupId: GROUP_ID,
+                exchangePortionGrams: 120,
+                exchangePortionLabel: '  ',
+            })
+        ).toEqual({ exchangeGroupId: GROUP_ID, exchangePortionGrams: 120, exchangePortionLabel: null })
+        expect(
+            normalizeFoodExchangeEquivalence({
+                exchangeGroupId: GROUP_ID,
+                exchangePortionGrams: 120,
+                exchangePortionLabel: '  1 taza  ',
+            })
+        ).toEqual({ exchangeGroupId: GROUP_ID, exchangePortionGrams: 120, exchangePortionLabel: '1 taza' })
+    })
+})
+
+describe('foodExchangeEquivalenceShape (mezclado en un schema de alimento)', () => {
+    const FoodSchema = z
+        .object({ name: z.string().min(1), ...foodExchangeEquivalenceShape })
+        .superRefine(refineFoodExchangeEquivalence)
+
+    it('los gramos deben ser > 0 y con tope', () => {
+        expect(FoodSchema.safeParse({ name: 'Arroz', exchangeGroupId: GROUP_ID, exchangePortionGrams: 0 }).success).toBe(false)
+        expect(FoodSchema.safeParse({ name: 'Arroz', exchangeGroupId: GROUP_ID, exchangePortionGrams: -5 }).success).toBe(false)
+        expect(
+            FoodSchema.safeParse({
+                name: 'Arroz',
+                exchangeGroupId: GROUP_ID,
+                exchangePortionGrams: EXCHANGE_PORTION_GRAMS_MAX + 1,
+            }).success
+        ).toBe(false)
+        expect(FoodSchema.safeParse({ name: 'Arroz', exchangeGroupId: GROUP_ID, exchangePortionGrams: 120 }).success).toBe(true)
+    })
+
+    it('rechaza el grupo con id inválido y la medida casera muy larga', () => {
+        expect(FoodSchema.safeParse({ name: 'Arroz', exchangeGroupId: 'nope', exchangePortionGrams: 120 }).success).toBe(false)
+        expect(
+            FoodSchema.safeParse({
+                name: 'Arroz',
+                exchangeGroupId: GROUP_ID,
+                exchangePortionGrams: 120,
+                exchangePortionLabel: 'x'.repeat(EXCHANGE_PORTION_LABEL_MAX + 1),
+            }).success
+        ).toBe(false)
+    })
+
+    it('el refinamiento del trío sobrevive a un .extend() posterior (contrato del endpoint mobile)', () => {
+        const Extended = FoodSchema.extend({ action: z.literal('createFood') })
+        expect(Extended.safeParse({ name: 'Arroz', action: 'createFood' }).success).toBe(true)
+        const missingGrams = Extended.safeParse({ name: 'Arroz', action: 'createFood', exchangeGroupId: GROUP_ID })
+        expect(missingGrams.success).toBe(false)
+        expect(missingGrams.error?.issues[0]?.path).toEqual(['exchangePortionGrams'])
     })
 })

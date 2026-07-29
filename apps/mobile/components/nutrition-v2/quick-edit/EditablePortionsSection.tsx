@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import { Minus, Plus, StickyNote, Trash2 } from 'lucide-react-native'
-import { exchangeGroupColor } from '@eva/nutrition-engine'
+import { Minus, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react-native'
+import { exchangeGroupColor, type ExchangeGroup } from '@eva/nutrition-engine'
 import { Sheet } from '../../Sheet'
+import { ExchangeGroupFormSheet, type ExchangeGroupFormInitial } from '../ExchangeGroupFormSheet'
 import { useTheme } from '../../../context/ThemeContext'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 import {
@@ -12,6 +13,22 @@ import {
   type QuickEditPortionGroup,
   type QuickEditPortionTarget,
 } from './portions-state'
+
+/**
+ * Porciones propias (FD6a) en el quick-edit: la lista del picker es el dict CONGELADO del plan
+ * (grupos que ya usa), así que crear/editar/eliminar necesita dos cosas del orquestador —
+ * quiénes son los grupos PROPIOS del coach (el dict congelado no lo sabe) y dónde depositar el
+ * grupo escrito para que la lista lo refleje sin cerrar el picker. `undefined` = superficie sin
+ * administración de grupos: la sección se pinta EXACTAMENTE como antes (cero UI nueva).
+ */
+export interface QuickEditGroupAdmin {
+  /** Ids de grupos propios del coach; los del sistema no llevan afordancia de edición. */
+  ownGroupIds: ReadonlySet<string>
+  /** Carga perezosa de la propiedad (se dispara al abrir el picker). Best-effort. */
+  ensureLoaded: () => void
+  onSaved: (group: ExchangeGroup) => void
+  onDeleted: (groupId: string) => void
+}
 
 /**
  * Seccion "Porciones a eleccion" del quick-edit RN (SPEC UX-a, T1.4) — espejo movil de
@@ -180,6 +197,12 @@ function PortionTargetRow({
 /**
  * Bottom sheet de altas (nativeModal): grupos que el plan YA usa, con circulito + nombre
  * + referencia por porcion; los presentes en la franja quedan deshabilitados.
+ *
+ * Porciones propias (FD6a, solo con `groupAdmin`): al final va "+ Crear grupo nuevo" y cada fila
+ * PROPIA lleva su afordancia de opciones. Ambas abren el `ExchangeGroupFormSheet`, montado DENTRO
+ * de este sheet a proposito (dos `Modal` hermanos no apilan bien en iOS): al guardar, la lista se
+ * refresca en el acto sin cerrar el picker. La escritura va SIEMPRE por
+ * `/api/mobile/nutrition/exchanges/groups`, nunca por Supabase directo.
  */
 function GroupPickerSheet({
   open,
@@ -187,13 +210,19 @@ function GroupPickerSheet({
   groups,
   usedGroupIds,
   onPick,
+  groupAdmin,
 }: {
   open: boolean
   onClose: () => void
   groups: QuickEditPortionGroup[]
   usedGroupIds: ReadonlySet<string>
   onPick: (group: QuickEditPortionGroup) => void
+  groupAdmin?: QuickEditGroupAdmin
 }) {
+  const { theme } = useTheme()
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<ExchangeGroupFormInitial | null>(null)
+
   return (
     <Sheet
       open={open}
@@ -206,41 +235,93 @@ function GroupPickerSheet({
       <View className="gap-1 pb-2">
         {groups.map((group) => {
           const used = usedGroupIds.has(group.exchangeGroupId)
+          const own = groupAdmin?.ownGroupIds.has(group.exchangeGroupId) === true
           return (
-            <Pressable
-              key={group.exchangeGroupId}
-              accessibilityRole="button"
-              accessibilityLabel={
-                used ? `${group.groupName}: ${PORTIONS_COPY.builder.groupUsed}` : `Agregar ${group.groupName}`
-              }
-              disabled={used}
-              onPress={() => onPick(group)}
-              className={`min-h-12 flex-row items-center gap-3 rounded-control px-2 py-2 ${used ? 'opacity-50' : 'active:bg-surface-sunken'}`}
-            >
-              <GroupDot group={group} sortOrder={group.sortOrder} />
-              <View className="min-w-0 flex-1">
-                <View className="flex-row items-center gap-1.5">
-                  <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
-                    {group.groupName}
+            <View key={group.exchangeGroupId} className="flex-row items-center gap-1">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  used ? `${group.groupName}: ${PORTIONS_COPY.builder.groupUsed}` : `Agregar ${group.groupName}`
+                }
+                disabled={used}
+                onPress={() => onPick(group)}
+                className={`min-h-12 min-w-0 flex-1 flex-row items-center gap-3 rounded-control px-2 py-2 ${used ? 'opacity-50' : 'active:bg-surface-sunken'}`}
+              >
+                <GroupDot group={group} sortOrder={group.sortOrder} />
+                <View className="min-w-0 flex-1">
+                  <View className="flex-row items-center gap-1.5">
+                    <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
+                      {group.groupName}
+                    </Text>
+                    {!group.macrosConfirmed ? (
+                      <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-1.5 py-px">
+                        <Text className="text-[10px] font-semibold text-warning-700">
+                          {PORTIONS_COPY.builder.referentialBadge}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text className="text-xs text-text-muted" numberOfLines={1}>
+                    {used
+                      ? PORTIONS_COPY.builder.groupUsed
+                      : `1 porción ≈ ${Math.round(group.ref.calories)} kcal · ${Math.round(group.ref.carbsG)} C · ${Math.round(group.ref.proteinG)} P`}
                   </Text>
-                  {!group.macrosConfirmed ? (
-                    <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-1.5 py-px">
-                      <Text className="text-[10px] font-semibold text-warning-700">
-                        {PORTIONS_COPY.builder.referentialBadge}
-                      </Text>
-                    </View>
-                  ) : null}
                 </View>
-                <Text className="text-xs text-text-muted" numberOfLines={1}>
-                  {used
-                    ? PORTIONS_COPY.builder.groupUsed
-                    : `1 porción ≈ ${Math.round(group.ref.calories)} kcal · ${Math.round(group.ref.carbsG)} C · ${Math.round(group.ref.proteinG)} P`}
-                </Text>
-              </View>
-            </Pressable>
+              </Pressable>
+              {own ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={PORTIONS_COPY.groupEditor.manageAria(group.groupName)}
+                  onPress={() => {
+                    setEditingGroup({
+                      id: group.exchangeGroupId,
+                      name: group.groupName,
+                      code: group.groupCode,
+                      refCalories: group.ref.calories,
+                      refProteinG: group.ref.proteinG,
+                      refCarbsG: group.ref.carbsG,
+                      refFatsG: group.ref.fatsG,
+                      color: group.color,
+                    })
+                    setFormOpen(true)
+                  }}
+                  hitSlop={4}
+                  className="h-11 w-11 items-center justify-center rounded-control"
+                >
+                  <Pencil color={theme.mutedForeground} size={16} />
+                </Pressable>
+              ) : null}
+            </View>
           )
         })}
+
+        {groupAdmin ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={PORTIONS_COPY.groupEditor.createRow}
+            onPress={() => {
+              setEditingGroup(null)
+              setFormOpen(true)
+            }}
+            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-border-default px-2 py-2 active:bg-surface-sunken"
+          >
+            <View className="h-5 w-5 items-center justify-center rounded-full border border-dashed border-primary/60">
+              <Plus color={theme.primary} size={12} />
+            </View>
+            <Text className="text-sm font-semibold text-primary">{PORTIONS_COPY.groupEditor.createRow}</Text>
+          </Pressable>
+        ) : null}
       </View>
+
+      {groupAdmin ? (
+        <ExchangeGroupFormSheet
+          open={formOpen}
+          initial={editingGroup}
+          onClose={() => setFormOpen(false)}
+          onSaved={groupAdmin.onSaved}
+          onDeleted={groupAdmin.onDeleted}
+        />
+      ) : null}
     </Sheet>
   )
 }
@@ -253,6 +334,7 @@ export function EditablePortionsSection({
   onSetNotes,
   onRemove,
   onAdd,
+  groupAdmin,
 }: {
   targets: QuickEditPortionTarget[]
   groups: QuickEditPortionGroup[]
@@ -261,6 +343,8 @@ export function EditablePortionsSection({
   onSetNotes: (targetKey: string, value: string) => void
   onRemove: (target: QuickEditPortionTarget, index: number) => void
   onAdd: (group: QuickEditPortionGroup) => void
+  /** Porciones propias (FD6a). Ausente = picker sin altas/edición de grupos (comportamiento previo). */
+  groupAdmin?: QuickEditGroupAdmin
 }) {
   const { theme } = useTheme()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -294,12 +378,15 @@ export function EditablePortionsSection({
         </View>
       ) : null}
 
-      {groups.length > 0 ? (
+      {groups.length > 0 || groupAdmin ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={PORTIONS_COPY.builder.addGroup}
           disabled={disabled}
-          onPress={() => setPickerOpen(true)}
+          onPress={() => {
+            groupAdmin?.ensureLoaded()
+            setPickerOpen(true)
+          }}
           className="mt-2 min-h-11 flex-row items-center gap-1.5 self-start rounded-control px-2 active:bg-primary/10"
         >
           <Plus color={theme.primary} size={16} />
@@ -312,6 +399,7 @@ export function EditablePortionsSection({
         onClose={() => setPickerOpen(false)}
         groups={groups}
         usedGroupIds={usedGroupIds}
+        groupAdmin={groupAdmin}
         onPick={(group) => {
           setPickerOpen(false)
           onAdd(group)

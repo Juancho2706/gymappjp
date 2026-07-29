@@ -415,6 +415,7 @@ export default function CoachNutritionV2ClientScreen() {
         planModel={detail.plan}
         scope={scope}
         todayIso={date}
+        hasNutritionPro={hasNutritionPro}
         onExit={() => setEditing(false)}
         onPublished={() => {
           setEditing(false)

@@ -110,6 +110,35 @@ export const PORTIONS_COPY = {
     macrosRequired: 'Revisa las macros: deben ser números mayores o iguales a 0.',
     writeFailed: 'No pudimos guardar el grupo. Intenta nuevamente.',
   },
+  /**
+   * Bloque opcional "Equivalencia de porciones" del alta/edición de alimentos del coach
+   * (clasificar alimentos propios — specs/nutrition-custom-portions §P-B). Vive colapsado:
+   * la enorme mayoría de las altas no clasifica nada. RN espeja esta tabla en su ola.
+   */
+  foodEquivalence: {
+    sectionTitle: 'Equivalencia de porciones',
+    sectionHint: 'Opcional: permite que este alimento cuente en las porciones a elección del plan.',
+    expand: 'Agregar equivalencia',
+    collapse: 'Quitar equivalencia',
+    groupLabel: 'Grupo de porciones',
+    groupPlaceholder: 'Sin clasificar',
+    gramsLabel: 'Gramos que equivalen a 1 porción',
+    gramsPlaceholder: 'Ej: 120',
+    labelLabel: 'Medida casera (opcional)',
+    labelPlaceholder: 'Ej: 1 taza',
+    /** grupo = nombre del grupo; gramos ya formateados. */
+    preview: (grupo: string, gramos: string, medida: string | null) =>
+      medida
+        ? `1 porción de ${grupo} = ${gramos} g (${medida})`
+        : `1 porción de ${grupo} = ${gramos} g`,
+    groupsLoading: 'Cargando grupos…',
+    groupsError: 'No pudimos cargar los grupos de porciones.',
+    groupsEmpty: 'Todavía no hay grupos de porciones disponibles.',
+    groupRequired: 'Elige el grupo de porciones al que equivale este alimento.',
+    gramsRequired: 'Indica cuántos gramos equivalen a 1 porción.',
+    groupUnavailable: 'Ese grupo de porciones ya no está disponible.',
+    saved: 'Equivalencia guardada',
+  },
   coach: {
     dayCoverage: 'Porciones',
     derivedNote:
