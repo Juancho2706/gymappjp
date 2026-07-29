@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeIntakeUnit } from './intake-units'
 
 export const NutritionStrategySchema = z.enum(['structured', 'flexible', 'hybrid'])
 export const NutritionPlanStatusSchema = z.enum(['draft', 'published', 'superseded', 'archived'])
@@ -22,6 +23,28 @@ export const NutritionIntakeSourceSchema = z.enum([
   'manual',
   'legacy',
 ])
+
+/** Base declarada de los macros congelados en un registro (NUT-001). */
+export const NutritionMacrosBasisSchema = z.enum(['per_100', 'per_serving'])
+
+/**
+ * Unidad de una ESCRITURA NUEVA de intake (NUT-017). Acepta los sinonimos historicos
+ * ('unidad', 'gr', 'porcion', …) para no romper superficies aun no migradas, pero rechaza
+ * cualquier cosa fuera del vocabulario del factor: sin esto, el `z.string().max(32)` anterior
+ * dejaba pasar "100 unidad" y persistia `100 x macros` (x100 silencioso, sin tope server-side).
+ *
+ * NO transforma: el tipo de salida sigue siendo `string` para no romper los constructores
+ * literales de payload de web/RN. La normalizacion a codigo canonico la hace la UI con
+ * `normalizeIntakeUnit`.
+ */
+export const NutritionIntakeUnitSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(32)
+  .refine((value) => normalizeIntakeUnit(value) !== null, {
+    message: 'Unidad no soportada. Usa gramos (g), mililitros (ml), unidad o porción.',
+  })
 
 export const NutritionMacroTargetsSchema = z.object({
   calories: z.number().nonnegative().nullable().default(null),
@@ -194,7 +217,7 @@ export const NutritionIntakeMutationSchema = z
     foodId: z.string().uuid().nullable().default(null),
     customName: z.string().trim().min(1).max(180).nullable().default(null),
     quantity: z.number().positive(),
-    unit: z.string().trim().min(1).max(32),
+    unit: NutritionIntakeUnitSchema,
     mealSlot: z.string().trim().max(64).nullable().default(null),
     source: NutritionIntakeSourceSchema,
     captureMethod: NutritionCaptureMethodSchema,
@@ -213,6 +236,11 @@ export const NutritionIntakeMutationSchema = z
       fiberG: z.number().nonnegative().nullable().default(null),
       servingSize: z.number().positive().nullable().default(null),
       servingUnit: z.string().trim().max(32).nullable().default(null),
+      // Base declarada de los macros (NUT-001, transporte doble con p_snapshot_macros_basis).
+      // `.optional()` SIN default: un payload que no la declara conserva la formula LEGADA en el
+      // servidor (`snapshot_macros_basis` queda NULL). Un re-parse (route mobile / cola offline)
+      // nunca debe inventarla ni stripearla — ausente queda ausente.
+      macrosBasis: NutritionMacrosBasisSchema.optional(),
       // Porciones (SPEC R4, transporte B1): viajan DENTRO del snapshot hasta el RPC,
       // que las extrae a columnas. `.optional()` (sin default): un re-parse del
       // mutation (route mobile / cola offline) NUNCA debe stripearlas ni inventarlas
@@ -236,7 +264,20 @@ export const NutritionIntakeMutationSchema = z
     }
   })
 
-export const NutritionIntakeCorrectionSchema = NutritionIntakeMutationSchema.extend({
+/**
+ * Correccion / retiro de un registro EXISTENTE.
+ *
+ * `unit` vuelve a ser permisiva a proposito (whitelist SOLO en escrituras nuevas, riesgo (b) de
+ * la verificacion G1): una correccion copia la unidad de la fila original, y hay filas historicas
+ * con unidades libres. Validarla aqui dejaria al alumno sin poder editar ni RETIRAR esos
+ * registros — un fix que crea un lockout peor que el bug que cierra.
+ *
+ * `safeExtend` (no `extend`): Zod 4 prohibe SOBRESCRIBIR llaves con `.extend()` sobre un schema
+ * con refinements ("Cannot overwrite keys on object schemas containing refinements"). El
+ * superRefine de la base (alimento o nombre obligatorio) se conserva igual.
+ */
+export const NutritionIntakeCorrectionSchema = NutritionIntakeMutationSchema.safeExtend({
+  unit: z.string().trim().min(1).max(32),
   correctsEntryId: z.string().uuid(),
   correctionReason: z.string().trim().min(3).max(1000),
 })

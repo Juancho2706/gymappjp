@@ -256,7 +256,6 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
         clientId={clientId}
         clientName={clientName}
         substitutionsByItem={substitutionsByItem}
-        revalidatePath={`${base}/nutrition-v2`}
         scanHref={`${base}/nutrition-v2/scanner`}
       />
     </>

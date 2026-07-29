@@ -17,6 +17,10 @@ import {
   NutritionIntakeMutationSchema,
   NutritionIntakeSourceSchema,
   buildNutritionIdempotencyKey,
+  intakeEntryFactor,
+  prescribedSnapshotMacros,
+  scaleSnapshotMacros,
+  type NutritionMacrosBasis,
   type NutritionFoodRowModel,
   type NutritionIntakeCorrection,
   type NutritionIntakeMutation,
@@ -40,7 +44,15 @@ function coerceCaptureMethod(value: string | null | undefined): NutritionCapture
   return parsed.success ? parsed.data : 'manual'
 }
 
-/** Snapshot inmutable del alimento congelado en cada registro (per-serving, igual que el catalogo). */
+/**
+ * Snapshot inmutable del alimento congelado en cada registro.
+ *
+ * `macrosBasis` (NUT-001) DECLARA la base de esos macros: 'per_100' es la del catalogo
+ * (`public.foods` guarda por 100 g/ml y `serving_size` solo describe la porcion). Ausente =
+ * LEGADO: el servidor conserva la formula historica, que es lo correcto para las entries ya
+ * persistidas. Viaja dentro del snapshot (transporte doble con `p_snapshot_macros_basis`), asi
+ * que un binario RN viejo contra el RPC nuevo — o al reves — sigue funcionando.
+ */
 export interface NutritionIntakeSnapshotInput {
   name: string
   brand?: string | null
@@ -51,6 +63,7 @@ export interface NutritionIntakeSnapshotInput {
   fiberG?: number | null
   servingSize?: number | null
   servingUnit?: string | null
+  macrosBasis?: NutritionMacrosBasis | null
   exchangeGroupCode?: string
   exchangePortions?: number
 }
@@ -98,6 +111,36 @@ export function nutritionV2IntakeIdempotencyKey(input: {
   })
 }
 
+/**
+ * `operationId` DETERMINISTA de la intencion "me comí ESTE item prescrito ESTE día".
+ *
+ * `newNutritionV2OperationId()` emite un UUID por GESTO, de modo que dos toques de "Lo comí" sobre
+ * el mismo item producen dos keys distintas: ni la cola offline (dedup por `userId + key`) ni el
+ * RPC (dedup por `client_id + idempotency_key`) pueden colapsarlas, y el día termina con el aporte
+ * duplicado (NUT-003). El camino prescrito SÍ tiene identidad lógica natural — (alumno, día, item) —
+ * y esta funcion la materializa: misma intencion ⇒ misma key ⇒ una sola escritura.
+ *
+ * `attempt` (>= 1, default 1) existe para el caso legitimo de repetir el mismo plato: la UI debe
+ * pedir confirmacion EXPLICITA y recien entonces incrementarlo; nunca se mueve por un doble toque.
+ *
+ * Solo aplica al camino prescrito. El "Registrar alimento" libre y las correcciones siguen usando
+ * `newNutritionV2OperationId()` (registrar dos veces el mismo alimento libre es una intencion valida).
+ *
+ * No recibe `clientId`: la key final ya lo incorpora (`buildNutritionIdempotencyKey`), asi que
+ * repetirlo aqui solo alargaria la key sin agregar identidad.
+ */
+export function prescribedIntentOperationId(input: {
+  localDate: string
+  prescriptionItemId: string
+  attempt?: number
+}): string {
+  const attempt = input.attempt ?? 1
+  if (!Number.isInteger(attempt) || attempt < 1) {
+    throw new Error('prescribedIntentOperationId: attempt debe ser entero >= 1')
+  }
+  return `presc-${input.localDate}-${input.prescriptionItemId}-a${attempt}`
+}
+
 function snapshotPayload(snapshot: NutritionIntakeSnapshotInput) {
   return {
     name: snapshot.name,
@@ -109,6 +152,9 @@ function snapshotPayload(snapshot: NutritionIntakeSnapshotInput) {
     fiberG: snapshot.fiberG ?? null,
     servingSize: snapshot.servingSize ?? null,
     servingUnit: snapshot.servingUnit ?? null,
+    // Ausente queda AUSENTE (no `null`): un payload sin base declarada conserva la formula
+    // legada en el servidor y un re-parse del mutation no debe inventarla.
+    ...(snapshot.macrosBasis ? { macrosBasis: snapshot.macrosBasis } : {}),
     ...(snapshot.exchangeGroupCode ? { exchangeGroupCode: snapshot.exchangeGroupCode } : {}),
     ...(snapshot.exchangePortions != null ? { exchangePortions: snapshot.exchangePortions } : {}),
   }
@@ -175,10 +221,33 @@ export function buildCorrectionMutation(
 }
 
 /**
+ * Snapshot de macros normalizado del item prescrito: POR UNIDAD y con `servingSize = 1`
+ * (helper compartido con la web, `@eva/nutrition-v2/intake-normalize`). Lo usa tanto el payload
+ * como la UI optimista, para que el numero que ve el alumno y el que persiste el RPC coincidan.
+ */
+export function prescribedIntakeSnapshotMacros(
+  item: Pick<NutritionPrescriptionItemRead, 'macros' | 'quantity'>,
+) {
+  return prescribedSnapshotMacros(item.macros, item.quantity)
+}
+
+/** Totales optimistas de un "Lo comí" prescrito: identicos a los que reconstruira el servidor. */
+export function prescribedIntakeTotals(
+  item: Pick<NutritionPrescriptionItemRead, 'macros' | 'quantity' | 'unit'>,
+): NutritionIntakeTotals {
+  return computeIntakeTotals(item.quantity, item.unit, prescribedIntakeSnapshotMacros(item))
+}
+
+/**
  * "Comi lo indicado": registra un intake que refleja un item PRESCRITO tal cual. Conserva la franja
- * (`slotCode`), el `prescriptionItemId` y la version del plan, y congela los macros mostrados del
- * item como snapshot. La cantidad/unidad prescritas se pasan tal cual; el servidor calcula los
- * totales con su factor (serving-size del snapshot, o 100 por defecto).
+ * (`slotCode`), el `prescriptionItemId` y la version del plan.
+ *
+ * Los macros del item prescrito son TOTALES de la cantidad prescrita, y el RPC SIEMPRE reescala el
+ * snapshot por su factor. Mandarlos crudos con `servingSize: null` hacia que 200 g / 330 kcal se
+ * persistieran como 660 kcal y que 50 g se subregistraran a la mitad (NUT-002). Por eso el snapshot
+ * se normaliza a POR UNIDAD con `servingSize = 1` — el mismo helper compartido que usa la web —, de
+ * modo que el total reconstruido `(macros/quantity) x quantity` vuelva a ser exactamente los macros
+ * mostrados, con g/ml o con unidades contables.
  */
 export function buildAteAsPrescribedMutation(input: {
   clientId: string
@@ -212,12 +281,7 @@ export function buildAteAsPrescribedMutation(input: {
     snapshot: {
       name: input.item.name ?? 'Alimento prescrito',
       brand: input.item.brand,
-      calories: input.item.macros.calories,
-      proteinG: input.item.macros.proteinG,
-      carbsG: input.item.macros.carbsG,
-      fatsG: input.item.macros.fatsG,
-      fiberG: input.item.macros.fiberG,
-      servingSize: null,
+      ...prescribedIntakeSnapshotMacros(input.item),
       servingUnit: input.item.unit,
     },
   })
@@ -327,25 +391,19 @@ export function buildVoidIntakeCorrection(input: {
   })
 }
 
-function round1(value: number): number {
-  return Math.round(value * 10) / 10
-}
-
 /**
  * Factor de escala IDENTICO al servidor (`private.nutrition_v2_entry_factor`): para g/ml divide la
  * cantidad por el serving-size (100 por defecto); para cualquier otra unidad ('un', etc.) el factor
- * es la cantidad. Mantener 1:1 con la migracion 20260714210000.
+ * es la cantidad. La formula vive en `@eva/nutrition-v2` (compartida con la web); este alias se
+ * conserva por compatibilidad de importaciones RN. Mantener 1:1 con la migracion 20260714210000.
  */
 export function nutritionV2EntryFactor(
   quantity: number,
   unit: string | null | undefined,
   servingSize: number | null | undefined,
+  basis?: NutritionMacrosBasis | null,
 ): number {
-  const u = (unit ?? '').toLowerCase()
-  if (u === 'g' || u === 'ml') {
-    return Math.max(quantity || 0, 0) / Math.max(servingSize ?? 100, 0.0001)
-  }
-  return Math.max(quantity || 0, 0)
+  return intakeEntryFactor({ quantity, unit, servingSize, basis: basis ?? null })
 }
 
 export interface NutritionIntakeTotals {
@@ -364,25 +422,34 @@ export interface NutritionIntakeTotals {
 export interface OptimisticNutritionFoodRowModel extends NutritionFoodRowModel {
   shareQuantity: number
   shareUnit: string
+  /**
+   * Idempotency key de la mutacion AUN encolada que produjo esta fila (null si ya salio o si la
+   * fila esta en vuelo). Es lo que permite ofrecer "Retirar" sobre una fila offline: sin ella el
+   * alumno veia el registro encolado y no tenia ninguna accion para sacarlo (NUT-003 / NUT-019).
+   */
+  queuedKey?: string | null
 }
 
-/** Totales de UN registro (snapshot per-serving x factor), redondeados a 1 decimal como el servidor. */
+/**
+ * Totales de UN registro (macros del snapshot x factor), redondeados a 1 decimal COMO EL
+ * SERVIDOR. Respeta la base declarada del snapshot (`macrosBasis`), de modo que el numero
+ * optimista que ve el alumno y el que persiste el RPC sean el mismo tambien para el catalogo
+ * per-100. Delega en la funcion pura compartida con la web (`scaleSnapshotMacros`).
+ */
 export function computeIntakeTotals(
   quantity: number,
   unit: string,
   snapshot: Pick<
     NutritionIntakeSnapshotInput,
-    'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'servingSize'
+    'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'servingSize' | 'macrosBasis'
   >,
 ): NutritionIntakeTotals {
-  const f = nutritionV2EntryFactor(quantity, unit, snapshot.servingSize ?? null)
-  return {
-    calories: round1((snapshot.calories ?? 0) * f),
-    proteinG: round1((snapshot.proteinG ?? 0) * f),
-    carbsG: round1((snapshot.carbsG ?? 0) * f),
-    fatsG: round1((snapshot.fatsG ?? 0) * f),
-    fiberG: round1((snapshot.fiberG ?? 0) * f),
-  }
+  return scaleSnapshotMacros(snapshot, {
+    quantity,
+    unit,
+    servingSize: snapshot.servingSize ?? null,
+    basis: snapshot.macrosBasis ?? null,
+  })
 }
 
 /**
@@ -397,6 +464,7 @@ export function optimisticIntakeRow(input: {
   unit: string
   status: 'pending' | 'offline'
   totals: NutritionIntakeTotals
+  queuedKey?: string | null
 }): OptimisticNutritionFoodRowModel {
   return {
     id: input.id,
@@ -410,6 +478,144 @@ export function optimisticIntakeRow(input: {
     carbsG: input.totals.carbsG,
     fatsG: input.totals.fatsG,
     status: input.status === 'offline' ? 'offline' : 'pending',
+    queuedKey: input.queuedKey ?? null,
+  }
+}
+
+// ── Overlay optimista derivado de la cola offline ────────────────────────────────
+// La cola es autoritativa para el replay pero era INVISIBLE para la UI de intake: no apagaba el
+// boton "Lo comí" del item ya encolado (NUT-003) ni ofrecia forma de cancelar lo encolado
+// (NUT-019). Este builder es puro para poder fijarlo con tests; la pantalla solo lo consume.
+
+/** Forma minima de un item de la cola (`NutritionV2QueuedMutation` es asignable a esta union). */
+export type QueuedIntakeLike =
+  | { action: 'record'; idempotencyKey: string; payload: NutritionIntakeMutation }
+  | { action: 'correct'; idempotencyKey: string; payload: NutritionIntakeCorrection }
+
+export interface QueuedIntakeOverlay {
+  addedBySlot: Record<string, OptimisticNutritionFoodRowModel[]>
+  addedUnassigned: OptimisticNutritionFoodRowModel[]
+  hiddenIds: string[]
+  /** Items prescritos con un `record` AUN encolado para ese dia (apagan el boton "Lo comí"). */
+  queuedPrescriptionItemIds: string[]
+  /** Idempotency key encolada por `prescriptionItemId`, para cancelar en cola sin buscarla. */
+  queuedKeyByPrescriptionItemId: Record<string, string>
+}
+
+export const EMPTY_QUEUED_INTAKE_OVERLAY: QueuedIntakeOverlay = {
+  addedBySlot: {},
+  addedUnassigned: [],
+  hiddenIds: [],
+  queuedPrescriptionItemIds: [],
+  queuedKeyByPrescriptionItemId: {},
+}
+
+/**
+ * Reconstruye la representacion optimista de records/correcciones normales desde la cola
+ * autoritativa (unica fuente persistida: sobrevive remount, focus y reinicio). Las marcas
+ * sinteticas de porciones tienen su propio lente (`usePortionMarks`) y se excluyen para no
+ * mostrarlas como alimentos consumidos.
+ */
+export function buildQueuedIntakeOverlay(
+  queued: ReadonlyArray<QueuedIntakeLike>,
+  localDate: string,
+): QueuedIntakeOverlay {
+  const records: QueuedIntakeLike[] = []
+  const corrections = new Map<string, QueuedIntakeLike>()
+
+  for (const item of queued) {
+    if (item.payload.localDate !== localDate) continue
+    if (item.action === 'correct') corrections.set(item.payload.correctsEntryId, item)
+    else if (!item.payload.snapshot.exchangeGroupCode) records.push(item)
+  }
+
+  const overlay: QueuedIntakeOverlay = {
+    addedBySlot: {},
+    addedUnassigned: [],
+    hiddenIds: [],
+    queuedPrescriptionItemIds: [],
+    queuedKeyByPrescriptionItemId: {},
+  }
+  const append = (item: QueuedIntakeLike) => {
+    const payload = item.payload
+    const totals = computeIntakeTotals(payload.quantity, payload.unit, payload.snapshot)
+    const row = optimisticIntakeRow({
+      id: `queued-${item.idempotencyKey}`,
+      name: payload.snapshot.name,
+      brand: payload.snapshot.brand,
+      quantity: payload.quantity,
+      unit: payload.unit,
+      status: 'offline',
+      totals,
+      queuedKey: item.idempotencyKey,
+    })
+    if (payload.mealSlot) {
+      overlay.addedBySlot[payload.mealSlot] = [...(overlay.addedBySlot[payload.mealSlot] ?? []), row]
+    } else {
+      overlay.addedUnassigned.push(row)
+    }
+  }
+
+  for (const item of records) {
+    append(item)
+    const prescriptionItemId = item.payload.prescriptionItemId
+    if (prescriptionItemId && !overlay.queuedKeyByPrescriptionItemId[prescriptionItemId]) {
+      overlay.queuedPrescriptionItemIds.push(prescriptionItemId)
+      overlay.queuedKeyByPrescriptionItemId[prescriptionItemId] = item.idempotencyKey
+    }
+  }
+  for (const [correctsEntryId, item] of corrections) {
+    overlay.hiddenIds.push(correctsEntryId)
+    // El void conserva auditoría con una corrección de aporte cero, pero no se representa como una
+    // fila consumida. Una edición sí muestra su reemplazo.
+    if (item.payload.note !== 'Registro retirado' && !item.payload.snapshot.exchangeGroupCode) append(item)
+  }
+  return overlay
+}
+
+/** Copy + disponibilidad de "Deshacer" del snackbar de una tanda ("Comí toda esta comida"). */
+export interface BulkAteSnackbarState {
+  message: string
+  detail: string | null
+  tone: 'default' | 'danger'
+  canUndo: boolean
+}
+
+/**
+ * Reducer PURO del snackbar de la tanda. Antes el copy mentia por omision: con
+ * `(recorded 1, queued 2)` decia "Registraste tu Almuerzo" con "Deshacer", el undo solo anulaba lo
+ * registrado y minutos despues aparecian los 2 encolados (NUT-019). Ahora el detalle nombra SIEMPRE
+ * lo que quedo en cola y el "Deshacer" se ofrece tambien cuando TODO quedo encolado (es cancelable
+ * en la cola local).
+ */
+export function bulkAteSnackbarState(input: {
+  slotName: string
+  eligible: number
+  recorded: number
+  queued: number
+}): BulkAteSnackbarState {
+  const { slotName, eligible, recorded, queued } = input
+  if (recorded === 0 && queued === 0) {
+    return { message: `No se pudo registrar tu ${slotName}.`, detail: null, tone: 'danger', canUndo: false }
+  }
+  const leftover = Math.max(eligible - recorded - queued, 0)
+  const parts: string[] = []
+  if (recorded > 0 && (queued > 0 || leftover > 0)) parts.push(`Registré ${recorded} de ${eligible}.`)
+  if (queued > 0) {
+    parts.push(
+      queued === 1
+        ? '1 quedó en cola y se enviará cuando vuelvas a tener internet.'
+        : `${queued} quedaron en cola y se enviarán cuando vuelvas a tener internet.`,
+    )
+  }
+  if (leftover > 0) {
+    parts.push(leftover === 1 ? 'Quedó 1 sin registrar.' : `Quedaron ${leftover} sin registrar.`)
+  }
+  return {
+    message: recorded === 0 ? `Guardé tu ${slotName} sin conexión.` : `Registraste tu ${slotName}`,
+    detail: parts.length > 0 ? parts.join(' ') : null,
+    tone: 'default',
+    canUndo: true,
   }
 }
 

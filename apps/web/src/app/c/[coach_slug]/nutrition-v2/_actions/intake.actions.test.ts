@@ -1,17 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { rpc, getUser, getScope, isEnabled, domainEnabled, revalidate, rateIntake, rateSearch } = vi.hoisted(() => ({
-  rpc: vi.fn(),
-  getUser: vi.fn(),
-  getScope: vi.fn(),
-  isEnabled: vi.fn(),
-  domainEnabled: vi.fn(),
-  revalidate: vi.fn(),
-  rateIntake: vi.fn(),
-  rateSearch: vi.fn(),
-}))
+const { rpc, getUser, getScope, isEnabled, domainEnabled, revalidate, rateIntake, rateSearch, requestHeaders } =
+  vi.hoisted(() => ({
+    rpc: vi.fn(),
+    getUser: vi.fn(),
+    getScope: vi.fn(),
+    isEnabled: vi.fn(),
+    domainEnabled: vi.fn(),
+    revalidate: vi.fn(),
+    rateIntake: vi.fn(),
+    rateSearch: vi.fn(),
+    // Headers que inyecta el proxy en el request de la server action (NUT-006).
+    requestHeaders: new Map<string, string>(),
+  }))
 
 vi.mock('next/cache', () => ({ revalidatePath: revalidate }))
+vi.mock('next/headers', () => ({
+  headers: async () => ({ get: (key: string) => requestHeaders.get(key) ?? null }),
+}))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }))
 vi.mock('../../nutrition/_data/nutrition-auth.queries', () => ({ getClientNutritionUser: getUser }))
 vi.mock('../../nutrition/_data/client-scope.queries', () => ({ getClientScope: getScope }))
@@ -26,8 +32,10 @@ import {
   closeDayAction,
   correctIntakeAction,
   recordIntakeAction,
+  recordSlotIntakeBatchAction,
   searchFoodCatalogAction,
   voidIntakeAction,
+  voidSlotIntakeBatchAction,
 } from './intake.actions'
 
 const CLIENT_ID = '33333333-3333-4333-8333-333333333333'
@@ -67,8 +75,22 @@ function basePayload() {
   }
 }
 
+/** Simula el request tal como lo sirve el proxy para un alumno standalone `/c/<slug>`. */
+function setStandaloneRequest() {
+  requestHeaders.clear()
+  requestHeaders.set('x-coach-slug', 'josefit')
+}
+
+/** Simula el request de un alumno de TEAM: el proxy setea `x-client-base-path` = `/t/<slug>`. */
+function setTeamRequest(teamSlug = 'eva-team') {
+  requestHeaders.clear()
+  requestHeaders.set('x-client-base-path', `/t/${teamSlug}`)
+  requestHeaders.set('x-coach-slug', 'josefit')
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  setStandaloneRequest()
   getUser.mockResolvedValue({ user: { id: CLIENT_ID }, hasClientRow: true })
   getScope.mockResolvedValue({ coachId: null, teamId: null, orgId: null })
   isEnabled.mockResolvedValue(true)
@@ -80,7 +102,7 @@ beforeEach(() => {
 
 describe('recordIntakeAction', () => {
   it('construye los args del RPC record y revalida al exito', async () => {
-    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res).toEqual({ ok: true, id: NEW_ID })
     expect(rpc).toHaveBeenCalledTimes(1)
@@ -104,7 +126,7 @@ describe('recordIntakeAction', () => {
 
   it('rechaza payload invalido (cantidad no positiva) sin tocar el RPC', async () => {
     const bad = { ...basePayload(), quantity: -5 }
-    const res = await recordIntakeAction({ payload: bad, revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: bad })
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
@@ -112,16 +134,18 @@ describe('recordIntakeAction', () => {
     expect(revalidate).not.toHaveBeenCalled()
   })
 
-  it('rechaza revalidatePath fuera del scope del alumno', async () => {
+  it('ignora un revalidatePath inyectado por el cliente y usa el derivado del header', async () => {
+    // NUT-006: la ruta ya NO viene del cliente. Un `revalidatePath` inyectado en el input se
+    // IGNORA (Zod lo strippea) y la escritura procede con la ruta derivada del header.
     const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: '/coach/dashboard' })
-    expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
-    expect(rpc).not.toHaveBeenCalled()
+    expect(res).toEqual({ ok: true, id: NEW_ID })
+    expect(revalidate).toHaveBeenCalledWith('/c/josefit/nutrition-v2')
+    expect(revalidate).not.toHaveBeenCalledWith('/coach/dashboard')
   })
 
   it('falla cerrado si el clientId no es el usuario autenticado', async () => {
     getUser.mockResolvedValue({ user: { id: 'someone-else' }, hasClientRow: true })
-    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('CLIENT_SCOPE_MISMATCH')
@@ -130,7 +154,7 @@ describe('recordIntakeAction', () => {
 
   it('falla cerrado si el gate de rollout esta apagado', async () => {
     isEnabled.mockResolvedValue(false)
-    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('ROLLOUT_DISABLED')
@@ -139,7 +163,7 @@ describe('recordIntakeAction', () => {
 
   it('rechaza escrituras si el master switch de nutrición está apagado', async () => {
     domainEnabled.mockResolvedValue(false)
-    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('NUTRITION_DOMAIN_DISABLED')
@@ -148,7 +172,7 @@ describe('recordIntakeAction', () => {
 
   it('mapea el 42501 del RPC a SCOPE_DENIED sin revalidar', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'denied', code: '42501' } })
-    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('SCOPE_DENIED')
@@ -159,7 +183,7 @@ describe('recordIntakeAction', () => {
     // Regresion (perdida silenciosa QA): un source invalido debe ser un fallo HONESTO con shape
     // { ok:false, code, error }, nunca un ok:true fantasma que la UI presente como guardado.
     const bad = { ...basePayload(), source: 'quien-sabe' }
-    const res = await recordIntakeAction({ payload: bad, revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: bad })
 
     expect(res.ok).toBe(false)
     if (!res.ok) {
@@ -175,7 +199,7 @@ describe('recordIntakeAction', () => {
     // La causa raiz de la perdida silenciosa: el ok:false del rate limit debe llegar como error
     // visible (shape correcto), no tragarse. El registro NUNCA se persiste en este caso.
     rateIntake.mockResolvedValue({ ok: false, retryAfter: 5 })
-    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+    const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res.ok).toBe(false)
     if (!res.ok) {
@@ -196,7 +220,7 @@ describe('correctIntakeAction', () => {
       correctionReason: 'comi un poco menos',
       quantity: 80,
     }
-    const res = await correctIntakeAction({ payload, revalidatePath: REVALIDATE })
+    const res = await correctIntakeAction({ payload })
 
     expect(res).toEqual({ ok: true, id: NEW_ID })
     expect(rpc).toHaveBeenCalledWith(
@@ -212,7 +236,7 @@ describe('correctIntakeAction', () => {
 
   it('rechaza motivo de correccion demasiado corto', async () => {
     const payload = { ...basePayload(), correctsEntryId: ENTRY_ID, correctionReason: 'x' }
-    const res = await correctIntakeAction({ payload, revalidatePath: REVALIDATE })
+    const res = await correctIntakeAction({ payload })
     expect(res.ok).toBe(false)
     expect(rpc).not.toHaveBeenCalled()
   })
@@ -235,7 +259,7 @@ describe('voidIntakeAction', () => {
   }
 
   it('retira via correct_nutrition_intake_v2 con macros en 0 y revalida', async () => {
-    const res = await voidIntakeAction({ payload: voidPayload(), revalidatePath: REVALIDATE })
+    const res = await voidIntakeAction({ payload: voidPayload() })
 
     expect(res).toEqual({ ok: true, id: NEW_ID })
     expect(rpc).toHaveBeenCalledTimes(1)
@@ -257,7 +281,6 @@ describe('voidIntakeAction', () => {
   it('rechaza correctsEntryId no-uuid sin tocar el RPC', async () => {
     const res = await voidIntakeAction({
       payload: { ...voidPayload(), correctsEntryId: 'nope' },
-      revalidatePath: REVALIDATE,
     })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
@@ -271,7 +294,6 @@ describe('closeDayAction', () => {
       clientId: CLIENT_ID,
       localDate: '2026-07-15',
       timezone: 'America/Santiago',
-      revalidatePath: REVALIDATE,
     })
 
     expect(res).toEqual({ ok: true, id: NEW_ID })
@@ -280,6 +302,87 @@ describe('closeDayAction', () => {
       p_local_date: '2026-07-15',
       p_timezone: 'America/Santiago',
     })
+  })
+})
+
+/**
+ * NUT-006 — Team (`/t/<slug>`) escribia CERO: el schema exigia `revalidatePath` que empezara con
+ * `/c/`, se parseaba ANTES del RPC y abortaba los 7 gestos de escritura del alumno de Team en web.
+ * La ruta ahora se DERIVA del header del proxy y se valida con un allowlist, no se acepta del
+ * cliente. Estos casos fijan el invariante en ambas direcciones.
+ */
+describe('NUT-006 — ruta de revalidacion derivada del servidor', () => {
+  it('un alumno de Team (/t/...) registra y revalida la ruta de su team', async () => {
+    setTeamRequest()
+    const res = await recordIntakeAction({ payload: basePayload() })
+
+    expect(res).toEqual({ ok: true, id: NEW_ID })
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(revalidate).toHaveBeenCalledWith('/t/eva-team/nutrition-v2')
+  })
+
+  it('un alumno de Team corrige y retira (correct_ y void_) sin INVALID_PAYLOAD', async () => {
+    setTeamRequest()
+    const correction = {
+      ...basePayload(),
+      correctsEntryId: ENTRY_ID,
+      correctionReason: 'comi un poco menos',
+      quantity: 80,
+    }
+    const corrected = await correctIntakeAction({ payload: correction })
+    expect(corrected).toEqual({ ok: true, id: NEW_ID })
+
+    const removed = await voidIntakeAction({
+      payload: {
+        ...correction,
+        source: 'manual',
+        captureMethod: 'manual',
+        note: 'Registro retirado',
+        snapshot: { ...basePayload().snapshot, calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
+        correctionReason: 'lo registre por error',
+        idempotencyKey: 'void-abcdefgh12',
+      },
+    })
+    expect(removed).toEqual({ ok: true, id: NEW_ID })
+    expect(revalidate).toHaveBeenCalledWith('/t/eva-team/nutrition-v2')
+  })
+
+  it('los batch de Team (bulk-mark y deshacer) tambien revalidan la ruta /t/', async () => {
+    setTeamRequest()
+    const recorded = await recordSlotIntakeBatchAction({ payloads: [basePayload()] })
+    expect(recorded).toEqual({ ok: true, ids: [NEW_ID], failed: 0 })
+
+    const undone = await voidSlotIntakeBatchAction({
+      payloads: [
+        {
+          ...basePayload(),
+          correctsEntryId: ENTRY_ID,
+          correctionReason: 'Deshacer registro de la comida',
+          idempotencyKey: 'void-abcdefgh13',
+        },
+      ],
+    })
+    expect(undone).toEqual({ ok: true, ids: [NEW_ID], failed: 0 })
+    expect(revalidate).toHaveBeenCalledWith('/t/eva-team/nutrition-v2')
+  })
+
+  it('un header con path traversal NO se usa como ruta de revalidacion', async () => {
+    requestHeaders.clear()
+    requestHeaders.set('x-client-base-path', '/c/otro-coach/../../admin')
+
+    const res = await recordIntakeAction({ payload: basePayload() })
+
+    expect(res).toEqual({ ok: true, id: NEW_ID })
+    expect(revalidate).not.toHaveBeenCalled()
+  })
+
+  it('sin headers confiables la escritura entra igual y simplemente no revalida', async () => {
+    requestHeaders.clear()
+    const res = await recordIntakeAction({ payload: basePayload() })
+
+    expect(res).toEqual({ ok: true, id: NEW_ID })
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(revalidate).not.toHaveBeenCalled()
   })
 })
 

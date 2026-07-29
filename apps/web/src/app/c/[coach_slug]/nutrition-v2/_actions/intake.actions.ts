@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { z } from 'zod'
 import {
   FoodCatalogSearchReadModelSchema,
@@ -39,16 +40,53 @@ type RpcClient = {
   ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>
 }
 
-const RevalidatePathSchema = z.string().trim().startsWith('/c/').max(200)
+/**
+ * Ruta a revalidar: se DERIVA EN EL SERVIDOR, ya no se acepta del cliente (NUT-006).
+ *
+ * El contrato anterior (`z.string().startsWith('/c/')`) era un campo OBLIGATORIO de los seis
+ * schemas y se parseaba ANTES de cualquier RPC, asi que un alumno de Team —que el proxy sirve
+ * bajo `/t/<slug>` (proxy.ts:630 setea `x-client-base-path`)— recibia `INVALID_PAYLOAD` y la
+ * mutacion entera se abortaba: "Lo comí", registro libre, bulk-mark, deshacer, editar, retirar y
+ * scanner, TODOS rotos en web para ese segmento. Ademas confiar la ruta al cliente permitia
+ * revalidar la ruta de otro coach/team.
+ *
+ * Ahora la ruta sale del header que inyecta el proxy (`x-client-base-path` para /t y /e) o del
+ * `x-coach-slug` del branch standalone /c, y se valida contra un allowlist estricto. Si ningun
+ * header sirve (render directo sin proxy, tests), no se revalida: la UI ya hace `router.refresh()`
+ * tras cada mutacion, asi que el peor caso es una revalidacion de menos, nunca una escritura de
+ * menos.
+ */
+const CLIENT_BASE_PATH_RE = /^\/(c|t|e)\/[a-z0-9-]{1,64}$/
+const COACH_SLUG_RE = /^[a-z0-9-]{1,64}$/
+
+async function resolveRevalidateTarget(): Promise<string | null> {
+  try {
+    const h = await headers()
+    const raw = (h.get('x-client-base-path') ?? '').trim()
+    const base = raw.endsWith('/') ? raw.slice(0, -1) : raw
+    if (base.length > 0 && CLIENT_BASE_PATH_RE.test(base)) return `${base}/nutrition-v2`
+
+    const coachSlug = (h.get('x-coach-slug') ?? '').trim().toLowerCase()
+    if (COACH_SLUG_RE.test(coachSlug)) return `/c/${coachSlug}/nutrition-v2`
+    return null
+  } catch {
+    // `headers()` fuera de un request scope. Se resuelve DESPUES de que la escritura ya entro:
+    // jamas puede convertir un registro guardado en un error para el alumno.
+    return null
+  }
+}
+
+/** Revalida la ruta derivada del request (no-op si no hay header confiable). */
+function revalidateResolved(target: string | null): void {
+  if (target) revalidatePath(target)
+}
 
 const RecordActionInputSchema = z.object({
   payload: NutritionIntakeMutationSchema,
-  revalidatePath: RevalidatePathSchema,
 })
 
 const CorrectActionInputSchema = z.object({
   payload: NutritionIntakeCorrectionSchema,
-  revalidatePath: RevalidatePathSchema,
 })
 
 // "Retirar" no tiene RPC propio: es una correccion de contribucion CERO, asi que
@@ -56,25 +94,21 @@ const CorrectActionInputSchema = z.object({
 // buildVoidPayload) -> paridad 1:1 con RN (buildVoidIntakeCorrection).
 const VoidActionInputSchema = z.object({
   payload: NutritionIntakeCorrectionSchema,
-  revalidatePath: RevalidatePathSchema,
 })
 
 // Bulk-mark de franja ("Comí toda esta comida"): un solo auth/rate-limit + N RPC server-side.
 // Cap 24 = techo holgado de items por comida. Cada payload trae su propia idempotency key.
 const BatchRecordInputSchema = z.object({
   payloads: z.array(NutritionIntakeMutationSchema).min(1).max(24),
-  revalidatePath: RevalidatePathSchema,
 })
 const BatchVoidInputSchema = z.object({
   payloads: z.array(NutritionIntakeCorrectionSchema).min(1).max(24),
-  revalidatePath: RevalidatePathSchema,
 })
 
 const CloseDayActionInputSchema = z.object({
   clientId: z.string().uuid(),
   localDate: z.string().date(),
   timezone: z.string().trim().min(1).max(80).default('America/Santiago'),
-  revalidatePath: RevalidatePathSchema,
 })
 
 const SearchActionInputSchema = z.object({
@@ -188,7 +222,14 @@ function mapRpcError(error: { message: string; code?: string }): ActionFailure {
   return fail('WRITE_FAILED', 'No se pudo guardar tu registro. Intenta nuevamente.')
 }
 
-/** Argumentos comunes de record_/correct_nutrition_intake_v2 (mismo contrato que el gateway móvil). */
+/**
+ * Argumentos comunes de record_/correct_nutrition_intake_v2 (mismo contrato que el gateway móvil).
+ *
+ * `macrosBasis` (NUT-001) viaja DENTRO de `p_snapshot`, no como parámetro propio: el cuerpo nuevo
+ * del RPC la extrae (`p_snapshot ->> 'macrosBasis'`) y el cuerpo viejo — el que corre en prod hasta
+ * que se aplique la migración — simplemente ignora la llave extra. Así el web se puede desplegar
+ * antes que el SQL sin romper nada, mismo transporte que ya usan `exchangeGroupCode/Portions`.
+ */
 function commonRpcArgs(payload: NutritionIntakeMutation): Record<string, unknown> {
   return {
     p_client_id: payload.clientId,
@@ -238,7 +279,7 @@ export async function recordIntakeAction(input: unknown): Promise<MutationSucces
   if (!auth.ok) return auth
 
   const result = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(parsed.data.payload))
-  if (result.ok) revalidatePath(parsed.data.revalidatePath)
+  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
@@ -260,7 +301,7 @@ export async function correctIntakeAction(input: unknown): Promise<MutationSucce
     p_correction_reason: parsed.data.payload.correctionReason,
     ...commonRpcArgs(parsed.data.payload),
   })
-  if (result.ok) revalidatePath(parsed.data.revalidatePath)
+  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
@@ -286,7 +327,7 @@ export async function voidIntakeAction(input: unknown): Promise<MutationSuccess 
     p_correction_reason: parsed.data.payload.correctionReason,
     ...commonRpcArgs(parsed.data.payload),
   })
-  if (result.ok) revalidatePath(parsed.data.revalidatePath)
+  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
@@ -299,7 +340,7 @@ export async function voidIntakeAction(input: unknown): Promise<MutationSuccess 
 export async function recordSlotIntakeBatchAction(input: unknown): Promise<BatchMutationResult> {
   const parsed = BatchRecordInputSchema.safeParse(input)
   if (!parsed.success) return fail('INVALID_PAYLOAD', 'Datos de registro inválidos.', zodFields(parsed.error))
-  const { payloads, revalidatePath: rp } = parsed.data
+  const { payloads } = parsed.data
 
   const clientId = payloads[0].clientId
   if (payloads.some((p) => p.clientId !== clientId)) {
@@ -322,7 +363,7 @@ export async function recordSlotIntakeBatchAction(input: unknown): Promise<Batch
   if (ids.length === 0) {
     return firstError ?? fail('BATCH_FAILED', 'No se pudo registrar la comida. Intenta nuevamente.')
   }
-  revalidatePath(rp)
+  revalidateResolved(await resolveRevalidateTarget())
   return { ok: true, ids, failed }
 }
 
@@ -333,7 +374,7 @@ export async function recordSlotIntakeBatchAction(input: unknown): Promise<Batch
 export async function voidSlotIntakeBatchAction(input: unknown): Promise<BatchMutationResult> {
   const parsed = BatchVoidInputSchema.safeParse(input)
   if (!parsed.success) return fail('INVALID_PAYLOAD', 'Datos de retiro inválidos.', zodFields(parsed.error))
-  const { payloads, revalidatePath: rp } = parsed.data
+  const { payloads } = parsed.data
 
   const clientId = payloads[0].clientId
   if (payloads.some((p) => p.clientId !== clientId)) {
@@ -369,7 +410,7 @@ export async function voidSlotIntakeBatchAction(input: unknown): Promise<BatchMu
   if (ids.length === 0) {
     return firstError ?? fail('BATCH_FAILED', 'No se pudo deshacer. Intenta nuevamente.')
   }
-  revalidatePath(rp)
+  revalidateResolved(await resolveRevalidateTarget())
   return { ok: true, ids, failed }
 }
 
@@ -391,7 +432,7 @@ export async function closeDayAction(input: unknown): Promise<MutationSuccess | 
     p_local_date: parsed.data.localDate,
     p_timezone: parsed.data.timezone,
   })
-  if (result.ok) revalidatePath(parsed.data.revalidatePath)
+  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 

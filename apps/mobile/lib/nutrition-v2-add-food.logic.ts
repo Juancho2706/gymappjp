@@ -16,10 +16,12 @@
  * marcas aún encoladas offline no se cuentan — con la conexión caída este fetch
  * tampoco resuelve, así que el aviso opera igual que web en el caso online.
  */
-import type {
-  FoodCatalogItem,
-  NutritionExchangeFoodRead,
-  NutritionTodayReadModel,
+import {
+  catalogUnitOptions,
+  type FoodCatalogItem,
+  type NutritionCatalogUnit,
+  type NutritionExchangeFoodRead,
+  type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import { formatPortionsCl } from './nutrition-v2-portions'
 
@@ -30,9 +32,39 @@ export function mealSlotOptions(
   return today.mealSlots.map((slot) => ({ code: slot.code, label: slot.name }))
 }
 
-/** Unidades del alimento elegido: porción del catálogo + g/ml/porción/unidad, únicas. */
-export function unitOptionsFor(food: Pick<FoodCatalogItem, 'servingUnit'>): string[] {
-  return Array.from(new Set([food.servingUnit, 'g', 'ml', 'porción', 'unidad']))
+/**
+ * Unidades ofrecidas para el alimento elegido: códigos CANÓNICOS (`g`|`ml` según la magnitud del
+ * alimento + `un`), no el texto libre del catálogo. Antes eran
+ * `[servingUnit, 'g', 'ml', 'porción', 'unidad']`: `'unidad'` caía a la rama contable del factor
+ * y dejar 100 en el campo persistía `100 x macros` (NUT-017). Espejo exacto de la web
+ * (`catalogUnitOptions`, paquete compartido — la lista ya NO se duplica aquí).
+ */
+export function unitOptionsFor(
+  food: Pick<FoodCatalogItem, 'servingUnit'>,
+): readonly NutritionCatalogUnit[] {
+  return catalogUnitOptions(food.servingUnit)
+}
+
+/**
+ * Estado del buscador del catálogo como decisión PURA (NUT-020). Antes el `.catch` del
+ * live-search hacía `setResults([])` y el render solo distinguía "buscando" / "vacío" / "lista":
+ * un fetch caído se presentaba como **"Sin resultados en el catálogo local."** y el alumno
+ * concluía que EVA no tiene arroz. `'error'` es una rama propia, con reintento.
+ *
+ * Orden de precedencia: hint (término corto) → buscando → error → vacío → resultados. El error
+ * NO gana sobre "buscando" para que un reintento en vuelo no siga mostrando el fallo anterior.
+ */
+export function resolveCatalogSearchState(input: {
+  termLength: number
+  searching: boolean
+  error: boolean
+  resultCount: number
+}): 'hint' | 'searching' | 'error' | 'empty' | 'results' {
+  if (input.termLength < 2) return 'hint'
+  if (input.searching) return 'searching'
+  if (input.error) return 'error'
+  if (input.resultCount === 0) return 'empty'
+  return 'results'
 }
 
 /** Mapa foodId → groupCode del catálogo clasificado que viaja en el read-model. */

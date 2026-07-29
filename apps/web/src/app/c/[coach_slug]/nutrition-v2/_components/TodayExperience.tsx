@@ -11,9 +11,14 @@ import {
   buildNutritionDayShareText,
   bulkMarkCtaLabel,
   bulkMarkSlotState,
+  catalogUnitOptions,
   consumedPrescriptionItemIds,
+  convertIntakeQuantity,
+  defaultCatalogUnit,
   firstNameFromFullName,
   formatNutritionCalories,
+  intakeUnitLabel,
+  normalizeIntakeUnit,
   sortFoodsByFavoriteFirst,
   type BulkMarkSlotState,
   type FoodCatalogItem,
@@ -44,6 +49,7 @@ import {
   buildVoidPayload,
   consumedEntries,
   contextFromToday,
+  estimateCatalogIntakeTotals,
   mealSlotOptions,
   newIdempotencyKey,
   resolveItemDisplayNote,
@@ -83,14 +89,12 @@ type DialogState =
 export function TodayExperience({
   today,
   clientId,
-  revalidatePath,
   scanHref,
   clientName,
   substitutionsByItem = {},
 }: {
   today: NutritionTodayReadModel
   clientId: string
-  revalidatePath: string
   scanHref: string
   /** Nombre completo del alumno para el saludo del héroe (opcional; sin él, saludo sin nombre). */
   clientName?: string | null
@@ -162,7 +166,7 @@ export function TodayExperience({
     setBusyId(id)
     startTransition(async () => {
       try {
-        const res = await recordSlotIntakeBatchAction({ payloads, revalidatePath })
+        const res = await recordSlotIntakeBatchAction({ payloads })
         if (!res.ok) {
           setError(humanizeStudentWriteError(res.error, 'No se pudo registrar la comida.'))
           return
@@ -195,7 +199,7 @@ export function TodayExperience({
     if (undo.length === 0) return
     startTransition(async () => {
       try {
-        const res = await voidSlotIntakeBatchAction({ payloads: undo, revalidatePath })
+        const res = await voidSlotIntakeBatchAction({ payloads: undo })
         if (res.ok) {
           router.refresh()
           toast.success(`Deshice el registro de ${slotName}.`)
@@ -343,7 +347,6 @@ export function TodayExperience({
                 item,
                 idempotencyKey: newIdempotencyKey('intake'),
               }),
-              revalidatePath,
             }),
           )
         }}
@@ -424,7 +427,6 @@ export function TodayExperience({
                     mealSlotCode,
                     idempotencyKey: newIdempotencyKey('intake'),
                   }),
-                  revalidatePath,
                 }),
               closeDialog,
             )
@@ -451,7 +453,6 @@ export function TodayExperience({
                     reason,
                     idempotencyKey: newIdempotencyKey('correction'),
                   }),
-                  revalidatePath,
                 }),
               closeDialog,
             )
@@ -476,7 +477,6 @@ export function TodayExperience({
                     reason,
                     idempotencyKey: newIdempotencyKey('void'),
                   }),
-                  revalidatePath,
                 }),
               closeDialog,
             )
@@ -966,17 +966,46 @@ function RegisterFoodDialog({
   const selectFood = (food: FoodCatalogItem) => {
     setSelected(food)
     setQuantity(String(food.servingSize))
-    setUnit(food.servingUnit)
+    // Unidad CANONICA del alimento (g|ml|un): la UI ya no propaga 'unidad' ni el texto libre
+    // del catalogo, que se leia con una formula en V2 y con otra en V1 (NUT-017).
+    setUnit(defaultCatalogUnit(food.servingUnit))
   }
 
-  const unitOptions = useMemo(() => {
-    if (!selected) return []
-    return Array.from(new Set([selected.servingUnit, 'g', 'ml', 'porción', 'unidad']))
-  }, [selected])
+  const unitOptions = useMemo(
+    () => (selected ? catalogUnitOptions(selected.servingUnit) : []),
+    [selected],
+  )
+
+  /**
+   * Cambio de unidad: CONVIERTE la cantidad en vez de conservar el numero (NUT-017). Dejar "100"
+   * y pasar de g a unidad persistia 100 x macros — hasta 15.500 kcal en un solo registro. Si la
+   * conversion no es representable (alimento sin porcion), se limpia el campo para que el alumno
+   * vuelva a indicar cuanto comio.
+   */
+  const changeUnit = (nextUnit: string) => {
+    const from = normalizeIntakeUnit(unit)
+    const to = normalizeIntakeUnit(nextUnit)
+    setUnit(nextUnit)
+    if (!selected || !from || !to || from === to) return
+    const current = Number(quantity)
+    const converted = convertIntakeQuantity({
+      quantity: current,
+      from,
+      to,
+      servingSize: selected.servingSize,
+    })
+    setQuantity(converted === null ? '' : String(converted))
+  }
 
   const quantityNumber = Number(quantity)
   const canSubmit =
     selected !== null && Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0
+
+  // Total ESTIMADO con la MISMA formula del servidor: un x100 se vuelve obvio ANTES de guardar.
+  const estimatedTotals = useMemo(() => {
+    if (!selected || !Number.isFinite(quantityNumber) || quantityNumber <= 0) return null
+    return estimateCatalogIntakeTotals({ food: selected, quantity: quantityNumber, unit })
+  }, [quantityNumber, selected, unit])
 
   // Aviso anti-duplicado (no bloqueante): el alimento elegido pertenece a un grupo con
   // porciones YA marcadas en la franja seleccionada ⇒ inline, sin frenar el registro.
@@ -1051,17 +1080,32 @@ function RegisterFoodDialog({
               <span className="mb-1 block text-xs font-semibold text-muted">Unidad</span>
               <select
                 value={unit}
-                onChange={(event) => setUnit(event.target.value)}
+                onChange={(event) => changeUnit(event.target.value)}
                 className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
               >
                 {unitOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {intakeUnitLabel(option)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
+          {estimatedTotals ? (
+            <div aria-live="polite" className="rounded-control border border-border-subtle bg-surface-sunken px-3 py-2">
+              <p className="text-xs font-semibold text-muted">Total estimado</p>
+              <span className="mt-1 block">
+                <MacroChipRow
+                  calories={estimatedTotals.calories}
+                  proteinG={estimatedTotals.proteinG}
+                  carbsG={estimatedTotals.carbsG}
+                  fatsG={estimatedTotals.fatsG}
+                  per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                  size="sm"
+                />
+              </span>
+            </div>
+          ) : null}
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-muted">Franja (opcional)</span>
             <select

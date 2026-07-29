@@ -3,6 +3,7 @@ import {
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
   NutritionIntakeSourceSchema,
+  intakeEntryFactor,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
   type NutritionItemSubstitutionRead,
@@ -13,6 +14,7 @@ import {
   buildCorrectionPayload,
   buildPrescribedIntakePayload,
   buildVoidPayload,
+  estimateCatalogIntakeTotals,
   groupSubstitutionsByPrescriptionItem,
   resolveItemDisplayNote,
 } from './nutrition-today.logic'
@@ -157,6 +159,123 @@ describe('buildCatalogIntakePayload', () => {
     // Fail-closed: un source fuera del contrato hace fallar la validacion de la mutacion.
     const tampered = { ...payload, source: 'quien-sabe' }
     expect(NutritionIntakeMutationSchema.safeParse(tampered).success).toBe(false)
+  })
+})
+
+/**
+ * NUT-001 — matriz de escala del catalogo. Los macros de `public.foods` son POR 100 g/ml y
+ * `serving_size` solo describe la porcion; la formula LEGADA dividia g/ml por `serving_size` e
+ * ignoraba la porcion en la unidad contable, o sea exactamente lo inverso al motor canonico
+ * (`packages/nutrition-engine/macros.ts:120-135`). Con el alimento del informe (155 kcal/100 g,
+ * porcion 60 g) registrar 100 g daba 258,3 kcal y 1 unidad daba 155 kcal.
+ *
+ * Esta matriz fija el contrato per_100 en las 4 superficies (las 4 construyen el mismo payload
+ * via `buildCatalogIntakePayload`) y verifica que el TOTAL ESTIMADO que ve el alumno usa la
+ * misma funcion pura que reconstruira el servidor.
+ */
+describe('NUT-001 — matriz de escala del catalogo (base per_100)', () => {
+  const EJEMPLO = {
+    id: '44444444-4444-4444-8444-444444444444',
+    catalogKey: null,
+    gtin: null,
+    name: 'Alimento del informe',
+    brand: null,
+    category: null,
+    countryCode: 'CL',
+    servingSize: 60,
+    servingUnit: 'g',
+    calories: 155,
+    proteinG: 10,
+    carbsG: 20,
+    fatsG: 5,
+    fiberG: 1,
+    sodiumMg: null,
+    sugarG: null,
+    saturatedFatG: null,
+    packageQuantity: null,
+    packageUnit: null,
+    source: 'eva',
+    sourceRef: null,
+    verificationStatus: 'eva_verified',
+    media: null,
+  } satisfies FoodCatalogItem
+
+  /** kcal esperadas por contrato per_100: g/ml ⇒ qty/100 · un ⇒ qty*serving/100. */
+  function expectedCalories(quantity: number, unit: string, servingSize: number): number {
+    const factor = unit === 'g' || unit === 'ml' ? quantity / 100 : (quantity * servingSize) / 100
+    return Math.round(155 * factor * 10) / 10
+  }
+
+  const QUANTITIES = [30, 60, 125, 250]
+  const UNITS = ['g', 'ml', 'un'] as const
+  const SERVINGS = [60, 100]
+
+  for (const servingSize of SERVINGS) {
+    for (const unit of UNITS) {
+      for (const quantity of QUANTITIES) {
+        it(`${quantity} ${unit} con porcion ${servingSize} g escala per_100`, () => {
+          const food = { ...EJEMPLO, servingSize }
+          const payload = buildCatalogIntakePayload({
+            context: CTX,
+            food,
+            quantity,
+            unit,
+            mealSlotCode: null,
+            idempotencyKey: 'intake-abcdefgh12',
+          })
+          const parsed = NutritionIntakeMutationSchema.parse(payload)
+          expect(parsed.snapshot.macrosBasis).toBe('per_100')
+
+          // Total que reconstruira el RPC con la base declarada.
+          const total =
+            (parsed.snapshot.calories ?? 0) *
+            intakeEntryFactor({
+              quantity: parsed.quantity,
+              unit: parsed.unit,
+              servingSize: parsed.snapshot.servingSize,
+              basis: parsed.snapshot.macrosBasis,
+            })
+          expect(Math.round(total * 10) / 10).toBe(expectedCalories(quantity, unit, servingSize))
+
+          // El "Total estimado" del formulario usa la MISMA funcion pura.
+          expect(estimateCatalogIntakeTotals({ food, quantity, unit }).calories).toBe(
+            expectedCalories(quantity, unit, servingSize),
+          )
+        })
+      }
+    }
+  }
+
+  it('cierra el caso exacto del informe: 100 g = 155 kcal y 1 unidad = 93 kcal', () => {
+    expect(estimateCatalogIntakeTotals({ food: EJEMPLO, quantity: 100, unit: 'g' }).calories).toBe(155)
+    expect(estimateCatalogIntakeTotals({ food: EJEMPLO, quantity: 1, unit: 'un' }).calories).toBe(93)
+    // El default de la UI (cantidad = porcion) tambien queda correcto: 60 g ⇒ 93 kcal.
+    expect(estimateCatalogIntakeTotals({ food: EJEMPLO, quantity: 60, unit: 'g' }).calories).toBe(93)
+  })
+
+  it('normaliza la unidad de la UI al codigo canonico (unidad ⇒ un)', () => {
+    const payload = buildCatalogIntakePayload({
+      context: CTX,
+      food: EJEMPLO,
+      quantity: 1,
+      unit: 'unidad',
+      mealSlotCode: null,
+      idempotencyKey: 'intake-abcdefgh12',
+    })
+    expect(payload.unit).toBe('un')
+    expect(NutritionIntakeMutationSchema.safeParse(payload).success).toBe(true)
+  })
+
+  it('el contrato rechaza una unidad fuera de la whitelist en una escritura nueva', () => {
+    const payload = buildCatalogIntakePayload({
+      context: CTX,
+      food: EJEMPLO,
+      quantity: 1,
+      unit: 'taza',
+      mealSlotCode: null,
+      idempotencyKey: 'intake-abcdefgh12',
+    })
+    expect(NutritionIntakeMutationSchema.safeParse(payload).success).toBe(false)
   })
 })
 

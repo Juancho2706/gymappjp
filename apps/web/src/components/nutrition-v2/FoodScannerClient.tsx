@@ -5,6 +5,11 @@ import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, Flashlight, FlashlightOff, ScanBarcode } from 'lucide-react'
 import {
   FoodBarcodeLookupReadModelSchema,
+  catalogUnitOptions,
+  convertIntakeQuantity,
+  defaultCatalogUnit,
+  intakeUnitLabel,
+  normalizeIntakeUnit,
   type FoodBarcodeLookupReadModel,
   type FoodCatalogItem,
 } from '@eva/nutrition-v2'
@@ -28,7 +33,10 @@ import {
 // MISMO camino de registro que el dialogo de busqueda del Today (P0 QA: la card del scan
 // no tenia forma de registrar): TodayModal + newIdempotencyKey + recordIntakeAction.
 import { TodayModal } from '@/app/c/[coach_slug]/nutrition-v2/_components/TodayModal'
-import { newIdempotencyKey } from '@/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic'
+import {
+  estimateCatalogIntakeTotals,
+  newIdempotencyKey,
+} from '@/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic'
 import { recordIntakeAction } from '@/app/c/[coach_slug]/nutrition-v2/_actions/intake.actions'
 
 type DetectedBarcode = { rawValue: string; format?: string }
@@ -387,7 +395,7 @@ export function FoodScannerClient({
           reported={reported}
           loading={loading}
           registered={registered}
-          registeredHref={registered ? registration?.revalidatePath ?? null : null}
+          registeredHref={registered ? registration?.backHref ?? null : null}
           onRegister={registration ? () => setRegisterOpen(true) : null}
           onReport={reportMissing}
           onReset={() => {
@@ -446,19 +454,39 @@ function RegisterScannedFoodDialog({
   onRegistered: () => void
 }) {
   const [quantity, setQuantity] = useState(String(food.servingSize))
-  const [unit, setUnit] = useState(food.servingUnit)
+  const [unit, setUnit] = useState<string>(defaultCatalogUnit(food.servingUnit))
   const [mealSlot, setMealSlot] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Mismas opciones de unidad que el dialogo de busqueda (RegisterFoodDialog del Today).
-  const unitOptions = useMemo(
-    () => Array.from(new Set([food.servingUnit, 'g', 'ml', 'porción', 'unidad'])),
-    [food.servingUnit],
-  )
+  // Mismas opciones de unidad que el dialogo de busqueda (RegisterFoodDialog del Today):
+  // codigos canonicos g|ml|un, sin 'unidad' libre ni 'porción' (NUT-017).
+  const unitOptions = useMemo(() => catalogUnitOptions(food.servingUnit), [food.servingUnit])
+
+  /** Cambio de unidad: convierte la cantidad (o la limpia si no es convertible). NUT-017. */
+  const changeUnit = (nextUnit: string) => {
+    const from = normalizeIntakeUnit(unit)
+    const to = normalizeIntakeUnit(nextUnit)
+    setUnit(nextUnit)
+    if (!from || !to || from === to) return
+    const converted = convertIntakeQuantity({
+      quantity: Number(quantity),
+      from,
+      to,
+      servingSize: food.servingSize,
+    })
+    setQuantity(converted === null ? '' : String(converted))
+  }
+
   const quantityNumber = Number(quantity)
   const canSubmit =
     Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0 && !submitting
+
+  // Total ESTIMADO con la MISMA formula del servidor (misma funcion pura que el Today).
+  const estimatedTotals = useMemo(() => {
+    if (!Number.isFinite(quantityNumber) || quantityNumber <= 0) return null
+    return estimateCatalogIntakeTotals({ food, quantity: quantityNumber, unit })
+  }, [food, quantityNumber, unit])
 
   const submit = async () => {
     if (!canSubmit) return
@@ -480,7 +508,6 @@ function RegisterScannedFoodDialog({
           mealSlotCode: mealSlot === '' ? null : mealSlot,
           idempotencyKey: newIdempotencyKey('intake'),
         }),
-        revalidatePath: registration.revalidatePath,
       })
       if (!res.ok) {
         // Copy humano (COACH_ACCOUNT_PAUSED etc.), mismo patron que el Today del alumno.
@@ -559,17 +586,32 @@ function RegisterScannedFoodDialog({
             <span className="mb-1 block text-xs font-semibold text-muted">Unidad</span>
             <select
               value={unit}
-              onChange={(event) => setUnit(event.target.value)}
+              onChange={(event) => changeUnit(event.target.value)}
               className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
             >
               {unitOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {intakeUnitLabel(option)}
                 </option>
               ))}
             </select>
           </label>
         </div>
+        {estimatedTotals ? (
+          <div aria-live="polite" className="rounded-control border border-border-subtle bg-surface-sunken px-3 py-2">
+            <p className="text-xs font-semibold text-muted">Total estimado</p>
+            <span className="mt-1 block">
+              <MacroChipRow
+                calories={estimatedTotals.calories}
+                proteinG={estimatedTotals.proteinG}
+                carbsG={estimatedTotals.carbsG}
+                fatsG={estimatedTotals.fatsG}
+                per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                size="sm"
+              />
+            </span>
+          </div>
+        ) : null}
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-muted">Franja (opcional)</span>
           <select

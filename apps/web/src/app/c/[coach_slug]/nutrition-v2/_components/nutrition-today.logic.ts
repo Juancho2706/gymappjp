@@ -1,3 +1,10 @@
+import {
+  CATALOG_MACROS_BASIS,
+  normalizeIntakeUnit,
+  prescribedSnapshotMacros,
+  scaleSnapshotMacros,
+  type NutritionMacroTotalsLike,
+} from '@eva/nutrition-v2'
 import type {
   FoodCatalogItem,
   NutritionFoodRowModel,
@@ -39,12 +46,6 @@ export function newIdempotencyKey(prefix: 'intake' | 'correction' | 'void' | 'cl
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`
   return `${prefix}-${uuid}`
-}
-
-/** Divide preservando null (macros por unidad prescrita). */
-function perUnit(value: number | null, quantity: number): number | null {
-  if (value === null || !Number.isFinite(value) || quantity <= 0) return value === null ? null : value
-  return value / quantity
 }
 
 /** Todas las franjas del dia como opciones {code,label} (sin franjas hardcodeadas). */
@@ -100,7 +101,8 @@ export function contextFromToday(today: NutritionTodayReadModel, clientId: strin
 /**
  * "Lo comi": registra exactamente lo prescrito. Normaliza los macros a por-unidad
  * con servingSize=1 para que el total recomputado por el RPC == macros mostrados,
- * cualquiera sea la unidad (g/ml o unidades discretas).
+ * cualquiera sea la unidad (g/ml o unidades discretas). La normalizacion vive en
+ * `@eva/nutrition-v2/intake-normalize`, compartida byte a byte con RN.
  */
 export function buildPrescribedIntakePayload(input: {
   context: Context
@@ -131,20 +133,37 @@ export function buildPrescribedIntakePayload(input: {
     snapshot: {
       name,
       brand: item.brand,
-      calories: perUnit(item.macros.calories, item.quantity),
-      proteinG: perUnit(item.macros.proteinG, item.quantity),
-      carbsG: perUnit(item.macros.carbsG, item.quantity),
-      fatsG: perUnit(item.macros.fatsG, item.quantity),
-      fiberG: perUnit(item.macros.fiberG, item.quantity),
-      servingSize: 1,
+      ...prescribedSnapshotMacros(item.macros, item.quantity),
       servingUnit: item.unit,
     },
   }
 }
 
 /**
- * Alimento libre del catalogo. Los macros del catalogo son por-porcion
- * (servingSize/servingUnit); el RPC escala segun la cantidad y unidad elegidas.
+ * Total ESTIMADO de un alimento del catalogo para la cantidad/unidad elegidas. Usa la MISMA
+ * funcion pura que el servidor (`scaleSnapshotMacros` ⇒ `intakeEntryFactor`) con la base
+ * declarada del catalogo, de modo que el numero del formulario y el que persiste el RPC son el
+ * mismo. Es lo que vuelve OBVIO un cambio de unidad mal hecho antes de guardar (NUT-017).
+ */
+export function estimateCatalogIntakeTotals(input: {
+  food: Pick<FoodCatalogItem, 'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'servingSize'>
+  quantity: number
+  unit: string
+}): NutritionMacroTotalsLike {
+  return scaleSnapshotMacros(input.food, {
+    quantity: input.quantity,
+    unit: normalizeIntakeUnit(input.unit) ?? input.unit,
+    servingSize: input.food.servingSize,
+    basis: CATALOG_MACROS_BASIS,
+  })
+}
+
+/**
+ * Alimento libre del catalogo. Los macros del catalogo son POR 100 g/ml (contrato del importador,
+ * `docs/operations/FOOD_CATALOG_CL_IMPORT.md:89`) y `servingSize` solo describe la porcion; por eso
+ * el payload DECLARA `macrosBasis: 'per_100'` y el servidor escala con esa base en vez de la
+ * legada (que dividia por `servingSize` e inflaba 100 g del alimento ejemplo a 258,3 kcal —
+ * NUT-001). La unidad se manda ya normalizada al codigo canonico (g|ml|un).
  */
 export function buildCatalogIntakePayload(input: {
   context: Context
@@ -164,7 +183,7 @@ export function buildCatalogIntakePayload(input: {
     foodId: food.id,
     customName: null,
     quantity: input.quantity,
-    unit: input.unit,
+    unit: normalizeIntakeUnit(input.unit) ?? input.unit,
     mealSlot: input.mealSlotCode,
     source: 'offplan',
     captureMethod: 'search',
@@ -183,6 +202,7 @@ export function buildCatalogIntakePayload(input: {
       fiberG: food.fiberG,
       servingSize: food.servingSize,
       servingUnit: food.servingUnit,
+      macrosBasis: CATALOG_MACROS_BASIS,
     },
   }
 }
@@ -227,6 +247,9 @@ export function buildCorrectionPayload(input: {
       fiberG: entry.snapshot.fiberG,
       servingSize: entry.snapshot.servingSize,
       servingUnit: entry.snapshot.servingUnit,
+      // La base viaja con el snapshot: sin esto la correccion caeria a la formula LEGADA y el
+      // mismo alimento cambiaria de calorias solo por editar la cantidad (NUT-001).
+      ...(entry.snapshot.macrosBasis ? { macrosBasis: entry.snapshot.macrosBasis } : {}),
     },
     correctsEntryId: entry.id,
     correctionReason: input.reason,
