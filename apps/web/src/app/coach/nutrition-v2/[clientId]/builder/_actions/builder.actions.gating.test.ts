@@ -22,16 +22,19 @@ import { publishPlanAction } from './builder.actions'
 const COACH_ID = '22222222-2222-4222-8222-222222222222'
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 
-// Lectura de idempotencia: devuelve una version existente para cortar-circuito con exito
-// (evita mockear todo el camino de escritura). Solo se alcanza si el gate Pro pasa.
-const idempotencyMaybeSingle = vi.fn(async () => ({
-  data: { id: 'ver-existing', plan_id: 'plan-existing' },
+// NUT-011: la persistencia entera va por UNA RPC transaccional. El fake devuelve la version
+// publicada; el `from` queda para las lecturas del freeze (aqui ninguna: drafts sin items).
+// Solo se alcanza si el gate Pro pasa.
+const PUBLISHED_VERSION = '55555555-5555-4555-8555-555555555555'
+const PUBLISHED_PLAN = '66666666-6666-4666-8666-666666666666'
+const dbFrom = vi.fn(() => ({
+  select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })) })),
+}))
+const dbRpc = vi.fn(async () => ({
+  data: { versionId: PUBLISHED_VERSION, planId: PUBLISHED_PLAN },
   error: null,
 }))
-const dbFrom = vi.fn(() => ({
-  select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: idempotencyMaybeSingle })) })),
-}))
-const dbMock = { from: dbFrom }
+const dbMock = { from: dbFrom, rpc: dbRpc }
 
 function draft(overrides: Record<string, unknown> = {}) {
   return {
@@ -74,6 +77,7 @@ describe('publishPlanAction — gate del addon Nutricion Pro', () => {
     const res = await publishPlanAction(input({ strategy: 'hybrid' }))
     expect(res).toMatchObject({ ok: false, code: 'UPGRADE_REQUIRED', feature: 'hybrid_strategy' })
     expect(dbFrom).not.toHaveBeenCalled()
+    expect(dbRpc).not.toHaveBeenCalled()
   })
 
   it('SIN addon: mas de una variante => UPGRADE_REQUIRED', async () => {
@@ -97,14 +101,14 @@ describe('publishPlanAction — gate del addon Nutricion Pro', () => {
   it('CON addon: hibrida pasa el gate y prosigue la publicacion', async () => {
     vi.mocked(hasModule).mockResolvedValue(true)
     const res = await publishPlanAction(input({ strategy: 'hybrid' }))
-    expect(res).toMatchObject({ ok: true, versionId: 'ver-existing', planId: 'plan-existing' })
-    expect(dbFrom).toHaveBeenCalled()
+    expect(res).toMatchObject({ ok: true, versionId: PUBLISHED_VERSION, planId: PUBLISHED_PLAN })
+    expect(dbRpc).toHaveBeenCalledWith('persist_and_publish_nutrition_plan_v2', expect.anything())
   })
 
   it('BASE sin addon: flexible con 1 variante publica sin friccion (gate se salta)', async () => {
     vi.mocked(hasModule).mockResolvedValue(false)
     const res = await publishPlanAction(input({ strategy: 'flexible' }))
-    expect(res).toMatchObject({ ok: true, versionId: 'ver-existing', planId: 'plan-existing' })
+    expect(res).toMatchObject({ ok: true, versionId: PUBLISHED_VERSION, planId: PUBLISHED_PLAN })
     // El gate ni consulta el entitlement cuando el draft es BASE.
     expect(hasModule).not.toHaveBeenCalled()
   })

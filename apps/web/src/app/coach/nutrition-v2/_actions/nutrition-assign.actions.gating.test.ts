@@ -30,6 +30,8 @@ const COACH = '22222222-2222-4222-8222-222222222222'
 const SOURCE = '11111111-1111-4111-8111-111111111111'
 const A = '33333333-3333-4333-8333-333333333333'
 const B = '44444444-4444-4444-8444-444444444444'
+const PUBLISHED_VERSION = '55555555-5555-4555-8555-555555555555'
+const PUBLISHED_PLAN = '66666666-6666-4666-8666-666666666666'
 
 function makeDb() {
   const from = vi.fn((table: string) => {
@@ -50,7 +52,15 @@ function makeDb() {
     })
     return chain
   })
-  return { from, rpc: vi.fn(async () => ({ data: null, error: null })) }
+  // NUT-011: la persistencia va por UNA RPC transaccional que devuelve {versionId, planId}.
+  return {
+    from,
+    rpc: vi.fn(async (name: string) =>
+      name === 'persist_and_publish_nutrition_plan_v2'
+        ? { data: { versionId: PUBLISHED_VERSION, planId: PUBLISHED_PLAN }, error: null }
+        : { data: null, error: null },
+    ),
+  }
 }
 
 let dbMock: ReturnType<typeof makeDb>

@@ -28,22 +28,29 @@ import {
 } from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 
 // Persistencia compartida del Builder V2 (web coach). Este modulo NO es 'use server':
-// aloja los tipos, helpers del lado servidor y la rutina de persistir+publicar un draft,
-// para que tanto publishPlanAction (builder) como assignPlanToClientsAction (asignar a
-// otros alumnos) reusen EXACTAMENTE el mismo camino de escritura
-// (plan -> version -> variantes -> franjas -> items -> publish_nutrition_plan_v2).
+// aloja los tipos, helpers del lado servidor y la rutina TRANSACCIONAL de persistir+publicar
+// un draft, para que publishPlanAction (builder), quickEditPublishAction,
+// assignPlanToClientsAction y el endpoint movil (/api/mobile/nutrition-v2/coach/mutate)
+// reusen EXACTAMENTE el mismo camino de escritura.
 //
-// ATENCION (honestidad transaccional — NUT-011): esta rutina NO es atomica. El arbol se
-// escribe en llamadas PostgREST SEPARADAS y solo el ULTIMO paso (`publish_nutrition_plan_v2`)
-// corre dentro de una transaccion SQL. Un fallo intermedio deja una version `draft` con arbol
-// parcial (huerfana). Mitigaciones vigentes: reuso del plan sin publicar
-// (`resolveReusableUnpublishedPlanId`), idempotencia por `publish_idempotency_key` (un retry
-// con la MISMA clave devuelve la version ya publicada) y compare-and-swap opcional
-// (`expectedCurrentVersionId`). El fix de fondo (una RPC transaccional unica) esta pendiente.
+// NUT-011 (cerrado): el arbol YA NO se escribe en N llamadas PostgREST. `persistAndPublishDraft`
+// es un THIN CALLER de `public.persist_and_publish_nutrition_plan_v2`
+// (supabase/migrations/20260728140000_nutrition_v2_persist_and_publish_transactional.sql), que
+// hace raiz -> version -> variantes -> franjas -> items -> reemplazos -> porciones -> publish
+// DENTRO DE UNA SOLA TRANSACCION: o queda todo publicado o no queda nada. Ahi viven ahora el
+// lock por alumno (advisory + for update), la numeracion `version_number = max+1` en SQL, el
+// reuso + limpieza de la raiz huerfana, el compare-and-swap y la idempotencia por clave.
+//
+// Lo que SIGUE ocurriendo aca antes de la unica llamada, a proposito: la resolucion RLS-scoped
+// del catalogo para el FREEZE de snapshots (`foods` por item/reemplazo y `exchange_groups` por
+// target). Son LECTURAS — no producen estado parcial — y deben pasar por el cliente del coach:
+// resolverlas dentro de la RPC (SECURITY DEFINER) bypassearia `foods_select` / `xg_select`, y
+// recalcular las macros en SQL divergiria del motor unico (@eva/nutrition-engine). Ver la
+// cabecera de la migracion para el detalle de la decision.
 //
 // Fail-closed: authorizeCoach re-verifica el gate (rollout + webCoach) y el scope del
-// workspace; la publicacion transaccional (RPC) revalida can_manage (RLS) por cada alumno.
-// Las macros de snapshot se re-derivan de foods en el servidor.
+// workspace; la RPC revalida `can_manage_client` y deriva `created_by`/`updated_by` de
+// `auth.uid()` (NUT-034). Las macros de snapshot se re-derivan de foods en el servidor.
 
 export type DbError = { message: string; code?: string }
 export type DbResult<T> = { data: T | null; error: DbError | null }
@@ -107,6 +114,14 @@ export function mapWriteError(error: DbError, phase: string): ActionFailure {
   if (message.includes('requires_variant')) {
     return fail('NEEDS_VARIANT', 'El plan necesita al menos un dia definido.')
   }
+  // Errores propios de la RPC transaccional (NUT-011). Conservan los codigos/copys que antes
+  // producia el camino por PostgREST, porque los callers los mapean (quick-edit -> VALIDATION).
+  if (message.includes('nutrition_v2_persist_client_not_found')) {
+    return fail('CLIENT_NOT_FOUND', 'No se encontro el alumno en tu espacio.')
+  }
+  if (message.includes('nutrition_v2_persist_plan_not_found')) {
+    return fail('PLAN_NOT_FOUND', 'El plan indicado no pertenece a este alumno.')
+  }
   if (code === '22023') {
     return fail('INVALID_DRAFT', 'El plan tiene datos invalidos y no se pudo publicar.')
   }
@@ -163,11 +178,9 @@ export async function authorizeCoach(
   return { ok: true, db, userId: user.id, proCtx: nutritionProCtxFromWorkspace(user.id, workspace), workspace }
 }
 
-interface ClientScopeRow {
-  coach_id: string
-  org_id: string | null
-  team_id: string | null
-}
+// RETIRADO `ClientScopeRow`: el scope de la raiz (coach_id/org_id/team_id) ya no se lee aca
+// para reenviarlo en el INSERT. Lo copia la RPC desde `public.clients` server-side, asi
+// `plan_scope_matches_client` se cumple por construccion y el payload no puede falsearlo.
 
 interface FoodRow {
   id: string
@@ -351,50 +364,165 @@ export async function resolveActiveClientPlanId(
   return { ok: true, planId: res.data?.id ?? null }
 }
 
-/**
- * Resuelve un plan V2 ACTIVO del alumno que todavia NO tiene version publicada
- * (`current_published_version_id` null) para REUTILIZARLO en vez de crear un duplicado.
- *
- * Motivo (secuela del bug de grants 42501): `persistAndPublishDraft` inserta el plan y luego
- * la version/variantes/franjas/items en llamadas PostgREST separadas (no hay transaccion que
- * cruce todas). Si una escritura posterior falla, la fila del plan queda HUERFANA (0 versiones).
- * Al reintentar, el builder vuelve con `draft.planId` null y crearia OTRO plan -> el alumno
- * termina con dos planes activos y el read model del hub podia elegir el huerfano (bug
- * "Plan publicado" + "Sin plan vigente"). Reutilizando el huerfano se corta la acumulacion en
- * origen (complementa el fix del read model, que ya prefiere el plan con version publicada).
- *
- * RLS-scoped. Nunca reutiliza un plan ya publicado: esa ruta va por `draft.planId` explicito
- * del builder (edicion), asi no tocamos un plan vivo. Toma el plan activo mas reciente y solo
- * lo reutiliza si no tiene version publicada.
- */
-export async function resolveReusableUnpublishedPlanId(
-  db: NutritionV2Db,
-  clientId: string,
-): Promise<{ ok: true; planId: string | null } | ActionFailure> {
-  const res = await db
-    .from('nutrition_plans_v2')
-    .select<{ id: string; current_published_version_id: string | null }>(
-      'id, current_published_version_id',
-    )
-    .eq('client_id', clientId)
-    .eq('lifecycle_status', 'active')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (res.error) return mapWriteError(res.error, 'plan-huerfano')
-  const row = res.data
-  if (!row || row.current_published_version_id != null) return { ok: true, planId: null }
-  return { ok: true, planId: row.id }
+// -- Payload de la RPC transaccional (NUT-011) --
+//
+// RETIRADO: `resolveReusableUnpublishedPlanId`. La resolucion de la raiz (append explicito /
+// reuso del huerfano + limpieza de su version draft / creacion) vive AHORA dentro de
+// `public.persist_and_publish_nutrition_plan_v2`, bajo el lock por alumno. Mantener una
+// segunda implementacion en TS era justamente el patron que produjo el drift web/RN que
+// denuncia la auditoria (NUT-039). Las cuatro reglas quedan cubiertas por
+// `supabase/tests/nutrition_v2_persist_and_publish_rollback.sql`.
+
+/** Id de relleno para los builders puros: la RPC re-escribe TODA la vinculacion del arbol. */
+const RPC_LINKED_ID = '00000000-0000-0000-0000-000000000000'
+
+/** Copia la fila sin las claves de vinculacion (las asigna la RPC con los ids que inserta). */
+function omitKeys(row: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(row)) {
+    if (!keys.includes(key)) out[key] = value
+  }
+  return out
 }
 
 /**
- * Persiste un draft (plan/version/variantes/franjas/items) via las tablas versionadas
- * RLS-scoped y publica de forma transaccional con publish_nutrition_plan_v2 (idempotente
- * por clave estable). NO hace el gate comercial (Pro) ni revalida rutas: eso queda en el
- * caller. Idempotente: si la clave ya existe, devuelve la version publicada existente.
+ * Ensambla el `p_draft` de la RPC: el arbol del plan con los `snapshot_*` YA CONGELADOS.
+ *
+ * Cada fila hoja la emiten los MISMOS builders puros que hasta ahora alimentaban a PostgREST
+ * (`draft-builder.ts`), asi que lo que termina en la base es byte-identico al camino viejo; lo
+ * unico que se les quita son las columnas de vinculacion (`version_id`, `day_variant_id`,
+ * `meal_slot_id`, `prescription_item_id`), que la RPC asigna con los ids que ella inserta.
+ * `privateNotes` no viaja (NUT-007: columna deprecada e ilegible; ahora ni siquiera es
+ * alcanzable desde este camino).
+ *
+ * Falla-cerrado con `ActionFailure` si un target de porciones no puede congelar su grupo
+ * (mismo mapeo de `ExchangeGroupSnapshotError` que el camino anterior).
+ */
+export function buildPersistDraftPayload(input: {
+  draft: NutritionPlanDraft
+  foods: Map<string, BuilderFood>
+  exchangeGroupsById: Map<string, BuilderExchangeGroup>
+  resolveBaseGroup: (code: string) => BuilderExchangeGroup | null
+}): { ok: true; payload: Record<string, unknown> } | ActionFailure {
+  const { draft, foods, exchangeGroupsById, resolveBaseGroup } = input
+  const foodFor = (foodId: string | null): BuilderFood | null => (foodId ? foods.get(foodId) ?? null : null)
+
+  let variants: Array<Record<string, unknown>>
+  try {
+    variants = draft.dayVariants.map((variant) => ({
+      ...omitKeys(buildVariantInsertRow(RPC_LINKED_ID, variant), ['version_id']),
+      mealSlots: variant.mealSlots.map((slot) => ({
+        ...omitKeys(buildSlotInsertRow(RPC_LINKED_ID, RPC_LINKED_ID, slot), [
+          'version_id',
+          'day_variant_id',
+        ]),
+        items: slot.items.map((item, index) => {
+          // Id explicito por item (F-02), igual que antes: los reemplazos cuelgan de el sin un
+          // RETURNING por fila.
+          const itemId = crypto.randomUUID()
+          return {
+            ...omitKeys(
+              buildItemInsertRow({
+                versionId: RPC_LINKED_ID,
+                mealSlotId: RPC_LINKED_ID,
+                orderIndex: index,
+                item,
+                food: foodFor(item.foodId),
+                id: itemId,
+              }),
+              ['version_id', 'meal_slot_id'],
+            ),
+            // PENDIENTE (NUT-008, capa 1 — merge server-side): la publicacion reescribe el arbol
+            // COMPLETO y las sustituciones salen EXCLUSIVAMENTE del draft; un draft sin la
+            // coleccion borra las de la version base. La mitigacion vigente es de cliente
+            // (carry-over + guard de UI que bloquea publicar si la lectura fallo). El merge
+            // server-side NO se implementa aqui a proposito: el contrato es ambiguo —
+            // `substitutions` es opcional y "ausente" no se distingue de "el coach las borro
+            // todas", asi que el merge las resucitaria. Requiere volver la coleccion explicita
+            // en el contrato (o un flag `substitutionsEdited` por item).
+            substitutions: (item.substitutions ?? []).map((sub, subIndex) =>
+              omitKeys(
+                buildItemSubstitutionInsertRow({
+                  versionId: RPC_LINKED_ID,
+                  prescriptionItemId: itemId,
+                  orderIndex: subIndex,
+                  sub,
+                  food: foodFor(sub.foodId),
+                }),
+                ['version_id', 'prescription_item_id'],
+              ),
+            ),
+          }
+        }),
+        exchangeTargets: (slot.exchangeTargets ?? []).map((target, index) =>
+          omitKeys(
+            buildExchangeTargetInsertRow({
+              versionId: RPC_LINKED_ID,
+              mealSlotId: RPC_LINKED_ID,
+              orderIndex: index,
+              target,
+              group: exchangeGroupsById.get(target.exchangeGroupId) ?? null,
+              resolveBaseGroup,
+            }),
+            ['version_id', 'meal_slot_id'],
+          ),
+        ),
+      })),
+    }))
+  } catch (err) {
+    if (err instanceof ExchangeGroupSnapshotError) {
+      return fail(
+        err.reason === 'BASE_GROUP_NOT_FOUND'
+          ? 'EXCHANGE_BASE_GROUP_NOT_FOUND'
+          : 'EXCHANGE_GROUP_NOT_FOUND',
+        'No se pudo congelar un grupo de porciones del plan. Recarga el builder e intenta de nuevo.',
+      )
+    }
+    throw err
+  }
+
+  return {
+    ok: true,
+    payload: {
+      clientId: draft.clientId,
+      name: draft.name,
+      strategy: draft.strategy,
+      timezone: draft.timezone,
+      permissions: draft.permissions,
+      visibleNotes: draft.visibleNotes,
+      protocolNotes: draft.protocolNotes,
+      variants,
+    },
+  }
+}
+
+/** Respuesta de `persist_and_publish_nutrition_plan_v2` (el resto de las claves es telemetria). */
+const PersistRpcResultSchema = z.object({
+  versionId: z.string().uuid(),
+  planId: z.string().uuid(),
+})
+
+/**
+ * Persiste un draft (raiz/version/variantes/franjas/items/reemplazos/porciones) y lo publica
+ * de forma ATOMICA con `public.persist_and_publish_nutrition_plan_v2` (NUT-011): una sola
+ * llamada, una sola transaccion SQL. NO hace el gate comercial (Pro) ni revalida rutas: eso
+ * queda en el caller.
+ *
+ * Antes de esa llamada solo hay LECTURAS RLS-scoped (catalogo de alimentos y grupos de
+ * porciones) para congelar los `snapshot_*`; ninguna produce estado parcial si falla.
+ *
+ * Idempotente: la misma `idempotencyKey` devuelve la version ya publicada sin crear una
+ * segunda (el guard vive en la RPC, acotado al alumno). El `version_number` se calcula EN SQL
+ * bajo el lock del alumno, asi que dos publicaciones concurrentes se serializan en vez de
+ * chocar contra el unique `(plan_id, version_number)`.
  */
 export async function persistAndPublishDraft(input: {
   db: NutritionV2Db
+  /**
+   * Coach autenticado. Ya NO viaja a la base: la RPC deriva `created_by`/`updated_by` de
+   * `auth.uid()` server-side (NUT-034). Se conserva en la firma porque los cuatro callers lo
+   * pasan y sirve de documentacion del actor esperado.
+   */
   userId: string
   draft: NutritionPlanDraft
   idempotencyKey: string
@@ -407,117 +535,12 @@ export async function persistAndPublishDraft(input: {
    */
   expectedCurrentVersionId?: string
 }): Promise<PublishSuccess | ActionFailure> {
-  const { db, userId, draft, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = input
-
-  const existing = await db
-    .from('nutrition_plan_versions_v2')
-    .select<{ id: string; plan_id: string }>('id, plan_id')
-    .eq('publish_idempotency_key', idempotencyKey)
-    .maybeSingle()
-  if (existing.error) return mapWriteError(existing.error, 'idempotencia')
-  if (existing.data) return { ok: true, versionId: existing.data.id, planId: existing.data.plan_id }
-
-  const clientRes = await db
-    .from('clients')
-    .select<ClientScopeRow>('coach_id, org_id, team_id')
-    .eq('id', draft.clientId)
-    .maybeSingle()
-  if (clientRes.error) return mapWriteError(clientRes.error, 'alumno')
-  if (!clientRes.data) return fail('CLIENT_NOT_FOUND', 'No se encontro el alumno en tu espacio.')
-  const clientScope = clientRes.data
-
-  let planId: string
-  let nextVersion = 1
-  if (draft.planId) {
-    const planRes = await db
-      .from('nutrition_plans_v2')
-      .select<{ id: string; client_id: string }>('id, client_id')
-      .eq('id', draft.planId)
-      .maybeSingle()
-    if (planRes.error) return mapWriteError(planRes.error, 'plan')
-    if (!planRes.data || planRes.data.client_id !== draft.clientId) {
-      return fail('PLAN_NOT_FOUND', 'El plan indicado no pertenece a este alumno.')
-    }
-    planId = planRes.data.id
-    const maxRes = await db
-      .from('nutrition_plan_versions_v2')
-      .select<{ version_number: number }>('version_number')
-      .eq('plan_id', planId)
-      .order('version_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (maxRes.error) return mapWriteError(maxRes.error, 'version')
-    nextVersion = (maxRes.data?.version_number ?? 0) + 1
-  } else {
-    // Prevencion de planes huerfanos (secuela del bug 42501): si el alumno ya tiene un plan
-    // ACTIVO sin version publicada (basura de un intento previo que fallo entre el INSERT del
-    // plan y el de la version), REUTILIZALO en vez de crear otro. Asi el read model nunca ve
-    // dos planes activos compitiendo. Solo aplica cuando el builder no trajo `draft.planId`.
-    const reusable = await resolveReusableUnpublishedPlanId(db, draft.clientId)
-    if (!reusable.ok) return reusable
-    if (reusable.planId) {
-      planId = reusable.planId
-      const maxRes = await db
-        .from('nutrition_plan_versions_v2')
-        .select<{ version_number: number }>('version_number')
-        .eq('plan_id', planId)
-        .order('version_number', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (maxRes.error) return mapWriteError(maxRes.error, 'version')
-      nextVersion = (maxRes.data?.version_number ?? 0) + 1
-    } else {
-      const planIns = await db
-        .from('nutrition_plans_v2')
-        .insert({
-          client_id: draft.clientId,
-          coach_id: clientScope.coach_id,
-          org_id: clientScope.org_id,
-          team_id: clientScope.team_id,
-          name: draft.name,
-          strategy: draft.strategy,
-          created_by: userId,
-          updated_by: userId,
-        })
-        .select('id')
-        .single()
-      if (planIns.error || !planIns.data) return mapWriteError(planIns.error ?? { message: 'no plan' }, 'plan')
-      planId = planIns.data.id
-    }
-  }
-
-  const versionIns = await db
-    .from('nutrition_plan_versions_v2')
-    .insert({
-      plan_id: planId,
-      version_number: nextVersion,
-      status: 'draft',
-      strategy: draft.strategy,
-      timezone: draft.timezone,
-      student_permissions: draft.permissions,
-      visible_notes: draft.visibleNotes,
-      // `private_notes` NO se escribe (NUT-007): la columna same-row esta DEPRECADA
-      // (20260714191500_nutrition_v2_private_notes) — `authenticated` no tiene grant de
-      // SELECT/UPDATE sobre ella, solo el INSERT quedo abierto, asi que lo que se escribia
-      // ahi jamas volvia por ningun read model. La nota privada versionada vive en
-      // `nutrition_plan_private_notes_v2`, tabla que hoy ningun camino de la app puebla (no
-      // hay UI de escritura en web, RN ni quick-edit). Mandar la clave solo agregaba un
-      // camino de escritura ciego y romperia el dia que se revoque el INSERT por columna.
-      protocol_notes: draft.protocolNotes,
-      created_by: userId,
-      updated_by: userId,
-    })
-    .select('id')
-    .single()
-  if (versionIns.error || !versionIns.data) {
-    return mapWriteError(versionIns.error ?? { message: 'no version' }, 'version')
-  }
-  const versionId = versionIns.data.id
+  const { db, draft, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = input
 
   // Foods de los items MÁS los referenciados por los reemplazos autorizados (F-02): un solo
-  // set para resolver/congelar todo en una pasada.
+  // set para resolver/congelar todo en una pasada. RLS-scoped a proposito (ver cabecera).
   const foodIds = [...new Set([...collectFoodIds(draft), ...collectSubstitutionFoodIds(draft)])]
-  const foodMap = new Map<string, BuilderFood>()
+  const foods = new Map<string, BuilderFood>()
   for (const id of foodIds) {
     const foodRes = await db
       .from('foods')
@@ -525,136 +548,41 @@ export async function persistAndPublishDraft(input: {
       .eq('id', id)
       .maybeSingle()
     if (foodRes.error) return mapWriteError(foodRes.error, 'alimentos')
-    if (foodRes.data) foodMap.set(id, toBuilderFood(foodRes.data))
+    if (foodRes.data) foods.set(id, toBuilderFood(foodRes.data))
   }
 
   // Resolucion server-side de los grupos de porciones para el freeze (SPEC R2/A2). Se
-  // resuelve una sola vez para todo el draft (grupos directos + bases de compuestos) y se
-  // congela por target en el loop de abajo. Falla-cerrado si algun grupo no resuelve.
+  // resuelve una sola vez para todo el draft (grupos directos + bases de compuestos).
+  // Falla-cerrado si algun grupo no resuelve.
   const groupsRes = await resolveExchangeGroupsForDraft(db, draft)
   if (!groupsRes.ok) return groupsRes
   const { byId: exchangeGroupsById, byCode: exchangeGroupsByCode } = groupsRes.groups
-  const resolveBaseGroup = (code: string): BuilderExchangeGroup | null =>
-    exchangeGroupsByCode.get(code) ?? null
 
-  for (const variant of draft.dayVariants) {
-    const variantIns = await db
-      .from('nutrition_day_variants_v2')
-      .insert(buildVariantInsertRow(versionId, variant))
-      .select('id')
-      .single()
-    if (variantIns.error || !variantIns.data) {
-      return mapWriteError(variantIns.error ?? { message: 'no variant' }, 'dia')
-    }
-    const variantId = variantIns.data.id
+  const built = buildPersistDraftPayload({
+    draft,
+    foods,
+    exchangeGroupsById,
+    resolveBaseGroup: (code: string) => exchangeGroupsByCode.get(code) ?? null,
+  })
+  if (!built.ok) return built
 
-    for (const slot of variant.mealSlots) {
-      const slotIns = await db
-        .from('nutrition_meal_slots_v2')
-        .insert(buildSlotInsertRow(versionId, variantId, slot))
-        .select('id')
-        .single()
-      if (slotIns.error || !slotIns.data) {
-        return mapWriteError(slotIns.error ?? { message: 'no slot' }, 'franja')
-      }
-      const mealSlotId = slotIns.data.id
-
-      if (slot.items.length > 0) {
-        // Id explícito por item (F-02): lo generamos aquí para poder colgar los reemplazos
-        // referenciándolo, sin un round-trip extra de RETURNING.
-        const itemsWithIds = slot.items.map((item) => ({ item, id: crypto.randomUUID() }))
-        const itemRows = itemsWithIds.map(({ item, id }, index) =>
-          buildItemInsertRow({
-            versionId,
-            mealSlotId,
-            orderIndex: index,
-            item,
-            food: item.foodId ? foodMap.get(item.foodId) ?? null : null,
-            id,
-          }),
-        )
-        const itemsIns = await db.from('nutrition_prescription_items_v2').insert(itemRows)
-        if (itemsIns.error) return mapWriteError(itemsIns.error, 'items')
-
-        // Reemplazos autorizados del coach (F-02), congelados por item. Solo structured/hybrid
-        // tienen items (flexible nunca llega aquí). Un item sin reemplazos no toca la tabla nueva.
-        //
-        // PENDIENTE (NUT-008, capa 1 — merge server-side): hoy la publicación reescribe el árbol
-        // COMPLETO y las sustituciones salen EXCLUSIVAMENTE del draft; un draft sin la colección
-        // borra las de la versión base. La mitigación vigente es de cliente (carry-over + guard
-        // de UI que bloquea publicar si la lectura falló). El merge server-side (releer la base
-        // cuando hay `expectedCurrentVersionId` y conservar lo no editado) NO se implementa aquí
-        // a propósito: el contrato es ambiguo — `substitutions` es opcional y "ausente" no se
-        // distingue de "el coach las borró todas", así que el merge las resucitaría cuando
-        // aterrice el editor de reemplazos (F-02 P3, RN). Requiere primero volver la colección
-        // explícita en el contrato (o un flag `substitutionsEdited` por item).
-        const substitutionRows = itemsWithIds.flatMap(({ item, id }) =>
-          (item.substitutions ?? []).map((sub, subIndex) =>
-            buildItemSubstitutionInsertRow({
-              versionId,
-              prescriptionItemId: id,
-              orderIndex: subIndex,
-              sub,
-              food: sub.foodId ? foodMap.get(sub.foodId) ?? null : null,
-            }),
-          ),
-        )
-        if (substitutionRows.length > 0) {
-          const subsIns = await db.from('nutrition_item_substitutions_v2').insert(substitutionRows)
-          if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
-        }
-      }
-
-      // Targets de porciones de la franja, congelados en la MISMA pasada de escritura del
-      // draft (misma "tx" en el sentido de esta arquitectura: mismas llamadas PostgREST
-      // pre-publish que items/franjas; no hay tx SQL que cruce todas — ver cabecera del
-      // modulo). El snapshot ya viene resuelto/enriquecido; `publish_nutrition_plan_v2`
-      // queda INTACTO (A1). Los grupos fueron validados arriba; el throw defensivo de
-      // `buildExchangeTargetInsertRow` se traduce a un ActionFailure limpio por si acaso.
-      const exchangeTargets = slot.exchangeTargets ?? []
-      if (exchangeTargets.length > 0) {
-        let targetRows
-        try {
-          targetRows = exchangeTargets.map((target, index) =>
-            buildExchangeTargetInsertRow({
-              versionId,
-              mealSlotId,
-              orderIndex: index,
-              target,
-              group: exchangeGroupsById.get(target.exchangeGroupId) ?? null,
-              resolveBaseGroup,
-            }),
-          )
-        } catch (err) {
-          if (err instanceof ExchangeGroupSnapshotError) {
-            return fail(
-              err.reason === 'BASE_GROUP_NOT_FOUND'
-                ? 'EXCHANGE_BASE_GROUP_NOT_FOUND'
-                : 'EXCHANGE_GROUP_NOT_FOUND',
-              'No se pudo congelar un grupo de porciones del plan. Recarga el builder e intenta de nuevo.',
-            )
-          }
-          throw err
-        }
-        const targetsIns = await db.from('nutrition_slot_exchange_targets_v2').insert(targetRows)
-        if (targetsIns.error) return mapWriteError(targetsIns.error, 'porciones')
-      }
-    }
-  }
-
-  const publishRes = await db.rpc('publish_nutrition_plan_v2', {
-    p_version_id: versionId,
+  // UNA llamada: raiz + version + arbol + publish, todo o nada.
+  const res = await db.rpc('persist_and_publish_nutrition_plan_v2', {
+    p_draft: built.payload,
     p_effective_from: effectiveFrom,
     p_idempotency_key: idempotencyKey,
-    // Solo el quick-edit envia el guard optimista; el builder pasa undefined -> PostgREST resuelve
-    // a la firma con default null y el RPC omite el compare-and-swap.
+    // Solo el quick-edit (y el builder sobre un plan existente) envian el guard optimista; sin
+    // la clave, PostgREST resuelve al default null y la RPC omite el compare-and-swap.
     ...(expectedCurrentVersionId ? { p_expected_current_version_id: expectedCurrentVersionId } : {}),
+    // Raiz explicita: edicion de un plan existente. Ausente => la RPC decide entre reusar la
+    // raiz huerfana del alumno (limpiando su draft parcial) o crear una nueva.
+    ...(draft.planId ? { p_plan_id: draft.planId } : {}),
   })
-  if (publishRes.error) return mapWriteError(publishRes.error, 'publicacion')
+  if (res.error) return mapWriteError(res.error, 'publicacion')
 
-  const publishedId = z.string().uuid().safeParse(publishRes.data)
-  if (!publishedId.success) {
+  const parsed = PersistRpcResultSchema.safeParse(res.data)
+  if (!parsed.success) {
     return fail('INVALID_RESPONSE', 'La publicacion devolvio una respuesta inesperada.')
   }
-  return { ok: true, versionId: publishedId.data, planId }
+  return { ok: true, versionId: parsed.data.versionId, planId: parsed.data.planId }
 }
