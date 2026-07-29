@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: 2026-07-20
+last_verified: "2026-07-28 @ 0fbf850d"
 canonical: true
 ---
 
@@ -10,6 +10,11 @@ canonical: true
 El último rollout registrado dejó Nutrition V2 en `mode=on`. Antes de operar o declarar su alcance, comprobar el valor vivo de `NUTRITION_V2_ROLLOUT`; este documento ya no es un plan de canary.
 
 El estado general del proyecto se registra en [CURRENT.md](../status/CURRENT.md). Este runbook solo explica cómo comprobar, apagar y recuperar la superficie.
+
+> **Limitación vigente:** `mode=off` controla entrada, configuración y rutas que consultan el
+> gate, pero no contiene por sí solo todas las escrituras coach mobile directas. Hasta cerrar
+> [NUT-005](../audits/nutricion-v2-coach-alumno-2026-07-28.md), no declarar rollback completo sin
+> probar además el rechazo real de una mutación con JWT técnico.
 
 ## Fuentes de verdad
 
@@ -50,7 +55,7 @@ Validar con cuentas técnicas, nunca con datos personales copiados a logs:
 2. Coach web abre hub, ficha y editor/publicación.
 3. Alumno móvil recibe `nutritionV2Student=true` desde `/api/mobile/config`.
 4. Coach móvil recibe `nutritionV2Coach=true` para el workspace activo.
-5. Standalone, Teams y organización solo muestran alumnos de su scope.
+5. Standalone y Teams solo muestran alumnos de su scope activo.
 6. Un `clientId` ajeno no habilita ni devuelve datos.
 7. Registrar y corregir intake no duplica entradas al reintentar.
 8. Scanner conocido/desconocido responde y muestra atribución cuando la fuente lo exige.
@@ -82,8 +87,12 @@ Usar ante pérdida/duplicación de intake, fuga de scope, errores P0/P1 generali
 3. Comprobar con una sesión nueva que web vuelve a la superficie legacy/fallback prevista.
 4. En móvil, enviar la app a background y abrirla para forzar la revalidación. Logout/login también limpia la configuración local.
 5. Considerar que el cache global móvil puede conservar flags de rollout hasta 24 horas si el dispositivo permanece offline. Con red, la app revalida al iniciar, recuperar sesión y volver a foreground.
-6. Verificar que mutations V2 queden rechazadas server-side aunque una UI móvil conserve un flag cacheado.
-7. Revisar la cola offline antes de volver a encender para no interpretar reintentos legítimos como duplicados.
+6. Ejecutar una mutación técnica controlada y verificar rechazo server-side aunque la UI conserve
+   el flag. En el corte auditado, algunas escrituras coach directas pueden seguir aceptándose: si
+   ocurre, el rollback es **parcial**, el incidente sigue abierto y requiere contención
+   server-side revisada antes de declarar éxito.
+7. Revisar la cola offline y el riesgo de doble toque antes de volver a encender; una nueva clave
+   idempotente representa hoy otra operación y puede duplicar intake.
 
 No hacer durante el rollback:
 
@@ -109,7 +118,7 @@ No hacer durante el rollback:
 
 - habilitar solo la superficie bajo prueba;
 - agregar IDs internos explícitos;
-- probar separación standalone/team/org;
+- probar separación standalone/team;
 - vaciar allowlists al terminar;
 - no dejar un canary sin dueño ni fecha de salida.
 
