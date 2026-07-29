@@ -49,7 +49,7 @@ export function PrescribedPortionChips({ targets, className }: PrescribedPortion
 
   return (
     <View className={className}>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
         {PORTIONS_COPY.builder.sectionTitle}
       </Text>
       <View className="mt-1 flex-row flex-wrap gap-1.5">
@@ -59,17 +59,17 @@ export function PrescribedPortionChips({ targets, className }: PrescribedPortion
             <View
               key={target.id}
               accessibilityLabel={`${target.groupName}: ${label}`}
-              className="max-w-full flex-row items-center gap-1.5 rounded-pill border border-border-subtle bg-surface-sunken px-2 py-1"
+              className="max-w-full flex-row items-center gap-1.5 rounded-pill border border-subtle bg-surface-sunken px-2 py-1"
             >
               <GroupDot
                 code={target.groupCode}
                 color={exchangeGroupColor({ color: target.color, sortOrder: target.orderIndex })}
                 size={20}
               />
-              <Text className="min-w-0 shrink text-xs font-medium text-text-strong" numberOfLines={1}>
+              <Text className="min-w-0 shrink text-xs font-medium text-strong" numberOfLines={1}>
                 {target.groupName}
               </Text>
-              <Text className="shrink-0 text-xs font-semibold text-text-muted" style={TABULAR_NUMS}>
+              <Text className="shrink-0 text-xs font-semibold text-muted" style={TABULAR_NUMS}>
                 {label}
               </Text>
             </View>

@@ -9,7 +9,7 @@ function cx(...values: Array<string | false | null | undefined>): string {
 }
 
 const toneClasses: Record<NutritionTone, string> = {
-  neutral: 'border-border-subtle bg-surface-card',
+  neutral: 'border-subtle bg-surface-card',
   brand: 'border-sport-300 bg-sport-100',
   nutrition: 'border-primary/30 bg-primary/10',
   success: 'border-success-500/30 bg-success-500/10',

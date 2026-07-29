@@ -158,10 +158,10 @@ export function PortionEquivalencesSheet({
           <View className="flex-row items-start gap-3 pr-10">
             <GroupDot code={target.groupCode} color={portionTargetColor(target)} size={36} />
             <View className="min-w-0 flex-1">
-              <Text className="font-display text-base font-semibold text-text-strong" numberOfLines={2}>
+              <Text className="font-display text-base font-semibold text-strong" numberOfLines={2}>
                 {PORTIONS_COPY.student.sheetTitle(target.groupName)}
               </Text>
-              <Text className="text-[11px] leading-4 text-text-muted">
+              <Text className="text-[11px] leading-4 text-muted">
                 {`≈ ${Math.round(target.ref.calories)} kcal · P ${formatPortionsCl(target.ref.proteinG)} g · C ${formatPortionsCl(target.ref.carbsG)} g · G ${formatPortionsCl(target.ref.fatsG)} g`}
               </Text>
               {!target.macrosConfirmed ? (
@@ -190,13 +190,13 @@ export function PortionEquivalencesSheet({
                     }}
                     className={cx(
                       'min-h-9 flex-row items-center rounded-pill border px-3 py-1',
-                      active ? 'border-primary bg-primary' : 'border-border-subtle bg-surface-card',
+                      active ? 'border-primary bg-primary' : 'border-subtle bg-surface-card',
                     )}
                   >
                     <Text
                       className={cx(
                         'text-xs font-semibold',
-                        !active && 'text-text-strong',
+                        !active && 'text-strong',
                       )}
                       style={active ? { color: theme.primaryForeground } : undefined}
                     >
@@ -208,17 +208,17 @@ export function PortionEquivalencesSheet({
             </View>
           ) : null}
 
-          <Text className="text-xs font-medium text-text-muted">
+          <Text className="text-xs font-medium text-muted">
             {PORTIONS_COPY.student.sheetSubtitle}
           </Text>
 
-          <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-app px-3">
+          <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-default bg-surface-app px-3">
             <Search color={theme.textSecondary} size={16} />
             <TextInput
               accessibilityLabel={PORTIONS_COPY.student.sheetSearchAria}
               autoCapitalize="none"
               autoCorrect={false}
-              className="min-w-0 flex-1 py-2 text-sm text-text-strong"
+              className="min-w-0 flex-1 py-2 text-sm text-strong"
               onChangeText={setSearch}
               placeholder={PORTIONS_COPY.student.sheetSearchPlaceholder}
               placeholderTextColor={theme.textSecondary}
@@ -228,7 +228,7 @@ export function PortionEquivalencesSheet({
           </View>
 
           {foods.length === 0 ? (
-            <Text className="py-8 text-center text-xs text-text-muted">
+            <Text className="py-8 text-center text-xs text-muted">
               {search.trim().length > 0
                 ? PORTIONS_COPY.student.sheetNoResults
                 : PORTIONS_COPY.student.sheetEmpty}
@@ -240,28 +240,28 @@ export function PortionEquivalencesSheet({
                   key={food.foodId}
                   className={cx(
                     'min-h-11 flex-row items-center justify-between gap-3 py-2',
-                    index > 0 && 'border-t border-border-subtle',
+                    index > 0 && 'border-t border-subtle',
                   )}
                 >
                   <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-semibold text-text-strong" numberOfLines={1}>
+                    <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
                       {food.name}
                     </Text>
                     {food.brand ? (
-                      <Text className="text-xs text-text-muted" numberOfLines={1}>{food.brand}</Text>
+                      <Text className="text-xs text-muted" numberOfLines={1}>{food.brand}</Text>
                     ) : null}
                   </View>
                   <View className="items-end">
                     <Text
                       className={cx(
                         'text-xs font-bold',
-                        food.portionLabel ? 'text-text-strong' : 'text-text-muted',
+                        food.portionLabel ? 'text-strong' : 'text-muted',
                       )}
                     >
                       {food.portionLabel ?? '—'}
                     </Text>
                     <Text
-                      className="font-mono text-[10px] text-text-muted"
+                      className="font-mono text-[10px] text-muted"
                       style={{ fontVariant: ['tabular-nums'] }}
                     >
                       {food.portionGrams != null ? `${food.portionGrams} g` : ''}

@@ -50,7 +50,7 @@ function cx(...values: Array<string | false | null | undefined>): string {
 }
 
 const toneClasses: Record<NutritionTone, string> = {
-  neutral: 'border-border-subtle bg-surface-card',
+  neutral: 'border-subtle bg-surface-card',
   brand: 'border-sport-300 bg-sport-100',
   nutrition: 'border-primary/30 bg-primary/10',
   success: 'border-success-500/30 bg-success-500/10',
@@ -60,7 +60,7 @@ const toneClasses: Record<NutritionTone, string> = {
 }
 
 const toneTextClasses: Record<NutritionTone, string> = {
-  neutral: 'text-text-strong',
+  neutral: 'text-strong',
   brand: 'text-sport-700',
   nutrition: 'text-primary',
   success: 'text-success-700',
@@ -79,7 +79,7 @@ const toneTextClasses: Record<NutritionTone, string> = {
 // warning/success = glifo ink de los tokens `on-warning`/`on-success` (web usa
 // slate-950/white raw; el DS RN define el glifo AA sobre sus fills saturados).
 const buttonToneClasses: Record<NutritionTone, string> = {
-  neutral: 'border-border-default bg-surface-card',
+  neutral: 'border-default bg-surface-card',
   brand: 'border-sport-500 bg-sport-500',
   nutrition: 'border-primary bg-primary',
   success: 'border-success-500 bg-success-500',
@@ -89,7 +89,7 @@ const buttonToneClasses: Record<NutritionTone, string> = {
 }
 
 const buttonToneTextClasses: Record<NutritionTone, string> = {
-  neutral: 'text-text-strong',
+  neutral: 'text-strong',
   brand: 'text-on-sport',
   nutrition: 'text-white',
   success: 'text-on-success',
@@ -203,13 +203,13 @@ export function NutritionHeader({
           ) : null}
           <Text
             accessibilityRole="header"
-            className="font-display-black text-[22px] leading-7 tracking-[-0.44px] text-text-strong"
+            className="font-display-black text-[22px] leading-7 tracking-[-0.44px] text-strong"
             numberOfLines={1}
           >
             {title}
           </Text>
           {description ? (
-            <Text className="mt-0.5 text-[12.5px] leading-4 text-text-muted" numberOfLines={1}>
+            <Text className="mt-0.5 text-[12.5px] leading-4 text-muted" numberOfLines={1}>
               {description}
             </Text>
           ) : null}
@@ -227,10 +227,10 @@ export function NutritionHeader({
               {eyebrow}
             </Text>
           ) : null}
-          <Text accessibilityRole="header" className="font-display text-3xl font-bold tracking-tight text-text-strong">
+          <Text accessibilityRole="header" className="font-display text-3xl font-bold tracking-tight text-strong">
             {title}
           </Text>
-          {description ? <Text className="mt-2 text-sm leading-5 text-text-muted">{description}</Text> : null}
+          {description ? <Text className="mt-2 text-sm leading-5 text-muted">{description}</Text> : null}
         </View>
         {actions ? <View className="shrink-0 flex-row items-center gap-2">{actions}</View> : null}
       </View>
@@ -246,7 +246,7 @@ export function NutritionToolbar({ children }: { children: ReactNode }) {
       keyboardShouldPersistTaps="handled"
       showsHorizontalScrollIndicator={false}
       contentContainerClassName="items-center gap-2 p-2"
-      className="min-h-14 rounded-card border border-border-subtle bg-surface-card"
+      className="min-h-14 rounded-card border border-subtle bg-surface-card"
       // Decisión única del kit: `shadow-sm` web (NutritionV2Kit.tsx:173) = token DS
       // RN `shadow('sm', scheme)` de lib/shadows.ts (misma escala en Card/Slot/botón).
       style={shadow('sm', theme.scheme)}
@@ -305,15 +305,15 @@ export function MacroBudget({
   compact?: boolean
 }) {
   return (
-    <View accessibilityLabel="Presupuesto nutricional" className="rounded-card border border-border-subtle bg-surface-card p-4">
+    <View accessibilityLabel="Presupuesto nutricional" className="rounded-card border border-subtle bg-surface-card p-4">
       {calories ? (
-        <View className="mb-4 flex-row flex-wrap items-end justify-between gap-3 border-b border-border-subtle pb-4">
+        <View className="mb-4 flex-row flex-wrap items-end justify-between gap-3 border-b border-subtle pb-4">
           <View>
-            <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">Energía</Text>
-            <Text className="mt-1 font-display text-2xl font-bold text-text-strong">
+            <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">Energía</Text>
+            <Text className="mt-1 font-display text-2xl font-bold text-strong">
               {formatNutritionCalories(calories.consumed)}
             </Text>
-            <Text className="mt-0.5 text-xs text-text-muted">de {formatNutritionCalories(calories.target)}</Text>
+            <Text className="mt-0.5 text-xs text-muted">de {formatNutritionCalories(calories.target)}</Text>
           </View>
           <Text className="text-sm font-semibold text-primary">
             {formatNutritionCalories(Math.max(calories.target - calories.consumed, 0))} restantes
@@ -354,7 +354,7 @@ export function MacroProgress({
     <View className={cx('min-w-0', compact ? 'gap-1.5' : 'gap-2')}>
       <View className="flex-row flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <Text className={cx('text-xs font-semibold', macroTextClasses[macro])}>{compact ? meta.shortLabel : meta.label}</Text>
-        <Text className="text-[10px] font-medium text-text-muted">{stateLabel}</Text>
+        <Text className="text-[10px] font-medium text-muted">{stateLabel}</Text>
       </View>
       <View
         accessibilityLabel={`${meta.label}: ${consumed} de ${target} ${unit}`}
@@ -368,8 +368,8 @@ export function MacroProgress({
           transition={{ type: 'timing', duration: duration('base') }}
         />
       </View>
-      <Text className="font-mono text-xs text-text-muted">
-        <Text className="font-semibold text-text-strong">{formatNutritionAmount(consumed, unit, 1)}</Text>
+      <Text className="font-mono text-xs text-muted">
+        <Text className="font-semibold text-strong">{formatNutritionAmount(consumed, unit, 1)}</Text>
         {' / '}
         {formatNutritionAmount(target, unit, 1)}
       </Text>
@@ -433,11 +433,11 @@ export function MealSlotCard({ slot, actions }: { slot: NutritionMealSlotModel; 
 
   return (
     // Web MealSlotCard (NutritionV2Kit.tsx:266): `shadow-sm` → token DS RN shadow('sm').
-    <View className="rounded-card border border-border-subtle bg-surface-card p-4" style={shadow('sm', theme.scheme)}>
+    <View className="rounded-card border border-subtle bg-surface-card p-4" style={shadow('sm', theme.scheme)}>
       <View className="flex-row flex-wrap items-start justify-between gap-3">
         <View className="min-w-0 flex-1">
           <View className="flex-row flex-wrap items-center gap-2">
-            <Text className="font-display text-lg font-semibold text-text-strong">{slot.name}</Text>
+            <Text className="font-display text-lg font-semibold text-strong">{slot.name}</Text>
             <View className={cx('rounded-pill border px-2 py-0.5', toneClasses[state.tone])}>
               <Text className={cx('text-[10px] font-semibold', toneTextClasses[state.tone])}>{state.label}</Text>
             </View>
@@ -445,28 +445,28 @@ export function MealSlotCard({ slot, actions }: { slot: NutritionMealSlotModel; 
           {slot.timeLabel ? (
             <View className="mt-1 flex-row items-center gap-1">
               <Clock3 color="#818C9A" size={13} />
-              <Text className="text-xs text-text-muted">{slot.timeLabel}</Text>
+              <Text className="text-xs text-muted">{slot.timeLabel}</Text>
             </View>
           ) : null}
-          {slot.prescriptionLabel ? <Text className="mt-2 text-sm leading-5 text-text-body">{slot.prescriptionLabel}</Text> : null}
+          {slot.prescriptionLabel ? <Text className="mt-2 text-sm leading-5 text-body">{slot.prescriptionLabel}</Text> : null}
         </View>
         {slot.subtotalCalories !== null && slot.subtotalCalories !== undefined ? (
-          <Text className="font-mono text-sm font-semibold text-text-strong">{formatNutritionCalories(slot.subtotalCalories)}</Text>
+          <Text className="font-mono text-sm font-semibold text-strong">{formatNutritionCalories(slot.subtotalCalories)}</Text>
         ) : null}
       </View>
 
       <View className="mt-4">
         {slot.foods.length > 0 ? (
           slot.foods.map((food, index) => (
-            <View key={food.id} className={cx(index > 0 && 'border-t border-border-subtle')}>
+            <View key={food.id} className={cx(index > 0 && 'border-t border-subtle')}>
               <FoodRow food={food} />
             </View>
           ))
         ) : (
-          <Text className="py-4 text-sm text-text-muted">Aún no registras alimentos en esta franja.</Text>
+          <Text className="py-4 text-sm text-muted">Aún no registras alimentos en esta franja.</Text>
         )}
       </View>
-      {actions ? <View className="mt-4 flex-row flex-wrap gap-2 border-t border-border-subtle pt-4">{actions}</View> : null}
+      {actions ? <View className="mt-4 flex-row flex-wrap gap-2 border-t border-subtle pt-4">{actions}</View> : null}
     </View>
   )
 }
@@ -505,7 +505,7 @@ export function FoodThumbnail({
         <View
           accessibilityLabel={`Sin imagen para ${alt}`}
           accessibilityRole="image"
-          className="shrink-0 items-center justify-center overflow-hidden rounded-control border border-border-subtle bg-surface-sunken"
+          className="shrink-0 items-center justify-center overflow-hidden rounded-control border border-subtle bg-surface-sunken"
           style={{ width: dimension, height: dimension }}
         >
           <View className="absolute inset-0 items-center justify-center bg-primary/10">
@@ -522,7 +522,7 @@ export function FoodThumbnail({
       <View
         accessibilityLabel={`Sin imagen para ${alt}`}
         accessibilityRole="image"
-        className="shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken"
+        className="shrink-0 items-center justify-center rounded-control border border-subtle bg-surface-sunken"
         style={{ width: dimension, height: dimension }}
       >
         {fallbackEmoji ? (
@@ -585,12 +585,12 @@ export function FoodRow({
       <FoodThumbnail alt={food.name} src={food.thumbnailUrl} fallbackCategory={category} />
       <View className="min-w-0 flex-1">
         <View className="flex-row flex-wrap items-center gap-2">
-          <Text className="min-w-0 shrink font-semibold text-text-strong" numberOfLines={nameLines}>
+          <Text className="min-w-0 shrink font-semibold text-strong" numberOfLines={nameLines}>
             {food.name}
           </Text>
           {statusLabel ? <Text className="text-[10px] font-semibold text-warning-700">{statusLabel}</Text> : null}
         </View>
-        <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+        <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
           {food.quantityLabel}
           {food.detail ? ` · ${food.detail}` : ''}
         </Text>
@@ -604,7 +604,7 @@ export function FoodRow({
           />
         </View>
         {note ? (
-          <Text className="mt-1 text-[11px] leading-4 text-text-subtle">{note}</Text>
+          <Text className="mt-1 text-[11px] leading-4 text-subtle">{note}</Text>
         ) : null}
       </View>
       {actions ? <View className="shrink-0">{actions}</View> : null}
@@ -695,7 +695,7 @@ export function NutritionStatePanel({
         </View>
       )}
       <Text className={cx('text-center font-display text-lg font-semibold', toneTextClasses[tone])}>{title}</Text>
-      <Text className="mt-2 max-w-md text-center text-sm leading-5 text-text-muted">{description}</Text>
+      <Text className="mt-2 max-w-md text-center text-sm leading-5 text-muted">{description}</Text>
       {action ? <View className="mt-5">{action}</View> : null}
     </View>
   )
@@ -838,12 +838,12 @@ export function SelectableStrategyCard({
         <View
           className={cx(
             'min-h-36 rounded-card border bg-surface-card p-4',
-            selected ? 'border-primary' : 'border-border-subtle',
+            selected ? 'border-primary' : 'border-subtle',
             disabled && 'opacity-50',
           )}
         >
-          <Text className="pr-10 font-display text-lg font-semibold text-text-strong">{meta.label}</Text>
-          <Text className="mt-2 text-sm leading-5 text-text-muted">{meta.description}</Text>
+          <Text className="pr-10 font-display text-lg font-semibold text-strong">{meta.label}</Text>
+          <Text className="mt-2 text-sm leading-5 text-muted">{meta.description}</Text>
           {selected ? (
             <MotiView
               animate={{ opacity: 1, scale: 1 }}
@@ -908,7 +908,7 @@ export function CoachAttentionCard({
         </View>
         <View className="min-w-0 flex-1">
           <Text className={cx('font-semibold', toneTextClasses[item.tone])}>{item.title}</Text>
-          <Text className="mt-1 text-sm leading-5 text-text-body">{item.description}</Text>
+          <Text className="mt-1 text-sm leading-5 text-body">{item.description}</Text>
         </View>
         <Pressable
           accessibilityLabel={`${item.actionLabel}: ${item.title}`}
@@ -927,7 +927,7 @@ export function CoachAttentionCard({
 export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] }) {
   const { theme } = useTheme()
   return (
-    <View accessibilityLabel="Pasos del constructor" className="rounded-card border border-border-subtle bg-surface-card p-3">
+    <View accessibilityLabel="Pasos del constructor" className="rounded-card border border-subtle bg-surface-card p-3">
       {steps.map((step, index) => (
         <View
           accessibilityState={{ selected: step.state === 'current' }}
@@ -943,19 +943,19 @@ export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] 
               'mt-0.5 h-6 w-6 shrink-0 items-center justify-center rounded-full border',
               step.state === 'complete' && 'border-success-500 bg-success-500',
               step.state === 'current' && 'border-primary bg-primary',
-              step.state === 'upcoming' && 'border-border-default bg-surface-sunken',
+              step.state === 'upcoming' && 'border-default bg-surface-sunken',
               step.state === 'error' && 'border-danger-500 bg-danger-500',
             )}
           >
             {step.state === 'complete' ? (
               <Check color={theme.primaryForeground} size={13} />
             ) : (
-              <Text className={cx('text-xs font-bold', step.state === 'upcoming' ? 'text-text-muted' : 'text-white')}>{index + 1}</Text>
+              <Text className={cx('text-xs font-bold', step.state === 'upcoming' ? 'text-muted' : 'text-white')}>{index + 1}</Text>
             )}
           </View>
           <View className="min-w-0 flex-1">
-            <Text className="text-sm font-semibold text-text-strong">{step.label}</Text>
-            {step.description ? <Text className="mt-0.5 text-xs leading-4 text-text-muted">{step.description}</Text> : null}
+            <Text className="text-sm font-semibold text-strong">{step.label}</Text>
+            {step.description ? <Text className="mt-0.5 text-xs leading-4 text-muted">{step.description}</Text> : null}
           </View>
         </View>
       ))}
@@ -967,12 +967,12 @@ export function BuilderInspector({ title = 'Inspector', children, footer }: { ti
   const { theme } = useTheme()
   return (
     // Web BuilderInspector (NutritionV2Kit.tsx:455): `shadow-sm` → token DS RN shadow('sm').
-    <View className="rounded-card border border-border-subtle bg-surface-card" style={shadow('sm', theme.scheme)}>
-      <View className="border-b border-border-subtle px-4 py-3">
-        <Text className="font-display text-base font-semibold text-text-strong">{title}</Text>
+    <View className="rounded-card border border-subtle bg-surface-card" style={shadow('sm', theme.scheme)}>
+      <View className="border-b border-subtle px-4 py-3">
+        <Text className="font-display text-base font-semibold text-strong">{title}</Text>
       </View>
       <View className="gap-4 p-4">{children}</View>
-      {footer ? <View className="border-t border-border-subtle p-4">{footer}</View> : null}
+      {footer ? <View className="border-t border-subtle p-4">{footer}</View> : null}
     </View>
   )
 }
@@ -991,9 +991,9 @@ export function StudentPreview({
       <View className="h-7 items-center justify-center bg-ink-900">
         <View className="h-1.5 w-20 rounded-pill bg-white/20" />
       </View>
-      <View className="flex-row items-center justify-between border-b border-border-subtle bg-surface-card px-4 py-3">
-        <Text className="text-sm font-semibold text-text-strong">{title}</Text>
-        {themeLabel ? <Text className="text-xs text-text-muted">{themeLabel}</Text> : null}
+      <View className="flex-row items-center justify-between border-b border-subtle bg-surface-card px-4 py-3">
+        <Text className="text-sm font-semibold text-strong">{title}</Text>
+        {themeLabel ? <Text className="text-xs text-muted">{themeLabel}</Text> : null}
       </View>
       <View className="max-h-[620px] p-3">{children}</View>
     </View>

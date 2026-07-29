@@ -37,7 +37,7 @@ export function PublishConfirmSheet({
       title={QUICK_EDIT_COPY.confirmTitle}
       accessibilityLabel={QUICK_EDIT_COPY.confirmTitle}
     >
-      <Text className="text-sm leading-5 text-text-body">
+      <Text className="text-sm leading-5 text-body">
         {publishConfirmBody(studentName, futureDate)}
       </Text>
       <View className="mt-2 gap-3">
@@ -82,7 +82,7 @@ export function StaleBaseSheet({
     >
       <View className="flex-row items-start gap-2">
         <RefreshCw color={theme.primary} size={18} />
-        <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">{QUICK_EDIT_COPY.stale}</Text>
+        <Text className="min-w-0 flex-1 text-sm leading-5 text-body">{QUICK_EDIT_COPY.stale}</Text>
       </View>
       <View className="mt-2">
         <NutritionMotionButton accessibilityLabel={QUICK_EDIT_COPY.reload} onPress={onReload}>
@@ -113,7 +113,7 @@ export function ProUpsellSheet({
     >
       <View className="flex-row items-start gap-2">
         <Lock color={theme.primary} size={18} />
-        <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">
+        <Text className="min-w-0 flex-1 text-sm leading-5 text-body">
           {message ?? 'Esta función requiere el complemento Nutrición Pro.'}
         </Text>
       </View>

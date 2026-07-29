@@ -784,7 +784,7 @@ export function QuickEditMode({
               accessibilityLabel="Salir del modo edición"
               onPress={requestExit}
               hitSlop={8}
-              className="h-11 w-11 items-center justify-center rounded-control border border-border-subtle bg-surface-card"
+              className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-card"
             >
               <ArrowLeft color={theme.textSecondary} size={20} />
             </Pressable>
@@ -799,15 +799,15 @@ export function QuickEditMode({
 
           <View className="flex-row flex-wrap items-center gap-2">
             <StrategyBadge strategy={baseline.strategy} />
-            <Text className="text-sm font-semibold text-text-strong" numberOfLines={1}>
+            <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
               {baseline.name}
             </Text>
           </View>
 
           {!usesSlots ? (
-            <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
+            <View className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
               <Info color={theme.primary} size={16} />
-              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-body">
                 {QUICK_EDIT_COPY.flexibleHint}
               </Text>
             </View>
@@ -849,14 +849,14 @@ export function QuickEditMode({
               {showVariantHeader ? (
                 <View className="flex-row items-start gap-2">
                   <View className="min-w-0 flex-1">
-                    <Text className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                    <Text className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
                       {variant.default ? QUICK_EDIT_COPY.baseDayEyebrow : QUICK_EDIT_COPY.specificDayEyebrow}
                     </Text>
-                    <Text className="font-display text-base font-semibold text-text-strong" numberOfLines={1}>
+                    <Text className="font-display text-base font-semibold text-strong" numberOfLines={1}>
                       {variant.label}
                     </Text>
                     {variant.default ? (
-                      <Text className="mt-0.5 text-xs leading-5 text-text-muted">
+                      <Text className="mt-0.5 text-xs leading-5 text-muted">
                         {QUICK_EDIT_COPY.baseDayHint}
                       </Text>
                     ) : null}
@@ -872,7 +872,7 @@ export function QuickEditMode({
                     disabled={publishing}
                     onPress={() => setDayMenuKey(variant.key)}
                     hitSlop={8}
-                    className="h-11 w-11 items-center justify-center rounded-control border border-border-subtle bg-surface-card"
+                    className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-card"
                   >
                     <MoreVertical color={theme.textSecondary} size={18} />
                   </Pressable>
@@ -949,9 +949,9 @@ export function QuickEditMode({
                   accessibilityLabel={QUICK_EDIT_COPY.addSlot}
                   disabled={publishing}
                   onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot') })}
-                  className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-border-default bg-surface-card px-3"
+                  className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
                 >
-                  <Text className="text-sm font-semibold text-text-muted">+ {QUICK_EDIT_COPY.addSlot}</Text>
+                  <Text className="text-sm font-semibold text-muted">+ {QUICK_EDIT_COPY.addSlot}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -965,14 +965,14 @@ export function QuickEditMode({
               accessibilityLabel={QUICK_EDIT_COPY.addDay}
               disabled={publishing}
               onPress={openAddDay}
-              className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-border-default bg-surface-card px-3"
+              className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
             >
               {hasNutritionPro ? (
                 <Plus color={theme.textSecondary} size={16} />
               ) : (
                 <Lock color={theme.primary} size={16} />
               )}
-              <Text className="text-sm font-semibold text-text-muted">{QUICK_EDIT_COPY.addDay}</Text>
+              <Text className="text-sm font-semibold text-muted">{QUICK_EDIT_COPY.addDay}</Text>
             </Pressable>
           ) : null}
 
@@ -981,11 +981,11 @@ export function QuickEditMode({
           <NutritionCard>
             <View className="flex-row items-center gap-2">
               <NotebookPen color={theme.textSecondary} size={16} />
-              <Text className="font-display text-base font-semibold text-text-strong">
+              <Text className="font-display text-base font-semibold text-strong">
                 {QUICK_EDIT_COPY.notesPermissionsTitle}
               </Text>
             </View>
-            <Text className="mt-3 text-xs font-semibold text-text-muted">
+            <Text className="mt-3 text-xs font-semibold text-muted">
               {QUICK_EDIT_COPY.notesLabel}
             </Text>
             <TextInput
@@ -998,7 +998,7 @@ export function QuickEditMode({
               textAlignVertical="top"
               placeholder={QUICK_EDIT_COPY.notesPlaceholder}
               placeholderTextColor={theme.mutedForeground}
-              className="mt-1.5 min-h-28 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm leading-6 text-text-body"
+              className="mt-1.5 min-h-28 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm leading-6 text-body"
             />
             {errors['plan.visibleNotes'] ? (
               <Text className="mt-1 text-xs font-medium text-danger-600">
@@ -1006,7 +1006,7 @@ export function QuickEditMode({
               </Text>
             ) : null}
             {planModel.protocolNotes ? (
-              <Text className="mt-2 text-xs leading-5 text-text-muted">{planModel.protocolNotes}</Text>
+              <Text className="mt-2 text-xs leading-5 text-muted">{planModel.protocolNotes}</Text>
             ) : null}
             <View className="mt-3 flex-row flex-wrap gap-1.5">
               {(
@@ -1020,11 +1020,11 @@ export function QuickEditMode({
                   key={label}
                   className={
                     'rounded-pill border px-2 py-0.5 ' +
-                    (enabled ? 'border-primary/30 bg-primary/10' : 'border-border-subtle bg-surface-sunken')
+                    (enabled ? 'border-primary/30 bg-primary/10' : 'border-subtle bg-surface-sunken')
                   }
                 >
                   <Text
-                    className={'text-[11px] font-semibold ' + (enabled ? 'text-primary' : 'text-text-muted')}
+                    className={'text-[11px] font-semibold ' + (enabled ? 'text-primary' : 'text-muted')}
                   >
                     {label}
                   </Text>
@@ -1033,7 +1033,7 @@ export function QuickEditMode({
             </View>
             <View className="mt-3 flex-row items-start gap-1.5">
               <Info color={theme.textSecondary} size={14} />
-              <Text className="min-w-0 flex-1 text-xs leading-5 text-text-muted">
+              <Text className="min-w-0 flex-1 text-xs leading-5 text-muted">
                 {QUICK_EDIT_COPY.readonlyHint}
               </Text>
             </View>
@@ -1089,7 +1089,7 @@ export function QuickEditMode({
           <View className="gap-3">
             <View className="flex-row items-start gap-2">
               <Lock color={theme.primary} size={18} />
-              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-body">
                 {QUICK_EDIT_COPY.multiDayLocked}
               </Text>
             </View>
@@ -1105,7 +1105,7 @@ export function QuickEditMode({
           </View>
         ) : (
           <View className="gap-3">
-            <Text className="text-xs leading-5 text-text-muted">{QUICK_EDIT_COPY.addDayHint}</Text>
+            <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.addDayHint}</Text>
             <DayPickerRow
               selected={addDays}
               taken={takenDays}
@@ -1118,7 +1118,7 @@ export function QuickEditMode({
               }
             />
             <View className="gap-1.5">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
                 {QUICK_EDIT_COPY.addDaySourceLabel}
               </Text>
               {(
@@ -1137,12 +1137,12 @@ export function QuickEditMode({
                     'min-h-12 flex-row items-center justify-center rounded-control border px-3 ' +
                     (addSource === value
                       ? 'border-primary bg-primary/10'
-                      : 'border-border-default bg-surface-card')
+                      : 'border-default bg-surface-card')
                   }
                 >
                   <Text
                     className={
-                      'text-sm font-semibold ' + (addSource === value ? 'text-primary' : 'text-text-strong')
+                      'text-sm font-semibold ' + (addSource === value ? 'text-primary' : 'text-strong')
                     }
                   >
                     {label}
@@ -1158,7 +1158,7 @@ export function QuickEditMode({
               {addDayCta(addDays.length)}
             </NutritionMotionButton>
             {addDays.length === 0 ? (
-              <Text className="text-xs leading-5 text-text-muted">
+              <Text className="text-xs leading-5 text-muted">
                 {QUICK_EDIT_COPY.addDayEmptySelection}
               </Text>
             ) : null}
@@ -1184,10 +1184,10 @@ export function QuickEditMode({
                 setChangeDayKey(dayMenuVariant.key)
                 setDayMenuKey(null)
               }}
-              className="min-h-12 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3"
+              className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
             >
               <CalendarDays color={theme.textSecondary} size={16} />
-              <Text className="text-sm font-semibold text-text-strong">{QUICK_EDIT_COPY.changeDay}</Text>
+              <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.changeDay}</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -1199,10 +1199,10 @@ export function QuickEditMode({
               setRenameKey(dayMenuVariant.key)
               setDayMenuKey(null)
             }}
-            className="min-h-12 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3"
+            className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
           >
             <Pencil color={theme.textSecondary} size={16} />
-            <Text className="text-sm font-semibold text-text-strong">{QUICK_EDIT_COPY.renameDay}</Text>
+            <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.renameDay}</Text>
           </Pressable>
           {dayMenuVariant && !dayMenuVariant.default ? (
             <Pressable
@@ -1218,7 +1218,7 @@ export function QuickEditMode({
           {dayMenuVariant?.default ? (
             <View className="flex-row items-start gap-1.5">
               <Info color={theme.textSecondary} size={14} />
-              <Text className="min-w-0 flex-1 text-xs leading-5 text-text-muted">
+              <Text className="min-w-0 flex-1 text-xs leading-5 text-muted">
                 {QUICK_EDIT_COPY.baseDayHint}
               </Text>
             </View>
@@ -1236,7 +1236,7 @@ export function QuickEditMode({
         accessibilityLabel={QUICK_EDIT_COPY.changeDayTitle}
       >
         <View className="gap-3">
-          <Text className="text-xs leading-5 text-text-muted">{QUICK_EDIT_COPY.changeDayHint}</Text>
+          <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.changeDayHint}</Text>
           <DayPickerRow
             selected={changeDayVariant?.dayOfWeek == null ? [] : [changeDayVariant.dayOfWeek]}
             taken={takenDays}
@@ -1259,7 +1259,7 @@ export function QuickEditMode({
         accessibilityLabel={QUICK_EDIT_COPY.renameDayTitle}
       >
         <View className="gap-3">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
             {QUICK_EDIT_COPY.dayNameLabel}
           </Text>
           <TextInput
@@ -1269,7 +1269,7 @@ export function QuickEditMode({
             maxLength={VARIANT_LABEL_MAX}
             placeholder={QUICK_EDIT_COPY.dayNamePlaceholder}
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-12 rounded-control border border-border-default bg-surface-card px-3 text-base text-text-strong"
+            className="min-h-12 rounded-control border border-default bg-surface-card px-3 text-base text-strong"
           />
           <NutritionMotionButton
             accessibilityLabel={QUICK_EDIT_COPY.renameDay}
@@ -1323,14 +1323,14 @@ function DayPickerRow({
               (isSelected
                 ? 'border-primary bg-primary/15'
                 : isTaken
-                  ? 'border-border-subtle bg-surface-sunken opacity-60'
-                  : 'border-border-default bg-surface-card')
+                  ? 'border-subtle bg-surface-sunken opacity-60'
+                  : 'border-default bg-surface-card')
             }
           >
             <Text
               className={
                 'text-sm font-semibold ' +
-                (isSelected ? 'text-primary' : isTaken ? 'text-text-muted' : 'text-text-strong')
+                (isSelected ? 'text-primary' : isTaken ? 'text-muted' : 'text-strong')
               }
             >
               {formatNutritionDayOfWeek(dayOfWeek, { short: true })}

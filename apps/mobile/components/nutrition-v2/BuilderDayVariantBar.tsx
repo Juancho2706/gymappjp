@@ -96,13 +96,13 @@ function DayChipRow({
             onPress={() => onToggle(day)}
             className={`h-11 min-w-11 items-center justify-center rounded-control border px-2 ${
               isTaken
-                ? 'border-border-subtle bg-surface-sunken opacity-50'
+                ? 'border-subtle bg-surface-sunken opacity-50'
                 : isOn
                   ? 'border-primary bg-primary/10'
-                  : 'border-border-default bg-surface-card'
+                  : 'border-default bg-surface-card'
             }`}
           >
-            <Text className={`text-sm font-semibold ${isOn ? 'text-primary' : 'text-text-strong'}`}>
+            <Text className={`text-sm font-semibold ${isOn ? 'text-primary' : 'text-strong'}`}>
               {NUTRITION_DAY_SHORT_LABELS[day]}
             </Text>
           </Pressable>
@@ -119,11 +119,11 @@ function UpsellPanel({ onUpgrade }: { onUpgrade: () => void }) {
     <View className="gap-2 pb-2">
       <View className="flex-row items-center gap-2">
         <Lock color={theme.primary} size={18} />
-        <Text className="font-display text-base font-semibold text-text-strong">
+        <Text className="font-display text-base font-semibold text-strong">
           Días distintos con Nutrición Pro
         </Text>
       </View>
-      <Text className="text-sm leading-5 text-text-muted">
+      <Text className="text-sm leading-5 text-muted">
         Armar un día especial (por ejemplo, el fin de semana) es parte de Nutrición Pro, incluido en los planes
         pagos. Tu plan actual publica un solo día para toda la semana.
       </Text>
@@ -176,13 +176,13 @@ function AddDaySheet({
       {locked ? (
         <UpsellPanel onUpgrade={onUpgrade} />
       ) : allTaken ? (
-        <Text className="py-4 text-sm leading-5 text-text-muted">
+        <Text className="py-4 text-sm leading-5 text-muted">
           Ya tienes los siete días definidos por separado. Elimina alguno para volver a usar el día base.
         </Text>
       ) : (
         <View className="gap-4 pb-2">
           <View>
-            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
               Elige los días
             </Text>
             <DayChipRow
@@ -196,7 +196,7 @@ function AddDaySheet({
           </View>
 
           <View>
-            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
               Contenido inicial
             </Text>
             {(
@@ -219,13 +219,13 @@ function AddDaySheet({
                 >
                   <View
                     className={`h-5 w-5 items-center justify-center rounded-full border ${
-                      checked ? 'border-transparent' : 'border-border-default bg-surface-card'
+                      checked ? 'border-transparent' : 'border-default bg-surface-card'
                     }`}
                     style={checked ? { backgroundColor: theme.primary } : undefined}
                   >
                     {checked ? <Check color={theme.primaryForeground} size={13} /> : null}
                   </View>
-                  <Text className="flex-1 text-sm text-text-body">{label}</Text>
+                  <Text className="flex-1 text-sm text-body">{label}</Text>
                 </Pressable>
               )
             })}
@@ -280,7 +280,7 @@ function MenuRow({
       className={`min-h-12 flex-row items-center gap-3 rounded-control px-2 ${disabled ? 'opacity-50' : 'active:bg-surface-sunken'}`}
     >
       <Icon color={destructive ? theme.destructive : theme.foreground} size={18} />
-      <Text className={`flex-1 text-sm font-medium ${destructive ? 'text-danger-600' : 'text-text-strong'}`}>
+      <Text className={`flex-1 text-sm font-medium ${destructive ? 'text-danger-600' : 'text-strong'}`}>
         {label}
       </Text>
     </Pressable>
@@ -375,7 +375,7 @@ function DayMenuSheet({
 
       {panel === 'rename' ? (
         <View className="gap-3 pb-2">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">Nombre del día</Text>
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Nombre del día</Text>
           <TextInput
             autoFocus
             accessibilityLabel="Nombre del día"
@@ -384,7 +384,7 @@ function DayMenuSheet({
             maxLength={120}
             placeholder="Sábado, Día de entrenamiento…"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
           />
           <Pressable
             accessibilityRole="button"
@@ -405,7 +405,7 @@ function DayMenuSheet({
 
       {panel === 'change' ? (
         <View className="gap-3 pb-2">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">Cambiar día</Text>
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Cambiar día</Text>
           <DayChipRow
             selected={[]}
             taken={taken}
@@ -421,7 +421,7 @@ function DayMenuSheet({
 
       {panel === 'duplicate' ? (
         <View className="gap-3 pb-2">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
             Duplicar como otro día
           </Text>
           <DayChipRow
@@ -502,7 +502,7 @@ export function BuilderDayVariantBar({
                     : 'bg-surface-card'
                   : isActive
                     ? 'border-primary bg-primary/10'
-                    : 'border-border-default bg-surface-card'
+                    : 'border-default bg-surface-card'
               }`}
               style={hasError ? { borderColor: theme.destructive } : undefined}
             >
@@ -519,10 +519,10 @@ export function BuilderDayVariantBar({
                 {hasError ? (
                   <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: theme.destructive }} />
                 ) : null}
-                <Text className={`text-xs font-semibold ${isActive ? 'text-primary' : 'text-text-strong'}`}>
+                <Text className={`text-xs font-semibold ${isActive ? 'text-primary' : 'text-strong'}`}>
                   {variant.label}
                 </Text>
-                <Text className="text-[11px] text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                <Text className="text-[11px] text-muted" style={{ fontVariant: ['tabular-nums'] }}>
                   {kcalLabel(kcal)}
                 </Text>
               </Pressable>
@@ -543,7 +543,7 @@ export function BuilderDayVariantBar({
           accessibilityRole="button"
           accessibilityLabel="Agregar un día distinto al plan"
           onPress={() => setAddOpen(true)}
-          className="min-h-11 flex-row items-center gap-1.5 rounded-pill border border-dashed border-border-default bg-surface-card px-3"
+          className="min-h-11 flex-row items-center gap-1.5 rounded-pill border border-dashed border-default bg-surface-card px-3"
         >
           {addDayLocked ? <Lock color={theme.primary} size={14} /> : <Plus color={theme.primary} size={14} />}
           <Text className="text-xs font-semibold text-primary">Agregar día</Text>
@@ -580,7 +580,7 @@ export function BuilderDayVariantBar({
             <View className="mt-2 flex-row gap-2">
               {MACRO_FIELDS.map(({ field, label }) => (
                 <View key={field} className="flex-1">
-                  <Text className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-text-subtle">
+                  <Text className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-subtle">
                     {label}
                   </Text>
                   <TextInput
@@ -590,7 +590,7 @@ export function BuilderDayVariantBar({
                     placeholder={baseTargets[field] || '0'}
                     placeholderTextColor={theme.mutedForeground}
                     keyboardType="number-pad"
-                    className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+                    className="min-h-11 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
                     style={{ fontVariant: ['tabular-nums'] }}
                   />
                 </View>
@@ -598,8 +598,8 @@ export function BuilderDayVariantBar({
             </View>
           </View>
         ) : (
-          <View className="flex-row flex-wrap items-center gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2">
-            <Text className="min-w-0 flex-1 text-xs text-text-muted">
+          <View className="flex-row flex-wrap items-center gap-2 rounded-control border border-subtle bg-surface-sunken px-3 py-2">
+            <Text className="min-w-0 flex-1 text-xs text-muted">
               {active.label} usa los objetivos base
               {baseTargets.calories.trim() !== '' ? ` (${baseTargets.calories} kcal)` : ''}.
             </Text>

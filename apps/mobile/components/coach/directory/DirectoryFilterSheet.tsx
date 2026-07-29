@@ -151,7 +151,7 @@ export function DirectoryFilterSheet({
           onPress={onClose}
           activeOpacity={0.9}
         >
-          <Text className="text-text-on-sport" style={styles.footerBtnTxt}>Ver resultados</Text>
+          <Text className="text-on-sport" style={styles.footerBtnTxt}>Ver resultados</Text>
         </TouchableOpacity>
       </View>
     </Modal>

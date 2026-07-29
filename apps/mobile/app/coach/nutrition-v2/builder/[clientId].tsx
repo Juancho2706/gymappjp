@@ -1274,7 +1274,7 @@ export default function CoachNutritionV2BuilderScreen() {
           ) : null}
         </ScrollView>
 
-        <View className="border-t border-border-subtle bg-surface-app">
+        <View className="border-t border-subtle bg-surface-app">
           {/* H-01 (P0): "Siguiente" no avanza por un error que vive en un dia NO montado. Sin esta
               linea el boton parece muerto: el unico rastro era la fila roja del BuilderStepList. */}
           {hiddenErrorVariants.length > 0 ? (
@@ -1353,7 +1353,7 @@ function LabeledInput({
   const { theme } = useTheme()
   return (
     <View>
-      <Text className="mb-1.5 text-sm font-semibold text-text-strong">{label}</Text>
+      <Text className="mb-1.5 text-sm font-semibold text-strong">{label}</Text>
       <TextInput
         autoFocus={autoFocus}
         value={value}
@@ -1361,9 +1361,9 @@ function LabeledInput({
         placeholder={placeholder}
         placeholderTextColor={theme.mutedForeground}
         keyboardType={keyboardType ?? 'default'}
-        className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-text-strong"
+        className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
       />
-      {hint && !error ? <Text className="mt-1 text-xs text-text-muted">{hint}</Text> : null}
+      {hint && !error ? <Text className="mt-1 text-xs text-muted">{hint}</Text> : null}
       <ErrorText message={error} />
     </View>
   )
@@ -1386,7 +1386,7 @@ function StrategyStep({
 }) {
   return (
     <View className="gap-3">
-      <Text className="font-display text-lg font-semibold text-text-strong">¿Cómo se estructura el plan?</Text>
+      <Text className="font-display text-lg font-semibold text-strong">¿Cómo se estructura el plan?</Text>
       <ErrorText message={error} />
       <View className="gap-3">
         {STRATEGY_ORDER.map((strategy) => {
@@ -1401,7 +1401,7 @@ function StrategyStep({
               {locked ? (
                 <View className="mt-1.5 flex-row items-center gap-1.5 px-1">
                   <Lock color="#8A94A6" size={13} />
-                  <Text className="text-xs font-medium text-text-muted">Incluido en Nutrición Pro</Text>
+                  <Text className="text-xs font-medium text-muted">Incluido en Nutrición Pro</Text>
                 </View>
               ) : null}
             </View>
@@ -1439,10 +1439,10 @@ function TargetsStep({
       />
 
       <NutritionCard>
-        <Text className="font-display text-base font-semibold text-text-strong">
+        <Text className="font-display text-base font-semibold text-strong">
           {state.variants.length > 1 ? 'Metas del día base' : 'Metas diarias'}
         </Text>
-        <Text className="mt-1 text-xs text-text-muted">
+        <Text className="mt-1 text-xs text-muted">
           {state.variants.length > 1
             ? 'Los días específicos las heredan salvo que les pongas objetivos propios.'
             : 'Define al menos una meta (kcal o un macro).'}
@@ -1492,7 +1492,7 @@ function TargetsStep({
       </NutritionCard>
 
       <NutritionCard>
-        <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">Permisos del alumno</Text>
+        <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</Text>
         <View className="mt-2 gap-1">
           {PERMISSION_FIELDS.map(([field, label]) => (
             <PermissionRow
@@ -1533,13 +1533,13 @@ function PermissionRow({ label, checked, onToggle }: { label: string; checked: b
     >
       <View
         className={`h-5 w-5 items-center justify-center rounded-control border ${
-          checked ? 'border-transparent' : 'border-border-default bg-surface-card'
+          checked ? 'border-transparent' : 'border-default bg-surface-card'
         }`}
         style={checked ? { backgroundColor: theme.primary } : undefined}
       >
         {checked ? <Check color={theme.primaryForeground} size={14} /> : null}
       </View>
-      <Text className="flex-1 text-sm text-text-body">{label}</Text>
+      <Text className="flex-1 text-sm text-body">{label}</Text>
     </Pressable>
   )
 }
@@ -1590,13 +1590,13 @@ function PortionsStepper({
         accessibilityLabel={PORTIONS_COPY.builder.stepDownAria(groupName)}
         disabled={!canDecrement}
         onPress={() => onStep(-1)}
-        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
       >
         <Minus color={theme.foreground} size={16} />
       </Pressable>
       <Text
         accessibilityLabel={`Porciones de ${groupName}: ${formatPortionsEs(portions)}`}
-        className="w-12 text-center text-base font-semibold text-text-strong"
+        className="w-12 text-center text-base font-semibold text-strong"
         style={{ fontVariant: ['tabular-nums'] }}
       >
         {formatPortionsEs(portions)}
@@ -1606,7 +1606,7 @@ function PortionsStepper({
         accessibilityLabel={PORTIONS_COPY.builder.stepUpAria(groupName)}
         disabled={!canIncrement}
         onPress={() => onStep(1)}
-        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
       >
         <Plus color={theme.foreground} size={16} />
       </Pressable>
@@ -1675,11 +1675,11 @@ function PortionsGroupPickerSheet({
       {groups == null && controller.groupsLoading ? (
         <View className="items-center gap-2 py-8">
           <ActivityIndicator color={theme.primary} />
-          <Text className="text-sm text-text-muted">{PORTIONS_COPY.builder.pickerLoading}</Text>
+          <Text className="text-sm text-muted">{PORTIONS_COPY.builder.pickerLoading}</Text>
         </View>
       ) : groups == null && controller.groupsError ? (
         <View className="items-center gap-3 py-8">
-          <Text className="text-center text-sm text-text-muted">{controller.groupsError}</Text>
+          <Text className="text-center text-sm text-muted">{controller.groupsError}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={PORTIONS_COPY.builder.pickerRetry}
@@ -1707,7 +1707,7 @@ function PortionsGroupPickerSheet({
                   <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
                   <View className="min-w-0 flex-1">
                     <View className="flex-row items-center gap-1.5">
-                      <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
+                      <Text className="shrink text-sm font-semibold text-strong" numberOfLines={1}>
                         {group.name}
                       </Text>
                       {!group.macrosConfirmed ? (
@@ -1718,7 +1718,7 @@ function PortionsGroupPickerSheet({
                         </View>
                       ) : null}
                     </View>
-                    <Text className="text-xs text-text-muted" numberOfLines={1}>
+                    <Text className="text-xs text-muted" numberOfLines={1}>
                       {used
                         ? PORTIONS_COPY.builder.groupUsed
                         : `1 porción ≈ ${Math.round(group.refCalories)} kcal · ${Math.round(group.refCarbsG)} C · ${Math.round(group.refProteinG)} P`}
@@ -1747,7 +1747,7 @@ function PortionsGroupPickerSheet({
             accessibilityRole="button"
             accessibilityLabel={PORTIONS_COPY.groupEditor.createRow}
             onPress={openCreate}
-            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-border-default px-2 py-2 active:bg-surface-sunken"
+            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-default px-2 py-2 active:bg-surface-sunken"
           >
             <View className="h-5 w-5 items-center justify-center rounded-full border border-dashed border-primary/60">
               <Plus color={theme.primary} size={12} />
@@ -1796,9 +1796,9 @@ function BuilderPortionsSection({
   }
 
   return (
-    <View className="mt-3 border-t border-border-subtle pt-3">
-      <Text className="text-sm font-medium text-text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
-      <Text className="mt-0.5 text-xs text-text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
+    <View className="mt-3 border-t border-subtle pt-3">
+      <Text className="text-sm font-medium text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
+      <Text className="mt-0.5 text-xs text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
 
       {targets.length > 0 ? (
         <View className="mt-2 gap-2">
@@ -1815,7 +1815,7 @@ function BuilderPortionsSection({
                   ) : (
                     <View accessible={false} className="h-5 w-5 rounded-full bg-border-subtle" />
                   )}
-                  <Text className="min-w-0 flex-1 text-sm font-medium text-text-strong" numberOfLines={1}>
+                  <Text className="min-w-0 flex-1 text-sm font-medium text-strong" numberOfLines={1}>
                     {name}
                   </Text>
                 </View>
@@ -1893,7 +1893,7 @@ function PortionsDeriveCard({
     <View className="gap-3 rounded-card border border-primary/20 bg-primary/10 p-4">
       <View className="flex-row items-start gap-2">
         <Sparkles color={theme.primary} size={18} />
-        <Text className="flex-1 text-sm leading-5 text-text-body">
+        <Text className="flex-1 text-sm leading-5 text-body">
           {PORTIONS_COPY.builder.deriveCard(kcal, p, c, g)}
         </Text>
       </View>
@@ -1944,8 +1944,8 @@ function PortionsReviewSection({
     .filter((r) => r.targets.length > 0)
   const anyUnconfirmed = rows.some((r) => hasUnconfirmedMacros(r.targets, groups))
   return (
-    <View className="gap-2 rounded-card border border-border-subtle bg-surface-card p-4">
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+    <View className="gap-2 rounded-card border border-subtle bg-surface-card p-4">
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">
         {PORTIONS_COPY.builder.sectionTitle}
       </Text>
       {anyUnconfirmed ? (
@@ -1956,11 +1956,11 @@ function PortionsReviewSection({
       <View className="gap-1.5">
         {rows.map(({ slot, index, targets }) => (
           <View key={slot.key} className="flex-row items-center gap-2">
-            <Text className="min-w-0 flex-1 text-xs text-text-body" numberOfLines={1}>
+            <Text className="min-w-0 flex-1 text-xs text-body" numberOfLines={1}>
               {slot.name || `Franja ${index + 1}`}
             </Text>
             <Text
-              className="font-mono text-xs text-text-strong"
+              className="font-mono text-xs text-strong"
               style={{ fontVariant: ['tabular-nums'] }}
             >
               {esDecimal(portionsSummaryLabel(targets, groups))}
@@ -1983,13 +1983,13 @@ function UnitToggle({ unit, onChange }: { unit: BuilderUnit; onChange: (unit: Bu
     <Pressable
       accessibilityLabel={`Unidad: ${unit}. Toca para cambiar.`}
       accessibilityRole="button"
-      className="min-h-11 min-w-14 items-center justify-center rounded-control border border-border-default bg-surface-sunken px-2"
+      className="min-h-11 min-w-14 items-center justify-center rounded-control border border-default bg-surface-sunken px-2"
       onPress={() => {
         const idx = BUILDER_UNITS.indexOf(unit)
         onChange(BUILDER_UNITS[(idx + 1) % BUILDER_UNITS.length])
       }}
     >
-      <Text className="text-sm font-semibold text-text-strong">{unit}</Text>
+      <Text className="text-sm font-semibold text-strong">{unit}</Text>
     </Pressable>
   )
 }
@@ -2041,7 +2041,7 @@ function ItemEditor({
   }
 
   return (
-    <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+    <View className="rounded-control border border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
           <FoodThumbnail
@@ -2057,10 +2057,10 @@ function ItemEditor({
                 onChangeText={(value) => patch({ customName: value })}
                 placeholder="Nombre del alimento"
                 placeholderTextColor={theme.mutedForeground}
-                className="min-h-10 rounded-control border border-border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-text-strong"
+                className="min-h-10 rounded-control border border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-strong"
               />
             ) : (
-              <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+              <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
                 {item.food?.name}
               </Text>
             )}
@@ -2084,7 +2084,7 @@ function ItemEditor({
             placeholder="Cantidad"
             placeholderTextColor={theme.mutedForeground}
             keyboardType="decimal-pad"
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
           />
         </View>
         <UnitToggle unit={item.unit} onChange={(unit) => patch({ unit })} />
@@ -2103,14 +2103,14 @@ function ItemEditor({
               ] as const
             ).map(([field, label]) => (
               <View className="flex-1" key={field}>
-                <Text className="mb-1 text-[10px] font-medium text-text-muted">{label}</Text>
+                <Text className="mb-1 text-[10px] font-medium text-muted">{label}</Text>
                 <TextInput
                   value={item[field]}
                   onChangeText={(value) => patch({ [field]: value } as Partial<Omit<BuilderItem, 'key'>>)}
                   placeholder="0"
                   placeholderTextColor={theme.mutedForeground}
                   keyboardType="number-pad"
-                  className="min-h-10 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+                  className="min-h-10 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
                 />
               </View>
             ))}
@@ -2130,14 +2130,14 @@ function ItemEditor({
               accessibilityLabel="Guardar en mi catálogo"
               disabled={saving}
               onPress={() => void handleSaveCustom()}
-              className={`min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 ${saving ? 'opacity-60' : ''}`}
+              className={`min-h-11 flex-row items-center gap-1.5 rounded-control border border-default bg-surface-card px-3 ${saving ? 'opacity-60' : ''}`}
             >
               {saving ? (
                 <ActivityIndicator color={theme.foreground} size="small" />
               ) : (
                 <Plus color={theme.foreground} size={14} />
               )}
-              <Text className="text-xs font-semibold text-text-strong">Guardar en mi catálogo</Text>
+              <Text className="text-xs font-semibold text-strong">Guardar en mi catálogo</Text>
             </Pressable>
             {saveError ? <Text className="text-[11px] text-danger-600">{saveError}</Text> : null}
           </View>
@@ -2201,11 +2201,11 @@ function FoodEquivalenceField({
   }
 
   return (
-    <View className="mt-2 gap-2 rounded-control border border-border-subtle bg-surface-card p-2.5">
+    <View className="mt-2 gap-2 rounded-control border border-subtle bg-surface-card p-2.5">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1">
-          <Text className="text-xs font-semibold text-text-strong">{COPY.sectionTitle}</Text>
-          <Text className="mt-0.5 text-[11px] leading-snug text-text-muted">{COPY.sectionHint}</Text>
+          <Text className="text-xs font-semibold text-strong">{COPY.sectionTitle}</Text>
+          <Text className="mt-0.5 text-[11px] leading-snug text-muted">{COPY.sectionHint}</Text>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -2218,9 +2218,9 @@ function FoodEquivalenceField({
         </Pressable>
       </View>
 
-      <Text className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{COPY.groupLabel}</Text>
+      <Text className="text-[10px] font-medium uppercase tracking-wide text-muted">{COPY.groupLabel}</Text>
       {groups == null && portions.groupsLoading ? (
-        <Text className="text-xs text-text-muted">{COPY.groupsLoading}</Text>
+        <Text className="text-xs text-muted">{COPY.groupsLoading}</Text>
       ) : groups == null && portions.groupsError ? (
         <Pressable
           accessibilityRole="button"
@@ -2231,7 +2231,7 @@ function FoodEquivalenceField({
           <Text className="text-xs font-semibold text-primary underline">{COPY.groupsError}</Text>
         </Pressable>
       ) : (groups ?? []).length === 0 ? (
-        <Text className="text-xs text-text-muted">{COPY.groupsEmpty}</Text>
+        <Text className="text-xs text-muted">{COPY.groupsEmpty}</Text>
       ) : (
         <View className="flex-row flex-wrap gap-1.5">
           {(groups ?? []).map((group) => {
@@ -2244,12 +2244,12 @@ function FoodEquivalenceField({
                 accessibilityLabel={group.name}
                 onPress={() => onChange({ ...value, exchangeGroupId: on ? null : group.id })}
                 className={`min-h-11 flex-row items-center gap-1.5 rounded-pill border px-2.5 ${
-                  on ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-sunken'
+                  on ? 'border-primary bg-primary/10' : 'border-default bg-surface-sunken'
                 }`}
               >
                 <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
                 <Text
-                  className={`shrink text-xs font-semibold ${on ? 'text-primary' : 'text-text-strong'}`}
+                  className={`shrink text-xs font-semibold ${on ? 'text-primary' : 'text-strong'}`}
                   numberOfLines={1}
                 >
                   {group.name}
@@ -2262,7 +2262,7 @@ function FoodEquivalenceField({
 
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
             {COPY.gramsLabel}
           </Text>
           <TextInput
@@ -2272,12 +2272,12 @@ function FoodEquivalenceField({
             keyboardType="decimal-pad"
             placeholder={COPY.gramsPlaceholder}
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
             style={{ fontVariant: ['tabular-nums'] }}
           />
         </View>
         <View className="flex-1">
-          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
             {COPY.labelLabel}
           </Text>
           <TextInput
@@ -2287,13 +2287,13 @@ function FoodEquivalenceField({
             maxLength={40}
             placeholder={COPY.labelPlaceholder}
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
           />
         </View>
       </View>
 
       {selected && grams != null ? (
-        <Text className="text-[11px] text-text-muted">
+        <Text className="text-[11px] text-muted">
           {COPY.preview(selected.name, String(grams), value.exchangePortionLabel.trim() || null)}
         </Text>
       ) : null}
@@ -2326,14 +2326,14 @@ function SubstitutionsField({
   const prescribedName = item.food ? item.food.name : (item.customName?.trim() || 'este alimento')
 
   return (
-    <View className="mt-2 border-t border-border-subtle pt-2">
+    <View className="mt-2 border-t border-subtle pt-2">
       <View className="flex-row flex-wrap items-center gap-1.5">
         <View className="flex-row items-center gap-1">
           <Repeat color={theme.mutedForeground} size={14} />
-          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Reemplazos autorizados</Text>
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">Reemplazos autorizados</Text>
         </View>
         {subs.length > 0 ? (
-          <Text className="font-mono text-[11px] tabular-nums text-text-subtle">
+          <Text className="font-mono text-[11px] tabular-nums text-subtle">
             {subs.length}/{MAX_ITEM_SUBSTITUTIONS}
           </Text>
         ) : null}
@@ -2344,9 +2344,9 @@ function SubstitutionsField({
           {subs.map((sub) => (
             <View
               key={sub.key}
-              className="max-w-full flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken py-0.5 pl-2.5 pr-1"
+              className="max-w-full flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken py-0.5 pl-2.5 pr-1"
             >
-              <Text className="min-w-0 shrink text-xs text-text-body" numberOfLines={1}>
+              <Text className="min-w-0 shrink text-xs text-body" numberOfLines={1}>
                 {sub.food.name}
               </Text>
               <Pressable
@@ -2369,24 +2369,24 @@ function SubstitutionsField({
           ))}
         </View>
       ) : (
-        <Text className="mt-1 text-[11px] leading-snug text-text-subtle">
+        <Text className="mt-1 text-[11px] leading-snug text-subtle">
           Alimentos que el alumno puede usar en lugar de {prescribedName}.
         </Text>
       )}
 
       {atCap ? (
-        <Text className="mt-1.5 text-[11px] text-text-subtle">
+        <Text className="mt-1.5 text-[11px] text-subtle">
           Alcanzaste el maximo de {MAX_ITEM_SUBSTITUTIONS} reemplazos.
         </Text>
       ) : (
         <Pressable
           accessibilityLabel="Agregar reemplazo autorizado"
           accessibilityRole="button"
-          className="mt-1.5 min-h-11 flex-row items-center justify-center gap-1.5 self-start rounded-control border border-border-default bg-surface-card px-3"
+          className="mt-1.5 min-h-11 flex-row items-center justify-center gap-1.5 self-start rounded-control border border-default bg-surface-card px-3"
           onPress={() => onSearch({ mode: 'substitution', variantKey, slotKey, itemKey: item.key })}
         >
           <Plus color={theme.foreground} size={14} />
-          <Text className="text-xs font-semibold text-text-strong">Reemplazo</Text>
+          <Text className="text-xs font-semibold text-strong">Reemplazo</Text>
         </Pressable>
       )}
     </View>
@@ -2452,7 +2452,7 @@ function SlotEditor({
             }
             placeholder="Nombre (ej: Desayuno)"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm font-semibold text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm font-semibold text-strong"
           />
         </View>
         <View className="w-24">
@@ -2463,7 +2463,7 @@ function SlotEditor({
             }
             placeholder="HH:MM"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
           />
         </View>
       </View>
@@ -2498,24 +2498,24 @@ function SlotEditor({
         <Pressable
           accessibilityLabel="Agregar alimento libre"
           accessibilityRole="button"
-          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
+          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
           onPress={() =>
             dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genKey('item'), food: null })
           }
         >
           <Plus color={theme.foreground} size={15} />
-          <Text className="text-sm font-semibold text-text-strong">Libre</Text>
+          <Text className="text-sm font-semibold text-strong">Libre</Text>
         </Pressable>
       </View>
 
       <BuilderPortionsSection slotKey={portionsSlotKey} controller={portions} />
 
       {showSubtotal ? (
-        <View className="mt-3 border-t border-border-subtle pt-2">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Subtotal franja</Text>
+        <View className="mt-3 border-t border-subtle pt-2">
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Subtotal franja</Text>
           <MacroChipRow size="sm" calories={subtotal.calories} proteinG={subtotal.proteinG} carbsG={subtotal.carbsG} fatsG={subtotal.fatsG} />
           {portionTotals != null ? (
-            <Text className="mt-1 text-[11px] text-text-muted">
+            <Text className="mt-1 text-[11px] text-muted">
               {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
             </Text>
           ) : null}
@@ -2560,8 +2560,8 @@ function ConstructionStep({
   if (!strategyUsesSlots(state.strategy)) {
     return (
       <NutritionCard>
-        <Text className="font-display text-base font-semibold text-text-strong">Plan flexible</Text>
-        <Text className="mt-2 text-sm leading-5 text-text-muted">
+        <Text className="font-display text-base font-semibold text-strong">Plan flexible</Text>
+        <Text className="mt-2 text-sm leading-5 text-muted">
           Este plan no usa franjas prescritas: el alumno registra sus comidas libremente contra las metas
           diarias del paso anterior. Continúa a la revisión.
         </Text>
@@ -2624,15 +2624,15 @@ function ConstructionStep({
       <Pressable
         accessibilityLabel="Agregar franja"
         accessibilityRole="button"
-        className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-border-default bg-surface-card px-3"
+        className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
         onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot') })}
       >
         <Plus color="#8A94A6" size={16} />
-        <Text className="text-sm font-semibold text-text-muted">Agregar franja</Text>
+        <Text className="text-sm font-semibold text-muted">Agregar franja</Text>
       </Pressable>
       {variant.slots.length > 0 ? (
         <View className="px-1">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {state.variants.length > 1 ? `Total de ${variant.label}` : 'Total del día'}
           </Text>
           <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
@@ -2670,14 +2670,14 @@ function ConflictOptionButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      className={`min-h-11 flex-row items-start gap-3 rounded-control border border-border-default bg-surface-card px-3 py-3 ${disabled ? 'opacity-50' : 'active:bg-surface-sunken'}`}
+      className={`min-h-11 flex-row items-start gap-3 rounded-control border border-default bg-surface-card px-3 py-3 ${disabled ? 'opacity-50' : 'active:bg-surface-sunken'}`}
     >
       <View className="mt-0.5">
         <Icon color={theme.primary} size={20} />
       </View>
       <View className="min-w-0 flex-1">
-        <Text className="text-sm font-semibold text-text-strong">{title}</Text>
-        <Text className="mt-0.5 text-xs leading-snug text-text-muted">{hint}</Text>
+        <Text className="text-sm font-semibold text-strong">{title}</Text>
+        <Text className="mt-0.5 text-xs leading-snug text-muted">{hint}</Text>
       </View>
     </Pressable>
   )
@@ -2723,27 +2723,27 @@ function ReviewVariantSection({
         <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">{variant.label}</Text>
       ) : null}
 
-      <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
-        <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+      <View className="rounded-control border border-subtle bg-surface-sunken p-3">
+        <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">
           {showDayHeading ? `Metas de ${variant.label}` : 'Metas diarias'}
         </Text>
-        <Text className="mt-1 font-mono text-sm text-text-strong">{targetsSummary(effectiveTargets)}</Text>
+        <Text className="mt-1 font-mono text-sm text-strong">{targetsSummary(effectiveTargets)}</Text>
         {showDayHeading && !variant.isDefault && variant.targetsMode !== 'custom' ? (
-          <Text className="mt-0.5 text-[11px] text-text-muted">Heredadas del día base.</Text>
+          <Text className="mt-0.5 text-[11px] text-muted">Heredadas del día base.</Text>
         ) : null}
       </View>
 
       {variant.slots.map((slot, index) => (
-        <View key={slot.key} className="rounded-control border border-border-subtle bg-surface-card p-3">
-          <Text className="text-sm font-semibold text-text-strong">
+        <View key={slot.key} className="rounded-control border border-subtle bg-surface-card p-3">
+          <Text className="text-sm font-semibold text-strong">
             {slot.name || `Franja ${index + 1}`}
             {slot.startTime ? ` · ${slot.startTime}` : ''}
           </Text>
           {slot.items.length === 0 ? (
-            <Text className="mt-1 text-xs text-text-muted">Sin alimentos</Text>
+            <Text className="mt-1 text-xs text-muted">Sin alimentos</Text>
           ) : (
             slot.items.map((item) => (
-              <Text key={item.key} className="mt-1 text-xs text-text-body">
+              <Text key={item.key} className="mt-1 text-xs text-body">
                 {(item.food?.name ?? item.customName ?? 'Alimento') + ` · ${item.quantity || '0'} ${item.unit}`}
               </Text>
             ))
@@ -2752,12 +2752,12 @@ function ReviewVariantSection({
       ))}
 
       <View className="px-1">
-        <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+        <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
           {showDayHeading ? `Total de ${variant.label}` : 'Total prescrito'}
         </Text>
         <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
         {portionDay != null ? (
-          <Text className="mt-1 text-[11px] text-text-muted">
+          <Text className="mt-1 text-[11px] text-muted">
             {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
           </Text>
         ) : null}
@@ -2804,8 +2804,8 @@ function ReviewStep({
       <StudentPreview title="Vista del alumno" themeLabel={NUTRITION_STRATEGIES[strategy].shortLabel}>
         <View className="gap-3">
           <View>
-            <Text className="font-display text-lg font-semibold text-text-strong">{state.planName || 'Plan sin nombre'}</Text>
-            <Text className="mt-0.5 text-xs text-text-muted">Vigente desde {state.effectiveFrom || 'hoy'}</Text>
+            <Text className="font-display text-lg font-semibold text-strong">{state.planName || 'Plan sin nombre'}</Text>
+            <Text className="mt-0.5 text-xs text-muted">Vigente desde {state.effectiveFrom || 'hoy'}</Text>
           </View>
 
           {usesSlots ? (
@@ -2825,13 +2825,13 @@ function ReviewStep({
             </View>
           ) : (
             <>
-              <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">Metas diarias</Text>
-                <Text className="mt-1 font-mono text-sm text-text-strong">
+              <View className="rounded-control border border-subtle bg-surface-sunken p-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">Metas diarias</Text>
+                <Text className="mt-1 font-mono text-sm text-strong">
                   {targetsSummary(state.targets)}
                 </Text>
               </View>
-              <Text className="text-sm text-text-muted">Registro libre del alumno contra las metas diarias.</Text>
+              <Text className="text-sm text-muted">Registro libre del alumno contra las metas diarias.</Text>
             </>
           )}
         </View>
@@ -2849,10 +2849,10 @@ function ReviewStep({
         : null}
 
       {dateConflict ? (
-        <View className="gap-3 rounded-card border border-border-default bg-surface-card p-4">
+        <View className="gap-3 rounded-card border border-default bg-surface-card p-4">
           <View className="gap-1">
-            <Text className="font-display text-base font-semibold text-text-strong">Ya hay un plan vigente desde hoy</Text>
-            <Text className="text-sm leading-5 text-text-muted">
+            <Text className="font-display text-base font-semibold text-strong">Ya hay un plan vigente desde hoy</Text>
+            <Text className="text-sm leading-5 text-muted">
               {existingPlanName
                 ? `${existingPlanName} empieza a regir hoy. Elige cómo seguir con el plan nuevo.`
                 : 'El plan actual empieza a regir hoy. Elige cómo seguir con el plan nuevo.'}
@@ -2881,7 +2881,7 @@ function ReviewStep({
           {publishing ? (
             <View className="flex-row items-center gap-2" accessibilityRole="text">
               <ActivityIndicator color={theme.mutedForeground} size="small" />
-              <Text className="text-xs text-text-muted">Procesando…</Text>
+              <Text className="text-xs text-muted">Procesando…</Text>
             </View>
           ) : null}
 
@@ -2980,8 +2980,8 @@ function FoodSearchModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
-        <View className="flex-row items-center gap-2 border-b border-border-subtle px-4 py-3">
-          <View className="flex-1 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+        <View className="flex-row items-center gap-2 border-b border-subtle px-4 py-3">
+          <View className="flex-1 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
             <Search color={theme.mutedForeground} size={16} />
             <TextInput
               autoFocus
@@ -2989,7 +2989,7 @@ function FoodSearchModal({
               onChangeText={setQuery}
               placeholder="Buscar alimento…"
               placeholderTextColor={theme.mutedForeground}
-              className="min-h-11 flex-1 py-2 text-base text-text-strong"
+              className="min-h-11 flex-1 py-2 text-base text-strong"
             />
           </View>
           <Pressable
@@ -3008,7 +3008,7 @@ function FoodSearchModal({
               <ActivityIndicator color={theme.primary} />
             </View>
           ) : items.length === 0 ? (
-            <Text className="px-1 py-6 text-center text-sm text-text-muted">
+            <Text className="px-1 py-6 text-center text-sm text-muted">
               {touched && query.trim().length >= 2 ? 'Sin resultados.' : 'Escribe al menos 2 letras para buscar.'}
             </Text>
           ) : (
@@ -3017,7 +3017,7 @@ function FoodSearchModal({
                 key={food.id}
                 accessibilityLabel={`Agregar ${food.name}`}
                 accessibilityRole="button"
-                className="min-h-14 flex-row items-center gap-3 rounded-control border border-border-subtle bg-surface-card px-3 py-2.5"
+                className="min-h-14 flex-row items-center gap-3 rounded-control border border-subtle bg-surface-card px-3 py-2.5"
                 onPress={() => onSelect(food)}
               >
                 <FoodThumbnail
@@ -3027,10 +3027,10 @@ function FoodSearchModal({
                   size="sm"
                 />
                 <View className="min-w-0 flex-1">
-                  <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+                  <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
                     {food.name}
                   </Text>
-                  <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+                  <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
                     {[food.brand, `${Math.round(food.calories)} kcal / ${food.servingSize}${food.servingUnit}`]
                       .filter(Boolean)
                       .join(' · ')}
@@ -3055,13 +3055,13 @@ function UpsellSheet({ reason, onClose }: { reason: string | null; onClose: () =
   return (
     <Modal visible={reason !== null} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable className="flex-1 justify-end bg-black/40" onPress={onClose}>
-        <Pressable className="rounded-t-sheet border-t border-border-subtle bg-surface-app px-5 pb-8 pt-5" onPress={() => {}}>
+        <Pressable className="rounded-t-sheet border-t border-subtle bg-surface-app px-5 pb-8 pt-5" onPress={() => {}}>
           <View className="mb-3 h-1.5 w-12 self-center rounded-pill bg-border-default" />
           <View className="mb-2 flex-row items-center gap-2">
             <Lock color={theme.primary} size={18} />
-            <Text className="font-display text-lg font-bold text-text-strong">Nutrición Pro</Text>
+            <Text className="font-display text-lg font-bold text-strong">Nutrición Pro</Text>
           </View>
-          <Text className="text-sm leading-5 text-text-body">
+          <Text className="text-sm leading-5 text-body">
             {reason ?? 'Esta función requiere el complemento Nutrición Pro.'}
           </Text>
           <View className="mt-5 flex-row gap-3">

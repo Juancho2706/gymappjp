@@ -35,7 +35,7 @@ export function TargetsEditorCard({
 }) {
   return (
     <NutritionCard>
-      <Text className="font-display text-base font-semibold text-text-strong">
+      <Text className="font-display text-base font-semibold text-strong">
         {QUICK_EDIT_COPY.targetsTitle}
         {showVariantLabel ? ` · ${variant.label}` : ''}
       </Text>
@@ -45,7 +45,7 @@ export function TargetsEditorCard({
           return (
             <View key={field}>
               <View className="flex-row items-center justify-between gap-3">
-                <Text className="min-w-0 flex-1 text-sm font-semibold text-text-strong">{label}</Text>
+                <Text className="min-w-0 flex-1 text-sm font-semibold text-strong">{label}</Text>
                 <QuantityStepper
                   value={variant.targets[field]}
                   onChange={(value) => onTargetChange(field, value)}

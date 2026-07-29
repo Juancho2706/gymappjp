@@ -1482,9 +1482,9 @@ function TodayTab({
       >
         {showTodayPlanLag ? (
           // Banner de lag del plan (web page.tsx:172-177): Info muted sobre superficie hundida.
-          <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
+          <View className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
             <Info color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
-            <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">{lagMessage}</Text>
+            <Text className="min-w-0 flex-1 text-sm leading-5 text-body">{lagMessage}</Text>
           </View>
         ) : null}
 
@@ -1574,9 +1574,9 @@ function TodayTab({
               />
             </>
           ) : (
-            <View className="flex-row items-start gap-2 rounded-card border border-border-subtle bg-surface-sunken px-3 py-2">
+            <View className="flex-row items-start gap-2 rounded-card border border-subtle bg-surface-sunken px-3 py-2">
               <Lock color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
-              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-secondary">
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-muted">
                 Tu coach dejó el plan en solo alimentos prescritos: marca lo que comiste del plan.
               </Text>
             </View>
@@ -1588,7 +1588,7 @@ function TodayTab({
           // "Tu plan de hoy" (web TodayExperience.tsx:561-640): sin sección si no hay franjas
           // con prescripción (PrescribedSection retorna null, TodayExperience.tsx:582).
           <View accessibilityLabel="Tu plan de hoy" className="gap-3">
-            <Text className="font-display text-lg font-semibold text-text-strong">Tu plan de hoy</Text>
+            <Text className="font-display text-lg font-semibold text-strong">Tu plan de hoy</Text>
             {slotsWithPrescription.map((slot) => (
               <TodaySlotCard
                 key={slot.id}
@@ -1614,7 +1614,7 @@ function TodayTab({
         <View accessibilityLabel="Consumido hoy" className="gap-3">
           <View className="flex-row items-center gap-2">
             <Utensils color={theme.primary} size={16} />
-            <Text className="font-display text-lg font-semibold text-text-strong">Consumido hoy</Text>
+            <Text className="font-display text-lg font-semibold text-strong">Consumido hoy</Text>
           </View>
           {consumedRows.length === 0 ? (
             <NutritionStatePanel
@@ -1625,7 +1625,7 @@ function TodayTab({
           ) : (
             <NutritionCard>
               {consumedRows.map(({ row, entry, queuedKey }, index) => (
-                <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+                <View key={row.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
                   <FoodRow
                     food={row}
                     fallbackCategory={entry?.category}
@@ -1735,7 +1735,7 @@ function intakeToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
 
 // 4A-02: CTA de la fila principal del Hoy (web TodayExperience.tsx:228-248): primario
 // "Registrar alimento" sólido en tono nutrition + secundarios neutros "Escanear"/"Compartir"
-// (web: border-border-default bg-surface-card text-strong). El NutritionMotionButton del kit
+// (web: border-default bg-surface-card text-strong). El NutritionMotionButton del kit
 // RN renderiza children dentro de <Text> y no admite ícono, así que la fila se arma local
 // con la misma motion de presión (NUTRITION_MOTION.press) y háptica del kit.
 function TodayCta({
@@ -1769,7 +1769,7 @@ function TodayCta({
       >
         <View
           className={`min-h-11 flex-row items-center justify-center gap-2 rounded-control border px-4 ${
-            tone === 'nutrition' ? 'border-primary bg-primary' : 'border-border-default bg-surface-card'
+            tone === 'nutrition' ? 'border-primary bg-primary' : 'border-default bg-surface-card'
           }`}
           style={shadow('sm', theme.scheme)}
         >
@@ -1778,7 +1778,7 @@ function TodayCta({
             color={tone === 'nutrition' ? undefined : theme.foreground}
             size={16}
           />
-          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-white' : 'text-text-strong'}`}>
+          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-white' : 'text-strong'}`}>
             {label}
           </Text>
         </View>
@@ -1869,8 +1869,8 @@ const TodaySlotCard = memo(function TodaySlotCard({
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
-        <Text className="font-display text-base font-semibold text-text-strong">{slot.name}</Text>
-        {slot.startTime ? <Text className="font-mono text-xs text-text-muted">{slot.startTime}</Text> : null}
+        <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
+        {slot.startTime ? <Text className="font-mono text-xs text-muted">{slot.startTime}</Text> : null}
       </View>
 
       {bulk.requiredTotal > 0 ? (
@@ -1887,7 +1887,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
             const rawNote = item.notes?.trim() || null
             const displayNote = subs.length > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
             return (
-              <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+              <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
                 <FoodRow
                   food={{
                     id: item.id,
@@ -1909,7 +1909,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
                         // el chip NO miente — todavía no llegó al servidor.
                         <View className="flex-row items-center gap-1">
                           <History color={theme.textSecondary} size={16} />
-                          <Text className="text-xs font-semibold text-text-muted">En cola</Text>
+                          <Text className="text-xs font-semibold text-muted">En cola</Text>
                         </View>
                       ) : (
                         // Estado "Registrado" (web TodayExperience.tsx:608-611): check esmeralda
@@ -1969,7 +1969,7 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
     <View
       accessibilityLabel={`${consumed} de ${total} registrados`}
       className={`self-start flex-row items-center gap-2 rounded-pill border px-2.5 py-1 ${
-        complete ? 'border-success-500/30 bg-success-500/10' : 'border-border-subtle bg-surface-sunken'
+        complete ? 'border-success-500/30 bg-success-500/10' : 'border-subtle bg-surface-sunken'
       }`}
     >
       {complete ? (
@@ -1983,7 +1983,7 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
           />
         </View>
       )}
-      <Text className={`font-mono text-[11px] font-semibold ${complete ? 'text-success-700' : 'text-text-muted'}`}>
+      <Text className={`font-mono text-[11px] font-semibold ${complete ? 'text-success-700' : 'text-muted'}`}>
         {complete ? 'Completa' : `${consumed}/${total}`}
       </Text>
     </View>
@@ -1998,16 +1998,16 @@ function ItemSubstitutionsHint({ substitutions }: { substitutions: NutritionItem
   if (substitutions.length === 0) return null
   return (
     <View className="pb-3 pl-14">
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Puedes reemplazar por</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</Text>
       <View accessibilityLabel="Reemplazos autorizados por tu coach" className="mt-1 flex-row flex-wrap gap-1.5">
         {substitutions.map((sub) => (
           <View
             key={sub.id}
-            className="flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1"
+            className="flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
           >
-            <Text className="text-xs font-medium text-text-body">{sub.name}</Text>
+            <Text className="text-xs font-medium text-body">{sub.name}</Text>
             {sub.macros.calories != null ? (
-              <Text className="font-mono text-xs text-text-muted">· {formatNutritionCalories(sub.macros.calories)}</Text>
+              <Text className="font-mono text-xs text-muted">· {formatNutritionCalories(sub.macros.calories)}</Text>
             ) : null}
           </View>
         ))}
@@ -2151,11 +2151,11 @@ function EntryCorrectionSheet({
 
           {action.kind === 'edit' ? (
             <View>
-              <Text className="mb-1 text-xs font-semibold text-text-muted">Nueva cantidad ({entry.unit})</Text>
+              <Text className="mb-1 text-xs font-semibold text-muted">Nueva cantidad ({entry.unit})</Text>
               <TextInput
                 accessibilityLabel={`Nueva cantidad en ${entry.unit}`}
                 accessibilityHint="Ingresa un número mayor que cero"
-                className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-text-strong"
+                className="min-h-12 w-full rounded-control border border-default bg-surface-app px-3 text-base text-strong"
                 editable={!pending}
                 inputMode="decimal"
                 keyboardType="decimal-pad"
@@ -2165,19 +2165,19 @@ function EntryCorrectionSheet({
               />
             </View>
           ) : (
-            <Text className="text-sm leading-5 text-text-body">
+            <Text className="text-sm leading-5 text-body">
               El registro dejará de contar en tu día, pero se conserva en el historial para tu coach.
             </Text>
           )}
 
           <View>
-            <Text className="mb-1 text-xs font-semibold text-text-muted">
+            <Text className="mb-1 text-xs font-semibold text-muted">
               {action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo'}
             </Text>
             <TextInput
               accessibilityLabel={action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo del retiro'}
               accessibilityHint="Escribe al menos tres caracteres"
-              className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-text-strong"
+              className="min-h-12 w-full rounded-control border border-default bg-surface-app px-3 text-base text-strong"
               editable={!pending}
               maxLength={1000}
               onChangeText={setReason}
@@ -2186,7 +2186,7 @@ function EntryCorrectionSheet({
               returnKeyType="done"
               value={reason}
             />
-            <Text className="mt-1 text-[11px] leading-4 text-text-subtle">
+            <Text className="mt-1 text-[11px] leading-4 text-subtle">
               {action.kind === 'edit'
                 ? 'Mínimo 3 caracteres. Se conserva el registro original.'
                 : 'Mínimo 3 caracteres.'}
@@ -2324,7 +2324,7 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
       // 4A-05: toolbar espejo del web (`NutritionToolbar`, NutritionV2Kit.tsx:169-180) —
       // rounded-card + p-2 + gap-2 + min-h-12; `shadow-sm` web = decisión única del kit
       // (`shadow('sm', scheme)`, ver NutritionCard). Pills conservan min-h-11 (44pt táctil).
-      className="min-h-12 flex-row flex-wrap items-center gap-2 rounded-card border border-border-subtle bg-surface-card p-2"
+      className="min-h-12 flex-row flex-wrap items-center gap-2 rounded-card border border-subtle bg-surface-card p-2"
       style={shadow('sm', theme.scheme)}
     >
       {NUTRITION_V2_TABS.map(({ key, label, Icon }) => {
@@ -2344,7 +2344,7 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
             className={`min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-control ${active ? 'bg-primary' : ''}`}
           >
             <Icon color={active ? '#FFFFFF' : theme.textSecondary} size={16} />
-            <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-text-muted'}`}>{label}</Text>
+            <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-muted'}`}>{label}</Text>
           </Pressable>
         )
       })}
@@ -2551,16 +2551,16 @@ function PlanTab() {
             <StrategyBadge strategy={summary.strategy} />
             <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
           </View>
-          <Text className="mt-4 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
-          <Text className="mt-1 text-xs text-text-muted">
+          <Text className="mt-4 font-display text-2xl font-bold text-strong">{summary.name}</Text>
+          <Text className="mt-1 text-xs text-muted">
             Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
             {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
           </Text>
-          <Text className="mt-2 text-sm leading-6 text-text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+          <Text className="mt-2 text-sm leading-6 text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
           {plan.visibleNotes ? (
-            <View className="mt-4 rounded-control border border-border-subtle bg-surface-sunken p-3">
-              <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Notas de tu coach</Text>
-              <Text className="mt-1 text-sm leading-6 text-text-body">{plan.visibleNotes}</Text>
+            <View className="mt-4 rounded-control border border-subtle bg-surface-sunken p-3">
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Notas de tu coach</Text>
+              <Text className="mt-1 text-sm leading-6 text-body">{plan.visibleNotes}</Text>
             </View>
           ) : null}
         </NutritionCard>
@@ -2620,16 +2620,16 @@ function PlanObjectives({
   if (rows.length === 0) return null
   return (
     <NutritionCard>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
         Metas diarias{dayLabel ? ` · ${dayLabel}` : ''}
       </Text>
       <View className="mt-3 flex-row flex-wrap gap-y-3">
         {rows.map((row) => (
           <View key={row.label} className="min-w-[30%] flex-1 pr-2">
-            <Text className="font-display text-lg font-bold text-text-strong" style={{ fontVariant: ['tabular-nums'] }}>
+            <Text className="font-display text-lg font-bold text-strong" style={{ fontVariant: ['tabular-nums'] }}>
               {row.value}
             </Text>
-            <Text className="text-xs text-text-muted">{row.label}</Text>
+            <Text className="text-xs text-muted">{row.label}</Text>
           </View>
         ))}
       </View>
@@ -2652,11 +2652,11 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
   if (permissions.canSkipOptionalItems) chips.push('Puedes omitir opcionales')
   return (
     <NutritionCard>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Reglas del plan</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Reglas del plan</Text>
       <View className="mt-3 flex-row flex-wrap gap-2">
         {chips.map((chip) => (
-          <View key={chip} className="rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1">
-            <Text className="text-xs font-medium text-text-body">{chip}</Text>
+          <View key={chip} className="rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1">
+            <Text className="text-xs font-medium text-body">{chip}</Text>
           </View>
         ))}
       </View>
@@ -2680,14 +2680,14 @@ function PlanVariantCard({
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
-        <Text className="font-display text-lg font-semibold text-text-strong">{variant.label}</Text>
+        <Text className="font-display text-lg font-semibold text-strong">{variant.label}</Text>
         {variant.isDefault ? (
           <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
             <Text className="text-[10px] font-semibold text-primary">Por defecto</Text>
           </View>
         ) : null}
       </View>
-      <Text className="mt-1 text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+      <Text className="mt-1 text-sm text-muted" style={{ fontVariant: ['tabular-nums'] }}>
         {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
         {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
       </Text>
@@ -2706,7 +2706,7 @@ function PlanVariantCard({
       ) : null}
       <View className="mt-2 gap-4">
         {variant.mealSlots.length === 0 ? (
-          <Text className="text-sm text-text-muted">
+          <Text className="text-sm text-muted">
             Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
           </Text>
         ) : (
@@ -2733,21 +2733,21 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
     slot.targets.fatsG != null
 
   return (
-    <View className="rounded-control border border-border-subtle bg-surface-sunken/40 p-3">
+    <View className="rounded-control border border-subtle bg-surface-sunken/40 p-3">
       <View className="flex-row items-center justify-between gap-2">
         <View className="flex-row flex-wrap items-center gap-2">
-          <Text className="font-display text-base font-semibold text-text-strong">{slot.name}</Text>
-          {timeLabel ? <Text className="font-mono text-xs text-text-muted">{timeLabel}</Text> : null}
+          <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
+          {timeLabel ? <Text className="font-mono text-xs text-muted">{timeLabel}</Text> : null}
         </View>
         {hasItems && subtotal > 0 ? (
-          <Text className="font-mono text-xs font-semibold text-text-strong">{formatNutritionCalories(subtotal)}</Text>
+          <Text className="font-mono text-xs font-semibold text-strong">{formatNutritionCalories(subtotal)}</Text>
         ) : null}
       </View>
-      {slot.instructions ? <Text className="mt-1 text-xs leading-5 text-text-subtle">{slot.instructions}</Text> : null}
+      {slot.instructions ? <Text className="mt-1 text-xs leading-5 text-subtle">{slot.instructions}</Text> : null}
       {hasItems ? (
         <View className="mt-2">
           {slot.prescriptionItems.map((item, index) => (
-            <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+            <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
               <FoodRow
                 food={{
                   id: item.id,
@@ -2768,7 +2768,7 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
         </View>
       ) : targetChips ? (
         <View className="mt-2">
-          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Objetivo de la franja</Text>
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Objetivo de la franja</Text>
           <View className="mt-1">
             <MacroChipRow
               calories={slot.targets.calories}
@@ -2784,7 +2784,7 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
       <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
       {!hasItems && !targetChips && !hasPortions ? (
         // El empty-state solo aparece cuando la franja no prescribe NADA (ni items ni porciones).
-        <Text className="mt-2 text-xs text-text-muted">Franja flexible sin alimentos prescritos.</Text>
+        <Text className="mt-2 text-xs text-muted">Franja flexible sin alimentos prescritos.</Text>
       ) : null}
     </View>
   )
@@ -2943,7 +2943,7 @@ function HistoryTab({
       ListFooterComponent={
         loadingMore ? (
           <View className="items-center py-5">
-            <Text className="text-sm text-text-muted">Cargando días anteriores…</Text>
+            <Text className="text-sm text-muted">Cargando días anteriores…</Text>
           </View>
         ) : null
       }
@@ -2976,7 +2976,7 @@ function HistoryDayCard({ day, onOpen }: { day: NutritionHistoryDay; onOpen: (is
       <NutritionCard>
         <View className="flex-row items-start justify-between gap-3">
           <View className="min-w-0 flex-1">
-            <Text className="font-display text-lg font-semibold text-text-strong">{dayLabel}</Text>
+            <Text className="font-display text-lg font-semibold text-strong">{dayLabel}</Text>
             {showLegacyMacros && legacyInfo.consumed ? (
               <View className="mt-1">
                 <MacroChipRow
@@ -2988,7 +2988,7 @@ function HistoryDayCard({ day, onOpen }: { day: NutritionHistoryDay; onOpen: (is
                 />
               </View>
             ) : (
-              <Text className="mt-1 text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+              <Text className="mt-1 text-sm text-muted" style={{ fontVariant: ['tabular-nums'] }}>
                 {legacyInfo.legacyOnly
                   ? legacyInfo.completionCount > 0
                     ? legacyInfo.completionsLabel
@@ -2997,12 +2997,12 @@ function HistoryDayCard({ day, onOpen }: { day: NutritionHistoryDay; onOpen: (is
               </Text>
             )}
             {legacy && !legacyInfo.legacyOnly && legacyInfo.secondaryLabel ? (
-              <Text className="mt-1 text-xs text-text-subtle" style={{ fontVariant: ['tabular-nums'] }}>
+              <Text className="mt-1 text-xs text-subtle" style={{ fontVariant: ['tabular-nums'] }}>
                 {legacyInfo.secondaryLabel}
               </Text>
             ) : null}
             {legacy && legacyInfo.mealsLabel ? (
-              <Text numberOfLines={2} className="mt-1 text-xs text-text-subtle">
+              <Text numberOfLines={2} className="mt-1 text-xs text-subtle">
                 {legacyInfo.mealsLabel}
               </Text>
             ) : null}

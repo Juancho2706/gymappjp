@@ -493,7 +493,7 @@ export default function CoachNutritionV2ClientScreen() {
           accessibilityLabel="Volver al Centro"
           onPress={() => router.back()}
           hitSlop={8}
-          className="h-11 w-11 items-center justify-center rounded-control border border-border-subtle bg-surface-card"
+          className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-card"
         >
           <ArrowLeft color={theme.textSecondary} size={20} />
         </Pressable>
@@ -533,14 +533,14 @@ export default function CoachNutritionV2ClientScreen() {
               accessibilityState={{ disabled: offline }}
               disabled={offline}
               onPress={() => setAssignOpen(true)}
-              className={`ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-subtle bg-surface-card px-3 ${offline ? 'opacity-50' : ''}`}
+              className={`ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-subtle bg-surface-card px-3 ${offline ? 'opacity-50' : ''}`}
             >
               <UserPlus color={offline ? theme.textSecondary : theme.primary} size={14} />
-              <Text className="text-xs font-semibold text-text-body">Asignar a otros alumnos</Text>
+              <Text className="text-xs font-semibold text-body">Asignar a otros alumnos</Text>
             </Pressable>
           ) : null}
           {canAssign && userId && offline ? (
-            <Text className="w-full text-[11px] text-text-muted">
+            <Text className="w-full text-[11px] text-muted">
               Sin conexión no podemos confirmar que este sea el plan vigente: reintenta al recuperar señal.
             </Text>
           ) : null}
@@ -548,9 +548,9 @@ export default function CoachNutritionV2ClientScreen() {
       ) : null}
 
       {showTodayPlanLag ? (
-        <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
+        <View className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
           <Info color={theme.primary} size={16} />
-          <Text className="flex-1 text-sm leading-5 text-text-body">{todayPlanLagMessage}</Text>
+          <Text className="flex-1 text-sm leading-5 text-body">{todayPlanLagMessage}</Text>
         </View>
       ) : null}
 
@@ -575,13 +575,13 @@ export default function CoachNutritionV2ClientScreen() {
               sale del payload que la ficha ya trajo: cambiar de día no dispara una sola lectura. */}
           <View className="gap-3">
             <View className="flex-row flex-wrap items-center justify-between gap-2">
-              <Text className="font-display text-xl font-semibold text-text-strong">La semana</Text>
+              <Text className="font-display text-xl font-semibold text-strong">La semana</Text>
               {!showingToday ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Volver a hoy"
                   onPress={() => setSelectedIso(date)}
-                  className="min-h-11 flex-row items-center justify-center rounded-control border border-border-subtle bg-surface-card px-3"
+                  className="min-h-11 flex-row items-center justify-center rounded-control border border-subtle bg-surface-card px-3"
                 >
                   <Text className="text-xs font-semibold text-primary">Volver a hoy</Text>
                 </Pressable>
@@ -595,7 +595,7 @@ export default function CoachNutritionV2ClientScreen() {
               label={`Días de la semana de ${detail.client.fullName}`}
             />
 
-            <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+            <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">
               {selectedDayLabel}
             </Text>
 
@@ -631,13 +631,13 @@ export default function CoachNutritionV2ClientScreen() {
                 {/* Card "Hoy" (web page.tsx:273-281; copy verbatim del web, incluida la
                     ortografía "segun/dia" sin tilde del original). */}
                 <NutritionCard>
-                  <Text className="font-display text-lg font-semibold text-text-strong">Hoy</Text>
-                  <Text className="mt-1 text-sm text-text-muted">
+                  <Text className="font-display text-lg font-semibold text-strong">Hoy</Text>
+                  <Text className="mt-1 text-sm text-muted">
                     {detail.today.consumed.entryCount} registro
                     {detail.today.consumed.entryCount === 1 ? '' : 's'} ·{' '}
                     {detail.today.mealSlots.length} franjas
                   </Text>
-                  <Text className="mt-3 text-sm text-text-body">
+                  <Text className="mt-3 text-sm text-body">
                     {detail.today.remaining.calories ?? 0} kcal restantes segun el snapshot del dia.
                   </Text>
                 </NutritionCard>
@@ -648,9 +648,9 @@ export default function CoachNutritionV2ClientScreen() {
           </View>
 
           <NutritionCard>
-            <Text className="font-display text-lg font-semibold text-text-strong">Plan vigente</Text>
-            <Text className="mt-1 text-sm text-text-muted">{detail.plan.plan?.name}</Text>
-            <Text className="mt-3 text-sm leading-5 text-text-body">
+            <Text className="font-display text-lg font-semibold text-strong">Plan vigente</Text>
+            <Text className="mt-1 text-sm text-muted">{detail.plan.plan?.name}</Text>
+            <Text className="mt-3 text-sm leading-5 text-body">
               {detail.plan.visibleNotes || 'Sin indicaciones visibles.'}
             </Text>
             <View className="mt-4">
@@ -668,12 +668,12 @@ export default function CoachNutritionV2ClientScreen() {
 
       {detail.plan.plan && detail.plan.dayVariants.length > 0 ? (
         <View className="gap-3">
-          <Text className="font-display text-xl font-semibold text-text-strong">Estructura prescrita</Text>
+          <Text className="font-display text-xl font-semibold text-strong">Estructura prescrita</Text>
           {orderedVariants.map((variant) => (
             <NutritionCard key={variant.id}>
               <View className="flex-row flex-wrap items-center justify-between gap-2">
                 <View className="flex-row flex-wrap items-center gap-2">
-                  <Text className="font-display text-base font-semibold text-text-strong">{variant.label}</Text>
+                  <Text className="font-display text-base font-semibold text-strong">{variant.label}</Text>
                   {todayVariant?.id === variant.id ? (
                     <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
                       <Text className="text-[10px] font-semibold text-primary">Hoy aplica</Text>
@@ -683,14 +683,14 @@ export default function CoachNutritionV2ClientScreen() {
                       queda rotulada ("Aplica el sábado"). Solo futuro: rotular el pasado con el
                       plan de hoy sería proyectar hacia atrás una versión que ese día no tuvo. */}
                   {highlightedVariantId === variant.id && selectedCell != null ? (
-                    <View className="rounded-pill border border-border-default bg-surface-sunken px-2 py-0.5">
-                      <Text className="text-[10px] font-semibold text-text-body">
+                    <View className="rounded-pill border border-default bg-surface-sunken px-2 py-0.5">
+                      <Text className="text-[10px] font-semibold text-body">
                         Aplica el {selectedCell.longLabel.toLowerCase()}
                       </Text>
                     </View>
                   ) : null}
                 </View>
-                <Text className="text-xs text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                <Text className="text-xs text-muted" style={{ fontVariant: ['tabular-nums'] }}>
                   {variant.targets.calories != null
                     ? `${formatNutritionCalories(variant.targets.calories)} objetivo`
                     : 'Sin objetivo de energía'}
@@ -705,23 +705,23 @@ export default function CoachNutritionV2ClientScreen() {
                 />
               ) : null}
               {variant.mealSlots.length === 0 ? (
-                <Text className="mt-2 text-sm text-text-muted">Plan flexible: sin franjas prescritas.</Text>
+                <Text className="mt-2 text-sm text-muted">Plan flexible: sin franjas prescritas.</Text>
               ) : (
                 <View className="mt-3 gap-3">
                   {variant.mealSlots.map((slot) => (
-                    <View key={slot.id} className="rounded-control border border-border-subtle bg-surface-app p-3">
+                    <View key={slot.id} className="rounded-control border border-subtle bg-surface-app p-3">
                       <View className="flex-row items-center justify-between gap-2">
-                        <Text className="text-sm font-semibold text-text-strong">{slot.name}</Text>
-                        {slot.startTime ? <Text className="text-xs text-text-muted">{slot.startTime}</Text> : null}
+                        <Text className="text-sm font-semibold text-strong">{slot.name}</Text>
+                        {slot.startTime ? <Text className="text-xs text-muted">{slot.startTime}</Text> : null}
                       </View>
                       {slot.prescriptionItems.length > 0 ? (
                         <View className="mt-2 gap-1">
                           {slot.prescriptionItems.map((prescription) => (
                             <View key={prescription.id} className="flex-row items-center justify-between gap-2">
-                              <Text className="min-w-0 flex-1 text-sm text-text-body" numberOfLines={1}>
+                              <Text className="min-w-0 flex-1 text-sm text-body" numberOfLines={1}>
                                 {prescription.name || 'Alimento'} · {prescription.quantity} {prescription.unit}
                               </Text>
-                              <Text className="shrink-0 text-xs text-text-muted">
+                              <Text className="shrink-0 text-xs text-muted">
                                 {Math.round(prescription.macros.calories ?? 0)} kcal
                               </Text>
                             </View>
@@ -734,7 +734,7 @@ export default function CoachNutritionV2ClientScreen() {
                       <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
                       {slot.prescriptionItems.length === 0 &&
                       (slot.exchangeTargets?.length ?? 0) === 0 ? (
-                        <Text className="mt-2 text-xs text-text-muted">Sin alimentos prescritos en esta franja.</Text>
+                        <Text className="mt-2 text-xs text-muted">Sin alimentos prescritos en esta franja.</Text>
                       ) : null}
                     </View>
                   ))}
@@ -748,44 +748,44 @@ export default function CoachNutritionV2ClientScreen() {
       <NutritionCard>
         <View className="flex-row items-center gap-2">
           <LockKeyhole color={theme.primary} size={16} />
-          <Text className="font-display text-lg font-semibold text-text-strong">Nota profesional</Text>
+          <Text className="font-display text-lg font-semibold text-strong">Nota profesional</Text>
         </View>
-        <Text className="mt-2 text-sm leading-5 text-text-body">
+        <Text className="mt-2 text-sm leading-5 text-body">
           {detail.privateNote?.note || 'Sin nota privada para la versión vigente.'}
         </Text>
         {/* D-07: palabra alineada a web ("informacion", no "contenido"), conservando la ortografía
             correcta del proyecto (tildes). El typo web "informacion" queda como deuda RN-out. */}
-        <Text className="mt-2 text-xs text-text-muted">El alumno no recibe esta información.</Text>
+        <Text className="mt-2 text-xs text-muted">El alumno no recibe esta información.</Text>
       </NutritionCard>
 
       <NutritionCard>
-        <Text className="font-display text-lg font-semibold text-text-strong">Últimos días</Text>
+        <Text className="font-display text-lg font-semibold text-strong">Últimos días</Text>
         {showHistoryUpsell ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={NUTRITION_PRO_HISTORY_BANNER_LABEL}
             onPress={() => router.push('/coach/modules')}
-            className="mt-3 flex-row items-center gap-2 self-start rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
+            className="mt-3 flex-row items-center gap-2 self-start rounded-control border border-subtle bg-surface-sunken px-3 py-2"
           >
             <LockKeyhole color={theme.primary} size={14} />
-            <Text className="text-xs font-semibold text-text-muted">{NUTRITION_PRO_HISTORY_BANNER_LABEL}</Text>
+            <Text className="text-xs font-semibold text-muted">{NUTRITION_PRO_HISTORY_BANNER_LABEL}</Text>
           </Pressable>
         ) : null}
         <View className="mt-3 gap-3">
           {recentDays.length === 0 ? (
-            <Text className="text-sm text-text-muted">Sin registros en la ventana disponible.</Text>
+            <Text className="text-sm text-muted">Sin registros en la ventana disponible.</Text>
           ) : (
             recentDays.map((day) => {
               const legacy = describeLegacyHistoryDay(day)
               const showLegacyMacros = legacy.legacyOnly && legacy.hasMacros && legacy.consumed != null
               return (
-                <View className="border-b border-border-subtle pb-3" key={day.localDate}>
+                <View className="border-b border-subtle pb-3" key={day.localDate}>
                   <View className="flex-row items-start justify-between gap-3">
                     <View className="min-w-0 flex-1">
                       <View className="flex-row flex-wrap items-center gap-2">
                         {/* QW-10: fecha legible ("ayer", "sáb 25 jul"), no el ISO crudo. Mismo
                             helper y mismas opciones que el historial del alumno RN. */}
-                        <Text className="font-semibold text-text-strong">
+                        <Text className="font-semibold text-strong">
                           {formatNutritionShortDate(day.localDate, { todayIso: date, relative: true })}
                         </Text>
                         {legacy.isLegacy ? (
@@ -805,7 +805,7 @@ export default function CoachNutritionV2ClientScreen() {
                           />
                         </View>
                       ) : (
-                        <Text className="mt-0.5 text-xs text-text-muted">
+                        <Text className="mt-0.5 text-xs text-muted">
                           {legacy.legacyOnly
                             ? legacy.completionCount > 0
                               ? legacy.completionsLabel
@@ -814,16 +814,16 @@ export default function CoachNutritionV2ClientScreen() {
                         </Text>
                       )}
                       {legacy.isLegacy && !legacy.legacyOnly && legacy.secondaryLabel ? (
-                        <Text className="mt-1 text-[11px] text-text-subtle">{legacy.secondaryLabel}</Text>
+                        <Text className="mt-1 text-[11px] text-subtle">{legacy.secondaryLabel}</Text>
                       ) : null}
                       {legacy.isLegacy && legacy.mealsLabel ? (
-                        <Text numberOfLines={2} className="mt-1 text-[11px] text-text-subtle">
+                        <Text numberOfLines={2} className="mt-1 text-[11px] text-subtle">
                           {legacy.mealsLabel}
                         </Text>
                       ) : null}
                     </View>
                     {!legacy.legacyOnly ? (
-                      <Text className="font-mono text-sm font-semibold text-text-strong">
+                      <Text className="font-mono text-sm font-semibold text-strong">
                         {day.consumed.calories} kcal
                       </Text>
                     ) : null}
@@ -848,18 +848,18 @@ export default function CoachNutritionV2ClientScreen() {
       {/* Zona "Archivar plan vigente" (delta 7): discreta, separada y aislada del CTA primario
           para evitar toques accidentales. Solo con plan vigente. Microcopy no tóxica. */}
       {activePlan && userId ? (
-        <View className="mt-2 gap-3 border-t border-border-subtle pt-5">
-          <Text className="text-xs leading-5 text-text-muted">
+        <View className="mt-2 gap-3 border-t border-subtle pt-5">
+          <Text className="text-xs leading-5 text-muted">
             Archivar retira el plan de la vista del alumno. El historial registrado se conserva.
           </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Archivar plan"
             onPress={() => setArchiveOpen(true)}
-            className="min-h-11 flex-row items-center gap-2 self-start rounded-control border border-border-subtle bg-surface-card px-3"
+            className="min-h-11 flex-row items-center gap-2 self-start rounded-control border border-subtle bg-surface-card px-3"
           >
             <Archive color={theme.textSecondary} size={16} />
-            <Text className="text-sm font-semibold text-text-muted">Archivar plan</Text>
+            <Text className="text-sm font-semibold text-muted">Archivar plan</Text>
           </Pressable>
         </View>
       ) : null}
@@ -935,21 +935,21 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
     return (
       <NutritionCard>
         <View className="flex-row flex-wrap items-center justify-between gap-2">
-          <Text className="min-w-0 flex-1 font-display text-base font-semibold text-text-strong">
+          <Text className="min-w-0 flex-1 font-display text-base font-semibold text-strong">
             {cell.variant ? cell.variant.label : 'Sin estructura para este día'}
           </Text>
-          <View className="rounded-pill border border-border-subtle bg-surface-sunken px-2 py-0.5">
-            <Text className="text-[10px] font-semibold text-text-muted">Próximo</Text>
+          <View className="rounded-pill border border-subtle bg-surface-sunken px-2 py-0.5">
+            <Text className="text-[10px] font-semibold text-muted">Próximo</Text>
           </View>
         </View>
-        <Text className="mt-1 text-sm leading-5 text-text-muted">
+        <Text className="mt-1 text-sm leading-5 text-muted">
           {cell.variant
             ? 'Esto es lo que le va a tocar. Todavía no hay nada que registrar.'
             : 'El plan vigente no prescribe una estructura para este día.'}
         </Text>
         {targets ? (
           <View className="mt-3">
-            <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
               Metas del día
             </Text>
             <View className="mt-1">
@@ -970,8 +970,8 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
   if (cell.state === 'past-empty') {
     return (
       <NutritionCard>
-        <Text className="font-display text-base font-semibold text-text-strong">Sin registros</Text>
-        <Text className="mt-1 text-sm leading-5 text-text-muted">
+        <Text className="font-display text-base font-semibold text-strong">Sin registros</Text>
+        <Text className="mt-1 text-sm leading-5 text-muted">
           Ese día no quedó ningún registro. No es un cero: simplemente no hay datos.
         </Text>
       </NutritionCard>
@@ -983,7 +983,7 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
     return (
       <NutritionCard>
         <View className="flex-row flex-wrap items-center gap-2">
-          <Text className="font-display text-base font-semibold text-text-strong">Registro anterior</Text>
+          <Text className="font-display text-base font-semibold text-strong">Registro anterior</Text>
           <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">
             <Text className="text-[10px] font-semibold text-warning-700">Historial anterior</Text>
           </View>
@@ -999,12 +999,12 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
             />
           </View>
         ) : (
-          <Text className="mt-1 text-sm text-text-muted">
+          <Text className="mt-1 text-sm text-muted">
             {legacy.completionCount > 0 ? legacy.completionsLabel : 'Registrado en el sistema anterior'}
           </Text>
         )}
         {legacy.mealsLabel ? (
-          <Text className="mt-2 text-xs leading-5 text-text-subtle">{legacy.mealsLabel}</Text>
+          <Text className="mt-2 text-xs leading-5 text-subtle">{legacy.mealsLabel}</Text>
         ) : null}
       </NutritionCard>
     )
@@ -1034,14 +1034,14 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
           ]}
         />
         <NutritionCard>
-          <Text className="text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+          <Text className="text-sm text-muted" style={{ fontVariant: ['tabular-nums'] }}>
             {consumed.entryCount} registro{consumed.entryCount === 1 ? '' : 's'} ese día
           </Text>
-          <Text className="mt-2 text-sm leading-5 text-text-body">
+          <Text className="mt-2 text-sm leading-5 text-body">
             Resultados del día, tal como quedaron. Solo lectura.
           </Text>
           {legacy?.secondaryLabel ? (
-            <Text className="mt-2 text-xs text-text-subtle">{legacy.secondaryLabel}</Text>
+            <Text className="mt-2 text-xs text-subtle">{legacy.secondaryLabel}</Text>
           ) : null}
         </NutritionCard>
       </>
@@ -1051,7 +1051,7 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
   // Hubo actividad pero el snapshot no dejó metas (o el consumo no viaja): se dice tal cual.
   return (
     <NutritionCard>
-      <Text className="font-display text-base font-semibold text-text-strong">Con actividad</Text>
+      <Text className="font-display text-base font-semibold text-strong">Con actividad</Text>
       {consumed ? (
         <View className="mt-2">
           <MacroChipRow
@@ -1063,7 +1063,7 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
           />
         </View>
       ) : null}
-      <Text className="mt-2 text-sm leading-5 text-text-muted">
+      <Text className="mt-2 text-sm leading-5 text-muted">
         Ese día no quedaron metas asignadas en el registro, así que no hay adherencia que comparar.
       </Text>
     </NutritionCard>
@@ -1117,12 +1117,12 @@ function ConvertedPlanBanner({
   return (
     <View
       accessibilityRole="summary"
-      className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3"
+      className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3"
     >
       <History color={theme.mutedForeground} size={16} />
-      <Text className="flex-1 text-sm leading-5 text-text-body">
+      <Text className="flex-1 text-sm leading-5 text-body">
         Plan convertido del sistema anterior el{' '}
-        <Text className="font-semibold text-text-strong">{convertedAtLabel}</Text> — revísalo cuando
+        <Text className="font-semibold text-strong">{convertedAtLabel}</Text> — revísalo cuando
         quieras.
       </Text>
       <Pressable
@@ -1348,8 +1348,8 @@ function AssignPlanModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
-        <View className="flex-row items-center gap-2 border-b border-border-subtle px-4 py-3">
-          <Text className="min-w-0 flex-1 font-display text-lg font-semibold text-text-strong">
+        <View className="flex-row items-center gap-2 border-b border-subtle px-4 py-3">
+          <Text className="min-w-0 flex-1 font-display text-lg font-semibold text-strong">
             Asignar plan a otros alumnos
           </Text>
           <Pressable
@@ -1364,9 +1364,9 @@ function AssignPlanModal({
 
         {results ? (
           <ScrollView className="flex-1" contentContainerClassName="gap-3 px-4 py-4">
-            <View className="rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
-              <Text className="text-sm text-text-body">
-                <Text className="font-semibold text-text-strong">{results.summary.succeeded}</Text> asignado
+            <View className="rounded-control border border-subtle bg-surface-sunken px-4 py-3">
+              <Text className="text-sm text-body">
+                <Text className="font-semibold text-strong">{results.summary.succeeded}</Text> asignado
                 {results.summary.succeeded === 1 ? '' : 's'}
                 {results.summary.failed > 0
                   ? ` · ${results.summary.failed} con problemas`
@@ -1378,7 +1378,7 @@ function AssignPlanModal({
               {results.items.map((item) => (
                 <View
                   key={item.clientId}
-                  className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-card px-3 py-2.5"
+                  className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-card px-3 py-2.5"
                 >
                   {item.ok ? (
                     <CheckCircle2 color={theme.success} size={16} />
@@ -1386,10 +1386,10 @@ function AssignPlanModal({
                     <XCircle color={theme.destructive} size={16} />
                   )}
                   <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-semibold text-text-strong">
+                    <Text className="text-sm font-semibold text-strong">
                       {nameById.get(item.clientId) ?? 'Alumno'}
                     </Text>
-                    <Text className="mt-0.5 text-xs text-text-muted">
+                    <Text className="mt-0.5 text-xs text-muted">
                       {item.ok ? 'Nueva versión publicada.' : item.error}
                     </Text>
                   </View>
@@ -1415,9 +1415,9 @@ function AssignPlanModal({
             contentContainerClassName="gap-4 px-4 py-4"
             keyboardShouldPersistTaps="handled"
           >
-            <Text className="text-sm leading-5 text-text-body">
+            <Text className="text-sm leading-5 text-body">
               Se copiará la estructura de{' '}
-              <Text className="font-semibold text-text-strong">{sourcePlanName}</Text> a los alumnos que
+              <Text className="font-semibold text-strong">{sourcePlanName}</Text> a los alumnos que
               elijas. A quienes ya tengan un plan se les creará una nueva versión vigente.
             </Text>
 
@@ -1426,21 +1426,21 @@ function AssignPlanModal({
                 <ActivityIndicator color={theme.primary} />
               </View>
             ) : rosterError ? (
-              <View className="rounded-control border border-border-subtle bg-surface-sunken px-4 py-8">
-                <Text className="text-center text-sm text-text-muted">
+              <View className="rounded-control border border-subtle bg-surface-sunken px-4 py-8">
+                <Text className="text-center text-sm text-muted">
                   No pudimos cargar la lista de alumnos. Cierra y vuelve a intentar.
                 </Text>
               </View>
             ) : roster.length === 0 && !rosterHasMore ? (
-              <View className="items-center rounded-control border border-border-subtle bg-surface-sunken px-4 py-8">
+              <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">
                 <Users color={theme.mutedForeground} size={28} />
-                <Text className="mt-2 text-center text-sm text-text-muted">
+                <Text className="mt-2 text-center text-sm text-muted">
                   No hay otros alumnos en tu espacio para asignar este plan.
                 </Text>
               </View>
             ) : (
               <>
-                <View className="flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+                <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
                   <Search color={theme.mutedForeground} size={16} />
                   <TextInput
                     value={search}
@@ -1448,14 +1448,14 @@ function AssignPlanModal({
                     placeholder="Buscar alumno…"
                     placeholderTextColor={theme.mutedForeground}
                     autoCorrect={false}
-                    className="min-h-11 flex-1 py-2 text-base text-text-strong"
+                    className="min-h-11 flex-1 py-2 text-base text-strong"
                   />
                   {searching ? <ActivityIndicator color={theme.mutedForeground} size="small" /> : null}
                 </View>
 
                 {/* Honestidad del tope (NUT-026): la primera página no es todo el espacio. */}
                 {rosterHasMore && !useRemote ? (
-                  <Text className="text-xs text-text-muted">
+                  <Text className="text-xs text-muted">
                     Tu espacio tiene más alumnos de los que caben aquí. Escribe para buscarlos a todos.
                   </Text>
                 ) : null}
@@ -1466,7 +1466,7 @@ function AssignPlanModal({
                 ) : null}
 
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-xs text-text-muted">
+                  <Text className="text-xs text-muted">
                     {selected.size} seleccionado{selected.size === 1 ? '' : 's'}
                   </Text>
                   <View className="flex-row items-center gap-4">
@@ -1483,7 +1483,7 @@ function AssignPlanModal({
                         accessibilityLabel="Limpiar selección"
                         onPress={() => setSelected(new Set())}
                       >
-                        <Text className="text-xs font-semibold text-text-muted">Limpiar</Text>
+                        <Text className="text-xs font-semibold text-muted">Limpiar</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -1496,7 +1496,7 @@ function AssignPlanModal({
                         <ActivityIndicator color={theme.primary} />
                       </View>
                     ) : (
-                      <Text className="py-6 text-center text-sm text-text-muted">
+                      <Text className="py-6 text-center text-sm text-muted">
                         {searchError ? 'No pudimos completar la búsqueda.' : 'Sin coincidencias.'}
                       </Text>
                     )
@@ -1511,10 +1511,10 @@ function AssignPlanModal({
                           accessibilityLabel={entry.clientName}
                           onPress={() => toggle(entry.clientId)}
                           className={`min-h-14 flex-row items-center gap-3 rounded-control border px-3 py-2.5 ${
-                            isSelected ? 'border-primary bg-primary/10' : 'border-border-subtle bg-surface-card'
+                            isSelected ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card'
                           }`}
                         >
-                          <Text className="min-w-0 flex-1 text-sm font-semibold text-text-strong" numberOfLines={1}>
+                          <Text className="min-w-0 flex-1 text-sm font-semibold text-strong" numberOfLines={1}>
                             {entry.clientName}
                           </Text>
                           {entry.hasPlan ? (
@@ -1530,17 +1530,17 @@ function AssignPlanModal({
                   )}
                 </View>
 
-                <View className="border-t border-border-subtle pt-4">
-                  <Text className="mb-1.5 text-sm font-semibold text-text-strong">Vigente desde</Text>
+                <View className="border-t border-subtle pt-4">
+                  <Text className="mb-1.5 text-sm font-semibold text-strong">Vigente desde</Text>
                   <TextInput
                     value={effectiveFrom}
                     onChangeText={setEffectiveFrom}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor={theme.mutedForeground}
                     autoCapitalize="none"
-                    className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-text-strong"
+                    className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
                   />
-                  <Text className="mt-1 text-xs text-text-muted">
+                  <Text className="mt-1 text-xs text-muted">
                     Formato AAAA-MM-DD. Para quienes ya tienen plan, debe ser posterior a la de su versión
                     vigente.
                   </Text>
@@ -1643,7 +1643,7 @@ function ArchivePlanConfirmSheet({
       title="Archivar plan vigente"
       accessibilityLabel="Archivar plan vigente"
     >
-      <Text className="text-sm leading-5 text-text-body">
+      <Text className="text-sm leading-5 text-body">
         El alumno dejará de ver {planName}. El historial registrado se conserva. Puedes crear uno nuevo
         cuando quieras.
       </Text>

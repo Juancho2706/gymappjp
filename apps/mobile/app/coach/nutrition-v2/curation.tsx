@@ -200,8 +200,8 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
                 <Barcode size={20} color={theme.warning} />
               </View>
               <View className="min-w-0 flex-1">
-                <Text className="text-sm font-bold text-text-strong">Codigos por revisar</Text>
-                <Text className="mt-0.5 text-[13px] leading-relaxed text-text-muted">
+                <Text className="text-sm font-bold text-strong">Codigos por revisar</Text>
+                <Text className="mt-0.5 text-[13px] leading-relaxed text-muted">
                   Productos escaneados que aun no existen en el catalogo local. Vincular no
                   inventa nutrientes: solo ensena a EVA que fila local corresponde a ese codigo.
                 </Text>
@@ -217,26 +217,26 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
               accessibilityState={{ disabled: loadingMore }}
               disabled={loadingMore}
               onPress={() => void loadMore()}
-              className={`mt-2 min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-border-default bg-surface-card px-4 ${loadingMore ? 'opacity-60' : ''}`}
+              className={`mt-2 min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-4 ${loadingMore ? 'opacity-60' : ''}`}
             >
               {loadingMore ? <ActivityIndicator size="small" color={theme.primary} /> : null}
-              <Text className="text-sm font-semibold text-text-strong">
+              <Text className="text-sm font-semibold text-strong">
                 {loadingMore ? 'Cargando…' : 'Ver mas codigos'}
               </Text>
             </Pressable>
           ) : null
         }
         renderItem={({ item }) => (
-          <View className="flex-row items-center justify-between gap-3 rounded-control border border-border-default bg-surface-card p-3">
+          <View className="flex-row items-center justify-between gap-3 rounded-control border border-default bg-surface-card p-3">
             <View className="min-w-0 flex-1">
               <Text
-                className="font-mono text-sm font-black text-text-strong"
+                className="font-mono text-sm font-black text-strong"
                 style={{ fontVariant: ['tabular-nums'] }}
                 numberOfLines={1}
               >
                 {item.barcode}
               </Text>
-              <Text className="mt-1 text-xs font-semibold text-text-muted">
+              <Text className="mt-1 text-xs font-semibold text-muted">
                 {item.countryCode} · {item.sightings}{' '}
                 {item.sightings === 1 ? 'escaneo' : 'escaneos'} · {formatRelativeDate(item.lastSeenAt)}
               </Text>
@@ -245,10 +245,10 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
               accessibilityRole="button"
               accessibilityLabel="Vincular alimento"
               onPress={() => setSelected(item)}
-              className="min-h-11 shrink-0 flex-row items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
+              className="min-h-11 shrink-0 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
             >
               <Link2 size={16} color={theme.foreground} />
-              <Text className="text-sm font-semibold text-text-strong">Vincular alimento</Text>
+              <Text className="text-sm font-semibold text-strong">Vincular alimento</Text>
             </Pressable>
           </View>
         )}
@@ -293,7 +293,7 @@ export default function CurationRoute() {
 
 function LoadingCard({ color }: { color: string }) {
   return (
-    <View className="mx-4 mt-3 min-h-24 items-center justify-center rounded-card border border-border-default bg-surface-card">
+    <View className="mx-4 mt-3 min-h-24 items-center justify-center rounded-card border border-default bg-surface-card">
       <ActivityIndicator color={color} />
     </View>
   )
@@ -427,14 +427,14 @@ function ResolveSheet({
       accessibilityLabel={shown ? `Vincular codigo ${shown.barcode}` : undefined}
     >
       <Text
-        className="font-mono text-sm font-black text-text-muted"
+        className="font-mono text-sm font-black text-muted"
         style={{ fontVariant: ['tabular-nums'] }}
       >
         {shown?.barcode}
       </Text>
 
       {/* Segmented de dos modos (tokens del DS; activo = bg-primary + texto blanco). */}
-      <View className="flex-row gap-1 rounded-control border border-border-default bg-surface-sunken p-1">
+      <View className="flex-row gap-1 rounded-control border border-default bg-surface-sunken p-1">
         {(['search', 'create'] as const).map((key) => {
           const active = mode === key
           return (
@@ -450,7 +450,7 @@ function ResolveSheet({
               ) : (
                 <Plus size={16} color={active ? theme.primaryForeground : theme.mutedForeground} />
               )}
-              <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-text-muted'}`}>
+              <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-muted'}`}>
                 {key === 'search' ? 'Buscar existente' : 'Crear nuevo'}
               </Text>
             </Pressable>
@@ -475,7 +475,7 @@ function ResolveSheet({
       {/* Pie fijo (copy verbatim web `:285-289`). */}
       <View className="flex-row items-start gap-2 rounded-control bg-surface-sunken px-3 py-2.5">
         <CheckCircle2 size={16} color={theme.success} style={{ marginTop: 2 }} />
-        <Text className="flex-1 text-[11px] leading-relaxed text-text-muted">
+        <Text className="flex-1 text-[11px] leading-relaxed text-muted">
           Vincular no cambia el alimento ni inventa nutrientes: solo asocia ese codigo a una
           fila del catalogo.
         </Text>
@@ -538,7 +538,7 @@ function CatalogPicker({ onPick }: { onPick: (food: FoodCatalogItem) => void }) 
 
   return (
     <View className="gap-2">
-      <View className="flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+      <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
         <Search color={theme.mutedForeground} size={16} />
         <TextInput
           value={query}
@@ -548,7 +548,7 @@ function CatalogPicker({ onPick }: { onPick: (food: FoodCatalogItem) => void }) 
           accessibilityLabel="Buscar alimento en el catalogo"
           autoCorrect={false}
           returnKeyType="search"
-          className="min-h-11 flex-1 py-2 text-base text-text-strong"
+          className="min-h-11 flex-1 py-2 text-base text-strong"
         />
         {loading ? <ActivityIndicator color={theme.mutedForeground} size="small" /> : null}
       </View>
@@ -558,9 +558,9 @@ function CatalogPicker({ onPick }: { onPick: (food: FoodCatalogItem) => void }) 
           <Text className="text-xs text-danger-700">{searchError}</Text>
         </View>
       ) : debounced.length < MIN_QUERY ? (
-        <Text className="px-1 text-xs text-text-muted">Escribe al menos 2 caracteres para buscar.</Text>
+        <Text className="px-1 text-xs text-muted">Escribe al menos 2 caracteres para buscar.</Text>
       ) : !loading && items.length === 0 ? (
-        <Text className="px-1 text-xs text-text-muted">
+        <Text className="px-1 text-xs text-muted">
           Sin resultados. Prueba con otro nombre o crea el alimento en la pestana Crear nuevo.
         </Text>
       ) : (
@@ -571,14 +571,14 @@ function CatalogPicker({ onPick }: { onPick: (food: FoodCatalogItem) => void }) 
               accessibilityRole="button"
               accessibilityLabel={`Vincular con ${food.name}`}
               onPress={() => onPick(food)}
-              className="flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 py-2"
+              className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3 py-2"
             >
               <View className="min-w-0 flex-1">
-                <Text className="text-sm font-semibold text-text-strong" numberOfLines={1}>
+                <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
                   {food.name}
                 </Text>
                 {food.brand ? (
-                  <Text className="mt-0.5 text-[11px] text-text-muted" numberOfLines={1}>
+                  <Text className="mt-0.5 text-[11px] text-muted" numberOfLines={1}>
                     {food.brand}
                   </Text>
                 ) : null}
@@ -676,11 +676,11 @@ function CreateFoodForm({
   }
 
   const inputClass =
-    'min-h-11 rounded-control border border-border-default bg-surface-card px-3 text-base text-text-strong'
+    'min-h-11 rounded-control border border-default bg-surface-card px-3 text-base text-strong'
 
   return (
     <View className="gap-2.5">
-      <Text className="px-1 text-[11px] leading-relaxed text-text-muted">
+      <Text className="px-1 text-[11px] leading-relaxed text-muted">
         Ingresa las macros por 100 {form.unit}. Se crea como alimento tuyo (coach) y se vincula
         al codigo.
       </Text>
@@ -706,7 +706,7 @@ function CreateFoodForm({
           />
         </Field>
         <Field label="Unidad" className="flex-1">
-          <View className="flex-row gap-1 rounded-control border border-border-default bg-surface-sunken p-1">
+          <View className="flex-row gap-1 rounded-control border border-default bg-surface-sunken p-1">
             {(['g', 'ml'] as const).map((u) => {
               const active = form.unit === u
               return (
@@ -718,7 +718,7 @@ function CreateFoodForm({
                   className={`min-h-9 flex-1 items-center justify-center rounded-control px-2 ${active ? 'bg-primary' : ''}`}
                 >
                   <Text
-                    className={`text-xs font-semibold ${active ? 'text-white' : 'text-text-muted'}`}
+                    className={`text-xs font-semibold ${active ? 'text-white' : 'text-muted'}`}
                   >
                     {u === 'g' ? 'Solido (g)' : 'Liquido (ml)'}
                   </Text>
@@ -801,7 +801,7 @@ function Field({
 }) {
   return (
     <View className={className}>
-      <Text className="mb-1 text-xs font-semibold text-text-muted">{label}</Text>
+      <Text className="mb-1 text-xs font-semibold text-muted">{label}</Text>
       {children}
     </View>
   )

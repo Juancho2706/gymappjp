@@ -79,6 +79,7 @@ export interface NutritionWeekHistoryDayLike {
   targets?: NutritionWeekTargetsLike | null
   consumed?: NutritionWeekConsumedLike | null
   activeEntryCount?: number
+  correctionCount?: number
   legacyCompletionCount?: number
   legacyDisclosure?: 'legacy_completion_without_food_detail' | null
   legacyEntryCount?: number

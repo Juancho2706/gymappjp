@@ -34,7 +34,7 @@ export function PortionDayCoverageCard({
 
   return (
     <NutritionCard>
-      <Text className="font-display text-base font-semibold text-text-strong">
+      <Text className="font-display text-base font-semibold text-strong">
         {PORTIONS_COPY.coach.dayCoverage}
       </Text>
       <View className="mt-3 flex-row flex-wrap gap-2">
@@ -50,7 +50,7 @@ export function PortionDayCoverageCard({
                 'flex-row items-center gap-1.5 rounded-pill border px-2.5 py-1.5',
                 complete
                   ? 'border-success-500/30 bg-success-500/10'
-                  : 'border-border-subtle bg-surface-card',
+                  : 'border-subtle bg-surface-card',
               )}
               key={row.groupCode}
             >
@@ -62,7 +62,7 @@ export function PortionDayCoverageCard({
               <Text
                 className={cx(
                   'text-xs font-semibold',
-                  complete ? 'text-success-700' : 'text-text-strong',
+                  complete ? 'text-success-700' : 'text-strong',
                 )}
                 style={{ fontVariant: ['tabular-nums'] }}
               >
@@ -82,7 +82,7 @@ export function PortionDayCoverageCard({
           )
         })}
       </View>
-      <Text className="mt-3 text-xs text-text-muted">{PORTIONS_COPY.coach.derivedNote}</Text>
+      <Text className="mt-3 text-xs text-muted">{PORTIONS_COPY.coach.derivedNote}</Text>
     </NutritionCard>
   )
 }

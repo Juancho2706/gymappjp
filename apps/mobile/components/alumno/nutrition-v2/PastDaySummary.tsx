@@ -54,7 +54,7 @@ export function PastDaySummary({ cell, ready }: PastDaySummaryProps) {
   if (isLegacyOnly && legacy) {
     return (
       <NutritionCard>
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
           Registrado en el sistema anterior
         </Text>
         {legacy.hasMacros && legacy.consumed ? (
@@ -68,12 +68,12 @@ export function PastDaySummary({ cell, ready }: PastDaySummaryProps) {
             />
           </View>
         ) : (
-          <Text className="mt-2 text-sm leading-6 text-text-body" style={TABULAR_NUMS}>
+          <Text className="mt-2 text-sm leading-6 text-body" style={TABULAR_NUMS}>
             {legacy.completionCount > 0 ? legacy.completionsLabel : 'Ese día quedó registrado en el sistema clásico.'}
           </Text>
         )}
         {legacy.mealsLabel ? (
-          <Text className="mt-2 text-xs leading-5 text-text-subtle">{legacy.mealsLabel}</Text>
+          <Text className="mt-2 text-xs leading-5 text-subtle">{legacy.mealsLabel}</Text>
         ) : null}
       </NutritionCard>
     )
@@ -123,31 +123,31 @@ export function PastDaySummary({ cell, ready }: PastDaySummaryProps) {
 
   return (
     <NutritionCard>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
         Lo que registraste ese día
       </Text>
       <View className="mt-3 flex-row flex-wrap gap-y-3">
         {rows.map((row) => (
           <View key={row.label} className="min-w-[40%] flex-1 pr-2">
-            <Text className="font-display text-lg font-bold text-text-strong" style={TABULAR_NUMS}>
+            <Text className="font-display text-lg font-bold text-strong" style={TABULAR_NUMS}>
               {row.value}
             </Text>
-            <Text className="text-xs text-text-muted">{row.label}</Text>
+            <Text className="text-xs text-muted">{row.label}</Text>
             {row.target ? (
               // Meta CONGELADA del snapshot de ese día (no la del plan vigente hoy).
-              <Text className="mt-0.5 text-[11px] text-text-subtle" style={TABULAR_NUMS}>
+              <Text className="mt-0.5 text-[11px] text-subtle" style={TABULAR_NUMS}>
                 Meta {row.target}
               </Text>
             ) : null}
           </View>
         ))}
       </View>
-      <Text className="mt-3 text-xs text-text-subtle" style={TABULAR_NUMS}>
+      <Text className="mt-3 text-xs text-subtle" style={TABULAR_NUMS}>
         {entryCount} registro{entryCount === 1 ? '' : 's'}
         {correctionCount > 0 ? ` · ${correctionCount} corrección${correctionCount === 1 ? '' : 'es'}` : ''}
       </Text>
       {legacyNote ? (
-        <Text className="mt-1 text-xs text-text-subtle" style={TABULAR_NUMS}>
+        <Text className="mt-1 text-xs text-subtle" style={TABULAR_NUMS}>
           {legacyNote}
         </Text>
       ) : null}

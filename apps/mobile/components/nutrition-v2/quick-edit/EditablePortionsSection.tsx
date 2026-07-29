@@ -87,13 +87,13 @@ function PortionsStepper({
         accessibilityLabel={PORTIONS_COPY.builder.stepDownAria(groupName)}
         disabled={!canDecrement}
         onPress={() => onStep(-1)}
-        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
       >
         <Minus color={theme.foreground} size={16} />
       </Pressable>
       <Text
         accessibilityLabel={`Porciones de ${groupName}: ${formatPortionsEsCl(portions)}`}
-        className="w-12 text-center text-base font-semibold text-text-strong"
+        className="w-12 text-center text-base font-semibold text-strong"
         style={{ fontVariant: ['tabular-nums'] }}
       >
         {formatPortionsEsCl(portions)}
@@ -103,7 +103,7 @@ function PortionsStepper({
         accessibilityLabel={PORTIONS_COPY.builder.stepUpAria(groupName)}
         disabled={!canIncrement}
         onPress={() => onStep(1)}
-        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
       >
         <Plus color={theme.foreground} size={16} />
       </Pressable>
@@ -140,7 +140,7 @@ function PortionTargetRow({
         <View className="min-w-0 flex-1 flex-row items-center gap-2">
           <GroupDot group={target} sortOrder={sortOrder} />
           <View className="min-w-0 flex-1">
-            <Text className="text-sm font-medium text-text-strong" numberOfLines={1}>
+            <Text className="text-sm font-medium text-strong" numberOfLines={1}>
               {target.groupName}
             </Text>
             {!target.macrosConfirmed ? (
@@ -187,7 +187,7 @@ function PortionTargetRow({
           placeholder={PORTIONS_COPY.builder.notePlaceholder}
           placeholderTextColor={theme.mutedForeground}
           maxLength={1000}
-          className="mt-1 min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"
+          className="mt-1 min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
         />
       ) : null}
     </View>
@@ -250,7 +250,7 @@ function GroupPickerSheet({
                 <GroupDot group={group} sortOrder={group.sortOrder} />
                 <View className="min-w-0 flex-1">
                   <View className="flex-row items-center gap-1.5">
-                    <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
+                    <Text className="shrink text-sm font-semibold text-strong" numberOfLines={1}>
                       {group.groupName}
                     </Text>
                     {!group.macrosConfirmed ? (
@@ -261,7 +261,7 @@ function GroupPickerSheet({
                       </View>
                     ) : null}
                   </View>
-                  <Text className="text-xs text-text-muted" numberOfLines={1}>
+                  <Text className="text-xs text-muted" numberOfLines={1}>
                     {used
                       ? PORTIONS_COPY.builder.groupUsed
                       : `1 porción ≈ ${Math.round(group.ref.calories)} kcal · ${Math.round(group.ref.carbsG)} C · ${Math.round(group.ref.proteinG)} P`}
@@ -303,7 +303,7 @@ function GroupPickerSheet({
               setEditingGroup(null)
               setFormOpen(true)
             }}
-            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-border-default px-2 py-2 active:bg-surface-sunken"
+            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-default px-2 py-2 active:bg-surface-sunken"
           >
             <View className="h-5 w-5 items-center justify-center rounded-full border border-dashed border-primary/60">
               <Plus color={theme.primary} size={12} />
@@ -357,9 +357,9 @@ export function EditablePortionsSection({
   const groupOrder = new Map(groups.map((group) => [group.exchangeGroupId, group.sortOrder]))
 
   return (
-    <View className="mt-3 border-t border-border-subtle pt-3">
-      <Text className="text-sm font-medium text-text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
-      <Text className="mt-0.5 text-xs text-text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
+    <View className="mt-3 border-t border-subtle pt-3">
+      <Text className="text-sm font-medium text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
+      <Text className="mt-0.5 text-xs text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
 
       {targets.length > 0 ? (
         <View className="mt-2 gap-2">

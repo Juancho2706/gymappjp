@@ -101,7 +101,7 @@ export function EditableSlotCard({
             editable={!disabled}
             placeholder="Nombre (ej: Desayuno)"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm font-semibold text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm font-semibold text-strong"
           />
         </View>
         <View className="w-24">
@@ -112,7 +112,7 @@ export function EditableSlotCard({
             editable={!disabled}
             placeholder="HH:MM"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
           />
         </View>
       </View>
@@ -121,7 +121,7 @@ export function EditableSlotCard({
       ) : null}
 
       {slot.items.length === 0 ? (
-        <Text className="mt-3 text-sm text-text-muted">{QUICK_EDIT_COPY.emptySlot}</Text>
+        <Text className="mt-3 text-sm text-muted">{QUICK_EDIT_COPY.emptySlot}</Text>
       ) : (
         <View className="mt-3 gap-2">
           {slot.items.map((item) => (
@@ -157,10 +157,10 @@ export function EditableSlotCard({
           accessibilityLabel={QUICK_EDIT_COPY.freeFood}
           disabled={disabled}
           onPress={onAddFreeItem}
-          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
+          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
         >
           <Plus color={theme.foreground} size={15} />
-          <Text className="text-sm font-semibold text-text-strong">Libre</Text>
+          <Text className="text-sm font-semibold text-strong">Libre</Text>
         </Pressable>
       </View>
 
@@ -178,8 +178,8 @@ export function EditableSlotCard({
       />
 
       {slot.items.length > 0 ? (
-        <View className="mt-3 border-t border-border-subtle pt-2">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+        <View className="mt-3 border-t border-subtle pt-2">
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Subtotal franja
           </Text>
           <MacroChipRow

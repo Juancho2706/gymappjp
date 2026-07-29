@@ -46,22 +46,22 @@ export function ReadOnlyDayBanner({ isoDate, tone, onBackToToday }: ReadOnlyDayB
   return (
     <View
       accessibilityRole="summary"
-      className="gap-3 rounded-card border border-border-subtle bg-surface-sunken p-3"
+      className="gap-3 rounded-card border border-subtle bg-surface-sunken p-3"
     >
       <View className="flex-row items-start gap-2">
         <CalendarDays color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
         <View className="min-w-0 flex-1">
-          <Text className="text-sm font-semibold leading-5 text-text-strong">
+          <Text className="text-sm font-semibold leading-5 text-strong">
             Estás viendo el {dayLabel}
           </Text>
-          <Text className="mt-0.5 text-xs leading-5 text-text-muted">{detail}</Text>
+          <Text className="mt-0.5 text-xs leading-5 text-muted">{detail}</Text>
         </View>
       </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Volver a hoy"
         onPress={onBackToToday}
-        className="min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-border-default bg-surface-card px-3 active:opacity-70"
+        className="min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-3 active:opacity-70"
       >
         <RotateCcw color={theme.primary} size={16} />
         <Text className="text-sm font-semibold text-primary">Volver a hoy</Text>

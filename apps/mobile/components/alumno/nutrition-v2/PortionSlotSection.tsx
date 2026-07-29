@@ -162,8 +162,8 @@ function PortionSlotSectionBase({
   if (targets.length === 0) return null
 
   return (
-    <View className="mt-3 border-t border-border-subtle pt-3">
-      <Text className="mb-1 text-xs text-text-muted">{PORTIONS_COPY.student.slotHint}</Text>
+    <View className="mt-3 border-t border-subtle pt-3">
+      <Text className="mb-1 text-xs text-muted">{PORTIONS_COPY.student.slotHint}</Text>
       {orderedTargets.map((target) => (
         <View key={target.id}>
           <PortionChip
@@ -190,9 +190,9 @@ function PortionSlotSectionBase({
                 accessibilityRole="button"
                 accessibilityLabel={PORTIONS_COPY.student.extraCancelAria}
                 onPress={closeConfirm}
-                className="min-h-9 items-center justify-center rounded-control border border-border-default bg-surface-card px-3"
+                className="min-h-9 items-center justify-center rounded-control border border-default bg-surface-card px-3"
               >
-                <Text className="text-xs font-semibold text-text-strong">
+                <Text className="text-xs font-semibold text-strong">
                   {PORTIONS_COPY.student.extraCancel}
                 </Text>
               </Pressable>

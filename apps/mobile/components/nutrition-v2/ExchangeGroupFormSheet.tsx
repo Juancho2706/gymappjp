@@ -192,7 +192,7 @@ export function ExchangeGroupFormSheet({
     <Sheet open={open} onClose={onClose} nativeModal snapPoints={['85%']} title={title} accessibilityLabel={title}>
       <View className="gap-3 pb-2">
         <View>
-          <Text className="mb-1.5 text-sm font-semibold text-text-strong">{COPY.nameLabel}</Text>
+          <Text className="mb-1.5 text-sm font-semibold text-strong">{COPY.nameLabel}</Text>
           <TextInput
             accessibilityLabel={COPY.nameLabel}
             value={name}
@@ -201,12 +201,12 @@ export function ExchangeGroupFormSheet({
             placeholder={COPY.namePlaceholder}
             placeholderTextColor={theme.mutedForeground}
             editable={!saving}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
           />
         </View>
 
         <View>
-          <Text className="mb-1.5 text-sm font-semibold text-text-strong">{COPY.codeLabel}</Text>
+          <Text className="mb-1.5 text-sm font-semibold text-strong">{COPY.codeLabel}</Text>
           <TextInput
             accessibilityLabel={COPY.codeLabel}
             value={code}
@@ -220,13 +220,13 @@ export function ExchangeGroupFormSheet({
             placeholder="SHK"
             placeholderTextColor={theme.mutedForeground}
             editable={!saving}
-            className="min-h-11 w-24 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base font-semibold text-text-strong"
+            className="min-h-11 w-24 rounded-control border border-default bg-surface-card px-3 py-2 text-base font-semibold text-strong"
           />
-          <Text className="mt-1 text-xs text-text-muted">{COPY.codeHint}</Text>
+          <Text className="mt-1 text-xs text-muted">{COPY.codeHint}</Text>
         </View>
 
         <View>
-          <Text className="mb-1.5 text-sm font-semibold text-text-strong">{COPY.macrosLabel}</Text>
+          <Text className="mb-1.5 text-sm font-semibold text-strong">{COPY.macrosLabel}</Text>
           <View className="flex-row gap-2">
             {(
               [
@@ -236,7 +236,7 @@ export function ExchangeGroupFormSheet({
               ] as const
             ).map(([label, value, setter]) => (
               <View className="flex-1" key={label}>
-                <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">{label}</Text>
+                <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">{label}</Text>
                 <TextInput
                   accessibilityLabel={label}
                   value={value}
@@ -245,7 +245,7 @@ export function ExchangeGroupFormSheet({
                   placeholder="0"
                   placeholderTextColor={theme.mutedForeground}
                   editable={!saving}
-                  className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+                  className="min-h-11 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
                   style={{ fontVariant: ['tabular-nums'] }}
                 />
               </View>
@@ -254,7 +254,7 @@ export function ExchangeGroupFormSheet({
         </View>
 
         <View>
-          <Text className="mb-1.5 text-sm font-semibold text-text-strong">{COPY.kcalLabel}</Text>
+          <Text className="mb-1.5 text-sm font-semibold text-strong">{COPY.kcalLabel}</Text>
           <TextInput
             accessibilityLabel={COPY.kcalLabel}
             value={kcalValue}
@@ -266,14 +266,14 @@ export function ExchangeGroupFormSheet({
             placeholder="0"
             placeholderTextColor={theme.mutedForeground}
             editable={!saving}
-            className="min-h-11 w-28 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-text-strong"
+            className="min-h-11 w-28 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
             style={{ fontVariant: ['tabular-nums'] }}
           />
-          <Text className="mt-1 text-xs text-text-muted">{COPY.kcalHint}</Text>
+          <Text className="mt-1 text-xs text-muted">{COPY.kcalHint}</Text>
         </View>
 
         <View>
-          <Text className="mb-1.5 text-sm font-semibold text-text-strong">{COPY.colorLabel}</Text>
+          <Text className="mb-1.5 text-sm font-semibold text-strong">{COPY.colorLabel}</Text>
           <View className="flex-row flex-wrap gap-2">
             {EXCHANGE_GROUP_PALETTE.map((swatch, index) => {
               const selected = color === swatch

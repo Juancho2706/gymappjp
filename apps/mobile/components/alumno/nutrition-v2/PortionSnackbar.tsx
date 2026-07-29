@@ -65,18 +65,18 @@ function PortionSnackbarBase({
         className={`flex-row items-center gap-3 rounded-card border px-4 py-3 ${
           danger
             ? 'border-danger-500/30 bg-danger-500/10'
-            : 'border-border-subtle bg-surface-card'
+            : 'border-subtle bg-surface-card'
         }`}
       >
         <View className="min-w-0 flex-1">
           <Text
-            className={`text-sm font-semibold ${danger ? 'text-danger-700' : 'text-text-strong'}`}
+            className={`text-sm font-semibold ${danger ? 'text-danger-700' : 'text-strong'}`}
             numberOfLines={2}
           >
             {state.message}
           </Text>
           {state.detail ? (
-            <Text className="mt-0.5 text-xs leading-4 text-text-muted" numberOfLines={2}>
+            <Text className="mt-0.5 text-xs leading-4 text-muted" numberOfLines={2}>
               {state.detail}
             </Text>
           ) : null}
