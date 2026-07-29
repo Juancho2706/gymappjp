@@ -11,10 +11,14 @@ El último rollout registrado dejó Nutrition V2 en `mode=on`. Antes de operar o
 
 El estado general del proyecto se registra en [CURRENT.md](../status/CURRENT.md). Este runbook solo explica cómo comprobar, apagar y recuperar la superficie.
 
-> **Limitación vigente:** `mode=off` controla entrada, configuración y rutas que consultan el
-> gate, pero no contiene por sí solo todas las escrituras coach mobile directas. Hasta cerrar
-> [NUT-005](../audits/nutricion-v2-coach-alumno-2026-07-28.md), no declarar rollback completo sin
-> probar además el rechazo real de una mutación con JWT técnico.
+> **Limitación vigente en producción:** `mode=off` controla entrada, configuración y rutas que
+> consultan el gate, pero no contiene por sí solo todas las escrituras coach mobile directas.
+> El cierre de [NUT-005](../audits/nutricion-v2-coach-alumno-2026-07-28.md) está implementado en
+> esta rama (endpoint `/api/mobile/nutrition-v2/coach/mutate` + retiro de las escrituras Supabase
+> directas del camino coach RN), pero solo rige cuando (a) la web esté deployada, (b) las
+> migraciones nuevas `202607281*` estén aplicadas y (c) la app móvil corra la versión
+> actualizada. Hasta entonces, no declarar rollback completo sin probar el rechazo real de una
+> mutación con JWT técnico.
 
 ## Fuentes de verdad
 
