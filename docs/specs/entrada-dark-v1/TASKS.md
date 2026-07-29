@@ -9,6 +9,8 @@ canonical: false
 
 Estado: `[ ]` pendiente · `[x]` hecho · `[-]` descartado. Referencias: [SPEC](SPEC.md) · [PLAN](PLAN.md) · [DESIGN-SPEC](DESIGN-SPEC.md).
 
+> **Corte 2026-07-29**: Fases 0, 0b, 1, 2 y 3 EJECUTADAS y commiteadas en local (`c7a339bd`, `d32670e6`, `8c927b7b`, `3f641f21` — rama `rnmobiledenuevo`, sin push). Gates tsc + expo export verdes en cada fase; QA visual emulador de pantalla fusionada + ambos morphs + codigo + login coach OK. PENDIENTE: F2.7 parcial (QA del retorno branded con sesion — el fetch a nivel app del emulador esta roto desde 2026-07-29 aunque shell tiene red perfecta; validar en DEVICE fisico), Fase 4 (QA device owner + docs — CURRENT.md tiene cambios sin commitear de otra sesion, no mezclar) y Fase 5 (binario: F5.0 root bg + F5.1 splash figura blanca). Desviaciones aceptadas por el jefe: morph destino = ruta (no sheet), back sin morph inverso, rampa por cruce de 2 LightLayer, rail de progreso frame 06 omitido (nunca visible), radios normalizados a token.
+
 ## Fase 0 — Fixes de librerias (prod)
 
 - [ ] F0.1 `stopOpacity` explicito en `components/AmbientBrandGlow.tsx` (6 stops) y `components/GlassCard.tsx` (cornerGlow); barrido `stopColor` en todo `apps/mobile`
