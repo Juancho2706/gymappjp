@@ -30,14 +30,39 @@ export type AttentionFlag =
     | 'PROGRAMA_POR_VENCER'
     | 'FUERZA_CAYENDO';
 
+/** Puntos que suma el riesgo de nutrición dentro del score de atención. */
+export const NUTRITION_RISK_SCORE_POINTS = 20;
+
 /** Inputs for attention scoring (plan: ClientData) */
 export interface ClientDataForAttention {
     lastCheckinDate: string | null;
     lastWorkoutDate: string | null;
     hasActiveWorkoutProgram: boolean;
-    nutritionCompliance: number;
+    /**
+     * Adherencia de nutrición 0-100, o `null` = SIN DATO (no penaliza, no marca flag).
+     *
+     * La ficha del alumno pasa `null` a propósito: su señal de nutrición vive en V2
+     * (`nutrition_plans_v2`, resuelta fuera de este service) y antes entraba acá como el 0 %
+     * de las tablas V1 ⇒ +20 puntos fantasma en cada alumno que registra en V2. El término se
+     * aplica después con `applyNutritionAttentionScore`.
+     */
+    nutritionCompliance: number | null;
     planDaysRemaining: number | null;
     oneRMDelta: number | null;
+}
+
+/**
+ * Aplica el término de nutrición a un score ya calculado con `nutritionCompliance: null`.
+ *
+ * Existe porque la señal V2 se resuelve en otra capa (`_data/nutrition-tab-v2.data.ts`) que el
+ * service de la ficha no puede consumir sin invertir dependencias. `null` = sin plan V2 vigente
+ * ⇒ NO penaliza (regla de honestidad: la falta de dato nunca es riesgo).
+ */
+export function applyNutritionAttentionScore(
+    baseScore: number,
+    nutritionAtRisk: boolean | null | undefined
+): number {
+    return nutritionAtRisk === true ? baseScore + NUTRITION_RISK_SCORE_POINTS : baseScore;
 }
 
 export function calculateAttentionScore(client: ClientDataForAttention): {
@@ -68,8 +93,9 @@ export function calculateAttentionScore(client: ClientDataForAttention): {
         }
     }
 
-    if (client.nutritionCompliance < 60) {
-        score += 20;
+    // `null` = sin dato de nutrición ⇒ el término se omite (no penaliza ni marca flag).
+    if (client.nutritionCompliance != null && client.nutritionCompliance < 60) {
+        score += NUTRITION_RISK_SCORE_POINTS;
         flags.push('NUTRICION_RIESGO');
     }
 

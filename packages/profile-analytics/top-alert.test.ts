@@ -35,6 +35,22 @@ describe('getProfileTopAlert', () => {
     })
     expect(a!.message).toContain('(hoy / plan activo)')
   })
+  it('sin dato de nutricion NO dispara la alerta (la ficha web mide nutricion en V2, fuera de compliance)', () => {
+    const a = getProfileTopAlert({
+      checkIns: [{ created_at: isoDaysAgo(1) }],
+      lastWorkoutDate: isoDaysAgo(1),
+      compliance: { planDaysRemaining: 30, currentStreak: 1 },
+    })
+    expect(a).toBeNull()
+  })
+  it('0 % REAL sigue alertando (0 !== sin dato)', () => {
+    const a = getProfileTopAlert({
+      checkIns: [{ created_at: isoDaysAgo(1) }],
+      lastWorkoutDate: isoDaysAgo(1),
+      compliance: { nutritionCompliancePercent: 0, planDaysRemaining: 30 },
+    })
+    expect(a).toMatchObject({ type: 'warning' })
+  })
   it('success con racha >= 10', () => {
     const a = getProfileTopAlert({
       checkIns: [{ created_at: isoDaysAgo(1) }],

@@ -35,6 +35,7 @@ export function CoachFichaPanel({ bundle }: { bundle: ClientFichaPanelBundle }) 
                 nutritionFirstPlanId={hero.nutritionFirstPlanId}
                 activeProgramName={hero.activeProgramName}
                 moduleFlags={moduleFlags}
+                nutritionV2={bundle.nutritionV2}
             />
 
             <ClientProfileDashboard

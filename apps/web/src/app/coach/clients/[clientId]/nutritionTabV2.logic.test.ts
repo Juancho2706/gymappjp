@@ -6,6 +6,7 @@ import type {
 import {
   buildNutritionTabV2ViewModel,
   computeNutritionStreakDays,
+  computeNutritionWeeklyAdherence,
 } from './nutritionTabV2.logic'
 
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
@@ -55,6 +56,10 @@ function makeDetail(opts: {
   todayCalories?: number
   todayTarget?: number
   todayEntryCount?: number
+  /** `effectiveFrom` del plan vigente (default: antes de la semana en curso). */
+  effectiveFrom?: string
+  /** Variantes del plan (para las metas por día del PDF). */
+  dayVariants?: { key: string; label: string; dayOfWeek: number | null; isDefault: boolean; calories: number | null }[]
 }): NutritionClientDetailReadModel {
   const activePlan = opts.hasActivePlan
     ? {
@@ -64,7 +69,7 @@ function makeDetail(opts: {
         versionId: '33333333-3333-4333-8333-333333333333',
         versionNumber: 3,
         status: 'published' as const,
-        effectiveFrom: '2026-07-01',
+        effectiveFrom: opts.effectiveFrom ?? '2026-07-01',
         effectiveTo: null,
       }
     : null
@@ -117,7 +122,23 @@ function makeDetail(opts: {
     },
     plan: {
       plan: anyPlan,
-      dayVariants: [],
+      dayVariants: (opts.dayVariants ?? []).map((v) => ({
+        id: `variant-${v.key}`,
+        key: v.key,
+        label: v.label,
+        dayOfWeek: v.dayOfWeek,
+        isDefault: v.isDefault,
+        targets: {
+          calories: v.calories,
+          proteinG: null,
+          carbsG: null,
+          fatsG: null,
+          fiberG: null,
+          sodiumMg: null,
+          waterMl: null,
+        },
+        mealSlots: [],
+      })),
       visibleNotes: 'Prioriza proteína en el desayuno.',
     },
     recentDays: [],
@@ -174,6 +195,97 @@ describe('buildNutritionTabV2ViewModel', () => {
     expect(vm.streakDays).toBe(4)
   })
 
+  // Rescate 2026-07-29 (auditoría §2.2): la señal que consumen hero / anillo / pill / badge /
+  // attentionScore / PDF sale de acá. Los dos casos de abajo son el contrato de honestidad.
+  it('alumno V2 con la semana verde -> adherencia 100 % y SIN riesgo (nada de "en riesgo" con V1 en 0)', () => {
+    const detail = makeDetail({
+      hasAnyPlan: true,
+      hasActivePlan: true,
+      todayCalories: 2350, // en rango (90-110 % de 2400)
+      todayTarget: 2400,
+      todayEntryCount: 3,
+      dayVariants: [
+        { key: 'base', label: 'Base', dayOfWeek: null, isDefault: true, calories: 2400 },
+        { key: 'sabado', label: 'Sábado', dayOfWeek: 6, isDefault: false, calories: 2800 },
+      ],
+    })
+    const vm = buildNutritionTabV2ViewModel({
+      clientId: CLIENT_ID,
+      detail,
+      todayIso: TODAY_ISO, // miércoles
+      recentDaysForDisplay: [
+        makeDay('2026-07-28', { calories: 2400 }), // martes en rango
+        makeDay('2026-07-27', { calories: 2300 }), // lunes en rango
+      ],
+    })
+
+    // Lun + Mar cerrados en rango + hoy con registro en rango = 3/3.
+    expect(vm.weeklyTrackedDays).toBe(3)
+    expect(vm.weeklyInRangeDays).toBe(3)
+    expect(vm.weeklyInRangePct).toBe(100)
+    expect(vm.isAtRisk).toBe(false)
+    expect(vm.planName).toBe('Plan hipertrofia')
+    expect(vm.todayPct).toBe(98)
+    expect(vm.todayMacroTargets.calories).toBe(2400)
+    expect(vm.todaySlotCount).toBe(3)
+    // Metas por día para el PDF: la variante base primero, después los días específicos.
+    expect(vm.dayTargets).toEqual([
+      { label: 'Base', calories: 2400 },
+      { label: 'Sábado', calories: 2800 },
+    ])
+  })
+
+  it('sin plan V2 vigente -> señal NEUTRA (todo null/0, sin riesgo): la ficha la omite', () => {
+    const detail = makeDetail({
+      hasAnyPlan: true,
+      hasActivePlan: false,
+      todayCalories: 0,
+      todayTarget: 2400,
+    })
+    const vm = buildNutritionTabV2ViewModel({
+      clientId: CLIENT_ID,
+      detail,
+      todayIso: TODAY_ISO,
+      recentDaysForDisplay: [],
+    })
+
+    expect(vm.isAtRisk).toBeNull()
+    expect(vm.weeklyInRangePct).toBeNull()
+    expect(vm.weeklyTrackedDays).toBe(0)
+    expect(vm.weeklyInRangeDays).toBe(0)
+    expect(vm.todayPct).toBeNull()
+    expect(vm.todayMacroTargets).toEqual({
+      calories: null,
+      proteinG: null,
+      carbsG: null,
+      fatsG: null,
+    })
+    expect(vm.todaySlotCount).toBe(0)
+    expect(vm.planName).toBeNull()
+    expect(vm.dayTargets).toEqual([])
+  })
+
+  it('semana con dos días fuera de rango -> riesgo (33 % < 60 %)', () => {
+    const detail = makeDetail({
+      hasAnyPlan: true,
+      hasActivePlan: true,
+      todayCalories: 400,
+      todayTarget: 2400,
+      todayEntryCount: 1,
+    })
+    const vm = buildNutritionTabV2ViewModel({
+      clientId: CLIENT_ID,
+      detail,
+      todayIso: TODAY_ISO,
+      recentDaysForDisplay: [
+        makeDay('2026-07-28', { calories: 900 }), // martes muy abajo
+        makeDay('2026-07-27', { calories: 2400 }), // lunes en rango
+      ],
+    })
+    expect(vm.weeklyInRangePct).toBe(33)
+    expect(vm.isAtRisk).toBe(true)
+  })
+
   it('sin plan vigente hoy -> semana vacía, racha 0, CTA "Nueva versión" si hubo plan histórico', () => {
     const detail = makeDetail({ hasAnyPlan: true, hasActivePlan: false })
     const vm = buildNutritionTabV2ViewModel({
@@ -203,6 +315,38 @@ describe('buildNutritionTabV2ViewModel', () => {
     expect(vm.hasPlan).toBe(false)
     expect(vm.builderCtaLabel).toBe('Crear plan')
     expect(vm.week).toEqual([])
+  })
+})
+
+describe('computeNutritionWeeklyAdherence', () => {
+  const week = [
+    { isoDate: '2026-07-27', shortLabel: 'Lu', status: 'done' as const, isToday: false },
+    { isoDate: '2026-07-28', shortLabel: 'Ma', status: 'none' as const, isToday: false },
+    { isoDate: '2026-07-29', shortLabel: 'Mi', status: 'none' as const, isToday: true },
+    { isoDate: '2026-07-30', shortLabel: 'Ju', status: 'future' as const, isToday: false },
+  ]
+
+  it('un día pasado SIN registro cuenta como fuera de rango (el plan estaba vigente)', () => {
+    expect(
+      computeNutritionWeeklyAdherence({ week, planEffectiveFrom: null, todayHasIntake: false })
+    ).toEqual({ pct: 50, inRangeDays: 1, trackedDays: 2 })
+  })
+
+  it('hoy sin registro no entra al denominador; con registro sí', () => {
+    expect(
+      computeNutritionWeeklyAdherence({ week, planEffectiveFrom: null, todayHasIntake: true })
+        .trackedDays
+    ).toBe(3)
+  })
+
+  it('un plan publicado hoy NO reprueba los días previos (sin dato -> pct null)', () => {
+    expect(
+      computeNutritionWeeklyAdherence({
+        week,
+        planEffectiveFrom: '2026-07-29',
+        todayHasIntake: false,
+      })
+    ).toEqual({ pct: null, inRangeDays: 0, trackedDays: 0 })
   })
 })
 

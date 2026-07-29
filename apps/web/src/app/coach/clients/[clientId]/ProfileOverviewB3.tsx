@@ -55,15 +55,12 @@ type ComplianceShape = {
     workoutsThisWeek?: number
     workoutsPrevWeek?: number
     workoutsTarget?: number
-    nutritionWeeklyAvgPct?: number
-    nutritionPrevWeeklyAvgPct?: number
     checkInCompliancePercent?: number
     checkInCompliancePercentWeekAgo?: number
     currentStreak?: number
     planCurrentWeek?: number
     planTotalWeeks?: number
     planDaysRemaining?: number
-    nutritionCompliancePercent?: number
 }
 
 type CheckInRow = {
@@ -85,7 +82,16 @@ type ProfileOverviewB3Props = {
     clientId: string
     /** Programa activo del alumno — alimenta la card "Programa". */
     activeProgram: any | null | undefined
-    isNutritionAtRisk?: boolean
+    /** Riesgo de nutrición V2; `null`/ausente = SIN DATO ⇒ la señal se omite (no alarma). */
+    isNutritionAtRisk?: boolean | null
+    /**
+     * Adherencia semanal de nutrición V2 (`NutritionV2Signal.weeklyInRangePct`): % de días
+     * transcurridos de la semana con energía en rango. `null` ⇒ el anillo "Nutrición" muestra "—"
+     * en gris en vez de un 0 % falso. Antes se leía `compliance.nutritionWeeklyAvgPct` (V1).
+     */
+    nutritionWeeklyPct?: number | null
+    /** Días en rango / días computados de la semana (leyenda honesta del anillo). */
+    nutritionWeeklyDays?: { inRange: number; tracked: number } | null
     /** Último check-in (ya ordenado en el dashboard) para la card de snapshot. */
     lastCheckIn?: CheckInRow | null
     /** Check-ins con fotos (máx. 3) para "Evolución visual". */
@@ -121,7 +127,9 @@ export function ProfileOverviewB3({
     compliance,
     clientId,
     activeProgram,
-    isNutritionAtRisk = false,
+    isNutritionAtRisk = null,
+    nutritionWeeklyPct = null,
+    nutritionWeeklyDays = null,
     lastCheckIn,
     checkInsWithPhotos = [],
     currentWeight = 0,
@@ -155,10 +163,11 @@ export function ProfileOverviewB3({
     const workoutDelta =
         compliance.workoutsPrevWeek != null ? workoutPct - prevWorkoutPct : null
 
-    const nutAvg = compliance.nutritionWeeklyAvgPct ?? 0
-    const nutPrev = compliance.nutritionPrevWeeklyAvgPct ?? 0
-    const nutDelta =
-        compliance.nutritionPrevWeeklyAvgPct != null ? nutAvg - nutPrev : null
+    // Anillo "Nutrición" = señal V2 (días de la semana en rango / días transcurridos con plan).
+    // `null` ⇒ "—" en gris: no hay plan V2 vigente, así que no hay nada que afirmar. No existe
+    // comparable de la semana anterior en el resumen V2 ⇒ sin delta (no se fabrica uno).
+    const nutAvg = nutritionWeeklyPct
+    const nutDelta = null
 
     const checkPct = compliance.checkInCompliancePercent ?? 0
     const checkPctWeekAgo = compliance.checkInCompliancePercentWeekAgo ?? 0
@@ -195,7 +204,9 @@ export function ProfileOverviewB3({
     const redHex = 'var(--danger-500)'
     const amberHex = 'var(--warning-500)'
 
-    const nutColor = nutAvg >= 70 ? emeraldHex : nutAvg >= 50 ? amberHex : redHex
+    const mutedHex = 'var(--border-default)'
+    const nutColor =
+        nutAvg == null ? mutedHex : nutAvg >= 70 ? emeraldHex : nutAvg >= 50 ? amberHex : redHex
 
     const kpiItems: {
         icon: typeof Star
@@ -291,10 +302,17 @@ export function ProfileOverviewB3({
                     />
                     <ComplianceRing
                         label="Nutrición"
-                        percentage={Math.min(100, nutAvg)}
+                        percentage={nutAvg == null ? null : Math.min(100, nutAvg)}
                         delta={nutDelta}
                         pathColor={nutColor}
                         onClick={onViewNutrition}
+                        hint={
+                            nutAvg == null
+                                ? 'sin plan vigente'
+                                : nutritionWeeklyDays != null
+                                  ? `${nutritionWeeklyDays.inRange} de ${nutritionWeeklyDays.tracked} días en rango`
+                                  : undefined
+                        }
                     />
                     <ComplianceRing
                         label="Check-in"
@@ -759,13 +777,17 @@ function ComplianceRing({
     delta,
     pathColor,
     onClick,
+    hint,
 }: {
     label: string
-    percentage: number
+    /** `null` ⇒ SIN DATO: anillo vacío con "—" al centro (nunca un 0 % que el coach lea como cero real). */
+    percentage: number | null
     /** Delta en pts vs período anterior; `null` ⇒ sin dato previo (se omite el label). */
     delta: number | null
     pathColor: string
     onClick?: () => void
+    /** Sublínea opcional (p. ej. "4 de 6 días en rango" / "sin plan vigente"). */
+    hint?: string
 }) {
     const Wrapper = onClick ? 'button' : 'div'
     return (
@@ -778,9 +800,20 @@ function ComplianceRing({
                     'rounded-card p-1 transition-colors hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]'
             )}
         >
-            <ProgressRing value={percentage} size={ringSize} stroke={8} color={pathColor} />
+            <ProgressRing
+                value={percentage ?? 0}
+                size={ringSize}
+                stroke={8}
+                color={pathColor}
+                label={
+                    percentage == null ? (
+                        <span className="font-display text-base font-black leading-none text-subtle">—</span>
+                    ) : undefined
+                }
+            />
             <div className="space-y-0.5 text-center">
                 <p className="text-[12.5px] font-bold text-strong">{label}</p>
+                {hint ? <p className="text-[10.5px] font-medium text-muted">{hint}</p> : null}
                 {delta != null ? (
                     <p
                         className={cn(

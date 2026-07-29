@@ -26,13 +26,18 @@ function baseInput(): ClientDossierInput {
                 { title: 'Vacío', day_of_week: 5, workout_blocks: [] }, // se filtra (sin bloques)
             ],
         },
-        activeNutritionPlanWithMeals: {
-            name: 'Definición',
-            daily_calories: 2100,
-            protein_g: 180,
-            carbs_g: 200,
-            fats_g: 60,
-            nutrition_meals: [{}, {}, {}, {}],
+        // Señal V2 (la única fuente de nutrición del dossier desde el rescate 2026-07-29).
+        nutritionV2: {
+            hasActivePlan: true,
+            planName: 'Definición',
+            today: { calories: { consumed: 1680, target: 2100 } },
+            todayPct: 80,
+            todayMacroTargets: { calories: 2100, proteinG: 180, carbsG: 200, fatsG: 60 },
+            todaySlotCount: 4,
+            weeklyInRangePct: 75,
+            weeklyInRangeDays: 3,
+            weeklyTrackedDays: 4,
+            dayTargets: [{ label: 'Base', calories: 2100 }],
         },
         checkIns: [
             { created_at: '2026-06-30T09:00:00.000Z', weight: 68.0, energy_level: 8, notes: 'Bien', front_photo_url: 'https://signed/a.jpg' },
@@ -44,9 +49,6 @@ function baseInput(): ClientDossierInput {
         compliance: {
             workoutsThisWeek: 3,
             workoutsTarget: 4,
-            nutritionCompliancePercent: 75,
-            todayMealsDone: 3,
-            todayMealsTotal: 4,
             currentStreak: 12,
             planCurrentWeek: 3,
             planTotalWeeks: 8,
@@ -63,7 +65,6 @@ function baseInput(): ClientDossierInput {
             { muscleGroup: 'Pecho', volume: 3200 },
             { muscleGroup: 'Vacío', volume: 0 }, // se filtra (volumen 0)
         ],
-        nutritionMonthlyAvgPct: 82,
         attentionScore: 18,
         profileLastActivityAt: '2026-06-30T09:00:00.000Z',
     }
@@ -107,10 +108,9 @@ describe('buildClientDossier — mapeo completo', () => {
         expect(d.metrics.workoutsDone).toBe(3)
         expect(d.metrics.workoutsTarget).toBe(4)
         expect(d.metrics.adherenceWeeklyPct).toBe(75)
-        expect(d.metrics.mealsDoneToday).toBe(3)
-        expect(d.metrics.mealsTotalToday).toBe(4)
-        expect(d.metrics.nutritionTodayPct).toBe(75)
-        expect(d.metrics.nutritionAdherence30dPct).toBe(82)
+        expect(d.metrics.nutritionTodayKcal).toEqual({ consumed: 1680, target: 2100 })
+        expect(d.metrics.nutritionTodayPct).toBe(80)
+        expect(d.metrics.nutritionWeeklyInRangePct).toBe(75)
         expect(d.metrics.checkInCompliancePct).toBe(90)
         expect(d.metrics.planCurrentWeek).toBe(3)
         expect(d.metrics.planTotalWeeks).toBe(8)
@@ -132,34 +132,51 @@ describe('buildClientDossier — mapeo completo', () => {
         expect(d.training.muscleVolume[0]).toEqual({ muscleGroup: 'Piernas', volume: 5000 })
     })
 
-    it('nutrición: nombre, objetivos y nº de comidas (sin day-specific ⇒ por día)', () => {
+    it('nutrición: plan V2 vigente ⇒ nombre, metas de hoy, franjas y adherencia semanal', () => {
         expect(d.nutrition).not.toBeNull()
         expect(d.nutrition!.planName).toBe('Definición')
         expect(d.nutrition!.goals).toEqual({ calories: 2100, protein: 180, carbs: 200, fats: 60 })
         expect(d.nutrition!.mealsTotal).toBe(4)
-        expect(d.nutrition!.hasDaySpecificMeals).toBe(false)
+        expect(d.nutrition!.hasDaySpecificMeals).toBe(false) // una sola variante
+        expect(d.nutrition!.weeklyInRangePct).toBe(75)
+        expect(d.nutrition!.weeklyInRangeDays).toBe(3)
+        expect(d.nutrition!.weeklyTrackedDays).toBe(4)
     })
 
-    it('nutrición: comidas day-specific ⇒ hasDaySpecificMeals=true y total del plan', () => {
+    it('nutrición: plan V2 multi-día ⇒ hasDaySpecificMeals=true y kcal por variante', () => {
         const input = baseInput()
-        // Plan de días específicos: 2 comidas del lunes + 2 del miércoles + 1 de todos los días.
-        input.activeNutritionPlanWithMeals = {
-            name: 'Ciclado por día',
-            daily_calories: 2000,
-            protein_g: 160,
-            carbs_g: 190,
-            fats_g: 58,
-            nutrition_meals: [
-                { day_of_week: 1 },
-                { day_of_week: 1 },
-                { day_of_week: 3 },
-                { day_of_week: 3 },
-                { day_of_week: null },
+        input.nutritionV2 = {
+            hasActivePlan: true,
+            planName: 'Ciclado por día',
+            today: { calories: { consumed: 900, target: 2000 } },
+            todayPct: 45,
+            todayMacroTargets: { calories: 2000, proteinG: 160, carbsG: 190, fatsG: 58 },
+            todaySlotCount: 5,
+            weeklyInRangePct: 20,
+            weeklyInRangeDays: 1,
+            weeklyTrackedDays: 5,
+            dayTargets: [
+                { label: 'Base', calories: 2000 },
+                { label: 'Sábado', calories: 2400 },
             ],
         }
         const dd = buildClientDossier(input, { generatedAtIso: GEN_ISO })
         expect(dd.nutrition!.mealsTotal).toBe(5)
         expect(dd.nutrition!.hasDaySpecificMeals).toBe(true)
+        expect(dd.nutrition!.dayTargets).toEqual([
+            { label: 'Base', calories: 2000 },
+            { label: 'Sábado', calories: 2400 },
+        ])
+    })
+
+    it('nutrición: sin plan V2 vigente ⇒ sección omitida y métricas neutras (jamás cae a V1)', () => {
+        const input = baseInput()
+        input.nutritionV2 = { hasActivePlan: false, planName: null, dayTargets: [] }
+        const dd = buildClientDossier(input, { generatedAtIso: GEN_ISO })
+        expect(dd.nutrition).toBeNull()
+        expect(dd.metrics.nutritionTodayKcal).toBeNull()
+        expect(dd.metrics.nutritionTodayPct).toBeNull()
+        expect(dd.metrics.nutritionWeeklyInRangePct).toBeNull()
     })
 
     it('check-ins: orden DESC, delta encadenado y notas truncadas a ~200', () => {
@@ -192,12 +209,11 @@ describe('buildClientDossier — empty-states (nunca crashea con null)', () => {
                 },
                 // Todo lo demás ausente / null.
                 activeProgram: null,
-                activeNutritionPlanWithMeals: null,
+                nutritionV2: null,
                 checkIns: null,
                 compliance: null,
                 personalRecords: null,
                 muscleVolumeByGroup: null,
-                nutritionMonthlyAvgPct: null,
                 attentionScore: null,
                 profileLastActivityAt: null,
             },
@@ -219,9 +235,11 @@ describe('buildClientDossier — empty-states (nunca crashea con null)', () => {
         expect(d.metrics.currentWeightKg).toBeNull()
         expect(d.metrics.weightDeltaKg).toBeNull()
         expect(d.metrics.workoutsTarget).toBe(1)
-        expect(d.metrics.mealsTotalToday).toBe(1)
         expect(d.metrics.adherenceWeeklyPct).toBe(0)
-        expect(d.metrics.nutritionAdherence30dPct).toBeNull()
+        // Sin señal V2 la nutrición queda en "sin dato" (nunca 0 %, nunca V1).
+        expect(d.metrics.nutritionTodayKcal).toBeNull()
+        expect(d.metrics.nutritionTodayPct).toBeNull()
+        expect(d.metrics.nutritionWeeklyInRangePct).toBeNull()
     })
 
     it('capea check-ins a los 30 más recientes y reporta el total real', () => {

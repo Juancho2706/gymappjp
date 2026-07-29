@@ -26,7 +26,10 @@ export function getProfileTopAlert(data: {
 
   const c = data.compliance || {}
   const daysSinceWorkout = data.lastWorkoutDate ? diffDays(new Date(data.lastWorkoutDate), new Date()) : null
-  const nutritionCompliance = c.nutritionCompliancePercent ?? 0
+  // Sin dato de nutrición la regla se OMITE (antes `?? 0` disparaba "completó el 0% de sus comidas"
+  // para cualquier caller que no mida nutrición — p.ej. la ficha del coach web, cuya señal es V2 y
+  // se resuelve fuera de `compliance`). Un 0 real sigue alertando: 0 !== null/undefined.
+  const nutritionCompliance = c.nutritionCompliancePercent ?? null
   const planDaysRemaining = c.planDaysRemaining
   const streak = c.currentStreak ?? 0
   const oneRMDelta = data.oneRMDelta ?? null
@@ -37,7 +40,7 @@ export function getProfileTopAlert(data: {
   if (daysSinceWorkout === null || daysSinceWorkout >= 7) {
     return { type: 'danger', message: 'Adherencia crítica: no registra ejercicios en la última semana.' }
   }
-  if (nutritionCompliance < 60) {
+  if (nutritionCompliance != null && nutritionCompliance < 60) {
     return { type: 'warning', message: `Solo completó el ${nutritionCompliance}% de sus comidas (hoy / plan activo).` }
   }
   if (planDaysRemaining !== undefined && planDaysRemaining <= 0) {

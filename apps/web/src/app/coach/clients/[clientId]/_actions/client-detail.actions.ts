@@ -17,7 +17,9 @@ import {
     unmarkCheckInReviewed as unmarkCheckInReviewedService,
 } from '@/services/client/client-detail.service'
 import { assembleClientFichaPanel } from '../_data/ficha-panel.data'
+import { resolveNutritionTabV2 } from '../_data/nutrition-tab-v2.data'
 import { buildClientDossier } from '@/services/client/client-dossier'
+import { applyNutritionAttentionScore } from '@/services/dashboard.service'
 import { revalidatePath } from 'next/cache'
 
 export async function getClientProfileData(clientId: string) {
@@ -37,13 +39,31 @@ export async function getClientFichaPanel(clientId: string) {
  * Dossier serializable del alumno para el export a PDF (tema oscuro, client-side).
  * Llama al service en el CLICK ⇒ URLs firmadas de fotos frescas (TTL 600s) y datos al día.
  * El service ya scopea por el coach autenticado (RLS + assertCoachClientReadAccess).
+ *
+ * La nutrición del PDF sale de la MISMA señal V2 que el tab (`resolveNutritionTabV2`, scoped al
+ * workspace): antes exportaba el plan V1 del alumno (posiblemente convertido u obsoleto) y una
+ * adherencia V1 en 0 % (auditoría §2.2). Sin plan V2 vigente la sección se omite con su nota.
  */
 export async function getClientDossier(clientId: string) {
     if (typeof clientId !== 'string' || clientId.trim() === '') {
         throw new Error('clientId inválido')
     }
-    const data = await getClientProfileDataService(clientId)
-    return buildClientDossier(data, { generatedAtIso: new Date().toISOString() })
+    const [data, nutritionV2] = await Promise.all([
+        getClientProfileDataService(clientId),
+        resolveNutritionTabV2(clientId),
+    ])
+    return buildClientDossier(
+        {
+            ...data,
+            nutritionV2,
+            // Mismo cierre del score que la ficha en pantalla (el service ya no mira nutrición).
+            attentionScore: applyNutritionAttentionScore(
+                data.attentionScore,
+                nutritionV2?.isAtRisk ?? null
+            ),
+        },
+        { generatedAtIso: new Date().toISOString() }
+    )
 }
 
 export async function addPayment(data: {

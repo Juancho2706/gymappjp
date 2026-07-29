@@ -16,8 +16,9 @@ import { NutritionTabV2, NutritionTabV2Unavailable } from './NutritionTabV2'
 import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
 import { ProgressBodyCompositionB6 } from './ProgressBodyCompositionB6'
 import { ProgramTabB7 } from './ProgramTabB7'
-// BillingTabB8 desconectado del chrome de la ficha (rediseño dark-only: 5 pestañas
-// sin Facturación). El archivo se conserva; solo se quita del switch de pestañas.
+// Facturación no es una pestaña de la ficha (rediseño dark-only: 5 pestañas). `BillingTabB8`
+// quedó sin importadores y se borró en la poda 2026-07-29, junto con la lectura muerta de
+// `client_payments` en `client-detail.service.ts`. Se administra desde el dashboard del coach.
 import { ProfileFloatingActions } from './ProfileFloatingActions'
 import { SharePRButton } from '@/components/shared/SharePRButton'
 import {
@@ -84,8 +85,11 @@ export function ClientProfileDashboard({
     const checkInsWithPhotos = (checkIns || []).filter((c: any) => c.front_photo_url || c.side_photo_url || c.back_photo_url).slice(0, 3);
 
     const compliance = data.compliance || {};
-    const nutritionCompliancePercent = compliance.nutritionCompliancePercent || 0;
-    const isNutritionAtRisk = nutritionCompliancePercent < 60;
+    // Riesgo de nutrición: SIEMPRE de la señal V2 (`resolveNutritionTabV2`, la misma que pinta el
+    // tab). `null` = sin plan V2 vigente o lectura fallida ⇒ pill y badge se OMITEN. Antes se
+    // derivaba de `compliance.nutritionCompliancePercent` (V1) ⇒ "en riesgo" permanente + badge "!"
+    // para todo alumno que registra en V2, con la semana verde en el tab de al lado.
+    const isNutritionAtRisk: boolean | null = nutritionV2?.isAtRisk ?? null;
 
     const lastCheckIn = checkIns && checkIns.length > 0 
         ? checkIns.sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] 
@@ -117,7 +121,6 @@ export function ClientProfileDashboard({
 
     const prCount = Array.isArray(data.personalRecords) ? data.personalRecords.length : 0
     const checkInTotal = (checkIns || []).length
-    const mealDetailCount = Array.isArray(data.mealDetails) ? data.mealDetails.length : 0
 
     const abModeProgram = !!data.activeProgram?.ab_mode
     // Variante EFECTIVA: el contador de días del tab "Programa" refleja lo que el alumno ve (cae a la
@@ -146,7 +149,15 @@ export function ClientProfileDashboard({
                   ? data.workoutHistory.length
                   : undefined,
         program: programTrainingDayCount > 0 ? programTrainingDayCount : undefined,
-        nutrition: isNutritionAtRisk ? '!' : mealDetailCount > 0 ? mealDetailCount : undefined,
+        // Badge V2: "!" solo con riesgo REAL; con la semana en verde muestra los días en rango y
+        // sin señal (sin plan V2 vigente) no muestra nada. Antes caía al conteo de `mealDetails`
+        // (comidas del plan V1), que no dice nada del cumplimiento.
+        nutrition:
+            isNutritionAtRisk === true
+                ? '!'
+                : isNutritionAtRisk === false && (nutritionV2?.weeklyInRangeDays ?? 0) > 0
+                  ? nutritionV2!.weeklyInRangeDays
+                  : undefined,
     }
 
     const goToProgressHistory = () => {
@@ -223,6 +234,15 @@ export function ClientProfileDashboard({
                             clientId={client.id}
                             activeProgram={data.activeProgram}
                             isNutritionAtRisk={isNutritionAtRisk}
+                            nutritionWeeklyPct={nutritionV2?.weeklyInRangePct ?? null}
+                            nutritionWeeklyDays={
+                                nutritionV2 != null
+                                    ? {
+                                          inRange: nutritionV2.weeklyInRangeDays,
+                                          tracked: nutritionV2.weeklyTrackedDays,
+                                      }
+                                    : null
+                            }
                             lastCheckIn={lastCheckIn}
                             checkInsWithPhotos={checkInsWithPhotos}
                             currentWeight={currentWeight}

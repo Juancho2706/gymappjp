@@ -56,10 +56,9 @@ const FIXTURE: ClientDossierData = {
         workoutsDone: 3,
         workoutsTarget: 4,
         adherenceWeeklyPct: 75,
-        mealsDoneToday: 3,
-        mealsTotalToday: 4,
-        nutritionTodayPct: 75,
-        nutritionAdherence30dPct: 81,
+        nutritionTodayKcal: { consumed: 1620, target: 1950 },
+        nutritionTodayPct: 83,
+        nutritionWeeklyInRangePct: 67,
         checkInCompliancePct: 88,
         planCurrentWeek: 5,
         planTotalWeeks: 8,
@@ -91,9 +90,17 @@ const FIXTURE: ClientDossierData = {
     nutrition: {
         planName: 'Definición moderada',
         goals: { calories: 1950, protein: 150, carbs: 180, fats: 55 },
-        // Con day-specific el label pasa a "N comidas en el plan (varía por día)".
+        // Plan V2 multi-día: el label pasa a "N franjas hoy (las metas varían por día)" y se
+        // imprime la línea "METAS POR DÍA".
         mealsTotal: 5,
         hasDaySpecificMeals: true,
+        dayTargets: [
+            { label: 'Base', calories: 1950 },
+            { label: 'Sábado', calories: 2300 },
+        ],
+        weeklyInRangePct: 67,
+        weeklyInRangeDays: 4,
+        weeklyTrackedDays: 6,
     },
     checkIns: [
         { dateIso: '2026-06-30T09:00:00.000Z', weightKg: 63.4, weightDeltaKg: -0.7, energyLevel: 8, notes: 'Semana con buena energía, dormí mejor.', photoUrl: null },

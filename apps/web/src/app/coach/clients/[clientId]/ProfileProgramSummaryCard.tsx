@@ -22,7 +22,12 @@ type ComplianceSlice = {
 type ProfileProgramSummaryCardProps = {
     activeProgram: any | null | undefined
     compliance: ComplianceSlice
-    isNutritionAtRisk?: boolean
+    /**
+     * Riesgo de nutrición de la señal V2. `null`/ausente = SIN DATO (sin plan V2 vigente o lectura
+     * fallida) ⇒ la pill NO se pinta: antes se derivaba del 0 % de V1 y esta tarjeta gritaba
+     * "Nutrición en riesgo" en rojo pulsante con la semana verde en el tab de al lado.
+     */
+    isNutritionAtRisk?: boolean | null
     /** Para el deep-link de "Asignar programa" cuando no hay ciclo activo. */
     clientId: string
     /** Deep-link a la Zona A (Progreso) del hogar único de nutrición. La señal de
@@ -35,7 +40,7 @@ type ProfileProgramSummaryCardProps = {
 export function ProfileProgramSummaryCard({
     activeProgram,
     compliance,
-    isNutritionAtRisk = false,
+    isNutritionAtRisk = null,
     clientId,
     onViewNutrition,
     onOpenProgram,
@@ -113,32 +118,35 @@ export function ProfileProgramSummaryCard({
             </div>
 
             {/* Señal de nutrición — SEPARADA del entreno. Deep-link a Zona A; no
-                recomputa adherencia, solo navega al hogar de nutrición. */}
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation()
-                    onViewNutrition?.()
-                }}
-                disabled={!onViewNutrition}
-                className={cn(
-                    'mb-2.5 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[12.5px] font-bold transition-[filter]',
-                    isNutritionAtRisk
-                        ? 'bg-[var(--danger-100)] text-[var(--danger-700)]'
-                        : 'bg-[var(--success-100)] text-[var(--success-700)]',
-                    onViewNutrition ? 'hover:brightness-95' : 'cursor-default'
-                )}
-            >
-                <span
+                recomputa adherencia, solo navega al hogar de nutrición. Sin señal V2 (null) no se
+                pinta: mejor nada que un semáforo inventado. */}
+            {isNutritionAtRisk != null && (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onViewNutrition?.()
+                    }}
+                    disabled={!onViewNutrition}
                     className={cn(
-                        'h-2 w-2 shrink-0 rounded-full',
+                        'mb-2.5 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[12.5px] font-bold transition-[filter]',
                         isNutritionAtRisk
-                            ? 'animate-pulse bg-[var(--danger-500)]'
-                            : 'bg-[var(--success-500)]'
+                            ? 'bg-[var(--danger-100)] text-[var(--danger-700)]'
+                            : 'bg-[var(--success-100)] text-[var(--success-700)]',
+                        onViewNutrition ? 'hover:brightness-95' : 'cursor-default'
                     )}
-                />
-                {isNutritionAtRisk ? 'Nutrición en riesgo' : 'Nutrición en track'}
-            </button>
+                >
+                    <span
+                        className={cn(
+                            'h-2 w-2 shrink-0 rounded-full',
+                            isNutritionAtRisk
+                                ? 'animate-pulse bg-[var(--danger-500)]'
+                                : 'bg-[var(--success-500)]'
+                        )}
+                    />
+                    {isNutritionAtRisk ? 'Nutrición en riesgo' : 'Nutrición en track'}
+                </button>
+            )}
 
             {/* Próximo entreno */}
             {next && (

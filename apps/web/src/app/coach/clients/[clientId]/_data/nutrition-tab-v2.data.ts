@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { cache } from 'react'
+
 import { createClient } from '@/lib/supabase/server'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -31,11 +33,17 @@ import {
  * Alumnos (`_data/ficha-panel.data.ts` → `CoachFichaPanel`). Antes solo la standalone
  * resolvía el view model, así que el panel del master-detail mostraba V1 SIEMPRE.
  *
+ * Rescate 2026-07-29 (auditoría §2.2): el view model dejó de ser "el dato del tab" y pasó a ser
+ * la ÚNICA fuente de la señal de nutrición de toda la ficha (chip del hero, anillo del Resumen,
+ * pill de Programa, badge del tab, `attentionScore` y la sección del PDF; ver `NutritionV2Signal`).
+ * Por eso va envuelto en `React.cache`: la page, el ensamblado del panel y el server action del
+ * dossier piden lo mismo dentro de un request y pagan UNA sola lectura (RPC scoped + addon Pro).
+ *
  * Todo va envuelto en try/catch: un fallo del workspace o de la lectura scoped JAMÁS puede
  * tumbar la ficha completa. `null` ⇒ el tab pinta su estado degradado
- * (`NutritionTabV2Unavailable`) con el CTA a la ficha de nutrición.
+ * (`NutritionTabV2Unavailable`) y el resto de las superficies OMITEN la señal (nunca V1, nunca 0 %).
  */
-export async function resolveNutritionTabV2(
+export const resolveNutritionTabV2 = cache(async function resolveNutritionTabV2(
     clientId: string,
 ): Promise<NutritionTabV2ViewModel | null> {
     try {
@@ -73,4 +81,4 @@ export async function resolveNutritionTabV2(
         })
         return null
     }
-}
+})

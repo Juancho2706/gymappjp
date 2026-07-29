@@ -37,7 +37,12 @@ import {
   fetchItemSubstitutionsForVersion,
   type ItemSubstitutionsLoad,
 } from '../_data/item-substitutions.data'
+import {
+  fetchCoachPrivateNotes,
+  type CoachPrivateNotesLoad,
+} from '../_data/coach-private-notes.data'
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
+import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 import { CoachWeekDayNav } from './CoachWeekDayNav'
 import { PrescribedStructureSection } from './PrescribedStructureSection'
@@ -179,6 +184,13 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   const itemSubstitutions = substitutionsLoad.ok ? substitutionsLoad.rows : []
   const substitutionsLoadFailed = !substitutionsLoad.ok
 
+  // Nota privada del coach (decision owner 2026-07-29 punto 4): se lee solo cuando hay plan
+  // vigente, porque es ahi donde la card se monta (zona de notas, bajo la nota visible al
+  // alumno). Sin plan la ficha es un empty-state de "crea un plan" y no hay nada que anotar.
+  const privateNotesLoad: CoachPrivateNotesLoad = hasPlan
+    ? await fetchCoachPrivateNotes(clientId)
+    : { ok: true, notes: [] }
+
   return (
     // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
     // "Asignar a otros alumnos" se demueve a accion secundaria junto a los badges del plan.
@@ -214,9 +226,12 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       // `nutrition_plan_private_notes_v2`, una tabla que NINGUN camino de escritura puebla
       // (no hay input de nota privada en el builder, en RN ni en quick-edit), asi que el
       // panel mostraba el fallback "Sin nota privada" de forma permanente para todo coach.
-      // Las notas privadas del coach por alumno viven hoy en la ficha del alumno
-      // (`nutrition_private_notes`, CoachPrivateNotesPanel). Reponer una nota clinica POR
-      // VERSION exige SPEC + UI de escritura + copy-forward al republicar (opcion B).
+      // Reponer una nota clinica POR VERSION exige SPEC + UI de escritura + copy-forward al
+      // republicar (opcion B).
+      //
+      // La nota privada POR ALUMNO (`nutrition_private_notes`) si vive en esta ficha: card
+      // colapsable `CoachPrivateNotesPanel` en la zona de notas, mas abajo — repuesta por
+      // decision del owner 2026-07-29 (punto 4) cuando la poda del tab V1 la dejo inalcanzable.
     >
       {published ? (
         <div className="mb-5 flex items-center gap-2 rounded-control border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -359,6 +374,12 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               </p>
             </NutritionCard>
           </div>
+
+          {/* Zona de notas: arriba las indicaciones VISIBLES para el alumno (card "Plan vigente");
+              aca la nota PRIVADA del coach sobre este alumno (`nutrition_private_notes`, sin
+              policy de lectura para el alumno). Colapsada por defecto: el encabezado adelanta
+              fecha y primera linea, y solo se expande para escribir. */}
+          <CoachPrivateNotesPanel clientId={clientId} load={privateNotesLoad} />
 
           {/* SPEC 12 — "Tocas el dia, no la variante": strip Lu-Do del PLAN (kcal por celda,
               punto lleno = dia propio, hueco = hereda el base) + UNA card del dia elegido. Muere

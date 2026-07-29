@@ -5,8 +5,11 @@ import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientProfileDashboard } from './ClientProfileDashboard'
 import { ClientProfileHero } from './ClientProfileHero'
-import { createClient } from '@/lib/supabase/server'
-import { hasModule } from '@/services/entitlements.service'
+import {
+    getEnabledModulesForRender,
+    hasModuleFromMap,
+} from '@/services/entitlements-render-cache'
+import { applyNutritionAttentionScore } from '@/services/dashboard.service'
 import { resolveNutritionTabV2 } from './_data/nutrition-tab-v2.data'
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
@@ -44,24 +47,24 @@ async function ProfileContent({ clientId }: { clientId: string }) {
     // Entitlements de módulos movida por el contexto del RECURSO (team del pool manda; si
     // no, el coach). Enterprise (org_id) fuera en v1. Espejo del gate server-side; se
     // pasan al hero como botones-ícono (gateados), reemplazando la fila de links etiquetados.
-    const moduleSupabase = await createClient()
+    // Poda 2026-07-29: UNA lectura memoizada del mapa en vez de 3 `hasModule` = 3 SELECT
+    // idénticos a `coaches`/`teams` por render.
     const isOrgScoped = !!nutritionClient.org_id
-    const moduleCtx = nutritionClient.team_id
-        ? { teamId: nutritionClient.team_id }
-        : { coachId: nutritionClient.coach_id ?? '' }
 
     // Módulos (cardio/movimiento/composición) para el hero + el resumen del tab Nutrición
     // (SIEMPRE V2 desde la poda 2026-07-29; ver `_data/nutrition-tab-v2.data.ts`).
-    const [cardioModule, movementModule, bodycompModule, nutritionTabV2View] = await Promise.all([
-        isOrgScoped ? Promise.resolve(false) : hasModule(moduleSupabase, 'cardio', moduleCtx),
+    const [enabledModules, nutritionTabV2View] = await Promise.all([
         isOrgScoped
-            ? Promise.resolve(false)
-            : hasModule(moduleSupabase, 'movement_assessment', moduleCtx),
-        isOrgScoped
-            ? Promise.resolve(false)
-            : hasModule(moduleSupabase, 'body_composition', moduleCtx),
+            ? Promise.resolve({})
+            : getEnabledModulesForRender(
+                  nutritionClient.team_id ?? null,
+                  nutritionClient.coach_id ?? null
+              ),
         resolveNutritionTabV2(clientId),
     ])
+    const cardioModule = hasModuleFromMap(enabledModules, 'cardio')
+    const movementModule = hasModuleFromMap(enabledModules, 'movement_assessment')
+    const bodycompModule = hasModuleFromMap(enabledModules, 'body_composition')
 
     const sortedCheckIns = [...(checkIns || [])].sort(
         (a, b) =>
@@ -103,7 +106,13 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 coachSlug={heroCoachSlug}
                 compliance={compliance}
                 profileLastActivityAt={data.profileLastActivityAt}
-                attentionScore={data.attentionScore}
+                // Score final = base del service (que ya NO mira nutrición) + la señal V2 de esta
+                // misma carga. Sin plan V2 vigente no penaliza (rescate §2.2).
+                attentionScore={applyNutritionAttentionScore(
+                    data.attentionScore,
+                    nutritionTabV2View?.isAtRisk ?? null
+                )}
+                nutritionV2={nutritionTabV2View}
                 currentWeightKg={typeof currentWeightKg === 'number' ? currentWeightKg : 0}
                 weightDeltaKg={weightDeltaKg}
                 nutritionPlansLength={nutritionPlans.length}

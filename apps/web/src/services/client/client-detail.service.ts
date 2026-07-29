@@ -9,16 +9,11 @@ import { format, parseISO, subDays } from 'date-fns'
 import {
     getTodayInSantiago,
     getSantiagoUtcBoundsForDay,
-    getNutritionDayOfWeekFromIsoYmdInSantiago,
-    nutritionMealAppliesOnIsoYmdInSantiago,
 } from '@/lib/date-utils'
 import {
     calculateConsumedMacrosWithCompletionFallback,
-    computeNutritionAdherence,
     normalizeMealForMacros,
     portionPctMapFromMealLogs,
-    type AdherenceMeal,
-    type MealLogRow,
     type NutritionMealMacroSource,
 } from '@/lib/nutrition-utils'
 import { calculateAttentionScore } from '@/services/dashboard.service'
@@ -145,12 +140,11 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .gte('assigned_date', workoutHistoryFromDate)
         .order('assigned_date', { ascending: false })
 
-    // Fetch real payment history (table not yet in generated types)
-    const paymentsPromise = (supabase as any)
-        .from('client_payments')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('payment_date', { ascending: false })
+    // NOTA (poda 2026-07-29): acá vivía la lectura de `client_payments` -> `data.payments`.
+    // Su unico consumidor era `BillingTabB8`, desconectado del chrome de la ficha y borrado.
+    // El dossier PDF no declara `payments`. Se pagaba en CADA carga de ficha y de panel.
+    // La facturacion se administra desde el dashboard del coach (QuickAddPaymentModal) y
+    // `api/mobile/coach/payments`, que leen/escriben la tabla por su propia via.
 
     const { iso: todayIso } = getTodayInSantiago()
     const nutritionLogDateFrom = format(subDays(parseISO(`${todayIso}T12:00:00`), 40), 'yyyy-MM-dd')
@@ -185,16 +179,12 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .eq('client_id', clientId)
         .gte('date_completed', fourteenDaysAgoStr)
 
-    // Fetch today's meal completion logs for nutrition compliance
-    const mealCompletionsPromise = supabase
-        .from('daily_nutrition_logs')
-        .select(`
-            log_date,
-            nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )
-        `)
-        .eq('client_id', clientId)
-        .eq('log_date', todayIso)
-        .maybeSingle()
+    // NOTA (rescate 2026-07-29): acá vivía la lectura del `daily_nutrition_logs` de HOY, que
+    // alimentaba el "Nutrición Hoy" V1 (`nutritionCompliancePercent`) y `todayConsumedMacros` /
+    // `hasTodayNutritionLog`. La señal de nutrición de la ficha es V2 y esos dos campos derivados
+    // quedaron sin ningún lector cuando se retiró el tab V1 (`NutritionTabB5`) ⇒ −1 round-trip en
+    // CADA carga de ficha y cada selección del rail. El "hoy" de nutrición se lee del read model V2
+    // (`detail.today`, la única fecha que `get_nutrition_today_v2` puede materializar).
 
     const streakPromise = supabase
         .rpc('get_client_current_streak' as any, { p_client_id: clientId })
@@ -225,9 +215,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         { data: nutritionLogs },
         { data: checkIns },
         { data: workoutLogs },
-        { data: payments },
         { data: workoutSessions },
-        { data: todayNutritionLog },
         { data: currentStreak },
         { data: activeNutritionPlanFull }
     ] = await Promise.all([
@@ -237,9 +225,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         nutritionLogsPromise,
         checkInsPromise,
         workoutHistoryPromise,
-        paymentsPromise,
         workoutSessionsPromise,
-        mealCompletionsPromise,
         streakPromise,
         activeNutritionPlanPromise
     ])
@@ -261,11 +247,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         })
     }
 
-    // ─── B0: PRs, volumen por grupo (30d), detalle de comidas ─────────────
-    const activeNutritionPlanIds = (nutritionPlans || [])
-        .filter((p: { is_active?: boolean }) => p.is_active)
-        .map((p: { id: string }) => p.id)
-
+    // ─── B0: PRs + volumen por grupo (30d) ────────────────────────────────
     // PRs (peso máx por ejercicio) y volumen por grupo (30d): Postgres agrega.
     // Antes: doble fetch de workout_logs (hasta 4000 filas para PRs + ventana 30d
     // para volumen) + reducción en JS. Ahora: 2 RPCs que ya devuelven lo agregado.
@@ -274,25 +256,11 @@ export const getClientProfileData = cache(async (clientId: string) => {
         supabase.rpc('get_client_muscle_volume', { p_client_id: clientId, p_days_back: 30 }),
     ])
 
-    let mealDetails: unknown[] = []
-    if (activeNutritionPlanIds.length > 0) {
-        const { data: meals } = await supabase
-            .from('nutrition_meals')
-            .select(
-                `
-                *,
-                food_items (
-                    quantity,
-                    unit,
-                    swap_options,
-                    foods ( name, calories, protein_g, carbs_g, fats_g )
-                )
-            `
-            )
-            .in('plan_id', activeNutritionPlanIds)
-            .order('order_index', { ascending: true })
-        mealDetails = meals || []
-    }
+    // NOTA (rescate 2026-07-29): acá vivía `mealDetails` (`nutrition_meals` + `food_items` + `foods`
+    // de los planes V1 activos) — una query EN SERIE, después de la barrera de PRs/volumen. Sus dos
+    // consumidores eran el tab V1 borrado y el badge del tab Nutrición (que contaba comidas del plan
+    // V1, un número que no dice nada del cumplimiento y hoy sale de la señal V2). Sin lectores:
+    // −1 round-trip y −1 barrera secuencial por carga de ficha.
 
     const personalRecords = mapExercisePrsRpc(prsRes.data ?? null)
     const muscleVolumeByGroup = mapMuscleVolumeRpc(volRes.data ?? null)
@@ -321,37 +289,19 @@ export const getClientProfileData = cache(async (clientId: string) => {
     // Si no hay programa o no tiene bloques, evitamos dividir por 0
     if (weeklyWorkoutTarget === 0) weeklyWorkoutTarget = 1; 
 
-    // 2. Calcular Nutricion Hoy usando el motor canonico computeNutritionAdherence
-    //    (rango de UN dia = todayIso). El motor reemplaza el computo inline de
-    //    Formula A (mealsDone / applicableMeals filtrado por dia de semana).
-    //    Solo necesitamos el conteo de compliance del dia, no macros, asi que el
-    //    target vivo se pasa en cero (los macros del dia se calculan aparte mas
-    //    abajo via todayConsumedMacros).
-    const adherenceMealsToday: AdherenceMeal[] = (activeNutritionPlanFull?.nutrition_meals ?? []).map(
-        (m: NutritionMealMacroSource) => ({
-            ...normalizeMealForMacros(m),
-            day_of_week: m.day_of_week ?? null,
-        })
-    )
-    const todayMealLogs = ((todayNutritionLog as any)?.nutrition_meal_logs || []) as MealLogRow[]
-    const todayLogsByDate = new Map<string, MealLogRow[]>([[todayIso, todayMealLogs]])
-    const { perDay: adherencePerDayToday } = computeNutritionAdherence({
-        meals: adherenceMealsToday,
-        logsByDate: todayLogsByDate,
-        liveTarget: { calories: 0, protein: 0, carbs: 0, fats: 0 },
-        range: { startIso: todayIso, endIso: todayIso },
-        dayOfWeekResolver: getNutritionDayOfWeekFromIsoYmdInSantiago,
-        mealAppliesOn: nutritionMealAppliesOnIsoYmdInSantiago,
-    })
-    const todayAdherence = adherencePerDayToday[0]
-    const mealsDoneToday = todayAdherence?.mealsDone ?? 0
-    // todayMealsTotal: comidas aplicables hoy, con piso de 1 para no dividir por 0
-    // (misma invariante que el computo inline anterior).
-    let todayMealsTotal = todayAdherence?.applicableMeals ?? 0
-    if (todayMealsTotal === 0) todayMealsTotal = 1
-
-    // % de cumplimiento de hoy (0 a 100), redondeado.
-    const nutritionCompliancePercent = Math.min(100, Math.round((mealsDoneToday / todayMealsTotal) * 100))
+    // 2. NUTRICIÓN: este service YA NO produce la señal de nutrición de la ficha.
+    //
+    //    Acá vivía "Nutrición Hoy" (mealsDone / applicableMeals sobre `daily_nutrition_logs` +
+    //    `nutrition_meal_logs`) y de ahí salían `nutritionCompliancePercent`, `todayMealsDone/Total`,
+    //    `nutritionWeeklyAvgPct` y el término de nutrición del `attentionScore`. Todo V1, mientras el
+    //    tab Nutrición y la ficha dedicada leen V2 (`get_nutrition_client_detail_scoped_v2`) ⇒ un
+    //    alumno que registra en V2 veía "0/1 comidas", anillo 0 %, "Nutrición en riesgo" pulsante,
+    //    badge "!" y un PDF con el plan V1, con la semana verde al lado
+    //    (auditoría `audit3-perfil-cliente.md` §2.2).
+    //
+    //    Fuente única ahora: `_data/nutrition-tab-v2.data.ts` → `NutritionV2Signal`
+    //    (`nutritionTabV2.logic.ts`), que la page/el panel/el dossier resuelven una vez y pasan por
+    //    props. Sin plan V2 vigente la señal se OMITE; nunca se cae a V1.
 
     // 3. Progreso del Plan de Ejercicios
     let currentWeek = 0;
@@ -416,31 +366,12 @@ export const getClientProfileData = cache(async (clientId: string) => {
         checkIns || []
     )
 
-    const avgMealCompliance = (logs: any[]) => {
-        if (!logs.length) return null
-        let sum = 0
-        for (const l of logs) {
-            const ml = l.nutrition_meal_logs || []
-            const t = ml.length
-            const d = ml.filter((x: { is_completed?: boolean }) => x.is_completed).length
-            sum += t ? (d / t) * 100 : 0
-        }
-        return Math.round(sum / logs.length)
-    }
+    // NOTA (rescate 2026-07-29): acá vivían `nutritionWeeklyAvgPct` / `nutritionPrevWeeklyAvgPct`
+    // (promedio de comidas marcadas por día sobre `daily_nutrition_logs`), la fuente del anillo
+    // "Nutrición" del Resumen. Eran V1 ⇒ 0 % para todo alumno que registra en V2. El anillo lee
+    // ahora `NutritionV2Signal.weeklyInRangePct` (días de la semana en rango / días transcurridos
+    // que cubre el plan), y sin plan V2 vigente no pinta número.
     const nutritionLogsArr = nutritionLogs || []
-    const nutritionWeeklyAvgPct =
-        avgMealCompliance(
-            nutritionLogsArr.filter((l: { log_date?: string }) => l.log_date && l.log_date >= startDateStr)
-        ) ?? 0
-    const nutritionPrevWeeklyAvgPct =
-        avgMealCompliance(
-            nutritionLogsArr.filter(
-                (l: { log_date?: string }) =>
-                    l.log_date &&
-                    l.log_date >= fourteenDaysAgoStr &&
-                    l.log_date < startDateStr
-            )
-        ) ?? 0
 
     const planId = (activeNutritionPlanFull as { id?: string } | null)?.id
     const planMealsRaw = (activeNutritionPlanFull as { nutrition_meals?: unknown[] } | null)?.nutrition_meals
@@ -508,36 +439,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
             })),
         }))
 
-    let todayConsumedMacros = { calories: 0, protein: 0, carbs: 0, fats: 0 }
-    let hasTodayNutritionLog = false
-    const tn = todayNutritionLog as {
-        log_date?: string
-        nutrition_meal_logs?: {
-            is_completed?: boolean
-            meal_id?: string
-            consumed_quantity?: number | null
-        }[]
-    } | null
-    if (tn?.log_date === todayIso && mealsForMacros.length) {
-        hasTodayNutritionLog = true
-        const completed = new Set<string>()
-        for (const ml of tn.nutrition_meal_logs || []) {
-            if (ml.is_completed && ml.meal_id) completed.add(ml.meal_id)
-        }
-        const todayPortionMap = portionPctMapFromMealLogs(
-            (tn.nutrition_meal_logs || []) as {
-                meal_id: string
-                is_completed: boolean
-                consumed_quantity?: number | null
-            }[]
-        )
-        todayConsumedMacros = calculateConsumedMacrosWithCompletionFallback(mealsForMacros, completed, {
-            calories: Number((activeNutritionPlanFull as { daily_calories?: number } | null)?.daily_calories ?? 0),
-            protein: Number((activeNutritionPlanFull as { protein_g?: number } | null)?.protein_g ?? 0),
-            carbs: Number((activeNutritionPlanFull as { carbs_g?: number } | null)?.carbs_g ?? 0),
-            fats: Number((activeNutritionPlanFull as { fats_g?: number } | null)?.fats_g ?? 0),
-        }, todayPortionMap)
-    }
+    // NOTA (rescate 2026-07-29): `todayConsumedMacros` / `hasTodayNutritionLog` (macros consumidos
+    // HOY según las comidas marcadas del plan V1) se retiraron junto con su query: cero lectores
+    // desde que el tab V1 salió del chrome. Los macros de hoy los sirve el read model V2.
 
     const dateFrom30 = format(subDays(parseISO(`${todayIso}T12:00:00`), 29), 'yyyy-MM-dd')
     const logsLast30 = nutritionLogsArr.filter(
@@ -630,24 +534,28 @@ export const getClientProfileData = cache(async (clientId: string) => {
         },
         null
     )
+    // `nutritionCompliance: null` = SIN DATO acá a propósito: la señal de nutrición de la ficha es
+    // V2 y se resuelve fuera del service. El término se aplica en el borde que ya tiene la señal
+    // (`applyNutritionAttentionScore` en page.tsx / ficha-panel / dossier). Antes entraba el 0 % de
+    // V1 y todo alumno V2 arrastraba +20 puntos fantasma.
     const { score: attentionScore } = calculateAttentionScore({
         lastCheckinDate: lastCheckInRow?.created_at ?? null,
         lastWorkoutDate: lastWorkoutDateFromHistory,
         hasActiveWorkoutProgram: activeProgram != null,
-        nutritionCompliance: nutritionCompliancePercent,
+        nutritionCompliance: null,
         planDaysRemaining: daysRemaining,
         oneRMDelta: null,
     })
 
+    // `compliance` ya NO declara campos de nutrición: los cinco que vivían acá
+    // (`nutritionCompliancePercent`, `nutritionWeeklyAvgPct`, `nutritionPrevWeeklyAvgPct`,
+    // `todayMealsDone`, `todayMealsTotal`) eran V1 y alimentaban 4 superficies que mentían.
+    // Quitarlos del tipo es intencional: cualquier consumidor nuevo que los pida rompe el
+    // typecheck en vez de mostrar 0 % en silencio.
     const compliance = {
         workoutsThisWeek: completedWorkoutsCount,
         workoutsPrevWeek: completedWorkoutsPrevWeek,
         workoutsTarget: weeklyWorkoutTarget,
-        nutritionCompliancePercent: nutritionCompliancePercent,
-        nutritionWeeklyAvgPct,
-        nutritionPrevWeeklyAvgPct,
-        todayMealsDone: mealsDoneToday,
-        todayMealsTotal: todayMealsTotal,
         currentStreak: currentStreak || 0,
         planCurrentWeek: currentWeek,
         planTotalWeeks: totalWeeks,
@@ -735,22 +643,27 @@ export const getClientProfileData = cache(async (clientId: string) => {
         nutritionLogsEnriched,
         activeNutritionPlanWithMeals: activeNutritionPlanFull,
         nutritionAdherence30d,
-        todayConsumedMacros,
-        hasTodayNutritionLog,
         nutritionStreakDays,
         nutritionMonthlyAvgPct,
         nutritionAdherence30dAllDays,
         todayIso,
         // P2: sign check-in photo paths (service-role; coaches have no storage SELECT policy).
-        checkIns: await resolveCheckinPhotoUrls(createServiceRoleClient(), checkIns || []),
+        // Poda 2026-07-29: se firma SOLO lo que la ficha pinta. Antes se firmaban los 3 campos
+        // de foto de TODAS las filas (un alumno con 2 años de check-ins semanales => ~300 URLs
+        // por carga). Superficies reales: `front||side||back` de los 3 check-ins con foto mas
+        // recientes (snapshot del Resumen + "Evolucion visual") y `front_photo_url` en el resto
+        // (comparativa de fotos, historial de check-ins, detalle del punto de la curva, dossier
+        // PDF). La curva de peso necesita las FILAS, no las URLs -> la query sigue sin limite.
+        checkIns: await resolveCheckinPhotoUrls(createServiceRoleClient(), checkIns || [], {
+            fullPhotoRows: 3,
+            tailFields: ['front_photo_url'],
+        }),
         workoutHistory: workoutLogs || [],
-        payments: payments || [],
         compliance,
         personalRecords,
         muscleVolumeByGroup,
         programEffectiveWeekVariant,
         programAbMode,
-        mealDetails,
         attentionScore,
         profileLastActivityAt,
         clientFavoriteFoods,

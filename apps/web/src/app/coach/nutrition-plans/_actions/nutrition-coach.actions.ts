@@ -21,10 +21,6 @@ import {
 } from '@eva/schemas/nutrition-exchanges'
 import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { fetchClientPlanSnapshotPayload } from '@/lib/nutrition-plan-snapshot'
-import {
-  nutritionPlanCycleUpsertSchema,
-  type NutritionPlanCycleUpsertInput,
-} from '@/lib/nutrition-plan-cycle-schema'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { reconcileMealsById } from '@/services/nutrition-exchanges/meal-reconcile'
 
@@ -1169,135 +1165,15 @@ export async function duplicatePlanToClient(
   }
 }
 
-export async function restoreClientNutritionPlanFromHistory(
-  coachId: string,
-  clientId: string,
-  historyId: string
-): Promise<{ success: boolean; error?: string }> {
-  const scope = await requireCoachNutritionScope(coachId)
-  if (!scope.ok) return { success: false, error: scope.error }
-  const { supabase, orgId } = scope
+// Poda 2026-07-29: acá vivía `restoreClientNutritionPlanFromHistory` (restaurar un plan V1
+// desde `nutrition_plan_history`). Cero llamadores tras retirar `NutritionCycleHistorySection`
+// del tab de nutrición del perfil; como export de un archivo `'use server'` era un endpoint
+// POST alcanzable sin ninguna UI que lo invoque, así que se retira la superficie.
 
-  let clientQuery = supabase.from('clients').select('id').eq('id', clientId).eq('coach_id', coachId)
-  clientQuery = applyOrgScope(clientQuery, orgId)
-  const { data: client } = await clientQuery.maybeSingle()
-  if (!client) return { success: false, error: 'Cliente no pertenece al workspace activo.' }
-
-  const { data: row, error: fetchErr } = await supabase
-    .from('nutrition_plan_history')
-    .select('nutrition_plan_id, snapshot, client_id')
-    .eq('id', historyId)
-    .eq('coach_id', coachId)
-    .eq('client_id', clientId)
-    .maybeSingle()
-
-  if (fetchErr || !row) return { success: false, error: 'Versión no encontrada.' }
-
-  let planQuery = supabase
-    .from('nutrition_plans')
-    .select('id')
-    .eq('id', row.nutrition_plan_id)
-    .eq('coach_id', coachId)
-    .eq('client_id', clientId)
-  planQuery = applyOrgScope(planQuery, orgId)
-  const { data: plan } = await planQuery.maybeSingle()
-  if (!plan) return { success: false, error: 'Plan no pertenece al workspace activo.' }
-
-  const parsed = ClientPlanSchema.safeParse(row.snapshot)
-  if (!parsed.success) {
-    return { success: false, error: 'Snapshot inválido o incompatible con el validador actual.' }
-  }
-
-  const d = parsed.data
-  return upsertClientNutritionPlanJson(coachId, clientId, {
-    id: row.nutrition_plan_id,
-    name: d.name,
-    daily_calories: d.daily_calories,
-    protein_g: d.protein_g,
-    carbs_g: d.carbs_g,
-    fats_g: d.fats_g,
-    instructions: d.instructions ?? null,
-    meals: d.meals.map((m) => ({
-      name: m.name,
-      order_index: m.order_index,
-      day_of_week: m.day_of_week ?? null,
-      foodItems: m.foodItems.map((fi) => ({
-        food_id: fi.food_id,
-        quantity: fi.quantity,
-        unit: fi.unit,
-        swap_options: fi.swap_options,
-      })),
-    })),
-  })
-}
-
-export async function upsertNutritionPlanCycle(
-  coachId: string,
-  clientId: string,
-  data: NutritionPlanCycleUpsertInput
-): Promise<{ success: boolean; error?: string; cycleId?: string }> {
-  const scope = await requireCoachNutritionScope(coachId)
-  if (!scope.ok) return { success: false, error: scope.error }
-  const { supabase, orgId } = scope
-
-  const parsed = nutritionPlanCycleUpsertSchema.safeParse(data)
-  if (!parsed.success) {
-    return { success: false, error: zodErrorMessage(parsed.error.issues) }
-  }
-
-  const { id, name, start_date, blocks, is_active } = parsed.data
-  const now = new Date().toISOString()
-
-  try {
-    let clientQuery = supabase.from('clients').select('id').eq('id', clientId).eq('coach_id', coachId)
-    clientQuery = applyOrgScope(clientQuery, orgId)
-    const { data: client } = await clientQuery.maybeSingle()
-    if (!client) return { success: false, error: 'Cliente no pertenece al workspace activo.' }
-
-    if (is_active) {
-      await supabase
-        .from('nutrition_plan_cycles')
-        .update({ is_active: false, updated_at: now })
-        .eq('client_id', clientId)
-        .eq('coach_id', coachId)
-    }
-
-    const base = {
-      coach_id: coachId,
-      client_id: clientId,
-      name,
-      start_date,
-      blocks: JSON.parse(JSON.stringify(blocks)) as Json,
-      is_active,
-      updated_at: now,
-    }
-
-    if (id) {
-      const { data: updated, error } = await supabase
-        .from('nutrition_plan_cycles')
-        .update(base)
-        .eq('id', id)
-        .eq('coach_id', coachId)
-        .eq('client_id', clientId)
-        .select('id')
-        .single()
-      if (error) throw error
-      await revalidateClientNutritionPaths(coachId, clientId)
-      revalidatePath('/coach/nutrition-plans')
-      return { success: true, cycleId: updated.id }
-    }
-
-    const { data: inserted, error } = await supabase.from('nutrition_plan_cycles').insert(base).select('id').single()
-    if (error) throw error
-    await revalidateClientNutritionPaths(coachId, clientId)
-    revalidatePath('/coach/nutrition-plans')
-    return { success: true, cycleId: inserted.id }
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Error al guardar el ciclo.'
-    console.error('[upsertNutritionPlanCycle]', e)
-    return { success: false, error: msg }
-  }
-}
+// Poda 2026-07-29: acá vivía `upsertNutritionPlanCycle` (alta/edición de ciclos V1 en
+// `nutrition_plan_cycles`). Cero llamadores tras retirar los ciclos del tab de nutrición del
+// perfil; mismo criterio que arriba: export de `'use server'` = endpoint POST alcanzable sin UI.
+// La lectura automática de ciclos (`lib/nutrition-cycle-automation.ts`) NO se toca.
 
 // ─── Preferencias de alimentos del cliente ────────────────────────────────────
 
