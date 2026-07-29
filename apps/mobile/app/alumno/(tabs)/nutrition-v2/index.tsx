@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   History,
   Info,
@@ -62,7 +63,6 @@ import type {
 } from '../../../../lib/nutrition-v2-portions'
 import {
   NUTRITION_MOTION,
-  BULK_MARK_COMPLETE_LABEL,
   type BulkMarkSlotState,
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
   NUTRITION_STRATEGIES,
@@ -75,7 +75,6 @@ import {
   bulkMarkCtaLabel,
   bulkMarkSlotState,
   consumedPrescriptionItemIds,
-  describeLegacyHistoryDay,
   energyGoalReached,
   firstNameFromFullName,
   formatNutritionAmount,
@@ -92,7 +91,9 @@ import {
   type NutritionMealSlotRead,
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
+  type NutritionWeekCell,
   type NutritionWeekTargetsLike,
+  type NutritionWeekVariantLike,
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
@@ -153,7 +154,6 @@ import {
 import { useTheme } from '../../../../context/ThemeContext'
 import {
   canLoadMoreHistory,
-  historyDayIsLegacy,
   mergeHistoryPages,
   nextHistoryCursor,
 } from '../../../../lib/nutrition-v2-history'
@@ -196,10 +196,13 @@ const EMPTY_DAY_VARIANTS: PlanVariant[] = []
 function TodayTab({
   selectedDay,
   onSelectDay,
+  focusSlotCode,
 }: {
   /** Fecha `YYYY-MM-DD` que se está mirando; `null` = hoy. */
   selectedDay: string | null
   onSelectDay: (isoDate: string | null) => void
+  /** Franja a resaltar al entrar (deep-link desde la card de Nutrición del Home). */
+  focusSlotCode?: string | null
 }) {
   const router = useRouter()
   // 4A-01: bajo la cápsula de (tabs) el scroll reserva clearance en el
@@ -1399,34 +1402,29 @@ function TodayTab({
     (slot) => slot.prescriptionItems.length > 0 || (slot.exchangeTargets?.length ?? 0) > 0,
   )
 
-  // 4A-02: "Consumido hoy" agregado (web TodayExperience.tsx:274-323): TODOS los registros
-  // activos del día (franjas + sin franja) ordenados por hora (consumedEntries,
-  // nutrition-today.logic.ts:55-59) + las filas optimistas de la cola offline nativa al final.
-  // `queuedKey` habilita el "Retirar" de una fila que todavía está en la cola: sin él, el alumno
-  // veía el registro offline y no tenía ninguna acción para sacarlo (NUT-003 / NUT-019).
-  const consumedRows: Array<{
+  // SPEC nutrition-ui-poda #1: "Fuera del plan" reemplaza a "Consumido hoy". Antes listaba TODOS
+  // los registros del día, incluidos los prescritos — que ya se ven 300px más arriba en "Tu plan
+  // de hoy" con su chip "Registrado" (eco x2 confirmado en auditoría, hallazgo H4). Ahora solo
+  // entran los registros SIN prescriptionItemId (alimento libre). Las porciones marcadas
+  // (`exchangeGroupCode` no nulo) tampoco entran: ya viven colapsadas por franja en
+  // `PortionSlotSection`/`PortionDayCoverageRow` — una fila por marca sería el mismo eco de
+  // porciones que documentó la auditoría (4 marcas de "Cereales" = 4 filas idénticas).
+  const outOfPlanRows: Array<{
     row: NutritionFoodRowModel
     entry: NutritionIntakeReadItem | null
     queuedKey: string | null
   }> = [
     ...[...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]
-      .filter((entry) => !hiddenSet.has(entry.id))
+      .filter((entry) => !hiddenSet.has(entry.id) && entry.prescriptionItemId === null && !entry.exchangeGroupCode)
       .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
       .map((entry) => ({ row: intakeToRow(entry), entry, queuedKey: null })),
+    // Filas encoladas: siempre vienen del flujo "Registrar alimento" (libre), nunca de marcar
+    // porciones ni de "Lo comí" — esas dos rutas usan otros overlays (`portions`, `queuedItemIds`).
     ...Object.values(overlay.addedBySlot)
       .flat()
       .map((row) => ({ row, entry: null, queuedKey: row.queuedKey ?? null })),
     ...overlay.addedUnassigned.map((row) => ({ row, entry: null, queuedKey: row.queuedKey ?? null })),
   ]
-
-  // Chip de estado del día (paridad con el fix web de la ola 0, TodayExperience.tsx): NO puede
-  // colgar de `model.snapshotId`. `get_nutrition_today_v2` llama `ensure_day_snapshot` en CADA
-  // lectura, así que el id existe desde el primer render del día y el chip verde se encendía a las
-  // 8 AM con el anillo en 0 kcal. Cuelga de registros REALES — la misma vista efectiva que pinta
-  // "Consumido hoy" (servidor sin ocultos + filas optimistas/encoladas), así que un registro hecho
-  // offline también cuenta: para el alumno YA registró. Sin registros no se pinta nada (un "todavía
-  // no registras" solo repetiría el estado vacío de abajo).
-  const hasLoggedToday = consumedRows.length > 0
 
   // Sheet de equivalencias: datos derivados de la franja abierta (solo cuando está
   // abierto; sin hooks — el early-return de arriba lo permite).
@@ -1506,19 +1504,11 @@ function TodayTab({
           />
         ) : null}
 
-        {model.plan || hasLoggedToday ? (
-          // Fila de badges + chip de estado del día (web TodayExperience.tsx:185-200).
-          <View className="flex-row flex-wrap items-center gap-2">
-            {model.plan ? <StrategyBadge strategy={model.plan.strategy} /> : null}
-            {hasLoggedToday ? (
-              // Chip esmeralda del canvas web → tono success del kit RN (contrato white-label).
-              <View className="flex-row items-center gap-1.5 rounded-pill border border-success-500/30 bg-success-500/10 px-2.5 py-1">
-                <CheckCircle2 color={theme.success} size={14} />
-                <Text className="text-xs font-semibold text-success-700">Ya registraste hoy</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+        {/* SPEC nutrition-ui-poda #1/#3: fuera StrategyBadge + chip "Ya registraste hoy" (el
+            anillo, la lista y el punto verde del selector ya lo dicen). La nota visible del
+            coach SUBE al Hoy (antes vivía enterrada en el tab Plan) — `livePlan` ya está en
+            memoria, cero fetch extra. */}
+        {livePlan?.visibleNotes ? <CoachNoteCard note={livePlan.visibleNotes} /> : null}
 
         <AuraHero
           greetingName={firstNameFromFullName(clientName)}
@@ -1597,26 +1587,29 @@ function TodayTab({
                 portionVoids={portions.voidsBySlot[slot.code] ?? EMPTY_PORTION_VOIDS}
                 onMarkPortion={portions.mark}
                 onOpenEquivalences={onOpenEquivalences}
+                highlighted={slot.code === focusSlotCode}
               />
             ))}
           </View>
         ) : null}
 
-        {/* "Consumido hoy" agregado (web TodayExperience.tsx:274-323). */}
-        <View accessibilityLabel="Consumido hoy" className="gap-3">
+        {/* SPEC nutrition-ui-poda #1: "Fuera del plan" reemplaza a "Consumido hoy" — solo lo que
+            NO es prescrito (los registros del plan ya se ven arriba, bajo su franja, con su chip
+            "Registrado"). */}
+        <View accessibilityLabel="Fuera del plan" className="gap-3">
           <View className="flex-row items-center gap-2">
             <Utensils color={theme.primary} size={16} />
-            <Text className="font-display text-lg font-semibold text-strong">Consumido hoy</Text>
+            <Text className="font-display text-lg font-semibold text-strong">Fuera del plan</Text>
           </View>
-          {consumedRows.length === 0 ? (
+          {outOfPlanRows.length === 0 ? (
             <NutritionStatePanel
               icon="empty"
-              title="Todavía no registras alimentos"
-              description="Marca lo que comiste del plan o agrega un alimento libre para llenar tu presupuesto del día."
+              title="Nada fuera del plan todavía"
+              description="Lo que marques del plan vive arriba, bajo su franja. Acá solo aparece lo libre que agregues."
             />
           ) : (
             <NutritionCard>
-              {consumedRows.map(({ row, entry, queuedKey }, index) => (
+              {outOfPlanRows.map(({ row, entry, queuedKey }, index) => (
                 <View key={row.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
                   <FoodRow
                     food={row}
@@ -1707,6 +1700,40 @@ function TodayTab({
       />
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </>
+  )
+}
+
+/**
+ * Nota visible del coach, ahora en el tab Hoy (SPEC nutrition-ui-poda #3): antes vivía enterrada
+ * en el tab Plan, que el alumno abre menos. Colapsada por defecto (mismo patrón que el acordeón
+ * de micros V1); `livePlan.visibleNotes` ya viaja en memoria, sin fetch extra.
+ */
+function CoachNoteCard({ note }: { note: string }) {
+  const { theme } = useTheme()
+  const { reduced, duration } = useEvaMotion()
+  const [open, setOpen] = useState(false)
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Nota de tu coach"
+      accessibilityHint={open ? 'Toca para ocultarla' : 'Toca para leerla completa'}
+      accessibilityState={{ expanded: open }}
+      onPress={() => setOpen((v) => !v)}
+      className="rounded-control border border-subtle bg-surface-sunken px-4 py-3"
+    >
+      <View className="flex-row items-center justify-between gap-2">
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Nota de tu coach</Text>
+        <MotiView
+          animate={{ rotate: reduced ? '0deg' : open ? '180deg' : '0deg' }}
+          transition={{ type: 'timing', duration: duration('fast') }}
+        >
+          <ChevronDown color={theme.textSecondary} size={16} />
+        </MotiView>
+      </View>
+      <Text numberOfLines={open ? undefined : 1} className="mt-1 text-sm leading-6 text-body">
+        {note}
+      </Text>
+    </Pressable>
   )
 }
 
@@ -1835,6 +1862,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   portionVoids,
   onMarkPortion,
   onOpenEquivalences,
+  highlighted = false,
 }: {
   slot: NutritionMealSlotRead
   today: NutritionTodayReadModel
@@ -1855,11 +1883,13 @@ const TodaySlotCard = memo(function TodaySlotCard({
     completes: boolean,
   ) => void
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
+  /** Franja apuntada por el deep-link de la card de Nutrición del Home (SPEC #8). */
+  highlighted?: boolean
 }) {
   const { theme } = useTheme()
   const bulk = bulkMarkSlotState(today, slot, consumedIds)
   return (
-    <NutritionCard>
+    <NutritionCard tone={highlighted ? 'nutrition' : 'neutral'}>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
         <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
         {slot.startTime ? <Text className="font-mono text-xs text-muted">{slot.startTime}</Text> : null}
@@ -2011,7 +2041,9 @@ function ItemSubstitutionsHint({ substitutions }: { substitutions: NutritionItem
 /**
  * Control de registro en bloque de una franja. Estados (del helper puro compartido):
  *  - none-required → nada (la franja no tiene items requeridos; p. ej. solo-porciones).
- *  - complete      → banner "Comida completa" (sin acción).
+ *  - complete      → nada (SPEC nutrition-ui-poda #1/H1): el chip "Completa" del
+ *                     `MealProgressMeter`, en la misma card, ya lo dice — el banner
+ *                     "Comida completa" era el mismo hecho una segunda vez.
  *  - all-open      → CTA "Comí toda esta comida · N kcal".
  *  - partial       → CTA "Comer lo que falta (N) · M kcal".
  */
@@ -2024,16 +2056,7 @@ function BulkMarkControl({
   pending: boolean
   onEat: () => void
 }) {
-  const { theme } = useTheme()
-  if (state.status === 'none-required') return null
-  if (state.status === 'complete') {
-    return (
-      <View className="mt-3 flex-row items-center justify-center gap-2 rounded-control border border-success-500/30 bg-success-500/10 px-4 py-2.5">
-        <Check color={theme.success} size={16} />
-        <Text className="text-sm font-semibold text-success-700">{BULK_MARK_COMPLETE_LABEL}</Text>
-      </View>
-    )
-  }
+  if (state.status === 'none-required' || state.status === 'complete') return null
   const label = bulkMarkCtaLabel(state) ?? 'Registrar comida'
   const kcal = state.eligibleKcal > 0 ? ` · ${Math.round(state.eligibleKcal)} kcal` : ''
   return (
@@ -2205,6 +2228,11 @@ export default function StudentNutritionV2Screen() {
   const entitlements = useEntitlements()
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
   const { reduced, duration } = useEvaMotion()
+  // Deep-link desde la card "Nutrición" del Home (SPEC nutrition-ui-poda #8): `slot` señala la
+  // franja que le toca ahora al alumno; solo resalta una card, jamás abre otra fecha ni dispara
+  // otra lectura (el Hoy siempre carga el mismo día de hoy).
+  const { slot: focusSlotParam } = useLocalSearchParams<{ slot?: string }>()
+  const focusSlotCode = typeof focusSlotParam === 'string' ? focusSlotParam : null
   const [tab, setTab] = useState<NutritionV2Tab>('today')
   // Día que el tab "Hoy" está mostrando; `null` = hoy (SPEC nutrition-week-view). Vive acá, y no
   // dentro de `TodayTab`, por dos razones: cambiar de tab REMONTA el tab (MotiView con `key`), y
@@ -2294,7 +2322,9 @@ export default function StudentNutritionV2Screen() {
         animate={{ opacity: 1 }}
         transition={{ type: 'timing', duration: duration('base') }}
       >
-        {tab === 'today' ? <TodayTab selectedDay={selectedDay} onSelectDay={setSelectedDay} /> : null}
+        {tab === 'today' ? (
+          <TodayTab selectedDay={selectedDay} onSelectDay={setSelectedDay} focusSlotCode={focusSlotCode} />
+        ) : null}
         {tab === 'plan' ? <PlanTab /> : null}
         {tab === 'history' ? <HistoryTab onOpenDay={openDayFromHistory} /> : null}
       </MotiView>
@@ -2567,11 +2597,16 @@ function PlanTab() {
         <PlanRulesCard permissions={plan.permissions} />
 
         {selectedVariant ? (
+          // SPEC nutrition-ui-poda #2 (regresión RN detectada en auditoría): la tira Lu-Do de
+          // arriba (`WeekDayNav`) ya es LA tira del tab Plan — `showWeekStrip` duplicaba una
+          // segunda dentro de esta card. `showTargets` duplicaba las mismas 4 metas que
+          // `PlanObjectives` (única fuente) ya pintó arriba. Espejo de `FutureDayPreview`, que
+          // ya pasaba `false` en los dos.
           <PlanVariantCard
             variant={selectedVariant}
             variants={plan.dayVariants}
-            showTargets={multiDay}
-            showWeekStrip={multiDay}
+            showTargets={false}
+            showWeekStrip={false}
             todayIso={date}
           />
         ) : (
@@ -2801,6 +2836,7 @@ function HistoryTab({
   const [refreshing, setRefreshing] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [offline, setOffline] = useState(false)
+  const [todayIso] = useLocalDay(TZ)
 
   const mountedRef = useRef(true)
   const controllerRef = useRef<AbortController | null>(null)
@@ -2895,6 +2931,47 @@ function HistoryTab({
     if (userId) void loadFirst()
   }, [loadFirst, userId])
 
+  // SPEC nutrition-ui-poda #4: cards por SEMANA (no por día suelto) con un mini-strip Lu-Do
+  // tappable — "la navegación al día ya existe" (mismo `onOpenDay` que usaba cada card diaria).
+  // La semana EN CURSO se excluye a propósito: esa la ve el alumno en el tab Hoy (banner de
+  // abajo). `buildNutritionWeek` es el MISMO helper puro que arma la tira de Hoy/Plan — ninguna
+  // regla de "día con registro" (incluida la legacy) se reescribe acá para el conteo n/7.
+  const currentWeekStartIso = useMemo(() => nutritionWeekStartIso(todayIso), [todayIso])
+  const weeks = useMemo<NutritionHistoryWeek[]>(() => {
+    const order: string[] = []
+    const byWeek = new Map<string, NutritionHistoryDay[]>()
+    for (const item of items) {
+      const weekStartIso = nutritionWeekStartIso(item.localDate)
+      if (!weekStartIso || weekStartIso === currentWeekStartIso) continue
+      if (!byWeek.has(weekStartIso)) {
+        byWeek.set(weekStartIso, [])
+        order.push(weekStartIso)
+      }
+      byWeek.get(weekStartIso)!.push(item)
+    }
+    return order.map((weekStartIso) => {
+      const cells = buildNutritionWeek<NutritionWeekVariantLike, NutritionHistoryDay>({
+        variants: [],
+        history: byWeek.get(weekStartIso) ?? [],
+        weekStartIso,
+        todayIso,
+      })
+      const loggedCount = cells.filter((cell) => cell.state === 'past-logged').length
+      return { weekStartIso, cells, loggedCount }
+    })
+  }, [items, currentWeekStartIso, todayIso])
+
+  // Backfill acotado: si la PRIMERA página (14 días) cae entera dentro de la semana en curso
+  // (p.ej. hoy es martes), la lista de semanas cerradas queda vacía y no hay overflow para que
+  // `onEndReached` dispare solo. Pedimos más páginas hasta que aparezca una semana o el propio
+  // cursor del servidor diga que no hay más (`canLoadMoreHistory`) — nunca un timer, nunca polling.
+  useEffect(() => {
+    if (loading || loadingMore) return
+    if (weeks.length > 0) return
+    if (!canLoadMoreHistory(page)) return
+    void loadMore()
+  }, [loading, loadingMore, weeks.length, page, loadMore])
+
   if (loading) {
     return (
       <View className="flex-1 px-4 pt-2">
@@ -2905,8 +2982,8 @@ function HistoryTab({
 
   return (
     <FlashList
-      data={items}
-      keyExtractor={(item) => item.localDate}
+      data={weeks}
+      keyExtractor={(week) => week.weekStartIso}
       onEndReached={() => void loadMore()}
       onEndReachedThreshold={0.4}
       refreshing={refreshing}
@@ -2918,97 +2995,85 @@ function HistoryTab({
       onScroll={onScrollChrome}
       scrollEventThrottle={16}
       ItemSeparatorComponent={() => <View className="h-3" />}
+      ListHeaderComponent={
+        <Text className="mb-3 text-xs text-subtle">
+          Semanas anteriores — la semana en curso vive en el tab Hoy
+        </Text>
+      }
       ListEmptyComponent={
         <NutritionStatePanel
           icon={offline ? 'offline' : 'empty'}
           illustration={offline ? undefined : 'historial-vacio'}
           tone={offline ? 'warning' : 'neutral'}
-          title={offline ? 'Sin conexión' : 'Todavía no hay historial'}
+          title={offline ? 'Sin conexión' : items.length > 0 ? 'Todavía no hay semanas cerradas' : 'Todavía no hay historial'}
           description={
             offline
               ? 'No pudimos cargar tu historial y no hay copia guardada en este dispositivo.'
-              : 'Tus días aparecerán aquí después del primer registro o snapshot del plan.'
+              : items.length > 0
+                ? 'Esta semana la ves en el tab Hoy. Las semanas anteriores aparecerán aquí a medida que pasen los días.'
+                : 'Tus días aparecerán aquí después del primer registro o snapshot del plan.'
           }
         />
       }
       ListFooterComponent={
         loadingMore ? (
           <View className="items-center py-5">
-            <Text className="text-sm text-muted">Cargando días anteriores…</Text>
+            <Text className="text-sm text-muted">Cargando semanas anteriores…</Text>
           </View>
         ) : null
       }
-      renderItem={({ item }) => <HistoryDayCard day={item} onOpen={onOpenDay} />}
+      renderItem={({ item }) => <WeeklyHistoryCard week={item} onOpenDay={onOpenDay} />}
     />
   )
 }
 
-function HistoryDayCard({ day, onOpen }: { day: NutritionHistoryDay; onOpen: (isoDate: string) => void }) {
-  // 4A-04: la card mantiene el MISMO contenido plano que el web (HistoryView) — el detalle
-  // expandible RN-extra sigue retirado (decisión del owner, fila 1). Lo que sí hace ahora es
-  // ABRIR el día: la week view convirtió el tab "Hoy" en una superficie por fecha, así que el
-  // historial es su índice natural. No expande nada acá ni pide datos: solo selecciona la fecha.
+type NutritionHistoryWeek = {
+  weekStartIso: string
+  cells: NutritionWeekCell<NutritionWeekVariantLike, NutritionHistoryDay>[]
+  loggedCount: number
+}
+
+function WeeklyHistoryCard({
+  week,
+  onOpenDay,
+}: {
+  week: NutritionHistoryWeek
+  onOpenDay: (isoDate: string) => void
+}) {
   const { theme } = useTheme()
-  const legacy = historyDayIsLegacy(day)
-  const legacyInfo = describeLegacyHistoryDay(day)
-  const showLegacyMacros = legacyInfo.legacyOnly && legacyInfo.hasMacros && legacyInfo.consumed != null
-  const dayLabel = formatNutritionShortDate(day.localDate, { relative: true })
+  const total = week.cells.length
+  const first = week.cells[0]
+  const last = week.cells[total - 1]
+  const pct = total > 0 ? Math.round((week.loggedCount / total) * 100) : 0
+  const rangeLabel =
+    first && last ? `${formatNutritionShortDate(first.isoDate)} – ${formatNutritionShortDate(last.isoDate)}` : ''
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Ver ${dayLabel}`}
-      accessibilityHint="Abre ese día en modo lectura"
-      onPress={() => {
-        void Haptics.selectionAsync()
-        onOpen(day.localDate)
-      }}
-      className="active:opacity-70"
-    >
-      <NutritionCard>
-        <View className="flex-row items-start justify-between gap-3">
-          <View className="min-w-0 flex-1">
-            <Text className="font-display text-lg font-semibold text-strong">{dayLabel}</Text>
-            {showLegacyMacros && legacyInfo.consumed ? (
-              <View className="mt-1">
-                <MacroChipRow
-                  calories={legacyInfo.consumed.calories}
-                  proteinG={legacyInfo.consumed.proteinG}
-                  carbsG={legacyInfo.consumed.carbsG}
-                  fatsG={legacyInfo.consumed.fatsG}
-                  size="sm"
-                />
-              </View>
-            ) : (
-              <Text className="mt-1 text-sm text-muted" style={{ fontVariant: ['tabular-nums'] }}>
-                {legacyInfo.legacyOnly
-                  ? legacyInfo.completionCount > 0
-                    ? legacyInfo.completionsLabel
-                    : 'Registrado en el sistema anterior'
-                  : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
-              </Text>
-            )}
-            {legacy && !legacyInfo.legacyOnly && legacyInfo.secondaryLabel ? (
-              <Text className="mt-1 text-xs text-subtle" style={{ fontVariant: ['tabular-nums'] }}>
-                {legacyInfo.secondaryLabel}
-              </Text>
-            ) : null}
-            {legacy && legacyInfo.mealsLabel ? (
-              <Text numberOfLines={2} className="mt-1 text-xs text-subtle">
-                {legacyInfo.mealsLabel}
-              </Text>
-            ) : null}
-          </View>
-          <View className="shrink-0 flex-row items-center gap-2">
-            {legacy ? (
-              <View className="rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-1">
-                <Text className="text-[11px] font-semibold text-warning-700">Historial anterior</Text>
-              </View>
-            ) : null}
-            {/* Affordance de "esto se toca"; el nombre del día ya lo dice el accessibilityLabel. */}
-            <ChevronRight color={theme.textSecondary} size={18} />
-          </View>
-        </View>
-      </NutritionCard>
-    </Pressable>
+    <NutritionCard>
+      <View className="flex-row flex-wrap items-baseline justify-between gap-2">
+        <Text className="font-display text-base font-semibold text-strong" numberOfLines={1}>
+          {`Semana ${rangeLabel}`}
+        </Text>
+        <Text className="font-mono text-xs text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+          {`${week.loggedCount}/${total} días · ${pct}%`}
+        </Text>
+      </View>
+      {/* Mini-strip: MISMO `WeekDayNav` de Hoy/Plan — "la navegación al día ya existe", no se
+          reinventa el punto de estado ni el toque. `selectedIso=""` porque acá nada está
+          "seleccionado": es memoria, no una vista activa. */}
+      <WeekDayNav
+        cells={week.cells}
+        selectedIso=""
+        onSelect={(isoDate) => {
+          void Haptics.selectionAsync()
+          onOpenDay(isoDate)
+        }}
+        label={`Semana ${rangeLabel}`}
+        className="mt-3"
+      />
+      <View className="mt-2 flex-row items-center gap-1">
+        <Text className="text-xs text-subtle">Toca un día para ver qué comiste</Text>
+        <ChevronRight color={theme.textSecondary} size={14} />
+      </View>
+    </NutritionCard>
   )
 }

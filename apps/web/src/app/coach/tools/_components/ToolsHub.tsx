@@ -84,7 +84,7 @@ const PLAN_TOOL: ToolDef = {
     key: 'nutrition_exchanges',
     icon: Apple,
     label: ADDON_CONFIG.nutrition_exchanges.label,
-    value: 'Porciones e intercambios, micronutrientes avanzados y PDF con tu marca, dentro del plan.',
+    value: 'Porciones e intercambios, historial completo y PDF con tu marca, dentro del plan.',
     scope: 'plan',
     href: '/coach/nutrition-plans',
 }

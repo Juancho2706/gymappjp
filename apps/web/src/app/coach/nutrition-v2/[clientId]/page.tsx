@@ -1,10 +1,9 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { CheckCircle2, Info, LockKeyhole, Plus } from 'lucide-react'
+import { CheckCircle2, Info, Plus } from 'lucide-react'
 import {
   DayVariantWeekStrip,
   MacroBudget,
-  MacroChipRow,
   NutritionCard,
   NutritionPageShell,
   NutritionStatePanel,
@@ -14,14 +13,12 @@ import {
 import {
   buildNutritionWeek,
   createNutritionMacroValue,
-  describeLegacyHistoryDay,
   formatNutritionCalories,
-  formatNutritionDayOfWeek,
-  nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDate,
   sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
-import { formatDateDdMmYyyySantiago, formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
+import { formatDateDdMmYyyySantiago, getTodayInSantiago } from '@/lib/date-utils'
+import { foodCategoryIconUrl, foodCategoryIconUrlFromName } from '@/lib/food-image'
 import { cn } from '@/lib/utils'
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -34,7 +31,6 @@ import {
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { createClient } from '@/lib/supabase/server'
 import {
-  NUTRITION_PRO_UPGRADE_HREF,
   filterHistoryDaysToBaseWindow,
   hasNutritionProV2,
   nutritionProCtxFromWorkspace,
@@ -50,12 +46,15 @@ import {
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 import { CoachWeekDayNav } from './CoachWeekDayNav'
-import { DayAdherenceChip, SelectedDayPanel } from './SelectedDayPanel'
-import {
-  formatNutritionDayAndMonth,
-  resolveCoachDayAdherence,
-  resolveCoachWeekSelection,
-} from './_lib/week-nav'
+import { SelectedDayPanel } from './SelectedDayPanel'
+import { resolveCoachWeekSelection } from './_lib/week-nav'
+import { FoodThumb } from './builder/_components/FoodImage'
+import { resolveFoodImageUrl } from './builder/_components/food-card-presentation'
+
+// Regla transversal (owner, 2026-07-29): toda lista de alimentos muestra su miniatura — foto
+// real del catálogo vía `item.media` si existe, icono estático por categoría si no. Mismo par
+// componente/helper que ya usa el builder del coach para las cards de resultado de búsqueda.
+const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -367,11 +366,11 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             </NutritionCard>
             <NutritionCard>
               <h2 className="font-display text-lg font-semibold text-strong">Hoy</h2>
+              {/* R1 (auditoría 2026-07-29): se retiró el "K kcal restantes según el snapshot del
+                  día" de acá — MacroBudget, arriba, ya muestra las restantes (y con otra fórmula:
+                  dos cifras del mismo concepto podían discrepar). Queda una sola formula visible. */}
               <p className="mt-1 text-sm text-muted">
                 {detail.today.consumed.entryCount} registro{detail.today.consumed.entryCount === 1 ? '' : 's'} · {detail.today.mealSlots.length} franjas
-              </p>
-              <p className="mt-3 text-sm text-body">
-                {detail.today.remaining.calories ?? 0} kcal restantes segun el snapshot del dia.
               </p>
             </NutritionCard>
           </div>
@@ -432,17 +431,29 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                               {slot.startTime ? <span className="text-xs text-muted">{slot.startTime}</span> : null}
                             </div>
                             {slot.prescriptionItems.length > 0 ? (
-                              <ul className="mt-2 space-y-1">
-                                {slot.prescriptionItems.map((item) => (
-                                  <li key={item.id} className="flex items-center justify-between gap-2 text-sm text-body">
-                                    <span className="min-w-0 truncate">
-                                      {item.name || 'Alimento'} · {item.quantity} {item.unit}
-                                    </span>
-                                    <span className="shrink-0 text-xs text-muted">
-                                      {Math.round(item.macros.calories ?? 0)} kcal
-                                    </span>
-                                  </li>
-                                ))}
+                              <ul className="mt-2 space-y-2">
+                                {slot.prescriptionItems.map((item) => {
+                                  const itemName = item.name || 'Alimento'
+                                  return (
+                                    <li key={item.id} className="flex items-center gap-2 text-sm text-body">
+                                      <FoodThumb
+                                        alt={itemName}
+                                        iconUrl={
+                                          item.category
+                                            ? foodCategoryIconUrl(item.category)
+                                            : foodCategoryIconUrlFromName(itemName)
+                                        }
+                                        imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
+                                      />
+                                      <span className="min-w-0 flex-1 truncate">
+                                        {itemName} · {item.quantity} {item.unit}
+                                      </span>
+                                      <span className="shrink-0 text-xs tabular-nums text-muted">
+                                        {Math.round(item.macros.calories ?? 0)} kcal
+                                      </span>
+                                    </li>
+                                  )
+                                })}
                               </ul>
                             ) : null}
                             {/* Capa de porciones (P0-3): la franja puede prescribir SOLO porciones, o
@@ -461,134 +472,6 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               </div>
             </section>
           ) : null}
-
-          <section>
-            <h2 className="mb-3 font-display text-xl font-semibold text-strong">Ultimos dias</h2>
-            {!nutritionProEnabled ? (
-              <Link
-                href={NUTRITION_PRO_UPGRADE_HREF}
-                className="mb-3 inline-flex items-center gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted transition-colors hover:text-strong"
-              >
-                <LockKeyhole className="h-3.5 w-3.5 text-primary dark:text-primary" />
-                Historico completo con Nutricion Pro
-              </Link>
-            ) : null}
-            {/* NUT-041: sin empty-state el coach veia el titulo y un grid vacio, ambiguo entre
-                "no registro nada", "el filtro sin Pro recorto la ventana" y "fallo la lectura".
-                Los dos vacios se distinguen: si `detail.recentDays` trae dias pero `recentDays`
-                quedo vacio, el recorte lo hizo la ventana BASE (sin Nutricion Pro) -> upsell. */}
-            {recentDays.length === 0 ? (
-              <NutritionStatePanel
-                illustration="historial-vacio"
-                title={
-                  detail.recentDays.length > 0 && !nutritionProEnabled
-                    ? 'Historial fuera de tu ventana'
-                    : 'Sin días registrados todavía'
-                }
-                description={
-                  detail.recentDays.length > 0 && !nutritionProEnabled
-                    ? 'Los días de este alumno quedan fuera de la ventana incluida en tu plan. Con Nutrición Pro ves el histórico completo.'
-                    : 'Aparecerán aquí cuando el alumno registre su primer día.'
-                }
-                action={
-                  detail.recentDays.length > 0 && !nutritionProEnabled ? (
-                    <Link
-                      href={NUTRITION_PRO_UPGRADE_HREF}
-                      className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
-                    >
-                      <LockKeyhole className="h-4 w-4" />
-                      Activar Nutrición Pro
-                    </Link>
-                  ) : undefined
-                }
-              />
-            ) : (
-            // QW-6: cada día es un enlace al mismo día en la tira de arriba (`?date=`), con
-            // nombre de día + fecha corta legible (nunca el ISO crudo) y el % de adherencia de
-            // energía contra la meta congelada de ese día.
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {recentDays.map((day) => {
-                const legacy = describeLegacyHistoryDay(day)
-                const showLegacyMacros = legacy.legacyOnly && legacy.hasMacros && legacy.consumed != null
-                const dayName =
-                  formatNutritionDayOfWeek(nutritionDayOfWeekFromIso(day.localDate)) ?? 'Día'
-                // Una fila sin ingestas es un día SIN registro (el snapshot existe igual): no se
-                // pinta "0 kcal" ni % de adherencia, que serían un juicio sobre datos que no hay.
-                const hasIntake = day.activeEntryCount > 0 || day.consumed.entryCount > 0
-                const adherence =
-                  legacy.legacyOnly || !hasIntake
-                    ? null
-                    : resolveCoachDayAdherence(day.consumed.calories, day.targets.calories)
-                const isSelectedDay = day.localDate === weekSelection.selectedIso
-                return (
-                  <Link
-                    className="group block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    href={day.localDate === today ? fichaHref : `${fichaHref}?date=${day.localDate}`}
-                    key={day.localDate}
-                  >
-                    <NutritionCard
-                      className={cn(
-                        'h-full transition-colors',
-                        isSelectedDay
-                          ? 'border-primary ring-1 ring-primary/40'
-                          : 'group-hover:border-primary/40',
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-strong">{dayName}</p>
-                          <p className="mt-0.5 text-xs tabular-nums text-muted">
-                            {formatNutritionDayAndMonth(day.localDate)} ·{' '}
-                            {formatRelativeDate(day.localDate, today)}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          {adherence ? <DayAdherenceChip adherence={adherence} /> : null}
-                          {legacy.isLegacy ? (
-                            <span className="rounded-pill border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200">
-                              Historial anterior
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      {showLegacyMacros && legacy.consumed ? (
-                        <div className="mt-2">
-                          <MacroChipRow
-                            calories={legacy.consumed.calories}
-                            proteinG={legacy.consumed.proteinG}
-                            carbsG={legacy.consumed.carbsG}
-                            fatsG={legacy.consumed.fatsG}
-                            size="sm"
-                          />
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-sm tabular-nums text-muted">
-                          {legacy.legacyOnly
-                            ? legacy.completionCount > 0
-                              ? legacy.completionsLabel
-                              : 'Registrado en el sistema anterior'
-                            : hasIntake
-                              ? `${formatNutritionCalories(day.consumed.calories)}${
-                                  day.targets.calories != null
-                                    ? ` de ${formatNutritionCalories(day.targets.calories)}`
-                                    : ''
-                                } · ${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'}`
-                              : 'Sin registro'}
-                        </p>
-                      )}
-                      {legacy.isLegacy && !legacy.legacyOnly && legacy.secondaryLabel ? (
-                        <p className="mt-1 text-xs text-subtle">{legacy.secondaryLabel}</p>
-                      ) : null}
-                      {legacy.isLegacy && legacy.mealsLabel ? (
-                        <p className="mt-1 line-clamp-2 text-xs text-subtle">{legacy.mealsLabel}</p>
-                      ) : null}
-                    </NutritionCard>
-                  </Link>
-                )
-              })}
-            </div>
-            )}
-          </section>
 
           {/* Zona inferior discreta: archivar el plan vigente. Aislado del CTA primario del header
               para evitar clicks accidentales. Tras archivar, la ficha pasa a "Sin plan vigente". */}

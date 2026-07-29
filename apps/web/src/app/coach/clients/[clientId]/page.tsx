@@ -92,39 +92,10 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         ? { teamId: nutritionClient.team_id }
         : { coachId: nutritionClient.coach_id ?? '' }
 
-    const [
-        coachNutrientTargets,
-        coachPrivateNotes,
-        coachMealComments,
-        nutritionProEnabled,
-        nutritionDomainEnabled,
-        nutritionSectionFlags,
-        nutritionOverrideContext,
-        cardioModule,
-        movementModule,
-        bodycompModule,
-        nutritionTabV2View,
-    ] = await Promise.all([
-        getCoachNutrientTargets(clientId),
-        getCoachPrivateNotes(clientId),
-        nutritionTodayIso
-            ? getCoachMealComments(clientId, nutritionTodayIso)
-            : Promise.resolve([]),
-        resolveNutritionProEnabled(clientId),
-        resolveNutritionDomainEnabled(featurePrefsInput),
-        resolveFeaturePrefs({
-            domain: 'nutrition',
-            ...featurePrefsInput,
-            planId: activeNutritionPlanId,
-        }),
-        // Override por-alumno (tri-state heredar/mostrar/ocultar) que renderiza el panel
-        // "Funciones para este alumno" en la Zona C de la ficha. baseEffective = lo que se
-        // hereda del default coach/team; override = lo ya forzado para este alumno.
-        resolveClientFeaturePrefsOverrideContext({
-            domain: 'nutrition',
-            ...featurePrefsInput,
-            planId: activeNutritionPlanId,
-        }),
+    // Módulos (cardio/movimiento/composición) e independientes de la versión de nutrición: se
+    // usan en el hero pase lo que pase, así que corren siempre en paralelo. El canary V2 va en
+    // el mismo Promise.all porque decide qué otras lecturas hace falta disparar más abajo.
+    const [cardioModule, movementModule, bodycompModule, nutritionTabV2View] = await Promise.all([
         isOrgScoped ? Promise.resolve(false) : hasModule(moduleSupabase, 'cardio', moduleCtx),
         isOrgScoped
             ? Promise.resolve(false)
@@ -135,6 +106,55 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         // Canary V2 embebido en la ficha (surface webCoach). Fail-safe: null => tab V1 intacto.
         resolveNutritionTabV2(clientId),
     ])
+
+    // P11 (auditoría 2026-07-29, hallazgo VM-2 "DESPERDICIO"): las 7 lecturas de abajo SOLO
+    // alimentan `NutritionTabB5` (V1) — `ClientProfileDashboard` las pasa nada más a ese branch;
+    // con `nutritionTabV2View` no-null el dashboard monta `NutritionTabV2` y las descarta sin
+    // usarlas. Antes se disparaban SIEMPRE, en el mismo `Promise.all` que todo lo demás: pagar 6-7
+    // queries server-side por cada carga de ficha de un coach con el canary V2 encendido y tirar
+    // el resultado. Ahora solo corren cuando el tab V1 de verdad va a montarse.
+    let coachNutrientTargets: Awaited<ReturnType<typeof getCoachNutrientTargets>> = []
+    let coachPrivateNotes: Awaited<ReturnType<typeof getCoachPrivateNotes>> = []
+    let coachMealComments: Awaited<ReturnType<typeof getCoachMealComments>> = []
+    let nutritionProEnabled: Awaited<ReturnType<typeof resolveNutritionProEnabled>> = false
+    let nutritionDomainEnabled: Awaited<ReturnType<typeof resolveNutritionDomainEnabled>> = true
+    let nutritionSectionFlags: Awaited<ReturnType<typeof resolveFeaturePrefs>> | undefined
+    let nutritionOverrideContext:
+        | Awaited<ReturnType<typeof resolveClientFeaturePrefsOverrideContext>>
+        | undefined
+
+    if (!nutritionTabV2View) {
+        ;[
+            coachNutrientTargets,
+            coachPrivateNotes,
+            coachMealComments,
+            nutritionProEnabled,
+            nutritionDomainEnabled,
+            nutritionSectionFlags,
+            nutritionOverrideContext,
+        ] = await Promise.all([
+            getCoachNutrientTargets(clientId),
+            getCoachPrivateNotes(clientId),
+            nutritionTodayIso
+                ? getCoachMealComments(clientId, nutritionTodayIso)
+                : Promise.resolve([]),
+            resolveNutritionProEnabled(clientId),
+            resolveNutritionDomainEnabled(featurePrefsInput),
+            resolveFeaturePrefs({
+                domain: 'nutrition',
+                ...featurePrefsInput,
+                planId: activeNutritionPlanId,
+            }),
+            // Override por-alumno (tri-state heredar/mostrar/ocultar) que renderiza el panel
+            // "Funciones para este alumno" en la Zona C de la ficha. baseEffective = lo que se
+            // hereda del default coach/team; override = lo ya forzado para este alumno.
+            resolveClientFeaturePrefsOverrideContext({
+                domain: 'nutrition',
+                ...featurePrefsInput,
+                planId: activeNutritionPlanId,
+            }),
+        ])
+    }
 
     const sortedCheckIns = [...(checkIns || [])].sort(
         (a, b) =>
@@ -277,7 +297,7 @@ async function resolveNutritionTabV2(
         return buildNutritionTabV2ViewModel({
             clientId,
             detail,
-            nutritionProEnabled,
+            todayIso: today,
             recentDaysForDisplay,
         })
     } catch (error) {

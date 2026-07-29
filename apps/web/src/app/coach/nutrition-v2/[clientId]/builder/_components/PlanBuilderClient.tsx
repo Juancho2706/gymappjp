@@ -35,6 +35,7 @@ import {
   itemMacros,
   macroEnergyMismatch,
   resolveSlotCopyTargets,
+  slotsLostIfFlexible,
   slotSubtotal,
   strategyUsesSlots,
   takenDayOfWeeks,
@@ -58,6 +59,16 @@ import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-a
 import { canProceedToPublishAfterArchive, effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
 import { FoodResultCard } from './FoodResultCard'
 import { PublishConflictDialog } from './PublishConflictDialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 // Porciones a elección (T1.1): capa opcional sobre structured/hybrid (SPEC R1). El estado
 // vive en un controller hermano del reducer (no se toca _lib/draft-builder) y se inyecta
 // al draft canónico justo antes de publicar (attachPortionsAndValidate).
@@ -998,6 +1009,17 @@ function StrategyStep({
   nutritionProEnabled: boolean
 }) {
   const options: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
+  // Confirmacion antes de perder franjas (bug 2.3.5 de la auditoria): elegir "flexible"
+  // con contenido en cualquier dia BORRABA todas las franjas sin aviso ni deshacer. El
+  // reducer sigue ejecutando el borrado tal cual (es puro, no pregunta); esta UI decide
+  // si hace falta preguntar antes de despachar.
+  const [confirmFlexible, setConfirmFlexible] = useState(false)
+  const slotsAtRisk = slotsLostIfFlexible(state)
+
+  function pickStrategy(key: NutritionStrategy) {
+    dispatch({ type: 'SET_STRATEGY', strategy: key, firstSlotKey: genId() })
+  }
+
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1015,8 +1037,14 @@ function StrategyStep({
               disabled={locked}
               title={locked ? 'Disponible con Nutricion Pro' : meta.description}
               onClick={() => {
-                if (locked) return
-                dispatch({ type: 'SET_STRATEGY', strategy: key, firstSlotKey: genId() })
+                // No-op: re-tocar la MISMA estrategia no hace nada (el reducer tambien lo
+                // corta; cortar aca evita ademas disparar el candado Pro sin necesidad).
+                if (locked || active) return
+                if (key === 'flexible' && slotsAtRisk > 0) {
+                  setConfirmFlexible(true)
+                  return
+                }
+                pickStrategy(key)
               }}
               className={
                 'flex h-full flex-col rounded-card border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
@@ -1067,6 +1095,28 @@ function StrategyStep({
           </p>
         </div>
       ) : null}
+      <AlertDialog open={confirmFlexible} onOpenChange={setConfirmFlexible}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="normal-case tracking-tight">Cambiar a flexible</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cambiar a flexible elimina {slotsAtRisk === 1 ? 'la' : 'las'} {slotsAtRisk}{' '}
+              {slotsAtRisk === 1 ? 'franja' : 'franjas'} de tus días. ¿Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmFlexible(false)
+                pickStrategy('flexible')
+              }}
+            >
+              Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -1120,19 +1170,22 @@ function TargetsStep({
         </fieldset>
         <fieldset className="rounded-card border border-border-subtle p-3">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</legend>
+          <p className="px-1 pb-2 text-xs text-muted">Qué puede hacer el alumno con este plan, más allá de seguirlo.</p>
           {([
-            ['canRegisterFreely', 'Puede registrar alimentos libremente'],
-            ['canAdjustPrescribedQuantity', 'Puede ajustar la cantidad prescrita'],
-            ['canSubstitute', 'Puede sustituir alimentos'],
-          ] as const).map(([field, label]) => (
-            <label key={field} className="flex min-h-11 items-center gap-2 text-sm text-body">
+            ['canRegisterFreely', 'Registro libre', 'Puede anotar alimentos fuera de lo prescrito.'],
+            ['canAdjustPrescribedQuantity', 'Ajustar cantidades', 'Puede cambiar la cantidad de un alimento prescrito.'],
+          ] as const).map(([field, label, hint]) => (
+            <label key={field} className="flex min-h-11 items-start gap-2 py-1 text-sm text-body">
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-[var(--theme-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-0.5 h-4 w-4 accent-[var(--theme-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 checked={state.permissions[field]}
                 onChange={(e) => dispatch({ type: 'SET_PERMISSION', field, value: e.target.checked })}
               />
-              {label}
+              <span>
+                <span className="block font-medium text-strong">{label}</span>
+                <span className="block text-xs text-muted">{hint}</span>
+              </span>
             </label>
           ))}
         </fieldset>

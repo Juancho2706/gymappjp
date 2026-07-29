@@ -40,18 +40,10 @@ export function PlanVariantCard({
 }) {
   return (
     <NutritionCard>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-lg font-semibold text-strong">{variant.label}</h3>
-        {variant.isDefault ? (
-          <span className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary">
-            Por defecto
-          </span>
-        ) : null}
-      </div>
-      <p className="mt-1 text-sm tabular-nums text-muted">
-        {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
-        {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
-      </p>
+      {/* Auditoría P2/P3: fuera el chip "Por defecto" (concepto interno del builder, el alumno no
+          sabe qué es) y la línea "N franjas · kcal" (las kcal ya están 40 px arriba en "Metas del
+          día"; el conteo de franjas se ve solo, listándolas abajo). */}
+      <h3 className="font-display text-lg font-semibold text-strong">{variant.label}</h3>
       {showTargets ? (
         <span className="mt-2 block">
           <MacroChipRow

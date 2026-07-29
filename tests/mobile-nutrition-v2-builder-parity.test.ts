@@ -224,6 +224,38 @@ describe('paridad de envelope web ↔ RN (multi-día + porciones + reemplazos)',
     expect(rnDraft.dayVariants[2].mealSlots.map((slot) => slot.name)).toEqual(['Desayuno', 'Cena'])
   })
 
+  // Fix bug 2.3.5 de la auditoria (poda ola 3, SPEC nutrition-ui-poda punto 2): las dos
+  // superficies tienen que resolver el no-op y la preservacion de permisos IGUAL.
+  it('SET_STRATEGY (no-op + permisos preservados) converge igual en las dos superficies', () => {
+    const rnState = buildScript(rnCreateEmpty, rnReducer, FOOD) as RnBuilderState
+    const webState = buildScript(webCreateEmpty, webReducer, FOOD) as WebBuilderState
+    expect(rnState).toEqual(webState)
+
+    // El coach edita un permiso a mano y re-toca la MISMA estrategia (structured): no-op total.
+    const rnEdited = rnReducer(rnState, { type: 'SET_PERMISSION', field: 'canRegisterFreely', value: true } as never)
+    const webEdited = webReducer(webState, { type: 'SET_PERMISSION', field: 'canRegisterFreely', value: true } as never)
+    const rnSameStrategy = rnReducer(rnEdited, {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'ignored',
+    } as never)
+    const webSameStrategy = webReducer(webEdited, {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'ignored',
+    } as never)
+    expect(rnSameStrategy).toBe(rnEdited) // no-op: misma referencia
+    expect(webSameStrategy).toBe(webEdited)
+    expect(rnSameStrategy).toEqual(webSameStrategy)
+
+    // Cambiar a hybrid conserva el permiso editado en las dos superficies por igual.
+    const rnHybrid = rnReducer(rnEdited, { type: 'SET_STRATEGY', strategy: 'hybrid', firstSlotKey: 'k-h' } as never)
+    const webHybrid = webReducer(webEdited, { type: 'SET_STRATEGY', strategy: 'hybrid', firstSlotKey: 'k-h' } as never)
+    expect(rnHybrid.permissions.canRegisterFreely).toBe(true)
+    expect(webHybrid.permissions.canRegisterFreely).toBe(true)
+    expect(rnHybrid).toEqual(webHybrid)
+  })
+
   it('sin porciones el envelope tambien coincide (draft byte-idéntico al de un solo día)', () => {
     const rnState = rnCreateEmpty('2026-07-20')
     const webState = webCreateEmpty('2026-07-20')

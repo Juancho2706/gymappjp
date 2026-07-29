@@ -20,12 +20,15 @@ import {
   createEmptyBuilderState,
   createEmptyItem,
   customMacrosOf,
+  defaultPermissionsFor,
   itemMacros,
   macroEnergyMismatch,
   migrateBuilderState,
+  nextPermissionsForStrategyChange,
   normalizeBuilderVariants,
   resolveSlotCopyTargets,
   slotMergeName,
+  slotsLostIfFlexible,
   validateStep,
   type BuilderFood,
   type BuilderItem,
@@ -387,6 +390,67 @@ describe('builderReducer', () => {
     const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'flexible', firstSlotKey: 'k1' })
     expect(next.variants[0].slots).toHaveLength(0)
     expect(next.permissions.canRegisterFreely).toBe(true)
+  })
+
+  // Fix bug 2.3.5 de la auditoria (poda ola 3, SPEC nutrition-ui-poda punto 2): re-tocar la
+  // MISMA tarjeta de estrategia reseteaba los permisos a defaults y, si era "flexible", vaciaba
+  // TODAS las franjas de TODOS los dias sin aviso ni deshacer.
+  it('SET_STRATEGY con la MISMA estrategia es un no-op total (no resetea permisos ni toca franjas)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    // El coach edita un permiso y agrega una franja extra.
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canAdjustPrescribedQuantity', value: false })
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: BASE_VARIANT_KEY, key: 'slot-b' })
+    const before = state
+    const after = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'ignored' })
+    expect(after).toBe(before) // misma referencia: el reducer ni siquiera reconstruye el arbol.
+  })
+
+  it('un permiso editado por el coach se conserva al cambiar entre estrategias con franjas', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    // Default structured: canRegisterFreely = false. El coach lo prende a mano.
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canRegisterFreely', value: true })
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'hybrid', firstSlotKey: 'k2' })
+    expect(next.permissions.canRegisterFreely).toBe(true)
+  })
+
+  it('un permiso SIN tocar adopta el default de la nueva estrategia', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'hybrid',
+      firstSlotKey: 'k1',
+    })
+    expect(state.permissions.canRegisterFreely).toBe(true) // default hybrid, sin editar
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'k2' })
+    expect(next.permissions.canRegisterFreely).toBe(false) // vuelve al default estricto
+  })
+
+  it('nextPermissionsForStrategyChange conserva canSubstitute rehidratado aunque ninguna estrategia lo defaultee true', () => {
+    const current = { ...defaultPermissionsFor('structured'), canSubstitute: true }
+    const next = nextPermissionsForStrategyChange('structured', 'flexible', current)
+    expect(next.canSubstitute).toBe(true)
+  })
+
+  it('slotsLostIfFlexible cuenta las franjas de TODAS las variantes (logica pura de la confirmacion)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    expect(slotsLostIfFlexible(state)).toBe(1)
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: BASE_VARIANT_KEY, key: 'slot-b' })
+    expect(slotsLostIfFlexible(state)).toBe(2)
+    // El reducer SIGUE vaciando al despachar; la UI es quien pregunta antes usando este conteo.
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'flexible', firstSlotKey: 'ignored' })
+    expect(slotsLostIfFlexible(next)).toBe(0)
+    expect(next.variants[0].slots).toHaveLength(0)
   })
 
   it('ADD_ITEM con alimento precarga cantidad y unidad', () => {

@@ -166,6 +166,38 @@ export function defaultPermissionsFor(strategy: NutritionStrategy | null): Build
   }
 }
 
+/**
+ * Permisos tras un cambio de estrategia (fix bug 2.3.5 de la auditoria: `SET_STRATEGY`
+ * pisaba `permissions` con `defaultPermissionsFor(nueva)` INCONDICIONALMENTE, incluso los
+ * campos que el coach ya habia editado a mano). Semantica elegida — la mas simple de testear
+ * sin agregar un flag de "tocado" al estado: un campo se considera SIN TOCAR si su valor
+ * actual coincide con el default de la estrategia ANTERIOR; ahi se re-aplica el default
+ * nuevo. Si el coach lo cambio (valor distinto del default anterior — incluye el caso
+ * rehidratado desde un plan publicado), se CONSERVA tal cual.
+ */
+export function nextPermissionsForStrategyChange(
+  previousStrategy: NutritionStrategy | null,
+  nextStrategy: NutritionStrategy,
+  current: BuilderPermissions,
+): BuilderPermissions {
+  const previousDefaults = defaultPermissionsFor(previousStrategy)
+  const nextDefaults = defaultPermissionsFor(nextStrategy)
+  const merged = { ...current }
+  ;(Object.keys(nextDefaults) as Array<keyof BuilderPermissions>).forEach((field) => {
+    if (current[field] === previousDefaults[field]) merged[field] = nextDefaults[field]
+  })
+  return merged
+}
+
+/**
+ * Franjas (de TODAS las variantes) que `SET_STRATEGY` hacia `'flexible'` borraria. Pura: la UI
+ * la usa para decidir si pide confirmacion ANTES de despachar (bug 2.3.5 — hoy borra sin avisar
+ * ni permitir deshacer). El reducer NUNCA pregunta, solo ejecuta; 0 = nada que perder.
+ */
+export function slotsLostIfFlexible(state: BuilderState): number {
+  return state.variants.reduce((total, variant) => total + variant.slots.length, 0)
+}
+
 export function createEmptyTargets(): BuilderTargets {
   return { calories: '', proteinG: '', carbsG: '', fatsG: '' }
 }
@@ -445,9 +477,15 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     case 'PREV_STEP':
       return { ...state, step: clampStep(state.step - 1) }
     case 'SET_STRATEGY': {
+      // No-op TOTAL con la MISMA estrategia (bug 2.3.5 de la auditoria): re-tocar la tarjeta ya
+      // elegida no debe resetear permisos ni tocar franjas. La UI (StrategyStep) ya evita
+      // despachar esta accion sin cambio real; este corte es el cinturon del reducer.
+      if (action.strategy === state.strategy) return state
       const usesSlots = strategyUsesSlots(action.strategy)
       // La primera franja se siembra SOLO en el dia base; los dias especificos (si ya
-      // existieran) conservan lo suyo. Sin franjas (flexible) se vacian todos los dias.
+      // existieran) conservan lo suyo. Sin franjas (flexible) se vacian todos los dias — la UI
+      // pide confirmacion ANTES de despachar esto cuando hay franjas con contenido
+      // (`slotsLostIfFlexible`); el reducer no pregunta, solo ejecuta.
       const variants = state.variants.map((variant) => {
         if (!usesSlots) return variant.slots.length === 0 ? variant : { ...variant, slots: [] }
         if (!variant.isDefault || variant.slots.length > 0) return variant
@@ -456,7 +494,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       return {
         ...state,
         strategy: action.strategy,
-        permissions: defaultPermissionsFor(action.strategy),
+        permissions: nextPermissionsForStrategyChange(state.strategy, action.strategy, state.permissions),
         variants,
       }
     }

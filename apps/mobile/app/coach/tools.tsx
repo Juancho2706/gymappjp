@@ -98,7 +98,7 @@ const TOOLS: ToolDef[] = [
 const PLAN_TOOL: ToolDef = {
   key: 'nutrition_exchanges',
   icon: Apple,
-  value: 'Porciones e intercambios, micronutrientes avanzados y PDF con tu marca, dentro del plan.',
+  value: 'Porciones e intercambios y PDF con tu marca, dentro del plan.',
   scope: 'plan',
   href: '/coach/(tabs)/nutricion',
 }

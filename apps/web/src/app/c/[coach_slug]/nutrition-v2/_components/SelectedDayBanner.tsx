@@ -14,13 +14,16 @@ export function SelectedDayBanner({
   headline,
   note,
   backHref,
+  backLabel = 'Volver a hoy',
   tone = 'past',
 }: {
   headline: string
   /** Matiz opcional bajo el titular (por ejemplo, que el futuro es una proyección). */
   note?: string | null
-  /** URL canónica de hoy (sin parámetro de día). */
+  /** URL de retorno (canónica de hoy, o del historial cuando se llega desde ahí). */
   backHref: string
+  /** Copy del link de vuelta; el día abierto desde Historial dice "Volver al historial". */
+  backLabel?: string
   tone?: 'past' | 'future'
 }) {
   const Icon = tone === 'future' ? CalendarDays : History
@@ -47,7 +50,7 @@ export function SelectedDayBanner({
         className="inline-flex min-h-11 shrink-0 items-center rounded-control px-2 text-sm font-semibold text-primary hover:bg-surface-card"
         href={backHref}
       >
-        Volver a hoy
+        {backLabel}
       </Link>
     </div>
   )

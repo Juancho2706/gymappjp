@@ -118,6 +118,7 @@ import {
   macroEnergyMismatch,
   mapFoodCatalogItemToBuilderFood,
   resolveSlotCopyTargets,
+  slotsLostIfFlexible,
   slotSubtotal,
   strategyUsesSlots,
   takenDayOfWeeks,
@@ -278,13 +279,14 @@ interface BuilderDraftPayload {
 // que el `beforeunload` web, que tampoco toca localStorage).
 const LEAVE_GUARD_COPY = 'Tienes un borrador sin publicar. ¿Salir y descartarlo?'
 
-// Fieldset "Permisos del alumno" (sub-delta a): orden y copys LITERALES del web
-// (PlanBuilderClient.tsx:773-776). El estado ya fluye de punta a punta (SET_PERMISSION +
-// assembleDraft); esto solo lo puebla con la eleccion del coach en vez del default.
-const PERMISSION_FIELDS: Array<[keyof BuilderPermissions, string]> = [
-  ['canRegisterFreely', 'Puede registrar alimentos libremente'],
-  ['canAdjustPrescribedQuantity', 'Puede ajustar la cantidad prescrita'],
-  ['canSubstitute', 'Puede sustituir alimentos'],
+// Fieldset "Permisos del alumno" (poda ola 3, SPEC nutrition-ui-poda punto 1): quedan los 2
+// permisos reales de punta a punta (UI alumno + servicio + guard SQL); `canSubstitute` era
+// decorativo (solo pintaba una pastilla; los reemplazos se muestran al alumno SIEMPRE, con o
+// sin el flag) y se retira de esta UI — el campo sigue viviendo en el estado/contrato con su
+// default (`assembleDraft` no cambia). Copy corto + explicacion propia (punto 2 del SPEC).
+const PERMISSION_FIELDS: Array<[keyof BuilderPermissions, string, string]> = [
+  ['canRegisterFreely', 'Registro libre', 'Puede anotar alimentos fuera de lo prescrito.'],
+  ['canAdjustPrescribedQuantity', 'Ajustar cantidades', 'Puede cambiar la cantidad de un alimento prescrito.'],
 ]
 
 // ---------------------------------------------------------------------------
@@ -771,13 +773,38 @@ export default function CoachNutritionV2BuilderScreen() {
 
   const handlePickStrategy = useCallback(
     (strategy: NutritionStrategy) => {
+      // No-op: re-tocar la MISMA estrategia no hace nada (el reducer tambien lo corta; ver
+      // builderReducer). Se corta aca ademas para no disparar el candado Pro sin necesidad.
+      if (strategy === state.strategy) return
       if (strategy === 'hybrid' && !hasNutritionPro) {
         setUpsell('la estrategia hibrida')
         return
       }
+      // Confirmacion antes de perder franjas (bug 2.3.5 de la auditoria): "flexible" con
+      // contenido en cualquier dia BORRABA todas las franjas sin aviso ni deshacer.
+      if (strategy === 'flexible') {
+        const slotsAtRisk = slotsLostIfFlexible(state)
+        if (slotsAtRisk > 0) {
+          const article = slotsAtRisk === 1 ? 'la' : 'las'
+          const noun = slotsAtRisk === 1 ? 'franja' : 'franjas'
+          Alert.alert(
+            'Cambiar a flexible',
+            `Cambiar a flexible elimina ${article} ${slotsAtRisk} ${noun} de tus días. ¿Continuar?`,
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              {
+                text: 'Continuar',
+                style: 'destructive',
+                onPress: () => dispatch({ type: 'SET_STRATEGY', strategy, firstSlotKey: genKey('slot') }),
+              },
+            ],
+          )
+          return
+        }
+      }
       dispatch({ type: 'SET_STRATEGY', strategy, firstSlotKey: genKey('slot') })
     },
-    [hasNutritionPro],
+    [hasNutritionPro, state],
   )
 
   // ── Multi-dia: handlers de la barra de dias (espejo 1:1 del web PlanBuilderClient) ─────────
@@ -1588,11 +1615,13 @@ function TargetsStep({
 
       <NutritionCard>
         <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</Text>
+        <Text className="mt-1 text-xs text-muted">Qué puede hacer el alumno con este plan, más allá de seguirlo.</Text>
         <View className="mt-2 gap-1">
-          {PERMISSION_FIELDS.map(([field, label]) => (
+          {PERMISSION_FIELDS.map(([field, label, hint]) => (
             <PermissionRow
               key={field}
               label={label}
+              hint={hint}
               checked={state.permissions[field]}
               onToggle={() => dispatch({ type: 'SET_PERMISSION', field, value: !state.permissions[field] })}
             />
@@ -1616,7 +1645,17 @@ function TargetsStep({
 // `theme.primary` (nunca un hex — white-label). La UI NO autoriza: los permisos son metadatos del
 // plan; el enforcement real vive en el read-model del alumno y en el RPC. Patron de checkbox ya
 // sancionado (AssignClientsSheet / modal de asignar 4B-08): Pressable + accessibilityRole="checkbox".
-function PermissionRow({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+function PermissionRow({
+  label,
+  hint,
+  checked,
+  onToggle,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onToggle: () => void
+}) {
   const { theme } = useTheme()
   return (
     <Pressable
@@ -1624,17 +1663,20 @@ function PermissionRow({ label, checked, onToggle }: { label: string; checked: b
       accessibilityState={{ checked }}
       accessibilityLabel={label}
       onPress={onToggle}
-      className="min-h-11 flex-row items-center gap-2.5 rounded-control px-1"
+      className="min-h-11 flex-row items-start gap-2.5 rounded-control px-1 py-1.5"
     >
       <View
-        className={`h-5 w-5 items-center justify-center rounded-control border ${
+        className={`mt-0.5 h-5 w-5 items-center justify-center rounded-control border ${
           checked ? 'border-transparent' : 'border-default bg-surface-card'
         }`}
         style={checked ? { backgroundColor: theme.primary } : undefined}
       >
         {checked ? <Check color={theme.primaryForeground} size={14} /> : null}
       </View>
-      <Text className="flex-1 text-sm text-body">{label}</Text>
+      <View className="flex-1">
+        <Text className="text-sm text-body">{label}</Text>
+        {hint ? <Text className="mt-0.5 text-xs text-muted">{hint}</Text> : null}
+      </View>
     </Pressable>
   )
 }

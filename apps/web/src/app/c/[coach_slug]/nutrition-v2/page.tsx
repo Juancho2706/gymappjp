@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { CalendarDays, History, Info, ListChecks, Utensils } from 'lucide-react'
 import {
-  MacroChipRow,
   NutritionCard,
   NutritionPageShell,
   NutritionStatePanel,
@@ -12,15 +11,16 @@ import {
 } from '@/components/nutrition-v2'
 import {
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
-  NUTRITION_STRATEGIES,
+  addNutritionDays,
   buildNutritionWeek,
   buildNutritionWeekDates,
-  describeLegacyHistoryDay,
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
   mapNutritionItemSubstitutionRow,
+  nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDate,
+  type NutritionHistoryDay,
   type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
@@ -42,15 +42,21 @@ import { FutureDayPreview } from './_components/FutureDayPreview'
 import { PastDaySummary } from './_components/PastDaySummary'
 import { PlanVariantCard, type PlanVariant } from './_components/PlanVariantCard'
 import { WeekDayNavigator } from './_components/WeekDayNavigator'
+import { HistoryWeeksList } from './_components/HistoryWeeksList'
 import { groupSubstitutionsByPrescriptionItem } from './_components/nutrition-today.logic'
 import {
   NUTRITION_WEEK_HISTORY_PAGE_SIZE,
   formatSelectedDayCaption,
+  groupHistoryDaysByWeek,
   nutritionWeekHistoryCursor,
   resolveWeekIsoFromDateParam,
   resolveWeekIsoFromDowParam,
   toWeekNavCells,
 } from './_components/week-nav.logic'
+
+/** Filas de historial por tanda del tab "Historial" (~3-4 semanas si el alumno es activo a diario;
+ *  el historial es DISPERSO, así que una tanda puede cubrir más semanas si registra poco). */
+const NUTRITION_HISTORY_PAGE_ROWS = 21
 
 export const metadata = { title: 'Nutrición' }
 
@@ -130,7 +136,13 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
         ) : null}
         {view === 'history' ? (
           <Suspense fallback={<ViewSkeleton />}>
-            <HistoryView clientId={user.id} before={query.before ?? null} base={base} today={today} />
+            <HistoryView
+              base={base}
+              before={query.before ?? null}
+              clientId={user.id}
+              date={query.date ?? null}
+              today={today}
+            />
           </Suspense>
         ) : null}
       </div>
@@ -327,6 +339,7 @@ async function TodayView({
           clientName={clientName}
           substitutionsByItem={substitutionsByItem}
           scanHref={`${base}/nutrition-v2/scanner`}
+          visibleNotes={plan.visibleNotes}
         />
       </>
     )
@@ -441,7 +454,8 @@ async function PlanView({
           Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
           {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
         </p>
-        <p className="mt-2 text-sm leading-6 text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</p>
+        {/* Auditoría P2: fuera el párrafo de descripción de la estrategia — texto de folleto,
+            constante, se lee una vez en la vida y no cambia ninguna decisión del alumno. */}
         {plan.visibleNotes ? (
           <div className="mt-4 rounded-control border border-border-subtle bg-surface-sunken p-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Notas de tu coach</p>
@@ -493,7 +507,8 @@ function PlanObjectivesCard({
   if (targets.proteinG != null) rows.push({ label: 'Proteína', value: formatNutritionAmount(targets.proteinG, 'g') })
   if (targets.carbsG != null) rows.push({ label: 'Carbohidratos', value: formatNutritionAmount(targets.carbsG, 'g') })
   if (targets.fatsG != null) rows.push({ label: 'Grasas', value: formatNutritionAmount(targets.fatsG, 'g') })
-  if (targets.fiberG != null) rows.push({ label: 'Fibra', value: formatNutritionAmount(targets.fiberG, 'g') })
+  // Auditoría P4: fuera "Fibra" — ningún builder actual escribe `targets.fiberG` (siempre null),
+  // así que era una fila de código inalcanzable con cualquier plan creado hoy.
   if (rows.length === 0) return null
   return (
     <NutritionCard>
@@ -513,7 +528,15 @@ function PlanObjectivesCard({
   )
 }
 
-/** Reglas/permisos del alumno como pastillas (qué puede ajustar, sustituir, etc.). */
+/**
+ * Reglas/permisos del alumno como pastillas.
+ *
+ * Auditoría P1: podado a los 2 permisos que de verdad cambian la pantalla del alumno
+ * (`canRegisterFreely`, `canAdjustPrescribedQuantity` — ver tabla §3). Se retiraron
+ * "Intercambios permitidos" / "Puedes mover comidas de franja" / "Puedes omitir opcionales": los
+ * tres son chips de texto sin setter en ningún builder ni consumidor real en la UI del alumno —
+ * la card prometía reglas que la pantalla no cumplía.
+ */
 function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['permissions'] }) {
   const chips: string[] = []
   chips.push(permissions.canRegisterFreely ? 'Registro libre habilitado' : 'Solo alimentos prescritos')
@@ -524,9 +547,6 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
         : 'Ajuste de cantidad permitido',
     )
   }
-  if (permissions.canSubstitute) chips.push('Intercambios permitidos')
-  if (permissions.canMoveMealSlot) chips.push('Puedes mover comidas de franja')
-  if (permissions.canSkipOptionalItems) chips.push('Puedes omitir opcionales')
   return (
     <NutritionCard>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Reglas del plan</p>
@@ -544,83 +564,103 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
   )
 }
 
+/**
+ * Tab "Historial": card por SEMANA (SPEC ola 3 punto 7), no por día suelto.
+ *
+ * Con `?date=` presente delega en `HistoryDayDetailView` (el día abierto desde el mini-strip, en
+ * modo lectura — mismo mecanismo/componentes de "día pasado" de la ola 1, `PastDaySummary`).
+ * Sin `date`, pagina por semanas de forma ACUMULATIVA: la carga inicial es 100% RSC y "Ver
+ * semanas anteriores" AGREGA tandas vía server action (`HistoryWeeksList`), nunca reemplaza el
+ * listado — a diferencia del link `?before=` legado, que navegaba la página entera.
+ */
 async function HistoryView({
   clientId,
   before,
   base,
   today,
+  date,
 }: {
   clientId: string
   before: string | null
   base: string
   today: string
+  date: string | null
 }) {
-  const history = await getNutritionHistoryV2ForWeb({ clientId, before, pageSize: 14 })
-  if (history.items.length === 0) {
+  if (date != null) {
+    return <HistoryDayDetailView base={base} clientId={clientId} dateIso={date} today={today} />
+  }
+
+  const history = await getNutritionHistoryV2ForWeb({ clientId, before, pageSize: NUTRITION_HISTORY_PAGE_ROWS })
+  const weeks = groupHistoryDaysByWeek(history.items, today)
+  if (weeks.length === 0) {
     return (
       <NutritionStatePanel
         illustration="historial-vacio"
         title="Todavía no hay historial"
-        description="Tus días aparecerán aquí después del primer registro o snapshot del plan."
+        description="Tus semanas aparecerán aquí después del primer registro o snapshot del plan."
       />
     )
   }
 
   return (
-    <div className="space-y-3">
-      {history.items.map((day) => {
-        const legacy = describeLegacyHistoryDay(day)
-        const showLegacyMacros = legacy.legacyOnly && legacy.hasMacros && legacy.consumed != null
-        return (
-          <NutritionCard key={day.localDate}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="font-display text-lg font-semibold text-strong">
-                  {formatNutritionShortDate(day.localDate, { todayIso: today, relative: true })}
-                </h2>
-                {showLegacyMacros && legacy.consumed ? (
-                  <div className="mt-1">
-                    <MacroChipRow
-                      calories={legacy.consumed.calories}
-                      proteinG={legacy.consumed.proteinG}
-                      carbsG={legacy.consumed.carbsG}
-                      fatsG={legacy.consumed.fatsG}
-                      size="sm"
-                    />
-                  </div>
-                ) : (
-                  <p className="mt-1 text-sm tabular-nums text-muted">
-                    {legacy.legacyOnly
-                      ? legacy.completionCount > 0
-                        ? legacy.completionsLabel
-                        : 'Registrado en el sistema anterior'
-                      : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
-                  </p>
-                )}
-                {legacy.isLegacy && !legacy.legacyOnly && legacy.secondaryLabel ? (
-                  <p className="mt-1 text-xs tabular-nums text-subtle">{legacy.secondaryLabel}</p>
-                ) : null}
-                {legacy.isLegacy && legacy.mealsLabel ? (
-                  <p className="mt-1 line-clamp-2 text-xs text-subtle">{legacy.mealsLabel}</p>
-                ) : null}
-              </div>
-              {legacy.isLegacy ? (
-                <span className="shrink-0 rounded-pill border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
-                  Historial anterior
-                </span>
-              ) : null}
-            </div>
-          </NutritionCard>
-        )
-      })}
-      {history.hasMore && history.nextCursor ? (
-        <Link
-          className="inline-flex min-h-11 items-center rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong"
-          href={`${base}/nutrition-v2?view=history&before=${history.nextCursor}`}
-        >
-          Ver días anteriores
-        </Link>
-      ) : null}
-    </div>
+    <HistoryWeeksList
+      base={base}
+      clientId={clientId}
+      initialCursor={history.nextCursor}
+      initialHasMore={history.hasMore}
+      initialWeeks={weeks}
+      pageSize={NUTRITION_HISTORY_PAGE_ROWS}
+      todayIso={today}
+    />
   )
+}
+
+/**
+ * Un día del historial abierto desde el mini-strip de su semana, en modo lectura estricta.
+ *
+ * NO reusa la ventana semanal de "Hoy" (`TodayView`/`week-nav.logic`, deliberadamente acotada a la
+ * semana en curso — ver comentario de `resolveWeekIsoFromDateParam`): esta es la "otra página"
+ * que ese comentario prevé para navegar semanas anteriores. Solo pide UNA fila de historial
+ * (`get_nutrition_history_page_v2`, jamás `get_nutrition_today_v2` — ese RPC es `volatile` y
+ * revienta con fecha ≠ hoy) y reconstruye la celda con el mismo helper puro (`buildNutritionWeek`)
+ * que arma la semana de Hoy/Plan, así el read-only del día es byte-idéntico al de un día pasado
+ * de la semana en curso (`PastDaySummary`, sin variantes: acá no importa la estructura del plan,
+ * solo lo que el alumno realmente tuvo).
+ */
+async function HistoryDayDetailView({
+  clientId,
+  dateIso,
+  base,
+  today,
+}: {
+  clientId: string
+  dateIso: string
+  base: string
+  today: string
+}) {
+  const historyHref = `${base}/nutrition-v2?view=history`
+  if (nutritionDayOfWeekFromIso(dateIso) == null || dateIso > today) {
+    redirect(historyHref)
+  }
+
+  const page = await getNutritionHistoryV2ForWeb({
+    clientId,
+    before: addNutritionDays(dateIso, 1),
+    pageSize: 1,
+  })
+  const row = page.items.find((item) => item.localDate === dateIso) ?? null
+  // Generics explícitos: sin variantes reales que inferir de `[]`, fija el mismo par
+  // (PlanVariant, NutritionHistoryDay) que `StudentNutritionWeekCell` espera — la celda vale para
+  // `PastDaySummary` sin casts. `variant` queda `null` en los 7 días (no hay estructura que mostrar
+  // aquí; el día solo necesita lo que el alumno realmente consumió).
+  const cells = buildNutritionWeek<PlanVariant, NutritionHistoryDay>({
+    variants: [],
+    history: row ? [row] : [],
+    weekStartIso: dateIso,
+    todayIso: today,
+  })
+  const cell = cells.find((candidate) => candidate.isoDate === dateIso) ?? null
+  if (cell == null) redirect(historyHref)
+
+  return <PastDaySummary backHref={historyHref} backLabel="Volver al historial" cell={cell} />
 }

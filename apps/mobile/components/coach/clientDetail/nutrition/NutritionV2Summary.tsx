@@ -1,9 +1,9 @@
 /**
- * NutritionV2Summary — tab Nutrición V2 embebido en la ficha del alumno del coach. Espejo RN
- * 1:1 del `NutritionTabV2` web (`apps/web/src/app/coach/clients/[clientId]/NutritionTabV2.tsx`):
- * header con eyebrow "Nutrición · V2" + acciones (abrir ficha completa / builder), empty-state
- * "Sin plan V2 vigente", badges de estrategia/versión, MacroBudget del día, cards "Plan vigente"
- * y "Hoy", y sección "Últimos días" con CTA de Nutrición Pro sin addon.
+ * NutritionV2Summary — tab Nutrición V2 embebido en la ficha del alumno del coach. Poda ola 3
+ * (SPEC punto 6): deja de ser el clon degradado de la ficha completa (A) — "Plan vigente", "Hoy"
+ * y "Últimos días" ya viven ahí, a un tap por `detailHref`. Este tab pasa a ser SOLO una card de
+ * vistazo: estrategia + semana en puntos + energía de hoy + racha, y los dos CTAs de siempre
+ * (abrir ficha / crear-versionar plan).
  *
  * Gating (paralelo del server-resolve web `resolveNutritionTabV2`, clients/[clientId]/page.tsx:240):
  * cuando el flag/canary `nutritionV2Coach` está ON Y el fetch del read model responde,
@@ -15,13 +15,11 @@
  *    navegación es inmediata y el destino trae su propio skeleton, así que no se replica.
  *  - Aviso "Mostrando la última copia disponible." cuando el detail proviene de cache stale
  *    (no existe en web: RSC no tiene cache offline).
- *  - El recorte del historial sin addon Pro corre client-side con la MISMA función
- *    `filterHistoryDaysToBaseWindow` que usa el server web.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { ArrowUpRight, LockKeyhole, Plus, Utensils } from 'lucide-react-native'
+import { ArrowUpRight, Plus } from 'lucide-react-native'
 import {
   MacroBudget,
   NutritionCard,
@@ -29,8 +27,10 @@ import {
   StrategyBadge,
 } from '../../../nutrition-v2'
 import {
+  buildNutritionWeek,
   NutritionClientDetailReadModelSchema,
   type NutritionClientDetailReadModel,
+  type NutritionWeekCell,
 } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../../lib/flags'
 import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
@@ -190,6 +190,69 @@ function EmberCta({
   )
 }
 
+/**
+ * Celda de la semana con los tipos REALES del read model del coach (mismo patrón que
+ * `CoachWeekCell` de la ficha completa `coach/nutrition-v2/[clientId].tsx`): así el punto de la
+ * tira no castea nada.
+ */
+type SummaryWeekCell = NutritionWeekCell<
+  NutritionClientDetailReadModel['plan']['dayVariants'][number],
+  NutritionClientDetailReadModel['recentDays'][number]
+>
+
+/**
+ * ¿El día tiene registro? Espejo deliberado del mismo helper en `WeekDayNav.tsx` (documentado ahí
+ * como "vive en cada gemelo": es regla de PRESENTACIÓN del punto, no de datos, y cada superficie
+ * la repite en vez de acoplarse a un componente compartido).
+ */
+function hasLoggedIntake(cell: SummaryWeekCell): boolean {
+  if (cell.state === 'future') return false
+  if (cell.state === 'past-logged') return true
+  if (cell.isLegacy === true) return true
+  const consumed = cell.consumed
+  if (consumed == null) return false
+  return consumed.entryCount > 0 || consumed.calories > 0
+}
+
+/** Racha de días consecutivos con registro terminando en el día más reciente con datos. */
+function computeWeekStreak(cells: readonly SummaryWeekCell[]): number {
+  let streak = 0
+  for (let index = cells.length - 1; index >= 0; index -= 1) {
+    const cell = cells[index]
+    if (cell.state === 'future') continue
+    if (!hasLoggedIntake(cell)) break
+    streak += 1
+  }
+  return streak
+}
+
+/**
+ * Tira compacta de 7 puntos (semana Lu-Do): verde = con registro, tenue = pasado sin registro,
+ * hueco = futuro. Presentacional puro, NO navegable (a diferencia de `WeekDayNav` de la ficha
+ * completa): esta card es un vistazo, el detalle por día vive a un tap en `detailHref`.
+ */
+function WeekGlanceDots({ cells }: { cells: readonly SummaryWeekCell[] }) {
+  if (cells.length === 0) return null
+  const loggedCount = cells.filter(hasLoggedIntake).length
+  return (
+    <View
+      accessibilityRole="summary"
+      accessibilityLabel={`Semana: ${loggedCount} de 7 días con registro`}
+      className="flex-row gap-1.5"
+    >
+      {cells.map((cell) => {
+        const logged = hasLoggedIntake(cell)
+        const dotTone = logged
+          ? 'bg-success-500'
+          : cell.state === 'future'
+            ? 'border border-strong'
+            : 'bg-ink-300'
+        return <View key={cell.isoDate} className={cx('h-2 w-2 rounded-full', dotTone)} />
+      })}
+    </View>
+  )
+}
+
 export function NutritionV2Summary({
   detail,
   clientId,
@@ -221,6 +284,22 @@ export function NutritionV2Summary({
 
   const openDetail = () => router.push(view.detailHref)
   const openBuilder = () => router.push(view.builderHref)
+
+  // Semana Lu-Do de vistazo (mismo mecanismo que la ficha completa: `plan.dayVariants` + el
+  // historial disperso ya descargado, CERO fetch nuevo y cero `get_nutrition_today_v2` con otra
+  // fecha). `detail.recentDays` alcanza siempre para componer 7 días, con o sin addon Pro.
+  const weekCells = useMemo<SummaryWeekCell[]>(
+    () =>
+      buildNutritionWeek({
+        variants: detail.plan.dayVariants,
+        history: detail.recentDays,
+        weekStartIso: date,
+        todayIso: date,
+      }),
+    [date, detail],
+  )
+  const loggedDaysCount = useMemo(() => weekCells.filter(hasLoggedIntake).length, [weekCells])
+  const weekStreak = useMemo(() => computeWeekStreak(weekCells), [weekCells])
 
   return (
     <View className="min-w-0 gap-6">
@@ -275,82 +354,28 @@ export function NutritionV2Summary({
           action={<EmberCta label="Crear plan" accessibilityLabel="Crear plan" onPress={openBuilder} />}
         />
       ) : (
-        <View className="gap-5">
-          {view.plan ? (
-            <View className="flex-row flex-wrap items-center gap-2">
-              <StrategyBadge strategy={view.plan.strategy} />
-            </View>
-          ) : null}
-
-          <MacroBudget calories={view.today.calories} macros={view.today.macros} />
-
-          {/* Grid lg:grid-cols-2 del web colapsa a una columna en móvil. */}
-          <View className="gap-4">
-            <NutritionCard>
-              <View className="flex-row items-center gap-2">
-                <Utensils size={16} className="text-ember-600 dark:text-ember-300" />
-                <Text className="font-display text-base font-semibold text-strong">
-                  Plan vigente
-                </Text>
-              </View>
-              <Text className="mt-2 text-sm font-medium text-strong">
-                {view.plan?.name ?? 'Plan de nutrición'}
-              </Text>
-              <Text className="mt-2 text-sm leading-6 text-body">
-                {view.plan?.visibleNotes || 'Sin indicaciones visibles para el alumno.'}
-              </Text>
-            </NutritionCard>
-            <NutritionCard>
-              <Text className="font-display text-base font-semibold text-strong">Hoy</Text>
-              <Text className="mt-2 text-sm text-muted">
-                {view.today.entryCount} registro{view.today.entryCount === 1 ? '' : 's'} ·{' '}
-                {view.today.mealSlotCount} franja{view.today.mealSlotCount === 1 ? '' : 's'}
-              </Text>
-              <Text className="mt-3 text-sm text-body">
-                <Text className="font-semibold text-strong">
-                  {Math.round(view.today.remainingCalories)} kcal
-                </Text>{' '}
-                restantes según el snapshot del día.
-              </Text>
-            </NutritionCard>
+        // Card única de vistazo (SPEC punto 6 / mockup "Tab del menu de alumnos — resumen, no
+        // clon"): estrategia + semana en puntos + energía de hoy + racha. El detalle completo
+        // (plan vigente, franjas, historial) vive en la ficha a un tap por el CTA de arriba —
+        // ya no se clona acá.
+        <NutritionCard>
+          <View className="flex-row flex-wrap items-center justify-between gap-2">
+            <Text className="font-display text-base font-semibold text-strong">Esta semana</Text>
+            {view.plan ? <StrategyBadge compact strategy={view.plan.strategy} /> : null}
           </View>
 
-          <View>
-            <Text className="mb-3 font-display text-lg font-semibold text-strong">
-              Últimos días
-            </Text>
-            {view.showHistoryUpgradeCta ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Histórico completo con Nutrición Pro"
-                onPress={() => router.push(view.historyUpgradeHref)}
-                className="mb-3 flex-row items-center gap-2 self-start rounded-control border border-subtle bg-surface-sunken px-3 py-2"
-              >
-                <LockKeyhole size={14} className="text-ember-600 dark:text-ember-300" />
-                <Text className="text-xs text-muted">Histórico completo con Nutrición Pro</Text>
-              </Pressable>
-            ) : null}
-            {view.recentDays.length === 0 ? (
-              <NutritionCard tone="neutral">
-                <Text className="text-sm text-muted">
-                  Aún no hay días registrados en la ventana visible.
-                </Text>
-              </NutritionCard>
-            ) : (
-              <View className="gap-3">
-                {view.recentDays.map((day) => (
-                  <NutritionCard key={day.localDate}>
-                    <Text className="font-semibold text-strong">{day.label}</Text>
-                    <Text className="mt-1 text-sm text-muted">
-                      {Math.round(day.calories)} kcal · {day.entryCount} registro
-                      {day.entryCount === 1 ? '' : 's'}
-                    </Text>
-                  </NutritionCard>
-                ))}
-              </View>
-            )}
+          <View className="mt-3">
+            <WeekGlanceDots cells={weekCells} />
           </View>
-        </View>
+
+          <View className="mt-4">
+            <MacroBudget calories={view.today.calories} macros={view.today.macros} />
+          </View>
+
+          <Text className="mt-3 text-sm text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+            {loggedDaysCount} de 7 días con registro · racha {weekStreak}
+          </Text>
+        </NutritionCard>
       )}
     </View>
   )

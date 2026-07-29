@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildNutritionWeek, buildNutritionWeekDates } from '@eva/nutrition-v2'
+import { buildNutritionWeek, buildNutritionWeekDates, type NutritionHistoryDay } from '@eva/nutrition-v2'
 import {
   formatFutureDayHeadline,
+  formatHistoryWeekRangeLabel,
   formatPastDayHeadline,
   formatSelectedDayCaption,
+  groupHistoryDaysByWeek,
   nutritionWeekHistoryCursor,
   resolveWeekIsoFromDateParam,
   resolveWeekIsoFromDowParam,
@@ -133,5 +135,69 @@ describe('toWeekNavCells', () => {
     expect(navCells.find((cell) => cell.isoDate === HOY)?.state).toBe('today')
     expect(navCells.find((cell) => cell.isoDate === SABADO)?.state).toBe('future')
     expect(navCells.find((cell) => cell.isoDate === SABADO)?.consumed).toBeNull()
+  })
+})
+
+// ── Historial por semanas (SPEC ola 3 punto 7) ────────────────────────────────────
+
+function historyDay(overrides: Partial<NutritionHistoryDay> & { localDate: string }): NutritionHistoryDay {
+  return {
+    snapshotId: null,
+    planVersionId: null,
+    strategy: null,
+    targets: { calories: 2000, proteinG: 150, carbsG: 200, fatsG: 60, fiberG: 25, sodiumMg: null, waterMl: null },
+    consumed: { calories: 1800, proteinG: 140, carbsG: 190, fatsG: 55, fiberG: 20, entryCount: 3 },
+    activeEntryCount: 3,
+    correctionCount: 0,
+    legacyCompletionCount: 0,
+    legacyDisclosure: null,
+    lastRecordedAt: `${overrides.localDate}T20:00:00.000Z`,
+    ...overrides,
+  }
+}
+
+describe('groupHistoryDaysByWeek', () => {
+  // Semana pasada Lu-Do: 2026-07-20 (lunes) … 2026-07-26 (domingo).
+  const rows: NutritionHistoryDay[] = [
+    historyDay({ localDate: '2026-07-24' }), // viernes, con registro
+    historyDay({ localDate: '2026-07-22' }), // miercoles, con registro
+    historyDay({ localDate: '2026-07-13' }), // semana anterior a esa (lunes 13-19 jul)
+  ]
+
+  it('agrupa filas dispersas en semanas Lu-Do, mas reciente primero', () => {
+    const weeks = groupHistoryDaysByWeek(rows, HOY)
+    expect(weeks).toHaveLength(2)
+    expect(weeks[0].weekStartIso).toBe('2026-07-20')
+    expect(weeks[0].weekEndIso).toBe('2026-07-26')
+    expect(weeks[1].weekStartIso).toBe('2026-07-13')
+  })
+
+  it('cada semana trae sus 7 celdas y cuenta solo los dias con registro real', () => {
+    const [week] = groupHistoryDaysByWeek(rows, HOY)
+    expect(week.cells).toHaveLength(7)
+    expect(week.loggedCount).toBe(2)
+    expect(week.percent).toBe(29) // round(2/7*100)
+    // Los 5 dias sin fila de esa semana quedan "sin registro", no inventados.
+    const lunes = week.cells.find((cell) => cell.isoDate === '2026-07-20')
+    expect(lunes?.state).toBe('past-empty')
+  })
+
+  it('sin filas no fabrica semanas', () => {
+    expect(groupHistoryDaysByWeek([], HOY)).toEqual([])
+  })
+
+  it('no serializa el arbol del plan: las celdas vienen podadas (variant siempre null)', () => {
+    const [week] = groupHistoryDaysByWeek(rows, HOY)
+    expect(week.cells.every((cell) => cell.variant === null)).toBe(true)
+  })
+})
+
+describe('formatHistoryWeekRangeLabel', () => {
+  it('mismo mes: "21-27 jul"', () => {
+    expect(formatHistoryWeekRangeLabel('2026-07-21', '2026-07-27')).toBe('21-27 jul')
+  })
+
+  it('cruza de mes: incluye el mes de inicio', () => {
+    expect(formatHistoryWeekRangeLabel('2026-07-28', '2026-08-03')).toBe('28 jul-3 ago')
   })
 })

@@ -19,6 +19,7 @@
 
 import {
   addNutritionDays,
+  buildNutritionWeek,
   formatNutritionCalories,
   nutritionDayOfWeekFromIso,
   nutritionWeekStartIso,
@@ -158,4 +159,89 @@ export function formatSelectedDayCaption(cell: {
 }): string | null {
   const label = cell.variant?.label?.trim()
   return label ? `${cell.longLabel} · ${label}` : cell.longLabel
+}
+
+// ── Historial por semanas (auditoría SPEC ola 3 punto 7) ──────────────────────────
+//
+// El tab "Historial" pasa de una card por DÍA a una card por SEMANA (rango + n/7 + %) con un
+// mini-strip de 7 celdas tappable. `get_nutrition_history_page_v2` no tiene bordes de semana: su
+// paginación es por CANTIDAD de filas y el historial es DISPERSO (solo hay fila para un día si
+// alguna vez tuvo snapshot o intake), así que una tanda de filas puede cruzar más o menos semanas
+// según cuán activo sea el alumno. Por eso agrupamos lo que YA llegó por `nutritionWeekStartIso`
+// en vez de pedir "una semana" al backend: cero RPC nuevo, cero fecha inventada.
+
+/** Una semana agrupada del historial, lista para pintar una card + su mini-strip de 7 días. */
+export interface HistoryWeekBucket {
+  /** Lunes de la semana (`YYYY-MM-DD`). */
+  weekStartIso: string
+  /** Domingo de la semana (`YYYY-MM-DD`). */
+  weekEndIso: string
+  /** 7 celdas Lu-Do, podadas (`toWeekNavCells`) para cruzar al cliente. */
+  cells: NutritionWeekCell[]
+  /** Días con registro (`state === 'past-logged'`) de los 7 de la semana. */
+  loggedCount: number
+  /** `loggedCount / 7` redondeado, para el "% " de la card. */
+  percent: number
+}
+
+/**
+ * Agrupa filas de historial (ya ordenadas desc por el RPC) en semanas Lu-Do completas.
+ *
+ * Cada semana presente entre las filas recibidas se agrupa una sola vez, en el mismo orden en que
+ * aparecieron (más reciente primero); los días sin fila dentro de esa semana quedan "sin
+ * registro" vía `buildNutritionWeek` (regla 3: `consumed = null` ≠ "registró cero"). No se
+ * fabrican semanas fuera del rango de filas recibido — si el alumno tiene huecos de meses, esta
+ * función no inventa semanas vacías de por medio.
+ *
+ * `variants: []` a propósito: el mini-strip solo pinta el punto de estado (con/sin registro), no
+ * la estructura del plan de ese día — pasar variantes reales aquí serializaría el árbol del plan
+ * sin que ninguna UI lo use (mismo criterio que `toWeekNavCells`).
+ */
+export function groupHistoryDaysByWeek(
+  days: readonly NutritionHistoryDay[],
+  todayIso: string,
+): HistoryWeekBucket[] {
+  const rowsByWeek = new Map<string, NutritionHistoryDay[]>()
+  const order: string[] = []
+  for (const day of days) {
+    const weekStartIso = nutritionWeekStartIso(day.localDate)
+    if (weekStartIso == null) continue
+    if (!rowsByWeek.has(weekStartIso)) {
+      rowsByWeek.set(weekStartIso, [])
+      order.push(weekStartIso)
+    }
+    rowsByWeek.get(weekStartIso)!.push(day)
+  }
+
+  return order.map((weekStartIso) => {
+    const cells = toWeekNavCells(
+      buildNutritionWeek({
+        variants: [],
+        history: rowsByWeek.get(weekStartIso) ?? [],
+        weekStartIso,
+        todayIso,
+      }),
+    )
+    const loggedCount = cells.filter((cell) => cell.state === 'past-logged').length
+    return {
+      weekStartIso,
+      weekEndIso: addNutritionDays(weekStartIso, 6) ?? weekStartIso,
+      cells,
+      loggedCount,
+      percent: Math.round((loggedCount / 7) * 100),
+    }
+  })
+}
+
+/** "21-27 jul" (mismo mes) o "28 jul-3 ago" (cruza de mes), para el encabezado de la card. */
+export function formatHistoryWeekRangeLabel(weekStartIso: string, weekEndIso: string): string {
+  const start = new Date(`${weekStartIso}T00:00:00Z`)
+  const end = new Date(`${weekEndIso}T00:00:00Z`)
+  const monthFmt = new Intl.DateTimeFormat('es-CL', { month: 'short', timeZone: 'UTC' })
+  // `Intl` deja un punto tras la abreviatura ("jul.") en es-CL; se pela igual que
+  // `formatNutritionShortDate` (mismo criterio de copy en toda la superficie).
+  const monthLabel = (date: Date) => monthFmt.format(date).replace(/\.$/, '')
+  const sameMonth = start.getUTCMonth() === end.getUTCMonth() && start.getUTCFullYear() === end.getUTCFullYear()
+  const startLabel = sameMonth ? `${start.getUTCDate()}` : `${start.getUTCDate()} ${monthLabel(start)}`
+  return `${startLabel}-${end.getUTCDate()} ${monthLabel(end)}`
 }

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react-native'
 import {
   DayVariantWeekStrip,
+  FoodRow,
   MacroBudget,
   MacroChipRow,
   NutritionHeader,
@@ -38,7 +39,6 @@ import {
   NutritionClientDetailReadModelSchema,
   buildNutritionWeek,
   createNutritionMacroValue,
-  describeLegacyHistoryDay,
   formatNutritionCalories,
   resolveNutritionDayVariantForDate,
   sortNutritionDayVariantsForDisplay,
@@ -47,6 +47,7 @@ import {
   type NutritionWeekCell,
 } from '@eva/nutrition-v2'
 import { formatNutritionShortDate } from '../../../lib/date-utils'
+import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
@@ -75,10 +76,8 @@ import {
   nutritionV2BuilderHref,
 } from '../../../lib/nutrition-v2-hub'
 import {
-  NUTRITION_PRO_HISTORY_BANNER_LABEL,
   NUTRITION_PRO_MODULE_KEY,
   filterHistoryDaysToBaseWindow,
-  shouldShowNutritionProHistoryBanner,
 } from '../../../lib/nutrition-v2-pro'
 import { supabase } from '../../../lib/supabase'
 import { useTheme } from '../../../context/ThemeContext'
@@ -320,7 +319,6 @@ export default function CoachNutritionV2ClientScreen() {
     // profundidad para que RN nunca muestre >30d aunque el servidor no cortara.
     return hasNutritionPro ? detail.recentDays : filterHistoryDaysToBaseWindow(detail.recentDays, date)
   }, [date, detail, hasNutritionPro])
-  const showHistoryUpsell = shouldShowNutritionProHistoryBanner({ hasNutritionPro })
 
   // Semana Lu-Do compuesta con datos YA descargados: plan completo (`dayVariants`, el RPC devuelve
   // TODAS las variantes) + historial disperso (`recentDays`, ya recortado a la ventana del addon).
@@ -622,17 +620,14 @@ export default function CoachNutritionV2ClientScreen() {
                     Solo HOY: `recentDays` no trae cobertura de porciones por día. */}
                 <PortionDayCoverageCard coverage={detail.today.dayCoverage} />
 
-                {/* Card "Hoy" (web page.tsx:273-281; copy verbatim del web, incluida la
-                    ortografía "segun/dia" sin tilde del original). */}
+                {/* Card "Hoy": solo el conteo de registros/franjas — el "kcal restantes" ya lo
+                    dice `MacroBudget` arriba (mismo dato, otra fórmula: R1 de la auditoría). */}
                 <NutritionCard>
                   <Text className="font-display text-lg font-semibold text-strong">Hoy</Text>
                   <Text className="mt-1 text-sm text-muted">
                     {detail.today.consumed.entryCount} registro
                     {detail.today.consumed.entryCount === 1 ? '' : 's'} ·{' '}
                     {detail.today.mealSlots.length} franjas
-                  </Text>
-                  <Text className="mt-3 text-sm text-body">
-                    {detail.today.remaining.calories ?? 0} kcal restantes segun el snapshot del dia.
                   </Text>
                 </NutritionCard>
               </>
@@ -709,15 +704,29 @@ export default function CoachNutritionV2ClientScreen() {
                         {slot.startTime ? <Text className="text-xs text-muted">{slot.startTime}</Text> : null}
                       </View>
                       {slot.prescriptionItems.length > 0 ? (
-                        <View className="mt-2 gap-1">
-                          {slot.prescriptionItems.map((prescription) => (
-                            <View key={prescription.id} className="flex-row items-center justify-between gap-2">
-                              <Text className="min-w-0 flex-1 text-sm text-body" numberOfLines={1}>
-                                {prescription.name || 'Alimento'} · {prescription.quantity} {prescription.unit}
-                              </Text>
-                              <Text className="shrink-0 text-xs text-muted">
-                                {Math.round(prescription.macros.calories ?? 0)} kcal
-                              </Text>
+                        <View className="mt-2">
+                          {slot.prescriptionItems.map((prescription, index) => (
+                            <View
+                              key={prescription.id}
+                              className={index > 0 ? 'border-t border-subtle' : undefined}
+                            >
+                              {/* Miniatura del catálogo (regla transversal del owner): `media` si
+                                  el alimento tiene foto, si no icono por categoría (`FoodThumbnail`
+                                  vía `FoodRow`). Espejo del renglón del alumno (nutrition-v2/index.tsx). */}
+                              <FoodRow
+                                food={{
+                                  id: prescription.id,
+                                  name: prescription.name || 'Alimento',
+                                  detail: prescription.brand,
+                                  thumbnailUrl: foodMediaThumbnailUrl(prescription.media),
+                                  quantityLabel: `${prescription.quantity} ${prescription.unit}`,
+                                  calories: prescription.macros.calories,
+                                  proteinG: prescription.macros.proteinG,
+                                  carbsG: prescription.macros.carbsG,
+                                  fatsG: prescription.macros.fatsG,
+                                }}
+                                fallbackCategory={prescription.category}
+                              />
                             </View>
                           ))}
                         </View>
@@ -750,83 +759,6 @@ export default function CoachNutritionV2ClientScreen() {
         {/* D-07: palabra alineada a web ("informacion", no "contenido"), conservando la ortografía
             correcta del proyecto (tildes). El typo web "informacion" queda como deuda RN-out. */}
         <Text className="mt-2 text-xs text-muted">El alumno no recibe esta información.</Text>
-      </NutritionCard>
-
-      <NutritionCard>
-        <Text className="font-display text-lg font-semibold text-strong">Últimos días</Text>
-        {showHistoryUpsell ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={NUTRITION_PRO_HISTORY_BANNER_LABEL}
-            onPress={() => router.push('/coach/modules')}
-            className="mt-3 flex-row items-center gap-2 self-start rounded-control border border-subtle bg-surface-sunken px-3 py-2"
-          >
-            <LockKeyhole color={theme.primary} size={14} />
-            <Text className="text-xs font-semibold text-muted">{NUTRITION_PRO_HISTORY_BANNER_LABEL}</Text>
-          </Pressable>
-        ) : null}
-        <View className="mt-3 gap-3">
-          {recentDays.length === 0 ? (
-            <Text className="text-sm text-muted">Sin registros en la ventana disponible.</Text>
-          ) : (
-            recentDays.map((day) => {
-              const legacy = describeLegacyHistoryDay(day)
-              const showLegacyMacros = legacy.legacyOnly && legacy.hasMacros && legacy.consumed != null
-              return (
-                <View className="border-b border-subtle pb-3" key={day.localDate}>
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="min-w-0 flex-1">
-                      <View className="flex-row flex-wrap items-center gap-2">
-                        {/* QW-10: fecha legible ("ayer", "sáb 25 jul"), no el ISO crudo. Mismo
-                            helper y mismas opciones que el historial del alumno RN. */}
-                        <Text className="font-semibold text-strong">
-                          {formatNutritionShortDate(day.localDate, { todayIso: date, relative: true })}
-                        </Text>
-                        {legacy.isLegacy ? (
-                          <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">
-                            <Text className="text-[10px] font-semibold text-warning-700">Historial anterior</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      {showLegacyMacros && legacy.consumed ? (
-                        <View className="mt-1">
-                          <MacroChipRow
-                            calories={legacy.consumed.calories}
-                            proteinG={legacy.consumed.proteinG}
-                            carbsG={legacy.consumed.carbsG}
-                            fatsG={legacy.consumed.fatsG}
-                            size="sm"
-                          />
-                        </View>
-                      ) : (
-                        <Text className="mt-0.5 text-xs text-muted">
-                          {legacy.legacyOnly
-                            ? legacy.completionCount > 0
-                              ? legacy.completionsLabel
-                              : 'Registrado en el sistema anterior'
-                            : `${day.activeEntryCount} registros`}
-                        </Text>
-                      )}
-                      {legacy.isLegacy && !legacy.legacyOnly && legacy.secondaryLabel ? (
-                        <Text className="mt-1 text-[11px] text-subtle">{legacy.secondaryLabel}</Text>
-                      ) : null}
-                      {legacy.isLegacy && legacy.mealsLabel ? (
-                        <Text numberOfLines={2} className="mt-1 text-[11px] text-subtle">
-                          {legacy.mealsLabel}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {!legacy.legacyOnly ? (
-                      <Text className="font-mono text-sm font-semibold text-strong">
-                        {day.consumed.calories} kcal
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              )
-            })
-          )}
-        </View>
       </NutritionCard>
 
       {/* Con plan vigente el camino primario es "Editar plan" (card); el wizard queda como
@@ -972,7 +904,7 @@ function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
     )
   }
 
-  // Día del sistema anterior sin detalle V2: manda la capa legacy (mismas frases que "Últimos días").
+  // Día del sistema anterior sin detalle V2: manda la capa legacy.
   if (legacy?.legacyOnly) {
     return (
       <NutritionCard>
