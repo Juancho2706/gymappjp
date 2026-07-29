@@ -10,6 +10,7 @@ import {
   NutritionStatePanel,
   NutritionToolbar,
   PlanVersionBadge,
+  PrescribedPortionChips,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
@@ -463,6 +464,9 @@ function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
     : null
   const subtotal = slot.prescriptionItems.reduce((sum, item) => sum + (item.macros.calories ?? 0), 0)
   const hasItems = slot.prescriptionItems.length > 0
+  // Capa de porciones (P0-3): una franja puede prescribir SOLO porciones a elección; sin
+  // esto la vista Plan la mostraba como "franja flexible sin alimentos prescritos".
+  const hasPortions = (slot.exchangeTargets?.length ?? 0) > 0
   const targetChips =
     slot.targets.calories != null ||
     slot.targets.proteinG != null ||
@@ -514,9 +518,13 @@ function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
             />
           </span>
         </div>
-      ) : (
+      ) : null}
+      {/* Porciones prescritas: se suman a los alimentos fijos o al objetivo de macros; el
+          empty-state de abajo solo aparece cuando la franja no prescribe NADA. */}
+      <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
+      {!hasItems && !targetChips && !hasPortions ? (
         <p className="mt-2 text-xs text-muted">Franja flexible sin alimentos prescritos.</p>
-      )}
+      ) : null}
     </div>
   )
 }

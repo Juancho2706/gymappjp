@@ -3,11 +3,23 @@
  * marcada · Deshacer". También transporta el error determinista ("No se pudo
  * marcar la porción. Reintentar") y el aviso offline como detalle secundario.
  * Overlay absoluto al pie del tab; live-region para lectores de pantalla.
+ *
+ * F-01: se ancla POR ENCIMA de la cápsula flotante del alumno
+ * (`insets.bottom + ALUMNO_TABBAR_CLEARANCE + gap`, el mismo clearance que las
+ * tabs reservan en su `contentContainerStyle`). La cápsula se monta como `tabBar`
+ * del navigator, es decir en un padre por encima de la escena: ningún zIndex desde
+ * aquí puede superarla, así que el "Deshacer" —única salida de una porción mal
+ * marcada— tiene que quedar geométricamente arriba o es intocable.
  */
 import { memo } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
 import { useEvaMotion } from '../../../lib/motion'
+import { ALUMNO_TABBAR_CLEARANCE } from '../AlumnoMobileChrome'
+
+/** Aire entre el techo de la cápsula flotante y el borde inferior del snackbar. */
+const CAPSULE_GAP = 12
 
 export interface PortionSnackbarState {
   /** Nonce para re-animar cuando llega un snackbar nuevo con el mismo texto. */
@@ -27,6 +39,7 @@ function PortionSnackbarBase({
   onDismiss: () => void
 }) {
   const { reduced, duration } = useEvaMotion()
+  const insets = useSafeAreaInsets()
   if (!state) return null
   const danger = state.tone === 'danger'
   return (
@@ -35,7 +48,15 @@ function PortionSnackbarBase({
       from={reduced ? undefined : { opacity: 0, translateY: 12 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: duration('base') }}
-      style={{ position: 'absolute', left: 16, right: 16, bottom: 24 }}
+      style={{
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        bottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE + CAPSULE_GAP,
+        // Por encima del contenido de la escena (la cápsula vive en otro padre y se
+        // supera por posición, no por z).
+        zIndex: 60,
+      }}
       pointerEvents="box-none"
     >
       <View

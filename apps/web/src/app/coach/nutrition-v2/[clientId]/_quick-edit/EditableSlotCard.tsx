@@ -3,7 +3,9 @@
 /**
  * Franja editable del modo edicion (§1.2.B.2): nombre y hora inline en el header,
  * "+ Agregar alimento" al pie (bottom sheet con catalogo + alimento libre), eliminar
- * franja via menu "..." con confirm inline + snackbar Deshacer. Subtotal en vivo.
+ * franja via menu "..." (QeBottomSheet, igual que el menu de dia: el overlay del
+ * quick-edit vive en z-[60] y tapa cualquier popup portaleado en z-50) con confirm
+ * inline + snackbar Deshacer. Subtotal en vivo.
  * Una franja sin items es VALIDA (el RPC exige >= 1 franja, no >= 1 item): se muestra
  * "Franja sin alimentos" en vez de romperse (QA #4).
  */
@@ -13,14 +15,9 @@ import { MoreVertical, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { NutritionCard } from '@/components/nutrition-v2'
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { qeSlotPortionTotals, qeSlotSubtotal, qeCombineSubtotals, type QeSlot } from './quick-edit-state'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
+import { QeBottomSheet } from './QeBottomSheet'
 import { EditableItemRow } from './EditableItemRow'
 import { EditablePortionsCard } from './EditablePortionsCard'
 import { FoodPickerSheet } from './FoodPickerSheet'
@@ -38,6 +35,7 @@ export function EditableSlotCard({
 }) {
   const { clientId, dispatch, errors, showErrors, isPending, exchangeGroups } = useQuickEdit()
   const [addOpen, setAddOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   // El subtotal SUMA las porciones a eleccion de la franja (macros congelados del plan),
   // igual que el builder: la card de porciones se edita justo arriba y antes no contaba.
@@ -95,21 +93,34 @@ export function EditableSlotCard({
             className="h-11 w-[6.5rem] rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold tabular-nums text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label={`Opciones de la franja ${slot.name || 'sin nombre'}`}
-            disabled={isPending}
-            className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card p-0 normal-case tracking-normal text-muted hover:bg-surface-sunken hover:text-strong dark:bg-surface-card"
+        <button
+          type="button"
+          aria-label={`Opciones de la franja ${slot.name || 'sin nombre'}`}
+          disabled={isPending}
+          onClick={() => setMenuOpen(true)}
+          className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        >
+          <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
+        </button>
+
+        <QeBottomSheet
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          title={slot.name.trim() || 'Franja sin nombre'}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              // El confirm inline vive en la card (bajo el sheet): primero se cierra el menu.
+              setMenuOpen(false)
+              setConfirmingDelete(true)
+            }}
+            className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-rose-300 bg-surface-card px-3 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
           >
-            <MoreVertical aria-hidden="true" className="h-4 w-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => setConfirmingDelete(true)}>
-              <Trash2 aria-hidden="true" className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-              {QE_COPY.removeSlot}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <Trash2 aria-hidden="true" className="h-4 w-4" />
+            {QE_COPY.removeSlot}
+          </button>
+        </QeBottomSheet>
       </div>
 
       {confirmingDelete ? (

@@ -26,6 +26,7 @@ export {
 } from './NutritionV2Overrides'
 export { MacroChipRow, type MacroChipRowProps } from './MacroChipRow'
 export { DayVariantWeekStrip } from './DayVariantWeekStrip'
+export { PrescribedPortionChips } from './PrescribedPortionChips'
 export * from './NutritionV2Motion'
 export {
   NUTRITION_ILLUSTRATIONS,

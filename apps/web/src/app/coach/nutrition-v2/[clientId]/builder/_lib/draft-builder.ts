@@ -126,6 +126,13 @@ export interface BuilderState {
   /** Metas del dia BASE (paso "Objetivos"). Las variantes `inherit` las congelan al ensamblar. */
   targets: BuilderTargets
   permissions: BuilderPermissions
+  /**
+   * Notas visibles para el alumno. El wizard NO las edita (se escriben en la edicion rapida):
+   * viajan como CARRY-OVER del plan vigente (`rehydrateBuilderState`) para que "Rehacer con el
+   * asistente" no las borre al republicar. OPCIONAL a proposito: un borrador local guardado
+   * antes de este carry-over no trae la clave, y `RESTORE` conserva entonces las del plan.
+   */
+  visibleNotes?: string | null
   /** Dias del plan. Invariantes: exactamente una `isDefault`; `dayOfWeek` unico entre las demas. */
   variants: BuilderVariant[]
   /** Dia en edicion (chip activo de la barra de dias). Se persiste con el borrador local. */
@@ -197,6 +204,8 @@ export function createEmptyBuilderState(effectiveFrom: string): BuilderState {
     effectiveFrom,
     targets: createEmptyTargets(),
     permissions: defaultPermissionsFor(null),
+    // Plan nuevo: sin notas del alumno todavia (el carry-over solo aplica al rehidratar).
+    visibleNotes: null,
     variants: [createBaseVariant()],
     activeVariantKey: BASE_VARIANT_KEY,
   }
@@ -529,7 +538,12 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       // de multi-dia): `migrateBuilderState` los normaliza. Un payload corrupto se ignora —
       // jamas rompe el wizard.
       const next = migrateBuilderState(action.state, state.effectiveFrom)
-      return next ?? state
+      if (next == null) return state
+      // Notas visibles: son CARRY-OVER del plan vigente, no algo que el wizard edite. Un borrador
+      // guardado ANTES de este carry-over no las conoce (clave ausente), asi que restaurarlo NO
+      // puede borrarlas — se conservan las del estado actual (mismo criterio que el borrador
+      // pre-notas de la edicion rapida). Con la clave presente manda el borrador.
+      return next.visibleNotes === undefined ? { ...next, visibleNotes: state.visibleNotes ?? null } : next
     }
     default:
       return state
@@ -635,6 +649,11 @@ export function migrateBuilderState(raw: unknown, fallbackEffectiveFrom: string)
     effectiveFrom: typeof raw.effectiveFrom === 'string' && raw.effectiveFrom !== '' ? raw.effectiveFrom : fallbackEffectiveFrom,
     targets: normalizeTargetsShape(raw.targets),
     permissions,
+    // La clave solo se emite si el borrador la traia: `RESTORE` distingue "el borrador no sabe
+    // de notas" (ausente => conserva las del plan) de "el borrador dice que no hay" (null).
+    ...(typeof raw.visibleNotes === 'string' || raw.visibleNotes === null
+      ? { visibleNotes: raw.visibleNotes as string | null }
+      : {}),
     variants,
     activeVariantKey:
       activeKey != null && variants.some((variant) => variant.key === activeKey)
@@ -957,6 +976,11 @@ function assembleSlots(slots: BuilderSlot[], usesSlots: boolean): DraftMealSlot[
 export function assembleDraft(state: BuilderState, options: AssembleOptions): NutritionPlanDraft {
   const strategy = state.strategy ?? 'flexible'
   const usesSlots = strategyUsesSlots(strategy)
+  // Notas visibles del alumno: CARRY-OVER del plan vigente. Emitir `null` aqui BORRABA en
+  // silencio las indicaciones escritas en la edicion rapida cada vez que el coach republicaba
+  // desde "Rehacer con el asistente" (`plan-persistence` escribe `draft.visibleNotes` tal cual,
+  // sin merge server-side). '' se normaliza a null, paridad con la edicion rapida.
+  const visibleNotes = (state.visibleNotes ?? '').trim()
 
   const dayVariants: DraftDayVariant[] = state.variants.map((variant, index) => ({
     key: variant.key,
@@ -983,8 +1007,12 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
       canMoveMealSlot: false,
       canSkipOptionalItems: true,
     },
-    visibleNotes: null,
+    visibleNotes: visibleNotes === '' ? null : visibleNotes,
     privateNotes: null,
+    // `protocolNotes` NO viaja desde el cliente a proposito: es una capacidad Pro que el wizard
+    // no edita. `publishPlanAction` la repone leyendola de la version base (carry-over
+    // server-side, igual que la edicion rapida y el coach movil), asi el gate del addon nunca
+    // ve como "nueva" una nota de protocolo que el plan ya tenia publicada.
     protocolNotes: null,
     dayVariants,
   }

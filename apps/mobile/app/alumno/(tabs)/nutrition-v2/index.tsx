@@ -668,19 +668,41 @@ function TodayTab() {
   )
 
   // ── Snackbar del bulk-mark (mismo componente que porciones, estado propio) ──
+  // F-01: los dos productores comparten UN SOLO host, así que emitir uno DESCARTA al
+  // otro — el snackbar nuevo reemplaza al anterior en vez de dibujarse exactamente
+  // encima (antes se montaban dos overlays en las mismas coordenadas).
+  const portionsSnackbar = portions.snackbar
+  const dismissPortionsSnackbar = portions.dismissSnackbar
+
   const dismissBulkSnackbar = useCallback(() => {
     if (bulkSnackbarTimer.current) clearTimeout(bulkSnackbarTimer.current)
     setBulkSnackbar(null)
   }, [])
 
   const showBulkSnackbar = useCallback((next: Omit<PortionSnackbarState, 'nonce'>) => {
+    dismissPortionsSnackbar()
     bulkSnackbarNonce.current += 1
     setBulkSnackbar({ ...next, nonce: bulkSnackbarNonce.current })
     if (bulkSnackbarTimer.current) clearTimeout(bulkSnackbarTimer.current)
     bulkSnackbarTimer.current = setTimeout(() => {
       if (mountedRef.current) setBulkSnackbar(null)
     }, 6000)
-  }, [])
+  }, [dismissPortionsSnackbar])
+
+  // Dirección inversa: el snackbar de porciones lo emite el hook (no hay puente hacia
+  // acá), así que el descarte del bulk se dispara al ver el estado nuevo.
+  useEffect(() => {
+    if (portionsSnackbar) dismissBulkSnackbar()
+  }, [dismissBulkSnackbar, portionsSnackbar])
+
+  // Estado que efectivamente se dibuja. Porciones gana el desempate del frame en que
+  // ambos siguen vivos: el bulk ya quedó descartado por el efecto de arriba.
+  const activeSnackbar = portionsSnackbar ?? bulkSnackbar
+  // Cada productor lleva su propio contador de nonce, así que el prefijo evita que dos
+  // snackbars distintos compartan key y se salten la animación de entrada.
+  const activeSnackbarKey = portionsSnackbar
+    ? `portions-${portionsSnackbar.nonce}`
+    : `bulk-${bulkSnackbar?.nonce ?? 0}`
 
   useEffect(
     () => () => {
@@ -1517,8 +1539,11 @@ function TodayTab() {
         onMark={onSheetMark}
         onRegister={model.permissions.canRegisterFreely ? onSheetRegister : null}
       />
-      <PortionSnackbar state={portions.snackbar} onDismiss={portions.dismissSnackbar} />
-      <PortionSnackbar state={bulkSnackbar} onDismiss={dismissBulkSnackbar} />
+      <PortionSnackbar
+        key={activeSnackbarKey}
+        state={activeSnackbar}
+        onDismiss={portionsSnackbar ? dismissPortionsSnackbar : dismissBulkSnackbar}
+      />
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </>
   )

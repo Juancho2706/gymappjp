@@ -27,8 +27,17 @@ const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 // Solo se alcanza si el gate Pro pasa.
 const PUBLISHED_VERSION = '55555555-5555-4555-8555-555555555555'
 const PUBLISHED_PLAN = '66666666-6666-4666-8666-666666666666'
+const PLAN_ID = '77777777-7777-4777-8777-777777777777'
+const OTHER_PLAN_ID = '99999999-9999-4999-8999-999999999999'
+const BASE_VERSION_ID = '88888888-8888-4888-8888-888888888888'
+
+// Fila de la version base que lee el carry-over de `protocol_notes` (solo cuando el publish
+// manda `expectedCurrentVersionId`). `null` = la lectura no devuelve fila, como antes.
+let baseVersionRow: { id: string; plan_id: string; protocol_notes: string | null } | null = null
 const dbFrom = vi.fn(() => ({
-  select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })) })),
+  select: vi.fn(() => ({
+    eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: baseVersionRow, error: null })) })),
+  })),
 }))
 const dbRpc = vi.fn(async () => ({
   data: { versionId: PUBLISHED_VERSION, planId: PUBLISHED_PLAN },
@@ -60,6 +69,7 @@ function input(draftOverrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  baseVersionRow = null
   vi.mocked(getNutritionPlansPageCoach).mockResolvedValue({ user: { id: COACH_ID } } as never)
   vi.mocked(getPreferredWorkspaceForRender).mockResolvedValue({ type: 'coach_standalone' } as never)
   vi.mocked(isNutritionV2Enabled).mockResolvedValue(true)
@@ -118,5 +128,48 @@ describe('publishPlanAction — gate del addon Nutricion Pro', () => {
     const res = await publishPlanAction(input({ strategy: 'structured' }))
     expect(res).toMatchObject({ ok: true })
     expect(hasModule).not.toHaveBeenCalled()
+  })
+})
+
+// El wizard NO edita el protocolo profesional, asi que `assembleDraft` lo emite null y
+// republicar desde "Rehacer con el asistente" lo borraba. Se repone desde la version base.
+describe('publishPlanAction — carry-over de protocol_notes', () => {
+  const withBase = (draftOverrides: Record<string, unknown> = {}) => ({
+    ...input({ planId: PLAN_ID, ...draftOverrides }),
+    expectedCurrentVersionId: BASE_VERSION_ID,
+  })
+
+  it('nueva version de un plan existente: repone el protocolo de la version base', async () => {
+    vi.mocked(hasModule).mockResolvedValue(false)
+    baseVersionRow = { id: BASE_VERSION_ID, plan_id: PLAN_ID, protocol_notes: 'Protocolo del plan' }
+    const res = await publishPlanAction(withBase())
+    expect(res).toMatchObject({ ok: true })
+    expect(dbRpc).toHaveBeenCalledWith(
+      'persist_and_publish_nutrition_plan_v2',
+      expect.objectContaining({
+        p_draft: expect.objectContaining({ protocolNotes: 'Protocolo del plan' }),
+      }),
+    )
+    // Reponer lo que la version base YA tenia publicado no exige el addon (grandfathering).
+    expect(hasModule).not.toHaveBeenCalled()
+  })
+
+  it('la version base es de OTRO plan: no copia nada (anti-confusion de ids)', async () => {
+    vi.mocked(hasModule).mockResolvedValue(false)
+    baseVersionRow = { id: BASE_VERSION_ID, plan_id: OTHER_PLAN_ID, protocol_notes: 'Protocolo ajeno' }
+    const res = await publishPlanAction(withBase())
+    expect(res).toMatchObject({ ok: true })
+    expect(dbRpc).toHaveBeenCalledWith(
+      'persist_and_publish_nutrition_plan_v2',
+      expect.objectContaining({ p_draft: expect.objectContaining({ protocolNotes: null }) }),
+    )
+  })
+
+  it('sin version base (plan nuevo / rama "Reemplazar") no consulta la DB y publica igual', async () => {
+    vi.mocked(hasModule).mockResolvedValue(false)
+    baseVersionRow = { id: BASE_VERSION_ID, plan_id: PLAN_ID, protocol_notes: 'Protocolo del plan' }
+    const res = await publishPlanAction(input({ planId: PLAN_ID }))
+    expect(res).toMatchObject({ ok: true })
+    expect(dbFrom).not.toHaveBeenCalled()
   })
 })

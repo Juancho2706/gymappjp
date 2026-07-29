@@ -6,7 +6,7 @@
  * el plan ya tenia (por eso existia el guard anti-colapso). Este modulo hace lo contrario:
  * convierte el read-model del plan vigente en el `BuilderState` + el mapa de porciones que
  * el wizard sabe editar, de modo que abrirlo y publicar sin tocar nada produzca el MISMO
- * plan (N dias incluidos).
+ * plan (N dias y notas visibles del alumno incluidos).
  *
  * PURO (sin React / Next / Supabase): recibe el read-model, los alimentos ya resueltos
  * server-side (`foods`, RLS-scoped) y el mapa de reemplazos congelados. Se testea directo.
@@ -230,6 +230,12 @@ export function rehydrateBuilderState(input: {
         canAdjustPrescribedQuantity: planModel.permissions.canAdjustPrescribedQuantity,
         canSubstitute: planModel.permissions.canSubstitute,
       },
+      // Notas visibles del alumno: el wizard no tiene campo para editarlas (se escriben en la
+      // edicion rapida), pero publicar reescribe la version COMPLETA, asi que sin traerlas aqui
+      // "Rehacer con el asistente" las borraba en silencio. `protocolNotes` NO se rehidrata: es
+      // capacidad Pro y `publishPlanAction` la repone desde la version base, para que el gate del
+      // addon no lea como "nueva" una nota que el plan ya tenia (ver `assembleDraft`).
+      visibleNotes: planModel.visibleNotes,
       variants: normalized,
       activeVariantKey: base.key,
     },

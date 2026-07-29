@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { Modal, PanResponder, Pressable, ScrollView, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
+import {
+  KeyboardAvoidingView,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
@@ -303,47 +314,63 @@ export function Sheet({
             />
           </MotiView>
 
-          {/* Panel: slide-up spring (== KeypadHost). Content-hugs with maxHeight cap = largest snap
-              fraction of the screen; the scroll body shrinks (flexShrink) and scrolls past the cap. */}
-          <MotiView
-            from={{ translateY: motion.reduced ? 0 : maxDynamicContentSize }}
-            animate={{ translateY: 0 }}
-            transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
+          {/* Keyboard: this path renders in its OWN OS window, so the screen's KeyboardAvoidingView
+              (builder `[clientId].tsx`, `QuickEditMode`) does NOT reach it — every sheet with inputs
+              had its fields and its pinned footer ("Guardar") buried under the keyboard on iOS.
+              `padding` on iOS only: on Android RN's Modal already asks its Dialog for ADJUST_RESIZE
+              (and Expo leaves `softwareKeyboardLayoutMode` at "resize"), so compensating again would
+              shift twice — same convention as the rest of the app.
+              The flexShrink chain (avoider → MotiView → panel) is what lets the inner ScrollView give
+              up height when the keyboard eats the space: the panel's cap is a fraction of the FULL
+              screen, so without it a tall sheet would overflow past the top and lose its handle,
+              title and close button. Inert when there is no keyboard (nothing to shrink). */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flexShrink: 1 }}
           >
-            <View
-              accessibilityLabel={accessibilityLabel}
-              accessibilityViewIsModal
-              className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
-              style={[shadow('lg', resolvedScheme), { maxHeight: maxDynamicContentSize }]}
+            {/* Panel: slide-up spring (== KeypadHost). Content-hugs with maxHeight cap = largest snap
+                fraction of the screen; the scroll body shrinks (flexShrink) and scrolls past the cap. */}
+            <MotiView
+              from={{ translateY: motion.reduced ? 0 : maxDynamicContentSize }}
+              animate={{ translateY: 0 }}
+              transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
+              style={{ flexShrink: 1 }}
             >
-              {/* Swipe-down on the handle zone dismisses (parity with enablePanDownToClose). */}
-              <View {...swipeResponder.panHandlers}>{handleEl}</View>
+              <View
+                accessibilityLabel={accessibilityLabel}
+                accessibilityViewIsModal
+                className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
+                style={[shadow('lg', resolvedScheme), { maxHeight: maxDynamicContentSize, flexShrink: 1 }]}
+              >
+                {/* Swipe-down on the handle zone dismisses (parity with enablePanDownToClose). */}
+                <View {...swipeResponder.panHandlers}>{handleEl}</View>
 
-              {header}
+                {header}
 
-              {scrollable ? (
-                <ScrollView
-                  // flexGrow 0 → hug content when short; flexShrink 1 → shrink + scroll when the column
-                  // would exceed the parent maxHeight cap (RN flex items default to flexShrink 0).
-                  style={{ flexGrow: 0, flexShrink: 1 }}
-                  contentContainerStyle={contentContainerStyle}
-                  keyboardDismissMode="interactive"
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  stickyHeaderIndices={stickyHeaderIndices}
-                >
-                  {children}
-                </ScrollView>
-              ) : (
-                <View className="px-space-6" style={{ paddingBottom: bodyPadBottom, gap: 14 }}>
-                  {children}
-                </View>
-              )}
+                {scrollable ? (
+                  <ScrollView
+                    // flexGrow 0 → hug content when short; flexShrink 1 → shrink + scroll when the column
+                    // would exceed the parent maxHeight cap (RN flex items default to flexShrink 0).
+                    style={{ flexGrow: 0, flexShrink: 1 }}
+                    contentContainerStyle={contentContainerStyle}
+                    keyboardDismissMode="interactive"
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                    stickyHeaderIndices={stickyHeaderIndices}
+                  >
+                    {children}
+                  </ScrollView>
+                ) : (
+                  <View className="px-space-6" style={{ paddingBottom: bodyPadBottom, gap: 14 }}>
+                    {children}
+                  </View>
+                )}
 
-              {footerEl}
-              {closeEl}
-            </View>
-          </MotiView>
+                {footerEl}
+                {closeEl}
+              </View>
+            </MotiView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     )

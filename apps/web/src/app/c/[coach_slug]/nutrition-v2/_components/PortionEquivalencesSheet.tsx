@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Search, X } from 'lucide-react'
 import type {
@@ -12,6 +12,7 @@ import { NutritionMotionButton } from '@/components/nutrition-v2'
 import type { PortionMarksApi } from './PortionMarks'
 import { PortionGroupCircle } from './PortionCoverageRow'
 import { exchangeFoodsForGroup, orderedExchangeTargets } from './portion-marks.logic'
+import { useSheetBodyMarker } from './useSheetBodyMarker'
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
@@ -49,6 +50,7 @@ export function PortionEquivalencesSheet({
   onRegister: ((slotCode: string) => void) | null
 }) {
   const reduceMotion = useReducedMotion()
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const [activeCode, setActiveCode] = useState<string | null>(initialGroupCode)
   const [search, setSearch] = useState('')
   const [confirmExtra, setConfirmExtra] = useState(false)
@@ -72,6 +74,29 @@ export function PortionEquivalencesSheet({
   }, [target, exchangeFoods, search])
 
   const open = slot !== null && target !== null
+
+  // Mismo mecanismo que `TodayModal`: mientras el sheet vive, la cápsula flotante del nav del
+  // alumno se oculta por CSS. Sin esto el nav (hermano del `<main relative z-0>`, z-index 59)
+  // queda ENCIMA de los CTAs "Marcar 1 porción" / "Registrar alimento" del pie del sheet.
+  useSheetBodyMarker(open)
+
+  // Escape cierra el sheet (misma tecla que el `TodayModal`).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  // Foco inicial en el panel al abrir. Efecto aparte de Escape a propósito: `onClose` llega como
+  // arrow inline desde `TodayExperience`, así que cambia de identidad en cada render y un efecto
+  // único robaría el foco del buscador mientras el alumno escribe.
+  useEffect(() => {
+    if (!open) return
+    panelRef.current?.focus()
+  }, [open])
 
   const handleMark = () => {
     if (!slot || !target) return
@@ -102,11 +127,13 @@ export function PortionEquivalencesSheet({
             animate={{ y: 0 }}
             aria-label={PORTIONS_COPY.student.sheetTitle(target.groupName)}
             aria-modal="true"
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-border-subtle bg-surface-card pb-safe shadow-xl md:bottom-4 md:rounded-3xl md:border"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-border-subtle bg-surface-card pb-safe shadow-xl outline-none md:bottom-4 md:rounded-3xl md:border"
             exit={{ y: reduceMotion ? 0 : '100%' }}
             initial={{ y: reduceMotion ? 0 : '100%' }}
+            ref={panelRef}
             role="dialog"
             style={{ maxHeight: '85dvh' }}
+            tabIndex={-1}
             transition={{ type: 'tween', duration: reduceMotion ? 0 : 0.22, ease: 'easeOut' }}
           >
             <div aria-hidden="true" className="mx-auto mt-2 h-1 w-10 rounded-full bg-border-default" />

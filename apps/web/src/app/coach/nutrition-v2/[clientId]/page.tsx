@@ -9,6 +9,7 @@ import {
   NutritionPageShell,
   NutritionStatePanel,
   PlanVersionBadge,
+  PrescribedPortionChips,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
@@ -357,9 +358,14 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                                   </li>
                                 ))}
                               </ul>
-                            ) : (
+                            ) : null}
+                            {/* Capa de porciones (P0-3): la franja puede prescribir SOLO porciones, o
+                                porciones ademas de los alimentos fijos. Sin targets no pinta nada. */}
+                            <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
+                            {slot.prescriptionItems.length === 0 &&
+                            (slot.exchangeTargets?.length ?? 0) === 0 ? (
                               <p className="mt-2 text-xs text-muted">Sin alimentos prescritos en esta franja.</p>
-                            )}
+                            ) : null}
                           </li>
                         ))}
                       </ul>

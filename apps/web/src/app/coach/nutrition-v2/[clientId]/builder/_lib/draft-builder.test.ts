@@ -98,6 +98,7 @@ function flexibleState(): BuilderState {
     effectiveFrom: '2026-07-20',
     targets: { calories: '2000', proteinG: '150', carbsG: '200', fatsG: '60' },
     permissions: { canRegisterFreely: true, canAdjustPrescribedQuantity: true, canSubstitute: true },
+    visibleNotes: null,
     variants: [createBaseVariant()],
     activeVariantKey: BASE_VARIANT_KEY,
   }
@@ -115,6 +116,7 @@ function structuredState(): BuilderState {
     effectiveFrom: '2026-07-20',
     targets: { calories: '2000', proteinG: '150', carbsG: '', fatsG: '' },
     permissions: { canRegisterFreely: false, canAdjustPrescribedQuantity: true, canSubstitute: false },
+    visibleNotes: null,
     variants: [{ ...createBaseVariant(), slots: [baseSlot()] }],
     activeVariantKey: BASE_VARIANT_KEY,
   }
@@ -305,6 +307,27 @@ describe('assembleDraft', () => {
     const draft = assembleAndValidateDraft(structuredState(), { clientId: CLIENT_ID })
     expect(draft.dayVariants[0].mealSlots[0].items[0]).not.toHaveProperty('substitutions')
   })
+
+  // Perdida de datos (P0): publicar reescribe la version COMPLETA y las notas visibles se
+  // escriben en la edicion rapida, no en el wizard. Emitirlas de vuelta es lo unico que evita
+  // que "Rehacer con el asistente" las borre en silencio.
+  it('emite las notas visibles del estado (carry-over del plan vigente), ya trimeadas', () => {
+    const state = { ...structuredState(), visibleNotes: '  Domingo comida libre, hidratate  ' }
+    const draft = assembleAndValidateDraft(state, { clientId: CLIENT_ID })
+    expect(draft.visibleNotes).toBe('Domingo comida libre, hidratate')
+  })
+
+  it('notas visibles vacias o ausentes => null (paridad con la edicion rapida)', () => {
+    const blank = assembleDraft({ ...structuredState(), visibleNotes: '   ' }, { clientId: CLIENT_ID })
+    expect(blank.visibleNotes).toBeNull()
+    expect(assembleDraft(structuredState(), { clientId: CLIENT_ID }).visibleNotes).toBeNull()
+  })
+
+  it('el protocolo profesional NO viaja del cliente (lo repone publishPlanAction)', () => {
+    const state = { ...structuredState(), visibleNotes: 'Hidratate' }
+    expect(assembleDraft(state, { clientId: CLIENT_ID }).protocolNotes).toBeNull()
+    expect(assembleDraft(state, { clientId: CLIENT_ID }).privateNotes).toBeNull()
+  })
 })
 
 describe('validateStep', () => {
@@ -487,6 +510,26 @@ describe('builderReducer — RESTORE', () => {
     const current = createEmptyBuilderState('2026-07-20')
     const next = builderReducer(current, { type: 'RESTORE', state: null as unknown as BuilderState })
     expect(next).toBe(current)
+  })
+
+  // Las notas visibles son carry-over del plan, no contenido del wizard: un borrador guardado
+  // ANTES del carry-over no las trae y restaurarlo NO puede borrarlas.
+  it('un borrador PRE-notas conserva las notas visibles del plan rehidratado', () => {
+    const current = { ...createEmptyBuilderState('2026-07-20'), visibleNotes: 'Domingo comida libre' }
+    const legacy: Record<string, unknown> = { ...structuredState() }
+    delete legacy.visibleNotes
+    const next = builderReducer(current, { type: 'RESTORE', state: legacy })
+    expect(next.visibleNotes).toBe('Domingo comida libre')
+    expect(next.planName).toBe('Plan estructurado')
+  })
+
+  it('un borrador que SI trae la clave manda (incluso si las dejo vacias)', () => {
+    const current = { ...createEmptyBuilderState('2026-07-20'), visibleNotes: 'Vieja' }
+    const next = builderReducer(current, {
+      type: 'RESTORE',
+      state: { ...structuredState(), visibleNotes: null },
+    })
+    expect(next.visibleNotes).toBeNull()
   })
 })
 

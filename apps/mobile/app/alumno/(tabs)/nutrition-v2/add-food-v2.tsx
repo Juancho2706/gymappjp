@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import {
+  Alert,
+  AppState,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AlertTriangle, ChevronLeft, Search, Star } from 'lucide-react-native'
@@ -493,6 +503,11 @@ export default function NutritionV2AddFoodScreen() {
 
   return (
     <View className="flex-1 bg-surface-app">
+    {/* El teclado tapaba "Cantidad" y los chips de unidad/franja: `decimal-pad` no trae
+        tecla de retorno en iOS, así que sin esto no había forma de bajarlo ni de ver lo
+        que queda debajo. `padding` solo en iOS (Android ya redimensiona la ventana) —
+        misma convención que el builder y el quick-edit del coach. */}
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
     <ScrollView
       className="flex-1 bg-surface-app"
       contentContainerClassName="gap-5 px-4"
@@ -502,6 +517,7 @@ export default function NutritionV2AddFoodScreen() {
       }}
       onScroll={onScrollChrome}
       scrollEventThrottle={16}
+      keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
     >
       <View className="flex-row items-center gap-3">
@@ -796,6 +812,7 @@ export default function NutritionV2AddFoodScreen() {
         </View>
       )}
     </ScrollView>
+    </KeyboardAvoidingView>
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </View>
   )

@@ -19,7 +19,8 @@ import type { BuilderTargets, BuilderVariant } from '../../lib/nutrition-v2-buil
  * día del plan: etiqueta + kcal, el activo resaltado), el chip "Agregar día" y, por chip, el
  * menú (botón ⋯ o long-press) con Renombrar · Cambiar día · Duplicar como otro día ·
  * Personalizar objetivos · Eliminar. El día base no se elimina ni cambia de día (invariantes del
- * reducer, espejadas aquí en la UI).
+ * reducer, espejadas aquí en la UI). Un día con error de validación (`errorVariantKeys`) lleva
+ * punto + borde destructivo: es la única señal del error que vive en un día NO montado.
  *
  * Debajo va el banner de herencia de metas del día activo: "…usa los objetivos base (X kcal) ·
  * Personalizar", que despliega el editor de metas SCOPED a ese día.
@@ -444,6 +445,7 @@ export function BuilderDayVariantBar({
   kcalByVariantKey,
   baseTargets,
   addDayLocked,
+  errorVariantKeys,
   handlers,
 }: {
   variants: BuilderVariant[]
@@ -454,11 +456,18 @@ export function BuilderDayVariantBar({
   baseTargets: BuilderTargets
   /** Coach sin Nutrición Pro: "Agregar día" con candado + upsell. */
   addDayLocked: boolean
+  /**
+   * Días cuya validación del paso "Construcción" falló. El paso solo monta las franjas del día
+   * ACTIVO, así que un item incompleto de otro día bloqueaba "Siguiente" sin ninguna señal: acá se
+   * marca su chip (punto + borde destructivo). Solo EXPONE lo que `validateStep` ya calculó.
+   */
+  errorVariantKeys?: readonly string[]
   handlers: BuilderDayVariantBarHandlers
 }) {
   const { theme } = useTheme()
   const [addOpen, setAddOpen] = useState(false)
   const [menuKey, setMenuKey] = useState<string | null>(null)
+  const errorKeys = new Set(errorVariantKeys ?? [])
 
   const active = variants.find((variant) => variant.key === activeVariantKey) ?? variants[0]
   const baseVariant = variants.find((variant) => variant.isDefault) ?? variants[0]
@@ -479,22 +488,37 @@ export function BuilderDayVariantBar({
       >
         {variants.map((variant) => {
           const isActive = variant.key === active?.key
+          const hasError = errorKeys.has(variant.key)
           const kcal = kcalByVariantKey[variant.key] ?? 0
           return (
             <View
               key={variant.key}
+              // Con error el color del borde lo pone `style` (token destructivo del theme), así que
+              // la clase NO define borde: dos fuentes para la misma propiedad se pisan sin orden.
               className={`flex-row items-center gap-0.5 rounded-pill border pl-3 pr-0.5 ${
-                isActive ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-card'
+                hasError
+                  ? isActive
+                    ? 'bg-primary/10'
+                    : 'bg-surface-card'
+                  : isActive
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border-default bg-surface-card'
               }`}
+              style={hasError ? { borderColor: theme.destructive } : undefined}
             >
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                accessibilityLabel={`Día ${variant.label}`}
+                accessibilityLabel={
+                  hasError ? `Día ${variant.label}: tiene datos por corregir` : `Día ${variant.label}`
+                }
                 onPress={() => handlers.onSelect(variant.key)}
                 onLongPress={() => setMenuKey(variant.key)}
                 className="min-h-11 flex-row items-center gap-1.5"
               >
+                {hasError ? (
+                  <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: theme.destructive }} />
+                ) : null}
                 <Text className={`text-xs font-semibold ${isActive ? 'text-primary' : 'text-text-strong'}`}>
                   {variant.label}
                 </Text>

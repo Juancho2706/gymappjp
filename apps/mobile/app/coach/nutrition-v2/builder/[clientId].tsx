@@ -206,6 +206,13 @@ function multiDayBlockCopy(dayCount: number): string {
   return `No pudimos cargar los ${dayCount} días de este plan; rehacerlo aquí lo reduciría a uno. Usa Edición rápida.`
 }
 
+// H-01 — enumeracion es-CL para el aviso "Revisa Sábado y Domingo" (los dias con error que no
+// estan montados). Solo formatea: no decide nada sobre la validacion.
+function joinDayLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels[0] ?? ''
+  return `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`
+}
+
 // Plan vigente del alumno (sub-delta c): habilita la rama "Archivar y reemplazar". Se lee LOCAL
 // con getNutritionClientDetailV2 (no llega por nav params — decision del juez, evita tocar la
 // ficha/href de otras unidades). Espejo del `existingPlan` server-provisto del web.
@@ -647,6 +654,32 @@ export default function CoachNutritionV2BuilderScreen() {
     }
     return out
   }, [state.variants, portions.bySlot, portions.groups])
+
+  // H-01 (P0) — dias con error de validacion. `validateStep` valida TODOS los dias (publicar emite
+  // las N variantes) pero `ConstructionStep` solo monta las franjas del ACTIVO: los errores por
+  // franja/item de otro dia viven en editores desmontados y "Siguiente" quedaba muerto sin ningun
+  // mensaje. Aca se PROYECTA el mismo `validation.errors` sobre las variantes (las claves ya son
+  // keyables por dia); la validacion no cambia, solo se expone.
+  const variantErrorKeys = useMemo(() => {
+    if (!showErrors || state.step !== 2 || validation.ok) return []
+    const stepErrors = validation.errors
+    return state.variants
+      .filter(
+        (variant) =>
+          stepErrors['variant.' + variant.key + '.slots'] != null ||
+          variant.slots.some(
+            (slot) =>
+              stepErrors['slot.' + slot.key + '.name'] != null ||
+              stepErrors['slot.' + slot.key + '.startTime'] != null ||
+              slot.items.some(
+                (item) =>
+                  stepErrors['item.' + item.key + '.food'] != null ||
+                  stepErrors['item.' + item.key + '.quantity'] != null,
+              ),
+          ),
+      )
+      .map((variant) => variant.key)
+  }, [showErrors, state.step, state.variants, validation])
 
   // Copy del encabezado: la raiz puede venir por query (CTA del hub/ficha) o del plan vigente ya
   // resuelto (deep link viejo). El numero de version sale del param cuando viaja y si no del plan.
@@ -1133,6 +1166,12 @@ export default function CoachNutritionV2BuilderScreen() {
 
   const errors = showErrors ? validation.errors : {}
 
+  // Dias con error que NO estan en pantalla (el paso 2 solo monta el activo). Su aviso va al pie,
+  // junto a "Siguiente": es donde mira el coach cuando el boton parece no responder.
+  const hiddenErrorVariants = state.variants.filter(
+    (variant) => variant.key !== activeVariant.key && variantErrorKeys.includes(variant.key),
+  )
+
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
       <KeyboardAvoidingView
@@ -1212,6 +1251,7 @@ export default function CoachNutritionV2BuilderScreen() {
               dayHandlers={dayHandlers}
               dispatch={dispatch}
               errors={errors}
+              variantErrorKeys={variantErrorKeys}
               onSearch={(target) => setSearchTarget(target)}
               onSaveCustomFood={handleSaveCustomFood}
               portions={portions}
@@ -1234,29 +1274,41 @@ export default function CoachNutritionV2BuilderScreen() {
           ) : null}
         </ScrollView>
 
-        <View className="flex-row items-center justify-between gap-3 border-t border-border-subtle bg-surface-app px-4 py-3">
-          <NutritionMotionButton
-            accessibilityLabel="Paso anterior"
-            tone="neutral"
-            disabled={state.step === 0 || publishing}
-            onPress={handlePrev}
-          >
-            Atrás
-          </NutritionMotionButton>
-          {state.step < 3 ? (
-            <NutritionMotionButton accessibilityLabel="Siguiente paso" onPress={handleNext}>
-              Siguiente
-            </NutritionMotionButton>
-          ) : (
+        <View className="border-t border-border-subtle bg-surface-app">
+          {/* H-01 (P0): "Siguiente" no avanza por un error que vive en un dia NO montado. Sin esta
+              linea el boton parece muerto: el unico rastro era la fila roja del BuilderStepList. */}
+          {hiddenErrorVariants.length > 0 ? (
+            <View className="flex-row items-start gap-2 px-4 pt-3">
+              <AlertTriangle color={theme.destructive} size={14} />
+              <Text className="min-w-0 flex-1 text-xs font-medium leading-snug text-danger-600">
+                Revisa {joinDayLabels(hiddenErrorVariants.map((variant) => variant.label))} para continuar.
+              </Text>
+            </View>
+          ) : null}
+          <View className="flex-row items-center justify-between gap-3 px-4 py-3">
             <NutritionMotionButton
-              accessibilityLabel="Publicar plan"
-              pending={publishing || !existingPlanResolved}
-              disabled={publishing || !existingPlanResolved || multiDayBlocked}
-              onPress={() => void handlePublish()}
+              accessibilityLabel="Paso anterior"
+              tone="neutral"
+              disabled={state.step === 0 || publishing}
+              onPress={handlePrev}
             >
-              Publicar plan
+              Atrás
             </NutritionMotionButton>
-          )}
+            {state.step < 3 ? (
+              <NutritionMotionButton accessibilityLabel="Siguiente paso" onPress={handleNext}>
+                Siguiente
+              </NutritionMotionButton>
+            ) : (
+              <NutritionMotionButton
+                accessibilityLabel="Publicar plan"
+                pending={publishing || !existingPlanResolved}
+                disabled={publishing || !existingPlanResolved || multiDayBlocked}
+                onPress={() => void handlePublish()}
+              >
+                Publicar plan
+              </NutritionMotionButton>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -2481,6 +2533,7 @@ function ConstructionStep({
   dayHandlers,
   dispatch,
   errors,
+  variantErrorKeys,
   onSearch,
   onSaveCustomFood,
   portions,
@@ -2493,6 +2546,8 @@ function ConstructionStep({
   dayHandlers: BuilderDayVariantBarHandlers
   dispatch: BuilderDispatch
   errors: Record<string, string>
+  /** Días con error (H-01), incluido el activo: marca sus chips y ofrece "Revisa {día}". */
+  variantErrorKeys: readonly string[]
   onSearch: (target: SearchTarget) => void
   onSaveCustomFood: (
     item: BuilderItem,
@@ -2519,6 +2574,11 @@ function ConstructionStep({
   const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
   const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
   const totals = combineSubtotals(variantTotals(variant), portionDay)
+  // H-01: días con error que NO están montados. Tocarlos cambia de día (`onSelect`), que es donde
+  // sí se pintan los errores por franja/item.
+  const hiddenErrorVariants = state.variants.filter(
+    (other) => other.key !== variant.key && variantErrorKeys.includes(other.key),
+  )
   return (
     <View className="gap-3">
       {/* Barra de días: chips scrolleables + "Agregar día" + banner de herencia de objetivos. */}
@@ -2528,9 +2588,26 @@ function ConstructionStep({
         kcalByVariantKey={kcalByVariantKey}
         baseTargets={state.targets}
         addDayLocked={addDayLocked}
+        errorVariantKeys={variantErrorKeys}
         handlers={dayHandlers}
       />
-      <ErrorText message={errors.slots} />
+      {hiddenErrorVariants.length > 0 ? (
+        <View className="flex-row flex-wrap items-center gap-x-3">
+          {hiddenErrorVariants.map((other) => (
+            <Pressable
+              key={other.key}
+              accessibilityRole="button"
+              accessibilityLabel={`Revisa ${other.label}: tiene datos por corregir`}
+              onPress={() => dayHandlers.onSelect(other.key)}
+              className="min-h-11 justify-center"
+            >
+              <Text className="text-xs font-semibold text-danger-600 underline">Revisa {other.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {/* Error de franjas del día ACTIVO (clave scoped). Los otros días salen arriba y en su chip. */}
+      <ErrorText message={errors['variant.' + variant.key + '.slots']} />
       {variant.slots.map((slot, index) => (
         <SlotEditor
           key={slot.key}

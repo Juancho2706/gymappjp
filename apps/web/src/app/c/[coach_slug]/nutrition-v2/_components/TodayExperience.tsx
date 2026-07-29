@@ -76,8 +76,14 @@ import {
 // NOTA: `closeDayAction` (cierre manual del día) se retiró de la UI por decisión del CEO — los
 // registros ya se guardan solos, la card "Cerrar mi día" confundía. El action y su RPC siguen
 // VIVOS en `../_actions/intake.actions` como mecanismo interno para un cierre automático futuro;
-// aquí simplemente ya no se invocan. El chip "Día registrado" se conserva para días cerrados
-// históricamente (render condicional por `today.snapshotId`).
+// aquí simplemente ya no se invocan.
+//
+// El chip de estado del día NO puede colgar de `today.snapshotId`: `get_nutrition_today_v2` llama
+// `ensure_day_snapshot` en CADA lectura, así que el id existe desde el primer render del día y el
+// chip verde se encendía a las 8 AM con el anillo en 0 kcal. Cuelga de registros REALES (`entries`,
+// que ya incluye franjas + sin franja + porciones marcadas) y el copy dice lo único que es cierto:
+// que el alumno ya registró algo hoy. Sin registros no se pinta nada (un "sin registros aún" solo
+// repetiría el estado vacío de "Consumido hoy").
 
 type DialogState =
   | { kind: 'none' }
@@ -272,10 +278,10 @@ export function TodayExperience({
             effectiveLabel={`desde ${formatNutritionShortDate(today.plan.effectiveFrom)}`}
           />
         ) : null}
-        {today.snapshotId ? (
+        {entries.length > 0 ? (
           <span className="inline-flex items-center gap-1.5 rounded-pill border border-emerald-300/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Día registrado
+            Ya registraste hoy
           </span>
         ) : null}
       </div>
