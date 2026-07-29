@@ -1,0 +1,105 @@
+-- ============================================================================
+-- PENDIENTE DE AUDITORIA EN LIVE — NO SE APLICA AUTOMATICAMENTE
+-- (archivo sin timestamp: el CLI de Supabase lo ignora, mismo patron que los
+--  archivos _POST_DEPLOY_ de esta carpeta).
+--
+-- EVA Nutricion V2 — NUT-004 (punto 4): UNA SOLA raiz de plan activa por alumno
+-- ----------------------------------------------------------------------------
+-- Contexto (auditoria 2026-07-28, verificacion G3): los CTA "Nueva version" del coach RN
+-- (`apps/mobile/lib/nutrition-v2-hub.ts:246-248`,
+--  `apps/mobile/lib/coach-nutrition-v2-tab-logic.ts:188`,
+--  `apps/mobile/app/coach/nutrition-v2/[clientId].tsx:362`) construyen el href del builder
+-- SIN `planId`, y el builder solo lee `planId` de los query params
+-- (`builder/[clientId].tsx:271-273`), asi que `draft.planId` es SIEMPRE null y
+-- `apps/mobile/lib/nutrition-v2-builder.ts:1063-1080` INSERTA una raiz nueva en
+-- `nutrition_plans_v2` en cada publicacion. Web si propaga `existingPlan?.id`
+-- (`PlanBuilderClient.tsx:1209-1212`).
+--
+-- La base no lo impide: el unico indice unico relevante
+-- (`20260714190000_nutrition_v2_domain.sql:237-239`,
+--  `nutrition_plan_versions_v2_current_unique on (plan_id) where status='published' and
+--   effective_to is null`) garantiza UNA version vigente POR PLAN, no UN plan por alumno.
+-- `publish_nutrition_plan_v2` acota todo su supersede a `plan_id = v_plan.id`
+-- (20260717130000:118-156), asi que publicar una raiz nueva nunca marca la vieja como
+-- superseded: quedan N raices activas, todas `published` con `effective_to null`.
+--
+-- Los fixes de aplicacion (propagar planId, portar `resolveReusableUnpublishedPlanId` a RN)
+-- y el desempate determinista del selector (migracion 20260728120500 + 20260728121000) ya
+-- van en este PR. ESTE archivo es la barrera de DB, que es lo unico que cierra el hueco
+-- para escrituras directas por PostgREST — y NO se puede aplicar sin sanear datos primero.
+--
+-- ############################################################################
+-- ## PASO 1 — AUDITORIA (read-only, en LIVE, con OK del owner)              ##
+-- ############################################################################
+--
+--   -- 1a) Alumnos con MAS DE UNA raiz activa (deben ser 0 para poder crear el indice):
+--   select p.client_id, count(*) as raices_activas,
+--          array_agg(p.id order by p.updated_at desc) as plan_ids
+--   from public.nutrition_plans_v2 p
+--   where p.lifecycle_status = 'active'
+--   group by p.client_id
+--   having count(*) > 1
+--   order by count(*) desc;
+--
+--   -- 1b) Para cada alumno de 1a, cual raiz GANA hoy en el hub (criterio de
+--   --     20260716120000:98-106) — es la que hay que conservar:
+--   select p.client_id, p.id, p.name, p.updated_at,
+--          (p.current_published_version_id is not null) as tiene_publicada
+--   from public.nutrition_plans_v2 p
+--   where p.lifecycle_status = 'active'
+--     and p.client_id in (<client_ids de 1a>)
+--   order by p.client_id,
+--            (p.current_published_version_id is not null) desc,
+--            p.updated_at desc,
+--            p.id desc;
+--
+--   -- 1c) Cuanto historial de intake quedaria colgando de las raices perdedoras:
+--   select e.plan_version_id, count(*)
+--   from public.nutrition_intake_entries e
+--   join public.nutrition_plan_versions_v2 v on v.id = e.plan_version_id
+--   where v.plan_id in (<plan_ids perdedores>)
+--   group by e.plan_version_id;
+--
+-- ############################################################################
+-- ## PASO 2 — POLITICA DE SANEO (solo con GO explicito del owner)           ##
+-- ############################################################################
+--
+--   * Conservar por alumno la raiz GANADORA de 1b (la que el alumno ve hoy).
+--   * ARCHIVAR (nunca borrar) las perdedoras:
+--       update public.nutrition_plans_v2
+--       set lifecycle_status = 'archived', archived_at = now()
+--       where id in (<plan_ids perdedores>);
+--     Archivar preserva el historial de intake (las entries apuntan a
+--     `plan_version_id`, no a la raiz) y es reversible.
+--   * Revisar 1c ANTES: si una raiz perdedora concentra el historial reciente, es ella la
+--     que hay que conservar y no la del criterio del hub. Decision caso a caso del owner.
+--   * Re-correr 1a: debe devolver 0 filas.
+--
+-- ############################################################################
+-- ## PASO 3 — DDL (recien despues de que 1a devuelva 0 filas)               ##
+-- ############################################################################
+--
+-- OJO con "Archivar y reemplazar" (web `PlanBuilderClient.tsx:1316-1337`, RN
+-- `builder/[clientId].tsx:579-621`): archiva PRIMERO y publica DESPUES, o sea pasa por una
+-- ventana de 0 raices activas — compatible con el indice. Pero un fallo entre los dos pasos
+-- deja al alumno sin plan (deuda conocida, NUT-011).
+--
+-- `concurrently` NO puede correr dentro de una transaccion: ejecutar esta sentencia sola,
+-- fuera de cualquier BEGIN.
+
+create unique index concurrently if not exists nutrition_plans_v2_active_root_per_client_uniq
+  on public.nutrition_plans_v2 (client_id)
+  where lifecycle_status = 'active';
+
+comment on index public.nutrition_plans_v2_active_root_per_client_uniq is
+  'Un alumno tiene como maximo UNA raiz de plan activa. Barrera de DB de NUT-004; requiere '
+  'saneo previo de duplicadas (ver cabecera de este archivo).';
+
+-- ALTERNATIVA MENOS INVASIVA (si el owner prefiere no tomar el indice unico): validar la
+-- cardinalidad DENTRO de `publish_nutrition_plan_v2` — rechazar publicar una raiz nueva
+-- cuando el alumno ya tiene otra raiz activa con version publicada, salvo bandera explicita
+-- de reemplazo. Requiere `create or replace` de la funcion y un parametro nuevo, o sea
+-- drop+create de firma (precedente: 20260717130000:39).
+--
+-- ROLLBACK: drop index concurrently if exists public.nutrition_plans_v2_active_root_per_client_uniq;
+-- ============================================================================
