@@ -156,20 +156,26 @@ export function TypedBlockTimerButton({ block, kind }: { block: SessionBlock; ki
 
 function TimerButton({ testID, label, onPress }: { testID: string; label: string; onPress: () => void }) {
   return (
+    // Feedback de presión = web `active:scale-95` (WorkoutExecutionClient.tsx:354/364/380 — los tres
+    // botones de timer escalan a 0.95 al presionar; el `hover:bg` no aplica en touch). Va en una View
+    // interna con style ESTÁTICO porque css-interop descarta `style` cuando es función en un componente
+    // con className (auditoría a1 §2.1).
     <Pressable
       testID={testID}
       onPress={onPress}
-      className="h-11 flex-row items-center gap-1.5 self-end rounded-control border border-inverse/10 bg-sport-500/[0.12] px-3"
-      // Feedback de presión = web `active:scale-95` (WorkoutExecutionClient.tsx:354/364/380 — los tres
-      // botones de timer escalan a 0.95 al presionar; el `hover:bg` no aplica en touch). Se espeja con la
-      // función de estilo `pressed` (mismo idiom que SingleExerciseCard.tsx:435 para `active:scale-[0.99]`),
-      // reemplazando el `active:opacity-90` previo que el web no tiene.
-      style={({ pressed }) => (pressed ? { transform: [{ scale: 0.95 }] } : null)}
+      className="self-end"
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Timer size={14} color={ON_DARK} />
-      <Text style={TYPE.caption} className="text-[12px] text-on-dark font-sans-bold">{label}</Text>
+      {({ pressed }) => (
+        <View
+          className="h-11 flex-row items-center gap-1.5 rounded-control border border-inverse/10 bg-sport-500/[0.12] px-3"
+          style={pressed ? { transform: [{ scale: 0.95 }] } : null}
+        >
+          <Timer size={14} color={ON_DARK} />
+          <Text style={TYPE.caption} className="text-[12px] text-on-dark font-sans-bold">{label}</Text>
+        </View>
+      )}
     </Pressable>
   )
 }

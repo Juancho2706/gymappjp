@@ -304,21 +304,30 @@ export function Walkthrough({ onDone }: Props) {
             </Text>
           </View>
 
+          {/* css-interop DESCARTA `style` cuando es función en un componente con
+              className (auditoría a1 §2.1): el layout se pierde y el CTA cae a
+              columna. La superficie vive en esta View interna con style ESTÁTICO
+              y el feedback de press llega por children-as-function. */}
           <Pressable
             testID={isLast ? 'walkthrough-cta' : 'walkthrough-next'}
             accessibilityRole="button"
             accessibilityLabel={isLast ? 'Empezar en EVA' : `Ir a la pantalla ${index + 2} de ${SLIDES.length}`}
-            className="bg-cta-fill"
             onPress={goNext}
-            style={({ pressed }) => [
-              styles.primaryAction,
-              { borderRadius: theme.radius.control, opacity: pressed ? 0.86 : 1 },
-            ]}
           >
-            <Text className="text-on-sport" style={styles.primaryActionLabel}>
-              {isLast ? 'Empezar' : 'Siguiente'}
-            </Text>
-            <ArrowRight size={20} color={theme.primaryForeground} strokeWidth={2.25} />
+            {({ pressed }) => (
+              <View
+                className="bg-cta-fill"
+                style={[
+                  styles.primaryAction,
+                  { borderRadius: theme.radius.control, opacity: pressed ? 0.86 : 1 },
+                ]}
+              >
+                <Text className="text-on-sport" style={styles.primaryActionLabel}>
+                  {isLast ? 'Empezar' : 'Siguiente'}
+                </Text>
+                <ArrowRight size={20} color={theme.primaryForeground} strokeWidth={2.25} />
+              </View>
+            )}
           </Pressable>
         </View>
       </SafeAreaView>

@@ -5,13 +5,15 @@ import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
 
-function hexToRgba(hex: string, alpha: number): string {
+// react-native-svg extrae el alpha de un stop SOLO de `stopOpacity` (extractGradient.ts
+// hace `(color & 0x00ffffff) | (alpha << 24)`, con alpha=1 si stopOpacity falta): un
+// stopColor rgba(...) sin stopOpacity explicito resuelve OPACO. Por eso stopColor lleva
+// el color solido (hex, con el mismo fallback que antes daba hexToRgba) y el alpha va
+// aparte en stopOpacity.
+function resolveStopColor(hex: string): string {
   const clean = hex.replace('#', '')
-  if (clean.length !== 6) return `rgba(0,122,255,${alpha})`
-  const r = Number.parseInt(clean.slice(0, 2), 16)
-  const g = Number.parseInt(clean.slice(2, 4), 16)
-  const b = Number.parseInt(clean.slice(4, 6), 16)
-  return `rgba(${r},${g},${b},${alpha})`
+  if (clean.length !== 6) return '#007AFF' // fallback solido (mismo rgb que el rgba previo)
+  return `#${clean}`
 }
 
 interface GlassCardProps extends ViewProps {
@@ -54,9 +56,9 @@ export function GlassCard({ children, variant = 'solid', intensity = 22, glow = 
     <Svg pointerEvents="none" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
       <Defs>
         <RadialGradient id={glowId} cx="100%" cy="0%" r="75%">
-          <Stop offset="0" stopColor={hexToRgba(gColor, gA)} />
-          <Stop offset="0.6" stopColor={hexToRgba(gColor, gA * 0.28)} />
-          <Stop offset="1" stopColor={gColor} stopOpacity={0} />
+          <Stop offset="0" stopColor={resolveStopColor(gColor)} stopOpacity={gA} />
+          <Stop offset="0.6" stopColor={resolveStopColor(gColor)} stopOpacity={gA * 0.28} />
+          <Stop offset="1" stopColor={resolveStopColor(gColor)} stopOpacity={0} />
         </RadialGradient>
       </Defs>
       <Rect width="100%" height="100%" fill={`url(#${glowId})`} />

@@ -48,6 +48,8 @@ export function GoogleSignInButton({ intent, onPress, loading = false, disabled 
 
   return (
     <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: 'timing', duration: 300 }}>
+      {/* css-interop descarta `style` cuando es función en un componente con className
+          (auditoría a1 §2.1): alto y gap viven en esta View interna con style estático. */}
       <Pressable
         testID="google-signin-button"
         accessibilityRole="button"
@@ -58,22 +60,27 @@ export function GoogleSignInButton({ intent, onPress, loading = false, disabled 
           onPress()
         }}
         disabled={isDisabled}
-        className="flex-row items-center justify-center rounded-control bg-surface-card border-[1.5px] border-default"
-        style={({ pressed }) => ({
-          height: 52,
-          gap: 10,
-          opacity: isDisabled ? 0.6 : pressed ? 0.9 : 1,
-        })}
       >
-        {loading ? (
-          <ActivityIndicator size="small" color={theme.mutedForeground} />
-        ) : (
-          <>
-            <GoogleLogo />
-            <Text className="text-strong font-sans-semibold" style={{ fontSize: 15 }}>
-              {label}
-            </Text>
-          </>
+        {({ pressed }) => (
+          <View
+            className="flex-row items-center justify-center rounded-control bg-surface-card border-[1.5px] border-default"
+            style={{
+              height: 52,
+              gap: 10,
+              opacity: isDisabled ? 0.6 : pressed ? 0.9 : 1,
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={theme.mutedForeground} />
+            ) : (
+              <>
+                <GoogleLogo />
+                <Text className="text-strong font-sans-semibold" style={{ fontSize: 15 }}>
+                  {label}
+                </Text>
+              </>
+            )}
+          </View>
         )}
       </Pressable>
     </MotiView>

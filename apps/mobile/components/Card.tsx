@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { PressableProps, TextProps, ViewProps, ViewStyle, TextStyle } from 'react-native'
 import { useTheme } from '../context/ThemeContext'
@@ -83,6 +84,7 @@ export function Card({
   ...rest
 }: CardProps) {
   const { theme } = useTheme()
+  const [pressed, setPressed] = useState(false)
 
   const pad = typeof padding === 'number' ? padding : PAD_TOKEN[padding]
   const containerClass = `${VARIANT_CLASS[variant]} ${RADIUS_CLASS[radius]}`
@@ -106,7 +108,12 @@ export function Card({
         accessibilityRole="button"
         onPress={onPress}
         className={containerClass}
-        style={({ pressed }) => [
+        // css-interop descarta `style` cuando es función en un componente con
+        // className (auditoría a1 §2.1) — se perdían padding, sombra y el `style`
+        // del consumidor. El press pasa por estado local y `style` queda ESTÁTICO.
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
+        style={[
           baseStyle,
           shadow,
           pressed ? { transform: [{ scale: 0.97 }] } : null,

@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, AccessibilityInfo } from 'react-native'
-import { useEffect, useState } from 'react'
+import { View, Text, StyleSheet } from 'react-native'
 import { MotiView } from 'moti'
+import { useReducedMotion } from 'react-native-reanimated'
 import { Image } from 'expo-image'
 import { useTheme } from '../context/ThemeContext'
 import { AppBackground } from './AppBackground'
@@ -20,12 +20,10 @@ const LOGO: Record<Size, number> = { sm: 40, md: 60, lg: 84 }
 
 export function EvaLoader({ size = 'lg', subtitle }: { size?: Size; subtitle?: string }) {
   const { theme, branding } = useTheme()
-  const [reduceMotion, setReduceMotion] = useState(false)
+  // Mismo hook que el resto del repo (Walkthrough, selector): Reanimated ya sigue
+  // el ajuste del SO vía `<ReducedMotionConfig>` (auditoría a1 §5.2).
+  const reduceMotion = useReducedMotion()
   const fontSize = FONT[size]
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {})
-  }, [])
 
   // M-F1: loader personalizado del coach. Si está activo, honra texto/color/icon-mode/logo.
   const custom = branding?.useCustomLoader

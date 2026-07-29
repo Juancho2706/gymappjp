@@ -83,8 +83,9 @@ function RoleSelector() {
 
   if (phase === 'checking') {
     return (
+      /* `EvaLoaderScreen` ya monta su propio `AppBackground`; duplicarlo apilaba dos
+         Canvas Skia con blur 80 durante el cold start (auditoría a1 §2.3.1). */
       <View className="bg-surface-app" style={styles.root}>
-        <AppBackground />
         <SafeAreaView style={styles.root}>
           <EvaLoaderScreen subtitle="Preparando EVA…" />
         </SafeAreaView>
@@ -127,6 +128,10 @@ function RoleSelector() {
               </Text>
             </MotiView>
 
+            {/* css-interop DESCARTA el prop `style` cuando es función (auditoría a1
+                §2.1): las dos cards perdían layout, fondo y radio. La superficie va
+                en una View interna con style ESTÁTICO y el press llega por
+                children-as-function. */}
             <View style={styles.roles}>
               <MotiView
                 from={enter}
@@ -139,30 +144,35 @@ function RoleSelector() {
                   accessibilityLabel="Entrar como alumno"
                   accessibilityHint="Usa el código o enlace de tu coach"
                   onPress={() => router.push('/alumno/codigo')}
-                  style={({ pressed }) => [
-                    styles.roleCard,
-                    styles.studentCard,
-                    {
-                      borderRadius: theme.radius['2xl'],
-                      backgroundColor: theme.primary,
-                      opacity: pressed ? 0.9 : 1,
-                      transform: [{ scale: pressed ? 0.985 : 1 }],
-                    },
-                  ]}
                 >
-                  <View style={[styles.roleIcon, styles.studentIcon]}>
-                    <Dumbbell size={23} color={theme.primaryForeground} strokeWidth={2} />
-                  </View>
-                  <View style={styles.roleCopy}>
-                    <Text style={[TYPE.eyebrow, { color: withAlpha(theme.primaryForeground, 0.76) }]}>
-                      Para entrenar
-                    </Text>
-                    <Text style={[TYPE.title, { color: theme.primaryForeground }]}>Soy alumno</Text>
-                    <Text style={[TYPE.caption, { color: withAlpha(theme.primaryForeground, 0.82) }]}>
-                      Entra con tu coach
-                    </Text>
-                  </View>
-                  <ChevronRight size={23} color={theme.primaryForeground} strokeWidth={2.25} />
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.roleCard,
+                        styles.studentCard,
+                        {
+                          borderRadius: theme.radius['2xl'],
+                          backgroundColor: theme.primary,
+                          opacity: pressed ? 0.9 : 1,
+                          transform: [{ scale: pressed ? 0.985 : 1 }],
+                        },
+                      ]}
+                    >
+                      <View style={[styles.roleIcon, styles.studentIcon]}>
+                        <Dumbbell size={23} color={theme.primaryForeground} strokeWidth={2} />
+                      </View>
+                      <View style={styles.roleCopy}>
+                        <Text style={[TYPE.eyebrow, { color: withAlpha(theme.primaryForeground, 0.76) }]}>
+                          Para entrenar
+                        </Text>
+                        <Text style={[TYPE.title, { color: theme.primaryForeground }]}>Soy alumno</Text>
+                        <Text style={[TYPE.caption, { color: withAlpha(theme.primaryForeground, 0.82) }]}>
+                          Entra con tu coach
+                        </Text>
+                      </View>
+                      <ChevronRight size={23} color={theme.primaryForeground} strokeWidth={2.25} />
+                    </View>
+                  )}
                 </Pressable>
               </MotiView>
 
@@ -177,25 +187,30 @@ function RoleSelector() {
                   accessibilityLabel="Entrar como coach"
                   accessibilityHint="Abre el acceso para gestionar alumnos y programas"
                   onPress={() => router.push('/(auth)/login?role=coach')}
-                  className="bg-surface-card border border-default"
-                  style={({ pressed }) => [
-                    styles.roleCard,
-                    {
-                      borderRadius: theme.radius['2xl'],
-                      opacity: pressed ? 0.75 : 1,
-                      transform: [{ scale: pressed ? 0.985 : 1 }],
-                    },
-                  ]}
                 >
-                  <View className="bg-sport-100" style={[styles.roleIcon, { borderRadius: theme.radius.xl }]}>
-                    <Users size={23} color={theme.primary} strokeWidth={2} />
-                  </View>
-                  <View style={styles.roleCopy}>
-                    <Text className="text-muted" style={TYPE.eyebrow}>Para gestionar</Text>
-                    <Text className="text-strong" style={TYPE.title}>Soy coach</Text>
-                    <Text className="text-muted" style={TYPE.caption}>Administra alumnos y programas</Text>
-                  </View>
-                  <ChevronRight size={23} color={theme.mutedForeground} strokeWidth={2.25} />
+                  {({ pressed }) => (
+                    <View
+                      className="bg-surface-card border border-default"
+                      style={[
+                        styles.roleCard,
+                        {
+                          borderRadius: theme.radius['2xl'],
+                          opacity: pressed ? 0.75 : 1,
+                          transform: [{ scale: pressed ? 0.985 : 1 }],
+                        },
+                      ]}
+                    >
+                      <View className="bg-sport-100" style={[styles.roleIcon, { borderRadius: theme.radius.xl }]}>
+                        <Users size={23} color={theme.primary} strokeWidth={2} />
+                      </View>
+                      <View style={styles.roleCopy}>
+                        <Text className="text-muted" style={TYPE.eyebrow}>Para gestionar</Text>
+                        <Text className="text-strong" style={TYPE.title}>Soy coach</Text>
+                        <Text className="text-muted" style={TYPE.caption}>Administra alumnos y programas</Text>
+                      </View>
+                      <ChevronRight size={23} color={theme.mutedForeground} strokeWidth={2.25} />
+                    </View>
+                  )}
                 </Pressable>
               </MotiView>
             </View>

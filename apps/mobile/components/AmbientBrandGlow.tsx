@@ -30,13 +30,15 @@ import { useTheme } from '../context/ThemeContext'
  * (containerOpacity × innerAlpha), porque svg no tiene un wrapper con opacity.
  */
 
-function hexToRgba(hex: string, alpha: number): string {
+// react-native-svg extrae el alpha de un stop SOLO de `stopOpacity` (extractGradient.ts
+// hace `(color & 0x00ffffff) | (alpha << 24)`, con alpha=1 si stopOpacity falta): un
+// stopColor rgba(...) sin stopOpacity explicito resuelve OPACO. Por eso stopColor lleva
+// el color solido (hex, con el mismo fallback que antes daba hexToRgba) y el alpha va
+// aparte en stopOpacity.
+function resolveStopColor(hex: string): string {
   const clean = hex.replace('#', '')
-  if (clean.length !== 6) return `rgba(38,128,255,${alpha})`
-  const r = Number.parseInt(clean.slice(0, 2), 16)
-  const g = Number.parseInt(clean.slice(2, 4), 16)
-  const b = Number.parseInt(clean.slice(4, 6), 16)
-  return `rgba(${r},${g},${b},${alpha})`
+  if (clean.length !== 6) return '#2680FF' // fallback solido (mismo rgb que el rgba previo)
+  return `#${clean}`
 }
 
 interface AmbientBrandGlowProps {
@@ -71,19 +73,19 @@ export function AmbientBrandGlow({ accent }: AmbientBrandGlowProps) {
         <Defs>
           {/* Wash primario — bloom central sobre el area hero (arriba-centro). */}
           <RadialGradient id={`abg-p-${uid}`} cx="50%" cy="6%" r={wide ? '65%' : '80%'}>
-            <Stop offset="0" stopColor={hexToRgba(tint, aPrimary)} />
-            <Stop offset="0.7" stopColor={hexToRgba(tint, 0)} />
+            <Stop offset="0" stopColor={resolveStopColor(tint)} stopOpacity={aPrimary} />
+            <Stop offset="0.7" stopColor={resolveStopColor(tint)} stopOpacity={0} />
           </RadialGradient>
           {/* Wash secundario — sesgado al borde superior derecho, mas tenue. */}
           <RadialGradient id={`abg-s-${uid}`} cx="92%" cy="12%" r={wide ? '48%' : '62%'}>
-            <Stop offset="0" stopColor={hexToRgba(tint, aSecondary)} />
-            <Stop offset="0.68" stopColor={hexToRgba(tint, 0)} />
+            <Stop offset="0" stopColor={resolveStopColor(tint)} stopOpacity={aSecondary} />
+            <Stop offset="0.68" stopColor={resolveStopColor(tint)} stopOpacity={0} />
           </RadialGradient>
           {/* Wash terciario — abajo-izquierda, MUY tenue: da vida al area inferior
               sin robarle protagonismo al hero. */}
           <RadialGradient id={`abg-t-${uid}`} cx="6%" cy="100%" r={wide ? '52%' : '66%'}>
-            <Stop offset="0" stopColor={hexToRgba(tint, aTertiary)} />
-            <Stop offset="0.7" stopColor={hexToRgba(tint, 0)} />
+            <Stop offset="0" stopColor={resolveStopColor(tint)} stopOpacity={aTertiary} />
+            <Stop offset="0.7" stopColor={resolveStopColor(tint)} stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Rect width="100%" height="100%" fill={`url(#abg-p-${uid})`} />

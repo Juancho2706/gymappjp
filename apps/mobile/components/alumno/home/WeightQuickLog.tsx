@@ -72,14 +72,17 @@ export function WeightQuickLog({ clientId, onSaved }: { clientId: string; onSave
           style={{ height: 44, borderWidth: 1.5, borderColor: focused ? theme.primary : theme.border, paddingHorizontal: 12, fontFamily: FONT.uiSemibold, fontSize: 14, color: theme.foreground, fontVariant: ['tabular-nums'] }}
         />
       </View>
-      <Pressable
-        testID="weight-quick-log-save"
-        onPress={save}
-        disabled={pending}
-        className="rounded-control bg-cta-fill"
-        style={({ pressed }) => ({ height: 44, minWidth: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', opacity: pending ? 0.5 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] })}
-      >
-        <Text className="text-on-sport" style={{ fontFamily: FONT.uiBold, fontSize: 12 }}>{pending ? '…' : 'Guardar'}</Text>
+      {/* css-interop descarta `style` cuando es función en un componente con className
+          (auditoría a1 §2.1): la superficie va en una View interna con style estático. */}
+      <Pressable testID="weight-quick-log-save" onPress={save} disabled={pending}>
+        {({ pressed }) => (
+          <View
+            className="rounded-control bg-cta-fill"
+            style={{ height: 44, minWidth: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', opacity: pending ? 0.5 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }}
+          >
+            <Text className="text-on-sport" style={{ fontFamily: FONT.uiBold, fontSize: 12 }}>{pending ? '…' : 'Guardar'}</Text>
+          </View>
+        )}
       </Pressable>
       {error ? <Text className="text-danger-600" style={{ width: '100%', fontFamily: FONT.uiSemibold, fontSize: 12 }}>{error}</Text> : null}
       {success ? <Text className="text-success-700" style={{ width: '100%', fontFamily: FONT.uiSemibold, fontSize: 12 }}>Registrado.</Text> : null}

@@ -22,9 +22,11 @@ function hexToRgba(hex: string, alpha: number): string {
  * Estático → sin costo perceptible. Montado app-wide (todos los menús).
  */
 export function AppBackground({ accent }: { accent?: string }) {
-  const { theme, mode } = useTheme()
+  // `resolvedScheme` (no `mode`): con la preferencia por defecto 'system', `mode`
+  // vale 'system' y el fondo caía siempre en los alphas de dark (auditoría a1 §2.3.2).
+  const { theme, resolvedScheme } = useTheme()
   const { width, height } = useWindowDimensions()
-  const isDark = mode !== 'light'
+  const isDark = resolvedScheme === 'dark'
   const tint = accent ?? theme.primary
   const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'
   const brandColor = hexToRgba(tint, isDark ? 0.14 : 0.08)
