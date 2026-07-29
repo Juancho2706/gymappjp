@@ -1,8 +1,11 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import {
+  NUTRITION_V2_PERMISSION_DENIED_CODE,
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
+  NutritionIntakeVoidSchema,
+  isNutritionV2PermissionDenied,
   type NutritionIntakeMutation,
 } from '@eva/nutrition-v2'
 import {
@@ -12,11 +15,22 @@ import {
   rpcErrorResponse,
   type NutritionV2ApiGate,
 } from '../_shared'
+import {
+  evaluateCorrectPermission,
+  evaluateRecordPermission,
+  resolveStudentIntakePermissions,
+  type StudentIntakePermissionDenial,
+} from '@/services/nutrition-v2-student-permissions.service'
 import { jsonRateLimited, rateLimitNutritionIntake } from '@/lib/rate-limit'
 
 const ResponseIdSchema = z.string().uuid()
 
-type SupportedAction = 'record' | 'correct'
+/**
+ * `void` (NUT-010, opción A) llama a la RPC terminal `void_nutrition_intake_v2`. `correct` se
+ * conserva INTACTO al menos un ciclo de release: la cola offline de RN puede tener retiros
+ * encolados con el payload viejo (corrección de contribución cero) y esos tienen que drenar.
+ */
+type SupportedAction = 'record' | 'correct' | 'void'
 
 function commonRpcArgs(payload: NutritionIntakeMutation): Record<string, unknown> {
   return {
@@ -49,6 +63,23 @@ async function executeMutation(input: {
   const route = 'mobile.nutrition-v2.intake'
   const { data, error } = await input.gate.rpc.rpc(input.rpcName, input.args)
   if (error) {
+    // NUT-009: el guard de permisos del plan viaja con errcode 42501, igual que un scope denegado.
+    // `rpcErrorResponse` los mezclaría (403 con `code: '42501'`) y la cola offline de RN no sabría
+    // distinguirlos. Se responde con un código PROPIO y 403 — no reintentable por `isRetryable`,
+    // así que la mutación se descarta en vez de gastar 8 intentos contra una regla del coach.
+    if (isNutritionV2PermissionDenied(error.message)) {
+      logNutritionV2Api({
+        route,
+        startedAt: input.startedAt,
+        status: 403,
+        errorCode: NUTRITION_V2_PERMISSION_DENIED_CODE,
+        rolloutReason: input.gate.rolloutReason,
+      })
+      return jsonNoStore(
+        { error: 'Tu coach no permite este cambio en el plan de hoy.', code: NUTRITION_V2_PERMISSION_DENIED_CODE },
+        403,
+      )
+    }
     const response = rpcErrorResponse(error, 'NUTRITION_V2_INTAKE_FAILED')
     logNutritionV2Api({
       route,
@@ -76,7 +107,7 @@ async function executeMutation(input: {
   }
 
   const responsePayload = { ok: true as const, id: id.data, action: input.action }
-  const status = input.action === 'record' ? 201 : 200
+  const status: number = input.action === 'record' ? 201 : 200
   logNutritionV2Api({
     route,
     startedAt: input.startedAt,
@@ -115,6 +146,15 @@ export async function POST(request: NextRequest) {
     if (!gate.clientId || parsed.data.clientId !== gate.clientId) {
       return scopeMismatch(startedAt)
     }
+    // NUT-009: ESPEJO EXACTO de la server action web. La asimetría entre las dos superficies fue
+    // justamente lo que dejó el permiso sin efecto; el evaluador es el mismo módulo compartido.
+    const permissions = await resolveStudentIntakePermissions(gate.rpc, {
+      clientId: parsed.data.clientId,
+      localDate: parsed.data.localDate,
+      prescriptionItemId: parsed.data.prescriptionItemId,
+    })
+    const denial = evaluateRecordPermission(permissions, parsed.data)
+    if (denial) return permissionDenied(denial, startedAt)
     return executeMutation({
       gate,
       action: 'record',
@@ -130,6 +170,13 @@ export async function POST(request: NextRequest) {
     if (!gate.clientId || parsed.data.clientId !== gate.clientId) {
       return scopeMismatch(startedAt)
     }
+    const permissions = await resolveStudentIntakePermissions(gate.rpc, {
+      clientId: parsed.data.clientId,
+      localDate: parsed.data.localDate,
+      prescriptionItemId: parsed.data.prescriptionItemId,
+    })
+    const denial = evaluateCorrectPermission(permissions, parsed.data)
+    if (denial) return permissionDenied(denial, startedAt)
     return executeMutation({
       gate,
       action: 'correct',
@@ -143,8 +190,41 @@ export async function POST(request: NextRequest) {
     })
   }
 
+  // Retiro TERMINAL (NUT-010, opción A). Payload mínimo: no hay snapshot ni cantidad que mandar.
+  // Sin guard de permisos: retirar lo propio siempre se puede — bloquearlo dejaría al alumno con un
+  // registro erróneo imborrable, que es peor que la regla que protegería.
+  if (action === 'void') {
+    const parsed = NutritionIntakeVoidSchema.safeParse(body?.payload)
+    if (!parsed.success) return invalidPayload(parsed.error, startedAt)
+    if (!gate.clientId || parsed.data.clientId !== gate.clientId) {
+      return scopeMismatch(startedAt)
+    }
+    return executeMutation({
+      gate,
+      action: 'void',
+      rpcName: 'void_nutrition_intake_v2',
+      args: {
+        p_client_id: parsed.data.clientId,
+        p_entry_id: parsed.data.entryId,
+        p_reason: parsed.data.reason,
+        p_idempotency_key: parsed.data.idempotencyKey,
+      },
+      startedAt,
+    })
+  }
+
   logNutritionV2Api({ route, startedAt, status: 400, errorCode: 'INVALID_ACTION' })
   return jsonNoStore({ error: 'Acción inválida.', code: 'INVALID_ACTION' }, 400)
+}
+
+function permissionDenied(denial: StudentIntakePermissionDenial, startedAt: number) {
+  logNutritionV2Api({
+    route: 'mobile.nutrition-v2.intake',
+    startedAt,
+    status: 403,
+    errorCode: denial.code,
+  })
+  return jsonNoStore({ error: denial.error, code: NUTRITION_V2_PERMISSION_DENIED_CODE }, 403)
 }
 
 function invalidPayload(error: z.ZodError, startedAt: number) {

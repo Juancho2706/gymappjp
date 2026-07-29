@@ -20,6 +20,8 @@ import {
     type SectionPrefs,
 } from '@eva/feature-prefs'
 import { resolveNutritionV2RolloutDecision } from '@/services/nutrition-v2-rollout.service'
+import { resolveMobileCoachRolloutContext } from '@/services/mobile-nutrition-v2-rollout-context'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
 
 /**
@@ -151,56 +153,12 @@ async function resolveNutritionPrefs(
 }
 
 /**
- * ¿El alumno `clientId` pertenece al workspace coach ya resuelto? Espeja `mobileContextOwnsClient`:
- * standalone/team por columna de scope, enterprise por asignación activa. Solo decide si el canary por
- * alumno (allowlist por alumno) puede alcanzar la ficha del coach en mobile.
- */
-async function coachWorkspaceOwnsClient(
-    admin: DB,
-    scope: NutritionScope,
-    userId: string,
-    clientId: string,
-): Promise<boolean> {
-    if (scope.orgId) {
-        const [{ data: client }, { data: assignment }] = await Promise.all([
-            admin.from('clients').select('id').eq('id', clientId).eq('org_id', scope.orgId).is('team_id', null).maybeSingle(),
-            admin
-                .from('coach_client_assignments')
-                .select('id')
-                .eq('org_id', scope.orgId)
-                .eq('client_id', clientId)
-                .eq('coach_id', userId)
-                .is('deleted_at', null)
-                .maybeSingle(),
-        ])
-        return Boolean(client && assignment)
-    }
-    if (scope.teamId) {
-        const { data } = await admin
-            .from('clients')
-            .select('id')
-            .eq('id', clientId)
-            .eq('team_id', scope.teamId)
-            .is('org_id', null)
-            .maybeSingle()
-        return Boolean(data)
-    }
-    const { data } = await admin
-        .from('clients')
-        .select('id')
-        .eq('id', clientId)
-        .eq('coach_id', userId)
-        .is('org_id', null)
-        .is('team_id', null)
-        .maybeSingle()
-    return Boolean(data)
-}
-
-/**
- * Decisión de rollout de la superficie `mobileCoach`. Cuando la pantalla mobile es de un alumno puntual
- * (`clientId` de query) y ese alumno pertenece al workspace, se pasa su id al contexto para que un
- * canary acotado por alumno alcance la ficha/constructor del coach (paridad con web). Fail-closed: un
- * `clientId` ajeno o inexistente se ignora y se evalúa el flag global del coach, jamás un error.
+ * Decisión de rollout de la superficie `mobileCoach`. El contexto (workspace + alumno validado) lo
+ * arma el helper COMPARTIDO con la API de Nutrición V2 (`mobile-nutrition-v2-rollout-context`), para
+ * que el flag que enciende la UI y el gate que sirve los datos no puedan volver a divergir (NUT-013).
+ * `membershipVerified`: la pertenencia al team/org ya la resolvió `resolveMobileClientMutationContext`
+ * (o es el coach standalone del propio bearer), así que no se repiten esas consultas.
+ * Fail-closed: un `clientId` ajeno o inexistente se ignora y se evalúa el flag global del coach.
  */
 async function resolveMobileCoachV2Decision(
     admin: DB,
@@ -208,17 +166,24 @@ async function resolveMobileCoachV2Decision(
     userId: string,
     requestedClientId: string | null,
 ) {
-    const canaryClientId =
-        requestedClientId && (await coachWorkspaceOwnsClient(admin, scope, userId, requestedClientId))
-            ? requestedClientId
-            : null
+    const coachScope: NutritionV2CoachScope = scope.orgId
+        ? { scopeType: 'organization', teamId: null, orgId: scope.orgId }
+        : scope.teamId
+          ? { scopeType: 'team', teamId: scope.teamId, orgId: null }
+          : { scopeType: 'standalone', teamId: null, orgId: null }
+
+    const resolved = await resolveMobileCoachRolloutContext(admin, userId, coachScope, requestedClientId, {
+        membershipVerified: true,
+    })
+    if (!resolved.ok) return { enabled: false }
+
     return resolveNutritionV2RolloutDecision({
         surface: 'mobileCoach',
         userId,
-        coachId: userId,
-        clientId: canaryClientId,
-        teamId: scope.teamId,
-        orgId: scope.orgId,
+        coachId: resolved.context.coachId,
+        clientId: resolved.context.clientId,
+        teamId: resolved.context.teamId,
+        orgId: resolved.context.orgId,
     })
 }
 

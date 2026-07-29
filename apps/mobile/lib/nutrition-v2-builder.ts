@@ -5,14 +5,13 @@
  * supabase RN (PostgREST). Es el gemelo movil de la web:
  *   - reducer/ensamblado/validacion: PORTADOS 1:1 desde
  *     apps/web/.../builder/_lib/draft-builder.ts (mismo contrato NutritionPlanDraft),
- *   - persistencia: MISMO orden de escritura que
- *     apps/web/.../_actions/plan-persistence.ts
- *     (plan -> version -> variantes -> franjas -> items -> publish RPC), pero via el
- *     cliente supabase-js del movil. La RLS del servidor es la MISMA barrera: un 42501
- *     aca == SCOPE_DENIED. El RPC publish_nutrition_plan_v2 publica transaccionalmente.
+ *   - filas de insert (buildVariantInsertRow / buildSlotInsertRow / buildItemInsertRow …):
+ *     PORTADAS 1:1 y usadas por el quick-edit; el ORDEN de escritura ya no vive aqui.
  *
- * Regla de oro (heredada de la web): el gate comercial (Nutricion Pro) y el scope los
- * RE-VALIDA el servidor (RLS + RPC). El gate cliente de aca solo evita fricción/500 y
+ * NUT-005: este modulo NO escribe. La publicacion del coach pasa por la API movil
+ * (POST /api/mobile/nutrition-v2/coach/mutate, ver lib/nutrition-v2.api.ts), que re-valida
+ * rollout, workspace y entitlement server-side y persiste con el cliente RLS del usuario.
+ * El gate comercial que queda aqui (requiredNutritionProFeature) solo evita fricción/500 y
  * muestra un upsell suave; nunca es la barrera real.
  */
 
@@ -25,12 +24,8 @@ import {
   type NutritionPlanDraft,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
-import { calculateFoodItemMacros, type ExchangeGroup, type FoodMacrosRow } from '@eva/nutrition-engine'
-import { buildFrozenPortionGroups, type PortionsBySlot } from './nutrition-v2-builder-portions'
-// Reuso de la persistencia congelada del quick-edit (afirmación 8 de la spec 4B-11): NO se
-// duplica `buildPortionTargetInsertRows`. La lib del quick-edit vive en `lib/` (no en
-// `components/quick-edit/**`, territorio vetado), y ya exporta estas piezas.
-import { buildPortionTargetInsertRows } from './nutrition-v2-quick-edit'
+import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
+import { type PortionsBySlot } from './nutrition-v2-builder-portions'
 
 // ---------------------------------------------------------------------------
 // Estado del wizard (PORTADO 1:1 desde la web draft-builder.ts)
@@ -942,335 +937,13 @@ export function mapWriteError(error: DbError, phase: string): PublishFailure {
   return publishFail('WRITE_FAILED', 'No se pudo guardar el plan (' + phase + '). Intenta nuevamente.')
 }
 
-interface ClientScopeRow {
-  coach_id: string
-  org_id: string | null
-  team_id: string | null
-}
-
-interface FoodRow {
-  id: string
-  name: string
-  brand: string | null
-  calories: number
-  protein_g: number
-  carbs_g: number
-  fats_g: number
-  fiber_g: number | null
-  serving_size: number
-  serving_unit: string | null
-}
-
-function toBuilderFood(row: FoodRow): BuilderFood {
-  return {
-    id: row.id,
-    name: row.name,
-    brand: row.brand,
-    calories: row.calories,
-    proteinG: row.protein_g,
-    carbsG: row.carbs_g,
-    fatsG: row.fats_g,
-    fiberG: row.fiber_g,
-    servingSize: row.serving_size,
-    servingUnit: row.serving_unit ?? 'g',
-    category: null,
-    media: null,
-  }
-}
-
-function collectFoodIds(draft: NutritionPlanDraft): string[] {
-  const ids = new Set<string>()
-  for (const variant of draft.dayVariants) {
-    for (const slot of variant.mealSlots) {
-      for (const item of slot.items) {
-        if (item.foodId) ids.add(item.foodId)
-      }
-    }
-  }
-  return [...ids]
-}
-
-/**
- * Resuelve un plan V2 ACTIVO del alumno que todavia NO tiene version publicada
- * (`current_published_version_id` null) para REUTILIZARLO en vez de crear un duplicado.
- * Espejo 1:1 del web `resolveReusableUnpublishedPlanId` (plan-persistence.ts), que RN nunca
- * habia portado (NUT-004): sin este guard, cada reintento tras un fallo entre el INSERT del plan
- * y el de la version dejaba una raiz huerfana y creaba OTRA, acumulando planes activos por alumno
- * (la DB no tiene invariante de una-raiz-activa).
- *
- * RLS-scoped. Nunca reutiliza un plan ya publicado: esa ruta va por `draft.planId` explicito del
- * builder (edicion), asi no tocamos un plan vivo.
- */
-export async function resolveReusableUnpublishedPlanIdRN(
-  db: NutritionV2WriteClient,
-  clientId: string,
-): Promise<{ ok: true; planId: string | null } | { ok: false; code: string; error: string }> {
-  const res = await db
-    .from('nutrition_plans_v2')
-    .select('id, current_published_version_id')
-    .eq('client_id', clientId)
-    .eq('lifecycle_status', 'active')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (res.error) {
-    const failure = mapWriteError(res.error, 'plan-huerfano')
-    return { ok: false, code: failure.code, error: failure.error }
-  }
-  const row = res.data as { id: string; current_published_version_id: string | null } | null
-  if (!row || row.current_published_version_id != null) return { ok: true, planId: null }
-  return { ok: true, planId: row.id }
-}
-
-/**
- * Persiste un draft (plan/version/variantes/franjas/items) via las tablas versionadas
- * RLS-scoped y publica transaccionalmente con publish_nutrition_plan_v2 (idempotente por
- * clave estable). MISMO camino de escritura que el web persistAndPublishDraft. NO hace el
- * gate comercial (Pro): eso lo hace publishDraftRN antes. Idempotente: si la clave ya
- * existe, devuelve la version publicada existente sin re-escribir.
- */
-export async function persistAndPublishDraft(input: {
-  db: NutritionV2WriteClient
-  userId: string
-  draft: NutritionPlanDraft
-  idempotencyKey: string
-  effectiveFrom: string
-  /**
-   * Catálogo de grupos de intercambio para CONGELAR el snapshot de las porciones a elección
-   * (4B-11). Opcional: un draft sin porciones no lo necesita y publica byte-idéntico a hoy.
-   * Si el draft trae `exchangeTargets` pero un grupo no resuelve contra este catálogo, el
-   * publish corta con `EXCHANGE_GROUP_UNRESOLVED` (jamás una fila con snapshot NULL).
-   */
-  portionGroups?: ExchangeGroup[]
-}): Promise<PublishResult> {
-  const { db, userId, draft, idempotencyKey, effectiveFrom, portionGroups } = input
-  // Dict congelado del catálogo (por valor): alimenta el mismo `buildPortionTargetInsertRows`
-  // del quick-edit. Vacío si no se pasó catálogo (un draft sin porciones nunca lo consulta).
-  const frozenPortionGroups = buildFrozenPortionGroups(portionGroups ?? [])
-
-  const existing = await db
-    .from('nutrition_plan_versions_v2')
-    .select('id, plan_id')
-    .eq('publish_idempotency_key', idempotencyKey)
-    .maybeSingle()
-  if (existing.error) return mapWriteError(existing.error, 'idempotencia')
-  if (existing.data) {
-    const row = existing.data as { id: string; plan_id: string }
-    return { ok: true, versionId: row.id, planId: row.plan_id }
-  }
-
-  const clientRes = await db
-    .from('clients')
-    .select('coach_id, org_id, team_id')
-    .eq('id', draft.clientId)
-    .maybeSingle()
-  if (clientRes.error) return mapWriteError(clientRes.error, 'alumno')
-  if (!clientRes.data) return publishFail('CLIENT_NOT_FOUND', 'No se encontro el alumno en tu espacio.')
-  const clientScope = clientRes.data as ClientScopeRow
-
-  let planId: string
-  let nextVersion = 1
-  if (draft.planId) {
-    const planRes = await db
-      .from('nutrition_plans_v2')
-      .select('id, client_id')
-      .eq('id', draft.planId)
-      .maybeSingle()
-    if (planRes.error) return mapWriteError(planRes.error, 'plan')
-    const planRow = planRes.data as { id: string; client_id: string } | null
-    if (!planRow || planRow.client_id !== draft.clientId) {
-      return publishFail('PLAN_NOT_FOUND', 'El plan indicado no pertenece a este alumno.')
-    }
-    planId = planRow.id
-    const maxRes = await db
-      .from('nutrition_plan_versions_v2')
-      .select('version_number')
-      .eq('plan_id', planId)
-      .order('version_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (maxRes.error) return mapWriteError(maxRes.error, 'version')
-    const maxRow = maxRes.data as { version_number: number } | null
-    nextVersion = (maxRow?.version_number ?? 0) + 1
-  } else {
-    // Prevencion de planes huerfanos / raices duplicadas (NUT-004, paridad con web): si el alumno
-    // ya tiene un plan ACTIVO sin version publicada (basura de un intento previo que fallo entre el
-    // INSERT del plan y el de la version), REUTILIZALO en vez de crear otro.
-    const reusable = await resolveReusableUnpublishedPlanIdRN(db, draft.clientId)
-    if (!reusable.ok) return publishFail(reusable.code, reusable.error)
-    if (reusable.planId) {
-      planId = reusable.planId
-      const maxRes = await db
-        .from('nutrition_plan_versions_v2')
-        .select('version_number')
-        .eq('plan_id', planId)
-        .order('version_number', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (maxRes.error) return mapWriteError(maxRes.error, 'version')
-      const maxRow = maxRes.data as { version_number: number } | null
-      nextVersion = (maxRow?.version_number ?? 0) + 1
-    } else {
-      const planIns = await db
-        .from('nutrition_plans_v2')
-        .insert({
-          client_id: draft.clientId,
-          coach_id: clientScope.coach_id,
-          org_id: clientScope.org_id,
-          team_id: clientScope.team_id,
-          name: draft.name,
-          strategy: draft.strategy,
-          created_by: userId,
-          updated_by: userId,
-        })
-        .select('id')
-        .single()
-      if (planIns.error || !planIns.data) return mapWriteError(planIns.error ?? { message: 'no plan' }, 'plan')
-      planId = planIns.data.id
-    }
-  }
-
-  const versionIns = await db
-    .from('nutrition_plan_versions_v2')
-    .insert({
-      plan_id: planId,
-      version_number: nextVersion,
-      status: 'draft',
-      strategy: draft.strategy,
-      timezone: draft.timezone,
-      student_permissions: draft.permissions,
-      visible_notes: draft.visibleNotes,
-      private_notes: draft.privateNotes,
-      protocol_notes: draft.protocolNotes,
-      created_by: userId,
-      updated_by: userId,
-    })
-    .select('id')
-    .single()
-  if (versionIns.error || !versionIns.data) {
-    return mapWriteError(versionIns.error ?? { message: 'no version' }, 'version')
-  }
-  const versionId = versionIns.data.id
-
-  // Foods de los items MAS los referenciados por los reemplazos autorizados (F-02): un solo set
-  // para resolver/congelar todo en una pasada (espejo de la web plan-persistence.ts).
-  const foodIds = [...new Set([...collectFoodIds(draft), ...collectSubstitutionFoodIds(draft)])]
-  const foodMap = new Map<string, BuilderFood>()
-  for (const id of foodIds) {
-    const foodRes = await db
-      .from('foods')
-      .select('id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit')
-      .eq('id', id)
-      .maybeSingle()
-    if (foodRes.error) return mapWriteError(foodRes.error, 'alimentos')
-    if (foodRes.data) foodMap.set(id, toBuilderFood(foodRes.data as FoodRow))
-  }
-
-  for (const variant of draft.dayVariants) {
-    const variantIns = await db
-      .from('nutrition_day_variants_v2')
-      .insert(buildVariantInsertRow(versionId, variant))
-      .select('id')
-      .single()
-    if (variantIns.error || !variantIns.data) {
-      return mapWriteError(variantIns.error ?? { message: 'no variant' }, 'dia')
-    }
-    const variantId = variantIns.data.id
-
-    for (const slot of variant.mealSlots) {
-      const slotIns = await db
-        .from('nutrition_meal_slots_v2')
-        .insert(buildSlotInsertRow(versionId, variantId, slot))
-        .select('id')
-        .single()
-      if (slotIns.error || !slotIns.data) {
-        return mapWriteError(slotIns.error ?? { message: 'no slot' }, 'franja')
-      }
-      const mealSlotId = slotIns.data.id
-
-      if (slot.items.length > 0) {
-        // Id explicito por item (F-02): lo generamos aqui para poder colgar los reemplazos
-        // referenciandolo, sin un round-trip extra de RETURNING (espejo de la web).
-        const itemsWithIds = slot.items.map((item) => ({ item, id: newNutritionItemId() }))
-        const itemRows = itemsWithIds.map(({ item, id }, index) =>
-          buildItemInsertRow({
-            versionId,
-            mealSlotId,
-            orderIndex: index,
-            item,
-            food: item.foodId ? foodMap.get(item.foodId) ?? null : null,
-            id,
-          }),
-        )
-        const itemsIns = await db.from('nutrition_prescription_items_v2').insert(itemRows)
-        if (itemsIns.error) return mapWriteError(itemsIns.error, 'items')
-
-        // Reemplazos autorizados del coach (F-02), congelados por item. Solo structured/hybrid
-        // tienen items. Un item sin reemplazos no toca la tabla nueva (byte-identico a hoy).
-        const substitutionRows = itemsWithIds.flatMap(({ item, id }) =>
-          (item.substitutions ?? []).map((sub, subIndex) =>
-            buildItemSubstitutionInsertRow({
-              versionId,
-              prescriptionItemId: id,
-              orderIndex: subIndex,
-              sub,
-              food: sub.foodId ? foodMap.get(sub.foodId) ?? null : null,
-            }),
-          ),
-        )
-        if (substitutionRows.length > 0) {
-          const subsIns = await db
-            .from('nutrition_item_substitutions_v2')
-            .insert(substitutionRows as unknown as Record<string, unknown>[])
-          if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
-        }
-      }
-
-      // Porciones a elección (4B-11): inserta las filas de la franja con snapshot congelado.
-      // Gateado por `slot.exchangeTargets?.length`: una franja sin porciones no toca la tabla
-      // (byte-idéntico a hoy). Reusa `buildPortionTargetInsertRows` del quick-edit; si un grupo
-      // no resuelve contra el catálogo congelado, corta en voz alta (jamás snapshot NULL).
-      const exchangeTargets = slot.exchangeTargets ?? []
-      if (exchangeTargets.length > 0) {
-        const targetRows = buildPortionTargetInsertRows({
-          versionId,
-          mealSlotId,
-          targets: exchangeTargets,
-          groupsById: frozenPortionGroups,
-        })
-        if (targetRows == null) {
-          return publishFail(
-            'EXCHANGE_GROUP_UNRESOLVED',
-            'No se pudieron congelar los grupos de porciones del plan. Recarga el catálogo e intenta de nuevo.',
-          )
-        }
-        const targetsIns = await db
-          .from('nutrition_slot_exchange_targets_v2')
-          .insert(targetRows as unknown as Record<string, unknown>[])
-        if (targetsIns.error) return mapWriteError(targetsIns.error, 'porciones')
-      }
-    }
-  }
-
-  const publishRes = await db.rpc('publish_nutrition_plan_v2', {
-    p_version_id: versionId,
-    p_effective_from: effectiveFrom,
-    p_idempotency_key: idempotencyKey,
-  })
-  if (publishRes.error) return mapWriteError(publishRes.error, 'publicacion')
-
-  const publishedId = z.string().uuid().safeParse(publishRes.data)
-  if (!publishedId.success) {
-    return publishFail('INVALID_RESPONSE', 'La publicacion devolvio una respuesta inesperada.')
-  }
-  return { ok: true, versionId: publishedId.data, planId }
-}
-
-const PublishInputSchema = z.object({
-  draft: NutritionPlanDraftSchema,
-  idempotencyKey: z.string().trim().min(8).max(200),
-  effectiveFrom: z.string().date(),
-})
+// NOTA (NUT-005): la PERSISTENCIA del coach ya no vive aqui. `persistAndPublishDraft`,
+// `resolveReusableUnpublishedPlanIdRN` y `publishDraftRN` escribian directo contra PostgREST/RPC
+// con el JWT de la sesion, saltandose el rollout y el entitlement Pro (ninguno de los dos existe en
+// la RLS ni en el RPC). El unico camino de escritura del coach es ahora
+// POST /api/mobile/nutrition-v2/coach/mutate (`lib/nutrition-v2.api.ts`), que reusa el MISMO codigo
+// de escritura de la web. Este modulo conserva solo logica PURA (estado, ensamblado, validacion,
+// filas de insert y el gate cliente anti-friccion).
 
 /**
  * Genera la clave de idempotencia estable de una publicacion. operationId debe ser
@@ -1287,53 +960,6 @@ export function buildPublishIdempotencyKey(input: {
     deviceId: input.deviceId ?? 'rn-builder',
     operationId: input.operationId,
     kind: 'publish',
-  })
-}
-
-/**
- * Publica un draft desde el movil: valida el payload, aplica el gate comercial del addon
- * Nutricion Pro (fail-closed: si el draft exige Pro y el coach NO lo tiene habilitado,
- * devuelve UPGRADE_REQUIRED sin tocar la BD) y delega la persistencia+publicacion en
- * persistAndPublishDraft. El servidor (RLS + RPC) RE-VALIDA el gate y el scope: este
- * chequeo cliente solo evita fricción y un 500, nunca es la barrera.
- */
-export async function publishDraftRN(input: {
-  db: NutritionV2WriteClient
-  userId: string
-  draft: unknown
-  idempotencyKey: string
-  effectiveFrom: string
-  hasNutritionPro: boolean
-  /** Catálogo de grupos para congelar las porciones a elección (4B-11); ver persistAndPublishDraft. */
-  portionGroups?: ExchangeGroup[]
-}): Promise<PublishResult> {
-  const parsed = PublishInputSchema.safeParse({
-    draft: input.draft,
-    idempotencyKey: input.idempotencyKey,
-    effectiveFrom: input.effectiveFrom,
-  })
-  if (!parsed.success) {
-    return publishFail('INVALID_PAYLOAD', 'El plan tiene datos invalidos.', zodFields(parsed.error))
-  }
-  const { draft, idempotencyKey, effectiveFrom } = parsed.data
-
-  const proFeature = requiredNutritionProFeature(draft)
-  if (proFeature && !input.hasNutritionPro) {
-    return {
-      ok: false,
-      code: 'UPGRADE_REQUIRED',
-      feature: proFeature,
-      error: `Activa Nutricion Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[proFeature]}.`,
-    }
-  }
-
-  return persistAndPublishDraft({
-    db: input.db,
-    userId: input.userId,
-    draft,
-    idempotencyKey,
-    effectiveFrom,
-    portionGroups: input.portionGroups,
   })
 }
 

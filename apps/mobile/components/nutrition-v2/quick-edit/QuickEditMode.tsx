@@ -12,7 +12,12 @@ import {
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
 import { ArrowLeft, History, Info, NotebookPen, X } from 'lucide-react-native'
-import type { FoodCatalogItem, NutritionItemSubstitution, NutritionPlanReadModel } from '@eva/nutrition-v2'
+import type {
+  FoodCatalogItem,
+  NutritionItemSubstitution,
+  NutritionPlanReadModel,
+  NutritionV2CoachScope,
+} from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { NutritionHeader, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
@@ -31,7 +36,6 @@ import {
   loadQuickEditFoods,
   loadQuickEditSubstitutions,
   planModelToQuickEditState,
-  publishQuickEditRN,
   quickEditReducer,
   quickEditUsesSlots,
   validateQuickEditState,
@@ -45,6 +49,7 @@ import {
   type QuickEditPortionsState,
   type QuickEditPortionTarget,
 } from './portions-state'
+import { publishQuickEditRN } from '../../../lib/nutrition-v2.api'
 import {
   clearNutritionDraft,
   quickEditDraftKey,
@@ -107,8 +112,7 @@ export function QuickEditMode({
   clientId,
   clientName,
   planModel,
-  hasNutritionPro,
-  userId,
+  scope,
   todayIso,
   onExit,
   onPublished,
@@ -117,8 +121,8 @@ export function QuickEditMode({
   clientId: string
   clientName: string
   planModel: NutritionPlanReadModel
-  hasNutritionPro: boolean
-  userId: string
+  /** Workspace coach activo: viaja al endpoint de mutaciones (gate de rollout + scope). */
+  scope: NutritionV2CoachScope
   todayIso: string
   onExit: () => void
   onPublished: () => void
@@ -228,10 +232,6 @@ export function QuickEditMode({
     setSubsReloadNonce((nonce) => nonce + 1)
   }, [])
 
-  const portionGroupsById = useMemo(
-    () => new Map(portionGroups.map((group) => [group.exchangeGroupId, group])),
-    [portionGroups],
-  )
   // Franjas VIVAS del estado principal: las porciones de franjas eliminadas no cuentan
   // ni publican (la baja de la franja ya cuenta 1 y arrastra sus targets).
   const liveSlotKeys = useMemo(
@@ -494,17 +494,16 @@ export function QuickEditMode({
     setPublishError(null)
     // Publish canonico de la lib CON capa de porciones (targets con snapshot congelado
     // por el MISMO pipeline: tablas versionadas + publish_nutrition_plan_v2).
+    // NUT-005: la publicacion pasa por la API movil (rollout + delta-gate Pro + CAS server-side).
     const res = await publishQuickEditRN({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
+      scope,
       clientId,
       baseline,
       state,
-      portions: { state: portionsState, groupsById: portionGroupsById },
+      portions: { state: portionsState },
       carryOverSubstitutions: carryOverSubs,
       idempotencyKey: intentKeyRef.current,
       todayIso,
-      hasNutritionPro,
     })
     if (!mountedRef.current) return
     setPublishing(false)
@@ -527,7 +526,7 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, carryOverSubs, subsStatus, todayIso, hasNutritionPro, onPublished, draftKey])
+  }, [baseline, scope, clientId, state, portionsState, carryOverSubs, subsStatus, todayIso, onPublished, draftKey])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return

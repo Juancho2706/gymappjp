@@ -375,8 +375,7 @@ export default function CoachNutritionV2ClientScreen() {
         clientId={detail.client.id}
         clientName={clientFullName}
         planModel={detail.plan}
-        hasNutritionPro={hasNutritionPro}
-        userId={userId}
+        scope={scope}
         todayIso={date}
         onExit={() => setEditing(false)}
         onPublished={() => {
@@ -708,8 +707,6 @@ export default function CoachNutritionV2ClientScreen() {
           sourceClientId={detail.client.id}
           sourcePlanName={detail.plan.plan?.name ?? 'este plan'}
           sourceVersionId={activePlan?.versionId ?? ''}
-          userId={userId}
-          hasNutritionPro={hasNutritionPro}
           today={date}
         />
       ) : null}
@@ -717,10 +714,10 @@ export default function CoachNutritionV2ClientScreen() {
       {activePlan && userId ? (
         <ArchivePlanConfirmSheet
           open={archiveOpen}
+          scope={scope}
           clientId={detail.client.id}
           planId={activePlan.id}
           planName={activePlan.name}
-          userId={userId}
           onClose={() => setArchiveOpen(false)}
           onArchived={() => {
             setArchiveOpen(false)
@@ -804,7 +801,8 @@ function ConvertedPlanBanner({
 // Diálogo "Asignar plan a otros alumnos" (delta 4/5/6). Modal full-screen (patrón FoodSearchModal,
 // resolución del juez: consistencia con los flujos coach existentes), NO Sheet. Roster paginado
 // del workspace + buscador acento-insensible + "Vigente desde" YYYY-MM-DD + reporte parcial.
-// La escritura la hace assignNutritionPlanToClients (lib) contra el cliente RLS de la sesión.
+// La escritura la hace assignNutritionPlanToClients, que POSTea al endpoint de mutaciones del
+// coach (NUT-005): rollout, workspace, gate Pro y relectura de la fuente se validan server-side.
 // ---------------------------------------------------------------------------
 
 function AssignPlanModal({
@@ -814,8 +812,6 @@ function AssignPlanModal({
   sourceClientId,
   sourcePlanName,
   sourceVersionId,
-  userId,
-  hasNutritionPro,
   today,
 }: {
   visible: boolean
@@ -823,10 +819,8 @@ function AssignPlanModal({
   scope: NutritionV2CoachScope
   sourceClientId: string
   sourcePlanName: string
-  /** Versión vigente que la ficha mostró: CAS anti-stale que la lib valida tras releer la fuente. */
+  /** Versión vigente que la ficha mostró: CAS anti-stale que el servidor valida tras releer la fuente. */
   sourceVersionId: string
-  userId: string
-  hasNutritionPro: boolean
   today: string
 }) {
   const { theme } = useTheme()
@@ -941,22 +935,18 @@ function AssignPlanModal({
     setSubmitting(true)
     setTopError(null)
     const res = await assignNutritionPlanToClients({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
       sourceClientId,
       sourceScope: scope,
       expectedVersionId: sourceVersionId,
-      today,
       targetClientIds: [...selected],
       effectiveFrom: effectiveFrom.trim(),
       operationId: operationId.current,
-      hasNutritionPro,
     })
     if (!mountedRef.current) return
     setSubmitting(false)
     if (res.ok) setResults({ items: res.results, summary: res.summary })
     else setTopError(res.error)
-  }, [selected, submitting, effectiveFrom, userId, scope, sourceClientId, sourceVersionId, today, hasNutritionPro])
+  }, [selected, submitting, effectiveFrom, scope, sourceClientId, sourceVersionId])
 
   const confirmLabel = submitting
     ? 'Asignando…'
@@ -1169,23 +1159,24 @@ function AssignPlanModal({
 // ---------------------------------------------------------------------------
 // Confirmación "Archivar plan vigente" (delta 8). Sheet nativeModal (patrón PublishConfirmSheet,
 // resolución del juez), copy no tóxico, botón destructivo + Cancelar, bloqueo durante la escritura
-// y offline fail-closed. La escritura la hace archiveNutritionPlan (UPDATE RLS-scoped idempotente).
+// y offline fail-closed. La escritura la hace archiveNutritionPlan via la API movil (UPDATE
+// RLS-scoped e idempotente server-side; NUT-005).
 // ---------------------------------------------------------------------------
 
 function ArchivePlanConfirmSheet({
   open,
+  scope,
   clientId,
   planId,
   planName,
-  userId,
   onClose,
   onArchived,
 }: {
   open: boolean
+  scope: NutritionV2CoachScope
   clientId: string
   planId: string
   planName: string
-  userId: string
   onClose: () => void
   onArchived: () => void
 }) {
@@ -1219,12 +1210,7 @@ function ArchivePlanConfirmSheet({
       return
     }
     setPending(true)
-    const outcome = await archiveNutritionPlan({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
-      clientId,
-      planId,
-    })
+    const outcome = await archiveNutritionPlan({ scope, clientId, planId })
     if (!mountedRef.current) return
     setPending(false)
     if (outcome.code === 'OK') {
@@ -1232,7 +1218,7 @@ function ArchivePlanConfirmSheet({
       return
     }
     setError(outcome.error)
-  }, [pending, userId, clientId, planId, onArchived])
+  }, [pending, scope, clientId, planId, onArchived])
 
   return (
     <Sheet

@@ -19,8 +19,6 @@ import {
   itemMacros,
   mapFoodCatalogItemToBuilderFood,
   mapWriteError,
-  persistAndPublishDraft,
-  publishDraftRN,
   requiredNutritionProFeature,
   validateStep,
   type BuilderFood,
@@ -306,33 +304,11 @@ const FOOD_DB_ROW = {
   id: FOOD_ID, name: 'Pollo', brand: null, calories: 100, protein_g: 10, carbs_g: 20, fats_g: 5, fiber_g: 2, serving_size: 50, serving_unit: 'g',
 }
 
-describe('persistAndPublishDraft (orden de escritura)', () => {
-  it('escribe plan->version->variante->franja->items y publica con la idempotency key', async () => {
-    const draft = assembleAndValidateDraft(structuredState(), { clientId: CLIENT_ID })
-    const { client, inserts, rpcCalls } = makeClient({ foodRow: FOOD_DB_ROW })
-    const res = await persistAndPublishDraft({ db: client, userId: 'coach-1', draft, idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-20' })
-    expect(res.ok).toBe(true)
-    if (res.ok) expect(res.versionId).toBe(PUBLISHED_ID)
-    expect(inserts.map((i) => i.table)).toEqual([
-      'nutrition_plans_v2',
-      'nutrition_plan_versions_v2',
-      'nutrition_day_variants_v2',
-      'nutrition_meal_slots_v2',
-      'nutrition_prescription_items_v2',
-    ])
-    expect(rpcCalls[0].name).toBe('publish_nutrition_plan_v2')
-    expect(rpcCalls[0].args?.p_idempotency_key).toBe('publish:key:abcdef')
-  })
-
-  it('idempotente: version existente corta el flujo sin insertar', async () => {
-    const draft = assembleAndValidateDraft(structuredState(), { clientId: CLIENT_ID })
-    const { client, inserts, rpcCalls } = makeClient({ existingVersion: { id: 'ver-existing', plan_id: 'plan-existing' } })
-    const res = await persistAndPublishDraft({ db: client, userId: 'coach-1', draft, idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-20' })
-    expect(res).toEqual({ ok: true, versionId: 'ver-existing', planId: 'plan-existing' })
-    expect(inserts).toHaveLength(0)
-    expect(rpcCalls).toHaveLength(0)
-  })
-})
+// NUT-005: el orden de escritura (plan->version->variantes->franjas->items->publish) ya NO corre
+// en el dispositivo. La publicacion del coach pasa por POST /api/mobile/nutrition-v2/coach/mutate y
+// reusa `persistAndPublishDraft` de la web, cubierto por
+// apps/web/src/app/coach/nutrition-v2/_actions/plan-persistence.*.test.ts. Lo que RN debe garantizar
+// (llamar al endpoint y NUNCA escribir directo) vive en tests/mobile-nutrition-v2-coach-mutations.test.ts.
 
 describe('createCoachFoodV2 (alimento coach-scoped, sub-delta b)', () => {
   it('inserta en foods con macros por 100 + coach_id y devuelve el BuilderFood', async () => {
@@ -435,34 +411,6 @@ describe('canProceedToPublishAfterArchive (sub-delta c)', () => {
     expect(canProceedToPublishAfterArchive({ ok: true })).toBe(true)
     expect(canProceedToPublishAfterArchive({ code: 'SCOPE_DENIED' })).toBe(false)
     expect(canProceedToPublishAfterArchive({ code: 'WRITE_FAILED' })).toBe(false)
-  })
-})
-
-describe('publishDraftRN (gate Pro cliente)', () => {
-  it('hybrid sin Pro => UPGRADE_REQUIRED, sin tocar la BD', async () => {
-    const draft = assembleAndValidateDraft(hybridState(), { clientId: CLIENT_ID })
-    const { client, inserts } = makeClient()
-    const res = await publishDraftRN({ db: client, userId: 'coach-1', draft, idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-20', hasNutritionPro: false })
-    expect(res.ok).toBe(false)
-    if (!res.ok) {
-      expect(res.code).toBe('UPGRADE_REQUIRED')
-      expect(res.feature).toBe('hybrid_strategy')
-    }
-    expect(inserts).toHaveLength(0)
-  })
-
-  it('structured base sin Pro => publica', async () => {
-    const draft = assembleAndValidateDraft(structuredState(), { clientId: CLIENT_ID })
-    const { client } = makeClient({ foodRow: FOOD_DB_ROW })
-    const res = await publishDraftRN({ db: client, userId: 'coach-1', draft, idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-20', hasNutritionPro: false })
-    expect(res.ok).toBe(true)
-  })
-
-  it('draft invalido => INVALID_PAYLOAD', async () => {
-    const { client } = makeClient()
-    const res = await publishDraftRN({ db: client, userId: 'coach-1', draft: { nope: true }, idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-20', hasNutritionPro: true })
-    expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
   })
 })
 

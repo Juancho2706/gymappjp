@@ -30,7 +30,6 @@
  *  atrapar al coach sin addon.
  */
 
-import { z } from 'zod'
 import {
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
   NutritionPlanDraftSchema,
@@ -45,17 +44,7 @@ import {
   type QuickEditErrorCode,
 } from '@eva/nutrition-v2'
 import {
-  NUTRITION_PRO_FEATURE_LABEL,
-  buildItemInsertRow,
-  buildItemSubstitutionInsertRow,
-  buildSlotInsertRow,
-  buildVariantInsertRow,
-  collectSubstitutionFoodIds,
   computeItemMacros,
-  mapWriteError,
-  newNutritionItemId,
-  publishFail,
-  requiredNutritionProFeature,
   strategyUsesSlots,
   type BuilderFood,
   type DraftDayVariant,
@@ -65,7 +54,6 @@ import {
   type NutritionProFeature,
   type NutritionV2WriteClient,
   type PublishFailure,
-  type PublishResult,
 } from './nutrition-v2-builder'
 
 // ---------------------------------------------------------------------------
@@ -1114,11 +1102,8 @@ export type QuickEditPublishResult =
   | { ok: true; versionId: string }
   | { ok: false; code: QuickEditErrorCode; message: string; feature?: NutritionProFeature }
 
-function hasContent(value: string | null | undefined): boolean {
-  return typeof value === 'string' && value.trim().length > 0
-}
-
-function mapPublishFailureCode(failure: PublishFailure): QuickEditErrorCode {
+/** Mapea el fallo tipado del endpoint de mutaciones al codigo de error del quick-edit. */
+export function mapPublishFailureCode(failure: PublishFailure): QuickEditErrorCode {
   switch (failure.code) {
     case 'STALE_BASE':
       return 'STALE_BASE'
@@ -1138,85 +1123,42 @@ function mapPublishFailureCode(failure: PublishFailure): QuickEditErrorCode {
   }
 }
 
-interface BaseVersionNotesRow {
-  id: string
-  plan_id: string
-  visible_notes: string | null
-  protocol_notes: string | null
-}
+export type QuickEditDraftResult =
+  | { ok: true; draft: NutritionPlanDraft; effectiveFrom: string }
+  | { ok: false; code: QuickEditErrorCode; message: string }
 
 /**
- * Publica el quick-edit desde el movil (espejo del quickEditPublishAction web, §2.3):
- *  1. Lee las notas de la version base (RLS coach) y valida que pertenece al plan del
- *     draft (anti-confusion de ids; fail-closed si no es legible).
- *  2. Notas: `visibleNotes` es EDITABLE (sale del estado, normalizada); solo protocol_notes
- *     se pisa con el carry-over de la base (F1 no lo edita). NO se lee ni copia
- *     `private_notes`: la columna same-row esta deprecada e ilegible por `authenticated`
- *     (grant SELECT revocado) y pedirla producia 42501 "permission denied for table ...".
- *     OJO (NUT-007): tampoco existe hoy una feature de nota privada versionada — la tabla
- *     canonica `nutrition_plan_private_notes_v2` (PK version_id) NO la escribe nadie, asi que
- *     no hay nada que preservar; implementarla exigira copy-forward explicito al republicar.
- *  3. Valida el draft con NutritionPlanDraftSchema.
- *  4. Delta-gate Pro: solo gatea features NUEVAS (contenido grandfathered pasa).
- *  5. Persiste y publica con p_expected_current_version_id = version base (CAS).
+ * PURA: arma el draft canonico del quick-edit listo para publicar (paso previo al POST de
+ * `publishQuickEditRN`, lib/nutrition-v2.api.ts).
  *
- * Capa de porciones (opcional): con `portions` se inyectan los `exchangeTargets` en el
- * draft (paso 2b; el Zod del paquete valida multiplos de 0,5) y se persisten sus filas
- * con snapshot congelado antes del publish RPC (paso 5). SIN `portions` el flujo es
- * byte-identico al original (el draft nunca trae `exchangeTargets` y el insert de
- * targets no corre). El delta-gate Pro no cambia: las porciones no son feature Pro.
+ * NUT-005: la publicacion del quick-edit ya NO escribe desde el dispositivo. Lo que antes hacia
+ * esta lib (leer la version base, delta-gate Pro, insertar version/variantes/franjas/items/
+ * reemplazos/porciones y llamar `publish_nutrition_plan_v2`) vive ahora en
+ * POST /api/mobile/nutrition-v2/coach/mutate, que re-valida rollout/workspace/entitlement y
+ * persiste con el cliente RLS del propio coach reusando el codigo de escritura de la web.
+ *
+ * Aqui queda solo el ensamblado:
+ *  1. fecha de vigencia (nunca anterior a la vigente),
+ *  2. estado -> draft (`visibleNotes` es EDITABLE y sale del estado, ya normalizada),
+ *  3. porciones a eleccion (targets; el snapshot de grupos lo congela el servidor),
+ *  4. reemplazos autorizados carry-over (F-02): sin ellos el republish los BORRARIA,
+ *  5. validacion contra el contrato.
+ * `privateNotes`/`protocolNotes` quedan en null: el servidor pisa `protocol_notes` con el
+ * carry-over de la version base (el quick-edit F1 no lo edita) y la columna same-row de notas
+ * privadas esta deprecada.
  */
-export async function publishQuickEditRN(input: {
-  db: NutritionV2WriteClient
-  userId: string
+export function buildQuickEditPublishDraft(input: {
   clientId: string
   baseline: QuickEditBaseline
   state: QuickEditState
-  /** Estado de porciones + dict congelado de grupos del plan (omitir = sin porciones). */
-  portions?: {
-    state: QuickEditPortionsState
-    groupsById: ReadonlyMap<string, QuickEditPortionGroup>
-  }
-  /** Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. Carry-over: se
-   *  re-inyectan en el draft para que republicar NO los pierda (omitir = sin reemplazos). */
+  /** Estado de porciones (omitir = sin porciones: el draft queda byte-identico al original). */
+  portions?: { state: QuickEditPortionsState }
+  /** Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. */
   carryOverSubstitutions?: ReadonlyMap<string, NutritionItemSubstitution[]>
-  idempotencyKey: string
   todayIso: string
-  hasNutritionPro: boolean
-}): Promise<QuickEditPublishResult> {
-  const {
-    db,
-    userId,
-    clientId,
-    baseline,
-    state,
-    portions,
-    carryOverSubstitutions,
-    idempotencyKey,
-    todayIso,
-    hasNutritionPro,
-  } = input
+}): QuickEditDraftResult {
+  const { clientId, baseline, state, portions, carryOverSubstitutions, todayIso } = input
 
-  // 1. Version base: notas + pertenencia al plan (fail-closed).
-  const baseRes = await db
-    .from('nutrition_plan_versions_v2')
-    .select('id, plan_id, visible_notes, protocol_notes')
-    .eq('id', baseline.baseVersionId)
-    .maybeSingle()
-  if (baseRes.error) {
-    const mapped = mapWriteError(baseRes.error, 'version base')
-    return { ok: false, code: mapPublishFailureCode(mapped), message: mapped.error }
-  }
-  const baseRow = baseRes.data as BaseVersionNotesRow | null
-  if (!baseRow || baseRow.plan_id !== baseline.planId) {
-    return {
-      ok: false,
-      code: 'FORBIDDEN',
-      message: 'No se encontró la versión vigente de este plan. Recarga la ficha e intenta de nuevo.',
-    }
-  }
-
-  // 2-3. Draft (+ porciones si vienen, + reemplazos carry-over) + carry-over de notas + Zod.
   const effectiveFrom = quickEditEffectiveFrom(todayIso, baseline.effectiveFrom)
   const baseDraft = quickEditStateToDraft({ state, baseline, clientId, effectiveFrom })
   const withTargets = portions
@@ -1226,11 +1168,9 @@ export async function publishQuickEditRN(input: {
   const rawDraft = carryOverSubstitutions
     ? injectSubstitutionsIntoDraft(withTargets, carryOverSubstitutions)
     : withTargets
-  // `visibleNotes` NO se pisa: es editable en el quick-edit y ya viene del estado (normalizado
-  // por quickEditStateToDraft). protocol_notes si es carry-over fresco de la base (F1 no lo
-  // edita) y privateNotes queda null (columna same-row deprecada e ilegible; ver punto 2 arriba).
   rawDraft.privateNotes = null
-  rawDraft.protocolNotes = baseRow.protocol_notes
+  rawDraft.protocolNotes = null
+
   const parsed = NutritionPlanDraftSchema.safeParse(rawDraft)
   if (!parsed.success) {
     return {
@@ -1239,258 +1179,14 @@ export async function publishQuickEditRN(input: {
       message: 'El plan tiene datos inválidos y no se pudo publicar. Revisa las cantidades y nombres.',
     }
   }
-  const draft = parsed.data
-
-  // 4. Delta-gate Pro (qe-design §2.4): preservar contenido Pro existente ≠ crear.
-  const newFeature = requiredNutritionProFeature(draft)
-  if (newFeature && !hasNutritionPro) {
-    const baseFeatures = new Set<NutritionProFeature>()
-    if (baseline.strategy === 'hybrid') baseFeatures.add('hybrid_strategy')
-    if (draft.dayVariants.length > 1) baseFeatures.add('multi_variant') // F1 no crea variantes
-    // `private_notes` no se detecta desde la version row (columna deprecada e ilegible). El
-    // quick-edit F1 nunca fija privateNotes (rawDraft.privateNotes = null) -> el draft jamas
-    // requiere la feature 'private_notes', asi que no hay nada que grandfatherear aqui.
-    if (hasContent(baseRow.protocol_notes)) baseFeatures.add('protocol_notes')
-    if (!baseFeatures.has(newFeature)) {
-      return {
-        ok: false,
-        code: 'UPGRADE_REQUIRED',
-        feature: newFeature,
-        message: `Activa Nutrición Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[newFeature]}.`,
-      }
+  if (!parsed.data.planId) {
+    return {
+      ok: false,
+      code: 'FORBIDDEN',
+      message: 'No se encontró la versión vigente de este plan. Recarga la ficha e intenta de nuevo.',
     }
   }
-
-  // 5. Persistencia (+ targets de porciones congelados si aplican) + publish con CAS.
-  const res = await persistAndPublishQuickEdit({
-    db,
-    userId,
-    draft,
-    portionGroupsById: portions?.groupsById,
-    idempotencyKey,
-    effectiveFrom,
-    expectedCurrentVersionId: baseline.baseVersionId,
-  })
-  if (res.ok) return { ok: true, versionId: res.versionId }
-  return { ok: false, code: mapPublishFailureCode(res), message: res.error }
-}
-
-interface PlanRow {
-  id: string
-  client_id: string
-}
-
-/**
- * Espejo MINIMO de persistAndPublishDraft (lib/nutrition-v2-builder.ts — nota de
- * origen) con dos diferencias deliberadas:
- *  - exige `draft.planId` (el quick-edit SIEMPRE republica un plan existente), y
- *  - pasa `p_expected_current_version_id` al RPC (guard optimista del Contrato 3) y
- *    mapea `nutrition_v2_publish_stale_base` → STALE_BASE.
- * No se edita el builder (regla de reparticion §5, archivos disjuntos).
- *
- * Porciones: tras los items de cada franja inserta sus filas de
- * `nutrition_slot_exchange_targets_v2` con snapshot congelado (espejo del insert de
- * `plan-persistence` web), gateado por `slot.exchangeTargets?.length` — un draft sin
- * porciones jamas toca la tabla nueva.
- */
-async function persistAndPublishQuickEdit(input: {
-  db: NutritionV2WriteClient
-  userId: string
-  draft: NutritionPlanDraft
-  /** Dict congelado de grupos del plan (requerido solo si el draft trae exchangeTargets). */
-  portionGroupsById?: ReadonlyMap<string, QuickEditPortionGroup>
-  idempotencyKey: string
-  effectiveFrom: string
-  expectedCurrentVersionId: string
-}): Promise<PublishResult> {
-  const { db, userId, draft, portionGroupsById, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = input
-
-  if (!draft.planId) {
-    return publishFail('PLAN_NOT_FOUND', 'El quick-edit requiere un plan vigente.')
-  }
-
-  // Retry idempotente: si la clave ya publico, devolvemos la version existente.
-  const existing = await db
-    .from('nutrition_plan_versions_v2')
-    .select('id, plan_id')
-    .eq('publish_idempotency_key', idempotencyKey)
-    .maybeSingle()
-  if (existing.error) return mapWriteError(existing.error, 'idempotencia')
-  if (existing.data) {
-    const row = existing.data as { id: string; plan_id: string }
-    return { ok: true, versionId: row.id, planId: row.plan_id }
-  }
-
-  const planRes = await db
-    .from('nutrition_plans_v2')
-    .select('id, client_id')
-    .eq('id', draft.planId)
-    .maybeSingle()
-  if (planRes.error) return mapWriteError(planRes.error, 'plan')
-  const planRow = planRes.data as PlanRow | null
-  if (!planRow || planRow.client_id !== draft.clientId) {
-    return publishFail('PLAN_NOT_FOUND', 'El plan indicado no pertenece a este alumno.')
-  }
-
-  const maxRes = await db
-    .from('nutrition_plan_versions_v2')
-    .select('version_number')
-    .eq('plan_id', planRow.id)
-    .order('version_number', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (maxRes.error) return mapWriteError(maxRes.error, 'version')
-  const maxRow = maxRes.data as { version_number: number } | null
-  const nextVersion = (maxRow?.version_number ?? 0) + 1
-
-  const versionIns = await db
-    .from('nutrition_plan_versions_v2')
-    .insert({
-      plan_id: planRow.id,
-      version_number: nextVersion,
-      status: 'draft',
-      strategy: draft.strategy,
-      timezone: draft.timezone,
-      student_permissions: draft.permissions,
-      visible_notes: draft.visibleNotes,
-      private_notes: draft.privateNotes,
-      protocol_notes: draft.protocolNotes,
-      created_by: userId,
-      updated_by: userId,
-    })
-    .select('id')
-    .single()
-  if (versionIns.error || !versionIns.data) {
-    return mapWriteError(versionIns.error ?? { message: 'no version' }, 'version')
-  }
-  const versionId = versionIns.data.id
-
-  // Foods para snapshots (mismo camino que el builder): items MAS los referenciados por los
-  // reemplazos autorizados carry-over (F-02), en un solo set para congelar todo en una pasada.
-  const foodIds: string[] = []
-  for (const variant of draft.dayVariants) {
-    for (const slot of variant.mealSlots) {
-      for (const item of slot.items) {
-        if (item.foodId && !foodIds.includes(item.foodId)) foodIds.push(item.foodId)
-      }
-    }
-  }
-  for (const id of collectSubstitutionFoodIds(draft)) {
-    if (!foodIds.includes(id)) foodIds.push(id)
-  }
-  const foodMap = new Map<string, BuilderFood>()
-  for (const id of foodIds) {
-    const foodRes = await db
-      .from('foods')
-      .select('id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit')
-      .eq('id', id)
-      .maybeSingle()
-    if (foodRes.error) return mapWriteError(foodRes.error, 'alimentos')
-    if (foodRes.data) foodMap.set(id, toBuilderFood(foodRes.data as FoodRow))
-  }
-
-  for (const variant of draft.dayVariants) {
-    const variantIns = await db
-      .from('nutrition_day_variants_v2')
-      .insert(buildVariantInsertRow(versionId, variant))
-      .select('id')
-      .single()
-    if (variantIns.error || !variantIns.data) {
-      return mapWriteError(variantIns.error ?? { message: 'no variant' }, 'dia')
-    }
-    const variantId = variantIns.data.id
-
-    for (const slot of variant.mealSlots) {
-      const slotIns = await db
-        .from('nutrition_meal_slots_v2')
-        .insert(buildSlotInsertRow(versionId, variantId, slot))
-        .select('id')
-        .single()
-      if (slotIns.error || !slotIns.data) {
-        return mapWriteError(slotIns.error ?? { message: 'no slot' }, 'franja')
-      }
-      const mealSlotId = slotIns.data.id
-
-      if (slot.items.length > 0) {
-        // Id explicito por item (F-02): necesario para colgar los reemplazos carry-over
-        // referenciandolo antes del insert (sin RETURNING). Espejo del builder/web.
-        const itemsWithIds = slot.items.map((item) => ({ item, id: newNutritionItemId() }))
-        const itemRows = itemsWithIds.map(({ item, id }, index) =>
-          buildItemInsertRow({
-            versionId,
-            mealSlotId,
-            orderIndex: index,
-            item,
-            food: item.foodId ? foodMap.get(item.foodId) ?? null : null,
-            id,
-          }),
-        )
-        const itemsIns = await db.from('nutrition_prescription_items_v2').insert(itemRows)
-        if (itemsIns.error) return mapWriteError(itemsIns.error, 'items')
-
-        // Reemplazos autorizados carry-over (F-02), re-congelados por item. Un item sin
-        // reemplazos no toca la tabla nueva (byte-identico a un republish sin reemplazos).
-        const substitutionRows = itemsWithIds.flatMap(({ item, id }) =>
-          (item.substitutions ?? []).map((sub, subIndex) =>
-            buildItemSubstitutionInsertRow({
-              versionId,
-              prescriptionItemId: id,
-              orderIndex: subIndex,
-              sub,
-              food: sub.foodId ? foodMap.get(sub.foodId) ?? null : null,
-            }),
-          ),
-        )
-        if (substitutionRows.length > 0) {
-          const subsIns = await db
-            .from('nutrition_item_substitutions_v2')
-            .insert(substitutionRows as unknown as Record<string, unknown>[])
-          if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
-        }
-      }
-
-      // Targets de porciones de la franja, congelados desde el dict del plan (jamas
-      // snapshot NULL — si un grupo no resuelve, se corta el publish en voz alta).
-      const exchangeTargets = slot.exchangeTargets ?? []
-      if (exchangeTargets.length > 0) {
-        const targetRows = buildPortionTargetInsertRows({
-          versionId,
-          mealSlotId,
-          targets: exchangeTargets,
-          groupsById: portionGroupsById ?? new Map(),
-        })
-        if (!targetRows) {
-          return publishFail(
-            'WRITE_FAILED',
-            'No se pudo preparar un grupo de porciones. Recarga la ficha e intenta de nuevo.',
-          )
-        }
-        const targetsIns = await db
-          .from('nutrition_slot_exchange_targets_v2')
-          .insert(targetRows as unknown as Record<string, unknown>[])
-        if (targetsIns.error) return mapWriteError(targetsIns.error, 'porciones')
-      }
-    }
-  }
-
-  const publishRes = await db.rpc('publish_nutrition_plan_v2', {
-    p_version_id: versionId,
-    p_effective_from: effectiveFrom,
-    p_idempotency_key: idempotencyKey,
-    p_expected_current_version_id: expectedCurrentVersionId,
-  })
-  if (publishRes.error) {
-    if ((publishRes.error.message ?? '').includes('publish_stale_base')) {
-      return publishFail('STALE_BASE', 'Este plan cambió en otra sesión.')
-    }
-    return mapWriteError(publishRes.error, 'publicación')
-  }
-
-  const publishedId = z.string().uuid().safeParse(publishRes.data)
-  if (!publishedId.success) {
-    return publishFail('INVALID_RESPONSE', 'La publicación devolvió una respuesta inesperada.')
-  }
-  return { ok: true, versionId: publishedId.data, planId: planRow.id }
+  return { ok: true, draft: parsed.data, effectiveFrom }
 }
 
 /** ¿El modo edicion muestra franjas? (flexible sin franjas → quick-edit solo de metas). */

@@ -7,7 +7,7 @@
  * CONSOLIDADO (follow-up PR #129/#131): los tipos compartidos con la persistencia
  * (`QuickEditPortionGroup`/`QuickEditPortionTarget`/`QuickEditPortionsState`) y las
  * piezas del publish (`injectExchangeTargetsIntoDraft`, `buildPortionTargetInsertRows`)
- * viven ahora en `lib/nutrition-v2-quick-edit.ts` (junto a `publishQuickEditRN`, que
+ * viven ahora en `lib/nutrition-v2-quick-edit.ts` (junto a `buildQuickEditPublishDraft`, que
  * acepta el estado de porciones como parametro opcional) y se RE-EXPORTAN aqui para
  * conservar la superficie publica del modulo. Aqui queda lo propio de la UI: estado
  * editable, hidratacion desde el read model, reducer y contador — capa ADITIVA que se

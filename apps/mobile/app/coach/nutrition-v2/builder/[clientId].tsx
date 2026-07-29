@@ -63,7 +63,12 @@ import {
 } from '../../../../lib/nutrition-v2-builder-portions'
 import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
-import { archiveNutritionPlan, getNutritionClientDetailV2, nutritionV2CoachScope } from '../../../../lib/nutrition-v2.api'
+import {
+  archiveNutritionPlan,
+  getNutritionClientDetailV2,
+  nutritionV2CoachScope,
+  publishDraftRN,
+} from '../../../../lib/nutrition-v2.api'
 import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
 import {
   builderDraftKey,
@@ -91,7 +96,6 @@ import {
   itemMacros,
   macroEnergyMismatch,
   mapFoodCatalogItemToBuilderFood,
-  publishDraftRN,
   slotSubtotal,
   strategyUsesSlots,
   validateStep,
@@ -154,10 +158,27 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
+// F0 — guard anti-perdida de dias: el wizard RN construye UN solo dia y la publicacion reescribe el
+// arbol COMPLETO de la version. Rehacer aqui un plan con varias variantes las reduciria a una, sin
+// aviso. Hasta que el constructor sepa crear variantes, se bloquea y se deriva a Edicion rapida
+// (que edita la version vigente respetando sus dias).
+function multiDayBlockCopy(dayCount: number): string {
+  return `Este plan tiene ${dayCount} días distintos; rehacerlo aquí lo reduciría a uno. Usa Edición rápida.`
+}
+
 // Plan vigente del alumno (sub-delta c): habilita la rama "Archivar y reemplazar". Se lee LOCAL
 // con getNutritionClientDetailV2 (no llega por nav params — decision del juez, evita tocar la
 // ficha/href de otras unidades). Espejo del `existingPlan` server-provisto del web.
-type ExistingPlan = { id: string; effectiveFrom: string; versionNumber: number; name: string }
+type ExistingPlan = {
+  id: string
+  /** Version vigente al abrir el wizard: viaja como CAS al publicar (NUT-011). */
+  versionId: string
+  effectiveFrom: string
+  versionNumber: number
+  name: string
+  /** Dias distintos del plan vigente: >1 dispara el guard anti-perdida (el wizard solo hace uno). */
+  dayVariantCount: number
+}
 
 // Respaldo local del wizard (4B-13): DOS piezas de estado independientes viajan juntas — el arbol
 // del reducer (BuilderState) y el mapa hermano de porciones (PortionsBySlot). Sin `portionsBySlot`
@@ -168,6 +189,15 @@ interface BuilderDraftPayload {
   planId: string | null
   state: BuilderState
   portionsBySlot: PortionsBySlot
+  /**
+   * Clave de idempotencia del intento de publicacion en curso + firma del contenido con el que se
+   * acuño (NUT-011, espejo del web PlanBuilderClient). Restaurar el borrador restaura tambien la
+   * clave: si el publish se corto (red / app matada) el reintento con el MISMO contenido reusa la
+   * clave y el servidor devuelve la version YA publicada en vez de crear una segunda. Ausente en
+   * borradores viejos => se acuña una clave nueva (comportamiento anterior).
+   */
+  publishKey?: string | null
+  publishSignature?: string | null
 }
 
 // Copy LITERAL del aviso de salida (web PlanBuilderClient.tsx:1040). Warn-only: "Salir" deja la
@@ -317,6 +347,11 @@ export default function CoachNutritionV2BuilderScreen() {
   // archivar reintente SOLO la publicacion sin duplicar el plan ni re-archivar. Espejo del web.
   const replaceKeyRef = useRef<string | null>(null)
   const replaceArchivedRef = useRef(false)
+  // Idempotencia ESTABLE del publish normal (NUT-011, espejo del web PlanBuilderClient): clave +
+  // firma del draft con el que se acuño. Mismo contenido => misma clave en todos los reintentos;
+  // contenido editado => clave nueva (otra intencion). Se persisten con el borrador local.
+  const publishKeyRef = useRef<string | null>(null)
+  const publishSignatureRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -347,7 +382,16 @@ export default function CoachNutritionV2BuilderScreen() {
         if (!active) return
         const p = detail.plan.plan
         setExistingPlan(
-          p ? { id: p.id, effectiveFrom: p.effectiveFrom, versionNumber: p.versionNumber, name: p.name } : null,
+          p
+            ? {
+                id: p.id,
+                versionId: p.versionId,
+                effectiveFrom: p.effectiveFrom,
+                versionNumber: p.versionNumber,
+                name: p.name,
+                dayVariantCount: detail.plan.dayVariants.length,
+              }
+            : null,
         )
         setExistingPlanResolved(true)
       })
@@ -405,7 +449,14 @@ export default function CoachNutritionV2BuilderScreen() {
       if (builderHasSignificantContent(state)) {
         void writeNutritionDraft<BuilderDraftPayload>(
           draftKey,
-          { clientId, planId: existingPlan?.id ?? null, state, portionsBySlot: portions.bySlot },
+          {
+            clientId,
+            planId: existingPlan?.id ?? null,
+            state,
+            portionsBySlot: portions.bySlot,
+            publishKey: publishKeyRef.current,
+            publishSignature: publishSignatureRef.current,
+          },
           Date.now(),
         )
       } else {
@@ -416,6 +467,9 @@ export default function CoachNutritionV2BuilderScreen() {
   }, [state, portions.bySlot, draftKey, existingPlanResolved, clientId, existingPlan?.id])
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
+
+  // F0: el plan vigente tiene varias variantes de dia y el wizard solo sabe construir una.
+  const multiDayBlocked = (existingPlan?.dayVariantCount ?? 0) > 1
 
   // Copy del encabezado: la raiz puede venir por query (CTA del hub/ficha) o del plan vigente ya
   // resuelto (deep link viejo). El numero de version sale del param cuando viaja y si no del plan.
@@ -472,6 +526,10 @@ export default function CoachNutritionV2BuilderScreen() {
     if (payload != null) {
       dispatch({ type: 'RESTORE', state: payload.state })
       portions.restoreBySlot(payload.portionsBySlot ?? {})
+      // Idempotencia (NUT-011): recuperar la clave del intento interrumpido es lo que hace que
+      // reintentar tras matar la app no publique una segunda version del mismo contenido.
+      publishKeyRef.current = payload.publishKey ?? null
+      publishSignatureRef.current = payload.publishSignature ?? null
       if (strategyUsesSlots(payload.state.strategy)) portions.ensureGroupsLoaded()
     }
     setShowDraftBanner(false)
@@ -485,9 +543,42 @@ export default function CoachNutritionV2BuilderScreen() {
     setShowDraftBanner(false)
   }, [draftKey])
 
+  // Clave de idempotencia ESTABLE por "intento logico" (NUT-011): se acuña una vez para un
+  // contenido dado y se REUSA en todos los reintentos de ese contenido, para que un retry tras una
+  // respuesta perdida devuelva la version YA publicada en vez de crear otra. Solo rota cuando el
+  // coach cambia el draft o la fecha (otra intencion). Se persiste de inmediato junto al borrador
+  // local para sobrevivir a que la app muera a mitad del publish. Espejo del web.
+  const stableIdempotencyKey = useCallback(
+    (draft: unknown, effectiveFrom: string): string => {
+      const signature = effectiveFrom + '|' + JSON.stringify(draft)
+      if (publishKeyRef.current && publishSignatureRef.current === signature) {
+        return publishKeyRef.current
+      }
+      operationId.current = genKey('op')
+      publishKeyRef.current = buildPublishIdempotencyKey({ clientId, operationId: operationId.current })
+      publishSignatureRef.current = signature
+      if (builderHasSignificantContent(state)) {
+        void writeNutritionDraft<BuilderDraftPayload>(
+          draftKey,
+          {
+            clientId,
+            planId: existingPlan?.id ?? null,
+            state,
+            portionsBySlot: portions.bySlot,
+            publishKey: publishKeyRef.current,
+            publishSignature: signature,
+          },
+          Date.now(),
+        )
+      }
+      return publishKeyRef.current
+    },
+    [clientId, draftKey, existingPlan?.id, portions.bySlot, state],
+  )
+
   const handlePublish = useCallback(
     async (effectiveFromOverride?: string) => {
-      if (!userId || !clientId) return
+      if (!userId || !clientId || !scope) return
       const chosenFrom = effectiveFromOverride ?? state.effectiveFrom ?? today
       // Pre-chequeo sin round-trip: si la fecha elegida choca con el plan que ya rige, abrimos la
       // card de decision directo. Solo en el submit normal — "Empezar manana" ya trae fecha avanzada
@@ -513,6 +604,13 @@ export default function CoachNutritionV2BuilderScreen() {
         setPublishError('Estamos verificando si el alumno ya tiene un plan. Espera un segundo y vuelve a intentar.')
         return
       }
+      // F0 — perdida silenciosa de dias: el wizard RN construye UN solo dia. Republicar sobre un
+      // plan con varias variantes reescribe el arbol completo y las reduciria a una. Hasta que el
+      // constructor sepa crear variantes, se corta aqui (la UI ya lo avisa y deshabilita el CTA).
+      if (multiDayBlocked) {
+        setPublishError(multiDayBlockCopy(existingPlan?.dayVariantCount ?? 2))
+        return
+      }
       const effectivePlanId = planId ?? existingPlan?.id ?? null
       let draft
       try {
@@ -522,19 +620,19 @@ export default function CoachNutritionV2BuilderScreen() {
         setPublishError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
         return
       }
-      // Clave fresca por intento: evita reutilizar la de un intento fallido (versiones huerfanas).
-      operationId.current = genKey('op')
-      const idempotencyKey = buildPublishIdempotencyKey({ clientId, operationId: operationId.current })
+      const idempotencyKey = stableIdempotencyKey(draft, chosenFrom)
       setPublishing(true)
+      // NUT-005: la publicacion pasa por la API movil (rollout + entitlement + RLS server-side).
+      // CAS (NUT-011): al publicar una version NUEVA del plan vigente mandamos la version base que
+      // el wizard tenia en pantalla; si otra sesion publico entremedio, el servidor corta con
+      // STALE_BASE en vez de superponer una version calculada sobre datos viejos.
       const res = await publishDraftRN({
-        db: supabase as unknown as NutritionV2WriteClient,
-        userId,
+        scope,
         draft,
         idempotencyKey,
         effectiveFrom: chosenFrom,
         hasNutritionPro,
-        // Catálogo para congelar el snapshot de las porciones (4B-11); sin porciones es inocuo.
-        portionGroups: portions.groups ?? undefined,
+        expectedCurrentVersionId: effectivePlanId && existingPlan ? existingPlan.versionId : null,
       })
       if (!mountedRef.current) return
       setPublishing(false)
@@ -584,7 +682,7 @@ export default function CoachNutritionV2BuilderScreen() {
   // PLAN NUEVO (planId null) con la MISMA fecha. Orden archivar-primero + key estable + guard
   // archivado-una-vez para reintento seguro. Espejo 1:1 del web handleReplaceToday.
   const handleReplaceToday = useCallback(async () => {
-    if (!userId || !clientId || !existingPlan) return
+    if (!userId || !clientId || !scope || !existingPlan) return
     setConflictError(null)
     // Validamos el draft del plan NUEVO (planId null) ANTES de archivar nada: si esta incompleto, no
     // tocamos el plan vigente del alumno.
@@ -610,8 +708,7 @@ export default function CoachNutritionV2BuilderScreen() {
     // saca de la seleccion. Idempotente: gateado por replaceArchivedRef, se salta en reintentos.
     if (!replaceArchivedRef.current) {
       const archived = await archiveNutritionPlan({
-        db: supabase as unknown as NutritionV2WriteClient,
-        userId,
+        scope,
         clientId,
         planId: existingPlan.id,
       })
@@ -626,14 +723,13 @@ export default function CoachNutritionV2BuilderScreen() {
     // PASO 2 — publicar el draft como plan NUEVO con la key estable + la fecha elegida (hoy). Si falla,
     // el alumno quedo momentaneamente sin plan vigente: ofrecemos reintentar SOLO la publicacion (sin
     // re-archivar, gracias a replaceArchivedRef) con un mensaje honesto.
+    // Plan NUEVO: sin CAS (no hay version base con la que comparar).
     const res = await publishDraftRN({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
+      scope,
       draft,
       idempotencyKey,
       effectiveFrom,
       hasNutritionPro,
-      portionGroups: portions.groups ?? undefined,
     })
     if (!mountedRef.current) return
     setPublishing(false)
@@ -644,7 +740,7 @@ export default function CoachNutritionV2BuilderScreen() {
     setConflictError(
       'Archivamos el plan anterior, pero no pudimos publicar el nuevo, así que el alumno quedó sin plan vigente. Vuelve a tocar "Archivar el actual y reemplazar" para reintentar solo la publicación (no se archivará de nuevo).',
     )
-  }, [userId, clientId, existingPlan, state, today, hasNutritionPro, portions.bySlot, portions.groups, goToPublished])
+  }, [userId, clientId, scope, existingPlan, state, today, hasNutritionPro, portions.bySlot, goToPublished])
 
   // "Cancelar" la card de conflicto: la cierra y arranca limpia la proxima decision (nuevo archivado
   // + nueva clave). Espejo del web handleConflictOpenChange al cerrar el modal.
@@ -807,6 +903,18 @@ export default function CoachNutritionV2BuilderScreen() {
             </View>
           ) : null}
 
+          {/* F0 — plan con varios días: el wizard solo construye uno y la publicación reescribe el
+              árbol completo, así que rehacerlo aquí borraría los demás días. Se avisa desde el
+              paso 1 (no al final) y el CTA de publicar queda deshabilitado. */}
+          {multiDayBlocked ? (
+            <View className="flex-row items-start gap-3 rounded-card border border-warning-500/30 bg-warning-500/10 p-3">
+              <AlertTriangle color={theme.warning} size={16} />
+              <Text className="min-w-0 flex-1 text-xs font-semibold leading-5 text-warning-700">
+                {multiDayBlockCopy(existingPlan?.dayVariantCount ?? 2)}
+              </Text>
+            </View>
+          ) : null}
+
           <NutritionHeader
             eyebrow={headerPlanId ? 'Nueva versión' : 'Nuevo plan'}
             title={clientName || 'Constructor de nutrición'}
@@ -869,7 +977,7 @@ export default function CoachNutritionV2BuilderScreen() {
             <NutritionMotionButton
               accessibilityLabel="Publicar plan"
               pending={publishing || !existingPlanResolved}
-              disabled={publishing || !existingPlanResolved}
+              disabled={publishing || !existingPlanResolved || multiDayBlocked}
               onPress={() => void handlePublish()}
             >
               Publicar plan

@@ -31,17 +31,13 @@ function todayInSantiago(): string {
 export async function GET(request: NextRequest) {
   const startedAt = Date.now()
   const route = 'mobile.nutrition-v2.coach'
-  const gate = await gateNutritionV2Api(request, { surface: 'mobileCoach' })
 
-  if (!gate.ok) {
-    logNutritionV2Api({ route, startedAt, status: gate.response.status })
-    return gate.response
-  }
-
-  // The client sends the ACTIVE coach workspace as query params. Membership is NOT trusted from the
-  // wire: the scoped RPC (get_nutrition_*_scoped_v2) re-validates it server-side against auth.uid()
-  // via private.nutrition_v2_client_matches_workspace. Here we only enforce the shape (fail-closed:
-  // unknown scopeType / mismatched team/org ids => 400, never an unscoped read).
+  // NUT-013: el scope (y el alumno de la ficha) se parsean ANTES del gate y viajan A el. Si el
+  // rollout se resolviera despues, un canary por Team/alumno encenderia la UI (config/route ya
+  // manda el scope) mientras esta ruta responderia 404 con el contexto en null. La forma se sigue
+  // exigiendo aqui (fail-closed: scopeType desconocido / ids cruzados => 400, nunca lectura
+  // sin scope); la PERTENENCIA la valida el gate (403) y la re-valida la RPC scoped contra
+  // auth.uid() via private.nutrition_v2_client_matches_workspace.
   const scopeResult = NutritionV2CoachScopeSchema.safeParse({
     scopeType: request.nextUrl.searchParams.get('scopeType'),
     teamId: request.nextUrl.searchParams.get('teamId') || null,
@@ -54,6 +50,22 @@ export async function GET(request: NextRequest) {
   const scope = scopeResult.data
 
   const view = request.nextUrl.searchParams.get('view') ?? 'hub'
+  const rawClientId = request.nextUrl.searchParams.get('clientId') ?? ''
+  // Solo un uuid bien formado alimenta el canary por alumno; el resto se ignora (el 400 por
+  // clientId invalido lo sigue dando la rama view=client, mas abajo).
+  const requestedClientId = view === 'client' && UUID.test(rawClientId) ? rawClientId : null
+
+  const gate = await gateNutritionV2Api(request, {
+    surface: 'mobileCoach',
+    coachScope: scope,
+    requestedClientId,
+  })
+
+  if (!gate.ok) {
+    logNutritionV2Api({ route, startedAt, status: gate.response.status })
+    return gate.response
+  }
+
   let rpcName: string
   let args: Record<string, unknown>
   let parse: (data: unknown) => unknown
@@ -87,7 +99,7 @@ export async function GET(request: NextRequest) {
     }
     parse = (data) => NutritionCoachHubPageReadModelSchema.parse(data)
   } else if (view === 'client') {
-    const clientId = request.nextUrl.searchParams.get('clientId') ?? ''
+    const clientId = rawClientId
     const date = request.nextUrl.searchParams.get('date') ?? todayInSantiago()
     const timezone = request.nextUrl.searchParams.get('timezone') ?? 'America/Santiago'
 

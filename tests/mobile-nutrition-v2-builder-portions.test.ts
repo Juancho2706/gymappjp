@@ -23,11 +23,9 @@ import {
   assembleAndValidateDraft,
   assembleDraft,
   createEmptyItem,
-  persistAndPublishDraft,
   type BuilderFood,
   type BuilderItem,
   type BuilderState,
-  type NutritionV2WriteClient,
 } from '../apps/mobile/lib/nutrition-v2-builder'
 
 // GUID-format ids: `NutritionExchangeTargetSchema` usa z.guid() (acepta seeds no-RFC), no
@@ -38,7 +36,6 @@ const GROUP_P = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const GROUP_LEG = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 const FOOD_ID = '33333333-3333-4333-8333-333333333333'
-const PUBLISHED_ID = '44444444-4444-4444-8444-444444444444'
 
 function group(overrides: Partial<ExchangeGroup> & Pick<ExchangeGroup, 'id' | 'code' | 'name'>): ExchangeGroup {
   return {
@@ -256,110 +253,6 @@ describe('buildFrozenPortionGroups (snapshot congelado por valor)', () => {
     expect(dict.has('ffffffff-ffff-4fff-8fff-ffffffffffff')).toBe(false)
   })
 })
-
-// -- fake write client (registra inserts + rpc) --
-function makeClient() {
-  const inserts: Array<{ table: string; rows: unknown }> = []
-  let counter = 0
-  const client = {
-    from(table: string) {
-      return {
-        select() {
-          const chain: any = {
-            eq() { return chain },
-            order() { return chain },
-            limit() { return chain },
-            async maybeSingle() {
-              if (table === 'clients') return { data: { coach_id: 'coach-1', org_id: null, team_id: null }, error: null }
-              if (table === 'foods') {
-                return {
-                  data: { id: FOOD_ID, name: 'Pollo', brand: null, calories: 100, protein_g: 10, carbs_g: 20, fats_g: 5, fiber_g: 2, serving_size: 50, serving_unit: 'g' },
-                  error: null,
-                }
-              }
-              return { data: null, error: null }
-            },
-            then(resolve: (v: unknown) => void) { resolve({ data: [], error: null }) },
-          }
-          return chain
-        },
-        insert(rows: unknown) {
-          inserts.push({ table, rows })
-          return {
-            select() { return { async single() { counter += 1; return { data: { id: table + '-' + counter }, error: null } } } },
-            then(resolve: (v: unknown) => void) { resolve({ data: null, error: null }) },
-          }
-        },
-      }
-    },
-    async rpc() { return { data: PUBLISHED_ID, error: null } },
-  }
-  return { client: client as unknown as NutritionV2WriteClient, inserts }
-}
-
-describe('persistAndPublishDraft inserta las porciones con snapshot congelado', () => {
-  it('emite la fila de nutrition_slot_exchange_targets_v2 solo con porciones', async () => {
-    const draft = assembleAndValidateDraft(structuredState(), {
-      clientId: CLIENT_ID,
-      portionsBySlot: { 'slot-a': [{ exchangeGroupId: GROUP_C, portions: 2 }] },
-    })
-    const { client, inserts } = makeClient()
-    const res = await persistAndPublishDraft({
-      db: client,
-      userId: 'coach-1',
-      draft,
-      idempotencyKey: 'publish:key:abcdef',
-      effectiveFrom: '2026-07-20',
-      portionGroups: CATALOG,
-    })
-    expect(res.ok).toBe(true)
-    const targetInsert = inserts.find((i) => i.table === 'nutrition_slot_exchange_targets_v2')
-    expect(targetInsert).toBeDefined()
-    const rows = targetInsert!.rows as Record<string, unknown>[]
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({
-      exchange_group_id: GROUP_C,
-      portions: 2,
-      order_index: 0,
-      snapshot_group_code: 'C',
-      snapshot_group_name: 'Cereales',
-      snapshot_ref_calories: 70,
-      snapshot_composed_of: null,
-      snapshot_macros_confirmed: true,
-    })
-  })
-
-  it('un draft sin porciones no toca la tabla (byte-identico a hoy)', async () => {
-    const draft = assembleAndValidateDraft(structuredState(), { clientId: CLIENT_ID })
-    const { client, inserts } = makeClient()
-    const res = await persistAndPublishDraft({
-      db: client,
-      userId: 'coach-1',
-      draft,
-      idempotencyKey: 'publish:key:abcdef',
-      effectiveFrom: '2026-07-20',
-      portionGroups: CATALOG,
-    })
-    expect(res.ok).toBe(true)
-    expect(inserts.some((i) => i.table === 'nutrition_slot_exchange_targets_v2')).toBe(false)
-  })
-
-  it('corta el publish si un grupo no resuelve contra el catalogo (jamas snapshot NULL)', async () => {
-    const draft = assembleAndValidateDraft(structuredState(), {
-      clientId: CLIENT_ID,
-      portionsBySlot: { 'slot-a': [{ exchangeGroupId: GROUP_C, portions: 1 }] },
-    })
-    const { client } = makeClient()
-    // Catalogo SIN el grupo C: buildPortionTargetInsertRows devuelve null → EXCHANGE_GROUP_UNRESOLVED.
-    const res = await persistAndPublishDraft({
-      db: client,
-      userId: 'coach-1',
-      draft,
-      idempotencyKey: 'publish:key:abcdef',
-      effectiveFrom: '2026-07-20',
-      portionGroups: [VERDURA],
-    })
-    expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('EXCHANGE_GROUP_UNRESOLVED')
-  })
-})
+// NUT-005: el freeze de las porciones al publicar ocurre ahora SERVER-SIDE (el endpoint de
+// mutaciones resuelve los grupos contra `exchange_groups` con el cliente RLS del coach y congela el
+// snapshot en `plan-persistence.ts`). El dispositivo solo manda los `exchangeTargets` del draft.
