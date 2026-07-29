@@ -14,9 +14,9 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, CalendarClock, Check, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
-  BuilderDayVariantBar,
+  BuilderDayStrip,
   BuilderStepList,
   ExchangeGroupFormSheet,
   FoodThumbnail,
@@ -26,10 +26,8 @@ import {
   NutritionSkeleton,
   NutritionStatePanel,
   SelectableStrategyCard,
-  StrategyBadge,
-  StudentPreview,
   variantDayBadge,
-  type BuilderDayVariantBarHandlers,
+  type BuilderDayStripHandlers,
   type ExchangeGroupFormInitial,
 } from '../../../../components/nutrition-v2'
 // Stepper táctil del quick-edit (H-07): el patrón correcto en móvil ya estaba resuelto ahí y el
@@ -37,17 +35,8 @@ import {
 import { QuantityStepper } from '../../../../components/nutrition-v2/quick-edit/QuantityStepper'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
-import {
-  NUTRITION_STRATEGIES,
-  type FoodCatalogItem,
-  type NutritionStrategy,
-} from '@eva/nutrition-v2'
-import {
-  exchangeGroupColor,
-  hasUnconfirmedMacros,
-  portionsSummaryLabel,
-  type ExchangeGroup,
-} from '@eva/nutrition-engine'
+import { type FoodCatalogItem, type NutritionStrategy } from '@eva/nutrition-v2'
+import { exchangeGroupColor, hasUnconfirmedMacros, type ExchangeGroup } from '@eva/nutrition-engine'
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
 import { useTheme } from '../../../../context/ThemeContext'
@@ -64,7 +53,6 @@ import {
   copySlotPortionsToVariants,
   derivePortionTotals,
   dropVariantPortions,
-  esDecimal,
   formatPortionsEs,
   hasAnyPortions,
   portionsKey,
@@ -98,32 +86,39 @@ import {
 } from '../../../../lib/nutrition-coach-draft-store'
 import { supabase } from '../../../../lib/supabase'
 import {
+  BUILDER_STEP_COUNT,
+  BUILDER_STEP_DAYS,
+  BUILDER_STEP_PLAN,
   BUILDER_UNITS,
   CoachFoodInputSchema,
   MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
   NUTRITION_PRO_MODULE_KEY,
-  activeVariantOf,
   assembleAndValidateDraft,
   baseVariantOf,
   buildPublishIdempotencyKey,
+  builderDayCells,
   builderHasSignificantContent,
   builderReducer,
+  builderVariantForDayOfWeek,
   canProceedToPublishAfterArchive,
   clonedKey,
   createEmptyBuilderState,
   customMacrosOf,
   effectiveDateConflicts,
+  inheritedDayOfWeeks,
   itemMacros,
   macroEnergyMismatch,
   mapFoodCatalogItemToBuilderFood,
   resolveSlotCopyTargets,
+  slotsLostIfFlexible,
   slotSubtotal,
   strategyUsesSlots,
   takenDayOfWeeks,
   validateStep,
   variantEffectiveTargets,
   variantTotals,
+  type BuilderDayCell,
   type BuilderItem,
   type BuilderPermissions,
   type BuilderSlot,
@@ -139,11 +134,12 @@ import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrit
 
 const STRATEGY_ORDER: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
 
+// Wizard de DOS pasos (SPEC nutrition-ui-poda punto 11). "Estrategia" y "Objetivos" caben en una
+// pantalla —el primero tenía un solo control— y "Revisión" era eco de lo que "Los días" ya muestra
+// en vivo, con `vigente-desde` como único campo editable (en RN siempre vivió en el primer paso).
 const STEP_META: Array<{ id: string; label: string }> = [
-  { id: 'strategy', label: 'Estrategia' },
-  { id: 'targets', label: 'Objetivos' },
-  { id: 'construction', label: 'Construcción' },
-  { id: 'review', label: 'Revisión' },
+  { id: 'plan', label: 'El plan' },
+  { id: 'days', label: 'Los días' },
 ]
 
 let keySeq = 0
@@ -238,6 +234,17 @@ function joinDayLabels(labels: string[]): string {
   return `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`
 }
 
+/**
+ * Dia que el strip abre al restaurar un arbol (plan rehidratado o borrador local): el del dia en
+ * edicion que traia el estado, o el primero que hereda el base. `null` solo si los 7 dias son
+ * propios y el foco venia en el base (la puerta explicita del dia base huerfano).
+ */
+function initialDowFor(state: BuilderState): number | null {
+  const active = state.variants.find((variant) => variant.key === state.activeVariantKey)
+  if (active != null && !active.isDefault && active.dayOfWeek != null) return active.dayOfWeek
+  return inheritedDayOfWeeks(state)[0] ?? null
+}
+
 // Plan vigente del alumno (sub-delta c): habilita la rama "Archivar y reemplazar". Se lee LOCAL
 // con getNutritionClientDetailV2 (no llega por nav params — decision del juez, evita tocar la
 // ficha/href de otras unidades). Espejo del `existingPlan` server-provisto del web.
@@ -278,21 +285,22 @@ interface BuilderDraftPayload {
 // que el `beforeunload` web, que tampoco toca localStorage).
 const LEAVE_GUARD_COPY = 'Tienes un borrador sin publicar. ¿Salir y descartarlo?'
 
-// Fieldset "Permisos del alumno" (sub-delta a): orden y copys LITERALES del web
-// (PlanBuilderClient.tsx:773-776). El estado ya fluye de punta a punta (SET_PERMISSION +
-// assembleDraft); esto solo lo puebla con la eleccion del coach en vez del default.
-const PERMISSION_FIELDS: Array<[keyof BuilderPermissions, string]> = [
-  ['canRegisterFreely', 'Puede registrar alimentos libremente'],
-  ['canAdjustPrescribedQuantity', 'Puede ajustar la cantidad prescrita'],
-  ['canSubstitute', 'Puede sustituir alimentos'],
+// Fieldset "Permisos del alumno" (poda ola 3, SPEC nutrition-ui-poda punto 1): quedan los 2
+// permisos reales de punta a punta (UI alumno + servicio + guard SQL); `canSubstitute` era
+// decorativo (solo pintaba una pastilla; los reemplazos se muestran al alumno SIEMPRE, con o
+// sin el flag) y se retira de esta UI — el campo sigue viviendo en el estado/contrato con su
+// default (`assembleDraft` no cambia). Copy corto + explicacion propia (punto 2 del SPEC).
+const PERMISSION_FIELDS: Array<[keyof BuilderPermissions, string, string]> = [
+  ['canRegisterFreely', 'Registro libre', 'Puede anotar alimentos fuera de lo prescrito.'],
+  ['canAdjustPrescribedQuantity', 'Ajustar cantidades', 'Puede cambiar la cantidad de un alimento prescrito.'],
 ]
 
 // ---------------------------------------------------------------------------
 // Controlador de porciones a elección (4B-11) — espejo RN de `usePortionsBuilder` web.
 // Estado hermano del reducer del wizard: el mapa slot→targets + el catálogo COMPLETO del
 // coach (system + propios) con carga perezosa/error/reintento. Se instancia una vez en la
-// pantalla y baja por props a Objetivos (card de derivar), Construcción (sección por franja)
-// y Revisión (chips). Sin `commitValue` (stepper de botones, afirmación 7) ni server action:
+// pantalla y baja por props a "El plan" (card de derivar) y "Los días" (sección por franja +
+// aviso de macros sin confirmar). Sin `commitValue` (stepper de botones, afirmación 7) ni server action:
 // la lectura es coach-scoped por RLS (`fetchCoachExchangeGroups`).
 // ---------------------------------------------------------------------------
 
@@ -491,6 +499,13 @@ export default function CoachNutritionV2BuilderScreen() {
   const [conflictError, setConflictError] = useState<string | null>(null)
   const [upsell, setUpsell] = useState<string | null>(null)
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
+  /**
+   * Selector de día (SPEC punto 10): el coach elige un DÍA de semana, no una variante. Vive en la
+   * pantalla y no en el reducer a propósito — es foco de UI, no contenido del plan, y el árbol del
+   * borrador no cambia de forma. `null` = el Día base explícito (única puerta cuando los 7 días ya
+   * tienen contenido propio). Arranca en lunes: es la primera celda del orden de lectura.
+   */
+  const [selectedDow, setSelectedDow] = useState<number | null>(1)
   // Plan vigente del alumno (sub-delta c): null hasta resolver la lectura local. `canReplace`
   // se deriva de su presencia, espejo del web (PlanBuilderClient.tsx:1439).
   const [existingPlan, setExistingPlan] = useState<ExistingPlan | null>(null)
@@ -588,6 +603,7 @@ export default function CoachNutritionV2BuilderScreen() {
             skipAutosaveOnceRef.current = true
             dispatch({ type: 'RESTORE', state: rehydrated.state })
             portions.restoreBySlot(rehydrated.portionsBySlot)
+            setSelectedDow(initialDowFor(rehydrated.state))
             if (strategyUsesSlots(rehydrated.state.strategy)) portions.ensureGroupsLoaded()
             setRehydrationFailed(false)
           } else {
@@ -679,19 +695,33 @@ export default function CoachNutritionV2BuilderScreen() {
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
-  // Dia en edicion + dia base (multi-dia): TODA la UI de Construccion trabaja scoped al activo.
-  const activeVariant = activeVariantOf(state)
+  // Selector de dia: el DIA elegido resuelve la variante que se edita — la propia si el coach la
+  // personalizo, el dia base si la hereda (misma regla del snapshot). TODA la UI de "Los días"
+  // trabaja scoped a esa variante, igual que antes con el chip activo.
+  const inheritedDays = useMemo(() => inheritedDayOfWeeks(state), [state])
+  const activeVariant = builderVariantForDayOfWeek(state, selectedDow)
   const baseVariant = baseVariantOf(state)
+
+  // El reducer sigue llevando `activeVariantKey` (lo persiste el borrador y lo usa `validateStep`
+  // para el alias del error de franjas): se mantiene en lockstep con el dia elegido, una sola
+  // fuente de verdad visible (el strip) y cero drift.
+  useEffect(() => {
+    if (state.activeVariantKey !== activeVariant.key) {
+      dispatch({ type: 'SET_ACTIVE_VARIANT', variantKey: activeVariant.key })
+    }
+  }, [state.activeVariantKey, activeVariant.key])
 
   // FD4: el guard solo sobrevive para la rehidratacion FALLIDA de un plan de varios dias — ahi
   // publicar en blanco los reduciria a uno. Con rehidratacion OK el wizard los edita todos.
   const multiDayBlocked = rehydrationFailed && (existingPlan?.dayVariantCount ?? 0) > 1
 
-  // Coach BASE: publicar mas de un dia exige Nutricion Pro (`multi_variant`). El candado del CTA
-  // "Agregar dia" es anti-friccion; la barrera real la pone el servidor.
-  const addDayLocked = !hasNutritionPro
+  // Coach BASE: publicar un dia con contenido propio ya son DOS variantes, y eso exige Nutricion
+  // Pro (`multi_variant`). El candado del CTA "Personalizar" es anti-friccion; la barrera real la
+  // pone el servidor.
+  const personalizeLocked = !hasNutritionPro
 
-  // kcal por dia para los chips (items fijos + porciones a eleccion del MISMO dia).
+  // kcal por dia para las celdas del strip (items fijos + porciones a eleccion del MISMO dia), y
+  // el conteo de porciones prescritas del dia (vive fuera del reducer, en el mapa hermano).
   const kcalByVariantKey = useMemo(() => {
     const out: Record<string, number> = {}
     for (const variant of state.variants) {
@@ -702,13 +732,34 @@ export default function CoachNutritionV2BuilderScreen() {
     return out
   }, [state.variants, portions.bySlot, portions.groups])
 
+  const portionsByVariantKey = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const variant of state.variants) {
+      out[variant.key] = variant.slots.reduce(
+        (total, slot) =>
+          total +
+          slotPortionTargets(portions.bySlot, portionsKey(variant.key, slot.key)).reduce(
+            (sum, target) => sum + target.portions,
+            0,
+          ),
+        0,
+      )
+    }
+    return out
+  }, [state.variants, portions.bySlot])
+
+  const dayCells = useMemo(
+    () => builderDayCells(state, { kcalByVariantKey, portionsByVariantKey, todayIso: today }),
+    [state, kcalByVariantKey, portionsByVariantKey, today],
+  )
+
   // H-01 (P0) — dias con error de validacion. `validateStep` valida TODOS los dias (publicar emite
-  // las N variantes) pero `ConstructionStep` solo monta las franjas del ACTIVO: los errores por
-  // franja/item de otro dia viven en editores desmontados y "Siguiente" quedaba muerto sin ningun
+  // las N variantes) pero el paso "Los días" solo monta las franjas del dia ELEGIDO: los errores por
+  // franja/item de otro dia viven en editores desmontados y "Publicar" quedaba muerto sin ningun
   // mensaje. Aca se PROYECTA el mismo `validation.errors` sobre las variantes (las claves ya son
   // keyables por dia); la validacion no cambia, solo se expone.
   const variantErrorKeys = useMemo(() => {
-    if (!showErrors || state.step !== 2 || validation.ok) return []
+    if (!showErrors || state.step !== BUILDER_STEP_DAYS || validation.ok) return []
     const stepErrors = validation.errors
     return state.variants
       .filter(
@@ -727,6 +778,14 @@ export default function CoachNutritionV2BuilderScreen() {
       )
       .map((variant) => variant.key)
   }, [showErrors, state.step, state.variants, validation])
+
+  // Los mismos errores traducidos a DIAS: el strip marca celdas, no variantes. Un error del dia
+  // base pinta todos los dias que lo heredan, que es exactamente a quienes afecta.
+  const errorDays = useMemo(() => {
+    if (variantErrorKeys.length === 0) return []
+    const keys = new Set(variantErrorKeys)
+    return dayCells.filter((cell) => keys.has(cell.variant.id)).map((cell) => cell.dayOfWeek)
+  }, [variantErrorKeys, dayCells])
 
   // QW-6 (H-14) — el buscador del builder es UN modal reusado por dos intenciones (agregar el
   // alimento prescrito / agregar un reemplazo autorizado) y no decía cuál: agregar por error un
@@ -750,7 +809,8 @@ export default function CoachNutritionV2BuilderScreen() {
     let stepState: 'upcoming' | 'current' | 'complete' | 'error' = 'upcoming'
     if (index === state.step) stepState = showErrors && !validation.ok ? 'error' : 'current'
     else if (index < state.step) stepState = 'complete'
-    const description = index === 2 && !strategyUsesSlots(state.strategy) ? 'No aplica (plan flexible)' : undefined
+    const description =
+      index === BUILDER_STEP_DAYS && !strategyUsesSlots(state.strategy) ? 'Plan flexible: sin franjas' : undefined
     return { id: meta.id, label: meta.label, description, state: stepState }
   })
 
@@ -771,13 +831,38 @@ export default function CoachNutritionV2BuilderScreen() {
 
   const handlePickStrategy = useCallback(
     (strategy: NutritionStrategy) => {
+      // No-op: re-tocar la MISMA estrategia no hace nada (el reducer tambien lo corta; ver
+      // builderReducer). Se corta aca ademas para no disparar el candado Pro sin necesidad.
+      if (strategy === state.strategy) return
       if (strategy === 'hybrid' && !hasNutritionPro) {
         setUpsell('la estrategia hibrida')
         return
       }
+      // Confirmacion antes de perder franjas (bug 2.3.5 de la auditoria): "flexible" con
+      // contenido en cualquier dia BORRABA todas las franjas sin aviso ni deshacer.
+      if (strategy === 'flexible') {
+        const slotsAtRisk = slotsLostIfFlexible(state)
+        if (slotsAtRisk > 0) {
+          const article = slotsAtRisk === 1 ? 'la' : 'las'
+          const noun = slotsAtRisk === 1 ? 'franja' : 'franjas'
+          Alert.alert(
+            'Cambiar a flexible',
+            `Cambiar a flexible elimina ${article} ${slotsAtRisk} ${noun} de tus días. ¿Continuar?`,
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              {
+                text: 'Continuar',
+                style: 'destructive',
+                onPress: () => dispatch({ type: 'SET_STRATEGY', strategy, firstSlotKey: genKey('slot') }),
+              },
+            ],
+          )
+          return
+        }
+      }
       dispatch({ type: 'SET_STRATEGY', strategy, firstSlotKey: genKey('slot') })
     },
-    [hasNutritionPro],
+    [hasNutritionPro, state],
   )
 
   // ── Multi-dia: handlers de la barra de dias (espejo 1:1 del web PlanBuilderClient) ─────────
@@ -793,32 +878,30 @@ export default function CoachNutritionV2BuilderScreen() {
     })
   }
 
-  function handleAddDays(days: number[], origin: 'copy-base' | 'empty') {
-    // Se filtra aca lo mismo que rechaza el reducer (dia ocupado / tope), para que las keys
-    // generadas queden alineadas con los dias que SI se crean y el clon de porciones no apunte
-    // a una variante inexistente.
-    const taken = new Set(takenDayOfWeeks(state))
-    const accepted: number[] = []
-    for (const day of days) {
-      if (taken.has(day) || accepted.length + taken.size >= MAX_DAY_VARIANTS) continue
-      accepted.push(day)
-    }
-    if (accepted.length === 0) return
-    const keys = accepted.map(() => genKey('variant'))
-    dispatch({ type: 'ADD_VARIANTS', days: accepted, keys, origin })
-    if (origin === 'copy-base') {
-      for (const key of keys) cloneVariantPortions(baseVariant, key)
-    }
-  }
-
-  function handleDuplicateVariant(sourceVariantKey: string, dayOfWeek: number) {
+  /**
+   * "Personalizar el {día}" / "Copiar a otros días": UNA sola primitiva, la que ya existía
+   * (`DUPLICATE_VARIANT_AS` + el clon del mapa de porciones). Personalizar = duplicar el DÍA BASE
+   * al día elegido; copiar = duplicar el día propio a los días que todavía heredan. Se filtra aca
+   * lo mismo que rechaza el reducer (día ocupado / tope) para que las keys generadas queden
+   * alineadas con los días que SÍ se crean y el clon de porciones no apunte a una variante
+   * inexistente. "+ Agregar día" ya no existe como concepto (SPEC punto 10).
+   */
+  function handleDuplicateVariantToDays(sourceVariantKey: string, days: readonly number[]) {
     const source = state.variants.find((variant) => variant.key === sourceVariantKey)
-    if (!source || takenDayOfWeeks(state).includes(dayOfWeek)) return
-    const key = genKey('variant')
-    dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek })
-    cloneVariantPortions(source, key)
+    if (!source) return
+    const taken = new Set(takenDayOfWeeks(state))
+    for (const day of days) {
+      if (taken.has(day) || taken.size >= MAX_DAY_VARIANTS) continue
+      taken.add(day)
+      const key = genKey('variant')
+      dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek: day })
+      cloneVariantPortions(source, key)
+    }
   }
 
+  // Eliminar un día = ese día vuelve a HEREDAR el día base (el reducer también reapunta
+  // `activeVariantKey`). La selección del strip no se mueve: el mismo día sigue elegido y ahora
+  // resuelve al base, que es exactamente lo que el coach acaba de pedir.
   function handleRemoveVariant(variantKey: string) {
     dispatch({ type: 'REMOVE_VARIANT', variantKey })
     portions.dropVariant(variantKey)
@@ -843,18 +926,39 @@ export default function CoachNutritionV2BuilderScreen() {
     })
   }
 
-  const dayHandlers: BuilderDayVariantBarHandlers = {
-    onSelect: (variantKey) => dispatch({ type: 'SET_ACTIVE_VARIANT', variantKey }),
-    onAddDays: handleAddDays,
+  const dayHandlers: BuilderDayStripHandlers = {
+    onSelectDay: (dayOfWeek) => setSelectedDow(dayOfWeek),
+    onPersonalize: (dayOfWeek) => handleDuplicateVariantToDays(baseVariant.key, [dayOfWeek]),
+    onPersonalizeLocked: () =>
+      setUpsell(
+        'Darle contenido propio a un día (el fin de semana, el día de entrenamiento) es parte de Nutrición Pro. Tu plan actual publica un solo día para toda la semana.',
+      ),
     onRename: (variantKey, label) => dispatch({ type: 'SET_VARIANT_LABEL', variantKey, value: label }),
-    onChangeDay: (variantKey, dayOfWeek) => dispatch({ type: 'SET_VARIANT_DAY', variantKey, dayOfWeek }),
-    onDuplicate: handleDuplicateVariant,
     onSetTargetsMode: (variantKey, mode) => dispatch({ type: 'SET_VARIANT_TARGETS_MODE', variantKey, mode }),
     onSetVariantTarget: (variantKey, field, value) =>
       dispatch({ type: 'SET_VARIANT_TARGETS', variantKey, field, value }),
+    onCopyDayTo: handleDuplicateVariantToDays,
     onRemove: handleRemoveVariant,
     onUpgrade: () => router.push('/coach/modules'),
   }
+
+  /**
+   * Un día con error que NO está montado se abre tocando "Revisa {día}". El strip selecciona DÍAS,
+   * así que la variante con el error se traduce a su día: los días propios tienen el suyo, el día
+   * base cae al primer día que lo hereda (o a la puerta explícita `null` si ya no rige ninguno).
+   */
+  const selectVariant = useCallback(
+    (variantKey: string) => {
+      const target = state.variants.find((variant) => variant.key === variantKey)
+      if (!target) return
+      if (!target.isDefault && target.dayOfWeek != null) {
+        setSelectedDow(target.dayOfWeek)
+        return
+      }
+      setSelectedDow(inheritedDays[0] ?? null)
+    },
+    [state.variants, inheritedDays],
+  )
 
   // Punto comun de exito de las DOS ramas de publicacion (normal / "Archivar y reemplazar"): limpia
   // el respaldo local antes de navegar — el plan ya esta en el servidor. Best-effort sin await (la
@@ -872,6 +976,7 @@ export default function CoachNutritionV2BuilderScreen() {
     if (payload != null) {
       dispatch({ type: 'RESTORE', state: payload.state })
       portions.restoreBySlot(payload.portionsBySlot ?? {})
+      setSelectedDow(initialDowFor(payload.state))
       // Idempotencia (NUT-011): recuperar la clave del intento interrumpido es lo que hace que
       // reintentar tras matar la app no publique una segunda version del mismo contenido.
       publishKeyRef.current = payload.publishKey ?? null
@@ -1309,7 +1414,7 @@ export default function CoachNutritionV2BuilderScreen() {
             description={
               headerPlanId
                 ? `Al publicar se creará la versión v${headerVersionNumber + 1} y la actual pasará a anterior.`
-                : 'Arma el plan en cuatro pasos y publícalo.'
+                : 'Define el plan, arma sus días y publícalo.'
             }
           />
 
@@ -1325,19 +1430,28 @@ export default function CoachNutritionV2BuilderScreen() {
             }}
           />
 
-          {state.step === 0 ? (
-            <StrategyStep state={state} onPick={handlePickStrategy} hasNutritionPro={hasNutritionPro} error={errors.strategy} />
+          {state.step === BUILDER_STEP_PLAN ? (
+            <PlanStep
+              state={state}
+              dispatch={dispatch}
+              errors={errors}
+              hasNutritionPro={hasNutritionPro}
+              onPickStrategy={handlePickStrategy}
+              portions={portions}
+            />
           ) : null}
-          {state.step === 1 ? (
-            <TargetsStep state={state} dispatch={dispatch} errors={errors} portions={portions} />
-          ) : null}
-          {state.step === 2 ? (
-            <ConstructionStep
+          {state.step === BUILDER_STEP_DAYS ? (
+            <DaysStep
               state={state}
               variant={activeVariant}
-              kcalByVariantKey={kcalByVariantKey}
-              addDayLocked={addDayLocked}
+              dayCells={dayCells}
+              selectedDow={selectedDow}
+              inheritedDays={inheritedDays}
+              activeKcal={kcalByVariantKey[activeVariant.key] ?? 0}
+              errorDays={errorDays}
+              personalizeLocked={personalizeLocked}
               dayHandlers={dayHandlers}
+              onSelectVariant={selectVariant}
               dispatch={dispatch}
               errors={errors}
               variantErrorKeys={variantErrorKeys}
@@ -1345,11 +1459,6 @@ export default function CoachNutritionV2BuilderScreen() {
               onSaveCustomFood={handleSaveCustomFood}
               onCopySlotToVariants={handleCopySlotToVariants}
               portions={portions}
-            />
-          ) : null}
-          {state.step === 3 ? (
-            <ReviewStep
-              state={state}
               publishError={publishError}
               dateConflict={dateConflict}
               conflictError={conflictError}
@@ -1359,13 +1468,12 @@ export default function CoachNutritionV2BuilderScreen() {
               onStartTomorrow={handleStartTomorrow}
               onReplaceToday={() => void handleReplaceToday()}
               onCancelConflict={handleCancelConflict}
-              portions={portions}
             />
           ) : null}
         </ScrollView>
 
         <View className="border-t border-subtle bg-surface-app">
-          {/* H-01 (P0): "Siguiente" no avanza por un error que vive en un dia NO montado. Sin esta
+          {/* H-01 (P0): "Publicar" no avanza por un error que vive en un dia NO montado. Sin esta
               linea el boton parece muerto: el unico rastro era la fila roja del BuilderStepList. */}
           {hiddenErrorVariants.length > 0 ? (
             <View className="flex-row items-start gap-2 px-4 pt-3">
@@ -1379,12 +1487,12 @@ export default function CoachNutritionV2BuilderScreen() {
             <NutritionMotionButton
               accessibilityLabel="Paso anterior"
               tone="neutral"
-              disabled={state.step === 0 || publishing}
+              disabled={state.step === BUILDER_STEP_PLAN || publishing}
               onPress={handlePrev}
             >
               Atrás
             </NutritionMotionButton>
-            {state.step < 3 ? (
+            {state.step < BUILDER_STEP_COUNT - 1 ? (
               <NutritionMotionButton accessibilityLabel="Siguiente paso" onPress={handleNext}>
                 Siguiente
               </NutritionMotionButton>
@@ -1461,65 +1569,57 @@ function LabeledInput({
 }
 
 // ---------------------------------------------------------------------------
-// Paso 0 — Estrategia
+// Paso 0 — "El plan": estrategia + nombre + metas + permisos + vigencia
+//
+// Fusión de los pasos "Estrategia" y "Objetivos" del wizard de cuatro (SPEC nutrition-ui-poda
+// punto 11). El primero tenía UN control y el segundo seis: juntos caben en una pantalla, y de
+// paso elegir estrategia deja de ser un gesto de navegación repetible (raíz del bug 2.3.5).
 // ---------------------------------------------------------------------------
 
-function StrategyStep({
-  state,
-  onPick,
-  hasNutritionPro,
-  error,
-}: {
-  state: BuilderState
-  onPick: (strategy: NutritionStrategy) => void
-  hasNutritionPro: boolean
-  error?: string
-}) {
-  return (
-    <View className="gap-3">
-      <Text className="font-display text-lg font-semibold text-strong">¿Cómo se estructura el plan?</Text>
-      <ErrorText message={error} />
-      <View className="gap-3">
-        {STRATEGY_ORDER.map((strategy) => {
-          const locked = strategy === 'hybrid' && !hasNutritionPro
-          return (
-            <View key={strategy}>
-              <SelectableStrategyCard
-                strategy={strategy}
-                selected={state.strategy === strategy}
-                onSelect={onPick}
-              />
-              {locked ? (
-                <View className="mt-1.5 flex-row items-center gap-1.5 px-1">
-                  <Lock color="#8A94A6" size={13} />
-                  <Text className="text-xs font-medium text-muted">Incluido en Nutrición Pro</Text>
-                </View>
-              ) : null}
-            </View>
-          )
-        })}
-      </View>
-    </View>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Paso 1 — Objetivos
-// ---------------------------------------------------------------------------
-
-function TargetsStep({
+function PlanStep({
   state,
   dispatch,
   errors,
+  hasNutritionPro,
+  onPickStrategy,
   portions,
 }: {
   state: BuilderState
-  dispatch: React.Dispatch<import('../../../../lib/nutrition-v2-builder').BuilderAction>
+  dispatch: BuilderDispatch
   errors: Record<string, string>
+  hasNutritionPro: boolean
+  onPickStrategy: (strategy: NutritionStrategy) => void
   portions: PortionsController
 }) {
+  // El candado usaba un hex (`#8A94A6`): en dark/white-label el gris quedaba fuera del sistema.
+  const { theme } = useTheme()
   return (
     <View className="gap-4">
+      <View className="gap-3">
+        <Text className="font-display text-lg font-semibold text-strong">¿Cómo se estructura el plan?</Text>
+        <ErrorText message={errors.strategy} />
+        <View className="gap-3">
+          {STRATEGY_ORDER.map((strategy) => {
+            const locked = strategy === 'hybrid' && !hasNutritionPro
+            return (
+              <View key={strategy}>
+                <SelectableStrategyCard
+                  strategy={strategy}
+                  selected={state.strategy === strategy}
+                  onSelect={onPickStrategy}
+                />
+                {locked ? (
+                  <View className="mt-1.5 flex-row items-center gap-1.5 px-1">
+                    <Lock color={theme.mutedForeground} size={13} />
+                    <Text className="text-xs font-medium text-muted">Incluido en Nutrición Pro</Text>
+                  </View>
+                ) : null}
+              </View>
+            )
+          })}
+        </View>
+      </View>
+
       <PortionsDeriveCard state={state} portions={portions} dispatch={dispatch} />
       <LabeledInput
         label="Nombre del plan"
@@ -1588,11 +1688,13 @@ function TargetsStep({
 
       <NutritionCard>
         <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</Text>
+        <Text className="mt-1 text-xs text-muted">Qué puede hacer el alumno con este plan, más allá de seguirlo.</Text>
         <View className="mt-2 gap-1">
-          {PERMISSION_FIELDS.map(([field, label]) => (
+          {PERMISSION_FIELDS.map(([field, label, hint]) => (
             <PermissionRow
               key={field}
               label={label}
+              hint={hint}
               checked={state.permissions[field]}
               onToggle={() => dispatch({ type: 'SET_PERMISSION', field, value: !state.permissions[field] })}
             />
@@ -1600,12 +1702,18 @@ function TargetsStep({
         </View>
       </NutritionCard>
 
+      {/* Vigencia: en RN siempre vivió acá (en la web estaba en el paso "Revisar" que se elimina).
+          QW-10: el hint lee la fecha en voz humana, no la ISO cruda que el coach acaba de escribir. */}
       <LabeledInput
         label="Vigente desde"
         value={state.effectiveFrom}
         onChangeText={(value) => dispatch({ type: 'SET_EFFECTIVE_FROM', value })}
         placeholder="YYYY-MM-DD"
-        hint="Formato AAAA-MM-DD. Debe ser posterior a la versión vigente."
+        hint={
+          /^\d{4}-\d{2}-\d{2}$/.test(state.effectiveFrom.trim())
+            ? `Empieza a regir ${formatNutritionShortDate(state.effectiveFrom.trim(), { relative: true })}. Debe ser posterior a la versión vigente.`
+            : 'Formato AAAA-MM-DD. Debe ser posterior a la versión vigente.'
+        }
       />
     </View>
   )
@@ -1616,7 +1724,17 @@ function TargetsStep({
 // `theme.primary` (nunca un hex — white-label). La UI NO autoriza: los permisos son metadatos del
 // plan; el enforcement real vive en el read-model del alumno y en el RPC. Patron de checkbox ya
 // sancionado (AssignClientsSheet / modal de asignar 4B-08): Pressable + accessibilityRole="checkbox".
-function PermissionRow({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+function PermissionRow({
+  label,
+  hint,
+  checked,
+  onToggle,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onToggle: () => void
+}) {
   const { theme } = useTheme()
   return (
     <Pressable
@@ -1624,17 +1742,20 @@ function PermissionRow({ label, checked, onToggle }: { label: string; checked: b
       accessibilityState={{ checked }}
       accessibilityLabel={label}
       onPress={onToggle}
-      className="min-h-11 flex-row items-center gap-2.5 rounded-control px-1"
+      className="min-h-11 flex-row items-start gap-2.5 rounded-control px-1 py-1.5"
     >
       <View
-        className={`h-5 w-5 items-center justify-center rounded-control border ${
+        className={`mt-0.5 h-5 w-5 items-center justify-center rounded-control border ${
           checked ? 'border-transparent' : 'border-default bg-surface-card'
         }`}
         style={checked ? { backgroundColor: theme.primary } : undefined}
       >
         {checked ? <Check color={theme.primaryForeground} size={14} /> : null}
       </View>
-      <Text className="flex-1 text-sm text-body">{label}</Text>
+      <View className="flex-1">
+        <Text className="text-sm text-body">{label}</Text>
+        {hint ? <Text className="mt-0.5 text-xs text-muted">{hint}</Text> : null}
+      </View>
     </Pressable>
   )
 }
@@ -2010,77 +2131,39 @@ function PortionsDeriveCard({
 }
 
 /**
- * Chips read-only + banner referencial en Revisión, de UN día (solo structured/hybrid con
- * porciones). `portionsSummaryLabel` ("2C · 1,5V") con coma decimal es-CL; el banner aparece si
- * algún grupo usado tiene `macros_confirmed=false`. No duplica totales. Multi-día: la Revisión
- * monta una card por día, así que esta sección recibe la variante ya elegida.
+ * Aviso de porciones con macros SIN confirmar del día en pantalla. Era lo único no-redundante del
+ * viejo paso "Revisar" (`PortionsReviewSection` apilaba además una tarjeta por día con las mismas
+ * chips que cada franja ya muestra): la advertencia sube al paso "Los días", donde el coach todavía
+ * puede cambiar el grupo, en vez de aparecer al final cuando ya iba a publicar.
  */
-function PortionsReviewSection({
+function PortionsUnconfirmedNotice({
   strategy,
   variant,
-  showDayHeading,
   portions,
 }: {
   strategy: BuilderState['strategy']
   variant: BuilderVariant
-  /**
-   * QW-7 (H-13): con varios días la revisión apilaba N tarjetas visualmente idénticas tituladas
-   * "Porciones a elección", sin decir de qué día era cada una (`ReviewVariantSection` sí lo hace).
-   */
-  showDayHeading: boolean
   portions: PortionsController
 }) {
-  const usesSlots = strategyUsesSlots(strategy)
   const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
   const groups = portions.groups
-  if (!usesSlots || groups == null || !hasAnyPortions(portions.bySlot, liveKeys)) return null
-  const rows = variant.slots
-    .map((slot, index) => ({
-      slot,
-      index,
-      targets: slotPortionTargets(portions.bySlot, portionsKey(variant.key, slot.key)).filter(
-        (t) => t.portions > 0,
-      ),
-    }))
-    .filter((r) => r.targets.length > 0)
-  const anyUnconfirmed = rows.some((r) => hasUnconfirmedMacros(r.targets, groups))
-  const badge = variantDayBadge(variant)
+  if (!strategyUsesSlots(strategy) || groups == null || !hasAnyPortions(portions.bySlot, liveKeys)) return null
+  const anyUnconfirmed = variant.slots.some((slot) =>
+    hasUnconfirmedMacros(
+      slotPortionTargets(portions.bySlot, portionsKey(variant.key, slot.key)).filter((t) => t.portions > 0),
+      groups,
+    ),
+  )
+  if (!anyUnconfirmed) return null
   return (
-    <View className="gap-2 rounded-card border border-subtle bg-surface-card p-4">
-      {showDayHeading ? (
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-          {badge ? `${variant.label} · ${badge.long}` : variant.label}
-        </Text>
-      ) : null}
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-        {PORTIONS_COPY.builder.sectionTitle}
-      </Text>
-      {anyUnconfirmed ? (
-        <View className="rounded-control border border-warning-500/30 bg-warning-500/10 p-2.5">
-          <Text className="text-xs text-warning-700">{PORTIONS_COPY.builder.unconfirmedBanner}</Text>
-        </View>
-      ) : null}
-      <View className="gap-1.5">
-        {rows.map(({ slot, index, targets }) => (
-          <View key={slot.key} className="flex-row items-center gap-2">
-            <Text className="min-w-0 flex-1 text-xs text-body" numberOfLines={1}>
-              {slot.name || `Franja ${index + 1}`}
-            </Text>
-            <Text
-              className="font-mono text-xs text-strong"
-              style={{ fontVariant: ['tabular-nums'] }}
-            >
-              {esDecimal(portionsSummaryLabel(targets, groups))}
-            </Text>
-          </View>
-        ))}
-      </View>
+    <View className="rounded-control border border-warning-500/30 bg-warning-500/10 p-2.5">
+      <Text className="text-xs leading-5 text-warning-700">{PORTIONS_COPY.builder.unconfirmedBanner}</Text>
     </View>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Paso 2 — Construcción (franjas + items)
+// Editores de franja e item (viven dentro del paso "Los días")
 // ---------------------------------------------------------------------------
 
 type BuilderDispatch = React.Dispatch<import('../../../../lib/nutrition-v2-builder').BuilderAction>
@@ -2411,7 +2494,7 @@ function FoodEquivalenceField({
 // Reemplazos autorizados por el coach (F-02): afordancia compacta bajo cada item prescrito.
 // "Reemplazo" abre el MISMO buscador de catalogo del builder (FoodSearchModal) y agrega el
 // alimento elegido como chip removible (tope MAX_ITEM_SUBSTITUTIONS). Solo se monta dentro
-// de ItemEditor, que a su vez solo existe en structured/hybrid (SlotEditor -> ConstructionStep).
+// de ItemEditor, que a su vez solo existe en structured/hybrid (SlotEditor -> DaysStep).
 // El alumno vera estas opciones; el server congela el snapshot de cada reemplazo al publicar.
 // Espejo del SubstitutionsField de la web (PlanBuilderClient.tsx).
 function SubstitutionsField({
@@ -2583,12 +2666,16 @@ function SlotCopySheet({
             {targets.map((target) => {
               const checked = selected.includes(target.key)
               const badge = variantDayBadge(target)
+              // Con el selector nuevo el coach piensa en días: la variante por defecto se nombra
+              // "Día base" (lo que dice el strip), no "Todos los días" — que ya es falso en cuanto
+              // un día tiene contenido propio. La etiqueta del contrato no cambia.
+              const targetLabel = target.isDefault ? 'Día base' : target.label
               return (
                 <Pressable
                   key={target.key}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked }}
-                  accessibilityLabel={badge ? `${target.label}, ${badge.long}` : target.label}
+                  accessibilityLabel={badge ? `${targetLabel}, ${badge.long}` : targetLabel}
                   onPress={() =>
                     setSelected((prev) =>
                       prev.includes(target.key) ? prev.filter((key) => key !== target.key) : [...prev, target.key],
@@ -2604,7 +2691,7 @@ function SlotCopySheet({
                   >
                     {checked ? <Check color={theme.primaryForeground} size={13} /> : null}
                   </View>
-                  <Text className="min-w-0 flex-1 text-sm text-body">{target.label}</Text>
+                  <Text className="min-w-0 flex-1 text-sm text-body">{targetLabel}</Text>
                   {badge ? (
                     <Text className="rounded-pill bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold text-muted">
                       {badge.short}
@@ -2813,12 +2900,25 @@ function SlotEditor({
   )
 }
 
-function ConstructionStep({
+// ---------------------------------------------------------------------------
+// Paso 1 — "Los días": selector de día + franjas del día elegido + publicar
+//
+// El viejo paso "Construcción" con el selector nuevo (SPEC punto 10) y la publicación adentro
+// (punto 11): el paso "Revisar" era eco de estas mismas cifras y su único campo editable
+// (`vigente-desde`) siempre vivió en "El plan".
+// ---------------------------------------------------------------------------
+
+function DaysStep({
   state,
   variant,
-  kcalByVariantKey,
-  addDayLocked,
+  dayCells,
+  selectedDow,
+  inheritedDays,
+  activeKcal,
+  errorDays,
+  personalizeLocked,
   dayHandlers,
+  onSelectVariant,
   dispatch,
   errors,
   variantErrorKeys,
@@ -2826,16 +2926,31 @@ function ConstructionStep({
   onSaveCustomFood,
   onCopySlotToVariants,
   portions,
+  publishError,
+  dateConflict,
+  conflictError,
+  canReplace,
+  existingPlanName,
+  publishing,
+  onStartTomorrow,
+  onReplaceToday,
+  onCancelConflict,
 }: {
   state: BuilderState
-  /** Día en edición (chip activo). TODA la sección trabaja scoped a él. */
+  /** Variante que recibe el día elegido. TODA la sección trabaja scoped a ella. */
   variant: BuilderVariant
-  kcalByVariantKey: Record<string, number>
-  addDayLocked: boolean
-  dayHandlers: BuilderDayVariantBarHandlers
+  dayCells: readonly BuilderDayCell[]
+  selectedDow: number | null
+  inheritedDays: readonly number[]
+  activeKcal: number
+  errorDays: readonly number[]
+  personalizeLocked: boolean
+  dayHandlers: BuilderDayStripHandlers
+  /** "Revisa {día}": abre el día de una variante con error (traduce variante → día). */
+  onSelectVariant: (variantKey: string) => void
   dispatch: BuilderDispatch
   errors: Record<string, string>
-  /** Días con error (H-01), incluido el activo: marca sus chips y ofrece "Revisa {día}". */
+  /** Días con error (H-01), incluido el elegido: marca sus celdas y ofrece "Revisa {día}". */
   variantErrorKeys: readonly string[]
   onSearch: (target: SearchTarget) => void
   onSaveCustomFood: (
@@ -2844,19 +2959,45 @@ function ConstructionStep({
     slotKey: string,
     equivalence: FoodEquivalenceDraft | null,
   ) => Promise<{ ok: boolean; error?: string }>
-  /** CE-5: copia de una franja del día activo hacia otros días (árbol + porciones). */
+  /** CE-5: copia de una franja del día elegido hacia otros días (árbol + porciones). */
   onCopySlotToVariants: (sourceVariantKey: string, slotKey: string, targetVariantKeys: string[]) => void
   portions: PortionsController
+  publishError: string | null
+  dateConflict: boolean
+  conflictError: string | null
+  canReplace: boolean
+  existingPlanName: string | null
+  publishing: boolean
+  onStartTomorrow: () => void
+  onReplaceToday: () => void
+  onCancelConflict: () => void
 }) {
+  const publishPanel = (
+    <PublishPanel
+      publishError={publishError}
+      dateConflict={dateConflict}
+      conflictError={conflictError}
+      canReplace={canReplace}
+      existingPlanName={existingPlanName}
+      publishing={publishing}
+      onStartTomorrow={onStartTomorrow}
+      onReplaceToday={onReplaceToday}
+      onCancelConflict={onCancelConflict}
+    />
+  )
+
   if (!strategyUsesSlots(state.strategy)) {
     return (
-      <NutritionCard>
-        <Text className="font-display text-base font-semibold text-strong">Plan flexible</Text>
-        <Text className="mt-2 text-sm leading-5 text-muted">
-          Este plan no usa franjas prescritas: el alumno registra sus comidas libremente contra las metas
-          diarias del paso anterior. Continúa a la revisión.
-        </Text>
-      </NutritionCard>
+      <View className="gap-4">
+        <NutritionCard>
+          <Text className="font-display text-base font-semibold text-strong">Plan flexible</Text>
+          <Text className="mt-2 text-sm leading-5 text-muted">
+            Este plan no usa franjas prescritas: el alumno registra sus comidas libremente contra las metas
+            diarias de "El plan", iguales los siete días. Ya puedes publicarlo.
+          </Text>
+        </NutritionCard>
+        {publishPanel}
+      </View>
     )
   }
 
@@ -2873,14 +3014,18 @@ function ConstructionStep({
   const activeBadge = variantDayBadge(variant)
   return (
     <View className="gap-3">
-      {/* Barra de días: chips scrolleables + "Agregar día" + banner de herencia de objetivos. */}
-      <BuilderDayVariantBar
-        variants={state.variants}
-        activeVariantKey={variant.key}
-        kcalByVariantKey={kcalByVariantKey}
+      {/* Selector de día: strip Lu-Do + barra de contexto + menú del día. */}
+      <BuilderDayStrip
+        ownDayCount={state.variants.length - 1}
+        cells={dayCells}
+        selectedDayOfWeek={selectedDow}
+        activeVariant={variant}
+        inheritedDays={inheritedDays}
+        activeKcal={activeKcal}
         baseTargets={state.targets}
-        addDayLocked={addDayLocked}
-        errorVariantKeys={variantErrorKeys}
+        activeTargetCalories={variantEffectiveTargets(state, variant).calories}
+        personalizeLocked={personalizeLocked}
+        errorDays={errorDays}
         handlers={dayHandlers}
       />
       {hiddenErrorVariants.length > 0 ? (
@@ -2890,7 +3035,7 @@ function ConstructionStep({
               key={other.key}
               accessibilityRole="button"
               accessibilityLabel={`Revisa ${other.label}: tiene datos por corregir`}
-              onPress={() => dayHandlers.onSelect(other.key)}
+              onPress={() => onSelectVariant(other.key)}
               className="min-h-11 justify-center"
             >
               <Text className="text-xs font-semibold text-danger-600 underline">Revisa {other.label}</Text>
@@ -2898,8 +3043,9 @@ function ConstructionStep({
           ))}
         </View>
       ) : null}
-      {/* Error de franjas del día ACTIVO (clave scoped). Los otros días salen arriba y en su chip. */}
+      {/* Error de franjas del día ELEGIDO (clave scoped). Los otros días salen arriba y en su celda. */}
       <ErrorText message={errors['variant.' + variant.key + '.slots']} />
+      <PortionsUnconfirmedNotice strategy={state.strategy} variant={variant} portions={portions} />
       {variant.slots.map((slot, index) => (
         <SlotEditor
           key={slot.key}
@@ -2923,26 +3069,34 @@ function ConstructionStep({
         className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
         onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot') })}
       >
-        <Plus color="#8A94A6" size={16} />
+        <AddSlotIcon />
         <Text className="text-sm font-semibold text-muted">Agregar franja</Text>
       </Pressable>
       {variant.slots.length > 0 ? (
         <View className="px-1">
-          {/* QW-2: con etiqueta personalizada el total tampoco decía a qué día pertenece. */}
+          {/* QW-2: con etiqueta personalizada el total tampoco decía a qué día pertenece. Es el
+              ÚNICO bloque de totales del día: la barra sticky y el eco del paso "Revisar" que
+              repetían la misma cifra se retiraron con la poda. */}
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            {state.variants.length > 1
-              ? `Total de ${activeBadge ? `${variant.label} (${activeBadge.long})` : variant.label}`
-              : 'Total del día'}
+            {variant.isDefault ? 'Total del Día base' : `Total de ${activeBadge ? `${variant.label} (${activeBadge.long})` : variant.label}`}
           </Text>
           <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
         </View>
       ) : null}
+      {publishPanel}
     </View>
   )
 }
 
+/** Icono del CTA "Agregar franja": tinte del theme, nunca el hex `#8A94A6` que estaba hardcodeado. */
+function AddSlotIcon() {
+  const { theme } = useTheme()
+  return <Plus color={theme.mutedForeground} size={16} />
+}
+
 // ---------------------------------------------------------------------------
-// Paso 3 — Revisión y publicar
+// Publicar (vive dentro de "Los días", SPEC punto 11): conflicto de fecha + error de publicación.
+// El CTA "Publicar plan" es el del pie de pantalla; acá van las decisiones y los errores.
 // ---------------------------------------------------------------------------
 
 // Boton-opcion de la card de conflicto de fecha (sub-delta c): adaptacion nativa del Dialog web
@@ -2982,95 +3136,14 @@ function ConflictOptionButton({
   )
 }
 
-/** Línea "2000 kcal · P 150 · C 200 · G 60" de las metas de un día (o el vacío honesto). */
-function targetsSummary(targets: BuilderState['targets']): string {
-  return (
-    [
-      targets.calories ? `${targets.calories} kcal` : null,
-      targets.proteinG ? `P ${targets.proteinG}` : null,
-      targets.carbsG ? `C ${targets.carbsG}` : null,
-      targets.fatsG ? `G ${targets.fatsG}` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ') || 'Sin metas definidas'
-  )
-}
-
 /**
- * Bloque de UN día en la Revisión: encabezado con el nombre del día (solo si el plan tiene
- * varios), metas EFECTIVAS de ese día, sus franjas y su total prescrito combinado (items fijos +
- * porciones a elección — la misma matemática del paso Construcción, Dudu-B F2).
+ * Decisiones y errores de la publicación, dentro del paso "Los días" (SPEC punto 11). El eco de
+ * solo lectura del viejo paso "Revisar" (badge de estrategia, vista del alumno, metas y franjas
+ * repetidas por día, totales por cuarta y quinta vez) se retiró: TODO eso está en pantalla en vivo
+ * dos scrolls más arriba. Lo que no estaba en ninguna otra parte —el conflicto de fecha de vigencia
+ * y el error del publish— vive acá, pegado al CTA del pie.
  */
-function ReviewVariantSection({
-  state,
-  variant,
-  showDayHeading,
-  portions,
-}: {
-  state: BuilderState
-  variant: BuilderVariant
-  showDayHeading: boolean
-  portions: PortionsController
-}) {
-  const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
-  const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
-  const totals = combineSubtotals(variantTotals(variant), portionDay)
-  const effectiveTargets = variantEffectiveTargets(state, variant)
-  // QW-2: si el coach renombró el día, el encabezado de la revisión también decía solo el alias.
-  const badge = variantDayBadge(variant)
-  return (
-    <View className="gap-2">
-      {showDayHeading ? (
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-          {badge ? `${variant.label} · ${badge.long}` : variant.label}
-        </Text>
-      ) : null}
-
-      <View className="rounded-control border border-subtle bg-surface-sunken p-3">
-        <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">
-          {showDayHeading ? `Metas de ${variant.label}` : 'Metas diarias'}
-        </Text>
-        <Text className="mt-1 font-mono text-sm text-strong">{targetsSummary(effectiveTargets)}</Text>
-        {showDayHeading && !variant.isDefault && variant.targetsMode !== 'custom' ? (
-          <Text className="mt-0.5 text-[11px] text-muted">Heredadas del día base.</Text>
-        ) : null}
-      </View>
-
-      {variant.slots.map((slot, index) => (
-        <View key={slot.key} className="rounded-control border border-subtle bg-surface-card p-3">
-          <Text className="text-sm font-semibold text-strong">
-            {slot.name || `Franja ${index + 1}`}
-            {slot.startTime ? ` · ${slot.startTime}` : ''}
-          </Text>
-          {slot.items.length === 0 ? (
-            <Text className="mt-1 text-xs text-muted">Sin alimentos</Text>
-          ) : (
-            slot.items.map((item) => (
-              <Text key={item.key} className="mt-1 text-xs text-body">
-                {(item.food?.name ?? item.customName ?? 'Alimento') + ` · ${item.quantity || '0'} ${item.unit}`}
-              </Text>
-            ))
-          )}
-        </View>
-      ))}
-
-      <View className="px-1">
-        <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          {showDayHeading ? `Total de ${variant.label}` : 'Total prescrito'}
-        </Text>
-        <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
-        {portionDay != null ? (
-          <Text className="mt-1 text-[11px] text-muted">
-            {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  )
-}
-
-function ReviewStep({
-  state,
+function PublishPanel({
   publishError,
   dateConflict,
   conflictError,
@@ -3080,9 +3153,7 @@ function ReviewStep({
   onStartTomorrow,
   onReplaceToday,
   onCancelConflict,
-  portions,
 }: {
-  state: BuilderState
   publishError: string | null
   dateConflict: boolean
   conflictError: string | null
@@ -3092,73 +3163,11 @@ function ReviewStep({
   onStartTomorrow: () => void
   onReplaceToday: () => void
   onCancelConflict: () => void
-  portions: PortionsController
 }) {
   const { theme } = useTheme()
-  const strategy = state.strategy ?? 'flexible'
-  const usesSlots = strategyUsesSlots(state.strategy)
-  const multiDay = state.variants.length > 1
+  if (!dateConflict && publishError == null) return null
   return (
-    <View className="gap-4">
-      <View className="flex-row flex-wrap items-center gap-2">
-        <StrategyBadge strategy={strategy} />
-      </View>
-
-      <StudentPreview title="Vista del alumno" themeLabel={NUTRITION_STRATEGIES[strategy].shortLabel}>
-        <View className="gap-3">
-          <View>
-            <Text className="font-display text-lg font-semibold text-strong">{state.planName || 'Plan sin nombre'}</Text>
-            {/* QW-10 (H-22): la vista del alumno mostraba la ISO cruda (`2026-08-01`). El
-                formateador ya existe y la pantalla del alumno lo usa; el coach no. */}
-            <Text className="mt-0.5 text-xs text-muted">
-              Vigente desde{' '}
-              {state.effectiveFrom
-                ? formatNutritionShortDate(state.effectiveFrom, { relative: true })
-                : 'hoy'}
-            </Text>
-          </View>
-
-          {usesSlots ? (
-            // Multi-día: la revisión se agrupa POR DÍA (una sección por variante, en el orden en
-            // que se publican). Cada día muestra sus metas EFECTIVAS (propias o heredadas del
-            // base), sus franjas y su total prescrito combinado.
-            <View className="gap-4">
-              {state.variants.map((variant) => (
-                <ReviewVariantSection
-                  key={variant.key}
-                  state={state}
-                  variant={variant}
-                  showDayHeading={multiDay}
-                  portions={portions}
-                />
-              ))}
-            </View>
-          ) : (
-            <>
-              <View className="rounded-control border border-subtle bg-surface-sunken p-3">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">Metas diarias</Text>
-                <Text className="mt-1 font-mono text-sm text-strong">
-                  {targetsSummary(state.targets)}
-                </Text>
-              </View>
-              <Text className="text-sm text-muted">Registro libre del alumno contra las metas diarias.</Text>
-            </>
-          )}
-        </View>
-      </StudentPreview>
-
-      {usesSlots
-        ? state.variants.map((variant) => (
-            <PortionsReviewSection
-              key={variant.key}
-              strategy={state.strategy}
-              variant={variant}
-              showDayHeading={multiDay}
-              portions={portions}
-            />
-          ))
-        : null}
-
+    <View className="gap-3">
       {dateConflict ? (
         <View className="gap-3 rounded-card border border-default bg-surface-card p-4">
           <View className="gap-1">

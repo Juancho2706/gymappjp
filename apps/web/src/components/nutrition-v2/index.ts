@@ -12,7 +12,6 @@ export {
   NutritionSkeleton,
   NutritionStatePanel,
   NutritionToolbar,
-  PlanVersionBadge,
   ResponsiveDataAdapter,
   StrategyBadge,
   SyncOfflineState,
@@ -27,6 +26,7 @@ export {
 export { MacroChipRow, type MacroChipRowProps } from './MacroChipRow'
 export { DayVariantWeekStrip } from './DayVariantWeekStrip'
 export { WeekDayNav, type WeekDayNavProps } from './WeekDayNav'
+export { PlanDowSelector } from './PlanDowSelector'
 export { PrescribedPortionChips } from './PrescribedPortionChips'
 export * from './NutritionV2Motion'
 export {

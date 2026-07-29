@@ -599,7 +599,20 @@ export default function AlumnoHomeScreen() {
           nutritionV2Enabled ? (
             <View>
               <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutrition-v2')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
-              <NutritionDailySummaryV2 clientId={data.client.id} reloadSignal={reloadKey} onSeeAll={() => router.push('/alumno/nutrition-v2')} />
+              <NutritionDailySummaryV2
+                clientId={data.client.id}
+                reloadSignal={reloadKey}
+                // Deep-link a la franja que le toca ahora (SPEC nutrition-ui-poda #8): `slotCode`
+                // viene de la propia card, calculado sobre el mismo cache que ya lee — sin él,
+                // cae al Hoy sin resaltar ninguna franja.
+                onSeeAll={(slotCode) =>
+                  router.push(
+                    slotCode
+                      ? { pathname: '/alumno/nutrition-v2', params: { slot: slotCode } }
+                      : '/alumno/nutrition-v2',
+                  )
+                }
+              />
             </View>
           ) : (
             <View>

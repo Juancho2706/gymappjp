@@ -3,14 +3,10 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTransition, type ReactNode } from 'react'
-import { ArrowUpRight, LoaderCircle, LockKeyhole, Plus, Utensils } from 'lucide-react'
-import {
-  MacroBudget,
-  NutritionCard,
-  NutritionStatePanel,
-  PlanVersionBadge,
-  StrategyBadge,
-} from '@/components/nutrition-v2'
+import { ArrowUpRight, LoaderCircle, Plus } from 'lucide-react'
+import { formatNutritionCalories, nutritionProgressPercent } from '@eva/nutrition-v2'
+import { NutritionCard, NutritionStatePanel, StrategyBadge } from '@/components/nutrition-v2'
+import { cn } from '@/lib/utils'
 import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
 
 /**
@@ -18,6 +14,12 @@ import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
  *
  * Se monta SOLO cuando la page resolvió el canary V2 (surface webCoach) server-side; para
  * quien no tiene canary la ficha sigue mostrando `NutritionTabB5` (V1) sin cambio alguno.
+ *
+ * Poda 2026-07-29: este tab dejó de clonar la ficha completa (`/coach/nutrition-v2/[clientId]`).
+ * La auditoría de redundancia lo encontró como un subconjunto ESTRICTO y degradado de la ficha
+ * (plan vigente / hoy / últimos días, las cuatro cards repetidas a mano en tres archivos). Ahora
+ * es UNA tarjeta-resumen: semana en dots + energía de hoy + racha + un único CTA a la ficha. El
+ * detalle completo (estructura, notas, historial) vive a un clic de distancia.
  *
  * Es puramente presentacional: recibe el view model ya mapeado (`buildNutritionTabV2ViewModel`)
  * y usa las primitivas del kit `@/components/nutrition-v2` (tokens theme-aware -> claro/oscuro/
@@ -65,11 +67,54 @@ function PendingNavLink({
   )
 }
 
-export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
+/** Los 7 puntos de la semana en curso del resumen (mockup "flujos podados" sección 01, frame 3).
+ *  Reusa la clasificación de la view model: verde = dentro de rango, ámbar = con registro pero
+ *  fuera de rango, punto tenue = pasado sin registro, contorno = futuro. */
+function NutritionTabWeekDots({ week }: { week: NutritionTabV2ViewModel['week'] }) {
+  if (week.length === 0) return null
   return (
-    <section className="min-w-0 space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+    <div
+      aria-label="Días de la semana en curso"
+      className="grid grid-cols-7 gap-1"
+      role="group"
+    >
+      {week.map((day) => (
+        <div
+          className={cn(
+            'flex flex-col items-center gap-1 rounded-control border py-1.5',
+            day.isToday ? 'border-primary/50 bg-primary/5' : 'border-transparent',
+          )}
+          key={day.isoDate}
+        >
+          <span className="text-[9px] font-semibold uppercase tracking-wide text-subtle">
+            {day.shortLabel}
+          </span>
+          <span
+            aria-hidden="true"
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              day.status === 'done' && 'bg-emerald-500 dark:bg-emerald-400',
+              day.status === 'partial' && 'bg-amber-500 dark:bg-amber-400',
+              day.status === 'none' && 'bg-border-default',
+              day.status === 'future' && 'border border-border-default bg-transparent',
+            )}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
+  const caloriesPercent = nutritionProgressPercent(
+    view.today.calories.consumed,
+    view.today.calories.target,
+  )
+
+  return (
+    <section className="min-w-0 space-y-4">
+      <header className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted">
             Nutrición · V2
           </p>
@@ -77,24 +122,7 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
             Ficha nutricional
           </h2>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <PendingNavLink
-            href={view.detailHref}
-            className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken"
-            pendingLabel="Abriendo ficha…"
-          >
-            Abrir ficha nutrición completa
-            <ArrowUpRight className="h-4 w-4" />
-          </PendingNavLink>
-          <PendingNavLink
-            href={view.builderHref}
-            className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-ember-600"
-            pendingLabel="Abriendo builder…"
-          >
-            <Plus className="h-4 w-4" />
-            {view.builderCtaLabel}
-          </PendingNavLink>
-        </div>
+        {view.strategy ? <StrategyBadge strategy={view.strategy} /> : null}
       </header>
 
       {!view.hasActivePlan ? (
@@ -109,92 +137,52 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
               className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-ember-600"
             >
               <Plus className="h-4 w-4" />
-              Crear plan
+              {view.builderCtaLabel}
             </Link>
           }
         />
       ) : (
-        <div className="space-y-5">
-          {view.plan ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <StrategyBadge strategy={view.plan.strategy} />
-              <PlanVersionBadge
-                version={view.plan.versionNumber}
-                status={view.plan.status}
-                effectiveLabel={`desde ${view.plan.effectiveFromLabel}`}
-              />
-            </div>
-          ) : null}
-
-          <MacroBudget
-            calories={view.today.calories}
-            macros={view.today.macros}
-          />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <NutritionCard>
-              <div className="flex items-center gap-2">
-                <Utensils className="h-4 w-4 text-ember-600 dark:text-ember-300" />
-                <h3 className="font-display text-base font-semibold text-strong">
-                  Plan vigente
-                </h3>
-              </div>
-              <p className="mt-2 text-sm font-medium text-strong">
-                {view.plan?.name ?? 'Plan de nutrición'}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-body">
-                {view.plan?.visibleNotes || 'Sin indicaciones visibles para el alumno.'}
-              </p>
-            </NutritionCard>
-            <NutritionCard>
-              <h3 className="font-display text-base font-semibold text-strong">Hoy</h3>
-              <p className="mt-2 text-sm text-muted">
-                {view.today.entryCount} registro{view.today.entryCount === 1 ? '' : 's'} ·{' '}
-                {view.today.mealSlotCount} franja{view.today.mealSlotCount === 1 ? '' : 's'}
-              </p>
-              <p className="mt-3 text-sm text-body">
-                <span className="font-semibold text-strong">
-                  {Math.round(view.today.remainingCalories)} kcal
-                </span>{' '}
-                restantes según el snapshot del día.
-              </p>
-            </NutritionCard>
+        <NutritionCard>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-display text-sm font-semibold text-strong">Esta semana</h3>
+          </div>
+          <div className="mt-2">
+            <NutritionTabWeekDots week={view.week} />
           </div>
 
-          <section>
-            <h3 className="mb-3 font-display text-lg font-semibold text-strong">
-              Últimos días
-            </h3>
-            {view.showHistoryUpgradeCta ? (
-              <Link
-                href={view.historyUpgradeHref}
-                className="mb-3 inline-flex items-center gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted transition-colors hover:text-strong"
-              >
-                <LockKeyhole className="h-3.5 w-3.5 text-ember-600 dark:text-ember-300" />
-                Histórico completo con Nutrición Pro
-              </Link>
-            ) : null}
-            {view.recentDays.length === 0 ? (
-              <NutritionCard tone="neutral">
-                <p className="text-sm text-muted">
-                  Aún no hay días registrados en la ventana visible.
-                </p>
-              </NutritionCard>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {view.recentDays.map((day) => (
-                  <NutritionCard key={day.localDate}>
-                    <p className="font-semibold text-strong">{day.label}</p>
-                    <p className="mt-1 text-sm text-muted">
-                      {Math.round(day.calories)} kcal · {day.entryCount} registro
-                      {day.entryCount === 1 ? '' : 's'}
-                    </p>
-                  </NutritionCard>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-2 border-t border-border-subtle pt-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Hoy</p>
+              <p className="mt-1 font-display text-xl font-bold tabular-nums text-strong">
+                {formatNutritionCalories(view.today.calories.consumed)}
+                <span className="ml-1 text-sm font-medium text-muted">
+                  / {formatNutritionCalories(view.today.calories.target)}
+                </span>
+              </p>
+            </div>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-pill bg-surface-sunken">
+            <div
+              className="h-full rounded-pill bg-primary transition-[width] duration-[var(--dur-base)]"
+              style={{ width: `${caloriesPercent}%` }}
+            />
+          </div>
+
+          <p className="mt-3 text-sm tabular-nums text-muted">
+            {view.completedCount} cumplido{view.completedCount === 1 ? '' : 's'} ·{' '}
+            {view.partialCount} parcial{view.partialCount === 1 ? '' : 'es'} · racha{' '}
+            {view.streakDays}
+          </p>
+
+          <PendingNavLink
+            href={view.detailHref}
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control border border-primary/40 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+            pendingLabel="Abriendo ficha…"
+          >
+            Abrir ficha de nutrición
+            <ArrowUpRight className="h-4 w-4" />
+          </PendingNavLink>
+        </NutritionCard>
       )}
     </section>
   )

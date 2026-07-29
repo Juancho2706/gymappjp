@@ -24,10 +24,13 @@ import { formatPastDayHeadline, type StudentNutritionWeekCell } from './week-nav
 export function PastDaySummary({
   cell,
   backHref,
+  backLabel,
 }: {
   cell: StudentNutritionWeekCell
-  /** URL canónica de hoy (sin `?date=`). */
+  /** URL de retorno (canónica de hoy, sin `?date=`; o del historial cuando se abre desde ahí). */
   backHref: string
+  /** Copy del link de vuelta (default "Volver a hoy"; el historial pasa "Volver al historial"). */
+  backLabel?: string
 }) {
   const legacy = cell.legacy
   const legacyOnly = cell.isLegacy === true && legacy?.legacyOnly === true
@@ -37,7 +40,7 @@ export function PastDaySummary({
 
   return (
     <>
-      <SelectedDayBanner backHref={backHref} headline={formatPastDayHeadline(cell)} tone="past" />
+      <SelectedDayBanner backHref={backHref} backLabel={backLabel} headline={formatPastDayHeadline(cell)} tone="past" />
 
       {legacyOnly ? (
         <LegacyDayCard legacy={legacy} />

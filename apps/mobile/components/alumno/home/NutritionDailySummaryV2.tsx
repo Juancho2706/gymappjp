@@ -1,27 +1,36 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Text, TouchableOpacity, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { Apple } from 'lucide-react-native'
-import { createNutritionMacroValue, type NutritionTodayReadModel } from '@eva/nutrition-v2'
+import {
+  NutritionTodayReadModelSchema,
+  consumedPrescriptionItemIds,
+  type NutritionTodayReadModel,
+} from '@eva/nutrition-v2'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { getTodayInSantiago } from '../../../lib/date-utils'
-import { getNutritionTodayV2 } from '../../../lib/nutrition-v2.api'
+import { readNutritionV2Cache } from '../../../lib/nutrition-v2-cache'
 import { Card } from '../../Card'
-import { MacroBudget } from '../../nutrition-v2'
+import { ProgressRing } from '../../ProgressRing'
+
+type NutritionHomeSummary = {
+  total: number
+  done: number
+  missingItems: number
+  missingKcal: number
+  current: { code: string; name: string; startTime: string | null } | null
+}
 
 /**
- * Resumen del día de Nutrición V2 para el Home del alumno (surface mobileStudent). Espejo del
- * widget web `NutritionDailySummaryV2`: alimentado por el read model de HOY (`getNutritionTodayV2`),
- * reusa `MacroBudget` (energía consumida/meta + tres macros, paleta intacta) y navega a la
- * experiencia completa. Sin plan vigente => CTA suave. Solo lectura; el registro vive en
- * `/alumno/nutrition-v2`. Accentos white-label vía tokens (`bg-primary`, `text-primary`,
- * `theme.primary`); dark/claro automáticos.
- *
- * Se monta SOLO cuando el rollout `nutritionV2Student` está activo para el alumno (el Home
- * decide el gate). Refetch en cada foco del Home y ante pull-to-refresh (`reloadSignal`), igual
- * que la card V1; last-write-wins con `isIgnored`. Fail-safe: un read fallido conserva el último
- * estado y nunca rompe el Home.
+ * Card de nutrición del Home (SPEC nutrition-ui-poda #8, mockup sección 02 frame 1): anillo de
+ * ITEMS (no kcal) + "te faltan N items y M kcal" + un único deep-link a la franja que le toca
+ * ahora. Antes esta card hacía su propio fetch de `getNutritionTodayV2` en cada foco del Home
+ * (duplicaba la lectura que el propio módulo de Nutrición ya hace); ahora lee EXCLUSIVAMENTE el
+ * cache local que escribe `TodayTab` (`kind: 'today'`, mismo `scopeKey` = hoy) — cero red desde el
+ * Home, cero polling. Sin cache (alumno no abrió Nutrición hoy en este dispositivo) o sin plan con
+ * items prescritos, la card degrada a un CTA simple sin números: nunca inventa un 0/0 ni dispara
+ * `get_nutrition_today_v2` fuera de la superficie de Nutrición.
  */
 export function NutritionDailySummaryV2({
   clientId,
@@ -29,17 +38,19 @@ export function NutritionDailySummaryV2({
   reloadSignal = 0,
 }: {
   clientId: string
-  onSeeAll: () => void
+  /** `slotCode` = franja que le toca ahora (para resaltarla al llegar); `undefined` sin franja. */
+  onSeeAll: (slotCode?: string) => void
   reloadSignal?: number
 }) {
   const { theme } = useTheme()
   const [model, setModel] = useState<NutritionTodayReadModel | null>(null)
-  const [noPlan, setNoPlan] = useState(false)
+  // `false` hasta que se resuelve la lectura de AsyncStorage: evita un parpadeo del CTA "sin
+  // cache" durante el primer frame, mientras el cache (rápido, pero async) todavía no respondió.
+  const [checked, setChecked] = useState(false)
 
-  // Reset solo al cambiar de alumno (evita render stale del anterior mientras llega el fetch).
   useEffect(() => {
     setModel(null)
-    setNoPlan(false)
+    setChecked(false)
   }, [clientId])
 
   useFocusEffect(
@@ -55,98 +66,142 @@ export function NutritionDailySummaryV2({
 
   async function load(isIgnored: () => boolean) {
     const { iso: date } = getTodayInSantiago()
-    try {
-      const fresh = await getNutritionTodayV2({ date })
-      if (isIgnored()) return
-      if (!fresh.plan) {
-        setNoPlan(true)
-        setModel(null)
-        return
-      }
-      setNoPlan(false)
-      setModel(fresh)
-    } catch {
-      // Silencioso: offline o rollout recién apagado no deben romper el Home; se conserva el
-      // último estado renderizado (la tab de Nutrición y la web muestran el detalle real).
-    }
+    const cached = await readNutritionV2Cache({
+      userId: clientId,
+      clientId,
+      kind: 'today',
+      scopeKey: date,
+      schema: NutritionTodayReadModelSchema,
+      allowStale: true,
+    })
+    if (isIgnored()) return
+    setModel(cached?.payload ?? null)
+    setChecked(true)
   }
 
-  if (noPlan) {
+  const summary = useMemo<NutritionHomeSummary | null>(() => {
+    if (!model?.plan) return null
+    const consumedIds = consumedPrescriptionItemIds(model)
+    let total = 0
+    let done = 0
+    let current: NutritionHomeSummary['current'] = null
+    const slots = [...model.mealSlots].sort((a, b) =>
+      (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99'),
+    )
+    for (const slot of slots) {
+      if (slot.prescriptionItems.length === 0) continue
+      const slotDone = slot.prescriptionItems.filter((item) => consumedIds.has(item.id)).length
+      total += slot.prescriptionItems.length
+      done += slotDone
+      if (!current && slotDone < slot.prescriptionItems.length) {
+        current = { code: slot.code, name: slot.name, startTime: slot.startTime }
+      }
+    }
+    // Plan sin ningún item prescrito (solo porciones a elección): no hay "items" que contar —
+    // degrada al CTA simple en vez de mostrar un 0/0 que no significa nada.
+    if (total === 0) return null
+    return {
+      total,
+      done,
+      missingItems: total - done,
+      missingKcal: Math.max(0, Math.round((model.targets.calories ?? 0) - model.consumed.calories)),
+      current,
+    }
+  }, [model])
+
+  if (!checked) return null
+
+  if (!summary) {
     return (
-      <Card padding="lg" style={{ alignItems: 'center', gap: 8 }}>
-        <Apple size={40} color={theme.mutedForeground} strokeWidth={1.75} />
-        <Text className="text-strong font-sans-bold" style={{ fontSize: 14 }}>
-          Aún no tienes un plan
-        </Text>
-        <Text className="text-muted font-sans" style={{ fontSize: 12, textAlign: 'center' }}>
-          Cuando tu coach publique tu plan, verás aquí tu resumen del día.
-        </Text>
+      <Card padding="md" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View
+          className="bg-primary/10"
+          style={{ width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Apple size={20} color={theme.primary} strokeWidth={2.25} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text className="text-strong font-sans-bold" style={{ fontSize: 14 }}>
+            Nutrición
+          </Text>
+          <Text className="text-muted" style={{ fontSize: 12 }}>
+            Revisa tu plan de hoy
+          </Text>
+        </View>
         <TouchableOpacity
           testID="nutrition-v2-see-all"
-          onPress={onSeeAll}
+          onPress={() => onSeeAll()}
           activeOpacity={0.82}
           className="rounded-control border border-primary/30 bg-primary/10"
-          style={{ marginTop: 4, paddingHorizontal: 16, paddingVertical: 8 }}
+          style={{ paddingHorizontal: 14, paddingVertical: 8 }}
         >
           <Text className="text-primary" style={{ fontFamily: FONT.uiBold, fontSize: 12 }}>
-            Ver nutrición
+            Ver →
           </Text>
         </TouchableOpacity>
       </Card>
     )
   }
 
-  if (!model) return null
-
-  const { consumed, targets } = model
+  const pct = (summary.done / summary.total) * 100
+  const ctaLabel = summary.current ? `Marcar mi ${summary.current.name.toLowerCase()} →` : 'Ver nutrición →'
+  const subtitle = summary.current
+    ? [summary.current.startTime, summary.current.name].filter(Boolean).join(' · ')
+    : 'Hoy'
 
   return (
-    <Card padding="md" style={{ gap: 16 }}>
+    <Card padding="md" style={{ gap: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
-          <View
-            className="bg-primary/10"
-            style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Apple size={18} color={theme.primary} strokeWidth={2.25} />
-          </View>
-          <View style={{ flexShrink: 1, minWidth: 0 }}>
-            <Text className="text-strong font-sans-bold" numberOfLines={1} style={{ fontSize: 14 }}>
-              {model.plan?.name}
-            </Text>
-            <Text
-              className="text-subtle"
-              style={{ fontFamily: FONT.uiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 }}
-            >
-              Hoy
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity testID="nutrition-v2-see-all" onPress={onSeeAll} activeOpacity={0.7}>
-          <Text className="text-primary" style={{ fontFamily: FONT.uiBold, fontSize: 11 }}>
-            Ver todo →
-          </Text>
-        </TouchableOpacity>
+        <Text className="text-strong font-sans-bold" style={{ fontSize: 14 }}>
+          Nutrición
+        </Text>
+        <Text
+          className="text-subtle"
+          numberOfLines={1}
+          style={{ fontFamily: FONT.uiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 }}
+        >
+          {subtitle}
+        </Text>
       </View>
 
-      <MacroBudget
-        calories={{ consumed: consumed.calories, target: targets.calories ?? 0 }}
-        macros={[
-          createNutritionMacroValue('protein', { consumed: consumed.proteinG, target: targets.proteinG ?? 0 }),
-          createNutritionMacroValue('carbs', { consumed: consumed.carbsG, target: targets.carbsG ?? 0 }),
-          createNutritionMacroValue('fats', { consumed: consumed.fatsG, target: targets.fatsG ?? 0 }),
-        ]}
-        compact
-      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <ProgressRing
+          value={pct}
+          size={56}
+          stroke={6}
+          label={
+            <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
+              {`${summary.done}/${summary.total}`}
+            </Text>
+          }
+        />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {summary.missingItems > 0 ? (
+            <>
+              <Text className="text-strong font-sans-bold" style={{ fontSize: 14 }}>
+                {`Te faltan ${summary.missingItems} item${summary.missingItems === 1 ? '' : 's'}`}
+              </Text>
+              <Text className="text-muted" style={{ fontSize: 12 }}>
+                {summary.missingKcal > 0 ? `y ${summary.missingKcal} kcal para cerrar el día` : 'para cerrar el día'}
+              </Text>
+            </>
+          ) : (
+            <Text className="text-strong font-sans-bold" style={{ fontSize: 14 }}>
+              Completaste tu plan de hoy
+            </Text>
+          )}
+        </View>
+      </View>
 
       <TouchableOpacity
-        onPress={onSeeAll}
+        testID="nutrition-v2-see-all"
+        onPress={() => onSeeAll(summary.current?.code)}
         activeOpacity={0.82}
         className="rounded-control border border-primary/30 bg-primary/10"
         style={{ paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' }}
       >
         <Text className="text-primary" style={{ fontFamily: FONT.uiBold, fontSize: 12 }}>
-          Ver nutrición →
+          {ctaLabel}
         </Text>
       </TouchableOpacity>
     </Card>

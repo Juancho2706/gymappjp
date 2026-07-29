@@ -4,6 +4,8 @@ import { calculateFoodItemMacros } from '@eva/nutrition-engine'
 import {
   BASE_VARIANT_KEY,
   BUILDER_STEP_COUNT,
+  BUILDER_STEP_DAYS,
+  BUILDER_STEP_PLAN,
   CoachFoodInputSchema,
   MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
@@ -12,7 +14,10 @@ import {
   buildItemInsertRow,
   buildSlotInsertRow,
   buildVariantInsertRow,
+  builderDayCells,
+  builderDowForVariant,
   builderReducer,
+  builderVariantForDayOfWeek,
   clonedKey,
   computeCustomItemMacros,
   computeItemMacros,
@@ -20,12 +25,17 @@ import {
   createEmptyBuilderState,
   createEmptyItem,
   customMacrosOf,
+  defaultPermissionsFor,
+  inheritedDayOfWeeks,
+  initialBuilderDow,
   itemMacros,
   macroEnergyMismatch,
   migrateBuilderState,
+  nextPermissionsForStrategyChange,
   normalizeBuilderVariants,
   resolveSlotCopyTargets,
   slotMergeName,
+  slotsLostIfFlexible,
   validateStep,
   type BuilderFood,
   type BuilderItem,
@@ -94,7 +104,7 @@ function dayVariant(over: Partial<BuilderVariant> & { key: string; dayOfWeek: nu
 
 function flexibleState(): BuilderState {
   return {
-    step: 3,
+    step: BUILDER_STEP_DAYS,
     strategy: 'flexible',
     planName: 'Plan de corte',
     effectiveFrom: '2026-07-20',
@@ -112,7 +122,7 @@ function baseSlot(): BuilderSlot {
 
 function structuredState(): BuilderState {
   return {
-    step: 3,
+    step: BUILDER_STEP_DAYS,
     strategy: 'structured',
     planName: 'Plan estructurado',
     effectiveFrom: '2026-07-20',
@@ -332,43 +342,154 @@ describe('assembleDraft', () => {
   })
 })
 
+// Wizard de DOS pasos (SPEC nutrition-ui-poda, punto 11): paso 0 "El plan" (estrategia + nombre +
+// metas, antes repartidos en dos pasos) y paso 1 "Los dias" (lo que era el paso "Construccion").
 describe('validateStep', () => {
-  it('paso 0 exige estrategia', () => {
+  it('el wizard tiene exactamente dos pasos', () => {
+    expect(BUILDER_STEP_COUNT).toBe(2)
+    expect(BUILDER_STEP_PLAN).toBe(0)
+    expect(BUILDER_STEP_DAYS).toBe(1)
+  })
+
+  it('paso "El plan" exige estrategia, nombre y al menos una meta EN EL MISMO paso', () => {
     const state = createEmptyBuilderState('2026-07-20')
-    expect(validateStep(state, 0).ok).toBe(false)
-    expect(validateStep({ ...state, strategy: 'flexible' }, 0).ok).toBe(true)
+    const empty = validateStep(state, BUILDER_STEP_PLAN)
+    expect(empty.ok).toBe(false)
+    expect(empty.errors.strategy).toBeTruthy()
+    expect(empty.errors.planName).toBeTruthy()
+
+    // Con estrategia pero sin nombre ni metas sigue bloqueado (antes eso pasaba el paso 0).
+    const onlyStrategy = { ...state, strategy: 'flexible' as const }
+    const partial = validateStep(onlyStrategy, BUILDER_STEP_PLAN)
+    expect(partial.ok).toBe(false)
+    expect(partial.errors.strategy).toBeUndefined()
+    expect(partial.errors.planName).toBeTruthy()
+    expect(partial.errors.calories).toBeTruthy()
+
+    const complete = {
+      ...onlyStrategy,
+      planName: 'X',
+      targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' },
+    }
+    expect(validateStep(complete, BUILDER_STEP_PLAN).ok).toBe(true)
   })
 
-  it('paso 1 exige nombre y al menos una meta', () => {
-    const state = { ...createEmptyBuilderState('2026-07-20'), strategy: 'flexible' as const }
-    const r = validateStep(state, 1)
-    expect(r.ok).toBe(false)
-    expect(r.errors.planName).toBeTruthy()
-    const withName = { ...state, planName: 'X', targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' } }
-    expect(validateStep(withName, 1).ok).toBe(true)
-  })
-
-  it('paso 1 rechaza kcal no numerico', () => {
+  it('paso "El plan" rechaza kcal no numerico', () => {
     const state = {
       ...createEmptyBuilderState('2026-07-20'),
       strategy: 'flexible' as const,
       planName: 'X',
       targets: { calories: 'abc', proteinG: '', carbsG: '', fatsG: '' },
     }
-    expect(validateStep(state, 1).errors.calories).toBeTruthy()
+    expect(validateStep(state, BUILDER_STEP_PLAN).errors.calories).toBeTruthy()
   })
 
-  it('paso 2 (structured) rechaza franja sin nombre y acepta valida', () => {
+  it('paso "Los dias" (structured) rechaza franja sin nombre y acepta valida', () => {
     const bad = structuredState()
     bad.variants[0].slots[0].name = ''
-    expect(validateStep(bad, 2).ok).toBe(false)
-    expect(validateStep(structuredState(), 2).ok).toBe(true)
+    expect(validateStep(bad, BUILDER_STEP_DAYS).ok).toBe(false)
+    expect(validateStep(structuredState(), BUILDER_STEP_DAYS).ok).toBe(true)
   })
 
-  it('paso 2 acepta un item libre con nombre y cantidad', () => {
+  it('paso "Los dias" acepta un item libre con nombre y cantidad', () => {
     const state = structuredState()
     state.variants[0].slots[0].items = [customItem()]
-    expect(validateStep(state, 2).ok).toBe(true)
+    expect(validateStep(state, BUILDER_STEP_DAYS).ok).toBe(true)
+  })
+
+  it('paso "Los dias" no valida franjas en un plan flexible', () => {
+    expect(validateStep(flexibleState(), BUILDER_STEP_DAYS).ok).toBe(true)
+  })
+})
+
+// Selector "tocas el dia, no la variante" (SPEC nutrition-ui-poda, punto 10). El MODELO de
+// variantes no cambia: estos helpers solo traducen dia <-> variante con la regla del snapshot.
+describe('selector de dia del creador', () => {
+  function multiDay(): BuilderState {
+    const base = { ...createBaseVariant(), slots: [baseSlot()] }
+    const sabado = dayVariant({ key: 'v-sa', dayOfWeek: 6, label: 'Día libre', slots: [baseSlot()] })
+    return { ...structuredState(), variants: [base, sabado], activeVariantKey: 'v-sa' }
+  }
+
+  it('builderVariantForDayOfWeek: el dia propio gana, el resto hereda el base', () => {
+    const state = multiDay()
+    expect(builderVariantForDayOfWeek(state, 6).key).toBe('v-sa')
+    for (const dow of [1, 2, 3, 4, 5, 0]) {
+      expect(builderVariantForDayOfWeek(state, dow).key).toBe(BASE_VARIANT_KEY)
+    }
+    // `null` = el dia base explicito (unica puerta cuando ya no rige ningun dia).
+    expect(builderVariantForDayOfWeek(state, null).key).toBe(BASE_VARIANT_KEY)
+  })
+
+  it('inheritedDayOfWeeks: los dias que comparten el base, en orden Lu->Do', () => {
+    expect(inheritedDayOfWeeks(multiDay())).toEqual([1, 2, 3, 4, 5, 0])
+    expect(inheritedDayOfWeeks(structuredState())).toEqual([1, 2, 3, 4, 5, 6, 0])
+  })
+
+  it('builderDayCells: 7 celdas Lu->Do con el dia propio marcado y las kcal de la pantalla', () => {
+    const state = multiDay()
+    const cells = builderDayCells(state, {
+      kcalByVariantKey: { [BASE_VARIANT_KEY]: 2180, 'v-sa': 2640 },
+      todayIso: '2026-08-01', // sabado
+    })
+    expect(cells.map((cell) => cell.dayOfWeek)).toEqual([1, 2, 3, 4, 5, 6, 0])
+    expect(cells.map((cell) => cell.shortLabel)).toEqual(['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'])
+    const sabado = cells.find((cell) => cell.dayOfWeek === 6)
+    expect(sabado?.isOwnDay).toBe(true)
+    expect(sabado?.inheritsBase).toBe(false)
+    expect(sabado?.isToday).toBe(true)
+    expect(sabado?.displayCalories).toBe(2640)
+    expect(sabado?.caloriesSource).toBe('prescribed')
+    const lunes = cells.find((cell) => cell.dayOfWeek === 1)
+    expect(lunes?.isOwnDay).toBe(false)
+    expect(lunes?.variant.id).toBe(BASE_VARIANT_KEY)
+    expect(lunes?.displayCalories).toBe(2180)
+  })
+
+  it('builderDayCells: dia vacio cae a su objetivo (nunca a un 0 inventado)', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), strategy: 'structured' as const, targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' } }
+    const cells = builderDayCells(state, { kcalByVariantKey: {} })
+    expect(cells[0].prescribedCalories).toBeNull()
+    expect(cells[0].displayCalories).toBe(2000)
+    expect(cells[0].caloriesSource).toBe('target')
+  })
+
+  it('builderDayCells: las porciones cuentan como contenido del dia', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), strategy: 'structured' as const }
+    state.variants[0].slots = [{ key: 'slot-a', name: 'Desayuno', startTime: '', items: [] }]
+    const cells = builderDayCells(state, {
+      kcalByVariantKey: { [BASE_VARIANT_KEY]: 320 },
+      portionsByVariantKey: { [BASE_VARIANT_KEY]: 2 },
+    })
+    expect(cells[0].portionCount).toBe(2)
+    expect(cells[0].displayCalories).toBe(320)
+    expect(cells[0].caloriesSource).toBe('prescribed')
+  })
+
+  it('builderDowForVariant: dia propio -> su dia; base -> el dia preferido si lo hereda', () => {
+    const state = multiDay()
+    expect(builderDowForVariant(state, 'v-sa', 1)).toBe(6)
+    expect(builderDowForVariant(state, BASE_VARIANT_KEY, 3)).toBe(3)
+    // El dia preferido ya es propio => cae al primer dia que SI hereda el base.
+    expect(builderDowForVariant(state, BASE_VARIANT_KEY, 6)).toBe(1)
+  })
+
+  it('builderDowForVariant: base sin dias => null (se selecciona aparte)', () => {
+    const base = { ...createBaseVariant(), slots: [baseSlot()] }
+    const sevenOwnDays = [1, 2, 3, 4, 5, 6, 0].map((dow) =>
+      dayVariant({ key: 'v-' + dow, dayOfWeek: dow, slots: [baseSlot()] }),
+    )
+    const state = { ...structuredState(), variants: [base, ...sevenOwnDays] }
+    expect(inheritedDayOfWeeks(state)).toEqual([])
+    expect(builderDowForVariant(state, BASE_VARIANT_KEY, 1)).toBeNull()
+  })
+
+  it('initialBuilderDow: abre en HOY cuando el dia en edicion es el base', () => {
+    const state = multiDay()
+    // 2026-07-29 es miercoles y lo hereda el base => el creador abre en miercoles.
+    expect(initialBuilderDow({ ...state, activeVariantKey: BASE_VARIANT_KEY }, '2026-07-29')).toBe(3)
+    // Con un dia propio en edicion manda SU dia.
+    expect(initialBuilderDow(state, '2026-07-29')).toBe(6)
   })
 })
 
@@ -387,6 +508,67 @@ describe('builderReducer', () => {
     const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'flexible', firstSlotKey: 'k1' })
     expect(next.variants[0].slots).toHaveLength(0)
     expect(next.permissions.canRegisterFreely).toBe(true)
+  })
+
+  // Fix bug 2.3.5 de la auditoria (poda ola 3, SPEC nutrition-ui-poda punto 2): re-tocar la
+  // MISMA tarjeta de estrategia reseteaba los permisos a defaults y, si era "flexible", vaciaba
+  // TODAS las franjas de TODOS los dias sin aviso ni deshacer.
+  it('SET_STRATEGY con la MISMA estrategia es un no-op total (no resetea permisos ni toca franjas)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    // El coach edita un permiso y agrega una franja extra.
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canAdjustPrescribedQuantity', value: false })
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: BASE_VARIANT_KEY, key: 'slot-b' })
+    const before = state
+    const after = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'ignored' })
+    expect(after).toBe(before) // misma referencia: el reducer ni siquiera reconstruye el arbol.
+  })
+
+  it('un permiso editado por el coach se conserva al cambiar entre estrategias con franjas', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    // Default structured: canRegisterFreely = false. El coach lo prende a mano.
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canRegisterFreely', value: true })
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'hybrid', firstSlotKey: 'k2' })
+    expect(next.permissions.canRegisterFreely).toBe(true)
+  })
+
+  it('un permiso SIN tocar adopta el default de la nueva estrategia', () => {
+    const state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'hybrid',
+      firstSlotKey: 'k1',
+    })
+    expect(state.permissions.canRegisterFreely).toBe(true) // default hybrid, sin editar
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'k2' })
+    expect(next.permissions.canRegisterFreely).toBe(false) // vuelve al default estricto
+  })
+
+  it('nextPermissionsForStrategyChange conserva canSubstitute rehidratado aunque ninguna estrategia lo defaultee true', () => {
+    const current = { ...defaultPermissionsFor('structured'), canSubstitute: true }
+    const next = nextPermissionsForStrategyChange('structured', 'flexible', current)
+    expect(next.canSubstitute).toBe(true)
+  })
+
+  it('slotsLostIfFlexible cuenta las franjas de TODAS las variantes (logica pura de la confirmacion)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    expect(slotsLostIfFlexible(state)).toBe(1)
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: BASE_VARIANT_KEY, key: 'slot-b' })
+    expect(slotsLostIfFlexible(state)).toBe(2)
+    // El reducer SIGUE vaciando al despachar; la UI es quien pregunta antes usando este conteo.
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'flexible', firstSlotKey: 'ignored' })
+    expect(slotsLostIfFlexible(next)).toBe(0)
+    expect(next.variants[0].slots).toHaveLength(0)
   })
 
   it('ADD_ITEM con alimento precarga cantidad y unidad', () => {
@@ -909,7 +1091,9 @@ describe('migrateBuilderState (borrador v1 -> v2)', () => {
     expect(migrated?.activeVariantKey).toBe(BASE_VARIANT_KEY)
     expect(migrated?.planName).toBe('Plan viejo')
     expect(migrated?.targets.calories).toBe('2100')
-    expect(migrated?.step).toBe(2)
+    // El borrador viejo venia del wizard de 4 pasos (`step: 2` = "Construccion"): con dos pasos
+    // re-clampa al ultimo, que es justo donde vive esa construccion ahora.
+    expect(migrated?.step).toBe(BUILDER_STEP_DAYS)
   })
 
   it('RESTORE acepta un borrador v1 y lo migra (los borradores guardados no se pierden)', () => {
@@ -993,10 +1177,10 @@ describe('assembleDraft — N variantes de dia', () => {
     expect(draft.dayVariants[0].dayOfWeek).toBeNull()
   })
 
-  it('validateStep(2) revisa TODOS los dias, no solo el activo', () => {
+  it('validateStep del paso "Los dias" revisa TODOS los dias, no solo el activo', () => {
     let state = builderReducer(structuredState(), { type: 'ADD_VARIANTS', days: [6], keys: ['v-sa'], origin: 'empty' })
     // El dia activo (sabado) esta vacio.
-    let result = validateStep(state, 2)
+    let result = validateStep(state, BUILDER_STEP_DAYS)
     expect(result.ok).toBe(false)
     expect(result.errors['variant.v-sa.slots']).toBeTruthy()
 
@@ -1011,7 +1195,7 @@ describe('assembleDraft — N variantes de dia', () => {
       itemKey: 'i1',
       patch: { quantity: '0' },
     })
-    result = validateStep(state, 2)
+    result = validateStep(state, BUILDER_STEP_DAYS)
     expect(result.ok).toBe(false)
     expect(result.errors['item.i1.quantity']).toBeTruthy()
   })

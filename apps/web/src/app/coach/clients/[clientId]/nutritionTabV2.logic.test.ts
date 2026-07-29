@@ -3,34 +3,43 @@ import type {
   NutritionClientDetailReadModel,
   NutritionHistoryDay,
 } from '@eva/nutrition-v2'
-import { buildNutritionTabV2ViewModel, formatLocalDateEsCl } from './nutritionTabV2.logic'
+import {
+  buildNutritionTabV2ViewModel,
+  computeNutritionStreakDays,
+} from './nutritionTabV2.logic'
 
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
+// Miércoles: mismo día de semana que el mockup aprobado "flujos podados" sección 01 frame 3
+// ("Miércoles 29 · en curso", "2 días cumplidos · 1 parcial · racha 4").
+const TODAY_ISO = '2026-07-29'
 
-function makeDay(localDate: string, calories: number, entries: number): NutritionHistoryDay {
+function makeDay(
+  localDate: string,
+  opts: { calories: number; target?: number; entries?: number },
+): NutritionHistoryDay {
   return {
     localDate,
     snapshotId: null,
     planVersionId: null,
     strategy: 'structured',
     targets: {
-      calories: 2000,
-      proteinG: 150,
-      carbsG: 200,
-      fatsG: 60,
+      calories: opts.target ?? 2400,
+      proteinG: 180,
+      carbsG: 250,
+      fatsG: 70,
       fiberG: null,
       sodiumMg: null,
       waterMl: null,
     },
     consumed: {
-      calories,
+      calories: opts.calories,
       proteinG: 100,
       carbsG: 150,
       fatsG: 40,
       fiberG: 10,
-      entryCount: entries,
+      entryCount: opts.entries ?? 1,
     },
-    activeEntryCount: entries,
+    activeEntryCount: opts.entries ?? 1,
     correctionCount: 0,
     legacyCompletionCount: 0,
     legacyDisclosure: null,
@@ -43,7 +52,9 @@ function makeDay(localDate: string, calories: number, entries: number): Nutritio
 function makeDetail(opts: {
   hasAnyPlan: boolean
   hasActivePlan: boolean
-  remainingCalories?: number | null
+  todayCalories?: number
+  todayTarget?: number
+  todayEntryCount?: number
 }): NutritionClientDetailReadModel {
   const activePlan = opts.hasActivePlan
     ? {
@@ -72,29 +83,29 @@ function makeDetail(opts: {
 
   return {
     schemaVersion: 1,
-    generatedAt: '2026-07-15T12:00:00.000Z',
-    client: { id: CLIENT_ID, fullName: 'Ana Coello' },
+    generatedAt: '2026-07-29T12:00:00.000Z',
+    client: { id: CLIENT_ID, fullName: 'Catalina Araya' },
     today: {
       plan: activePlan,
       targets: {
-        calories: 2000,
-        proteinG: 150,
-        carbsG: 200,
-        fatsG: 60,
+        calories: opts.todayTarget ?? 2400,
+        proteinG: 180,
+        carbsG: 250,
+        fatsG: 70,
         fiberG: null,
         sodiumMg: null,
         waterMl: null,
       },
       consumed: {
-        calories: 1200,
+        calories: opts.todayCalories ?? 0,
         proteinG: 90,
         carbsG: 130,
         fatsG: 35,
         fiberG: 12,
-        entryCount: 4,
+        entryCount: opts.todayEntryCount ?? 0,
       },
       remaining: {
-        calories: opts.remainingCalories === undefined ? 800 : opts.remainingCalories,
+        calories: 0,
         proteinG: null,
         carbsG: null,
         fatsG: null,
@@ -106,6 +117,7 @@ function makeDetail(opts: {
     },
     plan: {
       plan: anyPlan,
+      dayVariants: [],
       visibleNotes: 'Prioriza proteína en el desayuno.',
     },
     recentDays: [],
@@ -114,132 +126,126 @@ function makeDetail(opts: {
 }
 
 describe('buildNutritionTabV2ViewModel', () => {
-  it('mapea plan vigente + hoy con addon Pro (sin CTA de upgrade)', () => {
-    const detail = makeDetail({ hasAnyPlan: true, hasActivePlan: true })
+  it('mapea semana + hoy + racha, reproduciendo el mockup aprobado (2 cumplidos · 1 parcial · racha 4)', () => {
+    const detail = makeDetail({
+      hasAnyPlan: true,
+      hasActivePlan: true,
+      todayCalories: 1780,
+      todayTarget: 2400,
+      todayEntryCount: 2,
+    })
+    const recentDaysForDisplay = [
+      makeDay('2026-07-28', { calories: 2300 }), // martes: en rango -> cumplido
+      makeDay('2026-07-27', { calories: 2350 }), // lunes: en rango -> cumplido
+      makeDay('2026-07-26', { calories: 2200 }), // domingo (semana previa): en rango, solo racha
+    ]
+
     const vm = buildNutritionTabV2ViewModel({
       clientId: CLIENT_ID,
       detail,
-      nutritionProEnabled: true,
-      recentDaysForDisplay: [makeDay('2026-07-14', 1900, 5), makeDay('2026-07-13', 1750, 3)],
+      todayIso: TODAY_ISO,
+      recentDaysForDisplay,
     })
 
-    expect(vm.clientName).toBe('Ana Coello')
+    expect(vm.clientName).toBe('Catalina Araya')
     expect(vm.hasPlan).toBe(true)
     expect(vm.hasActivePlan).toBe(true)
-    expect(vm.builderCtaLabel).toBe('Nueva versión')
+    expect(vm.strategy).toBe('structured')
     expect(vm.detailHref).toBe(`/coach/nutrition-v2/${CLIENT_ID}`)
     expect(vm.builderHref).toBe(`/coach/nutrition-v2/${CLIENT_ID}/builder`)
-    expect(vm.plan).toEqual({
-      strategy: 'structured',
-      versionNumber: 3,
-      status: 'published',
-      effectiveFrom: '2026-07-01',
-      effectiveFromLabel: formatLocalDateEsCl('2026-07-01'),
-      name: 'Plan hipertrofia',
-      visibleNotes: 'Prioriza proteína en el desayuno.',
-    })
-    // La etiqueta visible NO es la fecha ISO cruda.
-    expect(vm.plan?.effectiveFromLabel).not.toBe('2026-07-01')
-    expect(vm.today.calories).toEqual({ consumed: 1200, target: 2000 })
-    expect(vm.today.remainingCalories).toBe(800)
-    expect(vm.today.entryCount).toBe(4)
-    expect(vm.today.mealSlotCount).toBe(3)
-    expect(vm.today.macros.map((m) => [m.macro, m.consumed, m.target])).toEqual([
-      ['protein', 90, 150],
-      ['carbs', 130, 200],
-      ['fats', 35, 60],
+    expect(vm.builderCtaLabel).toBe('Nueva versión')
+
+    expect(vm.week).toHaveLength(7)
+    expect(vm.week.map((d) => [d.isoDate, d.status])).toEqual([
+      ['2026-07-27', 'done'],
+      ['2026-07-28', 'done'],
+      ['2026-07-29', 'partial'],
+      ['2026-07-30', 'future'],
+      ['2026-07-31', 'future'],
+      ['2026-08-01', 'future'],
+      ['2026-08-02', 'future'],
     ])
-    expect(vm.showHistoryUpgradeCta).toBe(false)
-    expect(vm.recentDays).toEqual([
-      {
-        localDate: '2026-07-14',
-        label: formatLocalDateEsCl('2026-07-14'),
-        calories: 1900,
-        entryCount: 5,
-      },
-      {
-        localDate: '2026-07-13',
-        label: formatLocalDateEsCl('2026-07-13'),
-        calories: 1750,
-        entryCount: 3,
-      },
-    ])
+    expect(vm.week.find((d) => d.isoDate === TODAY_ISO)?.isToday).toBe(true)
+
+    expect(vm.today.calories).toEqual({ consumed: 1780, target: 2400 })
+    expect(vm.completedCount).toBe(2)
+    expect(vm.partialCount).toBe(1)
+    // Mié(hoy, con registro) + Mar + Lun + Dom = 4, igual que el mockup.
+    expect(vm.streakDays).toBe(4)
   })
 
-  it('sin addon Pro -> muestra CTA de upgrade y respeta el set de días ya recortado', () => {
-    const detail = makeDetail({ hasAnyPlan: true, hasActivePlan: true })
-    const vm = buildNutritionTabV2ViewModel({
-      clientId: CLIENT_ID,
-      detail,
-      nutritionProEnabled: false,
-      recentDaysForDisplay: [makeDay('2026-07-14', 1900, 5)],
-    })
-    expect(vm.showHistoryUpgradeCta).toBe(true)
-    expect(vm.recentDays).toHaveLength(1)
-  })
-
-  it('plan histórico pero sin vigente hoy -> hasActivePlan false y plan null, CTA "Nueva versión"', () => {
+  it('sin plan vigente hoy -> semana vacía, racha 0, CTA "Nueva versión" si hubo plan histórico', () => {
     const detail = makeDetail({ hasAnyPlan: true, hasActivePlan: false })
     const vm = buildNutritionTabV2ViewModel({
       clientId: CLIENT_ID,
       detail,
-      nutritionProEnabled: true,
+      todayIso: TODAY_ISO,
       recentDaysForDisplay: [],
     })
     expect(vm.hasPlan).toBe(true)
     expect(vm.hasActivePlan).toBe(false)
-    expect(vm.plan).toBeNull()
+    expect(vm.strategy).toBeNull()
+    expect(vm.week).toEqual([])
+    expect(vm.streakDays).toBe(0)
+    expect(vm.completedCount).toBe(0)
+    expect(vm.partialCount).toBe(0)
     expect(vm.builderCtaLabel).toBe('Nueva versión')
-    expect(vm.recentDays).toEqual([])
   })
 
-  it('sin ningún plan -> estado vacío, CTA "Crear plan"', () => {
+  it('sin ningún plan -> CTA "Crear plan"', () => {
     const detail = makeDetail({ hasAnyPlan: false, hasActivePlan: false })
     const vm = buildNutritionTabV2ViewModel({
       clientId: CLIENT_ID,
       detail,
-      nutritionProEnabled: false,
+      todayIso: TODAY_ISO,
       recentDaysForDisplay: [],
     })
     expect(vm.hasPlan).toBe(false)
-    expect(vm.hasActivePlan).toBe(false)
-    expect(vm.plan).toBeNull()
     expect(vm.builderCtaLabel).toBe('Crear plan')
-  })
-
-  it('remaining.calories null -> fallback a max(target - consumed, 0)', () => {
-    const detail = makeDetail({ hasAnyPlan: true, hasActivePlan: true, remainingCalories: null })
-    const vm = buildNutritionTabV2ViewModel({
-      clientId: CLIENT_ID,
-      detail,
-      nutritionProEnabled: true,
-      recentDaysForDisplay: [],
-    })
-    // target 2000 - consumed 1200 = 800
-    expect(vm.today.remainingCalories).toBe(800)
+    expect(vm.week).toEqual([])
   })
 })
 
-describe('formatLocalDateEsCl', () => {
-  it('formatea es-CL con día/mes/año legibles', () => {
-    const out = formatLocalDateEsCl('2026-07-15')
-    expect(out).toContain('15')
-    expect(out).toContain('2026')
-    expect(out.toLowerCase()).toContain('jul')
+describe('computeNutritionStreakDays', () => {
+  it('cuenta hoy + días consecutivos hacia atrás', () => {
+    const streak = computeNutritionStreakDays({
+      recentDays: [
+        makeDay('2026-07-28', { calories: 2000 }),
+        makeDay('2026-07-27', { calories: 2000 }),
+      ],
+      todayIso: TODAY_ISO,
+      todayHasIntake: true,
+    })
+    expect(streak).toBe(3)
   })
 
-  it('NO corre el día por timezone en fechas límite de año (sin shift a dic 31 2025)', () => {
-    // `new Date('2026-01-01')` sería medianoche UTC -> en zonas negativas (Chile) mostraría
-    // 2025-12-31. El formateo por componentes en UTC debe mantener el 1 de enero de 2026.
-    const out = formatLocalDateEsCl('2026-01-01')
-    expect(out).toContain('2026')
-    expect(out).not.toContain('2025')
-    expect(out).not.toContain('31')
-    expect(out.toLowerCase()).not.toContain('dic')
+  it('un día sin registro corta la racha', () => {
+    const streak = computeNutritionStreakDays({
+      recentDays: [
+        makeDay('2026-07-28', { calories: 0, entries: 0 }),
+        makeDay('2026-07-27', { calories: 2000 }),
+      ],
+      todayIso: TODAY_ISO,
+      todayHasIntake: true,
+    })
+    expect(streak).toBe(1)
   })
 
-  it('devuelve el string tal cual si no calza el patrón YYYY-MM-DD', () => {
-    expect(formatLocalDateEsCl('no-es-fecha')).toBe('no-es-fecha')
-    expect(formatLocalDateEsCl('2026/07/15')).toBe('2026/07/15')
+  it('hoy sin registro todavía NO corta la racha de días anteriores', () => {
+    const streak = computeNutritionStreakDays({
+      recentDays: [
+        makeDay('2026-07-28', { calories: 2000 }),
+        makeDay('2026-07-27', { calories: 2000 }),
+      ],
+      todayIso: TODAY_ISO,
+      todayHasIntake: false,
+    })
+    expect(streak).toBe(2)
+  })
+
+  it('sin ningún día registrado -> racha 0', () => {
+    expect(
+      computeNutritionStreakDays({ recentDays: [], todayIso: TODAY_ISO, todayHasIntake: false }),
+    ).toBe(0)
   })
 })

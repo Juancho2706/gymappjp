@@ -21,7 +21,6 @@ import {
   NutritionSkeleton,
   NutritionStatePanel,
   NutritionCard,
-  PlanVersionBadge,
   StrategyBadge,
   SyncOfflineState,
 } from '../../../components/nutrition-v2'
@@ -547,13 +546,13 @@ export default function CoachNutritionV2Screen() {
                       {item.clientName}
                     </Text>
                     {item.strategy ? <StrategyBadge compact strategy={item.strategy} /> : null}
-                    {item.versionNumber && item.planStatus === 'published' ? (
-                      <PlanVersionBadge version={item.versionNumber} status="published" />
-                    ) : null}
                   </View>
                   <Text className="mt-1 text-xs text-muted" numberOfLines={1}>
                     {item.planName ?? 'Sin plan publicado'} · {item.intakeEntries7d} registros en 7 días
                   </Text>
+                  <View className="mt-1.5">
+                    <RosterWeekDots activeDays={item.activeDays7d} />
+                  </View>
                 </View>
                 <ChevronRight color={theme.textSecondary} size={20} />
               </View>
@@ -608,6 +607,33 @@ export default function CoachNutritionV2Screen() {
         onChoose={choosePickerClient}
         textSecondary={theme.textSecondary}
       />
+    </View>
+  )
+}
+
+/**
+ * Puntos de la semana del alumno en el roster (SPEC ola 3 punto 8: "hub coach con dots de semana
+ * por alumno"). El read-model del hub móvil (`NutritionCoachHubItem`) NO trae un desglose por
+ * día — solo `activeDays7d` (cuántos de los últimos 7 tuvieron registro) e `intakeEntries7d`
+ * (cuenta total). Sin la fecha de cada día no se puede pintar Lu-Do real, así que estos puntos
+ * son un CONTEO (los primeros `activeDays7d` de 7 se ven llenos), no un calendario: el
+ * `accessibilityLabel` lo dice explícito para no insinuar qué día exacto tuvo registro.
+ */
+function RosterWeekDots({ activeDays }: { activeDays: number }) {
+  const filled = Math.max(0, Math.min(7, Math.trunc(activeDays)))
+  return (
+    <View
+      accessibilityRole="summary"
+      accessibilityLabel={`${filled} de 7 días con registro esta semana`}
+      className="flex-row gap-1"
+    >
+      {Array.from({ length: 7 }, (_, index) =>
+        index < filled ? (
+          <View key={index} className="h-1.5 w-1.5 rounded-full bg-success-500" />
+        ) : (
+          <View key={index} className="h-1.5 w-1.5 rounded-full bg-ink-300" />
+        ),
+      )}
     </View>
   )
 }

@@ -270,31 +270,6 @@ export function StrategyBadge({ strategy, compact = false }: { strategy: Nutriti
   )
 }
 
-export function PlanVersionBadge({
-  version,
-  status,
-  effectiveLabel,
-}: {
-  version: number | string
-  status: 'draft' | 'published' | 'superseded' | 'archived'
-  effectiveLabel?: string
-}) {
-  const config = {
-    draft: { label: 'Borrador', tone: 'warning' as const },
-    published: { label: 'Publicado', tone: 'success' as const },
-    superseded: { label: 'Anterior', tone: 'neutral' as const },
-    archived: { label: 'Archivado', tone: 'neutral' as const },
-  }[status]
-  return (
-    <View className={cx('self-start rounded-pill border px-2.5 py-1', toneClasses[config.tone])}>
-      <Text className={cx('text-xs font-semibold', toneTextClasses[config.tone])}>
-        v{version} · {config.label}
-        {effectiveLabel ? ` · ${effectiveLabel}` : ''}
-      </Text>
-    </View>
-  )
-}
-
 export function MacroBudget({
   calories,
   macros,

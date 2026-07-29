@@ -9,6 +9,7 @@ import {
   type NutritionIntakeReadItem,
   type NutritionItemSubstitutionRead,
   type NutritionMealSlotRead,
+  type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import {
   buildBulkUndoPayloads,
@@ -16,9 +17,15 @@ import {
   buildCorrectionPayload,
   buildPrescribedIntakePayload,
   buildVoidPayload,
+  consumedEntryForItem,
   estimateCatalogIntakeTotals,
+  formatIntakeClock,
   groupSubstitutionsByPrescriptionItem,
+  isPortionMarkEntry,
+  outOfPlanEntries,
   resolveItemDisplayNote,
+  slotFreeEntries,
+  slotPortionMarksTotal,
 } from './nutrition-today.logic'
 
 const CTX = {
@@ -436,5 +443,132 @@ describe('resolveItemDisplayNote', () => {
     expect(resolveItemDisplayNote(null, true)).toBeNull()
     expect(resolveItemDisplayNote(undefined, false)).toBeNull()
     expect(resolveItemDisplayNote('   ', false)).toBeNull()
+  })
+})
+
+// ── "Hoy sin eco" (auditoría H4/H5) ───────────────────────────────────────────────
+
+function intakeEntry(overrides: Partial<NutritionIntakeReadItem> & { id: string }): NutritionIntakeReadItem {
+  return {
+    foodId: null,
+    customName: 'Registro',
+    quantity: 1,
+    unit: 'un',
+    mealSlot: 'lunch',
+    source: 'offplan',
+    captureMethod: 'manual',
+    occurredAt: '2026-07-29T16:04:00.000Z',
+    status: 'active',
+    revision: 1,
+    correctsEntryId: null,
+    prescriptionItemId: null,
+    snapshot: {
+      name: 'Registro',
+      brand: null,
+      calories: 100,
+      proteinG: 5,
+      carbsG: 10,
+      fatsG: 2,
+      fiberG: null,
+      servingSize: 1,
+      servingUnit: 'un',
+    },
+    totals: { calories: 100, proteinG: 5, carbsG: 10, fatsG: 2, fiberG: 0 },
+    ...overrides,
+  }
+}
+
+describe('isPortionMarkEntry', () => {
+  it('una marca sintetica de porcion trae grupo + porciones > 0', () => {
+    expect(isPortionMarkEntry(intakeEntry({ id: 'e1', exchangeGroupCode: 'C', exchangePortions: 1.5 }))).toBe(true)
+  })
+
+  it('un alimento libre normal (sin grupo) no es marca de porcion', () => {
+    expect(isPortionMarkEntry(intakeEntry({ id: 'e2' }))).toBe(false)
+  })
+
+  it('una correctora fantasma de 0 kcal (exchangePortions null) tampoco cuenta como marca', () => {
+    expect(isPortionMarkEntry(intakeEntry({ id: 'e3', exchangeGroupCode: 'C', exchangePortions: null }))).toBe(false)
+  })
+})
+
+describe('consumedEntryForItem / slotFreeEntries / slotPortionMarksTotal', () => {
+  const prescribed = intakeEntry({ id: 'p1', prescriptionItemId: ITEM.id, customName: null, foodId: ITEM.foodId })
+  const free = intakeEntry({ id: 'f1', prescriptionItemId: null })
+  const orphan = intakeEntry({ id: 'o1', prescriptionItemId: 'no-existe-ya' })
+  const portionMark = intakeEntry({ id: 'm1', exchangeGroupCode: 'C', exchangePortions: 1.5 })
+  const slot: NutritionMealSlotRead = {
+    ...SLOT,
+    prescriptionItems: [ITEM],
+    intakeItems: [prescribed, free, orphan, portionMark],
+  }
+
+  it('encuentra el registro del item prescrito por prescriptionItemId', () => {
+    expect(consumedEntryForItem(slot, ITEM.id)?.id).toBe('p1')
+    expect(consumedEntryForItem(slot, 'otro-item')).toBeNull()
+  })
+
+  it('lo libre + lo huerfano entran a "Fuera del plan" de la franja; la marca de porcion NO (se resume aparte)', () => {
+    const ids = slotFreeEntries(slot).map((entry) => entry.id)
+    expect(ids.sort()).toEqual(['f1', 'o1'])
+  })
+
+  it('suma todas las porciones marcadas de la franja en un solo numero', () => {
+    expect(slotPortionMarksTotal(slot)).toBe(1.5)
+    expect(slotPortionMarksTotal({ ...SLOT, intakeItems: [free] })).toBe(0)
+  })
+})
+
+describe('outOfPlanEntries', () => {
+  function today(overrides: Partial<NutritionTodayReadModel>): NutritionTodayReadModel {
+    return {
+      schemaVersion: 1,
+      generatedAt: '2026-07-29T00:00:00.000Z',
+      localDate: '2026-07-29',
+      timezone: 'America/Santiago',
+      snapshotId: null,
+      plan: null,
+      targets: { calories: null, proteinG: null, carbsG: null, fatsG: null, fiberG: null, sodiumMg: null, waterMl: null },
+      consumed: { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0, entryCount: 0 },
+      remaining: { calories: null, proteinG: null, carbsG: null, fatsG: null, fiberG: null, sodiumMg: null, waterMl: null },
+      permissions: {
+        canRegisterFreely: true,
+        canAdjustPrescribedQuantity: true,
+        quantityAdjustmentPercent: null,
+        canSubstitute: false,
+        canMoveMealSlot: false,
+        canSkipOptionalItems: true,
+      },
+      mealSlots: [],
+      unassignedIntake: [],
+      syncToken: 'token',
+      ...overrides,
+    }
+  }
+
+  it('junta lo sin franja con lo de franjas que no se renderizan (nunca desaparece un registro)', () => {
+    const strandedSlotEntry = intakeEntry({ id: 's1', mealSlot: 'snack', occurredAt: '2026-07-29T10:00:00.000Z' })
+    const strandedSlot: NutritionMealSlotRead = { ...SLOT, id: 'snack-id', code: 'snack', intakeItems: [strandedSlotEntry] }
+    const unassigned = intakeEntry({ id: 'u1', mealSlot: null, occurredAt: '2026-07-29T08:00:00.000Z' })
+    const model = today({ mealSlots: [strandedSlot], unassignedIntake: [unassigned] })
+
+    // "lunch" SI se renderiza (tiene card); "snack" NO ⇒ sus registros caen a "Fuera del plan".
+    const out = outOfPlanEntries(model, new Set(['lunch']))
+    expect(out.map((entry) => entry.id)).toEqual(['u1', 's1'])
+  })
+
+  it('una franja renderizada no aporta nada a "Fuera del plan"', () => {
+    const model = today({ mealSlots: [{ ...SLOT, intakeItems: [intakeEntry({ id: 'p1' })] }] })
+    expect(outOfPlanEntries(model, new Set(['lunch']))).toHaveLength(0)
+  })
+})
+
+describe('formatIntakeClock', () => {
+  it('formatea la hora en la zona indicada (UTC, deterministico)', () => {
+    expect(formatIntakeClock('2026-07-29T13:04:00.000Z', 'UTC')).toBe('13:04')
+  })
+
+  it('fecha invalida ⇒ cadena vacia (nunca revienta el render)', () => {
+    expect(formatIntakeClock('no-es-fecha', 'UTC')).toBe('')
   })
 })

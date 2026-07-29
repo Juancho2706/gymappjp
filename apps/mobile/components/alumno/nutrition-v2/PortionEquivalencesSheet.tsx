@@ -239,33 +239,41 @@ export function PortionEquivalencesSheet({
                 <View
                   key={food.foodId}
                   className={cx(
-                    'min-h-11 flex-row items-center justify-between gap-3 py-2',
+                    'min-h-11 flex-row items-center gap-3 py-2',
                     index > 0 && 'border-t border-subtle',
                   )}
                 >
-                  <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
-                      {food.name}
-                    </Text>
-                    {food.brand ? (
-                      <Text className="text-xs text-muted" numberOfLines={1}>{food.brand}</Text>
-                    ) : null}
-                  </View>
-                  <View className="items-end">
-                    <Text
-                      className={cx(
-                        'text-xs font-bold',
-                        food.portionLabel ? 'text-strong' : 'text-muted',
-                      )}
-                    >
-                      {food.portionLabel ?? '—'}
-                    </Text>
-                    <Text
-                      className="font-mono text-[10px] text-muted"
-                      style={{ fontVariant: ['tabular-nums'] }}
-                    >
-                      {food.portionGrams != null ? `${food.portionGrams} g` : ''}
-                    </Text>
+                  {/* Regla transversal (SPEC nutrition-ui-poda #9): toda lista de alimentos lleva
+                      miniatura. `NutritionExchangeFoodRead` no trae `media`/`category` (el
+                      catálogo de equivalencias es congelado y liviano a propósito) — el
+                      `GroupDot` del grupo activo, ya usado en el encabezado de este sheet, es el
+                      fallback de categoría más honesto que el contrato permite sin tocarlo. */}
+                  <GroupDot code={target.groupCode} color={portionTargetColor(target)} size={28} />
+                  <View className="min-w-0 flex-1 flex-row items-center justify-between gap-3">
+                    <View className="min-w-0 flex-1">
+                      <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
+                        {food.name}
+                      </Text>
+                      {food.brand ? (
+                        <Text className="text-xs text-muted" numberOfLines={1}>{food.brand}</Text>
+                      ) : null}
+                    </View>
+                    <View className="items-end">
+                      <Text
+                        className={cx(
+                          'text-xs font-bold',
+                          food.portionLabel ? 'text-strong' : 'text-muted',
+                        )}
+                      >
+                        {food.portionLabel ?? '—'}
+                      </Text>
+                      <Text
+                        className="font-mono text-[10px] text-muted"
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        {food.portionGrams != null ? `${food.portionGrams} g` : ''}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               ))}

@@ -9,7 +9,6 @@ import {
   CoachAttentionCard,
   NutritionCard,
   NutritionStatePanel,
-  PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
@@ -27,6 +26,7 @@ import {
   type RosterFilters,
   type SortKey,
 } from '../_lib/hub-roster'
+import { cn } from '@/lib/utils'
 
 // Roster interactivo del Centro V2. Recibe la pagina ya cargada del servidor (items +
 // metricas + cursor) y aplica filtros/orden client-side (el RPC no los soporta). Los
@@ -45,6 +45,37 @@ function attentionDescription(reason: Exclude<AttentionReason, 'none'>): string 
   if (reason === 'no_plan') return 'Este alumno todavia no tiene una prescripcion versionada.'
   if (reason === 'draft_pending') return 'Existe una version que aun no ha sido publicada.'
   return 'No hay registros canonicos durante los ultimos siete dias.'
+}
+
+/**
+ * 7 puntos de actividad reciente por alumno (poda 2026-07-29, SPEC punto 8: "hub coach con dots
+ * de semana por alumno"). El read model del hub NO trae adherencia por dia de calendario -- solo
+ * `activeDays7d`, un conteo agregado (0-7) de cuantos de los ultimos 7 dias corridos tuvieron al
+ * menos un registro canonico. Por eso estos puntos NO se alinean a Lu-Do ni distinguen "cumplido"
+ * de "parcial" (esa granularidad exigiria una RPC nueva, fuera de alcance de esta poda): solo
+ * marcan CUANTOS de los ultimos 7 dias tuvieron registro, rellenando desde la izquierda.
+ */
+function HubActivityDots({ activeDays }: { activeDays: number }) {
+  const filled = Math.max(0, Math.min(7, Math.round(activeDays)))
+  return (
+    <span
+      aria-label={`${filled} de 7 dias con registro en la ultima semana`}
+      className="inline-flex shrink-0 items-center gap-[3px]"
+      role="img"
+      title={`${filled}/7 dias activos (7 dias corridos)`}
+    >
+      {Array.from({ length: 7 }, (_, index) => (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'h-1.5 w-1.5 rounded-full',
+            index < filled ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-border-subtle',
+          )}
+          key={index}
+        />
+      ))}
+    </span>
+  )
 }
 
 export function HubRoster({
@@ -253,13 +284,13 @@ export function HubRoster({
                       {item.clientName}
                     </h2>
                     {item.strategy ? <StrategyBadge compact strategy={item.strategy} /> : null}
-                    {item.versionNumber && item.planStatus === 'published' ? (
-                      <PlanVersionBadge version={item.versionNumber} status="published" />
-                    ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted">
                     {item.planName ?? 'Sin plan publicado'} · {item.intakeEntries7d} registros en 7 dias
                   </p>
+                  <div className="mt-1.5">
+                    <HubActivityDots activeDays={item.activeDays7d} />
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
@@ -302,6 +333,7 @@ export function HubRoster({
                 <tr className="border-b border-border-default bg-surface-sunken text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   <th className="px-4 py-2.5">Alumno</th>
                   <th className="px-4 py-2.5">Plan</th>
+                  <th className="px-4 py-2.5">Semana</th>
                   <th className="px-4 py-2.5 text-right">Registros 7d</th>
                   <th className="px-4 py-2.5">Atencion</th>
                   <th className="px-4 py-2.5 text-right">Acciones</th>
@@ -322,10 +354,10 @@ export function HubRoster({
                     <td className="px-4 py-2.5 text-muted">
                       <div className="flex items-center gap-2">
                         <span className="truncate">{item.planName ?? 'Sin plan'}</span>
-                        {item.versionNumber && item.planStatus === 'published' ? (
-                          <PlanVersionBadge version={item.versionNumber} status="published" />
-                        ) : null}
                       </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <HubActivityDots activeDays={item.activeDays7d} />
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-strong">
                       {item.intakeEntries7d}

@@ -43,7 +43,7 @@ const MODULE_COPY: Record<ModuleKey, ModuleCopy> = {
         icon: Apple,
         title: 'El módulo Nutrición Pro no está habilitado',
         description:
-            'Las pautas por intercambios, las plantillas reutilizables, los micronutrientes avanzados, los objetivos por composición corporal y el PDF con tu marca son parte del módulo Nutrición Pro.',
+            'Las pautas por intercambios, las plantillas reutilizables, los objetivos por composición corporal y el PDF con tu marca son parte del módulo Nutrición Pro.',
     },
 }
 

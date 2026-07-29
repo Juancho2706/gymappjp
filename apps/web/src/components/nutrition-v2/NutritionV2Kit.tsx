@@ -192,29 +192,6 @@ export function StrategyBadge({ strategy, compact = false }: { strategy: Nutriti
   )
 }
 
-export function PlanVersionBadge({
-  version,
-  status,
-  effectiveLabel,
-}: {
-  version: number | string
-  status: 'draft' | 'published' | 'superseded' | 'archived'
-  effectiveLabel?: string
-}) {
-  const config = {
-    draft: { label: 'Borrador', tone: 'warning' as const },
-    published: { label: 'Publicado', tone: 'success' as const },
-    superseded: { label: 'Anterior', tone: 'neutral' as const },
-    archived: { label: 'Archivado', tone: 'neutral' as const },
-  }[status]
-  return (
-    <span className={cx('inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold', toneClasses[config.tone])}>
-      v{version} · {config.label}
-      {effectiveLabel ? <span className="font-normal opacity-80">· {effectiveLabel}</span> : null}
-    </span>
-  )
-}
-
 export function MealTimeline({
   slots,
   renderActions,

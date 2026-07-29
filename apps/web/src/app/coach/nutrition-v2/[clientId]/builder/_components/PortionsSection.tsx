@@ -2,7 +2,7 @@
 
 /**
  * Sección "Porciones a elección" (T1.1 — SPEC UX-a): vive DENTRO de cada card de
- * franja del paso Construcción, hermana de la lista de alimentos, debajo de
+ * franja del paso "Los días", hermana de la lista de alimentos, debajo de
  * "+ Alimento". Fila por grupo: circulito 20 px con el código (color del grupo del
  * catálogo SOLO como identidad, letra blanca) + nombre + stepper 0,5 (adaptación
  * del patrón `StepperField` del quick-edit — copiado, no editado; nota de origen:
@@ -49,7 +49,7 @@ import {
  * el catálogo de grupos (carga perezosa con error/reintento — SPEC UX-c) y las
  * operaciones. Lo crea PlanBuilderClient (una instancia por wizard) y baja por
  * props a la sección de cada franja, la card de derivación (paso 1) y la revisión
- * (paso 3).
+ * (dentro del paso "Los días").
  */
 export interface PortionsController {
   bySlot: PortionsBySlot
@@ -326,7 +326,7 @@ function PortionsStepper({
   )
 }
 
-/** Sección "Porciones a elección" de una franja (paso Construcción). */
+/** Sección "Porciones a elección" de una franja (paso "Los días"). */
 export function PortionsSection({
   slotKey,
   slotName,

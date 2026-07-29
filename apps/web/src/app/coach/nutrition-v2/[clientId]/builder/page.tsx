@@ -106,8 +106,9 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
     initialDraft = await buildInitialDraft(detail.plan, existing.versionId, today)
   }
 
-  // Espejo UI del addon Nutricion Pro: marca/deshabilita las opciones Pro (estrategia hibrida)
-  // en el wizard. La barrera real vive en publishPlanAction (re-valida server-side).
+  // Espejo UI del addon Nutricion Pro: candado en "Personalizar {dia}" (dias con contenido propio)
+  // y en el checkbox de registro libre sobre planes con franjas. La barrera real vive en
+  // publishPlanAction (re-valida server-side y responde UPGRADE_REQUIRED).
   const supabase = await createClient()
   const nutritionProEnabled = await hasNutritionProV2(
     supabase,
@@ -123,7 +124,7 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
       backHref={`/coach/nutrition-v2/${clientId}`}
       eyebrow={existingPlan ? 'Nueva versión' : 'Nuevo plan'}
       title={detail.client.fullName}
-      description="Estrategia, metas y publicación del plan"
+      description="El plan y sus días, en dos pasos"
     >
       <PlanBuilderClient
         clientId={clientId}

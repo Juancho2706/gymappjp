@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, CopyCheck, History, Info, Loader2, Plus, Repeat, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { BuilderStepList, DayVariantWeekStrip, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
+import { BuilderStepList, MacroBudget, NutritionCard } from '@/components/nutrition-v2'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
@@ -20,21 +20,28 @@ import {
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 import {
+  BUILDER_STEP_DAYS,
+  BUILDER_STEP_PLAN,
   BUILDER_UNITS,
   CoachFoodInputSchema,
   MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
-  activeVariantOf,
   assembleAndValidateDraft,
   autoVariantLabel,
   baseVariantOf,
+  builderDayCells,
+  builderDowForVariant,
   builderReducer,
+  builderVariantForDayOfWeek,
   clonedKey,
   createEmptyBuilderState,
   customMacrosOf,
+  inheritedDayOfWeeks,
+  initialBuilderDow,
   itemMacros,
   macroEnergyMismatch,
   resolveSlotCopyTargets,
+  slotsLostIfFlexible,
   slotSubtotal,
   strategyUsesSlots,
   takenDayOfWeeks,
@@ -43,9 +50,9 @@ import {
   variantTotals,
   type BuilderFood,
   type BuilderItem,
+  type BuilderPermissions,
   type BuilderSlot,
   type BuilderState,
-  type BuilderTargets,
   type BuilderVariant,
   type ItemMacros,
 } from '../_lib/draft-builder'
@@ -58,12 +65,21 @@ import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-a
 import { canProceedToPublishAfterArchive, effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
 import { FoodResultCard } from './FoodResultCard'
 import { PublishConflictDialog } from './PublishConflictDialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 // Porciones a elección (T1.1): capa opcional sobre structured/hybrid (SPEC R1). El estado
 // vive en un controller hermano del reducer (no se toca _lib/draft-builder) y se inyecta
 // al draft canónico justo antes de publicar (attachPortionsAndValidate).
 import { PortionsSection, usePortionsBuilder, type PortionsController } from './PortionsSection'
 import { PortionsDeriveCard } from './PortionsDeriveCard'
-import { PortionsReviewSection } from './PortionsReviewChips'
 import {
   attachPortionsAndValidate,
   combineSubtotals,
@@ -73,10 +89,11 @@ import {
   variantPortionKeys,
   type PortionsBySlot,
 } from './portions-state'
-// Multi-dia (SPEC nutrition-multiday): barra de chips de dias + popover "Agregar dia".
-import { DayVariantBar, type DayVariantBarHandlers } from './DayVariantBar'
-// El menu "Copiar a otros dias" de la franja usa el MISMO patron responsive del "Agregar dia"
-// (popover en desktop / bottom sheet en movil), asi que reusa su hook en vez de copiarlo.
+// Selector de dia (SPEC nutrition-ui-poda, punto 10): strip Lu-Do + barra de contexto. Reemplaza
+// la barra de chips de variantes, el popover "Agregar dia" y la tira "Se aplica en".
+import { DayPlanStrip, type DayPlanStripHandlers } from './DayPlanStrip'
+// El menu "Copiar a otros dias" de la franja usa el MISMO patron responsive que el resto de las
+// afordancias del paso (popover en desktop / bottom sheet en movil), asi que reusa el hook.
 import { useIsDesktopMd } from './AddDayPopover'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -90,7 +107,7 @@ import {
   writeNutritionDraft,
 } from '@/lib/nutrition-coach-draft-store'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
-import type { ExchangeGroup } from '@eva/nutrition-engine'
+import type { ExchangeGroup, ExchangeMacroTotals } from '@eva/nutrition-engine'
 import { loadExchangeGroupsForBuilderAction } from './PortionsGroupsAction'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
@@ -137,15 +154,6 @@ const iconButtonClass =
 function numOr0(value: string): number {
   const n = Number(String(value).trim())
   return Number.isFinite(n) && n >= 0 ? n : 0
-}
-
-// Convierte una meta escrita (string) a numero, o null cuando esta vacia/invalida — asi
-// MacroChipRow oculta la pastilla en vez de mostrar un cero enganoso.
-function numOrNull(value: string): number | null {
-  const t = String(value).trim()
-  if (t === '') return null
-  const n = Number(t)
-  return Number.isFinite(n) ? n : null
 }
 
 function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: BuilderFood) => void }) {
@@ -976,10 +984,6 @@ function SlotEditor({
 // es server-only (import 'server-only') y no puede importarse en un client component.
 // Nutricion Pro viene incluido en los planes pagos — el CTA apunta al cambio de plan.
 const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
-// Estrategias que exigen el addon Nutricion Pro (frontera CEO): solo 'hybrid'. La UI marca
-// y deshabilita estas opciones sin addon; el servidor (publishPlanAction) es la barrera real.
-const PRO_STRATEGIES: readonly NutritionStrategy[] = ['hybrid']
-
 function ProBadge() {
   return (
     <span className="shrink-0 rounded-pill border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary">
@@ -988,104 +992,78 @@ function ProBadge() {
   )
 }
 
-function StrategyStep({
+/**
+ * Paso 1 — "El plan" (SPEC nutrition-ui-poda, punto 11). Fusiona los viejos pasos "Estrategia"
+ * y "Objetivos" y se queda con el UNICO control editable del viejo paso "Revisar"
+ * (`Vigente desde`, que en RN ya vivia aca). Todo lo que define el plan antes de tocar los dias
+ * cabe en una pantalla.
+ *
+ * Estrategia: DOS opciones reales — "Plan estructurado" (franjas prescritas) y "Objetivos
+ * flexibles" (solo metas). La HIBRIDA se retiro del selector: no aportaba ninguna capacidad que
+ * `structured` + el checkbox de registro libre no diera, y funcionaba como gate comercial con
+ * etiqueta de producto. El valor sigue vivo en el contrato y en los planes publicados: un plan
+ * hibrido rehidratado NO se degrada (se muestra sobre la tarjeta "estructurado", se dice en
+ * texto y se republica tal cual). El candado Pro se movio al checkbox "Registro libre" de los
+ * planes con franjas — que es la capacidad que la hibrida vendia.
+ */
+function PlanStep({
   state,
   dispatch,
+  errors,
   nutritionProEnabled,
 }: {
   state: BuilderState
   dispatch: Dispatch
+  errors: Record<string, string>
   nutritionProEnabled: boolean
 }) {
-  const options: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
-  return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {options.map((key) => {
-          const meta = NUTRITION_STRATEGIES[key]
-          const active = state.strategy === key
-          const isPro = PRO_STRATEGIES.includes(key)
-          const locked = isPro && !nutritionProEnabled
-          return (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={active}
-              aria-disabled={locked}
-              disabled={locked}
-              title={locked ? 'Disponible con Nutricion Pro' : meta.description}
-              onClick={() => {
-                if (locked) return
-                dispatch({ type: 'SET_STRATEGY', strategy: key, firstSlotKey: genId() })
-              }}
-              className={
-                'flex h-full flex-col rounded-card border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
-                (locked
-                  ? 'cursor-not-allowed border-border-subtle bg-surface-sunken opacity-90'
-                  : active
-                    ? 'border-primary bg-primary/10 dark:bg-primary/10'
-                    : 'border-border-default bg-surface-card hover:border-primary/40')
-              }
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2 font-display text-base font-semibold text-strong">
-                  {meta.label}
-                  {isPro ? <ProBadge /> : null}
-                </span>
-                {active && !locked ? <Check className="h-5 w-5 shrink-0 text-primary dark:text-primary" /> : null}
-              </div>
-              <p className="mt-1 text-sm text-muted">{meta.description}</p>
-              {locked ? (
-                <span className="mt-2 text-xs font-medium text-primary dark:text-primary">
-                  Disponible con Nutricion Pro
-                </span>
-              ) : null}
-            </button>
-          )
-        })}
-      </div>
-      {!nutritionProEnabled ? (
-        <div className="flex items-center gap-2.5 rounded-card border border-primary/30 bg-primary/10 p-3 dark:border-primary/30 dark:bg-primary/10">
-          {/* Ícono del módulo Nutrición Pro (asset del CEO, estático @2x). */}
-          <Image
-            src="/module-icons/nutrition-pro@2x.webp"
-            alt=""
-            aria-hidden="true"
-            width={32}
-            height={32}
-            unoptimized
-            className="h-8 w-8 shrink-0 object-contain"
-          />
-          <p className="text-xs text-muted">
-            La estrategia hibrida es parte de Nutricion Pro, incluido en los planes pagos.{' '}
-            <Link
-              href={NUTRITION_PRO_UPGRADE_HREF}
-              className="font-semibold text-primary underline underline-offset-2 dark:text-primary"
-            >
-              Mejorar mi plan
-            </Link>
-          </p>
-        </div>
-      ) : null}
-    </div>
-  )
-}
+  const options: NutritionStrategy[] = ['structured', 'flexible']
+  // Confirmacion antes de perder franjas (bug 2.3.5 de la auditoria): elegir "flexible" con
+  // contenido en cualquier dia BORRABA todas las franjas sin aviso ni deshacer. El reducer sigue
+  // ejecutando el borrado tal cual (es puro, no pregunta); esta UI decide si hace falta preguntar.
+  const [confirmFlexible, setConfirmFlexible] = useState(false)
+  const slotsAtRisk = slotsLostIfFlexible(state)
+  // Un plan hibrido (rehidratado / convertido de V1) se lee sobre la tarjeta estructurada: las
+  // dos usan franjas y el contrato no cambia hasta que el coach elija otra cosa.
+  const activeStrategyKey: NutritionStrategy | null = state.strategy === 'hybrid' ? 'structured' : state.strategy
+  const usesSlots = strategyUsesSlots(state.strategy)
+  // Gate Pro del registro libre: solo sobre planes CON franjas (en un plan flexible el alumno
+  // registra libre por definicion) y solo para ENCENDERLO — un plan que ya lo trae encendido
+  // (hibrido rehidratado) se puede apagar sin pagar nada. El servidor no gatea esta combinacion:
+  // es un limite comercial de UI, no una barrera de seguridad.
+  const freeRegistrationLocked = usesSlots && !nutritionProEnabled && !state.permissions.canRegisterFreely
 
-function TargetsStep({
-  state,
-  dispatch,
-  errors,
-}: {
-  state: BuilderState
-  dispatch: Dispatch
-  errors: Record<string, string>
-}) {
   const macroFields: Array<{ field: 'calories' | 'proteinG' | 'carbsG' | 'fatsG'; label: string }> = [
     { field: 'calories', label: 'Calorias (kcal)' },
     { field: 'proteinG', label: 'Proteina (g)' },
     { field: 'carbsG', label: 'Carbohidratos (g)' },
     { field: 'fatsG', label: 'Grasas (g)' },
   ]
+
+  const permissionFields: Array<{
+    field: keyof BuilderPermissions
+    label: string
+    hint: string
+    locked: boolean
+  }> = [
+    {
+      field: 'canRegisterFreely',
+      label: 'Registro libre',
+      hint: 'Puede anotar alimentos fuera de lo prescrito.',
+      locked: freeRegistrationLocked,
+    },
+    {
+      field: 'canAdjustPrescribedQuantity',
+      label: 'Ajustar cantidades',
+      hint: 'Puede cambiar la cantidad de un alimento prescrito.',
+      locked: false,
+    },
+  ]
+
+  function pickStrategy(key: NutritionStrategy) {
+    dispatch({ type: 'SET_STRATEGY', strategy: key, firstSlotKey: genId() })
+  }
+
   return (
     <div className="max-w-4xl space-y-5">
       <div>
@@ -1099,6 +1077,54 @@ function TargetsStep({
         />
         {errors.planName ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors.planName}</p> : null}
       </div>
+
+      <fieldset>
+        <legend className={labelClass}>Como sigue el plan tu alumno</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {options.map((key) => {
+            const meta = NUTRITION_STRATEGIES[key]
+            const active = activeStrategyKey === key
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={active}
+                title={meta.description}
+                onClick={() => {
+                  // Re-tocar la MISMA tarjeta no hace nada (el reducer tambien lo corta): elegir
+                  // estrategia dejo de ser un gesto de navegacion repetible.
+                  if (active) return
+                  if (key === 'flexible' && slotsAtRisk > 0) {
+                    setConfirmFlexible(true)
+                    return
+                  }
+                  pickStrategy(key)
+                }}
+                className={
+                  'flex h-full flex-col rounded-card border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                  (active
+                    ? 'border-primary bg-primary/10 dark:bg-primary/10'
+                    : 'border-border-default bg-surface-card hover:border-primary/40')
+                }
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-semibold text-strong">{meta.label}</span>
+                  {active ? <Check className="h-5 w-5 shrink-0 text-primary dark:text-primary" /> : null}
+                </div>
+                <p className="mt-1 text-sm text-muted">{meta.description}</p>
+              </button>
+            )
+          })}
+        </div>
+        {errors.strategy ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors.strategy}</p> : null}
+        {state.strategy === 'hybrid' ? (
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Este plan se publico como <span className="font-semibold text-strong">hibrido</span> (franjas prescritas +
+            registro libre). Se mantiene asi salvo que elijas otra estrategia.
+          </p>
+        ) : null}
+      </fieldset>
+
       <div className="grid gap-5 lg:grid-cols-2">
         <fieldset className="space-y-3">
           <legend className={labelClass}>Metas diarias</legend>
@@ -1117,26 +1143,102 @@ function TargetsStep({
               </div>
             ))}
           </div>
+          <p className="text-xs text-muted">
+            Son las metas del dia base. Cualquier dia puede llevar objetivos propios desde el paso siguiente.
+          </p>
         </fieldset>
+
         <fieldset className="rounded-card border border-border-subtle p-3">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</legend>
-          {([
-            ['canRegisterFreely', 'Puede registrar alimentos libremente'],
-            ['canAdjustPrescribedQuantity', 'Puede ajustar la cantidad prescrita'],
-            ['canSubstitute', 'Puede sustituir alimentos'],
-          ] as const).map(([field, label]) => (
-            <label key={field} className="flex min-h-11 items-center gap-2 text-sm text-body">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-[var(--theme-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                checked={state.permissions[field]}
-                onChange={(e) => dispatch({ type: 'SET_PERMISSION', field, value: e.target.checked })}
-              />
-              {label}
-            </label>
+          <p className="px-1 pb-2 text-xs text-muted">Qué puede hacer el alumno con este plan, más allá de seguirlo.</p>
+          {permissionFields.map(({ field, label, hint, locked }) => (
+            // El upsell va FUERA del <label> a propósito: un <a> dentro de una etiqueta de
+            // formulario secuestra el clic del checkbox.
+            <div key={field}>
+              <label
+                className={
+                  'flex min-h-11 items-start gap-2 py-1 text-sm text-body ' + (locked ? 'cursor-not-allowed' : '')
+                }
+              >
+                <input
+                  type="checkbox"
+                  disabled={locked}
+                  className="mt-0.5 h-4 w-4 accent-[var(--theme-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                  checked={state.permissions[field]}
+                  onChange={(e) => dispatch({ type: 'SET_PERMISSION', field, value: e.target.checked })}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 font-medium text-strong">
+                    {label}
+                    {locked ? <ProBadge /> : null}
+                  </span>
+                  <span className="block text-xs text-muted">{hint}</span>
+                </span>
+              </label>
+              {locked ? (
+                <p className="flex items-start gap-1.5 pb-1 pl-6 text-xs leading-relaxed text-muted">
+                  {/* Ícono del módulo Nutrición Pro (asset del CEO, estático @2x). */}
+                  <Image
+                    src="/module-icons/nutrition-pro@2x.webp"
+                    alt=""
+                    aria-hidden="true"
+                    width={20}
+                    height={20}
+                    unoptimized
+                    className="mt-0.5 h-5 w-5 shrink-0 object-contain"
+                  />
+                  <span>
+                    Combinar comidas prescritas con registro libre es parte de Nutricion Pro, incluido en los planes
+                    pagos.{' '}
+                    <Link
+                      href={NUTRITION_PRO_UPGRADE_HREF}
+                      className="font-semibold text-primary underline underline-offset-2 dark:text-primary"
+                    >
+                      Mejorar mi plan
+                    </Link>
+                  </span>
+                </p>
+              ) : null}
+            </div>
           ))}
         </fieldset>
       </div>
+
+      {/* Vigencia: subio del paso "Revisar" (era su unico control editable) y queda a la vista
+          junto al resto de lo que define el plan. */}
+      <div className="max-w-xs">
+        <label className={labelClass} htmlFor="effective-from">Vigente desde</label>
+        <input
+          id="effective-from"
+          className={inputClass}
+          type="date"
+          value={state.effectiveFrom}
+          onChange={(e) => dispatch({ type: 'SET_EFFECTIVE_FROM', value: e.target.value })}
+        />
+      </div>
+
+      <AlertDialog open={confirmFlexible} onOpenChange={setConfirmFlexible}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="normal-case tracking-tight">Cambiar a flexible</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cambiar a flexible elimina {slotsAtRisk === 1 ? 'la' : 'las'} {slotsAtRisk}{' '}
+              {slotsAtRisk === 1 ? 'franja' : 'franjas'} de tus días. ¿Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmFlexible(false)
+                pickStrategy('flexible')
+              }}
+            >
+              Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -1231,28 +1333,45 @@ function variantErrorsOf(state: BuilderState, errors: Record<string, string>): R
   return out
 }
 
+/**
+ * Paso 2 — "Los dias" (SPEC nutrition-ui-poda, puntos 10-11): el selector de dia + las franjas
+ * del dia en pantalla. Publicar vive aca (ya no hay paso "Revisar").
+ *
+ * "Tocas el dia, no la variante": el dia elegido (`selectedDow`) manda, y lo que se edita es la
+ * variante que ESE dia recibe — la propia si la tiene, el dia base si la hereda (y la barra de
+ * contexto lo dice, con el CTA para personalizarlo).
+ */
 function ConstructionStep({
   state,
   clientId,
   dispatch,
   errors,
   portions,
+  selectedDow,
+  todayIso,
   dayHandlers,
-  addDayLocked,
+  personalizeLocked,
   onCopySlot,
+  onApplyDerivedTargets,
 }: {
   state: BuilderState
   clientId: string
   dispatch: Dispatch
   errors: Record<string, string>
   portions: PortionsController
-  dayHandlers: DayVariantBarHandlers
-  addDayLocked: boolean
+  /** Dia en pantalla; `null` = el dia base cuando los siete dias tienen contenido propio. */
+  selectedDow: number | null
+  /** Fecha local del coach: solo marca "hoy" en el strip (no decide que variante aplica). */
+  todayIso: string
+  dayHandlers: DayPlanStripHandlers
+  personalizeLocked: boolean
   onCopySlot: (request: SlotCopyRequest) => void
+  /** Precarga las metas del dia base con los totales derivados de sus porciones. */
+  onApplyDerivedTargets: (totals: ExchangeMacroTotals) => void
 }) {
-  // Multi-dia: se edita SIEMPRE el dia activo de la barra de chips; los totales, el resumen
-  // lateral y las porciones son de ese dia.
-  const variant = activeVariantOf(state)
+  // El dia en pantalla resuelve a UNA variante (regla del snapshot); los totales, el resumen
+  // lateral y las porciones son de ella.
+  const variant = builderVariantForDayOfWeek(state, selectedDow)
   // "Total del dia" = items fijos + porciones a eleccion de TODAS las franjas vivas del dia
   // (paridad con RN y con el subtotal de cada franja). Antes solo sumaba items: la misma
   // pantalla mostraba "Subtotal franja 620 kcal" y "Total del dia 180 kcal" (queja del coach).
@@ -1264,14 +1383,21 @@ function ConstructionStep({
       )
     : null
   const totals = combineSubtotals(variantTotals(variant), portionDay)
-  // kcal por dia para los chips (items + porciones, mismo criterio que el total del dia).
+  // kcal por dia para las celdas del strip (items + porciones, mismo criterio que el total del
+  // dia y que el subtotal de cada franja: el strip nunca contradice al editor).
   const kcalByVariantKey: Record<string, number> = {}
+  const portionsByVariantKey: Record<string, number> = {}
   for (const v of state.variants) {
-    const vPortions = portions.groups
-      ? derivePortionTotals(v.slots.map((slot) => portionsKey(v.key, slot.key)), portions.bySlot, portions.groups)
-      : null
+    const keys = v.slots.map((slot) => portionsKey(v.key, slot.key))
+    const vPortions = portions.groups ? derivePortionTotals(keys, portions.bySlot, portions.groups) : null
     kcalByVariantKey[v.key] = combineSubtotals(variantTotals(v), vPortions).calories
+    portionsByVariantKey[v.key] = keys.reduce(
+      (total, key) => total + (portions.bySlot[key] ?? []).reduce((sum, target) => sum + (target.portions ?? 0), 0),
+      0,
+    )
   }
+  const cells = builderDayCells(state, { kcalByVariantKey, portionsByVariantKey, todayIso })
+  const inheritedDays = inheritedDayOfWeeks(state)
   const slotsError = errors['variant.' + variant.key + '.slots'] ?? errors.slots
   // P2-1: qué día tiene el problema, y un atajo para saltar ahí. Con un solo día del plan el
   // aviso sigue siendo el texto de siempre (no hay a dónde saltar).
@@ -1285,7 +1411,7 @@ function ConstructionStep({
       <NutritionCard tone="neutral">
         <p className="text-sm text-body">
           Los planes flexibles no definen franjas ni alimentos prescritos: el alumno registra libremente contra las
-          metas del paso anterior. Continua para revisar y publicar.
+          metas del paso anterior. Ya puedes publicar.
         </p>
       </NutritionCard>
     )
@@ -1293,13 +1419,14 @@ function ConstructionStep({
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-4">
-        {/* Barra de dias (multi-dia): chips + "Agregar dia" + menu de dia + banner de herencia. */}
-        <DayVariantBar
-          variants={state.variants}
-          activeVariantKey={variant.key}
-          kcalByVariantKey={kcalByVariantKey}
-          baseTargets={state.targets}
-          addDayLocked={addDayLocked}
+        {/* Selector de dia: strip Lu-Do + barra de contexto (que se edita y a quien le llega). */}
+        <DayPlanStrip
+          state={state}
+          cells={cells}
+          selectedDow={selectedDow}
+          inheritedDays={inheritedDays}
+          selectedKcal={totals.calories}
+          personalizeLocked={personalizeLocked}
           errorByVariantKey={dayErrors}
           handlers={dayHandlers}
         />
@@ -1309,17 +1436,19 @@ function ConstructionStep({
             className="rounded-control border border-rose-300 bg-rose-50 px-3 py-2 dark:border-rose-800 dark:bg-rose-950/40"
           >
             <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
-              {daysWithErrors.length === 1 ? 'Revisa este día antes de continuar:' : 'Revisa estos días antes de continuar:'}
+              {daysWithErrors.length === 1 ? 'Revisa este día antes de publicar:' : 'Revisa estos días antes de publicar:'}
             </p>
             <ul className="mt-1.5 space-y-1">
               {daysWithErrors.map((candidate) => (
                 <li key={candidate.key}>
                   <button
                     type="button"
-                    onClick={() => dayHandlers.onSelect(candidate.key)}
+                    onClick={() => dayHandlers.onSelectVariant(candidate.key)}
                     className="inline-flex min-h-9 w-full items-center gap-1.5 rounded-control px-1 text-left text-xs text-rose-700 transition-colors hover:bg-rose-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-rose-300 dark:hover:bg-rose-900/40"
                   >
-                    <span className="font-semibold underline underline-offset-2">{candidate.label}</span>
+                    <span className="font-semibold underline underline-offset-2">
+                      {candidate.isDefault ? 'Día base' : candidate.label}
+                    </span>
                     <span className="min-w-0 flex-1 truncate">{dayErrors[candidate.key]}</span>
                   </button>
                 </li>
@@ -1351,6 +1480,18 @@ function ConstructionStep({
           Agregar franja
         </button>
 
+        {/* "Usar como objetivos" (SPEC UX-a / R6): vive PEGADA al total del dia base, que es
+            donde las porciones ya existen — en el paso anterior nunca podia aparecer en la
+            primera pasada del coach (hallazgo 7 de la auditoria). Deriva del dia base, asi que
+            solo se monta con el dia base en pantalla; precarga las metas del paso "El plan". */}
+        {variant.isDefault ? (
+          <PortionsDeriveCard
+            liveSlotKeys={variant.slots.map((slot) => portionsKey(variant.key, slot.key))}
+            controller={portions}
+            onApply={onApplyDerivedTargets}
+          />
+        ) : null}
+
         <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 lg:hidden">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">
             {variant.isDefault ? 'Total del día base' : 'Total de ' + variant.label}
@@ -1369,262 +1510,6 @@ function ConstructionStep({
           <DaySummary state={state} variant={variant} totals={totals} portions={portions} />
         </div>
       </div>
-    </div>
-  )
-}
-
-const REVIEW_TARGET_FIELDS: Array<{ field: keyof BuilderTargets; label: string }> = [
-  { field: 'calories', label: 'kcal' },
-  { field: 'proteinG', label: 'P' },
-  { field: 'carbsG', label: 'C' },
-  { field: 'fatsG', label: 'G' },
-]
-
-/** Nombre visible de un item prescrito en la lectura compacta del paso Revisar. */
-function itemDisplayName(item: BuilderItem): string {
-  if (item.food) return item.food.name
-  const custom = (item.customName ?? '').trim()
-  return custom === '' ? 'Alimento sin nombre' : custom
-}
-
-/**
- * Lectura compacta del contenido de un dia en el paso Revisar (P1-6): franjas con su hora y,
- * bajo cada una, sus alimentos en UNA linea (nombre con ellipsis + cantidad tabular). Antes la
- * revision solo mostraba numeros abstractos: el coach tenia que volver al paso 3 y navegar por
- * chips para saber que iba a publicar. No edita nada; el detalle fino sigue en Construccion.
- */
-function ReviewSlotList({ slots }: { slots: BuilderSlot[] }) {
-  if (slots.length === 0) return null
-  return (
-    <ul className="mt-3 space-y-2 border-t border-border-subtle pt-3">
-      {slots.map((slot) => (
-        <li key={slot.key}>
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="min-w-0 truncate text-sm font-semibold text-strong">{slot.name.trim() || 'Franja sin nombre'}</p>
-            {slot.startTime.trim() !== '' ? (
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted">{slot.startTime}</span>
-            ) : null}
-          </div>
-          {slot.items.length === 0 ? (
-            <p className="text-xs text-subtle">Sin alimentos fijos</p>
-          ) : (
-            <ul className="mt-0.5 space-y-0.5">
-              {slot.items.map((item) => (
-                <li key={item.key} className="flex items-baseline justify-between gap-2">
-                  <span className="min-w-0 truncate text-xs text-body">
-                    {itemDisplayName(item)}
-                    {item.optional ? <span className="text-subtle"> · opcional</span> : null}
-                  </span>
-                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted">
-                    {item.quantity.trim() === '' ? '—' : item.quantity + ' ' + item.unit}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-/**
- * Card de UN dia en el paso Revisar (multi-dia): tira Lu-Do de los dias que le tocan,
- * objetivos efectivos con las DIFERENCIAS vs el dia base resaltadas, total prescrito del dia,
- * la lectura compacta de sus franjas/alimentos y sus chips de porciones. Solo se monta cuando
- * el plan tiene mas de un dia.
- */
-function ReviewDayCard({
-  state,
-  variant,
-  portions,
-}: {
-  state: BuilderState
-  variant: BuilderVariant
-  portions: PortionsController
-}) {
-  const keys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
-  const dayPortions = portions.groups ? derivePortionTotals(keys, portions.bySlot, portions.groups) : null
-  const totals = combineSubtotals(variantTotals(variant), dayPortions)
-  const targets = variantEffectiveTargets(state, variant)
-  const diffs = variant.isDefault
-    ? []
-    : REVIEW_TARGET_FIELDS.filter(({ field }) => targets[field].trim() !== state.targets[field].trim())
-
-  return (
-    <NutritionCard>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-display text-base font-semibold text-strong">{variant.label}</p>
-        <span className="font-mono text-xs tabular-nums text-muted">
-          {variant.slots.length} {variant.slots.length === 1 ? 'franja' : 'franjas'}
-        </span>
-      </div>
-      <DayVariantWeekStrip variants={state.variants} variant={variant} />
-
-      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="mb-1 text-xs uppercase tracking-wide text-muted">Objetivos del dia</dt>
-          <dd className="text-body">
-            <MacroChipRow
-              calories={numOrNull(targets.calories)}
-              proteinG={numOrNull(targets.proteinG)}
-              carbsG={numOrNull(targets.carbsG)}
-              fatsG={numOrNull(targets.fatsG)}
-            />
-            {diffs.length > 0 ? (
-              <ul className="mt-1.5 flex flex-wrap gap-1">
-                {diffs.map(({ field, label }) => (
-                  <li
-                    key={field}
-                    className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary"
-                  >
-                    {label}: {targets[field].trim() === '' ? 'sin meta' : targets[field]} (base{' '}
-                    {state.targets[field].trim() === '' ? 'sin meta' : state.targets[field]})
-                  </li>
-                ))}
-              </ul>
-            ) : variant.isDefault ? null : (
-              <p className="mt-1 text-xs text-subtle">Usa los objetivos del dia base.</p>
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt className="mb-1 text-xs uppercase tracking-wide text-muted">Total prescrito</dt>
-          <dd className="text-body">
-            <MacroChipRow
-              calories={totals.calories}
-              proteinG={totals.proteinG}
-              carbsG={totals.carbsG}
-              fatsG={totals.fatsG}
-            />
-            {dayPortions ? (
-              <p className="mt-1 text-xs text-muted">
-                {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(dayPortions.calories)))}
-              </p>
-            ) : null}
-          </dd>
-        </div>
-      </dl>
-
-      <ReviewSlotList slots={variant.slots} />
-
-      <PortionsReviewSection
-        slots={variant.slots.map((slot) => ({ key: portionsKey(variant.key, slot.key), name: slot.name }))}
-        controller={portions}
-      />
-    </NutritionCard>
-  )
-}
-
-function ReviewStep({
-  state,
-  dispatch,
-  publishError,
-  portions,
-}: {
-  state: BuilderState
-  dispatch: Dispatch
-  publishError: string | null
-  portions: PortionsController
-}) {
-  const usesSlots = strategyUsesSlots(state.strategy)
-  const multiDay = state.variants.length > 1
-  const base = baseVariantOf(state)
-  const baseKeys = base.slots.map((slot) => portionsKey(base.key, slot.key))
-  // "Total prescrito" combinado (items + porciones a eleccion): mismo criterio que el paso
-  // Construccion; antes la revision mostraba un total menor al que el coach acababa de ver.
-  const portionDay = portions.groups ? derivePortionTotals(baseKeys, portions.bySlot, portions.groups) : null
-  const totals = combineSubtotals(variantTotals(base), portionDay)
-  const meta = state.strategy ? NUTRITION_STRATEGIES[state.strategy] : null
-  return (
-    <div className="max-w-3xl space-y-4">
-      <NutritionCard>
-        <div className="flex flex-wrap items-center gap-2">
-          {state.strategy ? <StrategyBadge strategy={state.strategy} /> : null}
-          <span className="font-display text-lg font-semibold text-strong">{state.planName || 'Sin nombre'}</span>
-        </div>
-        {meta ? <p className="mt-1 text-sm text-muted">{meta.description}</p> : null}
-        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="mb-1 text-xs uppercase tracking-wide text-muted">
-              {multiDay ? 'Metas del dia base' : 'Metas diarias'}
-            </dt>
-            <dd className="text-body">
-              <MacroChipRow
-                calories={numOrNull(state.targets.calories)}
-                proteinG={numOrNull(state.targets.proteinG)}
-                carbsG={numOrNull(state.targets.carbsG)}
-                fatsG={numOrNull(state.targets.fatsG)}
-              />
-            </dd>
-          </div>
-          {usesSlots ? (
-            <div>
-              <dt className="mb-1 text-xs uppercase tracking-wide text-muted">
-                Total prescrito · {base.slots.length} {base.slots.length === 1 ? 'franja' : 'franjas'}
-              </dt>
-              <dd className="text-body">
-                <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
-                {portionDay ? (
-                  <p className="mt-1 text-xs text-muted">
-                    {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
-                  </p>
-                ) : null}
-              </dd>
-            </div>
-          ) : null}
-        </dl>
-        {/* P1-6: plan de un solo dia => la lectura del contenido va en esta misma card (con
-            varios dias, cada ReviewDayCard trae la suya). */}
-        {usesSlots && !multiDay ? <ReviewSlotList slots={base.slots} /> : null}
-      </NutritionCard>
-
-      {/* Multi-dia: la revision se agrupa POR DIA (totales del dia + diferencias vs el base).
-          Un plan de un solo dia conserva la revision de siempre. */}
-      {usesSlots && multiDay ? (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Dias del plan</p>
-          {state.variants.map((variant) => (
-            <ReviewDayCard key={variant.key} state={state} variant={variant} portions={portions} />
-          ))}
-        </div>
-      ) : null}
-
-      {/* NUEVO (SPEC UX-a): chips read-only portionsSummaryLabel por franja + banner de
-          macros referenciales. El MacroBudget/totales existentes no se duplican. */}
-      {usesSlots && !multiDay ? (
-        <PortionsReviewSection
-          slots={base.slots.map((slot) => ({ key: portionsKey(base.key, slot.key), name: slot.name }))}
-          controller={portions}
-        />
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2 md:items-start">
-        <div>
-          <label className={labelClass} htmlFor="effective-from">Vigente desde</label>
-          <input
-            id="effective-from"
-            className={inputClass}
-            type="date"
-            value={state.effectiveFrom}
-            onChange={(e) => dispatch({ type: 'SET_EFFECTIVE_FROM', value: e.target.value })}
-          />
-        </div>
-
-        <NutritionCard tone="neutral">
-          <p className="text-xs text-muted">
-            Para copiar este plan a otros alumnos, usa &quot;Asignar a otros alumnos&quot; desde la ficha después de publicar.
-            Cada cambio publica una versión nueva y la anterior queda en el historial. Las plantillas reutilizables todavía
-            no están disponibles.
-          </p>
-        </NutritionCard>
-      </div>
-
-      {publishError ? (
-        <p className="rounded-control border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300">
-          {publishError}
-        </p>
-      ) : null}
     </div>
   )
 }
@@ -1676,11 +1561,11 @@ function MobileBuilderStepper({ steps }: { steps: NutritionBuilderStepModel[] })
   )
 }
 
+// Wizard de DOS pasos (SPEC nutrition-ui-poda, punto 11). "Revisar" desaparecio: su unico
+// control editable (`Vigente desde`) subio a "El plan" y su lectura ya estaba en pantalla.
 const STEP_META = [
-  { id: 'estrategia', label: 'Estrategia' },
-  { id: 'objetivos', label: 'Objetivos' },
-  { id: 'construccion', label: 'Construccion' },
-  { id: 'revision', label: 'Revisar y publicar' },
+  { id: 'plan', label: 'El plan' },
+  { id: 'dias', label: 'Los días' },
 ]
 
 // Respaldo local (W3b): DOS piezas de estado independientes viajan juntas — el árbol del
@@ -1760,6 +1645,13 @@ export function PlanBuilderClient({
   // + catálogo de grupos con carga perezosa). Claves de franjas/días borrados quedan huérfanas
   // sin efecto: attach/derive filtran por las franjas vivas de state.variants.
   const portions = usePortionsBuilder(clientId, initialDraft?.portionsBySlot)
+  /**
+   * Día del strip que el coach tiene en pantalla (`null` = el día base cuando ya no le aplica a
+   * ningún día). Es estado de UI a propósito: el MODELO sigue siendo "día base + días propios"
+   * y la variante en edición sigue viviendo en el reducer (`activeVariantKey`). Cada gesto que
+   * mueve el día mueve las dos cosas juntas, así que no divergen.
+   */
+  const [selectedDow, setSelectedDow] = useState<number | null>(() => initialBuilderDow(state, today))
   const [showErrors, setShowErrors] = useState(false)
   // Anuncio para lectores de pantalla de lo que acaba de pasar con los dias (crear, duplicar,
   // eliminar, copiar una franja). Se pinta en una region `aria-live` visualmente oculta.
@@ -1880,10 +1772,11 @@ export function PlanBuilderClient({
   const multiDayVariantCount = existingPlan?.dayVariantCount ?? 0
   const rehydrationFailed = existingPlan != null && initialDraft == null
   const multiDayLocked = rehydrationFailed && multiDayVariantCount > 1
-  // Gate comercial (espejo de UI): mas de un dia exige Nutricion Pro. El servidor
-  // (`publishPlanAction`) responde UPGRADE_REQUIRED con feature `multi_variant` — esta bandera
-  // solo evita el callejon sin salida y muestra el upsell.
-  const addDayLocked = !nutritionProEnabled
+  // Gate comercial (espejo de UI): que un dia tenga contenido PROPIO exige Nutricion Pro (el
+  // plan pasa a tener 2 variantes). El servidor (`publishPlanAction`) responde UPGRADE_REQUIRED
+  // con feature `multi_variant` — esta bandera solo evita el callejon sin salida y muestra el
+  // upsell al tocar "Personalizar".
+  const personalizeLocked = !nutritionProEnabled
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
@@ -1891,7 +1784,8 @@ export function PlanBuilderClient({
     let stepState: 'upcoming' | 'current' | 'complete' | 'error' = 'upcoming'
     if (index === state.step) stepState = showErrors && !validation.ok ? 'error' : 'current'
     else if (index < state.step) stepState = 'complete'
-    const description = index === 2 && !strategyUsesSlots(state.strategy) ? 'No aplica (plan flexible)' : undefined
+    const description =
+      index === BUILDER_STEP_DAYS && !strategyUsesSlots(state.strategy) ? 'Plan flexible: sin franjas' : undefined
     return { id: meta.id, label: meta.label, description, state: stepState }
   })
 
@@ -1932,6 +1826,9 @@ export function PlanBuilderClient({
       // franjas (structured/hybrid) lo precargamos para que las filas de porciones muestren
       // nombre/color en vez del fallback (mismo camino que el flujo normal del picker).
       if (strategyUsesSlots(payload.state.strategy)) portions.ensureGroupsLoaded()
+      // El día del strip no viaja en el borrador (es estado de UI): se re-deriva del día que el
+      // borrador tenía en edición para que el strip y el reducer no queden apuntando distinto.
+      setSelectedDow(initialBuilderDow(payload.state, today))
       // Borrador del formato viejo: ya migrado en memoria por `RESTORE`. Se borra la key v1
       // para que el proximo autosave (que escribe en la v2) no deje dos copias divergentes.
       if (migratedDraftRef.current) {
@@ -1942,10 +1839,14 @@ export function PlanBuilderClient({
     setShowDraftBanner(false)
   }
 
-  // ── Multi-dia: handlers de la barra de dias ───────────────────────────────────────────────
-  // Las porciones viven FUERA del reducer, asi que crear/duplicar/eliminar un dia mueve DOS
+  // ── Handlers del selector de dia ──────────────────────────────────────────────────────────
+  // Las porciones viven FUERA del reducer, asi que personalizar/copiar/eliminar un dia mueve DOS
   // piezas: el arbol (dispatch) y el mapa de porciones (controller). Las keys de las franjas
   // clonadas son deterministas (`clonedKey`), asi que el mapa se re-etiqueta sin adivinar.
+  //
+  // TERCERA pieza, del selector nuevo: `selectedDow`. Todo gesto que cambie de dia la mueve en el
+  // MISMO handler que el dispatch (React agrupa el render), asi que el dia del strip y la
+  // variante activa del reducer nunca quedan apuntando a cosas distintas.
 
   function cloneVariantPortions(sourceVariant: BuilderVariant, targetVariantKey: string) {
     portions.cloneVariant({
@@ -1963,45 +1864,63 @@ export function PlanBuilderClient({
     toast(message, { duration: 4000 })
   }
 
-  function handleAddDays(days: number[], origin: 'copy-base' | 'empty') {
-    // Se filtra aca lo mismo que rechaza el reducer (dia ocupado / tope), para que las keys
-    // generadas queden alineadas con los dias que SI se crean y el clon de porciones no
-    // apunte a una variante inexistente.
-    const taken = new Set(takenDayOfWeeks(state))
-    const accepted: number[] = []
-    for (const day of days) {
-      if (taken.has(day) || accepted.length + taken.size >= MAX_DAY_VARIANTS) continue
-      accepted.push(day)
-    }
-    if (accepted.length === 0) return
-    const keys = accepted.map(() => genId())
-    dispatch({ type: 'ADD_VARIANTS', days: accepted, keys, origin })
-    if (origin === 'copy-base') {
-      const base = baseVariantOf(state)
-      for (const key of keys) cloneVariantPortions(base, key)
-    }
-    // El reducer deja activo el PRIMER dia creado: eso es lo que se anuncia.
-    const firstLabel = autoVariantLabel(accepted[0])
-    announce(
-      accepted.length === 1
-        ? `Se creó ${firstLabel} — ahora estás editando ${firstLabel}`
-        : `Se crearon ${accepted.length} días — ahora estás editando ${firstLabel}`,
-    )
+  /** Elegir un dia del strip: mueve el dia visible Y la variante en edicion del reducer. */
+  function handleSelectDay(dayOfWeek: number | null) {
+    setSelectedDow(dayOfWeek)
+    const variant = builderVariantForDayOfWeek(state, dayOfWeek)
+    if (variant.key !== state.activeVariantKey) dispatch({ type: 'SET_ACTIVE_VARIANT', variantKey: variant.key })
   }
 
-  function handleDuplicateVariant(sourceVariantKey: string, dayOfWeek: number) {
+  /**
+   * Saltar a un DIA por su variante (aviso "Revisa este día"): el strip habla de dias, asi que
+   * la variante se traduce al dia que la representa.
+   */
+  function handleSelectVariant(variantKey: string) {
+    setSelectedDow(builderDowForVariant(state, variantKey, selectedDow))
+    if (variantKey !== state.activeVariantKey) dispatch({ type: 'SET_ACTIVE_VARIANT', variantKey })
+  }
+
+  /**
+   * "Personalizar {dia}": el dia deja de heredar y pasa a tener contenido PROPIO, copiado del dia
+   * base (es lo que el coach ve en pantalla, asi que copiar es lo unico que no sorprende). Reusa
+   * la primitiva de alta de siempre (`ADD_VARIANTS` con origen `copy-base`), asi que el modelo,
+   * las keys clonadas y las porciones se mueven exactamente como antes.
+   */
+  function handlePersonalizeDay(dayOfWeek: number) {
+    // Cinturon: mismo filtro que el reducer (dia ya propio / tope de dias), para que la key
+    // generada no quede apuntando a una variante que no se creo.
+    const taken = takenDayOfWeeks(state)
+    if (taken.includes(dayOfWeek) || taken.length >= MAX_DAY_VARIANTS) return
+    const key = genId()
+    dispatch({ type: 'ADD_VARIANTS', days: [dayOfWeek], keys: [key], origin: 'copy-base' })
+    cloneVariantPortions(baseVariantOf(state), key)
+    setSelectedDow(dayOfWeek)
+    const label = autoVariantLabel(dayOfWeek)
+    announce(`${label} ahora es un día propio — lo que edites acá solo le llega a ese día`)
+  }
+
+  /** "Copiar a otros días" del menú del día: crea el día destino con este contenido. */
+  function handleCopyDayTo(sourceVariantKey: string, dayOfWeek: number) {
     const source = state.variants.find((variant) => variant.key === sourceVariantKey)
     if (!source || takenDayOfWeeks(state).includes(dayOfWeek)) return
     const key = genId()
     dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek })
     cloneVariantPortions(source, key)
+    setSelectedDow(dayOfWeek)
     const label = autoVariantLabel(dayOfWeek)
-    announce(`Se creó ${label} con una copia de ${source.label} — ahora estás editando ${label}`)
+    announce(`${label} quedó con una copia de ${source.label} — ahora estás editando ${label}`)
   }
 
-  // Eliminar un dia con DESHACER (paridad con la edicion rapida). Al deshacer se reinserta la
-  // variante en su posicion sobre el estado VIGENTE (no se revierte lo editado entremedio) y
-  // se reponen SUS porciones, que viven en el mapa hermano.
+  /** "Cambiar día": la variante se muda de dia y el strip sigue al dia nuevo. */
+  function handleChangeVariantDay(variantKey: string, dayOfWeek: number) {
+    if (takenDayOfWeeks(state, variantKey).includes(dayOfWeek)) return
+    dispatch({ type: 'SET_VARIANT_DAY', variantKey, dayOfWeek })
+    setSelectedDow(dayOfWeek)
+  }
+
+  // "Eliminar dia" = ese dia VUELVE A HEREDAR el dia base, con DESHACER (paridad con la edicion
+  // rapida). Al deshacer se reinserta la variante en su posicion sobre el estado VIGENTE (no se
+  // revierte lo editado entremedio) y se reponen SUS porciones, que viven en el mapa hermano.
   function handleRemoveVariant(variantKey: string) {
     const index = state.variants.findIndex((variant) => variant.key === variantKey)
     const removed = index < 0 ? null : state.variants[index]
@@ -2014,8 +1933,10 @@ export function PlanBuilderClient({
     }
     dispatch({ type: 'REMOVE_VARIANT', variantKey })
     portions.dropVariant(variantKey)
-    setLiveMessage(`Se eliminó ${removed.label}`)
-    toast(`Se eliminó ${removed.label}.`, {
+    // El dia sigue en pantalla: ahora muestra el dia base (que es lo que va a recibir).
+    if (removed.dayOfWeek != null) setSelectedDow(removed.dayOfWeek)
+    setLiveMessage(`${removed.label} volvió a seguir el día base`)
+    toast(`${removed.label} volvió a seguir el día base.`, {
       duration: 5000,
       action: {
         label: 'Deshacer',
@@ -2026,6 +1947,7 @@ export function PlanBuilderClient({
           variants.splice(Math.min(index, variants.length), 0, removed)
           dispatch({ type: 'RESTORE', state: { ...current, variants, activeVariantKey: removed.key } })
           portions.restoreBySlot({ ...portionsRef.current, ...removedPortions })
+          if (removed.dayOfWeek != null) setSelectedDow(removed.dayOfWeek)
           setLiveMessage(`Se restauró ${removed.label}`)
         },
       },
@@ -2055,12 +1977,13 @@ export function PlanBuilderClient({
     )
   }
 
-  const dayHandlers: DayVariantBarHandlers = {
-    onSelect: (variantKey) => dispatch({ type: 'SET_ACTIVE_VARIANT', variantKey }),
-    onAddDays: handleAddDays,
+  const dayHandlers: DayPlanStripHandlers = {
+    onSelectDay: handleSelectDay,
+    onSelectVariant: handleSelectVariant,
+    onPersonalize: handlePersonalizeDay,
     onRename: (variantKey, label) => dispatch({ type: 'SET_VARIANT_LABEL', variantKey, value: label }),
-    onChangeDay: (variantKey, dayOfWeek) => dispatch({ type: 'SET_VARIANT_DAY', variantKey, dayOfWeek }),
-    onDuplicate: handleDuplicateVariant,
+    onChangeDay: handleChangeVariantDay,
+    onCopyToDay: handleCopyDayTo,
     onSetTargetsMode: (variantKey, mode) => dispatch({ type: 'SET_VARIANT_TARGETS_MODE', variantKey, mode }),
     onSetVariantTarget: (variantKey, field, value) =>
       dispatch({ type: 'SET_VARIANT_TARGETS', variantKey, field, value }),
@@ -2356,40 +2279,45 @@ export function PlanBuilderClient({
       </div>
 
       <div className="min-w-0 space-y-5">
-        {state.step === 0 ? (
-          <StrategyStep state={state} dispatch={dispatch} nutritionProEnabled={nutritionProEnabled} />
+        {state.step === BUILDER_STEP_PLAN ? (
+          <PlanStep
+            state={state}
+            dispatch={dispatch}
+            errors={showErrors ? validation.errors : {}}
+            nutritionProEnabled={nutritionProEnabled}
+          />
         ) : null}
-        {state.step === 1 ? (
-          <>
-            {/* NUEVO (SPEC UX-a / R6): con porciones en el draft, ofrece precargar los
-                target_* derivados. Solo precarga tras el tap; nunca sobrescribe sola. */}
-            <PortionsDeriveCard
-              /* Las metas del paso "Objetivos" son las del dia BASE: la derivacion mira sus franjas. */
-              liveSlotKeys={baseVariantOf(state).slots.map((slot) => portionsKey(baseVariantOf(state).key, slot.key))}
-              controller={portions}
-              onApply={(totals) => {
-                dispatch({ type: 'SET_TARGET', field: 'calories', value: String(Math.round(totals.calories)) })
-                dispatch({ type: 'SET_TARGET', field: 'proteinG', value: String(Math.round(totals.proteinG)) })
-                dispatch({ type: 'SET_TARGET', field: 'carbsG', value: String(Math.round(totals.carbsG)) })
-                dispatch({ type: 'SET_TARGET', field: 'fatsG', value: String(Math.round(totals.fatsG)) })
-              }}
-            />
-            <TargetsStep state={state} dispatch={dispatch} errors={showErrors ? validation.errors : {}} />
-          </>
-        ) : null}
-        {state.step === 2 ? (
+        {state.step === BUILDER_STEP_DAYS ? (
           <ConstructionStep
             state={state}
             clientId={clientId}
             dispatch={dispatch}
             errors={showErrors ? validation.errors : {}}
             portions={portions}
+            selectedDow={selectedDow}
+            todayIso={today}
             dayHandlers={dayHandlers}
-            addDayLocked={addDayLocked}
+            personalizeLocked={personalizeLocked}
             onCopySlot={handleCopySlot}
+            onApplyDerivedTargets={(totals) => {
+              dispatch({ type: 'SET_TARGET', field: 'calories', value: String(Math.round(totals.calories)) })
+              dispatch({ type: 'SET_TARGET', field: 'proteinG', value: String(Math.round(totals.proteinG)) })
+              dispatch({ type: 'SET_TARGET', field: 'carbsG', value: String(Math.round(totals.carbsG)) })
+              dispatch({ type: 'SET_TARGET', field: 'fatsG', value: String(Math.round(totals.fatsG)) })
+              toast('Metas del plan actualizadas con las porciones del día base.', { duration: 4000 })
+            }}
           />
         ) : null}
-        {state.step === 3 ? <ReviewStep state={state} dispatch={dispatch} publishError={publishError} portions={portions} /> : null}
+
+        {/* El error de publicacion se pinta junto a la CTA (antes vivia en el paso "Revisar"). */}
+        {publishError ? (
+          <p
+            role="alert"
+            className="rounded-control border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+          >
+            {publishError}
+          </p>
+        ) : null}
 
         {/* Controles del wizard: en movil la CTA primaria crece (target grande en la thumb zone);
             en sm+ vuelve a su ancho natural. "Atras" siempre visible (navegacion libre). */}
@@ -2398,7 +2326,7 @@ export function PlanBuilderClient({
             <ChevronLeft className="h-4 w-4" />
             Atras
           </button>
-          {state.step < 3 ? (
+          {state.step < BUILDER_STEP_DAYS ? (
             <button type="button" onClick={handleNext} className={primaryButtonClass + ' flex-1 justify-center sm:flex-none'}>
               Siguiente
               <ChevronRight className="h-4 w-4" />

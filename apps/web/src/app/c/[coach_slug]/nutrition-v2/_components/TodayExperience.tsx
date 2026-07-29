@@ -5,9 +5,21 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, Lock, Pencil, Plus, ScanBarcode, Share2, Star, Trash2, Utensils } from 'lucide-react'
 import {
-  BULK_MARK_COMPLETE_LABEL,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Lock,
+  Pencil,
+  Plus,
+  ScanBarcode,
+  Share2,
+  Star,
+  Trash2,
+  Utensils,
+} from 'lucide-react'
+import {
   buildNutritionDayShareText,
   bulkMarkCtaLabel,
   bulkMarkSlotState,
@@ -26,15 +38,7 @@ import {
   type NutritionItemSubstitutionRead,
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
-import {
-  MacroChipRow,
-  NutritionCard,
-  NutritionMotionButton,
-  NutritionStatePanel,
-  PlanVersionBadge,
-  StrategyBadge,
-} from '@/components/nutrition-v2'
-import { formatNutritionShortDate } from '@/lib/date-utils'
+import { MacroChipRow, NutritionCard, NutritionMotionButton } from '@/components/nutrition-v2'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { AuraHero } from './AuraHero'
 import { TodayModal } from './TodayModal'
@@ -48,17 +52,22 @@ import {
   buildPrescribedIntakePayload,
   buildVoidPayload,
   consumedEntries,
+  consumedEntryForItem,
   contextFromToday,
   estimateCatalogIntakeTotals,
+  formatIntakeClock,
   mealSlotOptions,
   newIdempotencyKey,
+  outOfPlanEntries,
   resolveItemDisplayNote,
+  slotFreeEntries,
+  slotPortionMarksTotal,
 } from './nutrition-today.logic'
 import { usePortionMarks, type PortionMarksApi } from './PortionMarks'
 import { PortionCoverageRow } from './PortionCoverageRow'
 import { PortionSlotSection } from './PortionSlotSection'
 import { PortionEquivalencesSheet } from './PortionEquivalencesSheet'
-import { slotsWithPrescribedContent } from './portion-marks.logic'
+import { formatPortionsEs, slotsWithPrescribedContent } from './portion-marks.logic'
 import {
   correctIntakeAction,
   recordIntakeAction,
@@ -78,12 +87,9 @@ import {
 // VIVOS en `../_actions/intake.actions` como mecanismo interno para un cierre automático futuro;
 // aquí simplemente ya no se invocan.
 //
-// El chip de estado del día NO puede colgar de `today.snapshotId`: `get_nutrition_today_v2` llama
-// `ensure_day_snapshot` en CADA lectura, así que el id existe desde el primer render del día y el
-// chip verde se encendía a las 8 AM con el anillo en 0 kcal. Cuelga de registros REALES (`entries`,
-// que ya incluye franjas + sin franja + porciones marcadas) y el copy dice lo único que es cierto:
-// que el alumno ya registró algo hoy. Sin registros no se pinta nada (un "sin registros aún" solo
-// repetiría el estado vacío de "Consumido hoy").
+// El chip global "Ya registraste hoy" que colgaba de aquí se retiró (auditoría H2): lo dicen el
+// anillo del héroe, el punto verde del selector semanal y el check de cada fila — afirmarlo una
+// cuarta vez arriba de todo no agregaba ninguna decisión.
 
 type DialogState =
   | { kind: 'none' }
@@ -98,6 +104,7 @@ export function TodayExperience({
   scanHref,
   clientName,
   substitutionsByItem = {},
+  visibleNotes = null,
 }: {
   today: NutritionTodayReadModel
   clientId: string
@@ -109,6 +116,11 @@ export function TodayExperience({
    * lee RLS-scoped de la versión vigente; aquí solo se muestran bajo el item. Vacío ⇒ sin reemplazos.
    */
   substitutionsByItem?: Record<string, NutritionItemSubstitutionRead[]>
+  /**
+   * Nota visible del coach (SPEC ola 3 punto 2): antes solo vivía en el tab "Plan", que el alumno
+   * abre menos — sube al Hoy en una card colapsable bajo el héroe. `null`/vacío ⇒ no se pinta nada.
+   */
+  visibleNotes?: string | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -119,6 +131,14 @@ export function TodayExperience({
   const ctx = useMemo(() => contextFromToday(today, clientId), [today, clientId])
   const entries = useMemo(() => consumedEntries(today), [today])
   const slotOptions = useMemo(() => mealSlotOptions(today), [today])
+  // "Fuera del plan" (auditoría H4): lo que no calza en ninguna franja renderizada. El set de
+  // franjas mostradas se deriva del MISMO filtro que `PrescribedSection` usa para sus cards, así
+  // ningún registro desaparece en silencio si su franja no tiene card.
+  const renderedSlotCodes = useMemo(
+    () => new Set(slotsWithPrescribedContent(today).map((slot) => slot.code)),
+    [today],
+  )
+  const outOfPlan = useMemo(() => outOfPlanEntries(today, renderedSlotCodes), [today, renderedSlotCodes])
 
   // Capa de porciones (SPEC UX-b): invisible si el plan no tiene targets (Q1) — el
   // hook no agrega UI ni estado visible sin `dayCoverage`/`exchangeTargets`.
@@ -269,23 +289,9 @@ export function TodayExperience({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        {today.plan ? <StrategyBadge strategy={today.plan.strategy} /> : null}
-        {today.plan ? (
-          <PlanVersionBadge
-            version={today.plan.versionNumber}
-            status={today.plan.status}
-            effectiveLabel={`desde ${formatNutritionShortDate(today.plan.effectiveFrom)}`}
-          />
-        ) : null}
-        {entries.length > 0 ? (
-          <span className="inline-flex items-center gap-1.5 rounded-pill border border-emerald-300/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300">
-            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Ya registraste hoy
-          </span>
-        ) : null}
-      </div>
-
+      {/* Auditoría H2/H3: fuera el chip "Ya registraste hoy" (lo dicen el anillo, la lista y el
+          punto verde del selector) y el `StrategyBadge` (vocabulario del coach que ahora vive
+          solo en el tab Plan) — cero afirmaciones sin decisión asociada arriba del héroe. */}
       <AuraHero
         greetingName={firstNameFromFullName(clientName)}
         dateKey={today.localDate}
@@ -296,6 +302,9 @@ export function TodayExperience({
           fats: { consumed: today.consumed.fatsG, target: today.targets.fatsG },
         }}
       />
+
+      {/* Nota visible del coach (SPEC ola 3 punto 2): sube al Hoy, card colapsable. */}
+      {visibleNotes ? <CoachNoteCard note={visibleNotes} /> : null}
 
       {/* Fila secundaria compacta de porciones — el héroe único son los anillos. */}
       <PortionCoverageRow items={portionsApi.dayCoverage} />
@@ -369,24 +378,23 @@ export function TodayExperience({
             }),
           )
         }}
+        onEdit={(entry) => openDialog({ kind: 'edit', entry })}
+        onVoid={(entry) => openDialog({ kind: 'void', entry })}
       />
 
-      {/* Consumido hoy */}
-      <section aria-label="Consumido hoy" className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Utensils className="h-4 w-4 text-primary dark:text-primary" aria-hidden="true" />
-          <h2 className="font-display text-lg font-semibold text-strong">Consumido hoy</h2>
-        </div>
-        {entries.length === 0 ? (
-          <NutritionStatePanel
-            icon="empty"
-            title="Todavía no registras alimentos"
-            description="Marca lo que comiste del plan o agrega un alimento libre para llenar tu presupuesto del día."
-          />
-        ) : (
+      {/* "Fuera del plan" (auditoría H4): reemplaza a "Consumido hoy". Lo prescrito ya se ve arriba
+          en su propia fila (check + hora); acá SOLO lo que no calza en ninguna franja mostrada —
+          alimentos libres sin franja y registros de franjas sin card. Sin registros, no se pinta
+          nada (el estado vacío ya lo cubren las franjas de arriba; repetirlo era el eco). */}
+      {outOfPlan.length > 0 ? (
+        <section aria-label="Fuera del plan" className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Utensils className="h-4 w-4 text-primary dark:text-primary" aria-hidden="true" />
+            <h2 className="font-display text-lg font-semibold text-strong">Fuera del plan ({outOfPlan.length})</h2>
+          </div>
           <NutritionCard>
             <div className="divide-y divide-border-subtle">
-              {entries.map((entry) => (
+              {outOfPlan.map((entry) => (
                 <NutritionFoodRow
                   key={entry.id}
                   name={entry.snapshot.name}
@@ -429,8 +437,8 @@ export function TodayExperience({
               ))}
             </div>
           </NutritionCard>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       {dialog.kind === 'register' ? (
         <RegisterFoodDialog
@@ -527,6 +535,33 @@ export function TodayExperience({
         slot={portionSheetSlot}
       />
     </div>
+  )
+}
+
+/**
+ * Nota visible del coach, en una card colapsable bajo el héroe (SPEC ola 3 punto 2). Abierta por
+ * defecto: es la única voz humana del módulo y el punto de subirla al Hoy es que se LEA sin abrir
+ * el tab Plan; "colapsable" es para que el alumno la repliegue una vez leída, no para esconderla.
+ */
+function CoachNoteCard({ note }: { note: string }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <NutritionCard>
+      <button
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Nota de tu coach</span>
+        {open ? (
+          <ChevronUp className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+        ) : (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+        )}
+      </button>
+      {open ? <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-body">{note}</p> : null}
+    </NutritionCard>
   )
 }
 
@@ -678,6 +713,8 @@ function PrescribedSection({
   onOpenPortionSheet,
   onBulkEat,
   onEat,
+  onEdit,
+  onVoid,
 }: {
   today: NutritionTodayReadModel
   busyId: string | null
@@ -690,6 +727,10 @@ function PrescribedSection({
     slot: NutritionTodayReadModel['mealSlots'][number],
     item: NutritionTodayReadModel['mealSlots'][number]['prescriptionItems'][number],
   ) => void
+  /** Abre "Editar cantidad" para un registro ya hecho (prescrito consumido o libre de la franja). */
+  onEdit: (entry: NutritionIntakeReadItem) => void
+  /** Abre "Retirar registro" para un registro ya hecho. */
+  onVoid: (entry: NutritionIntakeReadItem) => void
 }) {
   // Franjas con items fijos O con targets de porciones (Q2: una franja
   // solo-porciones también aparece). Plan sin porciones ⇒ filtro idéntico al previo.
@@ -703,6 +744,8 @@ function PrescribedSection({
       <h2 className="font-display text-lg font-semibold text-strong">Tu plan de hoy</h2>
       {slotsWithPrescription.map((slot) => {
         const bulk = bulkMarkSlotState(today, slot, consumedIds)
+        const freeEntries = slotFreeEntries(slot)
+        const portionMarksTotal = slotPortionMarksTotal(slot)
         return (
           <NutritionCard key={slot.id}>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -710,35 +753,72 @@ function PrescribedSection({
                 <h3 className="font-display text-base font-semibold text-strong">{slot.name}</h3>
                 {slot.startTime ? <span className="font-mono text-xs text-muted">{slot.startTime}</span> : null}
               </div>
+              {/* El estado de la franja vive SOLO acá ("1 de 3" → "Completa") — auditoría H2. */}
               {bulk.requiredTotal > 0 ? (
                 <MealProgressMeter consumed={bulk.requiredConsumed} total={bulk.requiredTotal} />
               ) : null}
             </div>
             <div className="mt-3 divide-y divide-border-subtle">
               {slot.prescriptionItems.map((item) => {
-                const consumed = consumedIds.has(item.id)
+                // El registro consumido se pinta EN la fila del item (check + hora): auditoría
+                // H4 — muere la fila duplicada que antes vivía en "Consumido hoy".
+                const consumedEntry = consumedEntryForItem(slot, item.id)
                 // Reemplazos estructurados (F-02) del item: cuando existen, la fila estructurada
                 // reemplaza al texto legado "Alternativas: …" congelado en `notes` (resolveItemDisplayNote).
                 const substitutions = substitutionsByItem[item.id] ?? []
+                const row = consumedEntry
+                  ? {
+                      name: consumedEntry.snapshot.name,
+                      detail: consumedEntry.snapshot.brand,
+                      quantityLabel: `${consumedEntry.quantity} ${consumedEntry.unit}`,
+                      calories: consumedEntry.totals.calories,
+                      proteinG: consumedEntry.totals.proteinG,
+                      carbsG: consumedEntry.totals.carbsG,
+                      fatsG: consumedEntry.totals.fatsG,
+                      imageUrl: resolveFoodImageUrl(consumedEntry.media ?? item.media ?? null, SUPABASE_BASE),
+                      category: consumedEntry.category ?? item.category ?? undefined,
+                    }
+                  : {
+                      name: item.name ?? 'Alimento prescrito',
+                      detail: item.brand,
+                      quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                      calories: item.macros.calories,
+                      proteinG: item.macros.proteinG,
+                      carbsG: item.macros.carbsG,
+                      fatsG: item.macros.fatsG,
+                      imageUrl: resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE),
+                      category: item.category ?? undefined,
+                    }
                 return (
                   <div key={item.id}>
                     <NutritionFoodRow
-                      name={item.name ?? 'Alimento prescrito'}
-                      detail={item.brand}
-                      quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
-                      calories={item.macros.calories}
-                      proteinG={item.macros.proteinG}
-                      carbsG={item.macros.carbsG}
-                      fatsG={item.macros.fatsG}
-                      imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
-                      category={item.category ?? undefined}
+                      name={row.name}
+                      detail={row.detail}
+                      quantityLabel={row.quantityLabel}
+                      calories={row.calories}
+                      proteinG={row.proteinG}
+                      carbsG={row.carbsG}
+                      fatsG={row.fatsG}
+                      imageUrl={row.imageUrl}
+                      category={row.category}
                       note={resolveItemDisplayNote(item.notes, substitutions.length > 0)}
                       actions={
-                        consumed ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                            Registrado
-                          </span>
+                        consumedEntry ? (
+                          <div className="flex items-center gap-1">
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
+                              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                              {formatIntakeClock(consumedEntry.occurredAt, today.timezone)}
+                            </span>
+                            {/* NUT-009: el lápiz solo si el plan permite ajustar la cantidad prescrita. */}
+                            {today.permissions.canAdjustPrescribedQuantity ? (
+                              <IconButton label="Editar cantidad" onClick={() => onEdit(consumedEntry)} disabled={isPending}>
+                                <Pencil className="h-4 w-4" aria-hidden="true" />
+                              </IconButton>
+                            ) : null}
+                            <IconButton label="Retirar registro" tone="danger" onClick={() => onVoid(consumedEntry)} disabled={isPending}>
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </IconButton>
+                          </div>
                         ) : (
                           <NutritionMotionButton
                             type="button"
@@ -757,7 +837,43 @@ function PrescribedSection({
                   </div>
                 )
               })}
+              {/* Registros libres de la franja (SPEC ola 3 punto 1): filas dentro de la MISMA card,
+                  con las mismas acciones de editar/retirar que antes vivían en "Consumido hoy". */}
+              {freeEntries.map((entry) => (
+                <NutritionFoodRow
+                  key={entry.id}
+                  name={entry.snapshot.name}
+                  detail={entry.snapshot.brand}
+                  quantityLabel={`${entry.quantity} ${entry.unit}`}
+                  calories={entry.totals.calories}
+                  proteinG={entry.totals.proteinG}
+                  carbsG={entry.totals.carbsG}
+                  fatsG={entry.totals.fatsG}
+                  imageUrl={resolveFoodImageUrl(entry.media ?? null, SUPABASE_BASE)}
+                  category={entry.category ?? undefined}
+                  statusLabel={entry.status === 'corrected' ? 'Corregido' : null}
+                  actions={
+                    <div className="flex items-center gap-1">
+                      {entry.prescriptionItemId === null || today.permissions.canAdjustPrescribedQuantity ? (
+                        <IconButton label="Editar cantidad" onClick={() => onEdit(entry)} disabled={isPending}>
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </IconButton>
+                      ) : null}
+                      <IconButton label="Retirar registro" tone="danger" onClick={() => onVoid(entry)} disabled={isPending}>
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </IconButton>
+                    </div>
+                  }
+                />
+              ))}
             </div>
+            {/* Marcas de porción (SPEC ola 3 punto 1): una sola línea por franja, nunca una fila
+                por marca — auditoría §2.2 ("4 superficies para el mismo contador"). */}
+            {portionMarksTotal > 0 ? (
+              <p className="mt-2 text-xs font-medium tabular-nums text-muted">
+                Porciones marcadas: {formatPortionsEs(portionMarksTotal)}
+              </p>
+            ) : null}
             {/* Registro en bloque de la franja ("Comí toda esta comida") — thumb-zone bajo los items. */}
             <BulkMarkControl
               state={bulk}
@@ -843,7 +959,9 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
 /**
  * Control de registro en bloque de una franja. Estados (del helper puro):
  *  - none-required → nada (la franja no tiene items requeridos).
- *  - complete      → banner esmeralda "Comida completa" (sin acción).
+ *  - complete      → nada (auditoría H1: el chip "Completa" del medidor de arriba, en la MISMA
+ *                    card, ya dice esto — el banner "Comida completa" era la MISMA afirmación
+ *                    dos veces a ~200 px de distancia).
  *  - all-open      → CTA "Comí toda esta comida · N kcal".
  *  - partial       → CTA "Comer lo que falta (N) · M kcal".
  */
@@ -856,15 +974,7 @@ function BulkMarkControl({
   pending: boolean
   onEat: () => void
 }) {
-  if (state.status === 'none-required') return null
-  if (state.status === 'complete') {
-    return (
-      <div className="mt-3 flex items-center justify-center gap-2 rounded-control border border-emerald-300/60 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300">
-        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-        {BULK_MARK_COMPLETE_LABEL}
-      </div>
-    )
-  }
+  if (state.status === 'none-required' || state.status === 'complete') return null
   return (
     <NutritionMotionButton
       type="button"

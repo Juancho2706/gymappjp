@@ -13,23 +13,29 @@ import {
   buildPublishIdempotencyKey,
   buildSlotInsertRow,
   buildVariantInsertRow,
+  builderDayCells,
   builderHasSignificantContent,
   builderReducer,
+  builderVariantForDayOfWeek,
   canProceedToPublishAfterArchive,
   clonedKey,
   computeItemMacros,
   createBaseVariant,
   createEmptyBuilderState,
   createEmptyItem,
+  defaultPermissionsFor,
   effectiveDateConflicts,
+  inheritedDayOfWeeks,
   itemMacros,
   mapFoodCatalogItemToBuilderFood,
   mapWriteError,
   migrateBuilderState,
+  nextPermissionsForStrategyChange,
   normalizeBuilderVariants,
   otherVariantKeys,
   requiredNutritionProFeature,
   resolveSlotCopyTargets,
+  slotsLostIfFlexible,
   takenDayOfWeeks,
   validateStep,
   variantEffectiveTargets,
@@ -71,7 +77,8 @@ function subFood(id: string, name: string): BuilderFood {
 
 function structuredState(): BuilderState {
   return {
-    step: 3,
+    // Wizard de DOS pasos (poda ola 4): el ultimo paso es el 1 ("Los días").
+    step: 1,
     strategy: 'structured',
     planName: 'Plan estructurado',
     effectiveFrom: '2026-07-20',
@@ -123,6 +130,68 @@ describe('reducer / paridad con web', () => {
     const draft = assembleDraft(state, { clientId: CLIENT_ID })
     expect(draft.permissions.canSubstitute).toBe(true)
     expect(draft.permissions.canRegisterFreely).toBe(false)
+  })
+
+  // Fix bug 2.3.5 de la auditoria (poda ola 3, SPEC nutrition-ui-poda punto 2): re-tocar la
+  // MISMA estrategia era indistinguible de elegir una nueva -- reseteaba permisos y podia
+  // vaciar franjas. Espejo 1:1 de la web draft-builder.test.ts.
+  it('SET_STRATEGY con la MISMA estrategia es un no-op total (no resetea permisos ni toca franjas)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    // El coach edita un permiso y agrega una franja extra.
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canAdjustPrescribedQuantity', value: false })
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: BASE_VARIANT_KEY, key: 'slot-b' })
+    const before = state
+    const after = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'ignored' })
+    expect(after).toBe(before) // misma referencia: el reducer ni siquiera reconstruye el arbol.
+  })
+
+  it('un permiso editado por el coach se conserva al cambiar entre estrategias con franjas', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    // Default structured: canRegisterFreely = false. El coach lo prende a mano.
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canRegisterFreely', value: true })
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'hybrid', firstSlotKey: 'k2' })
+    expect(next.permissions.canRegisterFreely).toBe(true)
+  })
+
+  it('un permiso SIN tocar adopta el default de la nueva estrategia', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'hybrid',
+      firstSlotKey: 'k1',
+    })
+    expect(state.permissions.canRegisterFreely).toBe(true) // default hybrid, sin editar
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'k2' })
+    expect(next.permissions.canRegisterFreely).toBe(false) // vuelve al default estricto
+  })
+
+  it('nextPermissionsForStrategyChange conserva canSubstitute rehidratado aunque ninguna estrategia lo defaultee true', () => {
+    const current = { ...defaultPermissionsFor('structured'), canSubstitute: true }
+    const next = nextPermissionsForStrategyChange('structured', 'flexible', current)
+    expect(next.canSubstitute).toBe(true)
+  })
+
+  it('slotsLostIfFlexible cuenta las franjas de TODAS las variantes (logica pura de la confirmacion)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'k1',
+    })
+    expect(slotsLostIfFlexible(state)).toBe(1)
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: BASE_VARIANT_KEY, key: 'slot-b' })
+    expect(slotsLostIfFlexible(state)).toBe(2)
+    // El reducer SIGUE vaciando al despachar (0 = nada que perder ya no aplica); la UI es quien
+    // pregunta antes usando este mismo conteo.
+    const next = builderReducer(state, { type: 'SET_STRATEGY', strategy: 'flexible', firstSlotKey: 'ignored' })
+    expect(slotsLostIfFlexible(next)).toBe(0)
+    expect(baseSlots(next)).toHaveLength(0)
   })
 })
 
@@ -517,7 +586,7 @@ describe('migrateBuilderState (borrador v1 `slots` -> v2 `variants`)', () => {
   it('acepta el formato NUEVO y re-clampa el step + repara la key activa huerfana', () => {
     const raw = { ...structuredState(), step: 99, activeVariantKey: 'fantasma' }
     const migrated = migrateBuilderState(raw, '2026-07-20') as BuilderState
-    expect(migrated.step).toBe(3)
+    expect(migrated.step).toBe(1)
     expect(migrated.activeVariantKey).toBe(BASE_VARIANT_KEY)
   })
 
@@ -687,7 +756,7 @@ describe('validateStep multi-dia', () => {
     const state = builderReducer(structuredState(), { type: 'ADD_VARIANTS', days: [6], keys: ['v-sab'], origin: 'empty' })
     // El sabado quedo vacio y ademas es el activo tras crearlo.
     const withBaseActive = { ...state, activeVariantKey: BASE_VARIANT_KEY }
-    const result = validateStep(withBaseActive, 2)
+    const result = validateStep(withBaseActive, 1)
     expect(result.ok).toBe(false)
     expect(result.errors['variant.v-sab.slots']).toContain('Sábado')
     expect(result.errors.slots).toContain('Sábado')
@@ -703,7 +772,7 @@ describe('validateStep multi-dia', () => {
       itemKey: sabSlot.items[0].key,
       patch: { quantity: '' },
     })
-    const result = validateStep({ ...state, activeVariantKey: BASE_VARIANT_KEY }, 2)
+    const result = validateStep({ ...state, activeVariantKey: BASE_VARIANT_KEY }, 1)
     expect(result.ok).toBe(false)
     expect(result.errors['item.' + sabSlot.items[0].key + '.quantity']).toBe('Cantidad invalida.')
   })
@@ -739,11 +808,18 @@ describe('assemble + validate', () => {
     expect(assembleDraft(structuredState(), { clientId: CLIENT_ID, planId: PLAN_ID }).planId).toBe(PLAN_ID)
   })
 
-  it('paso 0 exige estrategia; paso 2 rechaza franja sin nombre', () => {
-    expect(validateStep(createEmptyBuilderState('2026-07-20'), 0).ok).toBe(false)
+  it('paso 0 exige estrategia, nombre y metas; paso 1 rechaza franja sin nombre', () => {
+    const empty = createEmptyBuilderState('2026-07-20')
+    const step0 = validateStep(empty, 0)
+    expect(step0.ok).toBe(false)
+    // Los pasos "Estrategia" y "Objetivos" se fusionaron: los tres errores salen juntos.
+    expect(step0.errors.strategy).toBeDefined()
+    expect(step0.errors.planName).toBeDefined()
+    expect(step0.errors.calories).toBeDefined()
+    expect(validateStep(structuredState(), 0).ok).toBe(true)
     const bad = structuredState()
     bad.variants[0].slots[0].name = ''
-    expect(validateStep(bad, 2).ok).toBe(false)
+    expect(validateStep(bad, 1).ok).toBe(false)
   })
 })
 
@@ -844,7 +920,7 @@ describe('reducer / RESTORE (respaldo local del builder, 4B-13)', () => {
     expect(restored.planName).toBe('Plan estructurado')
     expect(baseSlots(restored)).toHaveLength(1)
     expect(baseSlots(restored)[0].items[0].food?.id).toBe(FOOD_ID)
-    expect(restored.step).toBe(3)
+    expect(restored.step).toBe(1)
   })
 
   it('round-trip por AsyncStorage (JSON) del payload { state, portionsBySlot }: arbol Y porciones intactos', () => {
@@ -891,12 +967,12 @@ describe('reducer / RESTORE (respaldo local del builder, 4B-13)', () => {
     expect(restored.step).toBe(0)
   })
 
-  it('step fuera de rango en el payload => re-clampado al maximo (3)', () => {
+  it('step fuera de rango en el payload => re-clampado al maximo (1, wizard de dos pasos)', () => {
     const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
       type: 'RESTORE',
       state: { ...structuredState(), step: 99 },
     })
-    expect(restored.step).toBe(3)
+    expect(restored.step).toBe(1)
   })
 
   // Las notas visibles son carry-over del plan, no contenido del wizard: un borrador guardado en
@@ -976,5 +1052,90 @@ describe('builderHasSignificantContent (guard de autosave + salida, 4B-13)', () 
       targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' },
     }
     expect(builderHasSignificantContent(state)).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Selector de dia del creador (SPEC nutrition-ui-poda punto 10): "tocas el DIA, no la variante".
+// La resolucion NO es nueva (es la del snapshot); lo que se fija aca es que el creador la exponga
+// bien: que dia recibe que variante, cuales heredan, y las cifras que pinta cada celda.
+// ---------------------------------------------------------------------------
+
+describe('builderVariantForDayOfWeek / inheritedDayOfWeeks', () => {
+  it('sin dias propios los 7 dias reciben el dia base', () => {
+    const state = structuredState()
+    for (const dow of [1, 2, 3, 4, 5, 6, 0]) {
+      expect(builderVariantForDayOfWeek(state, dow).isDefault).toBe(true)
+    }
+    expect(inheritedDayOfWeeks(state)).toEqual([1, 2, 3, 4, 5, 6, 0])
+  })
+
+  it('el dia personalizado recibe SU variante; el resto sigue heredando', () => {
+    const state = builderReducer(structuredState(), {
+      type: 'DUPLICATE_VARIANT_AS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      key: 'v-sab',
+      dayOfWeek: 6,
+    })
+    expect(builderVariantForDayOfWeek(state, 6).key).toBe('v-sab')
+    expect(builderVariantForDayOfWeek(state, 1).isDefault).toBe(true)
+    expect(inheritedDayOfWeeks(state)).toEqual([1, 2, 3, 4, 5, 0])
+  })
+
+  it('dayOfWeek null = el dia base explicito (puerta del base huerfano)', () => {
+    expect(builderVariantForDayOfWeek(structuredState(), null).isDefault).toBe(true)
+  })
+})
+
+describe('builderDayCells', () => {
+  const kcal = { [BASE_VARIANT_KEY]: 2180, 'v-sab': 2640 }
+
+  it('7 celdas en orden de lectura, con el dia propio marcado y el resto heredando', () => {
+    const state = builderReducer(structuredState(), {
+      type: 'DUPLICATE_VARIANT_AS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      key: 'v-sab',
+      dayOfWeek: 6,
+    })
+    const cells = builderDayCells(state, { kcalByVariantKey: kcal })
+    expect(cells.map((cell) => cell.dayOfWeek)).toEqual([1, 2, 3, 4, 5, 6, 0])
+    expect(cells.map((cell) => cell.isOwnDay)).toEqual([false, false, false, false, false, true, false])
+    expect(cells.map((cell) => cell.inheritsBase)).toEqual([true, true, true, true, true, false, true])
+    // La celda del sabado cuenta SU variante (kcal + franjas del clon), no las del base.
+    const saturday = cells[5]
+    expect(saturday.variant.id).toBe('v-sab')
+    expect(saturday.displayCalories).toBe(2640)
+    expect(saturday.caloriesSource).toBe('prescribed')
+    expect(saturday.slotCount).toBe(1)
+    expect(saturday.itemCount).toBe(1)
+  })
+
+  it('un dia sin items ni porciones cae al OBJETIVO y lo declara (nunca un 0 inventado)', () => {
+    const state = builderReducer(structuredState(), {
+      type: 'REMOVE_SLOT',
+      variantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+    })
+    const cells = builderDayCells(state, { kcalByVariantKey: { [BASE_VARIANT_KEY]: 0 } })
+    expect(cells[0].prescribedCalories).toBeNull()
+    expect(cells[0].displayCalories).toBe(2000) // meta del paso "El plan"
+    expect(cells[0].caloriesSource).toBe('target')
+  })
+
+  it('las porciones del dia entran por el mapa hermano (viven fuera del reducer)', () => {
+    const cells = builderDayCells(structuredState(), {
+      kcalByVariantKey: { [BASE_VARIANT_KEY]: 2180 },
+      portionsByVariantKey: { [BASE_VARIANT_KEY]: 3.5 },
+    })
+    expect(cells[0].portionCount).toBe(3.5)
+  })
+
+  it('marca hoy sin cambiar que variante aplica', () => {
+    // 2026-07-29 es miercoles (dow 3).
+    const cells = builderDayCells(structuredState(), {
+      kcalByVariantKey: { [BASE_VARIANT_KEY]: 2180 },
+      todayIso: '2026-07-29',
+    })
+    expect(cells.filter((cell) => cell.isToday).map((cell) => cell.dayOfWeek)).toEqual([3])
   })
 })

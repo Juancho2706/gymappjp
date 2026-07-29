@@ -4,7 +4,6 @@ import { createNutritionMacroValue } from '@eva/nutrition-v2'
 import {
   MacroBudget,
   NutritionStatePanel,
-  PlanVersionBadge,
   StrategyBadge,
   StudentPreview,
 } from './index'
@@ -27,16 +26,14 @@ describe('Nutrition V2 web kit', () => {
     expect(screen.getByText(/680 kcal restantes/i)).toBeInTheDocument()
   })
 
-  it('renders strategy and immutable version language', () => {
+  it('renders strategy language', () => {
     render(
       <div>
         <StrategyBadge strategy="hybrid" />
-        <PlanVersionBadge effectiveLabel="desde 14 Jul" status="published" version={3} />
       </div>,
     )
 
     expect(screen.getByText('Plan híbrido')).toBeInTheDocument()
-    expect(screen.getByText(/v3 · Publicado/i)).toBeInTheDocument()
   })
 
   it('provides explicit empty state copy', () => {
