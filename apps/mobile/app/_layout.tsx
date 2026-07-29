@@ -37,6 +37,7 @@ import { registerSessionCacheJanitor } from '../lib/auth-actions'
 import { brandDisplayFontMap } from '../lib/brand-fonts'
 import { loadStoredBranding, type CoachBranding } from '../lib/branding'
 import { ThemeProvider, useTheme } from '../context/ThemeContext'
+import { ENTRY_TOKENS } from '../lib/theme'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
 import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
@@ -248,7 +249,14 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
   if (!fontsLoaded) return null
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }} onLayout={handleRootLayout}>
+    // Mitad OTA del anti-flash de la entrada dark v1 (DESIGN-SPEC §5.2): el window
+    // background nativo no está declarado en app.json, así que sin este color el root
+    // resuelve a blanco y se ve un flash al ocultar el splash. La mitad nativa
+    // (`expo.backgroundColor` / `android.backgroundColor`) viaja en la Fase 5.
+    <GestureHandlerRootView
+      style={{ flex: 1, backgroundColor: ENTRY_TOKENS.canvasEntry }}
+      onLayout={handleRootLayout}
+    >
       <ReducedMotionConfig mode={ReduceMotion.System} />
       <SafeAreaProvider>
         {/* ThemeProvider DEBE envolver a BottomSheetModalProvider (no al revés).

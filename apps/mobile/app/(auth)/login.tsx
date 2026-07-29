@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  type TextInput,
+  TextInput,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Image } from 'expo-image'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ArrowRight, Check, ChevronLeft, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native'
+import { ArrowRight, Check, ChevronLeft, Eye, EyeOff, Info, Lock, Mail } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { LoginSchema } from '@eva/schemas'
@@ -31,11 +31,15 @@ import {
   signInWithGoogleCoach,
   signOutGoogleAndSupabase,
 } from '../../lib/auth/google-signin'
-import { useTheme } from '../../context/ThemeContext'
+import { ForceScheme, useTheme } from '../../context/ThemeContext'
 import { FONT, TYPE } from '../../lib/typography'
 import { SHADOWS } from '../../lib/shadows'
-import { AuthDivider, Card, GoogleSignInButton, Input } from '../../components'
+import { ENTRY_TOKENS } from '../../lib/theme'
+import { GoogleSignInButton, Input } from '../../components'
 import { EvaLoader, EvaLoaderScreen } from '../../components/EvaLoader'
+import { EntryGrain } from '../../components/entry/EntryBackground'
+import { EvaFigure } from '../../components/entry/EvaFigure'
+import { ENTRY_LIGHT, LightLayer } from '../../components/entry/LightLayer'
 
 const REMEMBER_KEY = 'eva_remember_email'
 
@@ -370,94 +374,198 @@ export default function LoginScreen() {
     </View>
   )
 
-  // ════════════════ COACH — login generico (sin marca de coach) ════════════════
+  // ════════════════ COACH — identidad EVA dark (frame 05) ════════════════
+  // El coach que entra a su panel ES la marca; su branding se aplica DESPUES del login
+  // (aqui todavia no hay `coachId`). Por eso el sheet es identidad EVA pura, `cta-fill`
+  // #1A6BE6, sin white-label: la transicion a su panel brandeado ocurre en el frame 07.
+  // CERO cambios de logica auth respecto de la version clara: mismos estados, mismos
+  // handlers, mismos testIDs. Solo cambia la piel.
   if (!isAlumno) {
     return (
-      <View className="flex-1 bg-surface-app">
-        <LinearGradient
-          colors={[theme.primary + '24', theme.primary + '0A', 'transparent']}
-          locations={[0, 0.4, 0.75]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <ScrollView
-            contentContainerStyle={{
-              flexGrow: 1,
-              justifyContent: 'center',
-              paddingHorizontal: 24,
-              paddingTop: insets.top + 24,
-              paddingBottom: insets.bottom + 24,
-            }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <MotiView
-              from={{ opacity: 0, translateY: 20 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 500 }}
-              style={{ marginBottom: 24, gap: 8 }}
+      <ForceScheme scheme="dark" branded={false}>
+        <View style={coach.root}>
+          <LightLayer spec={ENTRY_LIGHT.morphCoach} />
+          <EntryGrain />
+          {/* El sheet CRECE, no se desplaza: el contenido se comprime dentro y el CTA
+              queda siempre visible (§3.5). */}
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <ScrollView
+              contentContainerStyle={[
+                coach.scroll,
+                { paddingTop: insets.top + 18, paddingBottom: Math.max(insets.bottom, 34) },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              <View
-                className="flex-row items-center self-start rounded-pill bg-surface-card border border-subtle"
-                style={{ gap: 6, paddingHorizontal: 12, paddingVertical: 6 }}
+              <MotiView
+                from={{ opacity: 0, translateY: 12 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 260 }}
               >
-                <Sparkles size={12} color={theme.primary} strokeWidth={2.25} />
-                <Text className="text-muted font-sans-medium" style={{ fontSize: 11, letterSpacing: 0.3 }}>
-                  Panel del coach
-                </Text>
-              </View>
-              <Text className="text-strong font-display-black" style={{ fontSize: 30, letterSpacing: -0.6, lineHeight: 34 }}>
-                Bienvenido de vuelta
-              </Text>
-              <Text className="text-muted font-sans" style={{ fontSize: 14, lineHeight: 20 }}>
-                Ingresa tus credenciales para acceder al panel
-              </Text>
-            </MotiView>
+                <View style={coach.grab} />
+                <View style={coach.eyebrowRow}>
+                  <EvaFigure size={22} opacity={0.82} />
+                  <Text style={coach.eyebrow}>Panel de coach</Text>
+                </View>
+                <Text style={coach.title}>Entra a tu panel</Text>
+                <Text style={coach.subtitle}>Con la misma cuenta que usas en la web.</Text>
+              </MotiView>
 
-            <MotiView
-              from={{ opacity: 0, translateY: 20 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 500, delay: 120 }}
-            >
-              <Card variant="default" padding={20} radius="card">
-                {renderFields(theme.primary, theme.primaryForeground, 'Entrar como coach', {
-                  emailPlaceholder: 'coach@eva.app',
-                  passwordPlaceholder: 'Tu contraseña',
-                })}
-                {showGoogle ? (
-                  <View style={{ gap: 14, marginTop: 16 }}>
-                    <AuthDivider />
-                    <GoogleSignInButton intent="login" onPress={handleGoogleCoach} loading={googleLoading} disabled={loading} />
+              <MotiView
+                from={{ opacity: 0, translateY: 12 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 260, delay: 60 }}
+              >
+                <View style={[coach.field, coach.fieldIdle, { marginBottom: 10 }]}>
+                  <View pointerEvents="none" style={coach.fieldInset} />
+                  <Mail size={19} color="#79838E" strokeWidth={2} />
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    editable={!loading}
+                    placeholder="coach@correo.com"
+                    placeholderTextColor="#79838E"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete={Platform.OS === 'android' ? 'off' : 'email'}
+                    importantForAutofill={Platform.OS === 'android' ? 'no' : undefined}
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => passwordRef.current?.focus()}
+                    selectionColor={ENTRY_TOKENS.luxSoft}
+                    accessibilityLabel="Email"
+                    style={coach.input}
+                    testID="login-email-input"
+                  />
+                </View>
+
+                <View style={[coach.field, coach.fieldIdle, { marginBottom: 8 }]}>
+                  <View pointerEvents="none" style={coach.fieldInset} />
+                  <Lock size={19} color="#9CC4FF" strokeWidth={2} />
+                  <TextInput
+                    ref={passwordRef}
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={!loading}
+                    placeholder="••••••••"
+                    placeholderTextColor="#79838E"
+                    secureTextEntry={!showPwd}
+                    autoCapitalize="none"
+                    autoComplete={Platform.OS === 'android' ? 'off' : 'password'}
+                    importantForAutofill={Platform.OS === 'android' ? 'no' : undefined}
+                    returnKeyType="done"
+                    onSubmitEditing={handleLogin}
+                    selectionColor={ENTRY_TOKENS.luxSoft}
+                    accessibilityLabel="Contraseña"
+                    style={[coach.input, showPwd ? null : coach.inputSecure]}
+                    testID="login-password-input"
+                  />
+                  {/* El ojito ya existe en el repo (PR #154): se reusa el mismo par de
+                      iconos y el mismo estado, no se redibuja. */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onPress={() => setShowPwd((s) => !s)}
+                    hitSlop={10}
+                  >
+                    {showPwd ? (
+                      <EyeOff size={19} color="#79838E" strokeWidth={2} />
+                    ) : (
+                      <Eye size={19} color="#79838E" strokeWidth={2} />
+                    )}
+                  </Pressable>
+                </View>
+
+                <Text
+                  onPress={() => router.push('/(auth)/forgot-password')}
+                  style={coach.forgot}
+                  testID="login-forgot-link"
+                >
+                  Olvidé mi contraseña
+                </Text>
+
+                <Pressable onPress={() => setRemember((r) => !r)} style={coach.rememberRow}>
+                  <View style={[coach.checkbox, remember ? coach.checkboxOn : null]}>
+                    {remember ? <Check size={13} color="#FFFFFF" strokeWidth={3} /> : null}
+                  </View>
+                  <Text style={coach.rememberLabel}>Recordarme</Text>
+                </Pressable>
+
+                {error ? (
+                  <View style={coach.errorBox} testID="login-error">
+                    <Text style={coach.errorText}>{error}</Text>
                   </View>
                 ) : null}
-              </Card>
-            </MotiView>
 
-            <MotiView
-              from={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ type: 'timing', duration: 600, delay: 360 }}
-              style={{ marginTop: 28, alignItems: 'center', gap: 10 }}
-            >
-              <Text
-                onPress={() => router.push('/(auth)/register')}
-                className="font-sans"
-                style={{ fontSize: 13 }}
-                testID="login-coach-register-link"
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: loading, busy: loading }}
+                  disabled={loading}
+                  testID="login-submit"
+                  onPressIn={() => {
+                    if (!loading) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  }}
+                  onPress={handleLogin}
+                  style={coach.ctaWrap}
+                >
+                  <View style={[coach.cta, loading ? { opacity: 0.65 } : null]}>
+                    <View pointerEvents="none" style={coach.ctaInset} />
+                    {loading ? <ActivityIndicator color="#FFFFFF" /> : null}
+                    <Text style={coach.ctaLabel}>{loading ? 'Ingresando…' : 'Entrar'}</Text>
+                  </View>
+                </Pressable>
+
+                {showGoogle ? (
+                  <View style={{ gap: 14, marginTop: 16 }}>
+                    <View style={coach.orsep}>
+                      <View style={coach.orsepLine} />
+                      <Text style={coach.orsepLabel}>o</Text>
+                      <View style={coach.orsepLine} />
+                    </View>
+                    <GoogleSignInButton
+                      intent="login"
+                      onPress={handleGoogleCoach}
+                      loading={googleLoading}
+                      disabled={loading}
+                    />
+                  </View>
+                ) : null}
+
+                <Text
+                  onPress={() => router.push('/(auth)/register')}
+                  style={coach.registerRow}
+                  testID="login-coach-register-link"
+                >
+                  ¿Aún no tienes cuenta de coach?{'\n'}
+                  <Text style={coach.registerLink}>Créala en 1 minuto</Text>
+                </Text>
+              </MotiView>
+
+              <MotiView
+                from={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ type: 'timing', duration: 260, delay: 120 }}
+                style={coach.noteWrap}
               >
-                <Text className="text-muted">¿No tienes cuenta? </Text>
-                <Text className="text-sport-600 font-sans-bold">Regístrate</Text>
-              </Text>
-              <Text className="text-subtle font-sans" style={{ fontSize: 12, letterSpacing: 0.3 }}>
-                eva-app.cl
-              </Text>
-            </MotiView>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
+                <View style={coach.note}>
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.045)', 'rgba(255,255,255,0.015)'] as const}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View pointerEvents="none" style={coach.noteInset} />
+                  <Info size={17} color={ENTRY_TOKENS.textFaint} strokeWidth={2} />
+                  <Text style={coach.noteText}>
+                    Tus alumnos no entran por acá: ellos usan{' '}
+                    <Text style={coach.noteStrong}>Soy alumno</Text> con tu código.
+                  </Text>
+                </View>
+              </MotiView>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </ForceScheme>
     )
   }
 
@@ -789,4 +897,188 @@ const styles = StyleSheet.create({
   heroTitleSm: { fontSize: 27, lineHeight: 30, letterSpacing: -0.6, marginTop: 16, textAlign: 'center' },
   heroTagline: { fontSize: 14, lineHeight: 20, marginTop: 6, textAlign: 'center', maxWidth: 300, fontFamily: FONT.ui },
   poweredBy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+})
+
+/**
+ * Piel dark del login de COACH — frame 05 de la entrada dark v1
+ * (`docs/specs/entrada-dark-v1/DESIGN-SPEC.md` §3.5). Estilos LOCALES a esta rama: el
+ * arbol del alumno (white-label claro) no toca ni uno de estos valores.
+ */
+const coach = StyleSheet.create({
+  root: { flex: 1, backgroundColor: ENTRY_TOKENS.canvasEntry },
+  scroll: { flexGrow: 1, paddingHorizontal: 22 },
+  grab: {
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 16 },
+  eyebrow: {
+    fontFamily: FONT.uiExtra,
+    fontSize: 9.5,
+    lineHeight: 12,
+    letterSpacing: 1.52,
+    textTransform: 'uppercase',
+    color: ENTRY_TOKENS.textFaint,
+  },
+  title: {
+    fontFamily: FONT.displayBlack,
+    fontSize: 25,
+    lineHeight: 27,
+    letterSpacing: -0.7,
+    color: '#F4F6F8',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontFamily: FONT.uiSemibold,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#86919E',
+    marginBottom: 20,
+  },
+
+  field: {
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#1F262F',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  fieldIdle: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)' },
+  fieldInset: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+  },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 0,
+    fontFamily: FONT.ui,
+    fontSize: 14.5,
+    color: '#F4F6F8',
+  },
+  inputSecure: { fontSize: 17, letterSpacing: 5.1 },
+
+  forgot: {
+    textAlign: 'right',
+    fontFamily: FONT.uiBold,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: ENTRY_TOKENS.luxSoft,
+    marginBottom: 18,
+  },
+  rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: ENTRY_TOKENS.lux, borderColor: ENTRY_TOKENS.lux },
+  rememberLabel: { fontFamily: FONT.uiSemibold, fontSize: 13, lineHeight: 17, color: '#98A2B0' },
+
+  errorBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,120,120,0.35)',
+    backgroundColor: 'rgba(255,120,120,0.10)',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 14,
+  },
+  errorText: { fontFamily: FONT.uiSemibold, fontSize: 13, lineHeight: 18, color: '#FFB4A8' },
+
+  ctaWrap: { marginTop: 2 },
+  cta: {
+    height: 56,
+    borderRadius: 14,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    backgroundColor: ENTRY_TOKENS.lux,
+    shadowColor: ENTRY_TOKENS.lux,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  ctaInset: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  ctaLabel: {
+    fontFamily: FONT.displayBlack,
+    fontSize: 16,
+    lineHeight: 20,
+    letterSpacing: -0.16,
+    color: '#FFFFFF',
+  },
+
+  orsep: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  orsepLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.07)' },
+  orsepLabel: {
+    fontFamily: FONT.uiExtra,
+    fontSize: 10.5,
+    lineHeight: 13,
+    letterSpacing: 1.575,
+    textTransform: 'uppercase',
+    color: ENTRY_TOKENS.textGhost,
+  },
+
+  registerRow: {
+    marginTop: 16,
+    textAlign: 'center',
+    fontFamily: FONT.uiSemibold,
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: ENTRY_TOKENS.textFaint,
+  },
+  registerLink: { fontFamily: FONT.uiExtra, color: ENTRY_TOKENS.luxSoft },
+
+  noteWrap: { marginTop: 'auto', paddingTop: 24 },
+  note: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  noteInset: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  noteText: {
+    flex: 1,
+    fontFamily: FONT.uiSemibold,
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: '#86919E',
+  },
+  noteStrong: { fontFamily: FONT.uiExtra, color: '#CDD3DB' },
 })

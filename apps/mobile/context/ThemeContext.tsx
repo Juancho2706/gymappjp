@@ -7,6 +7,7 @@ import {
   applyEffectiveCoachBranding,
   darkTheme,
   DARK_SCHEME_VARS,
+  ENTRY_TOKENS,
   effectiveBrandVars,
   lightTheme,
   LIGHT_SCHEME_VARS,
@@ -175,7 +176,16 @@ export function ForceScheme({
 
   return (
     <ThemeContext.Provider value={value}>
-      <View style={[{ flex: 1 }, themeVars]}>
+      {/* F2.5b — mitad OTA del anti-flash (DESIGN-SPEC §5.2): un subarbol dark forzado
+          pinta el canvas de la entrada (`#07080C`) en su propio contenedor. Sin esto se
+          ve un frame del fondo claro heredado al montar la pantalla. */}
+      <View
+        style={[
+          { flex: 1 },
+          scheme === 'dark' ? { backgroundColor: ENTRY_TOKENS.canvasEntry } : null,
+          themeVars,
+        ]}
+      >
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         {children}
       </View>
