@@ -80,18 +80,39 @@ jobs:
 
   nutrition-smoke:
     needs: quality
-    # Manual-only for now (same reason as e2e): unmaintained smoke suite times out against
-    # real Supabase. Run on demand via "Run workflow" until tuned.
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    # Antes era manual-only (`if: workflow_dispatch`) por la misma razón que `e2e`: la suite estaba
+    # sin mantención y colgaba contra Supabase real. El motivo real de fondo es que DEPENDE DE
+    # SECRETS: sin ellos no hay nada que correr. Ahora corre automático (push / PR / dispatch) con
+    # el patrón estándar de CI: cada paso está condicionado a la PRESENCIA de los secrets, así que
+    # en un fork o sin credenciales el job no-opea en verde en vez de fallar.
+    #
+    # `continue-on-error: true` a nivel de job es deliberado y TEMPORAL: el smoke escribe/lee contra
+    # Supabase de producción y todavía no tiene una corrida verde observada tras el repunte a V2, así
+    # que reporta señal sin poder bloquear un PR por flake de entorno. El gate que SÍ bloquea sigue
+    # siendo `quality` (typecheck + lint + vitest). Retirar esta línea cuando el job encadene
+    # corridas verdes.
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # secrets cannot be used in a job-level `if:` (invalid workflow). Mirror them into
     # env (allowed) and gate each step on env instead, so the job no-ops when the E2E
     # secrets are absent (e.g. forks) without breaking the whole workflow file.
     env:
+      # Smoke de la entrada legacy /c/{slug}/nutrition (tolera el redirect a V2).
       E2E_COACH_SLUG: ${{ secrets.E2E_COACH_SLUG }}
       E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
       E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+      # Suite Nutrición V2 (project `nutrition-v2`): corre contra el Preview de Vercel del branch.
+      # Sin PLAYWRIGHT_BASE_URL cada spec se auto-omite (ver tests/nutrition-v2/README.md). Se
+      # expone con OTRO nombre a nivel de job porque `if:` solo lee `env`, y exportar
+      # PLAYWRIGHT_BASE_URL a todo el job desviaría también el smoke legacy al Preview (hoy corre
+      # contra el dev server local que levanta playwright.config). El nombre real se pasa
+      # únicamente en el step de la suite V2.
+      NUTRITION_V2_PREVIEW_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      E2E_COACH_EMAIL: ${{ secrets.E2E_COACH_EMAIL }}
+      E2E_COACH_PASSWORD: ${{ secrets.E2E_COACH_PASSWORD }}
+      E2E_STUDENT_EMAIL: ${{ secrets.E2E_STUDENT_EMAIL }}
+      E2E_STUDENT_PASSWORD: ${{ secrets.E2E_STUDENT_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
@@ -102,16 +123,33 @@ jobs:
           node-version: lts/*
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - if: ${{ env.E2E_COACH_SLUG == '' || env.E2E_CLIENT_EMAIL == '' || env.E2E_CLIENT_PASSWORD == '' }}
+      - name: Sin secrets del smoke legacy — no-op
+        if: ${{ env.E2E_COACH_SLUG == '' || env.E2E_CLIENT_EMAIL == '' || env.E2E_CLIENT_PASSWORD == '' }}
         run: echo "E2E secrets not configured — skipping nutrition smoke."
-      - if: ${{ env.E2E_COACH_SLUG != '' && env.E2E_CLIENT_EMAIL != '' && env.E2E_CLIENT_PASSWORD != '' }}
+      # Browsers: los necesita cualquiera de los dos smokes, así que basta con que UNO tenga secrets.
+      - name: Instalar navegadores Playwright
+        if: ${{ (env.E2E_COACH_SLUG != '' && env.E2E_CLIENT_EMAIL != '' && env.E2E_CLIENT_PASSWORD != '') || (env.NUTRITION_V2_PREVIEW_URL != '' && env.E2E_STUDENT_EMAIL != '') }}
         run: npx playwright install --with-deps
       - if: ${{ env.E2E_COACH_SLUG != '' && env.E2E_CLIENT_EMAIL != '' && env.E2E_CLIENT_PASSWORD != '' }}
         run: pnpm run e2e:check-env
-      - if: ${{ env.E2E_COACH_SLUG != '' && env.E2E_CLIENT_EMAIL != '' && env.E2E_CLIENT_PASSWORD != '' }}
+      # Entrada legacy /c/{slug}/nutrition: afirma V1 o V2 según a dónde redirija el canary.
+      - name: Smoke entrada nutrición (V1/V2 según canary)
+        if: ${{ env.E2E_COACH_SLUG != '' && env.E2E_CLIENT_EMAIL != '' && env.E2E_CLIENT_PASSWORD != '' }}
+        run: pnpm run test:e2e:nutrition-v1
+        env:
+          CI: true
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Suite Nutrición V2 real (project `nutrition-v2`). Requiere el Preview de Vercel del branch
+      # + las cuentas E2E propias; sin esos secrets los specs se auto-omiten, así que el paso ni se
+      # lanza para no gastar minutos en una corrida inerte.
+      - name: Suite Nutrición V2 (canary sobre Preview)
+        if: ${{ env.NUTRITION_V2_PREVIEW_URL != '' && env.E2E_COACH_EMAIL != '' && env.E2E_COACH_PASSWORD != '' && env.E2E_STUDENT_EMAIL != '' && env.E2E_STUDENT_PASSWORD != '' }}
         run: pnpm run test:e2e:nutrition
         env:
           CI: true
+          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

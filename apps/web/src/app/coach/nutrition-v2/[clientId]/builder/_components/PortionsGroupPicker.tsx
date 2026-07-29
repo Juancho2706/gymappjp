@@ -14,7 +14,7 @@
  */
 
 import { useState, useSyncExternalStore } from 'react'
-import { Loader2, Plus, RefreshCcw } from 'lucide-react'
+import { Loader2, MoreVertical, Plus, RefreshCcw } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { NUTRITION_MOTION } from '@eva/nutrition-v2'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { PortionsGroupDot } from './PortionsGroupDot'
+import { PortionsGroupForm, type ExchangeGroupFormValues } from './PortionsGroupForm'
 import type { PortionsController } from './PortionsSection'
 
 // matchMedia md-up (mismo patrón que useIsDesktopMd del builder de workouts, copiado
@@ -88,17 +89,122 @@ function GroupOption({
   )
 }
 
+/**
+ * Menú ⋯ de una fila PROPIA (jamás en las system: `xg_update/xg_delete` las niegan y el
+ * schema las rechaza). Se resuelve inline en vez de con un dropdown portaleado para no
+ * anidar Radix dentro del popover/sheet del picker.
+ */
+function CustomGroupRow({
+  group,
+  used,
+  menuOpen,
+  confirmingDelete,
+  busy,
+  onPick,
+  onToggleMenu,
+  onEdit,
+  onAskDelete,
+  onCancelDelete,
+  onConfirmDelete,
+}: {
+  group: ExchangeGroup
+  used: boolean
+  menuOpen: boolean
+  confirmingDelete: boolean
+  busy: boolean
+  onPick: () => void
+  onToggleMenu: () => void
+  onEdit: () => void
+  onAskDelete: () => void
+  onCancelDelete: () => void
+  onConfirmDelete: () => void
+}) {
+  const copy = PORTIONS_COPY.groupEditor
+  return (
+    <div>
+      <div className="flex items-center gap-0.5">
+        <div className="min-w-0 flex-1">
+          <GroupOption group={group} used={used} onPick={onPick} />
+        </div>
+        <button
+          type="button"
+          aria-label={copy.manageAria(group.name)}
+          aria-expanded={menuOpen}
+          onClick={onToggleMenu}
+          className="inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <MoreVertical aria-hidden="true" className="h-4 w-4" />
+        </button>
+      </div>
+
+      {menuOpen && !confirmingDelete ? (
+        <div className="mb-1 ml-9 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="min-h-9 rounded-control px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {copy.edit}
+          </button>
+          <button
+            type="button"
+            onClick={onAskDelete}
+            className="min-h-9 rounded-control px-2 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-rose-400"
+          >
+            {copy.delete}
+          </button>
+        </div>
+      ) : null}
+
+      {confirmingDelete ? (
+        <div className="mb-1 ml-9 rounded-control border border-border-subtle bg-surface-sunken p-2">
+          <p className="text-xs font-semibold text-strong">{copy.deleteConfirmTitle(group.name)}</p>
+          <p className="mt-0.5 text-[11px] text-muted">{copy.deleteInUseNotice}</p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancelDelete}
+              disabled={busy}
+              className="min-h-9 flex-1 rounded-control border border-border-default bg-surface-card px-2 text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            >
+              {copy.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={onConfirmDelete}
+              disabled={busy}
+              className="min-h-9 flex-1 rounded-control bg-rose-600 px-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            >
+              {copy.deleteConfirm}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 /** Contenido compartido popover/sheet: loading, error con reintento, o lista. */
 function GroupList({
   controller,
   usedGroupIds,
   onPick,
+  onCreate,
+  onEdit,
+  busy,
+  actionError,
 }: {
   controller: PortionsController
   usedGroupIds: string[]
   onPick: (exchangeGroupId: string) => void
+  onCreate: () => void
+  onEdit: (group: ExchangeGroup) => void
+  busy: boolean
+  actionError: string | null
 }) {
   const { groups, groupsLoading, groupsError } = controller
+  const [menuGroupId, setMenuGroupId] = useState<string | null>(null)
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null)
   if (groupsLoading && groups == null) {
     return (
       <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted">
@@ -132,10 +238,55 @@ function GroupList({
       {system.map((group) => (
         <GroupOption key={group.id} group={group} used={used.has(group.id)} onPick={() => onPick(group.id)} />
       ))}
-      {custom.length > 0 ? <div className="my-1 border-t border-border-subtle" aria-hidden="true" /> : null}
+      <div className="my-1 border-t border-border-subtle" aria-hidden="true" />
       {custom.map((group) => (
-        <GroupOption key={group.id} group={group} used={used.has(group.id)} onPick={() => onPick(group.id)} />
+        <CustomGroupRow
+          key={group.id}
+          group={group}
+          used={used.has(group.id)}
+          menuOpen={menuGroupId === group.id}
+          confirmingDelete={deletingGroupId === group.id}
+          busy={busy}
+          onPick={() => onPick(group.id)}
+          onToggleMenu={() => {
+            setDeletingGroupId(null)
+            setMenuGroupId((prev) => (prev === group.id ? null : group.id))
+          }}
+          onEdit={() => {
+            setMenuGroupId(null)
+            onEdit(group)
+          }}
+          onAskDelete={() => setDeletingGroupId(group.id)}
+          onCancelDelete={() => setDeletingGroupId(null)}
+          onConfirmDelete={() => {
+            void controller.deleteGroup(group.id).then(() => {
+              setDeletingGroupId(null)
+              setMenuGroupId(null)
+            })
+          }}
+        />
       ))}
+
+      {/* Entrada a la creación: SIEMPRE al final de la lista custom (SPEC UX P-A). */}
+      <button
+        type="button"
+        onClick={onCreate}
+        className="flex min-h-12 w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span
+          aria-hidden="true"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-primary/60"
+        >
+          <Plus className="h-4 w-4" />
+        </span>
+        <span className="text-sm font-semibold">{PORTIONS_COPY.groupEditor.createRow}</span>
+      </button>
+
+      {actionError ? (
+        <p role="alert" className="px-2 pb-1 text-xs font-medium text-rose-600 dark:text-rose-400">
+          {actionError}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -152,17 +303,85 @@ export function PortionsGroupPicker({
   onPick: (exchangeGroupId: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  // 'list' = catálogo; 'form' = alta/edición de un grupo propio DENTRO del mismo popover/sheet.
+  const [editing, setEditing] = useState<{ group: ExchangeGroup | null } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const isDesktop = useIsDesktopMd()
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
-    if (next) controller.ensureGroupsLoaded()
+    if (next) {
+      controller.ensureGroupsLoaded()
+    } else {
+      setEditing(null)
+      setActionError(null)
+    }
   }
 
   function pick(exchangeGroupId: string) {
     onPick(exchangeGroupId)
     setOpen(false)
   }
+
+  async function submitGroup(values: ExchangeGroupFormValues) {
+    if (!editing) return
+    setBusy(true)
+    setActionError(null)
+    const res = editing.group
+      ? await controller.updateGroup(editing.group.id, values)
+      : await controller.createGroup(values)
+    setBusy(false)
+    if (!res.ok) {
+      setActionError(res.error)
+      return
+    }
+    // Vuelve a la lista SIN cerrar el picker: el grupo recién creado ya aparece y queda
+    // seleccionable de inmediato (criterio de aceptación P-A).
+    setEditing(null)
+  }
+
+  async function deleteGroup(groupId: string) {
+    setBusy(true)
+    setActionError(null)
+    const res = await controller.deleteGroup(groupId)
+    setBusy(false)
+    if (!res.ok) setActionError(res.error)
+    return res
+  }
+
+  const listProps = {
+    controller: { ...controller, deleteGroup },
+    usedGroupIds,
+    onPick: pick,
+    onCreate: () => {
+      setActionError(null)
+      setEditing({ group: null })
+    },
+    onEdit: (group: ExchangeGroup) => {
+      setActionError(null)
+      setEditing({ group })
+    },
+    busy,
+    actionError,
+  }
+
+  const body = editing ? (
+    <PortionsGroupForm
+      // Remonta el form al cambiar de grupo: el estado local arranca del grupo correcto.
+      key={editing.group?.id ?? 'nuevo'}
+      group={editing.group}
+      submitting={busy}
+      serverError={actionError}
+      onCancel={() => {
+        setEditing(null)
+        setActionError(null)
+      }}
+      onSubmit={(values) => void submitGroup(values)}
+    />
+  ) : (
+    <GroupList {...listProps} />
+  )
 
   const triggerLabel = `${PORTIONS_COPY.builder.addGroup} a ${slotName || 'la franja'}`
 
@@ -177,7 +396,7 @@ export function PortionsGroupPicker({
           align="start"
           className="max-h-96 w-80 overflow-y-auto rounded-card border border-border-subtle bg-surface-card p-1.5 text-body shadow-lg"
         >
-          <GroupList controller={controller} usedGroupIds={usedGroupIds} onPick={pick} />
+          {body}
         </PopoverContent>
       </Popover>
     )
@@ -196,11 +415,15 @@ export function PortionsGroupPicker({
         >
           <SheetHeader className="border-border-subtle bg-transparent p-4 pb-2 dark:border-border-subtle">
             <SheetTitle className="pr-10 font-display text-base font-semibold normal-case tracking-tight text-strong">
-              {PORTIONS_COPY.builder.addGroup}
+              {editing
+                ? editing.group
+                  ? PORTIONS_COPY.groupEditor.editTitle
+                  : PORTIONS_COPY.groupEditor.createTitle
+                : PORTIONS_COPY.builder.addGroup}
             </SheetTitle>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] pt-1">
-            <GroupList controller={controller} usedGroupIds={usedGroupIds} onPick={pick} />
+            {body}
           </div>
         </SheetContent>
       </Sheet>

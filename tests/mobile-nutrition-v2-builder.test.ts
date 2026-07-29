@@ -12,7 +12,6 @@ import {
   builderReducer,
   canProceedToPublishAfterArchive,
   computeItemMacros,
-  createCoachFoodV2,
   createEmptyBuilderState,
   createEmptyItem,
   effectiveDateConflicts,
@@ -25,13 +24,11 @@ import {
   type BuilderItem,
   type BuilderState,
   type DraftPrescriptionItem,
-  type NutritionV2WriteClient,
 } from '../apps/mobile/lib/nutrition-v2-builder'
 
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 const PLAN_ID = '22222222-2222-4222-8222-222222222222'
 const FOOD_ID = '33333333-3333-4333-8333-333333333333'
-const PUBLISHED_ID = '44444444-4444-4444-8444-444444444444'
 const SUB_FOOD_ID = '55555555-5555-4555-8555-555555555555'
 
 const FOOD: BuilderFood = {
@@ -249,147 +246,12 @@ describe('buildPublishIdempotencyKey', () => {
   })
 })
 
-// -- fake write client (registra escrituras + rpc) --
-function makeClient(opts: {
-  existingVersion?: { id: string; plan_id: string } | null
-  existingPlan?: { id: string; client_id: string } | null
-  foodRow?: Record<string, unknown> | null
-} = {}) {
-  const inserts: Array<{ table: string; rows: unknown }> = []
-  const rpcCalls: Array<{ name: string; args?: Record<string, unknown> }> = []
-  let counter = 0
-  const client = {
-    from(table: string) {
-      return {
-        select() {
-          const eqs: string[] = []
-          const chain: any = {
-            eq(col: string) { eqs.push(col); return chain },
-            order() { return chain },
-            limit() { return chain },
-            async maybeSingle() {
-              if (table === 'nutrition_plan_versions_v2') {
-                if (eqs.includes('publish_idempotency_key')) return { data: opts.existingVersion ?? null, error: null }
-                return { data: null, error: null }
-              }
-              if (table === 'clients') return { data: { coach_id: 'coach-1', org_id: null, team_id: null }, error: null }
-              if (table === 'nutrition_plans_v2') return { data: opts.existingPlan ?? null, error: null }
-              if (table === 'foods') return { data: opts.foodRow ?? null, error: null }
-              return { data: null, error: null }
-            },
-            then(resolve: (v: unknown) => void) { resolve({ data: [], error: null }) },
-          }
-          return chain
-        },
-        insert(rows: unknown) {
-          inserts.push({ table, rows })
-          return {
-            select() {
-              return { async single() { counter++; return { data: { id: table + '-' + counter }, error: null } } }
-            },
-            then(resolve: (v: unknown) => void) { resolve({ data: null, error: null }) },
-          }
-        },
-      }
-    },
-    async rpc(name: string, args?: Record<string, unknown>) {
-      rpcCalls.push({ name, args })
-      return { data: PUBLISHED_ID, error: null }
-    },
-  }
-  return { client: client as unknown as NutritionV2WriteClient, inserts, rpcCalls }
-}
-
-const FOOD_DB_ROW = {
-  id: FOOD_ID, name: 'Pollo', brand: null, calories: 100, protein_g: 10, carbs_g: 20, fats_g: 5, fiber_g: 2, serving_size: 50, serving_unit: 'g',
-}
-
 // NUT-005: el orden de escritura (plan->version->variantes->franjas->items->publish) ya NO corre
-// en el dispositivo. La publicacion del coach pasa por POST /api/mobile/nutrition-v2/coach/mutate y
-// reusa `persistAndPublishDraft` de la web, cubierto por
-// apps/web/src/app/coach/nutrition-v2/_actions/plan-persistence.*.test.ts. Lo que RN debe garantizar
-// (llamar al endpoint y NUNCA escribir directo) vive en tests/mobile-nutrition-v2-coach-mutations.test.ts.
-
-describe('createCoachFoodV2 (alimento coach-scoped, sub-delta b)', () => {
-  it('inserta en foods con macros por 100 + coach_id y devuelve el BuilderFood', async () => {
-    const { client, inserts } = makeClient()
-    const res = await createCoachFoodV2({
-      db: client,
-      userId: 'coach-1',
-      input: { clientId: CLIENT_ID, name: 'Salsa casera', brand: null, unit: 'g', calories: 120, proteinG: 3, carbsG: 10, fatsG: 8 },
-    })
-    expect(res.ok).toBe(true)
-    if (res.ok) {
-      expect(res.food.id).toBe('foods-1')
-      expect(res.food.servingSize).toBe(100)
-      expect(res.food.servingUnit).toBe('g')
-      expect(res.food.calories).toBe(120)
-      expect(res.food.fiberG).toBeNull()
-      expect(res.food.category).toBe('otro')
-    }
-    expect(inserts).toHaveLength(1)
-    expect(inserts[0].table).toBe('foods')
-    const row = inserts[0].rows as Record<string, unknown>
-    expect(row.coach_id).toBe('coach-1')
-    expect(row.org_id).toBeNull()
-    expect(row.serving_size).toBe(100)
-    expect(row.serving_unit).toBe('g')
-    expect(row.catalog_source).toBe('coach')
-    expect(row.verification_status).toBe('coach_verified')
-    expect(row.is_liquid).toBe(false)
-    expect(row.protein_g).toBe(3)
-    expect(row.carbs_g).toBe(10)
-    expect(row.fats_g).toBe(8)
-  })
-
-  it('unit ml => is_liquid true + serving_unit ml', async () => {
-    const { client, inserts } = makeClient()
-    const res = await createCoachFoodV2({
-      db: client,
-      userId: 'coach-1',
-      input: { clientId: CLIENT_ID, name: 'Bebida', brand: null, unit: 'ml', calories: 40, proteinG: 0, carbsG: 10, fatsG: 0 },
-    })
-    expect(res.ok).toBe(true)
-    const row = inserts[0].rows as Record<string, unknown>
-    expect(row.is_liquid).toBe(true)
-    expect(row.serving_unit).toBe('ml')
-  })
-
-  it('input invalido (nombre vacio) => INVALID_PAYLOAD sin tocar la BD', async () => {
-    const { client, inserts } = makeClient()
-    const res = await createCoachFoodV2({
-      db: client,
-      userId: 'coach-1',
-      input: { clientId: CLIENT_ID, name: '', brand: null, unit: 'g', calories: 100, proteinG: 5, carbsG: 5, fatsG: 5 },
-    })
-    expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
-    expect(inserts).toHaveLength(0)
-  })
-
-  it('error 42501 en el insert => SCOPE_DENIED (la RLS es la barrera real)', async () => {
-    const failClient = {
-      from() {
-        return {
-          insert() {
-            return {
-              select() {
-                return { async single() { return { data: null, error: { message: 'denied', code: '42501' } } } }
-              },
-            }
-          },
-        }
-      },
-    } as unknown as NutritionV2WriteClient
-    const res = await createCoachFoodV2({
-      db: failClient,
-      userId: 'coach-1',
-      input: { clientId: CLIENT_ID, name: 'Salsa', brand: null, unit: 'g', calories: 100, proteinG: 5, carbsG: 5, fatsG: 5 },
-    })
-    expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('SCOPE_DENIED')
-  })
-})
+// en el dispositivo, y desde esta ola tampoco el alta de alimento coach-scoped: la publicacion y
+// el `createFood` del coach pasan por POST /api/mobile/nutrition-v2/coach/mutate, que reusa el
+// codigo de escritura de la web (cubierto por plan-persistence.*.test.ts y por el route.test.ts
+// del endpoint). Lo que RN debe garantizar (llamar al endpoint y NUNCA escribir directo) vive en
+// tests/mobile-nutrition-v2-coach-mutations.test.ts.
 
 describe('effectiveDateConflicts (sub-delta c)', () => {
   it('igual o anterior choca; posterior no; faltante no bloquea', () => {

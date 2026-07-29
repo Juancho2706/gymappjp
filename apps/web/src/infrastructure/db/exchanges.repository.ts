@@ -128,6 +128,119 @@ export async function findExchangeGroupsByIdsForTenant(
     return (data ?? []).map(mapExchangeGroupRow)
 }
 
+// ─── Escritura de grupos PROPIOS del coach (porciones propias, P-A) ─────────────
+//
+// RLS es el TECHO real: `xg_insert` / `xg_update` / `xg_delete`
+// (20260611093001_nutrition_exchanges.sql) solo dejan pasar filas `NOT is_system` cuyo
+// `coach_id = auth.uid()` (o un team gestionado). Estas funciones NUNCA reciben el cliente
+// service-role: siempre el cliente user-scoped del coach. Patrón calcado de
+// `insertDayVariant` (insert -> select de las columnas del mapper -> map).
+//
+// `macros_confirmed` se fuerza a false: los grupos propios son SIEMPRE referenciales
+// (badge "Valores referenciales"); confirmar macros es una operación de catálogo, no del coach.
+// `is_system`, `composed_of`, `coach_id` y `team_id` no se tocan en el UPDATE — la identidad
+// y el ownership del grupo son inmutables desde la app.
+
+export type ExchangeGroupWriteValues = {
+    slug: string
+    code: string
+    name: string
+    refCalories: number
+    refProteinG: number
+    refCarbsG: number
+    refFatsG: number
+    color: string | null
+}
+
+/** Un grupo por id, VIVO y visible para el actor (RLS `xg_select`). */
+export async function findExchangeGroupById(db: DB, id: string): Promise<ExchangeGroup | null> {
+    const { data } = await db
+        .from('exchange_groups')
+        .select(GROUP_COLUMNS)
+        .eq('id', id)
+        .is('deleted_at', null)
+        .maybeSingle()
+    return data ? mapExchangeGroupRow(data) : null
+}
+
+export async function insertExchangeGroup(
+    db: DB,
+    owner: { coachId: string | null; teamId: string | null },
+    values: ExchangeGroupWriteValues,
+    sortOrder: number
+): Promise<{ group?: ExchangeGroup; error?: string }> {
+    const { data, error } = await db
+        .from('exchange_groups')
+        .insert({
+            slug: values.slug,
+            code: values.code,
+            name: values.name,
+            coach_id: owner.coachId,
+            team_id: owner.teamId,
+            is_system: false,
+            ref_calories: values.refCalories,
+            ref_protein_g: values.refProteinG,
+            ref_carbs_g: values.refCarbsG,
+            ref_fats_g: values.refFatsG,
+            color: values.color,
+            sort_order: sortOrder,
+            macros_confirmed: false,
+        })
+        .select(GROUP_COLUMNS)
+        .single()
+    if (error || !data) return { error: error?.message ?? 'No se pudo crear el grupo.' }
+    return { group: mapExchangeGroupRow(data) }
+}
+
+/**
+ * UPDATE acotado por id + `deleted_at IS NULL`. 0 filas ⇒ la RLS negó (grupo ajeno o del
+ * sistema) o ya estaba borrado: se devuelve error, jamás un éxito silencioso.
+ */
+export async function updateExchangeGroup(
+    db: DB,
+    groupId: string,
+    values: ExchangeGroupWriteValues
+): Promise<{ group?: ExchangeGroup; error?: string }> {
+    const { data, error } = await db
+        .from('exchange_groups')
+        .update({
+            slug: values.slug,
+            code: values.code,
+            name: values.name,
+            ref_calories: values.refCalories,
+            ref_protein_g: values.refProteinG,
+            ref_carbs_g: values.refCarbsG,
+            ref_fats_g: values.refFatsG,
+            color: values.color,
+            macros_confirmed: false,
+        })
+        .eq('id', groupId)
+        .is('deleted_at', null)
+        .select(GROUP_COLUMNS)
+        .maybeSingle()
+    if (error) return { error: error.message }
+    if (!data) return { error: 'No se pudo editar el grupo.' }
+    return { group: mapExchangeGroupRow(data) }
+}
+
+/**
+ * Soft-delete (`deleted_at`): el índice único parcial libera el slug y el grupo desaparece
+ * del catálogo vivo. Los planes YA publicados no se tocan — sus targets llevan el snapshot
+ * congelado (`snapshot_group_code` / `snapshot_ref_*` de 20260718140000).
+ */
+export async function softDeleteExchangeGroup(db: DB, groupId: string): Promise<{ error?: string }> {
+    const { data, error } = await db
+        .from('exchange_groups')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', groupId)
+        .is('deleted_at', null)
+        .select('id')
+        .maybeSingle()
+    if (error) return { error: error.message }
+    if (!data) return { error: 'No se pudo eliminar el grupo.' }
+    return {}
+}
+
 export async function findMealExchangeTargetsByMealIds(
     db: DB,
     mealIds: string[]

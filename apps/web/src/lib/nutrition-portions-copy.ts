@@ -74,6 +74,42 @@ export const PORTIONS_COPY = {
     offline: 'Sin conexión. Tus porciones se guardarán cuando vuelva la señal.',
     markFailed: 'No se pudo marcar la porción. Reintentar',
   },
+  /**
+   * Grupos PROPIOS del coach (porciones propias — specs/nutrition-custom-portions §P-A).
+   * Vive en el mismo popover/sheet del picker. RN espeja esta tabla cuando llegue FD6a.
+   */
+  groupEditor: {
+    createRow: 'Crear grupo nuevo',
+    createTitle: 'Nuevo grupo de porciones',
+    editTitle: 'Editar grupo',
+    nameLabel: 'Nombre',
+    namePlaceholder: 'Batido, Colación…',
+    codeLabel: 'Código',
+    codeHint: '1 a 3 letras. Es lo que ve el alumno en el círculo.',
+    macrosLabel: 'Macros de 1 porción',
+    proteinLabel: 'Proteínas (g)',
+    carbsLabel: 'Carbohidratos (g)',
+    fatsLabel: 'Grasas (g)',
+    kcalLabel: 'Calorías',
+    kcalHint: 'Se calculan solas (4/4/9). Puedes ajustarlas.',
+    colorLabel: 'Color',
+    colorOption: (n: number) => `Color ${n}`,
+    referentialNotice: 'Tus grupos siempre quedan marcados como valores referenciales.',
+    save: 'Guardar grupo',
+    saving: 'Guardando…',
+    cancel: 'Cancelar',
+    manageAria: (grupo: string) => `Opciones de ${grupo}`,
+    edit: 'Editar',
+    delete: 'Eliminar',
+    deleteConfirmTitle: (grupo: string) => `¿Eliminar ${grupo}?`,
+    deleteInUseNotice:
+      'Los planes publicados conservan su versión congelada. Se quitará de las franjas que estés editando.',
+    deleteConfirm: 'Eliminar grupo',
+    nameRequired: 'Escribe un nombre para el grupo.',
+    codeRequired: 'Escribe un código de 1 a 3 letras.',
+    macrosRequired: 'Revisa las macros: deben ser números mayores o iguales a 0.',
+    writeFailed: 'No pudimos guardar el grupo. Intenta nuevamente.',
+  },
   coach: {
     dayCoverage: 'Porciones',
     derivedNote:

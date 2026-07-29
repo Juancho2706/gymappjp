@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { CheckCircle2, Info, LockKeyhole, Plus } from 'lucide-react'
 import {
+  DayVariantWeekStrip,
   MacroBudget,
   MacroChipRow,
   NutritionCard,
@@ -10,7 +11,13 @@ import {
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
-import { createNutritionMacroValue, describeLegacyHistoryDay } from '@eva/nutrition-v2'
+import {
+  createNutritionMacroValue,
+  describeLegacyHistoryDay,
+  formatNutritionCalories,
+  resolveNutritionDayVariantForDate,
+  sortNutritionDayVariantsForDisplay,
+} from '@eva/nutrition-v2'
 import { formatDateDdMmYyyySantiago, getTodayInSantiago } from '@/lib/date-utils'
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -117,6 +124,18 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     todayPlan === null
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
+
+  // FD3 (multi-dia): las cards de "Estructura prescrita" se ordenan con el dia base primero y
+  // despues los dias especificos de lunes a domingo, y cada una muestra su tira Lu-Do. La card
+  // que aplica hoy se marca solo si el registro del dia ya es del plan vigente (durante el lag
+  // el snapshot es de otra version, nombrar la variante nueva seria mentir). Cero seleccion nueva:
+  // se replica la regla que el snapshot ya congelo.
+  const orderedVariants = sortNutritionDayVariantsForDisplay(detail.plan.dayVariants)
+  const multiDayPlan = detail.plan.dayVariants.length > 1
+  const todayVariant =
+    multiDayPlan && !showTodayPlanLag
+      ? resolveNutritionDayVariantForDate(detail.plan.dayVariants, today)
+      : null
 
   // Banner "plan convertido" (SPEC AC8): solo se consulta cuando hay plan vigente, y solo se
   // renderiza si existe link (`nutrition_v2_conversion_links`). Sin plan o sin link → cero query
@@ -289,14 +308,31 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             <section>
               <h2 className="mb-3 font-display text-xl font-semibold text-strong">Estructura prescrita</h2>
               <div className="space-y-4">
-                {detail.plan.dayVariants.map((variant) => (
+                {orderedVariants.map((variant) => (
                   <NutritionCard key={variant.id}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="font-display text-base font-semibold text-strong">{variant.label}</h3>
-                      <span className="text-xs text-muted">
-                        {variant.targets.calories ?? 0} kcal objetivo
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-display text-base font-semibold text-strong">{variant.label}</h3>
+                        {todayVariant?.id === variant.id ? (
+                          <span className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary dark:border-primary/40 dark:bg-primary/15">
+                            Hoy aplica
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="text-xs tabular-nums text-muted">
+                        {variant.targets.calories != null
+                          ? `${formatNutritionCalories(variant.targets.calories)} objetivo`
+                          : 'Sin objetivo de energía'}
                       </span>
                     </div>
+                    {/* Tira Lu-Do de la variante (FD3): con un solo día no aporta y no se pinta. */}
+                    {multiDayPlan ? (
+                      <DayVariantWeekStrip
+                        variants={detail.plan.dayVariants}
+                        variant={variant}
+                        todayIso={today}
+                      />
+                    ) : null}
                     {variant.mealSlots.length === 0 ? (
                       <p className="mt-2 text-sm text-muted">Plan flexible: sin franjas prescritas.</p>
                     ) : (
