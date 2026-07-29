@@ -9,7 +9,6 @@ import {
   CoachAttentionCard,
   NutritionCard,
   NutritionStatePanel,
-  PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
@@ -253,9 +252,6 @@ export function HubRoster({
                       {item.clientName}
                     </h2>
                     {item.strategy ? <StrategyBadge compact strategy={item.strategy} /> : null}
-                    {item.versionNumber && item.planStatus === 'published' ? (
-                      <PlanVersionBadge version={item.versionNumber} status="published" />
-                    ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted">
                     {item.planName ?? 'Sin plan publicado'} · {item.intakeEntries7d} registros en 7 dias
@@ -322,9 +318,6 @@ export function HubRoster({
                     <td className="px-4 py-2.5 text-muted">
                       <div className="flex items-center gap-2">
                         <span className="truncate">{item.planName ?? 'Sin plan'}</span>
-                        {item.versionNumber && item.planStatus === 'published' ? (
-                          <PlanVersionBadge version={item.versionNumber} status="published" />
-                        ) : null}
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-strong">

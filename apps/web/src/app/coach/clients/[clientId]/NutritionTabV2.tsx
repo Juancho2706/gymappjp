@@ -8,7 +8,6 @@ import {
   MacroBudget,
   NutritionCard,
   NutritionStatePanel,
-  PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
@@ -118,11 +117,6 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
           {view.plan ? (
             <div className="flex flex-wrap items-center gap-2">
               <StrategyBadge strategy={view.plan.strategy} />
-              <PlanVersionBadge
-                version={view.plan.versionNumber}
-                status={view.plan.status}
-                effectiveLabel={`desde ${view.plan.effectiveFromLabel}`}
-              />
             </div>
           ) : null}
 

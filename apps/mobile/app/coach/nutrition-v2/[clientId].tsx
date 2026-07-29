@@ -28,7 +28,6 @@ import {
   NutritionSkeleton,
   NutritionStatePanel,
   NutritionCard,
-  PlanVersionBadge,
   PortionDayCoverageCard,
   PrescribedPortionChips,
   StrategyBadge,
@@ -515,11 +514,6 @@ export default function CoachNutritionV2ClientScreen() {
       {detail.plan.plan ? (
         <View className="flex-row flex-wrap items-center gap-2">
           <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
-          <PlanVersionBadge
-            version={(detail.today.plan ?? detail.plan.plan).versionNumber}
-            status={(detail.today.plan ?? detail.plan.plan).status}
-            effectiveLabel={`desde ${(detail.today.plan ?? detail.plan.plan).effectiveFrom}`}
-          />
           {/* Disparador secundario "Asignar a otros alumnos" (delta 2): en la fila de badges, a
               la derecha (ml-auto), NUNCA en el header. Gateado por canAssign (delta 1).
               NUT-012 — fail-closed con cache stale: `offline` significa que la ficha se está

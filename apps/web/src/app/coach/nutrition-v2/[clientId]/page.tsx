@@ -8,7 +8,6 @@ import {
   NutritionCard,
   NutritionPageShell,
   NutritionStatePanel,
-  PlanVersionBadge,
   PrescribedPortionChips,
   StrategyBadge,
 } from '@/components/nutrition-v2'
@@ -274,11 +273,6 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               accion secundaria a la derecha (fuera del header; solo con plan publicado copiable). */}
           <div className="flex flex-wrap items-center gap-2">
             <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
-            <PlanVersionBadge
-              version={(detail.today.plan ?? detail.plan.plan).versionNumber}
-              status={(detail.today.plan ?? detail.plan.plan).status}
-              effectiveLabel={`desde ${(detail.today.plan ?? detail.plan.plan).effectiveFrom}`}
-            />
             {canAssign ? (
               <div className="ml-auto">
                 <AssignPlanToClientsDialog

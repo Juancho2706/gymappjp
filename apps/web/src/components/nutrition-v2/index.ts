@@ -12,7 +12,6 @@ export {
   NutritionSkeleton,
   NutritionStatePanel,
   NutritionToolbar,
-  PlanVersionBadge,
   ResponsiveDataAdapter,
   StrategyBadge,
   SyncOfflineState,

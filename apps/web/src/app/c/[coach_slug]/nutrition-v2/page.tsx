@@ -8,7 +8,6 @@ import {
   NutritionPageShell,
   NutritionStatePanel,
   NutritionToolbar,
-  PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
@@ -436,7 +435,6 @@ async function PlanView({
       <NutritionCard>
         <div className="flex flex-wrap items-center gap-2">
           <StrategyBadge strategy={summary.strategy} />
-          <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
         </div>
         <h2 className="mt-4 font-display text-2xl font-bold text-strong">{summary.name}</h2>
         <p className="mt-1 text-xs text-muted">

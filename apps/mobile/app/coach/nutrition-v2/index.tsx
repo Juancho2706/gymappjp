@@ -21,7 +21,6 @@ import {
   NutritionSkeleton,
   NutritionStatePanel,
   NutritionCard,
-  PlanVersionBadge,
   StrategyBadge,
   SyncOfflineState,
 } from '../../../components/nutrition-v2'
@@ -547,9 +546,6 @@ export default function CoachNutritionV2Screen() {
                       {item.clientName}
                     </Text>
                     {item.strategy ? <StrategyBadge compact strategy={item.strategy} /> : null}
-                    {item.versionNumber && item.planStatus === 'published' ? (
-                      <PlanVersionBadge version={item.versionNumber} status="published" />
-                    ) : null}
                   </View>
                   <Text className="mt-1 text-xs text-muted" numberOfLines={1}>
                     {item.planName ?? 'Sin plan publicado'} · {item.intakeEntries7d} registros en 7 días

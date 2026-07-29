@@ -31,7 +31,6 @@ import {
   NutritionCard,
   NutritionMotionButton,
   NutritionStatePanel,
-  PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import { formatNutritionShortDate } from '@/lib/date-utils'
@@ -271,13 +270,6 @@ export function TodayExperience({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         {today.plan ? <StrategyBadge strategy={today.plan.strategy} /> : null}
-        {today.plan ? (
-          <PlanVersionBadge
-            version={today.plan.versionNumber}
-            status={today.plan.status}
-            effectiveLabel={`desde ${formatNutritionShortDate(today.plan.effectiveFrom)}`}
-          />
-        ) : null}
         {entries.length > 0 ? (
           <span className="inline-flex items-center gap-1.5 rounded-pill border border-emerald-300/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />

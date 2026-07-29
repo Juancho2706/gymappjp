@@ -31,7 +31,6 @@ import {
   NutritionMotionButton,
   NutritionSkeleton,
   NutritionStatePanel,
-  PlanVersionBadge,
   PrescribedPortionChips,
   StrategyBadge,
   SyncOfflineState,
@@ -1511,13 +1510,6 @@ function TodayTab({
           // Fila de badges + chip de estado del día (web TodayExperience.tsx:185-200).
           <View className="flex-row flex-wrap items-center gap-2">
             {model.plan ? <StrategyBadge strategy={model.plan.strategy} /> : null}
-            {model.plan ? (
-              <PlanVersionBadge
-                version={model.plan.versionNumber}
-                status={model.plan.status}
-                effectiveLabel={`desde ${formatNutritionShortDate(model.plan.effectiveFrom)}`}
-              />
-            ) : null}
             {hasLoggedToday ? (
               // Chip esmeralda del canvas web → tono success del kit RN (contrato white-label).
               <View className="flex-row items-center gap-1.5 rounded-pill border border-success-500/30 bg-success-500/10 px-2.5 py-1">
@@ -2549,7 +2541,6 @@ function PlanTab() {
         <NutritionCard>
           <View className="flex-row flex-wrap items-center gap-2">
             <StrategyBadge strategy={summary.strategy} />
-            <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
           </View>
           <Text className="mt-4 font-display text-2xl font-bold text-strong">{summary.name}</Text>
           <Text className="mt-1 text-xs text-muted">
