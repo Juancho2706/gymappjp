@@ -153,6 +153,11 @@ export function QuickEditMode({
   // TODO(F-02 P3): editor coach RN — afordancia por item para agregar/quitar reemplazos (reusar
   // FoodSearchSheet, max 8, solo structured/hybrid). Hoy solo se preservan y se muestran al alumno.
   const [carryOverSubs, setCarryOverSubs] = useState<ReadonlyMap<string, NutritionItemSubstitution[]>>(new Map())
+  // NUT-008: estado HONESTO del carry-over. 'loading' = el fetch sigue en vuelo (publicar
+  // ahora borraria los reemplazos por carrera); 'error' = no se pudo leer (mismo dano). Solo
+  // 'loaded' habilita publicar. Antes el mapa arrancaba vacio y nada distinguia los tres casos.
+  const [subsStatus, setSubsStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const [subsReloadNonce, setSubsReloadNonce] = useState(0)
   const [showErrors, setShowErrors] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
@@ -197,20 +202,31 @@ export function QuickEditMode({
     }
   }, [initialState])
 
-  // Carry-over de reemplazos autorizados (F-02): fetch UNA vez de la version base congelada.
+  // Carry-over de reemplazos autorizados (F-02): fetch de la version base congelada. El
+  // estado del fetch gobierna el publish (ver `doPublish`): mientras no este 'loaded' no se
+  // puede publicar, porque el publish reescribe el arbol completo y borraria lo no leido.
   useEffect(() => {
     if (!baseline) return
     let active = true
+    setSubsStatus('loading')
     void loadQuickEditSubstitutions(
       supabase as unknown as NutritionV2WriteClient,
       baseline.baseVersionId,
-    ).then((map) => {
-      if (active && mountedRef.current) setCarryOverSubs(map)
+    ).then((res) => {
+      if (!active || !mountedRef.current) return
+      setCarryOverSubs(res.byItem)
+      setSubsStatus(res.status)
     })
     return () => {
       active = false
     }
-  }, [baseline])
+  }, [baseline, subsReloadNonce])
+
+  // Reintento explicito del fetch de reemplazos (boton del banner de error).
+  const retrySubstitutions = useCallback(() => {
+    setPublishError(null)
+    setSubsReloadNonce((nonce) => nonce + 1)
+  }, [])
 
   const portionGroupsById = useMemo(
     () => new Map(portionGroups.map((group) => [group.exchangeGroupId, group])),
@@ -454,6 +470,19 @@ export function QuickEditMode({
 
   const doPublish = useCallback(async () => {
     if (!baseline || !intentKeyRef.current) return
+    // NUT-008 (fail-closed): sin los reemplazos autorizados de la version base, publicar los
+    // BORRA (el publish reescribe el arbol completo y solo escribe lo que trae el draft).
+    // Cubre las dos vias: fetch en vuelo (carrera) y fetch fallido.
+    if (subsStatus !== 'loaded') {
+      if (!mountedRef.current) return
+      setConfirmOpen(false)
+      setPublishError(
+        subsStatus === 'loading'
+          ? QUICK_EDIT_COPY.substitutionsLoading
+          : QUICK_EDIT_COPY.substitutionsFailed,
+      )
+      return
+    }
     const net = await NetInfo.fetch()
     if (net.isConnected === false) {
       if (!mountedRef.current) return
@@ -498,10 +527,20 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, carryOverSubs, todayIso, hasNutritionPro, onPublished, draftKey])
+  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, carryOverSubs, subsStatus, todayIso, hasNutritionPro, onPublished, draftKey])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return
+    // Guard NUT-008 antes de abrir el confirm: no se ofrece publicar si el carry-over de
+    // reemplazos no esta resuelto (misma razon que en doPublish).
+    if (subsStatus !== 'loaded') {
+      setPublishError(
+        subsStatus === 'loading'
+          ? QUICK_EDIT_COPY.substitutionsLoading
+          : QUICK_EDIT_COPY.substitutionsFailed,
+      )
+      return
+    }
     if (!validation.ok) {
       setShowErrors(true)
       setPublishError('Revisa los campos marcados antes de publicar.')
@@ -512,15 +551,21 @@ export function QuickEditMode({
     // Key FRESCA por intencion (abrir el confirm); los reintentos de esta intencion la reusan.
     intentKeyRef.current = buildQuickEditIdempotencyKey({ clientId, operationId: genKey('qe') })
     setConfirmOpen(true)
-  }, [count, publishing, validation.ok, clientId])
+  }, [count, publishing, validation.ok, clientId, subsStatus])
 
   const handleRetry = useCallback(() => {
+    // Con el carry-over sin resolver, "Reintentar" reintenta la LECTURA de reemplazos (es
+    // lo que bloquea), no el publish: republicar sin ellos los borraria (NUT-008).
+    if (subsStatus !== 'loaded') {
+      retrySubstitutions()
+      return
+    }
     if (!intentKeyRef.current) {
       handlePublishRequest()
       return
     }
     void doPublish()
-  }, [doPublish, handlePublishRequest])
+  }, [doPublish, handlePublishRequest, subsStatus, retrySubstitutions])
 
   const handleDiscard = useCallback(() => {
     if (count === 0) {

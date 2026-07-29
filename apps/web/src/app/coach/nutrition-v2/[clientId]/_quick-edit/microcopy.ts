@@ -57,6 +57,13 @@ export const QE_COPY = {
   notesPlaceholder: 'Escribe indicaciones visibles para tu alumno (bienvenida, comida libre, recordatorios…).',
   /** Error red/servidor en la barra: el draft NO se pierde; reintento reusa la misma clave. */
   publishFailed: 'No se pudo publicar. Reintentar',
+  /**
+   * NUT-008: no pudimos leer los reemplazos autorizados de la version vigente. Publicar
+   * ahora los borraria (la publicacion reescribe el plan completo), asi que se bloquea.
+   */
+  substitutionsFailed:
+    'No pudimos cargar los reemplazos autorizados de este plan. Recarga antes de publicar: si publicas ahora, tu alumno los perdería.',
+  substitutionsRetry: 'Reintentar',
   discardConfirm: (n: number) => `¿Descartar ${cambios(n)}? Esta acción no se puede deshacer.`,
   emptySlot: 'Franja sin alimentos',
   addFood: 'Agregar alimento',

@@ -28,10 +28,19 @@ import {
 } from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 
 // Persistencia compartida del Builder V2 (web coach). Este modulo NO es 'use server':
-// aloja los tipos, helpers del lado servidor y la rutina transaccional de persistir+publicar
-// un draft, para que tanto publishPlanAction (builder) como assignPlanToClientsAction
-// (asignar a otros alumnos) reusen EXACTAMENTE el mismo camino de escritura
+// aloja los tipos, helpers del lado servidor y la rutina de persistir+publicar un draft,
+// para que tanto publishPlanAction (builder) como assignPlanToClientsAction (asignar a
+// otros alumnos) reusen EXACTAMENTE el mismo camino de escritura
 // (plan -> version -> variantes -> franjas -> items -> publish_nutrition_plan_v2).
+//
+// ATENCION (honestidad transaccional — NUT-011): esta rutina NO es atomica. El arbol se
+// escribe en llamadas PostgREST SEPARADAS y solo el ULTIMO paso (`publish_nutrition_plan_v2`)
+// corre dentro de una transaccion SQL. Un fallo intermedio deja una version `draft` con arbol
+// parcial (huerfana). Mitigaciones vigentes: reuso del plan sin publicar
+// (`resolveReusableUnpublishedPlanId`), idempotencia por `publish_idempotency_key` (un retry
+// con la MISMA clave devuelve la version ya publicada) y compare-and-swap opcional
+// (`expectedCurrentVersionId`). El fix de fondo (una RPC transaccional unica) esta pendiente.
+//
 // Fail-closed: authorizeCoach re-verifica el gate (rollout + webCoach) y el scope del
 // workspace; la publicacion transaccional (RPC) revalida can_manage (RLS) por cada alumno.
 // Las macros de snapshot se re-derivan de foods en el servidor.
@@ -487,7 +496,13 @@ export async function persistAndPublishDraft(input: {
       timezone: draft.timezone,
       student_permissions: draft.permissions,
       visible_notes: draft.visibleNotes,
-      private_notes: draft.privateNotes,
+      // `private_notes` NO se escribe (NUT-007): la columna same-row esta DEPRECADA
+      // (20260714191500_nutrition_v2_private_notes) — `authenticated` no tiene grant de
+      // SELECT/UPDATE sobre ella, solo el INSERT quedo abierto, asi que lo que se escribia
+      // ahi jamas volvia por ningun read model. La nota privada versionada vive en
+      // `nutrition_plan_private_notes_v2`, tabla que hoy ningun camino de la app puebla (no
+      // hay UI de escritura en web, RN ni quick-edit). Mandar la clave solo agregaba un
+      // camino de escritura ciego y romperia el dia que se revoque el INSERT por columna.
       protocol_notes: draft.protocolNotes,
       created_by: userId,
       updated_by: userId,
@@ -563,6 +578,16 @@ export async function persistAndPublishDraft(input: {
 
         // Reemplazos autorizados del coach (F-02), congelados por item. Solo structured/hybrid
         // tienen items (flexible nunca llega aquí). Un item sin reemplazos no toca la tabla nueva.
+        //
+        // PENDIENTE (NUT-008, capa 1 — merge server-side): hoy la publicación reescribe el árbol
+        // COMPLETO y las sustituciones salen EXCLUSIVAMENTE del draft; un draft sin la colección
+        // borra las de la versión base. La mitigación vigente es de cliente (carry-over + guard
+        // de UI que bloquea publicar si la lectura falló). El merge server-side (releer la base
+        // cuando hay `expectedCurrentVersionId` y conservar lo no editado) NO se implementa aquí
+        // a propósito: el contrato es ambiguo — `substitutions` es opcional y "ausente" no se
+        // distingue de "el coach las borró todas", así que el merge las resucitaría cuando
+        // aterrice el editor de reemplazos (F-02 P3, RN). Requiere primero volver la colección
+        // explícita en el contrato (o un flag `substitutionsEdited` por item).
         const substitutionRows = itemsWithIds.flatMap(({ item, id }) =>
           (item.substitutions ?? []).map((sub, subIndex) =>
             buildItemSubstitutionInsertRow({

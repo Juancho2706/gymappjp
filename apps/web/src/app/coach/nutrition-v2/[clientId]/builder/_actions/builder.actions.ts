@@ -34,6 +34,14 @@ const PublishInputSchema = z.object({
   draft: NutritionPlanDraftSchema,
   idempotencyKey: z.string().trim().min(8).max(200),
   effectiveFrom: z.string().date(),
+  /**
+   * Compare-and-swap opcional (NUT-011): id de la version vigente que el wizard tenia en
+   * pantalla al abrirse. Si otra sesion (otra pestaña, RN, quick-edit) publico entremedio, el
+   * RPC responde `nutrition_v2_publish_stale_base` -> STALE_BASE en vez de superponer una
+   * version calculada sobre datos viejos. Ausente (plan nuevo o rama "Reemplazar") => el RPC
+   * omite el guard, comportamiento identico al anterior.
+   */
+  expectedCurrentVersionId: z.string().uuid().optional(),
 })
 
 const SearchInputSchema = z.object({
@@ -52,7 +60,7 @@ export async function publishPlanAction(input: unknown): Promise<PublishSuccess 
   if (!parsed.success) {
     return fail('INVALID_PAYLOAD', 'El plan tiene datos invalidos.', zodFields(parsed.error))
   }
-  const { draft, idempotencyKey, effectiveFrom } = parsed.data
+  const { draft, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = parsed.data
 
   const auth = await authorizeCoach(draft.clientId)
   if (!auth.ok) return auth
@@ -76,7 +84,15 @@ export async function publishPlanAction(input: unknown): Promise<PublishSuccess 
     }
   }
 
-  const result = await persistAndPublishDraft({ db, userId, draft, idempotencyKey, effectiveFrom })
+  const result = await persistAndPublishDraft({
+    db,
+    userId,
+    draft,
+    idempotencyKey,
+    effectiveFrom,
+    // Solo cuando el wizard edita un plan existente (el CAS exige una version base real).
+    ...(expectedCurrentVersionId ? { expectedCurrentVersionId } : {}),
+  })
   if (!result.ok) return result
 
   revalidatePath('/coach/nutrition-v2')

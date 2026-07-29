@@ -9,7 +9,13 @@
 
 import { NutritionCard } from '@/components/nutrition-v2'
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
-import { qeVariantTotal, type QeTargetsText, type QeVariant } from './quick-edit-state'
+import {
+  qeVariantPortionTotals,
+  qeVariantTotalWithPortions,
+  type QeTargetsText,
+  type QeVariant,
+} from './quick-edit-state'
+import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { useQuickEdit } from './QuickEditProvider'
 import { StepperField } from './StepperField'
 
@@ -21,9 +27,12 @@ const TARGET_FIELDS: Array<{ field: keyof QeTargetsText; label: string; suffix: 
 ]
 
 export function TargetsEditorCard({ variant }: { variant: QeVariant }) {
-  const { dispatch, errors, showErrors, isPending } = useQuickEdit()
+  const { dispatch, errors, showErrors, isPending, exchangeGroups } = useQuickEdit()
   const hasSlots = variant.slots.length > 0
-  const total = qeVariantTotal(variant)
+  // "Total prescrito" = items fijos + porciones a eleccion (antes ignoraba los grupos y
+  // no cuadraba con los subtotales de franja ni con lo que el coach prescribio).
+  const portionTotals = qeVariantPortionTotals(variant, exchangeGroups)
+  const total = qeVariantTotalWithPortions(variant, exchangeGroups)
 
   return (
     <NutritionCard>
@@ -58,6 +67,11 @@ export function TargetsEditorCard({ variant }: { variant: QeVariant }) {
             carbsG={total.carbsG}
             fatsG={total.fatsG}
           />
+          {portionTotals ? (
+            <p className="w-full text-xs text-muted">
+              {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </NutritionCard>

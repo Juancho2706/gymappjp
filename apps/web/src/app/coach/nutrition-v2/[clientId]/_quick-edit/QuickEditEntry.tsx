@@ -26,6 +26,7 @@ export function QuickEditEntry({
   clientName,
   planModel,
   itemSubstitutions,
+  substitutionsLoadFailed = false,
   today,
 }: {
   clientId: string
@@ -33,6 +34,11 @@ export function QuickEditEntry({
   planModel: NutritionPlanReadModel
   /** Reemplazos autorizados de la version base (F-02), fetcheados server-side para el carry-over. */
   itemSubstitutions: NutritionItemSubstitutionRead[]
+  /**
+   * NUT-008: la lectura de reemplazos fallo (RLS/red/timeout). No es "no hay reemplazos":
+   * publicar con el mapa vacio los borraria, asi que el modo edicion bloquea "Publicar".
+   */
+  substitutionsLoadFailed?: boolean
   today: string
 }) {
   const [editing, setEditing] = useState(false)
@@ -90,6 +96,7 @@ export function QuickEditEntry({
           clientName={clientName}
           planModel={planModel}
           itemSubstitutions={itemSubstitutions}
+          substitutionsLoadFailed={substitutionsLoadFailed}
           today={today}
           onExit={() => setEditing(false)}
         >

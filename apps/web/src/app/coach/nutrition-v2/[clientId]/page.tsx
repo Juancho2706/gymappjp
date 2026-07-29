@@ -32,7 +32,10 @@ import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_component
 import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
-import { fetchItemSubstitutionsForVersion } from '../_data/item-substitutions.data'
+import {
+  fetchItemSubstitutionsForVersion,
+  type ItemSubstitutionsLoad,
+} from '../_data/item-substitutions.data'
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 
@@ -134,10 +137,14 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
 
   // Carry-over F-02: reemplazos autorizados congelados de la version vigente. El read-model
   // hot-path no los transporta; se leen aparte (RLS-scoped) y se inyectan en el quick-edit para
-  // que republicar NO los borre. Solo con plan vigente (el entry solo se monta ahi); fail-soft a [].
-  const itemSubstitutions = hasPlan
+  // que republicar NO los borre. Solo con plan vigente (el entry solo se monta ahi).
+  // NUT-008: un fallo de lectura NO degrada a [] — viaja como `substitutionsLoadFailed` y el
+  // quick-edit bloquea "Publicar" (republicar con el mapa vacio borraria los reemplazos).
+  const substitutionsLoad: ItemSubstitutionsLoad = hasPlan
     ? await fetchItemSubstitutionsForVersion(detail.plan.plan?.versionId)
-    : []
+    : { ok: true, rows: [] }
+  const itemSubstitutions = substitutionsLoad.ok ? substitutionsLoad.rows : []
+  const substitutionsLoadFailed = !substitutionsLoad.ok
 
   return (
     // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
@@ -156,6 +163,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             clientName={detail.client.fullName}
             planModel={detail.plan}
             itemSubstitutions={itemSubstitutions}
+            substitutionsLoadFailed={substitutionsLoadFailed}
             today={today}
           />
         ) : (
@@ -168,18 +176,13 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
           </Link>
         )
       }
-      aside={
-        <NutritionCard tone="neutral">
-          <div className="flex items-center gap-2">
-            <LockKeyhole className="h-4 w-4 text-primary" />
-            <h2 className="font-display text-base font-semibold text-strong">Nota profesional</h2>
-          </div>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-body">
-            {detail.privateNote?.note || 'Sin nota privada para la version vigente.'}
-          </p>
-          <p className="mt-3 text-xs text-muted">El alumno no recibe esta informacion.</p>
-        </NutritionCard>
-      }
+      // NUT-007 (opcion A): el aside "Nota profesional" se retiro. Leia
+      // `nutrition_plan_private_notes_v2`, una tabla que NINGUN camino de escritura puebla
+      // (no hay input de nota privada en el builder, en RN ni en quick-edit), asi que el
+      // panel mostraba el fallback "Sin nota privada" de forma permanente para todo coach.
+      // Las notas privadas del coach por alumno viven hoy en la ficha del alumno
+      // (`nutrition_private_notes`, CoachPrivateNotesPanel). Reponer una nota clinica POR
+      // VERSION exige SPEC + UI de escritura + copy-forward al republicar (opcion B).
     >
       {published ? (
         <div className="mb-5 flex items-center gap-2 rounded-control border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -349,6 +352,36 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                 Historico completo con Nutricion Pro
               </Link>
             ) : null}
+            {/* NUT-041: sin empty-state el coach veia el titulo y un grid vacio, ambiguo entre
+                "no registro nada", "el filtro sin Pro recorto la ventana" y "fallo la lectura".
+                Los dos vacios se distinguen: si `detail.recentDays` trae dias pero `recentDays`
+                quedo vacio, el recorte lo hizo la ventana BASE (sin Nutricion Pro) -> upsell. */}
+            {recentDays.length === 0 ? (
+              <NutritionStatePanel
+                illustration="historial-vacio"
+                title={
+                  detail.recentDays.length > 0 && !nutritionProEnabled
+                    ? 'Historial fuera de tu ventana'
+                    : 'Sin días registrados todavía'
+                }
+                description={
+                  detail.recentDays.length > 0 && !nutritionProEnabled
+                    ? 'Los días de este alumno quedan fuera de la ventana incluida en tu plan. Con Nutrición Pro ves el histórico completo.'
+                    : 'Aparecerán aquí cuando el alumno registre su primer día.'
+                }
+                action={
+                  detail.recentDays.length > 0 && !nutritionProEnabled ? (
+                    <Link
+                      href={NUTRITION_PRO_UPGRADE_HREF}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
+                    >
+                      <LockKeyhole className="h-4 w-4" />
+                      Activar Nutrición Pro
+                    </Link>
+                  ) : undefined
+                }
+              />
+            ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {recentDays.map((day) => {
                 const legacy = describeLegacyHistoryDay(day)
@@ -392,6 +425,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                 )
               })}
             </div>
+            )}
           </section>
 
           {/* Zona inferior discreta: archivar el plan vigente. Aislado del CTA primario del header

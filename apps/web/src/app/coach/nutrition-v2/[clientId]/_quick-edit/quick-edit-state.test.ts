@@ -12,7 +12,14 @@ import {
   collectPortionGroups,
   createCatalogItem,
   normalizeTimeHHMM,
+  qeExchangeGroups,
   qeItemMacros,
+  qeSlotPortionTotals,
+  qeSlotSubtotal,
+  qeSlotSubtotalWithPortions,
+  qeVariantPortionTotals,
+  qeVariantTotal,
+  qeVariantTotalWithPortions,
   quickEditReducer,
   readModelToEditState,
   stepPortionsText,
@@ -439,6 +446,68 @@ describe('quick-edit-state — porciones', () => {
     expect(groups.map((g) => g.groupCode)).toEqual(['C', 'V'])
     expect(groups[0].ref.carbsG).toBe(15)
     expect(groups[1].macrosConfirmed).toBe(false)
+  })
+})
+
+// ── Totales CON porciones: la queja del coach (los grupos no sumaban en el total) ────────
+
+describe('quick-edit-state — totales con porciones a eleccion', () => {
+  it('el subtotal de franja suma items + porciones (2C + 1,5V sobre los snapshots)', () => {
+    const { state, groups } = hydratePortions()
+    const dict = qeExchangeGroups(groups)
+    const slot = state.variants[0].slots[0]
+    const soloItems = qeSlotSubtotal(slot)
+    const conPorciones = qeSlotSubtotalWithPortions(slot, dict)
+    // 2 x C{70,2,15,0.5} + 1,5 x V{25,2,5,0} = {177.5, 7, 37.5, 1}
+    const derivado = qeSlotPortionTotals(slot, dict)
+    expect(derivado).toEqual({ calories: 177.5, proteinG: 7, carbsG: 37.5, fatsG: 1 })
+    expect(conPorciones.calories).toBe(Math.round((soloItems.calories + 177.5) * 10) / 10)
+    expect(conPorciones.calories).toBeGreaterThan(soloItems.calories)
+    // Las macros de los items no se pierden por el camino.
+    expect(conPorciones.proteinG).toBe(Math.round((soloItems.proteinG + 7) * 10) / 10)
+  })
+
+  it('el total prescrito de la variante suma las porciones de TODAS sus franjas', () => {
+    const { state, groups } = hydratePortions()
+    const dict = qeExchangeGroups(groups)
+    const variant = state.variants[0]
+    const total = qeVariantTotalWithPortions(variant, dict)
+    const soloItems = qeVariantTotal(variant)
+    expect(total.calories).toBe(Math.round((soloItems.calories + 177.5) * 10) / 10)
+    expect(qeVariantPortionTotals(variant, dict)).toEqual({
+      calories: 177.5,
+      proteinG: 7,
+      carbsG: 37.5,
+      fatsG: 1,
+    })
+  })
+
+  it('plan SIN porciones: los totales combinados son IDENTICOS a los de solo items', () => {
+    const { state } = hydrate()
+    const dict = qeExchangeGroups(collectPortionGroups(makePlanModel()))
+    expect(dict).toEqual([])
+    const slot = state.variants[0].slots[0]
+    expect(qeSlotPortionTotals(slot, dict)).toBeNull()
+    expect(qeSlotSubtotalWithPortions(slot, dict)).toEqual(qeSlotSubtotal(slot))
+    expect(qeVariantTotalWithPortions(state.variants[0], dict)).toEqual(qeVariantTotal(state.variants[0]))
+  })
+
+  it('porciones en cero/texto invalido no contaminan el subtotal (jamas NaN)', () => {
+    const { state, groups } = hydratePortions()
+    const dict = qeExchangeGroups(groups)
+    const roto: QuickEditState = {
+      ...state,
+      variants: state.variants.map((variant) => ({
+        ...variant,
+        slots: variant.slots.map((slot) => ({
+          ...slot,
+          portionTargets: slot.portionTargets.map((target) => ({ ...target, portions: 'abc' })),
+        })),
+      })),
+    }
+    const slot = roto.variants[0].slots[0]
+    expect(qeSlotPortionTotals(slot, dict)).toBeNull()
+    expect(qeSlotSubtotalWithPortions(slot, dict)).toEqual(qeSlotSubtotal(slot))
   })
 })
 

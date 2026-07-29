@@ -52,7 +52,13 @@ import { PublishConflictDialog } from './PublishConflictDialog'
 import { PortionsSection, usePortionsBuilder, type PortionsController } from './PortionsSection'
 import { PortionsDeriveCard } from './PortionsDeriveCard'
 import { PortionsReviewSection } from './PortionsReviewChips'
-import { attachPortionsAndValidate, combineSubtotals, slotPortionTotals, type PortionsBySlot } from './portions-state'
+import {
+  attachPortionsAndValidate,
+  combineSubtotals,
+  derivePortionTotals,
+  slotPortionTotals,
+  type PortionsBySlot,
+} from './portions-state'
 // Respaldo LOCAL del wizard (W3b): store puro versionado en localStorage. El coach retoma un
 // plan a medio construir si cerró la PWA / mató la pestaña. La key incluye clientId + planId.
 import {
@@ -791,7 +797,15 @@ function TargetsStep({
   )
 }
 
-function DaySummary({ state, totals }: { state: BuilderState; totals: ItemMacros }) {
+function DaySummary({
+  state,
+  totals,
+  portions,
+}: {
+  state: BuilderState
+  totals: ItemMacros
+  portions: PortionsController
+}) {
   return (
     <div className="space-y-3">
       <h3 className="font-display text-base font-semibold text-strong">Resumen del dia</h3>
@@ -810,7 +824,12 @@ function DaySummary({ state, totals }: { state: BuilderState; totals: ItemMacros
         ) : (
           <ul className="space-y-2">
             {state.slots.map((slot) => {
-              const s = slotSubtotal(slot)
+              // El desglose "Por franja" combina items + porciones a eleccion, igual que el
+              // subtotal de la card de la franja (antes mostraba solo los items).
+              const s = combineSubtotals(
+                slotSubtotal(slot),
+                slotPortionTotals(portions.bySlot, slot.key, portions.groups),
+              )
               return (
                 <li key={slot.key} className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate text-xs text-body">
@@ -841,7 +860,13 @@ function ConstructionStep({
   errors: Record<string, string>
   portions: PortionsController
 }) {
-  const totals = dayTotals(state)
+  // "Total del dia" = items fijos + porciones a eleccion de TODAS las franjas vivas (paridad
+  // con RN y con el subtotal de cada franja). Antes solo sumaba items: la misma pantalla
+  // mostraba "Subtotal franja 620 kcal" y "Total del dia 180 kcal" (queja del coach).
+  const portionDay = portions.groups
+    ? derivePortionTotals(state.slots.map((slot) => slot.key), portions.bySlot, portions.groups)
+    : null
+  const totals = combineSubtotals(dayTotals(state), portionDay)
   if (!strategyUsesSlots(state.strategy)) {
     return (
       <NutritionCard tone="neutral">
@@ -871,12 +896,17 @@ function ConstructionStep({
         <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 lg:hidden">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total del dia</span>
           <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
+          {portionDay ? (
+            <p className="w-full text-xs text-muted">
+              {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
+            </p>
+          ) : null}
         </div>
       </div>
 
       <div className="hidden lg:block">
         <div className="lg:sticky lg:top-6">
-          <DaySummary state={state} totals={totals} />
+          <DaySummary state={state} totals={totals} portions={portions} />
         </div>
       </div>
     </div>
@@ -895,7 +925,12 @@ function ReviewStep({
   portions: PortionsController
 }) {
   const usesSlots = strategyUsesSlots(state.strategy)
-  const totals = dayTotals(state)
+  // "Total prescrito" combinado (items + porciones a eleccion): mismo criterio que el paso
+  // Construccion; antes la revision mostraba un total menor al que el coach acababa de ver.
+  const portionDay = portions.groups
+    ? derivePortionTotals(state.slots.map((slot) => slot.key), portions.bySlot, portions.groups)
+    : null
+  const totals = combineSubtotals(dayTotals(state), portionDay)
   const meta = state.strategy ? NUTRITION_STRATEGIES[state.strategy] : null
   return (
     <div className="max-w-3xl space-y-4">
@@ -924,6 +959,11 @@ function ReviewStep({
               </dt>
               <dd className="text-body">
                 <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
+                {portionDay ? (
+                  <p className="mt-1 text-xs text-muted">
+                    {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
+                  </p>
+                ) : null}
               </dd>
             </div>
           ) : null}
@@ -1026,6 +1066,15 @@ interface BuilderDraftPayload {
   planId: string | null
   state: BuilderState
   portionsBySlot: PortionsBySlot
+  /**
+   * Clave de idempotencia del intento de publicacion en curso + firma del contenido con el
+   * que se acuño (NUT-011). Restaurar el borrador restaura tambien la clave: si el publish
+   * se corto (red/reload) el reintento con el MISMO contenido reusa la clave y el servidor
+   * devuelve la version ya publicada en vez de crear una segunda. Ausente en borradores
+   * viejos (pre-deploy) => se acuña una clave nueva, comportamiento anterior.
+   */
+  publishKey?: string | null
+  publishSignature?: string | null
 }
 
 // ¿El borrador tiene contenido que valga la pena respaldar? Evita escribir (y avisar al salir)
@@ -1048,6 +1097,8 @@ export function PlanBuilderClient({
   clientId: string
   existingPlan: {
     id: string
+    /** Version vigente al abrir el wizard: viaja como CAS al publicar (NUT-011). */
+    versionId: string
     versionNumber: number
     strategy: NutritionStrategy
     effectiveFrom: string
@@ -1075,6 +1126,11 @@ export function PlanBuilderClient({
   //   plan/version en vez de crear un duplicado. Se resetean al cerrar el modal (fresh open limpio).
   const replaceArchivedRef = useRef(false)
   const replaceKeyRef = useRef<string | null>(null)
+  // Idempotencia estable del publish normal (NUT-011): clave + firma del draft con el que se
+  // acuño. Mismo contenido => misma clave en todos los reintentos; contenido editado => clave
+  // nueva (intencion nueva). Ver `stableIdempotencyKey`.
+  const publishKeyRef = useRef<string | null>(null)
+  const publishSignatureRef = useRef<string | null>(null)
 
   // Respaldo local del wizard (W3b): key estable por alumno+plan, banner de restauración y
   // el payload leído al montar (guardado en un ref para no re-renderizar hasta tocar Restaurar).
@@ -1106,7 +1162,14 @@ export function PlanBuilderClient({
       if (builderHasSignificantContent(state)) {
         writeNutritionDraft<BuilderDraftPayload>(
           draftKey,
-          { clientId, planId: existingPlan?.id ?? null, state, portionsBySlot: portions.bySlot },
+          {
+            clientId,
+            planId: existingPlan?.id ?? null,
+            state,
+            portionsBySlot: portions.bySlot,
+            publishKey: publishKeyRef.current,
+            publishSignature: publishSignatureRef.current,
+          },
           Date.now(),
         )
       } else {
@@ -1167,6 +1230,10 @@ export function PlanBuilderClient({
     if (payload != null) {
       dispatch({ type: 'RESTORE', state: payload.state })
       portions.restoreBySlot(payload.portionsBySlot ?? {})
+      // Idempotencia (NUT-011): recuperar la clave del intento interrumpido es lo que hace
+      // que reintentar tras un reload no publique una segunda version del mismo contenido.
+      publishKeyRef.current = payload.publishKey ?? null
+      publishSignatureRef.current = payload.publishSignature ?? null
       // El catálogo de grupos (portions.groups) NO se persiste: si el plan restaurado usa
       // franjas (structured/hybrid) lo precargamos para que las filas de porciones muestren
       // nombre/color en vez del fallback (mismo camino que el flujo normal del picker).
@@ -1181,17 +1248,47 @@ export function PlanBuilderClient({
     setShowDraftBanner(false)
   }
 
-  // Clave de idempotencia FRESCA por cada intento real: cambia el destino (misma version vs
-  // plan nuevo) y evita reutilizar la clave de un intento fallido (riesgo de versiones draft
-  // huerfanas). El bloqueo de doble-submit lo da isPending + botones deshabilitados.
-  function freshIdempotencyKey(): string {
+  // Clave de idempotencia ESTABLE por "intento logico" (NUT-011): se fija una vez para un
+  // contenido de draft dado y se REUSA en todos los reintentos de ese mismo contenido, para
+  // que un retry tras una respuesta perdida devuelva la version YA publicada en vez de crear
+  // una segunda version/plan. Solo rota cuando el coach cambia el draft (o la fecha/destino):
+  // ahi es otra intencion y merece clave nueva. La firma + la clave se persisten junto al
+  // borrador local, asi que sobreviven a un reload y el reintento sigue siendo idempotente.
+  // El bloqueo de doble-submit lo sigue dando isPending + botones deshabilitados.
+  function draftSignature(draft: unknown, effectiveFrom: string): string {
+    return effectiveFrom + '|' + JSON.stringify(draft)
+  }
+
+  function stableIdempotencyKey(draft: unknown, effectiveFrom: string): string {
+    const signature = draftSignature(draft, effectiveFrom)
+    if (publishKeyRef.current && publishSignatureRef.current === signature) {
+      return publishKeyRef.current
+    }
     operationId.current = genId()
-    return buildNutritionIdempotencyKey({
+    publishKeyRef.current = buildNutritionIdempotencyKey({
       clientId,
       deviceId: 'web-builder',
       operationId: operationId.current,
       kind: 'publish',
     })
+    publishSignatureRef.current = signature
+    // Persistencia inmediata (no espera al autosave): si el publish se corta y el coach
+    // recarga, "Restaurar" recupera la MISMA clave y el reintento no duplica la version.
+    if (builderHasSignificantContent(state)) {
+      writeNutritionDraft<BuilderDraftPayload>(
+        draftKey,
+        {
+          clientId,
+          planId: existingPlan?.id ?? null,
+          state,
+          portionsBySlot: portions.bySlot,
+          publishKey: publishKeyRef.current,
+          publishSignature: signature,
+        },
+        Date.now(),
+      )
+    }
+    return publishKeyRef.current
   }
 
   // Publica el draft. `forceNewPlan` fuerza planId null => persistAndPublishDraft crea un plan
@@ -1220,9 +1317,19 @@ export function PlanBuilderClient({
       return
     }
 
-    const idempotencyKey = freshIdempotencyKey()
+    const idempotencyKey = stableIdempotencyKey(draft, effectiveFrom)
+    // CAS (NUT-011): al publicar una version NUEVA del plan vigente mandamos la version base
+    // que el wizard tenia en pantalla. Si otra sesion publico entremedio, el RPC responde
+    // STALE_BASE en vez de superponer una version calculada sobre datos viejos. La rama
+    // "Reemplazar" (plan nuevo) no manda CAS: no hay version base que comparar.
+    const expectedCurrentVersionId = forceNewPlan ? undefined : existingPlan?.versionId
     startTransition(async () => {
-      const res = await publishPlanAction({ draft, idempotencyKey, effectiveFrom })
+      const res = await publishPlanAction({
+        draft,
+        idempotencyKey,
+        effectiveFrom,
+        ...(expectedCurrentVersionId ? { expectedCurrentVersionId } : {}),
+      })
       if (res.ok) {
         goToPublished()
         return

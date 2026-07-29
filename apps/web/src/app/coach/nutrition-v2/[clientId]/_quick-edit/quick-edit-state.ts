@@ -12,12 +12,16 @@
  */
 
 import type {
+  NutritionExchangeComposedPart,
+  NutritionExchangeGroupRead,
   NutritionItemSubstitution,
   NutritionItemSubstitutionRead,
   NutritionMacroTargets,
   NutritionPlanDraft,
   NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
+import { reconstructExchangeGroups } from '@eva/nutrition-v2'
+import { macrosForTargets, type ExchangeMacroTotals } from '@eva/nutrition-engine'
 import {
   computeItemMacros,
   type BuilderFood,
@@ -115,6 +119,11 @@ export interface QePortionGroup {
   groupName: string
   color: string | null
   ref: { calories: number; proteinG: number; carbsG: number; fatsG: number }
+  /**
+   * Composicion congelada del grupo (LEG = 1P + 1C). Necesaria para que el engine expanda
+   * los compuestos al sumar las porciones en los subtotales; null = grupo simple.
+   */
+  composedOf: NutritionExchangeComposedPart[] | null
   macrosConfirmed: boolean
 }
 
@@ -306,6 +315,7 @@ export function collectPortionGroups(planModel: NutritionPlanReadModel): QePorti
           groupName: target.groupName,
           color: target.color,
           ref: target.ref,
+          composedOf: target.composedOf,
           macrosConfirmed: target.macrosConfirmed,
         })
       }
@@ -750,6 +760,111 @@ export function qeSlotSubtotal(slot: QeSlot): ItemMacros {
 
 export function qeVariantTotal(variant: QeVariant): ItemMacros {
   return variant.slots.reduce((acc, slot) => addMacros(acc, qeSlotSubtotal(slot)), ZERO_ITEM_MACROS)
+}
+
+// ---------------------------------------------------------------------------
+// Totales CON porciones a eleccion (queja del coach: los grupos no sumaban)
+//
+// Las porciones a eleccion ("2 porciones de Proteina") son una capa hermana de los items
+// fijos. Hasta ahora el quick-edit las editaba pero NO las sumaba: el "Subtotal franja" y el
+// "Total prescrito" mostraban solo los items, dejando dos matematicas distintas en la misma
+// pantalla (el builder ya combinaba el subtotal de franja). Los macros salen de los
+// snapshots CONGELADOS del read model (nunca del catalogo vivo) y se expanden por el mismo
+// motor que ve el alumno (`macrosForTargets`, incluye grupos compuestos tipo LEG = 1P + 1C).
+// ---------------------------------------------------------------------------
+
+/** Diccionario del engine reconstruido desde los snapshots (forma de `ExchangeGroup`). */
+export type QeExchangeGroup = NutritionExchangeGroupRead
+
+/**
+ * Reconstruye el diccionario de grupos (directos + bases de compuestos) desde los grupos
+ * que el plan ya usa. Sin porciones => [] (todas las lecturas degradan a "solo items").
+ */
+export function qeExchangeGroups(groups: readonly QePortionGroup[]): QeExchangeGroup[] {
+  if (groups.length === 0) return []
+  return reconstructExchangeGroups(
+    groups.map((group) => ({
+      exchangeGroupId: group.exchangeGroupId,
+      groupCode: group.groupCode,
+      groupName: group.groupName,
+      color: group.color,
+      ref: group.ref,
+      composedOf: group.composedOf ?? null,
+      macrosConfirmed: group.macrosConfirmed,
+    })),
+  )
+}
+
+/**
+ * Macros derivados de las porciones de UNA franja. `null` cuando la franja no tiene
+ * porciones validas o el diccionario esta vacio: el subtotal muestra solo los items
+ * (identico a antes, jamas NaN).
+ */
+export function qeSlotPortionTotals(
+  slot: QeSlot,
+  groups: QeExchangeGroup[],
+): ExchangeMacroTotals | null {
+  if (groups.length === 0) return null
+  const targets = slot.portionTargets
+    .map((target) => ({
+      exchangeGroupId: target.exchangeGroupId,
+      portions: parsePortionsValue(target.portions) ?? 0,
+    }))
+    .filter((target) => target.portions > 0)
+  if (targets.length === 0) return null
+  return macrosForTargets(targets, groups)
+}
+
+/** Suma de las porciones de TODAS las franjas de la variante (null = sin porciones). */
+export function qeVariantPortionTotals(
+  variant: QeVariant,
+  groups: QeExchangeGroup[],
+): ExchangeMacroTotals | null {
+  let acc: ExchangeMacroTotals | null = null
+  for (const slot of variant.slots) {
+    const slotTotals = qeSlotPortionTotals(slot, groups)
+    if (!slotTotals) continue
+    acc = acc
+      ? {
+          calories: acc.calories + slotTotals.calories,
+          proteinG: acc.proteinG + slotTotals.proteinG,
+          carbsG: acc.carbsG + slotTotals.carbsG,
+          fatsG: acc.fatsG + slotTotals.fatsG,
+        }
+      : slotTotals
+  }
+  return acc
+}
+
+/**
+ * Combina items fijos + derivado de porciones (redondeo a 1 decimal, espejo de `addMacros`).
+ * Sin porciones devuelve EXACTAMENTE el objeto de items (misma referencia).
+ */
+export function qeCombineSubtotals(items: ItemMacros, portions: ExchangeMacroTotals | null): ItemMacros {
+  if (portions == null) return items
+  return {
+    ...items,
+    calories: round1(items.calories + portions.calories),
+    proteinG: round1(items.proteinG + portions.proteinG),
+    carbsG: round1(items.carbsG + portions.carbsG),
+    fatsG: round1(items.fatsG + portions.fatsG),
+  }
+}
+
+/** Subtotal de franja CON porciones (lo que el coach espera ver bajo la franja). */
+export function qeSlotSubtotalWithPortions(
+  slot: QeSlot,
+  groups: QeExchangeGroup[],
+): ItemMacros {
+  return qeCombineSubtotals(qeSlotSubtotal(slot), qeSlotPortionTotals(slot, groups))
+}
+
+/** Total prescrito de la variante CON porciones (items de todas las franjas + grupos). */
+export function qeVariantTotalWithPortions(
+  variant: QeVariant,
+  groups: QeExchangeGroup[],
+): ItemMacros {
+  return qeCombineSubtotals(qeVariantTotal(variant), qeVariantPortionTotals(variant, groups))
 }
 
 // ---------------------------------------------------------------------------

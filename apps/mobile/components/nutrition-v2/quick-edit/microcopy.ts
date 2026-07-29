@@ -34,6 +34,13 @@ export const QUICK_EDIT_COPY = {
   permSubstitute: 'Puede sustituir',
   publishError: 'No se pudo publicar.',
   retry: 'Reintentar',
+  /**
+   * NUT-008: el carry-over de reemplazos autorizados no esta resuelto. Publicar los borraria
+   * (la publicacion reescribe el plan completo), asi que se bloquea hasta tenerlos.
+   */
+  substitutionsLoading: 'Estamos cargando los reemplazos autorizados. Espera un segundo antes de publicar.',
+  substitutionsFailed:
+    'No pudimos cargar los reemplazos autorizados de este plan. Reintenta antes de publicar: si publicas ahora, tu alumno los perdería.',
   emptySlot: 'Franja sin alimentos.',
   addFood: 'Agregar alimento',
   addSlot: 'Agregar franja',

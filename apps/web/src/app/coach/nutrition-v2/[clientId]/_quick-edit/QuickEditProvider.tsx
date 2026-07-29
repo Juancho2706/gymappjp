@@ -35,9 +35,11 @@ import {
   applyQuickEditToDraft,
   buildSubstitutionMap,
   collectPortionGroups,
+  qeExchangeGroups,
   quickEditReducer,
   readModelToEditState,
   validateQuickEdit,
+  type QeExchangeGroup,
   type QePortionGroup,
   type QuickEditAction,
   type QuickEditState,
@@ -78,6 +80,20 @@ interface QuickEditContextValue {
    * seccion no se pinta — SPEC UX-c "capa invisible").
    */
   portionGroups: QePortionGroup[]
+  /**
+   * Diccionario del engine reconstruido desde los snapshots congelados de los targets
+   * (incluye las bases de los grupos compuestos): alimenta los subtotales que SUMAN las
+   * porciones a eleccion. [] = plan sin porciones.
+   */
+  exchangeGroups: QeExchangeGroup[]
+  /**
+   * NUT-008: la carga server-side de los reemplazos autorizados fallo. Publicar los
+   * borraria (la publicacion reescribe el arbol completo), asi que "Publicar" queda
+   * bloqueado hasta recargar.
+   */
+  substitutionsFailed: boolean
+  /** Recarga el RSC para reintentar la lectura de reemplazos (conserva las ediciones). */
+  retrySubstitutions: () => void
   /** dd-mm-yyyy si la version vigente arranca en el futuro; null = aplica desde hoy. */
   futureDateLabel: string | null
   changeCount: number
@@ -115,6 +131,7 @@ export function QuickEditProvider({
   clientName,
   planModel,
   itemSubstitutions,
+  substitutionsLoadFailed = false,
   today,
   onExit,
   children,
@@ -128,6 +145,11 @@ export function QuickEditProvider({
    * read-model no los transporta; sin esto, publicar un quick-edit los perderia.
    */
   itemSubstitutions: NutritionItemSubstitutionRead[]
+  /**
+   * NUT-008: la lectura server-side de los reemplazos fallo (no es "sin reemplazos").
+   * Bloquea el publish: republicar con el mapa vacio borraria los reemplazos del alumno.
+   */
+  substitutionsLoadFailed?: boolean
   today: string
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
@@ -146,6 +168,9 @@ export function QuickEditProvider({
   // §2.3); las visibles viajan editadas desde el estado.
   const baseDraft = useMemo(() => readModelToDraft(planModel, clientId), [planModel, clientId])
   const portionGroups = useMemo(() => collectPortionGroups(planModel), [planModel])
+  // Diccionario del engine (grupos directos + bases de compuestos) para sumar las porciones
+  // a eleccion en los subtotales de franja y en el total prescrito.
+  const exchangeGroups = useMemo(() => qeExchangeGroups(portionGroups), [portionGroups])
 
   if (!initialState || !baseDraft) {
     throw new Error('QuickEditProvider requiere un plan vigente en el read model')
@@ -257,6 +282,12 @@ export function QuickEditProvider({
   }, [planModel.plan, today])
 
   const openConfirm = useCallback(() => {
+    // NUT-008: sin los reemplazos de la version base, publicar los borraria (el publish
+    // reescribe el arbol completo). Fail-closed: no se abre el confirm.
+    if (substitutionsLoadFailed) {
+      setPublishError(QE_COPY.substitutionsFailed)
+      return
+    }
     if (!validation.ok) {
       setShowErrors(true)
       setPublishError(QE_COPY.invalidDraft)
@@ -271,7 +302,7 @@ export function QuickEditProvider({
       })
     }
     setConfirmOpen(true)
-  }, [validation.ok, clientId])
+  }, [validation.ok, clientId, substitutionsLoadFailed])
 
   const closeConfirm = useCallback(() => {
     if (isPending) return
@@ -282,6 +313,12 @@ export function QuickEditProvider({
     const baseVersionId = planModel.plan?.versionId
     const idempotencyKey = idempotencyKeyRef.current
     if (!baseVersionId || !idempotencyKey) return
+    // Segunda barrera del guard NUT-008 (por si el retry entra sin pasar por openConfirm).
+    if (substitutionsLoadFailed) {
+      setConfirmOpen(false)
+      setPublishError(QE_COPY.substitutionsFailed)
+      return
+    }
     setPublishError(null)
     setUpgradeRequired(false)
     startTransition(async () => {
@@ -325,7 +362,14 @@ export function QuickEditProvider({
       }
       setPublishError(QE_COPY.publishFailed)
     })
-  }, [clientId, clientName, currentDraft, draftKey, onExit, planModel.plan, router])
+  }, [clientId, clientName, currentDraft, draftKey, onExit, planModel.plan, router, substitutionsLoadFailed])
+
+  // Reintento de la lectura de reemplazos: refresca el RSC (vuelve a correr el data-loader)
+  // sin desmontar el modo edicion, asi que las ediciones sin publicar se conservan.
+  const retrySubstitutions = useCallback(() => {
+    setPublishError(null)
+    router.refresh()
+  }, [router])
 
   const publishNow = useCallback(() => {
     if (isPending) return
@@ -390,6 +434,9 @@ export function QuickEditProvider({
     protocolNotes: planModel.protocolNotes,
     permissions: planModel.permissions,
     portionGroups,
+    exchangeGroups,
+    substitutionsFailed: substitutionsLoadFailed,
+    retrySubstitutions,
     futureDateLabel,
     changeCount,
     errors: validation.errors,

@@ -45,6 +45,9 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
   const existingPlan = existing
     ? {
         id: existing.id,
+        // Id de la version vigente: viaja al wizard para el compare-and-swap del publish
+        // (NUT-011). Si alguien publica entremedio, el RPC responde STALE_BASE.
+        versionId: existing.versionId,
         versionNumber: existing.versionNumber,
         strategy: existing.strategy,
         effectiveFrom: existing.effectiveFrom,
