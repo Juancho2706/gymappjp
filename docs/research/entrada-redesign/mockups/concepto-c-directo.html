@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVA · Entrada · Concepto C — Directo al valor</title>
+<style>
+  /* ============================================================
+     CONCEPTO C — "DIRECTO AL VALOR"
+     Familia de entrada RN: splash -> pantalla unica de valor+rol -> /alumno/codigo
+     Dark premium continuo. Canvas #07080C en las 4 capas.
+     Self-contained: cero assets, cero CDNs, cero fuentes externas.
+     ============================================================ */
+
+  :root{
+    /* --- canvas de la entrada (OBLIGATORIO: igual al splash nativo app.json:114) --- */
+    --canvas:      #07080C;
+    /* --- tokens dark REALES del repo (a1 seccion 3.1) --- */
+    --surface-app: #0A0D12;   /* global.css:193  (drift a reconciliar con --canvas) */
+    --card:        #161B22;   /* global.css:194 */
+    --sunken:      #1F262F;   /* global.css:195 */
+    --veil:        rgba(255,255,255,.045); /* GAP a1 3.3: superficie elevada translucida (no existe hoy) */
+    --veil-2:      rgba(255,255,255,.07);
+    --hair:        rgba(255,255,255,.07);  /* border-subtle */
+    --line:        rgba(255,255,255,.13);  /* border-default */
+    --line-strong: rgba(255,255,255,.22);  /* border-strong */
+    --ink:         #F4F6F8;   /* text-strong — off-white, NUNCA #FFF puro */
+    --body:        #CDD3DB;   /* text-body */
+    --muted:       #98A2B0;   /* text-muted */
+    --subtle:      #86919E;   /* text-subtle */
+    --cta:         #1A6BE6;   /* cta-fill (EVA, sin white-label en la entrada publica) */
+    --cta-ink:     #FFFFFF;   /* text-on-sport */
+    --brand-soft:  #7FB0FF;   /* sport-600 dark / brand-strong */
+    /* --- radios reales (tailwind.config.js:132-153) --- */
+    --r-card: 20px; --r-control: 14px; --r-sheet: 28px;
+    /* --- chrome de la pagina de mockup (NO es parte del diseno) --- */
+    --page:  #0E0F13;
+    --page-2:#15171C;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1a1d25 0%, transparent 60%),
+      var(--page);
+    color:var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100%;
+  }
+
+  /* ============ HEADER ============ */
+  .head{ max-width:1160px; margin:0 auto; padding:44px 40px 8px; }
+  .eyebrow{
+    display:inline-block; font-size:11px; font-weight:800; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--canvas); background:var(--brand-soft);
+    padding:5px 12px; border-radius:999px; margin-bottom:16px;
+  }
+  h1.title{
+    font-size:clamp(34px,4.6vw,56px); font-weight:900; letter-spacing:-.035em;
+    line-height:.98; margin:0 0 14px;
+  }
+  h1.title em{ font-style:normal; color:var(--brand-soft); }
+  .lede{ font-size:16px; line-height:1.55; color:var(--muted); max-width:760px; margin:0 0 26px; }
+  .lede b{ color:var(--body); font-weight:700; }
+
+  .metabar{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:26px; }
+  .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    font-size:12px; font-weight:700; color:var(--body);
+    background:var(--page-2); border:1px solid #262A32; border-radius:999px; padding:7px 13px;
+  }
+  .pill i{ width:8px;height:8px;border-radius:50%;background:var(--cta);display:block; }
+  .pill.ok i{ background:#4FD9A0; }
+  .pill.warn i{ background:#FF9D7E; }
+
+  /* timeline de presupuesto */
+  .budget{
+    background:var(--page-2); border:1px solid #262A32; border-radius:16px;
+    padding:18px 20px 16px; margin-bottom:30px;
+  }
+  .budget h3{ margin:0 0 4px; font-size:13px; font-weight:800; letter-spacing:.02em; }
+  .budget p{ margin:0 0 14px; font-size:12.5px; color:var(--subtle); line-height:1.5; }
+  .track{ display:flex; height:34px; border-radius:10px; overflow:hidden; border:1px solid #2A2F38; }
+  .seg{ display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; letter-spacing:.02em; white-space:nowrap; }
+  .seg.s1{ flex:0 0 22%; background:#1B2029; color:var(--muted); }
+  .seg.s2{ flex:0 0 14%; background:#222835; color:var(--body); }
+  .seg.s3{ flex:0 0 20%; background:rgba(26,107,230,.35); color:#DCE9FF; }
+  .seg.s4{ flex:1;       background:#14171D; color:var(--subtle); }
+  .ticks{ display:flex; margin-top:6px; font-size:10.5px; color:var(--subtle); font-weight:700; }
+  .ticks span{ flex:0 0 22%; } .ticks span+span{ flex:0 0 14%; } .ticks span+span+span{ flex:0 0 20%; } .ticks span+span+span+span{ flex:1; text-align:right; }
+
+  .hint{ font-size:12.5px; color:var(--subtle); margin:0 0 6px; }
+  .hint b{ color:var(--brand-soft); }
+
+  /* ============ STAGE ============ */
+  .stage{
+    display:flex; gap:52px; align-items:flex-start;
+    overflow-x:auto; overflow-y:visible;
+    padding:26px 40px 56px;
+    scroll-snap-type:x proximity;
+  }
+  .stage::-webkit-scrollbar{ height:12px; }
+  .stage::-webkit-scrollbar-track{ background:#101218; border-radius:999px; }
+  .stage::-webkit-scrollbar-thumb{ background:#2C323C; border-radius:999px; border:3px solid #101218; }
+
+  .group{ display:flex; gap:26px; align-items:flex-start; flex:0 0 auto; scroll-snap-align:center; }
+
+  .colhead{ display:flex; align-items:center; gap:10px; margin:0 0 14px 4px; }
+  .num{
+    width:26px;height:26px;border-radius:9px;flex:0 0 auto;
+    background:var(--cta); color:#fff; font-size:13px; font-weight:900;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .num.ghost{ background:transparent; border:1.5px solid var(--line-strong); color:var(--muted); }
+  .colname{ font-size:15px; font-weight:800; letter-spacing:-.01em; }
+  .tag{
+    font-size:10px; font-weight:800; letter-spacing:.11em; text-transform:uppercase;
+    padding:3px 8px; border-radius:999px; background:rgba(127,176,255,.14);
+    color:var(--brand-soft); border:1px solid rgba(127,176,255,.28);
+  }
+  .tag.bin{ background:rgba(255,157,126,.13); color:#FF9D7E; border-color:rgba(255,157,126,.3); }
+
+  /* ============ TELEFONO 390x844 ============ */
+  .phone{
+    width:414px; height:868px; border-radius:56px; padding:12px;
+    background:#050609; flex:0 0 auto;
+    box-shadow:0 0 0 2px #23262E, 0 40px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.05);
+    position:relative;
+  }
+  .screen{
+    position:relative; width:390px; height:844px; border-radius:44px; overflow:hidden;
+    background:var(--canvas);
+    display:flex; flex-direction:column;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; /* = Archivo/Hanken en la app */
+  }
+  .island{
+    position:absolute; top:11px; left:50%; transform:translateX(-50%);
+    width:120px; height:30px; background:#050609; border-radius:999px; z-index:60;
+  }
+  .statusbar{
+    height:59px; flex:0 0 auto; display:flex; align-items:flex-end; justify-content:space-between;
+    padding:0 26px 8px; font-size:13px; font-weight:700; color:var(--ink); z-index:50;
+  }
+  .statusbar .rt{ display:flex; align-items:center; gap:5px; opacity:.9; }
+  .bars{ display:flex; align-items:flex-end; gap:2px; }
+  .bars i{ width:3px; background:var(--ink); border-radius:1px; display:block; }
+  .bars i:nth-child(1){height:4px}.bars i:nth-child(2){height:6px}.bars i:nth-child(3){height:8px}.bars i:nth-child(4){height:10px}
+  .batt{ width:22px;height:11px;border:1.3px solid var(--ink);border-radius:3px;position:relative; }
+  .batt::after{ content:"";position:absolute;inset:1.5px;right:5px;background:var(--ink);border-radius:1px; }
+  .homebar{
+    position:absolute; bottom:9px; left:50%; transform:translateX(-50%);
+    width:140px; height:5px; border-radius:999px; background:rgba(255,255,255,.26); z-index:55;
+  }
+  .body{ flex:1; min-height:0; display:flex; flex-direction:column; padding:0 24px 34px; position:relative; }
+
+  /* atmosfera: glow radial amplio y de bajo alpha (r2 seccion 2) */
+  .amb{
+    position:absolute; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(120% 62% at 50% 8%, rgba(26,107,230,.16) 0%, rgba(26,107,230,.05) 42%, transparent 72%),
+      radial-gradient(90% 45% at 50% 104%, rgba(127,176,255,.055) 0%, transparent 70%);
+  }
+  .grain{
+    position:absolute; inset:0; pointer-events:none; z-index:1; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.010) 0 1px, transparent 1px 3px);
+  }
+  .z{ position:relative; z-index:2; }
+
+  /* ============ WORDMARK ============ */
+  .wm{ font-weight:900; letter-spacing:-.055em; color:var(--ink); line-height:1; display:inline-flex; align-items:baseline; }
+  .wm .dot{
+    width:.14em;height:.14em;border-radius:50%;background:var(--cta);
+    display:inline-block; margin-left:.1em; transform:translateY(-.04em);
+  }
+
+  /* ============ 1 · SPLASH ============ */
+  .splash{ align-items:center; justify-content:center; padding-bottom:0; }
+  .splashhalo{
+    position:absolute; left:50%; top:50%; width:420px; height:420px; transform:translate(-50%,-52%);
+    border-radius:50%; z-index:1;
+    background:radial-gradient(circle, rgba(26,107,230,.20) 0%, rgba(26,107,230,.07) 38%, transparent 68%);
+  }
+  .splashmark{ position:relative; z-index:3; text-align:center; }
+  .splashmark .wm{ font-size:74px; }
+  .splashsub{
+    margin-top:18px; font-size:11px; font-weight:800; letter-spacing:.28em;
+    text-transform:uppercase; color:var(--subtle);
+  }
+  .morphbar{
+    position:absolute; left:50%; bottom:96px; transform:translateX(-50%);
+    width:96px; height:4px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; z-index:3;
+  }
+  .morphbar i{
+    position:absolute; top:0; bottom:0; left:0; width:34px; border-radius:999px;
+    background:linear-gradient(90deg, rgba(127,176,255,.25), var(--brand-soft), rgba(127,176,255,.25));
+  }
+  .demoloop{
+    position:absolute; left:0; right:0; bottom:44px; text-align:center; z-index:4;
+    font-size:10px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#4C555F;
+  }
+
+  /* ============ 2 · PANTALLA UNICA (valor + rol) ============ */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding-top:6px; margin-bottom:26px; }
+  .topbar .wm{ font-size:20px; }
+  .topbar .lang{
+    font-size:11px; font-weight:800; letter-spacing:.06em; color:var(--subtle);
+    border:1px solid var(--hair); border-radius:999px; padding:5px 10px;
+  }
+
+  .kicker{
+    font-size:11px; font-weight:800; letter-spacing:.19em; text-transform:uppercase;
+    color:var(--subtle); margin:0 0 12px;
+  }
+  h2.hero{
+    margin:0 0 12px; font-size:38px; font-weight:900; letter-spacing:-.035em; line-height:1.03; color:var(--ink);
+  }
+  h2.hero span{ color:var(--muted); }
+  .herosub{ margin:0 0 22px; font-size:14.5px; line-height:1.5; color:var(--body); max-width:330px; }
+
+  .benefits{ display:flex; flex-direction:column; gap:2px; margin-bottom:22px; }
+  .ben{ display:flex; align-items:flex-start; gap:13px; padding:11px 0; }
+  .ben + .ben{ border-top:1px solid var(--hair); }
+  .bicon{
+    width:36px;height:36px;flex:0 0 auto;border-radius:11px;
+    background:var(--veil); border:1px solid var(--hair);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .bicon svg{ width:18px;height:18px;display:block;color:var(--brand-soft); }
+  .btxt b{ display:block; font-size:14.5px; font-weight:800; letter-spacing:-.01em; color:var(--ink); margin-bottom:2px; }
+  .btxt small{ display:block; font-size:12.5px; line-height:1.35; color:var(--subtle); font-weight:600; }
+
+  .sep{ display:flex; align-items:center; gap:12px; margin:0 0 14px; }
+  .sep hr{ flex:1; height:1px; border:0; background:var(--hair); margin:0; }
+  .sep span{ font-size:10.5px; font-weight:800; letter-spacing:.17em; text-transform:uppercase; color:var(--subtle); }
+
+  .roles{ display:flex; flex-direction:column; gap:11px; margin-top:auto; }
+  .role{
+    display:flex; align-items:center; gap:14px;
+    border-radius:var(--r-card); padding:16px 18px; min-height:76px;
+  }
+  .role .rt{ flex:1; }
+  .role .rt b{ display:block; font-size:18px; font-weight:900; letter-spacing:-.02em; margin-bottom:2px; }
+  .role .rt small{ display:block; font-size:12.5px; font-weight:600; line-height:1.3; }
+  .role .chev{ width:20px;height:20px;flex:0 0 auto; }
+  .role.primary{
+    background:var(--cta); color:var(--cta-ink);
+    box-shadow:0 10px 30px -12px rgba(26,107,230,.75), inset 0 1px 0 rgba(255,255,255,.16);
+  }
+  .role.primary .rt small{ color:rgba(255,255,255,.82); }
+  .role.primary .ricon{ background:rgba(255,255,255,.16); }
+  .role.secondary{
+    background:var(--veil); border:1px solid var(--line); color:var(--ink);
+  }
+  .role.secondary .rt small{ color:var(--subtle); }
+  .role.secondary .ricon{ background:var(--veil-2); border:1px solid var(--hair); }
+  .ricon{ width:42px;height:42px;border-radius:13px;flex:0 0 auto;display:flex;align-items:center;justify-content:center; }
+  .ricon svg{ width:21px;height:21px;display:block; }
+  .foot{
+    margin-top:14px; text-align:center; font-size:11.5px; font-weight:600; color:#6E7883; line-height:1.4;
+  }
+  .badge-last{
+    position:absolute; top:-9px; right:16px;
+    font-size:9.5px; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
+    background:var(--canvas); border:1px solid var(--line); color:var(--muted);
+    padding:3px 9px; border-radius:999px;
+  }
+
+  /* ============ 3 · RETORNO ============ */
+  .rethero{ text-align:center; padding-top:56px; }
+  .rethero .wm{ font-size:60px; }
+  .rethero .hi{ margin:20px 0 8px; font-size:22px; font-weight:800; letter-spacing:-.02em; color:var(--ink); }
+  .rethero .sub{ margin:0; font-size:13.5px; color:var(--subtle); font-weight:600; }
+  .chips{ display:flex; justify-content:center; gap:7px; margin-top:22px; flex-wrap:wrap; }
+  .chip{
+    font-size:11.5px; font-weight:700; color:var(--body);
+    background:var(--veil); border:1px solid var(--hair); border-radius:999px; padding:6px 12px;
+  }
+
+  /* ============ 4 · MORPH ============ */
+  .morphstage{ position:absolute; inset:0; overflow:hidden; z-index:3; }
+  .under{ position:absolute; inset:0; padding:0 24px 34px; display:flex; flex-direction:column; }
+  .sheet{
+    position:absolute; left:0; right:0; bottom:0; top:150px; z-index:4;
+    background:#0F131A;
+    border:1px solid var(--line); border-top-color:var(--line-strong);
+    border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+    box-shadow:0 -24px 60px -20px rgba(0,0,0,.85);
+    overflow:hidden;
+  }
+  .sheetgrab{ width:44px;height:4px;border-radius:999px;background:rgba(255,255,255,.18);margin:12px auto 0; }
+  .sheetsm{ position:absolute; inset:0; display:flex; align-items:center; gap:14px; padding:16px 18px; opacity:0; }
+  .sheetlg{ position:absolute; inset:0; padding:34px 22px 0; }
+  .sheetlg h3{ margin:0 0 8px; font-size:26px; font-weight:900; letter-spacing:-.028em; color:var(--ink); }
+  .sheetlg p{ margin:0 0 22px; font-size:13.5px; color:var(--subtle); font-weight:600; line-height:1.45; }
+  .dim{ position:absolute; inset:0; background:rgba(7,8,12,.55); z-index:3; }
+
+  /* ============ 5 · /alumno/codigo ============ */
+  .navbar{ display:flex; align-items:center; justify-content:space-between; padding-top:4px; margin-bottom:34px; }
+  .back{
+    width:40px;height:40px;border-radius:13px;background:var(--veil);border:1px solid var(--hair);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .back svg{ width:18px;height:18px;color:var(--body); }
+  .navbar .wm{ font-size:16px; opacity:.85; }
+  .step{ font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--subtle); }
+  h2.codeh{ margin:0 0 10px; font-size:30px; font-weight:900; letter-spacing:-.03em; line-height:1.06; color:var(--ink); }
+  .codesub{ margin:0 0 28px; font-size:14px; color:var(--body); line-height:1.5; font-weight:600; max-width:310px; }
+  .field{
+    height:64px; border-radius:var(--r-control); background:var(--sunken);
+    border:1.5px solid var(--cta); box-shadow:0 0 0 4px rgba(26,107,230,.16);
+    display:flex; align-items:center; gap:10px; padding:0 16px; margin-bottom:12px;
+  }
+  .field .val{
+    flex:1; font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size:20px; font-weight:700; letter-spacing:.14em; color:var(--ink); text-transform:uppercase;
+    display:flex; align-items:center;
+  }
+  .caret{ width:2px;height:24px;background:var(--brand-soft); margin-left:3px; border-radius:1px; }
+  .paste{
+    font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--brand-soft);
+    border:1px solid rgba(127,176,255,.3); border-radius:999px; padding:6px 11px;
+  }
+  .helper{ font-size:12.5px;color:var(--subtle);font-weight:600;margin:0 0 26px; }
+  .cta{
+    height:56px; border-radius:var(--r-control); background:var(--cta); color:#fff;
+    display:flex;align-items:center;justify-content:center; gap:10px;
+    font-size:16.5px; font-weight:900; letter-spacing:-.01em;
+    box-shadow:0 10px 26px -14px rgba(26,107,230,.9), inset 0 1px 0 rgba(255,255,255,.16);
+  }
+  .ghostbtn{
+    height:52px; border-radius:var(--r-control); background:transparent; border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;gap:9px;
+    font-size:14.5px;font-weight:800;color:var(--body); margin-top:11px;
+  }
+  .orsep{ display:flex;align-items:center;gap:12px;margin:18px 0; }
+  .orsep hr{ flex:1;height:1px;border:0;background:var(--hair);margin:0; }
+  .orsep span{ font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#5C656F; }
+  .codefoot{ margin-top:auto; text-align:center; font-size:12.5px; color:var(--subtle); font-weight:600; line-height:1.5; }
+  .codefoot b{ color:var(--brand-soft); font-weight:800; }
+
+  /* ============ PANEL DE NOTAS ============ */
+  .notes{
+    width:340px; flex:0 0 auto; background:var(--page-2);
+    border:1px solid #252A33; border-radius:20px; padding:20px 20px 18px;
+  }
+  .notes h4{
+    margin:0 0 4px; font-size:14px; font-weight:900; letter-spacing:-.01em; color:var(--ink);
+  }
+  .notes .kicker2{ margin:0 0 14px; font-size:11.5px; color:var(--subtle); line-height:1.5; font-weight:600; }
+  .mrow{ padding:11px 0; border-top:1px solid #23272F; }
+  .mrow:first-of-type{ border-top:0; padding-top:2px; }
+  .mrow .what{ font-size:12.5px; font-weight:800; color:var(--body); margin-bottom:5px; }
+  .mrow .spec{ display:flex; flex-wrap:wrap; gap:5px; }
+  .spec code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; font-weight:600;
+    background:#1B1F27; border:1px solid #2A2F38; color:#A9B4C0; border-radius:6px; padding:2.5px 6px;
+  }
+  .spec code.hi{ background:rgba(26,107,230,.16); border-color:rgba(26,107,230,.4); color:#9CC4FF; }
+  .mrow .why{ font-size:11.5px; color:var(--subtle); line-height:1.5; margin-top:6px; }
+  .rm{
+    margin-top:14px; background:#14181F; border:1px solid #262B34; border-radius:12px; padding:11px 13px;
+  }
+  .rm b{ display:block; font-size:10.5px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; color:#7FB0FF; margin-bottom:6px; }
+  .rm p{ margin:0; font-size:11.5px; color:var(--muted); line-height:1.5; }
+  .bud{ display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+  .bud span{
+    font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+    background:#181C23; border:1px solid #272C35; color:#8C96A2; border-radius:999px; padding:4px 9px;
+  }
+
+  /* ============ FOOTER ============ */
+  .foot-doc{ max-width:1160px; margin:0 auto; padding:8px 40px 70px; }
+  .cards2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+  .box{ background:var(--page-2); border:1px solid #252A33; border-radius:18px; padding:18px 20px; }
+  .box h5{ margin:0 0 10px; font-size:13px; font-weight:900; letter-spacing:.01em; }
+  .box ul{ margin:0; padding-left:18px; }
+  .box li{ font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:7px; }
+  .box li b{ color:var(--body); }
+  .box.warn{ border-color:rgba(255,157,126,.28); }
+  .box.warn h5{ color:#FF9D7E; }
+
+  /* ============================================================
+     MOTION — solo transform/opacity. Loops de demo (6s) para
+     COMUNICAR el motion; en la app cada gesto corre una sola vez.
+     ============================================================ */
+  @media (prefers-reduced-motion: no-preference){
+
+    /* --- splash: mark fade + scale sutil, halo respirando --- */
+    .splashmark{ animation: cc-splash 6s cubic-bezier(.2,0,0,1) infinite both; }
+    @keyframes cc-splash{
+      0%   { opacity:0; transform:scale(.965); }
+      6%,86%{ opacity:1; transform:scale(1); }   /* 6% de 6s = 360ms */
+      96%,100%{ opacity:0; transform:scale(1); }
+    }
+    .splashhalo{ animation: cc-halo 2.8s ease-in-out infinite alternate; }
+    @keyframes cc-halo{ from{ opacity:.55; } to{ opacity:.95; } }
+    .splashsub{ animation: cc-fade 6s cubic-bezier(.2,0,0,1) infinite both; animation-delay:.14s; }
+    .morphbar i{ animation: cc-morph 1.4s cubic-bezier(.4,0,.2,1) infinite; }
+    @keyframes cc-morph{
+      0%  { transform:translateX(0)   scaleX(1); }
+      45% { transform:translateX(62px) scaleX(.6); }
+      55% { transform:translateX(62px) scaleX(.6); }
+      100%{ transform:translateX(0)   scaleX(1); }
+    }
+
+    /* --- stagger generico de entrada (200-300ms, ease-out) --- */
+    .st{ opacity:0; animation: cc-in 6s cubic-bezier(.2,0,0,1) infinite both; }
+    @keyframes cc-in{
+      0%   { opacity:0; transform:translateY(12px); }
+      5%,88%{ opacity:1; transform:translateY(0); }  /* 5% de 6s = 300ms */
+      97%,100%{ opacity:0; transform:translateY(6px); }
+    }
+    @keyframes cc-fade{
+      0%   { opacity:0; }
+      5%,88%{ opacity:1; }
+      97%,100%{ opacity:0; }
+    }
+    .d0{ animation-delay:0s; }
+    .d1{ animation-delay:.07s; }
+    .d2{ animation-delay:.14s; }
+    .d3{ animation-delay:.21s; }
+    .d4{ animation-delay:.28s; }
+    .d5{ animation-delay:.35s; }
+    .d6{ animation-delay:.42s; }
+
+    /* --- pressed del CTA (scale .98, 140ms) una vez por loop --- */
+    .press{ animation: cc-press 6s linear infinite; }
+    @keyframes cc-press{
+      0%,72%   { transform:scale(1); }
+      73.5%,75%{ transform:scale(.98); }
+      77%,100% { transform:scale(1); }
+    }
+
+    /* --- caret del input --- */
+    .caret{ animation: cc-caret 1.1s steps(1,end) infinite; }
+    @keyframes cc-caret{ 0%,55%{opacity:1;} 56%,100%{opacity:0;} }
+
+    /* --- morph de la card hacia la sheet (260ms, 1 vez por loop) --- */
+    .sheet{ animation: cc-sheet 6s cubic-bezier(.2,0,0,1) infinite both; }
+    @keyframes cc-sheet{
+      0%,12%   { top:626px; left:16px; right:16px; border-radius:20px 20px 0 0; background-color:#1A6BE6; }
+      16.3%,88%{ top:150px; left:0px;  right:0px;  border-radius:28px 28px 0 0; background-color:#0F131A; } /* 4.3% de 6s = 260ms */
+      97%,100% { top:626px; left:16px; right:16px; border-radius:20px 20px 0 0; background-color:#1A6BE6; }
+    }
+    .sheetsm{ animation: cc-out 6s cubic-bezier(.2,0,0,1) infinite both; }
+    @keyframes cc-out{ 0%,12%{opacity:1;} 15%,88%{opacity:0;} 96%,100%{opacity:1;} }
+    .sheetlg{ opacity:0; animation: cc-inlate 6s cubic-bezier(.2,0,0,1) infinite both; }
+    @keyframes cc-inlate{ 0%,13%{opacity:0;} 19%,88%{opacity:1;} 95%,100%{opacity:0;} }
+    .dim{ opacity:0; animation: cc-dim 6s cubic-bezier(.2,0,0,1) infinite both; }
+    @keyframes cc-dim{ 0%,12%{opacity:0;} 17%,88%{opacity:1;} 96%,100%{opacity:0;} }
+  }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <span class="eyebrow">Entrada RN · Concepto C</span>
+  <h1 class="title">Directo al valor<br><em>una pantalla, dos caminos</em></h1>
+  <p class="lede">
+    La evidencia contra el carrusel es contundente: <b>~1% toca los indicadores</b>, 84% interactua una sola vez,
+    la mayoria lo swipea en menos de 2 segundos, y NN/g mide que los tutoriales tipo deck-of-cards
+    <b>no mejoran el desempeno</b>. Concepto C no mejora el carrusel: <b>lo elimina</b>. El walkthrough de 3 slides
+    colapsa en una unica pantalla donde el valor y la bifurcacion de rol conviven, con el CTA siempre visible sin scroll.
+    Misma atmosfera dark premium de A y B: base <code>#07080C</code>, off-white, un solo color saturado en el CTA.
+  </p>
+
+  <div class="metabar">
+    <span class="pill"><i></i>Canvas unico <code>#07080C</code> en las 4 capas</span>
+    <span class="pill ok"><i></i>Rol elegible a los <b>~1,6 s</b></span>
+    <span class="pill ok"><i></i>0 slides · 0 swipes · 0 dots</span>
+    <span class="pill"><i></i>Un solo acento: <code>cta-fill #1A6BE6</code></span>
+    <span class="pill warn"><i></i>Splash nativo = binario (app.json)</span>
+  </div>
+
+  <div class="budget">
+    <h3>Presupuesto de tiempo hasta "elegir rol"</h3>
+    <p>Techo duro de f1: splash ≤1000 ms, entradas 200-350 ms, stagger 60-90 ms, cascada completa ≤500 ms, nada sobre 500 ms.
+       El objetivo del concepto es que el pulgar pueda decidir antes de los 2 segundos y sin ningun gesto previo.</p>
+    <div class="track">
+      <div class="seg s1">Splash nativo (estatico)</div>
+      <div class="seg s2">Fade 300 ms</div>
+      <div class="seg s3">Stagger 300 + 6x70 ms</div>
+      <div class="seg s4">Pantalla estable · el usuario decide</div>
+    </div>
+    <div class="ticks"><span>0 ms</span><span>~600</span><span>~900</span><span>~1.600 ms · rol elegible</span></div>
+  </div>
+
+  <p class="hint">Desplaza horizontalmente ▸ &nbsp;<b>5 frames</b> · cada uno con sus notas de motion al costado.</p>
+</div>
+
+<div class="stage">
+
+  <!-- ============================================================
+       FRAME 1 · SPLASH (replica JS del splash nativo)
+       ============================================================ -->
+  <div class="group">
+    <div>
+      <div class="colhead"><span class="num">1</span><span class="colname">Splash</span><span class="tag bin">binario + OTA</span></div>
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <div class="amb"></div>
+          <div class="grain"></div>
+          <div class="statusbar z"><span>9:41</span><span class="rt"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+          <div class="body splash">
+            <div class="splashhalo"></div>
+            <div class="splashmark z">
+              <div class="wm">EVA<span class="dot"></span></div>
+              <div class="splashsub">Entrena con tu coach</div>
+            </div>
+            <div class="morphbar"><i></i></div>
+            <div class="demoloop">loop de demo · en la app dura &lt; 1 s</div>
+          </div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Notas de motion — Splash</h4>
+      <p class="kicker2">El splash nativo es <b>estatico</b> (iOS no admite animacion). Este frame es la <b>replica JS pixel-identica</b>
+      que se monta debajo y recibe el fade: mismo fondo, mismo mark, misma posicion. El movimiento arranca recien aca.</p>
+
+      <div class="mrow">
+        <div class="what">Handoff nativo → JS</div>
+        <div class="spec"><code class="hi">fade 300 ms</code><code>expo-splash-screen setOptions</code><code>hideAsync tras montar replica</code></div>
+        <div class="why">Cruce entre dos frames identicos: no hay flash porque no hay diferencia que ver.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Wordmark EVA</div>
+        <div class="spec"><code class="hi">360 ms</code><code>opacity 0→1</code><code>scale .965→1</code><code>effect spring, sin rebote</code></div>
+        <div class="why">Nunca scale agresivo ni overshoot: <code>springExpressive</code> esta prohibido en esta familia (f1 §2).</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Halo de marca</div>
+        <div class="spec"><code>2800 ms</code><code>ease-in-out alternate</code><code>opacity .55→.95</code></div>
+        <div class="why">Gradiente radial amplio de bajo alpha detras del mark, no blur saturado (evita halation, r2 §2).
+        Solo respira si el gate de sesion tarda &gt;600 ms; si resuelve antes, ni se ve.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Loader = forma de marca que muta</div>
+        <div class="spec"><code>1400 ms loop</code><code>translateX + scaleX</code><code>nunca ActivityIndicator</code></div>
+        <div class="why">Reemplaza el spinner de <code>EvaLoaderScreen</code> (r2 §9). 1 solo nodo animado.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Subtitulo "Entrena con tu coach"</div>
+        <div class="spec"><code>300 ms</code><code>delay 140 ms</code><code>solo opacity</code></div>
+        <div class="why">Unica licencia sobre la regla "splash sin texto": es la promesa que la pantalla 2 desarrolla.
+        Se puede omitir sin costo si QA lo ve ruidoso.</div>
+      </div>
+
+      <div class="rm"><b>Reduce motion</b><p>Mark: fade puro sin scale. Halo: opacidad fija en .7, sin respiracion. Loader: barra estatica al 40%. Handoff: igual (el fade es del sistema).</p></div>
+      <div class="bud"><span>2 nodos animados</span><span>≤1000 ms techo Android</span><span>solo transform+opacity</span></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FRAME 2 · PANTALLA UNICA — valor + selector fusionados
+       ============================================================ -->
+  <div class="group">
+    <div>
+      <div class="colhead"><span class="num">2</span><span class="colname">Valor + rol · una sola pantalla</span><span class="tag">el concepto</span></div>
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <div class="amb"></div>
+          <div class="grain"></div>
+          <div class="statusbar z"><span>9:41</span><span class="rt"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+          <div class="body z">
+
+            <div class="topbar st d0">
+              <div class="wm">EVA<span class="dot"></span></div>
+              <span class="lang">ES</span>
+            </div>
+
+            <p class="kicker st d0">Entrenamiento · Nutricion · Progreso</p>
+            <h2 class="hero st d0">Coach y alumno,<br>un solo plan.</h2>
+            <p class="herosub st d1">Tu coach lo arma desde su panel. Tu lo entrenas y lo comes. Los dos ven el mismo progreso, sin capturas ni planillas.</p>
+
+            <div class="benefits">
+              <div class="ben st d2">
+                <span class="bicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6M20 9v6M7 6v12M17 6v12M7 12h10"/></svg></span>
+                <span class="btxt"><b>Tu rutina del dia, serie por serie</b><small>Pesos, repeticiones y descansos guiados</small></span>
+              </div>
+              <div class="ben st d3">
+                <span class="bicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v8a2 2 0 0 0 4 0V3M8 11v10"/><path d="M17 3c-1.7 1.2-2.5 3-2.5 5.5S15.3 13 17 13.5V21"/></svg></span>
+                <span class="btxt"><b>Tu plan de comidas, sin planillas</b><small>Porciones y macros ya calculados</small></span>
+              </div>
+              <div class="ben st d4">
+                <span class="bicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M4 15l4.5-5 3.5 3.5L20 6"/></svg></span>
+                <span class="btxt"><b>Tu progreso, visible para los dos</b><small>Sin mandar fotos de la planilla por chat</small></span>
+              </div>
+            </div>
+
+            <div class="sep st d5"><hr><span>Elige como entrar</span><hr></div>
+
+            <div class="roles">
+              <div class="st d5" style="position:relative;">
+                <div class="role primary press">
+                  <span class="ricon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.7-3.6 3.4-5.5 7-5.5s6.3 1.9 7 5.5"/></svg></span>
+                  <span class="rt"><b>Soy alumno</b><small>Tengo el codigo de mi coach</small></span>
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+                </div>
+              </div>
+              <div class="st d6">
+                <div class="role secondary">
+                  <span class="ricon"><svg viewBox="0 0 24 24" fill="none" stroke="#CDD3DB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5c0-2-1.7-3.5-3.7-3.5H7.7C5.7 15 4 16.5 4 18.5V20"/><circle cx="10" cy="8" r="3"/><path d="M17 11h4M19 9v4"/></svg></span>
+                  <span class="rt"><b>Soy coach</b><small>Gestiono a mis alumnos</small></span>
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#98A2B0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <p class="foot st d6">Solo define por donde entras. Despues inicias sesion.</p>
+          </div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Notas de motion — Pantalla unica</h4>
+      <p class="kicker2">Una sola cascada al montar. <b>No hay swipe, no hay dots, no hay "Saltar"</b> porque no hay nada que saltar:
+      el CTA ya esta en pantalla. La cascada completa cierra en <b>~480 ms</b>, bajo el techo de 500 ms de f1 §3.</p>
+
+      <div class="mrow">
+        <div class="what">Cascada de entrada (7 pasos)</div>
+        <div class="spec"><code class="hi">280 ms c/u</code><code class="hi">stagger 70 ms</code><code>ease-out cubic-bezier(.2,0,0,1)</code><code>translateY 12→0 + opacity</code></div>
+        <div class="why">Orden: wordmark+H1 (0) → subtitulo (70) → beneficio 1 (140) → 2 (210) → 3 (280) → separador+card alumno (350) → card coach (420).
+        Lo primario se mueve primero; la jerarquia se comunica antes de leerse (f1 §3).</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Card "Soy alumno" — pressed</div>
+        <div class="spec"><code class="hi">140 ms</code><code>scale .98</code><code>effect spring</code><code>expo-haptics selectionAsync</code></div>
+        <div class="why">Haptica de <b>seleccion</b>, jamas <code>notificationAsync(Success)</code>: todavia no hay exito que confirmar (f1 §10).</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Atmosfera (halo + grano)</div>
+        <div class="spec"><code>estatica</code><code>expo-linear-gradient</code><code>sin Skia</code></div>
+        <div class="why">El fondo <b>no anima</b> en cold start. Se monta una vez por encima del router y no se desmonta entre rutas:
+        asi la continuidad splash→valor→codigo es por construccion, no por transicion (patron Peloton, r1 §2).</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Salida hacia el rol elegido</div>
+        <div class="spec"><code class="hi">260 ms</code><code>ease-out</code><code>morph de la card (frame 4)</code></div>
+        <div class="why">La card elegida crece; el resto de la pantalla hace fade a 0 en 160 ms. Nunca corte duro.</div>
+      </div>
+
+      <div class="rm"><b>Reduce motion</b><p>Sin stagger ni translateY: los 7 elementos aparecen juntos con un solo fade de 200 ms. Pressed: solo cambio de color, sin scale. Salida: cross-fade 160 ms sin morph.</p></div>
+      <div class="bud"><span>7 nodos en la cascada</span><span>≤500 ms cascada</span><span>1 acento saturado</span><span>0 gestos requeridos</span></div>
+
+      <div class="rm" style="margin-top:10px; border-color:rgba(127,176,255,.28);">
+        <b>Apuesta de contenido</b>
+        <p>Los 3 beneficios reemplazan a los 3 slides <b>1:1</b>: rutina (slide alumno-scan), nutricion (coach-plan) y progreso (progreso).
+        Ninguna ilustracion webp sobrevive — todas tienen contorno oscuro y paleta verde/coral ajena a la rampa EVA (a1 §4.1),
+        y este concepto las vuelve innecesarias en vez de mandarlas a rehacer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FRAME 3 · RETORNO (segunda apertura)
+       ============================================================ -->
+  <div class="group">
+    <div>
+      <div class="colhead"><span class="num ghost">3</span><span class="colname">Retorno · selector puro</span><span class="tag">2da apertura</span></div>
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <div class="amb"></div>
+          <div class="grain"></div>
+          <div class="statusbar z"><span>9:41</span><span class="rt"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+          <div class="body z">
+            <div class="rethero">
+              <div class="wm st d0" style="font-size:60px;">EVA<span class="dot"></span></div>
+              <p class="hi st d1">Hola de nuevo</p>
+              <p class="sub st d1">Elige como quieres entrar</p>
+              <div class="chips">
+                <span class="chip st d2">Rutina</span>
+                <span class="chip st d2">Nutricion</span>
+                <span class="chip st d2">Progreso</span>
+              </div>
+            </div>
+
+            <div class="roles">
+              <div class="st d3" style="position:relative;">
+                <span class="badge-last">La ultima vez</span>
+                <div class="role primary press">
+                  <span class="ricon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.7-3.6 3.4-5.5 7-5.5s6.3 1.9 7 5.5"/></svg></span>
+                  <span class="rt"><b>Soy alumno</b><small>Tengo el codigo de mi coach</small></span>
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+                </div>
+              </div>
+              <div class="st d4">
+                <div class="role secondary">
+                  <span class="ricon"><svg viewBox="0 0 24 24" fill="none" stroke="#CDD3DB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5c0-2-1.7-3.5-3.7-3.5H7.7C5.7 15 4 16.5 4 18.5V20"/><circle cx="10" cy="8" r="3"/><path d="M17 11h4M19 9v4"/></svg></span>
+                  <span class="rt"><b>Soy coach</b><small>Gestiono a mis alumnos</small></span>
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#98A2B0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+                </div>
+              </div>
+            </div>
+            <p class="foot st d4">Solo define por donde entras. Despues inicias sesion.</p>
+          </div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Notas de motion — Retorno</h4>
+      <p class="kicker2">Misma pantalla, <b>bloque de valor colapsado</b> a tres chips cuando <code>hasSeenEntry === true</code>.
+      El valor se cuenta una vez; despues la entrada son <b>dos taps desde cold start</b>. Es el mismo componente con una prop, no otra ruta.</p>
+
+      <div class="mrow">
+        <div class="what">Cascada corta (5 pasos)</div>
+        <div class="spec"><code class="hi">280 ms</code><code class="hi">stagger 70 ms</code><code>ease-out</code><code>cierra en ~340 ms</code></div>
+        <div class="why">Wordmark (0) → saludo (70) → chips (140) → card alumno (210) → card coach (280).</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Wordmark ampliado a 60 px</div>
+        <div class="spec"><code>letter-spacing -.055em</code><code>Archivo 900</code><code>sin animacion propia</code></div>
+        <div class="why">En dark premium el titular <b>es</b> la imagen (r2 §8, Perplexity 64 px / Linear display 72 px, tracking -.022em).
+        Sin ilustracion, sin mascota, sin logo decorativo.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Badge "La ultima vez"</div>
+        <div class="spec"><code>AsyncStorage lastRole</code><code>sin animacion</code><code>no preselecciona</code></div>
+        <div class="why">Pista, no atajo automatico: reduce deliberacion sin quitarle el control al usuario.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Cuando el contexto ya sabe el rol</div>
+        <div class="spec"><code class="hi">este frame no se muestra</code><code>deep link /c/{slug}</code><code>sesion previa</code></div>
+        <div class="why">Con invitacion de coach o sesion cacheada, el selector se <b>salta</b> y se aterriza directo en el login del alumno (r1 §7).
+        Requiere cerrar el P0 de QA ronda 1: <code>/c/josefit</code> deja <code>coachId</code> null (login.tsx:640).</div>
+      </div>
+
+      <div class="rm"><b>Reduce motion</b><p>Los 5 elementos con un unico fade de 200 ms, sin desplazamiento ni escalonado.</p></div>
+      <div class="bud"><span>5 nodos</span><span>~340 ms</span><span>2 taps a la sesion</span></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FRAME 4 · TRANSICION (morph de la card)
+       ============================================================ -->
+  <div class="group">
+    <div>
+      <div class="colhead"><span class="num ghost">4</span><span class="colname">Transicion · morph de la card</span><span class="tag">loop 6 s</span></div>
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <div class="amb"></div>
+          <div class="grain"></div>
+          <div class="statusbar z"><span>9:41</span><span class="rt"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+
+          <div class="morphstage">
+            <!-- capa de fondo: la pantalla 2 en reposo -->
+            <div class="under z" style="padding-top:59px;">
+              <div class="topbar" style="opacity:.75;"><div class="wm" style="font-size:20px;">EVA<span class="dot"></span></div><span class="lang">ES</span></div>
+              <p class="kicker" style="opacity:.6;">Entrenamiento · Nutricion · Progreso</p>
+              <h2 class="hero" style="opacity:.55;">Coach y alumno,<br>un solo plan.</h2>
+              <p class="herosub" style="opacity:.4;">Tu coach lo arma desde su panel. Tu lo entrenas y lo comes.</p>
+              <div class="benefits" style="opacity:.32;">
+                <div class="ben"><span class="bicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6M20 9v6M7 6v12M17 6v12M7 12h10"/></svg></span><span class="btxt"><b>Tu rutina del dia, serie por serie</b><small>Pesos, repeticiones y descansos guiados</small></span></div>
+                <div class="ben"><span class="bicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v8a2 2 0 0 0 4 0V3M8 11v10"/><path d="M17 3c-1.7 1.2-2.5 3-2.5 5.5S15.3 13 17 13.5V21"/></svg></span><span class="btxt"><b>Tu plan de comidas, sin planillas</b><small>Porciones y macros ya calculados</small></span></div>
+              </div>
+            </div>
+
+            <div class="dim"></div>
+
+            <!-- la card que morfea -->
+            <div class="sheet">
+              <div class="sheetsm">
+                <span class="ricon" style="background:rgba(255,255,255,.16);"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.7-3.6 3.4-5.5 7-5.5s6.3 1.9 7 5.5"/></svg></span>
+                <span class="rt"><b style="display:block;font-size:18px;font-weight:900;letter-spacing:-.02em;color:#fff;">Soy alumno</b>
+                <small style="display:block;font-size:12.5px;color:rgba(255,255,255,.8);">Tengo el codigo de mi coach</small></span>
+              </div>
+              <div class="sheetlg">
+                <div class="sheetgrab" style="margin-top:0;margin-bottom:26px;"></div>
+                <h3>Codigo de tu coach</h3>
+                <p>Ingresalo una sola vez. Queda guardado en este telefono.</p>
+                <div class="field" style="box-shadow:none;border-color:var(--line);background:var(--sunken);">
+                  <span class="val" style="color:#5C656F;letter-spacing:.14em;">EJ: JOSEFIT</span>
+                </div>
+                <div class="cta" style="margin-top:16px;opacity:.45;">Continuar</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Notas de motion — Transicion</h4>
+      <p class="kicker2">La <b>unica</b> transicion de toda la familia donde f1 §5 permite un cambio de layout real:
+      la card elegida crece hacia la pantalla siguiente (dimensionality genuina). Todo lo demas es transform/opacity puro.</p>
+
+      <div class="mrow">
+        <div class="what">Morph de la card → sheet</div>
+        <div class="spec"><code class="hi">260 ms</code><code>ease-out cubic-bezier(.2,0,0,1)</code><code>Reanimated layout API</code><code>radius 20 → 28</code></div>
+        <div class="why">Nunca frame por frame a mano. Si el device es gama baja y el morph no sostiene 60 fps, degradar a cross-fade: es preferible perder el efecto que perder los frames.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Crossfade de contenido</div>
+        <div class="spec"><code>salida 120 ms ease-in</code><code>entrada 200 ms ease-out</code><code>delay 60 ms</code></div>
+        <div class="why">Timing asimetrico: lo que se va sale mas rapido de lo que entra (f1 §1).</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Fondo (pantalla 2)</div>
+        <div class="spec"><code>opacity → .35</code><code>200 ms</code><code>sin scale ni blur</code></div>
+        <div class="why">La atmosfera <b>no se desmonta</b>: el mismo canvas <code>#07080C</code> sigue debajo. Por eso al llegar a /alumno/codigo no hay ni un frame de otro color.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Haptica</div>
+        <div class="spec"><code>selectionAsync</code><code>en el commit del rol</code><code>1 sola vez</code></div>
+        <div class="why">Nunca durante el gesto ni por frame.</div>
+      </div>
+
+      <div class="rm"><b>Reduce motion</b><p>Sin morph: corte con fade de 160 ms. El dim del fondo tambien se aplica instantaneo. El significado (una eleccion abrio un destino) se preserva con el mismo orden visual.</p></div>
+      <div class="bud"><span>3 nodos</span><span>260 ms</span><span>interrumpible con back</span></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FRAME 5 · /alumno/codigo DARK
+       ============================================================ -->
+  <div class="group">
+    <div>
+      <div class="colhead"><span class="num ghost">5</span><span class="colname">/alumno/codigo · dark</span><span class="tag">continuidad</span></div>
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <div class="amb"></div>
+          <div class="grain"></div>
+          <div class="statusbar z"><span>9:41</span><span class="rt"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+          <div class="body z">
+            <div class="navbar st d0">
+              <span class="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></span>
+              <div class="wm">EVA<span class="dot"></span></div>
+              <span class="step">1 de 2</span>
+            </div>
+
+            <h2 class="codeh st d0">Ingresa el codigo<br>de tu coach</h2>
+            <p class="codesub st d1">Te lo comparte por WhatsApp, o te manda un enlace y entras directo sin escribir nada.</p>
+
+            <div class="field st d2">
+              <span class="val">JOSEFI<span class="caret"></span></span>
+              <span class="paste">Pegar</span>
+            </div>
+            <p class="helper st d2">Letras y numeros, sin espacios.</p>
+
+            <div class="cta st d3 press">Continuar</div>
+
+            <div class="orsep st d4"><hr><span>o</span><hr></div>
+            <div class="ghostbtn st d4">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+              Abrir mi enlace de invitacion
+            </div>
+
+            <p class="codefoot st d4">No tienes codigo?<br><b>Pideselo a tu coach</b> — es el mismo que usa en su perfil.</p>
+          </div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Notas de motion — /alumno/codigo</h4>
+      <p class="kicker2">Presupuesto de novedad (r2 §4): todo el motion expresivo se gasto en el splash y en la pantalla 2.
+      <b>Aca la pantalla es deliberadamente aburrida</b>: familiar, rapida y sin sorpresas. Lo unico que importa es que sea <b>del mismo color</b>.</p>
+
+      <div class="mrow">
+        <div class="what">Entrada de la pantalla</div>
+        <div class="spec"><code class="hi">220 ms</code><code class="hi">stagger 60 ms</code><code>4 pasos</code><code>ease-out</code></div>
+        <div class="why">Mas corta y mas plana que la pantalla 2 a proposito: el usuario ya decidio, ahora solo quiere terminar.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Foco del input</div>
+        <div class="spec"><code>120 ms</code><code>border + focus-ring</code><code>sin scale</code></div>
+        <div class="why">El unico uso del acento saturado en esta pantalla ademas del CTA. Caret nativo, sin animacion custom.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Error de codigo invalido</div>
+        <div class="spec"><code>shake 180 ms</code><code>translateX ±6 px</code><code>2 ciclos</code><code>haptics notificationAsync(Error)</code></div>
+        <div class="why">Unico caso donde la haptica sube de nivel: aca si hay un resultado que comunicar.</div>
+      </div>
+      <div class="mrow">
+        <div class="what">Continuidad de canvas</div>
+        <div class="spec"><code class="hi">#07080C</code><code>ForceScheme scheme="dark"</code><code>StatusBar light</code></div>
+        <div class="why">Bloqueante: hoy <code>ForceLightTheme</code> hardcodea claro (ThemeContext.tsx:127-163) y esta ruta (<code>alumno/codigo.tsx:33</code>) entra en flash blanco.
+        Sin ese fix, el concepto se rompe justo aca.</div>
+      </div>
+
+      <div class="rm"><b>Reduce motion</b><p>Fade unico de 180 ms sin stagger. El shake de error se reemplaza por borde rojo + mensaje, sin desplazamiento.</p></div>
+      <div class="bud"><span>4 nodos</span><span>~400 ms</span><span>teclado safe-area</span><span>0 efectos decorativos</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="foot-doc">
+  <div class="cards2">
+    <div class="box">
+      <h5>Las 3 apuestas del concepto</h5>
+      <ul>
+        <li><b>El walkthrough desaparece, no se acorta.</b> Cero slides, cero dots, cero swipe, cero boton "Saltar". Si el CTA esta desde el primer frame, no hay nada que saltar (NN/g: los tutoriales deck-of-cards no mejoran el desempeno).</li>
+        <li><b>Valor y bifurcacion conviven.</b> El copy de venta ocupa el tercio superior y el selector el inferior, con la jerarquia asimetrica intacta: alumno relleno con el acento, coach outline (Hick's Law, r2 §5).</li>
+        <li><b>La segunda apertura es distinta a la primera.</b> Con <code>hasSeenEntry</code> el bloque de valor colapsa a tres chips: nadie lee dos veces la misma promesa.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h5>Que gana / que arriesga</h5>
+      <ul>
+        <li><b>Gana:</b> una pantalla menos de codigo, tres ilustraciones webp que no hay que rehacer, y el rol elegible a ~1,6 s sin un solo gesto.</li>
+        <li><b>Gana:</b> un solo componente que sirve a primera apertura y retorno, con el mismo fondo que nunca se desmonta.</li>
+        <li><b>Arriesga:</b> densidad. La pantalla 2 mete 7 bloques en 751 px utiles; si el device es chico (SE, 667 px) el bloque de valor debe colapsar a 2 beneficios — <b>nunca</b> permitir que el CTA quede bajo el fold.</li>
+        <li><b>Arriesga:</b> el copy carga solo con toda la venta. Si el titular no funciona, no hay slides 2 y 3 donde recuperarse: hay que testearlo antes de implementar.</li>
+      </ul>
+    </div>
+    <div class="box warn">
+      <h5>Bloqueantes previos (a1 §2 / direccion §3)</h5>
+      <ul>
+        <li><b>ForceLightTheme</b> hardcodea claro y anula todo <code>dark:</code> en index.tsx y alumno/codigo.tsx. Sin <code>ForceScheme scheme="dark"</code> + <code>DARK_SCHEME_VARS</code>, este concepto no existe.</li>
+        <li><b>react-native-svg</b> pierde el alpha del <code>stopColor</code>: <code>AmbientBrandGlow</code> pinta rects <code>#007AFF</code> solidos. El halo de los frames 1 y 2 depende de ese fix.</li>
+        <li><b>css-interop</b> descarta <code>style</code> cuando es funcion junto a <code>className</code>: rompe el layout de la card "Soy coach". Regla: nunca combinar ambos.</li>
+        <li><b>Splash nativo</b> apunta a <code>eva-mark-filled.png</code> (marca NEGRA, ~RGB 27) sobre <code>#07080C</code>: hoy es una pantalla vacia. Cambiar a <code>eva-icon.png</code> exige <b>binario nuevo</b>.</li>
+        <li><b>Token drift</b>: <code>surface-app</code> dark es <code>#0A0D12</code> pero el splash es <code>#07080C</code>. Reconciliar en una sola direccion antes de codificar.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
