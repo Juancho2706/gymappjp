@@ -15,6 +15,9 @@ import { useRouter } from 'expo-router'
 import {
   ArrowLeft,
   CalendarDays,
+  Check,
+  Copy,
+  CopyCheck,
   History,
   Info,
   Lock,
@@ -28,13 +31,15 @@ import {
 import {
   NUTRITION_WEEK_ORDER,
   formatNutritionDayOfWeek,
+  resolveNutritionDayVariantForDate,
   type FoodCatalogItem,
   type NutritionItemSubstitution,
   type NutritionPlanReadModel,
   type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
-import { NutritionHeader, NutritionMotionButton, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
+import { DayVariantWeekStrip } from '../DayVariantWeekStrip'
+import { NutritionMotionButton, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
 import { Sheet } from '../../Sheet'
 import { useTheme } from '../../../context/ThemeContext'
 import { supabase } from '../../../lib/supabase'
@@ -51,10 +56,12 @@ import {
   countQuickEditChanges,
   loadQuickEditFoods,
   loadQuickEditSubstitutions,
+  otherQuickEditVariantKeys,
   planDayVariantAdditions,
   planModelToQuickEditState,
   quickEditReducer,
   quickEditUsesSlots,
+  resolveQuickEditSlotCopyTargets,
   sortQuickEditVariantsForDisplay,
   takenDayVariantDows,
   validateQuickEditState,
@@ -63,6 +70,7 @@ import {
   type QuickEditVariant,
 } from '../../../lib/nutrition-v2-quick-edit'
 import {
+  copyPortionsToSlots,
   countPortionsChanges,
   hydrateQuickEditPortions,
   portionsReducer,
@@ -86,7 +94,15 @@ import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar } from './PublishBar'
 import { ProUpsellSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
-import { QUICK_EDIT_COPY, addDayCta, discardConfirmBody, removeDayConfirmBody } from './microcopy'
+import {
+  QUICK_EDIT_COPY,
+  addDayCta,
+  copySlotCta,
+  copySlotDone,
+  dayIndexJump,
+  discardConfirmBody,
+  removeDayConfirmBody,
+} from './microcopy'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 
 let keySeq = 0
@@ -102,6 +118,19 @@ interface SearchTarget {
   variantKey: string
   slotKey: string
   itemKey: string | null
+}
+
+/** Franja apuntada por el menú de la franja / la hoja de copia (CE-5). */
+interface SlotRef {
+  variantKey: string
+  slotKey: string
+}
+
+/** Variante proyectada al contrato compartido de la tira Lu-Do (`NutritionDayVariantLike`). */
+interface WeekVariantLike {
+  id: string
+  dayOfWeek: number | null
+  isDefault: boolean
 }
 
 interface UndoEntry {
@@ -230,11 +259,20 @@ export function QuickEditMode({
   const [changeDayKey, setChangeDayKey] = useState<string | null>(null)
   const [renameKey, setRenameKey] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
+  // CE-5: menú de la franja + hoja multi-select de días destino de la copia.
+  const [slotMenu, setSlotMenu] = useState<SlotRef | null>(null)
+  const [copySource, setCopySource] = useState<SlotRef | null>(null)
+  const [copyTargetKeys, setCopyTargetKeys] = useState<string[]>([])
   // Respaldo local (F2) de una sesion anterior recuperado de AsyncStorage; alimenta el banner
   // "Restaurar". Guarda el payload completo (state + portions) hasta que el coach decida.
   const [pendingRestore, setPendingRestore] = useState<QuickEditDraftPayload | null>(null)
 
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Anclas por día: el scroll apila los N días completos, así que cada bloque publica su
+  // offset vertical con `onLayout` (relativo al contentContainer = coordenada de `scrollTo`)
+  // y la fila de chips salta ahí. Ref y no estado: medir no debe re-renderizar el árbol.
+  const scrollRef = useRef<ScrollView>(null)
+  const dayOffsetsRef = useRef<Record<string, number | undefined>>({})
   // Guard para no escribir el respaldo local en la hidratacion inicial (evita un borrador vacio).
   const isFirstRenderRef = useRef(true)
   // Key del respaldo local: una sesion de quick-edit por alumno; el clientId va SIEMPRE en la
@@ -544,6 +582,41 @@ export function QuickEditMode({
   const orderedVariants = useMemo(() => sortQuickEditVariantsForDisplay(state.variants), [state.variants])
   const showVariantHeader = state.variants.length > 1
 
+  /**
+   * Proyección de las variantes al contrato compartido `NutritionDayVariantLike` para la tira
+   * Lu-Do (QW-13): el estado del quick-edit usa `default`/`key` y el helper del paquete
+   * `isDefault`/`id`. La identidad viaja en `id = key` porque `buildNutritionDayVariantWeekStrip`
+   * empareja por `id` cuando ambas variantes lo traen (identidad por referencia sería frágil).
+   */
+  const weekVariants = useMemo<WeekVariantLike[]>(
+    () =>
+      state.variants.map((variant) => ({
+        id: variant.key,
+        dayOfWeek: variant.dayOfWeek,
+        isDefault: variant.default,
+      })),
+    [state.variants],
+  )
+
+  // Día del plan que aplica HOY (misma regla que el snapshot del alumno): el índice lo marca
+  // para que el coach entre orientado — espejo del `todayVariantKey` web.
+  const todayVariantKey = useMemo(
+    () => resolveNutritionDayVariantForDate(weekVariants, todayIso)?.id ?? null,
+    [weekVariants, todayIso],
+  )
+
+  const handleDayLayout = useCallback((variantKey: string, y: number) => {
+    dayOffsetsRef.current[variantKey] = y
+  }, [])
+
+  // Salto a un día: sin offset medido (bloque aún no montado) no hace nada — mejor quieto
+  // que saltar a una coordenada inventada.
+  const jumpToDay = useCallback((variantKey: string) => {
+    const y = dayOffsetsRef.current[variantKey]
+    if (y == null) return
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true })
+  }, [])
+
   function openAddDay() {
     setAddDays([])
     setAddSource('clone')
@@ -605,6 +678,70 @@ export function QuickEditMode({
     },
     [state, pushUndo],
   )
+
+  // ── Copia de franja entre dias (CE-5) ─────────────────────────────────────────────
+  /**
+   * Aplica la copia a N días en UN gesto: el árbol lo mueve el reducer y la capa de
+   * PORCIONES —reducer hermano keyed por `slot.key`— la mueve la pantalla con los MISMOS
+   * destinos (`resolveQuickEditSlotCopyTargets` sobre el estado PREVIO, la misma función pura
+   * que usa el reducer: pantalla y estado no pueden divergir).
+   *
+   * Deshacer: el árbol y las porciones previos completos. Una copia toca N días a la vez, así
+   * que ningún `RESTORE_*` puntual la cubre (nota de la lib).
+   */
+  const applySlotCopy = useCallback(
+    (source: SlotRef, targetVariantKeys: readonly string[]) => {
+      if (targetVariantKeys.length === 0) return
+      const targets = resolveQuickEditSlotCopyTargets(state, {
+        sourceVariantKey: source.variantKey,
+        slotKey: source.slotKey,
+        targetVariantKeys,
+      })
+      if (targets.length === 0) return
+      const previousState = state
+      const previousPortions = portionsState
+      dispatch({
+        type: 'COPY_SLOT_TO_VARIANTS',
+        sourceVariantKey: source.variantKey,
+        slotKey: source.slotKey,
+        targetVariantKeys,
+      })
+      const nextPortions = copyPortionsToSlots(portionsState, {
+        sourceSlotKey: source.slotKey,
+        targets,
+      })
+      if (nextPortions !== portionsState) {
+        dispatchPortions({ type: 'RESTORE_PORTIONS', state: nextPortions })
+      }
+      setSlotMenu(null)
+      setCopySource(null)
+      setCopyTargetKeys([])
+      pushUndo({
+        message: copySlotDone(targets.length),
+        restore: () => {
+          dispatch({ type: 'RESTORE_DRAFT', state: previousState })
+          dispatchPortions({ type: 'RESTORE_PORTIONS', state: previousPortions })
+        },
+      })
+    },
+    [state, portionsState, pushUndo],
+  )
+
+  // Destinos posibles de la copia + si pisan una franja homónima (se resuelve con la MISMA
+  // función pura del reducer, para que la hoja prometa exactamente lo que va a pasar).
+  const copyCandidates = useMemo(() => {
+    if (!copySource) return []
+    const others = otherQuickEditVariantKeys(state, copySource.variantKey)
+    const resolved = resolveQuickEditSlotCopyTargets(state, {
+      sourceVariantKey: copySource.variantKey,
+      slotKey: copySource.slotKey,
+      targetVariantKeys: others,
+    })
+    const replacedByKey = new Map(resolved.map((target) => [target.variantKey, target.replaced]))
+    return orderedVariants
+      .filter((variant) => variant.key !== copySource.variantKey)
+      .map((variant) => ({ variant, replaces: replacedByKey.get(variant.key) === true }))
+  }, [copySource, state, orderedVariants])
 
   const handleSelectFood = useCallback(
     (food: FoodCatalogItem) => {
@@ -768,16 +905,24 @@ export function QuickEditMode({
   const futureDate = baseline.effectiveFrom > todayIso ? baseline.effectiveFrom : null
   const dayMenuVariant = state.variants.find((variant) => variant.key === dayMenuKey) ?? null
   const changeDayVariant = state.variants.find((variant) => variant.key === changeDayKey) ?? null
+  const slotMenuSlot = slotMenu
+    ? (state.variants
+        .find((variant) => variant.key === slotMenu.variantKey)
+        ?.slots.find((slot) => slot.key === slotMenu.slotKey) ?? null)
+    : null
+  const copySourceSlot = copySource
+    ? (state.variants
+        .find((variant) => variant.key === copySource.variantKey)
+        ?.slots.find((slot) => slot.key === copySource.slotKey) ?? null)
+    : null
 
   return (
     <View className="flex-1 bg-surface-app">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
-          className="flex-1"
-          contentContainerClassName="gap-4 px-4 pb-8 pt-5"
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        >
+        {/* Barra fija del modo edición: salida + identidad del alumno + anclas por día. Vive
+            FUERA del scroll a propósito — con los N días apilados, el único control de
+            navegación no puede desaparecer al primer deslizamiento. */}
+        <View className="border-b border-subtle bg-surface-app px-4 pb-2 pt-5">
           <View className="flex-row items-center gap-3">
             <Pressable
               accessibilityRole="button"
@@ -789,19 +934,45 @@ export function QuickEditMode({
               <ArrowLeft color={theme.textSecondary} size={20} />
             </Pressable>
             <View className="min-w-0 flex-1">
-              <NutritionHeader
-                eyebrow={QUICK_EDIT_COPY.editingEyebrow}
-                title={clientName}
-                description={QUICK_EDIT_COPY.editingHint}
-              />
+              <Text
+                className="font-mono text-[10px] font-semibold uppercase leading-4 tracking-[1.6px] text-primary"
+                numberOfLines={1}
+              >
+                {QUICK_EDIT_COPY.editingEyebrow}
+              </Text>
+              <Text
+                accessibilityRole="header"
+                className="font-display-black text-[22px] leading-7 tracking-[-0.44px] text-strong"
+                numberOfLines={1}
+              >
+                {clientName}
+              </Text>
             </View>
           </View>
+          {showVariantHeader ? (
+            <DayAnchorRow
+              variants={orderedVariants}
+              todayVariantKey={todayVariantKey}
+              onJump={jumpToDay}
+            />
+          ) : null}
+        </View>
 
-          <View className="flex-row flex-wrap items-center gap-2">
-            <StrategyBadge strategy={baseline.strategy} />
-            <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
-              {baseline.name}
-            </Text>
+        <ScrollView
+          ref={scrollRef}
+          className="flex-1"
+          contentContainerClassName="gap-4 px-4 pb-8 pt-4"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <View className="gap-1">
+            <View className="flex-row flex-wrap items-center gap-2">
+              <StrategyBadge strategy={baseline.strategy} />
+              <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
+                {baseline.name}
+              </Text>
+            </View>
+            <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.editingHint}</Text>
           </View>
 
           {!usesSlots ? (
@@ -843,39 +1014,53 @@ export function QuickEditMode({
           ) : null}
 
           {orderedVariants.map((variant) => (
-            <View key={variant.key} className="gap-3">
+            <View
+              key={variant.key}
+              className="gap-3"
+              onLayout={(event) => handleDayLayout(variant.key, event.nativeEvent.layout.y)}
+            >
               {/* FD5: encabezado del día + menú (Cambiar día / Renombrar / Eliminar). El día
                   base no cambia de día ni se elimina; solo se puede renombrar. */}
               {showVariantHeader ? (
-                <View className="flex-row items-start gap-2">
-                  <View className="min-w-0 flex-1">
-                    <Text className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-                      {variant.default ? QUICK_EDIT_COPY.baseDayEyebrow : QUICK_EDIT_COPY.specificDayEyebrow}
-                    </Text>
-                    <Text className="font-display text-base font-semibold text-strong" numberOfLines={1}>
-                      {variant.label}
-                    </Text>
-                    {variant.default ? (
-                      <Text className="mt-0.5 text-xs leading-5 text-muted">
-                        {QUICK_EDIT_COPY.baseDayHint}
+                <View>
+                  <View className="flex-row items-start gap-2">
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                        {variant.default ? QUICK_EDIT_COPY.baseDayEyebrow : QUICK_EDIT_COPY.specificDayEyebrow}
                       </Text>
-                    ) : null}
-                    {errors['variant.' + variant.key + '.label'] ? (
-                      <Text className="mt-1 text-xs font-medium text-danger-600">
-                        {errors['variant.' + variant.key + '.label']}
+                      <Text className="font-display text-base font-semibold text-strong" numberOfLines={1}>
+                        {variant.label}
                       </Text>
-                    ) : null}
+                      {variant.default ? (
+                        <Text className="mt-0.5 text-xs leading-5 text-muted">
+                          {QUICK_EDIT_COPY.baseDayHint}
+                        </Text>
+                      ) : null}
+                      {errors['variant.' + variant.key + '.label'] ? (
+                        <Text className="mt-1 text-xs font-medium text-danger-600">
+                          {errors['variant.' + variant.key + '.label']}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={QUICK_EDIT_COPY.dayMenuTitle + ' ' + variant.label}
+                      disabled={publishing}
+                      onPress={() => setDayMenuKey(variant.key)}
+                      hitSlop={8}
+                      className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-card"
+                    >
+                      <MoreVertical color={theme.textSecondary} size={18} />
+                    </Pressable>
                   </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={QUICK_EDIT_COPY.dayMenuTitle + ' ' + variant.label}
-                    disabled={publishing}
-                    onPress={() => setDayMenuKey(variant.key)}
-                    hitSlop={8}
-                    className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-card"
-                  >
-                    <MoreVertical color={theme.textSecondary} size={18} />
-                  </Pressable>
+                  {/* QW-13: la tira Lu-Do read-only también mientras se edita — es cuando más
+                      importa saber qué días cubre esta variante (un label propio como "Día de
+                      entrenamiento" borra toda referencia al día de semana). */}
+                  <VariantWeekStrip
+                    variants={weekVariants}
+                    variantKey={variant.key}
+                    todayIso={todayIso}
+                  />
                 </View>
               ) : null}
               <TargetsEditorCard
@@ -914,6 +1099,11 @@ export function QuickEditMode({
                         dispatch({ type: 'UPDATE_SLOT', variantKey: variant.key, slotKey: slot.key, patch })
                       }
                       onRemoveSlot={() => handleRemoveSlot(variant.key, slot.key)}
+                      onOpenMenu={
+                        showVariantHeader
+                          ? () => setSlotMenu({ variantKey: variant.key, slotKey: slot.key })
+                          : undefined
+                      }
                       onSearchFood={() =>
                         setSearchTarget({ mode: 'add', variantKey: variant.key, slotKey: slot.key, itemKey: null })
                       }
@@ -1284,7 +1474,209 @@ export function QuickEditMode({
           </NutritionMotionButton>
         </View>
       </Sheet>
+
+      {/* CE-5 — menú de la franja: copiar a otros días (hoja multi-select) o aplicar a todos.
+          Solo existe en planes multi-día: con un solo día no hay destino posible. */}
+      <Sheet
+        open={slotMenu !== null && slotMenuSlot !== null}
+        onClose={() => setSlotMenu(null)}
+        nativeModal
+        dynamicSizing
+        title={slotMenuSlot?.name.trim() || QUICK_EDIT_COPY.slotMenuTitle}
+        accessibilityLabel={QUICK_EDIT_COPY.slotMenuTitle}
+      >
+        <View className="gap-3">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={QUICK_EDIT_COPY.copySlot}
+            disabled={publishing}
+            onPress={() => {
+              if (!slotMenu) return
+              setCopySource(slotMenu)
+              setCopyTargetKeys([])
+              setSlotMenu(null)
+            }}
+            className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
+          >
+            <Copy color={theme.textSecondary} size={16} />
+            <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.copySlot}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={QUICK_EDIT_COPY.copySlotAll}
+            disabled={publishing}
+            onPress={() => {
+              if (!slotMenu) return
+              applySlotCopy(slotMenu, otherQuickEditVariantKeys(state, slotMenu.variantKey))
+            }}
+            className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
+          >
+            <CopyCheck color={theme.textSecondary} size={16} />
+            <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.copySlotAll}</Text>
+          </Pressable>
+        </View>
+      </Sheet>
+
+      {/* CE-5 — destinos de la copia: multi-select de los OTROS días, cada uno diciendo por
+          adelantado si reemplaza su franja homónima o si se agrega al final. */}
+      <Sheet
+        open={copySource !== null && copySourceSlot !== null}
+        onClose={() => setCopySource(null)}
+        nativeModal
+        dynamicSizing
+        title={QUICK_EDIT_COPY.copySlotTitle}
+        accessibilityLabel={QUICK_EDIT_COPY.copySlotTitle}
+        // CTA anclado: con 6 destinos la lista scrollea sola en vez de empujar el botón fuera
+        // de la hoja (mismo problema que el `max-h` de la web, resuelto con el footer del DS).
+        footer={
+          <NutritionMotionButton
+            accessibilityLabel={copySlotCta(copyTargetKeys.length)}
+            disabled={publishing || copyTargetKeys.length === 0}
+            onPress={() => {
+              if (!copySource) return
+              applySlotCopy(copySource, copyTargetKeys)
+            }}
+          >
+            {copySlotCta(copyTargetKeys.length)}
+          </NutritionMotionButton>
+        }
+      >
+        <View className="gap-3">
+          <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.copySlotHint}</Text>
+          {copyCandidates.map(({ variant, replaces }) => {
+            const checked = copyTargetKeys.includes(variant.key)
+            const dayCaption = variant.default
+              ? QUICK_EDIT_COPY.baseDayEyebrow
+              : (formatNutritionDayOfWeek(variant.dayOfWeek) ?? QUICK_EDIT_COPY.specificDayEyebrow)
+            return (
+              <Pressable
+                key={variant.key}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked }}
+                accessibilityLabel={
+                  variant.label + (replaces ? ' — ' + QUICK_EDIT_COPY.copySlotReplaces : '')
+                }
+                onPress={() =>
+                  setCopyTargetKeys((current) =>
+                    current.includes(variant.key)
+                      ? current.filter((key) => key !== variant.key)
+                      : [...current, variant.key],
+                  )
+                }
+                className={
+                  'min-h-12 flex-row items-center gap-2.5 rounded-control border px-3 py-2 ' +
+                  (checked ? 'border-primary bg-primary/10' : 'border-default bg-surface-card')
+                }
+              >
+                {checked ? <Check color={theme.primary} size={16} /> : null}
+                <View className="min-w-0 flex-1">
+                  <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
+                    {variant.label}
+                  </Text>
+                  <Text className="text-xs leading-4 text-muted" numberOfLines={1}>
+                    {dayCaption}
+                  </Text>
+                </View>
+                {replaces ? (
+                  <View className="rounded-pill border border-subtle bg-surface-sunken px-2 py-0.5">
+                    <Text className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      {QUICK_EDIT_COPY.copySlotReplaces}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            )
+          })}
+        </View>
+      </Sheet>
     </View>
+  )
+}
+
+/**
+ * Tira Lu-Do de UNA variante dentro del modo edición (QW-13). Resuelve la variante por `id`
+ * para no arrastrar un non-null assertion al render del día; si no la encuentra (imposible con
+ * el estado actual, pero barato de sostener) no pinta nada.
+ */
+function VariantWeekStrip({
+  variants,
+  variantKey,
+  todayIso,
+}: {
+  variants: readonly WeekVariantLike[]
+  variantKey: string
+  todayIso: string
+}) {
+  const variant = variants.find((candidate) => candidate.id === variantKey)
+  if (!variant) return null
+  return <DayVariantWeekStrip variants={variants} variant={variant} todayIso={todayIso} />
+}
+
+/**
+ * Índice de días (P1-1), espejo nativo del `DayAnchorNav` web: fila de anclas arriba de la
+ * pila para saltar a un día sin scrollear a ciegas. NO selecciona ni filtra nada — el
+ * contenido sigue siendo el plan completo; solo mueve el scroll.
+ *
+ * Cada chip lleva el día de semana corto (o "Base") + la etiqueta libre del coach truncada,
+ * así que sirve igual con nombres tipo "Día de entrenamiento". El día que aplica HOY va con
+ * acento, mismo patrón que `DayVariantWeekStrip`.
+ */
+function DayAnchorRow({
+  variants,
+  todayVariantKey,
+  onJump,
+}: {
+  variants: readonly QuickEditVariant[]
+  todayVariantKey: string | null
+  onJump: (variantKey: string) => void
+}) {
+  return (
+    <ScrollView
+      horizontal
+      // Indicador VISIBLE a propósito: la barra de días del builder lo apaga y por eso nadie
+      // sabe que hay más días fuera de pantalla (hallazgo H-05 de la auditoría).
+      keyboardShouldPersistTaps="handled"
+      className="mt-2 min-h-12"
+      contentContainerClassName="items-center gap-1.5 pr-4"
+      accessibilityLabel={QUICK_EDIT_COPY.dayIndexLabel}
+    >
+      {variants.map((variant) => {
+        const isToday = todayVariantKey != null && variant.key === todayVariantKey
+        // Sin día fijo y sin ser la base (dato inválido, tolerado en lectura) el chip se queda
+        // solo con la etiqueta: no se inventa un día de semana.
+        const short = variant.default
+          ? QUICK_EDIT_COPY.baseDayShort
+          : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
+        return (
+          <Pressable
+            key={variant.key}
+            accessibilityRole="button"
+            accessibilityLabel={
+              dayIndexJump(variant.label) + (isToday ? ' — ' + QUICK_EDIT_COPY.dayAppliesToday : '')
+            }
+            onPress={() => onJump(variant.key)}
+            hitSlop={4}
+            className={
+              'min-h-11 flex-row items-center gap-1.5 rounded-pill border px-3 ' +
+              (isToday ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card')
+            }
+          >
+            {short ? (
+              <Text className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
+                {short}
+              </Text>
+            ) : null}
+            <Text
+              className={'text-sm font-semibold ' + (isToday ? 'text-primary' : 'text-body')}
+              numberOfLines={1}
+              style={{ maxWidth: 140 }}
+            >
+              {variant.label}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </ScrollView>
   )
 }
 

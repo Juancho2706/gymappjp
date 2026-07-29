@@ -1,5 +1,5 @@
 import { Pressable, Text, TextInput, View } from 'react-native'
-import { Plus, Search, Trash2 } from 'lucide-react-native'
+import { MoreVertical, Plus, Search, Trash2 } from 'lucide-react-native'
 import { NutritionCard } from '../NutritionCard'
 import { MacroChipRow } from '../MacroChipRow'
 import { useTheme } from '../../../context/ThemeContext'
@@ -33,6 +33,7 @@ export function EditableSlotCard({
   portionGroups,
   onSlotPatch,
   onRemoveSlot,
+  onOpenMenu,
   onSearchFood,
   onAddFreeItem,
   onItemQuantity,
@@ -56,6 +57,11 @@ export function EditableSlotCard({
   portionGroups: QuickEditPortionGroup[]
   onSlotPatch: (patch: { name?: string; startTime?: string }) => void
   onRemoveSlot: () => void
+  /**
+   * Menú de la franja (CE-5): copiar a otros días / aplicar a todos. Ausente = plan de un
+   * solo día, donde copiar no tiene destino y la afordancia sería ruido.
+   */
+  onOpenMenu?: () => void
   onSearchFood: () => void
   onAddFreeItem: () => void
   onItemQuantity: (itemKey: string, value: string) => void
@@ -81,15 +87,28 @@ export function EditableSlotCard({
         <Text className="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
           Franja {index + 1}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Eliminar franja ${slot.name || index + 1}`}
-          disabled={disabled}
-          onPress={onRemoveSlot}
-          className="h-11 w-11 items-center justify-center rounded-control"
-        >
-          <Trash2 color={theme.destructive} size={17} />
-        </Pressable>
+        <View className="flex-row items-center">
+          {onOpenMenu ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${QUICK_EDIT_COPY.slotMenuTitle} ${slot.name || index + 1}`}
+              disabled={disabled}
+              onPress={onOpenMenu}
+              className="h-11 w-11 items-center justify-center rounded-control"
+            >
+              <MoreVertical color={theme.textSecondary} size={17} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Eliminar franja ${slot.name || index + 1}`}
+            disabled={disabled}
+            onPress={onRemoveSlot}
+            className="h-11 w-11 items-center justify-center rounded-control"
+          >
+            <Trash2 color={theme.destructive} size={17} />
+          </Pressable>
+        </View>
       </View>
 
       <View className="flex-row gap-2">

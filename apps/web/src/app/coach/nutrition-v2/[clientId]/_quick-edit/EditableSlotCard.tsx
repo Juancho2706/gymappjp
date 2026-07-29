@@ -5,17 +5,25 @@
  * "+ Agregar alimento" al pie (bottom sheet con catalogo + alimento libre), eliminar
  * franja via menu "..." (QeBottomSheet, igual que el menu de dia: el overlay del
  * quick-edit vive en z-[60] y tapa cualquier popup portaleado en z-50) con confirm
- * inline + snackbar Deshacer. Subtotal en vivo.
+ * inline + snackbar Deshacer, y copia de la franja a otros dias (P0-4) desde el mismo menu:
+ * multi-select de dias destino o "Aplicar a todos los dias". Subtotal en vivo.
  * Una franja sin items es VALIDA (el RPC exige >= 1 franja, no >= 1 item): se muestra
  * "Franja sin alimentos" en vez de romperse (QA #4).
  */
 
-import { useState } from 'react'
-import { MoreVertical, Plus, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, Copy, CopyCheck, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatNutritionDayOfWeek } from '@eva/nutrition-v2'
 import { NutritionCard } from '@/components/nutrition-v2'
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
-import { qeSlotPortionTotals, qeSlotSubtotal, qeCombineSubtotals, type QeSlot } from './quick-edit-state'
+import {
+  qeSlotCopyTargets,
+  qeSlotPortionTotals,
+  qeSlotSubtotal,
+  qeCombineSubtotals,
+  type QeSlot,
+} from './quick-edit-state'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableItemRow } from './EditableItemRow'
@@ -33,10 +41,15 @@ export function EditableSlotCard({
   slot: QeSlot
   index: number
 }) {
-  const { clientId, dispatch, errors, showErrors, isPending, exchangeGroups } = useQuickEdit()
+  const { clientId, state, dispatch, errors, showErrors, isPending, exchangeGroups } = useQuickEdit()
   const [addOpen, setAddOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [copyOpen, setCopyOpen] = useState(false)
+  const [copySelection, setCopySelection] = useState<readonly string[]>([])
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  // Dias destino de la copia (P0-4): todos menos el propio, en orden de lectura, con el aviso
+  // por fila de si la franja homonima se va a REEMPLAZAR. Plan de un solo dia ⇒ [] (sin CTA).
+  const copyTargets = useMemo(() => qeSlotCopyTargets(state, variantKey, slot.key), [state, variantKey, slot.key])
   // El subtotal SUMA las porciones a eleccion de la franja (macros congelados del plan),
   // igual que el builder: la card de porciones se edita justo arriba y antes no contaba.
   const portionTotals = qeSlotPortionTotals(slot, exchangeGroups)
@@ -54,6 +67,41 @@ export function EditableSlotCard({
         onClick: () => dispatch({ type: 'RESTORE_SLOT', variantKey, index, slot: removed }),
       },
     })
+  }
+
+  /**
+   * Copia la franja a los dias elegidos. El deshacer restaura el ARBOL PREVIO completo
+   * (`RESTORE_DRAFT`): una copia toca N dias y ningun `RESTORE_*` puntual la cubre, tal como
+   * lo declara el reducer. El contador de "cambios sin publicar" se recalcula solo (deriva
+   * del estado), asi que la barra refleja la copia y su deshacer sin nada extra.
+   */
+  function handleCopy(targetVariantKeys: readonly string[]) {
+    if (targetVariantKeys.length === 0) return
+    const previous = state
+    setMenuOpen(false)
+    setCopyOpen(false)
+    dispatch({ type: 'COPY_SLOT_TO_VARIANTS', sourceVariantKey: variantKey, slotKey: slot.key, targetVariantKeys })
+    toast(QE_COPY.copySlotDone(targetVariantKeys.length), {
+      duration: 5000,
+      action: {
+        label: QE_COPY.undo,
+        onClick: () => dispatch({ type: 'RESTORE_DRAFT', state: previous }),
+      },
+    })
+  }
+
+  function openCopySheet() {
+    setCopySelection([])
+    setMenuOpen(false)
+    setCopyOpen(true)
+  }
+
+  function toggleCopyTarget(variantKeyToToggle: string) {
+    setCopySelection((prev) =>
+      prev.includes(variantKeyToToggle)
+        ? prev.filter((key) => key !== variantKeyToToggle)
+        : [...prev, variantKeyToToggle],
+    )
   }
 
   return (
@@ -108,6 +156,29 @@ export function EditableSlotCard({
           onOpenChange={setMenuOpen}
           title={slot.name.trim() || 'Franja sin nombre'}
         >
+          {/* Copiar entre dias: solo con multi-dia (con un dia no hay destino posible). */}
+          {copyTargets.length > 0 ? (
+            <>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={openCopySheet}
+                className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <Copy aria-hidden="true" className="h-4 w-4 text-muted" />
+                {QE_COPY.copySlot}
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => handleCopy(copyTargets.map((target) => target.variantKey))}
+                className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <CopyCheck aria-hidden="true" className="h-4 w-4 text-muted" />
+                {QE_COPY.copySlotAll}
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -119,6 +190,67 @@ export function EditableSlotCard({
           >
             <Trash2 aria-hidden="true" className="h-4 w-4" />
             {QE_COPY.removeSlot}
+          </button>
+        </QeBottomSheet>
+
+        {/* Multi-select de dias destino: etiqueta libre del coach + dia de semana real. */}
+        <QeBottomSheet open={copyOpen} onOpenChange={setCopyOpen} title={QE_COPY.copySlotTitle}>
+          <p className="text-xs leading-5 text-muted">{QE_COPY.copySlotHint}</p>
+          {/* El bottom sheet crece con el contenido (h-auto): con 6 destinos la lista scrollea
+              sola en vez de empujar el CTA fuera de pantalla. */}
+          <ul className="-mx-1 max-h-[46vh] space-y-2 overflow-y-auto px-1">
+            {copyTargets.map((target) => {
+              const checked = copySelection.includes(target.variantKey)
+              const dayCaption = target.isDefault
+                ? QE_COPY.baseDayEyebrow
+                : (formatNutritionDayOfWeek(target.dayOfWeek) ?? QE_COPY.specificDayEyebrow)
+              return (
+                <li key={target.variantKey}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    onClick={() => toggleCopyTarget(target.variantKey)}
+                    className={
+                      'flex min-h-12 w-full items-center gap-3 rounded-control border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                      (checked
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border-default bg-surface-card hover:bg-surface-sunken')
+                    }
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ' +
+                        (checked
+                          ? 'border-primary bg-primary/100 text-white'
+                          : 'border-border-default bg-surface-card text-transparent')
+                      }
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-strong">{target.label}</span>
+                      <span className="block truncate text-xs text-muted">{dayCaption}</span>
+                    </span>
+                    {target.replaces ? (
+                      <span className="shrink-0 rounded-pill border border-border-subtle bg-surface-sunken px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                        {QE_COPY.copySlotReplaces}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <button
+            type="button"
+            disabled={isPending || copySelection.length === 0}
+            onClick={() => handleCopy(copySelection)}
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <Copy aria-hidden="true" className="h-4 w-4" />
+            {QE_COPY.copySlotCta(copySelection.length)}
           </button>
         </QeBottomSheet>
       </div>

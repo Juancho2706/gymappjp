@@ -32,6 +32,7 @@ import type { ExchangeGroupFormValues } from './PortionsGroupForm'
 import {
   addPortionGroup,
   clonePortionsForVariant,
+  copySlotPortionsToVariants,
   dropVariantPortions,
   formatPortionsEs,
   parsePortionsInput,
@@ -79,6 +80,18 @@ export interface PortionsController {
     sourceVariantKey: string
     targetVariantKey: string
     slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+  }) => void
+  /**
+   * Copia de franja entre días (P0-4): mueve las porciones de la franja copiada a cada día
+   * destino. Los destinos los resuelve `resolveSlotCopyTargets` del reducer con el MISMO
+   * estado previo al dispatch, así que la franja destino puede ser una existente (merge por
+   * nombre) o la recién clonada. Reemplazo total: sin porciones en el origen, el destino
+   * queda sin porciones.
+   */
+  copySlotToVariants: (params: {
+    sourceVariantKey: string
+    sourceSlotKey: string
+    targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
   }) => void
   /** Descarta las porciones de un día eliminado. */
   dropVariant: (variantKey: string) => void
@@ -167,6 +180,14 @@ export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsByS
         targetVariantKey: string
         slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
       }) => setBySlot((prev) => clonePortionsForVariant(prev, params)),
+      [],
+    ),
+    copySlotToVariants: useCallback(
+      (params: {
+        sourceVariantKey: string
+        sourceSlotKey: string
+        targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
+      }) => setBySlot((prev) => copySlotPortionsToVariants(prev, params)),
       [],
     ),
     dropVariant: useCallback((variantKey: string) => setBySlot((prev) => dropVariantPortions(prev, variantKey)), []),

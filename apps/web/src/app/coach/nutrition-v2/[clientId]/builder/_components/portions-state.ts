@@ -87,6 +87,54 @@ export function clonePortionsForVariant(
   return changed ? next : map
 }
 
+/** ¿Dos listas de targets son equivalentes? (mismo grupo y porciones, en el mismo orden). */
+function sameTargets(a: PortionTargetDraft[] | undefined, b: PortionTargetDraft[]): boolean {
+  if (a == null || a.length !== b.length) return false
+  return a.every(
+    (target, index) =>
+      target.exchangeGroupId === b[index].exchangeGroupId && target.portions === b[index].portions,
+  )
+}
+
+/**
+ * Copia las porciones de UNA franja a los dias destino de `COPY_SLOT_TO_VARIANTS` (P0-4).
+ * Los destinos salen de `resolveSlotCopyTargets` (mismo estado previo que usa el reducer),
+ * asi que la franja destino puede ser una EXISTENTE (merge por nombre) o la recien clonada.
+ *
+ * Semantica de REEMPLAZO total, espejo de lo que hace el reducer con los items: el destino
+ * queda con exactamente las porciones del origen — si el origen no tiene ninguna, las del
+ * destino se BORRAN (si no, quedarian porciones huerfanas de la franja pisada). Determinista
+ * e idempotente: aplicarla dos veces devuelve el MISMO mapa (misma referencia).
+ */
+export function copySlotPortionsToVariants(
+  map: PortionsBySlot,
+  params: {
+    sourceVariantKey: string
+    sourceSlotKey: string
+    targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
+  },
+): PortionsBySlot {
+  const sourceKey = portionsKey(params.sourceVariantKey, params.sourceSlotKey)
+  const source = map[sourceKey] ?? []
+  const next = { ...map }
+  let changed = false
+  for (const target of params.targets) {
+    const key = portionsKey(target.variantKey, target.slotKey)
+    // El origen jamas se toca (cinturon: la UI ya lo excluye de los destinos).
+    if (key === sourceKey) continue
+    if (source.length === 0) {
+      if (next[key] == null || next[key].length === 0) continue
+      delete next[key]
+      changed = true
+      continue
+    }
+    if (sameTargets(next[key], source)) continue
+    next[key] = source.map((entry) => ({ ...entry }))
+    changed = true
+  }
+  return changed ? next : map
+}
+
 /** Descarta las porciones de un dia eliminado (no dejar basura en el borrador local). */
 export function dropVariantPortions(map: PortionsBySlot, variantKey: string): PortionsBySlot {
   const prefix = variantKey + PORTIONS_KEY_SEPARATOR

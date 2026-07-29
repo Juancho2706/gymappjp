@@ -14,6 +14,7 @@ import {
   normalizeTimeHHMM,
   qeExchangeGroups,
   qeItemMacros,
+  qeSlotCopyTargets,
   qeSlotPortionTotals,
   qeSlotSubtotal,
   qeSlotSubtotalWithPortions,
@@ -851,6 +852,226 @@ describe('quick-edit-state — multi-dia (FD5)', () => {
     expect(draft.dayVariants[1].mealSlots[0].items).toHaveLength(1)
     expect(() => NutritionPlanDraftSchema.parse(draft)).not.toThrow()
     expect(countDraftChanges(baseline, draft)).toBeGreaterThan(0)
+  })
+
+  it('COPY_SLOT_TO_VARIANTS agrega la franja al dia destino con filas NUEVAS y cuenta cambios', () => {
+    const { state, baseline } = hydrate()
+    const withSaturday = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'empty' })
+    const next = quickEditReducer(withSaturday, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetVariantKeys: [withSaturday.variants[1].key],
+    })
+
+    const copied = next.variants[1].slots[0]
+    expect(next.variants[1].slots).toHaveLength(1)
+    expect(copied.name).toBe('Desayuno')
+    expect(copied.startTime).toBe('08:00')
+    expect(copied.items[0].displayName).toBe('Avena')
+    expect(copied.items[0].quantity).toBe('80')
+    // Filas NUEVAS del dia destino: sin id (el publish inserta) y con keys de UI propias.
+    expect(copied.id).toBeNull()
+    expect(copied.key).not.toBe(SLOT_ID)
+    expect(copied.items[0].id).toBeNull()
+    expect(copied.items[0].key).not.toBe(ITEM_ID)
+    // El dia de origen no se toca (misma referencia) y editar el destino no lo mueve.
+    expect(next.variants[0]).toBe(state.variants[0])
+    const edited = quickEditReducer(next, {
+      type: 'SET_ITEM_QUANTITY',
+      variantKey: next.variants[1].key,
+      slotKey: copied.key,
+      itemKey: copied.items[0].key,
+      value: '150',
+    })
+    expect(edited.variants[0].slots[0].items[0].quantity).toBe('80')
+
+    // Cuenta como cambios sin publicar y el draft resultante pasa el contrato.
+    const draft = currentDraftOf(next)
+    expect(countDraftChanges(baseline, draft)).toBeGreaterThan(0)
+    expect(() => NutritionPlanDraftSchema.parse(draft)).not.toThrow()
+    expect(draft.dayVariants[1].mealSlots[0].items[0]).not.toHaveProperty('id')
+  })
+
+  it('"aplicar a todos los dias": copia a N destinos y cada dia queda con su propia franja', () => {
+    const { state } = hydrate()
+    const withWeekend = quickEditReducer(state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY, SUNDAY],
+      source: 'empty',
+    })
+    const next = quickEditReducer(withWeekend, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetVariantKeys: withWeekend.variants.slice(1).map((variant) => variant.key),
+    })
+    expect(next.variants.map((variant) => variant.slots.length)).toEqual([1, 1, 1])
+    expect(next.variants[1].slots[0]).not.toBe(next.variants[2].slots[0])
+    // Keys unicas en todo el arbol (React keys y lookups del reducer).
+    const keys = next.variants.flatMap((variant) => variant.slots.map((slot) => slot.key))
+    expect(new Set(keys).size).toBe(3)
+    expect(() => NutritionPlanDraftSchema.parse(currentDraftOf(next))).not.toThrow()
+  })
+
+  it('merge por NOMBRE (trim + mayusculas): reemplaza la franja homonima en su posicion', () => {
+    const { state } = hydrate()
+    const withSaturday = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'clone' })
+    const saturdayKey = withSaturday.variants[1].key
+    const clonedSlot = withSaturday.variants[1].slots[0]
+    // El sabado quedo con "  DESAYUNO " (mismo nombre, otra caja) y SIN items.
+    const renamed = quickEditReducer(withSaturday, {
+      type: 'UPDATE_SLOT',
+      variantKey: saturdayKey,
+      slotKey: clonedSlot.key,
+      patch: { name: '  DESAYUNO ', startTime: '11:00' },
+    })
+    const emptied = quickEditReducer(renamed, {
+      type: 'REMOVE_ITEM',
+      variantKey: saturdayKey,
+      slotKey: clonedSlot.key,
+      itemKey: clonedSlot.items[0].key,
+    })
+    const next = quickEditReducer(emptied, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetVariantKeys: [saturdayKey],
+    })
+
+    const merged = next.variants[1].slots[0]
+    // No duplica: sigue habiendo UNA franja, con la key/id/codigo del destino (misma posicion).
+    expect(next.variants[1].slots).toHaveLength(1)
+    expect(merged.key).toBe(clonedSlot.key)
+    expect(merged.id).toBe(clonedSlot.id)
+    expect(merged.code).toBe(clonedSlot.code)
+    // ...y con el contenido del origen (nombre y hora incluidos).
+    expect(merged.name).toBe('Desayuno')
+    expect(merged.startTime).toBe('08:00')
+    expect(merged.items).toHaveLength(1)
+    expect(merged.items[0].displayName).toBe('Avena')
+  })
+
+  it('las PORCIONES de la franja viajan con ella y reemplazan las del destino', () => {
+    const { state, currentOf } = hydratePortions()
+    const withSaturday = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'empty' })
+    const saturdayKey = withSaturday.variants[1].key
+    const next = quickEditReducer(withSaturday, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetVariantKeys: [saturdayKey],
+    })
+
+    const copied = next.variants[1].slots[0]
+    expect(copied.portionTargets.map((target) => [target.groupCode, target.portions])).toEqual([
+      ['C', '2'],
+      ['V', '1.5'],
+    ])
+    // Filas nuevas: sin id y con keys propias (el destino no comparte objeto con el origen).
+    expect(copied.portionTargets.every((target) => target.id === null)).toBe(true)
+    expect(copied.portionTargets[0].key).not.toBe(TARGET_ID)
+    const draft = currentOf(next)
+    expect(draft.dayVariants[1].mealSlots[0].exchangeTargets).toEqual([
+      { exchangeGroupId: GROUP_C_ID, portions: 2, notes: null, orderIndex: 0 },
+      { exchangeGroupId: GROUP_V_ID, portions: 1.5, notes: null, orderIndex: 1 },
+    ])
+    expect(() => NutritionPlanDraftSchema.parse(draft)).not.toThrow()
+  })
+
+  it('aplicar la copia dos veces deja la MISMA estructura (idempotente)', () => {
+    const { state } = hydrate()
+    const withWeekend = quickEditReducer(state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY, SUNDAY],
+      source: 'empty',
+    })
+    const copy = {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetVariantKeys: withWeekend.variants.slice(1).map((variant) => variant.key),
+    } as const
+    const once = quickEditReducer(withWeekend, copy)
+    const twice = quickEditReducer(once, copy)
+    expect(twice.variants).toEqual(once.variants)
+  })
+
+  it('codigo de franja UNICO por dia al agregar (unique (day_variant_id, slot_code))', () => {
+    const { state } = hydrate()
+    // El sabado nacio clonando el base (mismo slot_code) y despues renombro su franja: la
+    // copia ya no matchea por nombre y debe aterrizar con un codigo propio.
+    const withSaturday = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'clone' })
+    const saturdayKey = withSaturday.variants[1].key
+    const renamed = quickEditReducer(withSaturday, {
+      type: 'UPDATE_SLOT',
+      variantKey: saturdayKey,
+      slotKey: withSaturday.variants[1].slots[0].key,
+      patch: { name: 'Colación' },
+    })
+    const next = quickEditReducer(renamed, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetVariantKeys: [saturdayKey],
+    })
+
+    const codes = next.variants[1].slots.map((slot) => slot.code)
+    expect(codes).toHaveLength(2)
+    expect(new Set(codes).size).toBe(2)
+    expect(new Set(next.variants[1].slots.map((slot) => slot.key)).size).toBe(2)
+    expect(() => NutritionPlanDraftSchema.parse(currentDraftOf(next))).not.toThrow()
+  })
+
+  it('cinturones de la copia: sin destinos validos y sin franja de origen es no-op', () => {
+    const { state } = hydrate()
+    const withSaturday = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'empty' })
+    const saturdayKey = withSaturday.variants[1].key
+    const copy = { type: 'COPY_SLOT_TO_VARIANTS', sourceVariantKey: VARIANT_ID, slotKey: SLOT_ID } as const
+
+    expect(quickEditReducer(withSaturday, { ...copy, targetVariantKeys: [] })).toBe(withSaturday)
+    // El propio dia de origen jamas es destino; un dia inexistente se descarta.
+    expect(quickEditReducer(withSaturday, { ...copy, targetVariantKeys: [VARIANT_ID] })).toBe(withSaturday)
+    expect(quickEditReducer(withSaturday, { ...copy, targetVariantKeys: ['fantasma'] })).toBe(withSaturday)
+    expect(
+      quickEditReducer(withSaturday, { ...copy, slotKey: 'no-existe', targetVariantKeys: [saturdayKey] }),
+    ).toBe(withSaturday)
+    // Destino repetido en la misma accion: se aplica UNA sola vez.
+    expect(
+      quickEditReducer(withSaturday, { ...copy, targetVariantKeys: [saturdayKey, saturdayKey] }).variants[1].slots,
+    ).toHaveLength(1)
+  })
+
+  it('qeSlotCopyTargets: dias destino en orden de lectura, sin el origen y con aviso de reemplazo', () => {
+    const { state } = hydrate()
+    // Un solo dia ⇒ no hay a donde copiar (la UI no ofrece el CTA).
+    expect(qeSlotCopyTargets(state, VARIANT_ID, SLOT_ID)).toEqual([])
+
+    const withDays = quickEditReducer(state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY, MONDAY],
+      source: 'empty',
+    })
+    // El sabado nace vacio y el lunes recibe una franja homonima a mano: solo ese avisa
+    // "Reemplaza".
+    const mondayKey = withDays.variants.find((variant) => variant.dayOfWeek === MONDAY)?.key ?? ''
+    const withHomonym = quickEditReducer(withDays, {
+      type: 'ADD_SLOT',
+      variantKey: mondayKey,
+      key: 'nuevo-desayuno',
+      name: '  desayuno  ',
+      startTime: '09:00',
+    })
+
+    const targets = qeSlotCopyTargets(withHomonym, VARIANT_ID, SLOT_ID)
+    // Orden de lectura Lu→Do (el origen es la base y queda fuera).
+    expect(targets.map((target) => target.dayOfWeek)).toEqual([MONDAY, SATURDAY])
+    expect(targets.some((target) => target.variantKey === VARIANT_ID)).toBe(false)
+    expect(targets.map((target) => target.replaces)).toEqual([true, false])
+    expect(targets[0].label.length).toBeGreaterThan(0)
+
+    // Sin franja de origen no hay destinos que ofrecer (cinturon del mismo shape del reducer).
+    expect(qeSlotCopyTargets(withHomonym, VARIANT_ID, 'no-existe')).toEqual([])
   })
 
   it('validacion local: dia sin nombre corta el publish antes del server', () => {

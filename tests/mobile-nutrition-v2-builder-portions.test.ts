@@ -7,6 +7,7 @@ import {
   buildFrozenPortionGroups,
   clonePortionsForVariant,
   combineSubtotals,
+  copySlotPortionsToVariants,
   derivePortionTotals,
   dropVariantPortions,
   esDecimal,
@@ -359,6 +360,67 @@ describe('clonePortionsForVariant / dropVariantPortions', () => {
     expect(Object.keys(dropped)).toEqual([portionsKey('default', 's1')])
     // Dia inexistente => misma referencia.
     expect(dropVariantPortions(dropped, 'dom')).toBe(dropped)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CE-5: al copiar UNA franja a otros dias, sus porciones viajan con ella. Los destinos
+// salen de `resolveSlotCopyTargets` (builder), aca solo se re-etiqueta el mapa.
+// ---------------------------------------------------------------------------
+
+describe('copySlotPortionsToVariants (la franja copiada se lleva sus porciones)', () => {
+  const TARGETS = [
+    { variantKey: 'sab', slotKey: 'sab~s1' },
+    { variantKey: 'dom', slotKey: 'dom~s1' },
+  ]
+
+  it('replica los targets por VALOR en cada destino y deja el origen intacto', () => {
+    const map: PortionsBySlot = {
+      [portionsKey('default', 's1')]: [
+        { exchangeGroupId: GROUP_C, portions: 2 },
+        { exchangeGroupId: GROUP_V, portions: 1.5 },
+      ],
+    }
+    const copied = copySlotPortionsToVariants(map, {
+      sourceVariantKey: 'default',
+      sourceSlotKey: 's1',
+      targets: TARGETS,
+    })
+    expect(slotPortionTargets(copied, portionsKey('sab', 'sab~s1'))).toEqual([
+      { exchangeGroupId: GROUP_C, portions: 2 },
+      { exchangeGroupId: GROUP_V, portions: 1.5 },
+    ])
+    expect(slotPortionTargets(copied, portionsKey('dom', 'dom~s1'))).toHaveLength(2)
+    const moved = stepPortionValue(copied, portionsKey('sab', 'sab~s1'), GROUP_C, -1)
+    expect(slotPortionTargets(moved, portionsKey('default', 's1'))[0].portions).toBe(2)
+    expect(slotPortionTargets(moved, portionsKey('dom', 'dom~s1'))[0].portions).toBe(2)
+  })
+
+  it('es REEMPLAZO: un origen sin porciones BORRA las del destino (queda igual al origen)', () => {
+    const map: PortionsBySlot = {
+      [portionsKey('default', 's1')]: [],
+      [portionsKey('sab', 'sab~s1')]: [{ exchangeGroupId: GROUP_P, portions: 3 }],
+    }
+    const copied = copySlotPortionsToVariants(map, {
+      sourceVariantKey: 'default',
+      sourceSlotKey: 's1',
+      targets: TARGETS,
+    })
+    expect(portionsKey('sab', 'sab~s1') in copied).toBe(false)
+    // El destino sin porciones no genera entrada basura.
+    expect(portionsKey('dom', 'dom~s1') in copied).toBe(false)
+  })
+
+  it('aplicar dos veces devuelve la MISMA referencia (idempotente, sin re-render)', () => {
+    const map: PortionsBySlot = { [portionsKey('default', 's1')]: [{ exchangeGroupId: GROUP_C, portions: 2 }] }
+    const params = { sourceVariantKey: 'default', sourceSlotKey: 's1', targets: TARGETS }
+    const once = copySlotPortionsToVariants(map, params)
+    expect(copySlotPortionsToVariants(once, params)).toBe(once)
+    // Origen sin porciones y destinos limpios => nada que mover.
+    expect(
+      copySlotPortionsToVariants({}, { sourceVariantKey: 'default', sourceSlotKey: 's1', targets: TARGETS }),
+    ).toEqual({})
+    expect(copySlotPortionsToVariants(map, { ...params, targets: [] })).toBe(map)
   })
 })
 

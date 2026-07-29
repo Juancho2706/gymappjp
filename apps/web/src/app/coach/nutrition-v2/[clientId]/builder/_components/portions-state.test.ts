@@ -6,6 +6,7 @@ import {
   builderReducer,
   clonedKey,
   createBaseVariant,
+  resolveSlotCopyTargets,
   type BuilderState,
 } from '../_lib/draft-builder'
 import {
@@ -13,6 +14,7 @@ import {
   attachPortionsAndValidate,
   clonePortionsForVariant,
   combineSubtotals,
+  copySlotPortionsToVariants,
   derivePortionTotals,
   dropVariantPortions,
   esDecimal,
@@ -342,6 +344,101 @@ describe('claves de porciones por día', () => {
     expect(next[portionsKey('v-sa', clonedKey('v-sa', 's2'))]).toBeUndefined()
     // Sin nada que copiar devuelve el MISMO mapa.
     expect(clonePortionsForVariant({}, { sourceVariantKey: 'x', targetVariantKey: 'y', slotKeyPairs: [] })).toEqual({})
+  })
+
+  it('copySlotPortionsToVariants lleva las porciones de la franja copiada a cada día destino', () => {
+    // El sábado ya tiene un "Desayuno" homónimo (merge por nombre) y el domingo no.
+    const state: BuilderState = {
+      ...builderState(),
+      variants: [
+        builderState().variants[0],
+        {
+          ...createBaseVariant(),
+          key: 'v-sa',
+          dayOfWeek: 6,
+          isDefault: false,
+          slots: [{ key: 's-des', name: 'DESAYUNO', startTime: '', items: [] }],
+        },
+        { ...createBaseVariant(), key: 'v-do', dayOfWeek: 0, isDefault: false, slots: [] },
+      ],
+    }
+    const map: PortionsBySlot = {
+      [portionsKey(BASE_VARIANT_KEY, 's1')]: [{ exchangeGroupId: ID_C, portions: 2 }],
+      // El destino pisado traía OTRAS porciones: la copia las reemplaza (no las mezcla).
+      [portionsKey('v-sa', 's-des')]: [{ exchangeGroupId: ID_P, portions: 4 }],
+    }
+    const targets = resolveSlotCopyTargets(state, {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 's1',
+      targetVariantKeys: ['v-sa', 'v-do'],
+    })
+    const next = copySlotPortionsToVariants(map, {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      sourceSlotKey: 's1',
+      targets,
+    })
+
+    expect(next[portionsKey('v-sa', 's-des')]).toEqual([{ exchangeGroupId: ID_C, portions: 2 }])
+    expect(next[portionsKey('v-do', clonedKey('v-do', 's1'))]).toEqual([{ exchangeGroupId: ID_C, portions: 2 }])
+    // Objetos NUEVOS: editar el destino no mueve el origen.
+    expect(next[portionsKey('v-sa', 's-des')][0]).not.toBe(map[portionsKey(BASE_VARIANT_KEY, 's1')][0])
+    // El origen queda intacto y aplicar de nuevo devuelve el MISMO mapa (idempotente).
+    expect(next[portionsKey(BASE_VARIANT_KEY, 's1')]).toEqual([{ exchangeGroupId: ID_C, portions: 2 }])
+    expect(
+      copySlotPortionsToVariants(next, {
+        sourceVariantKey: BASE_VARIANT_KEY,
+        sourceSlotKey: 's1',
+        targets,
+      }),
+    ).toBe(next)
+  })
+
+  it('origen SIN porciones borra las del destino pisado (cero huérfanas)', () => {
+    const map: PortionsBySlot = {
+      [portionsKey('v-sa', 's-des')]: [{ exchangeGroupId: ID_P, portions: 4 }],
+    }
+    const params = {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      sourceSlotKey: 's1',
+      targets: [{ variantKey: 'v-sa', slotKey: 's-des' }],
+    }
+    const next = copySlotPortionsToVariants(map, params)
+    expect(next[portionsKey('v-sa', 's-des')]).toBeUndefined()
+    // Sin nada que borrar, el mapa vuelve por referencia (sin re-render inútil).
+    expect(copySlotPortionsToVariants(next, params)).toBe(next)
+  })
+
+  it('integración: copiar la franja mueve árbol + porciones y el draft las emite en el día destino', () => {
+    const state = builderReducer(builderState(), {
+      type: 'ADD_VARIANTS',
+      days: [6],
+      keys: ['v-sa'],
+      origin: 'empty',
+    })
+    const map: PortionsBySlot = {
+      [portionsKey(BASE_VARIANT_KEY, 's2')]: [{ exchangeGroupId: ID_C, portions: 2 }],
+    }
+    const copy = {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 's2',
+      targetVariantKeys: ['v-sa'],
+    } as const
+    // La UI resuelve los destinos con el estado PREVIO (mismo que usa el reducer) y mueve
+    // las dos piezas en el mismo gesto.
+    const targets = resolveSlotCopyTargets(state, copy)
+    const nextState = builderReducer(state, { type: 'COPY_SLOT_TO_VARIANTS', ...copy })
+    const nextMap = copySlotPortionsToVariants(map, {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      sourceSlotKey: 's2',
+      targets,
+    })
+
+    const draft = assembleDraft(nextState, { clientId: CLIENT_ID })
+    const result = attachPortionsAndValidate(draft, variantPortionKeys(nextState.variants), nextMap)
+    expect(result.dayVariants[1].mealSlots[0].name).toBe('Almuerzo')
+    expect(result.dayVariants[1].mealSlots[0].exchangeTargets).toEqual([
+      { exchangeGroupId: ID_C, portions: 2, notes: null, orderIndex: 0 },
+    ])
   })
 
   it('dropVariantPortions limpia solo el día eliminado', () => {

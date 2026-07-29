@@ -231,6 +231,58 @@ export function portionsReducer(
 }
 
 // ---------------------------------------------------------------------------
+// Copia de franja entre dias (CE-5): la capa de porciones sigue a la franja
+// ---------------------------------------------------------------------------
+
+/** ¿Dos listas de targets son equivalentes? (mismo grupo, porciones y notas, en el mismo orden). */
+function sameTargets(a: QuickEditPortionTarget[] | undefined, b: QuickEditPortionTarget[]): boolean {
+  if (a == null || a.length !== b.length) return false
+  return a.every(
+    (target, index) =>
+      target.exchangeGroupId === b[index].exchangeGroupId &&
+      target.portions === b[index].portions &&
+      (target.notes ?? '') === (b[index].notes ?? ''),
+  )
+}
+
+/**
+ * Copia las porciones de UNA franja a las franjas destino de `COPY_SLOT_TO_VARIANTS` (los
+ * devuelve `resolveQuickEditSlotCopyTargets`, el MISMO recorrido que usa el reducer principal:
+ * el destino puede ser una franja EXISTENTE —merge por nombre— o la recien clonada).
+ *
+ * Semantica de REEMPLAZO total, espejo de lo que hace el reducer con los items: el destino
+ * queda con exactamente las porciones del origen — si el origen no tiene ninguna, las del
+ * destino se BORRAN (si no, quedarian porciones huerfanas de la franja pisada). Las `key` de
+ * UI se re-prefijan con la franja destino (misma convencion que el alta de dias clonados) y
+ * el `id` se suelta: en el dia destino son filas NUEVAS. Idempotente: aplicarla dos veces
+ * devuelve el MISMO estado (misma referencia).
+ */
+export function copyPortionsToSlots(
+  state: QuickEditPortionsState,
+  params: { sourceSlotKey: string; targets: ReadonlyArray<{ slotKey: string }> },
+): QuickEditPortionsState {
+  const source = state.bySlot[params.sourceSlotKey] ?? []
+  const bySlot = { ...state.bySlot }
+  let changed = false
+  for (const target of params.targets) {
+    const slotKey = target.slotKey
+    // El origen jamas se toca (cinturon: la UI ya lo excluye de los destinos).
+    if (slotKey === params.sourceSlotKey) continue
+    if (source.length === 0) {
+      if (bySlot[slotKey] == null || bySlot[slotKey].length === 0) continue
+      delete bySlot[slotKey]
+      changed = true
+      continue
+    }
+    const copied = source.map((entry) => ({ ...entry, key: slotKey + ':' + entry.key, id: null }))
+    if (sameTargets(bySlot[slotKey], copied)) continue
+    bySlot[slotKey] = copied
+    changed = true
+  }
+  return changed ? { bySlot } : state
+}
+
+// ---------------------------------------------------------------------------
 // Contador de cambios (se SUMA al de la lib para la barra "N cambios sin publicar")
 // ---------------------------------------------------------------------------
 

@@ -24,9 +24,10 @@ import { toast } from 'sonner'
 import {
   NUTRITION_WEEK_ORDER,
   formatNutritionDayOfWeek,
+  resolveNutritionDayVariantForDate,
   sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
-import { StrategyBadge } from '@/components/nutrition-v2'
+import { DayVariantWeekStrip, StrategyBadge } from '@/components/nutrition-v2'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { AddDayPopover } from '../builder/_components/AddDayPopover'
@@ -44,11 +45,21 @@ import {
 } from './quick-edit-state'
 import { QE_COPY } from './microcopy'
 
+/**
+ * Id del bloque de un dia dentro del overlay: destino de las anclas del indice (P1-1). Se
+ * deriva de la POSICION y no de `variant.key` (las keys del estado son uuid/claves libres,
+ * no ids de DOM seguros); el indice y la pila se pintan del mismo arreglo ordenado.
+ */
+function qeDaySectionId(index: number): string {
+  return `qe-day-section-${index}`
+}
+
 export function QuickEditPlanView() {
   const {
     state,
     dispatch,
     clientName,
+    today,
     strategy,
     protocolNotes,
     permissions,
@@ -65,6 +76,12 @@ export function QuickEditPlanView() {
   // orden de alta; la presentacion usa el MISMO helper que la ficha y el alumno.
   const orderedVariants = useMemo(() => sortNutritionDayVariantsForDisplay(state.variants), [state.variants])
   const multiDay = orderedVariants.length > 1
+  // Dia del plan que aplica HOY (misma regla que el snapshot del alumno): el indice lo marca
+  // con anillo para que el coach entre orientado.
+  const todayVariantKey = useMemo(
+    () => resolveNutritionDayVariantForDate(orderedVariants, today)?.key ?? null,
+    [orderedVariants, today],
+  )
 
   return (
     <div
@@ -127,8 +144,12 @@ export function QuickEditPlanView() {
           </div>
         ) : null}
 
-        {orderedVariants.map((variant) => (
-          <section key={variant.key} className="space-y-4">
+        {/* Índice de días (P1-1): ancla por día arriba de la pila. Con un solo día no aporta. */}
+        {multiDay ? <DayAnchorNav variants={orderedVariants} todayVariantKey={todayVariantKey} /> : null}
+
+        {orderedVariants.map((variant, dayIndex) => (
+          // `scroll-mt-20` deja el título del día por debajo del header sticky al saltar acá.
+          <section key={variant.key} id={qeDaySectionId(dayIndex)} className="scroll-mt-20 space-y-4">
             {multiDay ? <DayVariantHeader variant={variant} /> : null}
             <TargetsEditorCard variant={variant} />
             {usesSlots || variant.slots.length > 0 ? (
@@ -215,6 +236,67 @@ export function QuickEditPlanView() {
 }
 
 /**
+ * Índice de días (P1-1): fila de anclas arriba de la pila para saltar a un día sin scrollear
+ * a ciegas. NO reestructura el overlay (la convergencia a "un día activo" es de otra ola):
+ * solo mueve el scroll del propio overlay con `scrollIntoView`, y cada bloque de día lleva
+ * `scroll-mt` para no quedar tapado por el header sticky.
+ *
+ * Cada chip lleva la inicial del día (o "Base") + la etiqueta libre del coach truncada, así
+ * que sirve igual con nombres tipo "Día de entrenamiento". El día que aplica HOY va con
+ * anillo de acento, mismo patrón que `DayVariantWeekStrip` y `WeekDayNav`.
+ */
+function DayAnchorNav({
+  variants,
+  todayVariantKey,
+}: {
+  variants: readonly QeVariant[]
+  todayVariantKey: string | null
+}) {
+  return (
+    <nav aria-label={QE_COPY.dayIndexLabel} className="-mx-3 overflow-x-auto px-3 pb-1">
+      <ul className="flex w-max min-w-full items-center gap-1.5">
+        {variants.map((variant, index) => {
+          const isToday = todayVariantKey != null && variant.key === todayVariantKey
+          // Sin dia fijo y sin ser la base (dato invalido, tolerado en lectura) el chip se
+          // queda solo con la etiqueta: no se inventa un dia de semana.
+          const short = variant.isDefault
+            ? QE_COPY.baseDayShort
+            : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
+          return (
+            <li key={variant.key}>
+              <button
+                type="button"
+                aria-controls={qeDaySectionId(index)}
+                aria-label={
+                  QE_COPY.dayIndexJump(variant.label) + (isToday ? ` — ${QE_COPY.dayAppliesToday}` : '')
+                }
+                title={variant.label}
+                onClick={() =>
+                  document
+                    .getElementById(qeDaySectionId(index))
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                className={
+                  'inline-flex min-h-11 max-w-[13rem] items-center gap-1.5 rounded-pill border bg-surface-card px-3 text-xs font-semibold text-body transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                  (isToday ? 'border-primary/40 ring-1 ring-primary/60' : 'border-border-subtle')
+                }
+              >
+                {short ? (
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-primary">
+                    {short}
+                  </span>
+                ) : null}
+                <span className="truncate">{variant.label}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
+
+/**
  * Tira Lu-Do seleccionable. `taken` = dias que YA tienen plan propio (deshabilitados, salvo
  * el dia actual de la variante que se esta cambiando, que se muestra como seleccionado).
  */
@@ -261,11 +343,16 @@ function DayPicker({
 }
 
 /**
- * Encabezado de un dia del plan (FD5): etiqueta + menu (Cambiar día / Renombrar / Eliminar).
- * El dia base es intocable — no cambia de dia ni se elimina — asi que solo ofrece renombrar.
+ * Encabezado de un dia del plan (FD5): etiqueta + tira Lu-Do read-only + menu (Cambiar día /
+ * Renombrar / Eliminar). El dia base es intocable — no cambia de dia ni se elimina — asi que
+ * solo ofrece renombrar.
+ *
+ * QW-4 / P1-2: la tira Lu-Do es la MISMA de la ficha, el builder y el alumno. Sin ella, con
+ * etiquetas libres ("Día de entrenamiento", "Descarga"), el coach no podia saber que dia de
+ * la semana estaba editando sin abrir "Cambiar día".
  */
 function DayVariantHeader({ variant }: { variant: QeVariant }) {
-  const { state, dispatch, isPending, errors, showErrors } = useQuickEdit()
+  const { state, dispatch, isPending, errors, showErrors, today } = useQuickEdit()
   const [menuOpen, setMenuOpen] = useState(false)
   const [dayOpen, setDayOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
@@ -306,26 +393,31 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
   }
 
   return (
-    <div className="flex items-start gap-2">
-      <div className="min-w-0 flex-1">
-        <p className="font-mono text-[10px] font-semibold uppercase leading-4 tracking-[0.16em] text-muted">
-          {variant.isDefault ? QE_COPY.baseDayEyebrow : QE_COPY.specificDayEyebrow}
-        </p>
-        <h2 className="truncate font-display text-base font-semibold text-strong">{variant.label}</h2>
-        {variant.isDefault ? (
-          <p className="mt-0.5 text-xs leading-5 text-muted">{QE_COPY.baseDayHint}</p>
-        ) : null}
-        {labelError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{labelError}</p> : null}
+    <div>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[10px] font-semibold uppercase leading-4 tracking-[0.16em] text-muted">
+            {variant.isDefault ? QE_COPY.baseDayEyebrow : QE_COPY.specificDayEyebrow}
+          </p>
+          <h2 className="truncate font-display text-base font-semibold text-strong">{variant.label}</h2>
+          {variant.isDefault ? (
+            <p className="mt-0.5 text-xs leading-5 text-muted">{QE_COPY.baseDayHint}</p>
+          ) : null}
+          {labelError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{labelError}</p> : null}
+        </div>
+        <button
+          type="button"
+          aria-label={QE_COPY.dayMenu(variant.label)}
+          disabled={isPending}
+          onClick={() => setMenuOpen(true)}
+          className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        >
+          <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
+        </button>
       </div>
-      <button
-        type="button"
-        aria-label={QE_COPY.dayMenu(variant.label)}
-        disabled={isPending}
-        onClick={() => setMenuOpen(true)}
-        className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-      >
-        <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
-      </button>
+
+      {/* QW-4: qué días de la semana cubre ESTE bloque (read-only, hoy con anillo). */}
+      <DayVariantWeekStrip variants={state.variants} variant={variant} todayIso={today} />
 
       <QeBottomSheet open={menuOpen} onOpenChange={setMenuOpen} title={variant.label}>
         {!variant.isDefault ? (

@@ -50,26 +50,34 @@ export function PublishBar({
         </View>
       ) : null}
 
-      <View className="flex-row items-center justify-between gap-3">
-        <Text className="min-w-0 flex-1 text-sm font-semibold text-strong" numberOfLines={1}>
-          {dirtyBarLabel(count)}
-        </Text>
-        <NutritionMotionButton
-          accessibilityLabel={QUICK_EDIT_COPY.discard}
-          tone="neutral"
-          disabled={publishing}
-          onPress={onDiscard}
-        >
-          {QUICK_EDIT_COPY.discard}
-        </NutritionMotionButton>
-        <NutritionMotionButton
-          accessibilityLabel={QUICK_EDIT_COPY.publish}
-          pending={publishing}
-          disabled={publishing || count === 0}
-          onPress={onPublish}
-        >
-          {QUICK_EDIT_COPY.publish}
-        </NutritionMotionButton>
+      {/* H-18/QW-12: en una sola fila los dos botones no ceden ancho y el que se truncaba era el
+          contador ("3 cam…") — justo el feedback principal del modo edición. Contador en línea
+          propia y par de botones repartido en `flex-1` cada uno (gotcha conocido del proyecto:
+          dos botones en fila SIEMPRE flex-1, nunca ancho intrínseco). */}
+      <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
+        {dirtyBarLabel(count)}
+      </Text>
+      <View className="mt-2 flex-row items-center gap-3">
+        <View className="flex-1">
+          <NutritionMotionButton
+            accessibilityLabel={QUICK_EDIT_COPY.discard}
+            tone="neutral"
+            disabled={publishing}
+            onPress={onDiscard}
+          >
+            {QUICK_EDIT_COPY.discard}
+          </NutritionMotionButton>
+        </View>
+        <View className="flex-1">
+          <NutritionMotionButton
+            accessibilityLabel={QUICK_EDIT_COPY.publish}
+            pending={publishing}
+            disabled={publishing || count === 0}
+            onPress={onPublish}
+          >
+            {QUICK_EDIT_COPY.publish}
+          </NutritionMotionButton>
+        </View>
       </View>
     </View>
   )

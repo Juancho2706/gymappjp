@@ -4,18 +4,34 @@
  * Barra de días del builder multi-día (SPEC nutrition-multiday, UX 1).
  *
  * Vive arriba de las franjas del paso "Construcción": un chip por día del plan (etiqueta +
- * kcal del día, el activo resaltado), el botón "Agregar día" y, por chip, el menú ⋯ con
- * Renombrar · Cambiar día · Duplicar como otro día · Personalizar objetivos · Eliminar. El
- * día base no se elimina ni cambia de día (invariantes del reducer, espejadas aquí en la UI).
+ * "kcal / meta" del día, el activo resaltado), el botón "Agregar día" y, por chip, el menú ⋯
+ * con Renombrar · Cambiar día · Duplicar como otro día · Personalizar objetivos · Eliminar.
+ * El día base no se elimina ni cambia de día (invariantes del reducer, espejadas acá).
+ *
+ * La barra EXPLICA la semana, no solo la lista de días (auditoría P0-2/P1-3):
+ *  - los chips van en el orden canónico Lu→Do (`sortNutritionDayVariantsForDisplay`, el MISMO
+ *    helper que la ficha, la edición rápida y el alumno);
+ *  - debajo va la tira Lu-Do del día activo (`DayVariantWeekStrip`, el mismo componente del
+ *    paso Revisar y de la ficha): el coach ve qué días cubre lo que está editando sin llegar
+ *    al final del asistente;
+ *  - el día base queda marcado "Sin días" cuando los siete días tienen su propia variante
+ *    (P2-3: editarlo no le llega a nadie);
+ *  - un día con errores de validación se pinta en tono destructivo (P2-1) y el mensaje de
+ *    error del paso enlaza a él.
  *
  * Debajo va el banner de herencia de metas del día activo: "Usa los objetivos base (X kcal) ·
  * Personalizar", que despliega el editor de metas SCOPED a ese día.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Check, Copy, MoreVertical, Pencil, Sliders, Trash2, X } from 'lucide-react'
-import { NUTRITION_DAY_LABELS, NUTRITION_WEEK_ORDER, formatNutritionCalories } from '@eva/nutrition-v2'
+import { AlertTriangle, Check, Copy, MoreVertical, Pencil, Sliders, Trash2, X } from 'lucide-react'
+import {
+  NUTRITION_DAY_LABELS,
+  NUTRITION_WEEK_ORDER,
+  formatNutritionCalories,
+  sortNutritionDayVariantsForDisplay,
+} from '@eva/nutrition-v2'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +42,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+// Import por ruta directa (no via el barrel index.ts): mismo criterio que PlanBuilderClient
+// con MacroChipRow — desacopla del orden de edición de otros módulos del kit.
+import { DayVariantWeekStrip } from '@/components/nutrition-v2/DayVariantWeekStrip'
 import type { BuilderTargets, BuilderVariant } from '../_lib/draft-builder'
 import { AddDayPopover, type AddDayOrigin } from './AddDayPopover'
 
@@ -56,8 +75,28 @@ export interface DayVariantBarHandlers {
   onRemove: (variantKey: string) => void
 }
 
-function kcalLabel(value: number): string {
-  return formatNutritionCalories(Math.round(value))
+/** Formato es-CL sin unidad, para el par "prescrito / meta" del chip. */
+const KCAL_FORMAT = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
+
+/**
+ * Metas EFECTIVAS de un día en la barra: las propias solo si el coach las personalizó; el día
+ * base siempre usa las del paso "Objetivos". Espejo de `variantEffectiveTargets` del reducer
+ * (que necesita el estado completo, acá solo llegan las metas base).
+ */
+function effectiveTargetsOf(variant: BuilderVariant, baseTargets: BuilderTargets): BuilderTargets {
+  return !variant.isDefault && variant.targetsMode === 'custom' ? variant.targets : baseTargets
+}
+
+/**
+ * Texto de energía del chip (P2-4): "1.850 / 2.000 kcal" cuando el día tiene meta de calorías
+ * —así el número dice algo— y solo "1.850 kcal" cuando no hay contra qué compararlo.
+ */
+function kcalLabel(value: number, targetCalories: string): string {
+  const prescribed = Math.round(value)
+  const raw = targetCalories.trim()
+  const target = Number(raw)
+  if (raw === '' || !Number.isFinite(target) || target <= 0) return formatNutritionCalories(prescribed)
+  return KCAL_FORMAT.format(prescribed) + ' / ' + formatNutritionCalories(Math.round(target))
 }
 
 /** Menú ⋯ de un día. El día base solo ofrece Renombrar (no se elimina ni cambia de día). */
@@ -154,6 +193,7 @@ export function DayVariantBar({
   kcalByVariantKey,
   baseTargets,
   addDayLocked,
+  errorByVariantKey,
   handlers,
 }: {
   variants: BuilderVariant[]
@@ -164,6 +204,8 @@ export function DayVariantBar({
   baseTargets: BuilderTargets
   /** Coach sin Nutrición Pro: "Agregar día" con candado + upsell. */
   addDayLocked: boolean
+  /** Días con algún error de validación (P2-1): el chip se marca en tono destructivo. */
+  errorByVariantKey?: Record<string, string>
   handlers: DayVariantBarHandlers
 }) {
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
@@ -180,6 +222,12 @@ export function DayVariantBar({
     .map((variant) => variant.dayOfWeek as number)
   const baseVariant = variants.find((variant) => variant.isDefault) ?? variants[0]
   const canAddMore = takenDays.length < NUTRITION_WEEK_ORDER.length
+  // P1-3: mismo orden de lectura que la ficha, la edición rápida y el alumno (base + Lu→Do).
+  // El estado conserva el orden de alta; acá solo se presenta.
+  const orderedVariants = useMemo(() => sortNutritionDayVariantsForDisplay(variants), [variants])
+  // P2-3: los siete días tienen su propia variante ⇒ el día base ya no le aplica a nadie.
+  const baseUnused = !canAddMore
+  const activeIsUnusedBase = active != null && active.isDefault && baseUnused
 
   function commitRename() {
     if (renamingKey) handlers.onRename(renamingKey, renameDraft.trim() === '' ? 'Día' : renameDraft.trim())
@@ -189,27 +237,51 @@ export function DayVariantBar({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Días del plan">
-        {variants.map((variant) => {
+        {orderedVariants.map((variant) => {
           const isActive = variant.key === active?.key
           const kcal = kcalByVariantKey[variant.key] ?? 0
+          const kcalText = kcalLabel(kcal, effectiveTargetsOf(variant, baseTargets).calories)
+          const hasError = Boolean(errorByVariantKey?.[variant.key])
+          const isUnusedBase = variant.isDefault && baseUnused
           return (
             <div
               key={variant.key}
               className={
                 'flex items-center gap-0.5 rounded-pill border pl-3 pr-0.5 transition-colors ' +
-                (isActive
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border-default bg-surface-card hover:border-primary/40')
+                (hasError
+                  ? 'border-rose-400 bg-rose-50 dark:border-rose-700/70 dark:bg-rose-950/30'
+                  : isActive
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border-default bg-surface-card hover:border-primary/40') +
+                (isActive && hasError ? ' ring-1 ring-primary/60' : '')
               }
             >
               <button
                 type="button"
                 aria-pressed={isActive}
+                aria-label={
+                  variant.label +
+                  ' · ' +
+                  kcalText +
+                  (isUnusedBase ? ' · no se aplica a ningún día' : '') +
+                  (hasError ? ' · tiene algo por resolver' : '')
+                }
                 onClick={() => handlers.onSelect(variant.key)}
                 className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className={isActive ? 'text-primary' : 'text-strong'}>{variant.label}</span>
-                <span className="font-mono tabular-nums text-[11px] font-normal text-muted">{kcalLabel(kcal)}</span>
+                {hasError ? (
+                  <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-300" />
+                ) : null}
+                <span className={isActive && !hasError ? 'text-primary' : 'text-strong'}>{variant.label}</span>
+                {isUnusedBase ? (
+                  <span
+                    title="No se aplica a ningún día"
+                    className="rounded-pill border border-border-subtle bg-surface-sunken px-1.5 text-[10px] font-medium text-subtle"
+                  >
+                    Sin días
+                  </span>
+                ) : null}
+                <span className="font-mono tabular-nums text-[11px] font-normal text-muted">{kcalText}</span>
               </button>
               <DayMenu
                 variant={variant}
@@ -233,20 +305,40 @@ export function DayVariantBar({
         />
       </div>
 
+      {/* P0-2: la tira Lu-Do del día ACTIVO, el mismo componente del paso Revisar y de la ficha.
+          Acá el coach está decidiendo, así que ve la cobertura semanal mientras arma. */}
+      {active != null ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 [&>ul]:mt-0">
+          <p className="text-[11px] leading-5 text-muted">
+            {activeIsUnusedBase ? 'No se aplica a ningún día:' : 'Se aplica en:'}
+          </p>
+          <DayVariantWeekStrip variants={variants} variant={active} />
+        </div>
+      ) : null}
+
       {/* Coach BASE con un plan que YA tiene varios días (típicamente convertido de V1): el
-          servidor rechazará el publish con UPGRADE_REQUIRED. Se avisa acá, no al final. */}
+          servidor rechazará el publish con UPGRADE_REQUIRED. Se avisa acá, no al final.
+          P1-7: la salida primaria es MEJORAR el plan; borrar los días extra queda como
+          alternativa en texto plano — el caso típico es un plan que el alumno ya usa. */}
       {addDayLocked && variants.length > 1 ? (
-        <p
+        <div
           role="alert"
-          className="rounded-control border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+          className="rounded-control border border-amber-300/70 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10"
         >
-          Este plan tiene {variants.length} días distintos y publicarlos requiere Nutrición Pro. Puedes eliminar los
-          días extra desde su menú, o{' '}
-          <Link href={NUTRITION_PRO_UPGRADE_HREF} className="font-semibold underline underline-offset-2">
-            mejorar tu plan
+          <p className="text-xs font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
+            Publicar los {variants.length} días de este plan requiere Nutrición Pro.
+          </p>
+          <Link
+            href={NUTRITION_PRO_UPGRADE_HREF}
+            className="mt-2 inline-flex min-h-9 items-center rounded-control bg-primary/100 px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Mejorar tu plan
           </Link>
-          .
-        </p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300/90">
+            Si prefieres seguir con tu plan actual, elimina los días extra desde el menú ⋯ de cada día y publica uno
+            solo para toda la semana.
+          </p>
+        </div>
       ) : null}
 
       {renamingKey ? (

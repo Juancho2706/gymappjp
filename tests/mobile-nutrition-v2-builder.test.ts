@@ -27,7 +27,9 @@ import {
   mapWriteError,
   migrateBuilderState,
   normalizeBuilderVariants,
+  otherVariantKeys,
   requiredNutritionProFeature,
+  resolveSlotCopyTargets,
   takenDayOfWeeks,
   validateStep,
   variantEffectiveTargets,
@@ -282,6 +284,180 @@ describe('reducer multi-dia / dia activo', () => {
     const state = structuredState()
     expect(builderReducer(state, { type: 'SET_ACTIVE_VARIANT', variantKey: 'no-existe' })).toBe(state)
     expect(activeVariantOf({ ...state, activeVariantKey: 'fantasma' }).key).toBe(BASE_VARIANT_KEY)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CE-5: copiar UNA franja a otros dias (multi-dia en telefono sin retipear x7). Semantica
+// PORTADA de la web: clon completo + merge por NOMBRE (trim/case-insensitive) conservando
+// posicion, o alta al final. Deterministico y repetible; el dia origen jamas se toca.
+// ---------------------------------------------------------------------------
+
+describe('reducer multi-dia / COPY_SLOT_TO_VARIANTS', () => {
+  /** Base con "Desayuno" (item + reemplazo), sabado y domingo vacios. */
+  function planConFinde(): BuilderState {
+    const withSub = builderReducer(structuredState(), {
+      type: 'ADD_ITEM_SUBSTITUTION',
+      variantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      itemKey: 'i1',
+      key: 'sub-1',
+      food: subFood(SUB_FOOD_ID, 'Pavo'),
+    })
+    return builderReducer(withSub, { type: 'ADD_VARIANTS', days: [6, 0], keys: ['v-sab', 'v-dom'], origin: 'empty' })
+  }
+
+  function variantOf(state: BuilderState, key: string): BuilderVariant {
+    return state.variants.find((variant) => variant.key === key) as BuilderVariant
+  }
+
+  /** Key de la franja copiada en un dia sin homonima (derivada del dia destino). */
+  const copiedSlotKey = (variantKey: string) => clonedKey(variantKey, 'slot-a')
+
+  it('clona la franja COMPLETA (nombre, hora, items, reemplazos) en el dia sin homonima', () => {
+    const state = builderReducer(planConFinde(), {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: ['v-sab'],
+    })
+    const sabado = variantOf(state, 'v-sab')
+    expect(sabado.slots).toHaveLength(1)
+    expect(sabado.slots[0].key).toBe(copiedSlotKey('v-sab'))
+    expect(sabado.slots[0].name).toBe('Desayuno')
+    expect(sabado.slots[0].startTime).toBe('08:00')
+    // Items y reemplazos cuelgan de la key de la franja DESTINO (no chocan con otra franja).
+    expect(sabado.slots[0].items[0].key).toBe(clonedKey(copiedSlotKey('v-sab'), 'i1'))
+    expect(sabado.slots[0].items[0].quantity).toBe('200')
+    expect(sabado.slots[0].items[0].substitutions[0].key).toBe(clonedKey(copiedSlotKey('v-sab'), 'sub-1'))
+    expect(sabado.slots[0].items[0].substitutions[0].food.id).toBe(SUB_FOOD_ID)
+    // El dia origen jamas se toca; el domingo (no elegido) tampoco.
+    expect(baseSlots(state)[0].key).toBe('slot-a')
+    expect(baseSlots(state)[0].items[0].quantity).toBe('200')
+    expect(variantOf(state, 'v-dom').slots).toEqual([])
+  })
+
+  it('el clon es independiente: editar el destino no mueve el origen', () => {
+    let state = builderReducer(planConFinde(), {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: ['v-sab'],
+    })
+    state = builderReducer(state, {
+      type: 'UPDATE_ITEM',
+      variantKey: 'v-sab',
+      slotKey: copiedSlotKey('v-sab'),
+      itemKey: clonedKey(copiedSlotKey('v-sab'), 'i1'),
+      patch: { quantity: '999' },
+    })
+    expect(variantOf(state, 'v-sab').slots[0].items[0].quantity).toBe('999')
+    expect(baseSlots(state)[0].items[0].quantity).toBe('200')
+  })
+
+  it('merge por NOMBRE (trim + case-insensitive): reemplaza contenido conservando posicion y key', () => {
+    let state = planConFinde()
+    // El sabado ya tiene DOS franjas; la segunda es "  desayuno " (misma franja, otra caja).
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: 'v-sab', key: 's-cena' })
+    state = builderReducer(state, { type: 'UPDATE_SLOT', variantKey: 'v-sab', slotKey: 's-cena', patch: { name: 'Cena' } })
+    state = builderReducer(state, { type: 'ADD_SLOT', variantKey: 'v-sab', key: 's-des' })
+    state = builderReducer(state, {
+      type: 'UPDATE_SLOT',
+      variantKey: 'v-sab',
+      slotKey: 's-des',
+      patch: { name: '  desayuno ', startTime: '11:00' },
+    })
+    state = builderReducer(state, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: ['v-sab'],
+    })
+    const sabado = variantOf(state, 'v-sab')
+    // Sin franja nueva: la homonima se reemplazo EN SU POSICION conservando su key.
+    expect(sabado.slots.map((slot) => slot.key)).toEqual(['s-cena', 's-des'])
+    expect(sabado.slots[1].name).toBe('Desayuno')
+    expect(sabado.slots[1].startTime).toBe('08:00')
+    expect(sabado.slots[1].items.map((item) => item.key)).toEqual([clonedKey('s-des', 'i1')])
+    expect(sabado.slots[1].items[0].substitutions).toHaveLength(1)
+  })
+
+  it('aplicar dos veces deja el MISMO arbol (deterministico y repetible)', () => {
+    const action = {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: ['v-sab', 'v-dom'],
+    } as const
+    const once = builderReducer(planConFinde(), action)
+    expect(builderReducer(once, action)).toEqual(once)
+  })
+
+  it('"aplicar a todos los dias" = otherVariantKeys; el origen y las keys inexistentes se ignoran', () => {
+    const start = planConFinde()
+    const targets = otherVariantKeys(start, BASE_VARIANT_KEY)
+    expect(targets).toEqual(['v-sab', 'v-dom'])
+    const state = builderReducer(start, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: [...targets, BASE_VARIANT_KEY, 'fantasma'],
+    })
+    expect(variantOf(state, 'v-sab').slots).toHaveLength(1)
+    expect(variantOf(state, 'v-dom').slots).toHaveLength(1)
+    expect(baseSlots(state)).toHaveLength(1)
+  })
+
+  it('sin destinos validos (o franja/origen inexistente) devuelve el MISMO estado', () => {
+    const state = planConFinde()
+    const noop = (params: { sourceVariantKey: string; slotKey: string; targetVariantKeys: string[] }) =>
+      builderReducer(state, { type: 'COPY_SLOT_TO_VARIANTS', ...params })
+    expect(noop({ sourceVariantKey: BASE_VARIANT_KEY, slotKey: 'slot-a', targetVariantKeys: [] })).toBe(state)
+    expect(noop({ sourceVariantKey: BASE_VARIANT_KEY, slotKey: 'no-existe', targetVariantKeys: ['v-sab'] })).toBe(state)
+    expect(noop({ sourceVariantKey: 'fantasma', slotKey: 'slot-a', targetVariantKeys: ['v-sab'] })).toBe(state)
+    // Copiar la franja a su propio dia tampoco hace nada.
+    expect(noop({ sourceVariantKey: BASE_VARIANT_KEY, slotKey: 'slot-a', targetVariantKeys: [BASE_VARIANT_KEY] })).toBe(state)
+  })
+
+  it('resolveSlotCopyTargets anticipa EXACTAMENTE las keys que quedan en el estado (porciones)', () => {
+    const start = planConFinde()
+    const params = {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: ['v-sab', 'v-dom', 'v-sab', 'fantasma', BASE_VARIANT_KEY],
+    }
+    const targets = resolveSlotCopyTargets(start, params)
+    expect(targets).toEqual([
+      { variantKey: 'v-sab', slotKey: copiedSlotKey('v-sab'), replaced: false },
+      { variantKey: 'v-dom', slotKey: copiedSlotKey('v-dom'), replaced: false },
+    ])
+    const state = builderReducer(start, { type: 'COPY_SLOT_TO_VARIANTS', ...params })
+    for (const target of targets) {
+      expect(variantOf(state, target.variantKey).slots.some((slot) => slot.key === target.slotKey)).toBe(true)
+    }
+    // Segunda pasada: los mismos destinos, ahora por merge (idempotencia de las porciones).
+    expect(resolveSlotCopyTargets(state, params)).toEqual(targets.map((t) => ({ ...t, replaced: true })))
+    expect(resolveSlotCopyTargets(start, { ...params, targetVariantKeys: [] })).toEqual([])
+  })
+
+  it('una franja clonada y RENOMBRADA no se pisa: la copia entra con key desambiguada', () => {
+    const copy = {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: ['v-sab'],
+    } as const
+    let state = builderReducer(planConFinde(), copy)
+    state = builderReducer(state, {
+      type: 'UPDATE_SLOT',
+      variantKey: 'v-sab',
+      slotKey: copiedSlotKey('v-sab'),
+      patch: { name: 'Colación' },
+    })
+    state = builderReducer(state, copy)
+    const sabado = variantOf(state, 'v-sab')
+    expect(sabado.slots.map((slot) => slot.key)).toEqual([copiedSlotKey('v-sab'), copiedSlotKey('v-sab') + '~2'])
+    expect(sabado.slots.map((slot) => slot.name)).toEqual(['Colación', 'Desayuno'])
   })
 })
 

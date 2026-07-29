@@ -73,6 +73,12 @@ interface QuickEditContextValue {
   dispatch: (action: QuickEditAction) => void
   clientId: string
   clientName: string
+  /**
+   * Fecha local del alumno (YYYY-MM-DD) resuelta server-side. La usa la tira Lu-Do de cada
+   * dia para marcar cual aplica HOY (QW-4): sin esto el coach edita "Día de entrenamiento"
+   * sin saber a que dia de la semana corresponde.
+   */
+  today: string
   strategy: NutritionStrategy
   protocolNotes: string | null
   permissions: NutritionPlanReadModel['permissions']
@@ -474,6 +480,7 @@ export function QuickEditProvider({
     dispatch,
     clientId,
     clientName,
+    today,
     strategy: planModel.plan?.strategy ?? 'flexible',
     protocolNotes: planModel.protocolNotes,
     permissions: planModel.permissions,

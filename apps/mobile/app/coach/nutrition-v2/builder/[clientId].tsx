@@ -14,7 +14,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, History, Lock, Minus, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
   BuilderDayVariantBar,
   BuilderStepList,
@@ -28,9 +28,13 @@ import {
   SelectableStrategyCard,
   StrategyBadge,
   StudentPreview,
+  variantDayBadge,
   type BuilderDayVariantBarHandlers,
   type ExchangeGroupFormInitial,
 } from '../../../../components/nutrition-v2'
+// Stepper táctil del quick-edit (H-07): el patrón correcto en móvil ya estaba resuelto ahí y el
+// builder seguía con TextInput crudo. Se ADOPTA tal cual — no se copia ni se re-escribe.
+import { QuantityStepper } from '../../../../components/nutrition-v2/quick-edit/QuantityStepper'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
 import {
@@ -47,6 +51,7 @@ import {
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
 import { useTheme } from '../../../../context/ThemeContext'
+import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { isEnabled } from '../../../../lib/flags'
 import { fetchCoachExchangeGroups } from '../../../../lib/nutrition-exchanges.coach'
 import { PORTIONS_COPY } from '../../../../lib/nutrition-portions-copy'
@@ -56,6 +61,7 @@ import {
   addPortionGroup,
   clonePortionsForVariant,
   combineSubtotals,
+  copySlotPortionsToVariants,
   derivePortionTotals,
   dropVariantPortions,
   esDecimal,
@@ -111,6 +117,7 @@ import {
   itemMacros,
   macroEnergyMismatch,
   mapFoodCatalogItemToBuilderFood,
+  resolveSlotCopyTargets,
   slotSubtotal,
   strategyUsesSlots,
   takenDayOfWeeks,
@@ -125,6 +132,9 @@ import {
   type BuilderVariant,
   type NutritionV2WriteClient,
 } from '../../../../lib/nutrition-v2-builder'
+// H-07: mismo paso del stepper que el quick-edit (5 para g/ml, 0,5 para unidad/porción). Se
+// importa el helper compartido en vez de re-declarar la regla en el builder.
+import { stepForUnit } from '../../../../lib/nutrition-v2-quick-edit'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 
 const STRATEGY_ORDER: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
@@ -176,6 +186,21 @@ function nextDayIso(iso: string): string {
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
+}
+
+/**
+ * QW-4 (H-09) — máscara de la hora de franja. El campo era texto libre con teclado alfanumérico y
+ * el error ("Hora inválida (usa HH:MM)") recién aparecía al tocar "Siguiente", multiplicado por
+ * franjas × días. Acá se escriben SOLO dígitos y los dos puntos se ponen solos.
+ *
+ * Se queda con los primeros 4 dígitos y separa después del segundo: escribir "0930" da "09:30".
+ * El borrado funciona sin re-inyectar el separador ("09:3" → dígitos "093" → "09:3"; "09:" →
+ * dígitos "09" → "09"). No valida rangos: eso sigue siendo del validador del reducer, que exige
+ * hora de DOS dígitos — la misma forma que produce esta máscara.
+ */
+function maskTimeInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4)
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}:${digits.slice(2)}`
 }
 
 /**
@@ -293,6 +318,16 @@ interface PortionsController {
   }) => void
   /** Multi-día (FD4): descarta las porciones de un día eliminado. */
   dropVariant: (variantKey: string) => void
+  /**
+   * CE-5: copia las porciones de UNA franja a los días destino de `COPY_SLOT_TO_VARIANTS`. Los
+   * `targets` los resuelve `resolveSlotCopyTargets` con el MISMO estado previo que usa el reducer,
+   * así que la franja destino puede ser una existente (merge por nombre) o la recién clonada.
+   */
+  copySlotToVariants: (params: {
+    sourceVariantKey: string
+    sourceSlotKey: string
+    targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
+  }) => void
   /** Porciones propias (FD6a): grupo recién creado/editado -> catálogo en memoria, SIN refetch. */
   upsertCatalogGroup: (group: ExchangeGroup) => void
   /**
@@ -370,6 +405,17 @@ function usePortionsBuilder(): PortionsController {
     (variantKey: string) => setBySlot((prev) => dropVariantPortions(prev, variantKey)),
     [],
   )
+  // CE-5: la franja copiada arrastra sus porciones a elección. Semántica de REEMPLAZO total (si
+  // el origen no tiene porciones, las del destino se borran) — espejo exacto de lo que el reducer
+  // hace con los items, para que la franja destino quede igual al origen y no mezclada.
+  const copySlotToVariants = useCallback(
+    (params: {
+      sourceVariantKey: string
+      sourceSlotKey: string
+      targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
+    }) => setBySlot((prev) => copySlotPortionsToVariants(prev, params)),
+    [],
+  )
 
   // Porciones propias (FD6a): tras un POST/PATCH exitoso el catalogo en memoria se actualiza en el
   // acto (el picker sigue abierto y el grupo ya se puede asignar), sin un refetch de red.
@@ -406,6 +452,7 @@ function usePortionsBuilder(): PortionsController {
     restoreBySlot,
     cloneVariant,
     dropVariant,
+    copySlotToVariants,
     upsertCatalogGroup,
     dropCatalogGroup,
   }
@@ -681,6 +728,19 @@ export default function CoachNutritionV2BuilderScreen() {
       .map((variant) => variant.key)
   }, [showErrors, state.step, state.variants, validation])
 
+  // QW-6 (H-14) — el buscador del builder es UN modal reusado por dos intenciones (agregar el
+  // alimento prescrito / agregar un reemplazo autorizado) y no decía cuál: agregar por error un
+  // reemplazo como item prescrito cambia el plan del alumno. El título lo dice ahora, con el
+  // nombre del item que se está reemplazando (el quick-edit ya lo hacía en su sheet).
+  const searchModalTitle = useMemo(() => {
+    if (searchTarget == null || searchTarget.mode === 'item') return 'Agregar alimento'
+    const variant = state.variants.find((candidate) => candidate.key === searchTarget.variantKey)
+    const slot = variant?.slots.find((candidate) => candidate.key === searchTarget.slotKey)
+    const item = slot?.items.find((candidate) => candidate.key === searchTarget.itemKey)
+    const name = item?.food?.name ?? (item?.customName || '').trim()
+    return name ? `Reemplazo de ${name}` : 'Reemplazo autorizado'
+  }, [searchTarget, state.variants])
+
   // Copy del encabezado: la raiz puede venir por query (CTA del hub/ficha) o del plan vigente ya
   // resuelto (deep link viejo). El numero de version sale del param cuando viaja y si no del plan.
   const headerPlanId = planId ?? existingPlan?.id ?? null
@@ -762,6 +822,25 @@ export default function CoachNutritionV2BuilderScreen() {
   function handleRemoveVariant(variantKey: string) {
     dispatch({ type: 'REMOVE_VARIANT', variantKey })
     portions.dropVariant(variantKey)
+  }
+
+  // CE-5 (H-12) — copiar UNA franja a otros días ya existentes. Antes solo se podía DUPLICAR el
+  // día entero al crearlo: cambiar el desayuno de 5 días era repetir el cambio 5 veces a mano.
+  //
+  // Dos piezas se mueven en el mismo gesto y con el MISMO estado previo: el árbol (reducer) y el
+  // mapa de porciones (vive fuera del reducer). `resolveSlotCopyTargets` es la función PURA que
+  // ambos consultan, así que la franja que el reducer pisa es exactamente la que recibe las
+  // porciones — resolverlo dos veces con estados distintos las desalinearía.
+  function handleCopySlotToVariants(sourceVariantKey: string, slotKey: string, targetVariantKeys: string[]) {
+    if (targetVariantKeys.length === 0) return
+    const targets = resolveSlotCopyTargets(state, { sourceVariantKey, slotKey, targetVariantKeys })
+    if (targets.length === 0) return
+    dispatch({ type: 'COPY_SLOT_TO_VARIANTS', sourceVariantKey, slotKey, targetVariantKeys })
+    portions.copySlotToVariants({
+      sourceVariantKey,
+      sourceSlotKey: slotKey,
+      targets: targets.map((target) => ({ variantKey: target.variantKey, slotKey: target.slotKey })),
+    })
   }
 
   const dayHandlers: BuilderDayVariantBarHandlers = {
@@ -1234,7 +1313,17 @@ export default function CoachNutritionV2BuilderScreen() {
             }
           />
 
-          <BuilderStepList steps={steps} />
+          {/* H-04: stepper compacto y navegable HACIA ATRÁS (solo pasos completados: volver a uno
+              equivale a pulsar "Atrás" N veces, nunca esquiva la validación de "Siguiente"). */}
+          <BuilderStepList
+            steps={steps}
+            onSelectStep={(index) => {
+              if (index >= state.step) return
+              setShowErrors(false)
+              setPublishError(null)
+              dispatch({ type: 'SET_STEP', step: index })
+            }}
+          />
 
           {state.step === 0 ? (
             <StrategyStep state={state} onPick={handlePickStrategy} hasNutritionPro={hasNutritionPro} error={errors.strategy} />
@@ -1254,6 +1343,7 @@ export default function CoachNutritionV2BuilderScreen() {
               variantErrorKeys={variantErrorKeys}
               onSearch={(target) => setSearchTarget(target)}
               onSaveCustomFood={handleSaveCustomFood}
+              onCopySlotToVariants={handleCopySlotToVariants}
               portions={portions}
             />
           ) : null}
@@ -1314,6 +1404,7 @@ export default function CoachNutritionV2BuilderScreen() {
 
       <FoodSearchModal
         visible={searchTarget !== null}
+        title={searchModalTitle}
         onClose={() => setSearchTarget(null)}
         onSelect={handleSelectFood}
       />
@@ -1447,13 +1538,17 @@ function TargetsStep({
             ? 'Los días específicos las heredan salvo que les pongas objetivos propios.'
             : 'Define al menos una meta (kcal o un macro).'}
         </Text>
+        {/* QW-3 (H-08): `decimal-pad`, no `number-pad`. En iOS el teclado numérico puro no trae
+            separador decimal y el modelo SÍ acepta decimales (coma es-CL incluida): el coach
+            escribía 35 donde quería 3,5 y el aviso de mismatch de energía saltaba sin motivo
+            visible. La cantidad del item ya usaba decimal-pad: la inconsistencia era interna. */}
         <View className="mt-3 gap-3">
           <LabeledInput
             label="Energía (kcal)"
             value={state.targets.calories}
             onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'calories', value })}
             placeholder="2000"
-            keyboardType="number-pad"
+            keyboardType="decimal-pad"
             error={errors.calories}
           />
           <View className="flex-row gap-3">
@@ -1463,7 +1558,7 @@ function TargetsStep({
                 value={state.targets.proteinG}
                 onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'proteinG', value })}
                 placeholder="150"
-                keyboardType="number-pad"
+                keyboardType="decimal-pad"
                 error={errors.proteinG}
               />
             </View>
@@ -1473,7 +1568,7 @@ function TargetsStep({
                 value={state.targets.carbsG}
                 onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'carbsG', value })}
                 placeholder="200"
-                keyboardType="number-pad"
+                keyboardType="decimal-pad"
                 error={errors.carbsG}
               />
             </View>
@@ -1483,7 +1578,7 @@ function TargetsStep({
                 value={state.targets.fatsG}
                 onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'fatsG', value })}
                 placeholder="60"
-                keyboardType="number-pad"
+                keyboardType="decimal-pad"
                 error={errors.fatsG}
               />
             </View>
@@ -1923,10 +2018,16 @@ function PortionsDeriveCard({
 function PortionsReviewSection({
   strategy,
   variant,
+  showDayHeading,
   portions,
 }: {
   strategy: BuilderState['strategy']
   variant: BuilderVariant
+  /**
+   * QW-7 (H-13): con varios días la revisión apilaba N tarjetas visualmente idénticas tituladas
+   * "Porciones a elección", sin decir de qué día era cada una (`ReviewVariantSection` sí lo hace).
+   */
+  showDayHeading: boolean
   portions: PortionsController
 }) {
   const usesSlots = strategyUsesSlots(strategy)
@@ -1943,8 +2044,14 @@ function PortionsReviewSection({
     }))
     .filter((r) => r.targets.length > 0)
   const anyUnconfirmed = rows.some((r) => hasUnconfirmedMacros(r.targets, groups))
+  const badge = variantDayBadge(variant)
   return (
     <View className="gap-2 rounded-card border border-subtle bg-surface-card p-4">
+      {showDayHeading ? (
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+          {badge ? `${variant.label} · ${badge.long}` : variant.label}
+        </Text>
+      ) : null}
       <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">
         {PORTIONS_COPY.builder.sectionTitle}
       </Text>
@@ -2076,17 +2183,17 @@ function ItemEditor({
         </Pressable>
       </View>
 
-      <View className="mt-2 flex-row items-center gap-2">
-        <View className="flex-1">
-          <TextInput
-            value={item.quantity}
-            onChangeText={(value) => patch({ quantity: value })}
-            placeholder="Cantidad"
-            placeholderTextColor={theme.mutedForeground}
-            keyboardType="decimal-pad"
-            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
-          />
-        </View>
+      {/* H-07 — el mismo coach editaba "200 g de arroz" con teclado en el builder y con steppers
+          en el quick-edit: dos modelos de interacción para lo mismo. Se adopta el `QuantityStepper`
+          del quick-edit (−/+ de 44 pt + input central `selectTextOnFocus`, árbol estable, jamás
+          slider). El paso por unidad sale del helper compartido, no de una regla nueva. */}
+      <View className="mt-2 flex-row items-center justify-between gap-2">
+        <QuantityStepper
+          value={item.quantity}
+          onChange={(value) => patch({ quantity: value })}
+          step={stepForUnit(item.unit)}
+          accessibilityLabel={`Cantidad de ${item.food?.name ?? item.customName ?? 'alimento'}`}
+        />
         <UnitToggle unit={item.unit} onChange={(unit) => patch({ unit })} />
       </View>
       <ErrorText message={errors['item.' + item.key + '.quantity'] ?? errors['item.' + item.key + '.food']} />
@@ -2109,7 +2216,7 @@ function ItemEditor({
                   onChangeText={(value) => patch({ [field]: value } as Partial<Omit<BuilderItem, 'key'>>)}
                   placeholder="0"
                   placeholderTextColor={theme.mutedForeground}
-                  keyboardType="number-pad"
+                  keyboardType="decimal-pad"
                   className="min-h-10 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
                 />
               </View>
@@ -2393,20 +2500,164 @@ function SubstitutionsField({
   )
 }
 
+/**
+ * CE-5 (H-12) — menú de la franja: copiarla a otros días del plan.
+ *
+ * El flujo real del coach es armar 5 días copiando el base y después cambiar el desayuno: sin
+ * esto hay que repetir el cambio día por día, cambiando de chip cada vez (y con los chips fuera
+ * de pantalla). "Duplicar como otro día" no servía: CREA un día nuevo, no toca uno existente.
+ *
+ * Dos caminos, mismo despacho: elegir días a mano o aplicar a todos. La nota dice explícitamente
+ * qué pasa en el destino, porque la semántica es de REEMPLAZO por nombre de franja (no de mezcla).
+ */
+function SlotCopySheet({
+  open,
+  onClose,
+  slotName,
+  targets,
+  onApply,
+}: {
+  open: boolean
+  onClose: () => void
+  slotName: string
+  /** Días destino posibles: todos menos el de origen. */
+  targets: BuilderVariant[]
+  onApply: (variantKeys: string[]) => void
+}) {
+  const { theme } = useTheme()
+  const [panel, setPanel] = useState<'menu' | 'pick'>('menu')
+  const [selected, setSelected] = useState<string[]>([])
+
+  // Cada apertura arranca limpia (el sheet no se desmonta entre aperturas).
+  useEffect(() => {
+    if (open) {
+      setPanel('menu')
+      setSelected([])
+    }
+  }, [open])
+
+  const title = slotName.trim() === '' ? 'Franja' : slotName.trim()
+  // Copy alineado con el mismo gesto en la edición rápida: la semántica es de REEMPLAZO por
+  // nombre de franja, no de mezcla, y hay que decirlo antes de tocar 6 días de una.
+  const replaceNote =
+    'Reemplaza la franja del mismo nombre en los días que elijas; si ese día no la tiene, se agrega al final. Viajan los alimentos, la hora, los reemplazos autorizados y las porciones a elección.'
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      nativeModal
+      snapPoints={['65%']}
+      title={panel === 'pick' ? 'Copiar la franja' : `Franja: ${title}`}
+      accessibilityLabel={`Opciones de la franja ${title}`}
+    >
+      {panel === 'menu' ? (
+        <View className="gap-0.5 pb-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Copiar a otros días"
+            onPress={() => setPanel('pick')}
+            className="min-h-12 flex-row items-center gap-3 rounded-control px-2 active:bg-surface-sunken"
+          >
+            <Copy color={theme.foreground} size={18} />
+            <Text className="flex-1 text-sm font-medium text-strong">Copiar a otros días…</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Aplicar esta franja a los ${targets.length} días restantes`}
+            onPress={() => {
+              onApply(targets.map((target) => target.key))
+              onClose()
+            }}
+            className="min-h-12 flex-row items-center gap-3 rounded-control px-2 active:bg-surface-sunken"
+          >
+            <CopyCheck color={theme.foreground} size={18} />
+            <Text className="flex-1 text-sm font-medium text-strong">Aplicar a todos los días</Text>
+          </Pressable>
+          <Text className="mt-1 px-2 text-xs leading-5 text-muted">{replaceNote}</Text>
+        </View>
+      ) : (
+        <View className="gap-3 pb-2">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Días destino</Text>
+          <View className="gap-0.5">
+            {targets.map((target) => {
+              const checked = selected.includes(target.key)
+              const badge = variantDayBadge(target)
+              return (
+                <Pressable
+                  key={target.key}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked }}
+                  accessibilityLabel={badge ? `${target.label}, ${badge.long}` : target.label}
+                  onPress={() =>
+                    setSelected((prev) =>
+                      prev.includes(target.key) ? prev.filter((key) => key !== target.key) : [...prev, target.key],
+                    )
+                  }
+                  className="min-h-12 flex-row items-center gap-2.5 rounded-control px-2"
+                >
+                  <View
+                    className={`h-5 w-5 items-center justify-center rounded-control border ${
+                      checked ? 'border-transparent' : 'border-default bg-surface-card'
+                    }`}
+                    style={checked ? { backgroundColor: theme.primary } : undefined}
+                  >
+                    {checked ? <Check color={theme.primaryForeground} size={13} /> : null}
+                  </View>
+                  <Text className="min-w-0 flex-1 text-sm text-body">{target.label}</Text>
+                  {badge ? (
+                    <Text className="rounded-pill bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                      {badge.short}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              )
+            })}
+          </View>
+          <Text className="text-xs leading-5 text-muted">{replaceNote}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={selected.length <= 1 ? 'Copiar la franja al día elegido' : `Copiar la franja a ${selected.length} días`}
+            accessibilityState={{ disabled: selected.length === 0 }}
+            disabled={selected.length === 0}
+            onPress={() => {
+              onApply(selected)
+              onClose()
+            }}
+            className={`min-h-12 flex-row items-center justify-center gap-1.5 rounded-control px-4 ${
+              selected.length === 0 ? 'opacity-50' : ''
+            }`}
+            style={{ backgroundColor: theme.primary }}
+          >
+            <Copy color={theme.primaryForeground} size={16} />
+            <Text className="text-sm font-bold" style={{ color: theme.primaryForeground }}>
+              {selected.length <= 1 ? 'Copiar al día' : `Copiar a ${selected.length} días`}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </Sheet>
+  )
+}
+
 function SlotEditor({
   variantKey,
   slot,
   index,
+  variants,
   dispatch,
   errors,
   onSearch,
   onSaveCustomFood,
+  onCopyToVariants,
   portions,
 }: {
   /** Día (variante) al que pertenece la franja: toda mutación viaja scoped a él. */
   variantKey: string
   slot: BuilderSlot
   index: number
+  /** Todos los días del plan: el menú "Copiar a otros días" ofrece los que NO son el origen. */
+  variants: BuilderVariant[]
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
@@ -2416,9 +2667,14 @@ function SlotEditor({
     slotKey: string,
     equivalence: FoodEquivalenceDraft | null,
   ) => Promise<{ ok: boolean; error?: string }>
+  /** CE-5: despacha la copia de ESTA franja (árbol + porciones) a los días elegidos. */
+  onCopyToVariants: (slotKey: string, targetVariantKeys: string[]) => void
   portions: PortionsController
 }) {
   const { theme } = useTheme()
+  const [copyOpen, setCopyOpen] = useState(false)
+  // Días destino: todos menos el propio. Con un solo día el menú no tiene nada que ofrecer.
+  const copyTargets = variants.filter((candidate) => candidate.key !== variantKey)
   // Subtotal combinado (items fijos + derivado de porciones, 4B-11). Sin porciones (o catálogo
   // sin cargar) `slotPortionTotals` devuelve null y `combineSubtotals` deja el objeto de items intacto.
   // Multi-día: la clave de porciones es `variantKey::slotKey` — dos días con una franja homónima
@@ -2429,18 +2685,31 @@ function SlotEditor({
   const showSubtotal = slot.items.length > 0 || portionTotals != null
   return (
     <NutritionCard>
-      <View className="flex-row items-start justify-between gap-2">
+      <View className="flex-row items-center justify-between gap-2">
         <Text className="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
           Franja {index + 1}
         </Text>
-        <Pressable
-          accessibilityLabel="Quitar franja"
-          accessibilityRole="button"
-          className="min-h-9 min-w-9 items-center justify-center rounded-control"
-          onPress={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
-        >
-          <Trash2 color={theme.destructive} size={16} />
-        </Pressable>
+        <View className="flex-row items-center">
+          {/* CE-5: solo con más de un día hay adónde copiar. */}
+          {copyTargets.length > 0 ? (
+            <Pressable
+              accessibilityLabel={`Opciones de la franja ${slot.name || index + 1}`}
+              accessibilityRole="button"
+              className="h-11 w-9 items-center justify-center rounded-control"
+              onPress={() => setCopyOpen(true)}
+            >
+              <MoreVertical color={theme.mutedForeground} size={16} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityLabel="Quitar franja"
+            accessibilityRole="button"
+            className="h-11 w-9 items-center justify-center rounded-control"
+            onPress={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
+          >
+            <Trash2 color={theme.destructive} size={16} />
+          </Pressable>
+        </View>
       </View>
 
       <View className="mt-2 flex-row gap-2">
@@ -2457,13 +2726,22 @@ function SlotEditor({
         </View>
         <View className="w-24">
           <TextInput
+            accessibilityLabel={`Hora de ${slot.name || `la franja ${index + 1}`}`}
             value={slot.startTime}
             onChangeText={(value) =>
-              dispatch({ type: 'UPDATE_SLOT', variantKey, slotKey: slot.key, patch: { startTime: value } })
+              dispatch({
+                type: 'UPDATE_SLOT',
+                variantKey,
+                slotKey: slot.key,
+                patch: { startTime: maskTimeInput(value) },
+              })
             }
             placeholder="HH:MM"
             placeholderTextColor={theme.mutedForeground}
+            keyboardType="number-pad"
+            maxLength={5}
             className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
+            style={{ fontVariant: ['tabular-nums'] }}
           />
         </View>
       </View>
@@ -2521,6 +2799,16 @@ function SlotEditor({
           ) : null}
         </View>
       ) : null}
+
+      {copyTargets.length > 0 ? (
+        <SlotCopySheet
+          open={copyOpen}
+          onClose={() => setCopyOpen(false)}
+          slotName={slot.name || `Franja ${index + 1}`}
+          targets={copyTargets}
+          onApply={(variantKeys) => onCopyToVariants(slot.key, variantKeys)}
+        />
+      ) : null}
     </NutritionCard>
   )
 }
@@ -2536,6 +2824,7 @@ function ConstructionStep({
   variantErrorKeys,
   onSearch,
   onSaveCustomFood,
+  onCopySlotToVariants,
   portions,
 }: {
   state: BuilderState
@@ -2555,6 +2844,8 @@ function ConstructionStep({
     slotKey: string,
     equivalence: FoodEquivalenceDraft | null,
   ) => Promise<{ ok: boolean; error?: string }>
+  /** CE-5: copia de una franja del día activo hacia otros días (árbol + porciones). */
+  onCopySlotToVariants: (sourceVariantKey: string, slotKey: string, targetVariantKeys: string[]) => void
   portions: PortionsController
 }) {
   if (!strategyUsesSlots(state.strategy)) {
@@ -2579,6 +2870,7 @@ function ConstructionStep({
   const hiddenErrorVariants = state.variants.filter(
     (other) => other.key !== variant.key && variantErrorKeys.includes(other.key),
   )
+  const activeBadge = variantDayBadge(variant)
   return (
     <View className="gap-3">
       {/* Barra de días: chips scrolleables + "Agregar día" + banner de herencia de objetivos. */}
@@ -2614,10 +2906,14 @@ function ConstructionStep({
           variantKey={variant.key}
           slot={slot}
           index={index}
+          variants={state.variants}
           dispatch={dispatch}
           errors={errors}
           onSearch={onSearch}
           onSaveCustomFood={onSaveCustomFood}
+          onCopyToVariants={(slotKey, targetVariantKeys) =>
+            onCopySlotToVariants(variant.key, slotKey, targetVariantKeys)
+          }
           portions={portions}
         />
       ))}
@@ -2632,8 +2928,11 @@ function ConstructionStep({
       </Pressable>
       {variant.slots.length > 0 ? (
         <View className="px-1">
+          {/* QW-2: con etiqueta personalizada el total tampoco decía a qué día pertenece. */}
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            {state.variants.length > 1 ? `Total de ${variant.label}` : 'Total del día'}
+            {state.variants.length > 1
+              ? `Total de ${activeBadge ? `${variant.label} (${activeBadge.long})` : variant.label}`
+              : 'Total del día'}
           </Text>
           <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
         </View>
@@ -2717,10 +3016,14 @@ function ReviewVariantSection({
   const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
   const totals = combineSubtotals(variantTotals(variant), portionDay)
   const effectiveTargets = variantEffectiveTargets(state, variant)
+  // QW-2: si el coach renombró el día, el encabezado de la revisión también decía solo el alias.
+  const badge = variantDayBadge(variant)
   return (
     <View className="gap-2">
       {showDayHeading ? (
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">{variant.label}</Text>
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+          {badge ? `${variant.label} · ${badge.long}` : variant.label}
+        </Text>
       ) : null}
 
       <View className="rounded-control border border-subtle bg-surface-sunken p-3">
@@ -2805,7 +3108,14 @@ function ReviewStep({
         <View className="gap-3">
           <View>
             <Text className="font-display text-lg font-semibold text-strong">{state.planName || 'Plan sin nombre'}</Text>
-            <Text className="mt-0.5 text-xs text-muted">Vigente desde {state.effectiveFrom || 'hoy'}</Text>
+            {/* QW-10 (H-22): la vista del alumno mostraba la ISO cruda (`2026-08-01`). El
+                formateador ya existe y la pantalla del alumno lo usa; el coach no. */}
+            <Text className="mt-0.5 text-xs text-muted">
+              Vigente desde{' '}
+              {state.effectiveFrom
+                ? formatNutritionShortDate(state.effectiveFrom, { relative: true })
+                : 'hoy'}
+            </Text>
           </View>
 
           {usesSlots ? (
@@ -2843,6 +3153,7 @@ function ReviewStep({
               key={variant.key}
               strategy={state.strategy}
               variant={variant}
+              showDayHeading={multiDay}
               portions={portions}
             />
           ))
@@ -2919,10 +3230,13 @@ function ReviewStep({
 
 function FoodSearchModal({
   visible,
+  title,
   onClose,
   onSelect,
 }: {
   visible: boolean
+  /** QW-6: "Agregar alimento" o "Reemplazo de {item}" — el mismo modal sirve a dos intenciones. */
+  title: string
   onClose: () => void
   onSelect: (food: FoodCatalogItem) => void
 }) {
@@ -2980,8 +3294,25 @@ function FoodSearchModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
-        <View className="flex-row items-center gap-2 border-b border-subtle px-4 py-3">
-          <View className="flex-1 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
+        <View className="gap-2 border-b border-subtle px-4 py-3">
+          <View className="flex-row items-center gap-2">
+            <Text
+              accessibilityRole="header"
+              className="min-w-0 flex-1 font-display text-base font-semibold text-strong"
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+            <Pressable
+              accessibilityLabel="Cerrar búsqueda"
+              accessibilityRole="button"
+              className="h-11 w-11 items-center justify-center rounded-control"
+              onPress={onClose}
+            >
+              <X color={theme.foreground} size={20} />
+            </Pressable>
+          </View>
+          <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
             <Search color={theme.mutedForeground} size={16} />
             <TextInput
               autoFocus
@@ -2992,14 +3323,6 @@ function FoodSearchModal({
               className="min-h-11 flex-1 py-2 text-base text-strong"
             />
           </View>
-          <Pressable
-            accessibilityLabel="Cerrar búsqueda"
-            accessibilityRole="button"
-            className="min-h-11 min-w-11 items-center justify-center rounded-control"
-            onPress={onClose}
-          >
-            <X color={theme.foreground} size={20} />
-          </Pressable>
         </View>
 
         <ScrollView className="flex-1" contentContainerClassName="gap-2 px-4 py-3" keyboardShouldPersistTaps="handled">

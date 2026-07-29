@@ -24,10 +24,12 @@ import {
   NUTRITION_WEEK_ORDER,
   formatNutritionDayOfWeek,
   reconstructExchangeGroups,
+  sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
 import { macrosForTargets, type ExchangeMacroTotals } from '@eva/nutrition-engine'
 import {
   computeItemMacros,
+  slotMergeName,
   type BuilderFood,
   type ItemMacros,
 } from '../builder/_lib/draft-builder'
@@ -390,6 +392,12 @@ export type QuickEditAction =
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: QeSlot }
   | { type: 'ADD_SLOT'; variantKey: string; key: string; name: string; startTime: string }
+  /**
+   * Copia de una franja a otros dias (P0-4), espejo exacto de `COPY_SLOT_TO_VARIANTS` del
+   * wizard. Deshacer: el arbol previo con `RESTORE_DRAFT` (una copia toca N dias, ningun
+   * `RESTORE_*` puntual la cubre).
+   */
+  | { type: 'COPY_SLOT_TO_VARIANTS'; sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] }
   | { type: 'ADD_VARIANT'; days: readonly number[]; source: 'clone' | 'empty' }
   | { type: 'REMOVE_VARIANT'; variantKey: string }
   | { type: 'RESTORE_VARIANT'; index: number; variant: QeVariant }
@@ -721,6 +729,134 @@ function addDayVariants(state: QuickEditState, days: readonly number[], source: 
   return { ...state, variants: [...state.variants, ...added] }
 }
 
+// ---------------------------------------------------------------------------
+// Copia de una franja a otros dias (P0-4). Misma semantica que el wizard: clona la franja
+// COMPLETA (nombre, hora, items con todos sus campos, reemplazos y porciones) y, por nombre
+// normalizado (`slotMergeName`, compartido con el builder), REEMPLAZA la franja homonima del
+// dia destino conservando su posicion o la AGREGA al final. El dia de origen jamas se toca y
+// aplicarla dos veces deja la misma estructura.
+// ---------------------------------------------------------------------------
+
+/** Key libre dentro del dia: la deseada, o con sufijo `-2`, `-3`… si ya esta ocupada. */
+function uniqueSlotKeyIn(taken: ReadonlySet<string>, desired: string): string {
+  if (!taken.has(desired)) return desired
+  let suffix = 2
+  while (taken.has(`${desired}-${suffix}`)) suffix += 1
+  return `${desired}-${suffix}`
+}
+
+/**
+ * Codigo de franja libre dentro del dia. Es un requisito de la BASE, no cosmetico:
+ * `unique (day_variant_id, slot_code)` — copiar una franja a un dia que ya heredo su codigo
+ * (dia clonado y despues renombrado) reventaria el publish. Tope de 64 del contrato.
+ */
+function uniqueSlotCode(taken: ReadonlySet<string>, desired: string): string {
+  if (!taken.has(desired)) return desired
+  const base = desired.slice(0, 60)
+  let suffix = 2
+  while (taken.has(`${base}-${suffix}`)) suffix += 1
+  return `${base}-${suffix}`
+}
+
+/** Item copiado a otro dia: fila NUEVA (sin `id`) con keys de UI propias. */
+function copiedQeItem(item: QeItem, keyPrefix: string): QeItem {
+  return { ...cloneQeItem(item, keyPrefix), id: null }
+}
+
+/**
+ * Contenido de la franja origen bajado sobre una franja destino. `identity` es la identidad
+ * que conserva el destino: al REEMPLAZAR viaja la de la franja pisada (misma posicion, mismo
+ * `id` — el contador lo lee como franja tocada, no como baja+alta); al AGREGAR es nueva.
+ * Los items y targets de porciones siempre nacen sin `id` (filas nuevas del dia destino).
+ */
+function copiedQeSlot(source: QeSlot, identity: { key: string; id: string | null; code: string }): QeSlot {
+  return {
+    ...source,
+    key: identity.key,
+    id: identity.id,
+    code: identity.code,
+    targets: { ...source.targets },
+    items: source.items.map((item) => copiedQeItem(item, identity.key)),
+    portionTargets: source.portionTargets.map((target) => ({
+      ...target,
+      key: `${identity.key}:${target.key}`,
+      id: null,
+    })),
+  }
+}
+
+function copySlotToVariants(
+  state: QuickEditState,
+  params: { sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] },
+): QuickEditState {
+  const source = state.variants.find((variant) => variant.key === params.sourceVariantKey)
+  const sourceSlot = source?.slots.find((slot) => slot.key === params.slotKey)
+  if (!source || !sourceSlot) return state
+  // Dias destino validos: sin repetidos, sin inexistentes y NUNCA el propio origen.
+  const wanted = new Set(params.targetVariantKeys.filter((key) => key !== params.sourceVariantKey))
+  if (wanted.size === 0) return state
+  const mergeName = slotMergeName(sourceSlot.name)
+  let touched = false
+  const variants = state.variants.map((variant) => {
+    if (!wanted.has(variant.key)) return variant
+    touched = true
+    const index = variant.slots.findIndex((slot) => slotMergeName(slot.name) === mergeName)
+    if (index >= 0) {
+      const destination = variant.slots[index]
+      const slots = [...variant.slots]
+      slots[index] = copiedQeSlot(sourceSlot, {
+        key: destination.key,
+        id: destination.id,
+        code: destination.code,
+      })
+      return { ...variant, slots }
+    }
+    const key = uniqueSlotKeyIn(
+      new Set(variant.slots.map((slot) => slot.key)),
+      `${variant.key}:${sourceSlot.key}`,
+    )
+    const code = uniqueSlotCode(new Set(variant.slots.map((slot) => slot.code)), sourceSlot.code)
+    return { ...variant, slots: [...variant.slots, copiedQeSlot(sourceSlot, { key, id: null, code })] }
+  })
+  return touched ? { ...state, variants } : state
+}
+
+/** Un dia candidato de "copiar la franja a otros dias" (fila del multi-select). */
+export interface QeSlotCopyTarget {
+  variantKey: string
+  label: string
+  dayOfWeek: number | null
+  isDefault: boolean
+  /** Ese dia YA tiene una franja con el mismo nombre: la copia la REEMPLAZA (no duplica). */
+  replaces: boolean
+}
+
+/**
+ * Dias a los que se puede copiar una franja, en el MISMO orden de lectura de la pantalla
+ * (base primero, luego Lu→Do) y sin el dia de origen. `replaces` se resuelve con la misma
+ * regla de emparejamiento que aplicara el reducer (`slotMergeName`), calculada aca para que
+ * la UI no la reimplemente y el aviso "Reemplaza" nunca mienta.
+ */
+export function qeSlotCopyTargets(
+  state: QuickEditState,
+  sourceVariantKey: string,
+  slotKey: string,
+): QeSlotCopyTarget[] {
+  const source = state.variants.find((variant) => variant.key === sourceVariantKey)
+  const sourceSlot = source?.slots.find((slot) => slot.key === slotKey)
+  if (!source || !sourceSlot) return []
+  const mergeName = slotMergeName(sourceSlot.name)
+  return sortNutritionDayVariantsForDisplay(state.variants)
+    .filter((variant) => variant.key !== sourceVariantKey)
+    .map((variant) => ({
+      variantKey: variant.key,
+      label: variant.label,
+      dayOfWeek: variant.dayOfWeek,
+      isDefault: variant.isDefault,
+      replaces: variant.slots.some((slot) => slotMergeName(slot.name) === mergeName),
+    }))
+}
+
 function normalizeBuilderUnit(servingUnit: string | null | undefined): string {
   const u = String(servingUnit ?? '').toLowerCase()
   if (u === 'ml') return 'ml'
@@ -814,6 +950,8 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
           },
         ],
       }))
+    case 'COPY_SLOT_TO_VARIANTS':
+      return copySlotToVariants(state, action)
     case 'SET_PORTION_TARGET':
       return mapPortionTarget(state, action.variantKey, action.slotKey, action.targetKey, (target) => ({
         ...target,

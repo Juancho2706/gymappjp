@@ -69,6 +69,16 @@ export const QE_COPY = {
   addFood: 'Agregar alimento',
   addSlot: 'Agregar franja',
   removeSlot: 'Eliminar franja',
+  // ── Copiar una franja a otros días (P0-4). El destino se empareja por NOMBRE: si el día ya
+  //    tiene una franja homónima la reemplaza (misma posición), y si no la agrega al final.
+  copySlot: 'Copiar a otros días…',
+  copySlotAll: 'Aplicar a todos los días',
+  copySlotTitle: 'Copiar la franja a otros días',
+  copySlotHint:
+    'Reemplaza la franja del mismo nombre en cada día elegido. Si ese día no la tiene, se agrega al final.',
+  copySlotReplaces: 'Reemplaza',
+  copySlotCta: (n: number) => (n === 0 ? 'Elige al menos un día' : `Copiar a ${n} ${n === 1 ? 'día' : 'días'}`),
+  copySlotDone: (n: number) => `Franja copiada a ${n} ${n === 1 ? 'día' : 'días'}`,
   // ── Multi-día (FD5): menú por día en el modo edición. El alta vive en `AddDayPopover`
   //    (compartido con el builder), que trae su propio copy y su upsell del gate Pro.
   baseDayEyebrow: 'Día base',
@@ -85,6 +95,11 @@ export const QE_COPY = {
   removeDay: 'Eliminar día',
   dayRemovedUndo: 'Día eliminado',
   dayTaken: 'Ya tiene plan propio',
+  // ── Índice de días (P1-1): anclas arriba de la pila para no scrollear a ciegas.
+  dayIndexLabel: 'Ir a un día del plan',
+  dayIndexJump: (label: string) => `Ir a ${label}`,
+  baseDayShort: 'Base',
+  dayAppliesToday: 'Aplica hoy',
   freeFood: 'Alimento libre',
   upgradeRequired: 'Este cambio requiere Nutrición Pro, incluido en los planes pagos.',
   invalidDraft: 'Hay campos con valores inválidos. Revisa las cantidades y nombres marcados.',

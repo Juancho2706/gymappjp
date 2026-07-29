@@ -924,41 +924,104 @@ export function CoachAttentionCard({
   )
 }
 
-export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] }) {
+/**
+ * Stepper del constructor — H-04/CE-2.
+ *
+ * Era una lista VERTICAL de 4 filas (círculo + label + descripción ≈ 250 px) pintada arriba del
+ * contenido en los cuatro pasos: en un teléfono el primer campo editable arrancaba cerca de la
+ * mitad de la pantalla. En web esa lista vive en una columna lateral donde no compite; portarla
+ * vertical fue transcripción, no adaptación. Acá es UNA fila de 4 celdas (≤56 px de alto) que
+ * devuelve ~200 px a la zona editable.
+ *
+ * Además es NAVEGABLE: los pasos ya completados se tocan para volver (equivale a pulsar "Atrás"
+ * N veces — jamás salta hacia adelante, así que no puede esquivar una validación). Sin
+ * `onSelectStep` el componente se comporta como antes: puro indicador. La descripción
+ * ("No aplica (plan flexible)") ya no cabe en pantalla y viaja en el `accessibilityLabel`.
+ */
+export function BuilderStepList({
+  steps,
+  onSelectStep,
+}: {
+  steps: NutritionBuilderStepModel[]
+  /** Volver a un paso ya completado. Ausente ⇒ el stepper es solo lectura. */
+  onSelectStep?: (index: number) => void
+}) {
   const { theme } = useTheme()
   return (
-    <View accessibilityLabel="Pasos del constructor" className="rounded-card border border-subtle bg-surface-card p-3">
-      {steps.map((step, index) => (
-        <View
-          accessibilityState={{ selected: step.state === 'current' }}
-          className={cx(
-            'min-h-11 flex-row items-start gap-3 rounded-control px-3 py-2',
-            step.state === 'current' && 'bg-primary/10',
-            step.state === 'error' && 'bg-danger-100/40',
-          )}
-          key={step.id}
-        >
-          <View
+    <View
+      accessibilityRole="tablist"
+      accessibilityLabel="Pasos del constructor"
+      className="flex-row items-stretch gap-1 rounded-card border border-subtle bg-surface-card p-1.5"
+    >
+      {steps.map((step, index) => {
+        const navigable = step.state === 'complete' && onSelectStep != null
+        const stateWord =
+          step.state === 'complete'
+            ? 'completado'
+            : step.state === 'current'
+              ? 'en curso'
+              : step.state === 'error'
+                ? 'con datos por corregir'
+                : 'pendiente'
+        return (
+          <Pressable
+            key={step.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: step.state === 'current', disabled: !navigable }}
+            accessibilityLabel={`Paso ${index + 1} de ${steps.length}: ${step.label}, ${stateWord}${
+              step.description ? `. ${step.description}` : ''
+            }`}
+            accessibilityHint={navigable ? 'Vuelve a este paso' : undefined}
+            disabled={!navigable}
+            onPress={() => onSelectStep?.(index)}
             className={cx(
-              'mt-0.5 h-6 w-6 shrink-0 items-center justify-center rounded-full border',
-              step.state === 'complete' && 'border-success-500 bg-success-500',
-              step.state === 'current' && 'border-primary bg-primary',
-              step.state === 'upcoming' && 'border-default bg-surface-sunken',
-              step.state === 'error' && 'border-danger-500 bg-danger-500',
+              'min-h-11 flex-1 items-center justify-center gap-1 rounded-control px-0.5 py-1',
+              step.state === 'current' && 'bg-primary/10',
+              step.state === 'error' && 'bg-danger-100/40',
             )}
           >
-            {step.state === 'complete' ? (
-              <Check color={theme.primaryForeground} size={13} />
-            ) : (
-              <Text className={cx('text-xs font-bold', step.state === 'upcoming' ? 'text-muted' : 'text-white')}>{index + 1}</Text>
-            )}
-          </View>
-          <View className="min-w-0 flex-1">
-            <Text className="text-sm font-semibold text-strong">{step.label}</Text>
-            {step.description ? <Text className="mt-0.5 text-xs leading-4 text-muted">{step.description}</Text> : null}
-          </View>
-        </View>
-      ))}
+            <View
+              className={cx(
+                'h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                step.state === 'complete' && 'border-success-500 bg-success-500',
+                step.state === 'current' && 'border-primary bg-primary',
+                step.state === 'upcoming' && 'border-default bg-surface-sunken',
+                step.state === 'error' && 'border-danger-500 bg-danger-500',
+              )}
+            >
+              {step.state === 'complete' ? (
+                <Check color={theme.primaryForeground} size={12} />
+              ) : (
+                <Text
+                  // Sobre `bg-primary` el número usa `primaryForeground` (respeta white-label);
+                  // sobre `bg-danger-500` el blanco sí es el color correcto y fijo.
+                  className={cx(
+                    'text-[11px] font-bold',
+                    step.state === 'upcoming' && 'text-muted',
+                    step.state === 'error' && 'text-white',
+                  )}
+                  style={
+                    step.state === 'current'
+                      ? { fontVariant: ['tabular-nums'], color: theme.primaryForeground }
+                      : { fontVariant: ['tabular-nums'] }
+                  }
+                >
+                  {index + 1}
+                </Text>
+              )}
+            </View>
+            <Text
+              numberOfLines={1}
+              className={cx(
+                'text-[10px] font-semibold',
+                step.state === 'upcoming' ? 'text-muted' : 'text-strong',
+              )}
+            >
+              {step.label}
+            </Text>
+          </Pressable>
+        )
+      })}
     </View>
   )
 }

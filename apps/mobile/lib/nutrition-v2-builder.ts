@@ -289,6 +289,114 @@ function cloneSlotsForVariant(variantKey: string, slots: BuilderSlot[]): Builder
   }))
 }
 
+// ---------------------------------------------------------------------------
+// Copia de UNA franja entre dias (CE-5 / P0-4) — PORTADA 1:1 de la web draft-builder.ts
+// (`slotMergeName` / `cloneSlotAs` / `resolveSlotCopyTargets`). El multi-dia en telefono
+// era trabajo manual x7: el coach tenia que rearmar "Almuerzo" dia por dia.
+//
+// Las PORCIONES viajan aparte porque viven fuera del reducer (mapa `variantKey::slotKey`):
+// la pantalla llama a `copySlotPortionsToVariants` con los MISMOS destinos que devuelve
+// `resolveSlotCopyTargets`, en el mismo gesto.
+// ---------------------------------------------------------------------------
+
+/**
+ * Nombre normalizado de una franja para el MERGE de la copia entre dias: trim +
+ * minusculas. "  Almuerzo " y "almuerzo" son LA MISMA franja para el coach, asi que
+ * copiar sobre un dia que ya la tiene reemplaza su contenido en vez de duplicarla.
+ * Solo empareja: el nombre que queda escrito es SIEMPRE el del origen.
+ *
+ * Compartido con la edicion rapida RN (`nutrition-v2-quick-edit.ts`) para que las dos
+ * superficies moviles mezclen exactamente igual — y con las dos de la web.
+ */
+export function slotMergeName(name: string): string {
+  return name.trim().toLowerCase()
+}
+
+/**
+ * Clon de UNA franja con la key destino ya resuelta (copia entre dias). Las keys de items
+ * y reemplazos derivan de la key de la franja destino, asi que son estables y no chocan con
+ * las de otra franja del mismo dia. No comparte objetos con el origen (editar el destino
+ * jamas toca el dia de origen); el `food` es inmutable en el reducer y se reusa por
+ * referencia, igual que en `cloneSlotsForVariant`.
+ */
+function cloneSlotAs(slotKey: string, slot: BuilderSlot): BuilderSlot {
+  return {
+    ...slot,
+    key: slotKey,
+    items: slot.items.map((item) => ({
+      ...item,
+      key: clonedKey(slotKey, item.key),
+      substitutions: (item.substitutions ?? []).map((sub) => ({
+        ...sub,
+        key: clonedKey(slotKey, sub.key),
+      })),
+    })),
+  }
+}
+
+/** Key libre dentro de un dia: la deseada, o con sufijo `~2`, `~3`… si ya esta ocupada. */
+function uniqueSlotKey(taken: ReadonlySet<string>, desired: string): string {
+  if (!taken.has(desired)) return desired
+  let suffix = 2
+  while (taken.has(desired + '~' + suffix)) suffix += 1
+  return desired + '~' + suffix
+}
+
+/** Destino resuelto de una copia de franja: donde aterriza y si pisa una franja existente. */
+export interface SlotCopyTarget {
+  variantKey: string
+  /** Key de la franja destino: la EXISTENTE si hubo match por nombre, la clonada si se agrega. */
+  slotKey: string
+  /** true = reemplaza el contenido de una franja homonima (conserva su posicion). */
+  replaced: boolean
+}
+
+/**
+ * Resuelve a que franja de cada dia destino aterriza la copia. PURA y determinista: el
+ * reducer la usa para mover el arbol y la UI la usa —con el MISMO estado previo— para
+ * re-etiquetar el mapa de porciones, que vive fuera del reducer (ver
+ * `copySlotPortionsToVariants` en `nutrition-v2-builder-portions.ts`).
+ *
+ * Reglas: se ignoran dias inexistentes, repetidos y el propio dia de origen (el origen jamas
+ * se toca); match por `slotMergeName` (primera coincidencia) => reemplazo en su posicion;
+ * sin match => franja nueva al final con key derivada (y sufijo si esa key ya existiera en
+ * el dia, caso real cuando el dia se clono del base y luego renombro la franja).
+ */
+export function resolveSlotCopyTargets(
+  state: BuilderState,
+  params: { sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] },
+): SlotCopyTarget[] {
+  const source = state.variants.find((variant) => variant.key === params.sourceVariantKey)
+  const sourceSlot = source?.slots.find((slot) => slot.key === params.slotKey)
+  if (!source || !sourceSlot) return []
+  const mergeName = slotMergeName(sourceSlot.name)
+  const seen = new Set<string>()
+  const targets: SlotCopyTarget[] = []
+  for (const variantKey of params.targetVariantKeys) {
+    if (variantKey === params.sourceVariantKey || seen.has(variantKey)) continue
+    const variant = state.variants.find((candidate) => candidate.key === variantKey)
+    if (!variant) continue
+    seen.add(variantKey)
+    const match = variant.slots.find((slot) => slotMergeName(slot.name) === mergeName)
+    if (match) {
+      targets.push({ variantKey, slotKey: match.key, replaced: true })
+      continue
+    }
+    const taken = new Set(variant.slots.map((slot) => slot.key))
+    targets.push({
+      variantKey,
+      slotKey: uniqueSlotKey(taken, clonedKey(variantKey, sourceSlot.key)),
+      replaced: false,
+    })
+  }
+  return targets
+}
+
+/** Los demas dias del plan: el argumento de "Aplicar a todos los días". */
+export function otherVariantKeys(state: BuilderState, variantKey: string): string[] {
+  return state.variants.filter((variant) => variant.key !== variantKey).map((variant) => variant.key)
+}
+
 export function createEmptyItem(key: string): BuilderItem {
   return {
     key,
@@ -332,6 +440,7 @@ export type BuilderAction =
   | { type: 'ADD_SLOT'; variantKey: string; key: string }
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<BuilderSlot, 'name' | 'startTime'>> }
+  | { type: 'COPY_SLOT_TO_VARIANTS'; sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] }
   | { type: 'ADD_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood | null }
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
   | { type: 'UPDATE_ITEM'; variantKey: string; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
@@ -517,6 +626,34 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       }))
     case 'UPDATE_SLOT':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
+    case 'COPY_SLOT_TO_VARIANTS': {
+      // Copia de UNA franja a otros dias (CE-5). Clona todo lo de la franja —nombre, hora,
+      // items con sus campos y reemplazos— y, por nombre, REEMPLAZA la franja homonima del
+      // destino conservando su posicion o la AGREGA al final. Idempotente: aplicarla dos
+      // veces deja la misma estructura (la segunda vez ya hay match por nombre).
+      // Las PORCIONES viajan aparte (viven fuera del reducer): la UI llama a
+      // `copySlotPortionsToVariants` con estos MISMOS destinos en el mismo gesto.
+      const source = state.variants.find((variant) => variant.key === action.sourceVariantKey)
+      const sourceSlot = source?.slots.find((slot) => slot.key === action.slotKey)
+      if (!source || !sourceSlot) return state
+      const targets = resolveSlotCopyTargets(state, action)
+      if (targets.length === 0) return state
+      const byVariantKey = new Map(targets.map((target) => [target.variantKey, target]))
+      return {
+        ...state,
+        variants: state.variants.map((variant) => {
+          const target = byVariantKey.get(variant.key)
+          if (!target) return variant
+          const clone = cloneSlotAs(target.slotKey, sourceSlot)
+          return {
+            ...variant,
+            slots: target.replaced
+              ? variant.slots.map((slot) => (slot.key === target.slotKey ? clone : slot))
+              : [...variant.slots, clone],
+          }
+        }),
+      }
+    }
     case 'ADD_ITEM': {
       const item: BuilderItem = {
         ...createEmptyItem(action.key),
