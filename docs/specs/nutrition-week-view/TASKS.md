@@ -31,4 +31,4 @@ Estado: `[ ]` pendiente · `[x]` hecho · ejecución por workers Opus con juicio
 ## Cierre
 - [x] T4.1 Gates: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm --filter @eva/mobile exec tsc --noEmit`.
 - [x] T4.2 Juicio Fable de estilo por superficie (checklist PLAN §Craft).
-- [ ] T4.3 Actualizar `docs/status/CURRENT.md` + `docs/status/MOBILE_PARITY.md`.
+- [x] T4.3 Actualizar `docs/status/CURRENT.md` + `docs/status/MOBILE_PARITY.md`.
