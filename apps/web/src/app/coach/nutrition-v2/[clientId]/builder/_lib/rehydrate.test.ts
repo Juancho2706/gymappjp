@@ -205,6 +205,28 @@ describe('rehydrateBuilderState — plan vigente -> estado del wizard', () => {
     expect(draft.dayVariants[2].mealSlots[0].name).toBe('Brunch')
   })
 
+  // PERDIDA DE DATOS (P0): las "Notas para tu alumno" se escriben en la edicion rapida y el
+  // wizard no tiene campo para editarlas. Como publicar reescribe la version COMPLETA, sin este
+  // round-trip "Rehacer con el asistente" + publicar las borraba en silencio.
+  it('round-trip: rehidrata las notas visibles y re-publicar las CONSERVA', () => {
+    const model = { ...planModel([variant()]), visibleNotes: 'Domingo comida libre, hidratate' }
+    const result = rehydrate(model)!
+    expect(result.state.visibleNotes).toBe('Domingo comida libre, hidratate')
+
+    const draft = assembleDraft(result.state, { clientId: CLIENT_ID, planId: PLAN_ID })
+    expect(draft.visibleNotes).toBe('Domingo comida libre, hidratate')
+    // El protocolo profesional NO viaja del cliente: es capacidad Pro y lo repone
+    // `publishPlanAction` desde la version base (carry-over server-side).
+    expect(draft.protocolNotes).toBeNull()
+  })
+
+  it('plan sin notas visibles: el draft las emite null (no inventa contenido)', () => {
+    const result = rehydrate(planModel([variant()]))!
+    expect(result.state.visibleNotes).toBeNull()
+    const draft = assembleDraft(result.state, { clientId: CLIENT_ID, planId: PLAN_ID })
+    expect(draft.visibleNotes).toBeNull()
+  })
+
   it('rehidrata las porciones con clave por dia y las devuelve al draft', () => {
     const withPortions = slot({
       name: 'Cena',

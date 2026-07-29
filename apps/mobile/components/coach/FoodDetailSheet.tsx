@@ -45,7 +45,7 @@ type Props = {
 const VERIFICATION_TONE_CLASSES: Record<FoodVerificationTone, { box: string; text: string }> = {
   verified: { box: 'border-success-500/30 bg-success-500/10', text: 'text-success-700' },
   community: { box: 'border-info-500/30 bg-info-500/10', text: 'text-info-600' },
-  neutral: { box: 'border-border-subtle bg-surface-sunken', text: 'text-text-muted' },
+  neutral: { box: 'border-subtle bg-surface-sunken', text: 'text-muted' },
   danger: { box: 'border-danger-500/30 bg-danger-500/10', text: 'text-danger-700' },
 }
 
@@ -62,9 +62,9 @@ function unitBasis(item: FoodCatalogItem): string {
 function MicroRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-row items-center justify-between py-1.5">
-      <Text className="text-[13px] text-text-muted">{label}</Text>
+      <Text className="text-[13px] text-muted">{label}</Text>
       <Text
-        className="text-[13px] font-semibold text-text-body"
+        className="text-[13px] font-semibold text-body"
         style={{ fontVariant: ['tabular-nums'] }}
       >
         {value}
@@ -122,7 +122,7 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
       accessibilityLabel={item ? `Ficha de ${item.name}` : 'Ficha del alimento'}
     >
       {!item ? (
-        <Text className="py-12 text-center text-sm text-text-muted">
+        <Text className="py-12 text-center text-sm text-muted">
           No se pudo cargar la ficha del alimento.
         </Text>
       ) : (
@@ -133,7 +133,7 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
               accessibilityRole="button"
               accessibilityLabel={`Ampliar foto de ${item.name}`}
               onPress={() => setLightboxOpen(true)}
-              className="h-44 w-full items-center justify-center overflow-hidden rounded-card border border-border-subtle bg-surface-sunken"
+              className="h-44 w-full items-center justify-center overflow-hidden rounded-card border border-subtle bg-surface-sunken"
             >
               <Image
                 alt={item.name}
@@ -143,7 +143,7 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
                 onError={() => setHeaderFailed(true)}
                 style={{ width: '100%', height: '100%', padding: 12 }}
               />
-              <View className="absolute bottom-2 right-2 h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-surface-card">
+              <View className="absolute bottom-2 right-2 h-8 w-8 items-center justify-center rounded-full border border-subtle bg-surface-card">
                 <Maximize2 color={theme.textSecondary} size={16} />
               </View>
             </Pressable>
@@ -151,7 +151,7 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
             <View
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
-              className="h-36 w-full items-center justify-center rounded-card border border-border-subtle bg-surface-sunken"
+              className="h-36 w-full items-center justify-center rounded-card border border-subtle bg-surface-sunken"
             >
               <FoodThumbnail alt={item.name} src={null} fallbackCategory={item.category} size="lg" />
             </View>
@@ -172,7 +172,7 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
           ) : null}
 
           <View>
-            <Text className="mb-2 text-[10px] font-black uppercase tracking-widest text-text-muted">
+            <Text className="mb-2 text-[10px] font-black uppercase tracking-widest text-muted">
               Por {basis}
             </Text>
             <MacroChipRow
@@ -185,15 +185,15 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
           </View>
 
           {micros.length > 0 ? (
-            <View className="rounded-card border border-border-subtle bg-surface-card px-4 py-2">
-              <Text className="py-1.5 text-[10px] font-black uppercase tracking-widest text-text-muted">
+            <View className="rounded-card border border-subtle bg-surface-card px-4 py-2">
+              <Text className="py-1.5 text-[10px] font-black uppercase tracking-widest text-muted">
                 Detalle (por {basis})
               </Text>
               <View>
                 {micros.map((m, index) => (
                   <View
                     key={m.label}
-                    className={index > 0 ? 'border-t border-border-subtle/50' : undefined}
+                    className={index > 0 ? 'border-t border-subtle/50' : undefined}
                   >
                     <MicroRow label={m.label} value={m.value} />
                   </View>
@@ -205,35 +205,35 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
           {household || pkg ? (
             <View className="flex-row flex-wrap gap-2">
               {household ? (
-                <View className="min-w-0 flex-1 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2.5">
-                  <Text className="text-[10px] font-black uppercase tracking-widest text-text-muted">
+                <View className="min-w-0 flex-1 rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
+                  <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
                     Porción casera
                   </Text>
-                  <Text className="mt-0.5 text-[13px] font-semibold text-text-body">{household}</Text>
+                  <Text className="mt-0.5 text-[13px] font-semibold text-body">{household}</Text>
                 </View>
               ) : null}
               {pkg ? (
-                <View className="min-w-0 flex-1 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2.5">
-                  <Text className="text-[10px] font-black uppercase tracking-widest text-text-muted">
+                <View className="min-w-0 flex-1 rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
+                  <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
                     Envase
                   </Text>
-                  <Text className="mt-0.5 text-[13px] font-semibold text-text-body">{pkg}</Text>
+                  <Text className="mt-0.5 text-[13px] font-semibold text-body">{pkg}</Text>
                 </View>
               ) : null}
             </View>
           ) : null}
 
           {item.gtin ? (
-            <View className="flex-row items-center gap-2.5 rounded-control border border-border-subtle bg-surface-sunken px-3.5 py-2.5">
+            <View className="flex-row items-center gap-2.5 rounded-control border border-subtle bg-surface-sunken px-3.5 py-2.5">
               <View className="h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-surface-card">
                 <Barcode color={theme.textSecondary} size={16} />
               </View>
               <View className="min-w-0 flex-1">
-                <Text className="text-[10px] font-black uppercase tracking-widest text-text-muted">
+                <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
                   Código de barras
                 </Text>
                 <Text
-                  className="text-[13px] font-semibold text-text-body"
+                  className="text-[13px] font-semibold text-body"
                   numberOfLines={1}
                   style={{ fontVariant: ['tabular-nums'] }}
                 >
@@ -244,11 +244,11 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
           ) : null}
 
           {attribution ? (
-            <View className="rounded-card border border-border-subtle bg-surface-sunken px-4 py-3">
-              <Text className="text-[10px] font-black uppercase tracking-widest text-text-muted">
+            <View className="rounded-card border border-subtle bg-surface-sunken px-4 py-3">
+              <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
                 Fuente
               </Text>
-              <Text className="mt-1 text-[13px] font-semibold text-text-body">{attribution.label}</Text>
+              <Text className="mt-1 text-[13px] font-semibold text-body">{attribution.label}</Text>
               {attribution.href ? (
                 <Pressable
                   accessibilityRole="link"
@@ -262,7 +262,7 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
                   <ExternalLink color={theme.primary} size={12} />
                 </Pressable>
               ) : (
-                <Text className="mt-1 text-[11.5px] text-text-subtle">{attribution.attributionLine}</Text>
+                <Text className="mt-1 text-[11.5px] text-subtle">{attribution.attributionLine}</Text>
               )}
             </View>
           ) : null}

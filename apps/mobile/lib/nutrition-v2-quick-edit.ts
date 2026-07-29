@@ -47,6 +47,7 @@ import {
 } from '@eva/nutrition-v2'
 import {
   computeItemMacros,
+  slotMergeName,
   strategyUsesSlots,
   type BuilderFood,
   type DraftDayVariant,
@@ -280,6 +281,12 @@ export type QuickEditAction =
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
   | { type: 'RESTORE_ITEM'; variantKey: string; slotKey: string; index: number; item: QuickEditItem }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: { name?: string; startTime?: string } }
+  /**
+   * Copia de una franja a otros dias (CE-5), espejo exacto de `COPY_SLOT_TO_VARIANTS` del
+   * wizard. Deshacer: el arbol previo con `RESTORE_DRAFT` (una copia toca N dias, ningun
+   * `RESTORE_*` puntual la cubre).
+   */
+  | { type: 'COPY_SLOT_TO_VARIANTS'; sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] }
   | { type: 'ADD_SLOT'; variantKey: string; key: string }
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: QuickEditSlot }
@@ -481,6 +488,151 @@ export function planDayVariantAdditions(
   return { variants, slotKeyClones }
 }
 
+// ---------------------------------------------------------------------------
+// Copia de UNA franja a otros dias (CE-5 / P0-4) — MISMA semantica que el wizard y que las
+// dos superficies web: clona la franja COMPLETA (nombre, hora, items con todos sus campos y
+// sus reemplazos autorizados) y, por nombre normalizado (`slotMergeName`, compartido con el
+// builder), REEMPLAZA la franja homonima del dia destino conservando su posicion o la AGREGA
+// al final. El dia de origen jamas se toca y aplicarla dos veces deja la misma estructura.
+//
+// Las PORCIONES viajan aparte: en RN viven en un reducer hermano keyed por `slot.key`, asi
+// que la pantalla combina `resolveQuickEditSlotCopyTargets` + `copyPortionsToSlots` en el
+// mismo gesto (igual que en el alta de dias clonados).
+// ---------------------------------------------------------------------------
+
+/** Destino resuelto de una copia de franja: donde aterriza y si pisa una franja existente. */
+export interface QuickEditSlotCopyTarget {
+  variantKey: string
+  /** Key de la franja destino: la EXISTENTE si hubo match por nombre, la clonada si se agrega. */
+  slotKey: string
+  /** true = reemplaza el contenido de una franja homonima (conserva su posicion). */
+  replaced: boolean
+}
+
+/** Key libre dentro del dia: la deseada, o con sufijo `-2`, `-3`… si ya esta ocupada. */
+function uniqueSlotKeyIn(taken: ReadonlySet<string>, desired: string): string {
+  if (!taken.has(desired)) return desired
+  let suffix = 2
+  while (taken.has(desired + '-' + suffix)) suffix += 1
+  return desired + '-' + suffix
+}
+
+/**
+ * Codigo de franja libre dentro del dia. Es un requisito de la BASE, no cosmetico:
+ * `unique (day_variant_id, slot_code)` — copiar una franja a un dia que ya heredo su codigo
+ * (dia clonado y despues renombrado) reventaria el publish. Tope de 64 del contrato.
+ */
+function uniqueSlotCode(taken: ReadonlySet<string>, desired: string): string {
+  if (!taken.has(desired)) return desired
+  const base = desired.slice(0, 60)
+  let suffix = 2
+  while (taken.has(base + '-' + suffix)) suffix += 1
+  return base + '-' + suffix
+}
+
+/**
+ * Contenido de la franja origen bajado sobre una franja destino. `identity` es la identidad
+ * que conserva el destino: al REEMPLAZAR viaja la de la franja pisada (misma posicion, mismo
+ * `id`/`code` — el contador lo lee como franja tocada, no como baja+alta); al AGREGAR es nueva.
+ *
+ * Los `id` de los ITEMS se conservan a proposito (divergencia deliberada con la web, donde los
+ * reemplazos viven dentro del item del estado): en RN son la llave del carry-over de reemplazos
+ * autorizados — `injectSubstitutionsIntoDraft` empareja por `item.id` — asi que sin ellos la
+ * franja copiada llegaria al dia destino SIN sus reemplazos. Es la misma decision del alta de
+ * dias clonados (`planDayVariantAdditions`); la persistencia ignora esos ids e inserta filas
+ * nuevas. Las `key` de UI si se re-generan, prefijadas por la franja destino.
+ */
+function copiedQuickEditSlot(
+  source: QuickEditSlot,
+  identity: { key: string; id: string | null; code: string },
+): QuickEditSlot {
+  return {
+    ...cloneQuickEditSlot(source, identity.key),
+    key: identity.key,
+    id: identity.id,
+    code: identity.code,
+  }
+}
+
+/**
+ * Resuelve a que franja de cada dia destino aterriza la copia. PURA y determinista: el reducer
+ * la usa para mover el arbol y la pantalla la usa —con el MISMO estado previo— para mover la
+ * capa de porciones (ver `copyPortionsToSlots`).
+ *
+ * Reglas: se ignoran dias inexistentes, repetidos y el propio dia de origen; match por
+ * `slotMergeName` (primera coincidencia) => reemplazo en su posicion; sin match => franja nueva
+ * al final con key derivada (y sufijo si esa key ya existiera en el dia).
+ */
+export function resolveQuickEditSlotCopyTargets(
+  state: QuickEditState,
+  params: { sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] },
+): QuickEditSlotCopyTarget[] {
+  const source = state.variants.find((variant) => variant.key === params.sourceVariantKey)
+  const sourceSlot = source?.slots.find((slot) => slot.key === params.slotKey)
+  if (!source || !sourceSlot) return []
+  const mergeName = slotMergeName(sourceSlot.name)
+  const seen = new Set<string>()
+  const targets: QuickEditSlotCopyTarget[] = []
+  for (const variantKey of params.targetVariantKeys) {
+    if (variantKey === params.sourceVariantKey || seen.has(variantKey)) continue
+    const variant = state.variants.find((candidate) => candidate.key === variantKey)
+    if (!variant) continue
+    seen.add(variantKey)
+    const match = variant.slots.find((slot) => slotMergeName(slot.name) === mergeName)
+    if (match) {
+      targets.push({ variantKey, slotKey: match.key, replaced: true })
+      continue
+    }
+    const taken = new Set(variant.slots.map((slot) => slot.key))
+    targets.push({
+      variantKey,
+      slotKey: uniqueSlotKeyIn(taken, variantKey + ':' + sourceSlot.key),
+      replaced: false,
+    })
+  }
+  return targets
+}
+
+function copySlotToVariants(
+  state: QuickEditState,
+  params: { sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] },
+): QuickEditState {
+  const source = state.variants.find((variant) => variant.key === params.sourceVariantKey)
+  const sourceSlot = source?.slots.find((slot) => slot.key === params.slotKey)
+  if (!source || !sourceSlot) return state
+  const targets = resolveQuickEditSlotCopyTargets(state, params)
+  if (targets.length === 0) return state
+  const byVariantKey = new Map(targets.map((target) => [target.variantKey, target]))
+  return {
+    ...state,
+    variants: state.variants.map((variant) => {
+      const target = byVariantKey.get(variant.key)
+      if (!target) return variant
+      if (target.replaced) {
+        const index = variant.slots.findIndex((slot) => slot.key === target.slotKey)
+        const destination = variant.slots[index]
+        const slots = [...variant.slots]
+        slots[index] = copiedQuickEditSlot(sourceSlot, {
+          key: destination.key,
+          id: destination.id,
+          code: destination.code,
+        })
+        return { ...variant, slots }
+      }
+      const code = uniqueSlotCode(new Set(variant.slots.map((slot) => slot.code)), sourceSlot.code)
+      return {
+        ...variant,
+        slots: [...variant.slots, copiedQuickEditSlot(sourceSlot, { key: target.slotKey, id: null, code })],
+      }
+    }),
+  }
+}
+
+/** Los demas dias del plan: el argumento de "Aplicar a todos los días". */
+export function otherQuickEditVariantKeys(state: QuickEditState, variantKey: string): string[] {
+  return state.variants.filter((variant) => variant.key !== variantKey).map((variant) => variant.key)
+}
+
 export function quickEditReducer(state: QuickEditState, action: QuickEditAction): QuickEditState {
   switch (action.type) {
     case 'SET_VISIBLE_NOTES':
@@ -556,6 +708,10 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       }))
     case 'UPDATE_SLOT':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
+    case 'COPY_SLOT_TO_VARIANTS':
+      // Las porciones viven en el reducer hermano: la pantalla despacha esto y aplica
+      // `copyPortionsToSlots` con los destinos de `resolveQuickEditSlotCopyTargets`.
+      return copySlotToVariants(state, action)
     case 'ADD_SLOT': {
       const slot: QuickEditSlot = {
         key: action.key,

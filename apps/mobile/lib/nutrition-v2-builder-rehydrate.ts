@@ -240,6 +240,12 @@ export function rehydrateBuilderState(input: {
         canAdjustPrescribedQuantity: planModel.permissions.canAdjustPrescribedQuantity,
         canSubstitute: planModel.permissions.canSubstitute,
       },
+      // Notas visibles del alumno: el wizard no tiene campo para editarlas (se escriben en la
+      // edicion rapida), pero publicar reescribe la version COMPLETA, asi que sin traerlas aqui
+      // "Rehacer con el asistente" las borraba en silencio. `protocolNotes` NO se rehidrata: es
+      // capacidad Pro y el endpoint movil la repone desde la version base, para que el gate del
+      // addon no lea como "nueva" una nota que el plan ya tenia (ver `assembleDraft`).
+      visibleNotes: planModel.visibleNotes,
       variants: normalized,
       activeVariantKey: base.key,
     },

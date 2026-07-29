@@ -68,7 +68,7 @@ function Segment({ segment }: { segment: PortionSegmentView }) {
     <View
       className={cx(
         'flex-row overflow-hidden border bg-surface-sunken',
-        hasDerived ? 'border-primary' : filled ? 'border-primary/60' : 'border-border-default',
+        hasDerived ? 'border-primary' : filled ? 'border-primary/60' : 'border-default',
       )}
       style={
         isHalfWidth
@@ -122,7 +122,7 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
       onLongPress={onLongPress}
       delayLongPress={450}
       hitSlop={4}
-      className="min-h-11 flex-row items-center gap-2.5 rounded-control border border-border-subtle bg-surface-card px-2.5 py-1.5"
+      className="min-h-11 flex-row items-center gap-2.5 rounded-control border border-subtle bg-surface-card px-2.5 py-1.5"
     >
       {({ pressed }) => (
         <MotiView
@@ -131,7 +131,7 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
           className="flex-1 flex-row items-center gap-2"
         >
           <GroupDot code={target.groupCode} color={color} size={20} />
-          <Text className="min-w-0 flex-1 text-sm font-medium text-text-strong" numberOfLines={1}>
+          <Text className="min-w-0 flex-1 text-sm font-medium text-strong" numberOfLines={1}>
             {target.groupName}
           </Text>
           {view.unsynced ? (
@@ -163,7 +163,7 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
               <View
                 className={cx(
                   'h-2.5 w-16 flex-row overflow-hidden rounded-full border bg-surface-sunken',
-                  bar.marked + bar.derived > 0 ? 'border-primary/60' : 'border-border-default',
+                  bar.marked + bar.derived > 0 ? 'border-primary/60' : 'border-default',
                   view.unsynced && 'opacity-60',
                 )}
               >
@@ -182,7 +182,7 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
             </View>
           ) : null}
           <Text
-            className="text-xs font-semibold text-text-muted"
+            className="text-xs font-semibold text-muted"
             style={{ fontVariant: ['tabular-nums'] }}
           >
             {formatPortionsCl(view.displayCoverage)}/{formatPortionsCl(view.prescribed)}

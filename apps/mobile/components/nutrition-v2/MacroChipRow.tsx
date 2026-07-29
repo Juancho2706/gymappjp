@@ -51,11 +51,11 @@ export function MacroChipRow({
       {calories != null ? (
         // Web: `tabular-nums` en las cifras (MacroChipRow.tsx:50) → fontVariant RN.
         <Text
-          className={cx('font-bold text-text-strong', sm ? 'text-xs' : 'text-sm')}
+          className={cx('font-bold text-strong', sm ? 'text-xs' : 'text-sm')}
           style={{ fontVariant: ['tabular-nums'] }}
         >
           {Math.round(calories)}
-          <Text className={cx('font-semibold text-text-muted', sm ? 'text-[10px]' : 'text-[11px]')}>
+          <Text className={cx('font-semibold text-muted', sm ? 'text-[10px]' : 'text-[11px]')}>
             {' kcal'}
           </Text>
         </Text>
@@ -69,17 +69,17 @@ export function MacroChipRow({
           <View
             key={key}
             className={cx(
-              'flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken',
+              'flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken',
               // Paddings 1:1 con web MacroChipRow.tsx:72 (sm px-1.5 py-0.5 / md px-2 py-0.5).
               sm ? 'px-1.5 py-0.5' : 'px-2 py-0.5',
             )}
           >
             <View className={cx('rounded-full', meta.nativeClass)} style={{ width: 6, height: 6 }} />
-            <Text className={cx('font-semibold text-text-muted', sm ? 'text-[10px]' : 'text-[11px]')}>
+            <Text className={cx('font-semibold text-muted', sm ? 'text-[10px]' : 'text-[11px]')}>
               {meta.shortLabel}
             </Text>
             <Text
-              className={cx('font-semibold text-text-body', sm ? 'text-[10px]' : 'text-[11px]')}
+              className={cx('font-semibold text-body', sm ? 'text-[10px]' : 'text-[11px]')}
               style={{ fontVariant: ['tabular-nums'] }}
             >
               {fmtMacro(value)}
@@ -89,7 +89,7 @@ export function MacroChipRow({
       })}
 
       {per ? (
-        <Text className={cx('text-text-subtle', sm ? 'text-[10px]' : 'text-[11px]')}>{per}</Text>
+        <Text className={cx('text-subtle', sm ? 'text-[10px]' : 'text-[11px]')}>{per}</Text>
       ) : null}
     </View>
   )

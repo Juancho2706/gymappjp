@@ -46,6 +46,7 @@ import {
   type QuickEditState,
 } from './quick-edit-state'
 import { QE_COPY, formatIsoDateDdMmYyyy } from './microcopy'
+import { ExitConfirmDialog, type QuickEditExitIntent } from './ExitConfirmDialog'
 import {
   clearNutritionDraft,
   quickEditDraftKey,
@@ -72,6 +73,12 @@ interface QuickEditContextValue {
   dispatch: (action: QuickEditAction) => void
   clientId: string
   clientName: string
+  /**
+   * Fecha local del alumno (YYYY-MM-DD) resuelta server-side. La usa la tira Lu-Do de cada
+   * dia para marcar cual aplica HOY (QW-4): sin esto el coach edita "Día de entrenamiento"
+   * sin saber a que dia de la semana corresponde.
+   */
+  today: string
   strategy: NutritionStrategy
   protocolNotes: string | null
   permissions: NutritionPlanReadModel['permissions']
@@ -198,6 +205,11 @@ export function QuickEditProvider({
   const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [staleOpen, setStaleOpen] = useState(false)
+  // Guard de salida con cambios sin publicar: reemplaza los window.confirm() nativos por el
+  // dialogo del DS (ver ExitConfirmDialog). La intencion se conserva al cerrar (solo baja
+  // `exitConfirmOpen`) para que el copy no salte durante la animacion de cierre.
+  const [exitIntent, setExitIntent] = useState<QuickEditExitIntent>('leave')
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false)
   // Arbol de una sesion anterior recuperado del respaldo local; alimenta el banner "Restaurar".
   const [pendingRestore, setPendingRestore] = useState<QuickEditState | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -405,21 +417,43 @@ export function QuickEditProvider({
   // Al salir, el respaldo local solo se borra si el coach descarto ediciones PROPIAS (dirty
   // confirmado) o si no queda un respaldo anterior sin restaurar: salir limpio con el banner
   // "Restaurar" todavia pendiente NO debe destruir ese respaldo en silencio.
+  const finalizeExit = useCallback(
+    (hadChanges: boolean) => {
+      idempotencyKeyRef.current = null
+      if (hadChanges || pendingRestore === null) clearNutritionDraft(draftKey)
+      onExit()
+    },
+    [draftKey, pendingRestore, onExit],
+  )
+
+  // Con cambios sin publicar el guard abre el dialogo del DS (ExitConfirmDialog) en vez del
+  // window.confirm() nativo; sin cambios se sale directo.
   const discardChanges = useCallback(() => {
     if (isPending) return
-    if (dirty && !window.confirm(QE_COPY.discardConfirm(changeCount))) return
-    idempotencyKeyRef.current = null
-    if (dirty || pendingRestore === null) clearNutritionDraft(draftKey)
-    onExit()
-  }, [isPending, dirty, changeCount, draftKey, pendingRestore, onExit])
+    if (dirty) {
+      setExitIntent('discard')
+      setExitConfirmOpen(true)
+      return
+    }
+    finalizeExit(false)
+  }, [isPending, dirty, finalizeExit])
 
   const requestExit = useCallback(() => {
     if (isPending) return
-    if (dirty && !window.confirm(QE_COPY.leaveGuard)) return
-    idempotencyKeyRef.current = null
-    if (dirty || pendingRestore === null) clearNutritionDraft(draftKey)
-    onExit()
-  }, [isPending, dirty, draftKey, pendingRestore, onExit])
+    if (dirty) {
+      setExitIntent('leave')
+      setExitConfirmOpen(true)
+      return
+    }
+    finalizeExit(false)
+  }, [isPending, dirty, finalizeExit])
+
+  const cancelExit = useCallback(() => setExitConfirmOpen(false), [])
+
+  const confirmExit = useCallback(() => {
+    setExitConfirmOpen(false)
+    finalizeExit(true)
+  }, [finalizeExit])
 
   const reloadAfterStale = useCallback(() => {
     idempotencyKeyRef.current = null
@@ -446,6 +480,7 @@ export function QuickEditProvider({
     dispatch,
     clientId,
     clientName,
+    today,
     strategy: planModel.plan?.strategy ?? 'flexible',
     protocolNotes: planModel.protocolNotes,
     permissions: planModel.permissions,
@@ -475,5 +510,16 @@ export function QuickEditProvider({
     dismissRestore,
   }
 
-  return <QuickEditContext.Provider value={value}>{children}</QuickEditContext.Provider>
+  return (
+    <QuickEditContext.Provider value={value}>
+      {children}
+      <ExitConfirmDialog
+        open={exitConfirmOpen}
+        intent={exitIntent}
+        changeCount={changeCount}
+        onCancel={cancelExit}
+        onConfirm={confirmExit}
+      />
+    </QuickEditContext.Provider>
+  )
 }

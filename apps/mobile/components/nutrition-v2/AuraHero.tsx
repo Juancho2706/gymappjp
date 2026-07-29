@@ -155,11 +155,11 @@ function MacroMiniRing({
         color={color}
         trackColor={hexToRgba(color, 0.16)}
       >
-        <Text className="text-text-strong" style={styles.miniValue}>
+        <Text className="text-strong" style={styles.miniValue}>
           {Math.round(value.consumed)}
         </Text>
         {hasTarget ? (
-          <Text className="text-text-subtle" style={styles.miniTarget}>
+          <Text className="text-subtle" style={styles.miniTarget}>
             / {Math.round(value.target as number)}
           </Text>
         ) : null}
@@ -231,7 +231,7 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
       style={[{ borderRadius: theme.radius.card }, shadow('sm', theme.scheme)]}
     >
       <View
-        className="overflow-hidden rounded-card border border-border-subtle bg-surface-card"
+        className="overflow-hidden rounded-card border border-subtle bg-surface-card"
         style={{ padding: expanded ? 24 : 20 }}
       >
         <MotiView
@@ -240,7 +240,7 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
           transition={{ type: 'timing', duration: motion.duration('slow'), delay: motion.reduced ? 0 : 50 }}
         >
           <Text
-            className="text-text-strong"
+            className="text-strong"
             style={[
               styles.greeting,
               { fontSize: expanded ? TYPE_SCALE['2xl'] : TYPE_SCALE.xl },
@@ -248,7 +248,7 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
           >
             {greeting}
           </Text>
-          <Text className="text-text-muted" style={styles.subtitle}>
+          <Text className="text-muted" style={styles.subtitle}>
             {hasTarget ? 'Tu energía de hoy' : 'Vas sumando tu día'}
           </Text>
         </MotiView>
@@ -282,7 +282,7 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
             trackColor={hexToRgba(theme.primary, 0.13)}
           >
             <Text
-              className="text-text-strong"
+              className="text-strong"
               style={[
                 styles.kcal,
                 {
@@ -293,18 +293,18 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
             >
               <AnimatedKcal value={consumed} />
             </Text>
-            <Text className="text-text-subtle" style={styles.kcalUnit}>
+            <Text className="text-subtle" style={styles.kcalUnit}>
               kcal
             </Text>
             {hasTarget ? (
-              <Text className="text-text-muted" style={styles.kcalTarget}>
+              <Text className="text-muted" style={styles.kcalTarget}>
                 de{' '}
-                <Text className="text-text-body" style={styles.kcalTargetValue}>
+                <Text className="text-body" style={styles.kcalTargetValue}>
                   {formatNutritionCalories(target as number)}
                 </Text>
               </Text>
             ) : (
-              <Text className="text-text-muted" style={styles.kcalHint}>
+              <Text className="text-muted" style={styles.kcalHint}>
                 Registra lo que comas para ver tu avance
               </Text>
             )}

@@ -39,7 +39,7 @@ export function QuantityStepper({
         accessibilityLabel={`Restar ${step} a ${accessibilityLabel}`}
         disabled={disabled}
         onPress={() => bump(-1)}
-        className="h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card"
+        className="h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card"
       >
         <Minus color={theme.foreground} size={16} />
       </Pressable>
@@ -50,14 +50,14 @@ export function QuantityStepper({
         editable={!disabled}
         keyboardType="decimal-pad"
         selectTextOnFocus
-        className="h-11 w-16 rounded-control border border-border-default bg-surface-card text-center text-base font-semibold text-text-strong"
+        className="h-11 w-16 rounded-control border border-default bg-surface-card text-center text-base font-semibold text-strong"
       />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Sumar ${step} a ${accessibilityLabel}`}
         disabled={disabled}
         onPress={() => bump(1)}
-        className="h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card"
+        className="h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card"
       >
         <Plus color={theme.foreground} size={16} />
       </Pressable>

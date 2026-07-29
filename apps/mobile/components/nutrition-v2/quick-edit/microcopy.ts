@@ -72,6 +72,20 @@ export const QUICK_EDIT_COPY = {
   removeDay: 'Eliminar día',
   removeDayTitle: '¿Eliminar el día?',
   dayRemovedUndo: 'Día eliminado',
+  // ── Índice de días (P1-1): anclas arriba de la pila para no scrollear a ciegas. Mismas
+  //    cadenas que la web (`QE_COPY.dayIndex*`) — el copy del quick-edit es paritario. ──
+  dayIndexLabel: 'Ir a un día del plan',
+  baseDayShort: 'Base',
+  dayAppliesToday: 'Aplica hoy',
+  // ── Copiar una franja a otros días (P0-4). El destino se empareja por NOMBRE: si el día ya
+  //    tiene una franja homónima la reemplaza (misma posición), y si no la agrega al final. ──
+  slotMenuTitle: 'Opciones de la franja',
+  copySlot: 'Copiar a otros días…',
+  copySlotAll: 'Aplicar a todos los días',
+  copySlotTitle: 'Copiar la franja a otros días',
+  copySlotHint:
+    'Reemplaza la franja del mismo nombre en cada día elegido. Si ese día no la tiene, se agrega al final.',
+  copySlotReplaces: 'Reemplaza',
   /** Gate Pro `multi_variant`: el server rechaza igual; el candado evita el callejón. */
   multiDayLocked:
     'Armar días distintos (por ejemplo el fin de semana) es parte de Nutrición Pro, incluido en los planes pagos.',
@@ -97,6 +111,21 @@ export function publishConfirmBody(studentName: string, futureDate: string | nul
 /** CTA del sheet de alta de días: "Agregar día" / "Agregar 2 días". */
 export function addDayCta(n: number): string {
   return n <= 1 ? 'Agregar día' : `Agregar ${n} días`
+}
+
+/** CTA de la hoja de copia de franja (misma cadena que la web `QE_COPY.copySlotCta`). */
+export function copySlotCta(n: number): string {
+  return n === 0 ? 'Elige al menos un día' : `Copiar a ${n} ${n === 1 ? 'día' : 'días'}`
+}
+
+/** Snackbar de la copia de franja (deshacer = el árbol previo). Espejo de `copySlotDone`. */
+export function copySlotDone(n: number): string {
+  return `Franja copiada a ${n} ${n === 1 ? 'día' : 'días'}`
+}
+
+/** Etiqueta accesible del ancla de un día del índice (espejo de `QE_COPY.dayIndexJump`). */
+export function dayIndexJump(label: string): string {
+  return `Ir a ${label}`
 }
 
 /** Cuerpo del confirm de baja de un día específico. */

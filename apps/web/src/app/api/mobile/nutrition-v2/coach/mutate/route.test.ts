@@ -111,6 +111,32 @@ function admin(rowsByTable: Record<string, unknown>) {
   adminMaybeSingle.mockImplementation((table: string) => ({ data: rowsByTable[table] ?? null, error: null }))
 }
 
+/**
+ * Lectura de la VERSION BASE que hace `publish` para el carry-over de notas (el wizard no edita
+ * ni `protocol_notes` ni `visible_notes`, y publicar reescribe la version completa).
+ */
+function mockBaseVersionRead(result: { data?: unknown; error?: { message: string; code?: string } }) {
+  userFrom.mockImplementation((table: string) => {
+    if (table !== 'nutrition_plan_versions_v2') throw new Error(`tabla inesperada en el publish: ${table}`)
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      maybeSingle: async () => ({ data: result.data ?? null, error: result.error ?? null }),
+    }
+    return chain
+  })
+}
+
+/** Fila base por defecto: mismo plan del draft, sin notas (el caso "no hay nada que reponer"). */
+function baseVersionRow(over: Record<string, unknown> = {}) {
+  return { id: VERSION_ID, plan_id: PLAN_ROOT, protocol_notes: null, visible_notes: null, ...over }
+}
+
+/** Draft con el que `persistAndPublishDraft` fue llamado (lo que REALMENTE se persiste). */
+function persistedDraft(): NutritionPlanDraft {
+  return (persistAndPublishDraft.mock.calls[0][0] as { draft: NutritionPlanDraft }).draft
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   getUser.mockResolvedValue({ data: { user: { id: COACH } }, error: null })
@@ -118,6 +144,7 @@ beforeEach(() => {
   resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: true, reason: 'global_on' })
   hasNutritionProV2.mockResolvedValue(true)
   persistAndPublishDraft.mockResolvedValue({ ok: true, versionId: VERSION_ID, planId: PLAN_ROOT })
+  mockBaseVersionRead({ data: baseVersionRow() })
 })
 
 describe('POST coach/mutate · gate de rollout y workspace', () => {
@@ -205,6 +232,75 @@ describe('POST coach/mutate · publish', () => {
     const body = await res.json()
     expect(res.status).toBe(400)
     expect(body.code).toBe('INVALID_PAYLOAD')
+  })
+})
+
+// PERDIDA DE DATOS (P0): republicar desde el asistente RN reescribe la version COMPLETA. Las notas
+// visibles (edicion rapida) y el protocolo profesional no se editan en el wizard, asi que sin
+// carry-over cada "Rehacer con el asistente" + Publicar las borraba en silencio.
+describe('POST coach/mutate · publish · carry-over de notas', () => {
+  const base = (over: Record<string, unknown> = {}) => ({
+    action: 'publish',
+    workspace: SCOPE,
+    idempotencyKey: 'publish:key:abcdef',
+    effectiveFrom: '2026-07-28',
+    expectedCurrentVersionId: VERSION_ID,
+    ...over,
+  })
+
+  it('un binario RN sin carry-over (draft sin notas) NO borra las del alumno: se reponen de la base', async () => {
+    mockBaseVersionRead({ data: baseVersionRow({ visible_notes: 'Toma 2L de agua', protocol_notes: 'Protocolo cetogenico' }) })
+    const res = await POST(req(base({ draft: draft() })))
+    expect(res.status).toBe(200)
+    expect(persistedDraft().visibleNotes).toBe('Toma 2L de agua')
+    expect(persistedDraft().protocolNotes).toBe('Protocolo cetogenico')
+  })
+
+  it('las notas visibles del draft MANDAN sobre la base (el wizard ya las rehidrato)', async () => {
+    mockBaseVersionRead({ data: baseVersionRow({ visible_notes: 'Viejas' }) })
+    const res = await POST(req(base({ draft: draft({ visibleNotes: 'Las que el coach vio en pantalla' }) })))
+    expect(res.status).toBe(200)
+    expect(persistedDraft().visibleNotes).toBe('Las que el coach vio en pantalla')
+  })
+
+  it('el protocolo repuesto NO dispara el gate Pro de un coach base (grandfathering por construccion)', async () => {
+    hasNutritionProV2.mockResolvedValue(false)
+    mockBaseVersionRead({ data: baseVersionRow({ protocol_notes: 'Protocolo ya publicado' }) })
+    const res = await POST(req(base({ draft: draft() })))
+    expect(res.status).toBe(200)
+    expect(persistedDraft().protocolNotes).toBe('Protocolo ya publicado')
+  })
+
+  it('una version base de OTRO plan no contamina el draft (anti-confusion de ids)', async () => {
+    mockBaseVersionRead({ data: baseVersionRow({ plan_id: '77777777-7777-4777-8777-777777777777', visible_notes: 'De otro alumno' }) })
+    const res = await POST(req(base({ draft: draft() })))
+    expect(res.status).toBe(200)
+    expect(persistedDraft().visibleNotes).toBeNull()
+    expect(persistedDraft().protocolNotes).toBeNull()
+  })
+
+  it('sin poder leer la version base NO publica (fail-closed: nunca a ciegas sobre las notas)', async () => {
+    mockBaseVersionRead({ error: { message: 'denied', code: '42501' } })
+    const res = await POST(req(base({ draft: draft() })))
+    const body = await res.json()
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('SCOPE_DENIED')
+    expect(persistAndPublishDraft).not.toHaveBeenCalled()
+  })
+
+  it('plan NUEVO (sin version base) publica sin leer notas de ninguna parte', async () => {
+    const res = await POST(
+      req({
+        action: 'publish',
+        workspace: SCOPE,
+        draft: draft({ planId: undefined }),
+        idempotencyKey: 'publish:key:abcdef',
+        effectiveFrom: '2026-07-28',
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(userFrom).not.toHaveBeenCalled()
+    expect(persistedDraft().visibleNotes).toBeNull()
   })
 })
 

@@ -33,12 +33,12 @@ export function DayVariantWeekStrip<T extends NutritionDayVariantLike>({
           className={[
             'min-w-[32px] items-center justify-center rounded-pill border px-2 py-0.5',
             day.applies ? 'bg-primary/10' : 'bg-surface-sunken',
-            day.isToday ? 'border-primary' : day.applies ? 'border-primary/30' : 'border-border-subtle',
+            day.isToday ? 'border-primary' : day.applies ? 'border-primary/30' : 'border-subtle',
           ].join(' ')}
         >
           <Text
             className={
-              day.applies ? 'text-[11px] font-semibold text-primary' : 'text-[11px] text-text-subtle'
+              day.applies ? 'text-[11px] font-semibold text-primary' : 'text-[11px] text-subtle'
             }
             style={{ fontVariant: ['tabular-nums'] }}
           >

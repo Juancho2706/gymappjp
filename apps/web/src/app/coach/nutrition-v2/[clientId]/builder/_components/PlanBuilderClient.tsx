@@ -4,7 +4,8 @@ import { useEffect, useMemo, useReducer, useRef, useState, useTransition } from 
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, History, Info, Loader2, Plus, Repeat, Search, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, CopyCheck, History, Info, Loader2, Plus, Repeat, Search, Trash2, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { BuilderStepList, DayVariantWeekStrip, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
@@ -12,6 +13,7 @@ import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
 import {
   NUTRITION_STRATEGIES,
   buildNutritionIdempotencyKey,
+  sortNutritionDayVariantsForDisplay,
   type FoodCatalogCursor,
   type FoodCatalogItem,
   type NutritionBuilderStepModel,
@@ -24,6 +26,7 @@ import {
   MAX_ITEM_SUBSTITUTIONS,
   activeVariantOf,
   assembleAndValidateDraft,
+  autoVariantLabel,
   baseVariantOf,
   builderReducer,
   clonedKey,
@@ -31,6 +34,7 @@ import {
   customMacrosOf,
   itemMacros,
   macroEnergyMismatch,
+  resolveSlotCopyTargets,
   slotSubtotal,
   strategyUsesSlots,
   takenDayOfWeeks,
@@ -71,6 +75,11 @@ import {
 } from './portions-state'
 // Multi-dia (SPEC nutrition-multiday): barra de chips de dias + popover "Agregar dia".
 import { DayVariantBar, type DayVariantBarHandlers } from './DayVariantBar'
+// El menu "Copiar a otros dias" de la franja usa el MISMO patron responsive del "Agregar dia"
+// (popover en desktop / bottom sheet en movil), asi que reusa su hook en vez de copiarlo.
+import { useIsDesktopMd } from './AddDayPopover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 // Respaldo LOCAL del wizard (W3b): store puro versionado en localStorage. El coach retoma un
 // plan a medio construir si cerró la PWA / mató la pestaña. La key incluye clientId + planId.
 import {
@@ -681,21 +690,175 @@ function ItemRow({
   )
 }
 
+/** Copia de UNA franja a otros días: lo que el menú de la franja le pide al wizard (P0-4). */
+export interface SlotCopyRequest {
+  sourceVariantKey: string
+  slotKey: string
+  targetVariantKeys: string[]
+}
+
+/**
+ * Menú de la franja: "Copiar a otros días" (P0-4). El flujo real del coach es "el sábado es
+ * igual pero cambia el almuerzo": sin esto había que duplicar el día entero o retipear cada
+ * alimento buscándolo de nuevo en el catálogo.
+ *
+ * Un solo panel (popover en desktop / bottom sheet en móvil, mismo patrón que "Agregar día"):
+ * atajo "Aplicar a todos los días" + multi-select de días destino. La copia lleva alimentos,
+ * reemplazos y porciones, y REEMPLAZA la franja del mismo nombre del destino (merge por
+ * nombre del reducer) — se dice explícito en el panel, no se descubre después.
+ */
+function CopySlotMenu({
+  slot,
+  variantKey,
+  variants,
+  onCopySlot,
+}: {
+  slot: BuilderSlot
+  variantKey: string
+  variants: BuilderVariant[]
+  onCopySlot: (request: SlotCopyRequest) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
+  const isDesktop = useIsDesktopMd()
+  // Días destino en el orden canónico de lectura (base + Lu→Do), sin el día de origen.
+  const targets = useMemo(
+    () => sortNutritionDayVariantsForDisplay(variants).filter((variant) => variant.key !== variantKey),
+    [variants, variantKey],
+  )
+  const slotLabel = slot.name.trim() || 'esta franja'
+
+  function handleOpenChange(next: boolean) {
+    if (next) setSelected([])
+    setOpen(next)
+  }
+
+  function copyTo(targetVariantKeys: string[]) {
+    if (targetVariantKeys.length === 0) return
+    onCopySlot({ sourceVariantKey: variantKey, slotKey: slot.key, targetVariantKeys })
+    setOpen(false)
+  }
+
+  const body = (
+    <div className="space-y-3 p-1">
+      <p className="text-xs leading-relaxed text-muted">
+        Copia <span className="font-semibold text-strong">{slotLabel}</span> con sus alimentos y porciones. Reemplaza
+        la franja del mismo nombre en el día destino.
+      </p>
+      <button
+        type="button"
+        onClick={() => copyTo(targets.map((variant) => variant.key))}
+        className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <CopyCheck aria-hidden="true" className="h-4 w-4 text-muted" />
+        Aplicar a todos los días
+      </button>
+      <div>
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">O elige los días</p>
+        <div className="flex flex-wrap gap-1.5">
+          {targets.map((variant) => {
+            const isOn = selected.includes(variant.key)
+            return (
+              <button
+                key={variant.key}
+                type="button"
+                aria-pressed={isOn}
+                onClick={() =>
+                  setSelected((prev) =>
+                    prev.includes(variant.key) ? prev.filter((key) => key !== variant.key) : [...prev, variant.key],
+                  )
+                }
+                className={
+                  'inline-flex min-h-11 items-center rounded-control border px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                  (isOn
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border-default bg-surface-card text-strong hover:border-primary/40')
+                }
+              >
+                {variant.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <button
+        type="button"
+        disabled={selected.length === 0}
+        onClick={() => copyTo(selected)}
+        className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      >
+        <Copy aria-hidden="true" className="h-4 w-4" />
+        {selected.length <= 1 ? 'Copiar al día elegido' : `Copiar a ${selected.length} días`}
+      </button>
+    </div>
+  )
+
+  // El nombre accesible empieza con el texto visible (WCAG 2.5.3) y agrega de qué franja habla.
+  const triggerLabel = `Copiar a otros días: ${slot.name.trim() || 'franja sin nombre'}`
+  const trigger = (
+    <>
+      <Copy aria-hidden="true" className="h-4 w-4" />
+      Copiar a otros días
+    </>
+  )
+
+  if (isDesktop) {
+    return (
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger aria-label={triggerLabel} className={secondaryButtonClass}>
+          {trigger}
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-80 rounded-card border border-border-subtle bg-surface-card p-2 text-body shadow-lg"
+        >
+          {body}
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
+  return (
+    <>
+      <button type="button" aria-label={triggerLabel} onClick={() => handleOpenChange(true)} className={secondaryButtonClass}>
+        {trigger}
+      </button>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetContent side="bottom" className="max-h-[85dvh] rounded-t-card bg-surface-card text-body dark:bg-surface-card">
+          <SheetHeader className="border-border-subtle bg-transparent p-4 pb-2 dark:border-border-subtle">
+            <SheetTitle className="pr-10 font-display text-base font-semibold normal-case tracking-tight text-strong">
+              Copiar a otros días
+            </SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] pt-1">
+            {body}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  )
+}
+
 function SlotEditor({
   slot,
   variantKey,
+  variants,
   clientId,
   dispatch,
   errors,
   portions,
+  onCopySlot,
 }: {
   slot: BuilderSlot
   /** Día (variante) al que pertenece la franja: toda mutación viaja scoped a él. */
   variantKey: string
+  /** Días del plan: con más de uno aparece el menú "Copiar a otros días". */
+  variants: BuilderVariant[]
   clientId: string
   dispatch: Dispatch
   errors: Record<string, string>
   portions: PortionsController
+  onCopySlot: (request: SlotCopyRequest) => void
 }) {
   // Fix QA F1-2: el subtotal de franja combina items fijos + derivado de porciones
   // (Σ porciones × ref del grupo, catálogo VIVO del picker). Catálogo sin cargar o
@@ -706,6 +869,8 @@ function SlotEditor({
   const itemsSubtotal = slotSubtotal(slot)
   const portionTotals = slotPortionTotals(portions.bySlot, portionsSlotKey, portions.groups)
   const subtotal = combineSubtotals(itemsSubtotal, portionTotals)
+  // El menú de copia solo tiene sentido con más de un día en el plan.
+  const canCopyToOtherDays = variants.length > 1
   return (
     <NutritionCard>
       {/* Fix QA F1-2: grid con filas label/control — los dos labels comparten la fila 1
@@ -763,14 +928,22 @@ function SlotEditor({
           clientId={clientId}
           onPick={(food) => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food })}
         />
-        <button
-          type="button"
-          onClick={() => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food: null })}
-          className={secondaryButtonClass + ' mt-2'}
-        >
-          <Plus className="h-4 w-4" />
-          Alimento libre (con macros)
-        </button>
+        {/* Acciones de la franja. "Copiar a otros días" vive acá —visible, con etiqueta— y no
+            escondida tras un ⋯: es la acción que hoy obliga a retipear medio plan (P0-4), y el
+            header ya está al límite de ancho en 360 px. Solo aparece en planes multi-día. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food: null })}
+            className={secondaryButtonClass}
+          >
+            <Plus className="h-4 w-4" />
+            Alimento libre (con macros)
+          </button>
+          {canCopyToOtherDays ? (
+            <CopySlotMenu slot={slot} variantKey={variantKey} variants={variants} onCopySlot={onCopySlot} />
+          ) : null}
+        </div>
       </div>
 
       {/* NUEVO (SPEC UX-a): sección "Porciones a elección", hermana de la lista de
@@ -1025,6 +1198,39 @@ function DaySummary({
   )
 }
 
+/**
+ * Errores de validación agrupados POR DÍA (P2-1). `validateStep` valida TODOS los días, pero
+ * sus claves son de franja/item: sin este mapeo el coach veía "Cantidad invalida" sin saber en
+ * qué día está. Devuelve el PRIMER problema de cada día, que es lo que se pinta en el chip y
+ * en el aviso con enlace al día.
+ */
+function variantErrorsOf(state: BuilderState, errors: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (Object.keys(errors).length === 0) return out
+  for (const variant of state.variants) {
+    const missingSlots = errors['variant.' + variant.key + '.slots']
+    if (missingSlots) {
+      out[variant.key] = missingSlots
+      continue
+    }
+    for (const slot of variant.slots) {
+      const slotError = errors['slot.' + slot.key + '.name'] ?? errors['slot.' + slot.key + '.startTime']
+      if (slotError) {
+        out[variant.key] = slotError
+        break
+      }
+      const itemError = slot.items
+        .map((item) => errors['item.' + item.key + '.food'] ?? errors['item.' + item.key + '.quantity'])
+        .find((message) => Boolean(message))
+      if (itemError) {
+        out[variant.key] = itemError
+        break
+      }
+    }
+  }
+  return out
+}
+
 function ConstructionStep({
   state,
   clientId,
@@ -1033,6 +1239,7 @@ function ConstructionStep({
   portions,
   dayHandlers,
   addDayLocked,
+  onCopySlot,
 }: {
   state: BuilderState
   clientId: string
@@ -1041,6 +1248,7 @@ function ConstructionStep({
   portions: PortionsController
   dayHandlers: DayVariantBarHandlers
   addDayLocked: boolean
+  onCopySlot: (request: SlotCopyRequest) => void
 }) {
   // Multi-dia: se edita SIEMPRE el dia activo de la barra de chips; los totales, el resumen
   // lateral y las porciones son de ese dia.
@@ -1065,6 +1273,13 @@ function ConstructionStep({
     kcalByVariantKey[v.key] = combineSubtotals(variantTotals(v), vPortions).calories
   }
   const slotsError = errors['variant.' + variant.key + '.slots'] ?? errors.slots
+  // P2-1: qué día tiene el problema, y un atajo para saltar ahí. Con un solo día del plan el
+  // aviso sigue siendo el texto de siempre (no hay a dónde saltar).
+  const dayErrors = variantErrorsOf(state, errors)
+  const daysWithErrors = sortNutritionDayVariantsForDisplay(state.variants).filter(
+    (candidate) => dayErrors[candidate.key],
+  )
+  const showDayErrorNav = state.variants.length > 1 && daysWithErrors.length > 0
   if (!strategyUsesSlots(state.strategy)) {
     return (
       <NutritionCard tone="neutral">
@@ -1085,18 +1300,46 @@ function ConstructionStep({
           kcalByVariantKey={kcalByVariantKey}
           baseTargets={state.targets}
           addDayLocked={addDayLocked}
+          errorByVariantKey={dayErrors}
           handlers={dayHandlers}
         />
-        {slotsError ? <p className="text-sm text-rose-600 dark:text-rose-300">{slotsError}</p> : null}
+        {showDayErrorNav ? (
+          <div
+            role="alert"
+            className="rounded-control border border-rose-300 bg-rose-50 px-3 py-2 dark:border-rose-800 dark:bg-rose-950/40"
+          >
+            <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
+              {daysWithErrors.length === 1 ? 'Revisa este día antes de continuar:' : 'Revisa estos días antes de continuar:'}
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {daysWithErrors.map((candidate) => (
+                <li key={candidate.key}>
+                  <button
+                    type="button"
+                    onClick={() => dayHandlers.onSelect(candidate.key)}
+                    className="inline-flex min-h-9 w-full items-center gap-1.5 rounded-control px-1 text-left text-xs text-rose-700 transition-colors hover:bg-rose-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-rose-300 dark:hover:bg-rose-900/40"
+                  >
+                    <span className="font-semibold underline underline-offset-2">{candidate.label}</span>
+                    <span className="min-w-0 flex-1 truncate">{dayErrors[candidate.key]}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : slotsError ? (
+          <p className="text-sm text-rose-600 dark:text-rose-300">{slotsError}</p>
+        ) : null}
         {variant.slots.map((slot) => (
           <SlotEditor
             key={slot.key}
             slot={slot}
             variantKey={variant.key}
+            variants={state.variants}
             clientId={clientId}
             dispatch={dispatch}
             errors={errors}
             portions={portions}
+            onCopySlot={onCopySlot}
           />
         ))}
         <button
@@ -1137,10 +1380,59 @@ const REVIEW_TARGET_FIELDS: Array<{ field: keyof BuilderTargets; label: string }
   { field: 'fatsG', label: 'G' },
 ]
 
+/** Nombre visible de un item prescrito en la lectura compacta del paso Revisar. */
+function itemDisplayName(item: BuilderItem): string {
+  if (item.food) return item.food.name
+  const custom = (item.customName ?? '').trim()
+  return custom === '' ? 'Alimento sin nombre' : custom
+}
+
+/**
+ * Lectura compacta del contenido de un dia en el paso Revisar (P1-6): franjas con su hora y,
+ * bajo cada una, sus alimentos en UNA linea (nombre con ellipsis + cantidad tabular). Antes la
+ * revision solo mostraba numeros abstractos: el coach tenia que volver al paso 3 y navegar por
+ * chips para saber que iba a publicar. No edita nada; el detalle fino sigue en Construccion.
+ */
+function ReviewSlotList({ slots }: { slots: BuilderSlot[] }) {
+  if (slots.length === 0) return null
+  return (
+    <ul className="mt-3 space-y-2 border-t border-border-subtle pt-3">
+      {slots.map((slot) => (
+        <li key={slot.key}>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="min-w-0 truncate text-sm font-semibold text-strong">{slot.name.trim() || 'Franja sin nombre'}</p>
+            {slot.startTime.trim() !== '' ? (
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted">{slot.startTime}</span>
+            ) : null}
+          </div>
+          {slot.items.length === 0 ? (
+            <p className="text-xs text-subtle">Sin alimentos fijos</p>
+          ) : (
+            <ul className="mt-0.5 space-y-0.5">
+              {slot.items.map((item) => (
+                <li key={item.key} className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 truncate text-xs text-body">
+                    {itemDisplayName(item)}
+                    {item.optional ? <span className="text-subtle"> · opcional</span> : null}
+                  </span>
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted">
+                    {item.quantity.trim() === '' ? '—' : item.quantity + ' ' + item.unit}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 /**
  * Card de UN dia en el paso Revisar (multi-dia): tira Lu-Do de los dias que le tocan,
- * objetivos efectivos con las DIFERENCIAS vs el dia base resaltadas, total prescrito del dia
- * y sus chips de porciones. Solo se monta cuando el plan tiene mas de un dia.
+ * objetivos efectivos con las DIFERENCIAS vs el dia base resaltadas, total prescrito del dia,
+ * la lectura compacta de sus franjas/alimentos y sus chips de porciones. Solo se monta cuando
+ * el plan tiene mas de un dia.
  */
 function ReviewDayCard({
   state,
@@ -1214,6 +1506,8 @@ function ReviewDayCard({
         </div>
       </dl>
 
+      <ReviewSlotList slots={variant.slots} />
+
       <PortionsReviewSection
         slots={variant.slots.map((slot) => ({ key: portionsKey(variant.key, slot.key), name: slot.name }))}
         controller={portions}
@@ -1280,6 +1574,9 @@ function ReviewStep({
             </div>
           ) : null}
         </dl>
+        {/* P1-6: plan de un solo dia => la lectura del contenido va en esta misma card (con
+            varios dias, cada ReviewDayCard trae la suya). */}
+        {usesSlots && !multiDay ? <ReviewSlotList slots={base.slots} /> : null}
       </NutritionCard>
 
       {/* Multi-dia: la revision se agrupa POR DIA (totales del dia + diferencias vs el base).
@@ -1464,6 +1761,14 @@ export function PlanBuilderClient({
   // sin efecto: attach/derive filtran por las franjas vivas de state.variants.
   const portions = usePortionsBuilder(clientId, initialDraft?.portionsBySlot)
   const [showErrors, setShowErrors] = useState(false)
+  // Anuncio para lectores de pantalla de lo que acaba de pasar con los dias (crear, duplicar,
+  // eliminar, copiar una franja). Se pinta en una region `aria-live` visualmente oculta.
+  const [liveMessage, setLiveMessage] = useState('')
+  // Estado VIGENTE para acciones diferidas (el "Deshacer" del toast se toca segundos despues
+  // del render que lo creo): sin esto se restauraria un arbol viejo y se perderia lo editado
+  // entremedio. Se sincronizan en efecto, nunca durante el render.
+  const stateRef = useRef(state)
+  const portionsRef = useRef<PortionsBySlot>(portions.bySlot)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [conflictOpen, setConflictOpen] = useState(false)
   const [conflictError, setConflictError] = useState<string | null>(null)
@@ -1495,6 +1800,12 @@ export function PlanBuilderClient({
   const migratedDraftRef = useRef(false)
   const isFirstRender = useRef(true)
   const [dirty, setDirty] = useState(false)
+
+  // Espejo del estado vigente para las acciones diferidas (ver `stateRef`/`portionsRef`).
+  useEffect(() => {
+    stateRef.current = state
+    portionsRef.current = portions.bySlot
+  }, [state, portions.bySlot])
 
   // Al montar: barre borradores vencidos (higiene global) y, si hay uno vigente para ESTE
   // alumno/plan, ofrece restaurarlo. Best-effort (SSR / modo privado degradan a "sin borrador").
@@ -1644,6 +1955,14 @@ export function PlanBuilderClient({
     })
   }
 
+  // Aviso de lo que acaba de pasar (P1-4): crear/duplicar un dia MUEVE el foco de edicion, asi
+  // que se dice en voz alta. El toast lo ve el coach; la region `aria-live` de mas abajo lo
+  // anuncia a un lector de pantalla aunque el toast no llegue a montarse.
+  function announce(message: string) {
+    setLiveMessage(message)
+    toast(message, { duration: 4000 })
+  }
+
   function handleAddDays(days: number[], origin: 'copy-base' | 'empty') {
     // Se filtra aca lo mismo que rechaza el reducer (dia ocupado / tope), para que las keys
     // generadas queden alineadas con los dias que SI se crean y el clon de porciones no
@@ -1661,6 +1980,13 @@ export function PlanBuilderClient({
       const base = baseVariantOf(state)
       for (const key of keys) cloneVariantPortions(base, key)
     }
+    // El reducer deja activo el PRIMER dia creado: eso es lo que se anuncia.
+    const firstLabel = autoVariantLabel(accepted[0])
+    announce(
+      accepted.length === 1
+        ? `Se creó ${firstLabel} — ahora estás editando ${firstLabel}`
+        : `Se crearon ${accepted.length} días — ahora estás editando ${firstLabel}`,
+    )
   }
 
   function handleDuplicateVariant(sourceVariantKey: string, dayOfWeek: number) {
@@ -1669,11 +1995,64 @@ export function PlanBuilderClient({
     const key = genId()
     dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek })
     cloneVariantPortions(source, key)
+    const label = autoVariantLabel(dayOfWeek)
+    announce(`Se creó ${label} con una copia de ${source.label} — ahora estás editando ${label}`)
   }
 
+  // Eliminar un dia con DESHACER (paridad con la edicion rapida). Al deshacer se reinserta la
+  // variante en su posicion sobre el estado VIGENTE (no se revierte lo editado entremedio) y
+  // se reponen SUS porciones, que viven en el mapa hermano.
   function handleRemoveVariant(variantKey: string) {
+    const index = state.variants.findIndex((variant) => variant.key === variantKey)
+    const removed = index < 0 ? null : state.variants[index]
+    if (!removed || removed.isDefault) return
+    const removedPortions: PortionsBySlot = {}
+    for (const slot of removed.slots) {
+      const key = portionsKey(variantKey, slot.key)
+      const targets = portions.bySlot[key]
+      if (targets != null && targets.length > 0) removedPortions[key] = targets
+    }
     dispatch({ type: 'REMOVE_VARIANT', variantKey })
     portions.dropVariant(variantKey)
+    setLiveMessage(`Se eliminó ${removed.label}`)
+    toast(`Se eliminó ${removed.label}.`, {
+      duration: 5000,
+      action: {
+        label: 'Deshacer',
+        onClick: () => {
+          const current = stateRef.current
+          if (current.variants.some((variant) => variant.key === removed.key)) return
+          const variants = [...current.variants]
+          variants.splice(Math.min(index, variants.length), 0, removed)
+          dispatch({ type: 'RESTORE', state: { ...current, variants, activeVariantKey: removed.key } })
+          portions.restoreBySlot({ ...portionsRef.current, ...removedPortions })
+          setLiveMessage(`Se restauró ${removed.label}`)
+        },
+      },
+    })
+  }
+
+  /**
+   * Copia de UNA franja a otros dias (P0-4). Dos piezas en el MISMO gesto: el arbol (reducer)
+   * y el mapa de porciones (controller hermano). Los destinos se resuelven ANTES del dispatch
+   * con `resolveSlotCopyTargets` sobre el estado previo — exactamente el que usa el reducer —
+   * asi que las porciones aterrizan en la franja correcta (la existente si hubo merge por
+   * nombre, la clonada si se agrego).
+   */
+  function handleCopySlot({ sourceVariantKey, slotKey, targetVariantKeys }: SlotCopyRequest) {
+    const targets = resolveSlotCopyTargets(state, { sourceVariantKey, slotKey, targetVariantKeys })
+    if (targets.length === 0) return
+    dispatch({ type: 'COPY_SLOT_TO_VARIANTS', sourceVariantKey, slotKey, targetVariantKeys })
+    portions.copySlotToVariants({ sourceVariantKey, sourceSlotKey: slotKey, targets })
+    const source = state.variants.find((variant) => variant.key === sourceVariantKey)
+    const slotName = source?.slots.find((slot) => slot.key === slotKey)?.name.trim() || 'La franja'
+    const onlyTarget =
+      targets.length === 1 ? state.variants.find((variant) => variant.key === targets[0].variantKey) : null
+    const replaced = targets.filter((target) => target.replaced).length
+    announce(
+      `${slotName} se copió a ${onlyTarget ? onlyTarget.label : targets.length + ' días'}` +
+        (replaced > 0 ? ` (se reemplazó la franja del mismo nombre en ${replaced === 1 ? '1 día' : replaced + ' días'})` : ''),
+    )
   }
 
   const dayHandlers: DayVariantBarHandlers = {
@@ -1901,6 +2280,11 @@ export function PlanBuilderClient({
 
   return (
     <>
+    {/* Anuncio de los cambios de día/franja para lectores de pantalla (P1-4): el toast es el
+        canal visual; esto es el auditivo. `sr-only` para no ocupar layout. */}
+    <p aria-live="polite" role="status" className="sr-only">
+      {liveMessage}
+    </p>
     {/* Respaldo local (W3b): banner de restauración al tope del wizard. Molde tomado de
         WeeklyPlanBuilder (builder de entrenamiento), adaptado a los tokens de este archivo. */}
     {showDraftBanner ? (
@@ -2002,6 +2386,7 @@ export function PlanBuilderClient({
             portions={portions}
             dayHandlers={dayHandlers}
             addDayLocked={addDayLocked}
+            onCopySlot={handleCopySlot}
           />
         ) : null}
         {state.step === 3 ? <ReviewStep state={state} dispatch={dispatch} publishError={publishError} portions={portions} /> : null}

@@ -90,7 +90,7 @@ export function FoodSearchSheet({
       title={mode === 'swap' ? QUICK_EDIT_COPY.swapFood : QUICK_EDIT_COPY.addFood}
       accessibilityLabel={mode === 'swap' ? QUICK_EDIT_COPY.swapFood : QUICK_EDIT_COPY.addFood}
     >
-      <View className="flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+      <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
         <Search color={theme.mutedForeground} size={16} />
         <TextInput
           accessibilityLabel="Buscar alimento"
@@ -99,7 +99,7 @@ export function FoodSearchSheet({
           onChangeText={setQuery}
           placeholder="Buscar alimento…"
           placeholderTextColor={theme.mutedForeground}
-          className="min-h-11 flex-1 py-2 text-base text-text-strong"
+          className="min-h-11 flex-1 py-2 text-base text-strong"
         />
       </View>
 
@@ -108,10 +108,10 @@ export function FoodSearchSheet({
           accessibilityRole="button"
           accessibilityLabel={QUICK_EDIT_COPY.freeFood}
           onPress={onFreeItem}
-          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-sunken px-3"
+          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-sunken px-3"
         >
           <Plus color={theme.foreground} size={15} />
-          <Text className="text-sm font-semibold text-text-strong">{QUICK_EDIT_COPY.freeFood}</Text>
+          <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.freeFood}</Text>
         </Pressable>
       ) : null}
 
@@ -120,7 +120,7 @@ export function FoodSearchSheet({
           <ActivityIndicator color={theme.primary} />
         </View>
       ) : items.length === 0 ? (
-        <Text className="px-1 py-6 text-center text-sm text-text-muted">
+        <Text className="px-1 py-6 text-center text-sm text-muted">
           {touched && query.trim().length >= 2 ? 'Sin resultados.' : 'Escribe al menos 2 letras para buscar.'}
         </Text>
       ) : (
@@ -131,7 +131,7 @@ export function FoodSearchSheet({
               accessibilityRole="button"
               accessibilityLabel={`${mode === 'swap' ? 'Reemplazar por' : 'Agregar'} ${food.name}`}
               onPress={() => onSelect(food)}
-              className="min-h-14 flex-row items-center gap-3 rounded-control border border-border-subtle bg-surface-card px-3 py-2.5"
+              className="min-h-14 flex-row items-center gap-3 rounded-control border border-subtle bg-surface-card px-3 py-2.5"
             >
               <FoodThumbnail
                 alt={food.name}
@@ -140,10 +140,10 @@ export function FoodSearchSheet({
                 size="sm"
               />
               <View className="min-w-0 flex-1">
-                <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+                <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
                   {food.name}
                 </Text>
-                <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+                <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
                   {[food.brand, `${Math.round(food.calories)} kcal / ${food.servingSize}${food.servingUnit}`]
                     .filter(Boolean)
                     .join(' · ')}

@@ -55,6 +55,9 @@ const SearchInputSchema = z.object({
 /**
  * Publica un plan V2: valida el draft, aplica el gate comercial del addon Nutricion Pro y
  * delega la persistencia + publicacion transaccional en `persistAndPublishDraft`.
+ *
+ * Notas del plan: `visibleNotes` viaja en el draft (carry-over de la rehidratacion del wizard) y
+ * `protocolNotes` se repone aca desde la version base, porque el wizard no lo edita.
  */
 export async function publishPlanAction(input: unknown): Promise<PublishSuccess | ActionFailure> {
   const parsed = PublishInputSchema.safeParse(input)
@@ -85,10 +88,38 @@ export async function publishPlanAction(input: unknown): Promise<PublishSuccess 
     }
   }
 
+  // Carry-over de `protocol_notes`: el wizard NO edita el protocolo profesional (no tiene campo),
+  // asi que republicar desde "Rehacer con el asistente" lo BORRABA — la publicacion reescribe la
+  // version completa y `assembleDraft` emite null. Se relee de la version base que el wizard tenia
+  // en pantalla (la misma del compare-and-swap) y se repone DESPUES del gate Pro: el valor sale de
+  // una version YA publicada, asi que reponerlo no introduce una capacidad Pro nueva
+  // (grandfathering por construccion, como el delta-gate de la edicion rapida) y no es forjable
+  // desde el cliente. Mismo patron que `quick-edit.actions.ts` y el endpoint del coach movil.
+  // OJO: NO seleccionar `private_notes` (columna deprecada, sin grant de SELECT para
+  // `authenticated`: pedirla tira 42501 sobre nutrition_plan_versions_v2).
+  let draftToPersist = draft
+  if (expectedCurrentVersionId && draft.planId) {
+    const baseRes = await db
+      .from('nutrition_plan_versions_v2')
+      .select<{ id: string; plan_id: string; protocol_notes: string | null }>(
+        'id, plan_id, protocol_notes',
+      )
+      .eq('id', expectedCurrentVersionId)
+      .maybeSingle()
+    // Fail-closed: si no podemos leer la version base tampoco podemos garantizar que la
+    // publicacion no borre el protocolo, asi que no se publica a ciegas.
+    if (baseRes.error) return mapWriteError(baseRes.error, 'notas')
+    const base = baseRes.data
+    // Anti-confusion de ids: la version base debe pertenecer al plan que el draft republica.
+    if (base && base.plan_id === draft.planId && (base.protocol_notes ?? '').trim() !== '') {
+      draftToPersist = { ...draft, protocolNotes: base.protocol_notes }
+    }
+  }
+
   const result = await persistAndPublishDraft({
     db,
     userId,
-    draft,
+    draft: draftToPersist,
     idempotencyKey,
     effectiveFrom,
     // Solo cuando el wizard edita un plan existente (el CAS exige una version base real).

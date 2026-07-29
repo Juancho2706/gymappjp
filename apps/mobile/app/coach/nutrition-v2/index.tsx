@@ -410,10 +410,10 @@ export default function CoachNutritionV2Screen() {
               <Metric label="Sin plan" value={metrics.withoutPlan} />
               <Metric label="Activos hoy" value={metrics.activeToday} />
             </View>
-            <Text className="text-xs text-text-muted">
+            <Text className="text-xs text-muted">
               {metrics.total} {metrics.total === 1 ? 'alumno' : 'alumnos'} {scopeLabel}
             </Text>
-            <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+            <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
               <Search color={theme.textSecondary} size={16} />
               <TextInput
                 value={filters.search}
@@ -424,7 +424,7 @@ export default function CoachNutritionV2Screen() {
                 autoCorrect={false}
                 maxLength={120}
                 accessibilityLabel="Buscar alumno en el roster"
-                className="flex-1 py-2 text-sm text-text-strong"
+                className="flex-1 py-2 text-sm text-strong"
               />
             </View>
             <ScrollView
@@ -442,9 +442,9 @@ export default function CoachNutritionV2Screen() {
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={`Filtrar: ${option.label}`}
                     onPress={() => setFilters((prev) => ({ ...prev, attention: option.value }))}
-                    className={`min-h-9 items-center justify-center rounded-pill border px-3 ${active ? 'border-primary bg-primary/10' : 'border-border-subtle bg-surface-card'}`}
+                    className={`min-h-9 items-center justify-center rounded-pill border px-3 ${active ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card'}`}
                   >
-                    <Text className={`text-xs font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>
+                    <Text className={`text-xs font-semibold ${active ? 'text-primary' : 'text-muted'}`}>
                       {option.label}
                     </Text>
                   </Pressable>
@@ -456,10 +456,10 @@ export default function CoachNutritionV2Screen() {
                 accessibilityRole="button"
                 accessibilityLabel="Ordenar roster"
                 onPress={() => setSortOpen(true)}
-                className="min-h-9 flex-1 flex-row items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
+                className="min-h-9 flex-1 flex-row items-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
               >
                 <ArrowUpDown color={theme.textSecondary} size={15} />
-                <Text className="shrink text-xs font-semibold text-text-body" numberOfLines={1}>
+                <Text className="shrink text-xs font-semibold text-body" numberOfLines={1}>
                   Orden: {sortLabel}
                 </Text>
               </Pressable>
@@ -468,10 +468,10 @@ export default function CoachNutritionV2Screen() {
                   accessibilityRole="button"
                   accessibilityLabel="Limpiar filtros"
                   onPress={clearFilters}
-                  className="min-h-9 flex-row items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
+                  className="min-h-9 flex-row items-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
                 >
                   <X color={theme.textSecondary} size={14} />
-                  <Text className="text-xs font-semibold text-text-muted">Limpiar</Text>
+                  <Text className="text-xs font-semibold text-muted">Limpiar</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -504,15 +504,15 @@ export default function CoachNutritionV2Screen() {
                     accessibilityRole="button"
                     accessibilityLabel="Limpiar filtros"
                     onPress={clearFilters}
-                    className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
+                    className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
                   >
                     <X color={theme.textSecondary} size={16} />
-                    <Text className="text-sm font-semibold text-text-strong">Limpiar filtros</Text>
+                    <Text className="text-sm font-semibold text-strong">Limpiar filtros</Text>
                   </Pressable>
                 }
               />
               {page?.hasMore ? (
-                <Text className="text-center text-xs text-text-muted">
+                <Text className="text-center text-xs text-muted">
                   Hay más alumnos en otras páginas. La búsqueda solo cubre la página actual.
                 </Text>
               ) : null}
@@ -543,7 +543,7 @@ export default function CoachNutritionV2Screen() {
                 </View>
                 <View className="min-w-0 flex-1">
                   <View className="flex-row flex-wrap items-center gap-2">
-                    <Text className="shrink font-display text-lg font-semibold text-text-strong" numberOfLines={1}>
+                    <Text className="shrink font-display text-lg font-semibold text-strong" numberOfLines={1}>
                       {item.clientName}
                     </Text>
                     {item.strategy ? <StrategyBadge compact strategy={item.strategy} /> : null}
@@ -551,7 +551,7 @@ export default function CoachNutritionV2Screen() {
                       <PlanVersionBadge version={item.versionNumber} status="published" />
                     ) : null}
                   </View>
-                  <Text className="mt-1 text-xs text-text-muted" numberOfLines={1}>
+                  <Text className="mt-1 text-xs text-muted" numberOfLines={1}>
                     {item.planName ?? 'Sin plan publicado'} · {item.intakeEntries7d} registros en 7 días
                   </Text>
                 </View>
@@ -614,16 +614,16 @@ export default function CoachNutritionV2Screen() {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <View className="min-w-0 flex-1 rounded-card border border-border-subtle bg-surface-card p-4">
-      <Text className="font-display text-2xl font-bold text-text-strong">{value}</Text>
-      <Text className="mt-1 text-xs text-text-muted">{label}</Text>
+    <View className="min-w-0 flex-1 rounded-card border border-subtle bg-surface-card p-4">
+      <Text className="font-display text-2xl font-bold text-strong">{value}</Text>
+      <Text className="mt-1 text-xs text-muted">{label}</Text>
     </View>
   )
 }
 
 // Tablist DS del hub (espejo de web `NutritionHubTabs.tsx:28-54`): fila segmentada 3-en-1 con
-// los mismos tokens (`bg-surface-card`/`border-border-default`; activo `bg-primary` + texto
-// blanco, inactivo `text-text-muted`). Sin `hover`/breakpoint (no aplican en RN): icono+label
+// los mismos tokens (`bg-surface-card`/`border-default`; activo `bg-primary` + texto
+// blanco, inactivo `text-muted`). Sin `hover`/breakpoint (no aplican en RN): icono+label
 // siempre visibles. Estado local en el padre; conmutar NO toca la URL. White-label safe (solo
 // el blanco del texto activo es crudo, igual que web `text-white`).
 function HubTablist({
@@ -639,7 +639,7 @@ function HubTablist({
     <View
       accessibilityRole="tablist"
       accessibilityLabel="Secciones del centro de nutrición"
-      className="flex-row gap-1 rounded-control border border-border-default bg-surface-card p-1"
+      className="flex-row gap-1 rounded-control border border-default bg-surface-card p-1"
     >
       {HUB_TABS.map((tab) => {
         const on = active === tab.key
@@ -655,7 +655,7 @@ function HubTablist({
           >
             <Icon size={16} color={on ? '#FFFFFF' : inactiveColor} />
             <Text
-              className={`shrink text-sm font-semibold ${on ? 'text-white' : 'text-text-muted'}`}
+              className={`shrink text-sm font-semibold ${on ? 'text-white' : 'text-muted'}`}
               numberOfLines={1}
             >
               {tab.label}
@@ -692,7 +692,7 @@ function HubSortSheet({
       footer={<Button label="Ver resultados" variant="sport" full onPress={onClose} />}
     >
       <View className="gap-2">
-        <Text className="text-xs font-semibold text-text-muted">Ordenar por</Text>
+        <Text className="text-xs font-semibold text-muted">Ordenar por</Text>
         <View className="flex-row flex-wrap gap-2">
           {NUTRITION_SORT_OPTIONS.map((option) => {
             const on = selected === option.value
@@ -702,9 +702,9 @@ function HubSortSheet({
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
                 onPress={() => onSelect(option.value)}
-                className={`min-h-11 items-center justify-center rounded-pill border px-3.5 ${on ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-card'}`}
+                className={`min-h-11 items-center justify-center rounded-pill border px-3.5 ${on ? 'border-primary bg-primary/10' : 'border-default bg-surface-card'}`}
               >
-                <Text className={`text-sm font-semibold ${on ? 'text-primary' : 'text-text-body'}`}>
+                <Text className={`text-sm font-semibold ${on ? 'text-primary' : 'text-body'}`}>
                   {option.label}
                 </Text>
               </Pressable>
@@ -750,15 +750,15 @@ function NewPlanPickerSheet({
       nativeModal
     >
       {roster.length === 0 && !loading ? (
-        <View className="items-center rounded-control border border-border-subtle bg-surface-sunken px-4 py-8">
+        <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">
           <Users color={textSecondary} size={26} />
-          <Text className="mt-2 text-center text-sm text-text-muted">
+          <Text className="mt-2 text-center text-sm text-muted">
             No hay alumnos en tu espacio para crear un plan.
           </Text>
         </View>
       ) : (
         <View className="gap-4">
-          <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+          <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
             <Search color={textSecondary} size={16} />
             <TextInput
               value={search}
@@ -769,12 +769,12 @@ function NewPlanPickerSheet({
               autoCorrect={false}
               maxLength={120}
               accessibilityLabel="Buscar alumno"
-              className="flex-1 py-2 text-sm text-text-strong"
+              className="flex-1 py-2 text-sm text-strong"
             />
           </View>
 
           {loading && roster.length === 0 ? (
-            <Text className="py-6 text-center text-sm text-text-muted">Cargando…</Text>
+            <Text className="py-6 text-center text-sm text-muted">Cargando…</Text>
           ) : (
             <View className="gap-1.5">
               {filtered.map((entry) => (
@@ -783,14 +783,14 @@ function NewPlanPickerSheet({
                   accessibilityRole="button"
                   accessibilityLabel={`${nutritionPlanCtaLabel(entry.planStatus)} para ${entry.clientName}`}
                   onPress={() => onChoose(entry.clientId, entry.planId)}
-                  className="min-h-11 flex-row items-center gap-3 rounded-control border border-border-default bg-surface-card px-3 py-2.5"
+                  className="min-h-11 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5"
                 >
-                  <Text className="min-w-0 flex-1 font-semibold text-text-strong" numberOfLines={1}>
+                  <Text className="min-w-0 flex-1 font-semibold text-strong" numberOfLines={1}>
                     {entry.clientName}
                   </Text>
-                  <View className="flex-row items-center gap-1.5 rounded-pill border border-border-subtle bg-surface-sunken px-2 py-0.5">
+                  <View className="flex-row items-center gap-1.5 rounded-pill border border-subtle bg-surface-sunken px-2 py-0.5">
                     <FilePlus2 color={textSecondary} size={12} />
-                    <Text className="text-[11px] font-semibold text-text-muted">
+                    <Text className="text-[11px] font-semibold text-muted">
                       {nutritionPlanCtaLabel(entry.planStatus)}
                     </Text>
                   </View>
@@ -798,7 +798,7 @@ function NewPlanPickerSheet({
                 </Pressable>
               ))}
               {filtered.length === 0 ? (
-                <Text className="py-6 text-center text-sm text-text-muted">Sin coincidencias.</Text>
+                <Text className="py-6 text-center text-sm text-muted">Sin coincidencias.</Text>
               ) : null}
             </View>
           )}
@@ -828,7 +828,7 @@ function PaginationBar({
   if (pageIndex === 0 && !hasMore) {
     return paging ? (
       <View className="items-center py-5">
-        <Text className="text-sm text-text-muted">Cargando…</Text>
+        <Text className="text-sm text-muted">Cargando…</Text>
       </View>
     ) : null
   }
@@ -840,12 +840,12 @@ function PaginationBar({
         accessibilityState={{ disabled: !canPrev }}
         disabled={!canPrev}
         onPress={onPrev}
-        className={`min-h-11 flex-row items-center gap-1.5 rounded-control border px-3 ${canPrev ? 'border-border-default bg-surface-card' : 'border-border-subtle bg-surface-sunken opacity-50'}`}
+        className={`min-h-11 flex-row items-center gap-1.5 rounded-control border px-3 ${canPrev ? 'border-default bg-surface-card' : 'border-subtle bg-surface-sunken opacity-50'}`}
       >
         <ChevronLeft color={theme.textSecondary} size={18} />
-        <Text className="text-sm font-semibold text-text-body">Anterior</Text>
+        <Text className="text-sm font-semibold text-body">Anterior</Text>
       </Pressable>
-      <Text className="text-xs font-semibold text-text-muted">
+      <Text className="text-xs font-semibold text-muted">
         {paging ? 'Cargando…' : `Página ${pageIndex + 1}`}
       </Text>
       <Pressable
@@ -854,9 +854,9 @@ function PaginationBar({
         accessibilityState={{ disabled: !canNext }}
         disabled={!canNext}
         onPress={onNext}
-        className={`min-h-11 flex-row items-center gap-1.5 rounded-control border px-3 ${canNext ? 'border-border-default bg-surface-card' : 'border-border-subtle bg-surface-sunken opacity-50'}`}
+        className={`min-h-11 flex-row items-center gap-1.5 rounded-control border px-3 ${canNext ? 'border-default bg-surface-card' : 'border-subtle bg-surface-sunken opacity-50'}`}
       >
-        <Text className="text-sm font-semibold text-text-body">Siguiente</Text>
+        <Text className="text-sm font-semibold text-body">Siguiente</Text>
         <ChevronRight color={theme.textSecondary} size={18} />
       </Pressable>
     </View>

@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import {
+  Alert,
+  AppState,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AlertTriangle, ChevronLeft, Search, Star } from 'lucide-react-native'
@@ -493,6 +503,11 @@ export default function NutritionV2AddFoodScreen() {
 
   return (
     <View className="flex-1 bg-surface-app">
+    {/* El teclado tapaba "Cantidad" y los chips de unidad/franja: `decimal-pad` no trae
+        tecla de retorno en iOS, así que sin esto no había forma de bajarlo ni de ver lo
+        que queda debajo. `padding` solo en iOS (Android ya redimensiona la ventana) —
+        misma convención que el builder y el quick-edit del coach. */}
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
     <ScrollView
       className="flex-1 bg-surface-app"
       contentContainerClassName="gap-5 px-4"
@@ -502,6 +517,7 @@ export default function NutritionV2AddFoodScreen() {
       }}
       onScroll={onScrollChrome}
       scrollEventThrottle={16}
+      keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
     >
       <View className="flex-row items-center gap-3">
@@ -510,7 +526,7 @@ export default function NutritionV2AddFoodScreen() {
           accessibilityLabel="Volver"
           onPress={() => router.back()}
           hitSlop={8}
-          className="h-11 w-11 items-center justify-center rounded-control border border-border-subtle bg-surface-card"
+          className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-card"
         >
           <ChevronLeft color="#818C9A" size={22} />
         </Pressable>
@@ -531,7 +547,7 @@ export default function NutritionV2AddFoodScreen() {
               <TextInput
                 accessibilityLabel="Buscar alimento"
                 autoCorrect={false}
-                className="min-h-11 flex-1 text-base text-text-strong"
+                className="min-h-11 flex-1 text-base text-strong"
                 onChangeText={setTerm}
                 placeholder="Ej: pechuga de pollo"
                 placeholderTextColor="#818C9A"
@@ -553,9 +569,9 @@ export default function NutritionV2AddFoodScreen() {
               <View className="gap-2">
                 <View className="flex-row items-center gap-1.5">
                   <Star size={14} color="#FBBF24" fill="#FBBF24" />
-                  <Text className="text-xs font-semibold text-text-muted">Tus favoritos</Text>
+                  <Text className="text-xs font-semibold text-muted">Tus favoritos</Text>
                 </View>
-                <View className="rounded-card border border-border-subtle bg-surface-card">
+                <View className="rounded-card border border-subtle bg-surface-card">
                   {favoriteFoods.map((food, index) => (
                     <CatalogPickRow
                       key={food.id}
@@ -611,7 +627,7 @@ export default function NutritionV2AddFoodScreen() {
             />
           ) : (
             <>
-              <View className="rounded-card border border-border-subtle bg-surface-card">
+              <View className="rounded-card border border-subtle bg-surface-card">
                 {orderedResults.map((food, index) => (
                   <CatalogPickRow
                     key={food.id}
@@ -625,7 +641,7 @@ export default function NutritionV2AddFoodScreen() {
                 ))}
               </View>
               {catalogHasOpenFoodFactsSource(orderedResults) ? (
-                <Text className="text-[10px] text-text-subtle">{CATALOG_ODBL_GENERIC_LINE}</Text>
+                <Text className="text-[10px] text-subtle">{CATALOG_ODBL_GENERIC_LINE}</Text>
               ) : null}
             </>
           )}
@@ -637,17 +653,17 @@ export default function NutritionV2AddFoodScreen() {
                 card sunken neutra con thumb + nombre + "{marca} · {categoría} | Sin
                 marca" + macros base "por {servingSize} {servingUnit}" (sin preview
                 de totales: ese extra RN se retiró por paridad). */}
-            <View className="flex-row items-start gap-3 rounded-card border border-border-subtle bg-surface-sunken p-3">
+            <View className="flex-row items-start gap-3 rounded-card border border-subtle bg-surface-sunken p-3">
               <FoodThumbnail
                 alt={selected.name}
                 src={foodMediaThumbnailUrl(selected.media)}
                 fallbackEmoji={foodCategoryEmoji(selected.category)}
               />
               <View className="min-w-0 flex-1">
-                <Text className="text-sm font-semibold text-text-strong" numberOfLines={1}>
+                <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
                   {selected.name}
                 </Text>
-                <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+                <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
                   {[selected.brand, selected.category].filter(Boolean).join(' · ') || 'Sin marca'}
                 </Text>
                 <View className="mt-1.5">
@@ -661,7 +677,7 @@ export default function NutritionV2AddFoodScreen() {
                   />
                 </View>
                 {foodOdblAttributionLine(selected.source) ? (
-                  <Text className="mt-1 text-[10px] text-text-subtle">{foodOdblAttributionLine(selected.source)}</Text>
+                  <Text className="mt-1 text-[10px] text-subtle">{foodOdblAttributionLine(selected.source)}</Text>
                 ) : null}
               </View>
             </View>
@@ -670,10 +686,10 @@ export default function NutritionV2AddFoodScreen() {
                 unidades son las web (:758-761); chips segmentadas = picker nativo
                 del repo (mismo patrón del editor de registros). */}
             <View className="mt-4">
-              <Text className="mb-1 text-xs font-semibold text-text-muted">Cantidad</Text>
+              <Text className="mb-1 text-xs font-semibold text-muted">Cantidad</Text>
               <TextInput
                 accessibilityLabel="Cantidad"
-                className="min-h-12 w-28 rounded-control border border-border-default bg-surface-app px-3 text-lg text-text-strong"
+                className="min-h-12 w-28 rounded-control border border-default bg-surface-app px-3 text-lg text-strong"
                 inputMode="decimal"
                 keyboardType="decimal-pad"
                 onChangeText={setQuantity}
@@ -682,7 +698,7 @@ export default function NutritionV2AddFoodScreen() {
               />
             </View>
             <View className="mt-3">
-              <Text className="mb-1 text-xs font-semibold text-text-muted">Unidad</Text>
+              <Text className="mb-1 text-xs font-semibold text-muted">Unidad</Text>
               <View className="flex-row flex-wrap gap-2">
                 {unitOptionsFor(selected).map((value) => (
                   <SelectChip
@@ -701,9 +717,9 @@ export default function NutritionV2AddFoodScreen() {
             {estimatedTotals ? (
               <View
                 accessibilityLiveRegion="polite"
-                className="mt-3 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
+                className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2"
               >
-                <Text className="text-xs font-semibold text-text-muted">Total estimado</Text>
+                <Text className="text-xs font-semibold text-muted">Total estimado</Text>
                 <View className="mt-1">
                   <MacroChipRow
                     calories={estimatedTotals.calories}
@@ -721,7 +737,7 @@ export default function NutritionV2AddFoodScreen() {
                 las franjas del día (TodayExperience.tsx:851-865), preseleccionada por
                 param (initialMealSlot, :649,330,414). */}
             <View className="mt-3">
-              <Text className="mb-1 text-xs font-semibold text-text-muted">Franja (opcional)</Text>
+              <Text className="mb-1 text-xs font-semibold text-muted">Franja (opcional)</Text>
               <View className="flex-row flex-wrap gap-2">
                 <SelectChip
                   accessibilityLabel="Sin franja"
@@ -796,6 +812,7 @@ export default function NutritionV2AddFoodScreen() {
         </View>
       )}
     </ScrollView>
+    </KeyboardAvoidingView>
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </View>
   )
@@ -825,9 +842,9 @@ function SelectChip({
         void Haptics.selectionAsync()
         onPress()
       }}
-      className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-app'}`}
+      className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-default bg-surface-app'}`}
     >
-      <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{label}</Text>
+      <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-muted'}`}>{label}</Text>
     </Pressable>
   )
 }
@@ -857,7 +874,7 @@ function CatalogPickRow({
 }) {
   const meta = [food.brand, food.category].filter(Boolean).join(' · ')
   return (
-    <View className={`flex-row items-center gap-2 px-3 ${index > 0 ? 'border-t border-border-subtle' : ''}`}>
+    <View className={`flex-row items-center gap-2 px-3 ${index > 0 ? 'border-t border-subtle' : ''}`}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Agregar ${food.name}`}
@@ -870,11 +887,11 @@ function CatalogPickRow({
           fallbackEmoji={foodCategoryEmoji(food.category)}
         />
         <View className="min-w-0 flex-1">
-          <Text className="text-sm font-semibold text-text-strong" numberOfLines={1}>
+          <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
             {food.name}
           </Text>
           {meta ? (
-            <Text className="text-xs text-text-muted" numberOfLines={1}>
+            <Text className="text-xs text-muted" numberOfLines={1}>
               {meta}
             </Text>
           ) : null}

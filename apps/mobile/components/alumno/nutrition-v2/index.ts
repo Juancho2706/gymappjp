@@ -13,3 +13,11 @@ export { PortionDayCoverageRow } from './PortionDayCoverageRow'
 export { PortionEquivalencesSheet } from './PortionEquivalencesSheet'
 export { PortionSnackbar, type PortionSnackbarState } from './PortionSnackbar'
 export { usePortionMarks, type UsePortionMarksResult } from './usePortionMarks'
+
+/**
+ * Semana Lu-Do del alumno (SPEC nutrition-week-view): el día que no es hoy se muestra en SOLO
+ * lectura — pasado con sus resultados congelados, futuro como vista previa del plan.
+ */
+export { PastDaySummary, type PastDaySummaryProps } from './PastDaySummary'
+export { ReadOnlyDayBanner, type ReadOnlyDayBannerProps } from './ReadOnlyDayBanner'
+export { useNutritionWeekHistory, type NutritionWeekHistory } from './useNutritionWeekHistory'

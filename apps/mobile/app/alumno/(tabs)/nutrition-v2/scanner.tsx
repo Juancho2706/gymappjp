@@ -321,15 +321,15 @@ export default function NutritionV2ScannerScreen() {
             accessibilityRole="button"
             accessibilityLabel="Volver a Nutrición"
             onPress={goToToday}
-            className="min-h-11 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3"
+            className="min-h-11 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
           >
             <ArrowLeft color={theme.foreground} size={16} />
-            <Text className="text-sm font-semibold text-text-strong">Nutrición</Text>
+            <Text className="text-sm font-semibold text-strong">Nutrición</Text>
           </Pressable>
         }
       />
 
-      <View className="relative h-72 overflow-hidden rounded-sheet border border-border-subtle bg-ink-950">
+      <View className="relative h-72 overflow-hidden rounded-sheet border border-subtle bg-ink-950">
         {!scannerPaused ? (
           <CameraView
             className="flex-1"
@@ -450,10 +450,10 @@ function ManualLookup({
 }) {
   return (
     <NutritionCard>
-      <Text className="font-display text-base font-semibold text-text-strong">Código manual</Text>
+      <Text className="font-display text-base font-semibold text-strong">Código manual</Text>
       <TextInput
         accessibilityLabel="Código de barras"
-        className="mt-3 min-h-12 rounded-control border border-border-default bg-surface-app px-3 font-mono text-base text-text-strong"
+        className="mt-3 min-h-12 rounded-control border border-default bg-surface-app px-3 font-mono text-base text-strong"
         inputMode="numeric"
         keyboardType="number-pad"
         maxLength={14}
@@ -555,10 +555,10 @@ function ResultCard({
           fallbackEmoji={foodCategoryEmoji(result.food.category)}
         />
         <View className="min-w-0 flex-1">
-          <Text className="font-display text-lg font-semibold text-text-strong" numberOfLines={2}>
+          <Text className="font-display text-lg font-semibold text-strong" numberOfLines={2}>
             {result.food.name}
           </Text>
-          <Text className="mt-1 text-sm text-text-muted">{result.food.brand ?? 'Sin marca'}</Text>
+          <Text className="mt-1 text-sm text-muted">{result.food.brand ?? 'Sin marca'}</Text>
           <View className="mt-2">
             <MacroChipRow
               calories={result.food.calories}
@@ -568,13 +568,13 @@ function ResultCard({
               size="sm"
             />
           </View>
-          <Text className="mt-1 text-xs font-semibold text-text-muted">
+          <Text className="mt-1 text-xs font-semibold text-muted">
             {result.status === 'found' ? 'Verificado' : 'Pendiente de verificación'}
           </Text>
         </View>
       </View>
       {attribution ? (
-        <Text className="mt-3 text-[10px] text-text-subtle">{attribution}</Text>
+        <Text className="mt-3 text-[10px] text-subtle">{attribution}</Text>
       ) : null}
       {/* CTA primario "Registrar" (P0 QA web: la card moría en "Probar otro"). "Pendiente de
           verificación" NO bloquea el registro: es curación del catálogo, no un permiso
@@ -752,7 +752,7 @@ function RegisterScannedFoodSheet({
           </View>
         ) : null}
 
-        <View className="flex-row items-start gap-3 rounded-card border border-border-subtle bg-surface-sunken p-3">
+        <View className="flex-row items-start gap-3 rounded-card border border-subtle bg-surface-sunken p-3">
           <FoodThumbnail
             alt={food.name}
             src={mediaUrl}
@@ -760,10 +760,10 @@ function RegisterScannedFoodSheet({
             fallbackEmoji={foodCategoryEmoji(food.category)}
           />
           <View className="min-w-0 flex-1">
-            <Text className="text-sm font-semibold text-text-strong" numberOfLines={1}>
+            <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
               {food.name}
             </Text>
-            <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+            <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
               {food.brand ?? 'Sin marca'}
             </Text>
             <View className="mt-1.5">
@@ -785,10 +785,10 @@ function RegisterScannedFoodSheet({
         </View>
 
         <View>
-          <Text className="mb-1 text-xs font-semibold text-text-muted">Cantidad</Text>
+          <Text className="mb-1 text-xs font-semibold text-muted">Cantidad</Text>
           <TextInput
             accessibilityLabel="Cantidad"
-            className="min-h-12 rounded-control border border-border-default bg-surface-app px-3 text-base text-text-strong"
+            className="min-h-12 rounded-control border border-default bg-surface-app px-3 text-base text-strong"
             inputMode="decimal"
             keyboardType="decimal-pad"
             onChangeText={(value) => setQuantity(value.replace(/[^0-9.]/g, ''))}
@@ -798,7 +798,7 @@ function RegisterScannedFoodSheet({
         </View>
 
         <View>
-          <Text className="mb-1 text-xs font-semibold text-text-muted">Unidad</Text>
+          <Text className="mb-1 text-xs font-semibold text-muted">Unidad</Text>
           <View className="flex-row flex-wrap gap-2">
             {unitOptions.map((option) => {
               const active = unit === option
@@ -812,9 +812,9 @@ function RegisterScannedFoodSheet({
                     void Haptics.selectionAsync()
                     changeUnit(option)
                   }}
-                  className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-app'}`}
+                  className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-default bg-surface-app'}`}
                 >
-                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{intakeUnitLabel(option)}</Text>
+                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-muted'}`}>{intakeUnitLabel(option)}</Text>
                 </Pressable>
               )
             })}
@@ -824,9 +824,9 @@ function RegisterScannedFoodSheet({
         {estimatedTotals ? (
           <View
             accessibilityLiveRegion="polite"
-            className="rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
+            className="rounded-control border border-subtle bg-surface-sunken px-3 py-2"
           >
-            <Text className="text-xs font-semibold text-text-muted">Total estimado</Text>
+            <Text className="text-xs font-semibold text-muted">Total estimado</Text>
             <View className="mt-1">
               <MacroChipRow
                 calories={estimatedTotals.calories}
@@ -841,7 +841,7 @@ function RegisterScannedFoodSheet({
         ) : null}
 
         <View>
-          <Text className="mb-1 text-xs font-semibold text-text-muted">Franja (opcional)</Text>
+          <Text className="mb-1 text-xs font-semibold text-muted">Franja (opcional)</Text>
           <View className="flex-row flex-wrap gap-2">
             {slotOptions.map((option) => {
               const active = mealSlot === option.code
@@ -855,9 +855,9 @@ function RegisterScannedFoodSheet({
                     void Haptics.selectionAsync()
                     setMealSlot(option.code)
                   }}
-                  className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-app'}`}
+                  className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-default bg-surface-app'}`}
                 >
-                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{option.label}</Text>
+                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-muted'}`}>{option.label}</Text>
                 </Pressable>
               )
             })}

@@ -49,7 +49,7 @@ const PAGE_SIZE = 20
 const VERIFICATION_TONE_CLASSES: Record<FoodVerificationTone, { box: string; text: string }> = {
   verified: { box: 'border-success-500/30 bg-success-500/10', text: 'text-success-700' },
   community: { box: 'border-info-500/30 bg-info-500/10', text: 'text-info-600' },
-  neutral: { box: 'border-border-subtle bg-surface-sunken', text: 'text-text-muted' },
+  neutral: { box: 'border-subtle bg-surface-sunken', text: 'text-muted' },
   danger: { box: 'border-danger-500/30 bg-danger-500/10', text: 'text-danger-700' },
 }
 
@@ -213,18 +213,18 @@ export default function CoachNutritionCatalogScreen({ embedded = false }: { embe
             accessibilityState={{ disabled: loadingMore }}
             disabled={loadingMore}
             onPress={() => void loadMore()}
-            className={`min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-border-default bg-surface-card px-4 ${loadingMore ? 'opacity-60' : ''}`}
+            className={`min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-4 ${loadingMore ? 'opacity-60' : ''}`}
           >
             {loadingMore ? <ActivityIndicator color={theme.primary} size="small" /> : null}
-            <Text className="text-sm font-semibold text-text-strong">
+            <Text className="text-sm font-semibold text-strong">
               {loadingMore ? 'Cargando…' : 'Cargar mas'}
             </Text>
           </Pressable>
         ) : null}
         {/* Pie ODbL (obligación de licencia) — copy verbatim de web, visible con ≥1 resultado. */}
-        <Text className="px-1 pt-1 text-center text-[10.5px] leading-relaxed text-text-subtle">
+        <Text className="px-1 pt-1 text-center text-[10.5px] leading-relaxed text-subtle">
           {OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION}{' '}
-          <Text className="underline text-text-subtle" onPress={() => void Linking.openURL(OPEN_FOOD_FACTS_URL)}>
+          <Text className="underline text-subtle" onPress={() => void Linking.openURL(OPEN_FOOD_FACTS_URL)}>
             Ver Open Food Facts
           </Text>
         </Text>
@@ -236,7 +236,7 @@ export default function CoachNutritionCatalogScreen({ embedded = false }: { embe
     <>
       <View className="gap-4 px-4 pt-4">
         {embedded ? null : <NutritionHeader title="Alimentos" onBack={() => router.back()} />}
-        <View className="flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+        <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
           <Search color={theme.mutedForeground} size={16} />
           <TextInput
             value={query}
@@ -246,7 +246,7 @@ export default function CoachNutritionCatalogScreen({ embedded = false }: { embe
             accessibilityLabel="Buscar alimento en el catalogo"
             autoCorrect={false}
             returnKeyType="search"
-            className="min-h-11 flex-1 py-2 text-base text-text-strong"
+            className="min-h-11 flex-1 py-2 text-base text-strong"
           />
           {loading ? (
             <ActivityIndicator color={theme.mutedForeground} size="small" />
@@ -293,7 +293,7 @@ export default function CoachNutritionCatalogScreen({ embedded = false }: { embe
                 accessibilityRole="button"
                 accessibilityLabel={`Ver ficha de ${item.name}`}
                 onPress={() => openDetail(item)}
-                className="flex-row items-center gap-3 rounded-control border border-border-default bg-surface-card px-3 py-2.5"
+                className="flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5"
               >
                 <FoodThumbnail
                   alt={item.name}
@@ -303,7 +303,7 @@ export default function CoachNutritionCatalogScreen({ embedded = false }: { embe
                 />
                 <View className="min-w-0 flex-1">
                   <View className="flex-row flex-wrap items-center gap-1.5">
-                    <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
+                    <Text className="shrink text-sm font-semibold text-strong" numberOfLines={1}>
                       {item.name}
                     </Text>
                     <View className={`shrink-0 rounded-pill border px-1.5 py-0.5 ${tone.box}`}>
@@ -313,7 +313,7 @@ export default function CoachNutritionCatalogScreen({ embedded = false }: { embe
                     </View>
                   </View>
                   {metaLine ? (
-                    <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+                    <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
                       {metaLine}
                     </Text>
                   ) : null}

@@ -17,19 +17,25 @@ import {
   assembleDraft as rnAssembleDraft,
   builderReducer as rnReducer,
   createEmptyBuilderState as rnCreateEmpty,
+  resolveSlotCopyTargets as rnResolveSlotCopyTargets,
   type BuilderFood as RnBuilderFood,
   type BuilderState as RnBuilderState,
 } from '../apps/mobile/lib/nutrition-v2-builder'
-import { portionsKey as rnPortionsKey } from '../apps/mobile/lib/nutrition-v2-builder-portions'
+import {
+  copySlotPortionsToVariants as rnCopySlotPortions,
+  portionsKey as rnPortionsKey,
+} from '../apps/mobile/lib/nutrition-v2-builder-portions'
 import {
   assembleDraft as webAssembleDraft,
   builderReducer as webReducer,
   createEmptyBuilderState as webCreateEmpty,
+  resolveSlotCopyTargets as webResolveSlotCopyTargets,
   type BuilderFood as WebBuilderFood,
   type BuilderState as WebBuilderState,
 } from '../apps/web/src/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 import {
   attachPortionsAndValidate,
+  copySlotPortionsToVariants as webCopySlotPortions,
   portionsKey as webPortionsKey,
   variantPortionKeys,
   type PortionsBySlot,
@@ -94,6 +100,41 @@ function buildScript<S>(
   return state
 }
 
+/**
+ * El coach retoca el sábado, le agrega una "Cena" al domingo y queda listo para bajar el
+ * "Desayuno" del día base a los dos días (CE-5). Estado JUSTO ANTES de la copia: es el que la
+ * UI usa para resolver los destinos y mover las porciones.
+ */
+function buildPreCopyScript<S>(
+  createEmpty: (from: string) => S,
+  reduce: (state: S, action: never) => S,
+  food: RnBuilderFood & WebBuilderFood,
+): S {
+  const act = (state: S, action: unknown): S => reduce(state, action as never)
+  let state = buildScript(createEmpty, reduce, food)
+  state = act(state, {
+    type: 'UPDATE_ITEM',
+    variantKey: 'v-sab',
+    slotKey: 'v-sab~slot-a',
+    itemKey: 'v-sab~item-1',
+    patch: { quantity: '10' },
+  })
+  state = act(state, { type: 'ADD_SLOT', variantKey: 'v-dom', key: 'dom-cena' })
+  state = act(state, {
+    type: 'UPDATE_SLOT',
+    variantKey: 'v-dom',
+    slotKey: 'dom-cena',
+    patch: { name: 'Cena', startTime: '21:00' },
+  })
+  return state
+}
+
+const COPY_PARAMS = {
+  sourceVariantKey: 'default',
+  slotKey: 'slot-a',
+  targetVariantKeys: ['v-sab', 'v-dom'],
+} as const
+
 /** Mapa de porciones con la clave compuesta (idéntica en ambas superficies). */
 function portionsMap(key: (variantKey: string, slotKey: string) => string): PortionsBySlot {
   return {
@@ -131,6 +172,56 @@ describe('paridad de envelope web ↔ RN (multi-día + porciones + reemplazos)',
     ])
     expect(rnDraft.dayVariants[2].targets.calories).toBe(2500)
     expect(rnDraft.dayVariants[0].mealSlots[0].items[0].substitutions).toHaveLength(1)
+  })
+
+  it('COPY_SLOT_TO_VARIANTS: mismo árbol, mismos destinos y mismo envelope en las dos superficies', () => {
+    const rnPre = buildPreCopyScript(rnCreateEmpty, rnReducer, FOOD) as RnBuilderState
+    const webPre = buildPreCopyScript(webCreateEmpty, webReducer, FOOD) as WebBuilderState
+    expect(rnPre).toEqual(webPre)
+
+    // 1) Los destinos (lo que la UI usa para mover las porciones) se resuelven igual.
+    const rnTargets = rnResolveSlotCopyTargets(rnPre, COPY_PARAMS)
+    const webTargets = webResolveSlotCopyTargets(webPre, COPY_PARAMS)
+    expect(rnTargets).toEqual(webTargets)
+    // El sábado y el domingo ya tienen "Desayuno" (clonado del base): merge en su posición.
+    expect(rnTargets).toEqual([
+      { variantKey: 'v-sab', slotKey: 'v-sab~slot-a', replaced: true },
+      { variantKey: 'v-dom', slotKey: 'v-dom~slot-a', replaced: true },
+    ])
+
+    // 2) El árbol resultante es idéntico (mismas keys de franja, item y reemplazo).
+    const copyAction = { type: 'COPY_SLOT_TO_VARIANTS', ...COPY_PARAMS }
+    const rnState = rnReducer(rnPre, copyAction as never)
+    const webState = webReducer(webPre, copyAction as never)
+    expect(rnState).toEqual(webState)
+    expect(rnState.variants[1].slots[0].items[0].quantity).toBe('200') // el retoque del sábado quedó pisado
+
+    // 3) Las porciones siguen a la franja igual en ambas y el envelope converge.
+    const rnPortions = rnCopySlotPortions(portionsMap(rnPortionsKey), {
+      sourceVariantKey: 'default',
+      sourceSlotKey: 'slot-a',
+      targets: rnTargets,
+    })
+    const webPortions = webCopySlotPortions(portionsMap(webPortionsKey), {
+      sourceVariantKey: 'default',
+      sourceSlotKey: 'slot-a',
+      targets: webTargets,
+    })
+    expect(rnPortions).toEqual(webPortions)
+
+    const rnDraft = NutritionPlanDraftSchema.parse(
+      rnAssembleDraft(rnState, { clientId: CLIENT_ID, planId: PLAN_ID, portionsBySlot: rnPortions }),
+    )
+    const webDraft = attachPortionsAndValidate(
+      webAssembleDraft(webState, { clientId: CLIENT_ID, planId: PLAN_ID }),
+      variantPortionKeys(webState.variants),
+      webPortions,
+    )
+    expect(rnDraft).toEqual(webDraft)
+    // Sanidad: el sábado pasó de 1,5 a 2 porciones (reemplazo) y el domingo heredó las 2.
+    expect(rnDraft.dayVariants[1].mealSlots[0].exchangeTargets?.[0].portions).toBe(2)
+    expect(rnDraft.dayVariants[2].mealSlots[0].exchangeTargets?.[0].portions).toBe(2)
+    expect(rnDraft.dayVariants[2].mealSlots.map((slot) => slot.name)).toEqual(['Desayuno', 'Cena'])
   })
 
   it('sin porciones el envelope tambien coincide (draft byte-idéntico al de un solo día)', () => {

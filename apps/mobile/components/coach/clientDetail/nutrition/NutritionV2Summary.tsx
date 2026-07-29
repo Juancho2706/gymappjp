@@ -226,17 +226,17 @@ export function NutritionV2Summary({
   return (
     <View className="min-w-0 gap-6">
       {offline ? (
-        <Text className="text-xs text-text-muted">Mostrando la última copia disponible.</Text>
+        <Text className="text-xs text-muted">Mostrando la última copia disponible.</Text>
       ) : null}
 
       {/* Header: eyebrow + título + acciones (web NutritionTabV2.tsx:71-98; en móvil el
           sm:flex-row no aplica → columna con las acciones en fila envolvente). */}
       <View className="gap-3">
         <View className="min-w-0">
-          <Text className="font-sans-extra text-[10px] uppercase tracking-[1px] text-text-muted">
+          <Text className="font-sans-extra text-[10px] uppercase tracking-[1px] text-muted">
             Nutrición · V2
           </Text>
-          <Text className="mt-1 font-display text-xl font-bold text-text-strong">
+          <Text className="mt-1 font-display text-xl font-bold text-strong">
             Ficha nutricional
           </Text>
         </View>
@@ -249,14 +249,14 @@ export function NutritionV2Summary({
             {({ pressed }) => (
               <View
                 className={cx(
-                  'min-h-11 flex-row items-center gap-2 rounded-control border border-border-default px-3',
+                  'min-h-11 flex-row items-center gap-2 rounded-control border border-default px-3',
                   pressed ? 'bg-surface-sunken' : 'bg-surface-card',
                 )}
               >
-                <Text className="text-sm font-semibold text-text-strong">
+                <Text className="text-sm font-semibold text-strong">
                   Abrir ficha nutrición completa
                 </Text>
-                <ArrowUpRight size={16} className="text-text-strong" />
+                <ArrowUpRight size={16} className="text-strong" />
               </View>
             )}
           </Pressable>
@@ -295,25 +295,25 @@ export function NutritionV2Summary({
             <NutritionCard>
               <View className="flex-row items-center gap-2">
                 <Utensils size={16} className="text-ember-600 dark:text-ember-300" />
-                <Text className="font-display text-base font-semibold text-text-strong">
+                <Text className="font-display text-base font-semibold text-strong">
                   Plan vigente
                 </Text>
               </View>
-              <Text className="mt-2 text-sm font-medium text-text-strong">
+              <Text className="mt-2 text-sm font-medium text-strong">
                 {view.plan?.name ?? 'Plan de nutrición'}
               </Text>
-              <Text className="mt-2 text-sm leading-6 text-text-body">
+              <Text className="mt-2 text-sm leading-6 text-body">
                 {view.plan?.visibleNotes || 'Sin indicaciones visibles para el alumno.'}
               </Text>
             </NutritionCard>
             <NutritionCard>
-              <Text className="font-display text-base font-semibold text-text-strong">Hoy</Text>
-              <Text className="mt-2 text-sm text-text-muted">
+              <Text className="font-display text-base font-semibold text-strong">Hoy</Text>
+              <Text className="mt-2 text-sm text-muted">
                 {view.today.entryCount} registro{view.today.entryCount === 1 ? '' : 's'} ·{' '}
                 {view.today.mealSlotCount} franja{view.today.mealSlotCount === 1 ? '' : 's'}
               </Text>
-              <Text className="mt-3 text-sm text-text-body">
-                <Text className="font-semibold text-text-strong">
+              <Text className="mt-3 text-sm text-body">
+                <Text className="font-semibold text-strong">
                   {Math.round(view.today.remainingCalories)} kcal
                 </Text>{' '}
                 restantes según el snapshot del día.
@@ -322,7 +322,7 @@ export function NutritionV2Summary({
           </View>
 
           <View>
-            <Text className="mb-3 font-display text-lg font-semibold text-text-strong">
+            <Text className="mb-3 font-display text-lg font-semibold text-strong">
               Últimos días
             </Text>
             {view.showHistoryUpgradeCta ? (
@@ -330,15 +330,15 @@ export function NutritionV2Summary({
                 accessibilityRole="button"
                 accessibilityLabel="Histórico completo con Nutrición Pro"
                 onPress={() => router.push(view.historyUpgradeHref)}
-                className="mb-3 flex-row items-center gap-2 self-start rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
+                className="mb-3 flex-row items-center gap-2 self-start rounded-control border border-subtle bg-surface-sunken px-3 py-2"
               >
                 <LockKeyhole size={14} className="text-ember-600 dark:text-ember-300" />
-                <Text className="text-xs text-text-muted">Histórico completo con Nutrición Pro</Text>
+                <Text className="text-xs text-muted">Histórico completo con Nutrición Pro</Text>
               </Pressable>
             ) : null}
             {view.recentDays.length === 0 ? (
               <NutritionCard tone="neutral">
-                <Text className="text-sm text-text-muted">
+                <Text className="text-sm text-muted">
                   Aún no hay días registrados en la ventana visible.
                 </Text>
               </NutritionCard>
@@ -346,8 +346,8 @@ export function NutritionV2Summary({
               <View className="gap-3">
                 {view.recentDays.map((day) => (
                   <NutritionCard key={day.localDate}>
-                    <Text className="font-semibold text-text-strong">{day.label}</Text>
-                    <Text className="mt-1 text-sm text-text-muted">
+                    <Text className="font-semibold text-strong">{day.label}</Text>
+                    <Text className="mt-1 text-sm text-muted">
                       {Math.round(day.calories)} kcal · {day.entryCount} registro
                       {day.entryCount === 1 ? '' : 's'}
                     </Text>

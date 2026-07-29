@@ -37,9 +37,9 @@ function UnitToggle({
         const index = cycle.indexOf(unit)
         onChange(cycle[(index + 1) % cycle.length])
       }}
-      className="h-11 min-w-14 items-center justify-center rounded-control border border-border-default bg-surface-sunken px-2"
+      className="h-11 min-w-14 items-center justify-center rounded-control border border-default bg-surface-sunken px-2"
     >
-      <Text className="text-sm font-semibold text-text-strong">{unit}</Text>
+      <Text className="text-sm font-semibold text-strong">{unit}</Text>
     </Pressable>
   )
 }
@@ -71,7 +71,7 @@ export function EditableItemRow({
   const nameError = errors['item.' + item.key + '.name']
 
   return (
-    <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+    <View className="rounded-control border border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1">
           {isCustom ? (
@@ -82,15 +82,15 @@ export function EditableItemRow({
               editable={!disabled}
               placeholder="Nombre del alimento"
               placeholderTextColor={theme.mutedForeground}
-              className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-text-strong"
+              className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-strong"
             />
           ) : (
-            <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+            <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
               {item.displayName}
             </Text>
           )}
           {!isCustom && item.brand ? (
-            <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+            <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
               {item.brand}
             </Text>
           ) : null}

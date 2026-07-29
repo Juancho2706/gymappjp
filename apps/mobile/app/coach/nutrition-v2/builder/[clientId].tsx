@@ -14,7 +14,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, History, Lock, Minus, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
   BuilderDayVariantBar,
   BuilderStepList,
@@ -28,9 +28,13 @@ import {
   SelectableStrategyCard,
   StrategyBadge,
   StudentPreview,
+  variantDayBadge,
   type BuilderDayVariantBarHandlers,
   type ExchangeGroupFormInitial,
 } from '../../../../components/nutrition-v2'
+// Stepper táctil del quick-edit (H-07): el patrón correcto en móvil ya estaba resuelto ahí y el
+// builder seguía con TextInput crudo. Se ADOPTA tal cual — no se copia ni se re-escribe.
+import { QuantityStepper } from '../../../../components/nutrition-v2/quick-edit/QuantityStepper'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
 import {
@@ -47,6 +51,7 @@ import {
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
 import { useTheme } from '../../../../context/ThemeContext'
+import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { isEnabled } from '../../../../lib/flags'
 import { fetchCoachExchangeGroups } from '../../../../lib/nutrition-exchanges.coach'
 import { PORTIONS_COPY } from '../../../../lib/nutrition-portions-copy'
@@ -56,6 +61,7 @@ import {
   addPortionGroup,
   clonePortionsForVariant,
   combineSubtotals,
+  copySlotPortionsToVariants,
   derivePortionTotals,
   dropVariantPortions,
   esDecimal,
@@ -111,6 +117,7 @@ import {
   itemMacros,
   macroEnergyMismatch,
   mapFoodCatalogItemToBuilderFood,
+  resolveSlotCopyTargets,
   slotSubtotal,
   strategyUsesSlots,
   takenDayOfWeeks,
@@ -125,6 +132,9 @@ import {
   type BuilderVariant,
   type NutritionV2WriteClient,
 } from '../../../../lib/nutrition-v2-builder'
+// H-07: mismo paso del stepper que el quick-edit (5 para g/ml, 0,5 para unidad/porción). Se
+// importa el helper compartido en vez de re-declarar la regla en el builder.
+import { stepForUnit } from '../../../../lib/nutrition-v2-quick-edit'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 
 const STRATEGY_ORDER: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
@@ -179,6 +189,21 @@ function first(value: string | string[] | undefined): string | undefined {
 }
 
 /**
+ * QW-4 (H-09) — máscara de la hora de franja. El campo era texto libre con teclado alfanumérico y
+ * el error ("Hora inválida (usa HH:MM)") recién aparecía al tocar "Siguiente", multiplicado por
+ * franjas × días. Acá se escriben SOLO dígitos y los dos puntos se ponen solos.
+ *
+ * Se queda con los primeros 4 dígitos y separa después del segundo: escribir "0930" da "09:30".
+ * El borrado funciona sin re-inyectar el separador ("09:3" → dígitos "093" → "09:3"; "09:" →
+ * dígitos "09" → "09"). No valida rangos: eso sigue siendo del validador del reducer, que exige
+ * hora de DOS dígitos — la misma forma que produce esta máscara.
+ */
+function maskTimeInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4)
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}:${digits.slice(2)}`
+}
+
+/**
  * FD6b — bloque opcional "Equivalencia de porciones" del alta de alimento libre (P-B). Vive como
  * estado LOCAL del `ItemEditor` (texto crudo) y sube al `handleSaveCustomFood` de la pantalla, que
  * lo normaliza a las 3 columnas `exchange_*`. `null` = el coach no abrio el bloque.
@@ -204,6 +229,13 @@ function parseEquivalenceGrams(raw: string): number | null {
 // blanco reduciria el plan a un dia. Espejo del `multiDayLocked` web (rehydrationFailed && >1 dia).
 function multiDayBlockCopy(dayCount: number): string {
   return `No pudimos cargar los ${dayCount} días de este plan; rehacerlo aquí lo reduciría a uno. Usa Edición rápida.`
+}
+
+// H-01 — enumeracion es-CL para el aviso "Revisa Sábado y Domingo" (los dias con error que no
+// estan montados). Solo formatea: no decide nada sobre la validacion.
+function joinDayLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels[0] ?? ''
+  return `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`
 }
 
 // Plan vigente del alumno (sub-delta c): habilita la rama "Archivar y reemplazar". Se lee LOCAL
@@ -286,6 +318,16 @@ interface PortionsController {
   }) => void
   /** Multi-día (FD4): descarta las porciones de un día eliminado. */
   dropVariant: (variantKey: string) => void
+  /**
+   * CE-5: copia las porciones de UNA franja a los días destino de `COPY_SLOT_TO_VARIANTS`. Los
+   * `targets` los resuelve `resolveSlotCopyTargets` con el MISMO estado previo que usa el reducer,
+   * así que la franja destino puede ser una existente (merge por nombre) o la recién clonada.
+   */
+  copySlotToVariants: (params: {
+    sourceVariantKey: string
+    sourceSlotKey: string
+    targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
+  }) => void
   /** Porciones propias (FD6a): grupo recién creado/editado -> catálogo en memoria, SIN refetch. */
   upsertCatalogGroup: (group: ExchangeGroup) => void
   /**
@@ -363,6 +405,17 @@ function usePortionsBuilder(): PortionsController {
     (variantKey: string) => setBySlot((prev) => dropVariantPortions(prev, variantKey)),
     [],
   )
+  // CE-5: la franja copiada arrastra sus porciones a elección. Semántica de REEMPLAZO total (si
+  // el origen no tiene porciones, las del destino se borran) — espejo exacto de lo que el reducer
+  // hace con los items, para que la franja destino quede igual al origen y no mezclada.
+  const copySlotToVariants = useCallback(
+    (params: {
+      sourceVariantKey: string
+      sourceSlotKey: string
+      targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
+    }) => setBySlot((prev) => copySlotPortionsToVariants(prev, params)),
+    [],
+  )
 
   // Porciones propias (FD6a): tras un POST/PATCH exitoso el catalogo en memoria se actualiza en el
   // acto (el picker sigue abierto y el grupo ya se puede asignar), sin un refetch de red.
@@ -399,6 +452,7 @@ function usePortionsBuilder(): PortionsController {
     restoreBySlot,
     cloneVariant,
     dropVariant,
+    copySlotToVariants,
     upsertCatalogGroup,
     dropCatalogGroup,
   }
@@ -648,6 +702,45 @@ export default function CoachNutritionV2BuilderScreen() {
     return out
   }, [state.variants, portions.bySlot, portions.groups])
 
+  // H-01 (P0) — dias con error de validacion. `validateStep` valida TODOS los dias (publicar emite
+  // las N variantes) pero `ConstructionStep` solo monta las franjas del ACTIVO: los errores por
+  // franja/item de otro dia viven en editores desmontados y "Siguiente" quedaba muerto sin ningun
+  // mensaje. Aca se PROYECTA el mismo `validation.errors` sobre las variantes (las claves ya son
+  // keyables por dia); la validacion no cambia, solo se expone.
+  const variantErrorKeys = useMemo(() => {
+    if (!showErrors || state.step !== 2 || validation.ok) return []
+    const stepErrors = validation.errors
+    return state.variants
+      .filter(
+        (variant) =>
+          stepErrors['variant.' + variant.key + '.slots'] != null ||
+          variant.slots.some(
+            (slot) =>
+              stepErrors['slot.' + slot.key + '.name'] != null ||
+              stepErrors['slot.' + slot.key + '.startTime'] != null ||
+              slot.items.some(
+                (item) =>
+                  stepErrors['item.' + item.key + '.food'] != null ||
+                  stepErrors['item.' + item.key + '.quantity'] != null,
+              ),
+          ),
+      )
+      .map((variant) => variant.key)
+  }, [showErrors, state.step, state.variants, validation])
+
+  // QW-6 (H-14) — el buscador del builder es UN modal reusado por dos intenciones (agregar el
+  // alimento prescrito / agregar un reemplazo autorizado) y no decía cuál: agregar por error un
+  // reemplazo como item prescrito cambia el plan del alumno. El título lo dice ahora, con el
+  // nombre del item que se está reemplazando (el quick-edit ya lo hacía en su sheet).
+  const searchModalTitle = useMemo(() => {
+    if (searchTarget == null || searchTarget.mode === 'item') return 'Agregar alimento'
+    const variant = state.variants.find((candidate) => candidate.key === searchTarget.variantKey)
+    const slot = variant?.slots.find((candidate) => candidate.key === searchTarget.slotKey)
+    const item = slot?.items.find((candidate) => candidate.key === searchTarget.itemKey)
+    const name = item?.food?.name ?? (item?.customName || '').trim()
+    return name ? `Reemplazo de ${name}` : 'Reemplazo autorizado'
+  }, [searchTarget, state.variants])
+
   // Copy del encabezado: la raiz puede venir por query (CTA del hub/ficha) o del plan vigente ya
   // resuelto (deep link viejo). El numero de version sale del param cuando viaja y si no del plan.
   const headerPlanId = planId ?? existingPlan?.id ?? null
@@ -729,6 +822,25 @@ export default function CoachNutritionV2BuilderScreen() {
   function handleRemoveVariant(variantKey: string) {
     dispatch({ type: 'REMOVE_VARIANT', variantKey })
     portions.dropVariant(variantKey)
+  }
+
+  // CE-5 (H-12) — copiar UNA franja a otros días ya existentes. Antes solo se podía DUPLICAR el
+  // día entero al crearlo: cambiar el desayuno de 5 días era repetir el cambio 5 veces a mano.
+  //
+  // Dos piezas se mueven en el mismo gesto y con el MISMO estado previo: el árbol (reducer) y el
+  // mapa de porciones (vive fuera del reducer). `resolveSlotCopyTargets` es la función PURA que
+  // ambos consultan, así que la franja que el reducer pisa es exactamente la que recibe las
+  // porciones — resolverlo dos veces con estados distintos las desalinearía.
+  function handleCopySlotToVariants(sourceVariantKey: string, slotKey: string, targetVariantKeys: string[]) {
+    if (targetVariantKeys.length === 0) return
+    const targets = resolveSlotCopyTargets(state, { sourceVariantKey, slotKey, targetVariantKeys })
+    if (targets.length === 0) return
+    dispatch({ type: 'COPY_SLOT_TO_VARIANTS', sourceVariantKey, slotKey, targetVariantKeys })
+    portions.copySlotToVariants({
+      sourceVariantKey,
+      sourceSlotKey: slotKey,
+      targets: targets.map((target) => ({ variantKey: target.variantKey, slotKey: target.slotKey })),
+    })
   }
 
   const dayHandlers: BuilderDayVariantBarHandlers = {
@@ -1133,6 +1245,12 @@ export default function CoachNutritionV2BuilderScreen() {
 
   const errors = showErrors ? validation.errors : {}
 
+  // Dias con error que NO estan en pantalla (el paso 2 solo monta el activo). Su aviso va al pie,
+  // junto a "Siguiente": es donde mira el coach cuando el boton parece no responder.
+  const hiddenErrorVariants = state.variants.filter(
+    (variant) => variant.key !== activeVariant.key && variantErrorKeys.includes(variant.key),
+  )
+
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
       <KeyboardAvoidingView
@@ -1195,7 +1313,17 @@ export default function CoachNutritionV2BuilderScreen() {
             }
           />
 
-          <BuilderStepList steps={steps} />
+          {/* H-04: stepper compacto y navegable HACIA ATRÁS (solo pasos completados: volver a uno
+              equivale a pulsar "Atrás" N veces, nunca esquiva la validación de "Siguiente"). */}
+          <BuilderStepList
+            steps={steps}
+            onSelectStep={(index) => {
+              if (index >= state.step) return
+              setShowErrors(false)
+              setPublishError(null)
+              dispatch({ type: 'SET_STEP', step: index })
+            }}
+          />
 
           {state.step === 0 ? (
             <StrategyStep state={state} onPick={handlePickStrategy} hasNutritionPro={hasNutritionPro} error={errors.strategy} />
@@ -1212,8 +1340,10 @@ export default function CoachNutritionV2BuilderScreen() {
               dayHandlers={dayHandlers}
               dispatch={dispatch}
               errors={errors}
+              variantErrorKeys={variantErrorKeys}
               onSearch={(target) => setSearchTarget(target)}
               onSaveCustomFood={handleSaveCustomFood}
+              onCopySlotToVariants={handleCopySlotToVariants}
               portions={portions}
             />
           ) : null}
@@ -1234,34 +1364,47 @@ export default function CoachNutritionV2BuilderScreen() {
           ) : null}
         </ScrollView>
 
-        <View className="flex-row items-center justify-between gap-3 border-t border-border-subtle bg-surface-app px-4 py-3">
-          <NutritionMotionButton
-            accessibilityLabel="Paso anterior"
-            tone="neutral"
-            disabled={state.step === 0 || publishing}
-            onPress={handlePrev}
-          >
-            Atrás
-          </NutritionMotionButton>
-          {state.step < 3 ? (
-            <NutritionMotionButton accessibilityLabel="Siguiente paso" onPress={handleNext}>
-              Siguiente
-            </NutritionMotionButton>
-          ) : (
+        <View className="border-t border-subtle bg-surface-app">
+          {/* H-01 (P0): "Siguiente" no avanza por un error que vive en un dia NO montado. Sin esta
+              linea el boton parece muerto: el unico rastro era la fila roja del BuilderStepList. */}
+          {hiddenErrorVariants.length > 0 ? (
+            <View className="flex-row items-start gap-2 px-4 pt-3">
+              <AlertTriangle color={theme.destructive} size={14} />
+              <Text className="min-w-0 flex-1 text-xs font-medium leading-snug text-danger-600">
+                Revisa {joinDayLabels(hiddenErrorVariants.map((variant) => variant.label))} para continuar.
+              </Text>
+            </View>
+          ) : null}
+          <View className="flex-row items-center justify-between gap-3 px-4 py-3">
             <NutritionMotionButton
-              accessibilityLabel="Publicar plan"
-              pending={publishing || !existingPlanResolved}
-              disabled={publishing || !existingPlanResolved || multiDayBlocked}
-              onPress={() => void handlePublish()}
+              accessibilityLabel="Paso anterior"
+              tone="neutral"
+              disabled={state.step === 0 || publishing}
+              onPress={handlePrev}
             >
-              Publicar plan
+              Atrás
             </NutritionMotionButton>
-          )}
+            {state.step < 3 ? (
+              <NutritionMotionButton accessibilityLabel="Siguiente paso" onPress={handleNext}>
+                Siguiente
+              </NutritionMotionButton>
+            ) : (
+              <NutritionMotionButton
+                accessibilityLabel="Publicar plan"
+                pending={publishing || !existingPlanResolved}
+                disabled={publishing || !existingPlanResolved || multiDayBlocked}
+                onPress={() => void handlePublish()}
+              >
+                Publicar plan
+              </NutritionMotionButton>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
 
       <FoodSearchModal
         visible={searchTarget !== null}
+        title={searchModalTitle}
         onClose={() => setSearchTarget(null)}
         onSelect={handleSelectFood}
       />
@@ -1301,7 +1444,7 @@ function LabeledInput({
   const { theme } = useTheme()
   return (
     <View>
-      <Text className="mb-1.5 text-sm font-semibold text-text-strong">{label}</Text>
+      <Text className="mb-1.5 text-sm font-semibold text-strong">{label}</Text>
       <TextInput
         autoFocus={autoFocus}
         value={value}
@@ -1309,9 +1452,9 @@ function LabeledInput({
         placeholder={placeholder}
         placeholderTextColor={theme.mutedForeground}
         keyboardType={keyboardType ?? 'default'}
-        className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-text-strong"
+        className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
       />
-      {hint && !error ? <Text className="mt-1 text-xs text-text-muted">{hint}</Text> : null}
+      {hint && !error ? <Text className="mt-1 text-xs text-muted">{hint}</Text> : null}
       <ErrorText message={error} />
     </View>
   )
@@ -1334,7 +1477,7 @@ function StrategyStep({
 }) {
   return (
     <View className="gap-3">
-      <Text className="font-display text-lg font-semibold text-text-strong">¿Cómo se estructura el plan?</Text>
+      <Text className="font-display text-lg font-semibold text-strong">¿Cómo se estructura el plan?</Text>
       <ErrorText message={error} />
       <View className="gap-3">
         {STRATEGY_ORDER.map((strategy) => {
@@ -1349,7 +1492,7 @@ function StrategyStep({
               {locked ? (
                 <View className="mt-1.5 flex-row items-center gap-1.5 px-1">
                   <Lock color="#8A94A6" size={13} />
-                  <Text className="text-xs font-medium text-text-muted">Incluido en Nutrición Pro</Text>
+                  <Text className="text-xs font-medium text-muted">Incluido en Nutrición Pro</Text>
                 </View>
               ) : null}
             </View>
@@ -1387,21 +1530,25 @@ function TargetsStep({
       />
 
       <NutritionCard>
-        <Text className="font-display text-base font-semibold text-text-strong">
+        <Text className="font-display text-base font-semibold text-strong">
           {state.variants.length > 1 ? 'Metas del día base' : 'Metas diarias'}
         </Text>
-        <Text className="mt-1 text-xs text-text-muted">
+        <Text className="mt-1 text-xs text-muted">
           {state.variants.length > 1
             ? 'Los días específicos las heredan salvo que les pongas objetivos propios.'
             : 'Define al menos una meta (kcal o un macro).'}
         </Text>
+        {/* QW-3 (H-08): `decimal-pad`, no `number-pad`. En iOS el teclado numérico puro no trae
+            separador decimal y el modelo SÍ acepta decimales (coma es-CL incluida): el coach
+            escribía 35 donde quería 3,5 y el aviso de mismatch de energía saltaba sin motivo
+            visible. La cantidad del item ya usaba decimal-pad: la inconsistencia era interna. */}
         <View className="mt-3 gap-3">
           <LabeledInput
             label="Energía (kcal)"
             value={state.targets.calories}
             onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'calories', value })}
             placeholder="2000"
-            keyboardType="number-pad"
+            keyboardType="decimal-pad"
             error={errors.calories}
           />
           <View className="flex-row gap-3">
@@ -1411,7 +1558,7 @@ function TargetsStep({
                 value={state.targets.proteinG}
                 onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'proteinG', value })}
                 placeholder="150"
-                keyboardType="number-pad"
+                keyboardType="decimal-pad"
                 error={errors.proteinG}
               />
             </View>
@@ -1421,7 +1568,7 @@ function TargetsStep({
                 value={state.targets.carbsG}
                 onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'carbsG', value })}
                 placeholder="200"
-                keyboardType="number-pad"
+                keyboardType="decimal-pad"
                 error={errors.carbsG}
               />
             </View>
@@ -1431,7 +1578,7 @@ function TargetsStep({
                 value={state.targets.fatsG}
                 onChangeText={(value) => dispatch({ type: 'SET_TARGET', field: 'fatsG', value })}
                 placeholder="60"
-                keyboardType="number-pad"
+                keyboardType="decimal-pad"
                 error={errors.fatsG}
               />
             </View>
@@ -1440,7 +1587,7 @@ function TargetsStep({
       </NutritionCard>
 
       <NutritionCard>
-        <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">Permisos del alumno</Text>
+        <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</Text>
         <View className="mt-2 gap-1">
           {PERMISSION_FIELDS.map(([field, label]) => (
             <PermissionRow
@@ -1481,13 +1628,13 @@ function PermissionRow({ label, checked, onToggle }: { label: string; checked: b
     >
       <View
         className={`h-5 w-5 items-center justify-center rounded-control border ${
-          checked ? 'border-transparent' : 'border-border-default bg-surface-card'
+          checked ? 'border-transparent' : 'border-default bg-surface-card'
         }`}
         style={checked ? { backgroundColor: theme.primary } : undefined}
       >
         {checked ? <Check color={theme.primaryForeground} size={14} /> : null}
       </View>
-      <Text className="flex-1 text-sm text-text-body">{label}</Text>
+      <Text className="flex-1 text-sm text-body">{label}</Text>
     </Pressable>
   )
 }
@@ -1538,13 +1685,13 @@ function PortionsStepper({
         accessibilityLabel={PORTIONS_COPY.builder.stepDownAria(groupName)}
         disabled={!canDecrement}
         onPress={() => onStep(-1)}
-        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
       >
         <Minus color={theme.foreground} size={16} />
       </Pressable>
       <Text
         accessibilityLabel={`Porciones de ${groupName}: ${formatPortionsEs(portions)}`}
-        className="w-12 text-center text-base font-semibold text-text-strong"
+        className="w-12 text-center text-base font-semibold text-strong"
         style={{ fontVariant: ['tabular-nums'] }}
       >
         {formatPortionsEs(portions)}
@@ -1554,7 +1701,7 @@ function PortionsStepper({
         accessibilityLabel={PORTIONS_COPY.builder.stepUpAria(groupName)}
         disabled={!canIncrement}
         onPress={() => onStep(1)}
-        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
       >
         <Plus color={theme.foreground} size={16} />
       </Pressable>
@@ -1623,11 +1770,11 @@ function PortionsGroupPickerSheet({
       {groups == null && controller.groupsLoading ? (
         <View className="items-center gap-2 py-8">
           <ActivityIndicator color={theme.primary} />
-          <Text className="text-sm text-text-muted">{PORTIONS_COPY.builder.pickerLoading}</Text>
+          <Text className="text-sm text-muted">{PORTIONS_COPY.builder.pickerLoading}</Text>
         </View>
       ) : groups == null && controller.groupsError ? (
         <View className="items-center gap-3 py-8">
-          <Text className="text-center text-sm text-text-muted">{controller.groupsError}</Text>
+          <Text className="text-center text-sm text-muted">{controller.groupsError}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={PORTIONS_COPY.builder.pickerRetry}
@@ -1655,7 +1802,7 @@ function PortionsGroupPickerSheet({
                   <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
                   <View className="min-w-0 flex-1">
                     <View className="flex-row items-center gap-1.5">
-                      <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
+                      <Text className="shrink text-sm font-semibold text-strong" numberOfLines={1}>
                         {group.name}
                       </Text>
                       {!group.macrosConfirmed ? (
@@ -1666,7 +1813,7 @@ function PortionsGroupPickerSheet({
                         </View>
                       ) : null}
                     </View>
-                    <Text className="text-xs text-text-muted" numberOfLines={1}>
+                    <Text className="text-xs text-muted" numberOfLines={1}>
                       {used
                         ? PORTIONS_COPY.builder.groupUsed
                         : `1 porción ≈ ${Math.round(group.refCalories)} kcal · ${Math.round(group.refCarbsG)} C · ${Math.round(group.refProteinG)} P`}
@@ -1695,7 +1842,7 @@ function PortionsGroupPickerSheet({
             accessibilityRole="button"
             accessibilityLabel={PORTIONS_COPY.groupEditor.createRow}
             onPress={openCreate}
-            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-border-default px-2 py-2 active:bg-surface-sunken"
+            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-default px-2 py-2 active:bg-surface-sunken"
           >
             <View className="h-5 w-5 items-center justify-center rounded-full border border-dashed border-primary/60">
               <Plus color={theme.primary} size={12} />
@@ -1744,9 +1891,9 @@ function BuilderPortionsSection({
   }
 
   return (
-    <View className="mt-3 border-t border-border-subtle pt-3">
-      <Text className="text-sm font-medium text-text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
-      <Text className="mt-0.5 text-xs text-text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
+    <View className="mt-3 border-t border-subtle pt-3">
+      <Text className="text-sm font-medium text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
+      <Text className="mt-0.5 text-xs text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
 
       {targets.length > 0 ? (
         <View className="mt-2 gap-2">
@@ -1763,7 +1910,7 @@ function BuilderPortionsSection({
                   ) : (
                     <View accessible={false} className="h-5 w-5 rounded-full bg-border-subtle" />
                   )}
-                  <Text className="min-w-0 flex-1 text-sm font-medium text-text-strong" numberOfLines={1}>
+                  <Text className="min-w-0 flex-1 text-sm font-medium text-strong" numberOfLines={1}>
                     {name}
                   </Text>
                 </View>
@@ -1841,7 +1988,7 @@ function PortionsDeriveCard({
     <View className="gap-3 rounded-card border border-primary/20 bg-primary/10 p-4">
       <View className="flex-row items-start gap-2">
         <Sparkles color={theme.primary} size={18} />
-        <Text className="flex-1 text-sm leading-5 text-text-body">
+        <Text className="flex-1 text-sm leading-5 text-body">
           {PORTIONS_COPY.builder.deriveCard(kcal, p, c, g)}
         </Text>
       </View>
@@ -1871,10 +2018,16 @@ function PortionsDeriveCard({
 function PortionsReviewSection({
   strategy,
   variant,
+  showDayHeading,
   portions,
 }: {
   strategy: BuilderState['strategy']
   variant: BuilderVariant
+  /**
+   * QW-7 (H-13): con varios días la revisión apilaba N tarjetas visualmente idénticas tituladas
+   * "Porciones a elección", sin decir de qué día era cada una (`ReviewVariantSection` sí lo hace).
+   */
+  showDayHeading: boolean
   portions: PortionsController
 }) {
   const usesSlots = strategyUsesSlots(strategy)
@@ -1891,9 +2044,15 @@ function PortionsReviewSection({
     }))
     .filter((r) => r.targets.length > 0)
   const anyUnconfirmed = rows.some((r) => hasUnconfirmedMacros(r.targets, groups))
+  const badge = variantDayBadge(variant)
   return (
-    <View className="gap-2 rounded-card border border-border-subtle bg-surface-card p-4">
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+    <View className="gap-2 rounded-card border border-subtle bg-surface-card p-4">
+      {showDayHeading ? (
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+          {badge ? `${variant.label} · ${badge.long}` : variant.label}
+        </Text>
+      ) : null}
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">
         {PORTIONS_COPY.builder.sectionTitle}
       </Text>
       {anyUnconfirmed ? (
@@ -1904,11 +2063,11 @@ function PortionsReviewSection({
       <View className="gap-1.5">
         {rows.map(({ slot, index, targets }) => (
           <View key={slot.key} className="flex-row items-center gap-2">
-            <Text className="min-w-0 flex-1 text-xs text-text-body" numberOfLines={1}>
+            <Text className="min-w-0 flex-1 text-xs text-body" numberOfLines={1}>
               {slot.name || `Franja ${index + 1}`}
             </Text>
             <Text
-              className="font-mono text-xs text-text-strong"
+              className="font-mono text-xs text-strong"
               style={{ fontVariant: ['tabular-nums'] }}
             >
               {esDecimal(portionsSummaryLabel(targets, groups))}
@@ -1931,13 +2090,13 @@ function UnitToggle({ unit, onChange }: { unit: BuilderUnit; onChange: (unit: Bu
     <Pressable
       accessibilityLabel={`Unidad: ${unit}. Toca para cambiar.`}
       accessibilityRole="button"
-      className="min-h-11 min-w-14 items-center justify-center rounded-control border border-border-default bg-surface-sunken px-2"
+      className="min-h-11 min-w-14 items-center justify-center rounded-control border border-default bg-surface-sunken px-2"
       onPress={() => {
         const idx = BUILDER_UNITS.indexOf(unit)
         onChange(BUILDER_UNITS[(idx + 1) % BUILDER_UNITS.length])
       }}
     >
-      <Text className="text-sm font-semibold text-text-strong">{unit}</Text>
+      <Text className="text-sm font-semibold text-strong">{unit}</Text>
     </Pressable>
   )
 }
@@ -1989,7 +2148,7 @@ function ItemEditor({
   }
 
   return (
-    <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+    <View className="rounded-control border border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
           <FoodThumbnail
@@ -2005,10 +2164,10 @@ function ItemEditor({
                 onChangeText={(value) => patch({ customName: value })}
                 placeholder="Nombre del alimento"
                 placeholderTextColor={theme.mutedForeground}
-                className="min-h-10 rounded-control border border-border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-text-strong"
+                className="min-h-10 rounded-control border border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-strong"
               />
             ) : (
-              <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+              <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
                 {item.food?.name}
               </Text>
             )}
@@ -2024,17 +2183,17 @@ function ItemEditor({
         </Pressable>
       </View>
 
-      <View className="mt-2 flex-row items-center gap-2">
-        <View className="flex-1">
-          <TextInput
-            value={item.quantity}
-            onChangeText={(value) => patch({ quantity: value })}
-            placeholder="Cantidad"
-            placeholderTextColor={theme.mutedForeground}
-            keyboardType="decimal-pad"
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"
-          />
-        </View>
+      {/* H-07 — el mismo coach editaba "200 g de arroz" con teclado en el builder y con steppers
+          en el quick-edit: dos modelos de interacción para lo mismo. Se adopta el `QuantityStepper`
+          del quick-edit (−/+ de 44 pt + input central `selectTextOnFocus`, árbol estable, jamás
+          slider). El paso por unidad sale del helper compartido, no de una regla nueva. */}
+      <View className="mt-2 flex-row items-center justify-between gap-2">
+        <QuantityStepper
+          value={item.quantity}
+          onChange={(value) => patch({ quantity: value })}
+          step={stepForUnit(item.unit)}
+          accessibilityLabel={`Cantidad de ${item.food?.name ?? item.customName ?? 'alimento'}`}
+        />
         <UnitToggle unit={item.unit} onChange={(unit) => patch({ unit })} />
       </View>
       <ErrorText message={errors['item.' + item.key + '.quantity'] ?? errors['item.' + item.key + '.food']} />
@@ -2051,14 +2210,14 @@ function ItemEditor({
               ] as const
             ).map(([field, label]) => (
               <View className="flex-1" key={field}>
-                <Text className="mb-1 text-[10px] font-medium text-text-muted">{label}</Text>
+                <Text className="mb-1 text-[10px] font-medium text-muted">{label}</Text>
                 <TextInput
                   value={item[field]}
                   onChangeText={(value) => patch({ [field]: value } as Partial<Omit<BuilderItem, 'key'>>)}
                   placeholder="0"
                   placeholderTextColor={theme.mutedForeground}
-                  keyboardType="number-pad"
-                  className="min-h-10 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+                  keyboardType="decimal-pad"
+                  className="min-h-10 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
                 />
               </View>
             ))}
@@ -2078,14 +2237,14 @@ function ItemEditor({
               accessibilityLabel="Guardar en mi catálogo"
               disabled={saving}
               onPress={() => void handleSaveCustom()}
-              className={`min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 ${saving ? 'opacity-60' : ''}`}
+              className={`min-h-11 flex-row items-center gap-1.5 rounded-control border border-default bg-surface-card px-3 ${saving ? 'opacity-60' : ''}`}
             >
               {saving ? (
                 <ActivityIndicator color={theme.foreground} size="small" />
               ) : (
                 <Plus color={theme.foreground} size={14} />
               )}
-              <Text className="text-xs font-semibold text-text-strong">Guardar en mi catálogo</Text>
+              <Text className="text-xs font-semibold text-strong">Guardar en mi catálogo</Text>
             </Pressable>
             {saveError ? <Text className="text-[11px] text-danger-600">{saveError}</Text> : null}
           </View>
@@ -2149,11 +2308,11 @@ function FoodEquivalenceField({
   }
 
   return (
-    <View className="mt-2 gap-2 rounded-control border border-border-subtle bg-surface-card p-2.5">
+    <View className="mt-2 gap-2 rounded-control border border-subtle bg-surface-card p-2.5">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1">
-          <Text className="text-xs font-semibold text-text-strong">{COPY.sectionTitle}</Text>
-          <Text className="mt-0.5 text-[11px] leading-snug text-text-muted">{COPY.sectionHint}</Text>
+          <Text className="text-xs font-semibold text-strong">{COPY.sectionTitle}</Text>
+          <Text className="mt-0.5 text-[11px] leading-snug text-muted">{COPY.sectionHint}</Text>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -2166,9 +2325,9 @@ function FoodEquivalenceField({
         </Pressable>
       </View>
 
-      <Text className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{COPY.groupLabel}</Text>
+      <Text className="text-[10px] font-medium uppercase tracking-wide text-muted">{COPY.groupLabel}</Text>
       {groups == null && portions.groupsLoading ? (
-        <Text className="text-xs text-text-muted">{COPY.groupsLoading}</Text>
+        <Text className="text-xs text-muted">{COPY.groupsLoading}</Text>
       ) : groups == null && portions.groupsError ? (
         <Pressable
           accessibilityRole="button"
@@ -2179,7 +2338,7 @@ function FoodEquivalenceField({
           <Text className="text-xs font-semibold text-primary underline">{COPY.groupsError}</Text>
         </Pressable>
       ) : (groups ?? []).length === 0 ? (
-        <Text className="text-xs text-text-muted">{COPY.groupsEmpty}</Text>
+        <Text className="text-xs text-muted">{COPY.groupsEmpty}</Text>
       ) : (
         <View className="flex-row flex-wrap gap-1.5">
           {(groups ?? []).map((group) => {
@@ -2192,12 +2351,12 @@ function FoodEquivalenceField({
                 accessibilityLabel={group.name}
                 onPress={() => onChange({ ...value, exchangeGroupId: on ? null : group.id })}
                 className={`min-h-11 flex-row items-center gap-1.5 rounded-pill border px-2.5 ${
-                  on ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-sunken'
+                  on ? 'border-primary bg-primary/10' : 'border-default bg-surface-sunken'
                 }`}
               >
                 <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
                 <Text
-                  className={`shrink text-xs font-semibold ${on ? 'text-primary' : 'text-text-strong'}`}
+                  className={`shrink text-xs font-semibold ${on ? 'text-primary' : 'text-strong'}`}
                   numberOfLines={1}
                 >
                   {group.name}
@@ -2210,7 +2369,7 @@ function FoodEquivalenceField({
 
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
             {COPY.gramsLabel}
           </Text>
           <TextInput
@@ -2220,12 +2379,12 @@ function FoodEquivalenceField({
             keyboardType="decimal-pad"
             placeholder={COPY.gramsPlaceholder}
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
             style={{ fontVariant: ['tabular-nums'] }}
           />
         </View>
         <View className="flex-1">
-          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
             {COPY.labelLabel}
           </Text>
           <TextInput
@@ -2235,13 +2394,13 @@ function FoodEquivalenceField({
             maxLength={40}
             placeholder={COPY.labelPlaceholder}
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
           />
         </View>
       </View>
 
       {selected && grams != null ? (
-        <Text className="text-[11px] text-text-muted">
+        <Text className="text-[11px] text-muted">
           {COPY.preview(selected.name, String(grams), value.exchangePortionLabel.trim() || null)}
         </Text>
       ) : null}
@@ -2274,14 +2433,14 @@ function SubstitutionsField({
   const prescribedName = item.food ? item.food.name : (item.customName?.trim() || 'este alimento')
 
   return (
-    <View className="mt-2 border-t border-border-subtle pt-2">
+    <View className="mt-2 border-t border-subtle pt-2">
       <View className="flex-row flex-wrap items-center gap-1.5">
         <View className="flex-row items-center gap-1">
           <Repeat color={theme.mutedForeground} size={14} />
-          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Reemplazos autorizados</Text>
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">Reemplazos autorizados</Text>
         </View>
         {subs.length > 0 ? (
-          <Text className="font-mono text-[11px] tabular-nums text-text-subtle">
+          <Text className="font-mono text-[11px] tabular-nums text-subtle">
             {subs.length}/{MAX_ITEM_SUBSTITUTIONS}
           </Text>
         ) : null}
@@ -2292,9 +2451,9 @@ function SubstitutionsField({
           {subs.map((sub) => (
             <View
               key={sub.key}
-              className="max-w-full flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken py-0.5 pl-2.5 pr-1"
+              className="max-w-full flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken py-0.5 pl-2.5 pr-1"
             >
-              <Text className="min-w-0 shrink text-xs text-text-body" numberOfLines={1}>
+              <Text className="min-w-0 shrink text-xs text-body" numberOfLines={1}>
                 {sub.food.name}
               </Text>
               <Pressable
@@ -2317,27 +2476,167 @@ function SubstitutionsField({
           ))}
         </View>
       ) : (
-        <Text className="mt-1 text-[11px] leading-snug text-text-subtle">
+        <Text className="mt-1 text-[11px] leading-snug text-subtle">
           Alimentos que el alumno puede usar en lugar de {prescribedName}.
         </Text>
       )}
 
       {atCap ? (
-        <Text className="mt-1.5 text-[11px] text-text-subtle">
+        <Text className="mt-1.5 text-[11px] text-subtle">
           Alcanzaste el maximo de {MAX_ITEM_SUBSTITUTIONS} reemplazos.
         </Text>
       ) : (
         <Pressable
           accessibilityLabel="Agregar reemplazo autorizado"
           accessibilityRole="button"
-          className="mt-1.5 min-h-11 flex-row items-center justify-center gap-1.5 self-start rounded-control border border-border-default bg-surface-card px-3"
+          className="mt-1.5 min-h-11 flex-row items-center justify-center gap-1.5 self-start rounded-control border border-default bg-surface-card px-3"
           onPress={() => onSearch({ mode: 'substitution', variantKey, slotKey, itemKey: item.key })}
         >
           <Plus color={theme.foreground} size={14} />
-          <Text className="text-xs font-semibold text-text-strong">Reemplazo</Text>
+          <Text className="text-xs font-semibold text-strong">Reemplazo</Text>
         </Pressable>
       )}
     </View>
+  )
+}
+
+/**
+ * CE-5 (H-12) — menú de la franja: copiarla a otros días del plan.
+ *
+ * El flujo real del coach es armar 5 días copiando el base y después cambiar el desayuno: sin
+ * esto hay que repetir el cambio día por día, cambiando de chip cada vez (y con los chips fuera
+ * de pantalla). "Duplicar como otro día" no servía: CREA un día nuevo, no toca uno existente.
+ *
+ * Dos caminos, mismo despacho: elegir días a mano o aplicar a todos. La nota dice explícitamente
+ * qué pasa en el destino, porque la semántica es de REEMPLAZO por nombre de franja (no de mezcla).
+ */
+function SlotCopySheet({
+  open,
+  onClose,
+  slotName,
+  targets,
+  onApply,
+}: {
+  open: boolean
+  onClose: () => void
+  slotName: string
+  /** Días destino posibles: todos menos el de origen. */
+  targets: BuilderVariant[]
+  onApply: (variantKeys: string[]) => void
+}) {
+  const { theme } = useTheme()
+  const [panel, setPanel] = useState<'menu' | 'pick'>('menu')
+  const [selected, setSelected] = useState<string[]>([])
+
+  // Cada apertura arranca limpia (el sheet no se desmonta entre aperturas).
+  useEffect(() => {
+    if (open) {
+      setPanel('menu')
+      setSelected([])
+    }
+  }, [open])
+
+  const title = slotName.trim() === '' ? 'Franja' : slotName.trim()
+  // Copy alineado con el mismo gesto en la edición rápida: la semántica es de REEMPLAZO por
+  // nombre de franja, no de mezcla, y hay que decirlo antes de tocar 6 días de una.
+  const replaceNote =
+    'Reemplaza la franja del mismo nombre en los días que elijas; si ese día no la tiene, se agrega al final. Viajan los alimentos, la hora, los reemplazos autorizados y las porciones a elección.'
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      nativeModal
+      snapPoints={['65%']}
+      title={panel === 'pick' ? 'Copiar la franja' : `Franja: ${title}`}
+      accessibilityLabel={`Opciones de la franja ${title}`}
+    >
+      {panel === 'menu' ? (
+        <View className="gap-0.5 pb-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Copiar a otros días"
+            onPress={() => setPanel('pick')}
+            className="min-h-12 flex-row items-center gap-3 rounded-control px-2 active:bg-surface-sunken"
+          >
+            <Copy color={theme.foreground} size={18} />
+            <Text className="flex-1 text-sm font-medium text-strong">Copiar a otros días…</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Aplicar esta franja a los ${targets.length} días restantes`}
+            onPress={() => {
+              onApply(targets.map((target) => target.key))
+              onClose()
+            }}
+            className="min-h-12 flex-row items-center gap-3 rounded-control px-2 active:bg-surface-sunken"
+          >
+            <CopyCheck color={theme.foreground} size={18} />
+            <Text className="flex-1 text-sm font-medium text-strong">Aplicar a todos los días</Text>
+          </Pressable>
+          <Text className="mt-1 px-2 text-xs leading-5 text-muted">{replaceNote}</Text>
+        </View>
+      ) : (
+        <View className="gap-3 pb-2">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Días destino</Text>
+          <View className="gap-0.5">
+            {targets.map((target) => {
+              const checked = selected.includes(target.key)
+              const badge = variantDayBadge(target)
+              return (
+                <Pressable
+                  key={target.key}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked }}
+                  accessibilityLabel={badge ? `${target.label}, ${badge.long}` : target.label}
+                  onPress={() =>
+                    setSelected((prev) =>
+                      prev.includes(target.key) ? prev.filter((key) => key !== target.key) : [...prev, target.key],
+                    )
+                  }
+                  className="min-h-12 flex-row items-center gap-2.5 rounded-control px-2"
+                >
+                  <View
+                    className={`h-5 w-5 items-center justify-center rounded-control border ${
+                      checked ? 'border-transparent' : 'border-default bg-surface-card'
+                    }`}
+                    style={checked ? { backgroundColor: theme.primary } : undefined}
+                  >
+                    {checked ? <Check color={theme.primaryForeground} size={13} /> : null}
+                  </View>
+                  <Text className="min-w-0 flex-1 text-sm text-body">{target.label}</Text>
+                  {badge ? (
+                    <Text className="rounded-pill bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                      {badge.short}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              )
+            })}
+          </View>
+          <Text className="text-xs leading-5 text-muted">{replaceNote}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={selected.length <= 1 ? 'Copiar la franja al día elegido' : `Copiar la franja a ${selected.length} días`}
+            accessibilityState={{ disabled: selected.length === 0 }}
+            disabled={selected.length === 0}
+            onPress={() => {
+              onApply(selected)
+              onClose()
+            }}
+            className={`min-h-12 flex-row items-center justify-center gap-1.5 rounded-control px-4 ${
+              selected.length === 0 ? 'opacity-50' : ''
+            }`}
+            style={{ backgroundColor: theme.primary }}
+          >
+            <Copy color={theme.primaryForeground} size={16} />
+            <Text className="text-sm font-bold" style={{ color: theme.primaryForeground }}>
+              {selected.length <= 1 ? 'Copiar al día' : `Copiar a ${selected.length} días`}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </Sheet>
   )
 }
 
@@ -2345,16 +2644,20 @@ function SlotEditor({
   variantKey,
   slot,
   index,
+  variants,
   dispatch,
   errors,
   onSearch,
   onSaveCustomFood,
+  onCopyToVariants,
   portions,
 }: {
   /** Día (variante) al que pertenece la franja: toda mutación viaja scoped a él. */
   variantKey: string
   slot: BuilderSlot
   index: number
+  /** Todos los días del plan: el menú "Copiar a otros días" ofrece los que NO son el origen. */
+  variants: BuilderVariant[]
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
@@ -2364,9 +2667,14 @@ function SlotEditor({
     slotKey: string,
     equivalence: FoodEquivalenceDraft | null,
   ) => Promise<{ ok: boolean; error?: string }>
+  /** CE-5: despacha la copia de ESTA franja (árbol + porciones) a los días elegidos. */
+  onCopyToVariants: (slotKey: string, targetVariantKeys: string[]) => void
   portions: PortionsController
 }) {
   const { theme } = useTheme()
+  const [copyOpen, setCopyOpen] = useState(false)
+  // Días destino: todos menos el propio. Con un solo día el menú no tiene nada que ofrecer.
+  const copyTargets = variants.filter((candidate) => candidate.key !== variantKey)
   // Subtotal combinado (items fijos + derivado de porciones, 4B-11). Sin porciones (o catálogo
   // sin cargar) `slotPortionTotals` devuelve null y `combineSubtotals` deja el objeto de items intacto.
   // Multi-día: la clave de porciones es `variantKey::slotKey` — dos días con una franja homónima
@@ -2377,18 +2685,31 @@ function SlotEditor({
   const showSubtotal = slot.items.length > 0 || portionTotals != null
   return (
     <NutritionCard>
-      <View className="flex-row items-start justify-between gap-2">
+      <View className="flex-row items-center justify-between gap-2">
         <Text className="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
           Franja {index + 1}
         </Text>
-        <Pressable
-          accessibilityLabel="Quitar franja"
-          accessibilityRole="button"
-          className="min-h-9 min-w-9 items-center justify-center rounded-control"
-          onPress={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
-        >
-          <Trash2 color={theme.destructive} size={16} />
-        </Pressable>
+        <View className="flex-row items-center">
+          {/* CE-5: solo con más de un día hay adónde copiar. */}
+          {copyTargets.length > 0 ? (
+            <Pressable
+              accessibilityLabel={`Opciones de la franja ${slot.name || index + 1}`}
+              accessibilityRole="button"
+              className="h-11 w-9 items-center justify-center rounded-control"
+              onPress={() => setCopyOpen(true)}
+            >
+              <MoreVertical color={theme.mutedForeground} size={16} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityLabel="Quitar franja"
+            accessibilityRole="button"
+            className="h-11 w-9 items-center justify-center rounded-control"
+            onPress={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
+          >
+            <Trash2 color={theme.destructive} size={16} />
+          </Pressable>
+        </View>
       </View>
 
       <View className="mt-2 flex-row gap-2">
@@ -2400,18 +2721,27 @@ function SlotEditor({
             }
             placeholder="Nombre (ej: Desayuno)"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm font-semibold text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm font-semibold text-strong"
           />
         </View>
         <View className="w-24">
           <TextInput
+            accessibilityLabel={`Hora de ${slot.name || `la franja ${index + 1}`}`}
             value={slot.startTime}
             onChangeText={(value) =>
-              dispatch({ type: 'UPDATE_SLOT', variantKey, slotKey: slot.key, patch: { startTime: value } })
+              dispatch({
+                type: 'UPDATE_SLOT',
+                variantKey,
+                slotKey: slot.key,
+                patch: { startTime: maskTimeInput(value) },
+              })
             }
             placeholder="HH:MM"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"
+            keyboardType="number-pad"
+            maxLength={5}
+            className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
+            style={{ fontVariant: ['tabular-nums'] }}
           />
         </View>
       </View>
@@ -2446,28 +2776,38 @@ function SlotEditor({
         <Pressable
           accessibilityLabel="Agregar alimento libre"
           accessibilityRole="button"
-          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
+          className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
           onPress={() =>
             dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genKey('item'), food: null })
           }
         >
           <Plus color={theme.foreground} size={15} />
-          <Text className="text-sm font-semibold text-text-strong">Libre</Text>
+          <Text className="text-sm font-semibold text-strong">Libre</Text>
         </Pressable>
       </View>
 
       <BuilderPortionsSection slotKey={portionsSlotKey} controller={portions} />
 
       {showSubtotal ? (
-        <View className="mt-3 border-t border-border-subtle pt-2">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Subtotal franja</Text>
+        <View className="mt-3 border-t border-subtle pt-2">
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Subtotal franja</Text>
           <MacroChipRow size="sm" calories={subtotal.calories} proteinG={subtotal.proteinG} carbsG={subtotal.carbsG} fatsG={subtotal.fatsG} />
           {portionTotals != null ? (
-            <Text className="mt-1 text-[11px] text-text-muted">
+            <Text className="mt-1 text-[11px] text-muted">
               {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
             </Text>
           ) : null}
         </View>
+      ) : null}
+
+      {copyTargets.length > 0 ? (
+        <SlotCopySheet
+          open={copyOpen}
+          onClose={() => setCopyOpen(false)}
+          slotName={slot.name || `Franja ${index + 1}`}
+          targets={copyTargets}
+          onApply={(variantKeys) => onCopyToVariants(slot.key, variantKeys)}
+        />
       ) : null}
     </NutritionCard>
   )
@@ -2481,8 +2821,10 @@ function ConstructionStep({
   dayHandlers,
   dispatch,
   errors,
+  variantErrorKeys,
   onSearch,
   onSaveCustomFood,
+  onCopySlotToVariants,
   portions,
 }: {
   state: BuilderState
@@ -2493,6 +2835,8 @@ function ConstructionStep({
   dayHandlers: BuilderDayVariantBarHandlers
   dispatch: BuilderDispatch
   errors: Record<string, string>
+  /** Días con error (H-01), incluido el activo: marca sus chips y ofrece "Revisa {día}". */
+  variantErrorKeys: readonly string[]
   onSearch: (target: SearchTarget) => void
   onSaveCustomFood: (
     item: BuilderItem,
@@ -2500,13 +2844,15 @@ function ConstructionStep({
     slotKey: string,
     equivalence: FoodEquivalenceDraft | null,
   ) => Promise<{ ok: boolean; error?: string }>
+  /** CE-5: copia de una franja del día activo hacia otros días (árbol + porciones). */
+  onCopySlotToVariants: (sourceVariantKey: string, slotKey: string, targetVariantKeys: string[]) => void
   portions: PortionsController
 }) {
   if (!strategyUsesSlots(state.strategy)) {
     return (
       <NutritionCard>
-        <Text className="font-display text-base font-semibold text-text-strong">Plan flexible</Text>
-        <Text className="mt-2 text-sm leading-5 text-text-muted">
+        <Text className="font-display text-base font-semibold text-strong">Plan flexible</Text>
+        <Text className="mt-2 text-sm leading-5 text-muted">
           Este plan no usa franjas prescritas: el alumno registra sus comidas libremente contra las metas
           diarias del paso anterior. Continúa a la revisión.
         </Text>
@@ -2519,6 +2865,12 @@ function ConstructionStep({
   const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
   const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
   const totals = combineSubtotals(variantTotals(variant), portionDay)
+  // H-01: días con error que NO están montados. Tocarlos cambia de día (`onSelect`), que es donde
+  // sí se pintan los errores por franja/item.
+  const hiddenErrorVariants = state.variants.filter(
+    (other) => other.key !== variant.key && variantErrorKeys.includes(other.key),
+  )
+  const activeBadge = variantDayBadge(variant)
   return (
     <View className="gap-3">
       {/* Barra de días: chips scrolleables + "Agregar día" + banner de herencia de objetivos. */}
@@ -2528,35 +2880,59 @@ function ConstructionStep({
         kcalByVariantKey={kcalByVariantKey}
         baseTargets={state.targets}
         addDayLocked={addDayLocked}
+        errorVariantKeys={variantErrorKeys}
         handlers={dayHandlers}
       />
-      <ErrorText message={errors.slots} />
+      {hiddenErrorVariants.length > 0 ? (
+        <View className="flex-row flex-wrap items-center gap-x-3">
+          {hiddenErrorVariants.map((other) => (
+            <Pressable
+              key={other.key}
+              accessibilityRole="button"
+              accessibilityLabel={`Revisa ${other.label}: tiene datos por corregir`}
+              onPress={() => dayHandlers.onSelect(other.key)}
+              className="min-h-11 justify-center"
+            >
+              <Text className="text-xs font-semibold text-danger-600 underline">Revisa {other.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {/* Error de franjas del día ACTIVO (clave scoped). Los otros días salen arriba y en su chip. */}
+      <ErrorText message={errors['variant.' + variant.key + '.slots']} />
       {variant.slots.map((slot, index) => (
         <SlotEditor
           key={slot.key}
           variantKey={variant.key}
           slot={slot}
           index={index}
+          variants={state.variants}
           dispatch={dispatch}
           errors={errors}
           onSearch={onSearch}
           onSaveCustomFood={onSaveCustomFood}
+          onCopyToVariants={(slotKey, targetVariantKeys) =>
+            onCopySlotToVariants(variant.key, slotKey, targetVariantKeys)
+          }
           portions={portions}
         />
       ))}
       <Pressable
         accessibilityLabel="Agregar franja"
         accessibilityRole="button"
-        className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-border-default bg-surface-card px-3"
+        className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
         onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot') })}
       >
         <Plus color="#8A94A6" size={16} />
-        <Text className="text-sm font-semibold text-text-muted">Agregar franja</Text>
+        <Text className="text-sm font-semibold text-muted">Agregar franja</Text>
       </Pressable>
       {variant.slots.length > 0 ? (
         <View className="px-1">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-            {state.variants.length > 1 ? `Total de ${variant.label}` : 'Total del día'}
+          {/* QW-2: con etiqueta personalizada el total tampoco decía a qué día pertenece. */}
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {state.variants.length > 1
+              ? `Total de ${activeBadge ? `${variant.label} (${activeBadge.long})` : variant.label}`
+              : 'Total del día'}
           </Text>
           <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
         </View>
@@ -2593,14 +2969,14 @@ function ConflictOptionButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      className={`min-h-11 flex-row items-start gap-3 rounded-control border border-border-default bg-surface-card px-3 py-3 ${disabled ? 'opacity-50' : 'active:bg-surface-sunken'}`}
+      className={`min-h-11 flex-row items-start gap-3 rounded-control border border-default bg-surface-card px-3 py-3 ${disabled ? 'opacity-50' : 'active:bg-surface-sunken'}`}
     >
       <View className="mt-0.5">
         <Icon color={theme.primary} size={20} />
       </View>
       <View className="min-w-0 flex-1">
-        <Text className="text-sm font-semibold text-text-strong">{title}</Text>
-        <Text className="mt-0.5 text-xs leading-snug text-text-muted">{hint}</Text>
+        <Text className="text-sm font-semibold text-strong">{title}</Text>
+        <Text className="mt-0.5 text-xs leading-snug text-muted">{hint}</Text>
       </View>
     </Pressable>
   )
@@ -2640,33 +3016,37 @@ function ReviewVariantSection({
   const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
   const totals = combineSubtotals(variantTotals(variant), portionDay)
   const effectiveTargets = variantEffectiveTargets(state, variant)
+  // QW-2: si el coach renombró el día, el encabezado de la revisión también decía solo el alias.
+  const badge = variantDayBadge(variant)
   return (
     <View className="gap-2">
       {showDayHeading ? (
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">{variant.label}</Text>
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+          {badge ? `${variant.label} · ${badge.long}` : variant.label}
+        </Text>
       ) : null}
 
-      <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
-        <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+      <View className="rounded-control border border-subtle bg-surface-sunken p-3">
+        <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">
           {showDayHeading ? `Metas de ${variant.label}` : 'Metas diarias'}
         </Text>
-        <Text className="mt-1 font-mono text-sm text-text-strong">{targetsSummary(effectiveTargets)}</Text>
+        <Text className="mt-1 font-mono text-sm text-strong">{targetsSummary(effectiveTargets)}</Text>
         {showDayHeading && !variant.isDefault && variant.targetsMode !== 'custom' ? (
-          <Text className="mt-0.5 text-[11px] text-text-muted">Heredadas del día base.</Text>
+          <Text className="mt-0.5 text-[11px] text-muted">Heredadas del día base.</Text>
         ) : null}
       </View>
 
       {variant.slots.map((slot, index) => (
-        <View key={slot.key} className="rounded-control border border-border-subtle bg-surface-card p-3">
-          <Text className="text-sm font-semibold text-text-strong">
+        <View key={slot.key} className="rounded-control border border-subtle bg-surface-card p-3">
+          <Text className="text-sm font-semibold text-strong">
             {slot.name || `Franja ${index + 1}`}
             {slot.startTime ? ` · ${slot.startTime}` : ''}
           </Text>
           {slot.items.length === 0 ? (
-            <Text className="mt-1 text-xs text-text-muted">Sin alimentos</Text>
+            <Text className="mt-1 text-xs text-muted">Sin alimentos</Text>
           ) : (
             slot.items.map((item) => (
-              <Text key={item.key} className="mt-1 text-xs text-text-body">
+              <Text key={item.key} className="mt-1 text-xs text-body">
                 {(item.food?.name ?? item.customName ?? 'Alimento') + ` · ${item.quantity || '0'} ${item.unit}`}
               </Text>
             ))
@@ -2675,12 +3055,12 @@ function ReviewVariantSection({
       ))}
 
       <View className="px-1">
-        <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+        <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
           {showDayHeading ? `Total de ${variant.label}` : 'Total prescrito'}
         </Text>
         <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
         {portionDay != null ? (
-          <Text className="mt-1 text-[11px] text-text-muted">
+          <Text className="mt-1 text-[11px] text-muted">
             {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
           </Text>
         ) : null}
@@ -2727,8 +3107,15 @@ function ReviewStep({
       <StudentPreview title="Vista del alumno" themeLabel={NUTRITION_STRATEGIES[strategy].shortLabel}>
         <View className="gap-3">
           <View>
-            <Text className="font-display text-lg font-semibold text-text-strong">{state.planName || 'Plan sin nombre'}</Text>
-            <Text className="mt-0.5 text-xs text-text-muted">Vigente desde {state.effectiveFrom || 'hoy'}</Text>
+            <Text className="font-display text-lg font-semibold text-strong">{state.planName || 'Plan sin nombre'}</Text>
+            {/* QW-10 (H-22): la vista del alumno mostraba la ISO cruda (`2026-08-01`). El
+                formateador ya existe y la pantalla del alumno lo usa; el coach no. */}
+            <Text className="mt-0.5 text-xs text-muted">
+              Vigente desde{' '}
+              {state.effectiveFrom
+                ? formatNutritionShortDate(state.effectiveFrom, { relative: true })
+                : 'hoy'}
+            </Text>
           </View>
 
           {usesSlots ? (
@@ -2748,13 +3135,13 @@ function ReviewStep({
             </View>
           ) : (
             <>
-              <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">Metas diarias</Text>
-                <Text className="mt-1 font-mono text-sm text-text-strong">
+              <View className="rounded-control border border-subtle bg-surface-sunken p-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-subtle">Metas diarias</Text>
+                <Text className="mt-1 font-mono text-sm text-strong">
                   {targetsSummary(state.targets)}
                 </Text>
               </View>
-              <Text className="text-sm text-text-muted">Registro libre del alumno contra las metas diarias.</Text>
+              <Text className="text-sm text-muted">Registro libre del alumno contra las metas diarias.</Text>
             </>
           )}
         </View>
@@ -2766,16 +3153,17 @@ function ReviewStep({
               key={variant.key}
               strategy={state.strategy}
               variant={variant}
+              showDayHeading={multiDay}
               portions={portions}
             />
           ))
         : null}
 
       {dateConflict ? (
-        <View className="gap-3 rounded-card border border-border-default bg-surface-card p-4">
+        <View className="gap-3 rounded-card border border-default bg-surface-card p-4">
           <View className="gap-1">
-            <Text className="font-display text-base font-semibold text-text-strong">Ya hay un plan vigente desde hoy</Text>
-            <Text className="text-sm leading-5 text-text-muted">
+            <Text className="font-display text-base font-semibold text-strong">Ya hay un plan vigente desde hoy</Text>
+            <Text className="text-sm leading-5 text-muted">
               {existingPlanName
                 ? `${existingPlanName} empieza a regir hoy. Elige cómo seguir con el plan nuevo.`
                 : 'El plan actual empieza a regir hoy. Elige cómo seguir con el plan nuevo.'}
@@ -2804,7 +3192,7 @@ function ReviewStep({
           {publishing ? (
             <View className="flex-row items-center gap-2" accessibilityRole="text">
               <ActivityIndicator color={theme.mutedForeground} size="small" />
-              <Text className="text-xs text-text-muted">Procesando…</Text>
+              <Text className="text-xs text-muted">Procesando…</Text>
             </View>
           ) : null}
 
@@ -2842,10 +3230,13 @@ function ReviewStep({
 
 function FoodSearchModal({
   visible,
+  title,
   onClose,
   onSelect,
 }: {
   visible: boolean
+  /** QW-6: "Agregar alimento" o "Reemplazo de {item}" — el mismo modal sirve a dos intenciones. */
+  title: string
   onClose: () => void
   onSelect: (food: FoodCatalogItem) => void
 }) {
@@ -2903,8 +3294,25 @@ function FoodSearchModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
-        <View className="flex-row items-center gap-2 border-b border-border-subtle px-4 py-3">
-          <View className="flex-1 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
+        <View className="gap-2 border-b border-subtle px-4 py-3">
+          <View className="flex-row items-center gap-2">
+            <Text
+              accessibilityRole="header"
+              className="min-w-0 flex-1 font-display text-base font-semibold text-strong"
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+            <Pressable
+              accessibilityLabel="Cerrar búsqueda"
+              accessibilityRole="button"
+              className="h-11 w-11 items-center justify-center rounded-control"
+              onPress={onClose}
+            >
+              <X color={theme.foreground} size={20} />
+            </Pressable>
+          </View>
+          <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
             <Search color={theme.mutedForeground} size={16} />
             <TextInput
               autoFocus
@@ -2912,17 +3320,9 @@ function FoodSearchModal({
               onChangeText={setQuery}
               placeholder="Buscar alimento…"
               placeholderTextColor={theme.mutedForeground}
-              className="min-h-11 flex-1 py-2 text-base text-text-strong"
+              className="min-h-11 flex-1 py-2 text-base text-strong"
             />
           </View>
-          <Pressable
-            accessibilityLabel="Cerrar búsqueda"
-            accessibilityRole="button"
-            className="min-h-11 min-w-11 items-center justify-center rounded-control"
-            onPress={onClose}
-          >
-            <X color={theme.foreground} size={20} />
-          </Pressable>
         </View>
 
         <ScrollView className="flex-1" contentContainerClassName="gap-2 px-4 py-3" keyboardShouldPersistTaps="handled">
@@ -2931,7 +3331,7 @@ function FoodSearchModal({
               <ActivityIndicator color={theme.primary} />
             </View>
           ) : items.length === 0 ? (
-            <Text className="px-1 py-6 text-center text-sm text-text-muted">
+            <Text className="px-1 py-6 text-center text-sm text-muted">
               {touched && query.trim().length >= 2 ? 'Sin resultados.' : 'Escribe al menos 2 letras para buscar.'}
             </Text>
           ) : (
@@ -2940,7 +3340,7 @@ function FoodSearchModal({
                 key={food.id}
                 accessibilityLabel={`Agregar ${food.name}`}
                 accessibilityRole="button"
-                className="min-h-14 flex-row items-center gap-3 rounded-control border border-border-subtle bg-surface-card px-3 py-2.5"
+                className="min-h-14 flex-row items-center gap-3 rounded-control border border-subtle bg-surface-card px-3 py-2.5"
                 onPress={() => onSelect(food)}
               >
                 <FoodThumbnail
@@ -2950,10 +3350,10 @@ function FoodSearchModal({
                   size="sm"
                 />
                 <View className="min-w-0 flex-1">
-                  <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+                  <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
                     {food.name}
                   </Text>
-                  <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+                  <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
                     {[food.brand, `${Math.round(food.calories)} kcal / ${food.servingSize}${food.servingUnit}`]
                       .filter(Boolean)
                       .join(' · ')}
@@ -2978,13 +3378,13 @@ function UpsellSheet({ reason, onClose }: { reason: string | null; onClose: () =
   return (
     <Modal visible={reason !== null} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable className="flex-1 justify-end bg-black/40" onPress={onClose}>
-        <Pressable className="rounded-t-sheet border-t border-border-subtle bg-surface-app px-5 pb-8 pt-5" onPress={() => {}}>
+        <Pressable className="rounded-t-sheet border-t border-subtle bg-surface-app px-5 pb-8 pt-5" onPress={() => {}}>
           <View className="mb-3 h-1.5 w-12 self-center rounded-pill bg-border-default" />
           <View className="mb-2 flex-row items-center gap-2">
             <Lock color={theme.primary} size={18} />
-            <Text className="font-display text-lg font-bold text-text-strong">Nutrición Pro</Text>
+            <Text className="font-display text-lg font-bold text-strong">Nutrición Pro</Text>
           </View>
-          <Text className="text-sm leading-5 text-text-body">
+          <Text className="text-sm leading-5 text-body">
             {reason ?? 'Esta función requiere el complemento Nutrición Pro.'}
           </Text>
           <View className="mt-5 flex-row gap-3">

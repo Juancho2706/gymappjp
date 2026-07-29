@@ -52,7 +52,24 @@ import {
  *   con cada deshacer del ordinal — re-marcar tras deshacer = intake NUEVO).
  * - Deshacer: void del último intake sintético del gesto (snackbar 5 s). Si la marca
  *   sigue en vuelo, el deshacer queda pedido y se ejecuta apenas confirme.
+ * - Ráfagas (P1-4): marcar el día entero son decenas de taps. Ni el `router.refresh()` ni el
+ *   snackbar van por marca — uno solo agrupa la ráfaga (contador + Deshacer del lote) y la
+ *   reconciliación con el server se dispara UNA vez, tras la inactividad.
  */
+
+/** Id único del snackbar de porciones: cada marca ACTUALIZA este mismo toast, no apila otro. */
+const MARK_TOAST_ID = 'nutrition-v2-portion-mark'
+
+/** Vida del snackbar agrupado; sonner reinicia la cuenta con cada actualización de la ráfaga. */
+const MARK_TOAST_MS = 5000
+
+/**
+ * Inactividad tras la última marca antes de reconciliar con el server. El delta optimista ya
+ * cubre chips y "Porciones de hoy", así que refrescar por marca solo costaba: 18 taps eran 18
+ * refetch RSC completos y 18 de los 30 cargos por minuto del rate limit de intake — el alumno
+ * podía autobloquearse haciendo exactamente lo que la pantalla le pide.
+ */
+const PORTION_REFRESH_DEBOUNCE_MS = 4000
 
 /** Registro interno del gesto (sobrevive a la reconciliación para el deshacer). */
 interface MarkRecord {
@@ -88,6 +105,17 @@ export interface PortionMarksApi {
   ) => { extra: boolean; portions: 0.5 | 1 }
 }
 
+/**
+ * Copy del snackbar AGRUPADO. Los dos casos de una sola marca conservan el copy canónico de
+ * `PORTIONS_COPY.student` (tabla UX-d); el plural se compone con el MISMO formateador es-CL de
+ * la capa ("1,5 porciones marcadas", "3 porciones marcadas"), sin inventar cifras ni jerga.
+ */
+function markedBurstMessage(totalPortions: number): string {
+  if (totalPortions === 0.5) return PORTIONS_COPY.student.markedHalf
+  if (totalPortions === 1) return PORTIONS_COPY.student.marked
+  return `${portionsCountLabelEs(totalPortions)} marcadas`
+}
+
 export function usePortionMarks({
   today,
   clientId,
@@ -113,11 +141,49 @@ export function usePortionMarks({
   const marksRef = useRef<Map<string, MarkRecord>>(new Map())
   /** Deshacer pedido mientras la marca estaba en vuelo (se ejecuta al confirmar). */
   const undoRequestedRef = useRef<Set<string>>(new Set())
+  /** Marcas confirmadas que cuenta el snackbar vivo (se vacía cuando el snackbar se cierra). */
+  const burstRef = useRef<Array<{ key: string; portions: number }>>([])
+  /** Timer de la reconciliación debounced (una sola por ráfaga de marcas). */
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const commitPending = useCallback((next: PendingPortionMark[]) => {
     pendingRef.current = next
     setPending(next)
   }, [])
+
+  const clearBurst = useCallback(() => {
+    burstRef.current = []
+  }, [])
+
+  const cancelScheduledRefresh = useCallback(() => {
+    if (refreshTimerRef.current !== null) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+  }, [])
+
+  /**
+   * Reconciliación con el server: UNA por ráfaga, tras `PORTION_REFRESH_DEBOUNCE_MS` sin marcar
+   * (cerrar el sheet y quedarse en la pantalla cae dentro de esa ventana). Cada marca nueva
+   * reprograma el timer, así que marcar el día entero cuesta un solo refetch.
+   */
+  const scheduleRefresh = useCallback(() => {
+    cancelScheduledRefresh()
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null
+      router.refresh()
+    }, PORTION_REFRESH_DEBOUNCE_MS)
+  }, [cancelScheduledRefresh, router])
+
+  // Al desmontar se CANCELA el refresh pendiente: dispararlo después refrescaría la pantalla a la
+  // que navegó el alumno, no ésta. Nada queda a medias — las marcas ya están guardadas en el
+  // server, así que la próxima carga las lee del read-model sin depender de este timer.
+  useEffect(
+    () => () => {
+      cancelScheduledRefresh()
+    },
+    [cancelScheduledRefresh],
+  )
 
   // Reconciliación F1-front: al llegar un read-model nuevo, las marcas confirmadas
   // que ya aparecen en él salen del delta (nunca se restan dos veces).
@@ -125,6 +191,14 @@ export function usePortionMarks({
   useEffect(() => {
     commitPending(reconcilePendingMarks(pendingRef.current, todayIds))
   }, [todayIds, commitPending])
+
+  /**
+   * Delta que se PINTA: la misma reconciliación pura, aplicada en render. El efecto de arriba
+   * poda el estado un frame después, así que sin esto el frame en que llega el read-model nuevo
+   * pinta server + delta (doble conteo). Con la reconciliación agrupada ese parpadeo sería el de
+   * la ráfaga completa (12/6 y un "+6" fantasma), no el de una marca.
+   */
+  const visiblePending = useMemo(() => reconcilePendingMarks(pending, todayIds), [pending, todayIds])
 
   const removePending = useCallback(
     (key: string) => {
@@ -150,12 +224,14 @@ export function usePortionMarks({
         savePortionAttemptMap(storage, clientId, attemptMapRef.current)
         marksRef.current.delete(key)
         removePending(key)
-        router.refresh()
+        burstRef.current = burstRef.current.filter((m) => m.key !== key)
+        // Mismo refresh debounced que la marca: deshacer un lote no dispara N refetch.
+        scheduleRefresh()
       } catch {
         toast.error(PORTIONS_COPY.student.undoFailedOffline)
       }
     },
-    [clientId, localDate, removePending, router, storage],
+    [clientId, localDate, removePending, scheduleRefresh, storage],
   )
 
   const requestUndo = useCallback(
@@ -172,6 +248,17 @@ export function usePortionMarks({
     },
     [doUndo],
   )
+
+  /**
+   * "Deshacer" del snackbar agrupado: revierte TODAS las marcas que el contador muestra, en
+   * orden inverso al marcado. Cada una se deshace por su propio camino idempotente
+   * (`requestUndo`), así que una marca aún en vuelo se deshace apenas confirme.
+   */
+  const undoBurst = useCallback(() => {
+    const keys = burstRef.current.map((m) => m.key).reverse()
+    burstRef.current = []
+    for (const key of keys) requestUndo(key)
+  }, [requestUndo])
 
   const mark = useCallback(
     (input: MarkInput) => {
@@ -260,11 +347,19 @@ export function usePortionMarks({
             void doUndo(key)
             return
           }
-          toast(portions === 0.5 ? PORTIONS_COPY.student.markedHalf : PORTIONS_COPY.student.marked, {
-            duration: 5000,
-            action: { label: PORTIONS_COPY.student.undo, onClick: () => requestUndo(key) },
+          // Snackbar AGRUPADO: una sola pastilla que se ACTUALIZA con el total de la ráfaga
+          // ("3 porciones marcadas · Deshacer") en vez de apilar una por marca tapando la franja
+          // siguiente. Su "Deshacer" revierte el lote completo, que es lo que el contador promete.
+          burstRef.current = [...burstRef.current, { key, portions }]
+          const burstPortions = burstRef.current.reduce((sum, m) => sum + m.portions, 0)
+          toast(markedBurstMessage(burstPortions), {
+            id: MARK_TOAST_ID,
+            duration: MARK_TOAST_MS,
+            action: { label: PORTIONS_COPY.student.undo, onClick: () => undoBurst() },
+            onAutoClose: clearBurst,
+            onDismiss: clearBurst,
           })
-          router.refresh()
+          scheduleRefresh()
         })
         .catch(() => {
           const offline = typeof navigator !== 'undefined' && navigator.onLine === false
@@ -273,36 +368,47 @@ export function usePortionMarks({
       }
       runMark(input)
     },
-    [clientId, commitPending, deviceId, doUndo, localDate, removePending, requestUndo, router, today.timezone],
+    [
+      clearBurst,
+      clientId,
+      commitPending,
+      deviceId,
+      doUndo,
+      localDate,
+      removePending,
+      scheduleRefresh,
+      today.timezone,
+      undoBurst,
+    ],
   )
 
   const coverageFor = useCallback(
     (slotCode: string, target: NutritionSlotExchangeTargetRead): EffectivePortionCoverage =>
       effectiveTargetCoverage(
         target,
-        pendingPortionsSum(pendingInCell(pending, slotCode, target.groupCode)),
+        pendingPortionsSum(pendingInCell(visiblePending, slotCode, target.groupCode)),
       ),
-    [pending],
+    [visiblePending],
   )
 
   const hasInFlight = useCallback(
     (slotCode: string, groupCode: string): boolean =>
-      pendingInCell(pending, slotCode, groupCode).some((m) => m.entryId === null),
-    [pending],
+      pendingInCell(visiblePending, slotCode, groupCode).some((m) => m.entryId === null),
+    [visiblePending],
   )
 
   const dayCoverage = useMemo(
-    () => dayCoverageWithPending(today.dayCoverage, pending),
-    [today.dayCoverage, pending],
+    () => dayCoverageWithPending(today.dayCoverage, visiblePending),
+    [today.dayCoverage, visiblePending],
   )
 
   const dupWarningFor = useCallback(
     (foodId: string, mealSlotCode: string | null): string | null => {
-      const info = dupPortionInfo({ foodId, mealSlotCode, today, pending })
+      const info = dupPortionInfo({ foodId, mealSlotCode, today, pending: visiblePending })
       if (!info) return null
       return PORTIONS_COPY.student.dupWarning(portionsCountLabelEs(info.marcadas), info.groupName)
     },
-    [today, pending],
+    [today, visiblePending],
   )
 
   const nextMarkFor = useCallback(

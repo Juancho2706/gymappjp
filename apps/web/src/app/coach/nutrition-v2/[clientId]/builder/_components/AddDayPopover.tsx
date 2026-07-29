@@ -33,7 +33,12 @@ function subscribeMd(cb: () => void) {
   return () => mq.removeEventListener('change', cb)
 }
 
-function useIsDesktopMd(): boolean {
+/**
+ * Compartido con el menú "Copiar a otros días" del builder (`PlanBuilderClient`): las dos
+ * afordancias del paso Construcción abren popover en desktop y bottom sheet en móvil, así que
+ * el hook se exporta en vez de copiarse una tercera vez.
+ */
+export function useIsDesktopMd(): boolean {
   return useSyncExternalStore(
     subscribeMd,
     () => window.matchMedia('(min-width: 768px)').matches,
@@ -208,17 +213,28 @@ export function AddDayPopover({
     <DaySelector takenDays={takenDays} canCopyBase={canCopyBase} onCreate={handleCreate} />
   )
 
+  // Gate Pro LEGIBLE antes de abrir (P1-7): candado + pastilla "Pro" en el propio chip, para
+  // que el coach base no descubra el límite recién dentro del panel.
   const trigger = (
     <>
       {locked ? <Lock aria-hidden="true" className="h-3.5 w-3.5" /> : <Plus aria-hidden="true" className="h-3.5 w-3.5" />}
       Agregar día
+      {locked ? (
+        <span className="rounded-pill border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15">
+          Pro
+        </span>
+      ) : null}
     </>
   )
+  const triggerLabel = locked
+    ? 'Agregar un día distinto al plan (disponible con Nutrición Pro)'
+    : 'Agregar un día distinto al plan'
+  const triggerTitle = locked ? 'Días distintos: disponible con Nutrición Pro' : undefined
 
   if (isDesktop) {
     return (
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger aria-label="Agregar un día distinto al plan" className={triggerClass}>
+        <PopoverTrigger aria-label={triggerLabel} title={triggerTitle} className={triggerClass}>
           {trigger}
         </PopoverTrigger>
         <PopoverContent
@@ -233,7 +249,7 @@ export function AddDayPopover({
 
   return (
     <>
-      <button type="button" aria-label="Agregar un día distinto al plan" onClick={() => setOpen(true)} className={triggerClass}>
+      <button type="button" aria-label={triggerLabel} title={triggerTitle} onClick={() => setOpen(true)} className={triggerClass}>
         {trigger}
       </button>
       <Sheet open={open} onOpenChange={setOpen}>

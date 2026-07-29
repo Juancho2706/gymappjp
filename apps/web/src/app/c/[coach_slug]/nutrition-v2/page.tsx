@@ -1,9 +1,8 @@
-import { Suspense } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { CalendarDays, History, Info, ListChecks, Utensils } from 'lucide-react'
 import {
-  DayVariantWeekStrip,
   MacroChipRow,
   NutritionCard,
   NutritionPageShell,
@@ -15,13 +14,14 @@ import {
 import {
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
   NUTRITION_STRATEGIES,
+  buildNutritionWeek,
+  buildNutritionWeekDates,
   describeLegacyHistoryDay,
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
   mapNutritionItemSubstitutionRow,
   resolveNutritionDayVariantForDate,
-  sortNutritionDayVariantsForDisplay,
   type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
@@ -39,18 +39,25 @@ import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 import { NutritionDomainOff } from '../nutrition/_components/NutritionDomainOff'
 import { TodayExperience } from './_components/TodayExperience'
-import { NutritionFoodRow } from './_components/NutritionFoodRow'
+import { FutureDayPreview } from './_components/FutureDayPreview'
+import { PastDaySummary } from './_components/PastDaySummary'
+import { PlanVariantCard, type PlanVariant } from './_components/PlanVariantCard'
+import { WeekDayNavigator } from './_components/WeekDayNavigator'
 import { groupSubstitutionsByPrescriptionItem } from './_components/nutrition-today.logic'
-import { resolveFoodImageUrl } from './_components/food-result-image'
+import {
+  NUTRITION_WEEK_HISTORY_PAGE_SIZE,
+  formatSelectedDayCaption,
+  nutritionWeekHistoryCursor,
+  resolveWeekIsoFromDateParam,
+  resolveWeekIsoFromDowParam,
+  toWeekNavCells,
+} from './_components/week-nav.logic'
 
 export const metadata = { title: 'Nutrición' }
 
-/** Base pública de Storage para resolver la ilustración del producto (server-side, NEXT_PUBLIC). */
-const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
-
 interface Props {
   params: Promise<{ coach_slug: string }>
-  searchParams: Promise<{ view?: string; before?: string }>
+  searchParams: Promise<{ view?: string; before?: string; dow?: string; date?: string }>
 }
 
 export default async function StudentNutritionV2Page({ params, searchParams }: Props) {
@@ -82,6 +89,13 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
   const { iso: today } = getTodayInSantiago()
   const view = query.view === 'plan' || query.view === 'history' ? query.view : 'today'
 
+  // Navegación semanal SERVER-FIRST: el día que el alumno mira vive en la URL y se resuelve
+  // contra las 7 fechas Lu-Do de la semana en curso. Parámetro ausente, inválido o de otra
+  // semana ⇒ hoy (la pantalla solo tiene datos descargados de esta semana).
+  const weekDates = buildNutritionWeekDates(today)
+  const planDayIso = resolveWeekIsoFromDowParam(weekDates, query.dow, today)
+  const todayViewIso = resolveWeekIsoFromDateParam(weekDates, query.date, today)
+
   return (
     <NutritionPageShell
       title="Nutrición"
@@ -107,12 +121,12 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
             esperando el payload completo (QA CEO 2026-07-18). Cero cambio de datos. */}
         {view === 'today' ? (
           <Suspense fallback={<ViewSkeleton />}>
-            <TodayView clientId={user.id} date={today} base={base} />
+            <TodayView base={base} clientId={user.id} selectedIso={todayViewIso} todayIso={today} />
           </Suspense>
         ) : null}
         {view === 'plan' ? (
           <Suspense fallback={<ViewSkeleton />}>
-            <PlanView clientId={user.id} date={today} />
+            <PlanView base={base} clientId={user.id} selectedIso={planDayIso} todayIso={today} />
           </Suspense>
         ) : null}
         {view === 'history' ? (
@@ -215,20 +229,47 @@ async function fetchSubstitutionsByItem(
   return groupSubstitutionsByPrescriptionItem(data.map(mapNutritionItemSubstitutionRow))
 }
 
-async function TodayView({ clientId, date, base }: { clientId: string; date: string; base: string }) {
+/**
+ * Tab "Hoy" con navegación semanal.
+ *
+ * REGLA DURA: `getNutritionTodayV2ForWeb` se llama SOLO cuando el día elegido es hoy. Ese RPC es
+ * `volatile` — llama `ensure_day_snapshot`, que materializa filas create-once y lanza
+ * `nutrition_v2_snapshot_date_out_of_window` con fecha > hoy+1. Mirar el lunes o el sábado jamás
+ * debe escribir datos. El pasado se pinta del historial ya descargado y el futuro de la
+ * proyección de `plan.dayVariants` (misma regla del snapshot, sin fetch por celda).
+ */
+async function TodayView({
+  base,
+  clientId,
+  selectedIso,
+  todayIso,
+}: {
+  base: string
+  clientId: string
+  /** Día que el alumno está mirando (siempre dentro de la semana en curso). */
+  selectedIso: string
+  todayIso: string
+}) {
+  const isToday = selectedIso === todayIso
+
   // El empty-state depende SOLO del plan vigente en vivo (misma senal que el tab "Plan" y que la
   // ficha del coach). El registro del dia (`today.plan`) puede seguir apuntando al plan anterior o
   // venir vacio si se genero antes de publicar el nuevo: eso NO oculta la pantalla, se refleja con
   // un aviso honesto arriba y el alumno igual puede registrar lo que coma.
-  const [today, plan, clientName] = await Promise.all([
-    getNutritionTodayV2ForWeb({ clientId, date }),
-    getNutritionPlanV2ForWeb({ clientId, date }),
-    getClientDisplayName(clientId),
+  const [today, plan, history, clientName] = await Promise.all([
+    isToday ? getNutritionTodayV2ForWeb({ clientId, date: todayIso }) : null,
+    getNutritionPlanV2ForWeb({ clientId, date: todayIso }),
+    getNutritionHistoryV2ForWeb({
+      clientId,
+      before: nutritionWeekHistoryCursor(todayIso),
+      pageSize: NUTRITION_WEEK_HISTORY_PAGE_SIZE,
+    }),
+    isToday ? getClientDisplayName(clientId) : null,
   ])
 
   // Reemplazos estructurados de la version que el alumno VE hoy (`today.plan`, no `plan.plan`): los
   // items mostrados son de esa version, asi los reemplazos empatan durante el lag de publicacion.
-  const substitutionsByItem = await fetchSubstitutionsByItem(today.plan?.versionId ?? null)
+  const substitutionsByItem = today != null ? await fetchSubstitutionsByItem(today.plan?.versionId ?? null) : {}
 
   if (!plan.plan) {
     return (
@@ -241,51 +282,113 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
     )
   }
 
-  const showTodayPlanLag = today.plan === null || today.plan.id !== plan.plan.id
-  const lagMessage =
-    today.plan === null
-      ? 'Tu nuevo plan ya está publicado. Las metas y comidas de hoy se activan mañana; hoy puedes registrar lo que comas.'
-      : 'Tu nuevo plan ya está publicado. Hoy todavía ves las metas del plan anterior; desde mañana se aplican las del nuevo.'
+  // La semana se compone de datos YA descargados: plan (7 variantes) + historial disperso.
+  const cells = buildNutritionWeek({
+    variants: plan.dayVariants,
+    history: history.items,
+    weekStartIso: todayIso,
+    todayIso,
+  })
+  const selectedCell = cells.find((cell) => cell.isoDate === selectedIso) ?? null
+  const homeHref = `${base}/nutrition-v2`
 
-  // Badge multi-día (FD3): SOLO con más de una variante, y SOLO cuando el registro del día ya
-  // corresponde al plan vigente — durante el lag de publicación el snapshot es de otra versión
-  // y nombrar la variante nueva sería mentir. No decide nada: explica lo que el snapshot ya fijó.
-  const todayVariant =
-    plan.dayVariants.length > 1 && !showTodayPlanLag
-      ? resolveNutritionDayVariantForDate(plan.dayVariants, date)
-      : null
+  let body: ReactNode = null
+  if (today != null) {
+    const showTodayPlanLag = today.plan === null || today.plan.id !== plan.plan.id
+    const lagMessage =
+      today.plan === null
+        ? 'Tu nuevo plan ya está publicado. Las metas y comidas de hoy se activan mañana; hoy puedes registrar lo que comas.'
+        : 'Tu nuevo plan ya está publicado. Hoy todavía ves las metas del plan anterior; desde mañana se aplican las del nuevo.'
+
+    // Badge multi-día (FD3): SOLO con más de una variante, y SOLO cuando el registro del día ya
+    // corresponde al plan vigente — durante el lag de publicación el snapshot es de otra versión
+    // y nombrar la variante nueva sería mentir. No decide nada: explica lo que el snapshot ya fijó.
+    const todayVariant =
+      plan.dayVariants.length > 1 && !showTodayPlanLag
+        ? resolveNutritionDayVariantForDate(plan.dayVariants, todayIso)
+        : null
+
+    body = (
+      <>
+        {showTodayPlanLag ? (
+          <div className="flex items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-body">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+            <p>{lagMessage}</p>
+          </div>
+        ) : null}
+        {todayVariant ? (
+          <p className="inline-flex items-center gap-2 rounded-pill border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:border-primary/40 dark:bg-primary/15">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {formatNutritionTodayVariantBadge(todayVariant)}
+          </p>
+        ) : null}
+        <TodayExperience
+          today={today}
+          clientId={clientId}
+          clientName={clientName}
+          substitutionsByItem={substitutionsByItem}
+          scanHref={`${base}/nutrition-v2/scanner`}
+        />
+      </>
+    )
+  } else if (selectedCell != null) {
+    body =
+      selectedCell.state === 'future' ? (
+        <FutureDayPreview backHref={homeHref} cell={selectedCell} />
+      ) : (
+        <PastDaySummary backHref={homeHref} cell={selectedCell} />
+      )
+  }
+
+  // Sin semana compuesta (fecha imposible) no se pinta un calendario inventado: queda el día.
+  if (cells.length === 0 || selectedCell == null) return <div className="space-y-4">{body}</div>
 
   return (
-    <>
-      {showTodayPlanLag ? (
-        <div className="mb-4 flex items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-body">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-          <p>{lagMessage}</p>
-        </div>
-      ) : null}
-      {todayVariant ? (
-        <p className="mb-4 inline-flex items-center gap-2 rounded-pill border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:border-primary/40 dark:bg-primary/15">
-          <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {formatNutritionTodayVariantBadge(todayVariant)}
-        </p>
-      ) : null}
-      <TodayExperience
-        today={today}
-        clientId={clientId}
-        clientName={clientName}
-        substitutionsByItem={substitutionsByItem}
-        scanHref={`${base}/nutrition-v2/scanner`}
-      />
-    </>
+    <WeekDayNavigator
+      cells={toWeekNavCells(cells)}
+      hrefByIso={Object.fromEntries(
+        // Hoy vive en la URL canónica (sin `?date=`), que es la misma a la que vuelve el banner.
+        cells.map((cell): [string, string] => [
+          cell.isoDate,
+          cell.isoDate === todayIso ? homeHref : `${homeHref}?date=${cell.isoDate}`,
+        ]),
+      )}
+      label="Días de la semana"
+      selectedIso={selectedCell.isoDate}
+      sticky
+    >
+      {body}
+    </WeekDayNavigator>
   )
 }
 
-type PlanVariant = NutritionPlanReadModel['dayVariants'][number]
-type PlanSlot = PlanVariant['mealSlots'][number]
-type PlanItem = PlanSlot['prescriptionItems'][number]
-
-async function PlanView({ clientId, date }: { clientId: string; date: string }) {
-  const plan = await getNutritionPlanV2ForWeb({ clientId, date })
+/**
+ * Tab "Plan": selector semanal + LA variante del día elegido.
+ *
+ * Antes apilaba las 7 variantes expandidas (~9.700 px) y repetía una tira Lu-Do por card
+ * (auditoría P1-9/P1-10). Ahora hay un solo selector arriba —el que además navega— y una sola
+ * card. "Metas del día" lee la variante SELECCIONADA, no la variante por defecto (P1-8: con
+ * multi-día mostraba una cifra que no era la del día que el alumno estaba mirando).
+ */
+async function PlanView({
+  base,
+  clientId,
+  selectedIso,
+  todayIso,
+}: {
+  base: string
+  clientId: string
+  selectedIso: string
+  todayIso: string
+}) {
+  const [plan, history] = await Promise.all([
+    getNutritionPlanV2ForWeb({ clientId, date: todayIso }),
+    getNutritionHistoryV2ForWeb({
+      clientId,
+      before: nutritionWeekHistoryCursor(todayIso),
+      pageSize: NUTRITION_WEEK_HISTORY_PAGE_SIZE,
+    }),
+  ])
   if (!plan.plan) {
     return (
       <NutritionStatePanel
@@ -297,10 +400,35 @@ async function PlanView({ clientId, date }: { clientId: string; date: string }) 
   }
 
   const summary = plan.plan
-  const defaultVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
-  // FD3: día base primero y después los días específicos de lunes a domingo.
-  const orderedVariants = sortNutritionDayVariantsForDisplay(plan.dayVariants)
   const multiDay = plan.dayVariants.length > 1
+  const cells = buildNutritionWeek({
+    variants: plan.dayVariants,
+    history: history.items,
+    weekStartIso: todayIso,
+    todayIso,
+  })
+  const selectedCell = cells.find((cell) => cell.isoDate === selectedIso) ?? null
+  // Sin semana compuesta (fecha imposible) se cae al día base para no dejar la vista muda.
+  const fallbackVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
+  const dayVariant = selectedCell != null ? selectedCell.variant : fallbackVariant
+
+  const dayBody =
+    dayVariant != null ? (
+      <>
+        <PlanObjectivesCard
+          caption={multiDay && selectedCell != null ? formatSelectedDayCaption(selectedCell) : null}
+          targets={dayVariant.targets}
+          title={multiDay ? 'Metas del día' : 'Metas diarias'}
+        />
+        <PlanVariantCard variant={dayVariant} />
+      </>
+    ) : (
+      <NutritionStatePanel
+        illustration="sin-plan"
+        title="Ese día no tiene comidas prescritas"
+        description="Tu plan no define una estructura para ese día ni un día base al que seguir. Si crees que falta algo, coméntalo con tu coach."
+      />
+    )
 
   return (
     <div className="space-y-4">
@@ -324,29 +452,44 @@ async function PlanView({ clientId, date }: { clientId: string; date: string }) 
         ) : null}
       </NutritionCard>
 
-      {/* Metas diarias */}
-      {defaultVariant ? <PlanObjectivesCard targets={defaultVariant.targets} /> : null}
+      {/* Selector semanal + el día elegido (metas + estructura). Todo lo que va entre el selector
+          y las reglas habla del día seleccionado; lo que no depende del día queda fuera. */}
+      {selectedCell != null ? (
+        <WeekDayNavigator
+          cells={toWeekNavCells(cells)}
+          hrefByIso={Object.fromEntries(
+            cells.map((cell, index): [string, string] => [
+              cell.isoDate,
+              `${base}/nutrition-v2?view=plan&dow=${index + 1}`,
+            ]),
+          )}
+          label="Días del plan"
+          selectedIso={selectedCell.isoDate}
+        >
+          {dayBody}
+        </WeekDayNavigator>
+      ) : (
+        dayBody
+      )}
 
-      {/* Reglas del plan */}
+      {/* Reglas del plan (no dependen del día) */}
       <PlanRulesCard permissions={plan.permissions} />
-
-      {/* Detalle por variante de día */}
-      {orderedVariants.map((variant) => (
-        <PlanVariantCard
-          key={variant.id}
-          variant={variant}
-          variants={plan.dayVariants}
-          showTargets={multiDay}
-          showWeekStrip={multiDay}
-          todayIso={date}
-        />
-      ))}
     </div>
   )
 }
 
-/** Metas diarias del plan (energía + macros), en una grilla legible. */
-function PlanObjectivesCard({ targets }: { targets: PlanVariant['targets'] }) {
+/** Metas del día seleccionado (energía + macros), en una grilla legible. */
+function PlanObjectivesCard({
+  targets,
+  title = 'Metas diarias',
+  caption = null,
+}: {
+  targets: PlanVariant['targets']
+  /** Con multi-día se titula "Metas del día": son las de la variante que el alumno está viendo. */
+  title?: string
+  /** "Lunes · Día alto" — deja claro de qué día son las cifras (auditoría P1-8). */
+  caption?: string | null
+}) {
   const rows: Array<{ label: string; value: string }> = []
   if (targets.calories != null) rows.push({ label: 'Energía', value: formatNutritionCalories(targets.calories) })
   if (targets.proteinG != null) rows.push({ label: 'Proteína', value: formatNutritionAmount(targets.proteinG, 'g') })
@@ -356,7 +499,10 @@ function PlanObjectivesCard({ targets }: { targets: PlanVariant['targets'] }) {
   if (rows.length === 0) return null
   return (
     <NutritionCard>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Metas diarias</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">{title}</p>
+        {caption ? <p className="text-xs font-medium text-muted">{caption}</p> : null}
+      </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
         {rows.map((row) => (
           <div key={row.label}>
@@ -398,141 +544,6 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
       </div>
     </NutritionCard>
   )
-}
-
-/** Detalle de una variante de día: franjas con hora, indicaciones y alimentos con macros. */
-function PlanVariantCard({
-  variant,
-  variants,
-  showTargets,
-  showWeekStrip,
-  todayIso,
-}: {
-  variant: PlanVariant
-  variants: readonly PlanVariant[]
-  showTargets: boolean
-  showWeekStrip: boolean
-  todayIso: string
-}) {
-  return (
-    <NutritionCard>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-lg font-semibold text-strong">{variant.label}</h3>
-        {variant.isDefault ? (
-          <span className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary">
-            Por defecto
-          </span>
-        ) : null}
-      </div>
-      <p className="mt-1 text-sm tabular-nums text-muted">
-        {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
-        {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
-      </p>
-      {/* FD3: con un solo día la tira sería ruido; con varios explica qué días le tocan a esta card. */}
-      {showWeekStrip ? <DayVariantWeekStrip variants={variants} variant={variant} todayIso={todayIso} /> : null}
-      {showTargets ? (
-        <span className="mt-2 block">
-          <MacroChipRow
-            calories={variant.targets.calories}
-            proteinG={variant.targets.proteinG}
-            carbsG={variant.targets.carbsG}
-            fatsG={variant.targets.fatsG}
-            size="sm"
-          />
-        </span>
-      ) : null}
-      <div className="mt-2 space-y-4">
-        {variant.mealSlots.length === 0 ? (
-          <p className="text-sm text-muted">
-            Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
-          </p>
-        ) : (
-          variant.mealSlots.map((slot) => <PlanSlotBlock key={slot.id} slot={slot} />)
-        )}
-      </div>
-    </NutritionCard>
-  )
-}
-
-/** Una franja del plan: encabezado (hora), indicaciones, alimentos prescritos y subtotal. */
-function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
-  const timeLabel = slot.startTime
-    ? slot.endTime
-      ? `${slot.startTime}–${slot.endTime}`
-      : slot.startTime
-    : null
-  const subtotal = slot.prescriptionItems.reduce((sum, item) => sum + (item.macros.calories ?? 0), 0)
-  const hasItems = slot.prescriptionItems.length > 0
-  const targetChips =
-    slot.targets.calories != null ||
-    slot.targets.proteinG != null ||
-    slot.targets.carbsG != null ||
-    slot.targets.fatsG != null
-
-  return (
-    <div className="rounded-control border border-border-subtle bg-surface-sunken/40 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h4 className="font-display text-base font-semibold text-strong">{slot.name}</h4>
-          {timeLabel ? <span className="font-mono text-xs text-muted">{timeLabel}</span> : null}
-        </div>
-        {hasItems && subtotal > 0 ? (
-          <span className="font-mono text-xs font-semibold text-strong">{formatNutritionCalories(subtotal)}</span>
-        ) : null}
-      </div>
-      {slot.instructions ? (
-        <p className="mt-1 text-xs leading-5 text-subtle">{slot.instructions}</p>
-      ) : null}
-      {hasItems ? (
-        <div className="mt-2 divide-y divide-border-subtle">
-          {slot.prescriptionItems.map((item) => (
-            <NutritionFoodRow
-              key={item.id}
-              name={item.name ?? 'Alimento prescrito'}
-              detail={item.brand}
-              quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
-              calories={item.macros.calories}
-              proteinG={item.macros.proteinG}
-              carbsG={item.macros.carbsG}
-              fatsG={item.macros.fatsG}
-              imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
-              category={item.category ?? undefined}
-              note={describeItemGuidance(item)}
-            />
-          ))}
-        </div>
-      ) : targetChips ? (
-        <div className="mt-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Objetivo de la franja</p>
-          <span className="mt-1 block">
-            <MacroChipRow
-              calories={slot.targets.calories}
-              proteinG={slot.targets.proteinG}
-              carbsG={slot.targets.carbsG}
-              fatsG={slot.targets.fatsG}
-              size="sm"
-            />
-          </span>
-        </div>
-      ) : (
-        <p className="mt-2 text-xs text-muted">Franja flexible sin alimentos prescritos.</p>
-      )}
-    </div>
-  )
-}
-
-/** Nota de guía de un item prescrito: rango de cantidad ajustable + indicaciones del coach. */
-function describeItemGuidance(item: PlanItem): string | null {
-  const unit = item.unit
-  const range =
-    item.minimumQuantity != null && item.maximumQuantity != null
-      ? `Ajustable entre ${formatNutritionAmount(item.minimumQuantity, unit)} y ${formatNutritionAmount(item.maximumQuantity, unit)}`
-      : item.maximumQuantity != null
-        ? `Hasta ${formatNutritionAmount(item.maximumQuantity, unit)}`
-        : item.minimumQuantity != null
-          ? `Desde ${formatNutritionAmount(item.minimumQuantity, unit)}`
-          : null
-  return [range, item.notes].filter(Boolean).join(' · ') || null
 }
 
 async function HistoryView({

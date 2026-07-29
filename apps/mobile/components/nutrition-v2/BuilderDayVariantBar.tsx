@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { Check, Copy, Lock, MoreVertical, Pencil, Plus, Sliders, Trash2 } from 'lucide-react-native'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import { Check, ChevronRight, Copy, Lock, MoreVertical, Pencil, Plus, Sliders, Trash2 } from 'lucide-react-native'
 import {
   NUTRITION_DAY_LABELS,
   NUTRITION_DAY_SHORT_LABELS,
   NUTRITION_WEEK_ORDER,
   formatNutritionCalories,
+  formatNutritionDayOfWeek,
 } from '@eva/nutrition-v2'
 import { Sheet } from '../Sheet'
 import { useTheme } from '../../context/ThemeContext'
@@ -19,7 +21,8 @@ import type { BuilderTargets, BuilderVariant } from '../../lib/nutrition-v2-buil
  * día del plan: etiqueta + kcal, el activo resaltado), el chip "Agregar día" y, por chip, el
  * menú (botón ⋯ o long-press) con Renombrar · Cambiar día · Duplicar como otro día ·
  * Personalizar objetivos · Eliminar. El día base no se elimina ni cambia de día (invariantes del
- * reducer, espejadas aquí en la UI).
+ * reducer, espejadas aquí en la UI). Un día con error de validación (`errorVariantKeys`) lleva
+ * punto + borde destructivo: es la única señal del error que vive en un día NO montado.
  *
  * Debajo va el banner de herencia de metas del día activo: "…usa los objetivos base (X kcal) ·
  * Personalizar", que despliega el editor de metas SCOPED a ese día.
@@ -62,6 +65,29 @@ function kcalLabel(value: number): string {
   return formatNutritionCalories(Math.round(value))
 }
 
+/**
+ * QW-2 (H-10) — día de semana de una variante cuando su etiqueta ya NO lo dice. El label por
+ * defecto ES el día ("Sábado"), pero renombrarlo a "Día de entrenamiento" borraba toda referencia
+ * a qué día aplica: el chip, el encabezado y el menú quedaban mudos. Devuelve el par corto/largo
+ * (corto para pintar, largo para el lector de pantalla) solo cuando aporta información nueva:
+ * etiqueta automática ⇒ `null` (no se repite "Sábado Sá"), día base ⇒ `null` (no tiene día).
+ *
+ * PURA: solo lee `label` + `dayOfWeek`; la fuente de verdad sigue siendo el reducer. La etiqueta
+ * automática se detecta con el MISMO formateador del paquete que usa `autoVariantLabel` (para un
+ * `dayOfWeek` no nulo son idénticos), así el componente no arrastra el lib del builder a runtime.
+ */
+export function variantDayBadge(variant: {
+  label: string
+  dayOfWeek: number | null
+}): { short: string; long: string } | null {
+  if (variant.dayOfWeek == null) return null
+  const short = formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
+  const long = formatNutritionDayOfWeek(variant.dayOfWeek)
+  if (short == null || long == null) return null
+  if (variant.label.trim() === long) return null
+  return { short, long }
+}
+
 /** Fila Lu-Do de selección: chips 44pt, días ocupados deshabilitados. */
 function DayChipRow({
   selected,
@@ -95,13 +121,13 @@ function DayChipRow({
             onPress={() => onToggle(day)}
             className={`h-11 min-w-11 items-center justify-center rounded-control border px-2 ${
               isTaken
-                ? 'border-border-subtle bg-surface-sunken opacity-50'
+                ? 'border-subtle bg-surface-sunken opacity-50'
                 : isOn
                   ? 'border-primary bg-primary/10'
-                  : 'border-border-default bg-surface-card'
+                  : 'border-default bg-surface-card'
             }`}
           >
-            <Text className={`text-sm font-semibold ${isOn ? 'text-primary' : 'text-text-strong'}`}>
+            <Text className={`text-sm font-semibold ${isOn ? 'text-primary' : 'text-strong'}`}>
               {NUTRITION_DAY_SHORT_LABELS[day]}
             </Text>
           </Pressable>
@@ -118,11 +144,11 @@ function UpsellPanel({ onUpgrade }: { onUpgrade: () => void }) {
     <View className="gap-2 pb-2">
       <View className="flex-row items-center gap-2">
         <Lock color={theme.primary} size={18} />
-        <Text className="font-display text-base font-semibold text-text-strong">
+        <Text className="font-display text-base font-semibold text-strong">
           Días distintos con Nutrición Pro
         </Text>
       </View>
-      <Text className="text-sm leading-5 text-text-muted">
+      <Text className="text-sm leading-5 text-muted">
         Armar un día especial (por ejemplo, el fin de semana) es parte de Nutrición Pro, incluido en los planes
         pagos. Tu plan actual publica un solo día para toda la semana.
       </Text>
@@ -175,13 +201,13 @@ function AddDaySheet({
       {locked ? (
         <UpsellPanel onUpgrade={onUpgrade} />
       ) : allTaken ? (
-        <Text className="py-4 text-sm leading-5 text-text-muted">
+        <Text className="py-4 text-sm leading-5 text-muted">
           Ya tienes los siete días definidos por separado. Elimina alguno para volver a usar el día base.
         </Text>
       ) : (
         <View className="gap-4 pb-2">
           <View>
-            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
               Elige los días
             </Text>
             <DayChipRow
@@ -195,7 +221,7 @@ function AddDaySheet({
           </View>
 
           <View>
-            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
               Contenido inicial
             </Text>
             {(
@@ -207,25 +233,35 @@ function AddDaySheet({
               const disabled = value === 'copy-base' && !canCopyBase
               const checked = origin === value
               return (
-                <Pressable
-                  key={value}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked, disabled }}
-                  accessibilityLabel={label}
-                  disabled={disabled}
-                  onPress={() => setOrigin(value)}
-                  className={`min-h-11 flex-row items-center gap-2.5 rounded-control px-1 ${disabled ? 'opacity-50' : ''}`}
-                >
-                  <View
-                    className={`h-5 w-5 items-center justify-center rounded-full border ${
-                      checked ? 'border-transparent' : 'border-border-default bg-surface-card'
-                    }`}
-                    style={checked ? { backgroundColor: theme.primary } : undefined}
+                <View key={value}>
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked, disabled }}
+                    accessibilityLabel={
+                      disabled ? `${label}. Arma primero el día base para poder copiarlo.` : label
+                    }
+                    disabled={disabled}
+                    onPress={() => setOrigin(value)}
+                    className={`min-h-11 flex-row items-center gap-2.5 rounded-control px-1 ${disabled ? 'opacity-50' : ''}`}
                   >
-                    {checked ? <Check color={theme.primaryForeground} size={13} /> : null}
-                  </View>
-                  <Text className="flex-1 text-sm text-text-body">{label}</Text>
-                </Pressable>
+                    <View
+                      className={`h-5 w-5 items-center justify-center rounded-full border ${
+                        checked ? 'border-transparent' : 'border-default bg-surface-card'
+                      }`}
+                      style={checked ? { backgroundColor: theme.primary } : undefined}
+                    >
+                      {checked ? <Check color={theme.primaryForeground} size={13} /> : null}
+                    </View>
+                    <Text className="flex-1 text-sm text-body">{label}</Text>
+                  </Pressable>
+                  {/* QW-9 (H-11): la opción útil se apagaba al 50% sin decir por qué, y el coach
+                      quedaba forzado a armar cada día desde cero. El motivo va donde se ve. */}
+                  {disabled ? (
+                    <Text className="ml-[30px] text-xs leading-4 text-muted">
+                      Arma primero el día base para poder copiarlo.
+                    </Text>
+                  ) : null}
+                </View>
               )
             })}
           </View>
@@ -279,7 +315,7 @@ function MenuRow({
       className={`min-h-12 flex-row items-center gap-3 rounded-control px-2 ${disabled ? 'opacity-50' : 'active:bg-surface-sunken'}`}
     >
       <Icon color={destructive ? theme.destructive : theme.foreground} size={18} />
-      <Text className={`flex-1 text-sm font-medium ${destructive ? 'text-danger-600' : 'text-text-strong'}`}>
+      <Text className={`flex-1 text-sm font-medium ${destructive ? 'text-danger-600' : 'text-strong'}`}>
         {label}
       </Text>
     </Pressable>
@@ -313,6 +349,8 @@ function DayMenuSheet({
   }, [variant.key])
 
   const taken = new Set(takenDays)
+  // QW-2: con etiqueta personalizada el título del menú también perdía el día de semana.
+  const badge = variantDayBadge(variant)
 
   return (
     <Sheet
@@ -320,8 +358,10 @@ function DayMenuSheet({
       onClose={onClose}
       nativeModal
       snapPoints={['60%']}
-      title={`Día: ${variant.label}`}
-      accessibilityLabel={`Opciones del día ${variant.label}`}
+      title={badge ? `Día: ${variant.label} (${badge.long})` : `Día: ${variant.label}`}
+      accessibilityLabel={
+        badge ? `Opciones del día ${variant.label}, ${badge.long}` : `Opciones del día ${variant.label}`
+      }
     >
       {panel === 'menu' ? (
         <View className="gap-0.5 pb-2">
@@ -374,7 +414,7 @@ function DayMenuSheet({
 
       {panel === 'rename' ? (
         <View className="gap-3 pb-2">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">Nombre del día</Text>
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Nombre del día</Text>
           <TextInput
             autoFocus
             accessibilityLabel="Nombre del día"
@@ -383,7 +423,7 @@ function DayMenuSheet({
             maxLength={120}
             placeholder="Sábado, Día de entrenamiento…"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-text-strong"
+            className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
           />
           <Pressable
             accessibilityRole="button"
@@ -404,7 +444,7 @@ function DayMenuSheet({
 
       {panel === 'change' ? (
         <View className="gap-3 pb-2">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">Cambiar día</Text>
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">Cambiar día</Text>
           <DayChipRow
             selected={[]}
             taken={taken}
@@ -420,7 +460,7 @@ function DayMenuSheet({
 
       {panel === 'duplicate' ? (
         <View className="gap-3 pb-2">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
             Duplicar como otro día
           </Text>
           <DayChipRow
@@ -444,6 +484,7 @@ export function BuilderDayVariantBar({
   kcalByVariantKey,
   baseTargets,
   addDayLocked,
+  errorVariantKeys,
   handlers,
 }: {
   variants: BuilderVariant[]
@@ -454,13 +495,40 @@ export function BuilderDayVariantBar({
   baseTargets: BuilderTargets
   /** Coach sin Nutrición Pro: "Agregar día" con candado + upsell. */
   addDayLocked: boolean
+  /**
+   * Días cuya validación del paso "Construcción" falló. El paso solo monta las franjas del día
+   * ACTIVO, así que un item incompleto de otro día bloqueaba "Siguiente" sin ninguna señal: acá se
+   * marca su chip (punto + borde destructivo). Solo EXPONE lo que `validateStep` ya calculó.
+   */
+  errorVariantKeys?: readonly string[]
   handlers: BuilderDayVariantBarHandlers
 }) {
   const { theme } = useTheme()
   const [addOpen, setAddOpen] = useState(false)
   const [menuKey, setMenuKey] = useState<string | null>(null)
+  const errorKeys = new Set(errorVariantKeys ?? [])
+
+  // QW-8 (mitiga H-05) — la tira se cortaba al ras del borde sin ninguna pista de que había más
+  // días fuera de pantalla (el indicador estaba apagado). Se mide viewport/contenido/offset en
+  // REFS y solo se publica un booleano: `setState` con el mismo valor no re-renderiza, así que
+  // scrollear no repinta la barra salvo cuando la pista aparece o desaparece.
+  const viewportRef = useRef(0)
+  const contentRef = useRef(0)
+  const offsetRef = useRef(0)
+  const [moreRight, setMoreRight] = useState(false)
+  const syncMoreRight = () => {
+    const more = contentRef.current - viewportRef.current - offsetRef.current > 8
+    setMoreRight((prev) => (prev === more ? prev : more))
+  }
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offsetRef.current = event.nativeEvent.contentOffset.x
+    viewportRef.current = event.nativeEvent.layoutMeasurement.width
+    contentRef.current = event.nativeEvent.contentSize.width
+    syncMoreRight()
+  }
 
   const active = variants.find((variant) => variant.key === activeVariantKey) ?? variants[0]
+  const activeBadge = active != null ? variantDayBadge(active) : null
   const baseVariant = variants.find((variant) => variant.isDefault) ?? variants[0]
   const takenDays = variants
     .filter((variant) => !variant.isDefault && variant.dayOfWeek != null)
@@ -470,41 +538,92 @@ export function BuilderDayVariantBar({
 
   return (
     <View className="gap-2">
+      {/* QW-8: contador explícito — cuántos días tiene el plan no se puede contar mirando una
+          tira cortada. Con más chips de los que caben, el aviso de deslizar aparece al lado. */}
+      <View className="flex-row items-center justify-between gap-2 px-0.5">
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          <Text style={{ fontVariant: ['tabular-nums'] }}>{variants.length}</Text>
+          {variants.length === 1 ? ' día' : ' días'}
+        </Text>
+        {moreRight ? (
+          <View className="flex-row items-center gap-0.5" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Text className="text-[11px] font-medium text-muted">Desliza</Text>
+            <ChevronRight color={theme.mutedForeground} size={12} />
+          </View>
+        ) : null}
+      </View>
       <ScrollView
         horizontal
-        showsHorizontalScrollIndicator={false}
+        showsHorizontalScrollIndicator
         keyboardShouldPersistTaps="handled"
         contentContainerClassName="flex-row items-center gap-1.5 pr-1"
-        accessibilityLabel="Días del plan"
+        accessibilityLabel={`Días del plan: ${variants.length}`}
+        onLayout={(event) => {
+          viewportRef.current = event.nativeEvent.layout.width
+          syncMoreRight()
+        }}
+        onContentSizeChange={(width) => {
+          contentRef.current = width
+          syncMoreRight()
+        }}
+        onScroll={handleScroll}
+        scrollEventThrottle={32}
       >
         {variants.map((variant) => {
           const isActive = variant.key === active?.key
+          const hasError = errorKeys.has(variant.key)
           const kcal = kcalByVariantKey[variant.key] ?? 0
+          const badge = variantDayBadge(variant)
           return (
             <View
               key={variant.key}
+              // Con error el color del borde lo pone `style` (token destructivo del theme), así que
+              // la clase NO define borde: dos fuentes para la misma propiedad se pisan sin orden.
               className={`flex-row items-center gap-0.5 rounded-pill border pl-3 pr-0.5 ${
-                isActive ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-card'
+                hasError
+                  ? isActive
+                    ? 'bg-primary/10'
+                    : 'bg-surface-card'
+                  : isActive
+                    ? 'border-primary bg-primary/10'
+                    : 'border-default bg-surface-card'
               }`}
+              style={hasError ? { borderColor: theme.destructive } : undefined}
             >
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                accessibilityLabel={`Día ${variant.label}`}
+                accessibilityLabel={
+                  (badge ? `Día ${variant.label}, ${badge.long}` : `Día ${variant.label}`) +
+                  (hasError ? ': tiene datos por corregir' : '')
+                }
                 onPress={() => handlers.onSelect(variant.key)}
                 onLongPress={() => setMenuKey(variant.key)}
                 className="min-h-11 flex-row items-center gap-1.5"
               >
-                <Text className={`text-xs font-semibold ${isActive ? 'text-primary' : 'text-text-strong'}`}>
+                {hasError ? (
+                  <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: theme.destructive }} />
+                ) : null}
+                <Text className={`text-xs font-semibold ${isActive ? 'text-primary' : 'text-strong'}`}>
                   {variant.label}
                 </Text>
-                <Text className="text-[11px] text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                {/* QW-2: el chip del día renombrado recupera a qué día de semana aplica. */}
+                {badge ? (
+                  <Text className="rounded-pill bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                    {badge.short}
+                  </Text>
+                ) : null}
+                <Text className="text-[11px] text-muted" style={{ fontVariant: ['tabular-nums'] }}>
                   {kcalLabel(kcal)}
                 </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Opciones del día ${variant.label}`}
+                accessibilityLabel={
+                  badge
+                    ? `Opciones del día ${variant.label}, ${badge.long}`
+                    : `Opciones del día ${variant.label}`
+                }
                 onPress={() => setMenuKey(variant.key)}
                 hitSlop={4}
                 className="h-11 w-9 items-center justify-center rounded-pill"
@@ -519,7 +638,7 @@ export function BuilderDayVariantBar({
           accessibilityRole="button"
           accessibilityLabel="Agregar un día distinto al plan"
           onPress={() => setAddOpen(true)}
-          className="min-h-11 flex-row items-center gap-1.5 rounded-pill border border-dashed border-border-default bg-surface-card px-3"
+          className="min-h-11 flex-row items-center gap-1.5 rounded-pill border border-dashed border-default bg-surface-card px-3"
         >
           {addDayLocked ? <Lock color={theme.primary} size={14} /> : <Plus color={theme.primary} size={14} />}
           <Text className="text-xs font-semibold text-primary">Agregar día</Text>
@@ -543,7 +662,10 @@ export function BuilderDayVariantBar({
         active.targetsMode === 'custom' ? (
           <View className="rounded-control border border-primary/25 bg-primary/5 px-3 py-2">
             <View className="flex-row flex-wrap items-center justify-between gap-2">
-              <Text className="text-xs font-semibold text-primary">Objetivos propios de {active.label}</Text>
+              {/* QW-2: el encabezado del editor de metas también nombra el día de semana. */}
+              <Text className="text-xs font-semibold text-primary">
+                Objetivos propios de {activeBadge ? `${active.label} (${activeBadge.long})` : active.label}
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Volver a los objetivos base"
@@ -556,7 +678,7 @@ export function BuilderDayVariantBar({
             <View className="mt-2 flex-row gap-2">
               {MACRO_FIELDS.map(({ field, label }) => (
                 <View key={field} className="flex-1">
-                  <Text className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-text-subtle">
+                  <Text className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-subtle">
                     {label}
                   </Text>
                   <TextInput
@@ -565,8 +687,10 @@ export function BuilderDayVariantBar({
                     onChangeText={(value) => handlers.onSetVariantTarget(active.key, field, value)}
                     placeholder={baseTargets[field] || '0'}
                     placeholderTextColor={theme.mutedForeground}
-                    keyboardType="number-pad"
-                    className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+                    // QW-3 (H-08): `number-pad` en iOS no trae separador decimal y el modelo
+                    // acepta coma es-CL. Las metas se escriben con decimales.
+                    keyboardType="decimal-pad"
+                    className="min-h-11 rounded-control border border-default bg-surface-card px-2 py-1.5 text-sm text-strong"
                     style={{ fontVariant: ['tabular-nums'] }}
                   />
                 </View>
@@ -574,9 +698,9 @@ export function BuilderDayVariantBar({
             </View>
           </View>
         ) : (
-          <View className="flex-row flex-wrap items-center gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2">
-            <Text className="min-w-0 flex-1 text-xs text-text-muted">
-              {active.label} usa los objetivos base
+          <View className="flex-row flex-wrap items-center gap-2 rounded-control border border-subtle bg-surface-sunken px-3 py-2">
+            <Text className="min-w-0 flex-1 text-xs text-muted">
+              {activeBadge ? `${active.label} (${activeBadge.long})` : active.label} usa los objetivos base
               {baseTargets.calories.trim() !== '' ? ` (${baseTargets.calories} kcal)` : ''}.
             </Text>
             <Pressable

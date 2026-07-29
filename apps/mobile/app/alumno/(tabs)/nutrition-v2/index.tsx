@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronRight,
   History,
   Info,
   ListChecks,
@@ -31,8 +32,10 @@ import {
   NutritionSkeleton,
   NutritionStatePanel,
   PlanVersionBadge,
+  PrescribedPortionChips,
   StrategyBadge,
   SyncOfflineState,
+  WeekDayNav,
   CelebrationOverlay,
   type CelebrationInstance,
 } from '../../../../components/nutrition-v2'
@@ -42,12 +45,15 @@ import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMob
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
 import {
+  PastDaySummary,
   PortionDayCoverageRow,
   PortionEquivalencesSheet,
   PortionSlotSection,
   PortionSnackbar,
+  ReadOnlyDayBanner,
   type PortionSnackbarState,
   coverageViewFor,
+  useNutritionWeekHistory,
   usePortionMarks,
 } from '../../../../components/alumno/nutrition-v2'
 import type {
@@ -66,6 +72,7 @@ import {
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
   buildNutritionDayShareText,
+  buildNutritionWeek,
   bulkMarkCtaLabel,
   bulkMarkSlotState,
   consumedPrescriptionItemIds,
@@ -76,8 +83,8 @@ import {
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
   mapNutritionItemSubstitutionRow,
+  nutritionWeekStartIso,
   resolveNutritionDayVariantForDate,
-  sortNutritionDayVariantsForDisplay,
   type NutritionFoodRowModel,
   type NutritionItemSubstitutionRead,
   type NutritionHistoryDay,
@@ -86,6 +93,7 @@ import {
   type NutritionMealSlotRead,
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
+  type NutritionWeekTargetsLike,
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
@@ -170,8 +178,30 @@ const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 // Referencia estable para el lookup de reemplazos por item (F-02): `?? []` inline rompería memo.
 const EMPTY_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = []
+// Idem para la semana: sin plan cargado, `?? []` inline recompondría las 7 celdas en cada render.
+const EMPTY_DAY_VARIANTS: PlanVariant[] = []
 
-function TodayTab() {
+/**
+ * Tab "Hoy". Con la semana Lu-Do (SPEC nutrition-week-view) esta pantalla muestra UN día:
+ *  - `selectedDay === null` (o igual a hoy) ⇒ la experiencia de registro completa, INTACTA;
+ *  - un día pasado ⇒ resumen de solo lectura con los resultados congelados del historial;
+ *  - un día futuro ⇒ vista previa del plan proyectado, sin ningún control de registro.
+ *
+ * El día elegido vive en el contenedor (no acá) por dos razones: cambiar de tab remonta este
+ * componente, y el tab Historial abre un día concreto en modo lectura.
+ *
+ * INVARIANTE DE DATOS: `load()` sigue pidiendo `view=today` SOLO con la fecha de hoy. Ese RPC es
+ * `volatile` (materializa snapshots create-once) y revienta con fecha > hoy+1; los otros días se
+ * pintan del plan ya descargado y del historial de la semana.
+ */
+function TodayTab({
+  selectedDay,
+  onSelectDay,
+}: {
+  /** Fecha `YYYY-MM-DD` que se está mirando; `null` = hoy. */
+  selectedDay: string | null
+  onSelectDay: (isoDate: string | null) => void
+}) {
   const router = useRouter()
   // 4A-01: bajo la cápsula de (tabs) el scroll reserva clearance en el
   // contentContainer (patrón del layout, ver (tabs)/_layout.tsx) y alimenta el
@@ -227,6 +257,42 @@ function TodayTab() {
   // (foco / vuelta del background). `load` depende de `date`, así que el cambio reencadena el fetch.
   const [date, recheckDate] = useLocalDay(TZ)
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
+
+  // ── Semana Lu-Do (SPEC nutrition-week-view) ─────────────────────────────────
+  // `date` es HOY y sigue siendo el único día que se lee con `view=today` y el único con
+  // escritura; `viewDate` es el día que el alumno está MIRANDO.
+  const viewDate = selectedDay ?? date
+  const isViewingToday = viewDate === date
+  // La semana se ancla al día mirado (no a hoy): el tab Historial puede abrir un día de hace
+  // tres semanas y su tira tiene que ser la de ESA semana.
+  const weekStartIso = useMemo(() => nutritionWeekStartIso(viewDate), [viewDate])
+  const weekHistory = useNutritionWeekHistory({ userId, weekStartIso, enabled })
+  const weekVariants = livePlan?.dayVariants ?? EMPTY_DAY_VARIANTS
+  // Cero fetch por celda: la semana se compone del plan YA descargado (las 7 variantes viajan en
+  // el mismo `Promise.all` del Hoy) más UNA página del historial.
+  const weekCells = useMemo(
+    () =>
+      buildNutritionWeek({
+        variants: weekVariants,
+        history: weekHistory.days,
+        weekStartIso,
+        todayIso: date,
+      }),
+    [date, weekHistory.days, weekStartIso, weekVariants],
+  )
+  const selectedCell = useMemo(
+    () => weekCells.find((cell) => cell.isoDate === viewDate) ?? null,
+    [viewDate, weekCells],
+  )
+  const onSelectWeekDay = useCallback(
+    (isoDate: string) => {
+      void Haptics.selectionAsync()
+      // Hoy se guarda como `null` a propósito: cruzar la medianoche con la app abierta no debe
+      // dejar la vista anclada a ayer (misma regla viva que `useLocalDay`, NUT-018).
+      onSelectDay(isoDate === date ? null : isoDate)
+    },
+    [date, onSelectDay],
+  )
 
   const mountedRef = useRef(true)
   const controllerRef = useRef<AbortController | null>(null)
@@ -668,19 +734,41 @@ function TodayTab() {
   )
 
   // ── Snackbar del bulk-mark (mismo componente que porciones, estado propio) ──
+  // F-01: los dos productores comparten UN SOLO host, así que emitir uno DESCARTA al
+  // otro — el snackbar nuevo reemplaza al anterior en vez de dibujarse exactamente
+  // encima (antes se montaban dos overlays en las mismas coordenadas).
+  const portionsSnackbar = portions.snackbar
+  const dismissPortionsSnackbar = portions.dismissSnackbar
+
   const dismissBulkSnackbar = useCallback(() => {
     if (bulkSnackbarTimer.current) clearTimeout(bulkSnackbarTimer.current)
     setBulkSnackbar(null)
   }, [])
 
   const showBulkSnackbar = useCallback((next: Omit<PortionSnackbarState, 'nonce'>) => {
+    dismissPortionsSnackbar()
     bulkSnackbarNonce.current += 1
     setBulkSnackbar({ ...next, nonce: bulkSnackbarNonce.current })
     if (bulkSnackbarTimer.current) clearTimeout(bulkSnackbarTimer.current)
     bulkSnackbarTimer.current = setTimeout(() => {
       if (mountedRef.current) setBulkSnackbar(null)
     }, 6000)
-  }, [])
+  }, [dismissPortionsSnackbar])
+
+  // Dirección inversa: el snackbar de porciones lo emite el hook (no hay puente hacia
+  // acá), así que el descarte del bulk se dispara al ver el estado nuevo.
+  useEffect(() => {
+    if (portionsSnackbar) dismissBulkSnackbar()
+  }, [dismissBulkSnackbar, portionsSnackbar])
+
+  // Estado que efectivamente se dibuja. Porciones gana el desempate del frame en que
+  // ambos siguen vivos: el bulk ya quedó descartado por el efecto de arriba.
+  const activeSnackbar = portionsSnackbar ?? bulkSnackbar
+  // Cada productor lleva su propio contador de nonce, así que el prefijo evita que dos
+  // snackbars distintos compartan key y se salten la animación de entrada.
+  const activeSnackbarKey = portionsSnackbar
+    ? `portions-${portionsSnackbar.nonce}`
+    : `bulk-${bulkSnackbar?.nonce ?? 0}`
 
   useEffect(
     () => () => {
@@ -1084,7 +1172,8 @@ function TodayTab() {
     }
   }, [userId, model, consumedCalories, date, fireCelebration])
 
-  if (!entitlements.ready || loading) {
+  // El esqueleto de HOY solo aplica al día de hoy: mirar el sábado no depende del fetch del Today.
+  if (!entitlements.ready || (isViewingToday && loading)) {
     return (
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionSkeleton variant="today" />
@@ -1109,6 +1198,92 @@ function TodayTab() {
             </NutritionMotionButton>
           }
         />
+      </View>
+    )
+  }
+
+  // ── Día que NO es hoy: SOLO LECTURA (SPEC nutrition-week-view) ───────────────
+  // Pasado: manda la fila del historial (resultados congelados). Futuro: vista previa del plan
+  // proyectado, sin checks, sin steppers y sin registro en bloque. Ninguno de los dos pide
+  // `view=today` con otra fecha: ese RPC materializa snapshots y revienta más allá de hoy+1.
+  if (!isViewingToday) {
+    const isFuture = selectedCell?.state === 'future'
+    const dayLabel = selectedCell ? selectedCell.longLabel.toLowerCase() : 'día'
+    let body: ReactNode
+    if (selectedCell == null) {
+      body = (
+        <NutritionStatePanel
+          icon="info"
+          title="No pudimos abrir ese día"
+          description="Vuelve a hoy y elige otra fecha en la tira de la semana."
+        />
+      )
+    } else if (!isFuture) {
+      body = <PastDaySummary cell={selectedCell} ready={weekHistory.ready} />
+    } else if (livePlan == null) {
+      body = (
+        <NutritionStatePanel
+          icon="offline"
+          tone="warning"
+          title="No pudimos cargar tu plan"
+          description="Sin el plan no podemos mostrarte lo que viene. Revisa tu conexión e inténtalo nuevamente."
+        />
+      )
+    } else if (selectedCell.variant == null) {
+      // Puede ser que no haya plan publicado o que el plan no prescriba ese día: en los dos casos
+      // el snapshot tampoco prescribiría nada, así que NO se inventa la variante por defecto.
+      body =
+        livePlan.plan == null ? (
+          <NutritionStatePanel
+            icon="empty"
+            illustration="sin-plan"
+            title="Tu plan todavía no está publicado"
+            description="Cuando tu coach publique la primera versión, aparecerán aquí tus objetivos y comidas."
+          />
+        ) : (
+          <NutritionStatePanel
+            icon="empty"
+            title={`Tu plan no prescribe nada para el ${dayLabel}`}
+            description="Ese día no tiene comidas fijas: seguirás tus metas diarias y podrás registrar lo que comas."
+          />
+        )
+    } else {
+      // Metas y comidas PROYECTADAS con la MISMA regla del snapshot. El día todavía no ocurrió:
+      // ni consumo, ni checks, ni steppers, ni registro en bloque — cero controles.
+      body = (
+        <>
+          <PlanObjectives targets={selectedCell.targets} dayLabel={selectedCell.longLabel} />
+          <PlanVariantCard
+            variant={selectedCell.variant}
+            variants={weekVariants}
+            showTargets={false}
+            showWeekStrip={false}
+            todayIso={date}
+          />
+        </>
+      )
+    }
+
+    return (
+      <View className="flex-1 bg-surface-app">
+        {/* La tira va FUERA del scroll: es el chrome del tab, no se desmonta al cambiar de día. */}
+        <View className="px-4 pb-3">
+          <WeekDayNav cells={weekCells} selectedIso={viewDate} onSelect={onSelectWeekDay} />
+        </View>
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="gap-4 px-4"
+          contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+          onScroll={onScrollChrome}
+          scrollEventThrottle={16}
+        >
+          <ReadOnlyDayBanner
+            isoDate={viewDate}
+            tone={isFuture ? 'future' : 'past'}
+            onBackToToday={() => onSelectDay(null)}
+          />
+          {body}
+        </ScrollView>
       </View>
     )
   }
@@ -1245,6 +1420,15 @@ function TodayTab() {
     ...overlay.addedUnassigned.map((row) => ({ row, entry: null, queuedKey: row.queuedKey ?? null })),
   ]
 
+  // Chip de estado del día (paridad con el fix web de la ola 0, TodayExperience.tsx): NO puede
+  // colgar de `model.snapshotId`. `get_nutrition_today_v2` llama `ensure_day_snapshot` en CADA
+  // lectura, así que el id existe desde el primer render del día y el chip verde se encendía a las
+  // 8 AM con el anillo en 0 kcal. Cuelga de registros REALES — la misma vista efectiva que pinta
+  // "Consumido hoy" (servidor sin ocultos + filas optimistas/encoladas), así que un registro hecho
+  // offline también cuenta: para el alumno YA registró. Sin registros no se pinta nada (un "todavía
+  // no registras" solo repetiría el estado vacío de abajo).
+  const hasLoggedToday = consumedRows.length > 0
+
   // Sheet de equivalencias: datos derivados de la franja abierta (solo cuando está
   // abierto; sin hooks — el early-return de arriba lo permite).
   const equivSlot = equivOpen
@@ -1273,9 +1457,16 @@ function TodayTab() {
 
   return (
     <>
+      {/* Tira Lu-Do fija bajo el header (SPEC nutrition-week-view): vive FUERA del scroll, así
+          nunca se desmonta ni se va de pantalla al bajar por el día. HOY queda marcado siempre,
+          aunque el alumno esté mirando otro día. */}
+      <View className="bg-surface-app px-4 pb-3">
+        <WeekDayNav cells={weekCells} selectedIso={viewDate} onSelect={onSelectWeekDay} />
+      </View>
       <ScrollView
         className="flex-1 bg-surface-app"
-        contentContainerClassName="gap-5 px-4 pt-5"
+        // `pt-2` (antes `pt-5`): la tira de la semana ya aporta su propio respiro sobre el scroll.
+        contentContainerClassName="gap-5 px-4 pt-2"
         contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
         onScroll={onScrollChrome}
         scrollEventThrottle={16}
@@ -1291,9 +1482,9 @@ function TodayTab() {
       >
         {showTodayPlanLag ? (
           // Banner de lag del plan (web page.tsx:172-177): Info muted sobre superficie hundida.
-          <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
+          <View className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
             <Info color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
-            <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">{lagMessage}</Text>
+            <Text className="min-w-0 flex-1 text-sm leading-5 text-body">{lagMessage}</Text>
           </View>
         ) : null}
 
@@ -1316,8 +1507,8 @@ function TodayTab() {
           />
         ) : null}
 
-        {model.plan || model.snapshotId ? (
-          // Fila de badges + chip "Día registrado" (web TodayExperience.tsx:185-200).
+        {model.plan || hasLoggedToday ? (
+          // Fila de badges + chip de estado del día (web TodayExperience.tsx:185-200).
           <View className="flex-row flex-wrap items-center gap-2">
             {model.plan ? <StrategyBadge strategy={model.plan.strategy} /> : null}
             {model.plan ? (
@@ -1327,11 +1518,11 @@ function TodayTab() {
                 effectiveLabel={`desde ${formatNutritionShortDate(model.plan.effectiveFrom)}`}
               />
             ) : null}
-            {model.snapshotId ? (
+            {hasLoggedToday ? (
               // Chip esmeralda del canvas web → tono success del kit RN (contrato white-label).
               <View className="flex-row items-center gap-1.5 rounded-pill border border-success-500/30 bg-success-500/10 px-2.5 py-1">
                 <CheckCircle2 color={theme.success} size={14} />
-                <Text className="text-xs font-semibold text-success-700">Día registrado</Text>
+                <Text className="text-xs font-semibold text-success-700">Ya registraste hoy</Text>
               </View>
             ) : null}
           </View>
@@ -1383,9 +1574,9 @@ function TodayTab() {
               />
             </>
           ) : (
-            <View className="flex-row items-start gap-2 rounded-card border border-border-subtle bg-surface-sunken px-3 py-2">
+            <View className="flex-row items-start gap-2 rounded-card border border-subtle bg-surface-sunken px-3 py-2">
               <Lock color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
-              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-secondary">
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-muted">
                 Tu coach dejó el plan en solo alimentos prescritos: marca lo que comiste del plan.
               </Text>
             </View>
@@ -1397,7 +1588,7 @@ function TodayTab() {
           // "Tu plan de hoy" (web TodayExperience.tsx:561-640): sin sección si no hay franjas
           // con prescripción (PrescribedSection retorna null, TodayExperience.tsx:582).
           <View accessibilityLabel="Tu plan de hoy" className="gap-3">
-            <Text className="font-display text-lg font-semibold text-text-strong">Tu plan de hoy</Text>
+            <Text className="font-display text-lg font-semibold text-strong">Tu plan de hoy</Text>
             {slotsWithPrescription.map((slot) => (
               <TodaySlotCard
                 key={slot.id}
@@ -1423,7 +1614,7 @@ function TodayTab() {
         <View accessibilityLabel="Consumido hoy" className="gap-3">
           <View className="flex-row items-center gap-2">
             <Utensils color={theme.primary} size={16} />
-            <Text className="font-display text-lg font-semibold text-text-strong">Consumido hoy</Text>
+            <Text className="font-display text-lg font-semibold text-strong">Consumido hoy</Text>
           </View>
           {consumedRows.length === 0 ? (
             <NutritionStatePanel
@@ -1434,7 +1625,7 @@ function TodayTab() {
           ) : (
             <NutritionCard>
               {consumedRows.map(({ row, entry, queuedKey }, index) => (
-                <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+                <View key={row.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
                   <FoodRow
                     food={row}
                     fallbackCategory={entry?.category}
@@ -1517,8 +1708,11 @@ function TodayTab() {
         onMark={onSheetMark}
         onRegister={model.permissions.canRegisterFreely ? onSheetRegister : null}
       />
-      <PortionSnackbar state={portions.snackbar} onDismiss={portions.dismissSnackbar} />
-      <PortionSnackbar state={bulkSnackbar} onDismiss={dismissBulkSnackbar} />
+      <PortionSnackbar
+        key={activeSnackbarKey}
+        state={activeSnackbar}
+        onDismiss={portionsSnackbar ? dismissPortionsSnackbar : dismissBulkSnackbar}
+      />
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </>
   )
@@ -1541,7 +1735,7 @@ function intakeToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
 
 // 4A-02: CTA de la fila principal del Hoy (web TodayExperience.tsx:228-248): primario
 // "Registrar alimento" sólido en tono nutrition + secundarios neutros "Escanear"/"Compartir"
-// (web: border-border-default bg-surface-card text-strong). El NutritionMotionButton del kit
+// (web: border-default bg-surface-card text-strong). El NutritionMotionButton del kit
 // RN renderiza children dentro de <Text> y no admite ícono, así que la fila se arma local
 // con la misma motion de presión (NUTRITION_MOTION.press) y háptica del kit.
 function TodayCta({
@@ -1575,7 +1769,7 @@ function TodayCta({
       >
         <View
           className={`min-h-11 flex-row items-center justify-center gap-2 rounded-control border px-4 ${
-            tone === 'nutrition' ? 'border-primary bg-primary' : 'border-border-default bg-surface-card'
+            tone === 'nutrition' ? 'border-primary bg-primary' : 'border-default bg-surface-card'
           }`}
           style={shadow('sm', theme.scheme)}
         >
@@ -1584,7 +1778,7 @@ function TodayCta({
             color={tone === 'nutrition' ? undefined : theme.foreground}
             size={16}
           />
-          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-white' : 'text-text-strong'}`}>
+          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-white' : 'text-strong'}`}>
             {label}
           </Text>
         </View>
@@ -1675,8 +1869,8 @@ const TodaySlotCard = memo(function TodaySlotCard({
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
-        <Text className="font-display text-base font-semibold text-text-strong">{slot.name}</Text>
-        {slot.startTime ? <Text className="font-mono text-xs text-text-muted">{slot.startTime}</Text> : null}
+        <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
+        {slot.startTime ? <Text className="font-mono text-xs text-muted">{slot.startTime}</Text> : null}
       </View>
 
       {bulk.requiredTotal > 0 ? (
@@ -1693,7 +1887,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
             const rawNote = item.notes?.trim() || null
             const displayNote = subs.length > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
             return (
-              <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+              <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
                 <FoodRow
                   food={{
                     id: item.id,
@@ -1715,7 +1909,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
                         // el chip NO miente — todavía no llegó al servidor.
                         <View className="flex-row items-center gap-1">
                           <History color={theme.textSecondary} size={16} />
-                          <Text className="text-xs font-semibold text-text-muted">En cola</Text>
+                          <Text className="text-xs font-semibold text-muted">En cola</Text>
                         </View>
                       ) : (
                         // Estado "Registrado" (web TodayExperience.tsx:608-611): check esmeralda
@@ -1775,7 +1969,7 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
     <View
       accessibilityLabel={`${consumed} de ${total} registrados`}
       className={`self-start flex-row items-center gap-2 rounded-pill border px-2.5 py-1 ${
-        complete ? 'border-success-500/30 bg-success-500/10' : 'border-border-subtle bg-surface-sunken'
+        complete ? 'border-success-500/30 bg-success-500/10' : 'border-subtle bg-surface-sunken'
       }`}
     >
       {complete ? (
@@ -1789,7 +1983,7 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
           />
         </View>
       )}
-      <Text className={`font-mono text-[11px] font-semibold ${complete ? 'text-success-700' : 'text-text-muted'}`}>
+      <Text className={`font-mono text-[11px] font-semibold ${complete ? 'text-success-700' : 'text-muted'}`}>
         {complete ? 'Completa' : `${consumed}/${total}`}
       </Text>
     </View>
@@ -1804,16 +1998,16 @@ function ItemSubstitutionsHint({ substitutions }: { substitutions: NutritionItem
   if (substitutions.length === 0) return null
   return (
     <View className="pb-3 pl-14">
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Puedes reemplazar por</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</Text>
       <View accessibilityLabel="Reemplazos autorizados por tu coach" className="mt-1 flex-row flex-wrap gap-1.5">
         {substitutions.map((sub) => (
           <View
             key={sub.id}
-            className="flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1"
+            className="flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
           >
-            <Text className="text-xs font-medium text-text-body">{sub.name}</Text>
+            <Text className="text-xs font-medium text-body">{sub.name}</Text>
             {sub.macros.calories != null ? (
-              <Text className="font-mono text-xs text-text-muted">· {formatNutritionCalories(sub.macros.calories)}</Text>
+              <Text className="font-mono text-xs text-muted">· {formatNutritionCalories(sub.macros.calories)}</Text>
             ) : null}
           </View>
         ))}
@@ -1957,11 +2151,11 @@ function EntryCorrectionSheet({
 
           {action.kind === 'edit' ? (
             <View>
-              <Text className="mb-1 text-xs font-semibold text-text-muted">Nueva cantidad ({entry.unit})</Text>
+              <Text className="mb-1 text-xs font-semibold text-muted">Nueva cantidad ({entry.unit})</Text>
               <TextInput
                 accessibilityLabel={`Nueva cantidad en ${entry.unit}`}
                 accessibilityHint="Ingresa un número mayor que cero"
-                className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-text-strong"
+                className="min-h-12 w-full rounded-control border border-default bg-surface-app px-3 text-base text-strong"
                 editable={!pending}
                 inputMode="decimal"
                 keyboardType="decimal-pad"
@@ -1971,19 +2165,19 @@ function EntryCorrectionSheet({
               />
             </View>
           ) : (
-            <Text className="text-sm leading-5 text-text-body">
+            <Text className="text-sm leading-5 text-body">
               El registro dejará de contar en tu día, pero se conserva en el historial para tu coach.
             </Text>
           )}
 
           <View>
-            <Text className="mb-1 text-xs font-semibold text-text-muted">
+            <Text className="mb-1 text-xs font-semibold text-muted">
               {action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo'}
             </Text>
             <TextInput
               accessibilityLabel={action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo del retiro'}
               accessibilityHint="Escribe al menos tres caracteres"
-              className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-text-strong"
+              className="min-h-12 w-full rounded-control border border-default bg-surface-app px-3 text-base text-strong"
               editable={!pending}
               maxLength={1000}
               onChangeText={setReason}
@@ -1992,7 +2186,7 @@ function EntryCorrectionSheet({
               returnKeyType="done"
               value={reason}
             />
-            <Text className="mt-1 text-[11px] leading-4 text-text-subtle">
+            <Text className="mt-1 text-[11px] leading-4 text-subtle">
               {action.kind === 'edit'
                 ? 'Mínimo 3 caracteres. Se conserva el registro original.'
                 : 'Mínimo 3 caracteres.'}
@@ -2020,6 +2214,14 @@ export default function StudentNutritionV2Screen() {
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
   const { reduced, duration } = useEvaMotion()
   const [tab, setTab] = useState<NutritionV2Tab>('today')
+  // Día que el tab "Hoy" está mostrando; `null` = hoy (SPEC nutrition-week-view). Vive acá, y no
+  // dentro de `TodayTab`, por dos razones: cambiar de tab REMONTA el tab (MotiView con `key`), y
+  // el historial abre un día concreto en modo lectura.
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const openDayFromHistory = useCallback((isoDate: string) => {
+    setSelectedDay(isoDate)
+    setTab('today')
+  }, [])
 
   // 4A-01: gate del flag, espejo EXACTO de la ruta web /nutrition-v2
   // (nutrition-v2/page.tsx:48-56): con `nutritionV2Student` OFF la web hace
@@ -2030,6 +2232,15 @@ export default function StudentNutritionV2Screen() {
     useCallback(() => {
       if (fallbackToV1) router.replace('/alumno/nutricion')
     }, [fallbackToV1, router]),
+  )
+
+  // Volver a la pantalla de Nutrición SIEMPRE aterriza en hoy: el día elegido sobrevive a cambiar
+  // de tab (Hoy ⇄ Plan ⇄ Historial, que remontan) pero no a salir del módulo — el tab se llama
+  // "Hoy" y reencontrarlo mostrando el miércoles pasado sería desorientador.
+  useFocusEffect(
+    useCallback(() => {
+      setSelectedDay(null)
+    }, []),
   )
 
   if (!entitlements.ready || !enabled) {
@@ -2091,9 +2302,9 @@ export default function StudentNutritionV2Screen() {
         animate={{ opacity: 1 }}
         transition={{ type: 'timing', duration: duration('base') }}
       >
-        {tab === 'today' ? <TodayTab /> : null}
+        {tab === 'today' ? <TodayTab selectedDay={selectedDay} onSelectDay={setSelectedDay} /> : null}
         {tab === 'plan' ? <PlanTab /> : null}
-        {tab === 'history' ? <HistoryTab /> : null}
+        {tab === 'history' ? <HistoryTab onOpenDay={openDayFromHistory} /> : null}
       </MotiView>
     </View>
   )
@@ -2113,7 +2324,7 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
       // 4A-05: toolbar espejo del web (`NutritionToolbar`, NutritionV2Kit.tsx:169-180) —
       // rounded-card + p-2 + gap-2 + min-h-12; `shadow-sm` web = decisión única del kit
       // (`shadow('sm', scheme)`, ver NutritionCard). Pills conservan min-h-11 (44pt táctil).
-      className="min-h-12 flex-row flex-wrap items-center gap-2 rounded-card border border-border-subtle bg-surface-card p-2"
+      className="min-h-12 flex-row flex-wrap items-center gap-2 rounded-card border border-subtle bg-surface-card p-2"
       style={shadow('sm', theme.scheme)}
     >
       {NUTRITION_V2_TABS.map(({ key, label, Icon }) => {
@@ -2133,7 +2344,7 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
             className={`min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-control ${active ? 'bg-primary' : ''}`}
           >
             <Icon color={active ? '#FFFFFF' : theme.textSecondary} size={16} />
-            <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-text-muted'}`}>{label}</Text>
+            <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-muted'}`}>{label}</Text>
           </Pressable>
         )
       })}
@@ -2156,6 +2367,11 @@ function PlanTab() {
   const [offline, setOffline] = useState(false)
   // Día local VIVO (NUT-018): la pestaña Plan también deja de quedar anclada al día del montaje.
   const [date] = useLocalDay(TZ)
+  // Día de la semana que se está mirando; `null` = hoy (SPEC nutrition-week-view). Local al tab:
+  // el Plan siempre muestra la semana ACTUAL — no navega a semanas viejas, porque el plan que
+  // tenemos en memoria es el vigente y proyectarlo hacia atrás sería mentir.
+  const [selectedIso, setSelectedIso] = useState<string | null>(null)
+  const viewIso = selectedIso ?? date
 
   const mountedRef = useRef(true)
   const controllerRef = useRef<AbortController | null>(null)
@@ -2223,6 +2439,36 @@ function PlanTab() {
     if (userId) void load()
   }, [load, userId])
 
+  // ── Semana Lu-Do del plan (SPEC nutrition-week-view) ────────────────────────
+  // Las 7 variantes ya viajaron en `plan.dayVariants`; el historial de la semana entra solo para
+  // que el punto de cada chip diga la verdad ("con registro" / "sin registro"). Reusa el MISMO
+  // scope de cache que el tab Hoy: dentro del TTL de 30 min, cambiar de tab no cuesta red.
+  const weekStartIso = useMemo(() => nutritionWeekStartIso(date), [date])
+  const weekHistory = useNutritionWeekHistory({ userId, weekStartIso })
+  const weekVariants = plan?.dayVariants ?? EMPTY_DAY_VARIANTS
+  const weekCells = useMemo(
+    () =>
+      buildNutritionWeek({
+        variants: weekVariants,
+        history: weekHistory.days,
+        weekStartIso,
+        todayIso: date,
+      }),
+    [date, weekHistory.days, weekStartIso, weekVariants],
+  )
+  const selectedCell = useMemo(
+    () => weekCells.find((cell) => cell.isoDate === viewIso) ?? null,
+    [viewIso, weekCells],
+  )
+  const onSelectWeekDay = useCallback(
+    (isoDate: string) => {
+      void Haptics.selectionAsync()
+      // Hoy vuelve a `null`: cruzar la medianoche no debe dejar el Plan anclado a ayer.
+      setSelectedIso(isoDate === date ? null : isoDate)
+    },
+    [date],
+  )
+
   const refreshControl = (
     <RefreshControl
       refreshing={refreshing}
@@ -2267,65 +2513,105 @@ function PlanTab() {
   }
 
   const summary = plan.plan
-  const defaultVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
-  // FD3 (espejo de web page.tsx): día base primero y después los días específicos Lu→Do.
-  const orderedVariants = sortNutritionDayVariantsForDisplay(plan.dayVariants)
   const multiDay = plan.dayVariants.length > 1
+  // UNA sola variante visible: la del día elegido, resuelta con la MISMA regla del snapshot que
+  // usa el servidor (`buildNutritionWeek` → `resolveNutritionDayVariantForDow`). Antes esta vista
+  // apilaba las 7 variantes expandidas (~9.700 px sin selector) y "Metas diarias" mostraba
+  // siempre la del día base, aunque hoy tocara otra (F-08).
+  const selectedVariant = selectedCell?.variant ?? null
+  const selectedDayLabel = selectedCell?.longLabel ?? null
 
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="gap-4 px-4 pt-2"
-      contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
-      onScroll={onScrollChrome}
-      scrollEventThrottle={16}
-      refreshControl={refreshControl}
-    >
-      {offline ? (
-        <View className="items-end">
-          <SyncOfflineState state="offline" />
-        </View>
-      ) : null}
-
-      <NutritionCard>
-        <View className="flex-row flex-wrap items-center gap-2">
-          <StrategyBadge strategy={summary.strategy} />
-          <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
-        </View>
-        <Text className="mt-4 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
-        <Text className="mt-1 text-xs text-text-muted">
-          Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
-          {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
-        </Text>
-        <Text className="mt-2 text-sm leading-6 text-text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
-        {plan.visibleNotes ? (
-          <View className="mt-4 rounded-control border border-border-subtle bg-surface-sunken p-3">
-            <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Notas de tu coach</Text>
-            <Text className="mt-1 text-sm leading-6 text-text-body">{plan.visibleNotes}</Text>
+    <View className="flex-1">
+      {/* Tira Lu-Do fija: el selector no se va de pantalla al bajar por las franjas del día. */}
+      <View className="px-4 pb-3">
+        <WeekDayNav
+          cells={weekCells}
+          selectedIso={viewIso}
+          onSelect={onSelectWeekDay}
+          label="Días del plan"
+        />
+      </View>
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-4 px-4"
+        contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+        onScroll={onScrollChrome}
+        scrollEventThrottle={16}
+        refreshControl={refreshControl}
+      >
+        {offline ? (
+          <View className="items-end">
+            <SyncOfflineState state="offline" />
           </View>
         ) : null}
-      </NutritionCard>
 
-      {defaultVariant ? <PlanObjectives targets={defaultVariant.targets} /> : null}
+        <NutritionCard>
+          <View className="flex-row flex-wrap items-center gap-2">
+            <StrategyBadge strategy={summary.strategy} />
+            <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
+          </View>
+          <Text className="mt-4 font-display text-2xl font-bold text-strong">{summary.name}</Text>
+          <Text className="mt-1 text-xs text-muted">
+            Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
+            {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
+          </Text>
+          <Text className="mt-2 text-sm leading-6 text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+          {plan.visibleNotes ? (
+            <View className="mt-4 rounded-control border border-subtle bg-surface-sunken p-3">
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Notas de tu coach</Text>
+              <Text className="mt-1 text-sm leading-6 text-body">{plan.visibleNotes}</Text>
+            </View>
+          ) : null}
+        </NutritionCard>
 
-      <PlanRulesCard permissions={plan.permissions} />
+        {/* Metas del DÍA ELEGIDO (F-08): antes eran siempre las del día base. */}
+        {selectedVariant ? (
+          <PlanObjectives
+            targets={selectedVariant.targets}
+            dayLabel={multiDay ? selectedDayLabel : null}
+          />
+        ) : null}
 
-      {orderedVariants.map((variant) => (
-        <PlanVariantCard
-          key={variant.id}
-          variant={variant}
-          variants={plan.dayVariants}
-          showTargets={multiDay}
-          showWeekStrip={multiDay}
-          todayIso={date}
-        />
-      ))}
-    </ScrollView>
+        <PlanRulesCard permissions={plan.permissions} />
+
+        {selectedVariant ? (
+          <PlanVariantCard
+            variant={selectedVariant}
+            variants={plan.dayVariants}
+            showTargets={multiDay}
+            showWeekStrip={multiDay}
+            todayIso={date}
+          />
+        ) : (
+          // Plan sin variante para ese día y sin día base: el snapshot tampoco prescribiría nada,
+          // así que no se inventa la default (regla 1 de `buildNutritionWeek`).
+          <NutritionStatePanel
+            icon="empty"
+            title={`Tu plan no prescribe nada para el ${(selectedDayLabel ?? 'día').toLowerCase()}`}
+            description="Ese día no tiene comidas fijas: sigue tus metas diarias y registra lo que comas."
+          />
+        )}
+      </ScrollView>
+    </View>
   )
 }
 
-function PlanObjectives({ targets }: { targets: PlanVariant['targets'] }) {
+/**
+ * "Metas diarias" del día ELEGIDO. `targets` se tipa con la forma mínima compartida
+ * (`NutritionWeekTargetsLike`) porque también llega desde una celda de la semana, donde las metas
+ * pueden venir del snapshot congelado y no de la variante del plan vigente.
+ */
+function PlanObjectives({
+  targets,
+  dayLabel,
+}: {
+  targets: NutritionWeekTargetsLike | null
+  /** Día al que pertenecen estas metas; `null` en planes de un solo día (no hay qué desambiguar). */
+  dayLabel?: string | null
+}) {
   const rows: { label: string; value: string }[] = []
+  if (targets == null) return null
   if (targets.calories != null) rows.push({ label: 'Energía', value: formatNutritionCalories(targets.calories) })
   if (targets.proteinG != null) rows.push({ label: 'Proteína', value: formatNutritionAmount(targets.proteinG, 'g') })
   if (targets.carbsG != null) rows.push({ label: 'Carbohidratos', value: formatNutritionAmount(targets.carbsG, 'g') })
@@ -2334,14 +2620,16 @@ function PlanObjectives({ targets }: { targets: PlanVariant['targets'] }) {
   if (rows.length === 0) return null
   return (
     <NutritionCard>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Metas diarias</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
+        Metas diarias{dayLabel ? ` · ${dayLabel}` : ''}
+      </Text>
       <View className="mt-3 flex-row flex-wrap gap-y-3">
         {rows.map((row) => (
           <View key={row.label} className="min-w-[30%] flex-1 pr-2">
-            <Text className="font-display text-lg font-bold text-text-strong" style={{ fontVariant: ['tabular-nums'] }}>
+            <Text className="font-display text-lg font-bold text-strong" style={{ fontVariant: ['tabular-nums'] }}>
               {row.value}
             </Text>
-            <Text className="text-xs text-text-muted">{row.label}</Text>
+            <Text className="text-xs text-muted">{row.label}</Text>
           </View>
         ))}
       </View>
@@ -2364,11 +2652,11 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
   if (permissions.canSkipOptionalItems) chips.push('Puedes omitir opcionales')
   return (
     <NutritionCard>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Reglas del plan</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Reglas del plan</Text>
       <View className="mt-3 flex-row flex-wrap gap-2">
         {chips.map((chip) => (
-          <View key={chip} className="rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1">
-            <Text className="text-xs font-medium text-text-body">{chip}</Text>
+          <View key={chip} className="rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1">
+            <Text className="text-xs font-medium text-body">{chip}</Text>
           </View>
         ))}
       </View>
@@ -2392,14 +2680,14 @@ function PlanVariantCard({
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
-        <Text className="font-display text-lg font-semibold text-text-strong">{variant.label}</Text>
+        <Text className="font-display text-lg font-semibold text-strong">{variant.label}</Text>
         {variant.isDefault ? (
           <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
             <Text className="text-[10px] font-semibold text-primary">Por defecto</Text>
           </View>
         ) : null}
       </View>
-      <Text className="mt-1 text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+      <Text className="mt-1 text-sm text-muted" style={{ fontVariant: ['tabular-nums'] }}>
         {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
         {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
       </Text>
@@ -2418,7 +2706,7 @@ function PlanVariantCard({
       ) : null}
       <View className="mt-2 gap-4">
         {variant.mealSlots.length === 0 ? (
-          <Text className="text-sm text-text-muted">
+          <Text className="text-sm text-muted">
             Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
           </Text>
         ) : (
@@ -2434,6 +2722,10 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
   const timeLabel = slot.startTime ? (slot.endTime ? `${slot.startTime}–${slot.endTime}` : slot.startTime) : null
   const subtotal = slot.prescriptionItems.reduce((sum, item) => sum + (item.macros.calories ?? 0), 0)
   const hasItems = slot.prescriptionItems.length > 0
+  // Capa de porciones (P0-3, espejo del fix web): una franja puede prescribir SOLO porciones a
+  // elección; sin esto la vista Plan la mostraba como "franja flexible sin alimentos prescritos" y
+  // un plan de porciones se veía vacío.
+  const hasPortions = (slot.exchangeTargets?.length ?? 0) > 0
   const targetChips =
     slot.targets.calories != null ||
     slot.targets.proteinG != null ||
@@ -2441,21 +2733,21 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
     slot.targets.fatsG != null
 
   return (
-    <View className="rounded-control border border-border-subtle bg-surface-sunken/40 p-3">
+    <View className="rounded-control border border-subtle bg-surface-sunken/40 p-3">
       <View className="flex-row items-center justify-between gap-2">
         <View className="flex-row flex-wrap items-center gap-2">
-          <Text className="font-display text-base font-semibold text-text-strong">{slot.name}</Text>
-          {timeLabel ? <Text className="font-mono text-xs text-text-muted">{timeLabel}</Text> : null}
+          <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
+          {timeLabel ? <Text className="font-mono text-xs text-muted">{timeLabel}</Text> : null}
         </View>
         {hasItems && subtotal > 0 ? (
-          <Text className="font-mono text-xs font-semibold text-text-strong">{formatNutritionCalories(subtotal)}</Text>
+          <Text className="font-mono text-xs font-semibold text-strong">{formatNutritionCalories(subtotal)}</Text>
         ) : null}
       </View>
-      {slot.instructions ? <Text className="mt-1 text-xs leading-5 text-text-subtle">{slot.instructions}</Text> : null}
+      {slot.instructions ? <Text className="mt-1 text-xs leading-5 text-subtle">{slot.instructions}</Text> : null}
       {hasItems ? (
         <View className="mt-2">
           {slot.prescriptionItems.map((item, index) => (
-            <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+            <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
               <FoodRow
                 food={{
                   id: item.id,
@@ -2476,7 +2768,7 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
         </View>
       ) : targetChips ? (
         <View className="mt-2">
-          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Objetivo de la franja</Text>
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Objetivo de la franja</Text>
           <View className="mt-1">
             <MacroChipRow
               calories={slot.targets.calories}
@@ -2487,9 +2779,13 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
             />
           </View>
         </View>
-      ) : (
-        <Text className="mt-2 text-xs text-text-muted">Franja flexible sin alimentos prescritos.</Text>
-      )}
+      ) : null}
+      {/* Porciones prescritas: se suman a los alimentos fijos o al objetivo de macros. */}
+      <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
+      {!hasItems && !targetChips && !hasPortions ? (
+        // El empty-state solo aparece cuando la franja no prescribe NADA (ni items ni porciones).
+        <Text className="mt-2 text-xs text-muted">Franja flexible sin alimentos prescritos.</Text>
+      ) : null}
     </View>
   )
 }
@@ -2498,7 +2794,12 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
 // History tab
 // ---------------------------------------------------------------------------
 
-function HistoryTab() {
+function HistoryTab({
+  /** Abre ese día en el tab "Hoy" en modo lectura (SPEC nutrition-week-view). */
+  onOpenDay,
+}: {
+  onOpenDay: (isoDate: string) => void
+}) {
   // 4A-01: clearance de la cápsula + minimizado por scroll (ver TodayTab).
   const insets = useSafeAreaInsets()
   const onScrollChrome = useAlumnoScrollHandler()
@@ -2642,64 +2943,81 @@ function HistoryTab() {
       ListFooterComponent={
         loadingMore ? (
           <View className="items-center py-5">
-            <Text className="text-sm text-text-muted">Cargando días anteriores…</Text>
+            <Text className="text-sm text-muted">Cargando días anteriores…</Text>
           </View>
         ) : null
       }
-      renderItem={({ item }) => <HistoryDayCard day={item} />}
+      renderItem={({ item }) => <HistoryDayCard day={item} onOpen={onOpenDay} />}
     />
   )
 }
 
-function HistoryDayCard({ day }: { day: NutritionHistoryDay }) {
-  // 4A-04: card plana no-interactiva, paridad estricta con el web (HistoryView).
-  // El detalle expandible RN-extra se retiró por decisión del owner (fila 1).
+function HistoryDayCard({ day, onOpen }: { day: NutritionHistoryDay; onOpen: (isoDate: string) => void }) {
+  // 4A-04: la card mantiene el MISMO contenido plano que el web (HistoryView) — el detalle
+  // expandible RN-extra sigue retirado (decisión del owner, fila 1). Lo que sí hace ahora es
+  // ABRIR el día: la week view convirtió el tab "Hoy" en una superficie por fecha, así que el
+  // historial es su índice natural. No expande nada acá ni pide datos: solo selecciona la fecha.
+  const { theme } = useTheme()
   const legacy = historyDayIsLegacy(day)
   const legacyInfo = describeLegacyHistoryDay(day)
   const showLegacyMacros = legacyInfo.legacyOnly && legacyInfo.hasMacros && legacyInfo.consumed != null
+  const dayLabel = formatNutritionShortDate(day.localDate, { relative: true })
   return (
-    <NutritionCard>
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="min-w-0 flex-1">
-          <Text className="font-display text-lg font-semibold text-text-strong">
-            {formatNutritionShortDate(day.localDate, { relative: true })}
-          </Text>
-          {showLegacyMacros && legacyInfo.consumed ? (
-            <View className="mt-1">
-              <MacroChipRow
-                calories={legacyInfo.consumed.calories}
-                proteinG={legacyInfo.consumed.proteinG}
-                carbsG={legacyInfo.consumed.carbsG}
-                fatsG={legacyInfo.consumed.fatsG}
-                size="sm"
-              />
-            </View>
-          ) : (
-            <Text className="mt-1 text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
-              {legacyInfo.legacyOnly
-                ? legacyInfo.completionCount > 0
-                  ? legacyInfo.completionsLabel
-                  : 'Registrado en el sistema anterior'
-                : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
-            </Text>
-          )}
-          {legacy && !legacyInfo.legacyOnly && legacyInfo.secondaryLabel ? (
-            <Text className="mt-1 text-xs text-text-subtle" style={{ fontVariant: ['tabular-nums'] }}>
-              {legacyInfo.secondaryLabel}
-            </Text>
-          ) : null}
-          {legacy && legacyInfo.mealsLabel ? (
-            <Text numberOfLines={2} className="mt-1 text-xs text-text-subtle">
-              {legacyInfo.mealsLabel}
-            </Text>
-          ) : null}
-        </View>
-        {legacy ? (
-          <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-1">
-            <Text className="text-[11px] font-semibold text-warning-700">Historial anterior</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Ver ${dayLabel}`}
+      accessibilityHint="Abre ese día en modo lectura"
+      onPress={() => {
+        void Haptics.selectionAsync()
+        onOpen(day.localDate)
+      }}
+      className="active:opacity-70"
+    >
+      <NutritionCard>
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="min-w-0 flex-1">
+            <Text className="font-display text-lg font-semibold text-strong">{dayLabel}</Text>
+            {showLegacyMacros && legacyInfo.consumed ? (
+              <View className="mt-1">
+                <MacroChipRow
+                  calories={legacyInfo.consumed.calories}
+                  proteinG={legacyInfo.consumed.proteinG}
+                  carbsG={legacyInfo.consumed.carbsG}
+                  fatsG={legacyInfo.consumed.fatsG}
+                  size="sm"
+                />
+              </View>
+            ) : (
+              <Text className="mt-1 text-sm text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                {legacyInfo.legacyOnly
+                  ? legacyInfo.completionCount > 0
+                    ? legacyInfo.completionsLabel
+                    : 'Registrado en el sistema anterior'
+                  : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
+              </Text>
+            )}
+            {legacy && !legacyInfo.legacyOnly && legacyInfo.secondaryLabel ? (
+              <Text className="mt-1 text-xs text-subtle" style={{ fontVariant: ['tabular-nums'] }}>
+                {legacyInfo.secondaryLabel}
+              </Text>
+            ) : null}
+            {legacy && legacyInfo.mealsLabel ? (
+              <Text numberOfLines={2} className="mt-1 text-xs text-subtle">
+                {legacyInfo.mealsLabel}
+              </Text>
+            ) : null}
           </View>
-        ) : null}
-      </View>
-    </NutritionCard>
+          <View className="shrink-0 flex-row items-center gap-2">
+            {legacy ? (
+              <View className="rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-1">
+                <Text className="text-[11px] font-semibold text-warning-700">Historial anterior</Text>
+              </View>
+            ) : null}
+            {/* Affordance de "esto se toca"; el nombre del día ya lo dice el accessibilityLabel. */}
+            <ChevronRight color={theme.textSecondary} size={18} />
+          </View>
+        </View>
+      </NutritionCard>
+    </Pressable>
   )
 }

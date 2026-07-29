@@ -52,7 +52,7 @@ function DayChip({
       className={`min-h-9 flex-row items-center gap-1.5 rounded-pill border px-2.5 py-1.5 ${
         view.complete
           ? 'border-success-500/40 bg-success-500/10'
-          : 'border-border-subtle bg-surface-card'
+          : 'border-subtle bg-surface-card'
       }`}
     >
       <GroupDot
@@ -62,7 +62,7 @@ function DayChip({
       />
       <View>
         <Text
-          className={`text-xs font-semibold ${view.complete ? 'text-success-700' : 'text-text-strong'}`}
+          className={`text-xs font-semibold ${view.complete ? 'text-success-700' : 'text-strong'}`}
           style={{ fontVariant: ['tabular-nums'] }}
         >
           {counter}
@@ -96,7 +96,7 @@ function PortionDayCoverageRowBase({
   if (rows.length === 0) return null
   return (
     <NutritionCard style={{ padding: 12 }}>
-      <Text className="mb-2 text-sm font-medium text-text-strong">
+      <Text className="mb-2 text-sm font-medium text-strong">
         {PORTIONS_COPY.student.coverageTitle}
       </Text>
       <ScrollView

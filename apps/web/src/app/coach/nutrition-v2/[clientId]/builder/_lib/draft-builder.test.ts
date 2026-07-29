@@ -24,6 +24,8 @@ import {
   macroEnergyMismatch,
   migrateBuilderState,
   normalizeBuilderVariants,
+  resolveSlotCopyTargets,
+  slotMergeName,
   validateStep,
   type BuilderFood,
   type BuilderItem,
@@ -98,6 +100,7 @@ function flexibleState(): BuilderState {
     effectiveFrom: '2026-07-20',
     targets: { calories: '2000', proteinG: '150', carbsG: '200', fatsG: '60' },
     permissions: { canRegisterFreely: true, canAdjustPrescribedQuantity: true, canSubstitute: true },
+    visibleNotes: null,
     variants: [createBaseVariant()],
     activeVariantKey: BASE_VARIANT_KEY,
   }
@@ -115,6 +118,7 @@ function structuredState(): BuilderState {
     effectiveFrom: '2026-07-20',
     targets: { calories: '2000', proteinG: '150', carbsG: '', fatsG: '' },
     permissions: { canRegisterFreely: false, canAdjustPrescribedQuantity: true, canSubstitute: false },
+    visibleNotes: null,
     variants: [{ ...createBaseVariant(), slots: [baseSlot()] }],
     activeVariantKey: BASE_VARIANT_KEY,
   }
@@ -305,6 +309,27 @@ describe('assembleDraft', () => {
     const draft = assembleAndValidateDraft(structuredState(), { clientId: CLIENT_ID })
     expect(draft.dayVariants[0].mealSlots[0].items[0]).not.toHaveProperty('substitutions')
   })
+
+  // Perdida de datos (P0): publicar reescribe la version COMPLETA y las notas visibles se
+  // escriben en la edicion rapida, no en el wizard. Emitirlas de vuelta es lo unico que evita
+  // que "Rehacer con el asistente" las borre en silencio.
+  it('emite las notas visibles del estado (carry-over del plan vigente), ya trimeadas', () => {
+    const state = { ...structuredState(), visibleNotes: '  Domingo comida libre, hidratate  ' }
+    const draft = assembleAndValidateDraft(state, { clientId: CLIENT_ID })
+    expect(draft.visibleNotes).toBe('Domingo comida libre, hidratate')
+  })
+
+  it('notas visibles vacias o ausentes => null (paridad con la edicion rapida)', () => {
+    const blank = assembleDraft({ ...structuredState(), visibleNotes: '   ' }, { clientId: CLIENT_ID })
+    expect(blank.visibleNotes).toBeNull()
+    expect(assembleDraft(structuredState(), { clientId: CLIENT_ID }).visibleNotes).toBeNull()
+  })
+
+  it('el protocolo profesional NO viaja del cliente (lo repone publishPlanAction)', () => {
+    const state = { ...structuredState(), visibleNotes: 'Hidratate' }
+    expect(assembleDraft(state, { clientId: CLIENT_ID }).protocolNotes).toBeNull()
+    expect(assembleDraft(state, { clientId: CLIENT_ID }).privateNotes).toBeNull()
+  })
 })
 
 describe('validateStep', () => {
@@ -487,6 +512,26 @@ describe('builderReducer — RESTORE', () => {
     const current = createEmptyBuilderState('2026-07-20')
     const next = builderReducer(current, { type: 'RESTORE', state: null as unknown as BuilderState })
     expect(next).toBe(current)
+  })
+
+  // Las notas visibles son carry-over del plan, no contenido del wizard: un borrador guardado
+  // ANTES del carry-over no las trae y restaurarlo NO puede borrarlas.
+  it('un borrador PRE-notas conserva las notas visibles del plan rehidratado', () => {
+    const current = { ...createEmptyBuilderState('2026-07-20'), visibleNotes: 'Domingo comida libre' }
+    const legacy: Record<string, unknown> = { ...structuredState() }
+    delete legacy.visibleNotes
+    const next = builderReducer(current, { type: 'RESTORE', state: legacy })
+    expect(next.visibleNotes).toBe('Domingo comida libre')
+    expect(next.planName).toBe('Plan estructurado')
+  })
+
+  it('un borrador que SI trae la clave manda (incluso si las dejo vacias)', () => {
+    const current = { ...createEmptyBuilderState('2026-07-20'), visibleNotes: 'Vieja' }
+    const next = builderReducer(current, {
+      type: 'RESTORE',
+      state: { ...structuredState(), visibleNotes: null },
+    })
+    expect(next.visibleNotes).toBeNull()
   })
 })
 
@@ -683,6 +728,173 @@ describe('builderReducer — invariantes de las variantes', () => {
     expect(normalized.map((variant) => variant.key)).toEqual(['a', 'c'])
     expect(normalized.filter((variant) => variant.isDefault)).toHaveLength(1)
     expect(normalized[0].dayOfWeek).toBeNull()
+  })
+})
+
+// ── Copia de una franja a otros dias (P0-4) ───────────────────────────────────────────────
+
+describe('builderReducer — COPY_SLOT_TO_VARIANTS', () => {
+  const SUB: BuilderFood = { ...FOOD, id: '44444444-4444-4444-8444-444444444444', name: 'Pavo' }
+
+  /** Base con "Desayuno" (slot-a, con un reemplazo) + sabado y domingo VACIOS. */
+  function weekState(): BuilderState {
+    const start = structuredState()
+    start.variants[0].slots[0].items[0].substitutions = [{ key: 'sub-1', food: SUB }]
+    return builderReducer(start, { type: 'ADD_VARIANTS', days: [6, 0], keys: ['v-sa', 'v-do'], origin: 'empty' })
+  }
+
+  function copyTo(state: BuilderState, targetVariantKeys: string[]): BuilderState {
+    return builderReducer(state, {
+      type: 'COPY_SLOT_TO_VARIANTS',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys,
+    })
+  }
+
+  it('copia la franja completa a un dia: la agrega al final con keys nuevas y sin tocar el origen', () => {
+    const start = weekState()
+    const next = copyTo(start, ['v-sa'])
+
+    const sabado = next.variants[1]
+    const copied = sabado.slots[0]
+    expect(sabado.slots).toHaveLength(1)
+    expect(copied.name).toBe('Desayuno')
+    expect(copied.startTime).toBe('08:00')
+    expect(copied.items[0].food?.id).toBe(FOOD_ID)
+    expect(copied.items[0].quantity).toBe('200')
+    expect(copied.items[0].substitutions[0].food.id).toBe(SUB.id)
+    // Keys NUEVAS derivadas del destino (nada compartido con el origen).
+    expect(copied.key).toBe(clonedKey('v-sa', 'slot-a'))
+    expect(copied.items[0].key).toBe(clonedKey(clonedKey('v-sa', 'slot-a'), 'i1'))
+    expect(copied.items[0].substitutions[0].key).toBe(clonedKey(clonedKey('v-sa', 'slot-a'), 'sub-1'))
+    expect(copied).not.toBe(start.variants[0].slots[0])
+    expect(copied.items[0]).not.toBe(start.variants[0].slots[0].items[0])
+    // El dia de origen y los dias que no eran destino quedan INTACTOS (misma referencia).
+    expect(next.variants[0]).toBe(start.variants[0])
+    expect(next.variants[2]).toBe(start.variants[2])
+  })
+
+  it('"aplicar a todos los dias": copia a N destinos en un gesto, cada uno con sus keys', () => {
+    const next = copyTo(weekState(), ['v-sa', 'v-do'])
+    expect(next.variants[1].slots[0].key).toBe(clonedKey('v-sa', 'slot-a'))
+    expect(next.variants[2].slots[0].key).toBe(clonedKey('v-do', 'slot-a'))
+    expect(next.variants[1].slots[0].items[0].food?.id).toBe(FOOD_ID)
+    expect(next.variants[2].slots[0].items[0].food?.id).toBe(FOOD_ID)
+    // Cada dia con objetos propios: editar uno no toca al otro.
+    expect(next.variants[1].slots[0]).not.toBe(next.variants[2].slots[0])
+    // El draft ensamblado numera los codigos por dia y pasa el contrato.
+    const draft = assembleAndValidateDraft(next, { clientId: CLIENT_ID })
+    expect(draft.dayVariants.map((variant) => variant.mealSlots.map((slot) => slot.code))).toEqual([
+      ['slot-1'],
+      ['slot-1'],
+      ['slot-1'],
+    ])
+  })
+
+  it('merge por NOMBRE (trim + mayusculas): reemplaza la franja homonima en su posicion, no duplica', () => {
+    const start: BuilderState = {
+      ...structuredState(),
+      variants: [
+        { ...createBaseVariant(), slots: [baseSlot()] },
+        dayVariant({
+          key: 'v-sa',
+          dayOfWeek: 6,
+          slots: [
+            { key: 's-alm', name: 'Almuerzo', startTime: '13:00', items: [] },
+            { key: 's-des', name: '  DESAYUNO ', startTime: '09:30', items: [customItem()] },
+          ],
+        }),
+      ],
+    }
+    const next = copyTo(start, ['v-sa'])
+    const sabado = next.variants[1]
+
+    // Sigue habiendo 2 franjas, en el MISMO orden y con la key/posicion del destino.
+    expect(sabado.slots).toHaveLength(2)
+    expect(sabado.slots.map((slot) => slot.key)).toEqual(['s-alm', 's-des'])
+    // El contenido del destino se reemplaza completo por el del origen (nombre incluido).
+    expect(sabado.slots[1].name).toBe('Desayuno')
+    expect(sabado.slots[1].startTime).toBe('08:00')
+    expect(sabado.slots[1].items).toHaveLength(1)
+    expect(sabado.slots[1].items[0].food?.id).toBe(FOOD_ID)
+    expect(sabado.slots[1].items[0].key).toBe(clonedKey('s-des', 'i1'))
+    // La otra franja del dia no se toca.
+    expect(sabado.slots[0]).toBe(start.variants[1].slots[0])
+    expect(slotMergeName('  DESAYUNO ')).toBe('desayuno')
+  })
+
+  it('aplicar dos veces deja la MISMA estructura (idempotente)', () => {
+    const once = copyTo(weekState(), ['v-sa', 'v-do'])
+    const twice = copyTo(once, ['v-sa', 'v-do'])
+    expect(twice.variants).toEqual(once.variants)
+  })
+
+  it('cinturones: sin destinos validos es no-op; el origen y los repetidos se ignoran', () => {
+    const start = weekState()
+    expect(copyTo(start, [])).toBe(start)
+    // El propio dia de origen jamas es destino, y un dia inexistente se descarta.
+    expect(copyTo(start, [BASE_VARIANT_KEY, 'fantasma'])).toBe(start)
+    // Franja inexistente => estado intacto.
+    expect(
+      builderReducer(start, {
+        type: 'COPY_SLOT_TO_VARIANTS',
+        sourceVariantKey: BASE_VARIANT_KEY,
+        slotKey: 'no-existe',
+        targetVariantKeys: ['v-sa'],
+      }),
+    ).toBe(start)
+    // Un destino repetido en la misma accion se aplica UNA sola vez.
+    expect(copyTo(start, ['v-sa', 'v-sa']).variants[1].slots).toHaveLength(1)
+  })
+
+  it('resolveSlotCopyTargets desambigua la key cuando el dia ya la tiene ocupada (clon renombrado)', () => {
+    // El sabado nacio de "copiar del base" (key `v-sa~slot-a`) y despues renombro la franja:
+    // ya no hay match por nombre, pero la key derivada esta OCUPADA.
+    let state = builderReducer(structuredState(), {
+      type: 'ADD_VARIANTS',
+      days: [6],
+      keys: ['v-sa'],
+      origin: 'copy-base',
+    })
+    state = builderReducer(state, {
+      type: 'UPDATE_SLOT',
+      variantKey: 'v-sa',
+      slotKey: clonedKey('v-sa', 'slot-a'),
+      patch: { name: 'Colación' },
+    })
+    const targets = resolveSlotCopyTargets(state, {
+      sourceVariantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      targetVariantKeys: ['v-sa'],
+    })
+    expect(targets).toEqual([{ variantKey: 'v-sa', slotKey: clonedKey('v-sa', 'slot-a') + '~2', replaced: false }])
+
+    const next = copyTo(state, ['v-sa'])
+    const keys = next.variants[1].slots.map((slot) => slot.key)
+    expect(keys).toEqual([clonedKey('v-sa', 'slot-a'), clonedKey('v-sa', 'slot-a') + '~2'])
+    expect(new Set(keys).size).toBe(2)
+  })
+
+  it('resolveSlotCopyTargets marca `replaced` en el merge por nombre y da la key del destino', () => {
+    const start: BuilderState = {
+      ...structuredState(),
+      variants: [
+        { ...createBaseVariant(), slots: [baseSlot()] },
+        dayVariant({ key: 'v-sa', dayOfWeek: 6, slots: [{ key: 's-des', name: 'desayuno', startTime: '', items: [] }] }),
+        dayVariant({ key: 'v-do', dayOfWeek: 0, slots: [] }),
+      ],
+    }
+    expect(
+      resolveSlotCopyTargets(start, {
+        sourceVariantKey: BASE_VARIANT_KEY,
+        slotKey: 'slot-a',
+        targetVariantKeys: ['v-sa', 'v-do'],
+      }),
+    ).toEqual([
+      { variantKey: 'v-sa', slotKey: 's-des', replaced: true },
+      { variantKey: 'v-do', slotKey: clonedKey('v-do', 'slot-a'), replaced: false },
+    ])
   })
 })
 
