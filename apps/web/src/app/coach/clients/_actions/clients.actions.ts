@@ -24,6 +24,7 @@ import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/publ
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
 import { resolveCoachScope as getCoachClientScope, applyOrgScope as applyClientScope } from '@/services/auth/coach-scope.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
+import { deleteClientHard } from '@/services/client/client-deletion.service'
 import { generateStudentTempPassword } from '@/lib/auth/temp-credentials'
 
 export type CreateClientState = {
@@ -363,24 +364,11 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
-    // Edge coach-como-cliente: el SELECT en coaches es publico y el DELETE pasa la RLS propia
-    // del coach → cliente user-scoped. Solo deleteUser (GoTrue Admin) exige la service key.
-    const { data: coachProfile } = await supabase.from('coaches').select('id').eq('id', clientId).maybeSingle()
-
-    if (coachProfile) {
-        let deleteQuery = supabase
-            .from('clients')
-            .delete()
-            .eq('id', clientId)
-            .eq('coach_id', coachUser.id)
-        deleteQuery = applyClientScope(deleteQuery, scope.orgId)
-        const { error: delErr } = await deleteQuery
-        if (delErr) return { error: delErr.message }
-    } else {
-        const authAdmin = createServiceRoleClient()
-        const { error } = await authAdmin.auth.admin.deleteUser(clientId)
-        if (error) return { error: error.message }
-    }
+    // El borrado vive en el service (misma logica que la API movil y que el borrado de cuenta del
+    // coach). La rama coach-como-alumno antes usaba el cliente user-scoped (RLS): pasar a service
+    // role es equivalente porque el SELECT scoped de arriba ya verifico ownership + org/team scope.
+    const { error: deleteError } = await deleteClientHard(createServiceRoleClient(), clientId)
+    if (deleteError) return { error: deleteError }
 
     revalidatePath('/coach/clients')
     return {}

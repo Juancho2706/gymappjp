@@ -291,6 +291,10 @@ export function ClientsDirectoryClient({
                     pulseByClientId={pulseByClientId}
                     coachSlug={publicIdentifier}
                     appUrl={appUrl}
+                    onActions={setActionsClient}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
+                    archivedCount={archivedCount}
                 />
             </div>
 

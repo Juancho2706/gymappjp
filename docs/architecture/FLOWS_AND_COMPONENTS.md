@@ -72,8 +72,8 @@ Directorio → formulario validado → Server Action/API → scope activo
 | Etapa | Web | Mobile / backend |
 |---|---|---|
 | Directorio y ficha | `apps/web/src/app/coach/clients/` | `apps/mobile/app/coach/(tabs)/clientes.tsx`, `coach/cliente/[clientId].tsx` |
-| Crear/editar/archivar | `_actions/clients.actions.ts` | `apps/web/src/app/api/mobile/coach/clients/` |
-| Caso de uso | `apps/web/src/services/client/` | API delega y revalida mutaciones sensibles |
+| Crear/editar/archivar/eliminar | `_actions/clients.actions.ts` | `apps/web/src/app/api/mobile/coach/clients/` |
+| Caso de uso | `apps/web/src/services/client/` (borrado duro: `client-deletion.service.ts`, único punto que toca GoTrue Admin + Storage) | API delega y revalida mutaciones sensibles |
 | Persistencia | `apps/web/src/infrastructure/db/client.repository.ts` y membership repository | Supabase bajo RLS |
 | Importación | `/coach/clients/import` | endpoint mobile `clients/import` |
 

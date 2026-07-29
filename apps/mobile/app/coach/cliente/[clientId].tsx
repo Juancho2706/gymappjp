@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, EmptyState, Input, NativeDialog, TopBar } from '../../../components'
+import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
@@ -95,7 +95,6 @@ export default function ClientDetailScreen() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [resourceModuleFlags, setResourceModuleFlags] = useState({ cardio: false, movement: false, bodycomp: false })
   const [resourceModulesReady, setResourceModulesReady] = useState(false)
@@ -397,7 +396,7 @@ export default function ClientDetailScreen() {
   }
 
   async function confirmDeleteClient() {
-    if (!client || deleting || deleteConfirm.trim().toLowerCase() !== client.full_name.toLowerCase()) return
+    if (!client || deleting) return
     setDeleting(true)
     setActionError(null)
     try {
@@ -685,7 +684,7 @@ export default function ClientDetailScreen() {
         onReset={() => { setResetPassword(null); setActionError(null); setResetOpen(true) }}
         onToggle={confirmToggle}
         onArchive={confirmArchive}
-        onDelete={() => { setDeleteConfirm(''); setActionError(null); setDeleteOpen(true) }}
+        onDelete={() => { setActionError(null); setDeleteOpen(true) }}
         includeNativeShortcuts={false}
       />
 
@@ -719,16 +718,14 @@ export default function ClientDetailScreen() {
       <NativeDialog open={deleteOpen} title="Eliminar alumno" onClose={() => { if (!deleting) setDeleteOpen(false) }} closeDisabled={deleting} unmountOnClose>
         <View style={{ gap: 14 }}>
           <Text style={{ color: theme.mutedForeground, fontSize: 13.5, lineHeight: 19 }}>
-            Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.
+            ¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground }}>{client.full_name}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.
           </Text>
-          <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-            Escribe <Text style={{ color: theme.foreground }}>{client.full_name}</Text> para confirmar:
-          </Text>
-          <Input value={deleteConfirm} onChangeText={setDeleteConfirm} placeholder={client.full_name} editable={!deleting} />
           {actionError ? <Text style={{ color: theme.destructive, fontSize: 13 }}>{actionError}</Text> : null}
-          <View style={styles.formActions}>
-            <Button label="Cancelar" variant="ghost" onPress={() => setDeleteOpen(false)} disabled={deleting} style={{ flex: 1 }} />
-            <Button label={deleting ? 'Guardando…' : 'Eliminar definitivamente'} variant="danger" onPress={confirmDeleteClient} loading={deleting} disabled={deleting || deleteConfirm.trim().toLowerCase() !== client.full_name.toLowerCase()} style={{ flex: 1 }} />
+          {/* Par apilado (no en fila): "Eliminar definitivamente" no cabe en media
+              columna del diálogo y Button trunca a una línea (numberOfLines={1}). */}
+          <View style={{ gap: 10, marginTop: 4 }}>
+            <Button label={deleting ? 'Eliminando…' : 'Eliminar definitivamente'} variant="danger" onPress={confirmDeleteClient} loading={deleting} disabled={deleting} full />
+            <Button label="Cancelar" variant="ghost" onPress={() => setDeleteOpen(false)} disabled={deleting} full />
           </View>
         </View>
       </NativeDialog>

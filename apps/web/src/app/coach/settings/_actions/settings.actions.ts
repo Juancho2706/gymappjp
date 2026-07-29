@@ -10,6 +10,7 @@ import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { isThemePresetKey } from '@/lib/brand-presets'
 import { isLoginLayoutKey, parseLoaderConfig } from '@/lib/brand-composer'
+import { deleteClientHard } from '@/services/client/client-deletion.service'
 
 /**
  * white-label W1b — validación de las 3 columnas nuevas (aditivas):
@@ -349,6 +350,8 @@ export async function updateLogoDarkAction(
 }
 
 // ── Delete Account (Ley 21.719 — right to erasure) ───────────────────────────
+// El borrado del coach arrastra el borrado DURO de todos sus alumnos (identidad de GoTrue incluida),
+// no una anonimización: nada del titular ni de sus alumnos queda accesible ni reidentificable.
 
 export type DeleteAccountResult = { success: true } | { error: string }
 
@@ -392,46 +395,38 @@ export async function deleteCoachAccountAction(
         }
     }
 
-    // 3. Anonymize client PII (preserve workout structure as coach IP, just erase identifiers)
-    const { data: coachClients } = await adminDb
+    // 3. Borrar DURO a cada alumno ANTES que al coach.
+    // Bug que esto corrige: `deleteUser(coachId)` cascadea por `clients_coach_id_fkey` y borra las
+    // filas `clients`, pero los `auth.users` de esos alumnos SOBREVIVEN (la cascada no sube) →
+    // logins zombie. Anonimizar PII + borrar logs sueltos era un parche incoherente con esa cascada:
+    // el borrado total del alumno es estrictamente más fuerte y deja cero huérfanos.
+    // Si CUALQUIERA falla se aborta antes de tocar al coach: mejor reintentable que a medias.
+    const { data: coachClients, error: clientsListError } = await adminDb
         .from('clients')
         .select('id')
         .eq('coach_id', coachId)
-    const clientIds = (coachClients ?? []).map((c) => c.id)
-
-    await adminDb
-        .from('clients')
-        .update({
-            full_name: '[Eliminado]',
-            email: `eliminado-${coachId}@anonymized.eva`,
-            phone: null,
-        })
-        .eq('coach_id', coachId)
-
-    // 4. Delete health data logs (sensitive data — must be erased)
-    if (clientIds.length > 0) {
-        await adminDb.from('workout_logs').delete().in('client_id', clientIds)
+    if (clientsListError) {
+        console.error('[deleteAccount] failed to list coach clients:', clientsListError)
+        return { error: 'Error al eliminar la cuenta. Contacta soporte en privacidad@eva-app.cl' }
     }
-    if (clientIds.length > 0) {
-        const { data: dailyLogs } = await adminDb
-            .from('daily_nutrition_logs')
-            .select('id')
-            .in('client_id', clientIds)
-        const dailyLogIds = (dailyLogs ?? []).map((l) => l.id)
-        if (dailyLogIds.length > 0) {
-            await adminDb.from('nutrition_meal_logs').delete().in('daily_log_id', dailyLogIds)
-        }
-        await adminDb.from('check_ins').delete().in('client_id', clientIds)
+    const failedClientIds: string[] = []
+    for (const client of coachClients ?? []) {
+        const { error: clientDeleteError } = await deleteClientHard(adminDb, client.id)
+        if (clientDeleteError) failedClientIds.push(client.id)
+    }
+    if (failedClientIds.length > 0) {
+        console.error('[deleteAccount] failed to delete clients:', { coachId, failedClientIds })
+        return { error: 'Error al eliminar la cuenta. Contacta soporte en privacidad@eva-app.cl' }
     }
 
-    // 5. Delete logo from storage (best-effort)
+    // 4. Delete logo from storage (best-effort)
     try {
         await supabase.storage.from('logos').remove([`${coachId}/logo.jpg`, `${coachId}/logo.png`])
     } catch {
         // Non-fatal
     }
 
-    // 6. Delete auth user — CASCADE will delete coaches row via FK
+    // 5. Delete auth user — CASCADE will delete coaches row via FK
     const { error: authError } = await adminDb.auth.admin.deleteUser(coachId)
     if (authError) {
         console.error('[deleteAccount] failed to delete auth user:', authError)
