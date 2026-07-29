@@ -1,7 +1,12 @@
 'use client'
 
 /**
- * "Agregar día" del builder multi-día (SPEC nutrition-multiday, UX 1).
+ * "Agregar día" (SPEC nutrition-multiday, UX 1).
+ *
+ * SUPERFICIE VIVA: la **edición rápida** (`_quick-edit/QuickEditPlanView`). El creador ya NO lo
+ * monta: ahí el alta de un día se hace tocando su celda en el strip Lu-Do y "Personalizar"
+ * (SPEC nutrition-ui-poda, punto 10 — "tocas el día, no la variante"). De este módulo el creador
+ * sigue usando `useIsDesktopMd` y `UpsellPanel`.
  *
  * Popover en desktop / bottom sheet en móvil (mismo patrón split que `PortionsGroupPicker`,
  * copiado para no acoplar módulos): selector Lu-Do MULTI-SELECT con los días ya ocupados
@@ -35,7 +40,7 @@ function subscribeMd(cb: () => void) {
 
 /**
  * Compartido con el menú "Copiar a otros días" del builder (`PlanBuilderClient`): las dos
- * afordancias del paso Construcción abren popover en desktop y bottom sheet en móvil, así que
+ * afordancias del paso de los días abren popover en desktop y bottom sheet en móvil, así que
  * el hook se exporta en vez de copiarse una tercera vez.
  */
 export function useIsDesktopMd(): boolean {
@@ -58,7 +63,12 @@ const WEEK_ORDER: number[] = [...NUTRITION_WEEK_ORDER]
 const triggerClass =
   'inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-dashed border-border-default bg-surface-card px-3 text-xs font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
 
-function UpsellPanel() {
+/**
+ * Upsell de "dias distintos" (gate Pro). Se EXPORTA porque el selector de dia del creador
+ * (`DayPlanStrip`) lo reusa tal cual cuando el coach BASE toca "Personalizar {dia}": es el mismo
+ * limite comercial contado con las mismas palabras, en el mismo popover/sheet.
+ */
+export function UpsellPanel() {
   return (
     <div className="flex items-start gap-2.5 p-1">
       {/* Ícono del módulo Nutrición Pro (asset del CEO, estático @2x). */}

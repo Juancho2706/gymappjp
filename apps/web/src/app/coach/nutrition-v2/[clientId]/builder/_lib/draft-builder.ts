@@ -8,8 +8,14 @@
 
 import { z } from 'zod'
 import {
+  NUTRITION_DAY_LABELS,
+  NUTRITION_DAY_SHORT_LABELS,
+  NUTRITION_WEEK_ORDER,
   NutritionPlanDraftSchema,
   formatNutritionDayOfWeek,
+  nutritionDayOfWeekFromIso,
+  resolveNutritionDayVariantForDow,
+  type NutritionPlanDowCell,
   type NutritionPlanDraft,
   type NutritionStrategy,
   type NutritionExchangeTarget,
@@ -139,7 +145,18 @@ export interface BuilderState {
   activeVariantKey: string
 }
 
-export const BUILDER_STEP_COUNT = 4
+/**
+ * Wizard de DOS pasos (SPEC nutrition-ui-poda, punto 11):
+ *  - `BUILDER_STEP_PLAN` "El plan": estrategia, nombre, metas del dia base, permisos reales y
+ *    la fecha de vigencia (que antes vivia en el paso "Revisar").
+ *  - `BUILDER_STEP_DAYS` "Los dias": el selector de dia + las franjas de cada dia. Publicar
+ *    vive aca.
+ * El paso "Revisar" se elimino: su unico control editable era `Vigente desde` y todo lo demas
+ * era lectura de lo que el paso de dias ya muestra en vivo.
+ */
+export const BUILDER_STEP_PLAN = 0
+export const BUILDER_STEP_DAYS = 1
+export const BUILDER_STEP_COUNT = 2
 
 /** Key/label del dia base. La key viaja al draft tal cual (contrato `dayVariants[].key`). */
 export const BASE_VARIANT_KEY = 'default'
@@ -267,6 +284,132 @@ export function takenDayOfWeeks(state: BuilderState, exceptKey?: string): number
   return state.variants
     .filter((variant) => !variant.isDefault && variant.key !== exceptKey && variant.dayOfWeek != null)
     .map((variant) => variant.dayOfWeek as number)
+}
+
+// ── Selector "tocas el dia, no la variante" (SPEC nutrition-ui-poda, punto 10) ────────────────
+// El coach piensa en DIAS. Estos helpers traducen dia -> variante con la MISMA regla del
+// snapshot (`resolveNutritionDayVariantForDow` del paquete, que espeja el `where day_of_week =
+// extract(dow) or is_default` del RPC): aca no se decide nada nuevo, solo se EXPONE para poder
+// pintarlo. El MODELO no cambia: sigue siendo dia base + 0..7 dias propios.
+//
+// Gemelos: `apps/mobile/lib/nutrition-v2-builder.ts` (mismos nombres) y el selector compartido
+// `PlanDowSelector` / `buildNutritionPlanDowStrip` del paquete, cuyo tipo de celda se reusa tal
+// cual para que creador, ficha y RN hablen del mismo objeto.
+
+/**
+ * Variante del strip proyectada a la forma minima del selector compartido. El creador no tiene
+ * read-model, asi que traduce su `BuilderVariant`; `id` es la key de la variante, que es como el
+ * helper compartido reconoce que dos dias reciben exactamente la misma estructura.
+ */
+export interface BuilderDayCellVariant {
+  id: string
+  dayOfWeek: number | null
+  isDefault: boolean
+  label: string
+  targets: { calories: number | null }
+}
+
+/**
+ * Celda del strip Lu-Do del creador. Tipo COMPARTIDO con la ficha y RN, con `variant` estrechado
+ * a no-nulo: en el creador SIEMPRE hay dia base, asi que todo dia recibe algo.
+ */
+export type BuilderDayCell = NutritionPlanDowCell<BuilderDayCellVariant> & {
+  variant: BuilderDayCellVariant
+}
+
+/**
+ * Variante que RECIBE un dia de semana: la propia de ese dia si existe, si no el dia base.
+ * `dayOfWeek` null = el dia base explicito (la unica forma de alcanzarlo cuando los siete dias
+ * ya tienen contenido propio y ninguna celda lo representa). Nunca devuelve `null`.
+ */
+export function builderVariantForDayOfWeek(state: BuilderState, dayOfWeek: number | null): BuilderVariant {
+  if (dayOfWeek == null) return baseVariantOf(state)
+  return resolveNutritionDayVariantForDow(state.variants, dayOfWeek) ?? baseVariantOf(state)
+}
+
+/**
+ * Las 7 celdas del strip en orden de lectura Lu→Do. Las kcal NO se recalculan aca: llegan ya
+ * combinadas desde la pantalla (`kcalByVariantKey` = items fijos + porciones a eleccion, el MISMO
+ * criterio del subtotal de cada franja y del total del dia), asi que el strip nunca contradice al
+ * editor. `caloriesSource` es 'prescribed' cuando el dia tiene contenido —lo que el alumno
+ * realmente recibe— y cae al objetivo del dia cuando esta vacio (mejor que un 0 inventado).
+ */
+export function builderDayCells(
+  state: BuilderState,
+  options: {
+    kcalByVariantKey: Record<string, number>
+    /** Σ de porciones a eleccion por dia (viven fuera del reducer). */
+    portionsByVariantKey?: Record<string, number>
+    todayIso?: string | null
+  },
+): BuilderDayCell[] {
+  const todayDow = nutritionDayOfWeekFromIso(options.todayIso)
+  return NUTRITION_WEEK_ORDER.map((dayOfWeek) => {
+    const variant = builderVariantForDayOfWeek(state, dayOfWeek)
+    const isOwnDay = !variant.isDefault
+    const itemCount = variant.slots.reduce((total, slot) => total + slot.items.length, 0)
+    const portionCount = options.portionsByVariantKey?.[variant.key] ?? 0
+    const targetCalories = toNullableNumber(variantEffectiveTargets(state, variant).calories)
+    const hasContent = itemCount > 0 || portionCount > 0
+    const prescribedCalories = hasContent ? (options.kcalByVariantKey[variant.key] ?? 0) : null
+    const displayCalories = prescribedCalories ?? targetCalories
+    return {
+      dayOfWeek,
+      shortLabel: NUTRITION_DAY_SHORT_LABELS[dayOfWeek],
+      longLabel: NUTRITION_DAY_LABELS[dayOfWeek],
+      variant: {
+        id: variant.key,
+        dayOfWeek: variant.dayOfWeek,
+        isDefault: variant.isDefault,
+        label: variant.label,
+        targets: { calories: targetCalories },
+      },
+      isOwnDay,
+      inheritsBase: !isOwnDay,
+      isToday: dayOfWeek === todayDow,
+      slotCount: variant.slots.length,
+      itemCount,
+      portionCount,
+      prescribedCalories,
+      targetCalories,
+      displayCalories,
+      caloriesSource: prescribedCalories != null ? 'prescribed' : targetCalories != null ? 'target' : null,
+    }
+  })
+}
+
+/**
+ * Dias que HEREDAN el dia base, en orden de lectura. Es el "se aplica a Lu · Ma · Mi · Ju · Vi"
+ * de la barra de contexto: vacio = el dia base ya no rige ningun dia (los 7 son propios).
+ */
+export function inheritedDayOfWeeks(state: BuilderState): number[] {
+  return NUTRITION_WEEK_ORDER.filter((dayOfWeek) => builderVariantForDayOfWeek(state, dayOfWeek).isDefault)
+}
+
+/**
+ * Dia del strip que representa a una variante (para mover la seleccion cuando el gesto no nace
+ * de una celda: aviso de errores por dia, restauracion de un borrador). Un dia propio se
+ * representa con SU dia; el dia base con `preferredDow` si lo hereda, si no con el primero que lo
+ * herede. `null` = el dia base no rige ningun dia (se selecciona aparte).
+ */
+export function builderDowForVariant(
+  state: BuilderState,
+  variantKey: string,
+  preferredDow: number | null,
+): number | null {
+  const variant = state.variants.find((candidate) => candidate.key === variantKey)
+  if (variant != null && !variant.isDefault) return variant.dayOfWeek
+  const inherited = inheritedDayOfWeeks(state)
+  if (preferredDow != null && inherited.includes(preferredDow)) return preferredDow
+  return inherited.length > 0 ? inherited[0] : null
+}
+
+/**
+ * Dia seleccionado al ABRIR el creador: el del dia en edicion si es propio, si no el dia de
+ * HOY cuando el dia base lo cubre (el coach entra viendo lo que su alumno come hoy).
+ */
+export function initialBuilderDow(state: BuilderState, todayIso: string | null | undefined): number | null {
+  return builderDowForVariant(state, state.activeVariantKey, nutritionDayOfWeekFromIso(todayIso))
 }
 
 /**
@@ -987,14 +1130,18 @@ function parseTarget(value: string): number | null {
 const MAX_KCAL = 12000
 const MAX_MACRO_G = 2000
 
+/**
+ * Validacion por paso del wizard de DOS pasos:
+ *  - paso 0 "El plan": estrategia + nombre + metas (antes eran dos pasos, y elegir estrategia
+ *    era un "gesto de navegacion" repetible que reseteaba permisos — ver `SET_STRATEGY`).
+ *  - paso 1 "Los dias": franjas/items de TODOS los dias (solo con estrategia que usa franjas).
+ */
 export function validateStep(state: BuilderState, step: number): StepValidation {
   const errors: Record<string, string> = {}
 
-  if (step === 0) {
+  if (step === BUILDER_STEP_PLAN) {
     if (!state.strategy) errors.strategy = 'Elige una estrategia para continuar.'
-  }
 
-  if (step === 1) {
     if (state.planName.trim().length === 0) errors.planName = 'Ponle un nombre al plan.'
     else if (state.planName.trim().length > 180) errors.planName = 'El nombre es demasiado largo.'
 
@@ -1015,7 +1162,7 @@ export function validateStep(state: BuilderState, step: number): StepValidation 
     if (!anyTarget) errors.calories = errors.calories ?? 'Define al menos una meta (kcal o un macro).'
   }
 
-  if (step === 2 && strategyUsesSlots(state.strategy)) {
+  if (step === BUILDER_STEP_DAYS && strategyUsesSlots(state.strategy)) {
     // Se validan TODOS los dias (no solo el activo): publicar emite las N variantes, asi que
     // un dia sin franjas o con un item incompleto tiene que bloquear igual. Las claves de
     // franja/item son unicas entre dias, asi que no colisionan.

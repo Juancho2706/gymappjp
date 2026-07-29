@@ -2,24 +2,18 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { CheckCircle2, Info, Plus } from 'lucide-react'
 import {
-  DayVariantWeekStrip,
   MacroBudget,
   NutritionCard,
   NutritionPageShell,
   NutritionStatePanel,
-  PrescribedPortionChips,
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
   buildNutritionWeek,
   createNutritionMacroValue,
-  formatNutritionCalories,
-  resolveNutritionDayVariantForDate,
-  sortNutritionDayVariantsForDisplay,
+  nutritionDayOfWeekFromIso,
 } from '@eva/nutrition-v2'
 import { formatDateDdMmYyyySantiago, getTodayInSantiago } from '@/lib/date-utils'
-import { foodCategoryIconUrl, foodCategoryIconUrlFromName } from '@/lib/food-image'
-import { cn } from '@/lib/utils'
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
@@ -46,14 +40,14 @@ import {
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 import { CoachWeekDayNav } from './CoachWeekDayNav'
+import { PrescribedStructureSection } from './PrescribedStructureSection'
 import { SelectedDayPanel } from './SelectedDayPanel'
 import { resolveCoachWeekSelection } from './_lib/week-nav'
-import { FoodThumb } from './builder/_components/FoodImage'
-import { resolveFoodImageUrl } from './builder/_components/food-card-presentation'
 
 // Regla transversal (owner, 2026-07-29): toda lista de alimentos muestra su miniatura — foto
-// real del catálogo vía `item.media` si existe, icono estático por categoría si no. Mismo par
-// componente/helper que ya usa el builder del coach para las cards de resultado de búsqueda.
+// real del catálogo vía `item.media` si existe, icono estático por categoría si no. La base se
+// resuelve acá (server) y se le pasa a `PrescribedStructureSection`, que es el cliente que pinta
+// las miniaturas del día elegido.
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
 interface Props {
@@ -137,18 +131,6 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
 
-  // FD3 (multi-dia): las cards de "Estructura prescrita" se ordenan con el dia base primero y
-  // despues los dias especificos de lunes a domingo, y cada una muestra su tira Lu-Do. La card
-  // que aplica hoy se marca solo si el registro del dia ya es del plan vigente (durante el lag
-  // el snapshot es de otra version, nombrar la variante nueva seria mentir). Cero seleccion nueva:
-  // se replica la regla que el snapshot ya congelo.
-  const orderedVariants = sortNutritionDayVariantsForDisplay(detail.plan.dayVariants)
-  const multiDayPlan = detail.plan.dayVariants.length > 1
-  const todayVariant =
-    multiDayPlan && !showTodayPlanLag
-      ? resolveNutritionDayVariantForDate(detail.plan.dayVariants, today)
-      : null
-
   // SEMANA DEL ALUMNO (`?date=`). La tira Lu-Do se compone con lo que YA viajó en ESTE render:
   // `plan.dayVariants` (el RPC devuelve TODAS las variantes, no solo la de hoy) + `recentDays` ya
   // recortado por el gate de Nutricion Pro. El read NO se repite ni se mueve de fecha: `?date=`
@@ -169,11 +151,14 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   })
   const selectedCell = weekCells.find((cell) => cell.isoDate === weekSelection.selectedIso) ?? null
   const fichaHref = `/coach/nutrition-v2/${clientId}`
-  const variantAnchorId = (variantId: string) => `variante-${variantId}`
-  // Solo el FUTURO se ancla a su card de "Estructura prescrita": proyectar es legitimo porque
-  // replica la regla que el snapshot congelara. Para un dia pasado manda la fila del historial
-  // (pudo congelar otra version del plan), asi que no se resalta ninguna variante vigente.
-  const previewVariantId = selectedCell?.state === 'future' ? (selectedCell.variant?.id ?? null) : null
+  // Solo el FUTURO se ancla a "Estructura prescrita": proyectar es legitimo porque replica la regla
+  // que el snapshot congelara. Para un dia pasado manda la fila del historial (pudo congelar otra
+  // version del plan), asi que la seccion no se preselecciona con la estructura de hoy.
+  const structureAnchorId = 'estructura-prescrita'
+  const previewDow =
+    selectedCell?.state === 'future' && selectedCell.variant != null
+      ? nutritionDayOfWeekFromIso(selectedCell.isoDate)
+      : null
 
   // Banner "plan convertido" (SPEC AC8): solo se consulta cuando hay plan vigente, y solo se
   // renderiza si existe link (`nutrition_v2_conversion_links`). Sin plan o sin link → cero query
@@ -352,7 +337,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             <SelectedDayPanel
               cell={selectedCell}
               todayIso={today}
-              variantAnchorId={previewVariantId ? variantAnchorId(previewVariantId) : null}
+              variantAnchorId={previewDow != null ? structureAnchorId : null}
             />
           )}
 
@@ -375,103 +360,20 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             </NutritionCard>
           </div>
 
-          {detail.plan.dayVariants.length > 0 ? (
-            <section>
-              <h2 className="mb-3 font-display text-xl font-semibold text-strong">Estructura prescrita</h2>
-              <div className="space-y-4">
-                {orderedVariants.map((variant) => (
-                  <NutritionCard
-                    className={cn(
-                      // Ancla del día futuro seleccionado: se resalta la card que aplicará, sin
-                      // duplicar el árbol de franjas en el panel de arriba.
-                      'scroll-mt-24',
-                      previewVariantId === variant.id ? 'border-primary ring-1 ring-primary/40' : null,
-                    )}
-                    id={variantAnchorId(variant.id)}
-                    key={variant.id}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-display text-base font-semibold text-strong">{variant.label}</h3>
-                        {todayVariant?.id === variant.id ? (
-                          <span className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary dark:border-primary/40 dark:bg-primary/15">
-                            Hoy aplica
-                          </span>
-                        ) : null}
-                        {/* Con una sola variante el badge no aporta (aplica los 7 días), igual
-                            que la tira Lu-Do de abajo: se muestra solo en planes multi-día. */}
-                        {multiDayPlan && previewVariantId === variant.id && selectedCell != null ? (
-                          <span className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary dark:border-primary/40 dark:bg-primary/15">
-                            Aplica el {selectedCell.longLabel.toLowerCase()}
-                          </span>
-                        ) : null}
-                      </div>
-                      <span className="text-xs tabular-nums text-muted">
-                        {variant.targets.calories != null
-                          ? `${formatNutritionCalories(variant.targets.calories)} objetivo`
-                          : 'Sin objetivo de energía'}
-                      </span>
-                    </div>
-                    {/* Tira Lu-Do de la variante (FD3): con un solo día no aporta y no se pinta. */}
-                    {multiDayPlan ? (
-                      <DayVariantWeekStrip
-                        variants={detail.plan.dayVariants}
-                        variant={variant}
-                        todayIso={today}
-                      />
-                    ) : null}
-                    {variant.mealSlots.length === 0 ? (
-                      <p className="mt-2 text-sm text-muted">Plan flexible: sin franjas prescritas.</p>
-                    ) : (
-                      <ul className="mt-3 space-y-3">
-                        {variant.mealSlots.map((slot) => (
-                          <li key={slot.id} className="rounded-control border border-border-subtle bg-surface-card p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-semibold text-strong">{slot.name}</span>
-                              {slot.startTime ? <span className="text-xs text-muted">{slot.startTime}</span> : null}
-                            </div>
-                            {slot.prescriptionItems.length > 0 ? (
-                              <ul className="mt-2 space-y-2">
-                                {slot.prescriptionItems.map((item) => {
-                                  const itemName = item.name || 'Alimento'
-                                  return (
-                                    <li key={item.id} className="flex items-center gap-2 text-sm text-body">
-                                      <FoodThumb
-                                        alt={itemName}
-                                        iconUrl={
-                                          item.category
-                                            ? foodCategoryIconUrl(item.category)
-                                            : foodCategoryIconUrlFromName(itemName)
-                                        }
-                                        imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
-                                      />
-                                      <span className="min-w-0 flex-1 truncate">
-                                        {itemName} · {item.quantity} {item.unit}
-                                      </span>
-                                      <span className="shrink-0 text-xs tabular-nums text-muted">
-                                        {Math.round(item.macros.calories ?? 0)} kcal
-                                      </span>
-                                    </li>
-                                  )
-                                })}
-                              </ul>
-                            ) : null}
-                            {/* Capa de porciones (P0-3): la franja puede prescribir SOLO porciones, o
-                                porciones ademas de los alimentos fijos. Sin targets no pinta nada. */}
-                            <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
-                            {slot.prescriptionItems.length === 0 &&
-                            (slot.exchangeTargets?.length ?? 0) === 0 ? (
-                              <p className="mt-2 text-xs text-muted">Sin alimentos prescritos en esta franja.</p>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </NutritionCard>
-                ))}
-              </div>
-            </section>
-          ) : null}
+          {/* SPEC 12 — "Tocas el dia, no la variante": strip Lu-Do del PLAN (kcal por celda,
+              punto lleno = dia propio, hueco = hereda el base) + UNA card del dia elegido. Muere
+              la pila de cards por variante y su DayVariantWeekStrip repetida. Read-only: el unico
+              camino de edicion sigue siendo el lapiz global del quick-edit en el header.
+              `key` = dia futuro anclado desde la tira de seguimiento: si el coach mira un dia que
+              todavia no ocurre, la seccion abre en ESE dia. */}
+          <PrescribedStructureSection
+            anchorId={structureAnchorId}
+            initialDow={previewDow}
+            key={previewDow ?? 'hoy'}
+            supabaseBaseUrl={SUPABASE_BASE}
+            todayIso={today}
+            variants={detail.plan.dayVariants}
+          />
 
           {/* Zona inferior discreta: archivar el plan vigente. Aislado del CTA primario del header
               para evitar clicks accidentales. Tras archivar, la ficha pasa a "Sin plan vigente". */}

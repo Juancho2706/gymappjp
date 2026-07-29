@@ -24,7 +24,7 @@ import {
 test.describe('Nutrición V2 · Builder publica un plan (canary)', () => {
   test.beforeEach(requireCanaryCoach)
 
-  test('el flujo de 4 pasos publica un plan con catálogo', async ({ page }) => {
+  test('el flujo de 2 pasos publica un plan con catálogo', async ({ page }) => {
     test.setTimeout(180_000)
     await loginCoachStandalone(page)
 
@@ -38,19 +38,18 @@ test.describe('Nutrición V2 · Builder publica un plan (canary)', () => {
     await page.goto(`/coach/nutrition-v2/${clientId}/builder`)
     await expect(page.getByTestId('nutrition-v2-builder-stepper')).toBeVisible({ timeout: 25_000 })
 
-    // Paso 1 · Estrategia: plan estructurado (usa franjas + catálogo; no requiere Nutrición Pro).
-    await page.getByRole('button', { name: /Plan estructurado/i }).click()
-    await page.getByRole('button', { name: 'Siguiente' }).click()
-
-    // Paso 2 · Objetivos: nombre del plan (prefijo E2E-) + metas diarias.
+    // Paso 1 · "El plan": nombre (prefijo E2E-), estrategia estructurada (usa franjas + catálogo;
+    // no requiere Nutrición Pro), metas diarias. `Vigente desde` ya trae hoy por defecto.
     await page.getByLabel('Nombre del plan').fill(planName)
+    await page.getByRole('button', { name: /Plan estructurado/i }).click()
     await page.locator('#target-calories').fill('2000')
     await page.locator('#target-proteinG').fill('150')
     await page.locator('#target-carbsG').fill('200')
     await page.locator('#target-fatsG').fill('60')
     await page.getByRole('button', { name: 'Siguiente' }).click()
 
-    // Paso 3 · Construcción: nombra la franja y agrega un alimento del catálogo local.
+    // Paso 2 · "Los días": el selector abre en el día de hoy (que hereda el día base). Nombra la
+    // franja del día base y agrega un alimento del catálogo local.
     await page.getByLabel('Nombre de la franja').first().fill('Desayuno')
     await page.getByLabel('Buscar alimento del catalogo').first().fill(FOOD_QUERY)
     await page.getByRole('button', { name: 'Buscar' }).first().click()
@@ -62,10 +61,8 @@ test.describe('Nutrición V2 · Builder publica un plan (canary)', () => {
 
     // El alimento entra como fila prescrita: fija una cantidad válida.
     await page.getByLabel('Cantidad').first().fill('100')
-    await page.getByRole('button', { name: 'Siguiente' }).click()
 
-    // Paso 4 · Revisar y publicar (la fecha "Vigente desde" ya trae hoy por defecto).
-    await expect(page.getByText(planName, { exact: false })).toBeVisible({ timeout: 15_000 })
+    // Publicar vive en este mismo paso (el paso "Revisar" ya no existe).
     await page.getByRole('button', { name: 'Publicar plan' }).click()
 
     // Si una corrida previa dejó un plan vigente HOY, aparece el modal de conflicto:

@@ -20,7 +20,6 @@ import {
   XCircle,
 } from 'lucide-react-native'
 import {
-  DayVariantWeekStrip,
   FoodRow,
   MacroBudget,
   MacroChipRow,
@@ -29,6 +28,7 @@ import {
   NutritionSkeleton,
   NutritionStatePanel,
   NutritionCard,
+  PlanDowSelector,
   PortionDayCoverageCard,
   PrescribedPortionChips,
   StrategyBadge,
@@ -36,12 +36,15 @@ import {
 } from '../../../components/nutrition-v2'
 import { Sheet } from '../../../components/Sheet'
 import {
+  NUTRITION_PLAN_DOW_UNIFORM_NOTE,
   NutritionClientDetailReadModelSchema,
+  buildNutritionPlanDowStrip,
   buildNutritionWeek,
   createNutritionMacroValue,
-  formatNutritionCalories,
-  resolveNutritionDayVariantForDate,
-  sortNutritionDayVariantsForDisplay,
+  describeNutritionPlanDowSelection,
+  initialNutritionPlanDow,
+  isNutritionPlanDowUniform,
+  nutritionDayOfWeekFromIso,
   type NutritionClientDetailReadModel,
   type NutritionV2CoachScope,
   type NutritionWeekCell,
@@ -432,26 +435,18 @@ export default function CoachNutritionV2ClientScreen() {
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
 
-  // FD3 (espejo de web coach/nutrition-v2/[clientId]/page.tsx): día base primero y después los
-  // días específicos Lu→Do, cada card con su tira de días. "Hoy aplica" solo si el registro del
-  // día ya es del plan vigente (con lag el snapshot es de otra versión). Cero selección nueva.
-  const orderedVariants = sortNutritionDayVariantsForDisplay(detail.plan.dayVariants)
-  const multiDayPlan = detail.plan.dayVariants.length > 1
-  const todayVariant =
-    multiDayPlan && !showTodayPlanLag
-      ? resolveNutritionDayVariantForDate(detail.plan.dayVariants, date)
-      : null
-
   // T3.5 — día seleccionado de la semana. Sin celda (semana no compuesta) la ficha se comporta
   // exactamente como antes: hoy. La sección del día NUNCA ofrece registro: la ficha del coach es
   // read-only y el pasado, además, es solo lectura por regla de producto.
   const showingToday = selectedCell == null || selectedCell.state === 'today'
   const selectedDayLabel = formatNutritionShortDate(selectedIso, { todayIso: date, relative: true })
-  // "Aplica el sábado" SOLO para días futuros: rotular la variante de hoy sobre un día PASADO
-  // sería proyectar el plan vigente hacia atrás (el snapshot de ese día pudo congelar otra
-  // versión). El pasado se cuenta con su historial, nunca con la estructura de hoy.
-  const highlightedVariantId =
-    selectedCell != null && selectedCell.state === 'future' ? (selectedCell.variant?.id ?? null) : null
+  // SPEC 12: con un día FUTURO elegido en la tira de seguimiento, "Estructura prescrita" abre en
+  // ESE día del plan. Solo futuro: preseleccionar el pasado con el plan de hoy sería proyectar
+  // hacia atrás una versión que ese día no tuvo (su snapshot pudo congelar otra).
+  const previewDow =
+    selectedCell != null && selectedCell.state === 'future' && selectedCell.variant != null
+      ? nutritionDayOfWeekFromIso(selectedCell.isoDate)
+      : null
 
   // Modo edicion in-place (quick-edit): misma ruta, estado cliente. Al publicar, la
   // ficha re-lee el read model (reloadNonce) y el baseline se re-hidrata solo.
@@ -655,97 +650,16 @@ export default function CoachNutritionV2ClientScreen() {
         </>
       )}
 
+      {/* SPEC 12 — "Tocas el dia, no la variante": strip Lu-Do del PLAN + UNA card del dia
+          elegido, en vez de la pila de cards por variante (cada una con su tira repetida). Espejo
+          del web `PrescribedStructureSection`. Read-only: editar sigue siendo "Editar plan". */}
       {detail.plan.plan && detail.plan.dayVariants.length > 0 ? (
-        <View className="gap-3">
-          <Text className="font-display text-xl font-semibold text-strong">Estructura prescrita</Text>
-          {orderedVariants.map((variant) => (
-            <NutritionCard key={variant.id}>
-              <View className="flex-row flex-wrap items-center justify-between gap-2">
-                <View className="flex-row flex-wrap items-center gap-2">
-                  <Text className="font-display text-base font-semibold text-strong">{variant.label}</Text>
-                  {todayVariant?.id === variant.id ? (
-                    <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
-                      <Text className="text-[10px] font-semibold text-primary">Hoy aplica</Text>
-                    </View>
-                  ) : null}
-                  {/* T3.5: con un día FUTURO seleccionado en la tira, la estructura que le toca
-                      queda rotulada ("Aplica el sábado"). Solo futuro: rotular el pasado con el
-                      plan de hoy sería proyectar hacia atrás una versión que ese día no tuvo. */}
-                  {highlightedVariantId === variant.id && selectedCell != null ? (
-                    <View className="rounded-pill border border-default bg-surface-sunken px-2 py-0.5">
-                      <Text className="text-[10px] font-semibold text-body">
-                        Aplica el {selectedCell.longLabel.toLowerCase()}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text className="text-xs text-muted" style={{ fontVariant: ['tabular-nums'] }}>
-                  {variant.targets.calories != null
-                    ? `${formatNutritionCalories(variant.targets.calories)} objetivo`
-                    : 'Sin objetivo de energía'}
-                </Text>
-              </View>
-              {/* Tira Lu-Do de la variante (FD3): con un solo día no aporta y no se pinta. */}
-              {multiDayPlan ? (
-                <DayVariantWeekStrip
-                  variants={detail.plan.dayVariants}
-                  variant={variant}
-                  todayIso={date}
-                />
-              ) : null}
-              {variant.mealSlots.length === 0 ? (
-                <Text className="mt-2 text-sm text-muted">Plan flexible: sin franjas prescritas.</Text>
-              ) : (
-                <View className="mt-3 gap-3">
-                  {variant.mealSlots.map((slot) => (
-                    <View key={slot.id} className="rounded-control border border-subtle bg-surface-app p-3">
-                      <View className="flex-row items-center justify-between gap-2">
-                        <Text className="text-sm font-semibold text-strong">{slot.name}</Text>
-                        {slot.startTime ? <Text className="text-xs text-muted">{slot.startTime}</Text> : null}
-                      </View>
-                      {slot.prescriptionItems.length > 0 ? (
-                        <View className="mt-2">
-                          {slot.prescriptionItems.map((prescription, index) => (
-                            <View
-                              key={prescription.id}
-                              className={index > 0 ? 'border-t border-subtle' : undefined}
-                            >
-                              {/* Miniatura del catálogo (regla transversal del owner): `media` si
-                                  el alimento tiene foto, si no icono por categoría (`FoodThumbnail`
-                                  vía `FoodRow`). Espejo del renglón del alumno (nutrition-v2/index.tsx). */}
-                              <FoodRow
-                                food={{
-                                  id: prescription.id,
-                                  name: prescription.name || 'Alimento',
-                                  detail: prescription.brand,
-                                  thumbnailUrl: foodMediaThumbnailUrl(prescription.media),
-                                  quantityLabel: `${prescription.quantity} ${prescription.unit}`,
-                                  calories: prescription.macros.calories,
-                                  proteinG: prescription.macros.proteinG,
-                                  carbsG: prescription.macros.carbsG,
-                                  fatsG: prescription.macros.fatsG,
-                                }}
-                                fallbackCategory={prescription.category}
-                              />
-                            </View>
-                          ))}
-                        </View>
-                      ) : null}
-                      {/* Capa de porciones (P0-3, paridad con web page.tsx:362-368): la franja puede
-                          prescribir SOLO porciones, o porciones ademas de los alimentos fijos. Sin
-                          targets no pinta nada. */}
-                      <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
-                      {slot.prescriptionItems.length === 0 &&
-                      (slot.exchangeTargets?.length ?? 0) === 0 ? (
-                        <Text className="mt-2 text-xs text-muted">Sin alimentos prescritos en esta franja.</Text>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-              )}
-            </NutritionCard>
-          ))}
-        </View>
+        <PrescribedStructureSection
+          initialDow={previewDow}
+          key={previewDow ?? 'hoy'}
+          todayIso={date}
+          variants={detail.plan.dayVariants}
+        />
       ) : null}
 
       <NutritionCard>
@@ -819,6 +733,171 @@ export default function CoachNutritionV2ClientScreen() {
         />
       ) : null}
     </ScrollView>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// "Estructura prescrita" — selector de día + UNA card (SPEC punto 12, mockup aprobado 2026-07-29).
+//
+// Antes: una card por variante APILADA, cada una con su tira Lu-Do, repitiendo cinco veces el mismo
+// día base. Ahora: strip Lu-Do del PLAN (kcal por celda, punto lleno = día propio, punto hueco =
+// hereda el base, hoy marcado sutil) + la card del día elegido + una barra de contexto que dice qué
+// se está mirando ("Lunes sigue el Día base · Igual que Ma · Mi · Ju · Vi").
+//
+// Read-only: el único camino de edición sigue siendo "Editar plan" (quick-edit). Acá no hay
+// "Personalizar", ni menú ⋮, ni "+ Agregar día" — eso vive en el creador y en el quick-edit.
+//
+// Estado LOCAL y cero fetch: todo sale de `plan.dayVariants`, que la ficha ya trajo. Espejo del web
+// `PrescribedStructureSection`; la copy del contexto viene del helper compartido para que las dos
+// superficies digan exactamente lo mismo del mismo plan.
+// ---------------------------------------------------------------------------
+
+function PrescribedStructureSection({
+  variants,
+  todayIso,
+  initialDow,
+}: {
+  variants: NutritionClientDetailReadModel['plan']['dayVariants']
+  todayIso: string
+  /** Día con el que abrir (dow 0-6). Sin dato abre en hoy. */
+  initialDow?: number | null
+}) {
+  const cells = useMemo(
+    () => buildNutritionPlanDowStrip({ variants, todayIso }),
+    [variants, todayIso],
+  )
+  const uniform = useMemo(() => isNutritionPlanDowUniform(cells), [cells])
+  const [selectedDow, setSelectedDow] = useState<number>(
+    () => initialDow ?? initialNutritionPlanDow(cells) ?? 1,
+  )
+  const selection = useMemo(
+    () => describeNutritionPlanDowSelection({ cells, dayOfWeek: selectedDow }),
+    [cells, selectedDow],
+  )
+  const selectedCell = cells.find((cell) => cell.dayOfWeek === selectedDow) ?? null
+
+  if (variants.length === 0 || selection == null) return null
+
+  const variant = selection.variant
+  // Día heredado: manda con quién comparte la estructura (mockup); día propio: sus cifras.
+  const contextLine =
+    selection.kind === 'inherited'
+      ? (selection.sharedLabel ?? selection.statsLabel)
+      : selection.statsLabel
+
+  return (
+    <View className="gap-3">
+      <Text className="font-display text-xl font-semibold text-strong">Estructura prescrita</Text>
+
+      {/* Plan de un solo día: el selector no aporta (los 7 días reciben lo mismo) y se dice. */}
+      {uniform ? (
+        <Text className="text-sm text-muted">{NUTRITION_PLAN_DOW_UNIFORM_NOTE}</Text>
+      ) : (
+        <>
+          <PlanDowSelector
+            cells={cells}
+            label="Días del plan del alumno"
+            onSelect={setSelectedDow}
+            selectedDow={selectedDow}
+          />
+          <View
+            className={`flex-row items-center gap-2 rounded-control border bg-surface-card px-3 py-2.5 ${
+              selection.kind === 'own' ? 'border-subtle' : 'border-dashed border-default'
+            }`}
+          >
+            <View className="min-w-0 flex-1">
+              <Text className="text-sm font-semibold text-strong">{selection.title}</Text>
+              {contextLine ? (
+                <Text className="mt-0.5 text-xs text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                  {contextLine}
+                </Text>
+              ) : null}
+            </View>
+            {selectedCell?.isToday ? (
+              <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  Hoy
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </>
+      )}
+
+      {variant == null ? (
+        <NutritionCard>
+          <Text className="text-sm leading-5 text-muted">
+            El plan vigente no prescribe una estructura para este día.
+          </Text>
+        </NutritionCard>
+      ) : (
+        <NutritionCard>
+          <View className="flex-row flex-wrap items-center justify-between gap-2">
+            <Text className="font-display text-base font-semibold text-strong">{variant.label}</Text>
+            {uniform && selection.statsLabel ? (
+              <Text className="text-xs text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                {selection.statsLabel}
+              </Text>
+            ) : null}
+          </View>
+          {variant.mealSlots.length === 0 ? (
+            <Text className="mt-2 text-sm text-muted">Plan flexible: sin franjas prescritas.</Text>
+          ) : (
+            <View className="mt-3 gap-3">
+              {variant.mealSlots.map((slot) => (
+                <View key={slot.id} className="rounded-control border border-subtle bg-surface-app p-3">
+                  <View className="flex-row items-center justify-between gap-2">
+                    <Text className="text-sm font-semibold text-strong">{slot.name}</Text>
+                    {slot.startTime ? (
+                      <Text className="text-xs text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                        {slot.startTime}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {slot.prescriptionItems.length > 0 ? (
+                    <View className="mt-2">
+                      {slot.prescriptionItems.map((prescription, index) => (
+                        <View
+                          key={prescription.id}
+                          className={index > 0 ? 'border-t border-subtle' : undefined}
+                        >
+                          {/* Miniatura del catálogo (regla transversal del owner): `media` si el
+                              alimento tiene foto, si no icono por categoría (`FoodThumbnail` vía
+                              `FoodRow`). Espejo del renglón del alumno. */}
+                          <FoodRow
+                            food={{
+                              id: prescription.id,
+                              name: prescription.name || 'Alimento',
+                              detail: prescription.brand,
+                              thumbnailUrl: foodMediaThumbnailUrl(prescription.media),
+                              quantityLabel: `${prescription.quantity} ${prescription.unit}`,
+                              calories: prescription.macros.calories,
+                              proteinG: prescription.macros.proteinG,
+                              carbsG: prescription.macros.carbsG,
+                              fatsG: prescription.macros.fatsG,
+                            }}
+                            fallbackCategory={prescription.category}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  {/* Capa de porciones (P0-3): la franja puede prescribir SOLO porciones, o
+                      porciones además de los alimentos fijos. Sin targets no pinta nada. */}
+                  <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
+                  {slot.prescriptionItems.length === 0 &&
+                  (slot.exchangeTargets?.length ?? 0) === 0 ? (
+                    <Text className="mt-2 text-xs text-muted">
+                      Sin alimentos prescritos en esta franja.
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
+        </NutritionCard>
+      )}
+    </View>
   )
 }
 
