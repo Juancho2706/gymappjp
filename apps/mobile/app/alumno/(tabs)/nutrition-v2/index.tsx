@@ -11,6 +11,7 @@ import {
   History,
   Info,
   ListChecks,
+  Lock,
   Pencil,
   Plus,
   ScanBarcode,
@@ -105,7 +106,7 @@ import {
   bulkAteSnackbarState,
   buildEditIntakeCorrection,
   buildQueuedIntakeOverlay,
-  buildVoidIntakeCorrection,
+  buildVoidIntakeRequest,
   computeIntakeTotals,
   optimisticIntakeRow,
   prescribedIntakeSnapshotMacros,
@@ -121,6 +122,7 @@ import {
   newNutritionV2OperationId,
   submitCorrectIntake,
   submitRecordIntake,
+  submitVoidIntake,
 } from '../../../../lib/nutrition-v2-intake-runner'
 import { useEvaMotion } from '../../../../lib/motion'
 import { shadow } from '../../../../lib/shadows'
@@ -620,19 +622,19 @@ function TodayTab() {
       setMutationError(null)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       try {
-        const payload = buildVoidIntakeCorrection({
+        // NUT-010 (opción A): retiro TERMINAL. Antes esto mandaba una corrección de contribución
+        // cero cuyo reemplazo quedaba ACTIVO — el item del plan seguía "consumido" y la cobertura
+        // derivada no bajaba. Ahora `void_nutrition_intake_v2` marca la fila `voided` y los read
+        // models (que filtran `active`) la dejan de ver.
+        const payload = buildVoidIntakeRequest({
           clientId: userId,
           deviceId,
           operationId: newNutritionV2OperationId(),
-          localDate: date,
-          timezone: TZ,
           entry,
-          planVersionId: model?.plan?.versionId ?? null,
-          daySnapshotId: model?.snapshotId ?? null,
           reason,
         })
         setHidden(entry.id, true)
-        const outcome = await submitCorrectIntake(userId, payload)
+        const outcome = await submitVoidIntake(userId, payload)
         if (!mountedRef.current) return
         if (outcome.status === 'recorded') {
           setEntryAction(null)
@@ -657,7 +659,7 @@ function TodayTab() {
         )
       }
     },
-    [date, deviceId, load, model, refreshPending, setHidden, userId],
+    [deviceId, load, refreshPending, setHidden, userId],
   )
 
   // ── Snackbar del bulk-mark (mismo componente que porciones, estado propio) ──
@@ -682,9 +684,9 @@ function TodayTab() {
     [],
   )
 
-  // Deshacer una tanda: anula (corrección de aporte CERO) cada registro creado por el bulk, vía el
+  // Deshacer una tanda: RETIRA (estado terminal `voided`) cada registro creado por el bulk, vía el
   // MISMO runner de void del "Retirar" individual. Recibe entries sintetizados con el id REAL
-  // devuelto por el servidor (correctsEntryId), así no depende del refetch para poder deshacer.
+  // devuelto por el servidor, así no depende del refetch para poder deshacer.
   //
   // Lo ENCOLADO no se anula con un void (todavía no existe server-side): se CANCELA en la cola por
   // su idempotency key, exactamente como ya hace el deshacer de porciones
@@ -699,18 +701,14 @@ function TodayTab() {
       let queued = 0
       for (const entry of entries) {
         setHidden(entry.id, true)
-        const payload = buildVoidIntakeCorrection({
+        const payload = buildVoidIntakeRequest({
           clientId: userId,
           deviceId,
           operationId: newNutritionV2OperationId(),
-          localDate: date,
-          timezone: TZ,
           entry,
-          planVersionId: model?.plan?.versionId ?? null,
-          daySnapshotId: model?.snapshotId ?? null,
           reason: 'Deshacer registro de la comida',
         })
-        const outcome = await submitCorrectIntake(userId, payload)
+        const outcome = await submitVoidIntake(userId, payload)
         if (!mountedRef.current) return
         if (outcome.status === 'recorded') undone += 1
         else if (outcome.status === 'queued') queued += 1
@@ -753,11 +751,9 @@ function TodayTab() {
       }
     },
     [
-      date,
       deviceId,
       dismissBulkSnackbar,
       load,
-      model,
       refreshPending,
       setHidden,
       showBulkSnackbar,
@@ -1348,15 +1344,29 @@ function TodayTab() {
           </View>
         ) : null}
 
-        {/* Fila de CTAs (web TodayExperience.tsx:228-248): Registrar + Escanear + Compartir. */}
+        {/* Fila de CTAs (web TodayExperience.tsx): Registrar + Escanear + Compartir.
+            NUT-009: con "Solo alimentos prescritos" (canRegisterFreely = false) desaparecen
+            Registrar y Escanear — antes se ofrecían igual y el alumno rompía la regla del coach sin
+            enterarse. La UI no autoriza: el guard real está en la API móvil y en el RPC. */}
         <View className="flex-row flex-wrap gap-2">
-          <TodayCta Icon={Plus} label="Registrar alimento" tone="nutrition" onPress={() => onRegister()} />
-          <TodayCta
-            Icon={ScanBarcode}
-            label="Escanear"
-            tone="neutral"
-            onPress={() => router.push('/alumno/nutrition-v2/scanner')}
-          />
+          {model.permissions.canRegisterFreely ? (
+            <>
+              <TodayCta Icon={Plus} label="Registrar alimento" tone="nutrition" onPress={() => onRegister()} />
+              <TodayCta
+                Icon={ScanBarcode}
+                label="Escanear"
+                tone="neutral"
+                onPress={() => router.push('/alumno/nutrition-v2/scanner')}
+              />
+            </>
+          ) : (
+            <View className="flex-row items-start gap-2 rounded-card border border-border-subtle bg-surface-sunken px-3 py-2">
+              <Lock color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-secondary">
+                Tu coach dejó el plan en solo alimentos prescritos: marca lo que comiste del plan.
+              </Text>
+            </View>
+          )}
           <TodayCta Icon={Share2} label="Compartir" tone="neutral" onPress={() => void onShareDay()} />
         </View>
 
@@ -1410,18 +1420,24 @@ function TodayTab() {
                         // Icon-buttons lápiz/papelera: cada uno abre su corrección dedicada,
                         // igual que EditQuantityDialog/VoidEntryDialog en web (4A-06).
                         <View className="flex-row items-center gap-1">
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Editar cantidad"
-                            hitSlop={8}
-                            onPress={() => {
-                              setEntryActionError(null)
-                              setEntryAction({ kind: 'edit', entry })
-                            }}
-                            className="h-10 w-10 items-center justify-center rounded-control"
-                          >
-                            <Pencil color={theme.textSecondary} size={16} />
-                          </Pressable>
+                          {/* NUT-009: "Editar cantidad" solo si el plan lo permite. La regla
+                              gobierna los registros ligados a un item PRESCRITO; un alimento libre
+                              ya registrado se corrige siempre. "Retirar" NUNCA se esconde: dejar un
+                              registro erróneo imborrable sería peor que la regla que protege. */}
+                          {entry.prescriptionItemId === null || model.permissions.canAdjustPrescribedQuantity ? (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Editar cantidad"
+                              hitSlop={8}
+                              onPress={() => {
+                                setEntryActionError(null)
+                                setEntryAction({ kind: 'edit', entry })
+                              }}
+                              className="h-10 w-10 items-center justify-center rounded-control"
+                            >
+                              <Pencil color={theme.textSecondary} size={16} />
+                            </Pressable>
+                          ) : null}
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel="Retirar registro"
@@ -1476,7 +1492,7 @@ function TodayTab() {
         views={equivViews}
         onClose={() => setEquivOpen(null)}
         onMark={onSheetMark}
-        onRegister={onSheetRegister}
+        onRegister={model.permissions.canRegisterFreely ? onSheetRegister : null}
       />
       <PortionSnackbar state={portions.snackbar} onDismiss={portions.dismissSnackbar} />
       <PortionSnackbar state={bulkSnackbar} onDismiss={dismissBulkSnackbar} />

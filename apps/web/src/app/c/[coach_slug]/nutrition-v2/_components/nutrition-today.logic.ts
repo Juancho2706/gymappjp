@@ -11,6 +11,7 @@ import type {
   NutritionIntakeCorrection,
   NutritionIntakeMutation,
   NutritionIntakeReadItem,
+  NutritionIntakeVoid,
   NutritionItemSubstitutionRead,
   NutritionMealSlotRead,
   NutritionTodayReadModel,
@@ -257,49 +258,28 @@ export function buildCorrectionPayload(input: {
 }
 
 /**
- * "Retirar" un registro. Sin un RPC de void dedicado, el único mecanismo del contrato es una
- * corrección de contribución CERO: conserva cantidad/unidad/franja/alimento del original, marca
- * source/captureMethod 'manual' y pone los macros del snapshot en 0. Así el original queda
- * `corrected` (fuera de totales) y el reemplazo activo no aporta al día, preservando la cadena de
- * auditoría (correctsEntryId). Paridad 1:1 con RN (buildVoidIntakeCorrection).
+ * "Retirar" un registro (NUT-010, opción A: estado TERMINAL `voided`).
+ *
+ * Antes esto construía una corrección de contribución CERO que conservaba cantidad, unidad, franja
+ * y `prescriptionItemId` del original. Esa entry correctora nacía ACTIVA, así que el item prescrito
+ * seguía contando como "consumido" (sin botón "Lo comí" de vuelta), el medidor de la franja seguía
+ * "completo", la cobertura de porciones DERIVADA no bajaba, `entryCount` quedaba inflado para el
+ * coach y la propia correctora era retirable — generando otra correctora, sin estado terminal.
+ *
+ * Ahora el retiro es un gesto propio contra `void_nutrition_intake_v2`: payload MÍNIMO, y toda la
+ * reversión ocurre porque los read models ya filtran `entry_status = 'active'`.
  */
 export function buildVoidPayload(input: {
   context: Context
   entry: NutritionIntakeReadItem
   reason: string
   idempotencyKey: string
-}): NutritionIntakeCorrection {
-  const { context, entry } = input
+}): NutritionIntakeVoid {
   return {
-    clientId: context.clientId,
-    localDate: context.date,
-    occurredAt: entry.occurredAt,
-    timezone: context.timezone,
-    foodId: entry.foodId,
-    customName: entry.foodId ? null : entry.customName ?? entry.snapshot.name,
-    quantity: entry.quantity,
-    unit: entry.unit,
-    mealSlot: entry.mealSlot,
-    source: 'manual',
-    captureMethod: 'manual',
-    daySnapshotId: context.snapshotId,
-    planVersionId: context.planVersionId,
-    prescriptionItemId: entry.prescriptionItemId,
+    clientId: input.context.clientId,
+    entryId: input.entry.id,
+    reason: input.reason.trim() || 'Registro retirado por el alumno',
     idempotencyKey: input.idempotencyKey,
-    note: 'Registro retirado',
-    snapshot: {
-      name: entry.snapshot.name,
-      brand: entry.snapshot.brand,
-      calories: 0,
-      proteinG: 0,
-      carbsG: 0,
-      fatsG: 0,
-      fiberG: 0,
-      servingSize: entry.snapshot.servingSize,
-      servingUnit: entry.snapshot.servingUnit,
-    },
-    correctsEntryId: entry.id,
-    correctionReason: input.reason.trim() || 'Registro retirado por el alumno',
   }
 }
 
@@ -325,28 +305,23 @@ export function buildBulkPrescribedPayloads(input: {
 }
 
 /**
- * Payloads de "deshacer" para los registros recién creados por el bulk: una corrección de
- * contribución CERO por cada id creado (mismo mecanismo que "Retirar registro"), reusando el
- * payload original enviado (mismo alimento/cantidad/franja) para no depender del read-model
- * refrescado. Empareja por índice payloads[i] ↔ createdIds[i].
+ * Payloads de "deshacer" para los registros recién creados por el bulk: un retiro TERMINAL por
+ * cada id creado (mismo mecanismo que "Retirar registro"). Solo hace falta el id devuelto por el
+ * servidor, así que no depende del read-model refrescado. Empareja por índice
+ * payloads[i] ↔ createdIds[i] (los payloads solo aportan el clientId y el largo de la tanda).
  */
 export function buildBulkUndoPayloads(
   payloads: NutritionIntakeMutation[],
   createdIds: string[],
-): NutritionIntakeCorrection[] {
+): NutritionIntakeVoid[] {
   const n = Math.min(payloads.length, createdIds.length)
-  const out: NutritionIntakeCorrection[] = []
+  const out: NutritionIntakeVoid[] = []
   for (let i = 0; i < n; i += 1) {
-    const p = payloads[i]
     out.push({
-      ...p,
-      source: 'manual',
-      captureMethod: 'manual',
-      note: 'Registro retirado',
+      clientId: payloads[i].clientId,
+      entryId: createdIds[i],
+      reason: 'Deshacer registro de la comida',
       idempotencyKey: newIdempotencyKey('void'),
-      snapshot: { ...p.snapshot, calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
-      correctsEntryId: createdIds[i],
-      correctionReason: 'Deshacer registro de la comida',
     })
   }
   return out

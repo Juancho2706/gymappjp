@@ -3,6 +3,7 @@ import {
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
   NutritionIntakeSourceSchema,
+  NutritionIntakeVoidSchema,
   intakeEntryFactor,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
@@ -10,6 +11,7 @@ import {
   type NutritionMealSlotRead,
 } from '@eva/nutrition-v2'
 import {
+  buildBulkUndoPayloads,
   buildCatalogIntakePayload,
   buildCorrectionPayload,
   buildPrescribedIntakePayload,
@@ -326,25 +328,58 @@ describe('buildCorrectionPayload', () => {
     expect(parsed.occurredAt).toBe(ENTRY.occurredAt)
   })
 
-  it('retira poniendo los macros del snapshot en 0 y conserva la cadena (paridad RN)', () => {
+  /**
+   * NUT-010 (opcion A): el assert de FORMA del payload viejo (macros en 0, cantidad conservada,
+   * cadena de correccion) quedo INVALIDO. Ese payload era justamente el problema: creaba una entry
+   * correctora ACTIVA que seguia contando como consumida. Ahora el retiro es un gesto propio con
+   * payload MINIMO contra `void_nutrition_intake_v2`.
+   */
+  it('el retiro manda el payload minimo (sin snapshot ni cantidad): paridad RN', () => {
     const payload = buildVoidPayload({
       context: CTX,
       entry: ENTRY,
       reason: 'lo registre por error',
       idempotencyKey: 'void-abcdefgh12',
     })
-    const parsed = NutritionIntakeCorrectionSchema.parse(payload)
-    expect(parsed.correctsEntryId).toBe(ENTRY.id)
-    expect(parsed.correctionReason).toBe('lo registre por error')
-    expect(parsed.quantity).toBe(ENTRY.quantity)
-    expect(parsed.source).toBe('manual')
-    expect(parsed.captureMethod).toBe('manual')
-    // Contribucion CERO: el reemplazo no aporta macros al dia.
-    expect(parsed.snapshot.calories).toBe(0)
-    expect(parsed.snapshot.proteinG).toBe(0)
-    expect(parsed.snapshot.carbsG).toBe(0)
-    expect(parsed.snapshot.fatsG).toBe(0)
-    expect(parsed.snapshot.fiberG).toBe(0)
+    const parsed = NutritionIntakeVoidSchema.parse(payload)
+    expect(parsed).toEqual({
+      clientId: CTX.clientId,
+      entryId: ENTRY.id,
+      reason: 'lo registre por error',
+      idempotencyKey: 'void-abcdefgh12',
+    })
+    // Nada del snapshot / cantidad / franja viaja: el servidor no los necesita para retirar.
+    expect(Object.keys(payload).sort()).toEqual(['clientId', 'entryId', 'idempotencyKey', 'reason'])
+  })
+
+  it('un motivo en blanco cae a un texto por defecto valido para el contrato', () => {
+    const payload = buildVoidPayload({
+      context: CTX,
+      entry: ENTRY,
+      reason: '   ',
+      idempotencyKey: 'void-abcdefgh12',
+    })
+    expect(() => NutritionIntakeVoidSchema.parse(payload)).not.toThrow()
+    expect(payload.reason.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('el deshacer de una tanda retira por id creado, sin reconstruir el intake', () => {
+    const payloads = [
+      buildPrescribedIntakePayload({
+        context: CTX,
+        slot: SLOT,
+        item: ITEM,
+        idempotencyKey: 'intake-abcdefgh12',
+      }),
+    ]
+    const undo = buildBulkUndoPayloads(payloads, [ENTRY.id])
+
+    expect(undo).toHaveLength(1)
+    expect(NutritionIntakeVoidSchema.parse(undo[0])).toMatchObject({
+      clientId: CTX.clientId,
+      entryId: ENTRY.id,
+      reason: 'Deshacer registro de la comida',
+    })
   })
 })
 

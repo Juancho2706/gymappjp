@@ -25,6 +25,7 @@ import {
   type NutritionIntakeCorrection,
   type NutritionIntakeMutation,
   type NutritionIntakeReadItem,
+  type NutritionIntakeVoid,
   type NutritionMealSlotRead,
 } from '@eva/nutrition-v2'
 
@@ -339,10 +340,46 @@ export function buildEditIntakeCorrection(input: {
 }
 
 /**
- * Retirar (void) un registro. Sin un RPC de void expuesto a mobile, el unico mecanismo del contrato
- * es una correction: marca el original `corrected` (fuera de totales) e inserta un reemplazo de
- * contribucion CERO (macros 0), preservando la cadena de auditoria. La cantidad se mantiene positiva
- * (el schema exige quantity > 0); son los macros en 0 los que retiran el aporte del dia.
+ * Retirar (void) un registro — NUT-010, opcion A: estado TERMINAL `voided`.
+ *
+ * Payload MINIMO: el servidor no necesita snapshot ni cantidad para retirar. Reemplaza a
+ * `buildVoidIntakeCorrection`, que construia una correction de contribucion CERO cuyo reemplazo
+ * quedaba ACTIVO — y por eso el item prescrito seguia "consumido" (sin boton "Lo comi" de vuelta),
+ * la cobertura de porciones DERIVADA no bajaba y el propio fantasma era retirable de nuevo.
+ * Paridad 1:1 con la web (`buildVoidPayload`).
+ */
+export function buildVoidIntakeRequest(input: {
+  clientId: string
+  deviceId: string
+  operationId: string
+  entry: Pick<NutritionIntakeReadItem, 'id'>
+  reason: string
+}): NutritionIntakeVoid {
+  return {
+    clientId: input.clientId,
+    entryId: input.entry.id,
+    reason: input.reason.trim() || 'Registro retirado por el alumno',
+    idempotencyKey: buildNutritionIdempotencyKey({
+      kind: 'correction',
+      clientId: input.clientId,
+      deviceId: input.deviceId,
+      operationId: input.operationId,
+    }),
+  }
+}
+
+/**
+ * LEGADO (NUT-010): retiro modelado como correction de contribucion CERO. Ya NO se usa para el
+ * "Retirar registro" del alumno — ese camino es `buildVoidIntakeRequest` + `void_nutrition_intake_v2`.
+ * Sigue viva por DOS razones:
+ *   1. la cola offline puede tener retiros encolados con ESTE payload antes del deploy, y su camino
+ *      (`correct_nutrition_intake_v2`) tiene que drenar al menos un ciclo de release;
+ *   2. el deshacer de PORCIONES (`usePortionMarks`) todavia la usa: su reconciliacion optimista
+ *      empareja por el id de la entry correctora, asi que migrarlo a void terminal es una tarea
+ *      aparte (documentada como pendiente en `undoPortionIntakeAction`).
+ * No cablear codigo nuevo de retiro a esta funcion.
+ *
+ * @deprecated Para retirar un registro, usar `buildVoidIntakeRequest`.
  */
 export function buildVoidIntakeCorrection(input: {
   clientId: string
@@ -491,6 +528,9 @@ export function optimisticIntakeRow(input: {
 export type QueuedIntakeLike =
   | { action: 'record'; idempotencyKey: string; payload: NutritionIntakeMutation }
   | { action: 'correct'; idempotencyKey: string; payload: NutritionIntakeCorrection }
+  // NUT-010: retiro terminal encolado. Su payload es MINIMO — no trae `localDate` ni snapshot,
+  // asi que no puede filtrarse por dia ni pintarse como fila; solo OCULTA la entry objetivo.
+  | { action: 'void'; idempotencyKey: string; payload: NutritionIntakeVoid }
 
 export interface QueuedIntakeOverlay {
   addedBySlot: Record<string, OptimisticNutritionFoodRowModel[]>
@@ -520,10 +560,21 @@ export function buildQueuedIntakeOverlay(
   queued: ReadonlyArray<QueuedIntakeLike>,
   localDate: string,
 ): QueuedIntakeOverlay {
-  const records: QueuedIntakeLike[] = []
-  const corrections = new Map<string, QueuedIntakeLike>()
+  type QueuedRecordLike = Extract<QueuedIntakeLike, { action: 'record' }>
+  type QueuedCorrectionLike = Extract<QueuedIntakeLike, { action: 'correct' }>
+
+  const records: QueuedRecordLike[] = []
+  const corrections = new Map<string, QueuedCorrectionLike>()
+  // Entries con un RETIRO encolado: se ocultan aunque el servidor todavia las devuelva activas.
+  // No se filtran por dia: el payload minimo del void no lleva fecha, y ocultar de mas en otro dia
+  // es imposible (el id de la entry es unico).
+  const voided: string[] = []
 
   for (const item of queued) {
+    if (item.action === 'void') {
+      voided.push(item.payload.entryId)
+      continue
+    }
     if (item.payload.localDate !== localDate) continue
     if (item.action === 'correct') corrections.set(item.payload.correctsEntryId, item)
     else if (!item.payload.snapshot.exchangeGroupCode) records.push(item)
@@ -536,7 +587,7 @@ export function buildQueuedIntakeOverlay(
     queuedPrescriptionItemIds: [],
     queuedKeyByPrescriptionItemId: {},
   }
-  const append = (item: QueuedIntakeLike) => {
+  const append = (item: QueuedRecordLike | QueuedCorrectionLike) => {
     const payload = item.payload
     const totals = computeIntakeTotals(payload.quantity, payload.unit, payload.snapshot)
     const row = optimisticIntakeRow({
@@ -566,9 +617,12 @@ export function buildQueuedIntakeOverlay(
   }
   for (const [correctsEntryId, item] of corrections) {
     overlay.hiddenIds.push(correctsEntryId)
-    // El void conserva auditoría con una corrección de aporte cero, pero no se representa como una
-    // fila consumida. Una edición sí muestra su reemplazo.
+    // Un retiro LEGADO encolado (payload de corrección de aporte cero, anterior a NUT-010) no se
+    // representa como fila consumida. Una edición sí muestra su reemplazo.
     if (item.payload.note !== 'Registro retirado' && !item.payload.snapshot.exchangeGroupCode) append(item)
+  }
+  for (const entryId of voided) {
+    if (!overlay.hiddenIds.includes(entryId)) overlay.hiddenIds.push(entryId)
   }
   return overlay
 }

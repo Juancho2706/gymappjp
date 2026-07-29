@@ -5,12 +5,21 @@ import { headers } from 'next/headers'
 import { z } from 'zod'
 import {
   FoodCatalogSearchReadModelSchema,
+  NUTRITION_V2_PERMISSION_DENIED_CODE,
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
+  NutritionIntakeVoidSchema,
   buildNutritionIdempotencyKey,
   buildNutritionPortionIntakeKey,
+  isNutritionV2PermissionDenied,
   type NutritionIntakeMutation,
 } from '@eva/nutrition-v2'
+import {
+  evaluateCorrectPermission,
+  evaluateRecordPermission,
+  resolveStudentIntakePermissions,
+  type StudentIntakePermissionDenial,
+} from '@/services/nutrition-v2-student-permissions.service'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch, rateLimitNutritionIntake } from '@/lib/rate-limit'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
@@ -89,11 +98,11 @@ const CorrectActionInputSchema = z.object({
   payload: NutritionIntakeCorrectionSchema,
 })
 
-// "Retirar" no tiene RPC propio: es una correccion de contribucion CERO, asi que
-// su entrada es el mismo contrato de correccion (macros en 0, construido por
-// buildVoidPayload) -> paridad 1:1 con RN (buildVoidIntakeCorrection).
+// "Retirar" TIENE RPC propio desde NUT-010 (opcion A): `void_nutrition_intake_v2` marca la fila
+// como `voided` sin insertar nada. El payload es MINIMO ({clientId, entryId, reason}) — ver el
+// comentario del schema en packages/nutrition-v2/contracts.ts.
 const VoidActionInputSchema = z.object({
-  payload: NutritionIntakeCorrectionSchema,
+  payload: NutritionIntakeVoidSchema,
 })
 
 // Bulk-mark de franja ("Comí toda esta comida"): un solo auth/rate-limit + N RPC server-side.
@@ -102,7 +111,7 @@ const BatchRecordInputSchema = z.object({
   payloads: z.array(NutritionIntakeMutationSchema).min(1).max(24),
 })
 const BatchVoidInputSchema = z.object({
-  payloads: z.array(NutritionIntakeCorrectionSchema).min(1).max(24),
+  payloads: z.array(NutritionIntakeVoidSchema).min(1).max(24),
 })
 
 const CloseDayActionInputSchema = z.object({
@@ -213,6 +222,15 @@ function mapRpcError(error: { message: string; code?: string }): ActionFailure {
   if (error.message?.includes('coach_account_paused')) {
     return fail(COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY.pausedWriteError)
   }
+  // NUT-009 fase 2: el guard de permisos del plan dentro del RPC tambien viaja con 42501, pero NO
+  // es un scope denegado. Codigo propio (no `SCOPE_DENIED`, ya sobrecargado) para que la UI diga la
+  // verdad y para que la cola offline lo trate como TERMINAL en vez de reintentar 8 veces.
+  if (isNutritionV2PermissionDenied(error.message)) {
+    return fail(
+      NUTRITION_V2_PERMISSION_DENIED_CODE,
+      'Tu coach no permite este cambio en el plan de hoy.',
+    )
+  }
   if (code === '42501') {
     return fail('SCOPE_DENIED', 'No tienes permiso para modificar este registro.')
   }
@@ -265,20 +283,39 @@ async function runMutation(
   return { ok: true, id: id.data }
 }
 
+/** Traduce una denegación del plan al shape de error de las actions. */
+function denied(denial: StudentIntakePermissionDenial): ActionFailure {
+  return fail(NUTRITION_V2_PERMISSION_DENIED_CODE, denial.error)
+}
+
 /**
  * Registra un alimento consumido (prescrito "lo comí" o alimento libre del catálogo).
  * input.payload.idempotencyKey viene del cliente y es la clave estable del gesto.
+ *
+ * NUT-009: antes de escribir se resuelven los permisos del día y se aplica `canRegisterFreely`
+ * (registro libre) y `canMoveMealSlot` (mover un item del plan de franja). La barrera REAL sigue
+ * siendo el RPC (`nutrition_v2_permission_denied`, 42501); esto es defensa en profundidad + un
+ * error tipado con copy humano sin gastar la escritura.
  */
 export async function recordIntakeAction(input: unknown): Promise<MutationSuccess | ActionFailure> {
   const parsed = RecordActionInputSchema.safeParse(input)
   if (!parsed.success) {
     return fail('INVALID_PAYLOAD', 'Datos de consumo inválidos.', zodFields(parsed.error))
   }
+  const payload = parsed.data.payload
 
-  const auth = await authorizeStudentWrite(parsed.data.payload.clientId)
+  const auth = await authorizeStudentWrite(payload.clientId)
   if (!auth.ok) return auth
 
-  const result = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(parsed.data.payload))
+  const permissions = await resolveStudentIntakePermissions(auth.supabase, {
+    clientId: payload.clientId,
+    localDate: payload.localDate,
+    prescriptionItemId: payload.prescriptionItemId,
+  })
+  const denial = evaluateRecordPermission(permissions, payload)
+  if (denial) return denied(denial)
+
+  const result = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(payload))
   if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
@@ -286,46 +323,64 @@ export async function recordIntakeAction(input: unknown): Promise<MutationSucces
 /**
  * Corrige un registro existente (típicamente la cantidad): marca el original como
  * corrected y crea el reemplazo activo, conservando la cadena de corrección.
+ *
+ * NUT-009: sobre un registro ligado a un item PRESCRITO se exige `canAdjustPrescribedQuantity` y,
+ * con tope `quantityAdjustmentPercent`, que la desviación contra lo prescrito no lo supere.
  */
 export async function correctIntakeAction(input: unknown): Promise<MutationSuccess | ActionFailure> {
   const parsed = CorrectActionInputSchema.safeParse(input)
   if (!parsed.success) {
     return fail('INVALID_PAYLOAD', 'Datos de corrección inválidos.', zodFields(parsed.error))
   }
+  const payload = parsed.data.payload
 
-  const auth = await authorizeStudentWrite(parsed.data.payload.clientId)
+  const auth = await authorizeStudentWrite(payload.clientId)
   if (!auth.ok) return auth
 
+  const permissions = await resolveStudentIntakePermissions(auth.supabase, {
+    clientId: payload.clientId,
+    localDate: payload.localDate,
+    prescriptionItemId: payload.prescriptionItemId,
+  })
+  const denial = evaluateCorrectPermission(permissions, payload)
+  if (denial) return denied(denial)
+
   const result = await runMutation(auth.supabase, 'correct_nutrition_intake_v2', {
-    p_corrects_entry_id: parsed.data.payload.correctsEntryId,
-    p_correction_reason: parsed.data.payload.correctionReason,
-    ...commonRpcArgs(parsed.data.payload),
+    p_corrects_entry_id: payload.correctsEntryId,
+    p_correction_reason: payload.correctionReason,
+    ...commonRpcArgs(payload),
   })
   if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
 /**
- * Retira un registro con motivo. No existe un RPC de void dedicado: "retirar" es una
- * CORRECCION de contribución CERO (macros en 0), idéntico a RN (buildVoidIntakeCorrection).
- * Marca el original como corrected (fuera de totales) y crea un reemplazo activo sin aporte,
- * conservando la cadena de auditoría. El payload lo arma buildVoidPayload y trae su propia
- * idempotency key estable (prefijo 'void'); se ejecuta vía correct_nutrition_intake_v2 con la
- * MISMA semántica que la web usa para editar (corrects_entry_id + reason + args comunes).
+ * Retira un registro con motivo (NUT-010, opción A: estado TERMINAL).
+ *
+ * `void_nutrition_intake_v2` marca la fila como `voided` y NO inserta nada. Como todos los read
+ * models filtran `entry_status = 'active'`, el registro retirado desaparece de "Consumido hoy", de
+ * `consumedPrescriptionItemIds` (la fila del plan vuelve a mostrar "Lo comí"), de la cobertura de
+ * porciones marcadas Y derivadas, y del `entryCount` que ve el coach — todo sin tocar una línea de
+ * SQL de lectura. La trazabilidad la conserva la auditoría (`intake.voided` con el motivo), no una
+ * entry fantasma.
+ *
+ * Es idempotente por ESTADO: retirar dos veces devuelve el mismo id (`already_voided`).
  */
 export async function voidIntakeAction(input: unknown): Promise<MutationSuccess | ActionFailure> {
   const parsed = VoidActionInputSchema.safeParse(input)
   if (!parsed.success) {
     return fail('INVALID_PAYLOAD', 'Datos de retiro inválidos.', zodFields(parsed.error))
   }
+  const payload = parsed.data.payload
 
-  const auth = await authorizeStudentWrite(parsed.data.payload.clientId)
+  const auth = await authorizeStudentWrite(payload.clientId)
   if (!auth.ok) return auth
 
-  const result = await runMutation(auth.supabase, 'correct_nutrition_intake_v2', {
-    p_corrects_entry_id: parsed.data.payload.correctsEntryId,
-    p_correction_reason: parsed.data.payload.correctionReason,
-    ...commonRpcArgs(parsed.data.payload),
+  const result = await runMutation(auth.supabase, 'void_nutrition_intake_v2', {
+    p_client_id: payload.clientId,
+    p_entry_id: payload.entryId,
+    p_reason: payload.reason,
+    p_idempotency_key: payload.idempotencyKey,
   })
   if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
@@ -349,10 +404,24 @@ export async function recordSlotIntakeBatchAction(input: unknown): Promise<Batch
   const auth = await authorizeStudentWrite(clientId)
   if (!auth.ok) return auth
 
+  // Un solo viaje de permisos para toda la tanda. El bulk legítimo son items PRESCRITOS (no los
+  // toca `canRegisterFreely`), pero el schema del batch acepta cualquier mutación: sin este guard,
+  // el bulk sería la puerta trasera para registrar 24 alimentos libres con un plan restringido.
+  const permissions = await resolveStudentIntakePermissions(auth.supabase, {
+    clientId,
+    localDate: payloads[0].localDate,
+  })
+
   const ids: string[] = []
   let failed = 0
   let firstError: ActionFailure | null = null
   for (const payload of payloads) {
+    const denial = evaluateRecordPermission(permissions, payload)
+    if (denial) {
+      failed += 1
+      if (!firstError) firstError = denied(denial)
+      continue
+    }
     const res = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(payload))
     if (res.ok) ids.push(res.id)
     else {
@@ -368,8 +437,9 @@ export async function recordSlotIntakeBatchAction(input: unknown): Promise<Batch
 }
 
 /**
- * Deshacer un bulk-mark: anula en bloque (corrección contribución-cero) los registros creados.
- * Idempotente: un registro ya anulado (doble-deshacer -> only_active 22023) cuenta como hecho.
+ * Deshacer un bulk-mark: retira en bloque los registros creados vía `void_nutrition_intake_v2`.
+ * La idempotencia ya vive en el RPC (retirar dos veces devuelve el mismo id), así que aquí ya no
+ * hace falta el parche por substring de mensaje que existía con el camino de corrección.
  */
 export async function voidSlotIntakeBatchAction(input: unknown): Promise<BatchMutationResult> {
   const parsed = BatchVoidInputSchema.safeParse(input)
@@ -387,25 +457,18 @@ export async function voidSlotIntakeBatchAction(input: unknown): Promise<BatchMu
   let failed = 0
   let firstError: ActionFailure | null = null
   for (const payload of payloads) {
-    const { data, error } = await auth.supabase.rpc('correct_nutrition_intake_v2', {
-      p_corrects_entry_id: payload.correctsEntryId,
-      p_correction_reason: payload.correctionReason,
-      ...commonRpcArgs(payload),
+    const res = await runMutation(auth.supabase, 'void_nutrition_intake_v2', {
+      p_client_id: payload.clientId,
+      p_entry_id: payload.entryId,
+      p_reason: payload.reason,
+      p_idempotency_key: payload.idempotencyKey,
     })
-    if (!error) {
-      const id = z.string().uuid().safeParse(data)
-      if (id.success) {
-        ids.push(id.data)
-        continue
-      }
-    }
-    // El registro ya estaba anulado (reintento / doble-deshacer): el objetivo ya se cumplió.
-    if (error?.message?.includes('nutrition_v2_only_active_entries_can_correct')) {
-      ids.push(payload.correctsEntryId)
+    if (res.ok) {
+      ids.push(res.id)
       continue
     }
     failed += 1
-    if (!firstError) firstError = error ? mapRpcError(error) : fail('INVALID_RESPONSE', 'Respuesta inesperada.')
+    if (!firstError) firstError = res
   }
   if (ids.length === 0) {
     return firstError ?? fail('BATCH_FAILED', 'No se pudo deshacer. Intenta nuevamente.')
@@ -484,6 +547,14 @@ export async function searchFoodCatalogAction(
 // - Modelo de confianza S2: self-report; sin validación server extra en F1. La
 //   cobertura es AUTO-DECLARADA (self-scope). No se revalida ref contra el snapshot
 //   vigente del target (hardening F2).
+// - PERMISOS (NUT-009): marcar/deshacer porción queda EXENTO del guard de
+//   `canRegisterFreely` A PROPÓSITO. La libertad de elegir DENTRO del grupo la otorga el
+//   propio target de intercambios, independiente de `canRegisterFreely`/`canSubstitute`
+//   (que siguen gobernando el registro libre y los swaps de items fijos) —
+//   `docs/archive/specs/nutrition-portions/SPEC.md:118-124` (regla R1) y `PLAN.md:201-205`.
+//   NO agregar aquí una llamada a `resolveStudentIntakePermissions`: no es deuda, es diseño.
+//   El RPC tampoco lo bloquea: el guard de registro libre solo dispara con
+//   `source = 'offplan'`, y el sintético manda `source = 'prescription'`.
 // - No se llama `revalidatePath` aquí: no está en el contrato de entrada y la UI del
 //   alumno mantiene un delta optimista de `marcadas` reconciliado por idempotency key
 //   contra el próximo read-model (SPEC UX-c, hallazgo F1-front).
@@ -621,6 +692,11 @@ export async function markPortionIntakeAction(
  * El RPC además fuerza `exchange_portions = null` en la correctora (belt B3), así que
  * el contador de porciones Y los macros revierten. La correctora no aporta cobertura
  * ni macros; su fecha/franja son inmateriales (se usa la fecha actual).
+ *
+ * PENDIENTE (NUT-010, fase 2): este camino sigue en `correct_` y por lo tanto deja una entry
+ * correctora activa (fantasma con 0 kcal en "Consumido hoy"). Migrarlo a
+ * `void_nutrition_intake_v2` exige rehacer la reconciliación optimista de `usePortionMarks`
+ * (que hoy empareja por el id de la correctora), así que se difirió a propósito fuera de esta ola.
  */
 export async function undoPortionIntakeAction(
   input: UndoPortionInput,

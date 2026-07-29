@@ -147,13 +147,17 @@ describe('markPortionIntakeAction', () => {
   })
 
   it('Q2: NO exige canRegisterFreely — una franja solo-porciones marca igual', async () => {
-    // La action no recibe ni consulta permisos del plan: el target habilita por sí mismo
-    // (SPEC R1). Con el gate de acceso OK y rollout ON, marcar procede sin importar
-    // canRegisterFreely. La ausencia total de un guard de permisos ES la garantía.
+    // La action no consulta permisos del plan: el target habilita por sí mismo (SPEC R1,
+    // docs/archive/specs/nutrition-portions/SPEC.md:118-124). Esta EXENCIÓN sobrevivió a NUT-009,
+    // que sí puso a gobernar canRegisterFreely en el registro libre: la garantía ya no es "no
+    // existe ningún guard", sino que marcar-porción NO llama a resolveStudentIntakePermissions
+    // (cero llamadas a get_nutrition_student_permissions_v2) y que el sintético viaja con
+    // source='prescription', que el guard del RPC tampoco alcanza.
     const res = await markPortionIntakeAction(markInput())
     expect(res.ok).toBe(true)
     expect(rpc).toHaveBeenCalledTimes(1)
     expect(rpc.mock.calls[0][0]).toBe('record_nutrition_intake_v2')
+    expect(rpc).not.toHaveBeenCalledWith('get_nutrition_student_permissions_v2', expect.anything())
   })
 
   it('rechaza porciones fuera del literal {0,5; 1} sin tocar el RPC', async () => {
@@ -236,12 +240,32 @@ describe('undoPortionIntakeAction', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('mapea el error de entry ya corregida (P0002) del RPC a un fallo honesto', async () => {
+  /**
+   * NUT-031 (migración 20260728122000): el RPC gana un short-circuit de idempotencia — si la MISMA
+   * idempotency key ya produjo una corrección sobre ESE original, devuelve el id previo en vez de
+   * levantar `nutrition_v2_only_active_entries_can_correct`.
+   *
+   * Por eso la expectativa vieja de este bloque ("re-deshacer devuelve un fallo honesto") quedó
+   * INVÁLIDA: el deshacer usa una key ESTABLE por entry, así que el segundo intento es exactamente
+   * el caso que el short-circuit resuelve. El 22023 solo puede aparecer con una key DISTINTA sobre
+   * una entry ya corregida — y ese camino sí sigue siendo un fallo honesto.
+   */
+  it('re-deshacer la MISMA entry es idempotente: el RPC devuelve el id previo (NUT-031)', async () => {
+    const PREVIOUS_CORRECTION_ID = '88888888-8888-4888-8888-888888888888'
+    rpc.mockResolvedValue({ data: PREVIOUS_CORRECTION_ID, error: null })
+
+    const res = await undoPortionIntakeAction({ clientId: CLIENT_ID, entryId: ENTRY_ID })
+
+    expect(res).toEqual({ ok: true, data: { correctionEntryId: PREVIOUS_CORRECTION_ID } })
+  })
+
+  it('un 22023 real (key distinta sobre una entry ya corregida) sigue siendo un fallo honesto', async () => {
     rpc.mockResolvedValue({
       data: null,
       error: { message: 'nutrition_v2_only_active_entries_can_correct', code: '22023' },
     })
     const res = await undoPortionIntakeAction({ clientId: CLIENT_ID, entryId: ENTRY_ID })
     expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('INVALID_INTAKE')
   })
 })

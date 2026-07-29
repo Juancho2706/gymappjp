@@ -16,6 +16,13 @@ export * from './food-category'
 export * from './favorites'
 export * from './share'
 export {
+  NUTRITION_V2_PERMISSION_DENIED,
+  NUTRITION_V2_PERMISSION_DENIED_CODE,
+  NUTRITION_V2_PERMISSION_RULES,
+  NutritionIntakeVoidSchema,
+  isNutritionV2PermissionDenied,
+  type NutritionIntakeVoid,
+  type NutritionV2PermissionRule,
   NutritionActorRoleSchema,
   NutritionCaptureMethodSchema,
   NutritionDaySnapshotSchema,

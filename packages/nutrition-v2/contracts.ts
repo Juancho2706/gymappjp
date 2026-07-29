@@ -282,6 +282,57 @@ export const NutritionIntakeCorrectionSchema = NutritionIntakeMutationSchema.saf
   correctionReason: z.string().trim().min(3).max(1000),
 })
 
+/**
+ * "Retirar" un registro (NUT-010, opcion A: estado TERMINAL `voided`).
+ *
+ * Antes el retiro se modelaba como una CORRECCION de contribucion cero: el original quedaba
+ * `corrected` y nacia un reemplazo ACTIVO con macros en 0 que heredaba `prescription_item_id`.
+ * Ese reemplazo seguia contando como "consumido" para el bulk-mark, mantenia la cobertura de
+ * porciones DERIVADA, inflaba `entryCount` y ademas era el mismo retirable — una cadena de
+ * fantasmas sin estado terminal. Ahora hay un RPC dedicado (`void_nutrition_intake_v2`) que
+ * marca la fila `voided` SIN insertar nada: los read models ya filtran `entry_status = 'active'`,
+ * asi que desaparece de consumido, de las derivadas y del conteo de una sola vez.
+ *
+ * Por eso el payload es MINIMO: el servidor no necesita el snapshot ni la cantidad para retirar.
+ * `idempotencyKey` es opcional (solo alimenta la auditoria); el retiro es idempotente por estado
+ * (`already_voided` devuelve el mismo id).
+ */
+export const NutritionIntakeVoidSchema = z.object({
+  clientId: z.string().uuid(),
+  entryId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(1000),
+  idempotencyKey: z.string().trim().min(8).max(200).nullable().default(null),
+})
+
+/**
+ * Mensaje canonico que levanta el guard de permisos del alumno dentro de
+ * `record_/correct_/void_nutrition_intake_v2` (errcode 42501). El sufijo `:<regla>` identifica
+ * cual permiso nego la escritura. Se compara por PREFIJO para no acoplarse al sufijo.
+ *
+ * NO se mapea a `SCOPE_DENIED`: ese codigo ya esta sobrecargado con `coach_account_paused` y con
+ * el scope real (fila de otro alumno). Un permiso del plan denegado NO es un fallo de scope y NO
+ * es reintentable: la cola offline debe descartarlo, no gastar 8 intentos.
+ */
+export const NUTRITION_V2_PERMISSION_DENIED = 'nutrition_v2_permission_denied'
+
+/** Reglas del plan que pueden negar una escritura del alumno (sufijo del mensaje del RPC). */
+export const NUTRITION_V2_PERMISSION_RULES = [
+  'free_registration',
+  'quantity_adjustment',
+  'quantity_adjustment_range',
+  'meal_slot_move',
+] as const
+
+export type NutritionV2PermissionRule = (typeof NUTRITION_V2_PERMISSION_RULES)[number]
+
+/** Codigo tipado que devuelven las server actions y la API movil cuando el plan niega el gesto. */
+export const NUTRITION_V2_PERMISSION_DENIED_CODE = 'PLAN_PERMISSION_DENIED'
+
+/** True si el error del RPC es un permiso del plan denegado (no un scope ni una pausa del coach). */
+export function isNutritionV2PermissionDenied(message: string | null | undefined): boolean {
+  return typeof message === 'string' && message.includes(NUTRITION_V2_PERMISSION_DENIED)
+}
+
 export const NutritionDaySnapshotSchema = z.object({
   id: z.string().uuid(),
   clientId: z.string().uuid(),
@@ -320,6 +371,7 @@ export type NutritionStudentPermissions = z.infer<typeof NutritionStudentPermiss
 export type NutritionPlanDraft = z.infer<typeof NutritionPlanDraftSchema>
 export type NutritionIntakeMutation = z.infer<typeof NutritionIntakeMutationSchema>
 export type NutritionIntakeCorrection = z.infer<typeof NutritionIntakeCorrectionSchema>
+export type NutritionIntakeVoid = z.infer<typeof NutritionIntakeVoidSchema>
 export type NutritionDaySnapshot = z.infer<typeof NutritionDaySnapshotSchema>
 export type NutritionLegacyHistoryItem = z.infer<typeof NutritionLegacyHistoryItemSchema>
 

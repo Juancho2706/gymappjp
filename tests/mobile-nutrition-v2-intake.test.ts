@@ -7,6 +7,7 @@ import {
   buildQueuedIntakeOverlay,
   buildRecordIntakeMutation,
   buildVoidIntakeCorrection,
+  buildVoidIntakeRequest,
   bulkAteSnackbarState,
   computeIntakeTotals,
   nutritionV2EntryFactor,
@@ -154,38 +155,52 @@ describe('nutrition v2 intake - builders validados', () => {
     expect(payload.correctionReason).toBe('comí un poco menos')
   })
 
-  it('retirar (void) zerea los macros, conserva la cadena y transporta el motivo', () => {
-    const payload = buildVoidIntakeCorrection({
+  /**
+   * NUT-010 (opcion A): el retiro dejo de ser una correccion de contribucion cero. Ese payload
+   * conservaba cantidad, unidad, franja y prescriptionItemId, y el reemplazo nacia ACTIVO — por eso
+   * el item del plan seguia "consumido" y la cobertura derivada no bajaba. Ahora es un gesto propio
+   * con payload MINIMO contra `void_nutrition_intake_v2`, identico al de la web.
+   */
+  it('retirar (void) manda el payload minimo: clientId, entryId, motivo y key', () => {
+    const payload = buildVoidIntakeRequest({
       clientId: CLIENT,
       deviceId: DEVICE,
       operationId: OP_A,
-      localDate: '2026-07-15',
-      timezone: 'America/Santiago',
       entry: consumedEntry,
       reason: 'lo registré por error',
     })
-    expect(payload.correctsEntryId).toBe(ENTRY)
-    expect(payload.quantity).toBeGreaterThan(0)
-    expect(payload.occurredAt).toBe(consumedEntry.occurredAt)
-    expect(payload.correctionReason).toBe('lo registré por error')
-    expect(payload.snapshot.calories).toBe(0)
-    expect(payload.snapshot.proteinG).toBe(0)
+    expect(payload.clientId).toBe(CLIENT)
+    expect(payload.entryId).toBe(ENTRY)
+    expect(payload.reason).toBe('lo registré por error')
+    expect(payload.idempotencyKey).toBeTruthy()
+    expect(Object.keys(payload).sort()).toEqual(['clientId', 'entryId', 'idempotencyKey', 'reason'])
   })
 
-  it('el void de una porción conserva su metadata en la cola para rehidratar el descuento', () => {
+  it('un motivo en blanco cae a un texto por defecto valido para el contrato', () => {
+    const payload = buildVoidIntakeRequest({
+      clientId: CLIENT,
+      deviceId: DEVICE,
+      operationId: OP_B,
+      entry: consumedEntry,
+      reason: '   ',
+    })
+    expect(payload.reason.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('el builder LEGADO de void sigue exportado para drenar la cola vieja (un release)', () => {
+    // Compatibilidad: retiros encolados ANTES del deploy viajan como correction y drenan por
+    // `correct_nutrition_intake_v2`. Cuando esa ventana cierre, esta funcion y este caso se borran.
     const payload = buildVoidIntakeCorrection({
       clientId: CLIENT,
       deviceId: DEVICE,
       operationId: OP_B,
       localDate: '2026-07-15',
       timezone: 'America/Santiago',
-      entry: { ...consumedEntry, exchangeGroupCode: 'C', exchangePortions: 0.5 },
-      reason: 'porción desmarcada',
+      entry: consumedEntry,
+      reason: 'lo registré por error',
     })
-
-    expect(payload.snapshot.exchangeGroupCode).toBe('C')
-    expect(payload.snapshot.exchangePortions).toBe(0.5)
-    expect(payload.note).toBe('Registro retirado')
+    expect(payload.correctsEntryId).toBe(ENTRY)
+    expect(payload.snapshot.calories).toBe(0)
   })
 
   it('rechaza un motivo menor a tres caracteres', () => {

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, Pencil, Plus, ScanBarcode, Share2, Star, Trash2, Utensils } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Lock, Pencil, Plus, ScanBarcode, Share2, Star, Trash2, Utensils } from 'lucide-react'
 import {
   BULK_MARK_COMPLETE_LABEL,
   buildNutritionDayShareText,
@@ -305,19 +305,32 @@ export function TodayExperience({
         </div>
       ) : null}
 
-      {/* CTA principal unico */}
+      {/* CTA principal unico.
+          NUT-009: con "Solo alimentos prescritos" (canRegisterFreely = false) el registro libre y
+          el escáner NO se muestran — antes se ofrecían igual y el alumno rompía la regla del coach
+          sin enterarse. La UI nunca autoriza: el guard real vive en la action y en el RPC; esto es
+          coherencia visual + copy honesto de por qué no está el botón. */}
       <div className="flex flex-wrap gap-2">
-        <NutritionMotionButton onClick={() => openDialog({ kind: 'register' })}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Registrar alimento
-        </NutritionMotionButton>
-        <Link
-          href={scanHref}
-          className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken"
-        >
-          <ScanBarcode className="h-4 w-4" aria-hidden="true" />
-          Escanear
-        </Link>
+        {today.permissions.canRegisterFreely ? (
+          <>
+            <NutritionMotionButton onClick={() => openDialog({ kind: 'register' })}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Registrar alimento
+            </NutritionMotionButton>
+            <Link
+              href={scanHref}
+              className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken"
+            >
+              <ScanBarcode className="h-4 w-4" aria-hidden="true" />
+              Escanear
+            </Link>
+          </>
+        ) : (
+          <p className="flex items-start gap-2 rounded-card border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-muted">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>Tu coach dejó el plan en solo alimentos prescritos: marca lo que comiste del plan.</span>
+          </p>
+        )}
         <button
           type="button"
           onClick={() => void handleShare()}
@@ -382,13 +395,20 @@ export function TodayExperience({
                   statusLabel={entry.status === 'corrected' ? 'Corregido' : null}
                   actions={
                     <div className="flex items-center gap-1">
-                      <IconButton
-                        label="Editar cantidad"
-                        onClick={() => openDialog({ kind: 'edit', entry })}
-                        disabled={isPending}
-                      >
-                        <Pencil className="h-4 w-4" aria-hidden="true" />
-                      </IconButton>
+                      {/* NUT-009: "Editar cantidad" solo se ofrece si el plan lo permite. La regla
+                          gobierna los registros ligados a un item PRESCRITO (es "ajustar la
+                          cantidad prescrita"); un alimento libre ya registrado se corrige siempre.
+                          "Retirar registro" NUNCA se esconde: dejar al alumno con un registro
+                          erróneo imborrable sería peor que la regla que protege. */}
+                      {entry.prescriptionItemId === null || today.permissions.canAdjustPrescribedQuantity ? (
+                        <IconButton
+                          label="Editar cantidad"
+                          onClick={() => openDialog({ kind: 'edit', entry })}
+                          disabled={isPending}
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </IconButton>
+                      ) : null}
                       <IconButton
                         label="Retirar registro"
                         tone="danger"
@@ -490,10 +510,14 @@ export function TodayExperience({
         exchangeFoods={today.exchangeFoods}
         initialGroupCode={portionSheet?.groupCode ?? null}
         onClose={() => setPortionSheet(null)}
-        onRegister={(slotCode) => {
-          setPortionSheet(null)
-          openDialog({ kind: 'register', initialMealSlot: slotCode })
-        }}
+        onRegister={
+          today.permissions.canRegisterFreely
+            ? (slotCode) => {
+                setPortionSheet(null)
+                openDialog({ kind: 'register', initialMealSlot: slotCode })
+              }
+            : null
+        }
         slot={portionSheetSlot}
       />
     </div>
