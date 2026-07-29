@@ -40,13 +40,7 @@ export function CoachFichaPanel({ bundle }: { bundle: ClientFichaPanelBundle }) 
             <ClientProfileDashboard
                 moduleFlags={moduleFlags}
                 data={bundle.data}
-                coachNutrientTargets={bundle.coachNutrientTargets}
-                coachPrivateNotes={bundle.coachPrivateNotes}
-                coachMealComments={bundle.coachMealComments}
-                nutritionProEnabled={bundle.nutritionProEnabled}
-                nutritionDomainEnabled={bundle.nutritionDomainEnabled}
-                nutritionSectionFlags={bundle.nutritionSectionFlags}
-                nutritionOverrideContext={bundle.nutritionOverrideContext}
+                nutritionV2={bundle.nutritionV2}
             />
         </div>
     )

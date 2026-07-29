@@ -12,8 +12,7 @@ import { ProfileTabNav, type ProfileMainTabId, type ProfileTabBadges } from './P
 import { SectionTitle } from './_components/SectionTitle'
 import { ProfileOverviewB3 } from './ProfileOverviewB3'
 import { TrainingTabB4Panels } from './TrainingTabB4Panels'
-import { NutritionTabB5 } from './NutritionTabB5'
-import { NutritionTabV2 } from './NutritionTabV2'
+import { NutritionTabV2, NutritionTabV2Unavailable } from './NutritionTabV2'
 import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
 import { ProgressBodyCompositionB6 } from './ProgressBodyCompositionB6'
 import { ProgramTabB7 } from './ProgramTabB7'
@@ -25,30 +24,18 @@ import {
     resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
-import { effectiveWorkoutSection } from '@eva/workout-engine'
 import { updateClientGoalWeight } from './_actions/client-detail.actions'
-import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
-import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
-import type { NutritionSectionKey } from '@eva/feature-prefs'
-import type { ClientFeaturePrefsOverrideContext } from '@/services/feature-prefs.service'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
-    /** Zona C (coach) de Nutrición — resueltos server-side en page.tsx. */
-    coachNutrientTargets?: NutrientTargetRow[]
-    coachPrivateNotes?: PrivateNoteRow[]
-    coachMealComments?: MealCommentRow[]
-    /** "Nutrición Pro" (nutrition_exchanges) ON ⇒ umbrales de micros avanzados. */
-    nutritionProEnabled?: boolean
-    /** Master switch del dominio Nutrición resuelto para ESTE alumno (false ⇒ ocultar todo). */
-    nutritionDomainEnabled?: boolean
-    /** Visibilidad por sección resuelta para ESTE alumno (entitled AND wants). */
-    nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
-    /** Contexto del override por-alumno (panel "Funciones para este alumno", Zona C). */
-    nutritionOverrideContext?: ClientFeaturePrefsOverrideContext
     /** Entitlements de módulos de pago (espejo del gate server-side, resueltos en page.tsx). */
     moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
-    /** View model del tab Nutrición V2 (canary webCoach resuelto en page.tsx). null/undefined => tab V1. */
+    /**
+     * View model del resumen de Nutrición V2 (resuelto server-side en `_data/nutrition-tab-v2.data`).
+     * Poda 2026-07-29 (docs/specs/nutrition-ui-poda/SPEC.md): el tab es SIEMPRE V2 — se retiró el
+     * swap al tab V1 (`NutritionTabB5`, borrado) y con él su canary en esta superficie. `null` ⇒
+     * la resolución falló y el tab pinta su estado degradado, nunca V1.
+     */
     nutritionV2?: NutritionTabV2ViewModel | null
     /** Fuerza tema oscuro para los charts (la ficha del master-detail es dark-only vía isla CSS;
         next-themes resolvedTheme no la conoce → sin esto los ejes saldrían claros sobre negro). */
@@ -57,13 +44,6 @@ interface ClientProfileDashboardProps {
 
 export function ClientProfileDashboard({
     data,
-    coachNutrientTargets = [],
-    coachPrivateNotes = [],
-    coachMealComments = [],
-    nutritionProEnabled = false,
-    nutritionDomainEnabled = true,
-    nutritionSectionFlags,
-    nutritionOverrideContext,
     moduleFlags,
     nutritionV2,
     forceDark = false,
@@ -101,45 +81,6 @@ export function ClientProfileDashboard({
     const tooltipBorderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
     const tooltipTextColor = isDark ? '#fff' : '#000'
 
-    // Plan de nutrición activo — sólo se usa para el objetivo calórico congelado
-    // en el timeline que consume la pestaña Nutrición (NutritionTabB5).
-    const activeNutritionPlan = data.activeNutritionPlanWithMeals ?? data.nutritionPlans?.[0]
-    const targetCalories =
-        activeNutritionPlan?.daily_calories ?? activeNutritionPlan?.target_calories ?? 0
-
-    const nutritionLogsSource = data.nutritionLogsEnriched ?? data.nutritionLogs ?? []
-
-    // Procesar logs de nutrición (ventana ampliada en servidor; consumos reales por comidas completadas)
-    const nutritionHistory = [...nutritionLogsSource]
-        .sort((a, b) => new Date(a.log_date).getTime() - new Date(b.log_date).getTime())
-        .map((log: Record<string, unknown>) => {
-            const mealLogs: unknown[] = (log.nutrition_meal_logs as unknown[]) || []
-            const total = mealLogs.length
-            const done = mealLogs.filter((ml: unknown) => (ml as { is_completed?: boolean }).is_completed).length
-            const pct = total > 0 ? Math.round((done / total) * 100) : 0
-            const logDate = String(log.log_date)
-            return {
-                date: new Date(logDate + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-                log_date: logDate,
-                plan_name: (log.plan_name_at_log as string) || '',
-                target_calories: (log.target_calories_at_log as number) || 0,
-                target_protein: (log.target_protein_at_log as number) || 0,
-                target_carbs: (log.target_carbs_at_log as number) || 0,
-                target_fats: (log.target_fats_at_log as number) || 0,
-                consumed_calories: (log.consumed_calories as number) || 0,
-                consumed_protein: (log.consumed_protein as number) || 0,
-                consumed_carbs: (log.consumed_carbs as number) || 0,
-                consumed_fats: (log.consumed_fats as number) || 0,
-                mealsTotal: total,
-                mealsDone: done,
-                compliancePct: pct,
-                mealLogs,
-                diferencial: ((log.consumed_calories as number) || 0) -
-                    ((log.target_calories_at_log as number) || targetCalories),
-                isAdherent: pct >= 80,
-            }
-        })
-
     const checkInsWithPhotos = (checkIns || []).filter((c: any) => c.front_photo_url || c.side_photo_url || c.back_photo_url).slice(0, 3);
 
     const compliance = data.compliance || {};
@@ -156,7 +97,6 @@ export function ClientProfileDashboard({
         ? checkIns.sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[1] 
         : null;
     const weeklyWeightVariation = prevWeightCheckIn ? currentWeight - prevWeightCheckIn.weight : 0;
-    const interactionStreak = compliance.currentStreak || 0
     const lastWorkoutDate = (data.workoutHistory || []).reduce((latest: string | null, plan: any) => {
         for (const block of plan.workout_blocks || []) {
             for (const log of block.workout_logs || []) {
@@ -476,7 +416,15 @@ export function ClientProfileDashboard({
                     </motion.div>
                 )}
 
-                {/* Task 4: Estructura Base Nutrición */}
+                {/* Tab Nutrición — SIEMPRE el resumen V2 (poda 2026-07-29:
+                    docs/specs/nutrition-ui-poda/SPEC.md ola 3 §6). El detalle vive en
+                    /coach/nutrition-v2/[clientId].
+                    Acá vivían las secciones V1 retiradas por decisión del owner ("V1 al olvido",
+                    mismo SPEC): "Ciclo de dieta" (NutritionCycleHistorySection — los ciclos no se
+                    usan; el cron api/cron/nutrition-cycles y los datos quedan intactos), los
+                    umbrales de micronutrientes (CoachNutrientTargetsEditor — micros NO se entregan
+                    en V2, claim retirado) y "Funciones para este alumno" (override de feature prefs
+                    por alumno, que solo gobernaba esos micros). */}
                 {activeTab === 'nutrition' && !isPending && (
                     <motion.div
                         key="nutrition"
@@ -485,45 +433,9 @@ export function ClientProfileDashboard({
                     >
                     <div className="min-w-0 space-y-6 animate-in fade-in duration-500 md:col-span-12">
                         {nutritionV2 ? (
-                        <NutritionTabV2 view={nutritionV2} />
+                            <NutritionTabV2 view={nutritionV2} />
                         ) : (
-                        <NutritionTabB5
-                            clientId={client.id}
-                            coachId={client.coach_id ?? ''}
-                            coachSlug={coachSlug}
-                            santiagoTodayIso={data.todayIso ?? ''}
-                            activeNutritionPlan={activeNutritionPlan}
-                            nutritionTimeline={nutritionHistory}
-                            mealDetails={data.mealDetails}
-                            adherence30d={data.nutritionAdherence30d}
-                            todayMacros={data.todayConsumedMacros}
-                            hasTodayNutritionLog={data.hasTodayNutritionLog}
-                            nutritionMonthlyAvgPct={data.nutritionMonthlyAvgPct}
-                            nutritionStreakDays={data.nutritionStreakDays}
-                            nutritionWeeklyAvgPct={compliance.nutritionWeeklyAvgPct}
-                            nutritionPrevWeeklyAvgPct={compliance.nutritionPrevWeeklyAvgPct}
-                            clientFavoriteFoods={data.clientFavoriteFoods ?? []}
-                            chartGridColor={chartGridColor}
-                            chartAxisColor={chartAxisColor}
-                            tooltipBgColor={tooltipBgColor}
-                            tooltipBorderColor={tooltipBorderColor}
-                            tooltipTextColor={tooltipTextColor}
-                            recentCheckIns={(data.checkIns || []).slice(0, 16).map((c: { created_at: string; weight?: number | null; energy_level?: number | null }) => ({
-                                created_at: c.created_at,
-                                weight: c.weight ?? null,
-                                energy_level: c.energy_level ?? null,
-                            }))}
-                            nutritionPlanCycles={data.nutritionPlanCycles ?? []}
-                            nutritionTemplatesLite={data.nutritionTemplatesLite ?? []}
-                            nutritionPlanHistoryEntries={data.nutritionPlanHistoryEntries ?? []}
-                            coachNutrientTargets={coachNutrientTargets}
-                            coachPrivateNotes={coachPrivateNotes}
-                            coachMealComments={coachMealComments}
-                            nutritionProEnabled={nutritionProEnabled}
-                            nutritionDomainEnabled={nutritionDomainEnabled}
-                            nutritionSectionFlags={nutritionSectionFlags}
-                            nutritionOverrideContext={nutritionOverrideContext}
-                        />
+                            <NutritionTabV2Unavailable clientId={client.id} />
                         )}
                     </div>
                     </motion.div>

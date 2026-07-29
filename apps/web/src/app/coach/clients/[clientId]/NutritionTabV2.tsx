@@ -12,8 +12,10 @@ import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
 /**
  * Tab Nutrición V2 embebido en la ficha principal del alumno (coach/clients/[clientId]).
  *
- * Se monta SOLO cuando la page resolvió el canary V2 (surface webCoach) server-side; para
- * quien no tiene canary la ficha sigue mostrando `NutritionTabB5` (V1) sin cambio alguno.
+ * Es el ÚNICO camino del tab desde la poda 2026-07-29 (decisión del owner "V1 al olvido"):
+ * el tab V1 (`NutritionTabB5`) y el canary `webCoach` que decidía el swap en esta superficie
+ * fueron borrados. Si la resolución server-side falla, el tab pinta `NutritionTabV2Unavailable`
+ * (estado honesto + CTA), nunca V1.
  *
  * Poda 2026-07-29: este tab dejó de clonar la ficha completa (`/coach/nutrition-v2/[clientId]`).
  * La auditoría de redundancia lo encontró como un subconjunto ESTRICTO y degradado de la ficha
@@ -105,6 +107,49 @@ function NutritionTabWeekDots({ week }: { week: NutritionTabV2ViewModel['week'] 
   )
 }
 
+/** Encabezado compartido por el resumen y su estado degradado. */
+function NutritionTabHeader({ children }: { children?: ReactNode }) {
+  return (
+    <header className="flex flex-wrap items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted">
+          Nutrición · V2
+        </p>
+        <h2 className="mt-1 font-display text-xl font-bold text-strong">Ficha nutricional</h2>
+      </div>
+      {children}
+    </header>
+  )
+}
+
+/**
+ * Estado degradado del tab: la resolución server-side del resumen falló (workspace sin
+ * resolver, RPC scoped caído). Con V1 borrado no hay fallback al que caer, así que el tab
+ * dice la verdad y ofrece la ficha completa, que resuelve por su cuenta.
+ */
+export function NutritionTabV2Unavailable({ clientId }: { clientId: string }) {
+  return (
+    <section className="min-w-0 space-y-4">
+      <NutritionTabHeader />
+      <NutritionStatePanel
+        icon="error"
+        tone="warning"
+        title="No pudimos cargar el resumen"
+        description="Hubo un problema al leer la nutrición de este alumno. Vuelve a intentar en unos segundos o abre la ficha de nutrición completa."
+        action={
+          <Link
+            href={`/coach/nutrition-v2/${clientId}`}
+            className="inline-flex min-h-11 items-center gap-2 rounded-control border border-primary/40 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+          >
+            Abrir ficha de nutrición
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        }
+      />
+    </section>
+  )
+}
+
 export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
   const caloriesPercent = nutritionProgressPercent(
     view.today.calories.consumed,
@@ -113,17 +158,9 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
 
   return (
     <section className="min-w-0 space-y-4">
-      <header className="flex flex-wrap items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted">
-            Nutrición · V2
-          </p>
-          <h2 className="mt-1 font-display text-xl font-bold text-strong">
-            Ficha nutricional
-          </h2>
-        </div>
+      <NutritionTabHeader>
         {view.strategy ? <StrategyBadge strategy={view.strategy} /> : null}
-      </header>
+      </NutritionTabHeader>
 
       {!view.hasActivePlan ? (
         <NutritionStatePanel
