@@ -1343,6 +1343,9 @@ function TodayTab({
               setRefreshing(true)
               void load(true)
             }}
+            // QA4: el spinner de pull-to-refresh se tiñe con la marca (iOS: tintColor, Android: colors).
+            tintColor={theme.primary}
+            colors={[theme.primary]}
           />
         }
       >
@@ -1480,6 +1483,9 @@ function TodayTab({
               setRefreshing(true)
               void load(true)
             }}
+            // QA4: mismo tinte de marca que el resto de los pull-to-refresh de la app.
+            tintColor={theme.primary}
+            colors={[theme.primary]}
           />
         }
       >
@@ -2427,6 +2433,7 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
 
 function PlanTab({ chrome }: { chrome: ReactNode }) {
   // 4A-01: clearance de la cápsula + minimizado por scroll (ver TodayTab).
+  const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   const onScrollChrome = useAlumnoScrollHandler()
   const [userId, setUserId] = useState<string | null>(null)
@@ -2546,6 +2553,9 @@ function PlanTab({ chrome }: { chrome: ReactNode }) {
         setRefreshing(true)
         void load(true)
       }}
+      // QA4: mismo tinte de marca que el resto de los pull-to-refresh de la app.
+      tintColor={theme.primary}
+      colors={[theme.primary]}
     />
   )
 
