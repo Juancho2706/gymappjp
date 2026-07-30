@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { X } from 'lucide-react'
 import { useSheetBodyMarker } from './useSheetBodyMarker'
 
@@ -8,6 +8,9 @@ import { useSheetBodyMarker } from './useSheetBodyMarker'
  * Modal ligero y autocontenido (sin dependencias externas) para los flujos del
  * Today: registrar alimento, editar cantidad y retirar. Cierra con Escape y con
  * click en el backdrop. Alto por dvh (nunca vh fuera de md:).
+ *
+ * Diálogo CENTRADO en TODOS los viewports (QA CEO): antes era hoja inferior en
+ * mobile (`items-end` + `rounded-t-card`) y sólo se centraba desde `md:`.
  */
 export function TodayModal({
   title,
@@ -16,6 +19,7 @@ export function TodayModal({
   onClose,
   children,
   footer,
+  initialFocusRef,
 }: {
   title: string
   description?: string
@@ -23,6 +27,12 @@ export function TodayModal({
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  /**
+   * Elemento que recibe el foco al abrir (p.ej. el input de búsqueda). Si no se pasa
+   * —o si el ref todavía es null— el foco cae en el panel, que mantiene el foco-trap
+   * y el cierre con Escape.
+   */
+  initialFocusRef?: RefObject<HTMLElement | null>
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null)
 
@@ -38,12 +48,13 @@ export function TodayModal({
     document.addEventListener('keydown', onKey)
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    panelRef.current?.focus()
+    const target = initialFocusRef?.current ?? panelRef.current
+    target?.focus()
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = previousOverflow
     }
-  }, [open, onClose])
+  }, [open, onClose, initialFocusRef])
 
   if (!open) return null
 
@@ -53,7 +64,7 @@ export function TodayModal({
       // z-[100]: por ENCIMA de la capsula flotante del nav del alumno (ClientNav, z-index 59) y
       // del sheet "Mas" (z-[60]). El backdrop cubre el nav para que no tape los inputs ni los
       // botones Registrar/Cambiar del sheet (bug QA: navbar encima del dialogo).
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-0 pb-safe backdrop-blur-sm md:items-center md:p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -63,7 +74,9 @@ export function TodayModal({
         aria-describedby={description ? 'today-modal-desc' : undefined}
         aria-labelledby="today-modal-title"
         aria-modal="true"
-        className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-card border border-border-subtle bg-surface-card shadow-xl outline-none md:rounded-card"
+        // max-h-full (no 92dvh): el contenedor ya reserva el padding p-4, así el panel centrado
+        // nunca se sale de la pantalla en mobile.
+        className="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-card shadow-xl outline-none"
         role="dialog"
         tabIndex={-1}
       >

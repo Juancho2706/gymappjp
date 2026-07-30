@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -1029,6 +1029,8 @@ function RegisterFoodDialog({
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [favoriteFoods, setFavoriteFoods] = useState<FoodCatalogItem[]>([])
   const [favBusyId, setFavBusyId] = useState<string | null>(null)
+  // El modal enfoca este input al abrir (en vez del panel) para escribir sin un tap extra.
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     let active = true
@@ -1160,6 +1162,7 @@ function RegisterFoodDialog({
       description="Busca en el catálogo local y elige cuánto comiste."
       open
       onClose={onClose}
+      initialFocusRef={searchInputRef}
       footer={
         selected ? (
           <div className="flex items-center justify-between gap-2">
@@ -1280,6 +1283,7 @@ function RegisterFoodDialog({
             className="flex gap-2"
           >
             <input
+              ref={searchInputRef}
               aria-label="Buscar alimento"
               value={query}
               onChange={(event) => setQuery(event.target.value)}

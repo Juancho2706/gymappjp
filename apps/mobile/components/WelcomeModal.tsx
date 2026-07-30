@@ -64,7 +64,8 @@ export function WelcomeModal({ brandName, enabled, content, type, version }: Pro
         <MotiView
           from={{ opacity: 0, translateY: 24, scale: 0.96 }}
           animate={{ opacity: 1, translateY: 0, scale: 1 }}
-          transition={{ type: 'spring', damping: 16 }}
+          // Entrada suave, casi sin rebote (QA: con damping 16 la tarjeta sobrepasaba y volvía).
+          transition={{ type: 'spring', damping: 22, stiffness: 160, mass: 0.9 }}
           style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}
         >
           <View style={styles.header}>
@@ -94,13 +95,18 @@ export function WelcomeModal({ brandName, enabled, content, type, version }: Pro
               (content vacio) no se reserva el hueco → modal compacto. */}
           {type === 'video' ? (
             content.trim() ? (
-              <VideoPlayer
-                url={content}
-                muted={false}
-                loop={false}
-                title="Video de bienvenida"
-                style={styles.videoPlayer}
-              />
+              // Clip extra alrededor del video: en Android el WebView del embed (capa de hardware)
+              // compone POR ENCIMA del recorte del padre y "se sale" de la tarjeta. Este View propio
+              // (collapsable={false} para que no lo optimice el compilador de vistas) fuerza un
+              // recorte real con el mismo radio que el marco del reproductor.
+              <View collapsable={false} style={[styles.videoClip, { borderRadius: theme.radius['2xl'] }]}>
+                <VideoPlayer
+                  url={content}
+                  muted={false}
+                  loop={false}
+                  title="Video de bienvenida"
+                />
+              </View>
             ) : null
           ) : (
             <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
@@ -175,7 +181,7 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 8, marginTop: 2 },
   body: { maxHeight: 280, paddingHorizontal: 20, paddingBottom: 4 },
   content: { fontSize: 14, lineHeight: 22 },
-  videoPlayer: { marginHorizontal: 20 },
+  videoClip: { marginHorizontal: 20, overflow: 'hidden' },
   footer: {
     padding: 20,
     paddingTop: 16,
