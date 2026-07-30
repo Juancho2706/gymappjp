@@ -12,6 +12,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { resetChromeScroll, useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { countLoggedSetsByBlock, deriveDayCompletion, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay, getTodayInSantiago, formatRelativeDate, isoDateAddDays, timeGreeting } from '../../../lib/date-utils'
+import { buildWorkoutDoneEditParams } from '../../../lib/workout-executor-nav'
 import { AppBackground } from '../../../components/AppBackground'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { Skeleton } from '../../../components/Skeleton'
@@ -546,13 +547,20 @@ export default function AlumnoHomeScreen() {
             }
             // Recuperar un dia pendiente: se entrena HOY y el log cae hoy (semantica correcta de
             // recuperacion, ver E1.1); el param `recuperar` solo pinta el banner informativo ambar.
-            // El camino "editar fecha pasada" (param `fecha`) queda cableado en [planId].tsx + banner
-            // neutro pero SIN entrada de UI aun: el sheet deshabilita "Revisar y editar" porque el
-            // guardado RN todavia escribe HOY (el solo-UPDATE por target_date es un server action web,
-            // E1.5). El editor de fecha pasada RN llega en ola posterior y reactivara ese onReview.
             // Recuperar dispara el MISMO Despegue que el CTA/day-cards (con el param `recuperar`); el
             // origin (rect del banner/card) lo pasa ActiveProgramSection para que el morph nazca de él.
             onRecover={(id, fecha, origin, label) => startMorph({ planId: id, origin, params: { recuperar: fecha }, label })}
+            // "Revisar y editar" del sheet: EDITOR DE DIA PASADO. `buildWorkoutDoneEditParams` decide el
+            // param igual que la web (`buildWorkoutDoneEditHref`): sesion realmente pasada ⇒ `?fecha=`
+            // (el motor conmuta a solo-UPDATE y corrige esa fecha sin insertar), sesion de HOY ⇒
+            // `?desde=hecho` (flujo normal de hoy, que ya corrige la misma fila por upsert).
+            onReview={(id, sessionDate, isTodayCell) =>
+              startMorph({
+                planId: id,
+                label: 'Revisar y editar',
+                params: buildWorkoutDoneEditParams(sessionDate, getTodayInSantiago().iso, isTodayCell),
+              })
+            }
           />
         </View>
 

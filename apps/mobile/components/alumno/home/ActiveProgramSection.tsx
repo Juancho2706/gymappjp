@@ -50,6 +50,7 @@ export function ActiveProgramSection({
   weekVariant = null,
   onStart,
   onRecover,
+  onReview,
 }: {
   program: Program | null
   currentWeek: number
@@ -69,6 +70,11 @@ export function ActiveProgramSection({
   /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). `origin` = rect del
    *  trigger (banner o day-card) para que el Despegue nazca de él, igual que el CTA y las day-cards. */
   onRecover: (planId: string, dateIso: string, origin?: MorphOrigin | null, label?: string) => void
+  /** "Revisar y editar" del sheet: abre los registros de esa sesión. `sessionDate` = fecha REAL del log
+   *  (`doneOnDate ?? dateIso`) y `isTodayCell` = la celda tocada es la de hoy; el caller traduce eso a
+   *  los params del ejecutor con `buildWorkoutDoneEditParams` (día pasado ⇒ `?fecha=` solo-UPDATE).
+   *  Sin esta prop el sheet no ofrece la opción. */
+  onReview?: (planId: string, sessionDate: string, isTodayCell: boolean) => void
 }) {
   const { theme, resolvedScheme } = useTheme()
   // Sheet doble intencion (E1.7): el day-card de un dia YA HECHO de OTRO dia lo abre; hoy/pendiente/
@@ -186,6 +192,9 @@ export function ActiveProgramSection({
       // `repeatDate` = fecha REAL de la sesión de ese día (la del log si fue recuperado): viaja como
       // param `repetir` para precargar cada serie con lo que se registró esa vez.
       onRepeat={(id, repeatDate) => { setSheetView(null); onStart(id, null, 'Repetir hoy', repeatDate ?? undefined) }}
+      // Revisar: los días que abren este sheet son SIEMPRE de otra fecha (hoy navega directo), así que
+      // acá `isTodayCell` es false y el caller manda `?fecha=` → editor de día pasado (solo-UPDATE).
+      onReview={onReview ? (id, sessionDate, isTodayCell) => { setSheetView(null); onReview(id, sessionDate, isTodayCell) } : undefined}
     />
     </>
   )
@@ -197,14 +206,15 @@ export function ActiveProgramSection({
  * nueva sesión de hoy PRECARGADA con lo registrado esa vez; Cancelar. Theme-aware (nivel dashboard,
  * claro/oscuro + safe areas vía Sheet).
  *
- * DECISIÓN RN (justificada): "Revisar y editar" queda DESHABILITADA con sublabel "Disponible pronto"
- * para días PASADOS. El guardado del ejecutor RN escribe SIEMPRE el log de HOY (habla PostgREST
- * directo); el solo-UPDATE por `target_date` que edita la fecha pasada es un server action WEB (E1.5),
- * aún no portado a RN. Si lo habilitáramos, el banner diría "editando el martes" pero cada serie crearía
- * un log NUEVO de hoy → duplicaría en vez de corregir, violando el invariante "editar jamás duplica".
- * Excepción: cuando el día hecho es HOY (`view.isToday`, único caller = el hero de la home) revisar ES
- * el flujo normal de hoy — abrir el ejecutor sin params corrige la MISMA fila — así que ahí sí se
- * habilita, vía `onReview` (espejo del `?desde=hecho` de la web, WorkoutHeroCard.tsx:165-166).
+ * "Revisar y editar" ya es accionable TAMBIÉN para días pasados (editor de día pasado RN): el motor
+ * (`useWorkoutSession(..., editDate)`) conmuta a SOLO-UPDATE sobre la ventana de esa fecha y corrige la
+ * fila existente sin insertar jamás una nueva — el invariante "editar jamás duplica" lo garantiza el
+ * motor, no la ausencia del botón. Antes quedaba deshabilitada con "Disponible pronto" porque el
+ * guardado RN escribía SIEMPRE el log de HOY (el solo-UPDATE existía sólo como server action web, E1.5)
+ * y habilitarla habría duplicado series en vez de corregirlas. `onReview` recibe la FECHA REAL de la
+ * sesión + si la celda es la de hoy, y el caller decide el param (`?fecha=` pasado vs `?desde=hecho`
+ * hoy) con `buildWorkoutDoneEditParams` — espejo del `buildWorkoutDoneEditHref` de la web. Sin `onReview`
+ * la opción no se pinta (nada que ofrecer si el caller no sabe navegar).
  *
  * "Repetir hoy" NO se ofrece cuando la sesión hecha es de HOY (decisión CEO): el índice único de la DB
  * es por día, así que repetir hoy sobre hoy pisaría la misma fila. Cuenta la FECHA REAL del log
@@ -216,10 +226,12 @@ export function ActiveProgramSection({
  * dejar un CTA muerto).
  *
  * DÍA PASADO A MEDIAS (spec `workout-day-in-progress`): el mismo sheet, con el título "Entrenamiento
- * incompleto" y un subtítulo honesto. Las acciones NO cambian (misma semántica: editar esa fecha —hoy
- * deshabilitada en RN— o repetir hoy); lo que se corrige es la mentira de decirle "ya hiciste este
- * entrenamiento" a alguien que dejó series sin registrar. El día de HOY a medias jamás llega acá: su
- * day-card navega directo al ejecutor a continuar.
+ * incompleto" y un subtítulo honesto. Las acciones NO cambian (misma semántica: editar esa fecha o
+ * repetir hoy); lo que se corrige es la mentira de decirle "ya hiciste este entrenamiento" a alguien que
+ * dejó series sin registrar. El día de HOY a medias jamás llega acá: su day-card navega directo al
+ * ejecutor a continuar. OJO: en un día a medias las series que NO se registraron no existen como fila,
+ * así que el modo solo-UPDATE las rechaza (copy honesto en la fila de la serie) — corregir lo registrado
+ * sí funciona; completarlo se hace con "Repetir hoy".
  */
 export function DoubleIntentSheet({
   view,
@@ -231,9 +243,13 @@ export function DoubleIntentSheet({
   onClose: () => void
   /** `repeatDate` = fecha real de la sesión que se repite (param `repetir` del ejecutor). */
   onRepeat: (planId: string, repeatDate: string | null) => void
-  /** Solo se usa cuando el día hecho es HOY: abre el ejecutor de hoy (revisar/corregir). Sin esta prop
-   *  la opción queda deshabilitada, como en los días pasados. */
-  onReview?: (planId: string) => void
+  /**
+   * Abre los registros de la sesión para corregirlos. `sessionDate` = fecha REAL de la sesión
+   * (`doneOnDate ?? dateIso`); `isTodayCell` = la celda tocada es la de hoy. El caller traduce eso a los
+   * params del ejecutor (`buildWorkoutDoneEditParams`): día pasado ⇒ `?fecha=` (solo-UPDATE), hoy ⇒
+   * flujo normal. Sin esta prop la opción no se ofrece.
+   */
+  onReview?: (planId: string, sessionDate: string, isTodayCell: boolean) => void
 }) {
   const { theme } = useTheme()
   const dow = view?.plan.day_of_week ?? 1
@@ -246,8 +262,12 @@ export function DoubleIntentSheet({
   // banner, pisando la fila de hoy serie por serie. Espejo exacto del `showRepeat` de la web
   // (WorkoutPlanCard.tsx:183: `(doneOnDate ?? dateIso) !== getTodayInSantiago().iso`).
   const showRepeat = !!reviewDate && reviewDate !== getTodayInSantiago().iso
-  // Revisar solo es accionable para HOY (ver nota del componente).
-  const canReview = !!view?.isToday && !!onReview
+  // Revisar es accionable para HOY y para días PASADOS (el motor RN ya tiene el modo solo-UPDATE); lo
+  // único que la apaga es que el caller no sepa navegar o que no haya fecha de sesión que abrir.
+  const canReview = !!reviewDate && !!onReview
+  // Copy del sublabel: para hoy son "tus registros de hoy"; para un día pasado, los de ESE día (misma
+  // copia que el sheet web, WorkoutDoneSheet.tsx:96).
+  const reviewIsToday = !!view?.isToday || reviewDate === getTodayInSantiago().iso
   // Día a medias → otro título/subtítulo, mismas acciones (ver nota del componente).
   const incomplete = view?.status === 'in_progress'
 
@@ -278,12 +298,12 @@ export function DoubleIntentSheet({
           </View>
         ) : null}
 
-        {/* Revisar y editar — accionable SOLO si el día hecho es HOY; deshabilitada en días pasados
-            (el editor por `target_date` aún no existe en RN, ver nota del componente). */}
+        {/* Revisar y editar — abre los registros de esa sesión para corregirlos: día pasado ⇒ modo
+            solo-UPDATE (`?fecha=`), hoy ⇒ flujo normal. Sólo se omite si el caller no pasó `onReview`. */}
         {canReview ? (
           <TouchableOpacity
             testID="double-intent-review"
-            onPress={() => view && onReview?.(view.plan.id)}
+            onPress={() => view && reviewDate && onReview?.(view.plan.id, reviewDate, !!view.isToday)}
             activeOpacity={0.85}
             accessibilityRole="button"
             className="rounded-control border border-sport-500 bg-sport-100"
@@ -294,26 +314,13 @@ export function DoubleIntentSheet({
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
-              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Abre tus registros de hoy y corrige lo que quieras</Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>
+                {reviewIsToday ? 'Abre tus registros de hoy y corrige lo que quieras' : 'Abre tus registros de ese día y corrige lo que quieras'}
+              </Text>
             </View>
             <ChevronRight size={18} color={theme.mutedForeground} />
           </TouchableOpacity>
-        ) : (
-          <View
-            accessibilityRole="button"
-            accessibilityState={{ disabled: true }}
-            className="rounded-control border border-subtle bg-surface-sunken/30"
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, opacity: 0.55 }}
-          >
-            <View className="bg-surface-sunken" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
-              <Pencil size={17} color={theme.mutedForeground} strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
-              <Text className="text-muted" numberOfLines={1} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Disponible pronto</Text>
-            </View>
-          </View>
-        )}
+        ) : null}
 
         {/* Repetir hoy — instancia NUEVA de hoy, con cada serie precargada con lo que se registró esa
             vez (editable). No se ofrece cuando la sesión hecha ya es de HOY (decisión CEO, ver nota). */}

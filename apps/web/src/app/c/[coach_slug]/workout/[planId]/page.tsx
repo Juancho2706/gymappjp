@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 import { getWorkoutExecutionData } from './_data/workout-execution.queries'
 import { getExecutorWeekStatusDays } from './_data/week-status.queries'
-import { resolveRepeatDate, validateTargetDate } from './_data/target-date'
+import { resolveRepeatDate, validateTargetDate } from '@eva/workout-engine'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getTodayInSantiago } from '@/lib/date-utils'
 
