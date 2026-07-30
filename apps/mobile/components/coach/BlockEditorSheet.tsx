@@ -256,14 +256,18 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
             {/* Ejes adicionales (farmer carry: distancia + carga + lado) */}
             <View style={[styles.groupBox, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
               <Label theme={theme}>Ejes adicionales (opcional)</Label>
+              {/* row2 con un solo hijo = fila completa; el wrapper se mantiene porque DistanceField
+                  usa flex:1 y necesita un contenedor de fila acotado. */}
               <View style={styles.row2}>
                 <DistanceField theme={theme} value={draft.distance_value ?? ''} unit={draft.distance_unit ?? 'm'}
                   onChangeText={(v: string) => patch({ distance_value: v })}
                   onToggleUnit={() => patch({ distance_unit: draft.distance_unit === 'km' ? 'm' : 'km' })} />
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Lado</Text>
-                  <SideModeSelector theme={theme} value={draft.side_mode ?? null} onChange={(v) => patch({ side_mode: v })} />
-                </View>
+              </View>
+              {/* "Lado" a fila propia (como en roller y como la web `grid-cols-3`): en media columna
+                  cada boton quedaba en ~49pt y "Alternado" wrappeaba a dos lineas. */}
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Lado</Text>
+                <SideModeSelector theme={theme} value={draft.side_mode ?? null} onChange={(v) => patch({ side_mode: v })} />
               </View>
             </View>
 
@@ -364,10 +368,11 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
             <View style={styles.row2}>
               <IntField theme={theme} label="Respiraciones" value={draft.reps_unit === 'breaths' ? (draft.reps_value ?? null) : null}
                 onCommit={(n) => patch({ reps_value: n, reps_unit: n != null ? 'breaths' : null })} placeholder="opcional" />
-              <View style={{ flex: 1, gap: 6 }}>
-                <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Lado</Text>
-                <SideModeSelector theme={theme} value={draft.side_mode ?? null} onChange={(v) => patch({ side_mode: v })} />
-              </View>
+            </View>
+            {/* "Lado" a ancho completo (idem roller / web grid-cols-3): en media columna "Alternado" partia. */}
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Lado</Text>
+              <SideModeSelector theme={theme} value={draft.side_mode ?? null} onChange={(v) => patch({ side_mode: v })} />
             </View>
             <Field theme={theme} label="Descanso entre holds" value={draft.rest_time ?? ''} onChangeText={(v: string) => patch({ rest_time: v })} placeholder="30s" />
           </>
@@ -544,7 +549,13 @@ function SideModeSelector({ theme, value, onChange }: { theme: any; value: 'bila
         return (
           <TouchableOpacity key={o.label} onPress={() => onChange(o.value as 'per_side' | 'alternating' | null)} activeOpacity={0.8}
             style={[styles.segItem, active && { backgroundColor: theme.primary }]}>
-            <Text style={{ fontSize: 11, fontFamily: FONT.uiSemibold, color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
+            {/* 1 sola linea siempre: sin esto "Alternado" se partia en "Alternad / o". */}
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+              allowFontScaling={false}
+              style={{ fontSize: 11, fontFamily: FONT.uiSemibold, color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
           </TouchableOpacity>
         )
       })}
@@ -651,7 +662,9 @@ const styles = StyleSheet.create({
   row2: { flexDirection: 'row', gap: 10 },
   input: { height: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   segmented: { flexDirection: 'row', borderWidth: 1, borderRadius: 10, padding: 3, gap: 3 },
-  segItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  // minWidth:0 deja que flex:1 encoja por debajo del ancho intrinseco del texto (sin esto el
+  // segmented desborda); minHeight:40 iguala el target tactil de la web (min-h-[44px] con padding).
+  segItem: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 8, paddingHorizontal: 2, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   typeGrid: { flexDirection: 'row', gap: 6 },
   typeBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 52, borderWidth: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 2 },
   typeBtnT: { fontSize: 10.5 },
