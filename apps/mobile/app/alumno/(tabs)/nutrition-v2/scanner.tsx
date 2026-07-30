@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { AppState, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import {
@@ -332,7 +332,10 @@ export default function NutritionV2ScannerScreen() {
       <View className="relative h-72 overflow-hidden rounded-sheet border border-subtle bg-ink-950">
         {!scannerPaused ? (
           <CameraView
-            className="flex-1"
+            // `CameraView` es nativo de terceros y NO tiene cssInterop registrado:
+            // un `className` no llega como estilo y la preview queda sin tamaño
+            // (recuadro negro). El estilo va imperativo.
+            style={StyleSheet.absoluteFillObject}
             facing="back"
             enableTorch={torch}
             barcodeScannerSettings={{ barcodeTypes: [...BARCODE_TYPES] }}
