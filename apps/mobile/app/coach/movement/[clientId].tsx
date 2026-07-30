@@ -10,6 +10,7 @@ import {
   Check,
   ChevronLeft,
   ClipboardCheck,
+  FileDown,
   LineChart,
   Trash2,
 } from 'lucide-react-native'
@@ -35,6 +36,7 @@ import {
   type DraftAssessmentRow,
   type FinalAssessmentRow,
 } from '../../../lib/movement-coach'
+import { exportMovementReportPdf } from '../../../lib/movement-report-pdf'
 import { AppBackground } from '../../../components/AppBackground'
 import { Card } from '../../../components/Card'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -144,6 +146,7 @@ export default function MovementClientScreen() {
       ) : (
         <ReportView
           clientId={clientId as string}
+          clientName={clientName}
           finals={finals}
           hasDraft={draft != null}
           onStartWizard={() => setMode('wizard')}
@@ -157,20 +160,43 @@ export default function MovementClientScreen() {
 /* ── Reporte + historial + evolucion ─────────────────────────────────────────── */
 function ReportView({
   clientId,
+  clientName,
   finals,
   hasDraft,
   onStartWizard,
   onReload,
 }: {
   clientId: string
+  clientName: string | null
   finals: FinalAssessmentRow[]
   hasDraft: boolean
   onStartWizard: () => void
   onReload: () => Promise<void>
 }) {
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
   const latest = finals.length > 0 ? finals[finals.length - 1] : null
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  // Export PDF — espejo del print web (`movement/[clientId]/print`). Delta anotado en
+  // MOBILE_PARITY: el print web registra `pdf_generate` en la bitácora del team; este
+  // export local no (sin endpoint dedicado aún).
+  async function handleExport() {
+    if (!latest || exporting) return
+    setExporting(true)
+    try {
+      await exportMovementReportPdf({
+        clientName,
+        brandName: branding?.displayName?.trim() || 'EVA',
+        brandColor: theme.primary,
+        assessment: latest,
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo exportar el reporte.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   function confirmDelete(id: string) {
     Alert.alert(
@@ -203,6 +229,23 @@ function ReportView({
       {latest ? (
         <>
           <MovementReportCard assessment={latest} />
+
+          <TouchableOpacity
+            testID="movement-export-pdf"
+            activeOpacity={0.85}
+            disabled={exporting}
+            onPress={handleExport}
+            style={[styles.exportBtn, { borderColor: theme.border, opacity: exporting ? 0.6 : 1 }]}
+          >
+            {exporting ? (
+              <ActivityIndicator size="small" color={theme.mutedForeground} />
+            ) : (
+              <FileDown size={16} color={theme.foreground} strokeWidth={2} />
+            )}
+            <Text style={[styles.exportBtnTxt, { color: theme.foreground, fontFamily: FONT.uiSemibold }]}>
+              Exportar PDF
+            </Text>
+          </TouchableOpacity>
 
           {finals.length >= 2 ? (
             <MovementEvolution finals={finals} />
@@ -929,6 +972,8 @@ const styles = StyleSheet.create({
   histDel: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   primaryCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, height: 52 },
   primaryCtaTxt: { color: '#fff', fontSize: 15 },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, height: 46, borderWidth: 1.5 },
+  exportBtnTxt: { fontSize: 13.5 },
   emptyCard: { alignItems: 'center', gap: 4 },
   emptyIcon: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   emptyText: { fontSize: 14, textAlign: 'center', maxWidth: 300, lineHeight: 20 },

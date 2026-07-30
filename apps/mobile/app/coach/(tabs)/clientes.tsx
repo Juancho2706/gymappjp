@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useRouter } from 'expo-router'
@@ -30,6 +30,7 @@ import { Button, Input, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
+import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import { DirRowCard } from '../../../components/coach/directory/DirRowCard'
 import { ClientActionsSheet } from '../../../components/coach/directory/ClientActionsSheet'
 import { DirectorySummary } from '../../../components/coach/directory/DirectorySummary'
@@ -299,6 +300,7 @@ function DirectoryScreenHeader({ theme, trailing }: { theme: any; trailing?: Rea
 
 export default function ClientesScreen() {
   const { onScroll: onTabbarScroll } = useCoachTabbarScroll()
+  const insets = useSafeAreaInsets()
   const { theme } = useTheme()
   const router = useRouter()
   const workspace = useWorkspace()
@@ -472,9 +474,19 @@ export default function ClientesScreen() {
   const urgentBanner = stats.urgentCount > 0
   const expiredBanner = stats.expiredProgramCount > 0
   const syncBanner = stats.pendingSyncCount > 0
-  // A-F10: contador de adherencia nutricional baja (desde el pulse) para banner de triage.
+  // A-F10 + QA F2: los contadores del resumen salen del array pulse CRUDO, no del
+  // roster con fallback 0 — espejo exacto de CoachWarRoom.tsx:220-229. Nutri. cuenta
+  // solo el flag NUTRICION_RIESGO (la web no suma el umbral pct<60 aquí).
   const nutritionLowCount = useMemo(
-    () => [...pulseById.values()].filter((p) => (p.attentionFlags?.includes('NUTRICION_RIESGO')) || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60)).length,
+    () => [...pulseById.values()].filter((p) => (p.attentionFlags ?? []).includes('NUTRICION_RIESGO')).length,
+    [pulseById]
+  )
+  const pulseUrgentCount = useMemo(
+    () => [...pulseById.values()].filter((p) => p.attentionScore >= 50).length,
+    [pulseById]
+  )
+  const pulseReviewCount = useMemo(
+    () => [...pulseById.values()].filter((p) => p.attentionScore >= 25 && p.attentionScore < 50).length,
     [pulseById]
   )
   // Adherencia promedio (espejo web CoachWarRoom) + total archivados — métricas derivadas del pulse/lista ya cargados.
@@ -678,6 +690,8 @@ export default function ClientesScreen() {
       {/* Resumen · hoy — pulso de prioridad + métricas secundarias (espejo CoachWarRoom) */}
       <DirectorySummary
         stats={stats}
+        urgentCount={pulseUrgentCount}
+        reviewCount={pulseReviewCount}
         riskFilter={riskFilter}
         onToggleRisk={toggleRisk}
         onSetAllRisk={() => setRiskFilter('all')}
@@ -789,7 +803,7 @@ export default function ClientesScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <DirectoryScreenHeader theme={theme} />
         <EvaLoaderScreen subtitle="Cargando alumnos…" />
       </SafeAreaView>
@@ -798,7 +812,7 @@ export default function ClientesScreen() {
 
   if (loadError && clients.length === 0) {
     return (
-      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
         <DirectoryScreenHeader theme={theme} />
         <View style={styles.filteredEmptyWrap}>
@@ -813,7 +827,7 @@ export default function ClientesScreen() {
   }
 
   return (
-    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
 
       {viewMode === 'cards' ? (
@@ -840,7 +854,7 @@ export default function ClientesScreen() {
               />
             </View>
           )}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           onScroll={onTabbarScroll}
           scrollEventThrottle={16}
@@ -854,7 +868,7 @@ export default function ClientesScreen() {
           data={[] as DirectoryClient[]}
           keyExtractor={(c) => c.id}
           renderItem={() => null}
-          contentContainerStyle={styles.tableList}
+          contentContainerStyle={[styles.tableList, { paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           onScroll={onTabbarScroll}
           scrollEventThrottle={16}

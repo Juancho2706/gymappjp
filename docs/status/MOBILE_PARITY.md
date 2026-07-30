@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-26 @ e0db4285"
+last_verified: "2026-07-29"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -27,6 +27,21 @@ La paridad global **no está certificada todavía**.
 | Experiencia de entrada — splash/onboarding/acceso | Cerrada estática | Pendiente | Código y exports verdes; requiere build nuevo + QA física |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
+
+> **2026-07-29 (rama `worktree-adelanto-qa-20260729`, sin merge)**: adelanto paralelo al QA del owner —
+> (1) **QA F2** contadores del directorio coach espejados al pulse crudo de `CoachWarRoom.tsx:220-229`
+> (Riesgo/Atención/Nutri. desde el array pulse; filtro `nutrition_low` solo por flag) + test
+> `tests/mobile-directory-pulse-parity.test.ts`; (2) **QA F4/F6** safe area top en `builder.tsx` y
+> `clientes.tsx` (`edges=['top']`) + clearance inset-aware (`COACH_TABBAR_CLEARANCE + insets.bottom`);
+> (3) **consentimiento de pool Ley 21.719 en RN** (gap legal: la app no pasa por el proxy web que lo
+> fuerza): endpoint `api/mobile/auth/pool-consent` (GET/POST/DELETE espejo de `consent.actions.ts`),
+> pantalla `alumno/consent.tsx`, gate en `(tabs)/_layout` (orden blocked→password→consent, fail-open
+> como el proxy) y revocación en el perfil del alumno; (4) **export PDF del reporte de Movimiento**
+> (`movement-report-pdf.ts`, espejo del print web; delta aceptado: sin bitácora `pdf_generate`);
+> (5) hallazgo transversal: la infra de push (`apps/web/src/lib/push.ts`) no tiene NINGÚN disparador
+> en todo el repo — hoy no se envía push a nadie, en ninguna plataforma (decisión de producto
+> pendiente). F5 (anillo proteína) no reproducible en código actual — re-testear en device; F9 ("Z4")
+> sin rastro en código — probable fix colateral. Todo pendiente de QA física.
 
 > **2026-07-29 (rama `worktree-nutricion-ui-rescate`, sin merge)**: rescate UI de Nutrición V2 en olas 0-4 (poda de eco + permisos a 2 reales + wizard 2 pasos + selector por día) con paridad web/RN en el mismo corte — semana completa Lu-Do (`WeekDayNav` + `week-view.ts` compartidos), copia de franjas entre días (`COPY_SLOT_TO_VARIANTS` en los 4 reducers), carry-over de `visible_notes` también en el publish RN, y barrido de 677 clases muertas `text-text-*`/`border-border-*` de mobile (texto renderizaba negro incluso en dark). Las olas 4A/4B siguen "cerradas estáticas": este corte agrega superficies que requieren QA física propia. Spec: [`docs/specs/nutrition-week-view/`](../specs/nutrition-week-view/SPEC.md).
 

@@ -44,8 +44,8 @@ import { signOutAndRedirectHome } from '../../../lib/auth-actions'
  *  · Mi Marca    → /coach/settings/brand    (el brand studio de E3, mudado bajo el hub)
  *  · Suscripción → /coach/subscription      (tab existente)
  *  · Módulos     → /coach/modules           (catálogo E6-12)
- *  · Funciones   → /coach/settings/features  (stub; lo llena fase 3)
- *  · Áreas       → /coach/settings/areas     (stub; lo llena fase 3)
+ *  · Funciones   → /coach/settings/features  (completo: presets + master switch + secciones)
+ *  · Áreas       → /coach/settings/areas     (completo: CRUD de áreas del builder)
  *  · Equipo      → /coach/team                (solo si kind es team_*)
  */
 

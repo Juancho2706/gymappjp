@@ -17,6 +17,7 @@ import {
   PersonStanding,
   Scale,
   Share2,
+  ShieldOff,
   Sun,
   Trash2,
   TrendingUp,
@@ -29,6 +30,7 @@ import { passwordRejectionMessage } from '@eva/schemas'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
 import { getClientProfile } from '../../../lib/client'
+import { getPoolConsentStatus, revokePoolConsent, type PoolConsentStatus } from '../../../lib/pool-consent'
 import { getWorkoutDaySummaries } from '../../../lib/history.queries'
 import { getMonthlyRecap, type MonthlyRecap } from '../../../lib/monthly-summary'
 import { clearBranding } from '../../../lib/branding'
@@ -327,6 +329,39 @@ export default function AlumnoPerfilScreen() {
     isBiometricAvailable().then(setBioAvailable).catch(() => {})
     isBiometricLockEnabled().then(setBioEnabled).catch(() => {})
   }, [])
+
+  // Consentimiento de pool (Ley 21.719): fila visible solo para alumnos de pool que ya
+  // consintieron — espejo de /t/[team_slug]/perfil web (RevokeConsentButton). Revocar
+  // devuelve al gate de consentimiento, igual que el proxy web.
+  const [poolConsent, setPoolConsent] = useState<PoolConsentStatus | null>(null)
+  const [revokingConsent, setRevokingConsent] = useState(false)
+  useEffect(() => {
+    getPoolConsentStatus().then(setPoolConsent).catch(() => {})
+  }, [])
+  function handleRevokeConsent() {
+    if (!poolConsent?.pool || revokingConsent) return
+    const { teamSlug, teamName } = poolConsent
+    Alert.alert(
+      'Revocar consentimiento',
+      'Perderás el acceso a la plataforma del equipo hasta que lo autorices de nuevo. ¿Seguro que quieres revocarlo?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Revocar',
+          style: 'destructive',
+          onPress: () => {
+            setRevokingConsent(true)
+            revokePoolConsent(teamSlug)
+              .then(() => {
+                router.replace({ pathname: '/alumno/consent', params: { team: teamSlug, name: teamName } })
+              })
+              .catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo revocar el consentimiento.'))
+              .finally(() => setRevokingConsent(false))
+          },
+        },
+      ]
+    )
+  }
   async function toggleBio(next: boolean) {
     if (next) {
       const ok = await authenticate('Confirma para activar el bloqueo')
@@ -538,6 +573,18 @@ export default function AlumnoPerfilScreen() {
                   showChevron
                   onPress={() => setShowPasswordModal(true)}
                 />
+                {poolConsent?.pool && poolConsent.granted ? (
+                  <>
+                    <RowDivider />
+                    <ListRow
+                      testID="perfil-consent-row"
+                      leading={<IconTile Icon={ShieldOff} tone="danger" />}
+                      title="Revocar consentimiento del equipo"
+                      showChevron
+                      onPress={handleRevokeConsent}
+                    />
+                  </>
+                ) : null}
                 <RowDivider />
                 <ListRow
                   testID="perfil-ayuda-row"
