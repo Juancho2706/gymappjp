@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-29"
+last_verified: "2026-07-30"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -68,6 +68,58 @@ La paridad global **no está certificada todavía**.
 > a fade 160ms); el form se extrajo a `CoachIdentifierForm` compartido y `/alumno/codigo` sigue
 > intacta para deep links. Timings 1:1 con la spec del mockup; gates: tsc 0, vitest 1121, expo
 > export android OK.
+
+> **2026-07-30 (misma rama, corte 4 — ronda QA-3 del owner, ~26 hallazgos, 13 workers juzgados)**:
+> **Ejecutor V3 RN** — (a) el keypad custom ya no se abre solo al entrar ni tras cada serie
+> (lazy-init del nonce en `SetRow.tsx:880`); (b) descanso SIN flash de la serie siguiente (la
+> decisión de descanso corre en el tick síncrono ANTES del `await logSet` en `handleCommit`);
+> (c) la nota de serie queda visible sobre el teclado (KeyboardAvoidingView en pager + KeypadHost
+> + contexto `useEnsureVisibleInStep`); (d) hairline blanca de los sheets dark muerta
+> (`border-inverse/10` en la primitive `Sheet.tsx`) y GestureHandlerRootView dentro de
+> `nativeModal` → el slider de volumen de Ajustes por fin arrastra; (e) la intro espera los datos
+> (mínimo 1.4s, techo 4.5s) — el Inicio ya no "carga por partes"; la racha semanal cabe en 360px
+> (grupo label/copy con shrink + dots 14px) y aterriza con fade sin salto; crossfade EMPEZAR→sesión
+> 220ms; confetti final una sola pasada (`isInfinite={false}`, la lib venía en TRUE por default);
+> prefetch del gif del primer ejercicio durante intro/Inicio; (f) superserie: glow del card activo
+> por anillos internos (muere el `elevation` cortado de Android), miniaturas reales en filas B/C
+> (gif/imagen/`mqdefault` de YouTube vía `execMediaKind`), bandas marquee "CONTINÚA SIN DESCANSO"
+> arriba/abajo del card activo (RN **y web**, apagadas durante descanso y reduced-motion),
+> `ExecMediaImage` nuevo con cache memory-disk + skeleton real + retry ×2 (compartido con
+> `TypedMediaV3`), el lightbox de técnica ahora sí agranda (70% del alto para gif; 16:9 solo
+> video), nombres a 2 líneas en "Plan completo" (sheet + peek del descanso).
+> **Notificaciones Android** — plugin `expo-notifications` cableado (`notification-icon.png`
+> reemplazado: era un PLACEHOLDER de plantilla, ahora la figura EVA blanca; color #0B0E13) +
+> `visibility PUBLIC` del countdown (canal y notificación) — todo exige build EAS nueva.
+> **Nutrición alumno RN** — sticky SOLO la tira de días (título+tabs scrollean; 3 tabs con
+> `stickyHeaderIndices=[1]`); flash "Sin conexión" muerto (el `stale` del TTL de cache ya no se
+> confunde con offline, 3 sitios); anillos macro con track limpio en dark (alpha .24) y "/ —"
+> cuando falta meta; scanner con preview (CameraView con `style` imperativo — mismo gotcha
+> cssInterop de los iconos); lightbox de la foto del alimento (fila de resultados + seleccionado).
+> **Versiones fuera** — jerga "versión/vN" retirada de web+RN (el único número visible era el
+> builder web; Borrador/Publicado funcional se conserva). **Modales** — "Registrar alimento" RN
+> pasa de bottom-sheet a diálogo centrado (fade + KAV + autofocus, testIDs intactos); web
+> `TodayModal` centrado en TODOS los viewports + `initialFocusRef` al input de búsqueda;
+> `WelcomeModal` con spring suave (damping 22/stiffness 160) y clip extra `collapsable={false}`
+> alrededor del video (WebView Android compone sobre el recorte del padre).
+> **Arranque** — una sola identidad tras el splash nativo (la firma EVA no se monta cuando hay
+> marca de coach cacheada; el crossfade arranca con AsyncStorage sin esperar red — la red solo
+> define el destino); el saludo SIEMPRE nombra a quien entra (sin nombre queda la marca sola:
+> "Hola de nuevo" pelado bajo el nombre del coach se leía como saludo AL coach); `/?pick=1`
+> fuerza el selector con sesión viva y elegir rol cierra la sesión del OTRO rol (con veredicto y
+> tope 1.2s). **Onboarding del alumno NUEVO** — 3 slides post-login primera vez en el dashboard
+> (`eva_student_onboarding_v1`, skippable, marca del coach en el slide 1) encadenado ANTES del
+> WelcomeModal. **Home/coach/misc** — bloque "día pendiente" pasa de ember a warning ámbar
+> informativo (RN + web; mapeo `--color-warning-*` nuevo en el @theme web); la ficha de alumno
+> del coach pinta el header superior con el MISMO glass que las tabs al quedar sticky (wrapper
+> local, TopBar intacto); "Conectar Salud" avisa antes de saltar a Health Connect + `getSdkStatus`
+> + try/catch/finally (mensajes instalar/actualizar); Aprender: chip de músculo legible (blanco
+> sobre scrim .62); disclaimers médicos legibles en dark (`dark:bg-warning-100/[0.16]` en
+> check-in + onboarding ×2 — quedan ~11 usos rotos del mismo patrón inventariados como deuda).
+> Gates del corte: tsc web+mobile en 0. Pendientes de DATOS (no UI): `proteinG` llega null en el
+> read-model de hoy aunque el plan lo define (290g) — revisar RPC; catálogo OFF con curación
+> pendiente (Quaker categoría "bebida"/100 ml). TODO pendiente de QA física; icono de notif,
+> countdown en lockscreen, sonido de fin de descanso (expo-audio) y Health Connect exigen la
+> build EAS nueva.
 
 > **2026-07-29 (misma rama, corte 2)**: (a) **push W1** (catálogo aprobado por el owner): payload dual
 > `url`/`screen`, kill-switch `EVA_PUSH_DISABLED_EVENTS`, `meal_reminder` extendido a nativo (el cron
