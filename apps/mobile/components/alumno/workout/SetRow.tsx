@@ -12,6 +12,9 @@ import {
   buildStrengthPayload,
   buildTypedPayload,
   int,
+  // Copia compartida del rechazo permanente del editor de día pasado: si la serie no existe en esa
+  // fecha no hay nada que reintentar ni que corregir → la fila de error se pinta SIN acciones.
+  PAST_SET_NOT_FOUND_ERROR,
 } from '@eva/workout-engine'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { hexToRgba } from '../../../lib/theme'
@@ -94,6 +97,11 @@ function effortUpdatePayload(
  * corrección/reintento (antes la tipada con `onRpeUpdate` retornaba temprano y nunca lo mostraba).
  * `onEdit` abre la fila editable (keypad sembrado, adaptación RN del `setEditing(true)` web);
  * `onRetry` re-dispara el commit del mismo payload para el error transitorio de red.
+ *
+ * Rechazo TERMINAL (`PAST_SET_NOT_FOUND_ERROR`, editor de día pasado): sólo el mensaje. Ni "Editar" ni
+ * "Reintentar" pueden hacer nada — no existe fila de esa serie en esa fecha y el modo solo-UPDATE jamás
+ * la crea, así que ofrecer acciones sería mentirle al alumno (mismo criterio que la cola web, que mete
+ * `past_set_not_found` en PERMANENT_FAILURE_CODES en vez de reintentar).
  */
 function SyncErrorRow({
   setNumber,
@@ -106,41 +114,46 @@ function SyncErrorRow({
   onEdit: () => void
   onRetry?: () => void
 }) {
+  const terminal = message === PAST_SET_NOT_FOUND_ERROR
   return (
     <View className="flex-row items-center gap-2 px-1">
       <Text style={TYPE.caption} className="flex-1 text-danger-500" numberOfLines={2}>
         {message}
       </Text>
-      <Pressable
-        testID={`edit-set-${setNumber}`}
-        onPress={onEdit}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`Editar la serie ${setNumber} para corregir el valor`}
-        className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
-      >
-        <Text
-          style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
-          className="text-danger-500"
-        >
-          Editar
-        </Text>
-      </Pressable>
-      <Pressable
-        testID={`retry-set-${setNumber}`}
-        onPress={onRetry}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`Reintentar guardar la serie ${setNumber}`}
-        className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
-      >
-        <Text
-          style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
-          className="text-danger-500"
-        >
-          Reintentar
-        </Text>
-      </Pressable>
+      {terminal ? null : (
+        <>
+          <Pressable
+            testID={`edit-set-${setNumber}`}
+            onPress={onEdit}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar la serie ${setNumber} para corregir el valor`}
+            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+          >
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+              className="text-danger-500"
+            >
+              Editar
+            </Text>
+          </Pressable>
+          <Pressable
+            testID={`retry-set-${setNumber}`}
+            onPress={onRetry}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Reintentar guardar la serie ${setNumber}`}
+            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+          >
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+              className="text-danger-500"
+            >
+              Reintentar
+            </Text>
+          </Pressable>
+        </>
+      )}
     </View>
   )
 }

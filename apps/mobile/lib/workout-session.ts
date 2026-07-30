@@ -22,6 +22,7 @@ import {
   buildRepeatSeedMap,
   executionAreaGroupsFor,
   groupContiguousSupersetRuns,
+  PAST_SET_NOT_FOUND_ERROR,
   type ReconciledSessionLog,
   type OptimisticLogPayload,
   type RepeatSeedEntry,
@@ -113,7 +114,11 @@ export type PrevSet = { weight_kg: number | null; reps_done: number | null; date
 /** Snapshot persistido por plan (resiliencia E2-03). */
 interface SessionSnapshot {
   planId: string
-  /** ISO ymd (Santiago) del día del snapshot — sólo se restaura si es hoy. */
+  /**
+   * ISO ymd (Santiago) del día al que ESCRIBE la sesión: hoy en una sesión normal, la fecha objetivo
+   * en el editor de día pasado (`?fecha`). Sólo se restaura si coincide con el día de la sesión que
+   * abre — así el snapshot de una edición jamás se rehidrata como si fuera el entreno de hoy.
+   */
   day: string
   startedAt: number
   logs: ReconciledSessionLog[]
@@ -247,6 +252,10 @@ export interface WorkoutSessionState {
    * guardado falla CON conexión (error real de server, no offline), `error` con el mensaje a mostrar
    * en el chip de la serie + Reintentar — mirror del estado 'error' web (`LogSetForm.tsx:136-137,348-363`).
    * Offline ⇒ `error: null` (la fila queda `_pending` ámbar + banner global, auto-reintento al reconectar).
+   *
+   * En modo edición de día pasado (`editDate`) hay un tercer resultado: `error` =
+   * `PAST_SET_NOT_FOUND_ERROR` cuando esa serie no existe en la fecha editada — rechazo PERMANENTE, sin
+   * insertar ni encolar (la UI lo muestra sin "Reintentar").
    */
   logSet: (payload: OptimisticLogPayload, opts?: LogSetOptions) => Promise<{ isPR: boolean; error: string | null }>
   /**
@@ -267,8 +276,20 @@ export interface LogSetOptions {
  * @param repeatDate Día ya entrenado que se está REPITIENDO hoy (ymd Santiago, ya validado por la
  *   ruta: pasado, calendario real y distinto de hoy). Sólo alimenta `repeatSeed`; el guardado sigue
  *   escribiendo el log de HOY, exactamente igual que una sesión normal.
+ * @param editDate Día PASADO cuyos registros se están EDITANDO (`?fecha`, ymd Santiago ya validado
+ *   por la ruta con `validateTargetDate`: formato/calendario real, pasado ESTRICTO — una fecha igual
+ *   a hoy llega como `null` y la sesión corre normal, fix web 80995cae). Conmuta el motor a modo
+ *   SOLO-UPDATE, réplica client-side del `pastEditMode` de la action web
+ *   (`workout-log.actions.ts:119-185`): toda la ventana del día (logs cargados, historial previo,
+ *   máximos, última sesión) se corre a esa fecha y `logSet` JAMÁS inserta — si la serie no existe en
+ *   ese día devuelve `PAST_SET_NOT_FOUND_ERROR` (sin encolar, sin reintento). Mutuamente excluyente
+ *   con `repeatDate` (la ruta descarta `repetir` cuando hay `fecha`, espejo de page.tsx:41).
  */
-export function useWorkoutSession(planId: string, repeatDate?: string | null): WorkoutSessionState {
+export function useWorkoutSession(
+  planId: string,
+  repeatDate?: string | null,
+  editDate?: string | null,
+): WorkoutSessionState {
   const [loading, setLoading] = useState(true)
   const [planTitle, setPlanTitle] = useState('')
   const [programName, setProgramName] = useState<string | null>(null)
@@ -306,25 +327,42 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
   // Espejo del estado online para leerlo sin stale-closure dentro de listeners (NetInfo/AppState/focus).
   const isOnlineRef = useRef(true)
 
-  const snapshotKey = SNAPSHOT_PREFIX + planId
+  /**
+   * Día al que ESCRIBE esta sesión (ymd Santiago): la fecha objetivo en modo edición, hoy si no. Es la
+   * ventana de TODAS las queries del día y del upsert/solo-UPDATE. Se recalcula por render (barato) y
+   * se espeja en un ref para leerlo dentro de `logSet` sin stale-closure.
+   */
+  const editIso = editDate ?? null
+  const editIsoRef = useRef(editIso)
+  editIsoRef.current = editIso
+
+  // El snapshot local se ESCOPA a la fecha editada: comparte `planId` con la sesión de hoy, así que sin
+  // sufijo una edición del martes dejaría sus logs en la clave de hoy y al abrir el entreno de hoy se
+  // rehidratarían como series `_pending` de hoy (falso "ya registrado" + flush a la fecha equivocada).
+  const snapshotKey = SNAPSHOT_PREFIX + planId + (editIso ? `@${editIso}` : '')
 
   const persistSnapshot = useCallback(() => {
     const snap: SessionSnapshot = {
       planId,
-      day: getTodayInSantiago().iso,
+      day: editIso ?? getTodayInSantiago().iso,
       startedAt: startedAtRef.current,
       logs: logsRef.current,
       draft: draftRef.current,
       updatedAt: Date.now(),
     }
     void AsyncStorage.setItem(snapshotKey, JSON.stringify(snap)).catch(() => {})
-  }, [planId, snapshotKey])
+  }, [planId, snapshotKey, editIso])
 
-  const loadTodayServerLogs = useCallback(
-    async (cid: string, blockIds: string[]): Promise<ReconciledSessionLog[]> => {
+  /**
+   * Series ya registradas de la ventana del día que se está trabajando. `dayIso` = hoy en una sesión
+   * normal y la FECHA OBJETIVO en el editor de día pasado (espejo de la query web, que reusa
+   * `windowStartUtc`/`windowEndUtc` para los logs del día — `workout-execution.queries.ts:157-203`).
+   * Sin esto el editor abría en blanco: no había nada que corregir en pantalla.
+   */
+  const loadServerLogsForDay = useCallback(
+    async (cid: string, blockIds: string[], dayIso: string): Promise<ReconciledSessionLog[]> => {
       if (!cid || blockIds.length === 0) return []
-      const { iso } = getTodayInSantiago()
-      const { startIso, endIso } = getSantiagoUtcBoundsForDay(iso)
+      const { startIso, endIso } = getSantiagoUtcBoundsForDay(dayIso)
       const { data } = await supabase
         .from('workout_logs')
         .select(
@@ -387,8 +425,13 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
     setRepeatSeed(buildRepeatSeedMap((data ?? []) as Parameters<typeof buildRepeatSeedMap>[0]))
   }, [])
 
+  /**
+   * `dayIso` acota lo "previo": el historial queda SIEMPRE en `< inicio(dayIso)`, así que editar un día
+   * pasado no lo autocompara consigo mismo ni con días posteriores (mismo criterio que la query web,
+   * que reusa `windowStartUtc` — `workout-execution.queries.ts:157-170`).
+   */
   const loadPreviousHistory = useCallback(
-    async (cid: string, planBlocks: SessionBlock[]) => {
+    async (cid: string, planBlocks: SessionBlock[], dayIso: string) => {
       const exerciseIds = planBlocks
         .map((b) => resolveExercise(b)?.id)
         .filter((x): x is string => Boolean(x))
@@ -398,8 +441,7 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       // Antes el JOIN `workout_blocks!inner` + `.not('block_id','in',...)` dejaba VACÍO el historial en
       // programas semanales reusados (mismos block_ids cada semana) ⇒ nunca aparecía "Última vez"/"Sesión
       // anterior" ni autollenaba "= última vez". Ahora sobrevive al borrado del bloque y a la reutilización.
-      const { iso } = getTodayInSantiago()
-      const { startIso } = getSantiagoUtcBoundsForDay(iso)
+      const { startIso } = getSantiagoUtcBoundsForDay(dayIso)
       const { data } = await supabase
         .from('workout_logs')
         .select('weight_kg, reps_done, logged_at, set_number, exercise_id')
@@ -433,8 +475,9 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
   // del historial recortado. `previousHistory` sólo retiene el día MÁS RECIENTE por ejercicio (recap
   // "sesión anterior") → derivar el máx de ahí daba `prevMax` = máx de la última sesión, no el histórico,
   // rompiendo la detección de PR. Acá se barre TODO el historial previo (límite 5000) por snapshot
-  // `exercise_id`, quedándose con el mejor peso de días PREVIOS a hoy.
-  const loadExerciseMaxes = useCallback(async (cid: string, planBlocks: SessionBlock[]) => {
+  // `exercise_id`, quedándose con el mejor peso de días PREVIOS al día trabajado (`dayIso`: hoy, o la
+  // fecha objetivo en modo edición — así corregir el martes no compite contra el jueves siguiente).
+  const loadExerciseMaxes = useCallback(async (cid: string, planBlocks: SessionBlock[], dayIso: string) => {
     const exerciseIds = planBlocks
       .map((b) => resolveExercise(b)?.id)
       .filter((x): x is string => Boolean(x))
@@ -442,8 +485,7 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       setExerciseMaxes({})
       return
     }
-    const { iso } = getTodayInSantiago()
-    const { startIso } = getSantiagoUtcBoundsForDay(iso)
+    const { startIso } = getSantiagoUtcBoundsForDay(dayIso)
     const { data } = await supabase
       .from('workout_logs')
       .select('weight_kg, exercise_id, logged_at')
@@ -462,14 +504,13 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
     setExerciseMaxes(maxes)
   }, [])
 
-  const loadLastSession = useCallback(async (planBlocks: SessionBlock[], blockIds: string[]) => {
+  const loadLastSession = useCallback(async (planBlocks: SessionBlock[], blockIds: string[], dayIso: string) => {
     const needsLastSession = planBlocks.some((b) => b.progression_mode === 'double')
     if (!needsLastSession || blockIds.length === 0) {
       setLastSessionByBlock({})
       return
     }
-    const { iso } = getTodayInSantiago()
-    const { startIso } = getSantiagoUtcBoundsForDay(iso)
+    const { startIso } = getSantiagoUtcBoundsForDay(dayIso)
     const { data: priorLogs } = await supabase
       .from('workout_logs')
       .select('block_id, set_number, weight_kg, reps_done, logged_at')
@@ -524,13 +565,17 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       clientIdRef.current = client.id
     }
 
+    // Día que esta sesión escribe: hoy, o la fecha objetivo en el editor de día pasado (`?fecha`).
+    // Es la ventana ÚNICA de logs del día / historial / máximos / última sesión y del upsert de `logSet`.
+    const windowDay = editIso ?? getTodayInSantiago().iso
+
     // Snapshot local del día (resiliencia): startedAt + logs guardados sin confirmar.
     let snapshot: SessionSnapshot | null = null
     try {
       const raw = await AsyncStorage.getItem(snapshotKey)
       if (raw) {
         const parsed = JSON.parse(raw) as SessionSnapshot
-        if (parsed.day === getTodayInSantiago().iso) snapshot = parsed
+        if (parsed.day === windowDay) snapshot = parsed
       }
     } catch { /* corrupto → ignorar */ }
     if (snapshot) {
@@ -613,11 +658,12 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
     const blockIds = sorted.map((b) => b.id)
     if (client && blockIds.length > 0) {
       const [serverLogs] = await Promise.all([
-        loadTodayServerLogs(client.id, blockIds),
-        loadPreviousHistory(client.id, sorted),
-        loadExerciseMaxes(client.id, sorted),
-        loadLastSession(sorted, blockIds),
+        loadServerLogsForDay(client.id, blockIds, windowDay),
+        loadPreviousHistory(client.id, sorted, windowDay),
+        loadExerciseMaxes(client.id, sorted, windowDay),
+        loadLastSession(sorted, blockIds, windowDay),
         // Semilla de repetición: query aparte, NUNCA mezclada con los logs de hoy ni con el snapshot.
+        // En modo edición la ruta ya descartó `repetir` (exclusión mutua), así que acá llega null.
         loadRepeatSeed(client.id, blockIds, repeatDate ?? null),
       ])
       // Reconciliación server ∪ snapshot (server gana por block:set; lo local sobrevive _pending).
@@ -628,7 +674,7 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
     }
 
     setLoading(false)
-  }, [planId, repeatDate, snapshotKey, loadAreas, loadTodayServerLogs, loadPreviousHistory, loadExerciseMaxes, loadLastSession, loadRepeatSeed])
+  }, [planId, repeatDate, editIso, snapshotKey, loadAreas, loadServerLogsForDay, loadPreviousHistory, loadExerciseMaxes, loadLastSession, loadRepeatSeed])
 
   useEffect(() => {
     void load()
@@ -809,11 +855,18 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
         logData.substitution_reason = sub.reason
       }
 
+      // Ventana del día a escribir: la fecha objetivo en modo edición (`?fecha`, ya validada como
+      // ESTRICTAMENTE pasada por la ruta), hoy en cualquier otro caso. Espejo de `windowDateStr` de la
+      // action web (workout-log.actions.ts:119-135).
+      const editIsoNow = editIsoRef.current
       const { iso } = getTodayInSantiago()
-      const { startIso, endIso } = getSantiagoUtcBoundsForDay(iso)
+      const { startIso, endIso } = getSantiagoUtcBoundsForDay(editIsoNow ?? iso)
       let error: { message: string } | null = null
+      // Rechazo PERMANENTE del modo solo-UPDATE: la serie no existe en esa fecha ⇒ no se inserta, no se
+      // encola y no se reintenta (la UI lo pinta sin "Reintentar"). Espejo del `past_set_not_found` web.
+      let terminalError: string | null = null
       try {
-        const { data: existing } = await supabase
+        const { data: existing, error: selError } = await supabase
           .from('workout_logs')
           .select('id')
           .eq('client_id', cid)
@@ -823,10 +876,21 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
           .lt('logged_at', endIso)
           .order('logged_at', { ascending: false })
         if (existing && existing.length > 0) {
+          // Fila existente → UPDATE + purga de duplicados, idéntico en los dos modos. `logged_at` NO se
+          // toca (no está en `logData`): editar un día pasado JAMÁS mueve la serie a hoy — eso es lo que
+          // mantiene la fila dentro de la ventana de su día y del índice único diario.
           const [keep, ...dups] = existing as { id: string }[]
           const upd = await supabase.from('workout_logs').update(logData).eq('id', keep.id)
           error = upd.error
           if (dups.length) await supabase.from('workout_logs').delete().in('id', dups.map((d) => d.id))
+        } else if (editIsoNow) {
+          // Modo solo-UPDATE (réplica client-side de workout-log.actions.ts:181-185): sin fila en la
+          // ventana de esa fecha no hay nada que corregir y NUNCA se inserta (imposible farmear
+          // adherencia retroactiva). Se distingue del error de red: si el SELECT falló, esto es un fallo
+          // transitorio ⇒ cae al camino de error normal (encola con `target_date` y reintenta); sólo un
+          // SELECT exitoso y vacío es el rechazo permanente.
+          if (selError) error = selError
+          else terminalError = PAST_SET_NOT_FOUND_ERROR
         } else {
           const ins = await supabase.from('workout_logs').insert({ ...logData, logged_at: new Date().toISOString() })
           // 23505 = choque contra el índice único de prod `workout_logs_one_set_per_day`
@@ -875,6 +939,19 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
         error = { message: (e as { message?: string })?.message ?? 'error' }
       }
 
+      // Rechazo permanente del modo edición: la serie queda `_pending` (sin check verde mentiroso) y el
+      // mensaje viaja a la fila de la serie SIN "Reintentar" (SetRow lo reconoce por la copia compartida).
+      // No se encola: encolarla la haría reintentar por siempre contra una fila que no existe — que es
+      // exactamente el bug que la web resolvió metiendo `past_set_not_found` en PERMANENT_FAILURE_CODES.
+      if (terminalError) {
+        logsRef.current = logsRef.current.map((l) =>
+          l.block_id === payload.blockId && l.set_number === payload.setNumber ? { ...l, _pending: true } : l,
+        )
+        setSessionLogs(logsRef.current)
+        persistSnapshot()
+        return { isPR: false, error: terminalError }
+      }
+
       let syncError: string | null = null
       if (error) {
         // Encolar SIEMPRE por seguridad del dato. Pero el banner "Sin conexion" refleja la red REAL,
@@ -906,6 +983,10 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
                 substitution_reason: sub.reason,
               }
             : {}),
+          // Modo edición: la fecha objetivo VIAJA con el item para que el drenaje use la ventana de ESE
+          // día (y no la del `queued_at`) y mantenga el solo-UPDATE — sin esto, un fallo de red editando
+          // el martes encolaba una serie que al reconectar se insertaba como entreno de HOY.
+          ...(editIsoNow ? { target_date: editIsoNow } : {}),
           exercise_name_at_log: (logData.exercise_name_at_log as string) ?? null,
         })
         const online = await checkOnline()

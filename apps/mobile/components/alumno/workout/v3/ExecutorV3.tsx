@@ -24,6 +24,7 @@ import {
   isRoundComplete,
   isStepComplete,
   metersToDistanceCapture,
+  PAST_SET_NOT_FOUND_ERROR,
   repsUnitForModality,
   sessionLogKey,
   typedTargetFor,
@@ -180,6 +181,12 @@ export default function ExecutorV3({ planId, recoverDate, editDate, repeatDate }
 interface ExecutorV3Props {
   planId: string
   recoverDate?: string
+  /**
+   * Día PASADO cuyos registros se están EDITANDO (`?fecha`, ya validado por la ruta como pasado
+   * ESTRICTO). Conmuta el motor a modo SOLO-UPDATE: la ventana del día (logs, historial, máximos) es esa
+   * fecha y `logSet` corrige la fila existente sin insertar jamás una nueva. También alimenta el banner
+   * "Editando registros del {día}".
+   */
   editDate?: string
   /**
    * Día ya entrenado que se está REPITIENDO hoy (`?repetir=`, ya validado por la ruta). La sesión corre
@@ -207,7 +214,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const { theme, branding } = useTheme()
   const motion = useEvaMotion()
   const timers = useWorkoutTimers()
-  const session = useWorkoutSession(planId, repeatDate)
+  const session = useWorkoutSession(planId, repeatDate, editDate)
   // Finalizar en curso: el REF es el guard de reentrada (bloquea el 2.º tap dentro del mismo render) y el
   // ESTADO es lo que ve el alumno (botones deshabilitados + spinner). Antes sólo existía el ref, así que
   // finalizar no daba ninguna señal visual mientras corría (paridad con el fix de la web).
@@ -612,7 +619,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       )
       const setKey = `${payload.blockId}:${payload.setNumber}`
       if (error) {
-        failedPayloads.current[setKey] = payload
+        // El rechazo del editor de día pasado es PERMANENTE: no se guarda el payload para reintento (no
+        // hay fila que corregir en esa fecha y el solo-UPDATE nunca la crea). La fila de error lo pinta
+        // sin botones; cualquier otro error sí conserva el payload para el Reintentar.
+        if (error !== PAST_SET_NOT_FOUND_ERROR) failedPayloads.current[setKey] = payload
         setSyncErrors((m) => ({ ...m, [setKey]: error }))
       } else {
         delete failedPayloads.current[setKey]

@@ -15,7 +15,9 @@
  *
  * `day-completion` agrega la regla ÚNICA de completitud del día (none / in_progress / done, spec
  * `workout-day-in-progress`) junto con sus fixtures de paridad, que web y RN consumen desde acá para
- * que la day-card no pueda divergir entre plataformas.
+ * que la day-card no pueda divergir entre plataformas. `target-date` hace lo mismo con la validación
+ * de la fecha objetivo del ejecutor (`?fecha` / `?repetir`): bajó de `apps/web` cuando el editor de
+ * día pasado se portó a RN, donde había una copia parcial que empezaba a driftear.
  */
 
 export * from './session-logs.reconcile'
@@ -43,3 +45,4 @@ export * from './pr-detect'
 export * from './repeat-seed'
 export * from './day-completion'
 export * from './day-completion.fixtures'
+export * from './target-date'

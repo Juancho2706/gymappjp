@@ -47,6 +47,15 @@ interface PendingLog {
   substitution_reason?: string | null
   exercise_name_at_log: string | null
   queued_at: string
+  /**
+   * Fecha objetivo `yyyy-mm-dd` (Santiago) cuando la serie se encoló EDITANDO un día PASADO (`?fecha`).
+   * Cambia dos cosas del drenaje: la ventana del día es ÉSTA (no la del `queued_at`) y el modo es
+   * SOLO-UPDATE — sin fila que corregir se DESCARTA permanentemente, jamás se inserta (espejo del
+   * `past_set_not_found` de la action web, que la cola web trata como fallo permanente). Es metadato de
+   * la cola: NUNCA viaja como columna a `workout_logs`. Ausente (todo item legacy / sesión normal) ⇒
+   * comportamiento previo byte-idéntico: ventana del `queued_at` y upsert con INSERT.
+   */
+  target_date?: string
 }
 
 export async function cachePlan(planId: string, data: unknown): Promise<void> {
@@ -63,9 +72,13 @@ export async function getCachedPlan<T>(planId: string): Promise<T | null> {
 // Clave natural = client:block:set:día-Santiago — MISMA identidad que el índice único de prod
 // `workout_logs_unique_set_per_day` (PR #113). Re-encolar la misma serie del mismo día colapsa
 // (last-wins); un flush concurrente ya no puede duplicar (candado + índice como backstop 23505).
+//
+// El día de la clave es el día al que la serie ESCRIBE: `target_date` cuando se está editando una fecha
+// pasada, el día del `queued_at` en una sesión normal. Sin esa distinción, corregir el martes con la red
+// caída colapsaba contra la serie de hoy del mismo block:set (misma clave) y una de las dos se perdía.
 
-function workoutDedupKey(l: { client_id: string; block_id: string; set_number: number; queued_at?: string }): string {
-  const day = getSantiagoIsoYmdForUtcInstant(l.queued_at ?? new Date().toISOString())
+function workoutDedupKey(l: { client_id: string; block_id: string; set_number: number; queued_at?: string; target_date?: string }): string {
+  const day = l.target_date ?? getSantiagoIsoYmdForUtcInstant(l.queued_at ?? new Date().toISOString())
   return `${l.client_id}:${l.block_id}:${l.set_number}:${day}`
 }
 
@@ -98,15 +111,21 @@ export async function enqueueLog(log: Omit<PendingLog, 'queued_at'>): Promise<vo
  * un reseed del plan) es una serie que el alumno YA entrenó y que no va a llegar al server NUNCA, así que
  * silenciarlo era pérdida de datos invisible — y peor, dejaba al chip del ejecutor en "Todo sincronizado"
  * verde. Los consumidores necesitan el descarte para avisar (espejo del `OfflineWorkoutQueueSync` web).
+ *
+ * Descartes permanentes hoy: `23503` (FK del bloque borrado) y `past_set_not_found` (item con
+ * `target_date` cuya serie no existe en esa fecha ⇒ el solo-UPDATE no puede insertarla).
  */
 export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueScope): Promise<FlushSummary> {
   const res = await flushQueue<PendingLog>(
     kv,
     LOG_QUEUE_KEY,
     async (item) => {
-      const { queued_at, ...log } = item
+      // `queued_at` y `target_date` son metadato de la cola: se sacan del payload para que NUNCA viajen
+      // como columnas (`target_date` no existe en `workout_logs` → PGRST204 y la serie se perdería).
+      const { queued_at, target_date, ...log } = item
       const loggedAt = queued_at || new Date().toISOString()
-      const dayIso = getSantiagoIsoYmdForUtcInstant(loggedAt)
+      // Ventana del día: la fecha editada manda; si no, el día del encolado (el día real del entreno).
+      const dayIso = target_date ?? getSantiagoIsoYmdForUtcInstant(loggedAt)
       const { startIso, endIso } = getSantiagoUtcBoundsForDay(dayIso)
       try {
         const { data: existing, error: selErr } = await supabase
@@ -125,6 +144,22 @@ export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueSc
           if (upd.error) return 'retry'
           if (dups.length) await supabase.from('workout_logs').delete().in('id', dups.map((d) => d.id))
           return 'ok'
+        }
+        if (target_date) {
+          // Modo SOLO-UPDATE (edición de día pasado): sin fila en esa fecha no hay nada que corregir y
+          // JAMÁS se inserta. Descarte PERMANENTE, no 'retry': reintentar con backoff contra una fila que
+          // no existe es un loop infinito (por eso la cola web mete `past_set_not_found` en
+          // PERMANENT_FAILURE_CODES). Se deja rastro en Sentry igual que el descarte 23503.
+          try {
+            Sentry.captureMessage('workout-offline-queue: descarte past_set_not_found', {
+              level: 'warning',
+              tags: { area: 'workout-offline-queue', platform: 'rn', discard_code: 'past_set_not_found' },
+              extra: { blockId: log.block_id, setNumber: log.set_number, targetDate: target_date },
+            })
+          } catch {
+            // Sentry no inicializado (sin DSN) / versión sin API → no-op silencioso.
+          }
+          return 'discard'
         }
         const ins = await supabase.from('workout_logs').insert({ ...log, logged_at: loggedAt })
         if (ins.error) {
