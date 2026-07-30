@@ -43,8 +43,6 @@
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_SLEEP"
       ],
@@ -160,6 +158,7 @@
         }
       ],
       "react-native-health-connect",
+      "./plugins/with-health-connect",
       "react-native-notify-kit",
       "expo-secure-store",
       "./plugins/with-ios-modular-headers",

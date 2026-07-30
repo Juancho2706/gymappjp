@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Linking, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Check, Droplets, Footprints, HeartPulse, Moon, Smartphone } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
@@ -9,11 +9,15 @@ import { FONT } from '../../../lib/typography'
 import { getDailyHabits, upsertDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 import {
   getAndroidHealthAvailability,
+  HEALTH_ERROR_COPY,
+  HEALTH_PROVIDER_INSTALL_COPY,
+  HEALTH_PROVIDER_STORE_URL,
+  HEALTH_PROVIDER_STORE_WEB_URL,
   isHealthAvailable,
   nearestSleepOption,
   readLastNightSleepHours,
   readTodaySteps,
-  requestHealthPermissions,
+  requestHealthPermissionsDetailed,
 } from '../../../lib/health-aggregators'
 import { getHealthOptIn, setHealthOptIn } from '../../../lib/health-prefs'
 import { toast } from '../../Toast'
@@ -123,17 +127,25 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
       if (Platform.OS === 'android') {
         const availability = await getAndroidHealthAvailability()
         if (availability !== 'available') {
-          toast.error(
-            availability === 'update-required'
-              ? 'Actualizá Health Connect desde Google Play para conectar.'
-              : 'Instalá Health Connect desde Google Play para conectar.',
-          )
+          // Android <=13 no trae Health Connect de fábrica: explicar ANTES de mandar a Play Store
+          // (QA4: el salto sin contexto se sentía como un bug).
+          Alert.alert(HEALTH_PROVIDER_INSTALL_COPY.title, HEALTH_PROVIDER_INSTALL_COPY.body, [
+            { text: 'Ahora no', style: 'cancel' },
+            {
+              text: HEALTH_PROVIDER_INSTALL_COPY.cta,
+              onPress: () => {
+                Linking.openURL(HEALTH_PROVIDER_STORE_URL).catch(() => {
+                  Linking.openURL(HEALTH_PROVIDER_STORE_WEB_URL).catch(() => {})
+                })
+              },
+            },
+          ])
           return
         }
       }
-      const granted = await requestHealthPermissions()
-      if (!granted) {
-        toast.error('No se pudo conectar con Salud')
+      const res = await requestHealthPermissionsDetailed()
+      if (!res.ok) {
+        toast.error(HEALTH_ERROR_COPY[res.reason] ?? 'No se pudo conectar con Salud')
         return
       }
       await setHealthOptIn(true)
