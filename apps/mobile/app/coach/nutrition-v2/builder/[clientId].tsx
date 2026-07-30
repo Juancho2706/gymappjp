@@ -35,7 +35,7 @@ import {
 import { QuantityStepper } from '../../../../components/nutrition-v2/quick-edit/QuantityStepper'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
-import { type FoodCatalogItem, type NutritionStrategy } from '@eva/nutrition-v2'
+import { foodCategoryFromName, type FoodCatalogItem, type NutritionStrategy } from '@eva/nutrition-v2'
 import { exchangeGroupColor, hasUnconfirmedMacros, type ExchangeGroup } from '@eva/nutrition-engine'
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
@@ -2234,10 +2234,13 @@ function ItemEditor({
     <View className="rounded-control border border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
+          {/* QA2-B3a: fallback 1:1 con el builder web (`PlanBuilderClient.tsx:622`) —
+              webp estatico de la categoria del catalogo; item libre => categoria
+              derivada del nombre. El emoji queda deprecado. */}
           <FoodThumbnail
             alt={item.food?.name ?? item.customName ?? 'Alimento'}
             src={item.food ? foodMediaThumbnailUrl(item.food.media) : null}
-            fallbackEmoji={item.food ? foodCategoryEmoji(item.food.category) : null}
+            fallbackCategory={item.food ? item.food.category : foodCategoryFromName(item.customName)}
             size="sm"
           />
           <View className="min-w-0 flex-1">

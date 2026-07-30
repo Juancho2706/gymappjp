@@ -1,8 +1,11 @@
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowLeftRight, Trash2 } from 'lucide-react-native'
+import { foodCategoryFromName } from '@eva/nutrition-v2'
 import { MacroChipRow } from '../MacroChipRow'
+import { FoodThumbnail } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { BUILDER_UNITS, type ItemMacros } from '../../../lib/nutrition-v2-builder'
+import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
 import { stepForUnit, type QuickEditItem } from '../../../lib/nutrition-v2-quick-edit'
 import { QuantityStepper } from './QuantityStepper'
 
@@ -69,31 +72,42 @@ export function EditableItemRow({
   const isCustom = !item.foodId && !item.recipeId
   const quantityError = errors['item.' + item.key + '.quantity']
   const nameError = errors['item.' + item.key + '.name']
+  // QA2-B3a: icono del producto a la izquierda del nombre — espejo del builder web
+  // (`PlanBuilderClient.tsx:619-626` + `FoodThumb`): foto del catalogo si existe, y si
+  // no el webp estatico de la categoria (item libre => categoria derivada del nombre).
+  const thumbAlt = item.displayName || item.customName || 'Alimento'
+  const thumbSrc = foodMediaThumbnailUrl(item.food?.media ?? item.media)
+  const thumbCategory = isCustom
+    ? foodCategoryFromName(item.customName ?? item.displayName)
+    : (item.food?.category ?? item.category)
 
   return (
     <View className="rounded-control border border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
-        <View className="min-w-0 flex-1">
-          {isCustom ? (
-            <TextInput
-              accessibilityLabel="Nombre del alimento"
-              value={item.customName ?? ''}
-              onChangeText={onNameChange}
-              editable={!disabled}
-              placeholder="Nombre del alimento"
-              placeholderTextColor={theme.mutedForeground}
-              className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-strong"
-            />
-          ) : (
-            <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
-              {item.displayName}
-            </Text>
-          )}
-          {!isCustom && item.brand ? (
-            <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
-              {item.brand}
-            </Text>
-          ) : null}
+        <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
+          <FoodThumbnail alt={thumbAlt} src={thumbSrc} fallbackCategory={thumbCategory} size="sm" />
+          <View className="min-w-0 flex-1">
+            {isCustom ? (
+              <TextInput
+                accessibilityLabel="Nombre del alimento"
+                value={item.customName ?? ''}
+                onChangeText={onNameChange}
+                editable={!disabled}
+                placeholder="Nombre del alimento"
+                placeholderTextColor={theme.mutedForeground}
+                className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-strong"
+              />
+            ) : (
+              <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
+                {item.displayName}
+              </Text>
+            )}
+            {!isCustom && item.brand ? (
+              <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
+                {item.brand}
+              </Text>
+            ) : null}
+          </View>
         </View>
         <View className="flex-row items-center">
           <Pressable

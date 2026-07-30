@@ -124,7 +124,7 @@ export default function SubscriptionScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
+      <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app">
         <AppBackground />
         <EvaLoaderScreen subtitle="Cargando tu plan…" />
       </SafeAreaView>
@@ -137,7 +137,7 @@ export default function SubscriptionScreen() {
     const managedBy = data?.managed ? data.managedBy : ws.kind === 'enterprise' ? 'org' : 'team'
     const name = ws.workspaces.find((w) => w.isActive)?.label ?? null
     return (
-      <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
+      <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app">
         <AppBackground />
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
@@ -159,7 +159,7 @@ export default function SubscriptionScreen() {
 
   if (failed || !data || data.managed) {
     return (
-      <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
+      <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app">
         <AppBackground />
         <EmptyState
           icon={Lock}
@@ -204,7 +204,7 @@ export default function SubscriptionScreen() {
     changeCardEnabled && ['active', 'trialing', 'paused', 'past_due'].includes(status)
 
   return (
-    <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
+    <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app">
       <AppBackground />
 
       <ScrollView

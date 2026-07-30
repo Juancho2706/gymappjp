@@ -105,7 +105,7 @@ export default function CoachPerfilScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
         <EvaLoaderScreen subtitle="Cargando perfil..." />
       </SafeAreaView>
@@ -113,7 +113,7 @@ export default function CoachPerfilScreen() {
   }
 
   return (
-    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
@@ -140,7 +140,9 @@ export default function CoachPerfilScreen() {
             ]}
           >
             {coach?.logoUrl ? (
-              <Image source={{ uri: coach.logoUrl }} style={styles.avatarLogo} contentFit="cover" transition={150} />
+              // QA2-B2: `contain` — un logo de marca NO se recorta (antes 'cover' comía
+              // los bordes de logos anchos). El fondo neutro lo pone el contenedor.
+              <Image source={{ uri: coach.logoUrl }} style={styles.avatarLogo} contentFit="contain" transition={150} />
             ) : (
               <User size={30} color={theme.primary} strokeWidth={1.75} />
             )}

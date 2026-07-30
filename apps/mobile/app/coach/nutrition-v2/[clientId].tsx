@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -205,6 +205,9 @@ function genAssignOperationId(): string {
 export default function CoachNutritionV2ClientScreen() {
   const router = useRouter()
   const { theme } = useTheme()
+  // QA2-B4: ruta de stack SIN header nativo (root Stack headerShown:false) — el inset
+  // superior lo pone la pantalla. Mismo patrón que `coach/nutrition-v2/index.tsx`.
+  const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ clientId: string }>()
   const clientId = Array.isArray(params.clientId) ? params.clientId[0] : params.clientId
   const entitlements = useEntitlements()
@@ -371,7 +374,7 @@ export default function CoachNutritionV2ClientScreen() {
 
   if (!entitlements.ready || !workspaceReady || loading) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionSkeleton variant="coach" />
       </View>
     )
@@ -379,7 +382,7 @@ export default function CoachNutritionV2ClientScreen() {
 
   if (!enabled || !clientId || !scope) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionStatePanel
           icon="permission"
           title="Ficha V2 no habilitada"
@@ -400,7 +403,7 @@ export default function CoachNutritionV2ClientScreen() {
 
   if (!detail) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionStatePanel
           icon="offline"
           tone="warning"
@@ -477,7 +480,8 @@ export default function CoachNutritionV2ClientScreen() {
   return (
     <ScrollView
       className="flex-1 bg-surface-app"
-      contentContainerClassName="gap-5 px-4 pb-12 pt-5"
+      contentContainerClassName="gap-5 px-4 pb-12"
+      contentContainerStyle={{ paddingTop: insets.top + 12 }}
     >
       <View className="flex-row items-center gap-3">
         <Pressable
