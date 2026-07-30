@@ -108,12 +108,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/eva-mark-filled.png",
+          "image": "./assets/eva-icon.png",
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#07080C",
           "dark": {
-            "image": "./assets/eva-mark-filled.png",
+            "image": "./assets/eva-icon.png",
             "backgroundColor": "#07080C"
           }
         }

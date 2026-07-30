@@ -4,17 +4,14 @@ import { useReducedMotion } from 'react-native-reanimated'
 import { Image } from 'expo-image'
 import { useTheme } from '../context/ThemeContext'
 import { AppBackground } from './AppBackground'
+import { EvaFigure, evaFigureHeight } from './entry/EvaFigure'
 
-// EVA brand loader — the multicolor "EVA" letters with a staggered wave.
-// Default in-app loading indicator (replaces ActivityIndicator). EVA gradient
-// stops: violet / cyan / emerald (same as the web shine loader).
-const LETTERS: { c: string; color: string }[] = [
-  { c: 'E', color: '#8B5CF6' },
-  { c: 'V', color: '#06B6D4' },
-  { c: 'A', color: '#10B981' },
-]
-
+// EVA brand loader — la FIGURA blanca de EVA con respiración sutil (QA2 2026-07-29:
+// muere el wordmark tricolor "EVA" viejo; el sistema actual es la figura — misma marca
+// que el splash nativo y la familia de entrada). En tema claro la figura se tiñe con la
+// tinta del tema (el PNG es blanco puro; sin tinte sería invisible sobre claro).
 type Size = 'sm' | 'md' | 'lg'
+const FIGURE: Record<Size, number> = { sm: 44, md: 66, lg: 96 }
 const FONT: Record<Size, number> = { sm: 30, md: 44, lg: 60 }
 const LOGO: Record<Size, number> = { sm: 40, md: 60, lg: 84 }
 
@@ -44,7 +41,7 @@ export function EvaLoader({ size = 'lg', subtitle }: { size?: Size; subtitle?: s
               <Image source={{ uri: branding.logoUrl }} style={{ width: LOGO[size], height: LOGO[size] }} contentFit="contain" transition={150} />
             </MotiView>
           ) : iconMode === 'eva' ? (
-            <DefaultEvaLetters fontSize={fontSize} reduceMotion={reduceMotion} />
+            <DefaultEvaFigure size={size} reduceMotion={reduceMotion} />
           ) : null}
           {customText ? (
             <MotiView from={{ opacity: 0.5 }} animate={{ opacity: 1 }} transition={pulse}>
@@ -55,7 +52,7 @@ export function EvaLoader({ size = 'lg', subtitle }: { size?: Size; subtitle?: s
           ) : null}
         </View>
       ) : (
-        <DefaultEvaLetters fontSize={fontSize} reduceMotion={reduceMotion} />
+        <DefaultEvaFigure size={size} reduceMotion={reduceMotion} />
       )}
       {subtitle ? (
         <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{subtitle}</Text>
@@ -64,24 +61,24 @@ export function EvaLoader({ size = 'lg', subtitle }: { size?: Size; subtitle?: s
   )
 }
 
-function DefaultEvaLetters({ fontSize, reduceMotion }: { fontSize: number; reduceMotion: boolean }) {
+function DefaultEvaFigure({ size, reduceMotion }: { size: Size; reduceMotion: boolean }) {
+  const { resolvedScheme, theme } = useTheme()
+  const width = FIGURE[size]
   return (
-    <View style={styles.row}>
-      {LETTERS.map((l, i) => (
-        <MotiView
-          key={l.c}
-          from={{ translateY: 0, opacity: 0.45 }}
-          animate={{ translateY: reduceMotion ? 0 : -6, opacity: 1 }}
-          transition={reduceMotion
-            ? { type: 'timing', duration: 1 }
-            : { type: 'timing', duration: 520, loop: true, repeatReverse: true, delay: i * 150 }}
-        >
-          <Text style={{ fontSize, lineHeight: fontSize * 1.05, color: l.color, fontFamily: 'Archivo_800ExtraBold', letterSpacing: -1 }}>
-            {l.c}
-          </Text>
-        </MotiView>
-      ))}
-    </View>
+    <MotiView
+      from={{ opacity: 0.55, scale: 0.96 }}
+      animate={{ opacity: 1, scale: reduceMotion ? 0.96 : 1.02 }}
+      transition={reduceMotion
+        ? { type: 'timing', duration: 1 }
+        : { type: 'timing', duration: 820, loop: true, repeatReverse: true }}
+      style={{ height: evaFigureHeight(width) }}
+    >
+      <EvaFigure
+        size={width}
+        // El asset es blanco puro: sobre tema claro se tiñe con la tinta del tema.
+        style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }}
+      />
+    </MotiView>
   )
 }
 
