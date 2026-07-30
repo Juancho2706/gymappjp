@@ -1550,7 +1550,7 @@ function AssignPlanModal({
                     className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
                   />
                   <Text className="mt-1 text-xs text-muted">
-                    Formato AAAA-MM-DD. Para quienes ya tienen plan, debe ser posterior a la de su versión
+                    Formato AAAA-MM-DD. Para quienes ya tienen plan, debe ser posterior a la de su plan
                     vigente.
                   </Text>
                 </View>

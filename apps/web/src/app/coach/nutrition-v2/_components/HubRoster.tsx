@@ -42,8 +42,8 @@ function attentionTitle(reason: Exclude<AttentionReason, 'none'>): string {
 }
 
 function attentionDescription(reason: Exclude<AttentionReason, 'none'>): string {
-  if (reason === 'no_plan') return 'Este alumno todavia no tiene una prescripcion versionada.'
-  if (reason === 'draft_pending') return 'Existe una version que aun no ha sido publicada.'
+  if (reason === 'no_plan') return 'Este alumno todavía no tiene un plan de nutrición asignado.'
+  if (reason === 'draft_pending') return 'Hay un borrador sin publicar.'
   return 'No hay registros canonicos durante los ultimos siete dias.'
 }
 

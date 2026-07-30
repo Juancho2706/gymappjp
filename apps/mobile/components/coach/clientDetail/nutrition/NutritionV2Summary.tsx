@@ -390,7 +390,7 @@ export function NutritionV2Summary({
         <NutritionStatePanel
           icon="empty"
           title="Sin plan V2 vigente"
-          description="Este alumno todavía no tiene una versión publicada de su plan de nutrición. Crea la primera para ver metas, franjas y adherencia."
+          description="Este alumno todavía no tiene un plan de nutrición publicado. Crea la primera para ver metas, franjas y adherencia."
           action={<EmberCta label="Crear plan" accessibilityLabel="Crear plan" onPress={openBuilder} />}
         />
       ) : (
