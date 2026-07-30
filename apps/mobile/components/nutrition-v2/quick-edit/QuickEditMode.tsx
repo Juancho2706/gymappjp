@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
   ArrowLeft,
@@ -190,6 +191,11 @@ export function QuickEditMode({
 }) {
   const { theme } = useTheme()
   const router = useRouter()
+  // QA2-B4: el modo edicion se monta como pantalla completa dentro de una ruta SIN
+  // header nativo (root Stack con headerShown:false), asi que el inset superior es
+  // responsabilidad de esta barra fija — sin el, el boton de salida choca con la
+  // barra de estado/notch.
+  const insets = useSafeAreaInsets()
   // Baseline CONGELADO al montar: se hidrata UNA vez al entrar al modo edicion (el
   // componente se monta al entrar y se desmonta al salir; una re-entrada re-hidrata
   // fresco). Si la ficha recibe un read model mas nuevo mientras se edita (carrera
@@ -892,7 +898,7 @@ export function QuickEditMode({
 
   if (!baseline) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionStatePanel
           title="Sin plan vigente"
           description="No hay un plan publicado para editar."
@@ -922,7 +928,7 @@ export function QuickEditMode({
         {/* Barra fija del modo edición: salida + identidad del alumno + anclas por día. Vive
             FUERA del scroll a propósito — con los N días apilados, el único control de
             navegación no puede desaparecer al primer deslizamiento. */}
-        <View className="border-b border-subtle bg-surface-app px-4 pb-2 pt-5">
+        <View className="border-b border-subtle bg-surface-app px-4 pb-2" style={{ paddingTop: insets.top + 8 }}>
           <View className="flex-row items-center gap-3">
             <Pressable
               accessibilityRole="button"

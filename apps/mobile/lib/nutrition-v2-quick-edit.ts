@@ -58,6 +58,7 @@ import {
   type NutritionV2WriteClient,
   type PublishFailure,
 } from './nutrition-v2-builder'
+import type { FoodMediaLike } from './nutrition-v2-food-media'
 
 // ---------------------------------------------------------------------------
 // Codigos de error del quick-edit — CONSOLIDADO: contrato unico en @eva/nutrition-v2
@@ -134,6 +135,14 @@ export interface QuickEditItem {
     fatsG: number | null
     fiberG: number | null
   } | null
+  /**
+   * QA2-B3a: categoria/media del catalogo resueltas EN LECTURA por el read model
+   * (`get_nutrition_plan_read_v2` → `category` + `media` por item). Alimentan el
+   * thumbnail de la fila igual que el builder web (`PlanBuilderClient.tsx:619-626`).
+   * Item libre (sin foodId) => ambas null y el icono cae por nombre.
+   */
+  category: string | null
+  media: FoodMediaLike | null
   /** Hidratado al swap/agregar desde el catalogo; para items base se usa el mapa de foods. */
   food: BuilderFood | null
 }
@@ -257,6 +266,8 @@ export function planModelToQuickEditState(
           notes: item.notes,
           baseQuantity: item.quantity,
           baseMacros: item.macros,
+          category: item.category ?? null,
+          media: item.media ?? null,
           food: null,
         })),
       })),
@@ -669,6 +680,8 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         brand: action.food.brand,
         baseQuantity: null,
         baseMacros: null,
+        category: action.food.category,
+        media: action.food.media,
         food: action.food,
       }))
     case 'ADD_ITEM': {
@@ -689,6 +702,8 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         notes: null,
         baseQuantity: null,
         baseMacros: null,
+        category: action.food ? action.food.category : null,
+        media: action.food ? action.food.media : null,
         food: action.food,
       }
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { Minus, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react-native'
 import { exchangeGroupColor, type ExchangeGroup } from '@eva/nutrition-engine'
+import { GroupDot as PortionGroupDot } from '../../alumno/nutrition-v2/PortionChip'
 import { Sheet } from '../../Sheet'
 import { ExchangeGroupFormSheet, type ExchangeGroupFormInitial } from '../ExchangeGroupFormSheet'
 import { useTheme } from '../../../context/ThemeContext'
@@ -41,7 +42,16 @@ export interface QuickEditGroupAdmin {
  * Plan sin porciones => la seccion NO se pinta (capa invisible, SPEC UX-c).
  */
 
-/** Circulito de identidad del grupo: color del catalogo SOLO aqui, letra blanca (SPEC UX). */
+/**
+ * Circulito de identidad del grupo: color del catalogo SOLO aqui, letra blanca (SPEC UX).
+ *
+ * QA2-B3b: delega en el `GroupDot` del DS de porciones (el mismo que usan
+ * `PrescribedPortionChips` / `PortionDayCoverageCard`), que escala la tipografia con el
+ * diametro, fija `numberOfLines={1}` y desactiva `allowFontScaling`. La version previa
+ * clavaba `text-[10px]` en un circulo de 20px y recortaba el code a 3 letras: un code de
+ * 3 ("PRO") ENVOLVIA en dos lineas dentro del circulo. Ahora el code va completo en una
+ * sola linea — mismo criterio adaptativo que el `PortionsGroupDot` del builder web.
+ */
 function GroupDot({
   group,
   sortOrder,
@@ -50,15 +60,11 @@ function GroupDot({
   sortOrder: number
 }) {
   return (
-    <View
-      accessible={false}
-      className="h-5 w-5 items-center justify-center rounded-full"
-      style={{ backgroundColor: exchangeGroupColor({ color: group.color, sortOrder }) }}
-    >
-      <Text className="text-[10px] font-bold leading-none text-white">
-        {group.groupCode.slice(0, 3)}
-      </Text>
-    </View>
+    <PortionGroupDot
+      code={group.groupCode}
+      color={exchangeGroupColor({ color: group.color, sortOrder })}
+      size={20}
+    />
   )
 }
 

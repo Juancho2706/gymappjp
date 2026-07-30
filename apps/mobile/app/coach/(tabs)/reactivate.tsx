@@ -73,7 +73,7 @@ export default function CoachReactivateScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
+      <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app">
         <AppBackground />
         <EvaLoaderScreen subtitle="Cargando tu plan…" />
       </SafeAreaView>

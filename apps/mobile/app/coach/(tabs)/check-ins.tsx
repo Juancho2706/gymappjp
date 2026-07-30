@@ -342,7 +342,7 @@ export default function CheckInsScreen() {
   }
 
   return (
-    <SafeAreaView edges={[]} style={{ flex: 1 }} className="bg-surface-app">
+    <SafeAreaView edges={['top']} style={{ flex: 1 }} className="bg-surface-app">
       <AppBackground />
       <ScreenHeader
         title="Check-ins"

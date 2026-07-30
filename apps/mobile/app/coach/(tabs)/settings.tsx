@@ -185,6 +185,9 @@ export default function CoachSettingsHubScreen() {
   const managed = ws.isManaged
   const tier = profile?.subscriptionTier ?? 'starter'
   const displayName = profile?.brandName?.trim() || profile?.fullName?.trim() || 'Coach'
+  // QA2-B2: el hero pinta el LOGO de la marca cuando existe (`coaches.logo_url`, la misma
+  // columna que edita `coach/settings/brand.tsx`); sin logo cae a las iniciales del DS.
+  const heroLogoUrl = profile?.logoUrl?.trim() || null
   const brandingOk = canUseBranding(tier)
 
   const roleBadge = isTeam
@@ -234,7 +237,9 @@ export default function CoachSettingsHubScreen() {
             style={{ marginTop: 14 }}
           >
             <Card variant="inverse" padding="lg" style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-              <Avatar name={displayName} size="xl" ring="sport" />
+              {/* QA2-B2: con logo de marca el círculo muestra el LOGO (contain sobre fondo
+                  neutro); sin logo — o si la imagen falla — cae a las iniciales del DS. */}
+              <Avatar name={displayName} src={heroLogoUrl} fit="contain" size="xl" ring="sport" />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text className="font-display-black text-on-dark" style={{ fontSize: 20, letterSpacing: -0.4 }} numberOfLines={1}>
                   {displayName}
