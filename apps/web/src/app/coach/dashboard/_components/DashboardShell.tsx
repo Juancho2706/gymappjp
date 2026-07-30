@@ -2,9 +2,9 @@
 
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Sparkles, ChevronDown } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
+import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { AmbientBrandGlow } from '@/components/coach/AmbientBrandGlow'
 import { BillingBanners } from './banners/BillingBanners'
@@ -234,16 +234,17 @@ export function DashboardShell({
  * Tamaño `md` (40px) para igualar la huella del avatar previo del header.
  */
 function HeaderBrandTile({ logoUrl, name }: { logoUrl?: string | null; name: string }) {
-    if (logoUrl) {
-        return (
-            // `block` obligatorio: un span inline ignora size-10 y colapsa a ~2px (el Image fill
-            // queda sin área) — así "desaparecía" el chip del workspace en el header móvil.
-            <span className="relative block size-10 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
-                <Image src={logoUrl} alt={name} fill sizes="40px" className="object-contain p-1.5" />
-            </span>
-        )
-    }
-    return <Avatar name={name} size="md" ring="sport" />
+    // Contrato compartido con el topbar/sidebar (CoachBrandAvatar): logo → iniciales, con caída
+    // automática a las iniciales si la imagen no carga. El fallback conserva el anillo sport que
+    // este header ya tenía.
+    return (
+        <CoachBrandAvatar
+            name={name}
+            logoUrl={logoUrl}
+            size="md"
+            fallback={<Avatar name={name} size="md" ring="sport" />}
+        />
+    )
 }
 
 function FreeTierBanner({ activeClients }: { activeClients: number }) {
