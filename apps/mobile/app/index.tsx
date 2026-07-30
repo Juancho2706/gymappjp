@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { BackHandler, Keyboard, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { MotiView } from 'moti'
@@ -11,6 +11,7 @@ import {
   withTiming,
 } from 'react-native-reanimated'
 import { ForceScheme, useTheme } from '../context/ThemeContext'
+import { CoachCodeSheet } from '../components/entry/CoachCodeSheet'
 import { EntryGrain } from '../components/entry/EntryBackground'
 import { EvaFigure } from '../components/entry/EvaFigure'
 import { ENTRY_LIGHT, LightLayer } from '../components/entry/LightLayer'
@@ -112,19 +113,15 @@ function Reveal({
 /** A1 — la rampa no se reemplaza de golpe: se cruza en 200 ms al entrar al morph. */
 const RAMP_MS = 200
 
-interface MorphState {
-  role: RoleKind
-  origin: MorphOrigin
-}
-
-const ROLE_TARGET: Record<RoleKind, '/alumno/codigo' | '/(auth)/login?role=coach'> = {
-  alumno: '/alumno/codigo',
-  coach: '/(auth)/login?role=coach',
-}
-
 /**
  * FRAME 02 — valor + rol en UNA sola pantalla: 0 slides, 0 swipes, 0 dots, 0 "Saltar".
  * Rol elegible a ~1.6 s del cold start.
+ *
+ * Los dos roles NO hacen lo mismo con el morph (decision del owner, 2026-07-30):
+ *  - **coach** navega: el morph es transicion pura y `/(auth)/login?role=coach` es el destino.
+ *  - **alumno** NO navega: la card se expande EN ESTA MISMA PANTALLA hasta ser el sheet que
+ *    contiene el form del codigo (frame 4 del concepto C). El selector queda montado debajo
+ *    —la atmosfera es continua por construccion— y el back revierte el morph.
  */
 function EntryScreen() {
   const router = useRouter()
@@ -135,7 +132,14 @@ function EntryScreen() {
   const containerRef = useRef<View>(null)
   const alumnoRef = useRef<View>(null)
   const coachRef = useRef<View>(null)
-  const [morph, setMorph] = useState<MorphState | null>(null)
+  /** Morph del coach: overlay de transicion, se limpia al volver del login. */
+  const [coachMorph, setCoachMorph] = useState<MorphOrigin | null>(null)
+  /** Sheet del alumno: el rect medido sobrevive al foco; el sheet ES la pantalla. */
+  const [sheet, setSheet] = useState<MorphOrigin | null>(null)
+  /** `false` = reproducir el recorrido invertido y desmontar al terminar. */
+  const [sheetOpen, setSheetOpen] = useState(false)
+  /** El recorrido de ida cerro: recien ahi el campo puede pedir el teclado. */
+  const [sheetReady, setSheetReady] = useState(false)
   const navigating = useRef(false)
 
   // §3.2.6 — densidad: en 667 pt colapsa el TERCER fragmento (su copy se anexa al
@@ -144,31 +148,44 @@ function EntryScreen() {
   const compact = height <= 667
   const bigText = fontScale > 1.15
 
-  // Al volver (back del destino) el overlay del morph debe estar limpio: la pantalla 02
-  // nunca se desmonto, solo quedo debajo.
+  // Al volver del login el overlay de TRANSICION debe estar limpio (la pantalla 02 nunca
+  // se desmonto, solo quedo debajo). El sheet del alumno NO se limpia: si el usuario vuelve
+  // del login con el back, encuentra su sheet y su codigo donde los dejo — igual que antes
+  // encontraba la pantalla `/alumno/codigo`.
   useFocusEffect(
     useCallback(() => {
-      setMorph(null)
+      setCoachMorph(null)
       navigating.current = false
     }, []),
   )
 
-  const commit = useCallback(
-    (role: RoleKind) => {
-      if (navigating.current) return
-      navigating.current = true
-      router.push(ROLE_TARGET[role])
-    },
-    [router],
-  )
+  const commitCoach = useCallback(() => {
+    if (navigating.current) return
+    navigating.current = true
+    router.push('/(auth)/login?role=coach')
+  }, [router])
+
+  const closeSheet = useCallback(() => {
+    // El teclado se va con el morph, no despues: cerrarlo al desmontar el input haria
+    // dos animaciones encadenadas.
+    Keyboard.dismiss()
+    setSheetReady(false)
+    setSheetOpen(false)
+  }, [])
 
   const startMorph = useCallback(
     (role: RoleKind, ref: RefObject<View | null>) => {
-      if (navigating.current || morph) return
+      if (navigating.current || coachMorph || sheet) return
+      const openFallback = () => {
+        if (role === 'coach') commitCoach()
+        else router.push('/alumno/codigo')
+      }
       const node = ref.current
       const container = containerRef.current
       if (!node || !container) {
-        commit(role)
+        // Sin rect no hay morph posible: el alumno cae a la ruta del frame 04, que monta
+        // el MISMO form. Nunca se queda sin camino.
+        openFallback()
         return
       }
       // El origen del morph es el rect REAL de la card, no el 595/692 de la referencia:
@@ -176,25 +193,48 @@ function EntryScreen() {
       container.measureInWindow((containerX, containerY) => {
         node.measureInWindow((x, y, width, cardHeight) => {
           if (!width || !cardHeight) {
-            commit(role)
+            openFallback()
             return
           }
-          setMorph({
-            role,
-            origin: { x: x - containerX, y: y - containerY, width, height: cardHeight },
-          })
+          const origin = { x: x - containerX, y: y - containerY, width, height: cardHeight }
+          if (role === 'coach') {
+            setCoachMorph(origin)
+            return
+          }
+          setSheet(origin)
+          setSheetOpen(true)
         })
       })
     },
-    [commit, morph],
+    [coachMorph, commitCoach, router, sheet],
+  )
+
+  // Back de Android mientras el sheet esta arriba: revierte el morph en vez de salir de la
+  // app. En iOS el afordance es el grab del sheet (y el dim).
+  //
+  // Va por `useFocusEffect` y no por `useEffect`: los listeners de `BackHandler` son
+  // GLOBALES y en LIFO, asi que uno vivo mientras esta pantalla no tiene el foco se comeria
+  // el back del login que hay encima (el sheet sigue montado detras a proposito).
+  useFocusEffect(
+    useCallback(() => {
+      if (!sheet) return
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        closeSheet()
+        return true
+      })
+      return () => sub.remove()
+    }, [closeSheet, sheet]),
   )
 
   // La rampa se enciende (alumno, pico .206) o se apaga (coach, minimo .052) durante el
   // mismo tramo del morph. Se CRUZAN opacidades, jamas se interpola el gradiente (§4 R3).
   const ramp = useSharedValue(0)
   const rampStyle = useAnimatedStyle(() => ({ opacity: ramp.value }))
-  const rampSpec = morph?.role === 'coach' ? ENTRY_LIGHT.morphCoach : ENTRY_LIGHT.morphStudent
-  const morphing = morph !== null
+  const rampSpec = coachMorph ? ENTRY_LIGHT.morphCoach : ENTRY_LIGHT.morphStudent
+  // Con el sheet abierto la rampa se queda en el pico: la composicion NO abandono el frame
+  // del morph (§3.3) — lo que en el mockup era "llegar a /alumno/codigo" ahora pasa dentro
+  // de esta misma pantalla. Al cerrar vuelve a la del selector con los mismos 200 ms.
+  const morphing = coachMorph !== null || (sheet !== null && sheetOpen)
   useEffect(() => {
     ramp.value = withTiming(morphing ? 1 : 0, {
       duration: reduced ? 0 : RAMP_MS,
@@ -206,7 +246,9 @@ function EntryScreen() {
   return (
     <View ref={containerRef} collapsable={false} style={styles.root} testID="role-selector">
       <LightLayer spec={ENTRY_LIGHT.valueRole} />
-      {morph ? <LightLayer spec={rampSpec} style={rampStyle} /> : null}
+      {/* Se monta mientras haya morph vivo — incluido el recorrido de VUELTA del sheet:
+          desmontarla antes se comeria su propio fade de salida. */}
+      {coachMorph || sheet ? <LightLayer spec={rampSpec} style={rampStyle} /> : null}
       {/* Capa 4 — el sello: UNA sola, encima de las atmosferas, debajo del contenido. */}
       <EntryGrain />
 
@@ -285,8 +327,21 @@ function EntryScreen() {
         </Reveal>
       </View>
 
-      {morph ? (
-        <RoleMorph role={morph.role} origin={morph.origin} onCommit={() => commit(morph.role)} />
+      {/* Frame 05 — coach: el morph es transicion, el destino es el login. */}
+      {coachMorph ? <RoleMorph role="coach" origin={coachMorph} onCommit={commitCoach} /> : null}
+
+      {/* Frame 4 del concepto C — alumno: el morph ES el destino. Cero navegacion. */}
+      {sheet ? (
+        <RoleMorph
+          role="alumno"
+          origin={sheet}
+          open={sheetOpen}
+          onCommit={() => setSheetReady(true)}
+          onClosed={() => setSheet(null)}
+          onRequestClose={closeSheet}
+        >
+          <CoachCodeSheet ready={sheetReady} onClose={closeSheet} />
+        </RoleMorph>
       ) : null}
     </View>
   )
