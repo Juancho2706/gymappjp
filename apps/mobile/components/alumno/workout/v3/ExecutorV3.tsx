@@ -38,7 +38,7 @@ import {
   type TypedKeypadContext,
   type WorkoutCelebrationEvent,
 } from '@eva/workout-engine'
-import { useTheme } from '../../../../context/ThemeContext'
+import { ForceScheme, useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
 import { hexToRgba } from '../../../../lib/theme'
 import { FONT } from '../../../../lib/typography'
@@ -123,6 +123,7 @@ type ActiveSub = {
   reason: string | null
   prescribedName: string
   gif_url: string | null
+  thumbnail_url: string | null
   video_url: string | null
   video_start_time: number | null
   video_end_time: number | null
@@ -175,10 +176,18 @@ function typedSeedValues(entry: RepeatSeedEntry | null | undefined, mode: string
  * V3 completa (media, prescripcion rica, efecto juicy) llega en la wave 2.
  */
 export default function ExecutorV3({ planId, recoverDate, editDate, repeatDate }: ExecutorV3Props) {
+  // El ejecutor es DARK-ONLY por contrato (exec-theme), pero los componentes COMPARTIDOS que monta
+  // (Sheet, keypad, mapa muscular, sombras, status bar) resolvían tokens con el esquema de la CUENTA:
+  // con el alumno en tema claro salía una barra BLANCA abajo (footer del sheet `bg-surface-sunken`),
+  // títulos negros sobre negro y glifos oscuros en la status bar. `ForceScheme` re-declara las CSS-vars
+  // de NativeWind al juego dark y anida un ThemeContext con `resolvedScheme:'dark'` para TODO el
+  // subárbol, así el ejecutor se ve igual con la cuenta en claro o en oscuro.
   return (
-    <WorkoutTimerProvider>
-      <ExecutorV3Inner planId={planId} recoverDate={recoverDate} editDate={editDate} repeatDate={repeatDate} />
-    </WorkoutTimerProvider>
+    <ForceScheme scheme="dark">
+      <WorkoutTimerProvider>
+        <ExecutorV3Inner planId={planId} recoverDate={recoverDate} editDate={editDate} repeatDate={repeatDate} />
+      </WorkoutTimerProvider>
+    </ForceScheme>
   )
 }
 
@@ -346,6 +355,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           reason: log.substitution_reason ?? null,
           prescribedName: resolveExercise(block)?.name ?? 'Ejercicio',
           gif_url: null,
+          thumbnail_url: null,
           video_url: null,
           video_start_time: null,
           video_end_time: null,
@@ -672,7 +682,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                     const idx = members.findIndex((m) => m.id === firstMember.id)
                     const exercise: SessionExercise | null = prescribed
                       ? (nextSub
-                          ? { ...prescribed, id: nextSub.exerciseId ?? prescribed.id, name: nextSub.name, gif_url: nextSub.gif_url, video_url: nextSub.video_url, video_start_time: nextSub.video_start_time, video_end_time: nextSub.video_end_time, instructions: nextSub.instructions }
+                          ? { ...prescribed, id: nextSub.exerciseId ?? prescribed.id, name: nextSub.name, gif_url: nextSub.gif_url, thumbnail_url: nextSub.thumbnail_url, video_url: nextSub.video_url, video_start_time: nextSub.video_start_time, video_end_time: nextSub.video_end_time, instructions: nextSub.instructions }
                           : prescribed)
                       : null
                     next = { name: nm, prescription, exercise, tag: `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextRound}` }
@@ -1086,7 +1096,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             showEffort={execSettings.showRpeRir}
             getMemberSub={(b): SupersetMemberSub | null => {
               const sub = getSubstitution(b)
-              return sub ? { exerciseId: sub.exerciseId, name: sub.name, prescribedName: sub.prescribedName, gif_url: sub.gif_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions } : null
+              return sub ? { exerciseId: sub.exerciseId, name: sub.name, prescribedName: sub.prescribedName, gif_url: sub.gif_url, thumbnail_url: sub.thumbnail_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions } : null
             }}
             onOpenTechnique={(ex) => setTechniqueExercise(ex)}
             onOpenSet={openSet}
@@ -1116,6 +1126,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             video_start_time: sub.video_start_time,
             video_end_time: sub.video_end_time,
             gif_url: sub.gif_url,
+            thumbnail_url: sub.thumbnail_url,
             instructions: sub.instructions,
           }
         : prescribed
@@ -1721,6 +1732,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
               reason: SUBSTITUTION_REASON,
               prescribedName: resolveExercise(substituteBlock)?.name ?? 'Ejercicio',
               gif_url: opt.gif_url,
+              thumbnail_url: opt.thumbnail_url ?? null,
               video_url: opt.video_url,
               video_start_time: opt.video_start_time,
               video_end_time: opt.video_end_time,

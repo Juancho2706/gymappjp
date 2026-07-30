@@ -275,6 +275,12 @@ export function StepperExecution({
         ref={scrollRef}
         onScroll={onScroll}
         scrollEventThrottle={16}
+        // iOS: el UIScrollView retiene el toque ~150ms antes de entregarlo al hijo, y recién ahí
+        // arranca el timer del long-press de la rueda (kg/reps). Con `false` el Pressable recibe el
+        // press-in al instante (el scroll sigue robando el responder en cuanto hay movimiento):
+        // la rueda abre ~150ms antes y el feedback visual de los tiles deja de sentirse laggy.
+        // (spread casteado: RN 0.81 quitó la prop iOS de los types pero el runtime la honra)
+        {...({ delaysContentTouches: false } as object)}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: bottomClearance + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

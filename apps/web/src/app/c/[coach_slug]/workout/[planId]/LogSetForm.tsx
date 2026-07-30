@@ -666,7 +666,9 @@ function StrengthLogSetForm({
             weightRef.current?.blur()
             repsRef.current?.blur()
             openWheel()
-        }, 400)
+        // 280ms (paridad con RN `WHEEL_LONG_PRESS_MS`): por encima del p95 de un tap real (~200ms), asi
+        // que no le roba taps al teclado, y ya se siente instantaneo. No bajar de 250.
+        }, 280)
     }
     const onFieldPointerMove = (e: React.PointerEvent<HTMLInputElement>) => {
         if (!useWheel) return

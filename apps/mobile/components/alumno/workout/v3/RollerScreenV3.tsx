@@ -197,7 +197,7 @@ export function RollerScreenV3({
                 testID="btn-roller-number-v3"
                 onPress={openNumberKeypad}
                 onLongPress={() => { haptics.tap(); setWheelOpen(true) }}
-                delayLongPress={400}
+                delayLongPress={280}
                 accessibilityRole="button"
                 accessibilityLabel={`${count} pasadas, toca para escribir`}
                 accessibilityHint="Mantén presionado para abrir la rueda de valores"
@@ -344,7 +344,7 @@ export function RollerScreenV3({
       )}
 
       {coachNote && (
-        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" forceDark nativeModal snapPoints={['35%']}>
           <View style={{ paddingVertical: 8 }}>
             <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">{coachNote}</Text>
           </View>

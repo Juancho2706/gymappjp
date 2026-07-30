@@ -7,7 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { AlignLeft, Dumbbell, MessageSquare, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react-native'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
-import { extractYoutubeVideoId } from '../../../../lib/youtube'
+import { extractYoutubeVideoId, isYoutubeMediaUrl } from '../../../../lib/youtube'
+import { toStorageRenderThumb } from '../../../../lib/exercise-catalog'
 import type { SessionExercise } from '../../../../lib/workout-session'
 import { VideoPlayer } from '../../../VideoPlayer'
 import { Sheet } from '../../../Sheet'
@@ -31,22 +32,51 @@ const MEDIA_MAX_RETRIES = 2
 export type ExecMediaKind = 'gif' | 'video' | 'youtube' | 'image' | 'none'
 export function execMediaKind(exercise: SessionExercise): ExecMediaKind {
   const videoUrl = exercise.video_url
-  const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
-  const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
   if (exercise.gif_url) return 'gif'
-  if (videoUrl && !isYouTube) {
-    const u = videoUrl.toLowerCase()
-    const isMp4 =
-      u.includes('.mp4') || u.includes('.mov') || u.includes('.webm') ||
-      (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
-    return isMp4 ? 'video' : 'image'
+  if (!videoUrl) return 'none'
+  // QA4 · hallazgo 17: la detección de YouTube pasa por el parser central (`isYoutubeMediaUrl`, allowlist
+  // de hosts que INCLUYE `youtube-nocookie.com`), NUNCA por `includes('youtube.com')` — ese substring dejaba
+  // fuera los 33 ejercicios guardados como `www.youtube-nocookie.com/embed/<id>`, que terminaban como
+  // 'image' y pintaban la caja de error permanente.
+  if (isYoutubeMediaUrl(videoUrl)) {
+    // Host de YouTube sin id extraíble ⇒ 'none' (silueta), jamás 'image': bajar la página de embed como
+    // imagen siempre falla.
+    return extractYoutubeVideoId(videoUrl) ? 'youtube' : 'none'
   }
-  if (isYouTube && ytId) return 'youtube'
-  return 'none'
+  const u = videoUrl.toLowerCase()
+  const isMp4 =
+    u.includes('.mp4') || u.includes('.mov') || u.includes('.webm') ||
+    (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
+  return isMp4 ? 'video' : 'image'
 }
 /** ¿El ejercicio tiene media visible (gif/video/youtube/imagen)? Si es false, kind === 'none'. */
 export function hasExecMedia(exercise: SessionExercise): boolean {
   return execMediaKind(exercise) !== 'none'
+}
+
+/**
+ * URI de MINIATURA ESTÁTICA del ejercicio (card "SIGUIENTE" del descanso, listas) — null ⇒ silueta.
+ *
+ * QA4 · hallazgo 1: la card del descanso miraba SOLO `gif_url`, que está vacío en TODO el catálogo (la
+ * media real vive en `video_url`), así que siempre caía al placeholder de mancuerna. Prioridad:
+ * `thumbnail_url` (webp chico ya generado) → `gif_url` → póster de YouTube → gif/imagen de Storage del
+ * propio `video_url`. Lo de Storage se reescribe a `render/image` (mismo criterio que `exerciseGridThumb`)
+ * para no bajar el gif crudo (~93KB) en un recuadro de 58px. Para mp4 real no hay póster ⇒ null ⇒ silueta.
+ */
+export function execThumbUri(exercise: SessionExercise, width = 128): string | null {
+  const kind = execMediaKind(exercise)
+  // `thumbnail_url` YA es el webp chico: se sirve tal cual, sin pasar por `render/image` (la cuota de
+  // Image Transformations de Supabase no se quema en algo que ya está optimizado — igual que la web
+  // `exerciseGridThumb`, que hace early-return con este campo).
+  if (exercise.thumbnail_url) return exercise.thumbnail_url
+  let base: string | null = exercise.gif_url ?? null
+  if (!base && kind === 'youtube') {
+    const yt = extractYoutubeVideoId(exercise.video_url)
+    if (yt) base = `https://img.youtube.com/vi/${yt}/hqdefault.jpg`
+  }
+  if (!base && kind === 'image' && exercise.video_url) base = exercise.video_url
+  if (!base) return null
+  return toStorageRenderThumb(base, width) ?? base
 }
 
 /**
@@ -75,17 +105,18 @@ export function ExecMediaV3({
 }) {
   const s = exec.surface
   const [noteOpen, setNoteOpen] = useState(false)
-  // Audio del ARCHIVO de video (kind 'video'): default SIN sonido; el botón glass alterna el mute.
+  // Audio del video (archivo directo o youtube inline): default SIN sonido; el botón glass alterna el mute.
   const [muted, setMuted] = useState(true)
   // Pausa/reanudar + reinicio (controles glass QA5). El nonce de reinicio se incrementa al tocar Reiniciar.
   const [paused, setPaused] = useState(false)
   const [restartNonce, setRestartNonce] = useState(0)
 
   const kind = execMediaKind(exercise)
-  // Controles de video: sólo con media reproducible (video directo o youtube inline). El botón de audio
-  // sólo con video DIRECTO — en youtube el mute se difiere (recargaría el WebView; ver TypedMediaV3).
+  // Controles de video: sólo con media reproducible (video directo o youtube inline). QA4 · hallazgo 10: el
+  // botón de audio ahora TAMBIÉN aplica a youtube — el mute se alterna con la IFrame API por
+  // `injectJavaScript` (como la web `ExecYoutubeInline`), sin recargar el WebView.
   const hasControls = kind === 'video' || kind === 'youtube'
-  const hasAudioBtn = kind === 'video'
+  const hasAudioBtn = kind === 'video' || kind === 'youtube'
 
   const hasTechnique = !!(exercise.gif_url || exercise.video_url)
   const hasInstructions = (exercise.instructions?.length ?? 0) > 0
@@ -99,7 +130,10 @@ export function ExecMediaV3({
     <>
       {/* MEDIA + chips glass. Fondo con gradiente 160deg #202029→#17171f (mockup `.a3a-media`) + barrido
           de brillo diagonal (shimmer) sobre la card. */}
-      <View style={{ position: 'relative', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong }}>
+      {/* `alignItems/justifyContent: center` = web `.exec-v3-media { display:flex; align-items:center;
+          justify-content:center }` (globals.css:1768): si el medio mide menos que el marco queda CENTRADO,
+          no pegado a la izquierda (QA4 · hallazgo 10). */}
+      <View style={{ position: 'relative', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, alignItems: 'center', justifyContent: 'center' }}>
         <LinearGradient
           colors={['#202029', '#17171f']}
           start={{ x: 0.15, y: 0 }}
@@ -175,7 +209,7 @@ export function ExecMediaV3({
 
       {/* Sheet de nota del coach. */}
       {coachNote && (
-        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" forceDark nativeModal snapPoints={['35%']}>
           <View style={{ paddingVertical: 8 }}>
             <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">
               {coachNote}
@@ -250,10 +284,11 @@ function GlassCtlButton({
 }
 
 /**
- * Fila de controles glass de la media de VIDEO (QA5): audio (mute/unmute — sólo con `hasAudio`, es decir
- * video DIRECTO), pausa/reanudar y reiniciar. Esquina inferior-derecha, 3 (o 2) botones chicos con gap 6,
- * mismo lenguaje que los chips. Compartido por `ExecMediaV3` (fuerza) y `TypedMediaV3` (tipadas). En
- * youtube el audio se difiere (`hasAudio=false`) porque alternar el mute recargaría el WebView.
+ * Fila de controles glass de la media de VIDEO (QA5): audio (mute/unmute), pausa/reanudar y reiniciar.
+ * Esquina inferior-derecha, 3 (o 2) botones chicos con gap 6, mismo lenguaje que los chips. Compartido por
+ * `ExecMediaV3` (fuerza) y `TypedMediaV3` (tipadas). QA4 · hallazgo 10: el audio ya aplica también a
+ * youtube — el `VideoPlayer` hornea el HTML SIEMPRE muteado (requisito de autoplay) y alterna el sonido con
+ * la IFrame API por `injectJavaScript`, sin recargar el WebView.
  */
 export function MediaControlsRow({
   hasAudio,
@@ -414,7 +449,9 @@ export function ExecMediaImage({
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    // `alignSelf: 'stretch'` — el marco de media del ejecutor centra sus hijos (QA4 · hallazgo 10); sin esto
+    // el ancho colapsaría a contenido y el gif no se vería.
+    <View style={{ flex: 1, width: '100%', alignSelf: 'stretch' }}>
       {status !== 'error' && (
         <Image
           key={attempt}
@@ -462,12 +499,13 @@ export function ExecMediaImage({
 }
 
 /**
- * Medio inline del ejercicio activo — MISMA prioridad estricta que TechniqueSheet/web (regla de media):
- *   1. gif_url → imagen `contain`.
- *   2. video_url no-YouTube (mp4/webm/mov/Storage) → VideoPlayer autoplay-mute-loop (modo GIF).
- *   3. video_url YouTube → NO inline: placeholder con silueta + Play que abre el modal de técnica.
- *   4. video_url imagen-ish → imagen.
- *   5. sin medio → placeholder silueta.
+ * Medio inline del ejercicio activo — ramifica por el `kind` de `execMediaKind` (única fuente de verdad de
+ * la regla de media, compartida con TechniqueSheet/web):
+ *   1. 'gif' → imagen `contain`.
+ *   2. 'video' (mp4/webm/mov/Storage) → VideoPlayer autoplay-mute-loop (modo GIF).
+ *   3. 'youtube' (incluye youtube-nocookie) → VideoPlayer inline autoplay muteado, con controles glass.
+ *   4. 'image' → imagen.
+ *   5. 'none' → placeholder silueta.
  */
 function ExecMediaInnerV3({
   exercise,
@@ -492,55 +530,53 @@ function ExecMediaInnerV3({
 }) {
   const s = exec.surface
   const videoUrl = exercise.video_url
-  const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
-  const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
+  // Una sola fuente de verdad de clasificación (QA4 · hallazgo 17): antes esta función RE-CALCULABA la
+  // detección a mano y divergía de `execMediaKind` (el padre habilitaba controles con un criterio y acá se
+  // renderizaba otra cosa). Ahora ramifica por el `kind` canónico.
+  const kind = execMediaKind(exercise)
+  // Todos los medios llenan el marco a lo ancho: el contenedor de 150px centra sus hijos.
+  const fillStyle = { flex: 1, width: '100%', alignSelf: 'stretch' } as const
 
-  if (exercise.gif_url) {
+  if (kind === 'gif' && exercise.gif_url) {
     return <ExecMediaImage uri={exercise.gif_url} alt={exercise.name} accent={exec.accent} reducedMotion={reducedMotion} />
   }
 
-  if (videoUrl && !isYouTube) {
-    const u = videoUrl.toLowerCase()
-    const isMp4 =
-      u.includes('.mp4') || u.includes('.mov') || u.includes('.webm') ||
-      (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
-    if (isMp4) {
-      // Archivo de video (kind 'video'): reproduce en loop mudo por default. Los controles glass (audio +
-      // pausa + reinicio) los monta el padre (`ExecMediaV3`) como overlay; acá sólo se propaga el estado.
-      return (
-        <View style={{ flex: 1 }}>
-          <VideoPlayer url={videoUrl} autoPlay muted={muted} paused={paused} restartSignal={restartSignal} frameless letterbox={s.surfaceRaised} style={{ flex: 1 }} title={exercise.name} />
-        </View>
-      )
-    }
+  if (kind === 'video' && videoUrl) {
+    // Archivo de video: reproduce en loop mudo por default. Los controles glass (audio + pausa + reinicio)
+    // los monta el padre (`ExecMediaV3`) como overlay; acá sólo se propaga el estado.
+    return (
+      <VideoPlayer url={videoUrl} autoPlay muted={muted} paused={paused} restartSignal={restartSignal} frameless letterbox={s.surfaceRaised} style={fillStyle} title={exercise.name} />
+    )
+  }
+
+  if (kind === 'image' && videoUrl) {
     return <ExecMediaImage uri={videoUrl} alt={exercise.name} accent={exec.accent} reducedMotion={reducedMotion} />
   }
 
   // YouTube (QA4 · decisión CEO): AUTOREPRODUCIDO inline MUTED al entrar al ejercicio (reusa el
-  // `VideoPlayer` de la técnica: mismo iframe youtube-nocookie autoplay/mute/loop del recorte). QA5: la
-  // fila de controles del padre añade PAUSA/REANUDAR y REINICIAR vía la IFrame API por injectJavaScript
-  // (no recarga el WebView). El AUDIO sigue diferido en youtube (alternar el mute sí recargaría). El chip
-  // "Instrucciones" abre la técnica completa.
-  if (isYouTube && ytId && videoUrl) {
+  // `VideoPlayer` de la técnica: mismo iframe youtube-nocookie autoplay/mute/loop del recorte). La fila de
+  // controles del padre añade PAUSA/REANUDAR, REINICIAR y —QA4 hallazgo 10— AUDIO, todo vía la IFrame API
+  // por injectJavaScript (no recarga el WebView), así que acá se propaga el `muted` REAL del padre.
+  if (kind === 'youtube' && videoUrl) {
     return (
       <VideoPlayer
         url={videoUrl}
         start={exercise.video_start_time}
         end={exercise.video_end_time}
         autoPlay
-        muted
+        muted={muted}
         paused={paused}
         restartSignal={restartSignal}
         frameless
         letterbox={s.surfaceRaised}
-        style={{ flex: 1 }}
+        style={fillStyle}
         title={exercise.name}
       />
     )
   }
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ flex: 1, width: '100%', alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' }}>
       <Dumbbell size={40} color={hexToRgba(exec.accent, 0.4)} strokeWidth={1.6} />
     </View>
   )

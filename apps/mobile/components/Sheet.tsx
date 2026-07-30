@@ -249,18 +249,26 @@ export function Sheet({
             // Titulo con glyph inline (web SheetTitle `flex items-center gap-2`).
             <View className="pr-space-9" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {titleIcon}
-              <Text style={[titleStyleFor(titleSize), { flexShrink: 1 }]} className="text-strong" numberOfLines={2}>
+              <Text
+                style={[titleStyleFor(titleSize), { flexShrink: 1 }]}
+                className={forceDark ? 'text-on-dark' : 'text-strong'}
+                numberOfLines={2}
+              >
                 {title}
               </Text>
             </View>
           ) : (
-            <Text style={titleStyleFor(titleSize)} className="text-strong pr-space-9" numberOfLines={2}>
+            <Text
+              style={titleStyleFor(titleSize)}
+              className={`pr-space-9 ${forceDark ? 'text-on-dark' : 'text-strong'}`}
+              numberOfLines={2}
+            >
               {title}
             </Text>
           )
         ) : null}
         {description ? (
-          <Text style={TYPE.caption} className="text-muted mt-space-2">
+          <Text style={TYPE.caption} className={`mt-space-2 ${forceDark ? 'text-on-dark-muted' : 'text-muted'}`}>
             {description}
           </Text>
         ) : null}
@@ -275,8 +283,15 @@ export function Sheet({
       <View className={`h-1 w-10 rounded-pill ${forceDark ? 'bg-white/15' : 'bg-ink-300 dark:bg-ink-600'}`} />
     </View>
   ) : null
+  // El footer va PEGADO al borde inferior (paddingBottom = safe-area + 16), así que con la cuenta en
+  // tema CLARO su `bg-surface-sunken` (casi blanco) pintaba una BARRA BLANCA sobre el home indicator
+  // dentro de un sheet forzado a dark (rueda de peso/reps del ejecutor). Gateado como el resto del
+  // chrome: con `forceDark` la superficie hundida es ink-900 y el borde el inverso.
   const footerEl = footer ? (
-    <View className="border-t border-subtle bg-surface-sunken px-space-6 pt-space-4" style={{ paddingBottom: insets.bottom + 16 }}>
+    <View
+      className={`border-t px-space-6 pt-space-4 ${forceDark ? 'border-inverse/10 bg-ink-900' : 'border-subtle bg-surface-sunken'}`}
+      style={{ paddingBottom: insets.bottom + 16 }}
+    >
       {footer}
     </View>
   ) : null
@@ -346,7 +361,7 @@ export function Sheet({
                 accessibilityLabel={accessibilityLabel}
                 accessibilityViewIsModal
                 className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse/10 bg-ink-950' : 'border-subtle bg-surface-card'}`}
-                style={[shadow('lg', resolvedScheme), { maxHeight: maxDynamicContentSize, flexShrink: 1 }]}
+                style={[shadow('lg', forceDark ? 'dark' : resolvedScheme), { maxHeight: maxDynamicContentSize, flexShrink: 1 }]}
               >
                 {/* Swipe-down on the handle zone dismisses (parity with enablePanDownToClose). */}
                 <View {...swipeResponder.panHandlers}>{handleEl}</View>
@@ -406,7 +421,7 @@ export function Sheet({
           bounded so tall content (> cap) still scrolls instead of clipping. */}
       <View
         className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse/10 bg-ink-950' : 'border-subtle bg-surface-card'}`}
-        style={shadow('lg', resolvedScheme)}
+        style={shadow('lg', forceDark ? 'dark' : resolvedScheme)}
       >
         {handleEl}
 

@@ -9,7 +9,10 @@ import { sessionFlags } from '../../../lib/session-flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 import { StudentAccessBlocked } from '../../../components/alumno/StudentAccessBlocked'
-import { SessionMorphProvider } from '../../../components/alumno/workout/v3/session-morph'
+// NOTA: `SessionMorphProvider` YA NO vive acá — se montó al layout RAÍZ (`app/_layout.tsx`). El
+// overlay del Despegue se pinta en un <Modal> nativo y, en Android, al hacer `router.push` a la ruta
+// del ejecutor (hermana de (tabs) en el Stack raíz) esta pantalla se detacha y RN cierra el Dialog sin
+// avisar a JS → la ceremonia se iba sola a los ~1,3s. Desde el root nunca se detacha.
 
 export default function AlumnoTabsLayout() {
   const router = useRouter()
@@ -113,7 +116,6 @@ export default function AlumnoTabsLayout() {
   }
 
   return (
-    <SessionMorphProvider>
     <View className="flex-1 bg-surface-app">
       <Tabs
         tabBar={(props) => <AlumnoMobileChrome {...props} />}
@@ -173,6 +175,5 @@ export default function AlumnoTabsLayout() {
         <Tabs.Screen name="nutrition-v2/scanner" options={{ href: null }} />
       </Tabs>
     </View>
-    </SessionMorphProvider>
   )
 }

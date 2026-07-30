@@ -57,6 +57,13 @@ export interface SessionExercise {
   video_start_time: number | null
   video_end_time: number | null
   gif_url: string | null
+  /**
+   * `exercises.thumbnail_url` — espejo WEBP chico del medio (existe para casi todo el catálogo). Sirve la
+   * MINIATURA estática del ejecutor (card "SIGUIENTE" del descanso) sin bajar el gif crudo (~93KB) para un
+   * recuadro de 58px. OPCIONAL a propósito: los planes ya cacheados offline con la forma vieja no lo traen
+   * ⇒ `undefined` ⇒ la miniatura cae al gif/póster derivado de `video_url` (ver `execThumbUri`).
+   */
+  thumbnail_url?: string | null
   instructions: string[] | null
   exercise_type: string | null
   /**
@@ -600,7 +607,7 @@ export function useWorkoutSession(
       .from('workout_plans')
       .select(
         `id, title, week_variant, program_id, day_of_week,
-         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type, cardio_modality ) )`,
+         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
       )
       .eq('id', planId)
       .maybeSingle()

@@ -24,6 +24,7 @@ import {
 } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
+import { haptics } from '../../../../lib/haptics'
 import { extractYoutubeVideoId } from '../../../../lib/youtube'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
 import { parseRestTime, useWorkoutTimers } from '../timers'
@@ -38,6 +39,8 @@ import type { EffectiveTarget } from '../../../../lib/workout/progression'
 import { Sheet } from '../../../Sheet'
 import { SetRow, ActiveSetRow } from '../SetRow'
 import { bestPrevOf } from '../workout-ui'
+import { DualWheelPicker } from './DualWheelPicker'
+import { dismissWheelHint } from './wheel-hint'
 import { ExecMediaV3, execMediaKind } from './ExecMediaV3'
 import type { ExecTheme } from './exec-theme'
 import { activeRound, memberLetter, nextMemberIdInRound, roundDotStates, totalRounds } from './superset-screen-model'
@@ -71,6 +74,7 @@ export interface SupersetMemberSub {
   name: string
   prescribedName: string
   gif_url: string | null
+  thumbnail_url: string | null
   video_url: string | null
   video_start_time: number | null
   video_end_time: number | null
@@ -155,6 +159,10 @@ export function SupersetScreenV3({
   // Miembro YA HECHO cuya edición está abierta (QA2 #3): tap en su tarjeta colapsada abre el sheet oscuro
   // "Editar {nombre}" con las filas clásicas del motor (SetRow). Estado LOCAL de UI: no roza guardado/cola.
   const [editBlockId, setEditBlockId] = useState<string | null>(null)
+  // Rueda dual kg | reps del miembro ACTIVO (paridad con el ejercicio solo, `ExerciseScreenV3`): se abre
+  // por long-press sobre los tiles del hero y entrega los valores por el MISMO autofill. Sólo para
+  // miembros de FUERZA (un miembro tipado captura otros ejes; ahí no hay rueda, igual que en su pantalla).
+  const [wheelOpen, setWheelOpen] = useState(false)
 
   useEffect(() => {
     if (!cue) return
@@ -178,6 +186,7 @@ export function SupersetScreenV3({
                 id: sub.exerciseId ?? prescribed.id,
                 name: sub.name,
                 gif_url: sub.gif_url,
+                thumbnail_url: sub.thumbnail_url,
                 video_url: sub.video_url,
                 video_start_time: sub.video_start_time,
                 video_end_time: sub.video_end_time,
@@ -229,6 +238,8 @@ export function SupersetScreenV3({
   const activeBlockId = active?.blockId ?? null
   useEffect(() => {
     setAutofill(null)
+    // La rueda es del miembro activo: si cambia el miembro (o cierra la ronda), se cierra.
+    setWheelOpen(false)
   }, [activeBlockId])
 
   // Precarga de la media del SIGUIENTE miembro de la ronda: al pasar a él, el gif/imagen ya está en el
@@ -246,6 +257,30 @@ export function SupersetScreenV3({
 
   // Miembros de la ronda ACTIVA (los que tienen serie en esa ronda), en orden.
   const roundMembers = memberVMs.filter((m) => m.block.sets >= round)
+
+  // Miembro ACTIVO + anclas de su rueda: centro en el valor ANTERIOR (mejor set previo) o, si no hay, en
+  // el OBJETIVO (peso sugerido / reps prescritas). `block.reps` puede ser "8-10" ⇒ toma el primer entero.
+  const activeVM = activeBlockId ? memberVMs.find((m) => m.block.id === activeBlockId) ?? null : null
+  const wheelVM = activeVM && activeVM.typedMode == null ? activeVM : null
+  const wheelAnchors = (() => {
+    if (!wheelVM) return { kg: 0, reps: 0 }
+    const repsParsed = parseInt(String(wheelVM.block.reps), 10)
+    return {
+      kg: wheelVM.bestPrev?.weight_kg ?? wheelVM.suggested ?? 0,
+      reps: wheelVM.bestPrev?.reps_done ?? (Number.isFinite(repsParsed) ? repsParsed : 0),
+    }
+  })()
+  const openWheel = () => {
+    if (!wheelVM) return
+    // Medium (no el Light de `tap`): confirma el gesto sostenido aunque el teléfono esté en el rack.
+    haptics.longPress()
+    setWheelOpen(true)
+  }
+  const handleWheelDone = (weightKg: number, reps: number) => {
+    setAutofill({ weight: weightKg, reps, nonce: Date.now() })
+    dismissWheelHint()
+    setWheelOpen(false)
+  }
 
   // Miembro cuya edición está abierta (sheet QA2 #3) + sus filas YA registradas (motor clásico, SetRow).
   const editVM = editBlockId ? memberVMs.find((m) => m.block.id === editBlockId) : null
@@ -497,6 +532,9 @@ export function SupersetScreenV3({
                   }}
                   onDraftChange={(values, fieldIndex) => onDraftChange(m.block.id, round, values, fieldIndex)}
                   onCommit={handleCommit}
+                  // Long-press en los tiles kg/reps ⇒ rueda (paridad ejercicio solo). Sin handler en los
+                  // miembros tipados: ahí el gesto queda inerte y el lector de pantalla no lo anuncia.
+                  onLongPressValue={wheelVM?.block.id === m.block.id ? openWheel : undefined}
                 />
 
                 {/* Banda marquee inferior: abraza el card por abajo con el mismo recorrido. */}
@@ -627,6 +665,24 @@ export function SupersetScreenV3({
           Letras en color de marca con glow (sin contorno duro) + micro-parallax. No interactivo. `key` por
           nonce reinicia la animación si se encadena otro aviso; el padre lo desmonta a los 1650ms. */}
       {cue && <CueBar key={cue.nonce} name={cue.name} exec={exec} reducedMotion={reducedMotion} />}
+
+      {/* Rueda dual kg | reps del miembro activo (mismo componente y mismo contrato que el ejercicio
+          solo): produce (peso, reps) y los entrega por el autofill. El guardado sigue siendo el CTA
+          normal de la fila — motor intocable. */}
+      {wheelVM && (
+        <DualWheelPicker
+          open={wheelOpen}
+          onClose={() => setWheelOpen(false)}
+          setNumber={round}
+          exerciseName={wheelVM.exercise.name}
+          totalSets={wheelVM.block.sets}
+          kgAnchor={wheelAnchors.kg}
+          repsAnchor={wheelAnchors.reps}
+          exec={exec}
+          reducedMotion={reducedMotion}
+          onDone={handleWheelDone}
+        />
+      )}
 
       {/* Sheet oscuro "Editar {nombre}" (QA2 #3): monta las filas CLÁSICAS del motor (SetRow) del miembro ya
           hecho para corregir sus series registradas — mismo motor de edición del lápiz del ejercicio solo,

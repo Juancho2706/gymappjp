@@ -16,6 +16,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const WHEEL_HINT_KEY = 'eva:wheel-hint-v1'
 
+/**
+ * Umbral del long-press que abre la rueda de valores (kg / reps / pasadas). 280ms: por debajo del
+ * default de RN (500) y por encima del p95 de duracion de un tap real (~200ms), asi que NO le roba
+ * taps al teclado. NO bajar de 250 (empiezan las ruedas fantasma).
+ *
+ * OJO: el "borrar todo" del keypad tipado (`TypedKeypad.tsx`) queda a 450ms A PROPOSITO — es
+ * destructivo y debe costar mas que la rueda. No unificarlo en un sweep de consistencia.
+ */
+export const WHEEL_LONG_PRESS_MS = 280
+
 let dismissed = false
 let hydrated = false
 const listeners = new Set<() => void>()

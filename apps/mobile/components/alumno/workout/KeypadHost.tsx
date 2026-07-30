@@ -19,7 +19,6 @@ import {
   buildTypedPayload,
   type TypedKeypadContext,
 } from '@eva/workout-engine'
-import { useTheme } from '@/context/ThemeContext'
 import { FONT, textStyle } from '../../../lib/typography'
 import { useEvaMotion } from '../../../lib/motion'
 import { shadow } from '../../../lib/shadows'
@@ -96,7 +95,6 @@ export function KeypadHost({
   accentText?: string
 }) {
   const insets = useSafeAreaInsets()
-  const { resolvedScheme } = useTheme()
   const motion = useEvaMotion()
   const [values, setValues] = useState<Record<string, string>>({})
   const valuesRef = useRef(values)
@@ -243,7 +241,9 @@ export function KeypadHost({
   const doneLabel = target.isEdit ? 'Guardar' : 'Listo'
   const noteTrimmed = (values.note ?? '').trim()
 
-  const panelShadow = { ...shadow('xl', resolvedScheme), shadowOffset: { width: 0, height: -16 } }
+  // Sombra SIEMPRE dark: el panel es `bg-ink-950` fijo (no depende del esquema de la cuenta); con la
+  // cuenta en claro salía la elevación clara y el panel quedaba "flotando" sin profundidad.
+  const panelShadow = { ...shadow('xl', 'dark'), shadowOffset: { width: 0, height: -16 } }
 
   return (
     <Modal transparent visible animationType="none" statusBarTranslucent onRequestClose={onClose}>
@@ -362,6 +362,9 @@ export function KeypadHost({
                           maxLength={300}
                           placeholder="Ej: sentí molestia en el hombro"
                           placeholderTextColor={ON_DARK_MUTED}
+                          // Teclado del sistema OSCURO (iOS; no-op en Android): el panel es ink-950 fijo
+                          // y con la cuenta en claro subía el teclado BLANCO pegado al borde inferior.
+                          keyboardAppearance="dark"
                           accessibilityLabel="Nota de la serie para tu coach"
                           style={textStyle('xs', FONT.ui)}
                           className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"

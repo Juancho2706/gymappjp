@@ -23,6 +23,7 @@ import { fmtTypedLoggedLine } from './workout-ui'
 import { JuicyButton } from './v3/JuicyButton'
 import { EffortTicksV3 } from './v3/EffortTicksV3'
 import { resolveExecTheme, type ExecTheme } from './v3/exec-theme'
+import { WHEEL_LONG_PRESS_MS } from './v3/wheel-hint'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
@@ -581,7 +582,7 @@ function FieldBox({
   active: boolean
   onPress: () => void
   /**
-   * Mantener presionado (~400ms) sobre la caja — captura por RUEDA del ejecutor V3 (E2.5). Aditivo y
+   * Mantener presionado (`WHEEL_LONG_PRESS_MS`) sobre la caja — captura por RUEDA del ejecutor V3 (E2.5). Aditivo y
    * opcional: solo V3 lo pasa; sin la prop el Pressable no registra long-press y la fila se comporta
    * IGUAL que en V2 (el `delayLongPress` queda inerte sin handler). El tap corto abre el teclado como
    * siempre.
@@ -595,7 +596,7 @@ function FieldBox({
       testID={testID}
       onPress={onPress}
       onLongPress={onLongPress}
-      delayLongPress={onLongPress ? 400 : undefined}
+      delayLongPress={onLongPress ? WHEEL_LONG_PRESS_MS : undefined}
       className="flex-1"
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
@@ -1333,7 +1334,7 @@ function ValueTile({
       testID={testID}
       onPress={onPress}
       onLongPress={onLongPress}
-      delayLongPress={onLongPress ? 400 : undefined}
+      delayLongPress={onLongPress ? WHEEL_LONG_PRESS_MS : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
       accessibilityHint={onLongPress ? 'Mantén presionado para abrir la rueda de valores' : undefined}

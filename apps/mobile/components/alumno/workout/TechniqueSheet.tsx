@@ -7,7 +7,7 @@ import { Sheet } from '../../Sheet'
 import { VideoPlayer } from '../../VideoPlayer'
 import { FONT, textStyle } from '../../../lib/typography'
 import { hexToRgba } from '../../../lib/theme'
-import { extractYoutubeVideoId } from '../../../lib/youtube'
+import { extractYoutubeVideoId, isYoutubeMediaUrl } from '../../../lib/youtube'
 import type { SessionExercise } from '../../../lib/workout-session'
 
 // Letterbox OSCURO del medio en modo V3 (informe 15, BLOCKER): el ejecutor V3 es dark-only, el medio
@@ -89,9 +89,11 @@ function TechniqueMedia({ exercise, v3 = false }: { exercise: SessionExercise; v
   // `h-48`/`h-64` de la escala Tailwind (misma grilla de 4px del DS) que compila el web, no `aspectRatio:16/9`.
   const mediaHeight = width >= 768 ? 256 : 192
   const videoUrl = exercise.video_url
-  // Detección idéntica a la web (WorkoutExecutionClient.tsx:2010-2012): substring + extractor robusto.
-  const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
-  const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
+  // QA4 · hallazgo 17: detección por el parser central (allowlist de hosts, incluye `youtube-nocookie.com`),
+  // NUNCA por substring `includes('youtube.com')` — dejaba fuera los embeds nocookie del catálogo y la
+  // técnica los pintaba como imagen rota.
+  const isYouTube = isYoutubeMediaUrl(videoUrl)
+  const ytId = extractYoutubeVideoId(videoUrl)
 
   // 1) YouTube — recorta el tramo [start,end] del coach.
   if (isYouTube && ytId && videoUrl) {
@@ -114,8 +116,9 @@ function TechniqueMedia({ exercise, v3 = false }: { exercise: SessionExercise; v
     return <MediaImage uri={exercise.gif_url} padded height={mediaHeight} v3={v3} />
   }
 
-  // 3) video_url no-YouTube: mp4/mov/webm/Storage → video directo; resto → imagen.
-  if (videoUrl) {
+  // 3) video_url no-YouTube: mp4/mov/webm/Storage → video directo; resto → imagen. (Un host de YouTube sin
+  //    id extraíble NO cae acá: bajar la página de embed como imagen siempre falla ⇒ mejor sin medio.)
+  if (videoUrl && !isYouTube) {
     const u = videoUrl.toLowerCase()
     const isMp4 =
       u.includes('.mp4') ||
@@ -157,8 +160,9 @@ function LightboxMedia({ exercise }: { exercise: SessionExercise }) {
   const boxH = Math.round(height * 0.7)
   const boxHVideo = Math.round(Math.min(height * 0.7, (boxW * 9) / 16))
   const videoUrl = exercise.video_url
-  const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
-  const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
+  // Mismo parser central que `TechniqueMedia` (QA4 · hallazgo 17): cubre youtube-nocookie / youtu.be / embed.
+  const isYouTube = isYoutubeMediaUrl(videoUrl)
+  const ytId = extractYoutubeVideoId(videoUrl)
 
   if (isYouTube && ytId && videoUrl) {
     return (
@@ -181,7 +185,7 @@ function LightboxMedia({ exercise }: { exercise: SessionExercise }) {
       </View>
     )
   }
-  if (videoUrl) {
+  if (videoUrl && !isYouTube) {
     const u = videoUrl.toLowerCase()
     const isMp4 =
       u.includes('.mp4') ||

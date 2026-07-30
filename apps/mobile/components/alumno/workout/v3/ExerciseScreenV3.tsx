@@ -162,7 +162,8 @@ export function ExerciseScreenV3({
 
   const openWheel = () => {
     if (firstUnlogged == null) return
-    haptics.tap()
+    // Medium (no el Light de `tap`): el pulso tiene que leerse COMO confirmación del gesto sostenido.
+    haptics.longPress()
     setWheelOpen(true)
   }
   const handleWheelDone = (weightKg: number, reps: number) => {
