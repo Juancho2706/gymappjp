@@ -4,8 +4,11 @@ import * as Clipboard from 'expo-clipboard'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { BlurView } from 'expo-blur'
+import { useReducedMotion } from 'react-native-reanimated'
 import { User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { hexToRgba } from '../../../lib/theme'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
@@ -65,7 +68,8 @@ function sinceMonthLabel(iso: string | null): string {
 
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string; clientName?: string }>()
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
+  const reducedMotion = useReducedMotion()
   const router = useRouter()
   const workspace = useWorkspace()
 
@@ -113,6 +117,12 @@ export default function ClientDetailScreen() {
   // `react-hooks/refs` prohíbe leer un ref durante el render.
   const [tabBackdrop] = useState(() => new Animated.Value(0))
   const [tabNear, setTabNear] = useState(false)
+  // QA3 — El TopBar vive FUERA del ScrollView: al anclarse la tira de tabs solo ella pintaba
+  // el glass y el tope quedaba partido en dos tonos. Este value opacita una capa glass IDÉNTICA
+  // a la de ClientTabBar sobre el header para que status bar + header + tabs se lean como una
+  // sola superficie. El área del inset superior ya la pinta el `SafeAreaView` con
+  // `theme.background` sólido (misma familia de tono), así que no hace falta extender la capa.
+  const [headerGlass] = useState(() => new Animated.Value(0))
   /** Racha del RPC get_client_current_streak (regla "días asignados"); null = RPC no disponible. */
   const [rpcStreak, setRpcStreak] = useState<number | null>(null)
   const loadedOnceRef = useRef(false)
@@ -476,6 +486,15 @@ export default function ClientDetailScreen() {
     lastY.current = y
   }
 
+  // Fade del glass del header al cruzar el anclaje (mismo umbral que la tira de tabs).
+  useEffect(() => {
+    Animated.timing(headerGlass, {
+      toValue: tabStuck ? 1 : 0,
+      duration: reducedMotion ? 0 : 150,
+      useNativeDriver: true,
+    }).start()
+  }, [tabStuck, reducedMotion, headerGlass])
+
   if (loading) {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
@@ -602,7 +621,24 @@ export default function ClientDetailScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
+      {/* Header + capa glass: sin borde inferior propio (el hairline vive en ClientTabBar,
+          así se evita el doble borde cuando la tira está anclada). El BlurView se MONTA solo
+          cerca del anclaje (en Android es caro tenerlo vivo todo el scroll). */}
+      <View style={styles.headerWrap}>
+        {tabNear || tabStuck ? (
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: headerGlass }]}>
+            <BlurView
+              intensity={resolvedScheme === 'dark' ? 20 : 30}
+              tint={resolvedScheme === 'dark' ? 'dark' : 'light'}
+              experimentalBlurMethod="dimezisBlurView"
+              pointerEvents="none"
+              style={StyleSheet.absoluteFill}
+            />
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.background, 0.8) }]} />
+          </Animated.View>
+        ) : null}
+        <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
+      </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} onScroll={onScroll} scrollEventThrottle={16}>
         {/* 0 — Hero */}
@@ -812,6 +848,7 @@ function EditClientForm({ client, workspace, onDone, onCancel, onSavingChange }:
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerWrap: { position: 'relative', zIndex: 2 },
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 120, gap: 14 },
   tabContent: { gap: 14, paddingTop: 14 },
   formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },

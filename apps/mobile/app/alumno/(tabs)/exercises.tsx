@@ -423,7 +423,7 @@ const ExerciseCard = memo(function ExerciseCard({
         )}
         {item.muscle_group ? (
           <View style={styles.bannerChip}>
-            <Text style={[textStyle('3xs', FONT.uiExtra, { ls: 'wide' }), styles.bannerChipText, { color: theme.primary }]}>
+            <Text style={[textStyle('3xs', FONT.uiExtra, { ls: 'wide' }), styles.bannerChipText, { color: '#FFFFFF' }]}>
               {item.muscle_group}
             </Text>
           </View>
@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
   card: { flex: 1, borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
   banner: { height: 96, backgroundColor: '#12161D', alignItems: 'center', justifyContent: 'center' },
   bannerPlay: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  bannerChip: { position: 'absolute', bottom: 7, left: 7, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  bannerChip: { position: 'absolute', bottom: 7, left: 7, backgroundColor: 'rgba(0,0,0,0.62)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   bannerChipText: { textTransform: 'uppercase' },
   cardContent: { padding: 11 },
   loadMore: {

@@ -37,6 +37,13 @@ type HealthConnectModule = {
     recordType: string,
     req: unknown,
   ) => Promise<{ records: { startTime: string; endTime: string }[] } | null>
+  /** Opcional: no existe en versiones viejas de la lib → se trata como "seguir el flujo normal". */
+  getSdkStatus?: () => Promise<number>
+  SdkAvailabilityStatus?: {
+    SDK_UNAVAILABLE?: number
+    SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED?: number
+    SDK_AVAILABLE?: number
+  }
 }
 
 let iosLoaded = false
@@ -130,8 +137,44 @@ const ANDROID_READ_PERMS = [
   { accessType: 'read', recordType: 'SleepSession' },
 ]
 
+/**
+ * Estado del agregador ANTES de tocar `initialize/requestPermission`. Sin este chequeo, en un
+ * teléfono sin Health Connect (o con el proveedor desactualizado) el `requestPermission` se va a
+ * una Activity que no existe y el error puede escaparse del try/catch de JS (QA3: "conectar salud
+ * saca de la app"). `available` tambien es el fallback cuando la lib no expone `getSdkStatus`.
+ */
+export type AndroidHealthAvailability = 'available' | 'update-required' | 'not-installed' | 'unsupported'
+
+async function androidAvailability(hc: HealthConnectModule): Promise<AndroidHealthAvailability> {
+  if (typeof hc.getSdkStatus !== 'function') return 'available'
+  try {
+    const status = await hc.getSdkStatus()
+    const codes = hc.SdkAvailabilityStatus
+    // Constantes de react-native-health-connect (1 = no disponible, 2 = requiere update, 3 = ok).
+    if (status === (codes?.SDK_AVAILABLE ?? 3)) return 'available'
+    if (status === (codes?.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ?? 2)) return 'update-required'
+    return 'not-installed'
+  } catch {
+    return 'unsupported'
+  }
+}
+
+/**
+ * ¿Puede este Android abrir Health Connect? La UI la usa para elegir el mensaje (instalar /
+ * actualizar) en vez de un "no se pudo conectar" a ciegas. En iOS/web → 'unsupported'.
+ */
+export async function getAndroidHealthAvailability(): Promise<AndroidHealthAvailability> {
+  if (Platform.OS !== 'android') return 'unsupported'
+  const hc = loadAndroidHealth()
+  if (!hc) return 'unsupported'
+  return androidAvailability(hc)
+}
+
 async function androidInit(hc: HealthConnectModule): Promise<boolean> {
   try {
+    // Gate previo: si el proveedor no está instalado/actualizado NO se pide permiso (evita el
+    // salto a una Activity inexistente). El caller muestra el mensaje segun getAndroidHealthAvailability().
+    if ((await androidAvailability(hc)) !== 'available') return false
     const ok = await hc.initialize()
     if (!ok) return false
     await hc.requestPermission(ANDROID_READ_PERMS)

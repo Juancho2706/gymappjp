@@ -20,13 +20,15 @@ function fmtSheetDate(ymd: string): string {
 }
 
 // Rampas DS FIJAS (nunca white-label) resueltas por esquema para props de color
-// de iconos lucide (className no las expresa). Valores verbatim de TOKENS.md:
-// ember-700 (light globals.css/LIGHT_SCHEME_VARS #C23E14, dark #FFB79E) y ink-300
-// (light #A8B1BD, dark #414C5A). `text-on-ember` = ink-950 #0B0E13, constante en
-// ambos modos (icono casi negro sobre el fondo ember-500).
-const EMBER_700_ICON = { light: '#C23E14', dark: '#FFB79E' } as const
+// de iconos lucide (className no las expresa). Valores verbatim de `global.css`:
+// warning-700 (light #8F5A05, dark #FFD489) y ink-300 (light #A8B1BD, dark #414C5A).
+// El icono sobre warning-500 (#F5A524) usa ink-950 #0B0E13 (`text-on-warning`),
+// constante en ambos modos.
+// QA3: el bloque "día pendiente" pasó de la rampa `ember` a `warning` — el rojo-naranja
+// se leía como error y no como el aviso ámbar informativo que es.
+const WARNING_700_ICON = { light: '#8F5A05', dark: '#FFD489' } as const
 const INK_300 = { light: '#A8B1BD', dark: '#414C5A' } as const
-const ON_EMBER = '#0B0E13'
+const ON_WARNING = '#0B0E13'
 
 // className→color del glyph Calendar: el header web lo pinta `text-sport-500`
 // (ActiveProgramSection.tsx:90, rampa de marca verbatim SIN contrast-clamp) — con
@@ -148,6 +150,8 @@ export function ActiveProgramSection({
       {oldestPending ? (
         // Wrapper medible + ocultable: el banner de pendientes dispara el MISMO Despegue que el CTA/cards
         // (mide su rect, se oculta durante el vuelo del clon).
+        // `dark:bg-warning-100/[0.16]`: en dark `--color-warning-100` ES warning-500 sólido (pensado
+        // para usarse con alpha, ver Badge.tsx) — sin el alpha el bloque quedaría naranja pleno.
         <View ref={bannerRef} collapsable={false} style={{ opacity: bannerHidden ? 0 : 1 }}>
           <TouchableOpacity
             testID="program-pending-cta"
@@ -160,21 +164,21 @@ export function ActiveProgramSection({
             }}
             activeOpacity={0.82}
             accessibilityRole="button"
-            className="rounded-control border border-ember-200 bg-ember-100"
+            className="rounded-control border border-warning-500/25 bg-warning-100 dark:bg-warning-100/[0.16]"
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
           >
-            <View className="bg-ember-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
-              <RotateCcw size={18} color={ON_EMBER} strokeWidth={2.25} />
+            <View className="bg-warning-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
+              <RotateCcw size={18} color={ON_WARNING} strokeWidth={2.25} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-ember-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
+              <Text className="text-warning-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
                 {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
               </Text>
-              <Text className="text-ember-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
+              <Text className="text-warning-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
                 Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
               </Text>
             </View>
-            <ArrowRight size={16} color={EMBER_700_ICON[resolvedScheme]} />
+            <ArrowRight size={16} color={WARNING_700_ICON[resolvedScheme]} />
           </TouchableOpacity>
         </View>
       ) : null}
@@ -377,16 +381,17 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   const doneElsewhere = done && !!doneOnLabel
 
   // Superficie y neutros via clases DS (theme + white-label aware): hoy=sport,
-  // pendiente=ember, resto=neutro. Espejo de web WorkoutPlanCard.tsx:48-84.
+  // pendiente=warning (ámbar informativo), resto=neutro. Espejo de web WorkoutPlanCard.tsx:48-84.
+  // El alpha de `dark:bg-warning-100/[0.16]` es obligatorio (en dark el token es warning-500 sólido).
   const cardClass = isToday
     ? 'border-sport-500 bg-sport-100'
     : pending
-      ? 'border-ember-200 bg-ember-100'
+      ? 'border-warning-500/25 bg-warning-100 dark:bg-warning-100/[0.16]'
       : inProgress
         ? 'border-sport-500/40 bg-surface-card'
         : 'border-subtle bg-surface-card'
-  const labelClass = isToday ? 'text-sport-600' : pending ? 'text-ember-700' : inProgress ? 'text-sport-600' : 'text-subtle'
-  const pieClass = pending ? 'text-ember-700' : inProgress ? 'text-sport-600' : 'text-subtle'
+  const labelClass = isToday ? 'text-sport-600' : pending ? 'text-warning-700' : inProgress ? 'text-sport-600' : 'text-subtle'
+  const pieClass = pending ? 'text-warning-700' : inProgress ? 'text-sport-600' : 'text-subtle'
   // Play (hoy) = sport-600 resuelto por esquema (dark aclara el foreground); web usa
   // text-sport-600, no sport-500. Solo se deriva en la card de hoy.
   const playColor = resolvedScheme === 'dark' ? deriveSportTokens(theme.primary).dark['600'] : deriveSportTokens(theme.primary).ramp['600']
@@ -429,7 +434,7 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
           ) : isToday ? (
             <Play size={12} color={playColor} strokeWidth={2.6} />
           ) : pending ? (
-            <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
+            <View className="bg-warning-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
           ) : (
             <ChevronRight size={13} color={INK_300[resolvedScheme]} />
           )}

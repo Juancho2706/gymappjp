@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Check, Droplets, Footprints, HeartPulse, Moon, Smartphone } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
@@ -8,6 +8,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { getDailyHabits, upsertDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 import {
+  getAndroidHealthAvailability,
   isHealthAvailable,
   nearestSleepOption,
   readLastNightSleepHours,
@@ -97,17 +98,53 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [healthAvailable, healthOptIn, isToday])
 
+  // QA3: pedir permisos abre la app de Salud del sistema (HealthKit / Health Connect) y eso, sin
+  // aviso, se siente como que EVA "te expulsa". Ahora avisamos ANTES y el flujo entero está
+  // blindado (toast en error, spinner siempre liberado) para que ningún fallo nativo deje el
+  // botón colgado en "Conectando…".
   async function connectHealth() {
+    if (connectingHealth) return
+    const appName = Platform.OS === 'ios' ? 'Salud' : 'Health Connect'
+    const proceed = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Conectar con Salud',
+        `Te vamos a llevar a ${appName} para autorizar el acceso a tus pasos y horas de sueño. Volvés a EVA al terminar.`,
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Continuar', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      )
+    })
+    if (!proceed) return
+
     setConnectingHealth(true)
-    const granted = await requestHealthPermissions()
-    setConnectingHealth(false)
-    if (!granted) {
+    try {
+      if (Platform.OS === 'android') {
+        const availability = await getAndroidHealthAvailability()
+        if (availability !== 'available') {
+          toast.error(
+            availability === 'update-required'
+              ? 'Actualizá Health Connect desde Google Play para conectar.'
+              : 'Instalá Health Connect desde Google Play para conectar.',
+          )
+          return
+        }
+      }
+      const granted = await requestHealthPermissions()
+      if (!granted) {
+        toast.error('No se pudo conectar con Salud')
+        return
+      }
+      await setHealthOptIn(true)
+      autofillDone.current = false
+      setHealthOptInState(true)
+    } catch (e) {
+      console.warn('[health] connect failed', e)
       toast.error('No se pudo conectar con Salud')
-      return
+    } finally {
+      setConnectingHealth(false)
     }
-    await setHealthOptIn(true)
-    autofillDone.current = false
-    setHealthOptInState(true)
   }
 
   async function disconnectHealth() {

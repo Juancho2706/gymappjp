@@ -61,9 +61,16 @@ interface NotifeeAndroidNotification {
   color?: string
   pressAction?: { id: string }
   importance?: number
+  visibility?: number
 }
 interface NotifeeLike {
-  createChannel: (channel: { id: string; name: string; importance?: number; vibration?: boolean }) => Promise<string>
+  createChannel: (channel: {
+    id: string
+    name: string
+    importance?: number
+    vibration?: boolean
+    visibility?: number
+  }) => Promise<string>
   displayNotification: (notification: {
     id?: string
     title?: string
@@ -78,22 +85,29 @@ let notifee: NotifeeLike | null = null
 // AndroidImportance.LOW (canal silencioso para el ongoing). Notifee lo exporta como named;
 // LOW = 2 en su enum → fallback numérico si el módulo no está.
 let IMPORTANCE_LOW = 2
+// AndroidVisibility.PUBLIC (visible completa en lockscreen, incluso con pantalla bloqueada).
+// PUBLIC = 1 en el enum de Notifee/notify-kit → fallback numérico si el módulo no está.
+let VISIBILITY_PUBLIC = 1
 try {
   /* eslint-disable @typescript-eslint/no-require-imports */
   const mod = require('react-native-notify-kit') as {
     default?: NotifeeLike
     AndroidImportance?: { LOW?: number }
+    AndroidVisibility?: { PUBLIC?: number }
   }
   notifee = (mod.default ?? (mod as unknown as NotifeeLike)) || null
   if (typeof mod.AndroidImportance?.LOW === 'number') IMPORTANCE_LOW = mod.AndroidImportance.LOW
+  if (typeof mod.AndroidVisibility?.PUBLIC === 'number') VISIBILITY_PUBLIC = mod.AndroidVisibility.PUBLIC
 } catch {
   try {
     const mod = require('@notifee/react-native') as {
       default?: NotifeeLike
       AndroidImportance?: { LOW?: number }
+      AndroidVisibility?: { PUBLIC?: number }
     }
     notifee = (mod.default ?? (mod as unknown as NotifeeLike)) || null
     if (typeof mod.AndroidImportance?.LOW === 'number') IMPORTANCE_LOW = mod.AndroidImportance.LOW
+    if (typeof mod.AndroidVisibility?.PUBLIC === 'number') VISIBILITY_PUBLIC = mod.AndroidVisibility.PUBLIC
   } catch {
     notifee = null
   }
@@ -117,6 +131,11 @@ function ensureChannel(): Promise<void> {
         // (beep/háptica) la cubren la barra in-app y el "¡Descanso listo!" final.
         importance: IMPORTANCE_LOW,
         vibration: false,
+        // Visible completa en lockscreen (no oculta como notif "sensible"). Nota: canales ya
+        // creados en dispositivos existentes NO se actualizan solos — esto aplica en
+        // instalaciones frescas o tras limpiar datos de la app; la visibility a nivel
+        // notificación (abajo, en displayNotification) cubre el resto de los casos.
+        visibility: VISIBILITY_PUBLIC,
       })
       .then(() => undefined)
       .catch(() => {
@@ -163,6 +182,9 @@ export async function showRestLiveCountdown(endEpochMs: number): Promise<void> {
         timeoutAfter: Math.max(1000, Math.round(remaining)),
         color: BRAND_COLOR,
         importance: IMPORTANCE_LOW,
+        // PUBLIC = visible completa en lockscreen (algunos OEM esconden IMPORTANCE_LOW sin
+        // visibility explícito).
+        visibility: VISIBILITY_PUBLIC,
         pressAction: { id: 'default' },
       },
     })

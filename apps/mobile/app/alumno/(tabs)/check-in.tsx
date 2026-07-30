@@ -429,7 +429,7 @@ export default function CheckInScreen() {
         </View>
 
         {/* Disclaimer medico */}
-        <View className="border border-warning-500 bg-warning-100" style={styles.disclaimer}>
+        <View className="border border-warning-500/40 bg-warning-100 dark:bg-warning-100/[0.16]" style={styles.disclaimer}>
           <ShieldAlert size={15} color={resolvedScheme === 'dark' ? '#FFC861' : '#A8690A'} strokeWidth={2} />
           <Text className="text-warning-600" style={[textStyle('3xs', FONT.uiMedium, { lh: 'snug' }), { flex: 1 }]}>
             EVA no es un dispositivo médico ni sustituye consejo profesional.
