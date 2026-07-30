@@ -19,7 +19,10 @@ import { ProductFragments } from '../components/entry/ProductFragments'
 import { ROLE_CARD_GAP, RoleCard, type RoleKind } from '../components/entry/RoleCards'
 import { RoleMorph, type MorphOrigin } from '../components/entry/RoleMorph'
 import { SplashGate, type SplashGateResult } from '../components/entry/SplashGate'
+import { signOutAndCleanup } from '../lib/auth-actions'
+import { getCoachProfile } from '../lib/coach'
 import { EASE } from '../lib/motion'
+import { supabase } from '../lib/supabase'
 import { ENTRY_TOKENS } from '../lib/theme'
 import { FONT } from '../lib/typography'
 
@@ -36,7 +39,9 @@ type Phase = 'checking' | 'selector'
  * Fase `checking` = `SplashGate`: la replica del splash ES el gate. Con sesion viva navega
  * el mismo (el retorno branded corre ANTES del `router.replace`); sin sesion devuelve el
  * branding cacheado y aqui se aplican los gates de siempre — `pick=1` → selector, branding
- * cacheado → login de alumno, y si no, la pantalla fusionada.
+ * cacheado → login de alumno, y si no, la pantalla fusionada. `pick=1` ademas DESARMA el
+ * ruteo automatico del gate (`forceSelector`): quien pidio cambiar de cuenta tiene que
+ * poder llegar al selector aunque la sesion vieja siga viva.
  *
  * El walkthrough de 3 slides fue RETIRADO (F3.7): la pantalla 02 no tiene nada que saltar
  * porque el CTA ya esta en pantalla. Con el se fueron `components/Walkthrough.tsx`,
@@ -71,7 +76,14 @@ export default function RoleSelectorRoute() {
 
   return (
     <ForceScheme scheme="dark" branded={false}>
-      {phase === 'checking' ? <SplashGate onAnonymous={handleAnonymous} /> : <EntryScreen />}
+      {phase === 'checking' ? (
+        // `pick=1` = el usuario pidio el selector ("cambiar de cuenta"). El gate sigue
+        // montado —es quien oculta el splash nativo— pero tiene prohibido rutear a home con
+        // la sesion vieja: sin esto, cambiar de rol con sesion viva era imposible.
+        <SplashGate onAnonymous={handleAnonymous} forceSelector={pick === '1'} />
+      ) : (
+        <EntryScreen />
+      )}
     </ForceScheme>
   )
 }
@@ -113,6 +125,23 @@ function Reveal({
 /** A1 — la rampa no se reemplaza de golpe: se cruza en 200 ms al entrar al morph. */
 const RAMP_MS = 200
 
+/** Tope de espera del cierre de la sesion ajena antes de navegar al login del coach. */
+const SIGN_OUT_MAX_WAIT_MS = 1200
+
+/**
+ * Rol de la sesion que quedo VIVA en el dispositivo, o `null` si no hay ninguna.
+ * `getCoachProfile()` truthy = coach, exactamente como lo deduce el `SplashGate`.
+ * Solo pega a la red cuando de verdad hay sesion (`getSession` es local).
+ */
+async function resolveLiveSessionRole(): Promise<RoleKind | null> {
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) return null
+  const coach = await getCoachProfile()
+  return coach ? 'coach' : 'alumno'
+}
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 /**
  * FRAME 02 — valor + rol en UNA sola pantalla: 0 slides, 0 swipes, 0 dots, 0 "Saltar".
  * Rol elegible a ~1.6 s del cold start.
@@ -142,6 +171,27 @@ function EntryScreen() {
   const [sheetReady, setSheetReady] = useState(false)
   const navigating = useRef(false)
 
+  // Sesion de OTRO rol colgada. Se resuelve al montar el selector (y no al tocar la card)
+  // para que el veredicto ya este listo cuando el usuario elige: llegar aca con sesion viva
+  // es la excepcion —gate caido o "cambiar de cuenta"—, pero si no se cierra, la proxima
+  // entrada la hereda y el arranque rutea y saluda con el rol viejo.
+  const liveRole = useRef<Promise<RoleKind | null> | null>(null)
+  const signOutRun = useRef<Promise<void> | null>(null)
+  useEffect(() => {
+    liveRole.current = resolveLiveSessionRole().catch(() => null)
+  }, [])
+
+  const dropForeignSession = useCallback((role: RoleKind) => {
+    signOutRun.current = (async () => {
+      // Sin veredicto (error de red) NO se cierra nada: preferimos heredar antes que
+      // desloguear a alguien que estaba en su rol correcto.
+      const current = await (liveRole.current ?? resolveLiveSessionRole().catch(() => null))
+      if (!current || current === role) return
+      await signOutAndCleanup()
+      liveRole.current = Promise.resolve(null)
+    })().catch(() => {})
+  }, [])
+
   // §3.2.6 — densidad: en 667 pt colapsa el TERCER fragmento (su copy se anexa al
   // segundo) y con fontScale > 1.15 los captions bajan a 1 linea. Los titulares, el
   // separador y las dos cards NUNCA se sacrifican: el CTA de rol jamas queda bajo el fold.
@@ -162,7 +212,16 @@ function EntryScreen() {
   const commitCoach = useCallback(() => {
     if (navigating.current) return
     navigating.current = true
-    router.push('/(auth)/login?role=coach')
+    const go = () => router.push('/(auth)/login?role=coach')
+    const pending = signOutRun.current
+    if (!pending) {
+      go()
+      return
+    }
+    // No se entra al login con el cierre de la sesion ajena en vuelo: ese `signOut` tardio
+    // mataria la sesion recien creada. El morph tapa la espera (arranco un recorrido antes)
+    // y el tope evita que una red muerta deje la transicion colgada.
+    void Promise.race([pending, delay(SIGN_OUT_MAX_WAIT_MS)]).then(go, go)
   }, [router])
 
   const closeSheet = useCallback(() => {
@@ -176,6 +235,9 @@ function EntryScreen() {
   const startMorph = useCallback(
     (role: RoleKind, ref: RefObject<View | null>) => {
       if (navigating.current || coachMorph || sheet) return
+      // Elegir rol es declarar identidad: una sesion viva del OTRO rol no sobrevive al tap.
+      // Corre en paralelo al morph, asi que no le cuesta un frame a la transicion.
+      dropForeignSession(role)
       const openFallback = () => {
         if (role === 'coach') commitCoach()
         else router.push('/alumno/codigo')
@@ -206,7 +268,7 @@ function EntryScreen() {
         })
       })
     },
-    [coachMorph, commitCoach, router, sheet],
+    [coachMorph, commitCoach, dropForeignSession, router, sheet],
   )
 
   // Back de Android mientras el sheet esta arriba: revierte el morph en vez de salir de la

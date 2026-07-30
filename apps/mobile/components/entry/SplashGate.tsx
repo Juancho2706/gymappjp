@@ -52,8 +52,17 @@ import { EvaFigure, evaFigureHeight } from './EvaFigure'
  *
  * Timeline del retorno branded (§2.3, t0 = montaje de la replica):
  *   t0 hold de continuidad 120 ms · t0+120 crossfade 260 ms simultaneo (luz + marca)
- *   · t0+380 `router.replace`. Si el gate resuelve ANTES de t0+120 se salta el crossfade
- *   y se navega directo: la animacion jamas retiene la navegacion.
+ *   · el `router.replace` sale cuando el gate tiene target Y el crossfade cerro. Si el
+ *   target ya estaba resuelto antes de t0+120 se salta el crossfade y se navega directo:
+ *   la animacion jamas retiene la navegacion.
+ *
+ * UNA sola identidad despues del splash nativo (QA-3 del owner: "veo 3 splashes"). La
+ * firma EVA (hairline + wordmark) NO se monta por defecto: solo aparece cuando el veredicto
+ * del gate dice que NO habra marca de coach —o cuando el propio gate se hace lento y la
+ * espera se queda sin marca que mostrar—. Con branding cacheado el usuario ve figura nativa
+ * → misma figura en JS → marca del coach, sin pantalla EVA intermedia. Por eso el crossfade
+ * arranca apenas resuelven sesion+branding (AsyncStorage) y NO espera a `getCoachProfile()`,
+ * que es RED: la marca no depende del rol, solo el destino.
  *
  * Cero red en el arranque: `loadStoredBranding()` lee AsyncStorage. Cache frio o tier sin
  * white-label (`isCoachBrandingPresentationAllowed`, gate real fuera de la UI) → capa EVA
@@ -93,8 +102,11 @@ export interface SplashGateResult {
   failed?: boolean
 }
 
+/** Destino del retorno con sesion viva. */
+type GateTarget = '/coach/home' | '/alumno/home'
+
+/** La marca que se muestra en el crossfade. NO depende del rol: sale toda del branding. */
 interface BrandedReturn {
-  target: '/coach/home' | '/alumno/home'
   accent: string
   displayName: string
   greetingName: string | null
@@ -107,18 +119,29 @@ export interface SplashGateProps {
    * mismo, porque el retorno branded tiene que correr ANTES del `router.replace`.
    */
   onAnonymous: (result: SplashGateResult) => void
+  /**
+   * El usuario pidio el selector a proposito (`/?pick=1`, escape "cambiar de cuenta" del
+   * login). Con sesion viva el gate NO puede secuestrar la entrada: devuelve el control al
+   * padre igual que si fuera anonimo, si no es imposible entrar con el otro rol.
+   */
+  forceSelector?: boolean
 }
 
-export function SplashGate({ onAnonymous }: SplashGateProps) {
+export function SplashGate({ onAnonymous, forceSelector = false }: SplashGateProps) {
   const router = useRouter()
   const reduced = useReducedMotion()
   const { width, height } = useWindowDimensions()
 
   const [branded, setBranded] = useState<BrandedReturn | null>(null)
+  const [target, setTarget] = useState<GateTarget | null>(null)
+  /** La firma EVA solo se monta si esta espera NO va a terminar en marca de coach. */
+  const [evaSignature, setEvaSignature] = useState(false)
   const [slow, setSlow] = useState(false)
   const routed = useRef(false)
   const splashHidden = useRef(false)
   const t0 = useRef(Date.now())
+  /** El gate ya sabe si habra marca de coach (aunque todavia no sepa el destino). */
+  const decided = useRef(false)
 
   // El contenido se centra sobre el centro de la PANTALLA, no del body (§3.1): el splash
   // nativo centra en la ventana completa y la diferencia de ~8 pt se ve en el handoff.
@@ -126,10 +149,10 @@ export function SplashGate({ onAnonymous }: SplashGateProps) {
   const figureCenterY = height / 2 - STACK_HEIGHT / 2 + FIGURE_HEIGHT / 2
 
   const navigate = useCallback(
-    (target: BrandedReturn['target']) => {
+    (to: GateTarget) => {
       if (routed.current) return
       routed.current = true
-      router.replace(target)
+      router.replace(to)
     },
     [router],
   )
@@ -157,9 +180,17 @@ export function SplashGate({ onAnonymous }: SplashGateProps) {
   // Gate: sesion y branding en PARALELO (§2.4, cero red).
   useEffect(() => {
     let active = true
-    const slowTimer = setTimeout(() => {
-      if (active) setSlow(true)
-    }, SLOW_GATE_MS)
+    const timers: ReturnType<typeof setTimeout>[] = []
+
+    timers.push(
+      setTimeout(() => {
+        if (!active) return
+        setSlow(true)
+        // Sin veredicto a los 600 ms la espera se quedo sin marca que mostrar: recien ahi
+        // aparece la firma EVA. En el camino branded NUNCA se monta.
+        if (!decided.current) setEvaSignature(true)
+      }, SLOW_GATE_MS),
+    )
 
     void (async () => {
       try {
@@ -170,33 +201,47 @@ export function SplashGate({ onAnonymous }: SplashGateProps) {
         if (!active || routed.current) return
 
         const session = sessionResult.data.session
-        if (!session) {
+        if (!session || forceSelector) {
+          decided.current = true
+          setEvaSignature(true)
           onAnonymousRef.current({ branding: storedBranding })
           return
         }
 
-        const coach = await getCoachProfile()
-        if (!active || routed.current) return
-        const target: BrandedReturn['target'] = coach ? '/coach/home' : '/alumno/home'
-
         // Gate real del white-label: vive en el payload de branding (tier), no en la UI.
         const allowed = storedBranding && isCoachBrandingPresentationAllowed(storedBranding)
-        const elapsed = Date.now() - t0.current
-        if (!allowed || !storedBranding || elapsed < HOLD_MS) {
-          navigateRef.current(target)
-          return
+        decided.current = true
+
+        if (allowed && storedBranding) {
+          const metadata = session.user.user_metadata as { full_name?: string; name?: string } | undefined
+          const mark: BrandedReturn = {
+            // Orden de resolucion del ACENTO (§2.4): accentDark → primaryColor → azul EVA.
+            accent: entrySolidHex(storedBranding.accentDark ?? storedBranding.primaryColor, ENTRY_ACCENT),
+            displayName: storedBranding.displayName,
+            greetingName: firstName(metadata?.full_name ?? metadata?.name ?? null),
+            // Orden de resolucion de la MARCA (§2.4): logoUrlDark → logoUrl → tile de iniciales.
+            logoUri: storedBranding.logoUrlDark ?? storedBranding.logoUrl ?? null,
+          }
+          // El hold de continuidad se respeta aunque AsyncStorage conteste en 40 ms (§4 R1):
+          // el crossfade nunca arranca antes de t0+120.
+          timers.push(
+            setTimeout(
+              () => {
+                if (active && !routed.current) setBranded(mark)
+              },
+              Math.max(0, HOLD_MS - (Date.now() - t0.current)),
+            ),
+          )
+        } else {
+          // No hay marca de coach que mostrar: la espera es de EVA y lo dice.
+          setEvaSignature(true)
         }
 
-        const metadata = session.user.user_metadata as { full_name?: string; name?: string } | undefined
-        setBranded({
-          target,
-          // Orden de resolucion del ACENTO (§2.4): accentDark → primaryColor → azul EVA.
-          accent: entrySolidHex(storedBranding.accentDark ?? storedBranding.primaryColor, ENTRY_ACCENT),
-          displayName: storedBranding.displayName,
-          greetingName: firstName(metadata?.full_name ?? metadata?.name ?? null),
-          // Orden de resolucion de la MARCA (§2.4): logoUrlDark → logoUrl → tile de iniciales.
-          logoUri: storedBranding.logoUrlDark ?? storedBranding.logoUrl ?? null,
-        })
+        // Consulta de RED. Define el DESTINO, no la marca: por eso corre despues de haber
+        // lanzado el crossfade y no antes.
+        const coach = await getCoachProfile()
+        if (!active || routed.current) return
+        setTarget(coach ? '/coach/home' : '/alumno/home')
       } catch {
         if (active && !routed.current) onAnonymousRef.current({ branding: null, failed: true })
       }
@@ -204,23 +249,33 @@ export function SplashGate({ onAnonymous }: SplashGateProps) {
 
     return () => {
       active = false
-      clearTimeout(slowTimer)
+      timers.forEach(clearTimeout)
     }
-  }, [])
+  }, [forceSelector])
 
   // Crossfade del retorno branded. Arranca con la capa coach YA montada (por eso depende
   // del estado, no de un rAF): animar un nodo que aun no existe cuesta un frame vacio.
   const xfade = useSharedValue(0)
+  const [xfadeDone, setXfadeDone] = useState(false)
   useEffect(() => {
     if (!branded) return
     const duration = reduced ? XFADE_REDUCED_MS : XFADE_MS
     xfade.value = withTiming(1, { duration, easing: EASE.standard })
-    const timer = setTimeout(() => navigateRef.current(branded.target), duration)
+    const timer = setTimeout(() => setXfadeDone(true), duration)
     return () => {
       clearTimeout(timer)
       cancelAnimation(xfade)
     }
   }, [branded, reduced, xfade])
+
+  // Navegar = tener destino. El crossfade solo puede RETENER lo que ya empezo (cortarlo a la
+  // mitad se lee como parpadeo de marca); si el destino llega antes de que hubiera marca, no
+  // hay nada que esperar y se corta.
+  useEffect(() => {
+    if (!target) return
+    if (branded && !xfadeDone) return
+    navigateRef.current(target)
+  }, [branded, target, xfadeDone])
 
   // §4 S3 — respiracion del halo: 1 solo nodo, solo `opacity`.
   const halo = useSharedValue(reduced ? 0.7 : 0.55)
@@ -294,12 +349,15 @@ export function SplashGate({ onAnonymous }: SplashGateProps) {
 
       {/* Capa 3 — marca EVA. La FIGURA no anima su entrada: el splash nativo ya la muestra
           y cualquier fade rompe el handoff pixel-identico (§3.1 + QA §7.1). El movimiento de
-          S2 se aplica a la firma (hairline + wordmark), que el splash nativo NO tiene. */}
+          S2 se aplica a la firma (hairline + wordmark), que el splash nativo NO tiene.
+          La firma se mantiene MONTADA aunque este invisible: su alto es parte del stack que
+          posiciona la figura (y el ancla del halo), asi que desmontarla haria saltar la
+          figura justo en el handoff. */}
       <Animated.View pointerEvents="none" style={[styles.center, evaStyle]}>
         <EvaFigure size={FIGURE_SIZE} />
         <MotiView
           from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          animate={{ opacity: evaSignature ? 1 : 0 }}
           transition={{ type: 'timing', duration: reduced ? 0 : SIGNATURE_MS, easing: EASE.standard }}
           style={styles.signature}
         >
@@ -326,9 +384,14 @@ export function SplashGate({ onAnonymous }: SplashGateProps) {
           <Text style={styles.coachName} numberOfLines={1}>
             {branded.displayName}
           </Text>
-          <Text style={styles.coachGreeting} numberOfLines={1}>
-            {branded.greetingName ? `Hola de nuevo, ${branded.greetingName}` : 'Hola de nuevo'}
-          </Text>
+          {/* El saludo SIEMPRE nombra a quien entra. Sin nombre a mano queda la marca sola:
+              "Hola de nuevo" pelado bajo el nombre del coach se lee como si saludara AL
+              COACH (QA-3 del owner) y en el retorno del alumno eso es directamente falso. */}
+          {branded.greetingName ? (
+            <Text style={styles.coachGreeting} numberOfLines={1}>
+              {`Hola de nuevo, ${branded.greetingName}`}
+            </Text>
+          ) : null}
         </Animated.View>
       ) : null}
 
@@ -391,9 +454,16 @@ function initialsOf(name: string): string {
   return `${words[0][0]}${words[1][0]}`.toUpperCase()
 }
 
+/**
+ * Primer nombre, presentable. Los nombres guardados en MAYUSCULAS (o todo minusculas) se
+ * normalizan; los que ya mezclan cajas se respetan tal cual ("McKenzie", "JuanPablo").
+ */
 function firstName(fullName: string | null): string | null {
   const first = (fullName ?? '').trim().split(/\s+/)[0]
-  return first ? first : null
+  if (!first) return null
+  const mixedCase = first !== first.toLocaleLowerCase('es') && first !== first.toLocaleUpperCase('es')
+  if (mixedCase) return first
+  return first.charAt(0).toLocaleUpperCase('es') + first.slice(1).toLocaleLowerCase('es')
 }
 
 const styles = StyleSheet.create({
