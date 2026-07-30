@@ -42,6 +42,29 @@ La paridad global **no está certificada todavía**.
 > nativo — corregido más abajo. F5 (anillo proteína) no reproducible en código actual — re-testear en
 > device; F9 ("Z4") sin rastro en código — probable fix colateral. Todo pendiente de QA física.
 
+> **2026-07-30 (misma rama, corte 3 — ronda QA-2 del owner, 14 hallazgos + 2 decisiones)**: (a) splash
+> nativo → figura BLANCA `eva-icon.png` (era la variante negra sobre #07080C; config nativa = próximo
+> build) y loader default RN → figura EVA respirando (muere el wordmark tricolor; custom del coach
+> intacto); (b) **grano global** en `AppBackground` ambos temas (crosshatch sello de la entrada,
+> decisión owner); (c) ficha de alumno coach: iconos lucide SIN `cssInterop` en todo el cluster
+> (caían a negro en dark — registro sistémico via `themed-lucide.ts`), 5 KPI cards con contrato
+> compartido web/RN (labels completos, tiles tonales), flash V1→V2 del tab Nutrición muerto
+> (skeleton hasta asentar 4 señales async), backdrop de tabs con rampa de opacidad + fricción
+> horizontal resuelta, fotos de check-in FIRMADAS en lote (bucket privado; antes pintaba paths
+> crudos = recuadros vacíos); (d) editor nutrición V2: icono del alimento repuesto (el dato llegaba
+> del read-model y se perdía en la hidratación), chip de grupo delega en `GroupDot` DS; (e) barrida
+> de safe areas: 11 ramas en 8 archivos (ficha nutricional, quick-edit, 6 tabs coach con
+> `edges=[]`); (f) `DateField` JS puro (día/mes/año) en perfil cardio; (g) avatar del hub Opciones
+> muestra el LOGO del coach (fallback iniciales), espejo web en `IdentityHero` de settings;
+> (h) retiro de las viñetas del directorio (patrón solo-RN); (i) builder workout: Guardar/FAB se
+> ocultan con el catálogo abierto (espejo web), modo simple EXTIRPADO (−40 líneas), anatomía de
+> filas espejada (trash rojo, link SS, volumen en línea) + bug real: `toggleSuperset` sin `intent`
+> podía agregar en vez de quitar; (j) web: fondo del documento bajo el ejecutor dark-only
+> (`html:has(.is-workout-page)` — mata el bloque blanco de iPhone) + fallback `100vh`, logo del
+> coach en avatares web, mismas KPI cards. Gates del corte: tsc web+mobile 0, vitest 1115 verdes,
+> lint 0 errores. TODO pendiente de QA física. Queda en vuelo: morph card→sheet de la entrada
+> (frame 4 concepto C, decisión owner 2026-07-30).
+
 > **2026-07-29 (misma rama, corte 2)**: (a) **push W1** (catálogo aprobado por el owner): payload dual
 > `url`/`screen`, kill-switch `EVA_PUSH_DISABLED_EVENTS`, `meal_reminder` extendido a nativo (el cron
 > pasa por `sendPushToClient`), `program_assigned` (web action + bridge RN), `checkin_received` al coach
