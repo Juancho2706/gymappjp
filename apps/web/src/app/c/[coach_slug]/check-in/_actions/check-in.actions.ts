@@ -7,6 +7,7 @@ import { CheckInSchema } from '@eva/schemas'
 import { compressImageToWebp } from '@/lib/storage/image-compress'
 import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
 import { resolveStudentAccessForClient } from '@/lib/student-access.server'
+import { notifyCoachOfCheckin } from '@/lib/push-events'
 
 export type CheckinState = {
     error?: string
@@ -216,6 +217,13 @@ export async function submitCheckinAction(
     if (insertError) {
         return { error: 'Error al guardar el reporte: ' + insertError.message }
     }
+
+    // Push W1 `checkin_received` al coach (best-effort: jamás afecta el resultado del alumno).
+    await notifyCoachOfCheckin(adminDb, {
+        clientId: user.id,
+        weight: parsed.data.weight ?? null,
+        energyLevel: parsed.data.energy_level ?? null,
+    })
 
     revalidatePath('/c', 'layout')
     revalidatePath(`/coach/clients/${user.id}`)

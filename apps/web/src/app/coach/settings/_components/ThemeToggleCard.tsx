@@ -9,11 +9,13 @@ import { Sun, Moon } from 'lucide-react'
  * Usa next-themes (attribute=class) ya montado en el layout raíz.
  */
 export function ThemeToggleCard() {
-    const { theme, setTheme } = useTheme()
+    // `resolvedTheme` (no `theme`): con enableSystem el valor puede ser 'system' y el segmented
+    // debe marcar lo que el usuario VE (QA F13).
+    const { resolvedTheme, setTheme } = useTheme()
     const [mounted, setMounted] = useState(false)
     useEffect(() => setMounted(true), [])
 
-    const current = mounted && theme === 'dark' ? 'dark' : 'light'
+    const current = mounted && resolvedTheme === 'dark' ? 'dark' : 'light'
     const opts = [
         { val: 'light', label: 'Claro', Icon: Sun },
         { val: 'dark', label: 'Oscuro', Icon: Moon },

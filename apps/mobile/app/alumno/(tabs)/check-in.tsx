@@ -20,6 +20,7 @@ import { ArrowRight, Camera, Check, ChevronLeft, History, Lock, Minus, Plus, Ref
 import { MotiView } from 'moti'
 import { Confetti } from 'react-native-fast-confetti'
 import { supabase } from '../../../lib/supabase'
+import { apiFetch } from '../../../lib/api'
 import { clearAppBadge } from '../../../lib/badge'
 import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
@@ -272,14 +273,14 @@ export default function CheckInScreen() {
     // NO seteamos `date` (espejo web check-in.actions.ts:193-200): el insert web solo escribe
     // weight/energy/notes/fotos y la lectura ordena por created_at. Setearlo generaba un residual
     // de off-by-one en la vista del coach vs filas creadas por web (date NULL).
-    const { error } = await supabase.from('check_ins').insert({
+    const { data: inserted, error } = await supabase.from('check_ins').insert({
       client_id: client.id,
       weight: weight ? parseFloat(weight) : null,
       energy_level: energyLevel,
       front_photo_url: frontPhotoPath,
       back_photo_url: backPhotoPath,
       notes: notes.trim() || null,
-    })
+    }).select('id').single()
 
     submittingRef.current = false
     setSubmitting(false)
@@ -295,6 +296,15 @@ export default function CheckInScreen() {
           : 'No se pudo enviar el check-in. Intenta de nuevo.'
       )
     } else {
+      // Push W1 `checkin_received` al coach — bridge best-effort (patrón assignment-notifications:
+      // la fila ya está por RLS, el server solo revalida y notifica; fallo = silencio, jamás UI).
+      if (inserted?.id) {
+        apiFetch('/api/mobile/checkin-submitted', {
+          method: 'POST',
+          authenticated: true,
+          body: { checkInId: inserted.id },
+        }).catch(() => {})
+      }
       setDone(true) // celebración: confetti + pantalla de éxito se montan con `done`
       setStep(1)
       setFrontPhotoUri(null)

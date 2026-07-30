@@ -130,10 +130,13 @@ export default function RootLayout({
       <body className={`${inter.variable} ${montserrat.variable} ${archivo.variable} ${jetbrainsMono.variable} ${BRAND_FONT_VARS} antialiased`} suppressHydrationWarning>
         <PostHogProvider>
           <ThemeScriptSuppressor />
+          {/* QA F13 (decisión owner 2026-07-29): la web honra prefers-color-scheme del sistema
+              como RN. defaultTheme="system" solo aplica a quien NUNCA eligió tema con el toggle
+              (next-themes no persiste el default); una elección explícita previa se respeta. */}
           <ThemeProvider
             attribute="class"
-            defaultTheme="light"
-            enableSystem={false}
+            defaultTheme="system"
+            enableSystem
             disableTransitionOnChange={false}
           >
             <LanguageProvider>

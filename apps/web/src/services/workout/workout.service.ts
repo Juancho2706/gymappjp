@@ -7,6 +7,7 @@ import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-prog
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildProgramAssignedEmail } from '@/lib/email/transactional-templates'
+import { notifyProgramAssigned } from '@/lib/push-events'
 import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
@@ -1092,6 +1093,14 @@ export async function assignProgramToClientsAction(
                         console.error(`Program assigned email error for ${clientId}:`, emailResult.error)
                     }
                 }
+                // Push W1 `program_assigned` (best-effort, jamás lanza): misma marca que el email.
+                await notifyProgramAssigned({
+                    clientId,
+                    coachSlug,
+                    brandName,
+                    programName: template.name,
+                    logoUrl: emailBrand.logoUrl,
+                })
                 assignedClientIds.push(clientId)
             } catch (clientError: any) {
                 failedClients.push({

@@ -62,6 +62,15 @@ export interface ProgramAssignmentNotificationEmailSender {
   }): Promise<{ ok: true; providerMessageId: string | null } | { ok: false; error: string }>
 }
 
+/** Push W1 `program_assigned` — inyectado por el caller (best-effort, jamás lanza). */
+export type ProgramAssignmentPushSender = (input: {
+  clientId: string
+  coachSlug: string
+  brandName: string
+  programName: string
+  logoUrl: string | null
+}) => Promise<void>
+
 export type ProgramAssignmentNotificationSkipReason =
   | 'program_not_eligible'
   | 'assignment_too_old'
@@ -131,6 +140,7 @@ export async function sendProgramAssignmentNotifications(input: {
   now?: Date
   repository: ProgramAssignmentNotificationRepository
   emailSender: ProgramAssignmentNotificationEmailSender
+  pushSender?: ProgramAssignmentPushSender
 }): Promise<ProgramAssignmentNotificationResult> {
   const programIds = [...new Set(input.programIds)]
   const snapshot = await input.repository.loadSnapshot({
@@ -188,6 +198,19 @@ export async function sendProgramAssignmentNotifications(input: {
       logoUrl: emailBrand.logoUrl,
       primaryColor: emailBrand.primaryColor,
     })
+    // Push W1 `program_assigned` (best-effort): se emite para todo programa+cliente elegible,
+    // independiente del resultado del email — un proveedor de correo caído no debe silenciar
+    // también la push. La idempotencia del email no aplica aquí (el push no reintenta).
+    if (input.pushSender) {
+      await input.pushSender({
+        clientId: client.id,
+        coachSlug,
+        brandName,
+        programName: program.name,
+        logoUrl: emailBrand.logoUrl,
+      }).catch(() => {})
+    }
+
     const sendResult = await input.emailSender.send({
       to: client.email,
       subject: email.subject,
