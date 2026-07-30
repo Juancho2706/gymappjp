@@ -17,9 +17,13 @@ function hexToRgba(hex: string, alpha: number): string {
 
 /**
  * Fondo global — 1:1 con el `AmbientBackground` de la web: dos blobs con **blur
- * Gaussian real** (Skia) — marca (arr-izq) + celeste (abj-der) — + grilla 40×40.
- * Skia replica el `blur-3xl` de la web (SVG no podía). Brand-aware + light/dark.
- * Estático → sin costo perceptible. Montado app-wide (todos los menús).
+ * Gaussian real** (Skia) — marca (arr-izq) + celeste (abj-der) — + grilla 40×40
+ * + GRANO (decisión owner 2026-07-30): el crosshatch sello de la familia de entrada
+ * (`EntryBackground.tsx` §1.3 — celda 3, líneas 1px con alphas asimétricos, capa 0.5)
+ * extendido a TODA la app, en ambos temas. En dark ditherea el banding OLED de los
+ * blobs; en light usa tinta oscura a alpha aún menor (calibrado para no leerse como
+ * suciedad en pantallas de baja densidad). Estático por contrato: jamás anima.
+ * Montado app-wide (todos los menús) → un solo cambio acá texturiza la app entera.
  */
 export function AppBackground({ accent }: { accent?: string }) {
   // `resolvedScheme` (no `mode`): con la preferencia por defecto 'system', `mode`
@@ -31,6 +35,11 @@ export function AppBackground({ accent }: { accent?: string }) {
   const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'
   const brandColor = hexToRgba(tint, isDark ? 0.14 : 0.08)
   const skyColor = hexToRgba(SKY, isDark ? 0.13 : 0.07)
+  // Grano por tema: dark = tokens exactos de la entrada (blanco 0.012/0.010, capa 0.5);
+  // light = tinta ink-900 con alphas ~20% menores y capa 0.4 (el fondo claro amplifica).
+  const grainH = isDark ? 'rgba(255,255,255,0.012)' : 'rgba(15,23,42,0.010)'
+  const grainV = isDark ? 'rgba(255,255,255,0.010)' : 'rgba(15,23,42,0.008)'
+  const grainOpacity = isDark ? 0.5 : 0.4
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -41,14 +50,20 @@ export function AppBackground({ accent }: { accent?: string }) {
           <Circle cx={width * 0.95} cy={height * 0.92} r={width * 0.62} color={skyColor} />
         </Group>
       </Canvas>
-      {/* Grilla (celdas cuadradas 40px, como la web). */}
+      {/* Grilla (celdas cuadradas 40px, como la web) + grano (celda 3, encima de todo:
+          debajo de los lavados el sello desaparece — misma regla §1.3 de la entrada). */}
       <Svg style={StyleSheet.absoluteFill}>
         <Defs>
           <Pattern id="appgrid" width={40} height={40} patternUnits="userSpaceOnUse">
             <Path d="M40 0 L0 0 0 40" fill="none" stroke={gridColor} strokeWidth={1} />
           </Pattern>
+          <Pattern id="appgrain" width={3} height={3} patternUnits="userSpaceOnUse">
+            <Rect x={0} y={0} width={3} height={1} fill={grainH} />
+            <Rect x={0} y={0} width={1} height={3} fill={grainV} />
+          </Pattern>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#appgrid)" />
+        <Rect width="100%" height="100%" fill="url(#appgrain)" opacity={grainOpacity} />
       </Svg>
     </View>
   )
