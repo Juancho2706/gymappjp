@@ -69,6 +69,57 @@ La paridad global **no está certificada todavía**.
 > intacta para deep links. Timings 1:1 con la spec del mockup; gates: tsc 0, vitest 1121, expo
 > export android OK.
 
+> **2026-07-30 (misma rama, corte 5 — ronda QA-4 del owner, 19 hallazgos, 13 informes + 12 workers
+> juzgados)**: **Ejecutor V3 RN** — cronómetro count-up arreglado (`useStopwatch` re-armaba el
+> intervalo cada tick y quedaba 0:00↔0:01; roller guardaba 0-1s en `workout_logs`); ejercicios por
+> tiempo YA NO auto-arrancan (paridad web: movilidad/cardio/intervalos con Iniciar/Pausar/Reanudar;
+> el lado 2 per-side sí auto-continúa); registro SIEMPRE visible en movilidad (ActiveSetRow +
+> historial bajo el anillo; muere "Registrar a mano", que desmontaba el anillo y mataba el timer);
+> miniatura real en la card SIGUIENTE del descanso (`thumbnail_url` entra al select del plan +
+> cadena thumb→gif→póster YT; las sustituciones propagan `thumbnail_url`); detector YouTube
+> unificado (`youtube-nocookie.com` caía a 'image' y rompía 33 ejercicios del catálogo — helper
+> `isYoutubeMediaUrl` RN+web, 6 clones muertos); video centrado llenando el marco + botón mute
+> (default muteado) también para YouTube vía IFrame API sin recargar el WebView; ignition:
+> `overflow hidden` (las 3 líneas ya no se ven antes de tiempo), `SessionMorphProvider` al layout
+> RAÍZ (Android cerraba el Dialog en el `router.push` sin avisar a JS → ahora sí espera el "TOCA
+> PARA COMENZAR"), LISTO centrado, logo con máscara circular; ejecutor forzado a DARK
+> (`ForceScheme` + footer/título/descripción de `Sheet` gateados por `forceDark` — muere la barra
+> blanca con cuenta en modo claro; sheets "Nota del coach" ×4 incluidos); rueda KG/REPS a 280ms
+> (antes 400 + ~150 de `delaysContentTouches` iOS) + haptic Medium + rueda conectada en superserie
+> + web a 280. **Días del programa** — la day-card de HOY completada abre "Ya hiciste este
+> entrenamiento" (paridad web QA7); `?recuperar=` validado con `validateTargetDate` (adiós
+> "Recuperando: Invalid date"); copy amigable para serie pasada sin registro (string compartido del
+> engine). **Centro Nutrición coach** — SOLO las 3 tabs quedan sticky (overlay `translateY`;
+> título/pill/+ scrollean); buscador de Alimentos dentro del scroll; la cápsula del coach por fin
+> se minimiza en el hub V2. **Fichas coach** — muere el flash "No pudimos abrir la ficha"
+> (`setLoading(false)` antes de tener `userId` + offline derivado del TTL de cache): máquina
+> resolving|loading|blocked|ready|failed (`lib/coach-nutrition-detail-phase.ts` + 9 tests), error
+> ámbar SOLO desde el catch, Reintentar + auto-retry al volver online, loader de marca; builder
+> ídem. **Mi marca FULL en RN** — las 7 variantes de loader + compositor 8×4 portadas
+> (`components/loaders/`, svg/moti, reduced-motion) y enchufadas vía `EvaLoaderScreen` (cubre las
+> 68 pantallas de carga); Guardar ya no corrompe la cache (merge no destructivo); el coach carga SU
+> PROPIA marca al entrar (antes solo el flujo alumno escribía cache → marca ajena en device
+> compartido); editor completado: tema del ejecutor + compositor + previews con el render REAL;
+> `use_brand_colors_coach` honrado solo por el camino autenticado (select anon intacto).
+> **Salud/BLE** — estudio completo en `docs/research/estudio-salud-dispositivos-2026-07-30.md`
+> (+ anexo de código). OTA: el scan espera `PoweredOn` + taxonomía de errores BLE con copy por
+> causa y CTA a ajustes; `BleManager` lazy (muere el prompt BT al abrir cardio); `androidInit`
+> verifica permisos realmente concedidos; `iosInit` propaga el error real; aviso ANTES de mandar a
+> Play Store por Health Connect (Android ≤13). Config para la PRÓXIMA build: `BLUETOOTH_SCAN/
+> CONNECT` fuera de `app.json` (habilita el `neverForLocation` del plugin ble-plx — sin él el scan
+> Android 12+ da 0 resultados) + `plugins/with-health-connect.js` (`setPermissionDelegate` en
+> MainActivity — sin esto `requestPermission` CRASHEA nativo — y `activity-alias` Android 14+).
+> BLOQUEANTES de release (owner): capability HealthKit en el provisioning local (`credentialsSource:
+> "local"` no sincroniza capabilities) y formulario "Health apps declaration" en Play Console
+> (~2 semanas de aprobación — empezar YA). **Misc** — check-in: fotos arregladas
+> (`expo-file-system/legacy`: el entry SDK 54 lanza siempre; try/catch con error visible; iOS sin
+> crop 1:1 forzado); comparador de fotos del coach migrado a `Gesture.Pan` (usaba `locationX`
+> relativo al view tocado = temblor frenético; sheet sin scroll); IMC sin desbordar; segmented
+> "Lado" a ancho completo ("Alternado" ya no parte); iconos de Herramientas normalizados para
+> Android (sizes pares, stroke 2, HW texture). Gates del corte: tsc web+mobile en 0; vitest 4843
+> verdes (379 archivos). TODO pendiente de QA física; BLE/Health Connect/HealthKit y el form de
+> Play exigen build EAS nueva + trámites del owner.
+
 > **2026-07-30 (misma rama, corte 4 — ronda QA-3 del owner, ~26 hallazgos, 13 workers juzgados)**:
 > **Ejecutor V3 RN** — (a) el keypad custom ya no se abre solo al entrar ni tras cada serie
 > (lazy-init del nonce en `SetRow.tsx:880`); (b) descanso SIN flash de la serie siguiente (la
