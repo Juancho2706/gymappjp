@@ -13,6 +13,7 @@ import { getCoachSettingsForUser } from './_data/settings.queries'
 import { BrandSettingsForm } from './BrandSettingsForm'
 import { ModulesForm } from './modules/_components/ModulesForm'
 import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
+import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
 import { AreasManager } from './areas/_components/AreasManager'
 import { getModulesContext } from './modules/_data/modules.queries'
 import { getFuncionesContext } from './funciones/_data/funciones.queries'
@@ -112,14 +113,42 @@ function SettingsFooter() {
     )
 }
 
-/** Hero de identidad — card invertida con avatar + badge de plan/rol. */
-function IdentityHero({ name, subtitle, badge }: { name: string; subtitle: string; badge: string }) {
+/**
+ * Hero de identidad — card invertida con avatar + badge de plan/rol.
+ *
+ * QA2 D2: el círculo muestra el LOGO de la marca del coach cuando existe (contain sobre fondo
+ * neutro, conservando el anillo sport) y cae a la inicial si no hay logo o la imagen no carga.
+ * Es el panel PROPIO del coach: sin gate de tier para verse a sí mismo (el gate de white-label
+ * aplica a lo que ve el ALUMNO). Espejo de la ficha de identidad de "Opciones" en RN.
+ */
+function IdentityHero({
+    name,
+    subtitle,
+    badge,
+    logoUrl,
+    logoDarkUrl,
+}: {
+    name: string
+    subtitle: string
+    badge: string
+    logoUrl?: string | null
+    logoDarkUrl?: string | null
+}) {
     const initial = (name?.trim()?.charAt(0) || 'C').toUpperCase()
     return (
         <div className="flex items-center gap-4 rounded-card p-5 bg-[var(--surface-inverse)]">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-display text-2xl font-black bg-[var(--sport-500)] text-[var(--text-on-sport)] ring-2 ring-[var(--sport-400)]/40">
-                {initial}
-            </span>
+            <CoachBrandAvatar
+                name={name}
+                logoUrl={logoUrl}
+                logoDarkUrl={logoDarkUrl}
+                size="lg"
+                className="ring-2 ring-[var(--sport-400)]/40"
+                fallback={
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-display text-2xl font-black bg-[var(--sport-500)] text-[var(--text-on-sport)] ring-2 ring-[var(--sport-400)]/40">
+                        {initial}
+                    </span>
+                }
+            />
             <div className="min-w-0 flex-1">
                 <p className="truncate font-display text-xl font-black text-on-dark">{name}</p>
                 <p className="mt-0.5 truncate text-[13px] text-on-dark-muted">{subtitle}</p>
@@ -170,7 +199,13 @@ export default async function CoachSettingsPage() {
                     </p>
                 </div>
 
-                <IdentityHero name={displayName} subtitle="Pool de coaches · gestión del equipo" badge="Co-gestor" />
+                <IdentityHero
+                    name={displayName}
+                    subtitle="Pool de coaches · gestión del equipo"
+                    badge="Co-gestor"
+                    logoUrl={coach.logo_url}
+                    logoDarkUrl={coach.logo_url_dark}
+                />
 
                 <div className="space-y-3">
                     <Eyebrow>Apariencia</Eyebrow>
@@ -327,7 +362,13 @@ export default async function CoachSettingsPage() {
                     </p>
                 </div>
 
-                <IdentityHero name={displayName} subtitle={`Coach · ${clientLabel}`} badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`} />
+                <IdentityHero
+                    name={displayName}
+                    subtitle={`Coach · ${clientLabel}`}
+                    badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`}
+                    logoUrl={coach.logo_url}
+                    logoDarkUrl={coach.logo_url_dark}
+                />
 
                 <div className="space-y-3">
                     <Eyebrow>Apariencia</Eyebrow>

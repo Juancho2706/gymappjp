@@ -23,9 +23,8 @@ import {
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Avatar } from '@/components/ui/avatar'
 import { NavPendingFeedback } from '@/components/navigation/NavPendingFeedback'
-import { ThemedLogo } from '@/components/brand/ThemedLogo'
+import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
 import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { getVisibleNavItems, splitForSidebar, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
@@ -342,13 +341,14 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                 {/* .dt-side-foot — bloque COACH / {nombre} + Colapsar menú */}
                 <div className="mt-3 flex flex-col gap-1.5 border-t border-[var(--border-subtle)] pt-3">
                     <div className={cn('flex min-w-0 items-center gap-2.5 rounded-[var(--radius-md)] p-1.5', isCollapsed && 'justify-center p-0')}>
-                        {logoUrl ? (
-                            <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
-                                <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
-                            </span>
-                        ) : (
-                            <Avatar name={avatarName} size="sm" />
-                        )}
+                        {/* Identidad del coach: logo de su marca si existe, iniciales si no (o si la
+                            imagen no carga). Ver CoachBrandAvatar. */}
+                        <CoachBrandAvatar
+                            name={avatarName}
+                            logoUrl={logoUrl}
+                            logoDarkUrl={logoUrlDark}
+                            size="sm"
+                        />
 
                         {!isCollapsed && (
                             <span className="flex min-w-0 flex-col gap-px">
