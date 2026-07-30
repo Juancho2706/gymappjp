@@ -17,6 +17,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { Skeleton } from '../../../components/Skeleton'
 import { WelcomeModal } from '../../../components/WelcomeModal'
+import { StudentOnboarding } from '../../../components/alumno/home/StudentOnboarding'
 import { DashboardHeader, DashboardHeaderSkeleton } from '../../../components/alumno/home/DashboardHeader'
 import { SectionTitle } from '../../../components/alumno/home/SectionTitle'
 import { StreakRibbon } from '../../../components/alumno/home/StreakRibbon'
@@ -97,6 +98,13 @@ export default function AlumnoHomeScreen() {
   // onSaved) puede resolver DESPUÉS de uno nuevo y pisar el estado fresco (p.ej.
   // un check-in recién guardado desaparece del widget).
   const loadIdRef = useRef(0)
+  // Onboarding corto del alumno (primera entrada al dashboard). `false` hasta que el
+  // overlay se resuelve — ya sea porque el alumno ya lo vio o porque acaba de cerrarlo.
+  // Encadena con el WelcomeModal del coach: onboarding primero, welcome después (nunca
+  // solapados). Sin `data` todavía no hay pantalla, así que el overlay se monta recién
+  // cuando la home terminó de cargar.
+  const [onboardingResolved, setOnboardingResolved] = useState(false)
+  const handleOnboardingResolved = useCallback(() => setOnboardingResolved(true), [])
 
   useEffect(() => {
     getOnboardingStatus().then((done) => { if (!done) router.replace('/alumno/onboarding') })
@@ -632,11 +640,14 @@ export default function AlumnoHomeScreen() {
         </View>
       </ScrollView>
 
-      {/* §13 WelcomeModal */}
+      {/* §13a Onboarding corto del alumno — 3 slides, una sola vez (AsyncStorage) */}
+      <StudentOnboarding onResolved={handleOnboardingResolved} />
+
+      {/* §13b WelcomeModal del coach — espera a que el onboarding esté resuelto */}
       {data?.welcomeModal ? (
         <WelcomeModal
           brandName={data.welcomeModal.brandName}
-          enabled={data.welcomeModal.enabled}
+          enabled={data.welcomeModal.enabled && onboardingResolved}
           content={data.welcomeModal.content}
           type={data.welcomeModal.type}
           version={data.welcomeModal.version}
