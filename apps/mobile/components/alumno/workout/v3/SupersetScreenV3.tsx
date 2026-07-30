@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, useWindowDimensions, View } from 'react-native'
 import { MotiView } from 'moti'
 import Animated, {
+  cancelAnimation,
   Easing,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated'
@@ -22,8 +24,9 @@ import {
 } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
+import { extractYoutubeVideoId } from '../../../../lib/youtube'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
-import { parseRestTime } from '../timers'
+import { parseRestTime, useWorkoutTimers } from '../timers'
 import {
   resolveExercise,
   type PrevSet,
@@ -35,13 +38,32 @@ import type { EffectiveTarget } from '../../../../lib/workout/progression'
 import { Sheet } from '../../../Sheet'
 import { SetRow, ActiveSetRow } from '../SetRow'
 import { bestPrevOf } from '../workout-ui'
-import { ExecMediaV3 } from './ExecMediaV3'
+import { ExecMediaV3, execMediaKind } from './ExecMediaV3'
 import type { ExecTheme } from './exec-theme'
 import { activeRound, memberLetter, nextMemberIdInRound, roundDotStates, totalRounds } from './superset-screen-model'
 
 // Reflow del layout (paridad ExerciseScreenV3 CARD_LAYOUT): anima el reordenamiento / contrae-expande al
 // cambiar de miembro/ronda. Sólo sin reduced-motion.
 const CARD_LAYOUT = LinearTransition.springify().damping(25).stiffness(200)
+
+// Radio INTERIOR del card del miembro activo (borderRadius 18 − borderWidth 2): lo comparten el halo y
+// las bandas marquee para pegarse a la esquina sin escalón.
+const ACTIVE_CARD_INNER_RADIUS = 16
+// Anillos del halo del card activo (inset en px → opacidad del acento). Decrecen hacia adentro para leerse
+// como un resplandor difuso; ver `ActiveCardHalo`.
+const HALO_RINGS: Array<{ inset: number; opacity: number }> = [
+  { inset: 0, opacity: 0.3 },
+  { inset: 2, opacity: 0.18 },
+  { inset: 4, opacity: 0.1 },
+  { inset: 6, opacity: 0.05 },
+]
+
+// Banda marquee del card activo (pedido CEO): recordatorio persistente de que la superserie NO tiene
+// descanso entre miembros. El "·" separa las repeticiones; el aire entre ellas lo pone `paddingRight`
+// (un espacio final se colapsa al medir el texto y rompería el loop sin costura).
+const MARQUEE_TEXT = 'CONTINÚA SIN DESCANSO ·'
+const MARQUEE_COPIES = 6
+const MARQUEE_MS = 9000
 
 /** Sustitución activa de un miembro (mirror del `ActiveSub` del orquestador ExecutorV3). */
 export interface SupersetMemberSub {
@@ -120,6 +142,11 @@ export function SupersetScreenV3({
   onRetrySet?: (blockId: string, setNumber: number) => void
 }) {
   const s = exec.surface
+  // Descanso de grupo en curso: mientras el interstitial de descanso está arriba, las bandas marquee
+  // ("continúa sin descanso") se apagan — ahí manda el descanso. `SupersetScreenV3` sólo se monta dentro
+  // de `ExecutorV3`, que ya vive bajo `WorkoutTimerProvider`.
+  const timers = useWorkoutTimers()
+  const restingNow = timers.state?.kind === 'rest'
 
   // Aviso "¡Sigue sin detenerte!" (overlay efímero) + prefill "= última vez" del miembro activo. Ambos
   // son estado LOCAL de UI: no rozan el motor de guardado/cola.
@@ -203,6 +230,17 @@ export function SupersetScreenV3({
   useEffect(() => {
     setAutofill(null)
   }, [activeBlockId])
+
+  // Precarga de la media del SIGUIENTE miembro de la ronda: al pasar a él, el gif/imagen ya está en el
+  // caché de disco y su card no aparece vacía. Sólo URLs de imagen (gif/imagen/miniatura de YouTube):
+  // precargar un mp4 se bajaría el archivo entero sin necesidad.
+  const nextThumbUri = memberThumbUri(
+    nextMemberId ? memberVMs.find((m) => m.block.id === nextMemberId)?.exercise ?? null : null,
+  )
+  useEffect(() => {
+    if (!nextThumbUri) return
+    Image.prefetch(nextThumbUri, 'memory-disk').catch(() => {})
+  }, [nextThumbUri])
 
   if (memberVMs.length < 2) return null
 
@@ -327,11 +365,15 @@ export function SupersetScreenV3({
                   borderWidth: 2,
                   backgroundColor: hexToRgba(exec.accent, 0.1),
                   borderColor: hexToRgba(exec.accent, 0.55),
-                  ...(reducedMotion
-                    ? null
-                    : { shadowColor: exec.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.28, shadowRadius: 10, elevation: 6 }),
                 }}
               >
+                {/* Halo del card activo — DENTRO del card (ver `ActiveCardHalo`): la sombra de marca que
+                    había acá se veía cortada en Android. */}
+                <ActiveCardHalo accent={exec.accent} />
+
+                {/* Banda marquee superior "CONTINÚA SIN DESCANSO" (pedido CEO). */}
+                {!restingNow && <MarqueeBand accent={exec.accent} reducedMotion={reducedMotion} edge="top" />}
+
                 {/* Badge de letra + AHORA. */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <LetterBadge letter={m.letter} active exec={exec} />
@@ -456,6 +498,9 @@ export function SupersetScreenV3({
                   onDraftChange={(values, fieldIndex) => onDraftChange(m.block.id, round, values, fieldIndex)}
                   onCommit={handleCommit}
                 />
+
+                {/* Banda marquee inferior: abraza el card por abajo con el mismo recorrido. */}
+                {!restingNow && <MarqueeBand accent={exec.accent} reducedMotion={reducedMotion} edge="bottom" />}
               </MotiView>
             )
           }
@@ -463,6 +508,7 @@ export function SupersetScreenV3({
           // ── MIEMBROS NO ACTIVOS — tarjeta compacta (mini-media 60px + estado). ──
           const isRecent = recentSet?.blockId === m.block.id && recentSet?.setNumber === round
           const syncError = syncErrors?.[`${m.block.id}:${round}`] ?? null
+          const thumbUri = memberThumbUri(m.exercise)
           return (
             <MotiView
               key={m.block.id}
@@ -490,8 +536,15 @@ export function SupersetScreenV3({
                     justifyContent: 'center',
                   }}
                 >
-                  {m.exercise.gif_url ? (
-                    <Image source={{ uri: m.exercise.gif_url }} alt={m.exercise.name} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                  {thumbUri ? (
+                    <Image
+                      source={{ uri: thumbUri }}
+                      alt={m.exercise.name}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={150}
+                    />
                   ) : (
                     <Dumbbell size={24} color={hexToRgba(s.textMuted, 0.55)} strokeWidth={1.8} />
                   )}
@@ -687,6 +740,137 @@ function CueBar({ name, exec, reducedMotion }: { name: string; exec: ExecTheme; 
           {name}
         </Animated.Text>
       </Animated.View>
+    </View>
+  )
+}
+
+/**
+ * URI de la miniatura de un miembro de la superserie (QA ronda 2: antes sólo se miraba `gif_url`, así que
+ * todo ejercicio con video o imagen caía en la mancuerna genérica). Precedencia = `execMediaKind`:
+ *   gif → el gif; imagen → esa URL; YouTube → la miniatura pública (`mqdefault`, 320×180: la `default` de
+ *   120×90 se ve borrosa en la mini de 60px a 3x); video mp4/Storage → null, porque sacarle un cuadro
+ *   exige decodificar el archivo (no hay miniatura barata) → mancuerna, igual que sin media.
+ */
+function memberThumbUri(exercise: SessionExercise | null): string | null {
+  if (!exercise) return null
+  const kind = execMediaKind(exercise)
+  if (kind === 'gif') return exercise.gif_url ?? null
+  if (kind === 'image') return exercise.video_url ?? null
+  if (kind === 'youtube') {
+    const id = exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null
+    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
+  }
+  return null
+}
+
+/**
+ * Halo del card del miembro ACTIVO. Antes era `shadowColor/shadowRadius` + `elevation`: en Android
+ * `elevation` ignora color y desenfoque (sombra dura gris) y el envoltorio del stepper recorta el
+ * sangrado con su `overflow:'hidden'`, así que el "glow" de marca se veía como un rectángulo cortado.
+ * Ahora son anillos concéntricos DENTRO del propio card, con opacidad decreciente hacia adentro: mismo
+ * resultado en Android y iOS y nada que recortar. Es estático (no hay animación que apagar con
+ * reduced-motion) y no intercepta toques.
+ */
+function ActiveCardHalo({ accent }: { accent: string }) {
+  return (
+    <>
+      {HALO_RINGS.map((ring) => (
+        <View
+          key={ring.inset}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: ring.inset,
+            left: ring.inset,
+            right: ring.inset,
+            bottom: ring.inset,
+            borderRadius: ACTIVE_CARD_INNER_RADIUS - ring.inset,
+            borderWidth: 2,
+            borderColor: hexToRgba(accent, ring.opacity),
+          }}
+        />
+      ))}
+    </>
+  )
+}
+
+/**
+ * Banda marquee "CONTINÚA SIN DESCANSO" que abraza el card del miembro activo por arriba y por abajo
+ * (pedido CEO): recordatorio persistente de que la superserie se encadena sin pausa. El texto se repite
+ * `MARQUEE_COPIES` veces en fila y se desplaza EXACTAMENTE el ancho de una repetición (medido con
+ * `onLayout`) en loop lineal, así el salto al reiniciar es invisible (mismo patrón que `WaveCrest` del
+ * morph de sesión). Los márgenes negativos cancelan el padding del card para que la banda llegue al borde
+ * interior; el radio iguala al del card en las esquinas de su lado. reduced-motion ⇒ texto fijo centrado.
+ * Decorativa: no recibe toques y se anuncia como UN solo texto (no las 6 repeticiones).
+ */
+function MarqueeBand({ accent, reducedMotion, edge }: { accent: string; reducedMotion: boolean; edge: 'top' | 'bottom' }) {
+  const [repWidth, setRepWidth] = useState(0)
+  const x = useSharedValue(0)
+
+  useEffect(() => {
+    if (reducedMotion || repWidth <= 0) return
+    x.value = 0
+    x.value = withRepeat(withTiming(-repWidth, { duration: MARQUEE_MS, easing: Easing.linear }), -1)
+    return () => cancelAnimation(x)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repWidth, reducedMotion])
+
+  const railStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }))
+  const textStyle = {
+    fontFamily: FONT.uiExtra,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: hexToRgba(accent, 0.85),
+    paddingRight: 12,
+    flexShrink: 0,
+  } as const
+
+  return (
+    <View
+      accessible
+      accessibilityLabel="Continúa sin descanso"
+      pointerEvents="none"
+      style={{
+        height: 22,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        marginHorizontal: -12,
+        backgroundColor: hexToRgba(accent, 0.1),
+        ...(edge === 'top'
+          ? {
+              marginTop: -12,
+              borderTopLeftRadius: ACTIVE_CARD_INNER_RADIUS,
+              borderTopRightRadius: ACTIVE_CARD_INNER_RADIUS,
+              borderBottomWidth: 1,
+              borderBottomColor: hexToRgba(accent, 0.22),
+            }
+          : {
+              marginBottom: -12,
+              borderBottomLeftRadius: ACTIVE_CARD_INNER_RADIUS,
+              borderBottomRightRadius: ACTIVE_CARD_INNER_RADIUS,
+              borderTopWidth: 1,
+              borderTopColor: hexToRgba(accent, 0.22),
+            }),
+      }}
+    >
+      {reducedMotion ? (
+        <Text style={[textStyle, { paddingRight: 0, textAlign: 'center' }]} numberOfLines={1}>
+          CONTINÚA SIN DESCANSO
+        </Text>
+      ) : (
+        <Animated.View style={[{ flexDirection: 'row' }, railStyle]}>
+          {Array.from({ length: MARQUEE_COPIES }).map((_, i) => (
+            <Text
+              key={i}
+              onLayout={i === 0 ? (e) => setRepWidth(Math.round(e.nativeEvent.layout.width)) : undefined}
+              style={textStyle}
+              numberOfLines={1}
+            >
+              {MARQUEE_TEXT}
+            </Text>
+          ))}
+        </Animated.View>
+      )}
     </View>
   )
 }

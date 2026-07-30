@@ -21,6 +21,7 @@ import {
 import { MotiView } from 'moti'
 import { cssInterop } from 'nativewind'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { X } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { useEvaMotion } from '../lib/motion'
@@ -285,7 +286,7 @@ export function Sheet({
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel="Cerrar"
-      className={`absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border ${forceDark ? 'border-inverse bg-white/5' : 'border-subtle bg-surface-sunken'}`}
+      className={`absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border ${forceDark ? 'border-inverse/10 bg-white/5' : 'border-subtle bg-surface-sunken'}`}
     >
       <X className={forceDark ? 'text-on-dark' : 'text-muted'} size={16} strokeWidth={2.4} />
     </TouchableOpacity>
@@ -298,6 +299,11 @@ export function Sheet({
   if (nativeModal) {
     return (
       <Modal transparent visible={open} animationType="none" statusBarTranslucent onRequestClose={onClose}>
+        {/* The native Modal renders in its OWN OS window — `GestureHandlerRootView` in
+            `app/_layout.tsx` doesn't reach it, so any `GestureDetector` inside (e.g. the
+            volume slider in ExecSettingsSheet) never receives touch events without its own
+            root here. Aditivo: no layout change (flex-1 passthrough). */}
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end">
           {/* Backdrop: black/60 (== the gorhom BottomSheetBackdrop opacity 0.6), tap-to-close. */}
           <MotiView
@@ -339,7 +345,7 @@ export function Sheet({
               <View
                 accessibilityLabel={accessibilityLabel}
                 accessibilityViewIsModal
-                className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
+                className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse/10 bg-ink-950' : 'border-subtle bg-surface-card'}`}
                 style={[shadow('lg', resolvedScheme), { maxHeight: maxDynamicContentSize, flexShrink: 1 }]}
               >
                 {/* Swipe-down on the handle zone dismisses (parity with enablePanDownToClose). */}
@@ -372,6 +378,7 @@ export function Sheet({
             </MotiView>
           </KeyboardAvoidingView>
         </View>
+        </GestureHandlerRootView>
       </Modal>
     )
   }
@@ -398,7 +405,7 @@ export function Sheet({
           scrollable's measured content (onContentSizeChange), while flex-1 keeps the scroll body
           bounded so tall content (> cap) still scrolls instead of clipping. */}
       <View
-        className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
+        className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse/10 bg-ink-950' : 'border-subtle bg-surface-card'}`}
         style={shadow('lg', resolvedScheme)}
       >
         {handleEl}

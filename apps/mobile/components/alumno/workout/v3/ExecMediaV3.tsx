@@ -18,6 +18,9 @@ import type { ExecTheme } from './exec-theme'
 const MEDIA_HEIGHT = 150
 // Colapso de los chips glass a solo-icono tras ENTRAR el ejercicio (~1,5s, one-shot por ejercicio).
 const CHIP_COLLAPSE_MS = 1500
+// Reintentos automáticos de carga de la media antes de ofrecer el retry manual (QA ronda 2: en el wifi
+// del gimnasio la primera petición muere seguido y la card quedaba vacía para siempre).
+const MEDIA_MAX_RETRIES = 2
 
 /**
  * Clasifica el medio del ejercicio con la MISMA precedencia estricta que `resolveExecMedia` (web) y
@@ -110,6 +113,7 @@ export function ExecMediaV3({
           muted={muted}
           paused={paused}
           restartSignal={restartNonce}
+          reducedMotion={reducedMotion}
         />
         {!reducedMotion && (
           <MotiView
@@ -368,6 +372,96 @@ export function GlassChip({
 }
 
 /**
+ * Imagen de la media del ejecutor (gif / imagen suelta) con caché, transición y ESTADO DE CARGA REAL
+ * (QA ronda 2 — "cajas vacías / gif que nunca aparece"):
+ *   - `cachePolicy="memory-disk"` + `transition`: el gif del ejercicio ya visto no se vuelve a bajar y
+ *     el que llega entra con fundido en vez de aparecer de golpe.
+ *   - Mientras la imagen no resolvió se pinta un velo pulsante ENCIMA del gradiente. El shimmer diagonal
+ *     del padre es decorativo (corre siempre) y NO sirve de estado de carga.
+ *   - `onError` reintenta remontando el `<Image>` con otra `key` (hasta `MEDIA_MAX_RETRIES`); si igual
+ *     muere, queda un icono discreto con "Toca para reintentar".
+ * Compartida por la media de fuerza/superserie (`ExecMediaV3`) y la de las pantallas tipadas
+ * (`TypedMediaV3`).
+ */
+export function ExecMediaImage({
+  uri,
+  alt,
+  accent,
+  reducedMotion = false,
+}: {
+  uri: string
+  alt: string
+  /** Acento de marca para el icono del reintento. */
+  accent: string
+  reducedMotion?: boolean
+}) {
+  const [attempt, setAttempt] = useState(0)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
+  // Cambió el ejercicio (o su sustitución): el ciclo de carga arranca de cero.
+  useEffect(() => {
+    setAttempt(0)
+    setStatus('loading')
+  }, [uri])
+
+  const handleError = () => {
+    if (attempt < MEDIA_MAX_RETRIES) {
+      setAttempt(attempt + 1)
+      setStatus('loading')
+      return
+    }
+    setStatus('error')
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      {status !== 'error' && (
+        <Image
+          key={attempt}
+          source={{ uri }}
+          alt={alt}
+          style={{ flex: 1, width: '100%' }}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          transition={200}
+          onLoadStart={() => setStatus((st) => (st === 'ready' ? st : 'loading'))}
+          onLoad={() => setStatus('ready')}
+          onError={handleError}
+        />
+      )}
+
+      {status === 'loading' && (
+        <MotiView
+          pointerEvents="none"
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}
+          from={{ opacity: reducedMotion ? 0.55 : 0.3 }}
+          animate={{ opacity: reducedMotion ? 0.55 : 0.75 }}
+          transition={{ type: 'timing', duration: reducedMotion ? 0 : 900, loop: !reducedMotion, repeatReverse: true }}
+        >
+          <Dumbbell size={30} color="rgba(255,255,255,0.16)" strokeWidth={1.6} />
+        </MotiView>
+      )}
+
+      {status === 'error' && (
+        <Pressable
+          testID="btn-media-retry-v3"
+          onPress={() => {
+            setAttempt(attempt + 1)
+            setStatus('loading')
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Reintentar cargar la imagen de ${alt}`}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        >
+          <RotateCcw size={20} color={hexToRgba(accent, 0.8)} strokeWidth={2} />
+          <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 11, color: '#9a9aa6' }}>Toca para reintentar</Text>
+        </Pressable>
+      )}
+    </View>
+  )
+}
+
+/**
  * Medio inline del ejercicio activo — MISMA prioridad estricta que TechniqueSheet/web (regla de media):
  *   1. gif_url → imagen `contain`.
  *   2. video_url no-YouTube (mp4/webm/mov/Storage) → VideoPlayer autoplay-mute-loop (modo GIF).
@@ -382,6 +476,7 @@ function ExecMediaInnerV3({
   muted = true,
   paused = false,
   restartSignal,
+  reducedMotion = false,
 }: {
   exercise: SessionExercise
   exec: ExecTheme
@@ -392,6 +487,8 @@ function ExecMediaInnerV3({
   paused?: boolean
   /** Nonce de reinicio (QA5): al cambiar, el video vuelve al inicio. */
   restartSignal?: number
+  /** Apaga el pulso del estado de carga (queda un velo fijo). */
+  reducedMotion?: boolean
 }) {
   const s = exec.surface
   const videoUrl = exercise.video_url
@@ -399,7 +496,7 @@ function ExecMediaInnerV3({
   const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
 
   if (exercise.gif_url) {
-    return <Image source={{ uri: exercise.gif_url }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
+    return <ExecMediaImage uri={exercise.gif_url} alt={exercise.name} accent={exec.accent} reducedMotion={reducedMotion} />
   }
 
   if (videoUrl && !isYouTube) {
@@ -416,7 +513,7 @@ function ExecMediaInnerV3({
         </View>
       )
     }
-    return <Image source={{ uri: videoUrl }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
+    return <ExecMediaImage uri={videoUrl} alt={exercise.name} accent={exec.accent} reducedMotion={reducedMotion} />
   }
 
   // YouTube (QA4 · decisión CEO): AUTOREPRODUCIDO inline MUTED al entrar al ejercicio (reusa el

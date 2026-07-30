@@ -64,7 +64,8 @@ function MediaImage({ uri, padded = false, height, v3 = false }: { uri: string; 
   if (v3) {
     return (
       <View className="overflow-hidden" style={{ width: '100%', height, backgroundColor: V3_LETTERBOX, padding: padded ? 20 : 0 }}>
-        <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
+        {/* memory-disk: el gif ya bajado en la card del ejecutor no se vuelve a pedir al abrir la técnica. */}
+        <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" cachePolicy="memory-disk" transition={200} />
       </View>
     )
   }
@@ -73,7 +74,7 @@ function MediaImage({ uri, padded = false, height, v3 = false }: { uri: string; 
       className={`overflow-hidden ${padded ? 'bg-surface-sunken p-space-5' : 'border-b border-subtle bg-white'}`}
       style={{ width: '100%', height }}
     >
-      <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
+      <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" cachePolicy="memory-disk" transition={200} />
     </View>
   )
 }
@@ -149,7 +150,12 @@ function TechniqueMedia({ exercise, v3 = false }: { exercise: SessionExercise; v
 function LightboxMedia({ exercise }: { exercise: SessionExercise }) {
   const { width, height } = useWindowDimensions()
   const boxW = Math.round(width * 0.94)
-  const boxH = Math.round(Math.min(height * 0.7, (boxW * 9) / 16))
+  // QA ronda 2: el gif/imagen usaba el mismo cap 16:9 que el video (≈206px en un phone) y el "lightbox"
+  // quedaba casi del tamaño del preview. gif/imagen toman el 70% del ALTO de la pantalla (el
+  // `contentFit="contain"` centra sin deformar, así que sobrar alto no estira nada); el cap 16:9 se
+  // conserva SOLO para el video (YouTube/mp4), que sí es apaisado y estiraría letterbox de más.
+  const boxH = Math.round(height * 0.7)
+  const boxHVideo = Math.round(Math.min(height * 0.7, (boxW * 9) / 16))
   const videoUrl = exercise.video_url
   const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
   const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
@@ -163,7 +169,7 @@ function LightboxMedia({ exercise }: { exercise: SessionExercise }) {
         autoPlay
         frameless
         letterbox={V3_LETTERBOX}
-        style={{ width: boxW, height: boxH }}
+        style={{ width: boxW, height: boxHVideo }}
         title={exercise.name}
       />
     )
@@ -171,7 +177,7 @@ function LightboxMedia({ exercise }: { exercise: SessionExercise }) {
   if (exercise.gif_url) {
     return (
       <View style={{ width: boxW, height: boxH, backgroundColor: V3_LETTERBOX }}>
-        <Image source={{ uri: exercise.gif_url }} style={{ flex: 1 }} contentFit="contain" />
+        <Image source={{ uri: exercise.gif_url }} style={{ flex: 1 }} contentFit="contain" cachePolicy="memory-disk" transition={200} />
       </View>
     )
   }
@@ -183,11 +189,11 @@ function LightboxMedia({ exercise }: { exercise: SessionExercise }) {
       u.includes('.webm') ||
       (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
     if (isMp4) {
-      return <VideoPlayer url={videoUrl} autoPlay frameless letterbox={V3_LETTERBOX} style={{ width: boxW, height: boxH }} title={exercise.name} />
+      return <VideoPlayer url={videoUrl} autoPlay frameless letterbox={V3_LETTERBOX} style={{ width: boxW, height: boxHVideo }} title={exercise.name} />
     }
     return (
       <View style={{ width: boxW, height: boxH, backgroundColor: V3_LETTERBOX }}>
-        <Image source={{ uri: videoUrl }} style={{ flex: 1 }} contentFit="contain" />
+        <Image source={{ uri: videoUrl }} style={{ flex: 1 }} contentFit="contain" cachePolicy="memory-disk" transition={200} />
       </View>
     )
   }

@@ -26,6 +26,7 @@ import { resolveExecTheme, type ExecTheme } from './v3/exec-theme'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
+import { useEnsureVisibleInStep } from './StepperExecution'
 import { useEvaMotion } from '../../../lib/motion'
 
 const SPORT_400 = '#5C9DFF'
@@ -809,6 +810,12 @@ export function ActiveSetRow({
   // (mismo carril que rpe/rir → viaja al draft y al `buildStrengthPayload`).
   const [noteOpen, setNoteOpen] = useState(false)
   const noteTrimmed = (values.note ?? '').trim()
+  // El input de nota es el ÚNICO campo de la fila que abre el teclado del sistema (los números usan el
+  // keypad propio) y vive al pie del hero ⇒ quedaba tapado. Al enfocar se le pide al pager (contexto de
+  // `StepperExecution`) que lo suba sobre el teclado; fuera del pager el hook es `null` y no hace nada.
+  const noteInputRef = useRef<TextInput>(null)
+  const ensureVisibleInStep = useEnsureVisibleInStep()
+  const onNoteFocus = () => ensureVisibleInStep?.(noteInputRef.current)
 
   // Escritura única: sincroniza ref + estado + reporta el draft (resiliencia). idx = campo tocado.
   const patch = (p: Record<string, string>, idx = 0) => {
@@ -867,7 +874,10 @@ export function ActiveSetRow({
 
   // Botón "teclado" del pie del hero (E-QA1): al cambiar el nonce abre el teclado en el tile de peso
   // (o el primer campo). Reusa `openField` — sin efecto sobre draft/commit.
-  const lastKbNonce = useRef<number | null>(null)
+  // Lazy-init con el valor inicial del prop: si arrancara en null, el primer render (y cada remount del
+  // hero, que se recrea por `key={hero-${setNumber}}` tras cada serie) vería un nonce "distinto" y abriría
+  // el keypad solo. Sólo debe abrir cuando el nonce CAMBIA respecto del que ya montó.
+  const lastKbNonce = useRef<number | null>(openKeypadNonce ?? null)
   useEffect(() => {
     if (openKeypadNonce == null || openKeypadNonce === lastKbNonce.current) return
     lastKbNonce.current = openKeypadNonce
@@ -1015,6 +1025,8 @@ export function ActiveSetRow({
                 transition={{ type: 'timing', duration: motion.reduced ? 0 : 200 }}
               >
                 <TextInput
+                  ref={noteInputRef}
+                  onFocus={onNoteFocus}
                   testID={`note-input-${setNumber}`}
                   value={values.note ?? ''}
                   onChangeText={(t) => patch({ note: t })}
@@ -1262,6 +1274,8 @@ export function ActiveSetRow({
                 transition={{ type: 'timing', duration: motion.reduced ? 0 : 200 }}
               >
                 <TextInput
+                  ref={noteInputRef}
+                  onFocus={onNoteFocus}
                   testID={`note-input-${setNumber}`}
                   value={values.note ?? ''}
                   onChangeText={(t) => patch({ note: t })}

@@ -470,7 +470,8 @@ export function RestInterstitialV3({
                       <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, color: isNow ? exec.accent : '#9a9aa6' }}>{item.letter}</Text>
                     </View>
                   ) : null}
-                  <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 13, color: isNow ? s.text : hexToRgba(s.text, 0.85) }} numberOfLines={1}>
+                  {/* Dos líneas (QA ronda 2): con una sola los nombres largos se cortaban con "…". */}
+                  <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 17, color: isNow ? s.text : hexToRgba(s.text, 0.85) }} numberOfLines={2}>
                     {item.title}
                   </Text>
                   <Text

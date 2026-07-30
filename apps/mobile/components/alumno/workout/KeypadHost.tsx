@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native'
 import { AnimatePresence, MotiView } from 'moti'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft, ArrowRight, Check, StickyNote, X } from 'lucide-react-native'
@@ -259,11 +259,22 @@ export function KeypadHost({
           <Pressable className="flex-1 bg-black/25" onPress={onClose} accessibilityRole="button" accessibilityLabel="Cerrar teclado" />
         </MotiView>
 
+        {/* Teclado del sistema: este Modal se pinta en su PROPIA ventana del SO, así que el
+            KeyboardAvoidingView de la pantalla (StepperExecution) NO lo alcanza — sin este wrapper el
+            input de nota (fase 'note') queda enterrado bajo el teclado en iOS. Mismo criterio que
+            `Sheet.tsx:333-336`: `padding` sólo en iOS (en Android el Modal ya pide ADJUST_RESIZE a su
+            Dialog y compensar de nuevo desplazaría dos veces) y `flexShrink: 1` para que el panel ceda
+            altura en vez de empujarse fuera de pantalla. Inerte sin teclado. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flexShrink: 1 }}
+        >
         {/* Panel: dark siempre (ink-950), aparece con spring (springsSheet.enter web). */}
         <MotiView
           from={{ translateY: motion.reduced ? 0 : 360 }}
           animate={{ translateY: 0 }}
           transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
+          style={{ flexShrink: 1 }}
         >
           <View
             accessibilityLabel="Teclado numérico"
@@ -448,6 +459,7 @@ export function KeypadHost({
             )}
           </View>
         </MotiView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   )

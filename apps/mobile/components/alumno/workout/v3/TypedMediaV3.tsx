@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { View } from 'react-native'
-import { Image } from 'expo-image'
 import { AlignLeft, MessageSquare } from 'lucide-react-native'
-import { hexToRgba } from '../../../../lib/theme'
 import { extractYoutubeVideoId } from '../../../../lib/youtube'
 import type { SessionExercise } from '../../../../lib/workout-session'
 import { VideoPlayer } from '../../../VideoPlayer'
-import { GlassChip, MediaControlsRow, execMediaKind, hasExecMedia, useChipCollapse } from './ExecMediaV3'
+import { ExecMediaImage, GlassChip, MediaControlsRow, execMediaKind, hasExecMedia, useChipCollapse } from './ExecMediaV3'
 import type { ExecTheme } from './exec-theme'
 
 /**
@@ -63,11 +61,12 @@ export function TypedMediaV3({
   const isYouTubeInline = kind === 'youtube'
   const hasControls = isDirectVideo || isYouTubeInline
   if (exercise.gif_url) {
-    mediaEl = <Image source={{ uri: exercise.gif_url }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
+    // Misma imagen con caché/transición/reintento que fuerza (`ExecMediaImage`).
+    mediaEl = <ExecMediaImage uri={exercise.gif_url} alt={exercise.name} accent={accent} reducedMotion={reducedMotion} />
   } else if (isDirectVideo && videoUrl) {
     mediaEl = <VideoPlayer url={videoUrl} autoPlay muted={muted} paused={paused} restartSignal={restartNonce} frameless letterbox={s.surfaceRaised} style={{ flex: 1 }} title={exercise.name} />
   } else if (videoUrl && !isYouTube) {
-    mediaEl = <Image source={{ uri: videoUrl }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
+    mediaEl = <ExecMediaImage uri={videoUrl} alt={exercise.name} accent={accent} reducedMotion={reducedMotion} />
   } else if (isYouTubeInline && videoUrl) {
     // YouTube AUTOREPRODUCIDO inline MUTED (QA4): reusa el VideoPlayer de la técnica. QA5: pausa/reinicio
     // vía la IFrame API (injectJavaScript, sin recargar); audio diferido (recargaría el WebView).
