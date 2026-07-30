@@ -18,6 +18,16 @@ import {
   type LucideIcon,
 } from 'lucide-react-native'
 import { FONT } from '../../../lib/typography'
+import { themeLucideIcons } from '../../../lib/themed-lucide'
+
+// QA2 A1: sin registrar el icono en nativewind, `className` NO llega al `color` del glyph
+// (RN no tiene `currentColor`) ⇒ todos los iconos del sheet salían negros sobre el tema
+// oscuro (imagen 9 del QA de dispositivo). El registro es por componente, así que también
+// cubre el lookup dinámico `action.icon`.
+themeLucideIcons(
+  Apple, Archive, ArchiveRestore, CirclePause, CirclePlay, Dumbbell, IdCard, KeyRound,
+  MessageCircle, Share2, Trash2, UserPen, X,
+)
 
 export interface ClientActionSubject {
   id: string
@@ -112,7 +122,9 @@ export function ClientActionsSheet({
     { key: 'reset', icon: KeyRound, label: 'Resetear contraseña', toneClass: 'text-info-600', on: onReset },
     { key: 'toggle', icon: paused ? CirclePlay : CirclePause, label: paused ? 'Reactivar acceso' : 'Pausar acceso', toneClass: 'text-warning-600', on: onToggle },
     ...(onArchive
-      ? [{ key: 'archive', icon: archived ? ArchiveRestore : Archive, label: archived ? 'Desarchivar' : 'Archivar alumno', toneClass: 'text-ink-600', on: onArchive }]
+      // `ink-700` (no `ink-600`): la rampa neutra solo flipea 100/200/300/700/800 en dark
+      // (global.css) ⇒ `text-ink-600` seguiría siendo gris oscuro sobre el sheet oscuro.
+      ? [{ key: 'archive', icon: archived ? ArchiveRestore : Archive, label: archived ? 'Desarchivar' : 'Archivar alumno', toneClass: 'text-ink-700', on: onArchive }]
       : []),
     { key: 'delete', icon: Trash2, label: 'Eliminar alumno', toneClass: 'text-danger-600', danger: true, on: onDelete },
   ]

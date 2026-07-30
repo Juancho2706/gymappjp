@@ -29,7 +29,8 @@ import {
   type NutritionTimelineEntry,
 } from './coach-client-detail-logic'
 import { supabase } from './supabase'
-import { apiFetch } from './api'
+import { apiFetch, signCheckinPhotos } from './api'
+import { signCheckinPhotoRows } from './checkin-photo-urls'
 import type { ClientActionWorkspace } from './client-actions'
 import { resolveProfileAnalyticsLoadMode } from './profile-analytics-load-policy'
 import {
@@ -970,7 +971,19 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
       }
     : null
 
-  const checkIns = (checkInRes.data as CheckInEntry[] | null) ?? []
+  const rawCheckIns = (checkInRes.data as CheckInEntry[] | null) ?? []
+  // QA2 A5: el bucket `checkins` es PRIVADO ⇒ los valores guardados (paths, o URLs públicas
+  // legacy) NO son renderizables y la ficha pintaba recuadros vacíos (imágenes 11 y 12 del QA).
+  // Se firman acá, en el ÚNICO punto donde nacen las filas, igual que la web lo hace
+  // server-side con `resolveCheckinPhotoUrls` — y con el MISMO recorte: los 3 campos de los 3
+  // check-ins con foto más recientes (fallback `front||side||back` del snapshot del Resumen y
+  // de "Evolución visual") y solo `front_photo_url` en el resto (comparativa, timeline,
+  // detalle del punto de la curva, dossier PDF). Cachea por path con TTL ⇒ no re-firma en
+  // cada refresco on-focus de la pantalla; fail-soft ⇒ sin firma la UI cae a "sin foto".
+  const checkIns = await signCheckinPhotoRows<CheckInEntry>(clientId, rawCheckIns, signCheckinPhotos, {
+    fullPhotoRows: 3,
+    tailFields: ['front_photo_url'],
+  })
   // Días con series (30d) — la RPC ya devuelve `day` en zona Santiago (YYYY-MM-DD).
   const workoutDays30 = new Set<string>()
   const workoutDayCountRows = ((dayCounts30Res.data as { day: string; sets: number }[] | null) ?? []).length

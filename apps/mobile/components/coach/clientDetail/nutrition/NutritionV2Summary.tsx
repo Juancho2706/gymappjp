@@ -33,7 +33,7 @@ import {
   type NutritionWeekCell,
 } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../../lib/flags'
-import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
+import { useEntitlements, useNutritionV2CoachFlagForClientState } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import {
   getNutritionClientDetailV2,
@@ -50,6 +50,11 @@ import {
 } from '../../../../lib/nutrition-v2-pro'
 import { supabase } from '../../../../lib/supabase'
 import { buildNutritionTabV2ViewModel } from '../../../../lib/coach-nutrition-v2-tab-logic'
+import { themeLucideIcons } from '../../../../lib/themed-lucide'
+
+// QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado en
+// nativewind (RN no tiene `currentColor`); sin esto el glyph cae al negro por defecto.
+themeLucideIcons(ArrowUpRight, Plus)
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
@@ -69,6 +74,13 @@ export type CoachNutritionV2Gate = {
   detail: NutritionClientDetailReadModel | null
   offline: boolean
   active: boolean
+  /**
+   * QA2 A3: `true` mientras TODAVÍA no se sabe qué versión corresponde (entitlements,
+   * canary por alumno, sesión, workspace o el fetch del read model sin resolver). El caller
+   * debe pintar un skeleton: renderizar V1 en esta ventana es lo que producía el flash
+   * "sale la versión antigua y luego la actual" al abrir el tab.
+   */
+  resolving: boolean
 }
 
 export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gate {
@@ -80,8 +92,11 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
     orgId: workspaceOrgId,
   } = useWorkspace()
   const [userId, setUserId] = useState<string | null>(null)
+  const [sessionResolved, setSessionResolved] = useState(false)
   const [detail, setDetail] = useState<NutritionClientDetailReadModel | null>(null)
   const [offline, setOffline] = useState(false)
+  /** `false` mientras el fetch/lectura de cache del read model está en vuelo. */
+  const [detailSettled, setDetailSettled] = useState(false)
   const date = useMemo(todayInSantiago, [])
 
   const scope = useMemo(
@@ -94,14 +109,16 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
   const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
   // Canary por alumno: el resumen V2 aparece en la ficha aunque el flag global del coach esté apagado;
   // el flag global sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta.
-  const clientCanaryV2 = useNutritionV2CoachFlagForClient(clientId)
-  const enabled = entitlements.ready && (isEnabled('nutritionV2Coach') || clientCanaryV2)
+  const { value: clientCanaryV2, resolved: canaryResolved } = useNutritionV2CoachFlagForClientState(clientId)
+  const globalFlagV2 = entitlements.ready && isEnabled('nutritionV2Coach')
+  const enabled = entitlements.ready && (globalFlagV2 || clientCanaryV2)
 
   useEffect(() => {
     let active = true
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setUserId(data.session?.user.id ?? null)
-    })
+    void supabase.auth.getSession().then(
+      ({ data }) => { if (active) { setUserId(data.session?.user.id ?? null); setSessionResolved(true) } },
+      () => { if (active) setSessionResolved(true) },
+    )
     return () => {
       active = false
     }
@@ -114,6 +131,7 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
     const controller = new AbortController()
     let active = true
     let hasCopy = false
+    setDetailSettled(false)
 
     void (async () => {
       const cached = await readNutritionV2Cache({
@@ -151,6 +169,9 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
         if (error instanceof Error && error.name === 'AbortError') return
         // Fail-open: sin copia previa el detail sigue null y el caller renderiza V1.
         if (active && hasCopy) setOffline(true)
+      } finally {
+        // Settled = ya se sabe si hay V2 o hay que caer a V1 (éxito, cache o fallo).
+        if (active) setDetailSettled(true)
       }
     })()
 
@@ -160,7 +181,26 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
     }
   }, [clientId, date, enabled, userId, scope, scopeCacheKey])
 
-  return { enabled, detail, offline, active: enabled && detail != null }
+  // ¿Aún no se sabe qué versión toca? Todas las señales que pueden FLIPEAR la decisión:
+  //  - entitlements sin asentar (el flag global aún no se conoce),
+  //  - canary por alumno en vuelo (puede prender V2 con el flag global apagado),
+  //  - sesión/workspace sin resolver (el fetch del read model no arranca sin ellos),
+  //  - fetch del read model en vuelo.
+  // El global ON corta el suspenso del canary: V2 ya está decidido, solo falta el detail.
+  //
+  // IMPORTANTE: cada término se apoya en señales que SIEMPRE asientan, para que un fallo no
+  // deje el skeleton colgado. Por eso se usa "asentado" (`ready || !loading`) y no `ready`:
+  // sin cache en disco y con la red caída, `ready` se queda en false para siempre mientras
+  // `loading` sí baja ⇒ con `ready` el tab habría quedado en skeleton eterno. Y el fetch solo
+  // cuenta como pendiente cuando sus prerequisitos (userId, scope) EXISTEN; si resolvieron a
+  // null el read model no se va a pedir nunca y corresponde caer a V1 (fail-open).
+  const entitlementsSettled = entitlements.ready || !entitlements.loading
+  const gateUndecided = !entitlementsSettled || (!globalFlagV2 && !canaryResolved)
+  const prereqsPending = enabled && (!sessionResolved || !workspaceReady)
+  const fetchPending = enabled && userId != null && scope != null && !detailSettled
+  const resolving = detail == null && (gateUndecided || prereqsPending || fetchPending)
+
+  return { enabled, detail, offline, active: enabled && detail != null, resolving }
 }
 
 /** CTA sólida ember del tab (web NutritionTabV2.tsx:91,109: bg-ember-500 hover:bg-ember-600). */

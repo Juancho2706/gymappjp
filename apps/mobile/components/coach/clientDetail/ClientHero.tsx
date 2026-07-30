@@ -9,6 +9,12 @@ import { HapticPressable } from '../../../components/HapticPressable'
 import { FONT } from '../../../lib/typography'
 import { hexToChannels } from '../../../lib/theme'
 import { shadow } from '../../../lib/shadows'
+import { themeLucideIcons } from '../../../lib/themed-lucide'
+
+// QA2 A1: `Activity` se colorea por clase (`text-sport-400`, token de marca) y sin registro
+// en nativewind el `className` no aterriza en el `color` del glyph ⇒ salía negro sobre el
+// hero oscuro (imagen 9). Sus hermanos de la meta-row ya usan la prop `color` literal.
+themeLucideIcons(Activity)
 
 // Neutrales de superficie inversa (fijos en light+dark porque la Card del hero es
 // siempre una superficie ink oscura — mirror de TOKENS.md §2/§3, mismo

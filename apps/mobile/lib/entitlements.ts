@@ -246,27 +246,47 @@ export async function fetchNutritionV2CoachFlagForClient(clientId: string): Prom
     }
 }
 
+export interface NutritionV2ClientFlagState {
+    /** `true` si el rollout aplica a ESTE alumno. `false` hasta resolver / ante fallo. */
+    value: boolean
+    /** `false` mientras la consulta del canary está en vuelo (aún no se sabe si aplica). */
+    resolved: boolean
+}
+
+/**
+ * Igual que `useNutritionV2CoachFlagForClient` pero expone si el canary YA se resolvió.
+ * QA2 A3: quien decide entre V1 y V2 necesita distinguir "el canary dijo que no" de "el
+ * canary todavía no contestó"; sin esa distinción se pinta V1 y luego se reemplaza por V2
+ * (el flash que reportó el owner al abrir el tab Nutrición).
+ */
+export function useNutritionV2CoachFlagForClientState(clientId: string | null | undefined): NutritionV2ClientFlagState {
+    const [state, setState] = useState<NutritionV2ClientFlagState>({ value: false, resolved: false })
+    useEffect(() => {
+        if (!clientId) {
+            setState({ value: false, resolved: true })
+            return
+        }
+        let active = true
+        // Al cambiar de alumno se vuelve a "sin resolver" (sin render extra en el mount).
+        setState((prev) => (prev.resolved ? { value: false, resolved: false } : prev))
+        void fetchNutritionV2CoachFlagForClient(clientId).then(
+            (value) => { if (active) setState({ value, resolved: true }) },
+            () => { if (active) setState({ value: false, resolved: true }) },
+        )
+        return () => {
+            active = false
+        }
+    }, [clientId])
+    return state
+}
+
 /**
  * Hook para ficha/constructor/summary del coach: `true` si el rollout `nutritionV2Coach` aplica a ESTE
  * alumno. Default `false` hasta resolver / ante fallo; la pantalla lo combina por OR con el flag global
  * (que sigue prendiendo V2 sin esperar esta consulta).
  */
 export function useNutritionV2CoachFlagForClient(clientId: string | null | undefined): boolean {
-    const [enabled, setEnabled] = useState(false)
-    useEffect(() => {
-        if (!clientId) {
-            setEnabled(false)
-            return
-        }
-        let active = true
-        void fetchNutritionV2CoachFlagForClient(clientId).then((value) => {
-            if (active) setEnabled(value)
-        })
-        return () => {
-            active = false
-        }
-    }, [clientId])
-    return enabled
+    return useNutritionV2CoachFlagForClientState(clientId).value
 }
 
 async function bootstrap(): Promise<void> {

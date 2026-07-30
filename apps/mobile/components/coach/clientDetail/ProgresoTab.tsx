@@ -31,7 +31,12 @@ import {
   type IsakView,
 } from '../../../lib/bodycomp-coach'
 import { InfoTooltip } from '../../../components/InfoTooltip'
+import { themeLucideIcons } from '../../../lib/themed-lucide'
 import type { ClientActionWorkspace } from '../../../lib/client-actions'
+
+// QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado en
+// nativewind (RN no tiene `currentColor`); sin esto el glyph cae al negro por defecto.
+themeLucideIcons(ArrowRightLeft)
 
 const BMI_MIN = 16
 const BMI_MAX = 36
