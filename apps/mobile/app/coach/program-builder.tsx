@@ -3,13 +3,11 @@ import {
   ActivityIndicator, Alert, Dimensions, InteractionManager, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
-import { Image } from 'expo-image'
-import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import BottomSheet, { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleHelp, Copy, Eye, History, Layers, Link2, Moon, MoreVertical, Pencil, Plus, Printer, Redo2, Scale, SlidersHorizontal, Sparkles, Sun, Undo2, Users, X } from 'lucide-react-native'
+import { ArrowLeft, Check, CircleHelp, Copy, Dumbbell, Eye, History, Layers, Link2, Moon, MoreVertical, Pencil, Plus, Printer, Redo2, Scale, SlidersHorizontal, Sun, Undo2, Users } from 'lucide-react-native'
 import { NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { MotiView } from 'moti'
@@ -55,13 +53,8 @@ import {
 } from '../../lib/client-action-workspace'
 import { getActiveCoachWorkspace } from '../../lib/workspace'
 import { activeSwapRollbackPlan, canAssignProgramToClients, duplicateTemplateNameError, filterTemplatePlansForAssignment, normalizeAssignmentWeeks, persistedPlanGroupName, programPlanTitle, resolveProgramScheduleMetadata, restorableProgramMetadata, shouldAutosaveProgramDraft, withoutProgramActive, type ProgramMetadataSnapshot } from '../../lib/program-persistence'
-import { resolveOnDark } from '../../lib/theme'
 import { getSantiagoIsoYmdForUtcInstant } from '../../lib/date-utils'
 import { apiFetch } from '../../lib/api'
-
-// DS token constants (imperativos: RN shadowColor / gradiente literal no expresables por className).
-// Degradado del toggle Modo Simple (1:1 web): índigo→violeta→púrpura de la superficie "IA".
-const { onDark: ON_DARK } = resolveOnDark()
 
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const SLIDE = Math.round(Dimensions.get('window').width * 0.22) // desplazamiento del slide de día
@@ -793,10 +786,9 @@ export default function ProgramBuilderScreen() {
   const observedDraftSignatureRef = useRef<string | null>(null)
   const editGenerationRef = useRef(0)
   const autosavedEditGenerationRef = useRef(0)
-  // Modo Simple/Normal (1:1 web). Default Normal. Persistido.
-  const [isSimpleMode, setIsSimpleMode] = useState(false)
-  const [modeLabel, setModeLabel] = useState<string | null>(null)
-  const [showHint, setShowHint] = useState(false)
+  // Catálogo expandido (snap ≥ 1 del sheet): esconde los flotantes para no taparlo (1:1 web,
+  // donde el stack Guardar/+ se desmonta con `!isCatalogOpen`).
+  const [catalogExpanded, setCatalogExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [titleEditing, setTitleEditing] = useState(false) // tap-to-edit del nombre en top bar (1:1 web, Pencil)
   const [dirty, setDirty] = useState(false) // cambios sin guardar (badge top bar 1:1 web)
@@ -808,7 +800,6 @@ export default function ProgramBuilderScreen() {
   const tourTargets = useRef<Map<string, any>>(new Map())
   const rootRef = useRef<View>(null) // ancla de coordenadas para el tour (measureLayout)
   const autoTourTried = useRef(false)
-  const simpleHydrated = useRef(false)
   const slideDir = useRef(0)
 
   const [activeDayId, setActiveDayId] = useState(1)
@@ -874,9 +865,7 @@ export default function ProgramBuilderScreen() {
 
   // Refs para que el gesto de swipe sea estable (no se recree por cada edición).
   const activeDayIdRef = useRef(1)
-  const simpleModeRef = useRef(false)
   useEffect(() => { activeDayIdRef.current = activeDayId })
-  useEffect(() => { simpleModeRef.current = isSimpleMode })
 
   // Catálogo exacto del workspace. requestId+cleanup impiden que una respuesta stale gane.
   useEffect(() => {
@@ -1169,6 +1158,7 @@ export default function ProgramBuilderScreen() {
     setDirty(false)
   }, [loading, draftKey, draftSignature])
 
+  // Marca "sin guardar" tras la primera edición real (post-hidratación).
   useEffect(() => {
     if (!hydratedRef.current || !dirtyTrackingReadyRef.current) return
     if (observedDraftSignatureRef.current === draftSignature) return
@@ -1218,25 +1208,6 @@ export default function ProgramBuilderScreen() {
     }
   }, [dirty, draftKey, draftPayload, pendingDraft])
 
-  // Marca "sin guardar" tras la primera edición real (post-hidratación).
-  // Modo Simple: cargar persistido + guardar al cambiar.
-  useEffect(() => {
-    AsyncStorage.getItem('builder:simpleMode')
-      .then((v) => { if (v === '1') setIsSimpleMode(true) })
-      .catch(() => {})
-      .finally(() => { simpleHydrated.current = true })
-  }, [])
-  useEffect(() => {
-    if (!simpleHydrated.current) return
-    AsyncStorage.setItem('builder:simpleMode', isSimpleMode ? '1' : '0').catch(() => {})
-  }, [isSimpleMode])
-
-  // Sheet de catálogo persistente: cerrado en Simple (lo abre el FAB verde), anclado a 12% en Normal.
-  useEffect(() => {
-    if (isSimpleMode) searchRef.current?.close()
-    else searchRef.current?.snapToIndex(0)
-  }, [isSimpleMode])
-
   // Reshape both variants when structure / cycle length changes (preserve blocks).
   useEffect(() => {
     if (!reshapeReady.current) return
@@ -1266,7 +1237,8 @@ export default function ProgramBuilderScreen() {
 
   function openEditor(uid: string) { setEditingUid(uid); editorRef.current?.present() }
 
-  const scrollContentStyle = useMemo(() => [styles.scroll, { paddingBottom: isSimpleMode ? 96 : 150 }], [isSimpleMode])
+  // El sheet colapsado (12%) + el pill Guardar flotan sobre la lista ⇒ reserva al pie.
+  const scrollContentStyle = useMemo(() => [styles.scroll, { paddingBottom: 150 }], [])
 
   // Chip de día 1:1 web: card suelta (activo=foreground, inactivo=card+shadow), etiqueta (3
   // letras) + Moon (descanso) / dot (con ejercicios → marca; vacío → muted tenue).
@@ -1277,10 +1249,12 @@ export default function ProgramBuilderScreen() {
       <TouchableOpacity key={d.id} onPress={() => { slideDir.current = d.id > activeDayId ? 1 : -1; setActiveDayId(d.id) }} activeOpacity={0.85}
         style={[styles.dayTab, active ? { backgroundColor: theme.foreground } : { backgroundColor: theme.card, ...SHADOWS[resolvedScheme].sm }]}>
         <Text style={[styles.dayTabLabel, { color: active ? theme.background : theme.foreground, fontFamily: FONT.displayBold }]}>{dayLabel(structureType, d).slice(0, 3)}</Text>
+        {/* 1:1 web: luna muted (tenue si el chip no está activo) y punto SIEMPRE de marca cuando
+            el día tiene ejercicios — antes en el chip activo salía negro (theme.background). */}
         {d.is_rest ? (
-          <Moon size={12} color={active ? theme.background : theme.mutedForeground} />
+          <Moon size={12} color={active ? theme.mutedForeground : theme.mutedForeground + '66'} />
         ) : (
-          <View style={[styles.dayDot, { backgroundColor: has ? (active ? theme.background : theme.primary) : theme.mutedForeground, opacity: has ? 1 : 0.4 }]} />
+          <View style={[styles.dayDot, { backgroundColor: has ? theme.primary : theme.mutedForeground, opacity: has ? 1 : (active ? 0.5 : 0.25) }]} />
         )}
       </TouchableOpacity>
     )
@@ -1342,6 +1316,8 @@ export default function ProgramBuilderScreen() {
         ;[arr[pos], arr[j]] = [arr[j], arr[pos]]
         reorderArea(areaId, arr)
       }
+      // Superserie (1:1 web): el badge SS·letra de la fila SIEMPRE desagrupa (intent 'unlink');
+      // el botón SS de la mini-fila enlaza con el siguiente o desenlaza según el estado.
       return (
         <View>
           <BuilderBlockCard
@@ -1354,7 +1330,9 @@ export default function ProgramBuilderScreen() {
             onRemove={(uid) => removeBlock(activeDayId, uid)}
             onUpdate={updateBlock}
             onSetArea={(uid, aId) => setBlockArea(activeDayId, uid, aId)}
-            onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
+            onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid, 'unlink')}
+            onTapSuperset={() => toggleSuperset(activeDayId, block.uid, block.superset_group ? 'unlink' : 'link')}
+            supersetEnabled={!!block.superset_group || !!next}
             onMoveUp={() => move(-1)}
             onMoveDown={() => move(1)}
             canMoveUp={pos > 0}
@@ -1367,14 +1345,14 @@ export default function ProgramBuilderScreen() {
             linkedToNext ? (
               <View style={styles.ssConnector}>
                 <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
-                <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
+                <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid, 'unlink')} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
                   <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: FONT.uiBold }]}>SS · {block.superset_group}</Text>
                 </TouchableOpacity>
                 <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
               </View>
             ) : (
               <View style={styles.ssConnector}>
-                <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
+                <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid, 'link')} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
                   <Link2 size={13} color={theme.mutedForeground} />
                   <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>Superserie</Text>
                 </TouchableOpacity>
@@ -1392,14 +1370,15 @@ export default function ProgramBuilderScreen() {
     const c = areaColor(vm)
     return (
       <View key={vm.id} style={{ gap: 8 }}>
-        <View style={[styles.sectionHeader, { borderColor: c + '55', backgroundColor: c + '12' }]}>
-          <View style={[styles.sectionDot, { backgroundColor: c }]} />
-          <Text style={[styles.sectionTitle, { color: c, fontFamily: FONT.display }]}>{vm.name.toUpperCase()}</Text>
-          <View style={[styles.sectionCount, { borderColor: c + '55' }]}>
-            <Text style={[styles.sectionCountText, { color: c, fontFamily: theme.fontSans }]}>{blocks.length}</Text>
-          </View>
-          <TouchableOpacity onPress={() => addToArea(vm.id)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: c + '55' }]}>
-            <Plus size={14} color={c} />
+        {/* Encabezado de área 1:1 web narrow (AreaDropZone `narrow`): cuadradito del color del
+            área + nombre + "· N", SIN caja punteada. El "+" es afordancia propia de RN (la web
+            añade al área arrastrando desde el catálogo lateral, que en móvil no existe). */}
+        <View style={styles.sectionHeader}>
+          <View style={[styles.sectionSquare, { backgroundColor: c + '26', borderColor: c }]} />
+          <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: FONT.uiExtra }]}>{vm.name.toUpperCase()}</Text>
+          <Text style={[styles.sectionCountText, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>· {blocks.length}</Text>
+          <TouchableOpacity onPress={() => addToArea(vm.id)} hitSlop={8} activeOpacity={0.8} style={styles.sectionAdd}>
+            <Plus size={15} color={c} />
           </TouchableOpacity>
         </View>
         <NestableDraggableFlatList
@@ -1414,10 +1393,6 @@ export default function ProgramBuilderScreen() {
     )
   }
 
-  function pokeHint() {
-    setShowHint(true)
-    setTimeout(() => setShowHint(false), 2500)
-  }
   // ── Tour de onboarding (F9) ──────────────────────────────────────────────
   const regTour = (id: string) => (node: any) => {
     if (node) tourTargets.current.set(id, node)
@@ -1441,7 +1416,6 @@ export default function ProgramBuilderScreen() {
     return tourMode === 'short' ? [base[0], base[2], base[4]] : base
   }, [tourMode])
   function openTour() {
-    if (isSimpleMode) setIsSimpleMode(false)
     setTourMode('full')
     setTourOpen(true)
   }
@@ -1460,15 +1434,6 @@ export default function ProgramBuilderScreen() {
       if (!v) { setSeenTour(false); setTourMode('short'); setTourOpen(true) }
     }).catch(() => {})
   }, [loading])
-  function toggleSimpleMode() {
-    const next = !isSimpleMode
-    setModeLabel(next ? 'Modo Simple' : 'Modo Normal')
-    Haptics.selectionAsync().catch(() => {})
-    // Swap de UI cuando el overlay negro cubre todo (~480ms, 1:1 web), limpia a ~2.2s.
-    setTimeout(() => { setIsSimpleMode(next); if (next) pokeHint() }, 480)
-    setTimeout(() => setModeLabel(null), 2200)
-  }
-
   // Swipe horizontal para cambiar de día (ventaja nativa sobre los chips de la web).
   function changeDay(dir: 1 | -1) {
     const list = liveDays.current
@@ -1478,7 +1443,6 @@ export default function ProgramBuilderScreen() {
     slideDir.current = dir
     setActiveDayId(next.id)
     Haptics.selectionAsync().catch(() => {})
-    if (simpleModeRef.current) pokeHint()
   }
   // Gesto estable (lee de refs) → no se reconfigura el GestureDetector en cada edición.
   const dayGesture = useMemo(
@@ -1873,29 +1837,34 @@ export default function ProgramBuilderScreen() {
         </View>
       </View>
 
-      {/* Barra A/B visible 1:1 web (solo Normal) */}
-      {!isSimpleMode ? (
-        <View style={[styles.abBar, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity ref={regTour('ab-toggle')} onPress={() => toggleAb(!abMode)} activeOpacity={0.8}
-            style={[styles.abToggle, { borderColor: abMode ? theme.primary : theme.border, backgroundColor: abMode ? theme.primary + '1A' : 'transparent' }]}>
-            <Text style={[styles.abTag, { color: abMode ? theme.primary : theme.mutedForeground }]}>A/B</Text>
-            <Text numberOfLines={1} style={[styles.abLabelTxt, { color: abMode ? theme.primary : theme.mutedForeground }]}>{abMode ? 'Semanas alternas activas' : 'Activar semanas A/B'}</Text>
-          </TouchableOpacity>
-          {abMode ? (
-            <View style={[styles.abSeg, { backgroundColor: theme.secondary, marginLeft: 0 }]}>
-              {(['A', 'B'] as const).map((v) => (
-                <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
-                  <Text style={{ fontSize: 11, fontFamily: FONT.display, color: variant === v ? theme.foreground : theme.mutedForeground }}>Semana {v}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
-          {/* Resumen de estructura (1:1 web: ml-auto 11px bold) */}
-          <Text numberOfLines={1} style={[styles.abSummary, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
-            {structureType === 'weekly' ? 'Semanal' : `Ciclo ${cycleLength}d`} · {weeks} sem
-          </Text>
-        </View>
+      {/* Barra de fases — bajo el top bar y SOBRE la barra A/B (1:1 web: vive en el <header>,
+          no en el tablero del día: es meta del programa, no del día, y no debe deslizarse
+          con el cambio de día). */}
+      {phases.length ? (
+        <View style={styles.phasesBar}><ProgramPhasesBar phases={phases} weeks={weeks} /></View>
       ) : null}
+
+      {/* Barra A/B visible 1:1 web */}
+      <View style={[styles.abBar, { borderBottomColor: theme.border }]}>
+        <TouchableOpacity ref={regTour('ab-toggle')} onPress={() => toggleAb(!abMode)} activeOpacity={0.8}
+          style={[styles.abToggle, { borderColor: abMode ? theme.primary : theme.border, backgroundColor: abMode ? theme.primary + '1A' : 'transparent' }]}>
+          <Text style={[styles.abTag, { color: abMode ? theme.primary : theme.mutedForeground }]}>A/B</Text>
+          <Text numberOfLines={1} style={[styles.abLabelTxt, { color: abMode ? theme.primary : theme.mutedForeground }]}>{abMode ? 'Semanas alternas activas' : 'Activar semanas A/B'}</Text>
+        </TouchableOpacity>
+        {abMode ? (
+          <View style={[styles.abSeg, { backgroundColor: theme.secondary, marginLeft: 0 }]}>
+            {(['A', 'B'] as const).map((v) => (
+              <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
+                <Text style={{ fontSize: 11, fontFamily: FONT.display, color: variant === v ? theme.foreground : theme.mutedForeground }}>Semana {v}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+        {/* Resumen de estructura (1:1 web: ml-auto 11px bold) */}
+        <Text numberOfLines={1} style={[styles.abSummary, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
+          {structureType === 'weekly' ? 'Semanal' : `Ciclo ${cycleLength}d`} · {weeks} sem
+        </Text>
+      </View>
 
       {/* Chips de día — sueltos sobre la superficie (sin barra de fondo), centrados o scrollables (1:1 web) */}
       <View style={styles.dayTabsBar}>
@@ -1930,19 +1899,8 @@ export default function ProgramBuilderScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Encabezado del día (AB + fases + card de título/volumen) */}
+          {/* Encabezado del día (card de título/volumen) */}
           <View style={{ gap: 10, paddingBottom: 6 }}>
-            {isSimpleMode && abMode ? (
-              <View style={[styles.abSeg, { backgroundColor: theme.secondary, alignSelf: 'center' }]}>
-                {(['A', 'B'] as const).map((v) => (
-                  <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
-                    <Text style={{ fontSize: 11, fontFamily: FONT.display, color: variant === v ? theme.foreground : theme.mutedForeground }}>{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
-            {!isSimpleMode && phases.length ? <ProgramPhasesBar phases={phases} weeks={weeks} /> : null}
-
             <View style={[styles.dayCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
               <View style={styles.dayHeader}>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -1958,21 +1916,19 @@ export default function ProgramBuilderScreen() {
                   style={[styles.restBtn, { borderColor: currentDay.is_rest ? theme.primary : theme.border, backgroundColor: currentDay.is_rest ? theme.primary : 'transparent' }]}>
                   {currentDay.is_rest ? <Sun size={15} color={theme.primaryForeground} /> : <Moon size={15} color={theme.mutedForeground} />}
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setCopyOpen(true)} activeOpacity={0.8} style={[styles.restBtn, { borderColor: theme.border }]}>
-                  <Copy size={15} color={theme.mutedForeground} />
-                </TouchableOpacity>
+                {!currentDay.is_rest && currentDay.blocks.length > 0 ? (
+                  <TouchableOpacity onPress={() => setCopyOpen(true)} activeOpacity={0.8} style={[styles.restBtn, { borderColor: theme.border }]}>
+                    <Copy size={15} color={theme.mutedForeground} />
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
-              {!isSimpleMode && !currentDay.is_rest ? (
+              {/* Volumen del día — UNA línea compacta "N ej · N series" + dots (1:1 web narrow) */}
+              {!currentDay.is_rest && currentDay.blocks.length > 0 ? (
                 <View style={styles.volRow}>
-                  <View style={[styles.volChip, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
-                    <Text style={[styles.volLbl, { color: theme.mutedForeground }]}>Ej.</Text>
-                    <Text style={[styles.volVal, { color: theme.foreground }]}>{currentDay.blocks.length}</Text>
-                  </View>
-                  <View style={[styles.volChip, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
-                    <Text style={[styles.volLbl, { color: theme.mutedForeground }]}>Series</Text>
-                    <Text style={[styles.volVal, { color: theme.foreground }]}>{dayTotalSets}</Text>
-                  </View>
+                  <Text style={[styles.volSummary, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
+                    {currentDay.blocks.length} ej · {dayTotalSets} series
+                  </Text>
                   <View style={styles.volDots}>
                     {dayMuscles.map((m) => <View key={m} style={[styles.muscleDot, { backgroundColor: getMuscleColor(m) }]} />)}
                   </View>
@@ -1998,9 +1954,14 @@ export default function ProgramBuilderScreen() {
               {areaGroups.length ? (
                 areaGroups.map(renderArea)
               ) : (
-                <View style={styles.emptyDayHint}>
-                  <Text style={[styles.emptyDayTitle, { color: theme.foreground, fontFamily: FONT.display }]}>Día vacío</Text>
-                  <Text style={[styles.emptyDaySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Agrega ejercicios y organízalos por área (Calentamiento, Principal, Enfriamiento…).</Text>
+                // Día vacío 1:1 web narrow: tarjeta punteada + icono en caja de marca + título/sub.
+                // La microcopia apunta al catálogo de abajo (en RN el sheet reemplaza al FAB "+").
+                <View style={[styles.emptyDayHint, { borderColor: theme.border }]}>
+                  <View style={[styles.emptyDayIcon, { backgroundColor: theme.primary + '1A' }]}>
+                    <Dumbbell size={24} color={theme.primary} />
+                  </View>
+                  <Text style={[styles.emptyDayTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>Día vacío</Text>
+                  <Text style={[styles.emptyDaySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Desliza el catálogo de abajo para agregar ejercicios y organizarlos por área.</Text>
                 </View>
               )}
               <TouchableOpacity onPress={() => addToArea(LEGACY_SECTION_AREA_ID.main)} activeOpacity={0.8}
@@ -2020,7 +1981,7 @@ export default function ProgramBuilderScreen() {
         exercises={catalog}
         dayBlockCount={currentDay?.blocks.length ?? 0}
         dayName={currentDay?.name ?? ''}
-        simpleMode={isSimpleMode}
+        onIndexChange={(i) => setCatalogExpanded(i >= 1)}
         onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: sectionForArea(pendingAreaId), section_template_id: pendingAreaId }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
       />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}
@@ -2110,48 +2071,22 @@ export default function ProgramBuilderScreen() {
         </Pressable>
       </Modal>
 
-      {/* FAB "+" verde (solo en Simple) */}
-      {isSimpleMode ? (
-        <TouchableOpacity onPress={() => addToArea(LEGACY_SECTION_AREA_ID.main)} activeOpacity={0.85} style={[styles.fabAdd, { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
-          <Plus size={26} color={theme.primaryForeground} strokeWidth={3} />
+      {/* Guardar — pill flotante abajo-derecha (1:1 web: h-14 rounded-full, Check + label; en la
+          web el stack Guardar/+ vive `fixed right-4` y se DESMONTA cuando el catálogo está
+          abierto). Aquí se desvanece y deja de recibir toques mientras el sheet del catálogo
+          está expandido: sin esto quedaba flotando encima de las filas del catálogo. */}
+      <MotiView
+        pointerEvents={catalogExpanded ? 'none' : 'auto'}
+        animate={{ opacity: catalogExpanded ? 0 : 1 }}
+        transition={{ type: 'timing', duration: 180 }}
+        style={styles.saveDock}
+      >
+        <TouchableOpacity ref={regTour('save-button')} onPress={() => { void handleSave() }} disabled={saving} activeOpacity={0.85}
+          style={[styles.saveBar, { backgroundColor: theme.primary, shadowColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
+          {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : <Check size={20} color={theme.primaryForeground} strokeWidth={2.5} />}
+          <Text style={[styles.saveBarTxt, { color: theme.primaryForeground, fontFamily: FONT.uiBold }]}>{saving ? 'Guardando...' : 'Guardar'}</Text>
         </TouchableOpacity>
-      ) : null}
-
-      {/* Guardar — pill de estado abajo (1:1 web: h-14 rounded-full, Check + label). Reemplaza el disquete del top-bar. */}
-      <TouchableOpacity ref={regTour('save-button')} onPress={() => { void handleSave() }} disabled={saving} activeOpacity={0.85}
-        style={[styles.saveBar, { backgroundColor: theme.primary, shadowColor: theme.primary, bottom: isSimpleMode ? 28 : 116, opacity: saving ? 0.6 : 1 }]}>
-        {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : <Check size={20} color={theme.primaryForeground} strokeWidth={2.5} />}
-        <Text style={[styles.saveBarTxt, { color: theme.primaryForeground, fontFamily: FONT.uiBold }]}>{saving ? 'Guardando...' : 'Guardar'}</Text>
-      </TouchableOpacity>
-
-      {/* Toggle Modo Simple/Normal (Sparkles) — degradado púrpura como la web en Normal */}
-      <TouchableOpacity onPress={toggleSimpleMode} activeOpacity={0.85}
-        style={[styles.fabMode, isSimpleMode ? SHADOWS[resolvedScheme].md : { shadowColor: theme.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.55, shadowRadius: 16, elevation: 8 }, { bottom: isSimpleMode ? 28 : 116, backgroundColor: isSimpleMode ? theme.card : 'transparent', borderColor: theme.border, borderWidth: isSimpleMode ? 1 : 0 }]}>
-        {!isSimpleMode ? (
-          <LinearGradient colors={[theme.primary, theme.cyan]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGradient} />
-        ) : null}
-        <Sparkles size={20} color={isSimpleMode ? theme.mutedForeground : ON_DARK} />
-      </TouchableOpacity>
-
-      {/* Label de transición */}
-      {modeLabel ? (
-        <MotiView pointerEvents="none" style={[styles.modeOverlay, { backgroundColor: theme.scheme === 'dark' ? theme.background : theme.foreground }]}
-          from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: 'timing', duration: 240 }}>
-          <MotiView from={{ opacity: 0, scale: 0.9, translateY: 8 }} animate={{ opacity: 1, scale: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 340, delay: 140 }} style={{ alignItems: 'center', gap: 22 }}>
-            <Image source={require('../../assets/eva-icon.png')} style={{ width: 76, height: 76 }} contentFit="contain" tintColor={ON_DARK} />
-            <Text style={[styles.modeOverlayText, { color: ON_DARK }]}>{modeLabel}</Text>
-          </MotiView>
-        </MotiView>
-      ) : null}
-
-      {/* Flechas hint de swipe (solo Simple) */}
-      {isSimpleMode && showHint ? (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <View style={[styles.hint, styles.hintLeft]}><ChevronLeft size={30} color={theme.primary} /></View>
-          <View style={[styles.hint, styles.hintRight]}><ChevronRight size={30} color={theme.primary} /></View>
-        </View>
-      ) : null}
+      </MotiView>
 
     </SafeAreaView>
       <BuilderOnboardingTour
@@ -2183,9 +2118,13 @@ const styles = StyleSheet.create({
   iconOutline: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   gearBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   pingAmber: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 9 },
-  // Guardar — pill de estado abajo-izquierda (1:1 web: h-14 rounded-full px-5, glow de marca).
-  saveBar: { position: 'absolute', left: 16, height: 56, borderRadius: 28, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, ...GLOWS.sport },
+  // Guardar — pill flotante abajo-DERECHA (1:1 web: `fixed right-4`, h-14 rounded-full px-5,
+  // glow de marca). `bottom: 116` lo deja justo sobre el handle del catálogo colapsado (12%).
+  saveDock: { position: 'absolute', right: 16, bottom: 116 },
+  saveBar: { height: 56, borderRadius: 28, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, ...GLOWS.sport },
   saveBarTxt: { fontSize: 14 },
+  // Barra de fases fija bajo el top bar (mismo gutter horizontal que el resto del builder).
+  phasesBar: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2 },
   abBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
   abToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 1 },
   abTag: { fontSize: 10, fontFamily: FONT.uiBold, letterSpacing: 0.5 },
@@ -2266,40 +2205,27 @@ const styles = StyleSheet.create({
   ssText: { fontSize: 10, fontFamily: FONT.uiSemibold },
   blockName: { fontSize: 14, flexShrink: 1 },
   blockMeta: { fontSize: 12 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 6, marginBottom: 4 },
-  volRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  volChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
-  volLbl: { fontSize: 9, fontFamily: FONT.uiBold, letterSpacing: 0.4 },
-  volVal: { fontSize: 10, fontFamily: FONT.display },
-  volDots: { flexDirection: 'row', gap: 4, marginLeft: 2 },
-  muscleDot: { width: 9, height: 9, borderRadius: 5 },
+  // Encabezado de área plano (1:1 web narrow: sin caja punteada — el chrome punteado es del
+  // drop-target de escritorio, que en móvil no existe).
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2, marginTop: 4, marginBottom: 2 },
+  volRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  volSummary: { fontSize: 12, letterSpacing: 0.1 },
+  volDots: { flexDirection: 'row', gap: 4 },
+  muscleDot: { width: 8, height: 8, borderRadius: 4 },
   restBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 16 },
   restBannerText: { fontSize: 12, letterSpacing: 1 },
-  sectionDot: { width: 7, height: 7, borderRadius: 4 },
-  sectionTitle: { fontSize: 12, letterSpacing: 0.6 },
-  sectionCount: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
+  sectionSquare: { width: 9, height: 9, borderRadius: 3, borderWidth: 1 },
+  sectionTitle: { fontSize: 11, letterSpacing: 0.55 },
   sectionCountText: { fontSize: 11 },
-  sectionAdd: { marginLeft: 'auto', width: 30, height: 30, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  sectionAdd: { marginLeft: 'auto', width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   reorder: { gap: 2 },
   addBtn: { height: 48, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 },
   addText: { fontSize: 14 },
-  emptyDayHint: { alignItems: 'center', paddingVertical: 28, gap: 6 },
-  emptyDayTitle: { fontSize: 15, letterSpacing: 0.4 },
-  emptyDaySub: { fontSize: 12.5, textAlign: 'center', lineHeight: 18, opacity: 0.85, paddingHorizontal: 24 },
+  emptyDayHint: { alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderRadius: 16, paddingVertical: 32, paddingHorizontal: 24, gap: 4 },
+  emptyDayIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  emptyDayTitle: { fontSize: 14 },
+  emptyDaySub: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
   blockCardCompact: { padding: 9 },
-  // Elevación aplicada inline (glow violeta en Normal / lift neutro DS en Simple).
-  fabMode: { position: 'absolute', right: 16, bottom: 28, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  fabGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 24 },
-  // Glow de marca DS (GLOWS.sport); backgroundColor + shadowColor se pisan inline con theme.primary.
-  fabAdd: { position: 'absolute', right: 16, bottom: 86, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...GLOWS.sport },
-  modeOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 100 },
-  modeOverlayText: { fontSize: 26, fontFamily: FONT.display, letterSpacing: 6, textTransform: 'uppercase' },
-  modeLabelWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  modeLabel: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 11 },
-  modeLabelText: { fontSize: 14 },
-  hint: { position: 'absolute', top: '46%' },
-  hintLeft: { left: 8 },
-  hintRight: { right: 8 },
   modalWrap: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 60 },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, opacity: 0.5 },
   modalCard: { width: '82%', borderWidth: 1, borderRadius: 16, padding: 14, gap: 4 },
