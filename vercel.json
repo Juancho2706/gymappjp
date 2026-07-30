@@ -10,9 +10,9 @@
   },
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/:path((?!\\.well-known/).*)",
       "has": [{ "type": "host", "value": "eva-app.cl" }],
-      "destination": "https://www.eva-app.cl/:path*",
+      "destination": "https://www.eva-app.cl/:path",
       "permanent": true
     }
   ],
