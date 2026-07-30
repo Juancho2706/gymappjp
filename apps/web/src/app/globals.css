@@ -117,6 +117,12 @@
   --color-ember-600: var(--ember-600);
   --color-ember-700: var(--ember-700);
 
+  /* Warning ramp (estado informativo ámbar; NO es el acento de nutrición) → bg-warning-500, etc. */
+  --color-warning-100: var(--warning-100);
+  --color-warning-500: var(--warning-500);
+  --color-warning-600: var(--warning-600);
+  --color-warning-700: var(--warning-700);
+
   /* Aqua ramp (recovery — fijo; sin paso 300) → bg-aqua-500, etc. */
   --color-aqua-100: var(--aqua-100);
   --color-aqua-200: var(--aqua-200);
@@ -2842,6 +2848,78 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* Bandas marquee PERSISTENTES del miembro activo de la superserie (pedido CEO): recordatorio "continúa
+   sin descanso" arriba y abajo de la tarjeta mientras la superserie sigue viva. Decorativas
+   (aria-hidden + pointer-events:none) — el aviso efímero sigue siendo `exec-v3-ss-cuebar`.
+   La tarjeta reserva el alto de las dos bandas con padding vertical extra. */
+[data-exec-v3] .exec-v3-excard.is-active.exec-v3-ss-hasmarquee {
+  position: relative;
+  padding-top: 32px;
+  padding-bottom: 32px;
+}
+[data-exec-v3] .exec-v3-ss-marquee {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--exec-brand) 14%, transparent);
+}
+[data-exec-v3] .exec-v3-ss-marquee.is-top {
+  top: 0;
+  border-radius: 16px 16px 0 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--exec-brand) 26%, transparent);
+}
+[data-exec-v3] .exec-v3-ss-marquee.is-bottom {
+  bottom: 0;
+  border-radius: 0 0 16px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--exec-brand) 26%, transparent);
+}
+/* Las dos copias del track son idénticas ⇒ -50% cae justo en el inicio de la segunda: loop sin costura. */
+[data-exec-v3] .exec-v3-ss-marquee-track {
+  display: flex;
+  width: max-content;
+  flex: none;
+  animation: exec-v3-ss-marquee-slide 9s linear infinite;
+  will-change: transform;
+}
+[data-exec-v3] .exec-v3-ss-marquee-track > span,
+[data-exec-v3] .exec-v3-ss-marquee-static {
+  flex: none;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--exec-brand) 80%, #ffffff);
+}
+[data-exec-v3] .exec-v3-ss-marquee-static {
+  display: none;
+}
+@keyframes exec-v3-ss-marquee-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-exec-v3] .exec-v3-ss-marquee {
+    justify-content: center;
+  }
+  [data-exec-v3] .exec-v3-ss-marquee-track {
+    display: none;
+  }
+  [data-exec-v3] .exec-v3-ss-marquee-static {
+    display: block;
   }
 }
 
