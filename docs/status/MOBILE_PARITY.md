@@ -38,10 +38,24 @@ La paridad global **no está certificada todavía**.
 > pantalla `alumno/consent.tsx`, gate en `(tabs)/_layout` (orden blocked→password→consent, fail-open
 > como el proxy) y revocación en el perfil del alumno; (4) **export PDF del reporte de Movimiento**
 > (`movement-report-pdf.ts`, espejo del print web; delta aceptado: sin bitácora `pdf_generate`);
-> (5) hallazgo transversal: la infra de push (`apps/web/src/lib/push.ts`) no tiene NINGÚN disparador
-> en todo el repo — hoy no se envía push a nadie, en ninguna plataforma (decisión de producto
-> pendiente). F5 (anillo proteína) no reproducible en código actual — re-testear en device; F9 ("Z4")
-> sin rastro en código — probable fix colateral. Todo pendiente de QA física.
+> (5) hallazgo transversal: la infra de push (`apps/web/src/lib/push.ts`) no tenía NINGÚN disparador
+> nativo — corregido más abajo. F5 (anillo proteína) no reproducible en código actual — re-testear en
+> device; F9 ("Z4") sin rastro en código — probable fix colateral. Todo pendiente de QA física.
+
+> **2026-07-29 (misma rama, corte 2)**: (a) **push W1** (catálogo aprobado por el owner): payload dual
+> `url`/`screen`, kill-switch `EVA_PUSH_DISABLED_EVENTS`, `meal_reminder` extendido a nativo (el cron
+> pasa por `sendPushToClient`), `program_assigned` (web action + bridge RN), `checkin_received` al coach
+> (action web + bridge nuevo `api/mobile/checkin-submitted`), `checkin_due` (cron nuevo, hitos día 8/15);
+> (b) **QA F13** (decisión owner): la web arranca en el tema del sistema (`defaultTheme="system"`),
+> toggles leen `resolvedTheme`; (c) limpieza de builds: perfiles `prodpreview`/`staging` y opción
+> `enterprise` retirados; (d) **editor de día pasado RN** (cierra el gap P1 del informe de paridad):
+> `validateTargetDate`/`resolveRepeatDate` promovidos a `@eva/workout-engine` (web importa del paquete),
+> `useWorkoutSession(planId, repeatDate, editDate)` con modo solo-UPDATE client-side (paridad
+> `workout-log.actions.ts:119-185` + fix `80995cae`: fecha=HOY se normaliza), ventana completa del día
+> corrida a la fecha (logs/historial/máximos/última sesión), snapshot escopado por fecha, cola offline
+> con `target_date` (dedup por día escrito, descarte permanente `past_set_not_found` + Sentry), sheet
+> del home habilita "Revisar y editar" para días pasados (muere "Disponible pronto"). 47 tests nuevos.
+> Todo pendiente de QA física.
 
 > **2026-07-29 (rama `worktree-nutricion-ui-rescate`, sin merge)**: rescate UI de Nutrición V2 en olas 0-4 (poda de eco + permisos a 2 reales + wizard 2 pasos + selector por día) con paridad web/RN en el mismo corte — semana completa Lu-Do (`WeekDayNav` + `week-view.ts` compartidos), copia de franjas entre días (`COPY_SLOT_TO_VARIANTS` en los 4 reducers), carry-over de `visible_notes` también en el publish RN, y barrido de 677 clases muertas `text-text-*`/`border-border-*` de mobile (texto renderizaba negro incluso en dark). Las olas 4A/4B siguen "cerradas estáticas": este corte agrega superficies que requieren QA física propia. Spec: [`docs/specs/nutrition-week-view/`](../specs/nutrition-week-view/SPEC.md).
 
