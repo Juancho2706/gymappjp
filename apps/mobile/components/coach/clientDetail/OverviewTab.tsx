@@ -9,7 +9,7 @@ import {
   AlertTriangle,
   Battery,
   CalendarCheck,
-  CalendarRange,
+  CalendarDays,
   Camera,
   Check,
   ChevronDown,
@@ -45,6 +45,8 @@ import {
   longestActivityStreak,
 } from '../../../lib/profile-analytics'
 import { getProfileTopAlert, type ProfileAlertType } from '../../../lib/profile-top-alert'
+import { buildClientKpiCards, type ClientKpiCard, type ClientKpiIcon, type ClientKpiTone } from '../../../lib/client-kpi-cards'
+import { themeLucideIcons } from '../../../lib/themed-lucide'
 import {
   markCoachCheckInReviewed,
   unmarkCoachCheckInReviewed,
@@ -57,6 +59,16 @@ import {
 import type { ClientActionWorkspace } from '../../../lib/client-actions'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import { FONT } from '../../../lib/typography'
+
+// QA2 A1: en RN un icono lucide IGNORA `className` si no está registrado en nativewind
+// (no hay `currentColor` ⇒ cae al negro por defecto y en dark se ve casi invisible). Se
+// registran TODOS los iconos que este tab colorea por clase, incluidos los que se resuelven
+// dinámicamente (`kpi.icon`, `tool.icon`, `visual.Icon`) porque el registro es por componente.
+themeLucideIcons(
+  AlertTriangle, ArrowDownRight, ArrowUpRight, Battery, CalendarCheck, CalendarDays, Camera,
+  Check, ChevronDown, ChevronRight, Droplet, Dumbbell, Flame, Footprints, HeartPulse, Info,
+  Minus, Moon, Pencil, PersonStanding, PieChart, Plus, Scale, Sparkles, Star, StickyNote,
+)
 
 type SexOption = ClientSex | 'none'
 const SEX_OPTIONS: { value: SexOption; label: string }[] = [
@@ -214,26 +226,17 @@ export function OverviewTab({
     oneRMDelta: null,
   })
 
-  const kpis: Kpi[] = [
-    { icon: Flame, label: 'Mejor racha', value: `${longestStreak} día${longestStreak === 1 ? '' : 's'}`, hint: 'histórico', tone: 'ember' },
-    { icon: Dumbbell, label: 'Sesiones', value: String(sessions30d), hint: 'últimos 30 días', tone: 'sport' },
-    {
-      icon: PieChart,
-      label: 'Adherencia entreno',
-      value: `${workoutPct}%`,
-      hint: `${workoutDelta >= 0 ? '+' : ''}${workoutDelta}% vs sem. ant.`,
-      tone: 'sport',
-      info: 'Porcentaje de entrenamientos completados frente al objetivo semanal.',
-    },
-    {
-      icon: Scale,
-      label: 'Δ Peso (30d)',
-      value: weightDelta30d == null ? '—' : `${weightDelta30d > 0 ? '+' : ''}${weightDelta30d} kg`,
-      hint: 'check-ins',
-      tone: weightDelta30d != null && weightDelta30d > 0 ? 'ember' : 'success',
-    },
-    { icon: CalendarRange, label: 'Sem. programa', value: activeProgram && currentWeek ? `${currentWeek} / ${totalWeeks}` : '—', hint: 'ciclo activo', tone: 'sport' },
-  ]
+  // QA2 A2: copys/tonos/orden viven en `lib/client-kpi-cards` (puro y testeado) para que la
+  // web pueda aplicar el MISMO contrato. Acá solo se pinta.
+  const kpis = buildClientKpiCards({
+    longestStreakDays: longestStreak,
+    sessions30d,
+    workoutAdherencePct: workoutPct,
+    weightDelta30dKg: weightDelta30d,
+    programCurrentWeek: currentWeek,
+    programTotalWeeks: totalWeeks,
+    hasActiveProgram: Boolean(activeProgram),
+  })
 
   return (
     <View style={styles.root}>
@@ -249,7 +252,7 @@ export function OverviewTab({
       </StatCard>
 
       <View style={styles.kpiGrid}>
-        {kpis.map((item, index) => <KpiCard key={item.label} item={item} index={index} />)}
+        {kpis.map((item, index) => <KpiCard key={item.key} item={item} index={index} />)}
       </View>
 
       <View style={styles.sectionBlock}>
@@ -293,34 +296,53 @@ export function OverviewTab({
   )
 }
 
-type KpiTone = 'sport' | 'ember' | 'success'
-type Kpi = { icon: LucideIcon; label: string; value: string; hint: string; tone: KpiTone; info?: string }
+/** Tile tonal del icono (fondo + color del glyph) por tono del contrato A2. */
+const KPI_TILE_BG: Record<ClientKpiTone, string> = {
+  ember: 'bg-ember-100 dark:bg-ember-100/20',
+  sport: 'bg-sport-100 dark:bg-sport-100/20',
+  success: 'bg-success-100 dark:bg-success-100/[0.18]',
+  info: 'bg-info-100 dark:bg-info-100/[0.18]',
+  neutral: 'bg-surface-sunken',
+}
+const KPI_TILE_FG: Record<ClientKpiTone, string> = {
+  ember: 'text-ember-600',
+  sport: 'text-sport-600',
+  success: 'text-success-600',
+  info: 'text-info-600',
+  neutral: 'text-ink-700',
+}
+const KPI_ICON: Record<ClientKpiIcon, LucideIcon> = {
+  flame: Flame,
+  dumbbell: Dumbbell,
+  pieChart: PieChart,
+  scale: Scale,
+  calendarDays: CalendarDays,
+}
 
-function KpiCard({ item, index }: { item: Kpi; index: number }) {
+/**
+ * KPI card del contrato QA2 A2: tile de icono chico arriba-izquierda (fondo tonal + glyph
+ * coloreado, correcto en light y dark), valor grande display, y DEBAJO el label completo en
+ * hasta 2 líneas — nunca una línea con ellipsis a mitad de palabra.
+ */
+function KpiCard({ item, index }: { item: ClientKpiCard; index: number }) {
   const reduceMotion = useReducedMotion()
-  const Icon = item.icon
-  const tile = item.tone === 'ember'
-    ? 'bg-ember-100 dark:bg-ember-100/20'
-    : item.tone === 'success'
-      ? 'bg-success-100 dark:bg-success-100/[0.18]'
-      : 'bg-sport-100 dark:bg-sport-100/20'
-  const icon = item.tone === 'ember' ? 'text-ember-600' : item.tone === 'success' ? 'text-success-600' : 'text-sport-600'
+  const Icon = KPI_ICON[item.icon]
   const settled = { opacity: 1, translateY: 0 }
   return (
     <MotiView
       from={reduceMotion ? settled : { opacity: 0, translateY: 8 }}
       animate={settled}
       transition={{ type: 'timing', duration: reduceMotion ? 0 : 250, delay: reduceMotion ? 0 : index * 50 }}
-      style={styles.kpiHalf}
+      style={item.span === 'full' ? styles.kpiFull : styles.kpiHalf}
     >
-      <View className="border border-subtle bg-surface-card" style={styles.kpiCard}>
-        <View className={tile} style={styles.kpiIcon}><Icon size={18} className={icon} /></View>
-        <View style={styles.kpiCopy}>
-          <Text className="text-strong" style={styles.kpiValue}>{item.value}</Text>
-          <View style={styles.kpiLabelRow}>
-            <Text className="text-muted" style={styles.kpiLabel} numberOfLines={1}>{item.label} · {item.hint}</Text>
-            {item.info ? <InfoTooltip title={item.label} content={item.info} size={12} /> : null}
-          </View>
+      <View className="border border-subtle bg-surface-card" style={styles.kpiCard} testID={`ficha-kpi-${item.key}`}>
+        <View className={KPI_TILE_BG[item.tone]} style={styles.kpiIcon}>
+          <Icon size={16} strokeWidth={2} className={KPI_TILE_FG[item.tone]} />
+        </View>
+        <Text className="text-strong" style={styles.kpiValue}>{item.value}</Text>
+        <View style={styles.kpiLabelRow}>
+          <Text className="text-muted" style={styles.kpiLabel} numberOfLines={2}>{item.label}</Text>
+          {item.info ? <InfoTooltip title={item.label} content={item.info} size={12} /> : null}
         </View>
       </View>
     </MotiView>
@@ -888,13 +910,13 @@ const styles = StyleSheet.create({
   ringDelta: { minHeight: 15, fontSize: 10.5, fontFamily: FONT.uiSemibold, textAlign: 'center' },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   kpiHalf: { width: '48%' },
+  kpiFull: { width: '100%' },
   compactPhaseTrack: { height: 6, borderRadius: 999, overflow: 'hidden', flexDirection: 'row' },
-  kpiCard: { minHeight: 88, borderRadius: 20, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  kpiIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  kpiCopy: { flex: 1, minWidth: 0 },
-  kpiValue: { fontSize: 18, lineHeight: 21, fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] },
-  kpiLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  kpiLabel: { flexShrink: 1, fontSize: 10.5, fontFamily: FONT.uiMedium },
+  kpiCard: { minHeight: 104, borderRadius: 20, padding: 14, alignItems: 'flex-start', gap: 8 },
+  kpiIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  kpiValue: { fontSize: 21, lineHeight: 24, fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] },
+  kpiLabelRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, alignSelf: 'stretch' },
+  kpiLabel: { flexShrink: 1, fontSize: 11.5, lineHeight: 15, fontFamily: FONT.uiMedium },
   emptyProgram: { fontSize: 13.5, fontFamily: FONT.uiMedium, textAlign: 'center' },
   programTitleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   programTitle: { flex: 1, fontSize: 15, lineHeight: 18, fontFamily: FONT.displayBlack },
@@ -956,7 +978,9 @@ const styles = StyleSheet.create({
   reviewButton: { minHeight: 34, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
   reviewLabel: { fontSize: 10, fontFamily: FONT.uiExtra, textTransform: 'uppercase', letterSpacing: 1 },
   photoRow: { flexDirection: 'row', gap: 10 },
-  photoItem: { flex: 1, alignItems: 'center', gap: 5 },
+  // `maxWidth` 33%: con 1 sola foto `flex: 1` estiraba la miniatura a TODO el ancho de la
+  // card y (con la URL sin firmar) se veía como un marco vacío gigante — QA2 A5, imagen 12.
+  photoItem: { flexBasis: 0, flexGrow: 1, maxWidth: '33%', alignItems: 'center', gap: 5 },
   photo: { width: '100%', aspectRatio: 0.78, borderRadius: 12, borderWidth: 1 },
   photoDate: { fontSize: 10.5, fontFamily: FONT.uiMedium },
   photoEmpty: { minHeight: 72, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 14 },

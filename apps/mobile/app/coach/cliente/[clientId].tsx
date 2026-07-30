@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Animated, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -12,6 +12,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
 import { ClientHero, type HeroChips, type HeroStatusLevel } from '../../../components/coach/clientDetail/ClientHero'
 import { ClientTabBar, type ClientTab, type TabItem } from '../../../components/coach/clientDetail/ClientTabBar'
+import { tabBarBackdropProgress } from '../../../lib/client-tabbar-backdrop'
 import { ProfileFloatingActions } from '../../../components/coach/clientDetail/ProfileFloatingActions'
 import { ClientActionsSheet } from '../../../components/coach/directory/ClientActionsSheet'
 import { OverviewTab } from '../../../components/coach/clientDetail/OverviewTab'
@@ -105,6 +106,13 @@ export default function ClientDetailScreen() {
   const lastY = useRef(0)
   const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
   const [tabStuck, setTabStuck] = useState(false)
+  // QA2 A4: opacidad del backdrop de la tira de tabs por proximidad al anclaje (transparente
+  // lejos → superficie del tema al anclarse). `tabNear` solo monta/desmonta la capa (el
+  // BlurView es caro en Android); la transición fina la hace el Animated.Value.
+  // `useState` lazy (no `useRef().current`): el value se pasa como prop en render y
+  // `react-hooks/refs` prohíbe leer un ref durante el render.
+  const [tabBackdrop] = useState(() => new Animated.Value(0))
+  const [tabNear, setTabNear] = useState(false)
   /** Racha del RPC get_client_current_streak (regla "días asignados"); null = RPC no disponible. */
   const [rpcStreak, setRpcStreak] = useState<number | null>(null)
   const loadedOnceRef = useRef(false)
@@ -454,7 +462,14 @@ export default function ClientDetailScreen() {
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y
-    setTabStuck(y >= tabStickyY.current - 1)
+    const stuck = y >= tabStickyY.current - 1
+    setTabStuck((current) => (current === stuck ? current : stuck))
+    // Rampa del backdrop: `setValue` en cada evento (throttle 16ms) da una transición suave
+    // sin re-renderizar el árbol; solo el cruce del umbral toca state.
+    const progress = tabBarBackdropProgress(y, tabStickyY.current)
+    tabBackdrop.setValue(progress)
+    const near = progress > 0
+    setTabNear((current) => (current === near ? current : near))
     if (y < 36) setCompact(false)
     else if (y - lastY.current > 8) setCompact(true)
     else if (lastY.current - y > 8) setCompact(false)
@@ -609,8 +624,17 @@ export default function ClientDetailScreen() {
         />
 
         {/* 1 — Tab bar (sticky) */}
-        <View onLayout={(event) => { tabStickyY.current = event.nativeEvent.layout.y }}>
-          <ClientTabBar items={tabs} value={tab} onChange={setTab} stuck={tabStuck} />
+        <View
+          onLayout={(event) => {
+            tabStickyY.current = event.nativeEvent.layout.y
+            // Con el hero corto (o al volver a un tab ya scrolleado) la tira puede nacer ya
+            // dentro de la rampa: sincronizar evita el primer frame sin backdrop.
+            const progress = tabBarBackdropProgress(lastY.current, tabStickyY.current)
+            tabBackdrop.setValue(progress)
+            setTabNear(progress > 0)
+          }}
+        >
+          <ClientTabBar items={tabs} value={tab} onChange={setTab} stuck={tabStuck} near={tabNear} backdropProgress={tabBackdrop} />
         </View>
 
         {/* 2 — Content */}

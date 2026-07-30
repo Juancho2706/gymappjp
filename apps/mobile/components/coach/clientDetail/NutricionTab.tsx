@@ -3,7 +3,7 @@ import { Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } fr
 import { Activity, Apple, ChevronDown, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, Lock, MessageSquare, Moon, Pencil, RotateCcw, Salad, Save, Scale, Send, SlidersHorizontal, Timer, Utensils } from 'lucide-react-native'
 import { useFocusEffect } from 'expo-router'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, Card, ComplianceRing, EmptyState, MacroPill, ProgressBar } from '../../../components'
+import { Button, Card, ComplianceRing, EmptyState, MacroPill, ProgressBar, Skeleton } from '../../../components'
 import { EvaLoader } from '../../../components/EvaLoader'
 import { MACRO_COLORS } from '../../MacroRingSummary'
 import { FONT } from '../../../lib/typography'
@@ -789,11 +789,48 @@ const styles = StyleSheet.create({
   prefsFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 2 },
 })
 
+/**
+ * Skeleton del tab mientras se resuelve QUÉ versión corresponde (QA2 A3). Imita la silueta
+ * del resumen V2 (eyebrow + título + 2 CTAs + card de vistazo) para que el swap posterior no
+ * salte de layout.
+ */
+function NutricionTabResolving() {
+  return (
+    <View style={{ gap: 24 }} accessibilityRole="progressbar" accessibilityLabel="Cargando nutrición" testID="ficha-nutricion-skeleton">
+      <View style={{ gap: 12 }}>
+        <View style={{ gap: 8 }}>
+          <Skeleton width={92} height={10} radius={5} />
+          <Skeleton width={190} height={24} radius={8} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Skeleton width={216} height={44} radius={14} />
+          <Skeleton width={96} height={44} radius={14} />
+        </View>
+      </View>
+      <View className="border border-subtle bg-surface-card" style={{ borderRadius: 20, padding: 16, gap: 14 }}>
+        <Skeleton width={140} height={18} radius={8} />
+        <Skeleton width="60%" height={10} radius={5} />
+        <Skeleton width="100%" height={132} radius={16} />
+        <Skeleton width="45%" height={12} radius={6} />
+      </View>
+    </View>
+  )
+}
+
 // ── Composicion V2 (espejo del swap server-side web) ─────────────────────────
 // Web ficha (clients/[clientId]/ClientProfileDashboard.tsx:487-527): con view model V2 resuelto
 // se monta `NutritionTabV2`; con null se monta `NutritionTabB5` (V1) sin cambio alguno. Aqui:
 // flag/canary `nutritionV2Coach` ON Y fetch del read model resuelto ⇒ NutritionV2Summary
 // (espejo 1:1 de NutritionTabV2.tsx); sin flag o ante CUALQUIER fallo ⇒ tab V1 (fail-open).
+//
+// QA2 A3 — causa raíz del flash "sale la versión antigua y luego la actual": la decisión V1/V2
+// depende de 4 señales ASÍNCRONAS (entitlements, canary por alumno, sesión + workspace, fetch
+// del read model) y este swap era un `if` sobre el resultado FINAL, así que en la ventana en
+// que aún faltaba alguna señal el tab pintaba V1 y después lo reemplazaba por V2. La web no
+// tiene el bug porque resuelve V1/V2 en el server ANTES de mandar HTML. Fix: mientras
+// `gate.resolving`, skeleton — nunca contenido viejo que después se reemplaza. Fail-open
+// intacto: cuando el gate se resuelve en contra (flag off, canary off o fallo del fetch),
+// `resolving` cae a false y se monta V1 igual que antes.
 export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
   const gate = useCoachNutritionV2Detail(props.clientId)
   if (gate.active && gate.detail) {
@@ -805,5 +842,6 @@ export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
       />
     )
   }
+  if (gate.resolving) return <NutricionTabResolving />
   return <NutricionTabV1 {...props} />
 }
