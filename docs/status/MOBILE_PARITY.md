@@ -62,8 +62,12 @@ La paridad global **no está certificada todavía**.
 > podía agregar en vez de quitar; (j) web: fondo del documento bajo el ejecutor dark-only
 > (`html:has(.is-workout-page)` — mata el bloque blanco de iPhone) + fallback `100vh`, logo del
 > coach en avatares web, mismas KPI cards. Gates del corte: tsc web+mobile 0, vitest 1115 verdes,
-> lint 0 errores. TODO pendiente de QA física. Queda en vuelo: morph card→sheet de la entrada
-> (frame 4 concepto C, decisión owner 2026-07-30).
+> lint 0 errores. TODO pendiente de QA física. Además aterrizó el **morph card→sheet de la
+> entrada** (frame 4 del concepto C, decisión owner 2026-07-30): "Soy alumno" se expande EN LA
+> MISMA pantalla hasta el sheet con el form del código (260ms, reversible con back, reduce-motion
+> a fade 160ms); el form se extrajo a `CoachIdentifierForm` compartido y `/alumno/codigo` sigue
+> intacta para deep links. Timings 1:1 con la spec del mockup; gates: tsc 0, vitest 1121, expo
+> export android OK.
 
 > **2026-07-29 (misma rama, corte 2)**: (a) **push W1** (catálogo aprobado por el owner): payload dual
 > `url`/`screen`, kill-switch `EVA_PUSH_DISABLED_EVENTS`, `meal_reminder` extendido a nativo (el cron
