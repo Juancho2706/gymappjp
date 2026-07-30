@@ -40,20 +40,21 @@ interface Props {
   /** Nº de ejercicios del día activo (para el label colapsado). */
   dayBlockCount: number
   dayName: string
-  /** En modo Simple el sheet vive cerrado y se abre con el FAB verde. */
-  simpleMode: boolean
+  /** Snap activo del sheet (0 = handle colapsado). El builder lo usa para esconder los
+   *  flotantes (Guardar) mientras el catálogo está expandido — 1:1 web `!isCatalogOpen`. */
+  onIndexChange?: (index: number) => void
   onSelect: (block: BuilderBlock) => void
 }
 
 /** Catálogo persistente jalable 1:1 web (handle colapsado → buscador+chips → catálogo completo).
  *  Lista completa por defecto + filtro en memoria + miniaturas (gif/imagen/YouTube) + preview. */
 export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
-  function ExerciseSearchSheet({ exercises, dayBlockCount, dayName, simpleMode, onSelect }, ref) {
+  function ExerciseSearchSheet({ exercises, dayBlockCount, dayName, onIndexChange, onSelect }, ref) {
     const { theme } = useTheme()
     const localRef = useRef<BottomSheet | null>(null)
     const [query, setQuery] = useState('')
     const [muscle, setMuscle] = useState('Todos')
-    const [index, setIndex] = useState(simpleMode ? -1 : 0)
+    const [index, setIndex] = useState(0)
     const [recents, setRecents] = useState<Ex[]>([])
     const [preview, setPreview] = useState<Ex | null>(null)
     const [addedFlash, setAddedFlash] = useState<Record<string, boolean>>({})
@@ -77,6 +78,11 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
       setRecents(next)
       AsyncStorage.setItem(RECENTS_KEY, JSON.stringify(next)).catch(() => {})
     }
+
+    const handleIndexChange = useCallback((i: number) => {
+      setIndex(i)
+      onIndexChange?.(i)
+    }, [onIndexChange])
 
     const deferredQuery = useDeferredValue(query)
     const filtered = useMemo(() => filterExercises(exercises, deferredQuery, muscle), [exercises, deferredQuery, muscle])
@@ -163,11 +169,11 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
     return (
       <BottomSheet
         ref={setRefs}
-        index={simpleMode ? -1 : 0}
+        index={0}
         snapPoints={snapPoints}
         enableDynamicSizing={false}
-        enablePanDownToClose={simpleMode}
-        onChange={setIndex}
+        enablePanDownToClose={false}
+        onChange={handleIndexChange}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
         handleComponent={renderHandle}

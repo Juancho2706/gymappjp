@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Check, ChevronDown, ChevronUp, CircleHelp, GripVertical, Minus, Plus, X } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronUp, CircleHelp, GripVertical, Link2, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { effectiveExerciseType, typedBlockSummary } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
@@ -31,7 +31,12 @@ interface Props {
   currentAreaId?: string
   /** Mover el bloque a otra área (persiste section_template_id vía SET_BLOCK_AREA). */
   onSetArea?: (uid: string, areaId: string) => void
+  /** Badge SS·letra de la fila → SIEMPRE desagrupa (web: intent 'unlink'). */
   onToggleSuperset: (uid: string) => void
+  /** Mini-fila inferior (1:1 web narrowLayout): enlaza/desenlaza con el SIGUIENTE de la misma área. */
+  onTapSuperset?: () => void
+  /** false ⇒ el botón SS queda deshabilitado (no hay siguiente en la misma área ni grupo propio). */
+  supersetEnabled?: boolean
   /** Rail de chevrons ▲▼ (1:1 web ExerciseBlock): reordenar el bloque dentro de su área. */
   onMoveUp?: () => void
   onMoveDown?: () => void
@@ -43,10 +48,12 @@ interface Props {
   catVideo?: string | null
 }
 
-/** Card de ejercicio 1:1 con la web (ExerciseBlock): borde por músculo, miniatura, badge de
- *  ÁREA (color), chip resumen typed (cardio/movilidad/roller) o sets×reps con quick-edit /
- *  "Incompleto", descanso, superserie, progresión, músculo + selector de área + eliminar. */
-function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, areaVMs, currentAreaId, onSetArea, onToggleSuperset, onMoveUp, onMoveDown, canMoveUp, canMoveDown, catGif, catImage, catVideo }: Props) {
+/** Card de ejercicio 1:1 con la web (ExerciseBlock en `narrowLayout`): borde por músculo,
+ *  miniatura, badge de ÁREA (color), chip resumen typed (cardio/movilidad/roller) o sets×reps
+ *  con quick-edit / "Incompleto", descanso, superserie, progresión, músculo, selector de área
+ *  y ayuda — todo en la MISMA fila envolvente — y una mini-fila inferior con SS (izquierda) y
+ *  el tacho de eliminar (derecha). */
+function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, areaVMs, currentAreaId, onSetArea, onToggleSuperset, onTapSuperset, supersetEnabled = false, onMoveUp, onMoveDown, canMoveUp, canMoveDown, catGif, catImage, catVideo }: Props) {
   const { theme } = useTheme()
   const [editing, setEditing] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -79,6 +86,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
   return (
     <ScaleDecorator>
       <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderLeftColor: muscle, opacity: isActive ? 0.6 : 1 }]}>
+        <View style={styles.cardRow}>
         <TouchableOpacity onLongPress={drag} delayLongPress={140} hitSlop={6} style={styles.grip}>
           <GripVertical size={16} color={theme.mutedForeground} />
         </TouchableOpacity>
@@ -91,7 +99,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
           )}
         </View>
 
-        <View style={{ flex: 1, gap: 6, minWidth: 0 }}>
+        <View style={styles.body}>
           <TouchableOpacity activeOpacity={0.8} onPress={() => onEdit(block.uid)}>
             <Text numberOfLines={2} style={[styles.name, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{block.exercise_name}</Text>
           </TouchableOpacity>
@@ -143,10 +151,8 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               <View style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.25) }]}><Text style={[styles.badgeT, { color: theme.primary, fontSize: 10, textTransform: 'none' }]}>↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}r`}</Text></View>
             ) : null}
             <View style={[styles.badge, { backgroundColor: muscle, borderColor: 'transparent', maxWidth: 120 }]}><Text style={[styles.badgeT, { color: '#fff' }]} numberOfLines={1}>{block.muscle_group}</Text></View>
-          </View>
 
-          {/* Selector de ÁREA (mover a otra área) + ayuda */}
-          <View style={styles.secSwitch}>
+            {/* Selector de ÁREA (mover a otra área) + ayuda — MISMA fila envolvente que los chips (1:1 web) */}
             {onSetArea ? (
               <TouchableOpacity onPress={() => setAreaOpen(true)} activeOpacity={0.8} style={[styles.areaBtn, { borderColor: hexToRgba(areaC, 0.4), backgroundColor: hexToRgba(areaC, 0.1) }]}>
                 <Text style={{ fontSize: 9, fontFamily: FONT.uiBold, color: areaC, letterSpacing: 0.3 }}>{currentArea?.shortLabel ?? 'PRI'}</Text>
@@ -157,6 +163,38 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               <CircleHelp size={13} color={theme.mutedForeground} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Rail de reordenar por tap (1:1 web): ▲▼ dentro del área */}
+        {onMoveUp || onMoveDown ? (
+          <View style={[styles.rail, { borderLeftColor: theme.border }]}>
+            <TouchableOpacity onPress={onMoveUp} disabled={!canMoveUp} hitSlop={4}
+              style={[styles.railBtn, { borderBottomWidth: 1, borderBottomColor: theme.border, opacity: canMoveUp ? 1 : 0.3 }]}>
+              <ChevronUp size={16} color={theme.mutedForeground} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onMoveDown} disabled={!canMoveDown} hitSlop={4}
+              style={[styles.railBtn, { opacity: canMoveDown ? 1 : 0.3 }]}>
+              <ChevronDown size={16} color={theme.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        </View>
+
+        {/* Mini-fila de acciones (1:1 web narrowLayout): SS abajo-izquierda, tacho abajo-derecha */}
+        <View style={styles.actionRow}>
+          {onTapSuperset ? (
+            <TouchableOpacity onPress={onTapSuperset} disabled={!supersetEnabled} hitSlop={4} activeOpacity={0.7}
+              accessibilityLabel={block.superset_group ? 'Quitar de la superserie' : 'Agrupar como superserie con el siguiente ejercicio'}
+              style={[styles.ssBtn, { opacity: supersetEnabled ? 1 : 0.4 }]}>
+              <Link2 size={13} color={block.superset_group ? theme.primary : theme.mutedForeground} />
+              <Text style={[styles.ssBtnTxt, { color: block.superset_group ? theme.primary : theme.mutedForeground, fontFamily: FONT.uiBold }]}>SS</Text>
+            </TouchableOpacity>
+          ) : null}
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity onPress={() => onRemove(block.uid)} hitSlop={6} activeOpacity={0.7}
+            accessibilityLabel="Eliminar ejercicio" style={styles.del}>
+            <Trash2 size={16} color={theme.destructive} />
+          </TouchableOpacity>
         </View>
 
         {/* Modal selector de área */}
@@ -192,23 +230,6 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
           </Pressable>
         </Modal>
 
-        {/* Rail de reordenar por tap (1:1 web): ▲▼ dentro del área */}
-        {onMoveUp || onMoveDown ? (
-          <View style={[styles.rail, { borderLeftColor: theme.border }]}>
-            <TouchableOpacity onPress={onMoveUp} disabled={!canMoveUp} hitSlop={4}
-              style={[styles.railBtn, { borderBottomWidth: 1, borderBottomColor: theme.border, opacity: canMoveUp ? 1 : 0.3 }]}>
-              <ChevronUp size={16} color={theme.mutedForeground} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onMoveDown} disabled={!canMoveDown} hitSlop={4}
-              style={[styles.railBtn, { opacity: canMoveDown ? 1 : 0.3 }]}>
-              <ChevronDown size={16} color={theme.mutedForeground} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        <TouchableOpacity onPress={() => onRemove(block.uid)} hitSlop={6} style={styles.del}>
-          <X size={18} color={theme.mutedForeground} />
-        </TouchableOpacity>
       </View>
     </ScaleDecorator>
   )
@@ -228,13 +249,18 @@ export const BuilderBlockCard = memo(
     a.areaVMs === b.areaVMs &&
     a.canMoveUp === b.canMoveUp &&
     a.canMoveDown === b.canMoveDown &&
+    a.supersetEnabled === b.supersetEnabled &&
     a.drag === b.drag,
 )
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderWidth: 1, borderLeftWidth: 4, borderRadius: 12, marginBottom: 6 },
-  grip: { paddingTop: 2 },
-  thumb: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden' },
+  // Contenedor en COLUMNA (1:1 web): fila principal + mini-fila de acciones. El padding vive en
+  // los hijos para que el rail ▲▼ llegue de borde a borde vertical, como en la web.
+  card: { borderWidth: 1, borderLeftWidth: 4, borderRadius: 12, marginBottom: 6, overflow: 'hidden' },
+  cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingLeft: 10 },
+  body: { flex: 1, minWidth: 0, gap: 6, paddingRight: 10, paddingVertical: 10 },
+  grip: { paddingTop: 12 },
+  thumb: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden', marginTop: 10 },
   thumbImg: { width: 40, height: 40 },
   name: { fontSize: 14.5, lineHeight: 18 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
@@ -247,12 +273,15 @@ const styles = StyleSheet.create({
   qval: { fontSize: 12, fontFamily: FONT.display, minWidth: 16, textAlign: 'center' },
   qinput: { width: 56, height: 26, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, fontSize: 12, textAlign: 'center' },
   okbtn: { borderRadius: 5, paddingHorizontal: 8, paddingVertical: 4 },
-  secSwitch: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 },
-  areaBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 28, paddingHorizontal: 8, borderWidth: 1, borderRadius: 7 },
+  areaBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 26, paddingHorizontal: 8, borderWidth: 1, borderRadius: 7 },
   helpBtn: { width: 26, height: 26, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   rail: { alignSelf: 'stretch', width: 38, borderLeftWidth: 1 },
   railBtn: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center' },
-  del: { padding: 4 },
+  // Mini-fila inferior (1:1 web narrowLayout `px-2 pb-1 pl-3`).
+  actionRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 12, paddingRight: 8, paddingBottom: 4 },
+  ssBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 40, paddingHorizontal: 6, borderRadius: 8 },
+  ssBtnTxt: { fontSize: 11.5, letterSpacing: 0.2 },
+  del: { minHeight: 40, minWidth: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   helpBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   helpCard: { width: '100%', maxWidth: 380, borderWidth: 1, borderRadius: 16, padding: 16, gap: 7 },
   helpTitle: { fontSize: 14 },
