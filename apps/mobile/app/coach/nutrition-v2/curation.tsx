@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
@@ -45,6 +53,11 @@ import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
  * exportamos el cuerpo embebible `CurationQueueScreen({ embedded })`. `embedded=true`
  * omite el `SafeAreaView` + `NutritionHeader onBack` propios (el hub aporta el chrome);
  * la ruta standalone se conserva para deep-links.
+ *
+ * QA-4 H2: el chrome del hub (título + tablist) es un overlay que colapsa con el scroll, así
+ * que el shell pasa `chromeHeight` y `onScroll`. Ojo: esta superficie tiene CUATRO estados sin
+ * lista (cargando / sin permiso / error / vacío) que no scrollean; todos se padean con el alto
+ * del chrome, o quedarían escondidos debajo de las pestañas.
  */
 
 // Cliente de escritura: el cliente supabase-js del móvil es estructuralmente compatible
@@ -56,7 +69,16 @@ const DEBOUNCE_MS = 400
 
 type Feedback = { kind: 'success' | 'error'; text: string }
 
-export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }) {
+export function CurationQueueScreen({
+  embedded = false,
+  chromeHeight = 0,
+  onScroll,
+}: {
+  embedded?: boolean
+  /** Alto del chrome colapsable del hub; solo aplica embebido. */
+  chromeHeight?: number
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+}) {
   const router = useRouter()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
@@ -140,12 +162,18 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
     setReloadToken((token) => token + 1)
   }, [])
 
+  // Los estados sin lista no scrollean: embebidos hay que empujarlos por debajo del chrome del
+  // hub (que ahí está siempre desplegado, porque sin scroll nunca colapsa) o quedan tapados.
+  const stateTopPadding = (embedded ? chromeHeight : 0) + 12
+
   // ── Estados (copys verbatim del web `CurationQueue.tsx:76-99`) ──
   const renderBody = () => {
-    if (!entitlements.ready || !workspaceReady) return <LoadingCard color={theme.primary} />
+    if (!entitlements.ready || !workspaceReady) {
+      return <LoadingCard color={theme.primary} topPadding={stateTopPadding} />
+    }
     if (!enabled || !scope) {
       return (
-        <View className="px-4 pt-3">
+        <View className="px-4" style={{ paddingTop: stateTopPadding }}>
           <NutritionStatePanel
             icon="permission"
             title="Centro V2 no habilitado"
@@ -154,10 +182,10 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
         </View>
       )
     }
-    if (loading) return <LoadingCard color={theme.primary} />
+    if (loading) return <LoadingCard color={theme.primary} topPadding={stateTopPadding} />
     if (loadError) {
       return (
-        <View className="px-4 pt-3">
+        <View className="px-4" style={{ paddingTop: stateTopPadding }}>
           <NutritionStatePanel
             icon="error"
             tone="danger"
@@ -170,7 +198,7 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
     }
     if (rows.length === 0) {
       return (
-        <View className="px-4 pt-3">
+        <View className="px-4" style={{ paddingTop: stateTopPadding }}>
           <NutritionStatePanel
             icon="empty"
             illustration="catalogo-vacio"
@@ -185,10 +213,13 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
       <FlashList
         data={rows}
         keyExtractor={(row) => row.id}
-        // Embebido bajo el tablist del hub: clearance de la cápsula flotante (mismo patrón que foods.tsx).
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        // Embebido bajo el tablist del hub: paddingTop = alto del chrome colapsable (la lista pasa
+        // por detrás) y clearance de la cápsula flotante al pie (mismo patrón que foods.tsx).
         contentContainerStyle={{
           paddingHorizontal: 16,
-          paddingTop: 8,
+          paddingTop: embedded ? chromeHeight + 8 : 8,
           paddingBottom: embedded ? insets.bottom + COACH_TABBAR_CLEARANCE : 40,
         }}
         ItemSeparatorComponent={() => <View className="h-2" />}
@@ -291,9 +322,12 @@ export default function CurationRoute() {
   return <CurationQueueScreen />
 }
 
-function LoadingCard({ color }: { color: string }) {
+function LoadingCard({ color, topPadding = 12 }: { color: string; topPadding?: number }) {
   return (
-    <View className="mx-4 mt-3 min-h-24 items-center justify-center rounded-card border border-default bg-surface-card">
+    <View
+      className="mx-4 min-h-24 items-center justify-center rounded-card border border-default bg-surface-card"
+      style={{ marginTop: topPadding }}
+    >
       <ActivityIndicator color={color} />
     </View>
   )

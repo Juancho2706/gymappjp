@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import {
+  Animated,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
@@ -26,6 +36,10 @@ import {
 } from '../../../components/nutrition-v2'
 import { Button, Sheet } from '../../../components'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
+import {
+  reportCoachTabbarScroll,
+  resetCoachTabbarScroll,
+} from '../../../components/coach/CoachTabbarScroll'
 import {
   NutritionCoachHubPageReadModelSchema,
   type NutritionCoachHubItem,
@@ -78,6 +92,10 @@ const COACH_TIMEZONE = 'America/Santiago'
 // updatedAt) hasta este tope, espejo del RSC web (8×50). El picker filtra client-side.
 const PICKER_PAGE_SIZE = 50
 const PICKER_MAX_PAGES = 8
+// Alto estimado del chrome colapsable (titulo + tablist) usado SOLO en el primer frame, antes
+// de que `onLayout` mida de verdad. Sin esta semilla las 3 listas arrancan con paddingTop 0 y se
+// ve un salto al medir. Aproximado a ojo: pt-5 + header (titulo 3xl + descripcion) + tira de tabs.
+const HUB_CHROME_FALLBACK_HEIGHT = 180
 
 type HubCursor = { updatedAt: string; clientId: string }
 // `planId` (NUT-004): raiz de plan ACTIVA del alumno. Viaja al builder por query para que publique
@@ -329,6 +347,55 @@ export default function CoachNutritionV2Screen() {
   )
   const clearFilters = useCallback(() => setFilters(DEFAULT_NUTRITION_ROSTER_FILTERS), [])
 
+  // ── Chrome colapsable del hub (QA-4 H2) ───────────────────────────────────────────────────
+  // Requerimiento: SOLO las 3 pestanas quedan pegadas arriba. El bloque de titulo (+ pill de
+  // sync + CTA "Nuevo plan") se va con el scroll. Como las 3 superficies del hub usan FlashList
+  // (y ahi `stickyHeaderIndices` indexa `data`, no los hijos), el patron del alumno con
+  // `ScrollView stickyHeaderIndices` no se puede copiar: el chrome vive en un overlay absoluto
+  // que se traslada hasta -alto-del-titulo y ahi se detiene (clamp). Las listas solo aportan
+  // `onScroll` + `paddingTop` y pasan POR DETRAS del overlay, que es opaco a proposito.
+  const scrollY = useRef(new Animated.Value(0)).current
+  // Alto TOTAL del overlay (titulo + tabs) = paddingTop de las 3 listas.
+  const [chromeHeight, setChromeHeight] = useState(HUB_CHROME_FALLBACK_HEIGHT)
+  // Alto del bloque de titulo SOLO = recorrido del colapso.
+  const [headerHeight, setHeaderHeight] = useState(0)
+  const onChromeLayout = useCallback(
+    (event: LayoutChangeEvent) => setChromeHeight(event.nativeEvent.layout.height),
+    [],
+  )
+  const onHeaderLayout = useCallback(
+    (event: LayoutChangeEvent) => setHeaderHeight(event.nativeEvent.layout.height),
+    [],
+  )
+  const chromeTranslate = useMemo(() => {
+    const travel = Math.max(1, headerHeight)
+    return scrollY.interpolate({
+      inputRange: [0, travel],
+      outputRange: [0, -travel],
+      extrapolate: 'clamp',
+    })
+  }, [headerHeight, scrollY])
+  // Handler unico de las 3 superficies. NO usamos `Animated.event` con `useNativeDriver: true`:
+  // FlashList v2 expone un imperative handle (no un host component) y ademas invoca `onScroll`
+  // como listener JS plano en vez de reenviarlo al ScrollView, asi que el driver nativo nunca
+  // llegaria a engancharse. Con `Animated.Value.setValue` el overlay se actualiza por
+  // `setNativeProps` (sin re-render de React), que es lo que importa para no repintar el roster.
+  // Bono: alimenta la capsula flotante del coach, que hasta ahora nunca se minimizaba en el hub V2.
+  const onBodyScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = event.nativeEvent.contentOffset.y
+      scrollY.setValue(y)
+      reportCoachTabbarScroll(y)
+    },
+    [scrollY],
+  )
+  // Cada tab monta su propio scroll en 0: sin este reset el overlay se queda colapsado sobre una
+  // lista que esta en el tope y el titulo desaparece sin forma de recuperarlo.
+  useEffect(() => {
+    scrollY.setValue(0)
+    resetCoachTabbarScroll()
+  }, [activeTab, scrollY])
+
   if (!entitlements.ready || !workspaceReady) {
     return (
       <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
@@ -358,48 +425,38 @@ export default function CoachNutritionV2Screen() {
   }
 
   return (
-    <View className="flex-1 bg-surface-app" style={{ paddingTop: insets.top }}>
-      {/* Shell persistente arriba del tablist (paridad web `page.tsx:86-104`): header con CTA
-          "Nuevo plan" + estado de sync, visible en las 3 tabs; debajo el tablist DS. */}
-      <View className="gap-4 px-4 pb-3 pt-5">
-        <NutritionHeader
-          title="Centro de Nutrición"
-          description="Planes, consumo reciente y alumnos por atender."
-          actions={
-            <View className="flex-row items-center gap-2">
-              <SyncOfflineState state={offline ? 'offline' : 'synced'} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Nuevo plan"
-                onPress={openPicker}
-                className="h-11 w-11 items-center justify-center rounded-control bg-primary"
-              >
-                <Plus color="#FFFFFF" size={20} />
-              </Pressable>
-            </View>
-          }
-        />
-        <HubTablist active={activeTab} onSelect={setActiveTab} inactiveColor={theme.textSecondary} />
-      </View>
+    <View className="flex-1 bg-surface-app">
+      {/* Franja de safe-area SOLIDA y en flujo: el overlay de abajo es `absolute` dentro de un
+          contenedor sin padding (`top: 0` sin ambigüedad de Yoga) y ninguna lista puede quedar
+          bajo la barra de estado. */}
+      <View style={{ height: insets.top }} />
 
+      <View className="flex-1">
       {/* Cuerpo de la tab activa. Conmutación INLINE (sin `router.push`) para conservar la
-          cápsula del coach y espejar que las 3 son secciones de UNA superficie. */}
+          cápsula del coach y espejar que las 3 son secciones de UNA superficie. Va ANTES del
+          chrome en el árbol: el overlay es hermano posterior, así pinta y recibe toques encima
+          en Android sin depender solo de `zIndex`. */}
       <View className="flex-1">
         {activeTab === 'foods' ? (
-          <CoachNutritionCatalogScreen embedded />
+          <CoachNutritionCatalogScreen embedded chromeHeight={chromeHeight} onScroll={onBodyScroll} />
         ) : activeTab === 'curation' ? (
-          <CurationQueueScreen embedded />
+          <CurationQueueScreen embedded chromeHeight={chromeHeight} onScroll={onBodyScroll} />
         ) : (
       <FlashList
         data={visibleItems}
         keyExtractor={(item) => item.clientId}
+        onScroll={onBodyScroll}
+        scrollEventThrottle={16}
         onRefresh={() => {
           setRefreshing(true)
           void loadFirst(true)
         }}
         refreshing={refreshing}
+        // Sin `progressViewOffset` el spinner del pull-to-refresh nace DETRAS del overlay opaco.
+        progressViewOffset={chromeHeight}
         contentContainerStyle={{
           paddingHorizontal: 16,
+          paddingTop: chromeHeight,
           paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE,
         }}
         ListHeaderComponent={
@@ -480,8 +537,9 @@ export default function CoachNutritionV2Screen() {
           items.length === 0 ? (
             // NUT-024: sin items hay DOS causas distintas y antes ambas decían lo mismo.
             // Con `offline` en true la primera carga falló y no había caché: el roster no
-            // está vacío, no lo pudimos leer. El badge "Sin conexión" del header ya lo
-            // anuncia; el empty-state deja de contradecirlo.
+            // está vacío, no lo pudimos leer. El badge "Sin conexión" del header lo anuncia
+            // (visible aquí: sin items no hay scroll, así que el chrome nunca colapsa); el
+            // empty-state deja de contradecirlo.
             offline ? (
               <NutritionStatePanel
                 title="Sin conexión y sin datos guardados"
@@ -588,6 +646,51 @@ export default function CoachNutritionV2Screen() {
         )}
       />
         )}
+      </View>
+
+        {/* Chrome del hub (paridad web `page.tsx:86-104`): header con CTA "Nuevo plan" + estado
+            de sync, y debajo el tablist DS. Solo el TABLIST queda pegado: el bloque de titulo se
+            traslada hacia arriba con el scroll y desaparece (el CTA "+" y la pill se van con el;
+            el CTA por-alumno de cada tarjeta sigue disponible). Fondo SOLIDO obligatorio porque
+            las listas pasan por detras; `box-none` en el wrapper animado para no capturar gestos
+            fuera del bloque opaco, que si los recibe (default `auto`). */}
+        <Animated.View
+          pointerEvents="box-none"
+          onLayout={onChromeLayout}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            transform: [{ translateY: chromeTranslate }],
+          }}
+        >
+          <View className="bg-surface-app">
+            <View className="px-4 pt-5" onLayout={onHeaderLayout}>
+              <NutritionHeader
+                title="Centro de Nutrición"
+                description="Planes, consumo reciente y alumnos por atender."
+                actions={
+                  <View className="flex-row items-center gap-2">
+                    <SyncOfflineState state={offline ? 'offline' : 'synced'} />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Nuevo plan"
+                      onPress={openPicker}
+                      className="h-11 w-11 items-center justify-center rounded-control bg-primary"
+                    >
+                      <Plus color="#FFFFFF" size={20} />
+                    </Pressable>
+                  </View>
+                }
+              />
+            </View>
+            <View className="px-4 pb-3 pt-4">
+              <HubTablist active={activeTab} onSelect={setActiveTab} inactiveColor={theme.textSecondary} />
+            </View>
+          </View>
+        </Animated.View>
       </View>
 
       <HubSortSheet
