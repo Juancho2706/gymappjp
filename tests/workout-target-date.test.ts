@@ -107,6 +107,6 @@ describe('resolveRepeatDate', () => {
 // MISMO texto (y para que la UI RN pueda reconocerlo y esconder el "Reintentar").
 describe('PAST_SET_NOT_FOUND_ERROR', () => {
     it('es la copia compartida del rechazo del modo solo-UPDATE', () => {
-        expect(PAST_SET_NOT_FOUND_ERROR).toBe('No existe un registro de esa serie para editar en esa fecha.')
+        expect(PAST_SET_NOT_FOUND_ERROR).toBe('Esta serie no se registró ese día. Usa "Repetir hoy" para completarla.')
     })
 })

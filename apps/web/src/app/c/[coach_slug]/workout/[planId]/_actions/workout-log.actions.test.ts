@@ -261,7 +261,7 @@ describe('logSetAction — edición de día pasado (target_date, E1.5)', () => {
         const result = await logSetAction({}, buildFormWithTarget(PAST_DATE))
 
         expect(result).toEqual({
-            error: 'No existe un registro de esa serie para editar en esa fecha.',
+            error: 'Esta serie no se registró ese día. Usa "Repetir hoy" para completarla.',
             code: 'past_set_not_found',
         })
         expect(logs.inserts).toHaveLength(0)

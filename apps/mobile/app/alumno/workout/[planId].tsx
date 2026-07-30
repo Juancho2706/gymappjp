@@ -1,3 +1,4 @@
+import { validateTargetDate } from '@eva/workout-engine'
 import { useLocalSearchParams } from 'expo-router'
 import ExecutorV3 from '../../../components/alumno/workout/v3/ExecutorV3'
 import { getTodayInSantiago } from '../../../lib/date-utils'
@@ -25,8 +26,14 @@ export default function WorkoutExecutionScreen() {
     fecha?: string
     repetir?: string
   }>()
-  const recoverDate = typeof recuperar === 'string' ? recuperar : undefined
-  const { editDate, repeatDate } = resolveExecutorDateParams({ fecha, repetir }, getTodayInSantiago().iso)
+  const todayIso = getTodayInSantiago().iso
+  // `recuperar` también pasa por `validateTargetDate` (paridad con la página web, page.tsx:36-37):
+  // sin esto un deep link con basura (`?recuperar=chao`) o una fecha FUTURA pintaba el banner ámbar
+  // "Recuperando: Invalid date". Formato/calendario inválido o futuro ⇒ se ignora el param y la
+  // sesión abre normal (el banner es puramente informativo, el log siempre cae en HOY).
+  const recoverCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
+  const recoverDate = recoverCheck?.ok ? recoverCheck.iso : undefined
+  const { editDate, repeatDate } = resolveExecutorDateParams({ fecha, repetir }, todayIso)
   return (
     <ExecutorV3
       planId={planId}

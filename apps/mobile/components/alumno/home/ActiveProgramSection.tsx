@@ -79,8 +79,9 @@ export function ActiveProgramSection({
   onReview?: (planId: string, sessionDate: string, isTodayCell: boolean) => void
 }) {
   const { theme, resolvedScheme } = useTheme()
-  // Sheet doble intencion (E1.7): el day-card de un dia YA HECHO de OTRO dia lo abre; hoy/pendiente/
-  // futuro navegan directo. Guarda la vista tocada para pintar dia/fecha del subtitulo.
+  // Sheet doble intencion (E1.7): lo abre el day-card de un dia YA HECHO (hoy incluido, paridad web) y
+  // el de un dia a medias de OTRO dia; hoy-a-medias/pendiente/futuro navegan directo. Guarda la vista
+  // tocada para pintar dia/fecha del subtitulo.
   const [sheetView, setSheetView] = useState<PlanDayView | null>(null)
   // Banner de pendientes: dispara el MISMO Despegue que el CTA/day-cards. Mide su rect y se oculta
   // durante el morph (el clon lo reemplaza).
@@ -88,16 +89,21 @@ export function ActiveProgramSection({
   const { hidden: bannerHidden, hide: hideBanner } = useTriggerMorphHide()
 
   // Enrutado por estado del day-card:
-  //  · done && !isToday        → sheet "Ya hiciste este entrenamiento" (revisar/repetir).
+  //  · done (HOY incluido)     → sheet "Ya hiciste este entrenamiento" (revisar/repetir). Paridad web
+  //    QA7 (`WorkoutPlanCard.tsx:153`, `opensSheet = done || (inProgress && !isToday)`): antes el día
+  //    hecho HOY entraba directo al ejecutor saltándose la ventanita, y el hero de esta misma pantalla
+  //    sí la abría → dos comportamientos para el mismo hecho. En ese caso el sheet sale sin "Repetir
+  //    hoy" (`showRepeat` false, la sesión ya es de hoy) y "Revisar y editar" navega con
+  //    `{ desde: 'hecho' }` (flujo normal de hoy, jamás `?fecha=<hoy>` — guard del incidente 2026-07-26).
   //  · in_progress && !isToday → MISMO sheet con copy "Entrenamiento incompleto" (spec
   //    `workout-day-in-progress`): la sesión de ese día quedó a medias y el camino sigue siendo el de
   //    siempre (editar esa fecha / repetir hoy), solo cambia lo que se le dice al alumno.
   //  · in_progress && isToday  → Despegue directo (continuar la sesión de hoy, NUNCA el sheet: ése era
   //    el trap del incidente P0 — "Ya hiciste este entrenamiento" a mitad de entreno).
   //  · pending                 → recuperar (param `recuperar`, banner ambar, se entrena hoy) — vía Despegue.
-  //  · resto (today/upcoming/done-hoy) → Despegue directo.
+  //  · resto (today/upcoming) → Despegue directo.
   function handleDayPress(view: PlanDayView, origin: MorphOrigin | null) {
-    if ((view.status === 'done' || view.status === 'in_progress') && !view.isToday) { setSheetView(view); return }
+    if (view.status === 'done' || (view.status === 'in_progress' && !view.isToday)) { setSheetView(view); return }
     // Las day-cards son angostas (96px) → el overlay NO pinta la etiqueta (solo rects anchos); se pasa el
     // título del plan por si la medición cae al origen sintético (ancho), donde sí se veria.
     if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso, origin, view.plan.title); return }
@@ -362,7 +368,7 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   // de la day-card clickeada (mismo patrón que el CTA del hero). Si la medición falla → origen sintético.
   const ref = useRef<View>(null)
   // Ocultar la card real durante el Despegue (el clon la reemplaza) — SÓLO cuando de verdad morfea:
-  // los estados que abren el sheet (done de otro día) o recuperan (pending) NO lanzan el morph.
+  // los estados que abren el sheet (done, hoy incluido) o recuperan (pending) NO lanzan el morph.
   const { hidden: cardHidden, hide: hideCard } = useTriggerMorphHide()
   const { plan, status, isToday, doneOnLabel } = view
   const dow = plan.day_of_week ?? 1
@@ -373,9 +379,11 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   // (hoy manda en el color) y un día pasado a medias se distingue del neutro con un borde sport tenue,
   // sin robarle el ámbar al pendiente (ése sí no tiene nada registrado).
   const inProgress = status === 'in_progress'
-  // handleDayPress morfea en TODO salvo done/in_progress de otro día (abren el sheet): hoy/futuro/
-  // done-hoy/in_progress-hoy → Despegue (onStart) y pending → Despegue de recuperación (onRecover).
-  const willMorph = !((done || inProgress) && !isToday)
+  // handleDayPress morfea en TODO salvo los estados que abren el sheet — done (hoy incluido) e
+  // in_progress de otro día. Espejo exacto del `opensSheet` web (WorkoutPlanCard.tsx:153). Si esto se
+  // desalinea de handleDayPress, la card queda invisible detrás del sheet (hideCard sin morph que la
+  // reemplace). hoy/futuro/in_progress-hoy → Despegue (onStart); pending → Despegue de recuperación.
+  const willMorph = !(done || (inProgress && !isToday))
   // "Hecho el jueves" solo cuando el dia se cerro por una sesion de OTRO dia (recuperacion):
   // label discreto que espeja el copy web (doneOnLabel). Done en su propia fecha → "Día N".
   const doneElsewhere = done && !!doneOnLabel

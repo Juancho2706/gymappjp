@@ -26,8 +26,14 @@ const ISO_YMD = /^\d{4}-\d{2}-\d{2}$/
  * web (`code: 'past_set_not_found'`) y el motor RN (`logSet`), y la UI la muestra SIN "Reintentar":
  * no hay nada que reintentar, el registro no existe. Vive acá para que las dos plataformas no
  * driftéen el texto.
+ *
+ * Copy HUMANO (QA4 H7-D): el texto viejo ("No existe un registro de esa serie para editar en esa
+ * fecha.") describía la fila de la base de datos, no lo que le pasa al alumno ni qué hacer. Ahora
+ * nombra el hecho y da la salida real — "Repetir hoy" del sheet de doble intención es el ÚNICO camino
+ * para completar una serie que nunca se registró (la política anti-farmeo retroactivo no cambia: el
+ * modo solo-UPDATE sigue sin insertar jamás). Debe caber en 2 líneas de caption (SetRow RN).
  */
-export const PAST_SET_NOT_FOUND_ERROR = 'No existe un registro de esa serie para editar en esa fecha.'
+export const PAST_SET_NOT_FOUND_ERROR = 'Esta serie no se registró ese día. Usa "Repetir hoy" para completarla.'
 
 /**
  * Valida una fecha objetivo ISO `yyyy-mm-dd` contra `todayIso` (día ya resuelto en Santiago).
