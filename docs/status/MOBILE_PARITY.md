@@ -50,6 +50,20 @@ La paridad global **no está certificada todavía**.
 > `expo export` android verde. TODO exige la MISMA build EAS ya pendiente (notify-kit); QA física
 > post-build: botones en MIUI/Pixel, +15 s sin doble-apply, huérfanas, "Mi plan"/muros en light/dark.
 >
+> **2026-07-31 (corte 2 — venta por email + deudas de timers cerradas)**: (a) **Canal de venta Resend**
+> (reemplazo del CTA purgado; `apps/web`): 3 correos por el MISMO evento que pinta el muro — límite de
+> alumnos (los 4 call sites de UPGRADE_REQUIRED: alta/import × web/móvil), "vence pronto" (ventana ≤3
+> días, solo `canceled`/`paused` — `active` se auto-renueva y `past_due` ya recibe dunning) y "venció"
+> (transición del cron paid-expiry). Dedupe SIN DDL vía `admin_audit_logs` como ledger (ancla
+> `current_period_end` / cooldown 7 d), kill-switch `EVA_SALES_EMAILS_DISABLED`, templates en código
+> sin precios (test lo pinnea), fail-open de lectura y ledger solo tras envío exitoso. Murió
+> `buildUpgradeRequiredEmail` (precios hardcodeados stale). ⚠️ Requiere `EMAIL_FROM` + `RESEND_API_KEY`
+> en Vercel prod. (b) **Deuda de pausa exacta CERRADA en los 3 modos de cardio**: `timing.ts` gana
+> `useStopwatch.adopt()` y `useIntervalRunner.adoptRemaining()` (aditivos, respetan QA4 h5); el drenaje
+> adopta exacto vía `cardio-adoption.ts` (módulo puro, 11 tests). (c) **Superserie**: la notif del
+> descanso imprime "Ronda n de N" (discriminador `countKind` ExecutorV3→…→notif). Gates: tsc web+mobile
+> 0, 5053 tests, export android verde. Cambios (b)/(c) son JS-only ⇒ viajan por OTA si la build ya corrió.
+>
 > **2026-07-31 (gate de acceso RN — corrección)**: los guards de suscripción vivían dentro de los layouts de **tabs**, así que no cubrían las rutas fuera de esos grupos. Coach: `app/coach/(tabs)/_layout.tsx` dejaba sin gate ~21 rutas (`cliente/[clientId]`, `program-builder`, `nutrition-v2/*`, `cardio/*`, `bodycomp`, `movement/*`, `settings/*`, `foods`, `tools`, …) y además se evaluaba una sola vez por arranque (el layout de tabs no se desmonta al cambiar de tab), de modo que un back-gesture devolvía al dashboard con el plan vencido. Alumno: mismo patrón dejaba fuera `workout/[planId]`, `exercise/[id]`, `add-food` y `onboarding`, alcanzables por deep link o por el tap de una notificación push. Corregido con layouts raíz `app/coach/_layout.tsx` y `app/alumno/_layout.tsx` — el del coach usa estado reactivo (`lib/coach-access.ts`, SWR + revalidación por foreground/navegación) en vez de un efecto de una pasada, y el del alumno absorbió el gate de montaje completo, incluido el consentimiento de pool (Ley 21.719), en el mismo orden que el proxy web. En el mismo corte, el muro `/coach/reactivate` de RN gana la salida **volver al plan gratuito** (panel de archivado/eliminación + `POST /api/mobile/coach/activate-free`, que comparte `services/billing/activate-free.service.ts` con la web): antes solo sabía link-outear al navegador, así que un coach vencido sin computador solo podía pagar. El camino de **pago** sigue siendo link-out exclusivo a la web. Requiere QA física + build/OTA.
 
 > **2026-07-29 (rama `worktree-adelanto-qa-20260729`, sin merge)**: adelanto paralelo al QA del owner —

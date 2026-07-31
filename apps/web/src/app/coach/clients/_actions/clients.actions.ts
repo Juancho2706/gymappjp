@@ -10,10 +10,10 @@ import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
     buildClientWelcomeEmail,
-    buildUpgradeRequiredEmail,
     buildClientArchivedEmail,
     buildClientUnarchivedEmail,
 } from '@/lib/email/transactional-templates'
+import { sendClientLimitReachedEmail } from '@/services/billing/sales-emails.service'
 import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import {
     assertPlatformEmailAvailable,
@@ -87,14 +87,16 @@ export async function createClientAction(
     }
     // Cap del tier personal: solo standalone (enterprise y team pagan centralizado).
     if (!scope.isEnterprise && !scope.activeTeamId && (activeClientsCount ?? 0) >= maxClients) {
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-        const { subject, html } = buildUpgradeRequiredEmail({
-            coachName: coach.full_name ?? 'Coach',
-            brandName: coach.brand_name ?? 'EVA',
+        // Correo de VENTA (el CTA de pago ya no puede vivir en la app móvil — compliance de tiendas).
+        // Fire-and-forget: el ledger de dedupe y el envío jamás bloquean la respuesta del rechazo.
+        void sendClientLimitReachedEmail(createServiceRoleClient(), {
+            coachId: coach.id,
+            coachEmail: coachUser.email,
+            coachName: coach.full_name,
+            tier,
             currentLimit: maxClients,
-            subscriptionUrl: `${appUrl}/coach/subscription`,
+            source: 'web_create',
         })
-        sendTransactionalEmail({ to: coachUser.email!, subject, html }).catch(() => null)
 
         return {
             error: `Alcanzaste el límite de ${maxClients} alumnos de tu plan actual.`,

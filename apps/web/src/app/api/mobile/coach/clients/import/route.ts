@@ -8,6 +8,7 @@ import type { Database, Json } from '@/lib/database.types'
 import { sanitizeCell } from '@/lib/import/csv-injection'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { sendClientLimitReachedEmail } from '@/services/billing/sales-emails.service'
 
 const MAX_ROWS = 1_000
 const CHUNK_SIZE = 10
@@ -260,6 +261,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No pudimos validar el límite de alumnos de tu plan.', code: 'CLIENT_LIMIT_CHECK_FAILED' }, { status: 500 })
         }
         if ((count ?? 0) + rows.length > maxClients) {
+            // Mismo evento que el alta unitaria: el muro de la app es neutro, el CTA de pago viaja
+            // por correo (compliance de tiendas). Dedupe y fallo de envío quedan en el service.
+            void sendClientLimitReachedEmail(admin, {
+                coachId: user.id,
+                coachEmail: user.email,
+                coachName: coach?.full_name,
+                tier,
+                currentLimit: maxClients,
+                source: 'mobile_import',
+            })
             return NextResponse.json({
                 error: `Tu plan permite ${maxClients} alumnos activos. Tienes ${count ?? 0} y quieres importar ${rows.length}. Actualiza tu plan o reduce la cantidad de filas.`,
                 code: 'UPGRADE_REQUIRED',

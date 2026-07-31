@@ -704,7 +704,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                   }
                 }
                 restRoundContextRef.current = { roundNumber: round, totalRounds, next }
-                timers.startRest(groupRest, { autoStart: true, label })
+                // En superserie `payload.setNumber` es una RONDA, no una serie: el contexto viaja con
+                // `countKind: 'ronda'` para que la notificación imprima "Ronda 2 de 4" en vez de la
+                // lectura falsa "Serie 2 de 4" (por eso antes esta rama no mandaba contexto alguno).
+                // Es la ronda RECIÉN cerrada sobre el total del grupo — nunca la próxima.
+                timers.startRest(groupRest, {
+                  autoStart: true,
+                  label,
+                  setIndex: round,
+                  setTotal: totalRounds,
+                  countKind: 'ronda',
+                })
               }
             } else {
               timers.cancelRest()
@@ -730,14 +740,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             // `setIndex`/`setTotal` viajan SOLO como contexto de la notificación del descanso
             // (QA-11 fase 2: "Serie 3 de 4" en la bandeja). Es la serie recién registrada sobre el
             // total del bloque — no la próxima, para no imprimir "Serie 5 de 4" al cerrar la última.
-            // La rama de SUPERSERIE no los pasa: ahí `setNumber` es una RONDA y "Serie n de N" sería
-            // una lectura falsa; queda pendiente un copy propio de rondas si el CEO lo pide.
+            // `countKind: 'serie'` explícito: la rama de SUPERSERIE cuenta RONDAS con el mismo par de
+            // campos, así que el discriminador se declara en AMBOS lados y no se deja al default.
             timers.startRest(secs, {
               autoStart: true,
               label: ex?.name,
               warmup: useWarmup,
               setIndex: payload.setNumber,
               setTotal: block?.sets,
+              countKind: 'serie',
             })
           } else {
             timers.cancelRest()

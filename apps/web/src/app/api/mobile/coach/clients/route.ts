@@ -5,10 +5,8 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
-import {
-    buildClientWelcomeEmail,
-    buildUpgradeRequiredEmail,
-} from '@/lib/email/transactional-templates'
+import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
+import { sendClientLimitReachedEmail } from '@/services/billing/sales-emails.service'
 import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import {
     assertPlatformEmailAvailable,
@@ -205,16 +203,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (workspace.type === 'coach_standalone' && (activeClientsCount ?? 0) >= maxClients) {
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-        const { subject, html } = buildUpgradeRequiredEmail({
-            coachName: coach.full_name ?? 'Coach',
-            brandName: coach.brand_name ?? 'EVA',
+        // La app móvil ya NO puede mostrar el CTA de pago (compliance de tiendas): pinta un muro
+        // neutro y la venta viaja por este correo, disparado por el MISMO rechazo 402.
+        void sendClientLimitReachedEmail(admin, {
+            coachId: coach.id,
+            coachEmail: coachUser.email,
+            coachName: coach.full_name,
+            tier,
             currentLimit: maxClients,
-            subscriptionUrl: `${appUrl}/coach/subscription`,
+            source: 'mobile_create',
         })
-        if (coachUser.email) {
-            sendTransactionalEmail({ to: coachUser.email, subject, html }).catch(() => null)
-        }
 
         return NextResponse.json(
             {

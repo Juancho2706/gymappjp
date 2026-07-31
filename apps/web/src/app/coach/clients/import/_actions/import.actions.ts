@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { getTierCapabilities, getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { getCoachOrgContext } from '@/lib/coach-context'
 import { resolveCoachScope } from '@/services/auth/coach-scope.service'
+import { sendClientLimitReachedEmail } from '@/services/billing/sales-emails.service'
 import { createClientInternal } from '../../_lib/create-client-internal'
 import { sanitizeCell } from '@/lib/import/csv-injection'
 
@@ -189,6 +190,15 @@ export async function importClientsAction(
             .eq('is_archived', false)
 
         if ((activeCount ?? 0) + rows.length > maxClients) {
+            // Correo de VENTA por el mismo evento que el rechazo (ver sales-emails.service).
+            void sendClientLimitReachedEmail(createServiceRoleClient(), {
+                coachId: rawCoach.id,
+                coachEmail: user.email,
+                coachName: rawCoach.full_name,
+                tier,
+                currentLimit: maxClients,
+                source: 'web_import',
+            })
             return {
                 error: `Tu plan permite ${maxClients} alumnos activos. Tienes ${activeCount ?? 0} y quieres importar ${rows.length}. Actualiza tu plan o reduce la cantidad de filas.`,
             }

@@ -31,17 +31,19 @@
  * aplicar un "Pausar" que vino de la notificación, el efecto borrara la ficha que el handler acaba de
  * pintar (mismo razonamiento que `useRestTimerEngine` al pausar).
  *
- * ── ADOPCIÓN DEL RELOJ AL DRENAR (y el drift que SÍ queda) ─────────────────────
- * `timing.ts` no se toca (motor congelado). Al drenar:
- *   · COUNTDOWN: se ADOPTA el valor exacto del snapshot vía `restart(segundos)` — `useCountdown` no
- *     expone otra forma de fijar el restante, y acá es seguro porque `CountdownHero` deriva su anillo
- *     de `durationSec` (prop), no del `target` interno del hook. Sin esta adopción, una pausa larga
- *     hecha desde el lockscreen se perdería entera: el `endRef` interno siguió corriendo durante la
- *     pausa y al volver el hero leería MENOS tiempo del que corresponde.
- *   · INTERVALOS y CRONÓMETRO: no hay forma de fijar el restante/transcurrido sin cirugía en
- *     `timing.ts` (`restart()` del runner vuelve a la fase 0; `useStopwatch` no expone su acumulador),
- *     así que se aplica sólo `toggle()` y se ACEPTA la deriva: el tiempo que el bloque estuvo pausado
- *     desde la notificación se cuenta como corrido. Deuda consciente, documentada acá y en el informe.
+ * ── ADOPCIÓN DEL RELOJ AL DRENAR (deuda CERRADA para los TRES modos) ───────────
+ * El handler headless ya actuó antes de encolar (congeló o re-ancló los instantes absolutos), así que
+ * la pantalla ADOPTA ese valor en vez de re-aplicar el delta. Qué se adopta lo decide
+ * `planCardioAdoption` (puro, testeado) y lo aplica el hero por `controls.adoptExact`:
+ *   · COUNTDOWN: `restart(segundos)` (+ `toggle` si el destino es pausa) — `useCountdown` no expone
+ *     otra forma de fijar el restante, y es seguro porque `CountdownHero` deriva su anillo de
+ *     `durationSec` (prop), no del `target` interno del hook.
+ *   · INTERVALOS: `adoptRemaining(segundos, corriendo)` de `useIntervalRunner` — re-ancla el fin de la
+ *     fase EN CURSO sin mover `phaseIndex` ni disparar `onPhaseChange`.
+ *   · CRONÓMETRO: `adopt(transcurridos, corriendo)` de `useStopwatch` — fija el acumulador.
+ * Antes, intervalos y cronómetro sólo hacían `toggle()` y el rato que el bloque estuvo pausado desde
+ * el lockscreen se contaba como corrido (deuda consciente del corte anterior). Ya no: la pausa
+ * también adopta el valor congelado del snapshot cuando difiere de lo que pinta la pantalla.
  *
  * ── ALERTA FINAL: sólo debe sonar si la app NO está delante ────────────────────
  * Mismo criterio que el descanso (`useRestTimerEngine`): con la app viva el cue lo da la UI
@@ -83,6 +85,7 @@ import {
   setCardioLiveSnapshot,
   subscribeCardioRemoteCommands,
 } from '../timers/cardio-remote-commands'
+import { planCardioAdoption } from './cardio-adoption'
 
 export interface CardioLiveSpec {
   /**
@@ -125,10 +128,12 @@ export interface CardioLiveControls {
   /** Pausa/reanuda (el `toggle` del hook de timing). */
   toggle: () => void
   /**
-   * Countdown: fija N segundos exactos y deja corriendo (`restart` de `useCountdown`). Sólo lo pasa
-   * el hero que puede hacerlo sin efectos colaterales visuales — ver la cabecera.
+   * ADOPCIÓN EXACTA: fija el reloj del hero en `seconds` (restantes en los modos `down`, transcurridos
+   * en el cronómetro) y lo deja corriendo o detenido de una sola vez. Lo implementa cada hero con el
+   * mecanismo de su hook de `timing.ts` — ver la cabecera. Opcional por contrato, pero los tres heroes
+   * lo pasan hoy: sin él el drenaje cae al `toggle` aproximado.
    */
-  adoptSeconds?: (seconds: number) => void
+  adoptExact?: (seconds: number, running: boolean) => void
   /** Intervalos: avanza a la fase siguiente (`skip` del runner). */
   skipPhase?: () => void
 }
@@ -253,24 +258,20 @@ export function useCardioLiveTimer(spec: CardioLiveSpec | null, controls?: Cardi
     try {
       if (skipRequested) controlsNow.skipPhase?.()
       if (desiredRunning == null) return
-      const snap = getCardioLiveSnapshot()
-      if (desiredRunning) {
-        // Reanudar: adoptar el restante ABSOLUTO que dejó el handler (`restart` ya deja corriendo).
-        const remaining =
-          snap?.endEpochMs != null ? Math.max(0, Math.ceil((snap.endEpochMs - Date.now()) / 1000)) : null
-        if (remaining != null && remaining > 0 && controlsNow.adoptSeconds) controlsNow.adoptSeconds(remaining)
-        else if (!controlsNow.running) controlsNow.toggle()
+      // Qué adoptar es aritmética pura sobre el snapshot (`cardio-adoption.ts`): reanudar toma el
+      // instante re-anclado por el handler; pausar toma el valor que ese mismo handler CONGELÓ, y sólo
+      // si difiere de lo que el hero pinta ahora (`spec.seconds`, restantes o transcurridos según modo).
+      const plan = planCardioAdoption(
+        getCardioLiveSnapshot(),
+        desiredRunning,
+        specRef.current?.seconds ?? null,
+      )
+      if (plan.action === 'adopt' && controlsNow.adoptExact) {
+        controlsNow.adoptExact(plan.seconds, plan.running)
         return
       }
-      // Pausar/detener: adoptar los segundos congelados y quedar detenido. `adoptSeconds` deja
-      // corriendo, así que el `toggle` posterior lo detiene (React colapsa ambos setState en un
-      // render; el `toggle` de `timing.ts` es funcional, por lo que el orden se respeta).
-      if (snap?.pausedRemainingSec != null && controlsNow.adoptSeconds) {
-        controlsNow.adoptSeconds(snap.pausedRemainingSec)
-        controlsNow.toggle()
-      } else if (controlsNow.running) {
-        controlsNow.toggle()
-      }
+      // Sin adopción exacta disponible (o sin valor que fijar): al menos honrar corriendo/pausado.
+      if (controlsNow.running !== plan.running) controlsNow.toggle()
     } catch {
       // Un comando que falla no puede tumbar la pantalla.
     }

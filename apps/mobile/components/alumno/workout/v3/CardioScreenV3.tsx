@@ -691,13 +691,18 @@ function CountdownHero({
   // Controles para el drenaje de los botones de la notificación. SIN `useMemo` a propósito: el hook
   // los guarda en un ref que refresca en cada render, así que su identidad es irrelevante (y memoizar
   // por propiedades sueltas rompe la compilación del React Compiler).
-  // `adoptSeconds` = `restart`: el ÚNICO camino de `useCountdown` para fijar un restante exacto al
+  // `adoptExact` sobre `restart`: el ÚNICO camino de `useCountdown` para fijar un restante exacto al
   // adoptar lo que dejó un botón. Es seguro acá porque el anillo se deriva de `durationSec` (prop), no
-  // del `target` interno del hook. Ver la cabecera de `use-cardio-live-timer`.
+  // del `target` interno del hook. `restart` deja CORRIENDO, así que el destino "pausa" se completa con
+  // un `toggle` inmediato: React colapsa ambos setState en un render y el `toggle` de `timing.ts` es
+  // funcional, por lo que el orden se respeta. Ver la cabecera de `use-cardio-live-timer`.
   const liveControls: CardioLiveControls = {
     running: countdown.running,
     toggle: countdown.toggle,
-    adoptSeconds: countdown.restart,
+    adoptExact: (seconds, running) => {
+      countdown.restart(seconds)
+      if (!running) countdown.toggle()
+    },
   }
   useCardioLiveTimer(liveSpec, liveControls)
 
@@ -821,11 +826,16 @@ function IntervalHero({
     restartTick,
     largeIconUrl,
   ])
-  // Sin `adoptSeconds`: `restart()` del runner vuelve a la fase 0, así que no sirve para adoptar el
-  // restante de la fase actual. Pausar/reanudar desde la notificación se aplica con `toggle` y arrastra
-  // la deriva documentada en `use-cardio-live-timer`. "Fase siguiente" sí tiene aplicación exacta.
+  // `adoptRemaining` (NO `restart`, que vuelve a la fase 0) re-ancla el restante de la fase EN CURSO:
+  // con eso pausar/reanudar desde la notificación es exacto y el rato pausado ya no se cuenta como
+  // corrido. "Fase siguiente" sigue aplicándose con `skip`.
   // Objeto sin memoizar: el hook lo guarda en un ref que refresca en cada render (ver CountdownHero).
-  const liveControls: CardioLiveControls = { running: runner.running, toggle: runner.toggle, skipPhase: runner.skip }
+  const liveControls: CardioLiveControls = {
+    running: runner.running,
+    toggle: runner.toggle,
+    adoptExact: runner.adoptRemaining,
+    skipPhase: runner.skip,
+  }
   useCardioLiveTimer(liveSpec, liveControls)
 
   return (
@@ -1023,10 +1033,14 @@ function StopwatchHero({
       endNotifSeconds: null,
     }
   }, [stopwatch.running, stopwatch.started, stopwatch.elapsed, zoneColor, largeIconUrl])
-  // Sin `adoptSeconds`: `useStopwatch` no expone su acumulador, así que "Pausar" desde la
-  // notificación se aplica con `toggle` y arrastra la deriva documentada en `use-cardio-live-timer`.
+  // `adopt` fija el acumulador de `useStopwatch` en lo TRANSCURRIDO que congeló/re-ancló el handler:
+  // pausar y reanudar desde la notificación ya no arrastran el rato detenido como tiempo corrido.
   // Objeto sin memoizar: el hook lo guarda en un ref que refresca en cada render (ver CountdownHero).
-  const liveControls: CardioLiveControls = { running: stopwatch.running, toggle: stopwatch.toggle }
+  const liveControls: CardioLiveControls = {
+    running: stopwatch.running,
+    toggle: stopwatch.toggle,
+    adoptExact: stopwatch.adopt,
+  }
   useCardioLiveTimer(liveSpec, liveControls)
 
   return (

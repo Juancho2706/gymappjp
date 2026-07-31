@@ -9,6 +9,20 @@ import { ProviderRequestError } from '@/lib/payments/provider-error'
 import { resolvePaidExpiryDecision, type RemoteVerification } from '@/lib/payments/paid-expiry'
 import { cancelAllForCoach } from '@/infrastructure/db/coach-addons.repository'
 import { revertActiveCouponForCoach } from '@/services/billing/coupons.service'
+import {
+    RENEWAL_REMINDER_THRESHOLD_DAYS,
+    buildSubscriptionUrl,
+    daysUntil,
+    isWithinRenewalReminderWindow,
+    resolveCoachEmail,
+    sendSalesEmailOnce,
+} from '@/services/billing/sales-emails.service'
+import {
+    buildPlanExpiredEmail,
+    buildPlanExpiringSoonEmail,
+    formatSalesEmailDate,
+} from '@/lib/email/sales-templates'
+import { TIER_LABELS, type SubscriptionTier } from '@/lib/constants'
 import type { TablesInsert } from '@/lib/database.types'
 
 /**
@@ -49,12 +63,17 @@ function isAuthorized(req: Request): boolean {
 type CandidateCoach = {
     id: string
     slug: string
+    full_name: string | null
     subscription_status: string
+    subscription_tier: string | null
     subscription_provider: string | null
     subscription_mp_id: string | null
     subscription_provider_external_id: string | null
     current_period_end: string | null
 }
+
+const CANDIDATE_COLUMNS =
+    'id, slug, full_name, subscription_status, subscription_tier, subscription_provider, subscription_mp_id, subscription_provider_external_id, current_period_end'
 
 /**
  * Verifica el estado REAL de la suscripción en el gateway. Reusa `fetchCheckoutSnapshot` del puerto
@@ -141,6 +160,76 @@ async function expireCoach(
     return { addonsCancelled, couponReverted }
 }
 
+/**
+ * Estados en los que el acceso REALMENTE termina en `current_period_end` (no hay cobro automático
+ * que lo empuje): 'canceled' (el coach canceló, conserva acceso hasta el fin del período) y 'paused'
+ * (preapproval pausado en el gateway → no cobra).
+ *
+ * A propósito NO se avisa a 'active' (la suscripción se auto-renueva: decirle "tu plan vence" sería
+ * FALSO y genera soporte) ni a 'past_due' (dunning: el gateway sigue reintentando y ese coach ya
+ * recibe `buildPaymentFailedEmail` desde el webhook — duplicarlo sería spam contradictorio).
+ */
+const RENEWAL_REMINDER_STATUSES = ['canceled', 'paused']
+
+/**
+ * Correo de VENTA "tu plan vence pronto" (§6 de `docs/research/cta-pagos-externos-stores-2026-07-31.md`).
+ * Corre en la MISMA pasada diaria del backstop, pero mirando HACIA ADELANTE (período aún vigente),
+ * mientras el bloque principal mira hacia atrás (período ya vencido). Idempotencia por ancla:
+ * `dedupeKey = current_period_end` — se manda una sola vez por período y se re-arma solo cuando el
+ * coach renueva y el ancla avanza. Ningún fallo acá aborta el backstop (bloque envuelto en try/catch).
+ */
+async function runRenewalReminders(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    now: Date
+): Promise<{ candidates: number; sent: number }> {
+    const horizonIso = new Date(
+        now.getTime() + RENEWAL_REMINDER_THRESHOLD_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString()
+
+    const { data, error } = await admin
+        .from('coaches')
+        .select(CANDIDATE_COLUMNS)
+        .in('payment_provider', ['mercadopago', 'flow'])
+        .in('subscription_status', RENEWAL_REMINDER_STATUSES)
+        .not('current_period_end', 'is', null)
+        .gt('current_period_end', now.toISOString())
+        .lte('current_period_end', horizonIso)
+
+    if (error) {
+        console.error('[cron/paid-expiry] renewal-reminder query failed:', error.message)
+        return { candidates: 0, sent: 0 }
+    }
+
+    const coaches = (data ?? []) as CandidateCoach[]
+    let sent = 0
+    for (const coach of coaches) {
+        const periodEnd = coach.current_period_end
+        // Segunda barrera (la query ya acota): la ventana pura es la fuente de verdad y es testeable.
+        if (!isWithinRenewalReminderWindow({ periodEndIso: periodEnd, now })) continue
+
+        const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+        const { subject, html } = buildPlanExpiringSoonEmail({
+            coachName: coach.full_name?.trim() || 'Coach',
+            tierLabel: TIER_LABELS[tier] ?? TIER_LABELS.free,
+            expiresOn: formatSalesEmailDate(periodEnd!),
+            daysLeft: daysUntil(periodEnd!, now),
+            subscriptionUrl: buildSubscriptionUrl(),
+        })
+        const outcome = await sendSalesEmailOnce(admin, {
+            event: 'plan_expiring_soon',
+            coachId: coach.id,
+            to: await resolveCoachEmail(admin, coach.id),
+            subject,
+            html,
+            dedupeKey: periodEnd,
+            payload: { coach_slug: coach.slug, tier, db_status: coach.subscription_status },
+        })
+        if (outcome === 'sent') sent++
+    }
+
+    return { candidates: coaches.length, sent }
+}
+
 export async function GET(req: Request) {
     if (!isAuthorized(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -157,9 +246,7 @@ export async function GET(req: Request) {
     // estado que conserva acceso por gracia (active/canceled/past_due/paused) y período YA vencido.
     const { data: candidates, error } = await admin
         .from('coaches')
-        .select(
-            'id, slug, subscription_status, subscription_provider, subscription_mp_id, subscription_provider_external_id, current_period_end'
-        )
+        .select(CANDIDATE_COLUMNS)
         .in('payment_provider', ['mercadopago', 'flow'])
         .in('subscription_status', ['active', 'canceled', 'past_due', 'paused'])
         .not('current_period_end', 'is', null)
@@ -172,6 +259,7 @@ export async function GET(req: Request) {
 
     let expired = 0
     let errors = 0
+    let expiredEmailsSent = 0
     const alerts: { slug: string; dbStatus: string; reason: string }[] = []
     const expiredList: { slug: string; reason: string }[] = []
     const errorList: { slug: string; message: string }[] = []
@@ -185,9 +273,33 @@ export async function GET(req: Request) {
             })
 
             if (decision.action === 'expire') {
+                // El ancla del correo se captura ANTES de expirar: `expireCoach` deja
+                // `current_period_end` en NULL (lo guarda en `paid_access_ended_at`).
+                const expiryAnchor = coach.current_period_end ?? nowIso
                 await expireCoach(admin, coach, decision.reason, nowIso)
                 expired++
                 expiredList.push({ slug: coach.slug, reason: decision.reason })
+
+                // Correo de VENTA "tu plan venció": se dispara SOLO en la corrida que ejecuta la
+                // transición (el coach pasa a 'expired' y sale del set de candidatos ⇒ idempotencia
+                // natural del cron). El ancla cubre el caso reactivar→re-expirar: distinto período,
+                // distinto correo. Nunca lanza — no puede abortar el resto de la corrida.
+                const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+                const expiredEmail = buildPlanExpiredEmail({
+                    coachName: coach.full_name?.trim() || 'Coach',
+                    tierLabel: TIER_LABELS[tier] ?? TIER_LABELS.free,
+                    subscriptionUrl: buildSubscriptionUrl(),
+                })
+                const outcome = await sendSalesEmailOnce(admin, {
+                    event: 'plan_expired',
+                    coachId: coach.id,
+                    to: await resolveCoachEmail(admin, coach.id),
+                    subject: expiredEmail.subject,
+                    html: expiredEmail.html,
+                    dedupeKey: expiryAnchor,
+                    payload: { coach_slug: coach.slug, tier, reason: decision.reason },
+                })
+                if (outcome === 'sent') expiredEmailsSent++
             } else {
                 alerts.push({ slug: coach.slug, dbStatus: coach.subscription_status, reason: decision.reason })
                 await admin.from('admin_audit_logs').insert({
@@ -211,13 +323,30 @@ export async function GET(req: Request) {
         }
     }
 
+    // Pasada de AVISO PREVIO (correo de venta "tu plan vence pronto"). Va después del backstop y
+    // aislada: si algo falla acá, la expiración —que es lo que protege el revenue— ya ocurrió.
+    let reminders = { candidates: 0, sent: 0 }
+    try {
+        reminders = await runRenewalReminders(admin, now)
+    } catch (err) {
+        console.error('[cron/paid-expiry] renewal reminders failed:', err)
+    }
+
     // Resumen de la corrida en auditoría (siempre, aunque no haya nada — traza de que corrió).
     await admin.from('admin_audit_logs').insert({
         admin_email: 'cron',
         action: 'cron.paid_expiry_ran',
         target_table: 'coaches',
         target_id: null,
-        payload: { candidates: candidates?.length ?? 0, expired, alerts: alerts.length, errors },
+        payload: {
+            candidates: candidates?.length ?? 0,
+            expired,
+            alerts: alerts.length,
+            errors,
+            expired_emails_sent: expiredEmailsSent,
+            renewal_reminder_candidates: reminders.candidates,
+            renewal_reminders_sent: reminders.sent,
+        },
     })
 
     // Email a ADMIN_EMAILS si hubo expirados, alertas o errores (evidencia + revisión manual).
@@ -305,7 +434,7 @@ ${errorBlock}`
     }
 
     console.info(
-        `[cron/paid-expiry] done — candidates=${candidates?.length ?? 0} expired=${expired} alerts=${alerts.length} errors=${errors}`
+        `[cron/paid-expiry] done — candidates=${candidates?.length ?? 0} expired=${expired} alerts=${alerts.length} errors=${errors} expiredEmails=${expiredEmailsSent} renewalReminders=${reminders.sent}/${reminders.candidates}`
     )
     return NextResponse.json({
         ok: true,
@@ -313,5 +442,8 @@ ${errorBlock}`
         expired,
         alerts: alerts.length,
         errors,
+        expiredEmailsSent,
+        renewalReminderCandidates: reminders.candidates,
+        renewalRemindersSent: reminders.sent,
     })
 }

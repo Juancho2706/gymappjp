@@ -356,6 +356,18 @@ describe('contexto visual del cronómetro vivo', () => {
     expect(shown?.color).toBe('#FF8800')
   })
 
+  it('en superserie el contador se lee "Ronda n de N" (countKind: ronda)', async () => {
+    // El mismo par `setIndex`/`setTotal` cuenta RONDAS cuando el descanso lo dispara una superserie
+    // (ahí `payload.setNumber` es la ronda cerrada): "Serie n de N" sería una lectura falsa.
+    setRestLiveSnapshot({
+      ...snapshotEndingAt(NOW + 60_000),
+      context: { nextLabel: 'Remo con barra', setIndex: 2, setTotal: 4, countKind: 'ronda' },
+    })
+    await handleRestNotificationEvent(pressEvent(REST_ACTION_PLUS15))
+
+    expect(lastLiveTimerCall()?.body).toBe('Ronda 2 de 4 · Sonará al terminar')
+  })
+
   it('un color de marca inválido cae al acento EVA en vez de tumbar la notificación', async () => {
     setRestLiveSnapshot({
       ...snapshotEndingAt(NOW + 60_000),

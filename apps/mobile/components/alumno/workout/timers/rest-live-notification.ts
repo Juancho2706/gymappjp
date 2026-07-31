@@ -67,12 +67,24 @@ export const REST_PAUSED_ACTIONS: { id: string; title: string }[] = [
  * `title`/`body` son overrides crudos por si algún consumidor necesita copys propios; lo normal es
  * pasar los campos semánticos y dejar que este módulo arme el texto.
  */
+/**
+ * Discriminador del contador que viaja en `setIndex`/`setTotal`. Vive acá (con el resto de la
+ * identidad de esta notificación) y lo re-exportan los que lo transportan (`TimerProvider`).
+ */
+export type RestCountKind = 'serie' | 'ronda'
+
 export interface RestLiveContext {
   /** Nombre del ejercicio que sigue (lo que ya viaja como `label` en `startRest`). */
   nextLabel?: string
-  /** Serie actual y total del bloque, para "Serie 2 de 4". Ambos o ninguno. */
+  /** Serie/ronda actual y total, para "Serie 2 de 4". Ambos o ninguno. */
   setIndex?: number
   setTotal?: number
+  /**
+   * QUÉ se está contando en `setIndex`/`setTotal`. Un bloque suelto cuenta SERIES; una superserie
+   * cuenta RONDAS (ahí `setIndex` es la ronda recién cerrada y "Serie n de N" sería una lectura falsa
+   * — por eso la superserie no mandaba contexto alguno hasta este corte). Default: `'serie'`.
+   */
+  countKind?: RestCountKind
   /** URL del logo del coach (branding runtime); Notifee la baja como largeIcon. */
   largeIconUrl?: string
   /** Acento de marca en hex; default = azul EVA. */
@@ -99,9 +111,10 @@ function resolveTitle(context?: RestLiveContext): string {
 function resolveBody(context?: RestLiveContext): string {
   if (context?.body) return context.body
   const hint = soundHint()
-  const { setIndex, setTotal } = context ?? {}
+  const { setIndex, setTotal, countKind } = context ?? {}
   if (typeof setIndex === 'number' && typeof setTotal === 'number' && setTotal > 0) {
-    return `Serie ${setIndex} de ${setTotal} · ${hint}`
+    const noun = countKind === 'ronda' ? 'Ronda' : 'Serie'
+    return `${noun} ${setIndex} de ${setTotal} · ${hint}`
   }
   // Copys históricos exactos cuando no hay contexto de serie.
   return isRestTimerMuted() ? 'Recupérate para la siguiente serie.' : 'Sonará al terminar.'

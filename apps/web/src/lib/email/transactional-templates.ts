@@ -212,58 +212,6 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú
     return { subject, html }
 }
 
-// ── Upgrade Required (client limit hit) ──────────────────────────────────────
-
-type UpgradeRequiredContext = {
-    coachName: string
-    brandName: string
-    currentLimit: number
-    subscriptionUrl: string
-}
-
-export function buildUpgradeRequiredEmail(ctx: UpgradeRequiredContext) {
-    const subject = `Alcanzaste el límite de ${ctx.currentLimit} alumnos — expande tu plan`
-
-    const body = `
-<p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#f59e0b;letter-spacing:0.8px;text-transform:uppercase;">Límite de alumnos alcanzado</p>
-<h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
-  ${ctx.coachName}, tu negocio está creciendo 🚀
-</h1>
-<p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-  Alcanzaste el límite de <strong>${ctx.currentLimit} alumnos</strong> de tu plan actual. Para seguir agregando clientes, pasa al siguiente nivel.
-</p>
-
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
-  <tr>
-    <td style="padding:12px 16px;background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:10px 10px 0 0;border-bottom:none;">
-      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#111827;">Starter — $19.990/mes</p>
-      <p style="margin:0;font-size:13px;color:#6b7280;">Hasta 10 alumnos · Branding propio · Mensual o anual</p>
-    </td>
-  </tr>
-  <tr>
-    <td style="padding:12px 16px;background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:0 0 10px 10px;">
-      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#111827;">Pro — $29.990/mes</p>
-      <p style="margin:0;font-size:13px;color:#6b7280;">Hasta 30 alumnos · Nutrición completa · Mensual o anual</p>
-    </td>
-  </tr>
-</table>
-
-<div style="margin-bottom:20px;">
-  ${ctaButton('Ver planes y mejorar →', ctx.subscriptionUrl)}
-</div>
-
-<p style="margin:0;font-size:12px;color:#9ca3af;">
-  El cambio es inmediato. Puedes pausar o cancelar cuando quieras.
-</p>`
-
-    const html = wrapEmailLayout(body, {
-        previewText: `Llegaste al límite de ${ctx.currentLimit} alumnos en EVA. Expande tu plan en 2 minutos.`,
-        headerTitle: 'Expande tu plan — EVA',
-    })
-
-    return { subject, html }
-}
-
 // ── Existing Coach Announcement ───────────────────────────────────────────────
 
 type ExistingCoachAnnouncementContext = {

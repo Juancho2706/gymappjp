@@ -4,6 +4,7 @@ import { AnimatePresence } from 'moti'
 import { buildIntervalSequence, type IntervalConfig, type IntervalPhase } from '@eva/workout-engine'
 import { toast } from '../../../Toast'
 import { RestTimerHost, type RestInterstitialRenderer } from './RestTimerHost'
+import type { RestCountKind } from './rest-live-notification'
 import { HoldTimer } from './HoldTimer'
 import { IntervalTimer } from './IntervalTimer'
 import { StopwatchTimer } from './StopwatchTimer'
@@ -26,9 +27,17 @@ import { primeTimerAudio } from './sound'
 /**
  * `setIndex`/`setTotal` son CONTEXTO de la notificación del descanso (QA-11 fase 2: "Serie 2 de 4"
  * en la bandeja/lockscreen). Opcionales y puramente informativos — no alteran la cuenta ni la UI
- * in-app; sin ellos la notificación cae a su copy histórico.
+ * in-app; sin ellos la notificación cae a su copy histórico. `countKind` dice QUÉ se cuenta: un bloque
+ * suelto cuenta series, una superserie cuenta RONDAS ("Ronda 2 de 4").
  */
-type RestOpts = { autoStart?: boolean; label?: string; warmup?: boolean; setIndex?: number; setTotal?: number }
+type RestOpts = {
+  autoStart?: boolean
+  label?: string
+  warmup?: boolean
+  setIndex?: number
+  setTotal?: number
+  countKind?: RestCountKind
+}
 
 type ActiveTimer =
   | {
@@ -40,6 +49,7 @@ type ActiveTimer =
       warmup?: boolean
       setIndex?: number
       setTotal?: number
+      countKind?: RestCountKind
     }
   | { kind: 'hold'; nonce: number; seconds: number; label?: string }
   | { kind: 'interval'; nonce: number; phases: IntervalPhase[] }
@@ -138,6 +148,7 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
         warmup: opts?.warmup,
         setIndex: opts?.setIndex,
         setTotal: opts?.setTotal,
+        countKind: opts?.countKind,
       })
     },
     [replaceWith],
@@ -233,6 +244,7 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
                 nextLabel={active.label}
                 setIndex={active.setIndex}
                 setTotal={active.setTotal}
+                countKind={active.countKind}
                 warmup={active.warmup}
                 onClose={close}
                 registerAlarmSilencer={registerAlarmSilencer}

@@ -112,6 +112,13 @@ export interface StopwatchApi {
   toggle: () => void
   /** Reinicia a 0 y detiene. */
   reset: () => void
+  /**
+   * ADOPCIÓN EXACTA de lo transcurrido (pausa/reanudación hechas desde la notificación del
+   * lockscreen): fija el acumulador al valor CONGELADO por el handler headless y deja el reloj
+   * corriendo o detenido, sin contar el tiempo que el bloque estuvo pausado. Aditivo: `toggle`/`reset`
+   * conservan su semántica. Único consumidor: el drenaje de `use-cardio-live-timer`.
+   */
+  adopt: (elapsedSec: number, running: boolean) => void
 }
 
 /**
@@ -173,8 +180,25 @@ export function useStopwatch(autoStart = false): StopwatchApi {
     setRunning(false)
     setStarted(false)
   }, [])
+  /**
+   * Adopta un transcurrido EXACTO. Toca los refs a mano (jamás el efecto — QA4 h5: el efecto no puede
+   * depender de `elapsed`): el acumulador pasa a ser el valor adoptado y el tramo en curso arranca
+   * AHORA, así el intervalo vivo sigue calculando `accumulated + (now - start)` desde ese punto.
+   * Cuando ya venía corriendo, `setRunning(true)` no re-arma el efecto y este `startRef` es el que
+   * queda vigente; cuando venía detenido, el efecto lo re-escribe en el mismo instante (delta nulo).
+   */
+  const adopt = useCallback((elapsedSec: number, nextRunning: boolean) => {
+    const next = Math.max(0, Math.round(elapsedSec))
+    accumulatedRef.current = next
+    elapsedRef.current = next
+    startRef.current = Date.now()
+    runningRef.current = nextRunning
+    setElapsed(next)
+    setStarted(true)
+    setRunning(nextRunning)
+  }, [])
 
-  return { elapsed, running, started, toggle, reset }
+  return { elapsed, running, started, toggle, reset, adopt }
 }
 
 // ─── Runner de fases de intervalo (cardio con interval_config) ────────────────────────────────────
@@ -197,6 +221,13 @@ export interface IntervalRunnerApi {
   next: () => void
   /** Reinicia la secuencia desde la primera fase y vuelve a correr (QA5 h3). */
   restart: () => void
+  /**
+   * ADOPCIÓN EXACTA del restante de la fase EN CURSO (pausa/reanudación hechas desde la notificación
+   * del lockscreen): fija `remaining` y re-ancla el fin absoluto de ESA fase, sin mover `phaseIndex`
+   * ni disparar `onPhaseChange`/`onFinish`. Aditivo: `toggle`/`skip`/`next`/`restart` no cambian.
+   * Único consumidor: el drenaje de `use-cardio-live-timer`.
+   */
+  adoptRemaining: (seconds: number, running: boolean) => void
 }
 
 /**
@@ -297,9 +328,26 @@ export function useIntervalRunner(
     setStarted(true)
     setRunning(true)
   }, [phases])
+  /**
+   * Adopta un restante EXACTO en la fase actual. El fin absoluto se re-ancla ACÁ y no en el efecto:
+   * el efecto sólo lo crea cuando está vacío (`if (!endRef.current)`), así que dejarlo escrito es
+   * justamente lo que impide que el tiempo pausado desde el lockscreen se cuente como corrido.
+   * Terminado o en una fase por DISTANCIA no hay cuenta que adoptar (ese tramo lo cierra el alumno).
+   */
+  const adoptRemaining = useCallback(
+    (seconds: number, nextRunning: boolean) => {
+      if (finished || isManual) return
+      const next = Math.max(0, Math.round(seconds))
+      endRef.current = nextRunning && next > 0 ? Date.now() + next * 1000 : null
+      setRemaining(next)
+      setStarted(true)
+      setRunning(nextRunning)
+    },
+    [finished, isManual],
+  )
 
   const phase = phases[phaseIndex] ?? null
   // Fase manual ⇒ progreso 0 (anillo lleno y estático: no hay cuenta que drenar).
   const phaseProgress = !isManual && phase && phase.durationSec > 0 ? (phase.durationSec - remaining) / phase.durationSec : 0
-  return { phaseIndex, phase, remaining, running, started, finished, isManual, phaseProgress, toggle, skip, next, restart }
+  return { phaseIndex, phase, remaining, running, started, finished, isManual, phaseProgress, toggle, skip, next, restart, adoptRemaining }
 }
