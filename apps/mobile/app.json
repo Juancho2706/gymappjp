@@ -20,8 +20,8 @@
         "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento",
         "NSFaceIDUsageDescription": "Usá Face ID para entrar a EVA de forma segura.",
         "NSBluetoothAlwaysUsageDescription": "EVA usa Bluetooth para conectar tu sensor de frecuencia cardiaca (cinta o reloj) durante el cardio.",
-        "NSHealthShareUsageDescription": "EVA lee tus pasos y sueño desde Salud para autocompletar tus hábitos del día.",
-        "NSHealthUpdateUsageDescription": "EVA no escribe datos en Salud; solo lee pasos y sueño con tu permiso.",
+        "NSHealthShareUsageDescription": "EVA lee tus pasos, sueño y entrenamientos (frecuencia cardiaca, distancia, calorías) desde Salud, solo con tu permiso.",
+        "NSHealthUpdateUsageDescription": "EVA no escribe datos en Salud; solo los lee con tu permiso.",
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
@@ -46,7 +46,11 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.health.READ_STEPS",
-        "android.permission.health.READ_SLEEP"
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
       ],
       "intentFilters": [
         {
@@ -145,11 +149,11 @@
         }
       ],
       [
-        "react-native-health",
+        "@kingstinct/react-native-healthkit",
         {
-          "isClinicalDataEnabled": false,
-          "healthSharePermission": "EVA lee tus pasos y sueño desde Salud para autocompletar tus hábitos del día.",
-          "healthUpdatePermission": "EVA no escribe datos en Salud; solo lee pasos y sueño con tu permiso."
+          "background": false,
+          "NSHealthShareUsageDescription": "EVA lee tus pasos, sueño y entrenamientos (frecuencia cardiaca, distancia, calorías) desde Salud, solo con tu permiso.",
+          "NSHealthUpdateUsageDescription": "EVA no escribe datos en Salud; solo los lee con tu permiso."
         }
       ],
       "react-native-health-connect",

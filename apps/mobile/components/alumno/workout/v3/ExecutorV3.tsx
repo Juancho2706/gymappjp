@@ -17,6 +17,7 @@ import {
   buildStepModel,
   cardioHasDistanceAxis,
   countLoggedSetsByBlock,
+  derivedPaceSecPerKm,
   effectiveExerciseType,
   firstIncompleteInRounds,
   firstIncompleteStepIndex,
@@ -35,6 +36,14 @@ import {
   type TypedKeypadContext,
   type WorkoutCelebrationEvent,
 } from '@eva/workout-engine'
+import {
+  downsampleSeries,
+  hubImportPatch,
+  hubZoneSec,
+  type HrMetadataV1,
+  type HrZone,
+  type HubWorkout,
+} from '@eva/cardio'
 import { useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
 import { hexToRgba } from '../../../../lib/theme'
@@ -62,6 +71,8 @@ import { StepperExecution, type StepperStepView } from '../StepperExecution'
 import { KeypadHost, type KeypadTarget } from '../KeypadHost'
 import { TechniqueSheet } from '../TechniqueSheet'
 import { SessionCompleteV3, type FinalSyncState } from './SessionCompleteV3'
+import { ImportWatchSheet, type WatchImportTarget } from './ImportWatchSheet'
+import { isHealthAvailable } from '../../../../lib/health-aggregators'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
@@ -231,6 +242,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, ActiveSub>>({})
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
+  // Import del reloj (specs/cardio-conectado F2): hoja del resumen + ventana REAL de la sesión, congelada
+  // al finalizar (el matching con el hub exige ≥50% de solape con ella).
+  const [watchImportOpen, setWatchImportOpen] = useState(false)
+  const [sessionWindow, setSessionWindow] = useState<{ startMs: number; endMs: number } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false) // Vista "Ver todo" (E2.6) — capa sobre el stepper.
   // QA4: el banner contextual ("Recuperando…" / "Editando registros…") se puede descartar con una X
@@ -731,6 +746,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
 
   const finalizeSession = useCallback(async () => {
     setFinishedElapsed(elapsedSec)
+    // Ventana de la sesión para el import del reloj: el cronómetro del motor ya cuenta desde el
+    // `startedAt` REAL (snapshot incluido), así que el inicio se deriva de él en vez de inventar una hora.
+    const endMs = Date.now()
+    setSessionWindow({ startMs: endMs - Math.max(0, elapsedSec) * 1000, endMs })
     await finishSession()
     // Épica de FIN DE SESIÓN (E4.1): emite el evento por el host (hoy = haptic épico; el overlay final
     // de coreografía llega en Wave 2/E4.3). El hook ya deja el evento cableado para esa pantalla.
@@ -869,6 +888,121 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     [lastCheckInDate, todayIso],
   )
   const checkInLastRelative = checkInReminder?.lastDay ? formatRelativeDate(checkInReminder.lastDay, todayIso) : null
+
+  // ── Import del reloj (specs/cardio-conectado · F2) ──
+  // La card del resumen SOLO existe si: (a) esta build tiene agregador de salud (guard dinámico, false en
+  // Expo Go/web), (b) la sesión registró series de cardio y (c) a esas series les falta algún eje que el
+  // reloj podría completar. Sin candidatos no se pinta nada — jamás un botón muerto.
+  const healthAvailable = useMemo(() => isHealthAvailable(), [])
+  const watchImportTargets = useMemo<WatchImportTarget[]>(() => {
+    if (!healthAvailable) return []
+    const out: WatchImportTarget[] = []
+    for (const b of blocks) {
+      const ex = resolveExercise(b)
+      if (!ex || effectiveExerciseType(b, ex) !== 'cardio') continue
+      // La distancia solo cuenta como "eje vacío" si la modalidad la captura (la elíptica no la pide).
+      const wantsDistance = cardioHasDistanceAxis(ex.cardio_modality ?? null)
+      const pending = sessionLogs
+        .filter((l) => l.block_id === b.id)
+        .sort((a, z) => a.set_number - z.set_number)
+        .find(
+          (l) =>
+            !(l.actual_duration_sec != null && l.actual_duration_sec > 0) ||
+            !(l.actual_avg_hr != null && l.actual_avg_hr > 0) ||
+            (wantsDistance && !(l.actual_distance_m != null && l.actual_distance_m > 0)),
+        )
+      if (!pending) continue
+      out.push({
+        blockId: b.id,
+        setNumber: pending.set_number,
+        name: ex.name,
+        detail: b.sets > 1 ? `Serie ${pending.set_number} de ${b.sets}` : null,
+        hrZone: b.hr_zone != null && b.hr_zone >= 1 && b.hr_zone <= 5 ? (b.hr_zone as HrZone) : null,
+      })
+    }
+    return out
+  }, [healthAvailable, blocks, sessionLogs])
+
+  /**
+   * Aplica el workout del reloj a UNA serie de cardio. Reglas duras del SPEC, todas resueltas por el
+   * dominio puro: `hubImportPatch` solo devuelve ejes VACÍOS (jamás pisa lo tipeado) y el `metadata.hr`
+   * del stream BLE en vivo tiene precedencia (no se reemplaza con el del hub). La escritura va por el
+   * pipeline existente (`logSet`: optimista + select-then-update + cola offline) — sin acceso nuevo.
+   */
+  const applyWatchImport = useCallback(
+    async (workout: HubWorkout, target: WatchImportTarget) => {
+      const block = blocks.find((b) => b.id === target.blockId)
+      const log = sessionLogs.find((l) => l.block_id === target.blockId && l.set_number === target.setNumber)
+      if (!block || !log) {
+        setWatchImportOpen(false)
+        return
+      }
+      const ex = resolveExercise(block)
+      const patch = hubImportPatch(workout, {
+        actual_duration_sec: log.actual_duration_sec ?? null,
+        actual_distance_m: log.actual_distance_m ?? null,
+        actual_avg_hr: log.actual_avg_hr ?? null,
+      })
+      // Modalidad sin eje de distancia: el hub puede traer metros, pero esa serie NO los captura.
+      if (!cardioHasDistanceAxis(ex?.cardio_modality ?? null)) delete patch.actual_distance_m
+
+      const existingHr = log.metadata?.hr ?? null
+      const targetZone: HrZone | null =
+        block.hr_zone != null && block.hr_zone >= 1 && block.hr_zone <= 5 ? (block.hr_zone as HrZone) : null
+      const zoneSec = hubZoneSec(workout.hrSamples, hrProfile)
+      const series = downsampleSeries(workout.hrSamples ?? [])
+      const hasSeries = series.samples.length > 0
+      const hr: HrMetadataV1 | null =
+        existingHr?.source === 'ble'
+          ? null
+          : {
+              v: 1,
+              source: 'health_import',
+              avg: workout.avgHr != null && workout.avgHr > 0 ? Math.round(workout.avgHr) : 0,
+              max: workout.maxHr != null && workout.maxHr > 0 ? Math.round(workout.maxHr) : 0,
+              duration_sec: Math.round(workout.durationSec),
+              target_zone: targetZone,
+              zone_sec: zoneSec,
+              in_target_sec: zoneSec != null && targetZone != null ? zoneSec[String(targetZone) as keyof typeof zoneSec] : null,
+              sample_period_sec: hasSeries ? series.samplePeriodSec : null,
+              samples: hasSeries ? series.samples : null,
+              ...(workout.source ? { hub_source: workout.source } : {}),
+              ...(workout.distanceM != null && workout.distanceM > 0 ? { distance_m: Math.round(workout.distanceM) } : {}),
+              ...(workout.calories != null && workout.calories > 0 ? { calories: Math.round(workout.calories) } : {}),
+            }
+      const hasPatch =
+        patch.actual_duration_sec != null || patch.actual_distance_m != null || patch.actual_avg_hr != null
+      if (!hasPatch && hr == null) {
+        setWatchImportOpen(false)
+        return
+      }
+
+      // El payload REPITE los ejes ya guardados: `logSet` escribe peso/reps/RPE/RIR siempre y el log
+      // optimista se reconstruye entero, así que mandar solo el parche borraría el resto de la pantalla.
+      const durationSec = patch.actual_duration_sec ?? log.actual_duration_sec ?? null
+      const distanceM = patch.actual_distance_m ?? log.actual_distance_m ?? null
+      const pace = derivedPaceSecPerKm(durationSec, distanceM)
+      const metadata = hr ? { ...(log.metadata ?? {}), hr } : log.metadata ?? null
+      await logSet({
+        blockId: target.blockId,
+        setNumber: target.setNumber,
+        weightKg: log.weight_kg ?? null,
+        repsDone: log.reps_done ?? null,
+        rpe: log.rpe ?? null,
+        rir: log.rir ?? null,
+        note: log.note ?? null,
+        actualDurationSec: durationSec,
+        actualDistanceM: distanceM,
+        actualHoldSec: log.actual_hold_sec ?? null,
+        actualAvgHr: patch.actual_avg_hr ?? log.actual_avg_hr ?? null,
+        ...(pace != null ? { actualPaceSecPerKm: pace } : {}),
+        ...(metadata != null ? { metadata } : {}),
+      })
+      void haptics.success()
+      setWatchImportOpen(false)
+    },
+    [blocks, sessionLogs, hrProfile, logSet],
+  )
 
   // ── Racha semanal (E4.4) ── Lectura acotada a la semana (best-effort, gateada por clientId) que espeja
   // la atribucion del dashboard (home.tsx momentumDays). FUENTE: `workout_plans` del alumno (dias con plan
@@ -1683,6 +1817,26 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         weeklyStreak={weeklyStreak}
         checkInReminder={checkInReminder}
         checkInLastRelative={checkInLastRelative}
+        // Import del reloj (cardio-conectado F2): la card solo aparece con agregador disponible, cardio
+        // en la sesión y ejes vacíos. La hoja viaja como slot para vivir DENTRO del Modal del resumen.
+        onImportFromWatch={
+          sessionWindow != null && watchImportTargets.length > 0 ? () => setWatchImportOpen(true) : null
+        }
+        watchImportSlot={
+          sessionWindow != null && watchImportTargets.length > 0 ? (
+            <ImportWatchSheet
+              open={watchImportOpen}
+              onClose={() => setWatchImportOpen(false)}
+              exec={exec}
+              reducedMotion={!!motion.reduced}
+              sessionStartMs={sessionWindow.startMs}
+              sessionEndMs={sessionWindow.endMs}
+              targets={watchImportTargets}
+              hrProfile={hrProfile}
+              onApply={applyWatchImport}
+            />
+          ) : null
+        }
         syncState={syncState}
         onCheckIn={() => router.replace('/alumno/check-in')}
         onDone={() => router.replace('/alumno/home')}

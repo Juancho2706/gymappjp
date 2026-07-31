@@ -13,6 +13,7 @@ import {
   buildTypedPayload,
   int,
 } from '@eva/workout-engine'
+import type { HrMetadataV1 } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { hexToRgba } from '../../../lib/theme'
 import { haptics } from '../../../lib/haptics'
@@ -650,6 +651,7 @@ export function ActiveSetRow({
   header,
   isActive = true,
   isEditing = false,
+  getHrMetadata,
   onDraftChange,
   onCommit,
   onLongPressValue,
@@ -708,6 +710,15 @@ export function ActiveSetRow({
    * representa una edición, en vez de hardcodear 'Listo'.
    */
   isEditing?: boolean
+  /**
+   * Resumen + curva de FC del bloque CARDIO al confirmar la serie (specs/cardio-conectado F1). La fila
+   * no acumula nada: solo PIDE el resumen en el instante del commit (`CardioScreenV3` lo arma con el
+   * reducer puro `zone-session` alimentado por el stream BLE) y lo pasa como `ctx.hrMetadata` a
+   * `buildTypedPayload` → `workout_logs.metadata.hr`. ADITIVO: sin la prop (o devolviendo null) el ctx
+   * NO gana la key y el payload es byte-idéntico al previo. Se ignora fuera de cardio (lo filtra el
+   * propio motor).
+   */
+  getHrMetadata?: () => HrMetadataV1 | null
   /**
    * Header de objetivo repetido DENTRO del teclado (DB-5: "SIEMPRE visible"; mirror web
    * `NumericKeypadSheet.tsx:204-228`). El scrim atenúa el objetivo/"Última vez" de la card mientras el
@@ -829,8 +840,16 @@ export function ActiveSetRow({
   }
 
   const commit = () => {
+    // FC del bloque cardio: se pide EN el commit (el acumulador vive en la pantalla, no acá) y solo entra
+    // al ctx si hay datos reales — sin la key el payload es byte-idéntico al de siempre.
+    const hrMetadata = typedMode === 'cardio' ? getHrMetadata?.() ?? null : null
     const payload = typedMode
-      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, { sideMode, distanceUnit, cardioModality })
+      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, {
+          sideMode,
+          distanceUnit,
+          cardioModality,
+          ...(hrMetadata ? { hrMetadata } : {}),
+        })
       : buildStrengthPayload(valuesRef.current, blockId, setNumber)
     onCommit(payload)
   }

@@ -50,6 +50,10 @@ export interface BleHrState {
   bpm: number | null
   /** Promedio de la sesion de stream (para auto-rellenar `actual_avg_hr` al cerrar el bloque). */
   avgHr: number | null
+  /** Maximo de la sesion de stream (HUD en vivo + `metadata.hr.max`). Mismo ciclo de vida que `avgHr`. */
+  maxHr: number | null
+  /** epoch ms de la ultima muestra valida; permite al HUD medir el dwell real entre notificaciones. */
+  lastSampleAtMs: number | null
   sampleCount: number
   error: string | null
 }
@@ -145,11 +149,14 @@ class BleHrController {
     connectedName: null,
     bpm: null,
     avgHr: null,
+    maxHr: null,
+    lastSampleAtMs: null,
     sampleCount: 0,
     error: null,
   }
   private sum = 0
   private count = 0
+  private max = 0
   private device: MinimalDevice | null = null
   private monitorSub: { remove: () => void } | null = null
   private disconnectSub: { remove: () => void } | null = null
@@ -242,11 +249,12 @@ class BleHrController {
   private async doConnect(id: string): Promise<void> {
     const manager = loadManager()
     if (!manager) return
-    // Reinicia el promedio de la sesion en cada conexion fresca (no en reconexion silenciosa).
+    // Reinicia los acumulados de la sesion en cada conexion fresca (no en reconexion silenciosa).
     if (this.reconnectAttempts === 0) {
       this.sum = 0
       this.count = 0
-      this.set({ bpm: null, avgHr: null, sampleCount: 0 })
+      this.max = 0
+      this.set({ bpm: null, avgHr: null, maxHr: null, lastSampleAtMs: null, sampleCount: 0 })
     }
     try {
       const device = await manager.connectToDevice(id)
@@ -266,11 +274,14 @@ class BleHrController {
           if (bpm == null || bpm <= 0) return
           this.sum += bpm
           this.count += 1
+          if (bpm > this.max) this.max = bpm
           this.reconnectAttempts = 0 // stream sano → resetea contador de reintentos
           this.set({
             status: 'streaming',
             bpm,
             avgHr: Math.round(this.sum / this.count),
+            maxHr: this.max,
+            lastSampleAtMs: Date.now(),
             sampleCount: this.count,
           })
         },

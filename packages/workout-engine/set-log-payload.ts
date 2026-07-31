@@ -12,8 +12,9 @@
  * Subido a `@eva/workout-engine` en E0.3 (specs/executor-v3): antes vivía en
  * `apps/mobile/.../set-log-payload.ts`. 100% puro → import relativo del tipo hermano.
  */
+import type { HrMetadataV1 } from '@eva/cardio'
 import type { OptimisticLogPayload } from './session-logs.optimistic'
-import type { WorkoutLogSideMetadata } from './session-logs.reconcile'
+import type { WorkoutLogMetadata, WorkoutLogSideMetadata } from './session-logs.reconcile'
 import {
   distanceCaptureToMeters,
   typedKeypadContext,
@@ -136,18 +137,54 @@ export function typedLogValues(
   return metadata === undefined ? base : { ...base, metadata }
 }
 
+/**
+ * Contexto del PAYLOAD tipado: el del teclado (`TypedKeypadContext`) + lo que solo existe al cerrar
+ * la serie. Superset ⇒ todo caller histórico que pasa un `TypedKeypadContext` (o el `sideMode` suelto)
+ * sigue compilando y produciendo lo mismo.
+ */
+export interface TypedPayloadContext extends TypedKeypadContext {
+  /**
+   * Resumen + curva de FC del bloque cardio (specs/cardio-conectado): lo arma `zoneSessionSummary`
+   * de `@eva/cardio` con el stream BLE de la ventana, o el import del reloj. Solo se persiste en
+   * modo `cardio`; SIN esta key el payload es byte-idéntico al previo.
+   */
+  hrMetadata?: HrMetadataV1 | null
+}
+
+/** `hrMetadata` del contexto (ausente con el 3er argumento histórico `sideMode` suelto). */
+function contextHrMetadata(ctx?: string | null | TypedPayloadContext): HrMetadataV1 | null {
+  if (ctx == null || typeof ctx === 'string') return null
+  return ctx.hrMetadata ?? null
+}
+
+/**
+ * `workout_logs.metadata` (jsonb) de la serie: hold por lado (movilidad `per_side`) y/o el resumen de
+ * FC bajo la clave `hr`. Devuelve `undefined` cuando no hay ninguno de los dos ⇒ el payload NO gana
+ * la key `metadata` (paridad byte-idéntica con lo previo).
+ */
+function buildLogMetadata(
+  side: WorkoutLogSideMetadata | null | undefined,
+  hr: HrMetadataV1 | null,
+): WorkoutLogMetadata | null | undefined {
+  if (hr == null) return side
+  return { ...(side ?? {}), hr }
+}
+
 /** Payload de una serie TIPADA (cardio/movilidad/roller): peso/rir van null, ejes en `actual_*`. */
 export function buildTypedPayload(
   mode: TypedKeypadMode,
   values: Record<string, string>,
   blockId: string,
   setNumber: number,
-  ctx?: string | null | TypedKeypadContext,
+  ctx?: string | null | TypedPayloadContext,
 ): OptimisticLogPayload {
   const v = typedLogValues(mode, values, ctx)
   // Pace REAL derivado (RF5): solo cuando la ronda quedó con tiempo Y distancia y el resultado cae en
   // el rango del schema. Sin ambos ejes el payload NO gana la key (paridad byte-idéntica con lo previo).
   const pace = derivedPaceSecPerKm(v.actualDurationSec, v.actualDistanceM)
+  // FC del bloque: SOLO cardio. Un `hrMetadata` que llegue en movilidad/roller se ignora — esos modos
+  // no tienen stream ni import, y escribirlo ensuciaría su `metadata` (donde vive el hold por lado).
+  const metadata = buildLogMetadata(v.metadata, mode === 'cardio' ? contextHrMetadata(ctx) : null)
   return {
     blockId,
     setNumber,
@@ -165,9 +202,10 @@ export function buildTypedPayload(
     actualHoldSec: v.actualHoldSec,
     actualAvgHr: v.actualAvgHr,
     ...(pace != null ? { actualPaceSecPerKm: pace } : {}),
-    // Solo el flujo per_side define `v.metadata` ⇒ solo entonces el payload gana la key `metadata`
-    // (los 30 asserts de paridad, sin sideMode, siguen viendo el objeto SIN `metadata`).
-    ...(v.metadata !== undefined ? { metadata: v.metadata } : {}),
+    // Solo el flujo per_side (o un cardio con `hrMetadata`) define `metadata` ⇒ solo entonces el
+    // payload gana la key (los 30 asserts de paridad, sin sideMode ni FC, siguen viendo el objeto
+    // SIN `metadata`).
+    ...(metadata !== undefined ? { metadata } : {}),
   }
 }
 

@@ -1,4 +1,4 @@
-import type { ReconciledSessionLog, WorkoutLogSideMetadata } from './session-logs.reconcile'
+import type { ReconciledSessionLog, WorkoutLogMetadata } from './session-logs.reconcile'
 
 /**
  * Payload de "serie recién confirmada localmente" que el hijo (`LogSetForm` / `TypedLogSetRow`)
@@ -24,9 +24,10 @@ export type OptimisticLogPayload = {
     // ronda de cardio que registró ambos ejes. No se refleja en el log optimista (ninguna pantalla
     // lo muestra todavía); viaja al server para que el dato quede en la columna.
     actualPaceSecPerKm?: number | null
-    // Hold POR LADO (E0.5): metadata jsonb {left_sec, right_sec}. Opcional — el camino strength/tipado
-    // bilateral no lo manda; solo el flujo per_side. Debe PRESERVARSE (mismo bug forense del hold).
-    metadata?: WorkoutLogSideMetadata | null
+    // `workout_logs.metadata` jsonb: hold por lado {left_sec, right_sec} (E0.5) y/o el resumen de FC
+    // del bloque cardio bajo `hr` (cardio-conectado). Opcional — el camino strength/tipado bilateral
+    // no lo manda. Debe PRESERVARSE (mismo bug forense del hold).
+    metadata?: WorkoutLogMetadata | null
 }
 
 /**
