@@ -94,7 +94,7 @@ import { EXERCISE_TYPE_META } from '@/lib/workout-exercise-type'
 import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
 import { formatPace } from '@eva/cardio'
-import { extractYoutubeVideoId } from '@/lib/youtube'
+import { extractYoutubeVideoId, isYoutubeMediaUrl } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 import { TargetDateProvider } from './target-date-context'
@@ -2863,7 +2863,7 @@ export function WorkoutExecutionClient({
                         {(() => {
                             const exercise = selectedExercise
                             if (!exercise) return null
-                            const isYouTube = exercise.video_url?.includes('youtube.com') || exercise.video_url?.includes('youtu.be');
+                            const isYouTube = isYoutubeMediaUrl(exercise.video_url);
                             
                             const ytId = exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null;
                             
@@ -2895,7 +2895,7 @@ export function WorkoutExecutionClient({
                                 );
                             }
                             
-                            if (exercise.video_url) {
+                            if (exercise.video_url && !isYouTube) {
                                 const urlLower = exercise.video_url.toLowerCase();
                                 const isMp4 = urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.webm') || (urlLower.includes('supabase.co/storage') && !urlLower.includes('.gif') && !urlLower.includes('.jpg') && !urlLower.includes('.png'));
                                 

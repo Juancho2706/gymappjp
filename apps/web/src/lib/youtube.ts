@@ -28,6 +28,13 @@ export function isYoutubeUrl(url: string): boolean {
   return YOUTUBE_HOSTS.has(parsed.hostname.toLowerCase())
 }
 
+/** Detector único para clasificar media de ejercicios, incluyendo embeds de youtube-nocookie.com. */
+export function isYoutubeMediaUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  if (isYoutubeUrl(url)) return true
+  return /(^|\/\/|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)([/:?#]|$)/i.test(url.trim())
+}
+
 export function extractYoutubeVideoId(url: string): string | null {
   const parsed = parseUrlOrNull(url)
   if (!parsed) return null
