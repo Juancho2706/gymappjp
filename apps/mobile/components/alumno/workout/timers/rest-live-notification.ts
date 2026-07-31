@@ -3,202 +3,170 @@
  * una notificación ONGOING con cuenta regresiva que corre nativamente como el Temporizador
  * del sistema ("39:57 [pausa] [x]"), incluso con la pantalla apagada y el JS congelado.
  *
- * ── POR QUÉ NO expo-notifications ──────────────────────────────────────────────
- * `expo-notifications` NO expone chronometer/ongoing con cuenta regresiva viva: sólo
- * programa una notificación que CAE en un instante. Actualizar un contador "cada segundo"
- * desde JS muere al apagar la pantalla (el SO congela el timer JS en background). Por eso
- * el "¡Descanso listo!" final SIGUE en `rest-notification.ts` (expo), y SOLO el contador
- * vivo se delega a Notifee.
+ * Este archivo quedó como wrapper FINO sobre `live-timer-notification.ts`, que es donde vive el
+ * mecanismo genérico (require guardado de `react-native-notify-kit`/`@notifee/react-native`,
+ * canales, chronometer nativo, NO-OP seguro sin lib nativa) y la justificación completa de por qué
+ * no se usa `expo-notifications` para esto y por qué el fork mantenido en vez del notifee
+ * archivado. Acá sólo queda la IDENTIDAD del descanso: id, canal, copys, color de marca, los ids
+ * de sus acciones y el estado "en pausa".
  *
- * ── VÍA CORRECTA (investigada 2026) ────────────────────────────────────────────
- * Notifee soporta en Android `android.showChronometer: true` + `chronometerDirection: 'down'`
- * + `timestamp` = instante de fin: la vista del chronometer la dibuja y avanza el PROPIO
- * Android (SystemClock), así que la cuenta regresiva sigue viva sin foreground service y sin
- * que el JS tickee. `ongoing: true` la hace no-descartable (como el timer del sistema).
- * `timeoutAfter` = ms restantes → el SO la retira solo al llegar al fin aunque el JS esté
- * congelado (entonces asoma el "¡Descanso listo!" programado en expo). Coexiste con
- * expo-notifications: canal e id propios, sin pisarse.
+ * El "¡Descanso listo!" final SIGUE en `rest-notification.ts` (expo-notifications): esto es sólo
+ * el contador vivo. `timeoutAfter` hace que el SO retire este contador al llegar al fin aunque el
+ * JS esté congelado, y entonces asoma esa alerta programada.
  *
- * ── DECISIÓN DE LIBRERÍA (justificada) ─────────────────────────────────────────
- * `@notifee/react-native` fue ARCHIVADO por Invertase (7-abr-2026, último release v9.1.8
- * dic-2024) y su soporte de New Architecture es dudoso. Esta app corre `newArchEnabled: true`
- * + RN 0.81.5 + Expo SDK 54, donde el fork MANTENIDO y API-compatible es
- * `react-native-notify-kit` (TurboModules-only, config plugin de Expo, export default `notifee`
- * idéntico). Este módulo hace `require` GUARDADO probando PRIMERO `react-native-notify-kit` y
- * cayendo a `@notifee/react-native`, así funciona con cualquiera que el build EAS termine
- * enlazando. Sin ninguno de los dos (builds actuales), TODO acá es NO-OP seguro (patrón de
- * `sound.ts`/`VideoPlayer.tsx`: sin import estático, no rompe tsc ni crashea).
+ * ── BOTONES DE ACCIÓN (ronda "notificación operable", QA-11 · fase 2) ───────────
+ * Los ids de acción viven ACÁ (no en `rest-remote-commands.ts`) a propósito: son parte de la
+ * identidad de ESTA notificación, y ponerlos acá deja la dependencia en UN solo sentido
+ * (`rest-remote-commands` → `rest-live-notification` → `live-timer-notification`), sin ciclo.
+ * Quien traduce un press en un comando para el motor React es `rest-remote-commands.ts`.
  *
- * ⚠️ REQUIERE UN BUILD EAS NUEVO: es una dependencia NATIVA. `react-native-notify-kit` YA está en
- * `package.json` (^10.4.0 → 10.4.8 en el lockfile raíz) y su plugin en `app.json`; sólo falta que un
- * build EAS enlace el módulo nativo para que el cronómetro vivo aparezca (el resto del descanso funciona
- * igual sin él). Hasta ese build, el `require` guardado deja todo en NO-OP seguro.
- *
- * ── 7A · ANDROID 16 LIVE UPDATES / ProgressStyle (evaluación) — DIFERIDO ─────────
- * Android 16 (API 36) agrega `Notification.ProgressStyle` + Live Updates (notificaciones promovidas
- * ongoing con barra de progreso segmentada, ideal para un temporizador). `react-native-notify-kit@10.4.8`
- * (instalado) expone `chronometer` (lo que usamos abajo) pero NO expone `ProgressStyle`/Live Updates: su
- * `AndroidNotification` no tiene campos de progreso promovido (verificado en sus tipos, sin `progressStyle`
- * ni `liveUpdate`). Implementarlo exigiría una versión futura de la lib que mapee la API 36 (o un módulo
- * nativo custom). Se DIFIERE: el `chronometer` actual ya da la cuenta regresiva viva en el lockscreen con
- * fallback correcto a APIs menores; el upgrade a ProgressStyle espera a que notify-kit lo soporte. No se
- * instala nada nuevo para esto (fuera del alcance de esta unidad).
+ * ⚠️ REQUIERE UN BUILD EAS NUEVO (dependencia nativa): hasta entonces todo acá es NO-OP seguro.
  */
-import { Platform } from 'react-native'
+import { showLiveTimer, stopLiveTimer } from './live-timer-notification'
 import { isRestTimerMuted } from './rest-timer-preferences'
 
-/** Superficie mínima de Notifee que usamos (tipada acá para no exigir sus tipos pre-install). */
-interface NotifeeAndroidNotification {
-  channelId: string
-  ongoing?: boolean
-  onlyAlertOnce?: boolean
-  autoCancel?: boolean
-  showChronometer?: boolean
-  chronometerDirection?: 'up' | 'down'
-  timestamp?: number
-  timeoutAfter?: number
-  smallIcon?: string
-  color?: string
-  pressAction?: { id: string }
-  importance?: number
-  visibility?: number
-}
-interface NotifeeLike {
-  createChannel: (channel: {
-    id: string
-    name: string
-    importance?: number
-    vibration?: boolean
-    visibility?: number
-  }) => Promise<string>
-  displayNotification: (notification: {
-    id?: string
-    title?: string
-    body?: string
-    android?: NotifeeAndroidNotification
-  }) => Promise<string>
-  cancelNotification: (id: string) => Promise<void>
-}
-
-// require GUARDADO: fork mantenido primero, notifee archivado como fallback. Sin ninguno → null.
-let notifee: NotifeeLike | null = null
-// AndroidImportance.LOW (canal silencioso para el ongoing). Notifee lo exporta como named;
-// LOW = 2 en su enum → fallback numérico si el módulo no está.
-let IMPORTANCE_LOW = 2
-// AndroidVisibility.PUBLIC (visible completa en lockscreen, incluso con pantalla bloqueada).
-// PUBLIC = 1 en el enum de Notifee/notify-kit → fallback numérico si el módulo no está.
-let VISIBILITY_PUBLIC = 1
-try {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  const mod = require('react-native-notify-kit') as {
-    default?: NotifeeLike
-    AndroidImportance?: { LOW?: number }
-    AndroidVisibility?: { PUBLIC?: number }
-  }
-  notifee = (mod.default ?? (mod as unknown as NotifeeLike)) || null
-  if (typeof mod.AndroidImportance?.LOW === 'number') IMPORTANCE_LOW = mod.AndroidImportance.LOW
-  if (typeof mod.AndroidVisibility?.PUBLIC === 'number') VISIBILITY_PUBLIC = mod.AndroidVisibility.PUBLIC
-} catch {
-  try {
-    const mod = require('@notifee/react-native') as {
-      default?: NotifeeLike
-      AndroidImportance?: { LOW?: number }
-      AndroidVisibility?: { PUBLIC?: number }
-    }
-    notifee = (mod.default ?? (mod as unknown as NotifeeLike)) || null
-    if (typeof mod.AndroidImportance?.LOW === 'number') IMPORTANCE_LOW = mod.AndroidImportance.LOW
-    if (typeof mod.AndroidVisibility?.PUBLIC === 'number') VISIBILITY_PUBLIC = mod.AndroidVisibility.PUBLIC
-  } catch {
-    notifee = null
-  }
-  /* eslint-enable @typescript-eslint/no-require-imports */
-}
-
-const LIVE_NOTIF_ID = 'eva-rest-live'
+export const REST_LIVE_NOTIF_ID = 'eva-rest-live'
 const LIVE_CHANNEL_ID = 'rest-live'
+const LIVE_CHANNEL_NAME = 'Descanso en curso'
 // EVA DS brand accent (sport-500 = rgb 38 128 255), espeja el lightColor de `setupAndroidChannel`.
 const BRAND_COLOR = '#2680FF'
 
-let channelReady: Promise<void> | null = null
-function ensureChannel(): Promise<void> {
-  if (!notifee) return Promise.resolve()
-  if (!channelReady) {
-    channelReady = notifee
-      .createChannel({
-        id: LIVE_CHANNEL_ID,
-        name: 'Descanso en curso',
-        // LOW = sin heads-up ni sonido: es un contador de estado, no una alerta. La alerta
-        // (beep/háptica) la cubren la barra in-app y el "¡Descanso listo!" final.
-        importance: IMPORTANCE_LOW,
-        vibration: false,
-        // Visible completa en lockscreen (no oculta como notif "sensible"). Nota: canales ya
-        // creados en dispositivos existentes NO se actualizan solos — esto aplica en
-        // instalaciones frescas o tras limpiar datos de la app; la visibility a nivel
-        // notificación (abajo, en displayNotification) cubre el resto de los casos.
-        visibility: VISIBILITY_PUBLIC,
-      })
-      .then(() => undefined)
-      .catch(() => {
-        channelReady = null // reintentar la próxima vez si falló
-      })
+/**
+ * Prefijo de TODOS los ids de acción del descanso: por él enruta el registro compartido de eventos
+ * (`notification-events.ts`), que es un handler ÚNICO para toda la app y separa `rest-*` de `cardio-*`.
+ */
+export const REST_ACTION_PREFIX = 'rest-'
+
+/** Ids de las acciones de la notificación del descanso (viajan en `detail.pressAction.id`). */
+export const REST_ACTION_PAUSE = 'rest-pause'
+export const REST_ACTION_PLUS15 = 'rest-plus15'
+export const REST_ACTION_SKIP = 'rest-skip'
+export const REST_ACTION_RESUME = 'rest-resume'
+
+/** Segundos que suma la acción "+15 s" (misma unidad que el botón in-app). */
+export const REST_PLUS_SECONDS = 15
+
+/** Acciones del descanso CORRIENDO. */
+export const REST_RUNNING_ACTIONS: { id: string; title: string }[] = [
+  { id: REST_ACTION_PAUSE, title: 'Pausar' },
+  { id: REST_ACTION_PLUS15, title: '+15 s' },
+  { id: REST_ACTION_SKIP, title: 'Saltar' },
+]
+
+/** Acciones del descanso EN PAUSA (no tiene sentido "+15 s" sobre un reloj detenido). */
+export const REST_PAUSED_ACTIONS: { id: string; title: string }[] = [
+  { id: REST_ACTION_RESUME, title: 'Reanudar' },
+  { id: REST_ACTION_SKIP, title: 'Saltar' },
+]
+
+/**
+ * Contexto VISUAL del descanso (paridad con el mock aprobado por el CEO: la notificación dice qué
+ * viene y en qué serie vas, con el logo del coach como ícono grande). Todo opcional: sin contexto
+ * la notificación conserva EXACTAMENTE los copys históricos ("Descanso en curso").
+ *
+ * `title`/`body` son overrides crudos por si algún consumidor necesita copys propios; lo normal es
+ * pasar los campos semánticos y dejar que este módulo arme el texto.
+ */
+export interface RestLiveContext {
+  /** Nombre del ejercicio que sigue (lo que ya viaja como `label` en `startRest`). */
+  nextLabel?: string
+  /** Serie actual y total del bloque, para "Serie 2 de 4". Ambos o ninguno. */
+  setIndex?: number
+  setTotal?: number
+  /** URL del logo del coach (branding runtime); Notifee la baja como largeIcon. */
+  largeIconUrl?: string
+  /** Acento de marca en hex; default = azul EVA. */
+  color?: string
+  /** Override crudo del título. */
+  title?: string
+  /** Override crudo del cuerpo. */
+  body?: string
+  /** Override de las acciones (default: `REST_RUNNING_ACTIONS`). */
+  actions?: { id: string; title: string }[]
+}
+
+/** Coletilla de audio: espeja el mute global del cronómetro. */
+function soundHint(): string {
+  return isRestTimerMuted() ? 'Sin sonido' : 'Sonará al terminar'
+}
+
+function resolveTitle(context?: RestLiveContext): string {
+  if (context?.title) return context.title
+  if (context?.nextLabel) return `Descanso · sigue ${context.nextLabel}`
+  return LIVE_CHANNEL_NAME
+}
+
+function resolveBody(context?: RestLiveContext): string {
+  if (context?.body) return context.body
+  const hint = soundHint()
+  const { setIndex, setTotal } = context ?? {}
+  if (typeof setIndex === 'number' && typeof setTotal === 'number' && setTotal > 0) {
+    return `Serie ${setIndex} de ${setTotal} · ${hint}`
   }
-  return channelReady
+  // Copys históricos exactos cuando no hay contexto de serie.
+  return isRestTimerMuted() ? 'Recupérate para la siguiente serie.' : 'Sonará al terminar.'
+}
+
+/**
+ * Notifee VALIDA el color y rechaza el display si no es un hex `#RRGGBB`/`#AARRGGBB`. El acento de
+ * marca viene del branding del coach (dato de DB), así que se filtra acá: cualquier cosa que no sea
+ * hex cae al azul EVA en vez de tumbar la notificación entera.
+ */
+function resolveColor(color?: string): string {
+  return color && /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color) ? color : BRAND_COLOR
+}
+
+function formatClock(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds))
+  const mm = Math.floor(safe / 60)
+  const ss = safe % 60
+  return `${mm}:${String(ss).padStart(2, '0')}`
 }
 
 /**
  * Muestra/actualiza el cronómetro vivo del descanso hasta `endEpochMs` (Date.now() del fin
  * absoluto). Reusa el MISMO id → llamar de nuevo (arranque, ±15s, reanudar) actualiza la
- * notificación en su sitio en vez de apilar. Sólo Android (Notifee chronometer es Android-only)
- * y sólo si la lib nativa está enlazada; en cualquier otro caso NO-OP. Nunca lanza.
+ * notificación en su sitio en vez de apilar. Sólo Android y sólo si la lib nativa está
+ * enlazada; en cualquier otro caso NO-OP. Nunca lanza.
  */
-export async function showRestLiveCountdown(endEpochMs: number): Promise<void> {
-  if (Platform.OS !== 'android' || !notifee) return
-  if (!Number.isFinite(endEpochMs)) return
-  const remaining = endEpochMs - Date.now()
-  if (remaining <= 0) {
-    await stopRestLiveCountdown()
-    return
-  }
-  try {
-    await ensureChannel()
-    await notifee.displayNotification({
-      id: LIVE_NOTIF_ID,
-      title: 'Descanso en curso',
-      body: isRestTimerMuted() ? 'Recupérate para la siguiente serie.' : 'Sonará al terminar.',
-      android: {
-        channelId: LIVE_CHANNEL_ID,
-        // ongoing = no-descartable (como el Temporizador del sistema); onlyAlertOnce = las
-        // actualizaciones (±15s) no re-alertan; autoCancel off = no se va al tocarla.
-        ongoing: true,
-        onlyAlertOnce: true,
-        autoCancel: false,
-        // Cuenta regresiva VIVA dibujada por Android (SystemClock) → tickea con la pantalla
-        // apagada y el JS congelado, sin foreground service.
-        showChronometer: true,
-        chronometerDirection: 'down',
-        timestamp: endEpochMs,
-        // El SO retira la notif al llegar al fin aunque el JS esté congelado en background
-        // (entonces asoma el "¡Descanso listo!" programado en expo-notifications).
-        timeoutAfter: Math.max(1000, Math.round(remaining)),
-        color: BRAND_COLOR,
-        importance: IMPORTANCE_LOW,
-        // PUBLIC = visible completa en lockscreen (algunos OEM esconden IMPORTANCE_LOW sin
-        // visibility explícito).
-        visibility: VISIBILITY_PUBLIC,
-        pressAction: { id: 'default' },
-      },
-    })
-  } catch {
-    // Falla de la notif nunca interrumpe el timer.
-  }
+export async function showRestLiveCountdown(endEpochMs: number, context?: RestLiveContext): Promise<void> {
+  await showLiveTimer({
+    id: REST_LIVE_NOTIF_ID,
+    channelId: LIVE_CHANNEL_ID,
+    channelName: LIVE_CHANNEL_NAME,
+    title: resolveTitle(context),
+    body: resolveBody(context),
+    direction: 'down',
+    endEpochMs,
+    color: resolveColor(context?.color),
+    largeIconUrl: context?.largeIconUrl,
+    actions: context?.actions ?? REST_RUNNING_ACTIONS,
+  })
+}
+
+/**
+ * Muestra la notificación ESTÁTICA de "Descanso en pausa" (mismo id → reemplaza al cronómetro).
+ * Sin chronometer (`direction: 'none'`): Android no sabe congelar un contador, así que la pausa se
+ * representa con los segundos restantes escritos en el cuerpo. Mantiene la notificación viva para
+ * que "Reanudar"/"Saltar" sigan al alcance con la app en background.
+ */
+export async function showRestPausedNotice(remainingSeconds: number, context?: RestLiveContext): Promise<void> {
+  await showLiveTimer({
+    id: REST_LIVE_NOTIF_ID,
+    channelId: LIVE_CHANNEL_ID,
+    channelName: LIVE_CHANNEL_NAME,
+    title: 'Descanso en pausa',
+    body: context?.nextLabel
+      ? `Quedan ${formatClock(remainingSeconds)} · sigue ${context.nextLabel}`
+      : `Quedan ${formatClock(remainingSeconds)}`,
+    direction: 'none',
+    color: resolveColor(context?.color),
+    largeIconUrl: context?.largeIconUrl,
+    actions: REST_PAUSED_ACTIONS,
+  })
 }
 
 /** Retira el cronómetro vivo (pausa/saltar/cerrar/terminar/desmontar). NO-OP si no aplica. */
 export async function stopRestLiveCountdown(): Promise<void> {
-  if (Platform.OS !== 'android' || !notifee) return
-  try {
-    await notifee.cancelNotification(LIVE_NOTIF_ID)
-  } catch {
-    // no-op
-  }
+  await stopLiveTimer(REST_LIVE_NOTIF_ID)
 }

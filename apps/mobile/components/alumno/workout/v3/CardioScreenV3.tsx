@@ -26,6 +26,7 @@ import {
 } from '@eva/cardio'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
+import { useTheme } from '../../../../context/ThemeContext'
 import { haptics, timerHaptics } from '../../../../lib/haptics'
 import { isBleAvailable, useBleHr } from '../../../../lib/ble-hr'
 import { Sheet } from '../../../Sheet'
@@ -36,11 +37,13 @@ import { JuicyButton } from './JuicyButton'
 import { ProgressRing } from './ProgressRing'
 import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
 import { useCountdown, useIntervalRunner, useStopwatch } from './timing'
+import { useCardioLiveTimer, type CardioLiveControls, type CardioLiveSpec } from './use-cardio-live-timer'
 import {
   PHASE_COLORS,
   cardioDetailLabel,
   cardioDistanceObjective,
   cardioObjective,
+  cardioSequenceRemainingSec,
   cardioTimerMode,
   formatClock,
   zoneBpmRange,
@@ -61,6 +64,13 @@ import type { ExecTheme } from './exec-theme'
  * La zona objetivo SIEMPRE visible con su rango bpm concreto si el perfil FC del alumno viajó
  * (`hrZones`); si no, solo "Z{n}". FC MANUAL (BLE = Ola 6): sub-chip honesto "Compara con tu reloj".
  * Captura post-esfuerzo por el keypad tipado EXISTENTE (`ActiveSetRow` cardio: min/metros/FC).
+ *
+ * BANDEJA/LOCKSCREEN (Android): cada hero espeja su cuenta como notificación ongoing con contador
+ * NATIVO vía `useCardioLiveTimer` — el mismo mecanismo del descanso (`live-timer-notification.ts`),
+ * con la identidad de cardio (id/canal propios) y la alerta puntual "¡Cardio completo!" para cuando la
+ * app está en segundo plano. La notificación es SIEMPRE un espejo: se publica sólo en TRANSICIONES
+ * (arrancar/reanudar/reiniciar/cambio de fase) y jamás participa de la cuenta, que sigue intacta en
+ * `timing.ts`. Sin lib nativa o sin permiso ⇒ NO-OP y la pantalla funciona igual.
  *
  * CON SENSOR CONECTADO (specs/cardio-conectado · F1) el chip de BPM crece a un HUD: tiempo acumulado
  * EN la zona pedida, barra de 5 zonas (marcador vivo + objetivo), promedio/máximo del stream y aviso
@@ -114,6 +124,13 @@ export function CardioScreenV3({
   const s = exec.surface
   const mode = cardioTimerMode(block)
   const isInterval = mode === 'interval'
+  // Logo del coach para el ícono grande de la notificación viva — MISMO criterio que el descanso
+  // (`RestTimerHost`): `logoUrlDark` en tema oscuro (la bandeja de Android sigue el tema del sistema)
+  // y `logoUrl` en claro. Sale del branding runtime ya hidratado: cero fetches nuevos. Sin marca queda
+  // `undefined` y la notificación se ve exactamente como antes.
+  const { branding, resolvedScheme } = useTheme()
+  const coachLogoUrl =
+    (resolvedScheme === 'dark' ? branding?.logoUrlDark ?? branding?.logoUrl : branding?.logoUrl) ?? undefined
   // Chip/mini-media del cardio: continuo = MARCA del coach; intervalos = ámbar z4 (token FIJO). Nunca
   // un naranja hardcodeado fuera de contrato (D4).
   const chipColor = isInterval ? PHASE_COLORS.work : exec.accent
@@ -143,8 +160,10 @@ export function CardioScreenV3({
   // `hrToZone` de la prescripción (cero drift).
   const targetZone: HrZone | null =
     block.hr_zone != null && block.hr_zone >= 1 && block.hr_zone <= 5 ? (block.hr_zone as HrZone) : null
-  const zoneSessionRef = useRef<ZoneSessionState>(createZoneSession(targetZone))
-  const [zoneSession, setZoneSession] = useState<ZoneSessionState>(zoneSessionRef.current)
+  // Estado primero (init lazy) y ref espejo desde el estado: leer un ref durante render viola
+  // react-hooks/refs; ambos parten del MISMO valor y el efecto de abajo los mantiene en sincronía.
+  const [zoneSession, setZoneSession] = useState<ZoneSessionState>(() => createZoneSession(targetZone))
+  const zoneSessionRef = useRef<ZoneSessionState>(zoneSession)
   // Marca de la última muestra YA integrada: el efecto puede re-correr por otras dependencias y una
   // muestra contada dos veces inflaría el tiempo en zona.
   const lastSampleRef = useRef<number | null>(null)
@@ -285,18 +304,20 @@ export function CardioScreenV3({
 
       {/* HERO por modo */}
       {mode === 'interval' ? (
-        <IntervalHero block={block} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} />
+        <IntervalHero block={block} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} largeIconUrl={coachLogoUrl} />
       ) : mode === 'countdown' ? (
         <CountdownHero
           durationSec={block.duration_sec as number}
           block={block}
+          exerciseName={exercise.name}
           zoneColor={zoneColor}
           reducedMotion={reducedMotion}
           exec={exec}
           onRunningChange={handleTimerRunning}
+          largeIconUrl={coachLogoUrl}
         />
       ) : (
-        <StopwatchHero distanceObjective={distanceObjective} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} />
+        <StopwatchHero distanceObjective={distanceObjective} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} largeIconUrl={coachLogoUrl} />
       )}
 
       {/* Zona objetivo SIEMPRE visible + sub-chip honesto */}
@@ -597,18 +618,24 @@ function HudStat({ label, value, exec }: { label: string; value: number; exec: E
 function CountdownHero({
   durationSec,
   block,
+  exerciseName,
   zoneColor,
   reducedMotion,
   exec,
   onRunningChange,
+  largeIconUrl,
 }: {
   durationSec: number
   block: SessionBlock
+  /** Nombre real del ejercicio: titula el contador vivo de la bandeja ("Cardio · Trote suave"). */
+  exerciseName: string
   zoneColor: string
   reducedMotion: boolean
   exec: ExecTheme
   /** Avisa al HUD si el conteo corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
   onRunningChange?: (running: boolean) => void
+  /** Logo del coach para el ícono grande de la notificación (unificado con el descanso). */
+  largeIconUrl?: string
 }) {
   const s = exec.surface
   // QA4 h8a: NO auto-arranca (paridad web: `useExecCountdown(durationSec, { autoStart: false })`).
@@ -620,6 +647,59 @@ function CountdownHero({
   const fill = progress ? 1 - progress.pct : countdown.remaining / (durationSec || 1)
 
   const distObj = cardioDistanceObjective(block)
+
+  // ── Espejo en bandeja/lockscreen ──────────────────────────────────────────────────────────────
+  // `restartTick` existe porque reiniciar CORRIENDO no cambia `running` y sí devuelve `remaining` al
+  // objetivo: sin este contador la clave de transición no se movería y la bandeja quedaría mintiendo.
+  const [restartTick, setRestartTick] = useState(0)
+  // Función simple (sin useCallback): el React Compiler infiere `countdown` completo como dep y
+  // rechaza la memo manual por [countdown.restart]; la identidad da igual (RingRestart es trivial).
+  const handleRestart = () => {
+    setRestartTick((t) => t + 1)
+    countdown.restart(durationSec)
+  }
+  const liveSpec = useMemo<CardioLiveSpec | null>(() => {
+    // En 0 o sin arrancar nunca ⇒ sin espejo (el hook limpia contador vivo y aviso final).
+    if (countdown.remaining <= 0) return null
+    if (!countdown.running && !countdown.started) return null
+    // PAUSADO es una transición real, no la ausencia de una: la notificación se convierte en la ficha
+    // estática "Cardio en pausa · [Reanudar]" (por eso el estado viaja en la key).
+    const paused = !countdown.running
+    return {
+      key: `cardio-countdown:${restartTick}:${paused ? 'p' : 'r'}`,
+      mode: 'countdown',
+      direction: 'down',
+      paused,
+      seconds: countdown.remaining,
+      title: `Cardio · ${exerciseName}`,
+      body: block.hr_zone != null ? `Zona ${block.hr_zone} objetivo` : 'Mantén el ritmo',
+      color: zoneColor,
+      largeIconUrl,
+      // El bloque termina cuando termina esta cuenta: el aviso final va al mismo instante.
+      endNotifSeconds: countdown.remaining,
+    }
+  }, [
+    countdown.running,
+    countdown.started,
+    countdown.remaining,
+    restartTick,
+    exerciseName,
+    block.hr_zone,
+    zoneColor,
+    largeIconUrl,
+  ])
+  // Controles para el drenaje de los botones de la notificación. SIN `useMemo` a propósito: el hook
+  // los guarda en un ref que refresca en cada render, así que su identidad es irrelevante (y memoizar
+  // por propiedades sueltas rompe la compilación del React Compiler).
+  // `adoptSeconds` = `restart`: el ÚNICO camino de `useCountdown` para fijar un restante exacto al
+  // adoptar lo que dejó un botón. Es seguro acá porque el anillo se deriva de `durationSec` (prop), no
+  // del `target` interno del hook. Ver la cabecera de `use-cardio-live-timer`.
+  const liveControls: CardioLiveControls = {
+    running: countdown.running,
+    toggle: countdown.toggle,
+    adoptSeconds: countdown.restart,
+  }
+  useCardioLiveTimer(liveSpec, liveControls)
 
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
@@ -638,7 +718,7 @@ function CountdownHero({
             <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: s.textMuted, textTransform: 'uppercase', marginTop: 6 }}>Restante</Text>
           </View>
         </ProgressRing>
-        <RingRestart onPress={() => countdown.restart(durationSec)} />
+        <RingRestart onPress={handleRestart} />
       </View>
       <PauseButton running={countdown.running} started={countdown.started} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
       {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
@@ -657,6 +737,7 @@ function IntervalHero({
   reducedMotion,
   exec,
   onRunningChange,
+  largeIconUrl,
 }: {
   block: SessionBlock
   zoneColor: string
@@ -664,6 +745,8 @@ function IntervalHero({
   exec: ExecTheme
   /** Avisa al HUD si el runner corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
   onRunningChange?: (running: boolean) => void
+  /** Logo del coach para el ícono grande de la notificación (unificado con el descanso). */
+  largeIconUrl?: string
 }) {
   const s = exec.surface
   // Fase D (G2/RF7): secuencia COMPLETA — incluye las fases por distancia (avance manual) además de
@@ -691,6 +774,59 @@ function IntervalHero({
   // Duraciones de fase derivadas de la prescripción (chips honestos: trabajo / recupera) — D1.
   const workPhase = phases.find((p) => p.kind === 'work') ?? null
   const recoveryPhase = phases.find((p) => p.kind === 'recovery') ?? null
+
+  // ── Espejo en bandeja/lockscreen ──────────────────────────────────────────────────────────────
+  // La clave de transición lleva el índice de fase: cada cambio de fase re-publica la MISMA
+  // notificación (mismo id ⇒ se actualiza en sitio) con el fin de la fase nueva. `restartTick` cubre
+  // el reinicio desde la fase 0 estando ya en la fase 0 y corriendo (el índice no se movería).
+  const [restartTick, setRestartTick] = useState(0)
+  // Función simple (sin useCallback): mismo criterio que CountdownHero — el Compiler infiere
+  // `runner` completo y rechaza la memo manual por [runner.restart].
+  const handleRestart = () => {
+    setRestartTick((t) => t + 1)
+    runner.restart()
+  }
+  const liveSpec = useMemo<CardioLiveSpec | null>(() => {
+    // Terminado, sin arrancar nunca, o en una fase por DISTANCIA ⇒ no hay cuenta que espejar (una
+    // fase manual dura lo que el alumno tarde: un cronómetro ahí sería mentira).
+    if (runner.finished || runner.isManual || !phase) return null
+    if (!runner.running && !runner.started) return null
+    // PAUSADO ⇒ ficha estática con [Reanudar] (la pausa es una transición, por eso viaja en la key).
+    const paused = !runner.running
+    return {
+      key: `cardio-interval:${restartTick}:${runner.phaseIndex}:${paused ? 'p' : 'r'}`,
+      mode: 'interval',
+      direction: 'down',
+      paused,
+      seconds: runner.remaining,
+      title: `Cardio · fase ${runner.phaseIndex + 1} de ${phases.length}`,
+      body: INTERVAL_PHASE_LABEL[phase.kind],
+      color: phaseColor,
+      largeIconUrl,
+      phaseIndex: runner.phaseIndex,
+      phaseCount: phases.length,
+      // El aviso final es el de la SECUENCIA completa (null si queda alguna fase manual por delante).
+      endNotifSeconds: cardioSequenceRemainingSec(phases, runner.phaseIndex, runner.remaining),
+    }
+  }, [
+    runner.running,
+    runner.started,
+    runner.finished,
+    runner.isManual,
+    runner.phaseIndex,
+    runner.remaining,
+    phase,
+    phases,
+    phaseColor,
+    restartTick,
+    largeIconUrl,
+  ])
+  // Sin `adoptSeconds`: `restart()` del runner vuelve a la fase 0, así que no sirve para adoptar el
+  // restante de la fase actual. Pausar/reanudar desde la notificación se aplica con `toggle` y arrastra
+  // la deriva documentada en `use-cardio-live-timer`. "Fase siguiente" sí tiene aplicación exacta.
+  // Objeto sin memoizar: el hook lo guarda en un ref que refresca en cada render (ver CountdownHero).
+  const liveControls: CardioLiveControls = { running: runner.running, toggle: runner.toggle, skipPhase: runner.skip }
+  useCardioLiveTimer(liveSpec, liveControls)
 
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
@@ -743,7 +879,7 @@ function IntervalHero({
         </View>
       </ProgressRing>
         {/* Reinicia los intervalos desde la primera fase (mecanismo `restart` del runner). */}
-        <RingRestart onPress={runner.restart} />
+        <RingRestart onPress={handleRestart} />
       </View>
 
       {nextPhase && !runner.finished ? (
@@ -849,6 +985,7 @@ function StopwatchHero({
   reducedMotion,
   exec,
   onRunningChange,
+  largeIconUrl,
 }: {
   distanceObjective: string | null
   zoneColor: string
@@ -856,6 +993,8 @@ function StopwatchHero({
   exec: ExecTheme
   /** Avisa al HUD si el cronómetro corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
   onRunningChange?: (running: boolean) => void
+  /** Logo del coach para el ícono grande de la notificación (unificado con el descanso). */
+  largeIconUrl?: string
 }) {
   const s = exec.surface
   // QA4 h8a: el cronómetro NO corre solo — el alumno lo arranca con el botón de abajo.
@@ -863,6 +1002,33 @@ function StopwatchHero({
   useEffect(() => {
     onRunningChange?.(stopwatch.running)
   }, [stopwatch.running, onRunningChange])
+
+  // ── Espejo en bandeja/lockscreen ──────────────────────────────────────────────────────────────
+  // Cronómetro ASCENDENTE: el instante de inicio absoluto es "ahora menos lo transcurrido", así el
+  // contador nativo retoma exactamente donde va la pantalla al reanudar. Sin aviso final: un bloque
+  // por distancia no tiene instante de término que programar (lo cierra el alumno).
+  const liveSpec = useMemo<CardioLiveSpec | null>(() => {
+    if (!stopwatch.running && !stopwatch.started) return null
+    const paused = !stopwatch.running
+    return {
+      key: `cardio-stopwatch:${paused ? 'p' : 'r'}`,
+      mode: 'stopwatch',
+      direction: 'up',
+      paused,
+      seconds: stopwatch.elapsed,
+      title: 'Cardio en curso',
+      body: 'Tiempo transcurrido',
+      color: zoneColor,
+      largeIconUrl,
+      endNotifSeconds: null,
+    }
+  }, [stopwatch.running, stopwatch.started, stopwatch.elapsed, zoneColor, largeIconUrl])
+  // Sin `adoptSeconds`: `useStopwatch` no expone su acumulador, así que "Pausar" desde la
+  // notificación se aplica con `toggle` y arrastra la deriva documentada en `use-cardio-live-timer`.
+  // Objeto sin memoizar: el hook lo guarda en un ref que refresca en cada render (ver CountdownHero).
+  const liveControls: CardioLiveControls = { running: stopwatch.running, toggle: stopwatch.toggle }
+  useCardioLiveTimer(liveSpec, liveControls)
+
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
       <ProgressRing size={196} strokeWidth={22} fill={stopwatch.running ? 1 : 0.001} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>

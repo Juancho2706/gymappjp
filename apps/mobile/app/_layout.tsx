@@ -47,6 +47,8 @@ import { BiometricLock } from '../components/BiometricLock'
 import { SessionMorphProvider } from '../components/alumno/workout/v3/session-morph'
 import { isBiometricLockEnabled } from '../lib/biometric'
 import { checkForOtaUpdate } from '../lib/ota'
+import { registerRestNotificationEvents } from '../components/alumno/workout/timers/rest-remote-commands'
+import { registerCardioNotificationEvents } from '../components/alumno/workout/timers/cardio-remote-commands'
 import { AppState, View } from 'react-native'
 
 // Retain the native launch screen until stored branding and fonts are ready.
@@ -77,6 +79,19 @@ function ReportingErrorBoundary(props: ErrorBoundaryProps) {
 export { ReportingErrorBoundary as ErrorBoundary }
 
 configurePushHandler()
+
+// Botones de las notificaciones vivas del ejecutor: descanso (Pausar / +15 s / Saltar / Reanudar,
+// QA-11 fase 2) y cardio (Pausar / Fase siguiente / Reanudar).
+// A nivel de MÓDULO, no dentro de un componente: `notifee.onBackgroundEvent` es un handler HEADLESS
+// que Android invoca levantando el bundle JS con la app en background o cerrada, cuando NO hay árbol
+// React montado; registrarlo en un efecto lo dejaría fuera de alcance justo en el caso que importa.
+// Ambas llamadas se ANOTAN en un registro compartido (`timers/notification-events.ts`) que hace UN
+// solo `onBackgroundEvent` para toda la app y despacha por prefijo de action id — Notifee admite un
+// único handler de background, así que dos registros se pisarían entre sí (ver esa cabecera).
+// Idempotentes y NO-OP total sin la lib nativa enlazada. Sin ciclos de import: los puentes sólo
+// importan módulos de notificación (ninguno importa hooks ni este layout).
+registerRestNotificationEvents()
+registerCardioNotificationEvents()
 
 function ThemedStatusBar() {
   const { resolvedScheme } = useTheme()

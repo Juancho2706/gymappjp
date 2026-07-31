@@ -727,7 +727,18 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           if (!isRestAutoTimerEnabled()) {
             timers.cancelRest()
           } else if (secs > 0) {
-            timers.startRest(secs, { autoStart: true, label: ex?.name, warmup: useWarmup })
+            // `setIndex`/`setTotal` viajan SOLO como contexto de la notificación del descanso
+            // (QA-11 fase 2: "Serie 3 de 4" en la bandeja). Es la serie recién registrada sobre el
+            // total del bloque — no la próxima, para no imprimir "Serie 5 de 4" al cerrar la última.
+            // La rama de SUPERSERIE no los pasa: ahí `setNumber` es una RONDA y "Serie n de N" sería
+            // una lectura falsa; queda pendiente un copy propio de rondas si el CEO lo pide.
+            timers.startRest(secs, {
+              autoStart: true,
+              label: ex?.name,
+              warmup: useWarmup,
+              setIndex: payload.setNumber,
+              setTotal: block?.sets,
+            })
           } else {
             timers.cancelRest()
           }

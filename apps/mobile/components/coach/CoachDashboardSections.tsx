@@ -70,7 +70,7 @@ import type {
   MobileRiskAlertItem,
 } from '../../lib/coach-dashboard'
 import type { CoachProfile } from '../../lib/coach'
-import { getRecommendedTier, TIER_CONFIG } from '../../lib/coach-tiers'
+import { TIER_CONFIG } from '../../lib/coach-tiers'
 import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
 import { Sheet } from '../Sheet'
@@ -143,7 +143,8 @@ function CardGlass({ tone }: { tone?: string }) {
   )
 }
 
-export function MobileBillingBanners({ coach, activeClientCount }: { coach: CoachProfile; activeClientCount: number }) {
+export function MobileBillingBanners({ coach }: { coach: CoachProfile; activeClientCount: number }) {
+  const router = useRouter()
   const nowMs = Date.now()
   const currentPeriodEndMs = coach.currentPeriodEnd ? new Date(coach.currentPeriodEnd).getTime() : null
   const trialEndsAtMs = coach.trialEndsAt ? new Date(coach.trialEndsAt).getTime() : null
@@ -159,65 +160,50 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
 
   if (blocked) {
     return (
-      <MobileBanner tone="danger" icon={TriangleAlert} actionLabel="Reactivar" onPress={() => openCoachWebPath('/coach/subscription')}>
-        <Text>Tu suscripcion esta cancelada. Reactiva para recuperar acceso.</Text>
+      <MobileBanner
+        tone="danger"
+        icon={TriangleAlert}
+        actionLabel="Ver mi plan"
+        onPress={() => router.push('/coach/(tabs)/subscription')}
+      >
+        <Text>Tu suscripción está cancelada. Tu acceso está limitado.</Text>
       </MobileBanner>
     )
   }
 
   if (canceledGrace) {
     const days = Math.max(0, Math.ceil(((currentPeriodEndMs ?? nowMs) - nowMs) / 86400000))
-    const showRec = days <= 7 && activeClientCount > 0
-    const recTier = showRec ? getRecommendedTier(activeClientCount) : null
-    const recConfig = recTier ? TIER_CONFIG[recTier] : null
     return (
       <MobileBanner
         tone="warn"
         icon={Clock}
-        actionLabel={showRec && recConfig ? `Activar ${recConfig.label}` : 'Renovar'}
-        onPress={() => openCoachWebPath(showRec && recTier ? `/coach/reactivate?tier=${recTier}` : '/coach/subscription')}
+        actionLabel="Ver mi plan"
+        onPress={() => router.push('/coach/(tabs)/subscription')}
       >
         <Text>
-          Cancelaste tu plan. Acceso hasta por {days} dia{days === 1 ? '' : 's'}.
+          Cancelaste tu plan. Acceso hasta por {days} día{days === 1 ? '' : 's'}.
         </Text>
-        {showRec && recConfig ? (
-          <Text>
-            Con {activeClientCount} alumnos: Plan {recConfig.label} (hasta {recConfig.maxClients}) ·
-          </Text>
-        ) : null}
       </MobileBanner>
     )
   }
 
   if (trialActive) {
     const days = Math.max(0, Math.ceil(((trialEndsAtMs ?? nowMs) - nowMs) / 86400000))
-    const showRec = days <= 7 && activeClientCount > 0
-    const recTier = showRec ? getRecommendedTier(activeClientCount) : null
-    const recConfig = recTier ? TIER_CONFIG[recTier] : null
     return (
       <MobileBanner
         tone="info"
         icon={Clock}
-        actionLabel={showRec && recConfig ? `Activar ${recConfig.label}` : 'Activar plan'}
-        onPress={() => openCoachWebPath(showRec && recTier ? `/coach/reactivate?tier=${recTier}` : '/coach/subscription')}
+        actionLabel="Ver mi plan"
+        onPress={() => router.push('/coach/(tabs)/subscription')}
       >
         <Text>
-          Periodo de prueba · {days} dia{days === 1 ? '' : 's'} restantes.
+          Período de prueba · {days} día{days === 1 ? '' : 's'} restantes.
         </Text>
-        {showRec && recConfig ? (
-          <Text>
-            Con {activeClientCount} alumnos: Plan {recConfig.label} (hasta {recConfig.maxClients}) ·
-          </Text>
-        ) : null}
       </MobileBanner>
     )
   }
 
   return null
-}
-
-function openCoachWebPath(path: string) {
-  Linking.openURL(`${getApiBaseUrl()}${path}`).catch(() => null)
 }
 
 export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachProfile; totalClients: number }) {
@@ -232,6 +218,7 @@ export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachPr
 
 function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
   const { theme, resolvedScheme } = useTheme()
+  const router = useRouter()
   const max = TIER_CONFIG.free.maxClients
   const used = Math.min(totalClients, max)
   const pct = Math.round((used / max) * 100)
@@ -240,7 +227,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
   return (
     <TouchableOpacity
       activeOpacity={0.82}
-      onPress={() => openCoachWebPath('/coach/subscription')}
+      onPress={() => router.push('/coach/(tabs)/subscription')}
       style={[
         styles.tierBanner,
         {
@@ -269,7 +256,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
         </View>
       </View>
       <Text style={[styles.tierAction, { color: theme.primary, fontFamily: FONT.uiBold }]}>
-        {full ? 'Expandir límite →' : 'Ver planes →'}
+        Ver mi plan →
       </Text>
     </TouchableOpacity>
   )
@@ -340,7 +327,7 @@ function MobileBanner({
     <TouchableOpacity
       activeOpacity={0.84}
       onPress={onPress}
-      accessibilityRole="link"
+      accessibilityRole="button"
       style={[
         styles.banner,
         {
@@ -471,6 +458,7 @@ const FREE_WELCOME_KEY = 'eva_free_welcome_seen'
 
 export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
   const { theme, resolvedScheme } = useTheme()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const dark = resolvedScheme === 'dark'
   const sport = deriveSportTokens(theme.primary)
@@ -523,7 +511,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           </Text>
           <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
           <WelcomeStep icon={Zap} color={ember700} backgroundColor={ember100} title="Crea tu primera rutina" subtitle="Constructor de programas sin límites" />
-          <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu app con Pro" subtitle="Tu logo y colores desde $29.990/mes" />
+          <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu marca" subtitle="Logo y colores propios · no incluido en tu plan" />
         </View>
 
         <View style={styles.freeWelcomeSection}>
@@ -566,12 +554,12 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
         <View style={styles.freeWelcomeActions}>
           <Button label="Empezar ahora →" variant="sport" onPress={dismiss} full />
           <Button
-            label="Ver todos los planes"
+            label="Ver mi plan"
             variant="ghost"
             size="sm"
             onPress={() => {
               dismiss()
-              openCoachWebPath('/coach/subscription')
+              router.push('/coach/(tabs)/subscription')
             }}
             full
           />
@@ -866,12 +854,12 @@ export function MobileOnboardingChecklist({
         <MobileOnboardingStepBlock
           title="1. Tu marca en la app del alumno"
           description={isFree
-            ? 'Disponible desde Starter. Puedes marcarlo como visto o subir de plan para personalizar logo, color y mensajes.'
+            ? 'No incluido en tu plan actual. Puedes marcarlo como visto y seguir con los demás pasos.'
             : 'Logo, color y mensajes: lo que ves en Mi Marca es lo que ellos ven al instalar tu espacio.'}
           done={completed.profile_branding}
           actions={isFree ? (
             <>
-              <Button label="Desbloquear con Starter" size="sm" onPress={() => openCoachWebPath('/coach/subscription')} style={styles.stepButton} />
+              <Button label="Ver mi plan" variant="secondary" size="sm" onPress={() => router.push('/coach/(tabs)/subscription')} style={styles.stepButton} />
               <Button label={completed.profile_branding ? 'Desmarcar paso' : 'Marcar como visto'} variant="ghost" size="sm" onPress={toggleBrandStep} style={styles.stepButton} />
             </>
           ) : (
@@ -1075,18 +1063,21 @@ function MobileNutritionTierBlock({ subscriptionTier }: { subscriptionTier: Coac
         NUTRICION {enabled ? '(OPCIONAL)' : ''}
       </Text>
       <Text style={[styles.nutritionTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
-        {enabled ? 'Cuando quieras, sigue esta ruta' : 'Planes de nutricion en Pro o superior'}
+        {enabled ? 'Cuando quieras, sigue esta ruta' : 'Nutrición no incluida en tu plan'}
       </Text>
       <Text style={[styles.nutritionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
         {enabled
           ? 'Tu plan ya incluye nutricion. Puedes crear plantillas, catalogo y asignar planes nutricionales.'
-          : 'Tu plan actual incluye entrenos. Al subir de plan desbloqueas plantillas, catalogo y asignacion nutricional.'}
+          : 'Tu plan actual incluye entrenos. Las plantillas, el catálogo y la asignación nutricional no están incluidos.'}
       </Text>
       <Button
-        label={enabled ? 'Abrir nutricion' : 'Ver planes y upgrade'}
+        label={enabled ? 'Abrir nutricion' : 'Ver mi plan'}
         variant="secondary"
         size="sm"
-        onPress={() => enabled ? router.push('/coach/(tabs)/nutricion') : openCoachWebPath('/coach/subscription')}
+        onPress={() => {
+          if (enabled) router.push('/coach/(tabs)/nutricion')
+          else router.push('/coach/(tabs)/subscription')
+        }}
         style={styles.nutritionButton}
       />
     </View>
@@ -1241,7 +1232,7 @@ const GUIDE_CHIP_HIDDEN_KEY = (coachId: string) => `eva_coach_guide_chip_hidden:
 
 /**
  * P3 — Guia de inicio como chip expandible (1:1 con coach-dashboard.jsx).
- * Libera el fold: barra colapsada con progreso → expande 4 pasos + upsell Pro + "Saltar guia".
+ * Libera el fold: barra colapsada con progreso → expande 4 pasos + estado de nutricion + "Saltar guia".
  * Los pasos se auto-completan desde la senal real (logo, alumnos, planes, uso 30d).
  */
 export function MobileOnboardingGuideChip({
@@ -1322,7 +1313,7 @@ export function MobileOnboardingGuideChip({
   }
 
   function openStep(route: string) {
-    if (route === 'subscription') openCoachWebPath('/coach/subscription')
+    if (route === 'subscription') router.push('/coach/(tabs)/subscription')
     else if (route === 'brand') router.push('/coach/settings/brand')
     else if (route === 'programs') router.push('/coach/(tabs)/builder')
     else router.push('/coach/(tabs)/clientes')
@@ -1460,10 +1451,10 @@ export function MobileOnboardingGuideChip({
           >
             <Sparkles size={15} color={sport600} />
             <Text className="flex-1 font-sans text-[12px]" style={{ color: sport700, lineHeight: 16 }}>
-              Suma planes de nutrición con <Text className="font-sans-bold">Pro</Text>.
+              Los planes de nutrición <Text className="font-sans-bold">no están incluidos</Text> en tu plan.
             </Text>
-            <TouchableOpacity onPress={() => openCoachWebPath('/coach/subscription')} hitSlop={6}>
-              <Text className="font-sans-extra text-[12px]" style={{ color: sport700 }}>Mejorar</Text>
+            <TouchableOpacity onPress={() => router.push('/coach/(tabs)/subscription')} hitSlop={6}>
+              <Text className="font-sans-extra text-[12px]" style={{ color: sport700 }}>Ver mi plan</Text>
             </TouchableOpacity>
           </View> : null}
 

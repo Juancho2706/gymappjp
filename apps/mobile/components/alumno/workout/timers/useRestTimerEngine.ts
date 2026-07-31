@@ -15,7 +15,19 @@ import {
   scheduleRestEndNotification,
   sweepRestNotifications,
 } from './rest-notification'
-import { showRestLiveCountdown, stopRestLiveCountdown } from './rest-live-notification'
+import {
+  showRestLiveCountdown,
+  showRestPausedNotice,
+  stopRestLiveCountdown,
+  type RestLiveContext,
+} from './rest-live-notification'
+import {
+  clearRestLiveSnapshot,
+  drainRestRemoteCommands,
+  getRestLiveSnapshot,
+  setRestLiveSnapshot,
+  subscribeRestRemoteCommands,
+} from './rest-remote-commands'
 
 /**
  * Motor del descanso protagonista (E3.1) — EXTRAIDO 1:1 del cuerpo de `RestTimerBar` (Ola 2) para que
@@ -82,6 +94,12 @@ interface UseRestTimerEngineArgs {
    * de la pantalla la silencie (paridad web listener global de `document`). Opcional.
    */
   registerAlarmSilencer?: (silence: (() => void) | null) => void
+  /**
+   * Contexto VISUAL de la notificacion del descanso (ejercicio que sigue, serie, logo del coach).
+   * Opcional: sin el, la notificacion conserva los copys historicos. Lo arma `RestTimerHost`, que ya
+   * tiene el `nextLabel` y el branding runtime via `useTheme()`.
+   */
+  liveContext?: RestLiveContext
 }
 
 export function useRestTimerEngine({
@@ -89,6 +107,7 @@ export function useRestTimerEngine({
   autoStart = true,
   onClose,
   registerAlarmSilencer,
+  liveContext,
 }: UseRestTimerEngineArgs): RestTimerEngine {
   const [timeLeft, setTimeLeft] = useState(initialSeconds)
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds)
@@ -104,10 +123,22 @@ export function useRestTimerEngine({
   const alarmCountRef = useRef(0)
   const alarmRingingRef = useRef(false)
   const lastBeepRef = useRef<number | null>(null)
+  // Contexto visual en un ref: cambia de identidad en cada render del host, pero las callbacks que lo
+  // usan (syncEndNotification) no deben re-crearse por eso — re-crearlas reejecutaria sus efectos.
+  // Se sincroniza en un efecto (no durante el render) por la regla `react-hooks/refs`.
+  const liveContextRef = useRef<RestLiveContext | undefined>(liveContext)
+  // Drenador de comandos remotos, expuesto por ref para que el listener de AppState (declarado ANTES
+  // que la callback) lo invoque PRIMERO al volver a foreground: asi el estado que dejo un boton de la
+  // notificacion se adopta antes de que el recomputo desde `endTimeRef` lea un reloj viejo.
+  const consumeRemoteRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     isActiveRef.current = isActive
   }, [isActive])
+
+  useEffect(() => {
+    liveContextRef.current = liveContext
+  }, [liveContext])
 
   // Sincroniza el mute con la preferencia global (tuerca ↔ barra/interstitial).
   useEffect(() => {
@@ -126,12 +157,15 @@ export function useRestTimerEngine({
   }, [])
 
   // Limpieza dura al desmontar: corta el loop de alarma y cancela notifs programadas + cronometro vivo.
+  // Tambien BORRA el espejo del puente de acciones: sin descanso montado, un press de la notificacion
+  // no debe encontrar un snapshot fantasma con el que "mover" un reloj que ya no existe.
   useEffect(() => () => {
     mountedRef.current = false
     if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current)
     void cancelRestEndNotification()
     void stopRestLiveCountdown()
     void dismissRestEndNotification()
+    clearRestLiveSnapshot()
   }, [])
 
   // Silenciar-alarma-en-cualquier-lado: registra `stopAlarm` en el provider SOLO mientras suena.
@@ -168,23 +202,49 @@ export function useRestTimerEngine({
     }, 3000)
   }, [stopAlarm])
 
+  /**
+   * Publica el espejo module-level que consume el puente de acciones de la notificacion
+   * (`rest-remote-commands.ts`). Se llama en CADA transicion, nunca en el tick: el handler headless
+   * necesita el `endEpochMs` ABSOLUTO, no un contador. `frozenSeconds` cubre la pausa, donde no hay
+   * reloj y la verdad son los segundos congelados.
+   */
+  const publishSnapshot = useCallback(
+    (end: number | null, frozenSeconds?: number) => {
+      const remainingSeconds =
+        end != null
+          ? Math.max(0, Math.ceil((end - Date.now()) / 1000))
+          : Math.max(0, Math.round(frozenSeconds ?? timeLeftRef.current))
+      setRestLiveSnapshot({
+        endEpochMs: end,
+        remainingSeconds,
+        initialSeconds,
+        muted: isRestTimerMuted(),
+        context: liveContextRef.current,
+      })
+    },
+    [initialSeconds],
+  )
+
   // Cronometro real de fondo: mantiene la notif local de FIN sincronizada con `endTimeRef`.
   const syncEndNotification = useCallback(async () => {
     const end = endTimeRef.current
     if (!end) {
       await cancelRestEndNotification()
       void stopRestLiveCountdown()
+      publishSnapshot(null)
       return
     }
     const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000))
     if (remaining <= 0) {
       await cancelRestEndNotification()
       void stopRestLiveCountdown()
+      publishSnapshot(null)
       return
     }
+    publishSnapshot(end)
     await scheduleRestEndNotification(remaining)
-    void showRestLiveCountdown(end)
-  }, [])
+    void showRestLiveCountdown(end, liveContextRef.current)
+  }, [publishSnapshot])
 
   // Permiso de notificaciones (lazy, cacheado). Barre huerfanas al arrancar un descanso nuevo.
   useEffect(() => {
@@ -215,10 +275,20 @@ export function useRestTimerEngine({
     } else if (!isActive) {
       endTimeRef.current = null
       void cancelRestEndNotification()
-      void stopRestLiveCountdown()
+      publishSnapshot(null, timeLeft)
+      // Espejo del estado en la bandeja (QA-11 fase 2): en PAUSA la notificacion NO se retira, se
+      // convierte en la ficha estatica "Descanso en pausa" con [Reanudar][Saltar]. Es lo que hace
+      // operable la pausa desde background y ademas evita que el efecto borre la ficha que acaba de
+      // pintar el handler cuando la pausa vino DEL boton de la notificacion. Con el descanso agotado
+      // o la alarma sonando no hay nada que reanudar → se retira como siempre.
+      if (timeLeft > 0 && !alarmRingingRef.current) {
+        void showRestPausedNotice(timeLeft, liveContextRef.current)
+      } else {
+        void stopRestLiveCountdown()
+      }
     }
     return () => clearInterval(interval)
-  }, [isActive, timeLeft, triggerAlarm, syncEndNotification])
+  }, [isActive, timeLeft, triggerAlarm, syncEndNotification, publishSnapshot])
 
   // Beeps/hapticos 3-2-1 en los ultimos 3s (el 0 lo cubre la alarma). Haptica gateada por vibracion
   // (E3.7); audio auto-gateado por mute dentro de `playTimerCue`.
@@ -235,6 +305,10 @@ export function useRestTimerEngine({
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
+        // PRIMERO los comandos que llegaron desde los botones de la notificacion mientras el JS
+        // dormia: si el alumno toco "+15 s" o "Pausar", `endTimeRef` esta desactualizado y recomputar
+        // antes de adoptarlos podria disparar la alarma con un fin viejo.
+        consumeRemoteRef.current?.()
         void cancelRestEndNotification()
         void dismissRestEndNotification()
         if (!endTimeRef.current) return
@@ -303,8 +377,63 @@ export function useRestTimerEngine({
     void cancelRestEndNotification()
     void stopRestLiveCountdown()
     void dismissRestEndNotification()
+    clearRestLiveSnapshot()
     onClose()
   }, [onClose, stopAlarm])
+
+  /**
+   * Aplica los comandos que dejaron los BOTONES de la notificacion (QA-11 fase 2). Misma semantica que
+   * los controles in-app (toggleTimer / adjust / close) con UNA diferencia deliberada:
+   *
+   *   NO se re-aplica el delta. El handler de la notificacion ya movio el reloj (tenia que hacerlo:
+   *   en background el motor puede tardar minutos en correr, y la notificacion y la alerta final se
+   *   reprograman ahi mismo). Por eso aca ADOPTAMOS el `endEpochMs` ABSOLUTO del snapshot en vez de
+   *   sumar 15 s otra vez — sumar seria el doble-apply clasico (+30 s por un solo toque).
+   */
+  const consumeRemoteCommands = useCallback(() => {
+    const commands = drainRestRemoteCommands()
+    if (commands.length === 0) return
+    for (const command of commands) {
+      if (command.type === 'skip') {
+        close()
+        continue
+      }
+      if (command.type === 'pause') {
+        const snap = getRestLiveSnapshot()
+        const frozen = snap ? Math.max(0, Math.round(snap.remainingSeconds)) : timeLeftRef.current
+        timeLeftRef.current = frozen
+        setTimeLeft(frozen)
+        endTimeRef.current = null
+        isActiveRef.current = false
+        setIsActive(false)
+        continue
+      }
+      // 'plus15' | 'resume' → adoptar el reloj absoluto del snapshot (ver comentario de arriba).
+      const end = getRestLiveSnapshot()?.endEpochMs ?? null
+      if (end == null) continue
+      const next = Math.max(0, Math.ceil((end - Date.now()) / 1000))
+      if (next <= 0) continue
+      stopAlarm()
+      timeLeftRef.current = next
+      setTimeLeft(next)
+      setTotalSeconds((t) => (next > t ? next : t))
+      if (next <= 3) lastBeepRef.current = null
+      endTimeRef.current = end
+      isActiveRef.current = true
+      setIsActive(true)
+    }
+  }, [close, stopAlarm])
+
+  useEffect(() => {
+    consumeRemoteRef.current = consumeRemoteCommands
+    // `subscribeRestRemoteCommands` dispara el callback de inmediato si ya habia pendientes: cubre el
+    // press que ocurrio antes de que este motor montara/se suscribiera.
+    const unsubscribe = subscribeRestRemoteCommands(consumeRemoteCommands)
+    return () => {
+      consumeRemoteRef.current = null
+      unsubscribe()
+    }
+  }, [consumeRemoteCommands])
 
   const done = timeLeft === 0
 

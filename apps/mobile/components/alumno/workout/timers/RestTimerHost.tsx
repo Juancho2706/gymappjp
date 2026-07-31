@@ -1,6 +1,8 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { useTheme } from '../../../../context/ThemeContext'
 import { RestTimerBar } from './RestTimerBar'
 import { useRestTimerEngine, type RestTimerEngine } from './useRestTimerEngine'
+import type { RestLiveContext } from './rest-live-notification'
 
 /** Controles que el host expone a la presentacion interstitial (minimizar → barra). */
 export interface RestInterstitialHostControls {
@@ -30,6 +32,8 @@ export function RestTimerHost({
   autoStart = true,
   warmup = false,
   nextLabel,
+  setIndex,
+  setTotal,
   onClose,
   registerAlarmSilencer,
   renderInterstitial,
@@ -38,11 +42,28 @@ export function RestTimerHost({
   autoStart?: boolean
   warmup?: boolean
   nextLabel?: string
+  /** Serie que se acaba de registrar y total del bloque (contexto de la notificacion). */
+  setIndex?: number
+  setTotal?: number
   onClose: () => void
   registerAlarmSilencer?: (silence: (() => void) | null) => void
   renderInterstitial?: RestInterstitialRenderer | null
 }) {
-  const engine = useRestTimerEngine({ initialSeconds, autoStart, onClose, registerAlarmSilencer })
+  // Contexto VISUAL de la notificacion del descanso (QA-11 fase 2, mock aprobado por el CEO):
+  // "Descanso · sigue {ejercicio}" + "Serie n de N" + logo del coach como largeIcon.
+  //
+  // Todo sale de lo que YA hay a mano — cero fetches nuevos: `nextLabel`/`setIndex`/`setTotal` bajan
+  // como props desde `startRest`, y la marca sale de `useTheme()` (branding runtime hidratado en el
+  // layout raiz; `logoUrl` es una URL remota ya almacenada, que Notifee baja por su cuenta). El logo
+  // dark se prefiere en tema oscuro porque la bandeja de Android sigue el tema del sistema.
+  const { branding, resolvedScheme, theme } = useTheme()
+  const logoUrl = (resolvedScheme === 'dark' ? branding?.logoUrlDark ?? branding?.logoUrl : branding?.logoUrl) ?? undefined
+  const liveContext = useMemo<RestLiveContext>(
+    () => ({ nextLabel, setIndex, setTotal, largeIconUrl: logoUrl, color: theme.primary }),
+    [nextLabel, setIndex, setTotal, logoUrl, theme.primary],
+  )
+
+  const engine = useRestTimerEngine({ initialSeconds, autoStart, onClose, registerAlarmSilencer, liveContext })
   const [minimized, setMinimized] = useState(false)
 
   // QA4 (paridad web `RestTimer.tsx`): la píldora/interstitial del descanso existe SÓLO mientras el

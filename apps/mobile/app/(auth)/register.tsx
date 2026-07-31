@@ -16,25 +16,15 @@ import {
   Check,
   CheckCircle2,
   ChevronLeft,
-  Globe,
   Lock,
   Mail,
-  Minus,
   Sparkles,
   Store,
   User,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { RegisterCoachFreeSchema } from '@eva/schemas'
-import {
-  BILLING_CYCLE_CONFIG,
-  getDefaultBillingCycleForTier,
-  getTierCapabilities,
-  getTierPriceClp,
-  SALE_TIERS,
-  TIER_CONFIG,
-  type SaleTier,
-} from '@eva/tiers'
+import { getTierCapabilities, getTierMaxClients, type SaleTier } from '@eva/tiers'
 import { useTheme } from '../../context/ThemeContext'
 import { AuthDivider, Button, Card, GoogleSignInButton, HapticPressable, Input } from '../../components'
 import { toast } from '../../components/Toast'
@@ -46,11 +36,11 @@ import {
   signInWithGoogleCoach,
 } from '../../lib/auth/google-signin'
 
-type Step = 1 | 2 | 3
+type Step = 1 | 2
 
-// Mobile v1 registra SOLO tier free (endpoint register-coach-free). Los planes pagos se
-// completan en eva-app.cl (money-safety = web-only). El paso "Tu plan" replica el visual de
-// radio-cards del web (delta §4.2) con free seleccionable y los pagos como referencia.
+// Mobile registra SOLO tier free (endpoint register-coach-free). El wizard NO muestra selección de
+// plan ni precios: las políticas de App Store (3.1.1) y Google Play prohíben CTA de pago externo
+// dentro de la app, así que el registro móvil es siempre gratuito y el resumen solo informa estado.
 const REGISTRABLE_TIER: SaleTier = 'free'
 
 export default function RegisterScreen() {
@@ -61,7 +51,6 @@ export default function RegisterScreen() {
   const [brandName, setBrandName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [tier, setTier] = useState<SaleTier>('free')
   const [acceptLegal, setAcceptLegal] = useState(false)
   const [acceptHealthData, setAcceptHealthData] = useState(false)
   const [acceptMarketing, setAcceptMarketing] = useState(false)
@@ -121,10 +110,6 @@ export default function RegisterScreen() {
         return
       }
       setStep(2)
-      return
-    }
-    if (step === 2) {
-      setStep(3)
     }
   }
 
@@ -134,17 +119,7 @@ export default function RegisterScreen() {
       router.replace('/(auth)/login?role=coach')
       return
     }
-    setStep((s) => (s === 3 ? 2 : 1) as Step)
-  }
-
-  function selectTier(next: SaleTier) {
-    if (next !== REGISTRABLE_TIER) {
-      toast.info('Disponible en eva-app.cl', {
-        description: 'La app crea tu cuenta gratis. Los planes pagos se activan en la web.',
-      })
-      return
-    }
-    setTier(next)
+    setStep(1)
   }
 
   async function handleCreate() {
@@ -214,12 +189,12 @@ export default function RegisterScreen() {
     }
   }
 
-  const stepLabel = ['Tu cuenta', 'Tu plan', 'Confirmar'][step - 1]
+  const stepLabel = ['Tu cuenta', 'Confirmar'][step - 1]
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kav}>
-        {/* Wizard header — back + "Paso X de 3" + barras de progreso (espejo web) */}
+        {/* Wizard header — back + "Paso X de 2" + barras de progreso */}
         <View style={styles.header}>
           <Pressable
             onPress={goBack}
@@ -235,14 +210,14 @@ export default function RegisterScreen() {
           <View style={styles.headerProgress}>
             <View style={styles.headerLabels}>
               <Text className="text-strong font-display-bold" style={styles.stepCount}>
-                Paso {step} de 3
+                Paso {step} de 2
               </Text>
               <Text className="text-subtle font-sans" style={styles.stepName}>
                 {stepLabel}
               </Text>
             </View>
             <View style={styles.progressRow}>
-              {[1, 2, 3].map((s) => (
+              {[1, 2].map((s) => (
                 <View
                   key={s}
                   className={step >= s ? 'bg-sport-500' : 'bg-surface-sunken'}
@@ -411,39 +386,6 @@ export default function RegisterScreen() {
                   </Text>
                 </Pressable>
               </View>
-            ) : step === 2 ? (
-              <View style={styles.form}>
-                <View style={styles.heading}>
-                  <Text className="text-strong font-display-black" style={styles.title}>
-                    Elige tu plan
-                  </Text>
-                  <Text className="text-muted font-sans" style={styles.subtitle}>
-                    Empieza gratis desde la app. Los planes pagos se activan en eva-app.cl.
-                  </Text>
-                </View>
-
-                <View style={styles.tierGroup}>
-                  {SALE_TIERS.map((key) => (
-                    <TierCard
-                      key={key}
-                      tierKey={key}
-                      selected={tier === key}
-                      registrable={key === REGISTRABLE_TIER}
-                      onPress={() => selectTier(key)}
-                    />
-                  ))}
-                </View>
-
-                <Button
-                  label="Continuar"
-                  variant="sport"
-                  rightIcon={ArrowRight}
-                  onPress={goNext}
-                  full
-                  size="lg"
-                  testID="register-continue"
-                />
-              </View>
             ) : (
               <View style={styles.form}>
                 <View style={styles.heading}>
@@ -459,8 +401,8 @@ export default function RegisterScreen() {
                   <SummaryRow label="Coach" value={fullName.trim()} />
                   <SummaryRow label="Marca" value={brandName.trim()} />
                   <SummaryRow label="Email" value={email.trim().toLowerCase()} />
-                  <SummaryRow label="Plan" value={TIER_CONFIG[tier].label} />
-                  <SummaryRow label="Alumnos" value={`Hasta ${TIER_CONFIG[tier].maxClients}`} />
+                  <SummaryRow label="Plan" value="Gratis" />
+                  <SummaryRow label="Alumnos" value={`Hasta ${getTierMaxClients(REGISTRABLE_TIER)}`} />
                   <SummaryRow
                     label="Nutrición"
                     value={caps.canUseNutrition ? 'Incluida' : 'No incluida'}
@@ -521,128 +463,6 @@ export default function RegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  )
-}
-
-/** Radio-card de plan (espejo del radiogroup web §4.2). Solo `free` es registrable en mobile. */
-function TierCard({
-  tierKey,
-  selected,
-  registrable,
-  onPress,
-}: {
-  tierKey: SaleTier
-  selected: boolean
-  registrable: boolean
-  onPress: () => void
-}) {
-  const { theme } = useTheme()
-  const cfg = TIER_CONFIG[tierKey]
-  const caps = getTierCapabilities(tierKey)
-  const isFree = tierKey === 'free'
-  const isPopular = tierKey === 'pro'
-  const cycle = getDefaultBillingCycleForTier(tierKey)
-  const price = getTierPriceClp(tierKey, cycle)
-  const cycleLabel = BILLING_CYCLE_CONFIG[cycle].label.toLowerCase()
-
-  const features = [
-    { label: `Hasta ${cfg.maxClients} alumnos`, included: true },
-    { label: 'Planes de nutrición', included: caps.canUseNutrition },
-    { label: 'Branding personalizado', included: caps.canUseBranding },
-  ]
-
-  return (
-    <HapticPressable
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      testID={`register-tier-${tierKey}`}
-      className={
-        selected
-          ? 'rounded-card border-[1.5px] border-sport-500 bg-sport-100'
-          : 'rounded-card border-[1.5px] border-subtle bg-surface-card'
-      }
-      style={[styles.tierCard, !registrable && !selected ? styles.tierDisabled : null]}
-    >
-      <View style={styles.tierTop}>
-        {/* Indicador de radio */}
-        <View
-          className={selected ? 'border-sport-500 bg-sport-500' : 'border-default'}
-          style={styles.radioOuter}
-        >
-          {selected ? <View style={[styles.radioInner, { backgroundColor: theme.primaryForeground }]} /> : null}
-        </View>
-
-        <View style={styles.tierBody}>
-          <View style={styles.tierNameRow}>
-            <Text className="text-strong font-display-black" style={styles.tierName}>
-              {cfg.label}
-            </Text>
-            {isFree ? (
-              <View className="rounded-pill bg-success-100" style={styles.tierBadge}>
-                <Text className="text-success-600 font-display-bold" style={styles.tierBadgeText}>
-                  Gratis para siempre
-                </Text>
-              </View>
-            ) : null}
-            {isPopular ? (
-              <View className="rounded-pill bg-sport-500" style={styles.tierBadge}>
-                <Text className="text-on-sport font-display-bold" style={styles.tierBadgeText}>
-                  Más popular
-                </Text>
-              </View>
-            ) : null}
-            {!registrable ? (
-              <View className="rounded-pill bg-surface-sunken" style={styles.tierBadge}>
-                <Text className="text-muted font-sans-semibold" style={styles.tierBadgeText}>
-                  En eva-app.cl
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.tierPriceRow}>
-            {isFree ? (
-              <>
-                <Text className="text-success-600 font-display-black" style={styles.tierPrice}>
-                  $0
-                </Text>
-                <Text className="text-muted font-sans-semibold" style={styles.tierPriceMeta}>
-                  · Sin tarjeta
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text className="text-strong font-display-black" style={styles.tierPrice}>
-                  ${price.toLocaleString('es-CL')}
-                </Text>
-                <Text className="text-muted font-sans" style={styles.tierPriceMeta}>
-                  CLP / {cycleLabel}
-                </Text>
-              </>
-            )}
-          </View>
-
-          <View style={styles.tierFeatures}>
-            {features.map((f) => (
-              <View key={f.label} style={styles.tierFeatureRow}>
-                {f.included ? (
-                  <Check size={14} color={theme.primary} strokeWidth={2.5} />
-                ) : (
-                  <Minus size={14} color={theme.muted} strokeWidth={2.5} />
-                )}
-                <Text
-                  className={f.included ? 'text-body font-sans' : 'text-subtle font-sans'}
-                  style={[styles.tierFeatureText, !f.included && styles.tierFeatureStrike]}
-                >
-                  {f.label}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    </HapticPressable>
   )
 }
 
@@ -740,24 +560,6 @@ const styles = StyleSheet.create({
   pwdBar: { flex: 1, height: 4, borderRadius: 999 },
   pwdHint: { fontSize: 11 },
   loginLine: { textAlign: 'center', fontSize: 13, marginTop: 2 },
-  tierGroup: { gap: 10 },
-  tierCard: { padding: 16 },
-  tierDisabled: { opacity: 0.6 },
-  tierTop: { flexDirection: 'row', gap: 12 },
-  radioOuter: { width: 20, height: 20, borderRadius: 999, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  radioInner: { width: 8, height: 8, borderRadius: 999 },
-  tierBody: { flex: 1, gap: 4 },
-  tierNameRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  tierName: { fontSize: 15, letterSpacing: -0.2 },
-  tierBadge: { paddingHorizontal: 6, paddingVertical: 2 },
-  tierBadgeText: { fontSize: 10, letterSpacing: 0.2 },
-  tierPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 },
-  tierPrice: { fontSize: 20 },
-  tierPriceMeta: { fontSize: 12 },
-  tierFeatures: { marginTop: 8, gap: 4 },
-  tierFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  tierFeatureText: { fontSize: 12.5, flex: 1 },
-  tierFeatureStrike: { textDecorationLine: 'line-through' },
   summaryCard: { gap: 0 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 11 },
   summaryLabel: { fontSize: 13 },

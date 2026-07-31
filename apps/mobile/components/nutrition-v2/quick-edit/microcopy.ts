@@ -88,7 +88,7 @@ export const QUICK_EDIT_COPY = {
   copySlotReplaces: 'Reemplaza',
   /** Gate Pro `multi_variant`: el server rechaza igual; el candado evita el callejón. */
   multiDayLocked:
-    'Armar días distintos (por ejemplo el fin de semana) es parte de Nutrición Pro, incluido en los planes pagos.',
+    'Armar días distintos (por ejemplo el fin de semana) es parte de Nutrición Pro, no incluido en tu plan actual.',
   discardTitle: '¿Descartar los cambios?',
   editingEyebrow: 'Modo edición',
   editingHint: 'Toca una cantidad para ajustarla. Publica cuando termines.',

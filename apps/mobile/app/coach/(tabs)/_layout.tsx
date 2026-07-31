@@ -35,7 +35,7 @@ export default function CoachTabsLayout() {
           <Tabs.Screen name="team" options={{ title: 'Equipo' }} />
           <Tabs.Screen name="reactivate" options={{ title: 'Reactivar' }} />
           <Tabs.Screen name="support" options={{ title: 'Soporte' }} />
-          <Tabs.Screen name="subscription" options={{ title: 'Suscripción' }} />
+          <Tabs.Screen name="subscription" options={{ title: 'Mi plan' }} />
           <Tabs.Screen name="check-ins" options={{ title: 'Check-ins' }} />
           <Tabs.Screen name="perfil" options={{ title: 'Mi cuenta' }} />
         </Tabs>

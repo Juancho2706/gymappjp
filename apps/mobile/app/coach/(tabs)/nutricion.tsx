@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, FlatList, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -37,6 +37,7 @@ import { Badge, Button, EmptyState, Input, NativeDialog, Sheet, Textarea } from 
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
+import { RefreshPlanButton } from '../../../components/coach/RefreshPlanButton'
 import { FONT } from '../../../lib/typography'
 import { SHADOWS, type Scheme } from '../../../lib/shadows'
 import { MACRO_COLORS } from '../../../components/MacroRingSummary'
@@ -64,7 +65,6 @@ import {
   type CoachRecipeRow,
 } from '../../../lib/recipes-coach'
 import { canUseNutrition, type SubscriptionTier } from '../../../lib/coach-tiers'
-import { getApiBaseUrl } from '../../../lib/api'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { resolveCoachNutritionTabMode } from '../../../lib/coach-nutrition-v2-tab-logic'
@@ -1285,7 +1285,10 @@ function RecipeAssign({ theme, recipe, clients, onClose }: { theme: any; recipe:
   )
 }
 
-// ─── Upsell (gate por tier, SOLO visual) ──────────────────────────────────────────
+// ─── Estado del módulo (gate por tier, SOLO informativo) ──────────────────────────
+// Compliance stores (Apple 3.1.1 / pagos Play): esta tarjeta describe el ESTADO del plan y lo
+// que incluye el módulo; jamás vende, muestra precios ni enlaza a una página de pago. La única
+// acción es revalidar entitlements para reflejar un plan que ya cambió fuera de la app.
 function UpsellCard({ theme }: { theme: any }) {
   const features = [
     'Plantillas de nutrición reutilizables',
@@ -1302,9 +1305,9 @@ function UpsellCard({ theme }: { theme: any }) {
           <Sparkles size={12} color={theme.primary} />
           <Text style={{ fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: theme.primary, fontFamily: FONT.uiExtra }}>Módulo Pro</Text>
         </View>
-        <Text style={[styles.upsellTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>Nutrición en Pro o superior</Text>
+        <Text style={[styles.upsellTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>Nutrición no está disponible</Text>
         <Text style={[styles.upsellText, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
-          Tu plan actual incluye entrenos. Al subir a Pro desbloqueas el centro de nutrición completo.
+          Nutrición Pro no está incluida en tu plan actual. Cuando esté activa, aquí verás el centro de nutrición completo.
         </Text>
         <View style={{ gap: 8, alignSelf: 'stretch', marginVertical: 4 }}>
           {features.map((f) => (
@@ -1314,7 +1317,7 @@ function UpsellCard({ theme }: { theme: any }) {
             </View>
           ))}
         </View>
-        <Button label="Mejorar a Pro" variant="sport" full onPress={() => Linking.openURL(`${getApiBaseUrl()}/coach/subscription?upgrade=pro`).catch(() => null)} />
+        <RefreshPlanButton variant="sport" full />
       </View>
     </View>
   )

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Apple, Bell, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
+import { Apple, Bell, ChevronRight, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { signOutAndRedirectHome } from '../../../lib/auth-actions'
@@ -185,16 +185,16 @@ export default function CoachPerfilScreen() {
             ) : null}
             <TouchableOpacity
               style={[styles.webLink, { borderTopColor: theme.border }]}
-              onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription')}
+              onPress={() => router.push('/coach/(tabs)/subscription')}
               activeOpacity={0.7}
             >
               <View style={styles.webLinkLeft}>
                 <CreditCard size={16} color={theme.primary} />
                 <Text style={[styles.webLinkText, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>
-                  Gestionar suscripcion
+                  Ver mi plan
                 </Text>
               </View>
-              <ExternalLink size={16} color={theme.mutedForeground} />
+              <ChevronRight size={16} color={theme.mutedForeground} />
             </TouchableOpacity>
           </Section>
         ) : null}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import { Apple, ChevronDown, ChevronLeft, Lock, Sparkles, Wrench } from 'lucide-react-native'
@@ -32,7 +32,8 @@ import {
  * E7-04 · Funciones (feature-prefs) — panel real. Espejo mobile de FeaturePrefsPanel (web,
  * coach/settings/funciones): por dominio (hoy Nutrición) un selector de PRESET (Básico/Intermedio/
  * Profesional), un master switch del dominio (`_enabled`), y toggles por sección con badge Base/Pro +
- * lock Pro (CTA a la web para desbloquear). Modelo `visible = ENTITLED AND ENABLED`: este panel SOLO
+ * lock Pro (acceso INTERNO al estado del plan, nunca un link de pago externo — políticas de las
+ * tiendas, docs/research/cta-pagos-externos-stores-2026-07-31.md). Modelo `visible = ENTITLED AND ENABLED`: este panel SOLO
  * escribe la capa ENABLED (@eva/feature-prefs); el ENTITLED lo aporta useEntitlements() (E0-C1). El
  * scope (standalone vs team) sale de useWorkspace() (E7-01, única resolución de contexto); en team solo
  * el gestor edita (canManageTeam), el resto ve read-only. Persistencia por PostgREST directo (RLS =
@@ -215,6 +216,7 @@ interface DomainGroupProps {
  *  único con "Guardar" (espejo del DomainFuncionesGroup de la web). */
 function DomainGroup({ data, scopeCtx, entitledByModule, canEdit }: DomainGroupProps) {
   const { theme } = useTheme()
+  const router = useRouter()
 
   const toggleable = useMemo(() => data.sections.filter((s) => !s.core), [data.sections])
 
@@ -364,13 +366,13 @@ function DomainGroup({ data, scopeCtx, entitledByModule, canEdit }: DomainGroupP
                     <Pressable
                       testID={`features-unlock-${section.key}`}
                       accessibilityRole="button"
-                      onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription').catch(() => {})}
+                      onPress={() => router.push('/coach/(tabs)/subscription')}
                       hitSlop={8}
                       className="flex-row items-center rounded-pill bg-sport-100"
                       style={{ gap: 5, paddingHorizontal: 11, paddingVertical: 8 }}
                     >
                       <Lock size={13} strokeWidth={2.2} className="text-sport-600" />
-                      <Text className="font-sans-bold text-sport-600" style={{ fontSize: 12 }}>Mejorar plan</Text>
+                      <Text className="font-sans-bold text-sport-600" style={{ fontSize: 12 }}>Ver mi plan</Text>
                     </Pressable>
                   ) : (
                     <Switch

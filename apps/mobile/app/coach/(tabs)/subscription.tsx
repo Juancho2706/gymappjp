@@ -1,24 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
 import {
   Activity,
   Check,
-  CreditCard,
-  ExternalLink,
   HeartPulse,
   Lock,
-  Receipt,
   Ruler,
   Utensils,
   type LucideIcon,
 } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Badge, Button, Card, EmptyState } from '../../../components'
+import { Badge, Card, EmptyState } from '../../../components'
 import type { BadgeTone } from '../../../components/Badge'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { RefreshPlanButton } from '../../../components/coach/RefreshPlanButton'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useWorkspace } from '../../../lib/workspace'
 import {
@@ -28,21 +26,14 @@ import {
   type CoachAddonView,
   type CoachBillingStatus,
 } from '../../../lib/coach-subscription'
-import {
-  BILLING_CYCLE_CONFIG,
-  type SubscriptionTier,
-} from '@eva/tiers'
+import type { SubscriptionTier } from '@eva/tiers'
 import { MODULE_CATALOG, MODULE_CATALOG_KEYS, type ModuleKey } from '@eva/module-catalog'
 
-// Acciones de cobro = WEB-ONLY (money-safety): la app abre el navegador externo a las URLs reales.
-// Host canónico www (mismo que api.ts) → la sesión web del coach ya vive ahí (evita el hop apex→www).
-const WEB = 'https://www.eva-app.cl'
-const SUB_URL = `${WEB}/coach/subscription`
-const CARD_URL = `${WEB}/coach/subscription/update-card`
-const REACTIVATE_URL = `${WEB}/coach/reactivate`
-
-// --text-on-dark (ink-50): literal DS neutral para íconos sobre superficie inversa (mismo que Button).
-const ON_DARK = '#F4F6F8'
+// Pantalla SOLO-ESTADO: ni CTAs de pago, ni link-out a la web, ni precios (Apple 3.1.1 y política
+// de pagos de Google prohíben dirigir a un mecanismo de compra externo desde la app). Lo que queda
+// es lo permitido: qué plan tengo, hasta cuándo, qué módulos entran y cuántos alumnos caben, más
+// "Actualizar estado" para reflejar en el acto un cambio hecho fuera del teléfono.
+// Informe: docs/research/cta-pagos-externos-stores-2026-07-31.md
 
 const ADDON_ICON: Record<ModuleKey, LucideIcon> = {
   cardio: HeartPulse,
@@ -51,26 +42,6 @@ const ADDON_ICON: Record<ModuleKey, LucideIcon> = {
   nutrition_exchanges: Utensils,
 }
 
-// Marca legible del payment_method_id de MP ('debvisa' es id de máquina, no marca).
-const MP_BRAND_LABEL: Record<string, string> = {
-  visa: 'Visa', debvisa: 'Visa débito',
-  master: 'Mastercard', debmaster: 'Mastercard débito',
-  amex: 'American Express', diners: 'Diners',
-  maestro: 'Maestro', magna: 'Magna', naranja: 'Naranja', cabal: 'Cabal',
-}
-function mpBrandLabel(pmid: string | null | undefined): string {
-  if (!pmid) return ''
-  return MP_BRAND_LABEL[pmid.toLowerCase()] ?? pmid.charAt(0).toUpperCase() + pmid.slice(1)
-}
-
-function openUrl(url: string) {
-  Linking.openURL(url).catch(() => {})
-}
-
-/** CLP determinista ($9.990) — sin depender de Intl en Hermes. */
-function clp(n: number): string {
-  return '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-}
 function shortDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
@@ -97,7 +68,7 @@ function addonBadge(
 ): { label: string; tone: BadgeTone; icon: LucideIcon | null; lit: boolean } {
   const hasLiveRow = row !== undefined && row.status !== 'cancelled'
   if (hasPaidPlan || hasLiveRow) return { label: 'Incluido en tu plan', tone: 'success', icon: Check, lit: true }
-  return { label: 'Con plan pago', tone: 'neutral', icon: Lock, lit: false }
+  return { label: 'No incluido', tone: 'neutral', icon: Lock, lit: false }
 }
 
 /** Una fila paga (self_service) manda sobre la cortesía; solo grant => "Cortesía EVA". */
@@ -113,14 +84,16 @@ export default function SubscriptionScreen() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<CoachBillingStatus | null>(null)
   const [failed, setFailed] = useState(false)
+  // Se incrementa tras "Actualizar estado": re-lee el estado sin volver a pasar por el loader.
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
     getCoachBillingStatus()
-      .then((d) => { if (mounted) { setData(d); setLoading(false) } })
+      .then((d) => { if (mounted) { setData(d); setFailed(false); setLoading(false) } })
       .catch(() => { if (mounted) { setFailed(true); setLoading(false) } })
     return () => { mounted = false }
-  }, [])
+  }, [reloadKey])
 
   if (loading) {
     return (
@@ -170,7 +143,7 @@ export default function SubscriptionScreen() {
     )
   }
 
-  const { coach, addons, events, billing, activeCoupon, changeCardEnabled } = data
+  const { coach, addons, activeClientCount } = data
   const tier = coach.subscriptionTier as SubscriptionTier
   const status = coach.subscriptionStatus
   const tierLabel = TIER_LABELS[tier] ?? coach.subscriptionTier
@@ -178,30 +151,30 @@ export default function SubscriptionScreen() {
   const statusTone = STATUS_TONE[status] ?? 'neutral'
   // Plan pago con acceso (espejo del hasActivePaidPlan web): decide "Incluido en tu plan".
   const hasPaidPlan = tier !== 'free' && (status === 'active' || status === 'trialing')
-  const cycleLabel = BILLING_CYCLE_CONFIG[coach.billingCycle]?.label.toLowerCase() ?? ''
 
-  const isActive = status === 'active'
-  const total = billing.totalClp
   const periodDate = coach.currentPeriodEnd ? shortDate(coach.currentPeriodEnd) : null
   const periodLabel =
     status === 'trialing' ? 'Prueba hasta'
       : status === 'canceled' || status === 'expired' ? 'Acceso hasta'
-        : 'Próximo cobro'
+        : 'Renovación'
 
-  // Aviso de estado (dunning / cancelado / vencido) — link-out a la acción web real.
-  const notice: { tone: BadgeTone; text: string; cta: string; url: string } | null =
+  // Cupo de alumnos = estado del plan, no venta (permitido dentro de la app).
+  const clientsLabel =
+    coach.maxClients != null
+      ? `Alumnos activos · ${activeClientCount} de ${coach.maxClients}`
+      : `Alumnos activos · ${activeClientCount}`
+
+  // Aviso de estado (dunning / cancelado / vencido) — informativo, sin acción de cobro.
+  const notice: { tone: BadgeTone; text: string } | null =
     status === 'past_due' || status === 'paused'
-      ? { tone: 'warning', text: 'Tu último pago no se procesó. Actualiza tu medio de pago para no perder el acceso.', cta: 'Actualizar pago en la web', url: CARD_URL }
+      ? { tone: 'warning', text: 'Tu último pago no se procesó y tu plan quedó en pausa.' }
       : status === 'pending_payment'
-        ? { tone: 'warning', text: 'Tu pago está siendo procesado. Puede tardar unos minutos en confirmarse.', cta: 'Ver en la web', url: SUB_URL }
+        ? { tone: 'warning', text: 'Tu pago está siendo procesado. Puede tardar unos minutos en confirmarse.' }
         : status === 'canceled'
-          ? { tone: 'info', text: 'Tu plan sigue activo hasta el fin del período pagado. Puedes reactivarlo cuando quieras.', cta: 'Reactivar en la web', url: REACTIVATE_URL }
+          ? { tone: 'info', text: 'Tu plan sigue activo hasta el fin del período pagado.' }
           : status === 'expired'
-            ? { tone: 'danger', text: 'Tu plan venció. Reactívalo para recuperar el acceso completo.', cta: 'Reactivar en la web', url: REACTIVATE_URL }
+            ? { tone: 'danger', text: 'Tu plan venció y quedaste con acceso limitado.' }
             : null
-
-  const showCard =
-    changeCardEnabled && ['active', 'trialing', 'paused', 'past_due'].includes(status)
 
   return (
     <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app">
@@ -213,7 +186,7 @@ export default function SubscriptionScreen() {
       >
         <Header />
 
-        {/* Plan actual — tarjeta inversa: tier grande + total compuesto + desglose + tarjeta */}
+        {/* Plan actual — tarjeta inversa: tier grande + vigencia + cupo de alumnos */}
         <MotiView
           from={{ opacity: 0, translateY: 12 }}
           animate={{ opacity: 1, translateY: 0 }}
@@ -234,57 +207,19 @@ export default function SubscriptionScreen() {
                     ? 'Gratis para siempre'
                     : periodDate ? `${periodLabel} · ${periodDate}` : ''}
                 </Text>
+                <Text style={[TYPE.caption, styles.mt2]} className="text-on-dark-muted">
+                  {clientsLabel}
+                </Text>
               </View>
               <View style={styles.planRight}>
                 <Badge label={statusLabel} tone={statusTone} dot />
-                {total > 0 ? (
-                  <View style={styles.totalCol}>
-                    <Text style={[textStyle('2xl', FONT.mono, { ls: 'tight' }), styles.tnum]} className="text-sport-400">
-                      {clp(total)}
-                    </Text>
-                    {cycleLabel ? (
-                      <Text style={TYPE.caption} className="text-on-dark-muted">{`/ ${cycleLabel}`}</Text>
-                    ) : null}
-                  </View>
-                ) : null}
               </View>
             </View>
-
-            {/* Desglose (base + módulos + cupón) — solo activo. La UI NUNCA calcula precios. */}
-            {isActive ? (
-              <View style={styles.breakdown}>
-                <Row label={`Plan ${tierLabel}`} value={clp(billing.baseClp)} />
-                {billing.addonsClp > 0 ? <Row label="Módulos" value={clp(billing.addonsClp)} /> : null}
-                {activeCoupon && billing.discountClp > 0 ? (
-                  <Row
-                    label={`Cupón${activeCoupon.code ? ` ${activeCoupon.code}` : ''}`}
-                    value={`−${clp(billing.discountClp)}`}
-                    positive
-                  />
-                ) : null}
-              </View>
-            ) : null}
-
-            {/* Tarjeta en archivo (brand ···· last4) + cambiar (link-out) */}
-            {showCard ? (
-              <View style={styles.cardRow}>
-                <CreditCard size={18} color={ON_DARK} />
-                <Text style={[TYPE.caption, styles.flex1]} className="text-on-dark" numberOfLines={1}>
-                  {coach.cardLast4
-                    ? `${coach.cardBrand ? mpBrandLabel(coach.cardBrand) + ' ' : ''}···· ${coach.cardLast4}`
-                    : 'Sin tarjeta registrada'}
-                </Text>
-                <Text
-                  onPress={() => openUrl(CARD_URL)}
-                  style={[TYPE.caption, styles.cardCta]}
-                  className="text-sport-400"
-                >
-                  Cambiar
-                </Text>
-              </View>
-            ) : null}
           </Card>
         </MotiView>
+
+        {/* Revalida entitlements: un cambio de plan hecho fuera del teléfono se refleja al toque. */}
+        <RefreshPlanButton full onRefreshed={() => setReloadKey((k) => k + 1)} />
 
         {/* Aviso de estado (dunning / cancelado / vencido) */}
         {notice ? (
@@ -293,13 +228,6 @@ export default function SubscriptionScreen() {
               <Badge label={statusLabel} tone={notice.tone} />
             </View>
             <Text style={TYPE.caption} className="text-muted">{notice.text}</Text>
-            <Button
-              label={notice.cta}
-              variant="secondary"
-              leftIcon={ExternalLink}
-              onPress={() => openUrl(notice.url)}
-              full
-            />
           </Card>
         ) : null}
 
@@ -342,57 +270,12 @@ export default function SubscriptionScreen() {
           <Text style={TYPE.caption} className="text-muted">
             {hasPaidPlan
               ? 'Vienen incluidos en tu plan, sin costo extra. Úsalos desde Herramientas.'
-              : 'Vienen incluidos en cualquier plan pago. En el plan Free no están disponibles.'}
+              : 'No están incluidos en tu plan actual.'}
           </Text>
         </View>
 
-        {/* Historial de pagos */}
-        <View style={styles.section}>
-          <Text style={[TYPE.eyebrow, styles.sectionTitle]} className="text-muted">Historial de pagos</Text>
-          {events.length === 0 ? (
-            <Card variant="default" padding={16} radius="card">
-              <Text style={TYPE.caption} className="text-muted">
-                Aún no hay movimientos de suscripción registrados.
-              </Text>
-            </Card>
-          ) : (
-            <Card variant="default" padding="none" radius="card">
-              {events.map((e, i) => (
-                <View key={e.id}>
-                  {i > 0 ? <View style={styles.divider} className="bg-subtle" /> : null}
-                  <View style={styles.eventRow}>
-                    <View style={styles.eventIcon} className="bg-success-100 dark:bg-success-100/[0.18]">
-                      <Receipt size={15} color={theme.success} />
-                    </View>
-                    <View style={styles.flex1}>
-                      <Text style={TYPE.caption} className="text-strong">
-                        {shortDate(e.createdAt)}
-                        {e.providerStatus ? <Text className="text-muted">{` · ${e.providerStatus}`}</Text> : null}
-                      </Text>
-                      <Text style={[textStyle('2xs', FONT.mono), styles.mt2]} className="text-muted">
-                        {e.providerCheckoutId ? `${e.provider} · ${e.providerCheckoutId}` : e.provider}
-                      </Text>
-                    </View>
-                    <Text style={[textStyle('sm', FONT.mono), styles.tnum]} className="text-strong">
-                      {e.amountClp != null ? clp(e.amountClp) : '—'}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </Card>
-          )}
-        </View>
-
-        {/* Gestión (cobros/cambios = web-only por seguridad) */}
-        <Button
-          label="Gestionar plan en la web"
-          variant="primary"
-          leftIcon={ExternalLink}
-          onPress={() => openUrl(SUB_URL)}
-          full
-        />
         <Text style={[TYPE.caption, styles.note]} className="text-muted">
-          Los pagos y cambios de plan se gestionan desde la web por seguridad.
+          ¿Dudas con tu plan? Escríbenos a contacto@eva-app.cl
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -403,25 +286,9 @@ function Header() {
   return (
     <View style={styles.header}>
       <Text style={textStyle('3xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' })} className="text-strong">
-        Suscripción
+        Mi plan
       </Text>
       <Text style={[TYPE.caption, styles.mt4]} className="text-muted">Tu plan y uso</Text>
-    </View>
-  )
-}
-
-// Verde legible sobre la superficie inversa (paridad con el emerald-400 del desglose web).
-const ON_DARK_POSITIVE = '#34D399'
-
-function Row({ label, value, positive }: { label: string; value: string; positive?: boolean }) {
-  return (
-    <View style={styles.breakdownRow}>
-      <Text style={TYPE.caption} className="text-on-dark-muted">{label}</Text>
-      {positive ? (
-        <Text style={[textStyle('sm', FONT.mono), styles.tnum, { color: ON_DARK_POSITIVE }]}>{value}</Text>
-      ) : (
-        <Text style={[textStyle('sm', FONT.mono), styles.tnum]} className="text-on-dark">{value}</Text>
-      )}
     </View>
   )
 }
@@ -437,20 +304,12 @@ const styles = StyleSheet.create({
   gap10: { gap: 10 },
   planRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   planRight: { alignItems: 'flex-end', gap: 8 },
-  totalCol: { alignItems: 'flex-end' },
-  tnum: { fontVariant: ['tabular-nums'] },
-  breakdown: { marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.14)', gap: 6 },
-  breakdownRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)' },
-  cardCta: { fontFamily: FONT.uiBold },
   iconRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   section: { gap: 8 },
   sectionTitle: { paddingHorizontal: 4 },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
   addonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   addonIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  eventIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   lockCard: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
   note: { textAlign: 'center', paddingHorizontal: 12 },
 })

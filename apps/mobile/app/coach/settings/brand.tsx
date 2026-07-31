@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Linking, Pressable, ScrollView, Share, Text, View } from 'react-native'
+import { Pressable, ScrollView, Share, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useReducedMotion } from 'react-native-reanimated'
 import { Image } from 'expo-image'
@@ -20,13 +20,13 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { CompositeLoaderView, LoaderVariantView, type LoaderVariantSize } from '../../../components/loaders/variants'
 import { EvaFigure } from '../../../components/entry/EvaFigure'
 import { AppBackground } from '../../../components/AppBackground'
+import { RefreshPlanButton } from '../../../components/coach/RefreshPlanButton'
 import { toast } from '../../../components/Toast'
 import { SHADOWS } from '../../../lib/shadows'
 import { FONT } from '../../../lib/typography'
 import { getCoachOrgContext } from '../../../lib/org'
 import { getCoachProfile } from '../../../lib/coach'
 import { canUseBranding, type SubscriptionTier } from '../../../lib/coach-tiers'
-import { getApiBaseUrl } from '../../../lib/api'
 import { THEME_PRESETS, getThemePreset, resolveBrandTheme, type BrandPreset } from '@eva/brand-kit'
 import { FONT_KEY_TUPLE } from '@eva/schemas'
 import {
@@ -411,7 +411,8 @@ export default function MiMarcaScreen() {
     return <EvaLoaderScreen subtitle="Cargando tu marca…" />
   }
 
-  // M-F4: tier-gate — branding es starter+. Free (no gestionado por org) ve upsell.
+  // M-F4: tier-gate — branding es starter+. Free (no gestionado por org) ve el estado del módulo
+  // (sin venta ni links de pago: políticas de las tiendas, ver docs/research/cta-pagos-externos-stores-2026-07-31.md).
   if (!orgManaged && !canUseBranding(tier)) {
     return (
       <View className="flex-1 bg-surface-app">
@@ -425,18 +426,12 @@ export default function MiMarcaScreen() {
                 <Lock size={26} className="text-sport-600" />
               </View>
               <Text className="font-display-bold text-strong" style={{ fontSize: 19, textAlign: 'center', letterSpacing: -0.3 }}>
-                Marca personalizada en Pro+
+                Marca personalizada no disponible
               </Text>
               <Text className="font-sans text-muted" style={{ fontSize: 13.5, lineHeight: 20, textAlign: 'center' }}>
-                Sube a Pro (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
+                Tu plan actual no incluye la marca personalizada. Cuando esté activa, podrás personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
               </Text>
-              <Button
-                label="Ver planes y upgrade"
-                variant="sport"
-                full
-                testID="mimarca-upgrade"
-                onPress={() => Linking.openURL(`${getApiBaseUrl()}/coach/subscription`).catch(() => null)}
-              />
+              <RefreshPlanButton variant="sport" full />
             </Card>
           </ScrollView>
         </SafeAreaView>

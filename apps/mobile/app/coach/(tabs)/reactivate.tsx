@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { MotiView } from 'moti'
-import { AlertTriangle, ExternalLink, Sparkles, Users } from 'lucide-react-native'
+import { AlertTriangle, Sparkles, Users } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, Card } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ReactivateArchivePanel } from '../../../components/coach/ReactivateArchivePanel'
+import { RefreshPlanButton } from '../../../components/coach/RefreshPlanButton'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
@@ -24,41 +25,24 @@ import {
   type CoachSubscriptionOverview,
 } from '../../../lib/coach-subscription'
 
-// MONEY-SAFETY: la reactivacion (pago) es SIEMPRE link-out al navegador — jamas se procesa in-app.
-// Mismo host que el resto del billing mobile (subscription tab): apex 307 -> www, inocuo en browser.
-// La bajada a Free NO pasa por aca: no cobra nada, asi que vive in-app (ver `handleActivateFree`).
-const REACTIVATE_URL = 'https://eva-app.cl/coach/reactivate'
-
 // DS warning-700 (status token, NO white-label): el theme JS no expone `warning`, se resuelve por
 // scheme igual que en `alumno/suspended.tsx` (var(--warning-700) flipea en dark).
 const WARNING_700 = { light: '#8F5A05', dark: '#FFD489' } as const
 
-/** Copy del titular segun el estado crudo (paridad con los estados que fuerzan el gate). */
-function headlineFor(status: string): { title: string; body: string } {
-  switch (status) {
-    case 'canceled':
-      return { title: 'Tu plan está cancelado', body: 'Tu acceso al panel terminó. Reactiva un plan para volver a gestionar tu marca, tus alumnos y tus rutinas.' }
-    case 'paused':
-      return { title: 'Tu plan está pausado', body: 'Tu suscripción quedó en pausa. Reactívala para recuperar el acceso completo al panel.' }
-    case 'past_due':
-      return { title: 'Tu pago quedó pendiente', body: 'No pudimos completar el cobro de tu suscripción. Regulariza el pago para mantener el acceso.' }
-    case 'expired':
-      return { title: 'Tu plan venció', body: 'Tu suscripción venció. Elige un plan para recuperar el acceso al panel.' }
-    default:
-      return { title: 'Reactiva tu plan', body: 'Tu suscripción está inactiva. Elige un plan para recuperar el acceso al panel.' }
-  }
-}
-
 /**
- * E7-12 — muro de reactivación del coach. Aterrizás acá cuando el guard de acceso
+ * E7-12 — muro del coach sin plan activo. Aterrizás acá cuando el guard de acceso
  * (`app/coach/_layout.tsx`) detecta que perdiste acceso EFECTIVO (`resolveReactivateRequired`).
  *
- * Ofrece las DOS salidas de la web, no solo una:
- *  - PAGAR: link-out al navegador (money-safety, sin excepciones).
- *  - VOLVER A FREE: in-app. No cobra nada — es la salida gratuita. Antes solo existía en web, así
- *    que un coach vencido con teléfono y sin computador quedaba encerrado: o pagaba, o nada.
- *    Si está sobre el cupo de Free, el panel de archivado lo deja bajar a ≤ FREE_CLIENT_LIMIT
- *    primero (el endpoint revalida el cupo server-side de todos modos).
+ * Muro NEUTRO: la app no puede ofrecer ni insinuar dónde pagar (Apple 3.1.1 y política de pagos de
+ * Google prohíben CTAs a un mecanismo de compra externo), así que acá no hay link-out, ni precios,
+ * ni "reactiva en la web". Ver docs/research/cta-pagos-externos-stores-2026-07-31.md.
+ *
+ * Lo que SÍ queda son las salidas que viven dentro de la app:
+ *  - ACTUALIZAR ESTADO: revalida entitlements; si el plan volvió, el guard suelta al toque.
+ *  - VOLVER A FREE: no cobra nada — es la salida gratuita. Si está sobre el cupo de Free, el panel
+ *    de archivado lo deja bajar a ≤ FREE_CLIENT_LIMIT primero (el endpoint revalida el cupo
+ *    server-side de todos modos).
+ *  - CERRAR SESIÓN.
  */
 export default function CoachReactivateScreen() {
   const { theme, resolvedScheme } = useTheme()
@@ -117,7 +101,6 @@ export default function CoachReactivateScreen() {
 
   // El estado del overview es la fuente rica; el del workspace es el gate. Priorizamos el crudo real.
   const status = data?.profile.subscriptionStatus || subscriptionState
-  const { title, body } = headlineFor(status)
   const tierLabel = data ? (TIER_LABELS[data.profile.subscriptionTier] ?? data.profile.subscriptionTier) : null
   const statusLabel = STATUS_LABELS[status] ?? status
   const clientCount = data?.clientCount ?? 0
@@ -142,10 +125,10 @@ export default function CoachReactivateScreen() {
           </View>
 
           <Text style={textStyle('3xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' })} className="text-strong">
-            {title}
+            Tu plan está inactivo
           </Text>
           <Text style={[TYPE.body, styles.body]} className="text-muted">
-            {body}
+            Tus datos y tus alumnos se conservan tal cual los dejaste.
           </Text>
         </MotiView>
 
@@ -192,8 +175,7 @@ export default function CoachReactivateScreen() {
               <Text style={textStyle('md', FONT.uiBold)} className="text-strong">Continuar con el plan gratuito</Text>
             </View>
             <Text style={TYPE.caption} className="text-muted">
-              Sigue usando EVA sin pagar, con hasta {FREE_CLIENT_LIMIT} alumnos activos. Puedes volver a un plan
-              pago cuando quieras; tus datos quedan intactos.
+              Sigue usando EVA sin pagar, con hasta {FREE_CLIENT_LIMIT} alumnos activos. Tus datos quedan intactos.
             </Text>
             {freeError ? (
               <View className="bg-danger-100" style={styles.errorBox}>
@@ -213,18 +195,8 @@ export default function CoachReactivateScreen() {
         ) : null}
 
         <View style={styles.actions}>
-          <Button
-            testID="reactivate-cta"
-            label="Reactivar plan en la web"
-            variant="primary"
-            leftIcon={ExternalLink}
-            onPress={() => Linking.openURL(REACTIVATE_URL).catch(() => {})}
-            full
-            size="lg"
-          />
-          <Text style={[TYPE.caption, styles.note]} className="text-muted">
-            Los pagos y cambios de plan se gestionan desde la web por seguridad.
-          </Text>
+          {/* Si el plan volvió fuera del teléfono, esto lo refleja al toque y el guard suelta. */}
+          <RefreshPlanButton variant="primary" size="lg" full onRefreshed={() => { void load() }} />
           <Button testID="reactivate-logout" label="Cerrar sesión" variant="ghost" onPress={handleLogout} full />
         </View>
       </ScrollView>
@@ -247,5 +219,4 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorBox: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   actions: { marginTop: 8, gap: 12 },
-  note: { textAlign: 'center', paddingHorizontal: 12 },
 })

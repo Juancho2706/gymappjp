@@ -29,7 +29,7 @@ import { nutritionV2BuilderHref } from './nutrition-v2-hub'
  *  - `plan`: el plan VIGENTE HOY (`today.plan`). Si es null → estado vacío con CTA al builder
  *    (web nutritionTabV2.logic.ts:121-122,159).
  *  - `showHistoryUpgradeCta`: sin el addon Nutrición Pro el histórico se recorta a la ventana
- *    base (~30d) y se ofrece el upgrade (web nutritionTabV2.logic.ts:183).
+ *    base (~30d) y se informa el estado (web nutritionTabV2.logic.ts:183).
  */
 export interface NutritionTabV2ViewModel {
   clientId: string
@@ -42,7 +42,7 @@ export interface NutritionTabV2ViewModel {
   detailHref: string
   /** Ruta expo-router del builder V2. */
   builderHref: string
-  /** Ruta canónica de upgrade del addon Pro (web: '/coach/subscription'). */
+  /** Ruta INTERNA (expo-router) de la pantalla de estado del plan. Nunca una URL de pago. */
   historyUpgradeHref: string
   builderCtaLabel: 'Crear plan' | 'Nueva versión'
   /** Resumen del plan vigente (null si no hay plan vigente hoy). */
@@ -66,7 +66,7 @@ export interface NutritionTabV2ViewModel {
   }
   /** Últimos días (ya recortados a la ventana base si no hay addon Pro). */
   recentDays: Array<{ localDate: string; label: string; calories: number; entryCount: number }>
-  /** Sin addon Pro → mostrar CTA "Histórico completo con Nutrición Pro". */
+  /** Sin addon Pro → informar que el histórico está recortado a la ventana base. */
   showHistoryUpgradeCta: boolean
 }
 
@@ -77,13 +77,14 @@ export interface BuildNutritionTabV2Input {
   nutritionProEnabled: boolean
   /** Últimos días YA recortados a la ventana visible. El mapper no vuelve a recortar. */
   recentDaysForDisplay: NutritionHistoryDay[]
-  /** Ruta de upgrade del addon (default: la canónica web '/coach/subscription'). */
+  /** Ruta interna del estado del plan (default: '/coach/(tabs)/subscription'). */
   historyUpgradeHref?: string
 }
 
-// Nutrición Pro viene incluido en los planes pagos — el CTA apunta al upgrade de plan
-// (web nutritionTabV2.logic.ts:80 DEFAULT_HISTORY_UPGRADE_HREF).
-const DEFAULT_HISTORY_UPGRADE_HREF = '/coach/subscription'
+// Divergencia deliberada con web (nutritionTabV2.logic.ts:80): en la app la ruta apunta a la
+// pantalla INTERNA de estado del plan, nunca a la página de pago web. Las políticas de las
+// tiendas (Apple 3.1.1 / pagos de Google Play) prohíben CTAs a mecanismos de pago externos.
+const DEFAULT_HISTORY_UPGRADE_HREF = '/coach/(tabs)/subscription'
 
 function num(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0

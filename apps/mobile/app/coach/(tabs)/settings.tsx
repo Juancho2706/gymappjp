@@ -42,7 +42,7 @@ import { signOutAndRedirectHome } from '../../../lib/auth-actions'
  *
  * Rutas (contrato del arquitecto E7):
  *  · Mi Marca    → /coach/settings/brand    (el brand studio de E3, mudado bajo el hub)
- *  · Suscripción → /coach/subscription      (tab existente)
+ *  · Mi plan     → /coach/subscription      (tab existente, solo estado del plan)
  *  · Módulos     → /coach/modules           (catálogo E6-12)
  *  · Funciones   → /coach/settings/features  (completo: presets + master switch + secciones)
  *  · Áreas       → /coach/settings/areas     (completo: CRUD de áreas del builder)
@@ -304,8 +304,8 @@ export default function CoachSettingsHubScreen() {
                   <ListRow
                     testID="hub-subscription"
                     leading={<IconTile Icon={CreditCard} />}
-                    title="Suscripción"
-                    subtitle="Tu plan, facturación y alumnos activos"
+                    title="Mi plan"
+                    subtitle="Estado de tu plan y alumnos activos"
                     showChevron
                     onPress={() => router.push('/coach/subscription')}
                   />

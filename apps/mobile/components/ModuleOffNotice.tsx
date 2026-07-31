@@ -1,8 +1,8 @@
-import { Linking, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { HeartPulse, Activity, Ruler, Apple, type LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { Button } from './Button'
-import { getApiBaseUrl } from '../lib/api'
+import { RefreshPlanButton } from './coach/RefreshPlanButton'
 import type { ModuleKey } from '../lib/entitlements-core'
 
 /**
@@ -12,10 +12,12 @@ import type { ModuleKey } from '../lib/entitlements-core'
  * la web por las 4 superficies (cardio, movement, body_composition, nutrition_exchanges).
  *
  * Decision CEO 2026-07-17: los modulos vienen INCLUIDOS con cualquier plan pago, asi que este
- * aviso solo lo ve un coach en plan Free. CTA CONTEXTUAL: por defecto (coach) abre el upgrade
- * de suscripcion en la web (`/coach/subscription` — la app no compra in-app). Los consumidores
- * pueden pasar un `cta` propio (p. ej. la vista del alumno: "contacta a tu coach") o
- * `cta={null}` para no mostrar boton.
+ * aviso solo lo ve un coach en plan Free. CTA CONTEXTUAL: por defecto (coach) el aviso es solo
+ * ESTADO del plan + "Actualizar estado" (revalida entitlements) — sin link-out a la pagina de
+ * pago ni precios (anti-steering Apple 3.1.1 / politica de pagos de Google, ver
+ * `docs/research/cta-pagos-externos-stores-2026-07-31.md`). Los consumidores pueden pasar un
+ * `cta` propio (p. ej. la vista del alumno: "contacta a tu coach") o `cta={null}` para no
+ * mostrar boton.
  */
 
 type ModuleCopy = { icon: LucideIcon; title: string; description: string }
@@ -54,22 +56,12 @@ export function ModuleOffNotice({
     cta,
 }: {
     moduleKey: ModuleKey
-    /** CTA override. `undefined` => default (coach: abrir catalogo web). `null` => sin boton. */
+    /** CTA override. `undefined` => default (coach: estado + "Actualizar estado"). `null` => sin boton. */
     cta?: CtaProp
 }) {
     const { theme } = useTheme()
     const copy = MODULE_COPY[moduleKey]
     const Icon = copy.icon
-
-    const resolvedCta: CtaProp =
-        cta === undefined
-            ? {
-                  label: 'Ver planes',
-                  onPress: () => {
-                      void Linking.openURL(`${getApiBaseUrl()}/coach/subscription`).catch(() => {})
-                  },
-              }
-            : cta
 
     return (
         <View style={styles.wrap} accessibilityLabel="module-off-notice">
@@ -91,12 +83,14 @@ export function ModuleOffNotice({
                 {copy.description}
             </Text>
             {cta === undefined ? (
-                <Text style={[styles.description, { color: theme.foreground, fontFamily: theme.fontSans, fontWeight: '600' }]}>
-                    Este módulo viene incluido en cualquier plan pago de EVA.
-                </Text>
-            ) : null}
-            {resolvedCta ? (
-                <Button label={resolvedCta.label} variant="sport" onPress={resolvedCta.onPress} style={styles.cta} />
+                <>
+                    <Text style={[styles.description, { color: theme.foreground, fontFamily: theme.fontSans, fontWeight: '600' }]}>
+                        Este módulo no está incluido en tu plan actual.
+                    </Text>
+                    <RefreshPlanButton size="sm" />
+                </>
+            ) : cta ? (
+                <Button label={cta.label} variant="sport" onPress={cta.onPress} style={styles.cta} />
             ) : null}
         </View>
     )

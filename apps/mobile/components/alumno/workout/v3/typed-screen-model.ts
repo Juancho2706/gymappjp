@@ -13,7 +13,9 @@ import {
   compactDistance,
   compactDuration,
   intervalTimerKind,
+  isManualPhase,
   type IntervalConfig,
+  type IntervalPhase,
   type IntervalPhaseKind,
 } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
@@ -101,6 +103,30 @@ export function cardioTimerMode(block: {
 /** ¿Los intervalos del bloque avanzan a mano (work por distancia)? Alimenta el CTA "Fase siguiente". */
 export function cardioIntervalIsManual(block: { interval_config?: unknown }): boolean {
   return intervalTimerKind((block.interval_config ?? null) as IntervalConfig | null) === 'manual'
+}
+
+/**
+ * Segundos que faltan para COMPLETAR la secuencia de intervalos, desde la fase `phaseIndex` con
+ * `remainingSec` en curso: lo que resta de la fase actual más la duración íntegra de las siguientes.
+ *
+ * Devuelve `null` cuando NO hay instante de fin conocido: índice fuera de rango, o alguna fase
+ * pendiente (incluida la actual) avanza MANUAL — una fase por distancia dura lo que el alumno tarde,
+ * así que programar un aviso sería inventar. Alimenta EXCLUSIVAMENTE la notificación de fin de cardio;
+ * la cuenta en pantalla la sigue llevando `useIntervalRunner` fase a fase (nada de esto la toca).
+ */
+export function cardioSequenceRemainingSec(
+  phases: IntervalPhase[],
+  phaseIndex: number,
+  remainingSec: number,
+): number | null {
+  if (!Number.isFinite(phaseIndex) || phaseIndex < 0 || phaseIndex >= phases.length) return null
+  if (isManualPhase(phases[phaseIndex])) return null
+  let total = Math.max(0, Math.round(remainingSec))
+  for (let i = phaseIndex + 1; i < phases.length; i += 1) {
+    if (isManualPhase(phases[i])) return null
+    total += Math.max(0, Math.round(phases[i].durationSec))
+  }
+  return total
 }
 
 /** Detalle corto del chip "Cardio · {detalle}" según la prescripción (identidad de la pantalla). */

@@ -28,6 +28,28 @@ La paridad global **no está certificada todavía**.
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
+> **2026-07-31 (corte compliance stores + timers lockscreen)**: (a) **Purga anti-steering completa**
+> (informe `docs/research/cta-pagos-externos-stores-2026-07-31.md`; Apple 3.1.1 + política de pagos de
+> Play prohíben CTAs a pago externo): eliminados de verdad (sin flags ni `Platform.OS`) los ~25 puntos
+> de venta de RN — tab Suscripción reconvertido a **"Mi plan"** solo-estado (sin precios, tarjeta ni
+> historial de pagos), muro `/coach/reactivate` neutro ("Tu plan está inactivo" + estado, ya sin botón
+> a la web), 9 banners del dashboard a "Ver mi plan" interno, registro reducido a 2 pasos SIN precios
+> CLP ni "se activan en eva-app.cl", muros de límite/módulos/nutrición/marca/funciones/perfil a copy de
+> estado, y normalización "incluido en planes pagos"→"no incluido en tu plan". Nuevo
+> `components/coach/RefreshPlanButton.tsx` ("Actualizar estado") revalida entitlements por el camino
+> canónico de `activate-free`. La venta vive en web/email/WhatsApp (correos Resend por evento = deuda
+> abierta). NOTA: esto supersede el "pago sigue siendo link-out a la web" del corte anterior — ya no
+> hay link-out; el pago es 100% fuera de la app sin mención in-app. (b) **Timers en lockscreen**:
+> módulo genérico `timers/live-timer-notification.ts` (chronometer down/up/none, actions, largeIcon,
+> smallIcon `notification_icon` con fallback), **cardio** ganó cronómetro vivo (countdown/fases/
+> ascendente, color de zona, logo del coach, notif final "¡Cardio completo!" patrón QA-10) y el
+> **descanso** ganó botones operables en background (`Pausar/+15 s/Saltar` + ficha de pausa con
+> `Reanudar`) vía handler headless único (`timers/notification-events.ts`, despacho por prefijo —
+> notify-kit admite UN solo `onBackgroundEvent`) + snapshot/cola anti doble-apply (57 tests nuevos).
+> Gates del corte: tsc mobile 0, eslint tocados limpio, suite 5007 tests verdes, boundaries verde,
+> `expo export` android verde. TODO exige la MISMA build EAS ya pendiente (notify-kit); QA física
+> post-build: botones en MIUI/Pixel, +15 s sin doble-apply, huérfanas, "Mi plan"/muros en light/dark.
+>
 > **2026-07-31 (gate de acceso RN — corrección)**: los guards de suscripción vivían dentro de los layouts de **tabs**, así que no cubrían las rutas fuera de esos grupos. Coach: `app/coach/(tabs)/_layout.tsx` dejaba sin gate ~21 rutas (`cliente/[clientId]`, `program-builder`, `nutrition-v2/*`, `cardio/*`, `bodycomp`, `movement/*`, `settings/*`, `foods`, `tools`, …) y además se evaluaba una sola vez por arranque (el layout de tabs no se desmonta al cambiar de tab), de modo que un back-gesture devolvía al dashboard con el plan vencido. Alumno: mismo patrón dejaba fuera `workout/[planId]`, `exercise/[id]`, `add-food` y `onboarding`, alcanzables por deep link o por el tap de una notificación push. Corregido con layouts raíz `app/coach/_layout.tsx` y `app/alumno/_layout.tsx` — el del coach usa estado reactivo (`lib/coach-access.ts`, SWR + revalidación por foreground/navegación) en vez de un efecto de una pasada, y el del alumno absorbió el gate de montaje completo, incluido el consentimiento de pool (Ley 21.719), en el mismo orden que el proxy web. En el mismo corte, el muro `/coach/reactivate` de RN gana la salida **volver al plan gratuito** (panel de archivado/eliminación + `POST /api/mobile/coach/activate-free`, que comparte `services/billing/activate-free.service.ts` con la web): antes solo sabía link-outear al navegador, así que un coach vencido sin computador solo podía pagar. El camino de **pago** sigue siendo link-out exclusivo a la web. Requiere QA física + build/OTA.
 
 > **2026-07-29 (rama `worktree-adelanto-qa-20260729`, sin merge)**: adelanto paralelo al QA del owner —

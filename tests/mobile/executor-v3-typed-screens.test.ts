@@ -12,6 +12,7 @@ import {
   cardioDistanceObjective,
   cardioIntervalIsManual,
   cardioObjective,
+  cardioSequenceRemainingSec,
   cardioTimerMode,
   formatClock,
   holdSeedValues,
@@ -93,6 +94,40 @@ describe('cardioDetailLabel', () => {
     expect(cardioDetailLabel({ interval_config: { repeats: 4, work: { duration_sec: 30 } } })).toBe('Intervalos')
     expect(cardioDetailLabel({ distance_value: 5000 })).toBe('Distancia')
     expect(cardioDetailLabel({ duration_sec: 1200 })).toBe('Continuo')
+  })
+})
+
+/**
+ * Alimenta la notificación "¡Cardio completo!" del espejo en bandeja/lockscreen: cuántos segundos
+ * faltan para terminar la SECUENCIA (no la fase). Es lo único del lote de notificaciones que tiene
+ * lógica pura; el resto (contador vivo) es NO-OP garantizado sin la lib nativa.
+ */
+describe('cardioSequenceRemainingSec', () => {
+  const timed = (kind: 'work' | 'recovery' | 'warmup' | 'cooldown', durationSec: number) =>
+    ({ kind, durationSec, mode: 'timed' as const })
+  const manual = (kind: 'work' | 'recovery') => ({ kind, durationSec: 0, mode: 'manual' as const, distanceM: 400 })
+
+  it('suma lo que resta de la fase actual más las fases por tiempo pendientes', () => {
+    const phases = [timed('warmup', 300), timed('work', 60), timed('recovery', 90), timed('cooldown', 120)]
+    expect(cardioSequenceRemainingSec(phases, 0, 300)).toBe(570)
+    expect(cardioSequenceRemainingSec(phases, 1, 20)).toBe(230)
+    expect(cardioSequenceRemainingSec(phases, 3, 120)).toBe(120)
+  })
+
+  it('null si la fase actual o alguna pendiente avanza MANUAL (dura lo que el alumno tarde)', () => {
+    const phases = [timed('warmup', 300), manual('work'), timed('recovery', 90)]
+    expect(cardioSequenceRemainingSec(phases, 0, 300)).toBeNull()
+    expect(cardioSequenceRemainingSec(phases, 1, 0)).toBeNull()
+    // Ya pasada la manual, el fin vuelve a ser conocido.
+    expect(cardioSequenceRemainingSec(phases, 2, 45)).toBe(45)
+  })
+
+  it('null con índice fuera de rango o secuencia vacía; nunca devuelve negativos', () => {
+    const phases = [timed('work', 60)]
+    expect(cardioSequenceRemainingSec([], 0, 30)).toBeNull()
+    expect(cardioSequenceRemainingSec(phases, -1, 30)).toBeNull()
+    expect(cardioSequenceRemainingSec(phases, 1, 30)).toBeNull()
+    expect(cardioSequenceRemainingSec(phases, 0, -5)).toBe(0)
   })
 })
 

@@ -23,10 +23,24 @@ import { primeTimerAudio } from './sound'
  * SOLOS vía este provider (el consumidor solo llama a los `start*`).
  */
 
-type RestOpts = { autoStart?: boolean; label?: string; warmup?: boolean }
+/**
+ * `setIndex`/`setTotal` son CONTEXTO de la notificación del descanso (QA-11 fase 2: "Serie 2 de 4"
+ * en la bandeja/lockscreen). Opcionales y puramente informativos — no alteran la cuenta ni la UI
+ * in-app; sin ellos la notificación cae a su copy histórico.
+ */
+type RestOpts = { autoStart?: boolean; label?: string; warmup?: boolean; setIndex?: number; setTotal?: number }
 
 type ActiveTimer =
-  | { kind: 'rest'; nonce: number; seconds: number; autoStart: boolean; label?: string; warmup?: boolean }
+  | {
+      kind: 'rest'
+      nonce: number
+      seconds: number
+      autoStart: boolean
+      label?: string
+      warmup?: boolean
+      setIndex?: number
+      setTotal?: number
+    }
   | { kind: 'hold'; nonce: number; seconds: number; label?: string }
   | { kind: 'interval'; nonce: number; phases: IntervalPhase[] }
   | { kind: 'stopwatch'; nonce: number }
@@ -122,6 +136,8 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
         autoStart: opts?.autoStart ?? true,
         label: opts?.label,
         warmup: opts?.warmup,
+        setIndex: opts?.setIndex,
+        setTotal: opts?.setTotal,
       })
     },
     [replaceWith],
@@ -215,6 +231,8 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
                 initialSeconds={active.seconds}
                 autoStart={active.autoStart}
                 nextLabel={active.label}
+                setIndex={active.setIndex}
+                setTotal={active.setTotal}
                 warmup={active.warmup}
                 onClose={close}
                 registerAlarmSilencer={registerAlarmSilencer}

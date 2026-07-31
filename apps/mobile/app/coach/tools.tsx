@@ -197,9 +197,9 @@ export default function ToolsHubScreen() {
 
             {!anyActive ? (
               <View style={{ gap: 14 }}>
-                {/* Empty-state que VENDE — nada comprado (no se esconde el catálogo). */}
+                {/* Empty-state informativo — sin venta in-app (compliance stores, informe 2026-07-31). */}
                 <SellCard managed={managed} onExplore={() => router.push('/coach/modules')} />
-                <SectionTitle>Incluido en los planes pagos</SectionTitle>
+                <SectionTitle>No incluidos en tu plan</SectionTitle>
                 <View style={{ gap: 12 }}>
                   {[...TOOLS, PLAN_TOOL].map((tool) => (
                     <ModuleHubCard key={tool.key} tool={tool} active={false} managed={managed} onPrimary={primaryFor(tool, false)} />
@@ -303,7 +303,7 @@ function SellCard({ managed, onExplore }: { managed: boolean; onExplore: () => v
       </Text>
       {!managed ? (
         <Button
-          label="Incluidas en los planes pagos — Ver planes"
+          label="No incluidas en tu plan — Ver módulos"
           variant="sport"
           onPress={onExplore}
           full
@@ -369,7 +369,7 @@ function ModuleHubCard({
           </Badge>
         ) : (
           <Badge tone="neutral" variant="soft" size="sm">
-            Con plan pago
+            No incluido
           </Badge>
         )}
       </View>
@@ -393,7 +393,7 @@ function ModuleHubCard({
         </View>
       ) : (
         <Button
-          label="Incluido en planes pagos · Ver planes"
+          label="No incluido en tu plan · Ver módulos"
           variant="secondary"
           leftIcon={Lock}
           onPress={onPrimary}

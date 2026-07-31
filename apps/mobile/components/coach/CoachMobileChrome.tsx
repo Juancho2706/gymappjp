@@ -31,7 +31,7 @@ const NAV_ROUTE: Record<string, MobileNavRoute> = {
   options: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones', concept: 'ajustes' },
   settings_team: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones', concept: 'ajustes' },
   team: { tab: 'team', path: '/coach/team', icon: Shield, label: 'Equipo', concept: 'equipo' },
-  reactivate: { tab: 'reactivate', path: '/coach/reactivate', icon: LayoutDashboard, label: 'Reactivar' },
+  reactivate: { tab: 'reactivate', path: '/coach/reactivate', icon: LayoutDashboard, label: 'Mi plan' },
 }
 
 // Orden verbatim del responsive web; despues de filtrar permisos toma hasta cinco

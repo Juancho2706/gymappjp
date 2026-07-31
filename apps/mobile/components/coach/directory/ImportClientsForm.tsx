@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Linking, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native'
-import { useRouter } from 'expo-router'
 import { Check, Download, Upload } from 'lucide-react-native'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system/legacy'
 import { decode } from 'base64-arraybuffer'
 import { Button } from '../../../components'
+import { RefreshPlanButton } from '../RefreshPlanButton'
 import { FONT } from '../../../lib/typography'
 import { ApiError, apiFetch, getApiBaseUrl } from '../../../lib/api'
 import {
@@ -95,7 +95,6 @@ export function ImportClientsForm({
   access: 'allowed' | 'upgrade' | 'loading' | 'load_error' | 'role_blocked'
   onBlockingChange?: (blocking: boolean) => void
 }) {
-  const router = useRouter()
   const { height: windowHeight } = useWindowDimensions()
   const [step, setStep] = useState(1)
   const [sheet, setSheet] = useState<ParsedSheet | null>(null)
@@ -131,54 +130,18 @@ export function ImportClientsForm({
       </View>
       <Button label="Cerrar" variant="secondary" onPress={onCancel} full />
     </View>
-  ) : access === 'upgrade' ? (() => {
-    const features = [
-      'Importa hasta 1.000 alumnos desde .xlsx / .csv',
-      'Detección automática de columnas (nombre, email, tel)',
-      'Preview con errores marcados antes de confirmar',
-      'Cumplimiento Ley 19.628 — checkbox de consentimiento',
-    ]
-    return (
-      <ScrollView style={{ maxHeight: Math.min(560, windowHeight * 0.62) }} showsVerticalScrollIndicator={false}>
-        <View style={{ gap: 16 }}>
-          <View className="border-success-500/20 bg-success-100 dark:bg-success-100/[0.12]" style={{ borderWidth: 1, borderRadius: theme.radius.lg, padding: 18, gap: 10 }}>
-            <View className="bg-success-500/15" style={{ width: 48, height: 48, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' }}>
-              <Upload size={24} className="text-success-600" />
-            </View>
-            <Text className="text-strong" style={{ fontSize: 22, fontFamily: FONT.displayBold }}>Importar Alumnos desde Excel</Text>
-            <Text className="text-muted" style={{ fontSize: 13.5, lineHeight: 19, fontFamily: FONT.ui }}>
-              Migra toda tu cartera de alumnos desde Excel en minutos, sin cargar uno por uno. Disponible en{' '}
-              <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold }}>Starter</Text>.
-            </Text>
-          </View>
-          <View className="border-subtle bg-surface-card" style={{ borderWidth: 1, borderRadius: theme.radius.lg, padding: 16, gap: 14 }}>
-            <View>
-              <Text className="text-muted" style={{ fontSize: 11, fontFamily: FONT.uiSemibold, textTransform: 'uppercase', letterSpacing: 0.6 }}>Disponible en Starter</Text>
-              <Text className="text-strong" style={{ fontSize: 22, fontFamily: FONT.displayBold, marginTop: 4 }}>$19.990<Text className="text-muted" style={{ fontSize: 13, fontFamily: FONT.ui }}> /mes</Text></Text>
-            </View>
-            <View style={{ gap: 10 }}>
-              {features.map((feature) => (
-                <View key={feature} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
-                  <Check size={16} className="text-success-600" style={{ marginTop: 1 }} />
-                  <Text className="text-muted" style={{ flex: 1, fontSize: 13, lineHeight: 18, fontFamily: FONT.ui }}>{feature}</Text>
-                </View>
-              ))}
-            </View>
-            <TouchableOpacity
-              testID="import-clients-upsell"
-              accessibilityRole="button"
-              activeOpacity={0.82}
-              className="bg-success-500"
-              style={{ minHeight: 44, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 }}
-              onPress={() => { onCancel(); router.push({ pathname: '/coach/subscription', params: { upgrade: 'starter' } }) }}
-            >
-              <Text className="text-on-sport" style={{ fontSize: 14, fontFamily: FONT.uiSemibold }}>Importar alumnos con Starter →</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    )
-  })() : null
+  ) : access === 'upgrade' ? (
+    <View style={{ gap: 16 }}>
+      <View testID="import-clients-not-included" className="border-subtle bg-surface-card" style={{ borderWidth: 1, borderRadius: theme.radius.lg, padding: 16, gap: 10 }}>
+        <Text className="text-strong" style={{ fontSize: 17, fontFamily: FONT.displayBold }}>La importación de alumnos no está incluida en tu plan actual</Text>
+        <Text className="text-muted" style={{ fontSize: 13, lineHeight: 18, fontFamily: FONT.ui }}>
+          Puedes seguir agregando alumnos uno por uno desde tu cartera.
+        </Text>
+        <RefreshPlanButton size="sm" />
+      </View>
+      <Button label="Cerrar" variant="secondary" onPress={onCancel} full />
+    </View>
+  ) : null
 
   // ─── Paso 1: cargar hoja ───────────────────────────────────────────────────
   function loadSheet(text: string, filename: string) {
@@ -320,7 +283,7 @@ export function ImportClientsForm({
       })
     } catch (error) {
       const message = error instanceof ApiError && error.code === 'UPGRADE_REQUIRED'
-        ? 'Tu plan actual no incluye la importación de alumnos. Actualiza tu plan para continuar.'
+        ? 'Tu plan actual no incluye la importación de alumnos.'
         : error instanceof Error ? error.message : 'No se pudo importar la cartera.'
       setUploadError(message)
     } finally {
@@ -606,13 +569,11 @@ export function ImportClientsForm({
             </View>
 
             {wouldExceedLimit ? (
-              <View style={{ borderWidth: 1, borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '0D', borderRadius: theme.radius.lg, padding: 12, gap: 6 }}>
+              <View testID="import-clients-limit" style={{ borderWidth: 1, borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '0D', borderRadius: theme.radius.lg, padding: 12, gap: 10 }}>
                 <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiSemibold }}>
-                  Tu plan permite {maxClients} alumnos y tienes {activeCount}. No puedes importar {toImport.length} alumnos más.
+                  Con esta importación superarías el límite de {maxClients} alumnos de tu plan. Tienes {activeCount} activos y estás importando {toImport.length}.
                 </Text>
-                <TouchableOpacity testID="import-clients-upgrade" onPress={() => { onCancel(); router.push({ pathname: '/coach/subscription', params: { upgrade: 'true' } }) }}>
-                  <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiBold, textDecorationLine: 'underline' }}>Actualiza tu plan →</Text>
-                </TouchableOpacity>
+                <RefreshPlanButton size="sm" />
               </View>
             ) : null}
 

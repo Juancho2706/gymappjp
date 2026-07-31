@@ -1,4 +1,4 @@
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import {
@@ -19,8 +19,8 @@ import { MotiView } from 'moti'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { MODULE_CATALOG, MODULE_CATALOG_KEYS, type ModuleKey } from '@eva/module-catalog'
 import { useEntitlements } from '../../lib/entitlements'
-import { getApiBaseUrl } from '../../lib/api'
 import { AppBackground } from '../../components/AppBackground'
+import { RefreshPlanButton } from '../../components/coach/RefreshPlanButton'
 import { Card } from '../../components'
 
 /**
@@ -29,8 +29,10 @@ import { Card } from '../../components'
  *
  * Decisión CEO 2026-07-17: los 4 módulos vienen INCLUIDOS con cualquier plan pago; ya no se
  * compran, activan ni desactivan por separado. Esta pantalla dejó de ser superficie de venta:
- * sin precios ni CTA de compra. Coach pago => "Incluido en tu plan"; coach Free => link-out al
- * upgrade de suscripción en la web (`/coach/subscription`) — nunca compra in-app (regla IAP).
+ * sin precios ni CTA de compra. Coach pago => "Incluido en tu plan"; coach Free => solo ESTADO
+ * ("No está incluido en tu plan actual") + "Actualizar estado", que revalida entitlements. Sin
+ * link-out a la página de pago (anti-steering Apple 3.1.1 / política de pagos de Google, ver
+ * `docs/research/cta-pagos-externos-stores-2026-07-31.md`).
  * Estado derivado de `useEntitlements().hasModule(key)` (mismo gate de VISIBILIDAD que el resto
  * de la app; el gate de DINERO vive server-side en /api/mobile/*).
  */
@@ -53,9 +55,6 @@ const MODULE_ICONS: Record<ModuleKey, LucideIcon> = {
 
 /** Alcance de uso: se configura en el plan (nutrición) vs se usa con un alumno (resto). */
 const PLAN_SCOPED_MODULES: ReadonlySet<ModuleKey> = new Set(['nutrition_exchanges'])
-
-/** Upgrade de suscripción en la web (LINK-OUT, sin IAP) — los módulos vienen con el plan. */
-const SUBSCRIPTION_URL = `${getApiBaseUrl()}/coach/subscription`
 
 // Small pill (surface chip / scope chip) — mirror of the web `rounded-pill` chips.
 function Chip({ children, icon, outline }: { children: string; icon?: LucideIcon; outline?: boolean }) {
@@ -101,7 +100,7 @@ function ModuleCard({ moduleKey, active }: { moduleKey: ModuleKey; active: boole
               ) : (
                 <View className="flex-row items-center rounded-pill bg-surface-sunken" style={{ gap: 4, paddingHorizontal: 9, paddingVertical: 3 }}>
                   <Lock size={12} strokeWidth={2.4} className="text-muted" />
-                  <Text className="font-sans-bold text-muted" style={{ fontSize: 11.5 }}>Con plan pago</Text>
+                  <Text className="font-sans-bold text-muted" style={{ fontSize: 11.5 }}>No incluido</Text>
                 </View>
               )}
             </View>
@@ -129,16 +128,16 @@ function ModuleCard({ moduleKey, active }: { moduleKey: ModuleKey; active: boole
             </Text>
           </View>
         ) : (
-          <Pressable
-            testID={`modulos-cta-${moduleKey}`}
-            accessibilityRole="button"
-            accessibilityLabel={`Mejorar plan para usar ${entry.label}`}
-            onPress={() => { void Linking.openURL(SUBSCRIPTION_URL).catch(() => {}) }}
-            className="flex-row items-center self-start rounded-control bg-sport-500"
-            style={{ gap: 6, paddingHorizontal: 16, height: 40, marginTop: 14 }}
+          <View
+            testID={`modulos-estado-${moduleKey}`}
+            className="flex-row items-center"
+            style={{ gap: 6, marginTop: 12 }}
           >
-            <Text className="font-sans-bold text-on-sport" style={{ fontSize: 14 }}>Incluido en planes pagos · Ver planes</Text>
-          </Pressable>
+            <Lock size={15} strokeWidth={2.2} className="text-muted" />
+            <Text className="font-sans-bold text-muted" style={{ flex: 1, fontSize: 12.5 }}>
+              No está incluido en tu plan actual
+            </Text>
+          </View>
         )}
       </View>
     </Card>
@@ -148,6 +147,7 @@ function ModuleCard({ moduleKey, active }: { moduleKey: ModuleKey; active: boole
 export default function CoachModulesScreen() {
   const router = useRouter()
   const { hasModule } = useEntitlements()
+  const anyLocked = MODULE_CATALOG_KEYS.some((key) => !hasModule(key))
 
   return (
     <View className="flex-1 bg-surface-app">
@@ -175,7 +175,7 @@ export default function CoachModulesScreen() {
               Módulos
             </Text>
             <Text className="font-sans text-muted" style={{ fontSize: 13.5, marginTop: 4, lineHeight: 19 }}>
-              Herramientas profesionales incluidas en los planes pagos, sin costo extra.
+              Herramientas profesionales de evaluación y seguimiento por alumno.
             </Text>
           </View>
 
@@ -188,7 +188,7 @@ export default function CoachModulesScreen() {
             <View className="flex-row items-start rounded-control bg-sport-100" style={{ gap: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14 }}>
               <Info size={17} strokeWidth={2.2} className="text-sport-600" style={{ marginTop: 1 }} />
               <Text className="font-sans-bold text-sport-700" style={{ flex: 1, fontSize: 12.5, lineHeight: 18 }}>
-                Con un plan pago, los módulos se activan solos. Úsalos desde Herramientas.
+                Cuando tu plan los incluye, los módulos se activan solos. Úsalos desde Herramientas.
               </Text>
             </View>
           </MotiView>
@@ -199,8 +199,14 @@ export default function CoachModulesScreen() {
             ))}
           </View>
 
+          {anyLocked ? (
+            <View style={{ alignItems: 'center', marginTop: 16 }}>
+              <RefreshPlanButton size="sm" />
+            </View>
+          ) : null}
+
           <Text className="font-sans text-subtle" style={{ fontSize: 11.5, textAlign: 'center', lineHeight: 17, marginTop: 16 }}>
-            En el plan Free los módulos no están disponibles. Tu plan se gestiona desde la web.
+            En el plan Free los módulos no están disponibles.
           </Text>
         </ScrollView>
       </SafeAreaView>

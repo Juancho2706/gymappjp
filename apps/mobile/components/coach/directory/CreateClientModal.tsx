@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
-import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { CreateClientSchema } from '@eva/schemas'
 import { Input } from '../../../components'
+import { RefreshPlanButton } from '../RefreshPlanButton'
 import { FONT } from '../../../lib/typography'
 import { ApiError, apiFetch } from '../../../lib/api'
 import type { Theme } from '../../../lib/theme'
@@ -101,7 +101,10 @@ function ModalButton({
  * CreateClientModal — bottom-sheet "Agregar Nuevo Alumno" (POST /api/mobile/coach/clients).
  * Espejo web `apps/web/src/app/coach/clients/CreateClientModal.tsx`: 3 estados excluyentes
  * en el mismo sheet: (A) formulario · (B) éxito + CTA WhatsApp (si el alumno trae teléfono) ·
- * (C) upgrade requerido (endpoint 402 UPGRADE_REQUIRED). Modal RN nativo (sin @gorhom → sin
+ * (C) límite de alumnos del plan alcanzado (endpoint 402 UPGRADE_REQUIRED) — muro de ESTADO
+ * + "Actualizar estado", sin link-out a la página de pago (anti-steering Apple 3.1.1 /
+ * política de pagos de Google, ver `docs/research/cta-pagos-externos-stores-2026-07-31.md`).
+ * Modal RN nativo (sin @gorhom → sin
  * bomba -999). Los inputs usan el `Input` DS (borde de foco por style, sin re-clasificar el
  * subárbol → sin focus-hop Fabric 45798).
  */
@@ -117,11 +120,10 @@ export function CreateClientModal({
   onClose: () => void
   onCreated: () => void
   theme: any
-  /** Cupo del plan; espeja `currentLimit` del 402 para el título del gate de upgrade. */
+  /** Cupo del plan; espeja `currentLimit` del 402 para el título del muro de límite. */
   maxClients?: number
   workspace: CreateWorkspace
 }) {
-  const router = useRouter()
   const insets = useSafeAreaInsets()
   const [form, setForm] = useState<CreateForm>(EMPTY)
   const [loading, setLoading] = useState(false)
@@ -259,27 +261,22 @@ export function CreateClientModal({
               <View style={{ height: 12 }} />
             </View>
           ) : phase === 'upgrade' ? (
-            // ─── (C) Upgrade requerido ────────────────────────────────────────────
-            <View style={styles.stateWrap}>
+            // ─── (C) Límite de alumnos del plan ───────────────────────────────────
+            <View testID="create-client-limit" style={styles.stateWrap}>
               <View style={[styles.stateCircle, { backgroundColor: WARNING + '26' }]}>
                 <Lock size={32} color={WARNING} />
               </View>
               <Text style={[styles.stateTitle, { color: theme.foreground }]}>
-                {upgradeLimit != null ? `Límite de ${upgradeLimit} alumnos alcanzado` : 'Límite de alumnos alcanzado'}
+                {upgradeLimit != null
+                  ? `Alcanzaste el límite de ${upgradeLimit} alumnos de tu plan.`
+                  : 'Alcanzaste el límite de alumnos de tu plan.'}
               </Text>
               <Text style={[styles.stateBody, { color: theme.mutedForeground }]}>
-                Haz upgrade para seguir creciendo. Tus alumnos actuales no se ven afectados.
+                Tus alumnos actuales no se ven afectados.
               </Text>
-              <ModalButton
-                testID="create-client-upgrade"
-                label="Ver planes →"
-                theme={theme}
-                variant="sport"
-                onPress={() => { handleClose(); router.push('/coach/subscription') }}
-                style={styles.fullButton}
-              />
-              <TouchableOpacity testID="create-client-upgrade-dismiss" onPress={handleClose} hitSlop={8}>
-                <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Ahora no</Text>
+              <RefreshPlanButton full />
+              <TouchableOpacity testID="create-client-limit-dismiss" onPress={handleClose} hitSlop={8}>
+                <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Cerrar</Text>
               </TouchableOpacity>
               <View style={{ height: 12 }} />
             </View>
@@ -460,8 +457,7 @@ const styles = StyleSheet.create({
   },
   modalButtonDisabled: { opacity: 0.6 },
   modalButtonLabel: { fontSize: 14, fontFamily: FONT.uiBold },
-  fullButton: { width: '100%' },
-  // Estados B/C (éxito / upgrade)
+  // Estados B/C (éxito / límite del plan)
   stateWrap: { alignItems: 'center', gap: 20, paddingVertical: 16, paddingHorizontal: 4 },
   stateCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   stateTitle: { fontSize: 18, fontFamily: FONT.displayBold, textAlign: 'center' },
