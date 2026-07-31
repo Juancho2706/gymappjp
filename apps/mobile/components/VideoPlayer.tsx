@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { Linking, StyleSheet, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { Linking, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Image } from 'expo-image'
 import { WebView, type WebViewProps } from 'react-native-webview'
 
@@ -10,9 +10,10 @@ import { WebView, type WebViewProps } from 'react-native-webview'
  */
 type WebViewHandle = { injectJavaScript: (js: string) => void }
 const WebViewWithRef = WebView as unknown as ComponentType<WebViewProps & { ref?: React.Ref<WebViewHandle> }>
-import { Play } from 'lucide-react-native'
+import { Play, RotateCcw } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { GLOWS } from '../lib/shadows'
+import { FONT } from '../lib/typography'
 import { extractYoutubeVideoId } from '../lib/youtube'
 
 /**
@@ -83,6 +84,37 @@ const MEDIA_MUTE_JS =
   '(function(){try{if(window.player&&player.mute)player.mute();}catch(e){}try{var v=document.getElementById("v");if(v)v.muted=true;}catch(e){}})();true;'
 const MEDIA_UNMUTE_JS =
   '(function(){try{if(window.player&&player.unMute){player.unMute();if(player.setVolume)player.setVolume(100);}}catch(e){}try{var v=document.getElementById("v");if(v){v.muted=false;var p=v.play();if(p&&p.catch)p.catch(function(){});}}catch(e){}})();true;'
+
+// ── Resiliencia de carga del WebView (QA5 · "caja vacía con controles encima") ──────────────────────
+// En el wifi del gimnasio el embed de youtube-nocookie (o el mp4 de Storage) muere seguido y el WebView
+// se quedaba montado en negro para siempre, con los controles glass flotando sobre la nada y sin ninguna
+// salida para el alumno. Mismo patrón que `ExecMediaImage` (ExecMediaV3.tsx): reintento automático y, si
+// igual muere, thumbnail + "Toca para reintentar".
+/** Reintentos AUTOMÁTICOS (remontando el WebView) ante un error inmediato antes de ofrecer el manual. */
+const MEDIA_MAX_AUTO_RETRIES = 2
+/**
+ * Watchdog: si el medio no avisó "cargué" en este lapso, se considera muerto. Vive en DOS capas porque
+ * ninguna sola lo cubre: (a) dentro del HTML —el único que sabe si el <iframe>/<video> resolvió, ya que
+ * el documento del WebView es local y su `onLoadEnd` llega al instante aunque el embed esté muerto—; y
+ * (b) del lado RN sobre `onLoadEnd`, por si ni el propio HTML llega a correr.
+ */
+const MEDIA_LOAD_TIMEOUT_MS = 12000
+/** Mensajes que el HTML manda por `postMessage` (contrato interno de este archivo). */
+const MSG_MEDIA_OK = 'media-ok'
+const MSG_MEDIA_ERROR = 'media-error'
+const MSG_MEDIA_TIMEOUT = 'media-timeout'
+/**
+ * Helpers inyectados en el `<head>` de AMBOS HTML (YouTube y `<video>` directo): avisan a RN si el medio
+ * cargó, falló o nunca resolvió. Van en el head (no al final del body) para que el handler ya exista
+ * cuando el `onload` del iframe dispare, incluso si viene de caché. Silencioso fuera del WebView.
+ */
+const MEDIA_BRIDGE_JS = `<script>
+  var MEDIA_LOADED=false;
+  function MEDIA_POST(m){try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(m);}catch(e){}}
+  function MEDIA_OK(){if(MEDIA_LOADED)return;MEDIA_LOADED=true;MEDIA_POST('${MSG_MEDIA_OK}');}
+  function MEDIA_FAIL(){if(!MEDIA_LOADED)MEDIA_POST('${MSG_MEDIA_ERROR}');}
+  setTimeout(function(){if(!MEDIA_LOADED)MEDIA_POST('${MSG_MEDIA_TIMEOUT}');},${MEDIA_LOAD_TIMEOUT_MS});
+</script>`
 
 let ExpoVideo: ExpoVideoModule | null = null
 try {
@@ -173,6 +205,10 @@ export function VideoPlayer({
   const ytId = useMemo(() => extractYoutubeVideoId(url), [url])
   const isDirect = !ytId && /^https?:\/\//i.test(url)
   const posterUri = poster ?? (ytId ? youtubeThumb(ytId) : null)
+  // ¿La reproducción corre dentro de un WebView? (YouTube siempre; media directa sólo si expo-video no
+  // está instalado). Es la única rama con el problema de la "caja vacía": expo-video y el fallback de
+  // "abrir afuera" no montan WebView.
+  const usesWebView = !!ytId || (isDirect && !ExpoVideo)
 
   // Ref del WebView (YouTube o <video> HTML5 directo) para inyectar los comandos de pausa/reinicio (QA5).
   // expo-video (mp4 con módulo instalado) se controla por props dentro de `DirectVideo`, no por acá.
@@ -207,6 +243,97 @@ export function VideoPlayer({
     webRef.current?.injectJavaScript(muted ? MEDIA_MUTE_JS : MEDIA_UNMUTE_JS)
   }, [muted, initialMuted, started])
 
+  // ── Resiliencia del WebView (QA5): intento actual (key del remonte) + fallo definitivo. ──
+  // `mediaAttempt` es la KEY del WebView: incrementarlo lo remonta desde cero (nueva petición del embed /
+  // del mp4). `mediaFailed` apaga el WebView y muestra thumbnail + "Toca para reintentar".
+  const [mediaAttempt, setMediaAttempt] = useState(0)
+  const [mediaFailed, setMediaFailed] = useState(false)
+  // Contador de intentos: la fuente de verdad es el REF (se lee y escribe sólo en handlers/efectos, nunca
+  // en render) y `mediaAttempt` es su espejo en estado, que es lo que remonta el WebView por `key`.
+  const attemptRef = useRef(0)
+  const nextAttempt = useCallback(() => {
+    attemptRef.current += 1
+    setMediaAttempt(attemptRef.current)
+  }, [])
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current)
+      watchdogRef.current = null
+    }
+  }, [])
+
+  /**
+   * El medio no cargó. `kind`:
+   *  · 'error'   → falla inmediata (onError/onHttpError de RN, o el `error` del <iframe>/<video>): se
+   *                reintenta solo hasta `MEDIA_MAX_AUTO_RETRIES` (igual que `ExecMediaImage`, donde el
+   *                reintento cuesta milisegundos) y recién ahí se ofrece el manual.
+   *  · 'timeout' → nadie avisó nada en 12s: reintentar en silencio costaría otros 12s de caja vacía, así
+   *                que se va DIRECTO al estado con botón — el alumno decide si insiste.
+   */
+  const handleMediaFailure = useCallback(
+    (kind: 'error' | 'timeout') => {
+      clearWatchdog()
+      if (kind === 'error' && attemptRef.current < MEDIA_MAX_AUTO_RETRIES) {
+        nextAttempt()
+        return
+      }
+      setMediaFailed(true)
+    },
+    [clearWatchdog, nextAttempt],
+  )
+
+  const retryMedia = useCallback(() => {
+    setMediaFailed(false)
+    nextAttempt()
+  }, [nextAttempt])
+
+  // Cambió la fuente (otro ejercicio / otra sustitución): el ciclo de carga arranca de cero.
+  useEffect(() => {
+    attemptRef.current = 0
+    setMediaAttempt(0)
+    setMediaFailed(false)
+  }, [url])
+
+  // Watchdog del lado RN: si el WebView ni siquiera termina de cargar su documento en 12s, se degrada
+  // igual (el watchdog de dentro del HTML no llegaría a correr nunca). Se rearma en cada intento.
+  useEffect(() => {
+    if (!started || !usesWebView || mediaFailed) return
+    clearWatchdog()
+    watchdogRef.current = setTimeout(() => {
+      watchdogRef.current = null
+      handleMediaFailure('timeout')
+    }, MEDIA_LOAD_TIMEOUT_MS)
+    return clearWatchdog
+  }, [started, usesWebView, mediaFailed, mediaAttempt, clearWatchdog, handleMediaFailure])
+
+  // Mensajes del HTML: 'media-ok' desarma el watchdog; error/timeout degradan.
+  const handleMediaMessage = useCallback(
+    (e: { nativeEvent: { data: string } }) => {
+      const msg = e.nativeEvent?.data
+      if (msg === MSG_MEDIA_OK) {
+        clearWatchdog()
+        return
+      }
+      if (msg === MSG_MEDIA_ERROR) handleMediaFailure('error')
+      else if (msg === MSG_MEDIA_TIMEOUT) handleMediaFailure('timeout')
+    },
+    [clearWatchdog, handleMediaFailure],
+  )
+
+  /**
+   * El documento del WebView terminó de cargar: desarma el watchdog RN (a partir de acá manda el del
+   * propio HTML, que sí sabe si el `<iframe>`/`<video>` resolvió) y RE-SINCRONIZA los controles tras un
+   * REMONTE por reintento — el HTML se hornea con autoplay y el mute inicial, así que si el alumno había
+   * pausado o encendido el sonido antes de la caída hay que volver a mandarle el comando. En la primera
+   * carga esto es no-op (paused=false y muted===initialMuted) ⇒ comportamiento previo intacto.
+   */
+  const handleWebViewLoadEnd = useCallback(() => {
+    clearWatchdog()
+    if (paused) webRef.current?.injectJavaScript(MEDIA_PAUSE_JS)
+    if (muted !== initialMuted) webRef.current?.injectJavaScript(muted ? MEDIA_MUTE_JS : MEDIA_UNMUTE_JS)
+  }, [clearWatchdog, paused, muted, initialMuted])
+
   const startAt = start != null && start > 0 ? Math.floor(start) : 0
   const endAt = end != null && end > startAt ? Math.floor(end) : null
 
@@ -240,6 +367,30 @@ export function VideoPlayer({
     </TouchableOpacity>
   )
 
+  // ── Medio caído (QA5): en vez de la caja vacía con los controles encima, la miniatura YA calculada
+  //    (póster de YouTube / el que pasó el caller) bajo un velo, con la afordancia de reintento. Todo el
+  //    recuadro es el botón. El velo oscuro deja legible el copy sobre CUALQUIER letterbox (el modal de
+  //    técnica lo pinta blanco), así que no depende del esquema de la cuenta. ──
+  const mediaFallback_ = (
+    <TouchableOpacity
+      testID="video-player-retry"
+      activeOpacity={0.9}
+      onPress={retryMedia}
+      accessibilityRole="button"
+      accessibilityLabel={title ? `Reintentar cargar el video de ${title}` : 'Reintentar cargar el video'}
+      className="w-full h-full items-center justify-center gap-2"
+    >
+      {posterUri ? (
+        <Image source={{ uri: posterUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} />
+      ) : null}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.retryScrim]} />
+      <View style={styles.retryBtn}>
+        <RotateCcw size={22} color="#eaeaf0" strokeWidth={2} />
+      </View>
+      <Text style={styles.retryText}>Toca para reintentar</Text>
+    </TouchableOpacity>
+  )
+
   // Letterbox: cuando se pasa un color, sobreescribe el #000 baked del fill (y el bg-surface-sunken del
   // contenedor) para que el fondo detrás del `object-contain` iguale a la web (p.ej. blanco en mp4 del modal).
   const fillStyle = letterbox ? [styles.fill, { backgroundColor: letterbox }] : styles.fill
@@ -269,8 +420,14 @@ export function VideoPlayer({
     >
       {!started ? (
         poster_
+      ) : usesWebView && mediaFailed ? (
+        // El embed/mp4 no cargó (wifi del gimnasio) — el WebView se DESMONTA: nada de controles flotando
+        // sobre una caja negra. Queda la miniatura + "Toca para reintentar" (remonta con otra key).
+        mediaFallback_
       ) : ytId ? (
         <WebViewWithRef
+          // La key es el intento: al reintentar, el WebView se remonta y vuelve a pedir el embed.
+          key={mediaAttempt}
           ref={webRef}
           testID="video-player-webview"
           accessibilityRole="image"
@@ -288,6 +445,12 @@ export function VideoPlayer({
           androidLayerType="hardware"
           // Evita que YouTube intente abrir el video en una ventana/app externa.
           setSupportMultipleWindows={false}
+          // Resiliencia (QA5): error del documento / HTTP / watchdog del propio HTML ⇒ degradar a
+          // miniatura + reintento en vez de dejar la caja vacía con los controles encima.
+          onError={() => handleMediaFailure('error')}
+          onHttpError={() => handleMediaFailure('error')}
+          onLoadEnd={handleWebViewLoadEnd}
+          onMessage={handleMediaMessage}
         />
       ) : isDirect && ExpoVideo ? (
         <DirectVideo
@@ -307,6 +470,7 @@ export function VideoPlayer({
         // Reemplaza el antiguo `Linking.openURL` (sacaba al usuario fuera de la app) → paridad inline
         // sin depender de un módulo nativo. El recorte [start,end] se loopea igual que en DirectVideo.
         <WebViewWithRef
+          key={mediaAttempt}
           ref={webRef}
           testID="video-player-direct-webview"
           accessibilityRole="image"
@@ -320,6 +484,12 @@ export function VideoPlayer({
           allowsFullscreenVideo={false}
           androidLayerType="hardware"
           setSupportMultipleWindows={false}
+          // Misma resiliencia que la rama YouTube: el `<video>` avisa su `error`/`loadeddata` por el
+          // puente y RN cubre el fallo del documento con onError/onHttpError + watchdog.
+          onError={() => handleMediaFailure('error')}
+          onHttpError={() => handleMediaFailure('error')}
+          onLoadEnd={handleWebViewLoadEnd}
+          onMessage={handleMediaMessage}
         />
       ) : (
         // URL no reconocida (ni YouTube ni media directa http/s): degradar a abrir afuera.
@@ -455,8 +625,13 @@ function youtubeEmbedHtml(
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>*{margin:0;padding:0}html,body{background:#000;height:100%;overflow:hidden}#p{width:100%;height:100%;border:0}</style>
+${MEDIA_BRIDGE_JS}
 </head><body>
-<iframe id="p" src="${src}" allow="autoplay; encrypted-media; picture-in-picture; web-share" allowfullscreen="false"></iframe>
+<!-- QA5 · resiliencia: el "cargó" se declara con el LOAD del iframe (no con la IFrame API): si el script
+     de la API no llega pero el embed sí, el video reproduce con el loop nativo y NO hay que degradar
+     nada (contrato §3a de degradación grácil). Sólo si el iframe nunca carga en 12s (wifi del gimnasio)
+     el puente avisa 'media-timeout' y RN cambia a la miniatura con reintento. -->
+<iframe id="p" src="${src}" onload="MEDIA_OK()" onerror="MEDIA_FAIL()" allow="autoplay; encrypted-media; picture-in-picture; web-share" allowfullscreen="false"></iframe>
 <script>
   var START=${start}, END=${end == null ? 'null' : end}, LOOP=${loop ? 'true' : 'false'};
   var player, watchdog;
@@ -503,12 +678,17 @@ function directVideoHtml(
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>*{margin:0;padding:0}html,body{background:${background};height:100%;overflow:hidden}video{width:100%;height:100%;object-fit:contain;background:${background}}</style>
+${MEDIA_BRIDGE_JS}
 </head><body>
 <video id="v" ${loop ? 'loop' : ''} ${muted ? 'muted' : ''} autoplay playsinline webkit-playsinline></video>
 <script>
   var START=${start}, END=${end == null ? 'null' : end}, LOOP=${loop ? 'true' : 'false'};
   var v=document.getElementById('v');
   ${muted ? 'v.muted=true;' : ''}
+  // QA5 · resiliencia: el primer frame decodificado confirma la carga; el evento 'error' del elemento
+  // (404 de Storage, red caída) degrada a la miniatura con reintento del lado RN.
+  v.addEventListener('loadeddata',function(){MEDIA_OK()});
+  v.addEventListener('error',function(){MEDIA_FAIL()});
   v.src=${JSON.stringify(url)};
   if(START>0){v.addEventListener('loadedmetadata',function(){try{v.currentTime=START}catch(_){}});}
   if(END!==null){v.addEventListener('timeupdate',function(){if(v.currentTime>=END){v.currentTime=START;if(LOOP){var p=v.play();if(p&&p.catch)p.catch(function(){});}}});}
@@ -531,4 +711,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Estado "no cargó" (QA5): velo + botón glass + copy, legible sobre cualquier letterbox (negro o blanco).
+  retryScrim: { backgroundColor: 'rgba(8,8,12,0.62)' },
+  retryBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8,8,12,0.72)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  retryText: { fontFamily: FONT.uiSemibold, fontSize: 11.5, color: '#eaeaf0' },
 })

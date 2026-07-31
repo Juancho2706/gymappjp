@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { MotiView } from 'moti'
+import { BrandLogoCircle } from '../../BrandLogoCircle'
 import { Skeleton } from '../../Skeleton'
 import { useTheme } from '../../../context/ThemeContext'
 import { hexToRgba } from '../../../lib/theme'
@@ -81,7 +81,7 @@ export function DashboardHeader({
 
   const welcomeRow = welcomeMessage ? (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-      <BrandDot size={22} brandName={brandName} />
+      <BrandLogoCircle size={22} brandName={brandName} />
       <Text className="text-muted" numberOfLines={1} style={{ flex: 1, fontSize: 12, fontFamily: FONT.ui }}>
         {`“${welcomeMessage}”`}
       </Text>
@@ -147,60 +147,6 @@ export function DashboardHeader({
           </View>
         )}
       </View>
-    </View>
-  )
-}
-
-/**
- * Círculo de marca del mensaje de bienvenida. El logo sale del branding RUNTIME
- * (`ThemeContext.branding`, ya saneado por tier en `resolveEffectiveCoachBrandPresentation`:
- * bajo Pro el logo llega en null y cae a las iniciales), con la misma precedencia que el
- * login (`login.tsx:160-161`): `logoUrlDark` en dark → `logoUrl` → inicial sobre
- * `theme.primary`. Cero hex de marca hardcodeado.
- */
-function BrandDot({ size, brandName }: { size: number; brandName?: string | null }) {
-  const { theme, branding, resolvedScheme } = useTheme()
-  const logoUri = (resolvedScheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
-  const initial = (brandName || branding?.displayName || 'E').trim().charAt(0).toUpperCase() || 'E'
-
-  if (logoUri) {
-    return (
-      <View
-        className="bg-surface-sunken border border-subtle"
-        style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }}
-      >
-        <Image
-          alt=""
-          source={{ uri: logoUri }}
-          style={{ width: size, height: size }}
-          contentFit="cover"
-          transition={150}
-        />
-      </View>
-    )
-  }
-
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.primary,
-      }}
-    >
-      <Text
-        style={{
-          fontFamily: FONT.uiExtra,
-          fontSize: Math.round(size * 0.5),
-          color: theme.primaryForeground,
-          textAlign: 'center',
-        }}
-      >
-        {initial}
-      </Text>
     </View>
   )
 }

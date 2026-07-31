@@ -21,6 +21,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { useTheme } from '../../../../context/ThemeContext'
+import { resolveOrFallback } from '../../../../lib/measure-guard'
 import { FONT } from '../../../../lib/typography'
 import { resolveExecTheme, type ExecTheme } from './exec-theme'
 
@@ -349,6 +350,32 @@ export function measureMorphOrigin(
   } catch {
     cb(null)
   }
+}
+
+/**
+ * Ventana máxima que se espera la medición nativa antes de navegar IGUAL (QA5). En MIUI/HyperOS el
+ * callback de `measureInWindow` a veces NUNCA dispara (nodo colapsado por su optimizador de vistas /
+ * frame descartado): como toda la navegación colgaba de ese callback, el tap quedaba MUERTO — el alumno
+ * tocaba la tarjeta del día y no pasaba nada. 120ms es holgado para una medición real (llega en el
+ * siguiente frame, ~16ms) e imperceptible como retraso.
+ */
+const MEASURE_TIMEOUT_MS = 120
+
+/**
+ * `measureMorphOrigin` con GARANTÍA DE DISPARO: llama `cb` exactamente UNA vez — con el rect si la
+ * medición contestó dentro de `timeoutMs`, o con `null` si no contestó. `null` es un camino ya soportado
+ * (el Despegue cae a `syntheticOrigin()`: misma ceremonia, la píldora nace del centro-bajo en vez de la
+ * tarjeta), así que la degradación es sólo visual y la navegación JAMÁS se pierde. Una medición que llega
+ * tarde, después del fallback, se IGNORA (guard `fired`) para no disparar dos veces la navegación.
+ */
+export function measureMorphOriginSafe(
+  node: { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void } | null,
+  radius: number,
+  cb: (origin: MorphOrigin | null) => void,
+  timeoutMs: number = MEASURE_TIMEOUT_MS,
+) {
+  // El guard (once + ventana) es puro y vive en `lib/measure-guard` para tener suite propia.
+  measureMorphOrigin(node, radius, resolveOrFallback<MorphOrigin | null>(cb, null, timeoutMs))
 }
 
 /** Ventana que el trigger real permanece OCULTO tras lanzar el Despegue: cubre el morph + wipe + nav

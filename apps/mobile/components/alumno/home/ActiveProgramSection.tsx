@@ -10,7 +10,7 @@ import { Badge } from '../../Badge'
 import { Card } from '../../Card'
 import { Sheet } from '../../Sheet'
 import { ProgramPhaseBar } from './ProgramPhaseBar'
-import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
+import { measureMorphOriginSafe, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
 import { DAY_FULL, DAY_SHORT } from './types'
 import type { PendingDay, PlanDayView, Program } from './types'
 
@@ -164,7 +164,9 @@ export function ActiveProgramSection({
             onPress={() => {
               hideBanner()
               // El banner es ancho → la píldora del Despegue SÍ muestra la etiqueta: texto de recuperación.
-              measureMorphOrigin(bannerRef.current, theme.radius.control, (origin) =>
+              // `…Safe` = la navegación NO cuelga de que la medición nativa conteste (QA5 · MIUI): si no
+              // contesta en 120ms se recupera igual con origen sintético.
+              measureMorphOriginSafe(bannerRef.current, theme.radius.control, (origin) =>
                 onRecover(oldestPending.planId, oldestPending.dateIso, origin, 'Recuperar entrenamiento'),
               )
             }}
@@ -422,7 +424,11 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
         testID={`program-day-${plan.id}`}
         onPress={() => {
           if (willMorph) hideCard()
-          measureMorphOrigin(ref.current, theme.radius.control, (origin) => onPress(origin))
+          // QA5 (MIUI/HyperOS): la navegación NO puede colgar del callback de `measureInWindow` — en esos
+          // ROMs a veces no dispara nunca y el tap quedaba MUERTO (la tarjeta ni siquiera abría el sheet).
+          // `measureMorphOriginSafe` garantiza el disparo: rect si midió a tiempo, `null` si no (el Despegue
+          // nace del origen sintético; los estados que abren el sheet ignoran el origin de todos modos).
+          measureMorphOriginSafe(ref.current, theme.radius.control, (origin) => onPress(origin))
         }}
         activeOpacity={0.8}
         accessibilityRole="button"

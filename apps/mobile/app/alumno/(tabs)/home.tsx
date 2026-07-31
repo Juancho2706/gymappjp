@@ -9,6 +9,7 @@ import { getDailyHabits } from '../../../lib/habits.queries'
 import { getActiveOrgAnnouncements } from '../../../lib/org-announcements'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useTheme } from '../../../context/ThemeContext'
+import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
 import { resetChromeScroll, useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { countLoggedSetsByBlock, deriveDayCompletion, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay, getTodayInSantiago, formatRelativeDate, isoDateAddDays, timeGreeting } from '../../../lib/date-utils'
@@ -106,8 +107,19 @@ export default function AlumnoHomeScreen() {
   const [onboardingResolved, setOnboardingResolved] = useState(false)
   const handleOnboardingResolved = useCallback(() => setOnboardingResolved(true), [])
 
+  // QA-5 — el splash de marca ES el loader de este dashboard (ver el efecto de `loading`
+  // más abajo). Se declara acá arriba porque el desvío al onboarding también lo retira.
+  const markDashboardReady = useMarkDashboardReady()
+
   useEffect(() => {
-    getOnboardingStatus().then((done) => { if (!done) router.replace('/alumno/onboarding') })
+    getOnboardingStatus().then((done) => {
+      if (!done) {
+        // El alumno nuevo NO vuelve a esta pantalla: su primer load nunca resolverá y el
+        // splash quedaría tapando el onboarding hasta el tope. El desvío ES la resolución.
+        markDashboardReady()
+        router.replace('/alumno/onboarding')
+      }
+    })
   }, [])
 
   // MOBILE-1 — refetch al ENFOCAR: antes la home solo cargaba al montar (deps []), asi el dia recien
@@ -474,6 +486,13 @@ export default function AlumnoHomeScreen() {
   // sola vez ya final (P0-3: evita el swap "Hola/Buenas tardes" -> "..., Nombre").
   const firstName = data?.client?.fullName?.split(' ')[0] ?? 'Atleta'
   const greeting = `${timeGreeting()}, ${firstName}`
+
+  // QA-5 — el splash de marca se retira cuando el PRIMER load resolvió, con datos o con
+  // error (`load()` baja `loading` en los dos caminos). El skeleton de abajo queda como
+  // fallback de las navegaciones posteriores, que ya no llevan splash.
+  useEffect(() => {
+    if (!loading) markDashboardReady()
+  }, [loading, markDashboardReady])
 
   if (loading) {
     return (

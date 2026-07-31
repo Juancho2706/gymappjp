@@ -62,6 +62,20 @@ Las suites E2E no bloquean PR automáticamente porque utilizan un entorno Supaba
 - [ ] Confirmar que los secrets E2E existen en el environment de GitHub.
 - [ ] Guardar el run y resultado consolidado en [TEST_STATUS.md](../testing/TEST_STATUS.md).
 
+### STORE-02 — Formulario Play Health con los data types de Cardio Conectado (2026-07-30)
+
+El corte 6 (`specs/cardio-conectado/`) suma permisos de lectura de Health Connect que la declaración
+de Play Console debe cubrir con justificación escrita por tipo de dato (~7 días de aprobación +
+5-7 hábiles de propagación del allowlist).
+
+- [ ] Verificar que la cuenta de Play sea **Organization Account verificada** (obligatoria para apps
+  de salud desde 2026-01-28; una cuenta individual bloquea el form).
+- [ ] Declarar y justificar: `READ_STEPS`, `READ_SLEEP` (ya en uso) + `READ_EXERCISE`,
+  `READ_HEART_RATE`, `READ_DISTANCE`, `READ_ACTIVE_CALORIES_BURNED` (Cardio Conectado F2). Pedir
+  solo lectura; beneficio: validar el cardio prescrito y autocompletar hábitos/check-in del alumno.
+- [ ] Confirmar que la privacy policy del listing coincide con la del link dentro de Health Connect.
+- [ ] Tras aprobar: probar en device que el diálogo de permisos muestra los 6 tipos.
+
 ## Cuándo agregar una tarea
 
 Agregar solo si se cumplen las tres condiciones:

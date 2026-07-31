@@ -907,6 +907,10 @@ export function ActiveSetRow({
 
   const currentField = openKey ? fields.find((f) => f.key === openKey) ?? null : null
 
+  // ¿Estamos en la captura HERO del ejecutor V3? (mismo predicado que la rama de render de abajo; se
+  // adelanta acá porque el teclado —que se arma antes— cambia de semántica en ese modo).
+  const heroCapture = heroMode && !typedMode && !!exec
+
   // Teclado numérico (Modal) — MISMO nodo para la fila V2 y el hero V3. Extraído a variable para no
   // duplicarlo entre ramas de render (la lógica de entrada/commit es idéntica).
   const keypadModal = openKey && currentField ? (
@@ -931,9 +935,16 @@ export function ActiveSetRow({
           value={values[openKey] ?? ''}
           onChange={(v) => patch({ [openKey]: v }, idxOf(openKey))}
           onNext={goNext}
+          // QA5 (CEO): en el HERO V3 el "Listo" del teclado SOLO baja el teclado — la serie se cierra con el
+          // CTA dedicado "Aplastar serie", no con el teclado (el alumno todavía quiere ver/ajustar esfuerzo y
+          // nota antes de aplastar). No se pierde nada: cada tecla ya pasó por `patch` → `values`/`valuesRef`,
+          // así que los tiles muestran lo tipeado al cerrar y el CTA commitea esos MISMOS valores.
+          // Fuera del hero (fila V2 y pantallas tipadas) se conserva cerrar+guardar = mirror web
+          // (`NumericKeypadSheet` "Listo" registra la serie).
+          doneIntent={heroCapture ? 'close' : 'save'}
           onDone={() => {
             setOpenKey(null)
-            handleConfirm(false)
+            if (!heroCapture) handleConfirm(false)
           }}
           onClose={() => setOpenKey(null)}
           tabs={

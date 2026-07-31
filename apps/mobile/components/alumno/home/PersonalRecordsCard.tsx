@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Text, TouchableOpacity, View } from 'react-native'
-import { Trophy } from 'lucide-react-native'
+import { Pressable, Text, TouchableOpacity, View } from 'react-native'
+import { Share2, Trophy } from 'lucide-react-native'
+import { cssInterop } from 'nativewind'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
 import { getPersonalRecords } from '../../../lib/history.queries'
 import { Card } from '../../Card'
-import { PRDetailSheet } from './PRDetailSheet'
+import { PRDetailSheet, RecordShareCard } from './PRDetailSheet'
+
+// className→color del glyph Share2 del atajo de compartir (patron cssInterop del repo para
+// lucide, mismo que PRDetailSheet.tsx:23 con Trophy): la card es `inverse` (oscura en ambos
+// esquemas) ⇒ el icono usa el token on-dark, nunca un hex de esquema.
+cssInterop(Share2, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 interface PR { exerciseId: string; exerciseName: string; weightKg: number; achievedAt: string }
 
@@ -30,6 +36,11 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
   const [prs, setPrs] = useState<PR[] | null>(null)
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<PR | null>(null)
+  // Atajo de 1 tap (QA-5 FIX-5): estado propio (dato pegajoso + flag de visibilidad, mismo par
+  // `selected`/`open` del sheet) para que la tarjeta conserve su contenido durante el fade de
+  // salida del preview y para no perturbar el PR seleccionado del PRDetailSheet.
+  const [sharePr, setSharePr] = useState<PR | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
 
   useEffect(() => {
     getPersonalRecords(clientId).then((data) => setPrs(data as PR[]))
@@ -68,6 +79,22 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
               </Text>
               <Text className="text-on-dark-muted" numberOfLines={2} style={{ fontFamily: FONT.uiSemibold, fontSize: 11, lineHeight: 14 }}>{pr.exerciseName}</Text>
               <Text className="text-on-dark-muted" style={{ fontFamily: FONT.ui, fontSize: 10, opacity: 0.7, fontVariant: ['tabular-nums'] }}>{fmtShort(pr.achievedAt)}</Text>
+
+              {/* Atajo de 1 tap a la tarjeta compartible (CEO QA-5): salta el PRDetailSheet y abre
+                  DIRECTO el preview de la share-card. El tap normal del tile sigue abriendo el
+                  detalle. Esquina inferior derecha porque la superior la ocupa el badge NUEVO;
+                  hitSlop 12 para llegar al mínimo táctil sin agrandar el glyph. Pressable anidado:
+                  captura el toque antes que el TouchableOpacity del tile. */}
+              <Pressable
+                testID={`pr-share-${pr.exerciseId}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Compartir record de ${pr.exerciseName}`}
+                onPress={() => { setSharePr(pr); setShareOpen(true) }}
+                hitSlop={12}
+                style={({ pressed }) => ({ position: 'absolute', right: 6, bottom: 6, padding: 4, opacity: pressed ? 0.55 : 1 })}
+              >
+                <Share2 size={16} className="text-on-dark-muted" strokeWidth={2.2} />
+              </Pressable>
             </TouchableOpacity>
           )
         })}
@@ -81,6 +108,18 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
         exerciseName={selected?.exerciseName ?? 'Ejercicio'}
         fallbackWeight={selected?.weightKg ?? null}
         onTecnica={onTecnica}
+      />
+
+      {/* Tarjeta compartible del atajo — MISMO componente que usa el sheet (cero lógica de tarjeta
+          nueva) y mismo montaje: overlay hermano, nunca dentro de otro <Modal> RN. Sólo uno de los
+          dos preview puede estar visible (el atajo vive en el tile, que queda detrás del sheet). */}
+      <RecordShareCard
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        clientId={clientId}
+        exerciseId={sharePr?.exerciseId ?? null}
+        exerciseName={sharePr?.exerciseName ?? 'Ejercicio'}
+        fallbackWeight={sharePr?.weightKg ?? null}
       />
     </Card>
   )

@@ -417,6 +417,13 @@ export function TypedKeypad(props: {
   onNext(): void
   onDone(): void
   /**
+   * Qué HACE el botón primario "Listo" en el caller (QA5): 'save' (default, mirror web) cierra Y guarda la
+   * serie; 'close' sólo baja el teclado porque la serie la cierra un CTA dedicado de la pantalla (hero V3
+   * "Aplastar serie"). Sólo cambia el `accessibilityLabel` — el rótulo visible sigue siendo "Listo" en ambos
+   * casos (para el alumno "Listo" = terminé de tipear) y `onDone` sigue siendo el único callback.
+   */
+  doneIntent?: 'save' | 'close'
+  /**
    * Cierre explícito SIN guardar — alimenta el botón X del panel (mirror web `NumericKeypadSheet.tsx:193-200`,
    * que SIEMPRE renderiza la X junto al grabber). Sin `onClose` el panel omite la X (el scrim del Modal padre
    * sigue cerrando por tap-fuera).
@@ -435,7 +442,7 @@ export function TypedKeypad(props: {
    */
   header?: { exerciseName?: string; objectiveLine?: string; last?: { weightKg: number | null; reps: number | null } | null }
 }) {
-  const { mode, value, onChange, onNext, onDone, onClose, unit, tabs, header } = props
+  const { mode, value, onChange, onNext, onDone, onClose, unit, tabs, header, doneIntent = 'save' } = props
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
   const cfg = MODE_CFG[mode]
@@ -553,7 +560,7 @@ export function TypedKeypad(props: {
           <Pressable
             testID={primaryIsNext ? 'keypad-next' : 'keypad-done'}
             accessibilityRole="button"
-            accessibilityLabel={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
+            accessibilityLabel={primaryIsNext ? 'Siguiente' : doneIntent === 'close' ? 'Listo, cerrar el teclado' : 'Listo, guardar serie'}
             onPress={primaryIsNext ? handleNext : handleDone}
             className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
           >

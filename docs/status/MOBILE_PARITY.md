@@ -69,6 +69,39 @@ La paridad global **no está certificada todavía**.
 > intacta para deep links. Timings 1:1 con la spec del mockup; gates: tsc 0, vitest 1121, expo
 > export android OK.
 
+> **2026-07-30 (misma rama, corte 6 — Cardio Conectado F1+F2 + home Mock C + ronda QA-5 del owner,
+> 10 hallazgos triados / 6 codificados)**: **Cardio Conectado** (SDD `specs/cardio-conectado/`) —
+> F1: HUD BLE en vivo en `CardioScreenV3` (tiempo-en-zona mm:ss, `ZoneBar` 5 segmentos con marcador
+> vivo + objetivo, avg/máx de sesión, háptica fuera-de-zona con debounce 10 s y rearme en pausa) con
+> reducer puro `zone-session` en `@eva/cardio`; la curva de FC persiste SIN migración en
+> `workout_logs.metadata.hr` (v1, serie downsampleada ≤360 pts) vía `ctx.hrMetadata` de
+> `buildTypedPayload`. F2: `readHubWorkouts` en ambos hubs — iOS migrado de `react-native-health`
+> (congelada por sus autores) a `@kingstinct/react-native-healthkit` v14 conservando la plomería de
+> errores QA-4 (HealthConnectResult + scopes `habits|workouts` para no reportar 'denied' falso) —
+> e `ImportWatchSheet` en el resumen: matching ≥50 % de solape con la ventana real de sesión,
+> `hubImportPatch` solo ejes vacíos, precedencia BLE>hub, escritura por `logSet`. Permisos nuevos
+> (`READ_EXERCISE/HEART_RATE/DISTANCE/ACTIVE_CALORIES_BURNED` + plugin kingstinct) **exigen build
+> EAS y ampliar el form de Play Health**. **Home alumno Mock C** (decisión CEO, artifact de mocks) —
+> header sin borde duro con wash de elevación del tema, marca↔fecha en una fila, mensaje del coach
+> con su logo real (`BrandLogoCircle`, ex-BrandDot, ahora compartido); `WeekStrip` reemplaza a
+> `StreakRibbon` (deprecated): 7 dots Lun→Dom con el MISMO estado greedy de las day-cards
+> (`deriveWeeklyStreak`, cero regla duplicada) + chip de racha RPC con hito y singular corregido.
+> **QA-5** — keypad "Listo" en hero SOLO cierra el teclado ("Aplastar serie" comitea; fuera de hero
+> intacto); `VideoPlayer` resiliente (onError/onHttpError + puente postMessage porque el onLoadEnd
+> del HTML local miente + watchdog 12 s → miniatura + reintento ×2, controles re-sincronizados);
+> taps de day-cards/hero/pendientes garantizados en MIUI (`measureMorphOriginSafe`: rect ≤120 ms o
+> fallback `null` — `startMorph` ya degradaba a origen sintético; deuda declarada: `workout.tsx`
+> PlanCard usa el crudo); logo del coach en el hero de "Mi perfil" (`Avatar src` modo logo, fallback
+> iniciales); atajo share 1-tap en cada tile de Records (`RecordShareCard` extraído de
+> `PRDetailSheet`, overlay hermano — jamás Modal-en-Modal); splash como loader del dashboard
+> (`DashboardReadyContext` + `DashboardSplashOverlay` hermano del Stack con handoff visual continuo
+> desde `SplashGate`, fade 280 ms, tope 5 s, onboarding y flujo sin sesión intactos). Verificado en
+> triaje sin tocar código: Aprender ya pagina server-side con taps vivos, "Comparte tu logro" ya
+> existe desde jul-08 (view-shot nativa — exige binario ≥ jul-08), Jose Fit SÍ tiene logo en DB
+> (avatar "JF" = bundle viejo). iOS Live Activities queda Ola 7A (diferida). Gates del corte: tsc
+> mobile 0; vitest 1388 verdes (tests/mobile + packages cardio/workout-engine); export Android en
+> curso al cierre. TODO pendiente de QA física en build EAS nueva.
+
 > **2026-07-30 (misma rama, corte 5 — ronda QA-4 del owner, 19 hallazgos, 13 informes + 12 workers
 > juzgados)**: **Ejecutor V3 RN** — cronómetro count-up arreglado (`useStopwatch` re-armaba el
 > intervalo cada tick y quedaba 0:00↔0:01; roller guardaba 0-1s en `workout_logs`); ejercicios por

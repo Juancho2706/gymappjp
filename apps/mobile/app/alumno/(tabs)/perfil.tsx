@@ -381,6 +381,12 @@ export default function AlumnoPerfilScreen() {
   // Marca del coach para el título "Constancia con {marca}" (mismo fallback que el chrome
   // de la card — ShareCard.tsx:371; web usa brand.brandName → 'EVA', canvas:733).
   const brandName = branding?.displayName?.trim() || 'EVA'
+  // QA-5 FIX-4: el avatar del hero muestra el LOGO del coach (pedido CEO), no las iniciales
+  // del alumno. MISMA precedencia que el header del home y el login (`BrandLogoCircle` /
+  // `login.tsx:161`): `logoUrlDark` en dark → `logoUrl` → null. Con null el `Avatar` cae solo
+  // a las iniciales del alumno (fallback ya existente, también si la URL muere: `Avatar.tsx:52-56`),
+  // que es el caso de los coaches sin logo (tier Pro sanea el logo a null en el branding runtime).
+  const coachLogoUri = (resolvedScheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
   const streakSubtitle = stats.streak > 0
     ? `${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} seguidos activo`
     : 'Enciende tu racha'
@@ -407,7 +413,9 @@ export default function AlumnoPerfilScreen() {
               style={{ marginBottom: 16 }}
             >
               <Card variant="inverse" padding="lg" style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                <Avatar name={detail?.fullName ?? ''} size="xl" ring="sport" />
+                {/* `fit="contain"` = modo LOGO del Avatar (QA2-B2): no recorta la marca, la
+                    apoya en un backplate neutro con margen interno. Ring/size intactos. */}
+                <Avatar src={coachLogoUri} name={detail?.fullName ?? ''} size="xl" ring="sport" fit="contain" />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text className="font-display-black text-on-dark" style={{ fontSize: 22, letterSpacing: -0.4 }} numberOfLines={1}>
                     {detail?.fullName ?? '-'}
