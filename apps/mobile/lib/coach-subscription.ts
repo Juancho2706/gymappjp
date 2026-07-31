@@ -3,15 +3,26 @@ import { getCoachProfile, type CoachProfile } from './coach'
 import { getCoachOrgContext } from './org'
 import { apiFetch } from './api'
 // F6 (plan 04): TIER_LABELS vive en @eva/tiers (fuente única web+mobile). Re-export, no espejo a mano.
-import { TIER_LABELS } from '@eva/tiers'
+import { TIER_LABELS, getTierMaxClients } from '@eva/tiers'
 import type { ModuleKey } from '@eva/module-catalog'
+
+/** Alumno activo listable en el panel de archivado de /coach/reactivate. */
+export interface ReactivateArchiveClient {
+  id: string
+  fullName: string
+}
 
 export interface CoachSubscriptionOverview {
   profile: CoachProfile
   orgManaged: boolean
   orgName: string | null
   clientCount: number
+  /** Activos standalone propios, para el panel de archivado (vacio si no aplica). */
+  activeClients: ReactivateArchiveClient[]
 }
+
+/** Cupo del plan gratuito (3). Fuente unica @eva/tiers — jamas hardcodear el numero en la UI. */
+export const FREE_CLIENT_LIMIT = getTierMaxClients('free')
 
 export { TIER_LABELS }
 
@@ -31,18 +42,42 @@ export async function getCoachSubscriptionOverview(): Promise<CoachSubscriptionO
   const [profile, ctx] = await Promise.all([getCoachProfile(), getCoachOrgContext()])
   if (!profile) return null
 
-  // Active (non-archived) client count — RLS scopes to the coach's own clients.
-  const { count } = await supabase
+  // Active (non-archived) clients — RLS scopes to the coach's own clients. Se traen id+nombre (no
+  // solo el count) porque el panel de archivado de la pantalla de reactivacion los lista; el conteo
+  // sale de la misma lectura en vez de una segunda query.
+  //
+  // `org_id IS NULL`: el panel solo puede tocar alumnos STANDALONE propios — mismo scope que
+  // `archiveClientsForFreeAction` en web. En managed (org/team) el muro ni siquiera se muestra.
+  const { data } = await supabase
     .from('clients')
-    .select('id', { count: 'exact', head: true })
+    .select('id, full_name')
     .or('is_archived.is.null,is_archived.eq.false')
+    .is('org_id', null)
+    .order('full_name')
+
+  const activeClients: ReactivateArchiveClient[] = (data ?? []).map((c: { id: string; full_name: string | null }) => ({
+    id: c.id,
+    fullName: c.full_name ?? 'Alumno',
+  }))
 
   return {
     profile,
     orgManaged: ctx.isOrgManaged,
     orgName: ctx.orgName,
-    clientCount: count ?? 0,
+    clientCount: activeClients.length,
+    activeClients,
   }
+}
+
+/**
+ * Baja al plan gratuito desde la app (salida del deadlock de cupo, SIN pagar).
+ *
+ * No es una operacion de cobro: el bridge cancela la suscripcion en el gateway y deja al coach en
+ * `free`. El servidor revalida estado bloqueado + cupo <= FREE_CLIENT_LIMIT; esta llamada NO
+ * autoriza nada por si misma.
+ */
+export function activateFreePlan(): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>('/api/mobile/coach/activate-free', { method: 'POST', authenticated: true })
 }
 
 // ── Estado de suscripción RICO (E7-03) ────────────────────────────────────────────────

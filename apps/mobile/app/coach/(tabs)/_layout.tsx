@@ -1,34 +1,16 @@
-import { useEffect } from 'react'
-import { Tabs, useRouter } from 'expo-router'
+import { Tabs } from 'expo-router'
 import { View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { CoachMobileTabBar } from '../../../components/coach/CoachMobileChrome'
 import { CoachTabbarScrollProvider } from '../../../components/coach/CoachTabbarScroll'
-import { getCoachProfile } from '../../../lib/coach'
-import { resolveReactivateRequired } from '../../../lib/workspace'
 
 export default function CoachTabsLayout() {
   const { theme } = useTheme()
-  const router = useRouter()
 
-  // E7-12: gate de suscripcion a nivel navegacion (cubre TODAS las tabs, espejo del middleware web
-  // resolveCoachSubscriptionRedirect + del guard alumno->suspended). Un coach sin acceso EFECTIVO
-  // (cancelado con gracia vencida / expired / dunning fuera de gracia) va a /coach/reactivate.
-  // Esa ruta vive en tabs para conservar la cápsula web; reemplazar por la ruta ya activa es no-op,
-  // así que no genera loop. `resolveReactivateRequired` respeta la gracia hasta current_period_end
-  // y NUNCA gatea a managed (org/team).
-  useEffect(() => {
-    let mounted = true
-    getCoachProfile()
-      .then((c) => {
-        if (!mounted || !c) return
-        if (resolveReactivateRequired(c.subscriptionStatus, c.currentPeriodEnd)) {
-          router.replace('/coach/reactivate')
-        }
-      })
-      .catch(() => {})
-    return () => { mounted = false }
-  }, [])
+  // E7-12: el gate de suscripcion YA NO vive aca. Subio a `app/coach/_layout.tsx` porque este
+  // layout solo cubre el grupo `(tabs)` (dejaba sin gate la ficha del alumno, program-builder,
+  // nutrition-v2, cardio, settings/*, …) y ademas no se desmonta al cambiar de tab, asi que el
+  // chequeo corria una sola vez por arranque. El de arriba es estado reactivo sobre TODO /coach.
 
   return (
     <CoachTabbarScrollProvider>

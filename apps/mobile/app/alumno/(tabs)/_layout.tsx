@@ -4,8 +4,9 @@ import { Tabs, useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { getClientProfile } from '../../../lib/client'
+// `getPoolConsentStatus` sigue acá para la re-evaluación por AppState; el chequeo de MONTAJE
+// (blocked → password → consent) vive ahora en `app/alumno/_layout.tsx`.
 import { getPoolConsentStatus } from '../../../lib/pool-consent'
-import { sessionFlags } from '../../../lib/session-flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 import { StudentAccessBlocked } from '../../../components/alumno/StudentAccessBlocked'
@@ -27,38 +28,12 @@ export default function AlumnoTabsLayout() {
   // montar y el de AppState pueden coincidir; el flag evita dos router.replace).
   const redirecting = useRef(false)
 
-  // Ola 0: gate de acceso a nivel navegación (cubre TODAS las tabs, no solo Home).
-  // Alumno pausado/archivado → /alumno/suspended. Cambio de clave forzado → /change-password.
-  // Consentimiento de pool (Ley 21.719) → /alumno/consent — mismo ORDEN que el proxy web
-  // (blocked → password → consent, proxy.ts:657-685). Fail-open si el estado no resuelve
-  // (espejo exacto del proxy: solo redirige con contexto presente y no consentido).
-  useEffect(() => {
-    let mounted = true
-    getClientProfile()
-      .then(async (c) => {
-        if (!mounted || !c) return
-        if (c.blocked) {
-          redirecting.current = true
-          router.replace('/alumno/suspended')
-          return
-        }
-        if (c.forcePasswordChange && !sessionFlags.pwChanged) {
-          router.replace('/change-password')
-          return
-        }
-        const consent = await getPoolConsentStatus()
-        if (!mounted || redirecting.current) return
-        if (consent?.pool && !consent.granted) {
-          redirecting.current = true
-          router.replace({
-            pathname: '/alumno/consent',
-            params: { team: consent.teamSlug, name: consent.teamName },
-          })
-        }
-      })
-      .catch(() => {})
-    return () => { mounted = false }
-  }, [])
+  // Ola 0: el gate de MONTAJE (blocked → /alumno/suspended; password forzado → /change-password;
+  // consentimiento de pool Ley 21.719 → /alumno/consent, en ese mismo orden que el proxy web)
+  // subió a `app/alumno/_layout.tsx`. Vivía acá, y por eso no cubría las rutas alumno fuera del
+  // grupo de tabs (workout/[planId], exercise/[id], add-food, onboarding), alcanzables por deep
+  // link o por el tap de una notificación push.
+  // Acá queda solo la re-evaluación al volver de background, específica de esta sesión de tabs.
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (nextState) => {
