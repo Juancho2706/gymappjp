@@ -18,6 +18,7 @@
  *
  * ⚠️ REQUIERE UN BUILD EAS NUEVO (dependencia nativa): hasta entonces todo acá es NO-OP seguro.
  */
+import { laShowCardio, laShowCardioPaused, laStopCardio } from './live-activity'
 import {
   CARDIO_CHANNEL_ID,
   CARDIO_CHANNEL_NAME,
@@ -115,10 +116,20 @@ export interface CardioLiveOptions extends CardioLiveContext {
 
 /**
  * Muestra/actualiza el contador vivo de cardio. Reusa el MISMO id → cada llamada actualiza la
- * notificación en su sitio en vez de apilar. Sólo Android y sólo con la lib nativa enlazada; en
- * cualquier otro caso NO-OP. Nunca lanza.
+ * notificación/actividad en su sitio en vez de apilar.
+ *
+ * ── DOS PLATAFORMAS, UN SOLO PUNTO DE ENTRADA (Ola 7A) ────────────────────────
+ * Android → notificación ONGOING con `chronometer`. iOS → Live Activity en lockscreen + Dynamic
+ * Island. Cada rama es NO-OP en la otra plataforma y ninguna lanza, así que `use-cardio-live-timer`
+ * —que ya centraliza TODAS las transiciones— gana iOS sin tocar una línea, y Android no cambia en nada.
  */
 export async function showCardioLive(opts: CardioLiveOptions): Promise<void> {
+  laShowCardio({
+    direction: opts.direction,
+    endEpochMs: opts.direction === 'down' ? opts.endEpochMs : undefined,
+    startEpochMs: opts.direction === 'up' ? opts.startEpochMs : undefined,
+    view: { title: opts.title, subtitle: opts.body, accentHex: resolveColor(opts.color) },
+  })
   await showLiveTimer({
     id: CARDIO_LIVE_ID,
     channelId: CARDIO_CHANNEL_ID,
@@ -149,6 +160,17 @@ export async function showCardioPausedNotice(opts: {
   largeIconUrl?: string
 }): Promise<void> {
   const clock = formatClock(opts.seconds)
+  laShowCardioPaused({
+    seconds: opts.seconds,
+    // El cronómetro por distancia congela TRANSCURRIDOS: el flag le dice al intent de "Reanudar" que
+    // debe retomar hacia arriba y no hacia abajo (el estado en pausa no lo delata por sí solo).
+    countsUp: opts.mode === 'stopwatch',
+    view: {
+      title: 'Cardio en pausa',
+      subtitle: opts.mode === 'stopwatch' ? `Llevas ${clock}` : `Quedan ${clock}`,
+      accentHex: resolveColor(opts.color),
+    },
+  })
   await showLiveTimer({
     id: CARDIO_LIVE_ID,
     channelId: CARDIO_CHANNEL_ID,
@@ -167,6 +189,10 @@ export async function showCardioPausedNotice(opts: {
  * lo aplica la pantalla (la secuencia de fases vive en el componente y el motor de conteo está
  * congelado — el handler headless no la recomputa), así que hasta que el alumno vuelva a EVA no hay
  * ninguna otra acción honesta que ofrecer.
+ *
+ * SIN rama iOS a propósito: sólo la dispara el handler headless de Notifee (Android) al procesar
+ * "Fase siguiente", botón que la Live Activity de iOS no ofrece — el salto de fase exige la secuencia
+ * que vive en el componente, y en iOS el alumno la avanza abriendo EVA.
  *
  * Sigue siendo `ongoing` porque la API actual de `showLiveTimer` no expone `ongoing: false`; se
  * autolimpia sola en cuanto la pantalla vuelve al frente (el drenaje aplica el salto y la transición
@@ -190,5 +216,6 @@ export async function showCardioPhaseSkippedNotice(opts: {
 
 /** Retira el contador vivo de cardio (pausa/terminar/desmontar). NO-OP si no aplica. */
 export async function stopCardioLive(): Promise<void> {
+  laStopCardio()
   await stopLiveTimer(CARDIO_LIVE_ID)
 }

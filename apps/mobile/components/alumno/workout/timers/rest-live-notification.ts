@@ -22,6 +22,12 @@
  *
  * ⚠️ REQUIERE UN BUILD EAS NUEVO (dependencia nativa): hasta entonces todo acá es NO-OP seguro.
  */
+import {
+  laShowRest,
+  laShowRestPaused,
+  laStopRest,
+  type LiveActivityView,
+} from './live-activity'
 import { showLiveTimer, stopLiveTimer } from './live-timer-notification'
 import { isRestTimerMuted } from './rest-timer-preferences'
 
@@ -137,12 +143,34 @@ function formatClock(totalSeconds: number): string {
 }
 
 /**
+ * Vista que consume la Live Activity de iOS: los MISMOS copys resueltos que la notificación de
+ * Android, para que el alumno lea exactamente lo mismo en las dos plataformas.
+ *
+ * El `largeIconUrl` (logo del coach) NO viaja: la extensión de iOS corre en otro proceso, sin red ni
+ * acceso al sandbox de la app, así que sólo puede pintar assets compilados en su propio bundle. Ver
+ * la nota de `logoAssetName` en `EvaTimerAttributes.swift` — el logo del coach queda DIFERIDO en iOS.
+ */
+function liveActivityView(context: RestLiveContext | undefined, title: string): LiveActivityView {
+  return {
+    title,
+    subtitle: resolveBody(context),
+    accentHex: resolveColor(context?.color),
+  }
+}
+
+/**
  * Muestra/actualiza el cronómetro vivo del descanso hasta `endEpochMs` (Date.now() del fin
  * absoluto). Reusa el MISMO id → llamar de nuevo (arranque, ±15s, reanudar) actualiza la
- * notificación en su sitio en vez de apilar. Sólo Android y sólo si la lib nativa está
- * enlazada; en cualquier otro caso NO-OP. Nunca lanza.
+ * notificación en su sitio en vez de apilar.
+ *
+ * ── DOS PLATAFORMAS, UN SOLO PUNTO DE ENTRADA ─────────────────────────────────
+ * Android → notificación ONGOING con `chronometer` (`showLiveTimer`). iOS → Live Activity en el
+ * lockscreen y la Dynamic Island (`laShowRest`, Ola 7A). Cada rama es NO-OP en la otra plataforma y
+ * ninguna puede lanzar, así que el motor sigue llamando esto igual que siempre y NADA cambia en el
+ * comportamiento de Android.
  */
 export async function showRestLiveCountdown(endEpochMs: number, context?: RestLiveContext): Promise<void> {
+  laShowRest(endEpochMs, liveActivityView(context, resolveTitle(context)))
   await showLiveTimer({
     id: REST_LIVE_NOTIF_ID,
     channelId: LIVE_CHANNEL_ID,
@@ -164,6 +192,13 @@ export async function showRestLiveCountdown(endEpochMs: number, context?: RestLi
  * que "Reanudar"/"Saltar" sigan al alcance con la app en background.
  */
 export async function showRestPausedNotice(remainingSeconds: number, context?: RestLiveContext): Promise<void> {
+  // iOS: la Live Activity sigue viva con el contador congelado y el rótulo "En pausa" (misma
+  // decisión que Android: un contador nativo no se congela, se dibuja el número).
+  laShowRestPaused(remainingSeconds, {
+    title: 'Descanso en pausa',
+    subtitle: context?.nextLabel ? `Sigue ${context.nextLabel}` : undefined,
+    accentHex: resolveColor(context?.color),
+  })
   await showLiveTimer({
     id: REST_LIVE_NOTIF_ID,
     channelId: LIVE_CHANNEL_ID,
@@ -181,5 +216,6 @@ export async function showRestPausedNotice(remainingSeconds: number, context?: R
 
 /** Retira el cronómetro vivo (pausa/saltar/cerrar/terminar/desmontar). NO-OP si no aplica. */
 export async function stopRestLiveCountdown(): Promise<void> {
+  laStopRest()
   await stopLiveTimer(REST_LIVE_NOTIF_ID)
 }

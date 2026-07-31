@@ -146,6 +146,18 @@ function enqueueCommand(type: RestRemoteCommandType): void {
   })
 }
 
+/**
+ * Encola un comando remoto SIN tocar la notificación ni el reloj. Lo usa el drenaje de las Live
+ * Activities de iOS (`live-activity-commands.ts`), donde el estado ya lo movió Swift en el momento
+ * del press y lo único que falta es avisarle al motor React. En Android nadie la llama: ahí los
+ * handlers de este archivo encolan por su cuenta después de mover el reloj.
+ *
+ * Es un export ADITIVO de `enqueueCommand`, que sigue siendo la vía interna del puente Android.
+ */
+export function enqueueRestRemoteCommand(type: RestRemoteCommandType): void {
+  enqueueCommand(type)
+}
+
 /** Segundos restantes según el snapshot (corriendo → derivado del reloj; en pausa → congelados). */
 function remainingFrom(snap: RestLiveSnapshot): number {
   if (snap.endEpochMs != null) return Math.max(0, Math.ceil((snap.endEpochMs - Date.now()) / 1000))

@@ -201,8 +201,11 @@ function clearCardioNotifications(): void {
 
 /**
  * Cablea el espejo del cardio. `spec === null` ⇒ no hay bloque que espejar (nunca arrancó, terminó, o
- * está en una fase manual) y se limpia todo, incluido el puente. Sólo Android tiene contador vivo; la
- * alerta final es multiplataforma. Nunca lanza y nunca altera la cuenta de la pantalla.
+ * está en una fase manual) y se limpia todo, incluido el puente. El contador vivo es multiplataforma
+ * desde la Ola 7A —Android lo dibuja como notificación ONGOING con `chronometer`, iOS como Live
+ * Activity en lockscreen + Dynamic Island—, y ambas ramas salen gratis desde `cardio-live-notification`
+ * sin tocar este hook. La alerta final también es multiplataforma. Nunca lanza y nunca altera la
+ * cuenta de la pantalla.
  */
 export function useCardioLiveTimer(spec: CardioLiveSpec | null, controls?: CardioLiveControls): void {
   // Espejo del spec para leer valores FRESCOS dentro de efectos que no dependen de ellos (patrón

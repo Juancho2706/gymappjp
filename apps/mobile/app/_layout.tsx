@@ -49,6 +49,7 @@ import { isBiometricLockEnabled } from '../lib/biometric'
 import { checkForOtaUpdate } from '../lib/ota'
 import { registerRestNotificationEvents } from '../components/alumno/workout/timers/rest-remote-commands'
 import { registerCardioNotificationEvents } from '../components/alumno/workout/timers/cardio-remote-commands'
+import { registerLiveActivityCommandDrain } from '../components/alumno/workout/timers/live-activity-commands'
 import { AppState, View } from 'react-native'
 
 // Retain the native launch screen until stored branding and fonts are ready.
@@ -92,6 +93,14 @@ configurePushHandler()
 // importan módulos de notificación (ninguno importa hooks ni este layout).
 registerRestNotificationEvents()
 registerCardioNotificationEvents()
+
+// Gemelo iOS de lo anterior (Ola 7A · Live Activities): los botones del lockscreen/Dynamic Island son
+// App Intents que corren en el proceso de la app SIN runtime JS garantizado, así que no hay a quién
+// emitirles un evento — dejan el comando escrito en el App Group y el JS lo drena al volver la app al
+// frente. Se registra acá, también a nivel de MÓDULO, para que el drenaje inicial ocurra aunque la app
+// se haya abierto DESDE el botón. Idempotente y NO-OP total en Android y en binarios sin el módulo
+// nativo enlazado.
+registerLiveActivityCommandDrain()
 
 function ThemedStatusBar() {
   const { resolvedScheme } = useTheme()

@@ -11,10 +11,16 @@
     "ios": {
       "icon": "./assets/icon-ios.png",
       "bundleIdentifier": "cl.evaapp.eva",
+      "appleTeamId": "5GKWMMZ46Q",
       "buildNumber": "3",
       "supportsTablet": false,
       "associatedDomains": ["applinks:eva-app.cl", "webcredentials:eva-app.cl"],
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.cl.evaapp.eva"]
+      },
       "infoPlist": {
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": false,
         "NSCameraUsageDescription": "EVA usa la cámara para fotos de progreso y escanear códigos de barras de alimentos.",
         "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
         "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento",
@@ -164,6 +170,7 @@
       "react-native-health-connect",
       "./plugins/with-health-connect",
       "react-native-notify-kit",
+      "@bacons/apple-targets",
       "expo-secure-store",
       "./plugins/with-ios-modular-headers",
       [

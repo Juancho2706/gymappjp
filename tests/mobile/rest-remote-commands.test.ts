@@ -22,6 +22,19 @@ vi.mock('../../apps/mobile/components/alumno/workout/timers/live-timer-notificat
   stopLiveTimer: vi.fn(async () => {}),
 }))
 
+// Tercera hoja nativa (Ola 7A): la Live Activity de iOS. `rest-live-notification` la llama en su rama
+// iOS y el módulo real importa `react-native` + el módulo Expo local, ninguno de los dos cargable acá.
+vi.mock('../../apps/mobile/components/alumno/workout/timers/live-activity', () => ({
+  laIsSupported: () => false,
+  laShowRest: vi.fn(),
+  laShowRestPaused: vi.fn(),
+  laStopRest: vi.fn(),
+  laShowCardio: vi.fn(),
+  laShowCardioPaused: vi.fn(),
+  laStopCardio: vi.fn(),
+  laDrainCommands: vi.fn(() => []),
+}))
+
 vi.mock('../../apps/mobile/components/alumno/workout/timers/rest-timer-preferences', () => ({
   isRestTimerMuted: () => false,
 }))

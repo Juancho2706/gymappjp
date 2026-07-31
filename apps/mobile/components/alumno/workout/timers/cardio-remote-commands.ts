@@ -147,6 +147,18 @@ function enqueueCommand(type: CardioRemoteCommandType): void {
   })
 }
 
+/**
+ * Encola un comando remoto SIN tocar la notificación ni el reloj. Lo usa el drenaje de las Live
+ * Activities de iOS (`live-activity-commands.ts`), donde el estado ya lo movió Swift en el momento
+ * del press y lo único que falta es avisarle a la pantalla. En Android nadie la llama: ahí los
+ * handlers de este archivo encolan por su cuenta después de mover el reloj.
+ *
+ * Es un export ADITIVO de `enqueueCommand`, que sigue siendo la vía interna del puente Android.
+ */
+export function enqueueCardioRemoteCommand(type: CardioRemoteCommandType): void {
+  enqueueCommand(type)
+}
+
 /** Restantes según el snapshot (corriendo → derivado del reloj; en pausa → congelados). */
 function remainingFrom(snap: CardioLiveSnapshot): number {
   if (snap.endEpochMs != null) return Math.max(0, Math.ceil((snap.endEpochMs - Date.now()) / 1000))

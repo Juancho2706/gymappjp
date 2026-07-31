@@ -66,6 +66,29 @@ La paridad global **no está certificada todavía**.
 >
 > **2026-07-31 (gate de acceso RN — corrección)**: los guards de suscripción vivían dentro de los layouts de **tabs**, así que no cubrían las rutas fuera de esos grupos. Coach: `app/coach/(tabs)/_layout.tsx` dejaba sin gate ~21 rutas (`cliente/[clientId]`, `program-builder`, `nutrition-v2/*`, `cardio/*`, `bodycomp`, `movement/*`, `settings/*`, `foods`, `tools`, …) y además se evaluaba una sola vez por arranque (el layout de tabs no se desmonta al cambiar de tab), de modo que un back-gesture devolvía al dashboard con el plan vencido. Alumno: mismo patrón dejaba fuera `workout/[planId]`, `exercise/[id]`, `add-food` y `onboarding`, alcanzables por deep link o por el tap de una notificación push. Corregido con layouts raíz `app/coach/_layout.tsx` y `app/alumno/_layout.tsx` — el del coach usa estado reactivo (`lib/coach-access.ts`, SWR + revalidación por foreground/navegación) en vez de un efecto de una pasada, y el del alumno absorbió el gate de montaje completo, incluido el consentimiento de pool (Ley 21.719), en el mismo orden que el proxy web. En el mismo corte, el muro `/coach/reactivate` de RN gana la salida **volver al plan gratuito** (panel de archivado/eliminación + `POST /api/mobile/coach/activate-free`, que comparte `services/billing/activate-free.service.ts` con la web): antes solo sabía link-outear al navegador, así que un coach vencido sin computador solo podía pagar. El camino de **pago** sigue siendo link-out exclusivo a la web. Requiere QA física + build/OTA.
 
+> **2026-07-31 (Ola 7A — Live Activities de iOS; código completo, **Swift sin compilar hasta el build EAS #3**)**:
+> el cronómetro vivo del descanso y de cardio llega al **lockscreen y la Dynamic Island de iOS**, espejo del
+> sistema que Android ya tenía con el `chronometer` de notify-kit. Tres piezas nuevas: (a) **Widget Extension**
+> `apps/mobile/targets/eva-timer-activity/` generada por `@bacons/apple-targets@5.0.0` (única dependencia nueva,
+> `-D`) — tarjeta oscura con `Text(timerInterval:)` monoespaciado tintado con el acento de marca, figura EVA como
+> imageset del target, isla compacta/mínima/expandida; (b) **módulo Expo local** `apps/mobile/modules/eva-live-activity/`
+> (autolink por `modules/`) con `isSupported/start/update/end/drainCommands` y **una actividad por `kind`**, de modo
+> que descanso y cardio coexisten; (c) **botones** `LiveActivityIntent` en `_shared/` (compilan en el target de la
+> app y en el de la extensión, como exige Apple) con los **mismos action ids que Android** — descanso
+> Pausar/+15 s/Saltar/Reanudar, cardio Pausar/Reanudar. Cada intent mueve la actividad al instante y deja el
+> comando en el App Group `group.cl.evaapp.eva`; el JS lo drena al volver la app al frente
+> (`timers/live-activity-commands.ts`, registrado a nivel de módulo en `app/_layout.tsx`) y reconstruye el snapshot
+> con el **`atMs` del press**, no con la hora del drenaje. Todo el JS nuevo es **NO-OP seguro** con require
+> guardado: **Android no cambia de comportamiento en nada** y en iOS < 16.2, sin el módulo nativo enlazado o con
+> las Live Activities apagadas en Ajustes, no ocurre nada. Botones sólo iOS 17+ (`#available`), sin fila de botones
+> en 16.2–16.x. DIFERIDOS conscientes: **logo del coach en iOS** (exigiría cachear la imagen dentro del App Group)
+> y **"Fase siguiente"** de cardio (la secuencia vive en el componente). Riesgo abierto a validar en dispositivo:
+> `EvaTimerAttributes` está **duplicado** entre el pod y el target porque son módulos Swift distintos, y ActivityKit
+> machea por nombre de tipo. Gates reales: `tsc --noEmit` 0 errores, **325 tests** de `tests/mobile/` verdes
+> (17 nuevos del drenaje), `expo config --type introspect` sin errores con el plugin y el App Group resueltos, y
+> `expo export --platform ios` verde. **Swift NO se compila en Windows**: la verificación nativa (target, intents,
+> provisioning del extension, `ios.appleTeamId`) queda para el **build EAS #3** + QA física.
+>
 > **2026-07-29 (rama `worktree-adelanto-qa-20260729`, sin merge)**: adelanto paralelo al QA del owner —
 > (1) **QA F2** contadores del directorio coach espejados al pulse crudo de `CoachWarRoom.tsx:220-229`
 > (Riesgo/Atención/Nutri. desde el array pulse; filtro `nutrition_low` solo por flag) + test
