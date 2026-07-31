@@ -3,6 +3,7 @@ import { decode } from 'base64-arraybuffer'
 import { z } from 'zod'
 import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
+import { parseLoaderConfig } from './brand-loaders'
 
 // slug + invite_code son INMUTABLES (set-once en el registro). No hay edición desde mobile.
 // El slug legacy se sigue leyendo (getCoachBrandSettings) y mostrando como alias read-only.
@@ -67,6 +68,14 @@ export interface CoachBrandSettings {
   brandFontKey: string | null
   /** Variante de loader (`loader_variant`). NULL/'eva' = default EVA. */
   loaderVariant: string | null
+  /**
+   * QA4 — config del compositor "Crear el mio" (`loader_config`, jsonb). Se expone SERIALIZADA
+   * (string JSON o null) para que el editor la trate como valor plano; parsear con
+   * `parseLoaderConfig` de lib/brand-loaders. PRECEDE a `loaderVariant` en el render.
+   */
+  loaderConfig: string | null
+  /** QA4 — tema del ejecutor del alumno (`executor_theme`): 'coach' | 'eva'. */
+  executorTheme: string | null
 }
 
 export interface CoachBrandEditable {
@@ -91,6 +100,13 @@ export interface CoachBrandEditable {
   neutralTint?: boolean
   brandFontKey?: string | null
   loaderVariant?: string | null
+  /**
+   * QA4 — OPCIONALES de verdad: si el caller no los manda (`undefined`) la columna NO entra al
+   * update y queda intacta. Asi el editor viejo sigue guardando byte-identico y solo la UI nueva
+   * (compositor / selector de ejecutor) los escribe. `null` limpia explicitamente.
+   */
+  loaderConfig?: string | null
+  executorTheme?: 'coach' | 'eva' | null
 }
 
 export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null> {
@@ -100,7 +116,9 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
   const baseCols = 'id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type'
   // E7-10: columnas white-label v2 (avanzado). Van en la query RICH; si una prod vieja no las
   // tiene, selectWithFallback cae a baseCols y quedan en null/defaults (degradación limpia).
-  const v2Cols = 'logo_url_dark, theme_preset_key, login_layout_key, brand_secondary_color, accent_light, accent_dark, neutral_tint, brand_font_key, loader_variant'
+  // QA4: loader_config + executor_theme entran SOLO por este camino AUTENTICADO (el coach lee su
+  // propia fila bajo RLS). El select anonimo del login del alumno (lib/branding.ts) NO se toca.
+  const v2Cols = 'logo_url_dark, theme_preset_key, login_layout_key, brand_secondary_color, accent_light, accent_dark, neutral_tint, brand_font_key, loader_variant, loader_config, executor_theme'
   // P4: traer slug_changed_at/previous_slugs para saber si el slug es legacy personalizado.
   // selectWithFallback: si esas columnas no existen en una prod vieja, cae a la query base.
   const { data } = await selectWithFallback<any>(
@@ -138,7 +156,16 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
     neutralTint: Boolean(data.neutral_tint),
     brandFontKey: data.brand_font_key ?? null,
     loaderVariant: data.loader_variant ?? null,
+    // jsonb llega como objeto; se normaliza a string JSON estable (o null si el shape no valida).
+    loaderConfig: serializeStoredLoaderConfig(data.loader_config),
+    executorTheme: (data.executor_theme as string) ?? 'coach',
   }
+}
+
+/** jsonb crudo → string JSON estable, o null si no es un compositor valido (fail-closed). */
+function serializeStoredLoaderConfig(raw: unknown): string | null {
+  const parsed = parseLoaderConfig(raw)
+  return parsed ? JSON.stringify(parsed) : null
 }
 
 export async function updateCoachBrandSettings(input: CoachBrandEditable): Promise<{ ok: boolean; error?: string }> {
@@ -210,6 +237,10 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
       neutral_tint: !!input.neutralTint,
       brand_font_key: input.brandFontKey || null,
       loader_variant: input.loaderVariant || 'eva',
+      // QA4 — aditivos y OPT-IN: solo viajan si el caller los mandó. Un editor que no los conoce
+      // (`undefined`) deja las columnas intactas y el update sale igual que antes.
+      ...(input.loaderConfig !== undefined ? { loader_config: parseLoaderConfig(input.loaderConfig) } : {}),
+      ...(input.executorTheme !== undefined ? { executor_theme: input.executorTheme === 'eva' ? 'eva' : 'coach' } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', user.id)

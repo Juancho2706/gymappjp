@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
@@ -35,6 +44,12 @@ import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChr
  * onBack`) y cuerpo embebible bajo el tablist del hub (4B-17). Con `embedded`, el shell del
  * hub aporta safe-area y chrome, así que omitimos ambos y sumamos el clearance de la tab-bar
  * del coach al pie de la lista; el buscador+lista+ficha quedan intactos en ambos modos.
+ *
+ * QA-4 H2: el chrome del hub (título + tablist) colapsa con el scroll y solo las pestañas
+ * quedan pegadas. Por eso el buscador vive DENTRO del scroll (`ListHeaderComponent`) en ambos
+ * modos: si se quedara fuera, al colapsar el título aparecería un hueco entre las pestañas y
+ * el buscador. El shell pasa `chromeHeight` (paddingTop del contenido, para que la lista
+ * empiece bajo el chrome) y `onScroll` (mueve el chrome + minimiza la cápsula del coach).
  */
 
 const MIN_QUERY = 2
@@ -58,7 +73,16 @@ function fmt0(value: number): string {
   return String(Math.round(value))
 }
 
-export default function CoachNutritionCatalogScreen({ embedded = false }: { embedded?: boolean }) {
+export default function CoachNutritionCatalogScreen({
+  embedded = false,
+  chromeHeight = 0,
+  onScroll,
+}: {
+  embedded?: boolean
+  /** Alto del chrome colapsable del hub; solo aplica embebido. */
+  chromeHeight?: number
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+}) {
   const router = useRouter()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
@@ -232,50 +256,58 @@ export default function CoachNutritionCatalogScreen({ embedded = false }: { embe
     )
   }
 
+  // Cabecera DENTRO del scroll (ver nota QA-4 H2 arriba): en standalone incluye el título con
+  // flecha; embebido solo el buscador, porque el título lo pone el chrome del hub. El padding
+  // horizontal lo aporta el `contentContainerStyle`, así que aquí no va `px-4`.
+  const listHeader = (
+    <View className={`gap-4 pb-2 ${embedded ? 'pt-1' : 'pt-4'}`}>
+      {embedded ? null : <NutritionHeader title="Alimentos" onBack={() => router.back()} />}
+      <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
+        <Search color={theme.mutedForeground} size={16} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Buscar alimento por nombre o marca…"
+          placeholderTextColor={theme.mutedForeground}
+          accessibilityLabel="Buscar alimento en el catalogo"
+          autoCorrect={false}
+          returnKeyType="search"
+          className="min-h-11 flex-1 py-2 text-base text-strong"
+        />
+        {loading ? (
+          <ActivityIndicator color={theme.mutedForeground} size="small" />
+        ) : query ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Limpiar busqueda"
+            hitSlop={8}
+            onPress={() => setQuery('')}
+            className="h-6 w-6 items-center justify-center rounded-full bg-surface-sunken"
+          >
+            <X color={theme.mutedForeground} size={13} />
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  )
+
   const body = (
     <>
-      <View className="gap-4 px-4 pt-4">
-        {embedded ? null : <NutritionHeader title="Alimentos" onBack={() => router.back()} />}
-        <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
-          <Search color={theme.mutedForeground} size={16} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Buscar alimento por nombre o marca…"
-            placeholderTextColor={theme.mutedForeground}
-            accessibilityLabel="Buscar alimento en el catalogo"
-            autoCorrect={false}
-            returnKeyType="search"
-            className="min-h-11 flex-1 py-2 text-base text-strong"
-          />
-          {loading ? (
-            <ActivityIndicator color={theme.mutedForeground} size="small" />
-          ) : query ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Limpiar busqueda"
-              hitSlop={8}
-              onPress={() => setQuery('')}
-              className="h-6 w-6 items-center justify-center rounded-full bg-surface-sunken"
-            >
-              <X color={theme.mutedForeground} size={13} />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-
-      <View className="mt-2 flex-1">
+      <View className="flex-1">
         <FlashList
           data={showList ? items : []}
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{
             paddingHorizontal: 16,
-            paddingTop: 4,
+            paddingTop: embedded ? chromeHeight : 0,
             paddingBottom: embedded ? insets.bottom + COACH_TABBAR_CLEARANCE : 40,
           }}
           ItemSeparatorComponent={() => <View className="h-2" />}
+          ListHeaderComponent={listHeader}
           ListEmptyComponent={renderEmpty()}
           ListFooterComponent={renderFooter()}
           renderItem={({ item }) => {

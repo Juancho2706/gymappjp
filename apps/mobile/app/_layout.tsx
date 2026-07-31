@@ -42,6 +42,7 @@ import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib
 import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
+import { SessionMorphProvider } from '../components/alumno/workout/v3/session-morph'
 import { isBiometricLockEnabled } from '../lib/biometric'
 import { checkForOtaUpdate } from '../lib/ota'
 import { AppState, View } from 'react-native'
@@ -278,9 +279,19 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
                 react-native-screens bajo Fabric, un anti-patrón que amplifica el
                 robo de foco. La transición de arranque termina al ocultar el splash
                 nativo después del primer layout listo, sin animar el navegador. */}
-            <View style={{ flex: 1 }}>
-              <RootLayoutNav />
-            </View>
+            {/* Despegue (ceremonia de arranque del workout): el provider vive en el ROOT —dentro de
+                ThemeProvider, que el overlay consume para el acento/logo del coach— y NO en el layout
+                de tabs del alumno. Su overlay se pinta en un <Modal> nativo y en Android RN CIERRA el
+                Dialog (onDetachedFromWindow → dismiss, sin callback a JS) cuando la pantalla que lo
+                monta se detacha; como la ruta del ejecutor es hermana de (tabs) en el Stack raíz, el
+                `router.push` de los ~1,3s mataba la ceremonia y el alumno aterrizaba sin el "TOCA PARA
+                COMENZAR". Desde el root el host nunca se detacha (espejo del portal-a-body + provider
+                persistente del layout /c de la web). `useSessionMorph()` sigue resolviendo igual. */}
+            <SessionMorphProvider>
+              <View style={{ flex: 1 }}>
+                <RootLayoutNav />
+              </View>
+            </SessionMorphProvider>
             {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
             <Toaster />
           </BottomSheetModalProvider>

@@ -13,6 +13,12 @@ export const haptics = {
   tap: () => safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)),
   /** Cambio de valor en un stepper/selector (peso, reps). */
   select: () => safe(Haptics.selectionAsync()),
+  /**
+   * Gesto de "mantener presionado" cumplido (abre la rueda de valores del ejecutor). Medium: se
+   * siente aunque el telefono este en el rack/suelo — el Light de `tap` se perdia dentro del gesto
+   * en curso y el alumno soltaba antes de tiempo.
+   */
+  longPress: () => safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)),
   /** Serie completada. */
   setDone: () => safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)),
   /** Comida/hábito marcado. */

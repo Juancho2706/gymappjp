@@ -1,5 +1,9 @@
+// Movida desde `apps/web/src/app/c/[coach_slug]/workout/[planId]/_data/target-date.test.ts` cuando el
+// helper bajó a `@eva/workout-engine` para que el editor de día pasado de RN use la MISMA validación que
+// la web (antes mobile tenía una copia parcial en la ruta del ejecutor). Misma cobertura + el borde que
+// el llamador debe poder distinguir: `iso === todayIso` (hoy valida OK pero NO activa el solo-UPDATE).
 import { describe, expect, it } from 'vitest'
-import { resolveRepeatDate, validateTargetDate } from './target-date'
+import { PAST_SET_NOT_FOUND_ERROR, resolveRepeatDate, validateTargetDate } from '@eva/workout-engine'
 
 /**
  * Validación pura de la fecha objetivo para editar un día pasado (Ola 1, E1.5). El "hoy Santiago"
@@ -14,6 +18,17 @@ describe('validateTargetDate', () => {
 
     it('acepta hoy (borde permitido)', () => {
         expect(validateTargetDate(TODAY, TODAY)).toEqual({ ok: true, iso: TODAY })
+    })
+
+    it('hoy valida OK pero el llamador puede distinguirlo por `iso` (no activa el solo-UPDATE)', () => {
+        // Contrato que sostiene el fix 80995cae: `?fecha=<hoy>` NO debe conmutar a modo edición (el
+        // upsert normal de hoy es seguro), así que la validación deja el borde visible en vez de
+        // rechazarlo — la decisión la toma la página/ruta comparando con hoy.
+        const check = validateTargetDate(TODAY, TODAY)
+        expect(check.ok).toBe(true)
+        expect(check.ok && check.iso === TODAY).toBe(true)
+        const past = validateTargetDate('2026-07-21', TODAY)
+        expect(past.ok && past.iso !== TODAY).toBe(true)
     })
 
     it('rechaza una fecha futura', () => {
@@ -85,5 +100,13 @@ describe('resolveRepeatDate', () => {
         ['nula', null],
     ])('devuelve null para entrada %s', (_label, input) => {
         expect(resolveRepeatDate(input, TODAY)).toBeNull()
+    })
+})
+
+// La copia del rechazo permanente vive en el paquete para que la action web y el motor RN muestren el
+// MISMO texto (y para que la UI RN pueda reconocerlo y esconder el "Reintentar").
+describe('PAST_SET_NOT_FOUND_ERROR', () => {
+    it('es la copia compartida del rechazo del modo solo-UPDATE', () => {
+        expect(PAST_SET_NOT_FOUND_ERROR).toBe('Esta serie no se registró ese día. Usa "Repetir hoy" para completarla.')
     })
 })

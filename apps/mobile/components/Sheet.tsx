@@ -21,6 +21,7 @@ import {
 import { MotiView } from 'moti'
 import { cssInterop } from 'nativewind'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { X } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { useEvaMotion } from '../lib/motion'
@@ -248,18 +249,26 @@ export function Sheet({
             // Titulo con glyph inline (web SheetTitle `flex items-center gap-2`).
             <View className="pr-space-9" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {titleIcon}
-              <Text style={[titleStyleFor(titleSize), { flexShrink: 1 }]} className="text-strong" numberOfLines={2}>
+              <Text
+                style={[titleStyleFor(titleSize), { flexShrink: 1 }]}
+                className={forceDark ? 'text-on-dark' : 'text-strong'}
+                numberOfLines={2}
+              >
                 {title}
               </Text>
             </View>
           ) : (
-            <Text style={titleStyleFor(titleSize)} className="text-strong pr-space-9" numberOfLines={2}>
+            <Text
+              style={titleStyleFor(titleSize)}
+              className={`pr-space-9 ${forceDark ? 'text-on-dark' : 'text-strong'}`}
+              numberOfLines={2}
+            >
               {title}
             </Text>
           )
         ) : null}
         {description ? (
-          <Text style={TYPE.caption} className="text-muted mt-space-2">
+          <Text style={TYPE.caption} className={`mt-space-2 ${forceDark ? 'text-on-dark-muted' : 'text-muted'}`}>
             {description}
           </Text>
         ) : null}
@@ -274,8 +283,15 @@ export function Sheet({
       <View className={`h-1 w-10 rounded-pill ${forceDark ? 'bg-white/15' : 'bg-ink-300 dark:bg-ink-600'}`} />
     </View>
   ) : null
+  // El footer va PEGADO al borde inferior (paddingBottom = safe-area + 16), así que con la cuenta en
+  // tema CLARO su `bg-surface-sunken` (casi blanco) pintaba una BARRA BLANCA sobre el home indicator
+  // dentro de un sheet forzado a dark (rueda de peso/reps del ejecutor). Gateado como el resto del
+  // chrome: con `forceDark` la superficie hundida es ink-900 y el borde el inverso.
   const footerEl = footer ? (
-    <View className="border-t border-subtle bg-surface-sunken px-space-6 pt-space-4" style={{ paddingBottom: insets.bottom + 16 }}>
+    <View
+      className={`border-t px-space-6 pt-space-4 ${forceDark ? 'border-inverse/10 bg-ink-900' : 'border-subtle bg-surface-sunken'}`}
+      style={{ paddingBottom: insets.bottom + 16 }}
+    >
       {footer}
     </View>
   ) : null
@@ -285,7 +301,7 @@ export function Sheet({
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel="Cerrar"
-      className={`absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border ${forceDark ? 'border-inverse bg-white/5' : 'border-subtle bg-surface-sunken'}`}
+      className={`absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border ${forceDark ? 'border-inverse/10 bg-white/5' : 'border-subtle bg-surface-sunken'}`}
     >
       <X className={forceDark ? 'text-on-dark' : 'text-muted'} size={16} strokeWidth={2.4} />
     </TouchableOpacity>
@@ -298,6 +314,11 @@ export function Sheet({
   if (nativeModal) {
     return (
       <Modal transparent visible={open} animationType="none" statusBarTranslucent onRequestClose={onClose}>
+        {/* The native Modal renders in its OWN OS window — `GestureHandlerRootView` in
+            `app/_layout.tsx` doesn't reach it, so any `GestureDetector` inside (e.g. the
+            volume slider in ExecSettingsSheet) never receives touch events without its own
+            root here. Aditivo: no layout change (flex-1 passthrough). */}
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end">
           {/* Backdrop: black/60 (== the gorhom BottomSheetBackdrop opacity 0.6), tap-to-close. */}
           <MotiView
@@ -339,8 +360,8 @@ export function Sheet({
               <View
                 accessibilityLabel={accessibilityLabel}
                 accessibilityViewIsModal
-                className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
-                style={[shadow('lg', resolvedScheme), { maxHeight: maxDynamicContentSize, flexShrink: 1 }]}
+                className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse/10 bg-ink-950' : 'border-subtle bg-surface-card'}`}
+                style={[shadow('lg', forceDark ? 'dark' : resolvedScheme), { maxHeight: maxDynamicContentSize, flexShrink: 1 }]}
               >
                 {/* Swipe-down on the handle zone dismisses (parity with enablePanDownToClose). */}
                 <View {...swipeResponder.panHandlers}>{handleEl}</View>
@@ -372,6 +393,7 @@ export function Sheet({
             </MotiView>
           </KeyboardAvoidingView>
         </View>
+        </GestureHandlerRootView>
       </Modal>
     )
   }
@@ -398,8 +420,8 @@ export function Sheet({
           scrollable's measured content (onContentSizeChange), while flex-1 keeps the scroll body
           bounded so tall content (> cap) still scrolls instead of clipping. */}
       <View
-        className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
-        style={shadow('lg', resolvedScheme)}
+        className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse/10 bg-ink-950' : 'border-subtle bg-surface-card'}`}
+        style={shadow('lg', forceDark ? 'dark' : resolvedScheme)}
       >
         {handleEl}
 

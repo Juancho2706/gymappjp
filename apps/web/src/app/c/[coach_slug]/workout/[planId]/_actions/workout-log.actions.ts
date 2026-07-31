@@ -6,7 +6,7 @@ import { WorkoutLogSetSchema } from '@eva/schemas'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
 import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
 import { resolveStudentAccessForClient } from '@/lib/student-access.server'
-import { validateTargetDate } from '../_data/target-date'
+import { PAST_SET_NOT_FOUND_ERROR, validateTargetDate } from '@eva/workout-engine'
 
 export type LogState = {
     error?: string
@@ -182,7 +182,9 @@ export async function logSetAction(
         // Modo solo-UPDATE: editar un día pasado JAMÁS inserta. Si no existe la fila de esa serie en
         // la ventana `target_date`, devolvemos un error tipado (imposible pre-cargar adherencia de un
         // día en el que el alumno no registró). El llamador (E1.6) lo muestra como "no hay registro".
-        return { error: 'No existe un registro de esa serie para editar en esa fecha.', code: 'past_set_not_found' }
+        // La copia vive en `@eva/workout-engine` (PAST_SET_NOT_FOUND_ERROR): el motor RN devuelve el
+        // MISMO texto en su réplica client-side del solo-UPDATE, así no driftean.
+        return { error: PAST_SET_NOT_FOUND_ERROR, code: 'past_set_not_found' }
     } else {
         const { error: insertError } = await supabase.from('workout_logs').insert({
             block_id: parsed.data.block_id,

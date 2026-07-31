@@ -35,7 +35,7 @@ import {
 import { QuantityStepper } from '../../../../components/nutrition-v2/quick-edit/QuantityStepper'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
-import { type FoodCatalogItem, type NutritionStrategy } from '@eva/nutrition-v2'
+import { foodCategoryFromName, type FoodCatalogItem, type NutritionStrategy } from '@eva/nutrition-v2'
 import { exchangeGroupColor, hasUnconfirmedMacros, type ExchangeGroup } from '@eva/nutrition-engine'
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
@@ -67,7 +67,7 @@ import {
   loadBuilderSubstitutionsForVersion,
   rehydrateBuilderState,
 } from '../../../../lib/nutrition-v2-builder-rehydrate'
-import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
+import { useEntitlements, useNutritionV2CoachFlagForClientState } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import {
   archiveNutritionPlan,
@@ -484,9 +484,13 @@ export default function CoachNutritionV2BuilderScreen() {
     [workspaceReady, kind, teamId, orgId],
   )
   // Canary por alumno: alcanza el constructor aunque el flag global del coach esté apagado; el flag
-  // global sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta.
-  const clientCanaryV2 = useNutritionV2CoachFlagForClient(clientId)
-  const enabled = entitlements.ready && (isEnabled('nutritionV2Coach') || clientCanaryV2)
+  // global sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta. QA4 H3: se usa la variante
+  // con `resolved` para no pintar "Constructor no habilitado" mientras el canary viaja (mentira +
+  // flash al abrir el constructor desde la ficha).
+  const clientCanary = useNutritionV2CoachFlagForClientState(clientId)
+  const globalV2 = isEnabled('nutritionV2Coach')
+  const rolloutResolved = entitlements.ready && (globalV2 || clientCanary.resolved)
+  const enabled = entitlements.ready && (globalV2 || clientCanary.value)
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
   const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
@@ -1319,7 +1323,7 @@ export default function CoachNutritionV2BuilderScreen() {
     return () => sub.remove()
   }, [state, router])
 
-  if (!entitlements.ready || !workspaceReady) {
+  if (!entitlements.ready || !workspaceReady || !rolloutResolved) {
     return (
       <SafeAreaView edges={['top']} className="flex-1 bg-surface-app">
         <View className="flex-1 px-4 pt-6">
@@ -2234,10 +2238,13 @@ function ItemEditor({
     <View className="rounded-control border border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
+          {/* QA2-B3a: fallback 1:1 con el builder web (`PlanBuilderClient.tsx:622`) —
+              webp estatico de la categoria del catalogo; item libre => categoria
+              derivada del nombre. El emoji queda deprecado. */}
           <FoodThumbnail
             alt={item.food?.name ?? item.customName ?? 'Alimento'}
             src={item.food ? foodMediaThumbnailUrl(item.food.media) : null}
-            fallbackEmoji={item.food ? foodCategoryEmoji(item.food.category) : null}
+            fallbackCategory={item.food ? item.food.category : foodCategoryFromName(item.customName)}
             size="sm"
           />
           <View className="min-w-0 flex-1">

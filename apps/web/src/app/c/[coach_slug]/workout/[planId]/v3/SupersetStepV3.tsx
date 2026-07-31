@@ -68,6 +68,15 @@ interface SupersetStepV3Props {
 const SUBSTITUTION_REASON = 'Máquina ocupada'
 
 /**
+ * Bandas marquee de la superserie (pedido CEO, web + RN): recordatorio PERSISTENTE arriba y abajo del
+ * miembro activo mientras la superserie sigue viva (el aviso efímero `exec-v3-ss-cuebar` es otra cosa).
+ * La frase va repetida para que la cinta llene el ancho y el loop `translateX(0 → -50%)` no deje huecos:
+ * las dos copias del track son idénticas, así que el corte es invisible.
+ */
+const MARQUEE_PHRASE = 'CONTINÚA SIN DESCANSO'
+const MARQUEE_RUN = `${Array.from({ length: 4 }, () => MARQUEE_PHRASE).join(' • ')} • `
+
+/**
  * Ejecutor V3 (E3.5 + QA1) — presentación de la SUPERSERIE como paso del stepper. Traducción del mockup
  * `concepto-a-v3-tipos` (pantalla Superserie) con el rediseño del CEO (2026-07-22): el miembro ACTIVO se
  * muestra IGUAL que un ejercicio solo (media grande 150px + chips glass + prescripción + fila "Anterior"
@@ -241,12 +250,25 @@ export function SupersetStepV3({
 
                     // MIEMBRO ACTIVO — presentación de ejercicio solo (media 150px + rx + Anterior + hero).
                     if (state === 'active') {
+                        // Mismo gate que la nota de descanso: las bandas mueren al cerrar la superserie.
+                        const showMarquee = !groupComplete
                         return (
                             <div
                                 key={m.block.id}
                                 ref={(el) => registerRowRef(m.block.id, currentRound, el)}
-                                className="exec-v3-excard is-active"
+                                className={cn('exec-v3-excard is-active', showMarquee && 'exec-v3-ss-hasmarquee')}
                             >
+                                {showMarquee &&
+                                    (['is-top', 'is-bottom'] as const).map((pos) => (
+                                        <div key={pos} className={cn('exec-v3-ss-marquee', pos)} aria-hidden="true">
+                                            <div className="exec-v3-ss-marquee-track">
+                                                <span>{MARQUEE_RUN}</span>
+                                                <span aria-hidden="true">{MARQUEE_RUN}</span>
+                                            </div>
+                                            {/* Reduced-motion: la cinta se apaga y queda esta frase quieta y centrada. */}
+                                            <span className="exec-v3-ss-marquee-static">{MARQUEE_PHRASE}</span>
+                                        </div>
+                                    ))}
                                 <div className="exec-v3-ss-activetop">
                                     <span className="exec-v3-exletter" aria-hidden>{m.letter}</span>
                                     <span className="exec-v3-exstate is-now">Ahora</span>

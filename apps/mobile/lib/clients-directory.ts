@@ -252,8 +252,10 @@ export function filterClients(
     else if (riskFilter === 'on_track') matchesRisk = c.attentionScore < 25
     else if (riskFilter === 'password_reset') matchesRisk = c.forcePwChange
     else if (riskFilter === 'nutrition_low') {
+      // Espejo web matchesRiskFilter (ClientsDirectoryClient.tsx:67-68): SOLO el flag
+      // NUTRICION_RIESGO; el umbral extra pct<60 divergia del conteo del resumen (QA F2).
       const p = pulseById?.get(c.id)
-      matchesRisk = !!p && (p.attentionFlags?.includes('NUTRICION_RIESGO') || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60))
+      matchesRisk = !!p && (p.attentionFlags ?? []).includes('NUTRICION_RIESGO')
     }
 
     let matchesProgram = true

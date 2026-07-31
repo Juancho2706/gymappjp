@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Maximize2, X } from 'lucide-react'
-import { extractYoutubeVideoId } from '@/lib/youtube'
+import { extractYoutubeVideoId, isYoutubeMediaUrl } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { resolveExecMedia } from './exec-media'
 import type { ExerciseType } from '../WorkoutExecutionClient'
@@ -32,7 +32,8 @@ interface Props {
 
 /** Media del ejercicio — MISMA prioridad estricta que el modal legacy, en letterbox OSCURO. */
 function TechniqueMedia({ exercise }: { exercise: ExerciseType }) {
-    const isYouTube = exercise.video_url?.includes('youtube.com') || exercise.video_url?.includes('youtu.be')
+    // QA4 · hallazgo 17: parser central (incluye `youtube-nocookie.com`), nunca substring `includes`.
+    const isYouTube = isYoutubeMediaUrl(exercise.video_url)
     const ytId = exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null
 
     if (isYouTube && ytId) {
@@ -55,7 +56,8 @@ function TechniqueMedia({ exercise }: { exercise: ExerciseType }) {
             </div>
         )
     }
-    if (exercise.video_url) {
+    // Un host de YouTube sin id extraíble NO cae acá: renderizar la página de embed como <Image> siempre falla.
+    if (exercise.video_url && !isYouTube) {
         const u = exercise.video_url.toLowerCase()
         const isMp4 =
             u.includes('.mp4') ||

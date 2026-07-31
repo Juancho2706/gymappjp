@@ -452,7 +452,7 @@ async function PlanView({
         <h2 className="mt-4 font-display text-2xl font-bold text-strong">{summary.name}</h2>
         <p className="mt-1 text-xs text-muted">
           Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
-          {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
+          {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ''}
         </p>
         {/* Auditoría P2: fuera el párrafo de descripción de la estrategia — texto de folleto,
             constante, se lee una vez en la vida y no cambia ninguna decisión del alumno. */}

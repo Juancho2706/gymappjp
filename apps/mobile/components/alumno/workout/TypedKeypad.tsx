@@ -14,7 +14,6 @@ import {
   KEYPAD_MAX_DECIMALS,
   KEYPAD_STEP_PRESETS,
 } from '@eva/workout-engine'
-import { useTheme } from '@/context/ThemeContext'
 import { FONT, TYPE, textStyle } from '@/lib/typography'
 import { shadow } from '@/lib/shadows'
 import { haptics } from '@/lib/haptics'
@@ -437,15 +436,15 @@ export function TypedKeypad(props: {
   header?: { exerciseName?: string; objectiveLine?: string; last?: { weightKg: number | null; reps: number | null } | null }
 }) {
   const { mode, value, onChange, onNext, onDone, onClose, unit, tabs, header } = props
-  const { resolvedScheme } = useTheme()
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
   const cfg = MODE_CFG[mode]
 
+  // Sombra SIEMPRE dark: el panel es `bg-ink-950` fijo (no sigue al esquema de la cuenta).
   const panelShadow = useMemo(() => {
-    const base = shadow('xl', resolvedScheme)
+    const base = shadow('xl', 'dark')
     return { ...base, shadowOffset: { width: 0, height: -16 } }
-  }, [resolvedScheme])
+  }, [])
 
   const onDigit = (d: string) => {
     haptics.select()

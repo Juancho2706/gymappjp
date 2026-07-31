@@ -384,9 +384,19 @@ export function SessionCompleteV3({
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#execFinalBg)" />
           </Svg>
           {/* Confeti sutil de cierre (react-native-fast-confetti, ya usado por el resumen legacy). Ligeramente
-              mas denso si hubo PRs. reduced-motion ⇒ sin confeti. */}
+              mas denso si hubo PRs. reduced-motion ⇒ sin confeti.
+              `isInfinite={false}`: la libreria trae `isInfinite` en TRUE por defecto — sin esto el confeti
+              se reciclaba PARA SIEMPRE en la pantalla Final (QA device). Una sola pasada y muere; la caida
+              se acorta a 3,5s (default 8s) para que la celebracion no tape las estadisticas. */}
           {visible && !reducedMotion ? (
-            <Confetti autoplay fadeOutOnEnd count={detectedPRs.length > 0 ? 160 : 90} colors={[brand, gold, '#4ADE80', '#38BDF8']} />
+            <Confetti
+              autoplay
+              isInfinite={false}
+              fallDuration={3500}
+              fadeOutOnEnd
+              count={detectedPRs.length > 0 ? 160 : 90}
+              colors={[brand, gold, '#4ADE80', '#38BDF8']}
+            />
           ) : null}
 
           <ScrollView

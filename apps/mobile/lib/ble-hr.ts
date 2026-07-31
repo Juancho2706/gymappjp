@@ -17,10 +17,18 @@
  * controlador con estado (scan/connect/stream/reconexion) que corre tras un guard dinamico.
  */
 import { useSyncExternalStore } from 'react'
-import { PermissionsAndroid, Platform } from 'react-native'
-import { HR_MEASUREMENT_UUID, HR_SERVICE_UUID, bpmFromBase64 } from './ble-hr-parse'
+import { NativeModules, PermissionsAndroid, Platform } from 'react-native'
+import {
+  BLE_ERROR_COPY,
+  type BleErrorKind,
+  HR_MEASUREMENT_UUID,
+  HR_SERVICE_UUID,
+  bleErrorKind,
+  bleStateErrorKind,
+  bpmFromBase64,
+} from './ble-hr-parse'
 
-// Re-export de la parte PURA (parser 0x2A37, señal→barras, promedio) para consumidores del modulo.
+// Re-export de la parte PURA (parser 0x2A37, señal→barras, promedio, taxonomia de error).
 export {
   HR_SERVICE_UUID,
   HR_MEASUREMENT_UUID,
@@ -29,7 +37,11 @@ export {
   bpmFromBase64,
   rssiToBars,
   averageBpm,
+  bleErrorKind,
+  bleStateErrorKind,
+  BLE_ERROR_COPY,
 } from './ble-hr-parse'
+export type { BleErrorKind } from './ble-hr-parse'
 
 // ─── Estado publico del controlador ──────────────────────────────────────────────────────────────
 
@@ -56,6 +68,11 @@ export interface BleHrState {
   lastSampleAtMs: number | null
   sampleCount: number
   error: string | null
+  /**
+   * Causa honesta del ultimo fallo (QA-4/H6). `error` sigue siendo el string que se pinta, pero la UI
+   * usa `errorKind` para elegir la ACCION (ir a ajustes de Bluetooth, de la app, de ubicacion…).
+   */
+  errorKind: BleErrorKind | null
 }
 
 // ─── Guard dinamico de la libreria nativa ────────────────────────────────────────────────────────
@@ -79,6 +96,8 @@ type MinimalDevice = {
   cancelConnection: () => Promise<MinimalDevice>
 }
 
+type BleSubscription = { remove: () => void }
+
 type MinimalManager = {
   startDeviceScan: (
     uuids: string[] | null,
@@ -88,11 +107,21 @@ type MinimalManager = {
   stopDeviceScan: () => void
   connectToDevice: (id: string, options?: unknown) => Promise<MinimalDevice>
   destroy: () => void
+  /** Estado del adaptador: 'PoweredOn' | 'PoweredOff' | 'Unauthorized' | 'Unsupported' | 'Unknown' | 'Resetting'. */
+  state: () => Promise<string>
+  /** `emitCurrentState=true` entrega el estado actual de inmediato (iOS arranca en 'Unknown'). */
+  onStateChange: (listener: (state: string) => void, emitCurrentState?: boolean) => BleSubscription
 }
 
 let managerSingleton: MinimalManager | null = null
 let managerLoadAttempted = false
 
+/**
+ * Instancia el `BleManager`. OJO: `new BleManager()` crea el CBCentralManager (iOS) /
+ * BluetoothAdapter client (Android) — en iOS eso dispara el prompt de Bluetooth del SISTEMA. Por eso
+ * NUNCA se llama desde el import ni desde el feature-detect: solo desde startScan/connect, es decir
+ * cuando el alumno ya tocó "Conectar sensor" (permisos JUST-IN-TIME, regla del módulo).
+ */
 function loadManager(): MinimalManager | null {
   if (managerLoadAttempted) return managerSingleton
   managerLoadAttempted = true
@@ -106,9 +135,71 @@ function loadManager(): MinimalManager | null {
   return managerSingleton
 }
 
-/** ¿Hay backend BLE nativo disponible? false en Expo Go / web. */
+let libDetected: boolean | null = null
+
+/**
+ * ¿Hay backend BLE nativo disponible? false en Expo Go / web.
+ * Detect BARATO y SIN efectos: mira el binding nativo (`NativeModules.BlePlx`, mismo nombre en iOS y
+ * Android) y que el JS exporte la clase. No instancia el manager (ver `loadManager`). Si el manager
+ * ya se instanció con éxito en esta sesión, eso manda: es la prueba más fuerte de que el módulo está.
+ */
 export function isBleAvailable(): boolean {
-  return loadManager() !== null
+  if (managerSingleton !== null) return true
+  if (libDetected !== null) return libDetected
+  try {
+    const mod = require('react-native-ble-plx') as { BleManager?: unknown }
+    const nativeLinked = (() => {
+      try {
+        return NativeModules != null && (NativeModules as Record<string, unknown>).BlePlx != null
+      } catch {
+        return false
+      }
+    })()
+    libDetected = typeof mod?.BleManager === 'function' && nativeLinked
+  } catch {
+    libDetected = false
+  }
+  return libDetected
+}
+
+// ─── Estado del adaptador Bluetooth ──────────────────────────────────────────────────────────────
+
+const ADAPTER_TIMEOUT_MS = 4_000
+
+/**
+ * Espera a que el adaptador resuelva. En iOS el CBCentralManager arranca en 'Unknown' y tarda
+ * 100-500 ms en llegar a 'PoweredOn': escanear antes falla con un error opaco. En Android devuelve
+ * 'PoweredOff' de inmediato cuando el Bluetooth está apagado — que es EXACTAMENTE el caso de QA.
+ * `manager.enable()` de ble-plx está deprecado (Android 13+ lo removió), así que no se usa: cuando
+ * el adaptador no está listo la UI manda al alumno a los ajustes del sistema.
+ */
+function waitForAdapterReady(manager: MinimalManager, timeoutMs = ADAPTER_TIMEOUT_MS): Promise<string> {
+  return new Promise((resolve) => {
+    let done = false
+    let sub: BleSubscription | null = null
+    const finish = (state: string) => {
+      if (done) return
+      done = true
+      try {
+        sub?.remove()
+      } catch {
+        /* no-op */
+      }
+      resolve(state)
+    }
+    const timer = setTimeout(() => finish('Unknown'), timeoutMs)
+    try {
+      sub = manager.onStateChange((state) => {
+        if (state === 'Unknown' || state === 'Resetting') return // aún resolviendo
+        clearTimeout(timer)
+        finish(state)
+      }, true)
+    } catch {
+      clearTimeout(timer)
+      // Runtime sin `onStateChange` (mock / lib vieja): no bloqueamos el flujo, seguimos al scan.
+      finish('PoweredOn')
+    }
+  })
 }
 
 // ─── Permisos JUST-IN-TIME (al tocar Conectar, nunca al abrir la app) ────────────────────────────
@@ -153,6 +244,7 @@ class BleHrController {
     lastSampleAtMs: null,
     sampleCount: 0,
     error: null,
+    errorKind: null,
   }
   private sum = 0
   private count = 0
@@ -160,6 +252,7 @@ class BleHrController {
   private device: MinimalDevice | null = null
   private monitorSub: { remove: () => void } | null = null
   private disconnectSub: { remove: () => void } | null = null
+  private adapterSub: BleSubscription | null = null
   private scanTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
   private userDisconnected = false
@@ -176,24 +269,75 @@ class BleHrController {
     this.listeners.forEach((l) => l())
   }
 
+  /** Setea el error con la causa clasificada + su copy (fuente única: BLE_ERROR_COPY). */
+  private fail(kind: BleErrorKind, status: BleStatus = 'error') {
+    this.set({ status, errorKind: kind, error: BLE_ERROR_COPY[kind] })
+  }
+
+  /**
+   * Mientras el Bluetooth esté apagado, escucha el adaptador: si el alumno lo prende desde el panel
+   * rápido / Centro de Control, el scan se reanuda solo sin cerrar el sheet.
+   */
+  private watchAdapterForResume(manager: MinimalManager) {
+    this.clearAdapterWatch()
+    try {
+      this.adapterSub = manager.onStateChange((state) => {
+        if (state !== 'PoweredOn') return
+        this.clearAdapterWatch()
+        if (this.snapshot.status === 'error' && this.snapshot.errorKind === 'powered-off') {
+          void this.startScan()
+        }
+      }, false)
+    } catch {
+      this.adapterSub = null
+    }
+  }
+
+  private clearAdapterWatch() {
+    try {
+      this.adapterSub?.remove()
+    } catch {
+      /* no-op */
+    }
+    this.adapterSub = null
+  }
+
   /** Inicia el scan filtrado por servicio 0x180D. Pide permisos JUST-IN-TIME. */
   async startScan(): Promise<void> {
+    if (!isBleAvailable()) {
+      this.set({ status: 'unavailable', errorKind: 'no-native', error: BLE_ERROR_COPY['no-native'] })
+      return
+    }
+    // Recién acá se instancia el manager (en iOS esto dispara el prompt de Bluetooth del sistema:
+    // tiene que salir con el sheet abierto, nunca al entrar a cardio).
     const manager = loadManager()
     if (!manager) {
-      this.set({ status: 'unavailable' })
+      this.set({ status: 'unavailable', errorKind: 'no-native', error: BLE_ERROR_COPY['no-native'] })
       return
     }
     const granted = await ensureBlePermissions()
     if (!granted) {
-      this.set({ status: 'error', error: 'Permiso de Bluetooth denegado' })
+      this.fail('unauthorized')
       return
     }
-    this.set({ status: 'scanning', devices: [], error: null })
+    // Gate del adaptador ANTES de escanear: con el Bluetooth apagado ble-plx no pide nada, solo
+    // devuelve un error opaco por el callback del scan (QA-4/H6: "no se pudo buscar sensores").
+    const adapterState = await waitForAdapterReady(manager)
+    const adapterProblem = bleStateErrorKind(adapterState)
+    if (adapterProblem) {
+      this.fail(adapterProblem)
+      if (adapterProblem === 'powered-off') this.watchAdapterForResume(manager)
+      return
+    }
+    this.clearAdapterWatch()
+    this.set({ status: 'scanning', devices: [], error: null, errorKind: null })
     try {
       manager.startDeviceScan([HR_SERVICE_UUID], null, (error, device) => {
         if (error) {
-          this.set({ status: 'error', error: 'No se pudo buscar sensores' })
+          const kind = bleErrorKind(error)
           this.stopScan()
+          this.fail(kind)
+          if (kind === 'powered-off') this.watchAdapterForResume(manager)
           return
         }
         if (!device) return
@@ -210,15 +354,24 @@ class BleHrController {
       })
       if (this.scanTimer) clearTimeout(this.scanTimer)
       this.scanTimer = setTimeout(() => {
-        if (this.snapshot.status === 'scanning') this.stopScan()
+        if (this.snapshot.status !== 'scanning') return
+        const empty = this.snapshot.devices.length === 0
+        this.stopScan()
+        // Vacío tras 15 s: antes el radar se quedaba quieto y el sheet no decía NADA. Ahora se
+        // explica qué hacer (prender la cinta / activar el broadcast del reloj) y se puede reintentar.
+        if (empty) this.fail('not-found')
       }, SCAN_TIMEOUT_MS)
-    } catch {
-      this.set({ status: 'error', error: 'No se pudo iniciar la busqueda' })
+    } catch (e) {
+      const kind = bleErrorKind(e)
+      this.fail(kind === 'unknown' ? 'scan-failed' : kind)
     }
   }
 
   stopScan(): void {
-    const manager = loadManager()
+    // Al cerrar el sheet se corta también la escucha del adaptador (nada de reanudar en background).
+    this.clearAdapterWatch()
+    // No instancia el manager: si nunca se escaneó no hay nada que detener.
+    const manager = managerSingleton
     try {
       manager?.stopDeviceScan()
     } catch {
@@ -235,14 +388,21 @@ class BleHrController {
   async connect(id: string): Promise<void> {
     const manager = loadManager()
     if (!manager) {
-      this.set({ status: 'unavailable' })
+      this.set({ status: 'unavailable', errorKind: 'no-native', error: BLE_ERROR_COPY['no-native'] })
       return
     }
+    this.clearAdapterWatch()
     this.stopScan()
     this.userDisconnected = false
     this.reconnectAttempts = 0
     const target = this.snapshot.devices.find((d) => d.id === id)
-    this.set({ status: 'connecting', connectedId: id, connectedName: target?.name ?? null, error: null })
+    this.set({
+      status: 'connecting',
+      connectedId: id,
+      connectedName: target?.name ?? null,
+      error: null,
+      errorKind: null,
+    })
     await this.doConnect(id)
   }
 
@@ -286,8 +446,10 @@ class BleHrController {
           })
         },
       )
-    } catch {
-      this.set({ status: 'error', error: 'No se pudo conectar al sensor' })
+    } catch (e) {
+      // Distingue "el adaptador se apagó / no hay permiso" de "el sensor no responde".
+      const kind = bleErrorKind(e)
+      this.fail(kind === 'unknown' || kind === 'not-found' ? 'connection-lost' : kind)
     }
   }
 
@@ -295,7 +457,7 @@ class BleHrController {
     this.monitorSub?.remove()
     this.monitorSub = null
     if (this.userDisconnected) {
-      this.set({ status: 'idle', connectedId: null, connectedName: null, bpm: null })
+      this.set({ status: 'idle', connectedId: null, connectedName: null, bpm: null, errorKind: null, error: null })
       return
     }
     // Reconexion basica: reintenta hasta MAX_RECONNECT_ATTEMPTS conservando el promedio.
@@ -304,13 +466,15 @@ class BleHrController {
       this.set({ status: 'connecting', bpm: null })
       void this.doConnect(id)
     } else {
-      this.set({ status: 'error', error: 'Se perdio la conexion con el sensor', bpm: null })
+      this.set({ bpm: null })
+      this.fail('connection-lost')
     }
   }
 
   /** Desconexion limpia solicitada por el usuario. Conserva el promedio en el estado. */
   async disconnect(): Promise<void> {
     this.userDisconnected = true
+    this.clearAdapterWatch()
     this.monitorSub?.remove()
     this.monitorSub = null
     this.disconnectSub?.remove()
@@ -321,7 +485,7 @@ class BleHrController {
       /* ya estaba desconectado */
     }
     this.device = null
-    this.set({ status: 'idle', connectedId: null, connectedName: null, bpm: null })
+    this.set({ status: 'idle', connectedId: null, connectedName: null, bpm: null, error: null, errorKind: null })
   }
 }
 

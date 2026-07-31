@@ -236,7 +236,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       {published ? (
         <div className="mb-5 flex items-center gap-2 rounded-control border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
           <CheckCircle2 className="h-5 w-5" />
-          Plan publicado. La version quedo vigente para el alumno.
+          Plan publicado. Ya está vigente para el alumno.
         </div>
       ) : null}
 

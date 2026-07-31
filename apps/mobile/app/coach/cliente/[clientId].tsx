@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Animated, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { BlurView } from 'expo-blur'
+import { useReducedMotion } from 'react-native-reanimated'
 import { User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { hexToRgba } from '../../../lib/theme'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
 import { ClientHero, type HeroChips, type HeroStatusLevel } from '../../../components/coach/clientDetail/ClientHero'
 import { ClientTabBar, type ClientTab, type TabItem } from '../../../components/coach/clientDetail/ClientTabBar'
+import { tabBarBackdropProgress } from '../../../lib/client-tabbar-backdrop'
 import { ProfileFloatingActions } from '../../../components/coach/clientDetail/ProfileFloatingActions'
 import { ClientActionsSheet } from '../../../components/coach/directory/ClientActionsSheet'
 import { OverviewTab } from '../../../components/coach/clientDetail/OverviewTab'
@@ -64,7 +68,8 @@ function sinceMonthLabel(iso: string | null): string {
 
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string; clientName?: string }>()
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
+  const reducedMotion = useReducedMotion()
   const router = useRouter()
   const workspace = useWorkspace()
 
@@ -105,6 +110,19 @@ export default function ClientDetailScreen() {
   const lastY = useRef(0)
   const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
   const [tabStuck, setTabStuck] = useState(false)
+  // QA2 A4: opacidad del backdrop de la tira de tabs por proximidad al anclaje (transparente
+  // lejos → superficie del tema al anclarse). `tabNear` solo monta/desmonta la capa (el
+  // BlurView es caro en Android); la transición fina la hace el Animated.Value.
+  // `useState` lazy (no `useRef().current`): el value se pasa como prop en render y
+  // `react-hooks/refs` prohíbe leer un ref durante el render.
+  const [tabBackdrop] = useState(() => new Animated.Value(0))
+  const [tabNear, setTabNear] = useState(false)
+  // QA3 — El TopBar vive FUERA del ScrollView: al anclarse la tira de tabs solo ella pintaba
+  // el glass y el tope quedaba partido en dos tonos. Este value opacita una capa glass IDÉNTICA
+  // a la de ClientTabBar sobre el header para que status bar + header + tabs se lean como una
+  // sola superficie. El área del inset superior ya la pinta el `SafeAreaView` con
+  // `theme.background` sólido (misma familia de tono), así que no hace falta extender la capa.
+  const [headerGlass] = useState(() => new Animated.Value(0))
   /** Racha del RPC get_client_current_streak (regla "días asignados"); null = RPC no disponible. */
   const [rpcStreak, setRpcStreak] = useState<number | null>(null)
   const loadedOnceRef = useRef(false)
@@ -454,12 +472,28 @@ export default function ClientDetailScreen() {
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y
-    setTabStuck(y >= tabStickyY.current - 1)
+    const stuck = y >= tabStickyY.current - 1
+    setTabStuck((current) => (current === stuck ? current : stuck))
+    // Rampa del backdrop: `setValue` en cada evento (throttle 16ms) da una transición suave
+    // sin re-renderizar el árbol; solo el cruce del umbral toca state.
+    const progress = tabBarBackdropProgress(y, tabStickyY.current)
+    tabBackdrop.setValue(progress)
+    const near = progress > 0
+    setTabNear((current) => (current === near ? current : near))
     if (y < 36) setCompact(false)
     else if (y - lastY.current > 8) setCompact(true)
     else if (lastY.current - y > 8) setCompact(false)
     lastY.current = y
   }
+
+  // Fade del glass del header al cruzar el anclaje (mismo umbral que la tira de tabs).
+  useEffect(() => {
+    Animated.timing(headerGlass, {
+      toValue: tabStuck ? 1 : 0,
+      duration: reducedMotion ? 0 : 150,
+      useNativeDriver: true,
+    }).start()
+  }, [tabStuck, reducedMotion, headerGlass])
 
   if (loading) {
     return (
@@ -587,7 +621,24 @@ export default function ClientDetailScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
+      {/* Header + capa glass: sin borde inferior propio (el hairline vive en ClientTabBar,
+          así se evita el doble borde cuando la tira está anclada). El BlurView se MONTA solo
+          cerca del anclaje (en Android es caro tenerlo vivo todo el scroll). */}
+      <View style={styles.headerWrap}>
+        {tabNear || tabStuck ? (
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: headerGlass }]}>
+            <BlurView
+              intensity={resolvedScheme === 'dark' ? 20 : 30}
+              tint={resolvedScheme === 'dark' ? 'dark' : 'light'}
+              experimentalBlurMethod="dimezisBlurView"
+              pointerEvents="none"
+              style={StyleSheet.absoluteFill}
+            />
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.background, 0.8) }]} />
+          </Animated.View>
+        ) : null}
+        <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
+      </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} onScroll={onScroll} scrollEventThrottle={16}>
         {/* 0 — Hero */}
@@ -609,8 +660,17 @@ export default function ClientDetailScreen() {
         />
 
         {/* 1 — Tab bar (sticky) */}
-        <View onLayout={(event) => { tabStickyY.current = event.nativeEvent.layout.y }}>
-          <ClientTabBar items={tabs} value={tab} onChange={setTab} stuck={tabStuck} />
+        <View
+          onLayout={(event) => {
+            tabStickyY.current = event.nativeEvent.layout.y
+            // Con el hero corto (o al volver a un tab ya scrolleado) la tira puede nacer ya
+            // dentro de la rampa: sincronizar evita el primer frame sin backdrop.
+            const progress = tabBarBackdropProgress(lastY.current, tabStickyY.current)
+            tabBackdrop.setValue(progress)
+            setTabNear(progress > 0)
+          }}
+        >
+          <ClientTabBar items={tabs} value={tab} onChange={setTab} stuck={tabStuck} near={tabNear} backdropProgress={tabBackdrop} />
         </View>
 
         {/* 2 — Content */}
@@ -788,6 +848,7 @@ function EditClientForm({ client, workspace, onDone, onCancel, onSavingChange }:
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerWrap: { position: 'relative', zIndex: 2 },
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 120, gap: 14 },
   tabContent: { gap: 14, paddingTop: 14 },
   formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },

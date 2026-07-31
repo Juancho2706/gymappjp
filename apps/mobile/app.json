@@ -33,7 +33,7 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#07080C"
       },
       "permissions": [
         "android.permission.CAMERA",
@@ -43,8 +43,6 @@
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_SLEEP",
         "android.permission.health.READ_EXERCISE",
@@ -112,18 +110,25 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/eva-mark-filled.png",
+          "image": "./assets/eva-icon.png",
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#07080C",
           "dark": {
-            "image": "./assets/eva-mark-filled.png",
+            "image": "./assets/eva-icon.png",
             "backgroundColor": "#07080C"
           }
         }
       ],
       "expo-router",
       "expo-updates",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0B0E13"
+        }
+      ],
       [
         "expo-camera",
         {
@@ -157,6 +162,7 @@
         }
       ],
       "react-native-health-connect",
+      "./plugins/with-health-connect",
       "react-native-notify-kit",
       "expo-secure-store",
       "./plugins/with-ios-modular-headers",

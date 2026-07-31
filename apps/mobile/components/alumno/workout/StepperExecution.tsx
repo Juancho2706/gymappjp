@@ -1,5 +1,18 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AccessibilityInfo, Pressable, ScrollView, Text, View, type TextStyle } from 'react-native'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  AccessibilityInfo,
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type TextStyle,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AnimatePresence, MotiView } from 'moti'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -66,6 +79,23 @@ export interface StepperStepView {
   /** ¿El paso está completo? (color del segmento del rail). */
   complete: boolean
 }
+
+// ── Scroll-into-view de inputs del paso (QA: la nota de la serie quedaba tapada por el teclado) ──────
+// Los inputs viven muy abajo en el árbol (ExerciseScreenV3 → SingleExerciseCard/SupersetGroupCard →
+// ActiveSetRow) y el ScrollView que hay que mover vive ACÁ. En vez de encadenar un prop por cuatro
+// niveles, el pager publica un contexto: el input pide "dejame visible" pasando su propio nodo y el
+// pager hace la cuenta contra el tope del teclado. Fuera del pager el hook devuelve `null` (la fila
+// también se pinta en superficies sin scroll propio) ⇒ los consumidores lo tratan como OPCIONAL.
+export type MeasurableNode = {
+  measureInWindow: (cb: (x: number, y: number, width: number, height: number) => void) => void
+}
+const EnsureVisibleContext = createContext<((node: MeasurableNode | null) => void) | null>(null)
+/** Pide al pager que deje visible un input sobre el teclado. `null` si no hay pager arriba. */
+export function useEnsureVisibleInStep() {
+  return useContext(EnsureVisibleContext)
+}
+// Respiro entre el borde inferior del input y el tope del teclado.
+const KEYBOARD_GAP = 12
 
 // Umbrales de swipe (paridad web StepperExecution.tsx:35-36, patrón DayNavigator).
 const SWIPE_OFFSET = 60
@@ -145,6 +175,51 @@ export function StepperExecution({
   // Arrastre elástico en vivo del paso (paridad web `drag='x' dragSnapToOrigin dragElastic=0.12`,
   // StepperExecution.tsx:148-151): el paso sigue al dedo al 12% y rebota al soltar; el cambio real de
   // paso lo decide el umbral en `onEnd`. Con reduce-motion el gesto se desactiva (`drag={false}`, :148).
+  // Scroll-into-view: el pager guarda el nodo pedido y resuelve cuando el teclado YA tiene métricas
+  // (`keyboardDidShow`), o en el frame siguiente si el teclado ya estaba arriba. La cuenta usa
+  // coordenadas de PANTALLA (`measureInWindow`) contra `Keyboard.metrics().screenY`, así no depende de
+  // dónde empiece el ScrollView (hay header y barra "Finalizar" fuera de él).
+  const scrollRef = useRef<ScrollView>(null)
+  const scrollY = useRef(0)
+  const pendingNode = useRef<MeasurableNode | null>(null)
+
+  const flushEnsureVisible = useCallback(() => {
+    const node = pendingNode.current
+    const scroller = scrollRef.current
+    pendingNode.current = null
+    if (!node || !scroller) return
+    const keyboardTop = Keyboard.metrics()?.screenY ?? Dimensions.get('window').height
+    node.measureInWindow((_x, y, _width, height) => {
+      const overlap = y + height + KEYBOARD_GAP - keyboardTop
+      if (overlap > 1) scroller.scrollTo({ y: Math.max(0, scrollY.current + overlap), animated: true })
+    })
+  }, [])
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', flushEnsureVisible)
+    // Si el teclado se cierra sin haber resuelto el pedido, se descarta: un foco posterior no debe
+    // arrastrar el scroll hasta un input viejo.
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      pendingNode.current = null
+    })
+    return () => {
+      show.remove()
+      hide.remove()
+    }
+  }, [flushEnsureVisible])
+
+  const ensureVisible = useCallback(
+    (node: MeasurableNode | null) => {
+      pendingNode.current = node
+      if (node && Keyboard.isVisible()) requestAnimationFrame(flushEnsureVisible)
+    },
+    [flushEnsureVisible],
+  )
+
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollY.current = e.nativeEvent.contentOffset.y
+  }, [])
+
   const dragX = useSharedValue(0)
   const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dragX.value }] }))
   const pan = Gesture.Pan()
@@ -189,7 +264,23 @@ export function StepperExecution({
           `GestureDetector`/arrastre elástico (`dragStyle`) envuelve SOLO el card del paso — no
           chrome/rail/pie — igual que el `drag` del web va SÓLO en el `motion.div` del pager
           (:145-152): un pan sobre el chrome, rail o pie NO navega (paridad estricta). */}
+      {/* Teclado del sistema: el ejecutor no tenía NINGÚN avoider, así que el input de nota de la serie
+          quedaba enterrado bajo el teclado. `padding` sólo en iOS — en Android el ScrollView + el
+          `adjustResize` del Activity ya reacomodan la ventana y compensar de nuevo desplazaría dos veces
+          (misma convención que `NativeScreen.tsx:21-28` y `Sheet.tsx:333-336`). Inerte sin teclado.
+          El provider deja que cualquier input del paso pida quedar visible sobre el teclado. */}
+      <EnsureVisibleContext.Provider value={ensureVisible}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView
+        ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        // iOS: el UIScrollView retiene el toque ~150ms antes de entregarlo al hijo, y recién ahí
+        // arranca el timer del long-press de la rueda (kg/reps). Con `false` el Pressable recibe el
+        // press-in al instante (el scroll sigue robando el responder en cuanto hay movimiento):
+        // la rueda abre ~150ms antes y el feedback visual de los tiles deja de sentirse laggy.
+        // (spread casteado: RN 0.81 quitó la prop iOS de los types pero el runtime la honra)
+        {...({ delaysContentTouches: false } as object)}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: bottomClearance + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -301,6 +392,8 @@ export function StepperExecution({
           </Pressable>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
+      </EnsureVisibleContext.Provider>
     </View>
   )
 }

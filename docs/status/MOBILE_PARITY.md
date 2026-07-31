@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-26 @ e0db4285"
+last_verified: "2026-07-30"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -27,6 +27,165 @@ La paridad global **no está certificada todavía**.
 | Experiencia de entrada — splash/onboarding/acceso | Cerrada estática | Pendiente | Código y exports verdes; requiere build nuevo + QA física |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
+
+> **2026-07-29 (rama `worktree-adelanto-qa-20260729`, sin merge)**: adelanto paralelo al QA del owner —
+> (1) **QA F2** contadores del directorio coach espejados al pulse crudo de `CoachWarRoom.tsx:220-229`
+> (Riesgo/Atención/Nutri. desde el array pulse; filtro `nutrition_low` solo por flag) + test
+> `tests/mobile-directory-pulse-parity.test.ts`; (2) **QA F4/F6** safe area top en `builder.tsx` y
+> `clientes.tsx` (`edges=['top']`) + clearance inset-aware (`COACH_TABBAR_CLEARANCE + insets.bottom`);
+> (3) **consentimiento de pool Ley 21.719 en RN** (gap legal: la app no pasa por el proxy web que lo
+> fuerza): endpoint `api/mobile/auth/pool-consent` (GET/POST/DELETE espejo de `consent.actions.ts`),
+> pantalla `alumno/consent.tsx`, gate en `(tabs)/_layout` (orden blocked→password→consent, fail-open
+> como el proxy) y revocación en el perfil del alumno; (4) **export PDF del reporte de Movimiento**
+> (`movement-report-pdf.ts`, espejo del print web; delta aceptado: sin bitácora `pdf_generate`);
+> (5) hallazgo transversal: la infra de push (`apps/web/src/lib/push.ts`) no tenía NINGÚN disparador
+> nativo — corregido más abajo. F5 (anillo proteína) no reproducible en código actual — re-testear en
+> device; F9 ("Z4") sin rastro en código — probable fix colateral. Todo pendiente de QA física.
+
+> **2026-07-30 (misma rama, corte 3 — ronda QA-2 del owner, 14 hallazgos + 2 decisiones)**: (a) splash
+> nativo → figura BLANCA `eva-icon.png` (era la variante negra sobre #07080C; config nativa = próximo
+> build) y loader default RN → figura EVA respirando (muere el wordmark tricolor; custom del coach
+> intacto); (b) **grano global** en `AppBackground` ambos temas (crosshatch sello de la entrada,
+> decisión owner); (c) ficha de alumno coach: iconos lucide SIN `cssInterop` en todo el cluster
+> (caían a negro en dark — registro sistémico via `themed-lucide.ts`), 5 KPI cards con contrato
+> compartido web/RN (labels completos, tiles tonales), flash V1→V2 del tab Nutrición muerto
+> (skeleton hasta asentar 4 señales async), backdrop de tabs con rampa de opacidad + fricción
+> horizontal resuelta, fotos de check-in FIRMADAS en lote (bucket privado; antes pintaba paths
+> crudos = recuadros vacíos); (d) editor nutrición V2: icono del alimento repuesto (el dato llegaba
+> del read-model y se perdía en la hidratación), chip de grupo delega en `GroupDot` DS; (e) barrida
+> de safe areas: 11 ramas en 8 archivos (ficha nutricional, quick-edit, 6 tabs coach con
+> `edges=[]`); (f) `DateField` JS puro (día/mes/año) en perfil cardio; (g) avatar del hub Opciones
+> muestra el LOGO del coach (fallback iniciales), espejo web en `IdentityHero` de settings;
+> (h) retiro de las viñetas del directorio (patrón solo-RN); (i) builder workout: Guardar/FAB se
+> ocultan con el catálogo abierto (espejo web), modo simple EXTIRPADO (−40 líneas), anatomía de
+> filas espejada (trash rojo, link SS, volumen en línea) + bug real: `toggleSuperset` sin `intent`
+> podía agregar en vez de quitar; (j) web: fondo del documento bajo el ejecutor dark-only
+> (`html:has(.is-workout-page)` — mata el bloque blanco de iPhone) + fallback `100vh`, logo del
+> coach en avatares web, mismas KPI cards. Gates del corte: tsc web+mobile 0, vitest 1115 verdes,
+> lint 0 errores. TODO pendiente de QA física. Además aterrizó el **morph card→sheet de la
+> entrada** (frame 4 del concepto C, decisión owner 2026-07-30): "Soy alumno" se expande EN LA
+> MISMA pantalla hasta el sheet con el form del código (260ms, reversible con back, reduce-motion
+> a fade 160ms); el form se extrajo a `CoachIdentifierForm` compartido y `/alumno/codigo` sigue
+> intacta para deep links. Timings 1:1 con la spec del mockup; gates: tsc 0, vitest 1121, expo
+> export android OK.
+
+> **2026-07-30 (misma rama, corte 5 — ronda QA-4 del owner, 19 hallazgos, 13 informes + 12 workers
+> juzgados)**: **Ejecutor V3 RN** — cronómetro count-up arreglado (`useStopwatch` re-armaba el
+> intervalo cada tick y quedaba 0:00↔0:01; roller guardaba 0-1s en `workout_logs`); ejercicios por
+> tiempo YA NO auto-arrancan (paridad web: movilidad/cardio/intervalos con Iniciar/Pausar/Reanudar;
+> el lado 2 per-side sí auto-continúa); registro SIEMPRE visible en movilidad (ActiveSetRow +
+> historial bajo el anillo; muere "Registrar a mano", que desmontaba el anillo y mataba el timer);
+> miniatura real en la card SIGUIENTE del descanso (`thumbnail_url` entra al select del plan +
+> cadena thumb→gif→póster YT; las sustituciones propagan `thumbnail_url`); detector YouTube
+> unificado (`youtube-nocookie.com` caía a 'image' y rompía 33 ejercicios del catálogo — helper
+> `isYoutubeMediaUrl` RN+web, 6 clones muertos); video centrado llenando el marco + botón mute
+> (default muteado) también para YouTube vía IFrame API sin recargar el WebView; ignition:
+> `overflow hidden` (las 3 líneas ya no se ven antes de tiempo), `SessionMorphProvider` al layout
+> RAÍZ (Android cerraba el Dialog en el `router.push` sin avisar a JS → ahora sí espera el "TOCA
+> PARA COMENZAR"), LISTO centrado, logo con máscara circular; ejecutor forzado a DARK
+> (`ForceScheme` + footer/título/descripción de `Sheet` gateados por `forceDark` — muere la barra
+> blanca con cuenta en modo claro; sheets "Nota del coach" ×4 incluidos); rueda KG/REPS a 280ms
+> (antes 400 + ~150 de `delaysContentTouches` iOS) + haptic Medium + rueda conectada en superserie
+> + web a 280. **Días del programa** — la day-card de HOY completada abre "Ya hiciste este
+> entrenamiento" (paridad web QA7); `?recuperar=` validado con `validateTargetDate` (adiós
+> "Recuperando: Invalid date"); copy amigable para serie pasada sin registro (string compartido del
+> engine). **Centro Nutrición coach** — SOLO las 3 tabs quedan sticky (overlay `translateY`;
+> título/pill/+ scrollean); buscador de Alimentos dentro del scroll; la cápsula del coach por fin
+> se minimiza en el hub V2. **Fichas coach** — muere el flash "No pudimos abrir la ficha"
+> (`setLoading(false)` antes de tener `userId` + offline derivado del TTL de cache): máquina
+> resolving|loading|blocked|ready|failed (`lib/coach-nutrition-detail-phase.ts` + 9 tests), error
+> ámbar SOLO desde el catch, Reintentar + auto-retry al volver online, loader de marca; builder
+> ídem. **Mi marca FULL en RN** — las 7 variantes de loader + compositor 8×4 portadas
+> (`components/loaders/`, svg/moti, reduced-motion) y enchufadas vía `EvaLoaderScreen` (cubre las
+> 68 pantallas de carga); Guardar ya no corrompe la cache (merge no destructivo); el coach carga SU
+> PROPIA marca al entrar (antes solo el flujo alumno escribía cache → marca ajena en device
+> compartido); editor completado: tema del ejecutor + compositor + previews con el render REAL;
+> `use_brand_colors_coach` honrado solo por el camino autenticado (select anon intacto).
+> **Salud/BLE** — estudio completo en `docs/research/estudio-salud-dispositivos-2026-07-30.md`
+> (+ anexo de código). OTA: el scan espera `PoweredOn` + taxonomía de errores BLE con copy por
+> causa y CTA a ajustes; `BleManager` lazy (muere el prompt BT al abrir cardio); `androidInit`
+> verifica permisos realmente concedidos; `iosInit` propaga el error real; aviso ANTES de mandar a
+> Play Store por Health Connect (Android ≤13). Config para la PRÓXIMA build: `BLUETOOTH_SCAN/
+> CONNECT` fuera de `app.json` (habilita el `neverForLocation` del plugin ble-plx — sin él el scan
+> Android 12+ da 0 resultados) + `plugins/with-health-connect.js` (`setPermissionDelegate` en
+> MainActivity — sin esto `requestPermission` CRASHEA nativo — y `activity-alias` Android 14+).
+> BLOQUEANTES de release (owner): capability HealthKit en el provisioning local (`credentialsSource:
+> "local"` no sincroniza capabilities) y formulario "Health apps declaration" en Play Console
+> (~2 semanas de aprobación — empezar YA). **Misc** — check-in: fotos arregladas
+> (`expo-file-system/legacy`: el entry SDK 54 lanza siempre; try/catch con error visible; iOS sin
+> crop 1:1 forzado); comparador de fotos del coach migrado a `Gesture.Pan` (usaba `locationX`
+> relativo al view tocado = temblor frenético; sheet sin scroll); IMC sin desbordar; segmented
+> "Lado" a ancho completo ("Alternado" ya no parte); iconos de Herramientas normalizados para
+> Android (sizes pares, stroke 2, HW texture). Gates del corte: tsc web+mobile en 0; vitest 4843
+> verdes (379 archivos). TODO pendiente de QA física; BLE/Health Connect/HealthKit y el form de
+> Play exigen build EAS nueva + trámites del owner.
+
+> **2026-07-30 (misma rama, corte 4 — ronda QA-3 del owner, ~26 hallazgos, 13 workers juzgados)**:
+> **Ejecutor V3 RN** — (a) el keypad custom ya no se abre solo al entrar ni tras cada serie
+> (lazy-init del nonce en `SetRow.tsx:880`); (b) descanso SIN flash de la serie siguiente (la
+> decisión de descanso corre en el tick síncrono ANTES del `await logSet` en `handleCommit`);
+> (c) la nota de serie queda visible sobre el teclado (KeyboardAvoidingView en pager + KeypadHost
+> + contexto `useEnsureVisibleInStep`); (d) hairline blanca de los sheets dark muerta
+> (`border-inverse/10` en la primitive `Sheet.tsx`) y GestureHandlerRootView dentro de
+> `nativeModal` → el slider de volumen de Ajustes por fin arrastra; (e) la intro espera los datos
+> (mínimo 1.4s, techo 4.5s) — el Inicio ya no "carga por partes"; la racha semanal cabe en 360px
+> (grupo label/copy con shrink + dots 14px) y aterriza con fade sin salto; crossfade EMPEZAR→sesión
+> 220ms; confetti final una sola pasada (`isInfinite={false}`, la lib venía en TRUE por default);
+> prefetch del gif del primer ejercicio durante intro/Inicio; (f) superserie: glow del card activo
+> por anillos internos (muere el `elevation` cortado de Android), miniaturas reales en filas B/C
+> (gif/imagen/`mqdefault` de YouTube vía `execMediaKind`), bandas marquee "CONTINÚA SIN DESCANSO"
+> arriba/abajo del card activo (RN **y web**, apagadas durante descanso y reduced-motion),
+> `ExecMediaImage` nuevo con cache memory-disk + skeleton real + retry ×2 (compartido con
+> `TypedMediaV3`), el lightbox de técnica ahora sí agranda (70% del alto para gif; 16:9 solo
+> video), nombres a 2 líneas en "Plan completo" (sheet + peek del descanso).
+> **Notificaciones Android** — plugin `expo-notifications` cableado (`notification-icon.png`
+> reemplazado: era un PLACEHOLDER de plantilla, ahora la figura EVA blanca; color #0B0E13) +
+> `visibility PUBLIC` del countdown (canal y notificación) — todo exige build EAS nueva.
+> **Nutrición alumno RN** — sticky SOLO la tira de días (título+tabs scrollean; 3 tabs con
+> `stickyHeaderIndices=[1]`); flash "Sin conexión" muerto (el `stale` del TTL de cache ya no se
+> confunde con offline, 3 sitios); anillos macro con track limpio en dark (alpha .24) y "/ —"
+> cuando falta meta; scanner con preview (CameraView con `style` imperativo — mismo gotcha
+> cssInterop de los iconos); lightbox de la foto del alimento (fila de resultados + seleccionado).
+> **Versiones fuera** — jerga "versión/vN" retirada de web+RN (el único número visible era el
+> builder web; Borrador/Publicado funcional se conserva). **Modales** — "Registrar alimento" RN
+> pasa de bottom-sheet a diálogo centrado (fade + KAV + autofocus, testIDs intactos); web
+> `TodayModal` centrado en TODOS los viewports + `initialFocusRef` al input de búsqueda;
+> `WelcomeModal` con spring suave (damping 22/stiffness 160) y clip extra `collapsable={false}`
+> alrededor del video (WebView Android compone sobre el recorte del padre).
+> **Arranque** — una sola identidad tras el splash nativo (la firma EVA no se monta cuando hay
+> marca de coach cacheada; el crossfade arranca con AsyncStorage sin esperar red — la red solo
+> define el destino); el saludo SIEMPRE nombra a quien entra (sin nombre queda la marca sola:
+> "Hola de nuevo" pelado bajo el nombre del coach se leía como saludo AL coach); `/?pick=1`
+> fuerza el selector con sesión viva y elegir rol cierra la sesión del OTRO rol (con veredicto y
+> tope 1.2s). **Onboarding del alumno NUEVO** — 3 slides post-login primera vez en el dashboard
+> (`eva_student_onboarding_v1`, skippable, marca del coach en el slide 1) encadenado ANTES del
+> WelcomeModal. **Home/coach/misc** — bloque "día pendiente" pasa de ember a warning ámbar
+> informativo (RN + web; mapeo `--color-warning-*` nuevo en el @theme web); la ficha de alumno
+> del coach pinta el header superior con el MISMO glass que las tabs al quedar sticky (wrapper
+> local, TopBar intacto); "Conectar Salud" avisa antes de saltar a Health Connect + `getSdkStatus`
+> + try/catch/finally (mensajes instalar/actualizar); Aprender: chip de músculo legible (blanco
+> sobre scrim .62); disclaimers médicos legibles en dark (`dark:bg-warning-100/[0.16]` en
+> check-in + onboarding ×2 — quedan ~11 usos rotos del mismo patrón inventariados como deuda).
+> Gates del corte: tsc web+mobile en 0. Pendientes de DATOS (no UI): `proteinG` llega null en el
+> read-model de hoy aunque el plan lo define (290g) — revisar RPC; catálogo OFF con curación
+> pendiente (Quaker categoría "bebida"/100 ml). TODO pendiente de QA física; icono de notif,
+> countdown en lockscreen, sonido de fin de descanso (expo-audio) y Health Connect exigen la
+> build EAS nueva.
+
+> **2026-07-29 (misma rama, corte 2)**: (a) **push W1** (catálogo aprobado por el owner): payload dual
+> `url`/`screen`, kill-switch `EVA_PUSH_DISABLED_EVENTS`, `meal_reminder` extendido a nativo (el cron
+> pasa por `sendPushToClient`), `program_assigned` (web action + bridge RN), `checkin_received` al coach
+> (action web + bridge nuevo `api/mobile/checkin-submitted`), `checkin_due` (cron nuevo, hitos día 8/15);
+> (b) **QA F13** (decisión owner): la web arranca en el tema del sistema (`defaultTheme="system"`),
+> toggles leen `resolvedTheme`; (c) limpieza de builds: perfiles `prodpreview`/`staging` y opción
+> `enterprise` retirados; (d) **editor de día pasado RN** (cierra el gap P1 del informe de paridad):
+> `validateTargetDate`/`resolveRepeatDate` promovidos a `@eva/workout-engine` (web importa del paquete),
+> `useWorkoutSession(planId, repeatDate, editDate)` con modo solo-UPDATE client-side (paridad
+> `workout-log.actions.ts:119-185` + fix `80995cae`: fecha=HOY se normaliza), ventana completa del día
+> corrida a la fecha (logs/historial/máximos/última sesión), snapshot escopado por fecha, cola offline
+> con `target_date` (dedup por día escrito, descarte permanente `past_set_not_found` + Sentry), sheet
+> del home habilita "Revisar y editar" para días pasados (muere "Disponible pronto"). 47 tests nuevos.
+> Todo pendiente de QA física.
 
 > **2026-07-29 (rama `worktree-nutricion-ui-rescate`, sin merge)**: rescate UI de Nutrición V2 en olas 0-4 (poda de eco + permisos a 2 reales + wizard 2 pasos + selector por día) con paridad web/RN en el mismo corte — semana completa Lu-Do (`WeekDayNav` + `week-view.ts` compartidos), copia de franjas entre días (`COPY_SLOT_TO_VARIANTS` en los 4 reducers), carry-over de `visible_notes` también en el publish RN, y barrido de 677 clases muertas `text-text-*`/`border-border-*` de mobile (texto renderizaba negro incluso en dark). Las olas 4A/4B siguen "cerradas estáticas": este corte agrega superficies que requieren QA física propia. Spec: [`docs/specs/nutrition-week-view/`](../specs/nutrition-week-view/SPEC.md).
 

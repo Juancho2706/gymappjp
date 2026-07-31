@@ -334,8 +334,15 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --cta-fill: ${sportTokens.ctaFill};
                 }
             ` }} />
+            {/* QA2 D1 — `min-h-dvh` (100dvh incluye la safe-area inferior con viewport-fit=cover) +
+                `bg-background`: el shell del alumno cubre SIEMPRE el viewport completo, así el
+                lienzo del documento nunca asoma bajo la app. `has-[.is-workout-page]` cierra el
+                caso del ejecutor, que es DARK-ONLY por contrato: sin esto, un alumno en tema CLARO
+                veía `bg-background` (--paper, casi blanco) en cualquier franja que el overlay
+                `fixed` del ejecutor no alcanzara a cubrir en iOS Safari. Ver el bloque "Lienzo del
+                documento" en globals.css para la causa raíz completa. */}
             <div
-                className="flex flex-col md:flex-row min-h-dvh antialiased bg-background text-foreground"
+                className="flex flex-col md:flex-row min-h-dvh antialiased bg-background text-foreground has-[.is-workout-page]:bg-[var(--exec-canvas)]"
                 style={{ '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
@@ -368,7 +375,10 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         AppDownloadBanner se removió (decisión CEO: promos de app store fuera; los
                         enlaces apuntaban a listados de tienda inexistentes). */}
 
-                    <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
+                    {/* `has-[.is-workout-page]:bg-[var(--exec-canvas)]` acompaña al wrapper (QA2 D1):
+                        el `bg-muted/20` del tema claro era la capa que se veía blanca bajo la
+                        pantalla final del ejecutor. */}
+                    <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:bg-[var(--exec-canvas)] has-[.is-workout-page]:pb-0">
                         {isStudentGrace && (
                             <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
                                 {/* info-* = rampa DS fija (nunca white-label): banner discreto, tono

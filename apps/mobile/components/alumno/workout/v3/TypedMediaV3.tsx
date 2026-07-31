@@ -1,12 +1,9 @@
 import { useState } from 'react'
 import { View } from 'react-native'
-import { Image } from 'expo-image'
 import { AlignLeft, MessageSquare } from 'lucide-react-native'
-import { hexToRgba } from '../../../../lib/theme'
-import { extractYoutubeVideoId } from '../../../../lib/youtube'
 import type { SessionExercise } from '../../../../lib/workout-session'
 import { VideoPlayer } from '../../../VideoPlayer'
-import { GlassChip, MediaControlsRow, execMediaKind, hasExecMedia, useChipCollapse } from './ExecMediaV3'
+import { ExecMediaImage, GlassChip, MediaControlsRow, execMediaKind, hasExecMedia, useChipCollapse } from './ExecMediaV3'
 import type { ExecTheme } from './exec-theme'
 
 /**
@@ -44,8 +41,6 @@ export function TypedMediaV3({
 }) {
   const s = exec.surface
   const videoUrl = exercise.video_url
-  const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
-  const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
   const [muted, setMuted] = useState(true)
   // Pausa/reanudar + reinicio (controles glass QA5).
   const [paused, setPaused] = useState(false)
@@ -55,34 +50,37 @@ export function TypedMediaV3({
   // instrucciones), no sólo videos reales (decisión CEO).
   const hasTechnique = !!(exercise.gif_url || exercise.video_url) || (exercise.instructions?.length ?? 0) > 0
 
-  // ── Media por precedencia (misma que TechniqueSheet). `isDirectVideo` habilita el botón de audio;
-  //    `isYouTubeInline` habilita pausa/reinicio (sin audio) en youtube. ──
+  // ── Media por el `kind` canónico de `execMediaKind` (QA4 · hallazgo 17: cero detección local por
+  //    substring, que dejaba fuera `youtube-nocookie.com`). Audio + pausa/reinicio en video y youtube. ──
   const kind = execMediaKind(exercise)
   let mediaEl: React.ReactNode
   const isDirectVideo = kind === 'video'
   const isYouTubeInline = kind === 'youtube'
   const hasControls = isDirectVideo || isYouTubeInline
-  if (exercise.gif_url) {
-    mediaEl = <Image source={{ uri: exercise.gif_url }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
+  // El medio llena el marco a lo ancho (el wrapper de la pantalla tipada centra sus hijos).
+  const fillStyle = { flex: 1, width: '100%', alignSelf: 'stretch' } as const
+  if (kind === 'gif' && exercise.gif_url) {
+    // Misma imagen con caché/transición/reintento que fuerza (`ExecMediaImage`).
+    mediaEl = <ExecMediaImage uri={exercise.gif_url} alt={exercise.name} accent={accent} reducedMotion={reducedMotion} />
   } else if (isDirectVideo && videoUrl) {
-    mediaEl = <VideoPlayer url={videoUrl} autoPlay muted={muted} paused={paused} restartSignal={restartNonce} frameless letterbox={s.surfaceRaised} style={{ flex: 1 }} title={exercise.name} />
-  } else if (videoUrl && !isYouTube) {
-    mediaEl = <Image source={{ uri: videoUrl }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
+    mediaEl = <VideoPlayer url={videoUrl} autoPlay muted={muted} paused={paused} restartSignal={restartNonce} frameless letterbox={s.surfaceRaised} style={fillStyle} title={exercise.name} />
+  } else if (kind === 'image' && videoUrl) {
+    mediaEl = <ExecMediaImage uri={videoUrl} alt={exercise.name} accent={accent} reducedMotion={reducedMotion} />
   } else if (isYouTubeInline && videoUrl) {
-    // YouTube AUTOREPRODUCIDO inline MUTED (QA4): reusa el VideoPlayer de la técnica. QA5: pausa/reinicio
-    // vía la IFrame API (injectJavaScript, sin recargar); audio diferido (recargaría el WebView).
+    // YouTube AUTOREPRODUCIDO inline MUTED (QA4): reusa el VideoPlayer de la técnica. Pausa/reinicio y
+    // AUDIO (hallazgo 10) vía la IFrame API (injectJavaScript, sin recargar el WebView).
     mediaEl = (
       <VideoPlayer
         url={videoUrl}
         start={exercise.video_start_time}
         end={exercise.video_end_time}
         autoPlay
-        muted
+        muted={muted}
         paused={paused}
         restartSignal={restartNonce}
         frameless
         letterbox={s.surfaceRaised}
-        style={{ flex: 1 }}
+        style={fillStyle}
         title={exercise.name}
       />
     )
@@ -135,10 +133,10 @@ export function TypedMediaV3({
         )}
       </View>
 
-      {/* Fila de controles glass de video (QA5): audio (sólo video directo) + pausa/reanudar + reiniciar. */}
+      {/* Fila de controles glass de video (QA5): audio (video directo o youtube) + pausa/reanudar + reiniciar. */}
       {hasControls && (
         <MediaControlsRow
-          hasAudio={isDirectVideo}
+          hasAudio={isDirectVideo || isYouTubeInline}
           muted={muted}
           onToggleMuted={() => setMuted((m) => !m)}
           paused={paused}

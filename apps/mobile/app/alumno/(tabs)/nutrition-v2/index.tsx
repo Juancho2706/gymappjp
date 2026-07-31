@@ -194,10 +194,13 @@ const EMPTY_DAY_VARIANTS: PlanVariant[] = []
  * pintan del plan ya descargado y del historial de la semana.
  */
 function TodayTab({
+  chrome,
   selectedDay,
   onSelectDay,
   focusSlotCode,
 }: {
+  /** Título + tabs del módulo: scrollean con el contenido (ver `NutritionChrome`). */
+  chrome: ReactNode
   /** Fecha `YYYY-MM-DD` que se está mirando; `null` = hoy. */
   selectedDay: string | null
   onSelectDay: (isoDate: string | null) => void
@@ -353,7 +356,9 @@ function TodayTab({
       ])
       if (mountedRef.current && cached) {
         setModel(cached.payload)
-        setOffline(cached.stale)
+        // `cached.stale` es solo TTL vencido, NO falta de conectividad: derivar
+        // `offline` de ahí prendía el banner "Sin conexión" un instante en cada
+        // entrada con red OK. El estado offline lo fija el catch del fetch.
         setLoading(false)
       }
       if (mountedRef.current && cachedPlan) setLivePlan(cachedPlan.payload)
@@ -1177,7 +1182,8 @@ function TodayTab({
   // El esqueleto de HOY solo aplica al día de hoy: mirar el sábado no depende del fetch del Today.
   if (!entitlements.ready || (isViewingToday && loading)) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 gap-5 bg-surface-app px-4">
+        {chrome}
         <NutritionSkeleton variant="today" />
       </View>
     )
@@ -1185,7 +1191,8 @@ function TodayTab({
 
   if (!enabled) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 gap-5 bg-surface-app px-4">
+        {chrome}
         <NutritionStatePanel
           icon="permission"
           title="Nutrición todavía no está disponible para ti"
@@ -1268,17 +1275,19 @@ function TodayTab({
 
     return (
       <View className="flex-1 bg-surface-app">
-        {/* La tira va FUERA del scroll: es el chrome del tab, no se desmonta al cambiar de día. */}
-        <View className="px-4 pb-3">
-          <WeekDayNav cells={weekCells} selectedIso={viewDate} onSelect={onSelectWeekDay} />
-        </View>
         <ScrollView
           className="flex-1"
           contentContainerClassName="gap-4 px-4"
           contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
           onScroll={onScrollChrome}
           scrollEventThrottle={16}
+          // [0] chrome (scrollea) · [1] tira de días (PEGADA) · [2+] contenido.
+          stickyHeaderIndices={[1]}
         >
+          {chrome}
+          <StickyWeekBar>
+            <WeekDayNav cells={weekCells} selectedIso={viewDate} onSelect={onSelectWeekDay} />
+          </StickyWeekBar>
           <ReadOnlyDayBanner
             isoDate={viewDate}
             tone={isFuture ? 'future' : 'past'}
@@ -1292,7 +1301,8 @@ function TodayTab({
 
   if (!model) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 gap-5 bg-surface-app px-4">
+        {chrome}
         <NutritionStatePanel
           icon="offline"
           tone="warning"
@@ -1322,7 +1332,7 @@ function TodayTab({
     return (
       <ScrollView
         className="flex-1 bg-surface-app"
-        contentContainerClassName="px-4 pt-5"
+        contentContainerClassName="gap-5 px-4"
         contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
         onScroll={onScrollChrome}
         scrollEventThrottle={16}
@@ -1333,9 +1343,13 @@ function TodayTab({
               setRefreshing(true)
               void load(true)
             }}
+            // QA4: el spinner de pull-to-refresh se tiñe con la marca (iOS: tintColor, Android: colors).
+            tintColor={theme.primary}
+            colors={[theme.primary]}
           />
         }
       >
+        {chrome}
         <NutritionStatePanel
           icon="empty"
           illustration="sin-plan"
@@ -1454,19 +1468,14 @@ function TodayTab({
 
   return (
     <>
-      {/* Tira Lu-Do fija bajo el header (SPEC nutrition-week-view): vive FUERA del scroll, así
-          nunca se desmonta ni se va de pantalla al bajar por el día. HOY queda marcado siempre,
-          aunque el alumno esté mirando otro día. */}
-      <View className="bg-surface-app px-4 pb-3">
-        <WeekDayNav cells={weekCells} selectedIso={viewDate} onSelect={onSelectWeekDay} />
-      </View>
       <ScrollView
         className="flex-1 bg-surface-app"
-        // `pt-2` (antes `pt-5`): la tira de la semana ya aporta su propio respiro sobre el scroll.
-        contentContainerClassName="gap-5 px-4 pt-2"
+        contentContainerClassName="gap-5 px-4"
         contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
         onScroll={onScrollChrome}
         scrollEventThrottle={16}
+        // [0] chrome (scrollea) · [1] tira Lu-Do (PEGADA) · [2+] contenido.
+        stickyHeaderIndices={[1]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1474,9 +1483,19 @@ function TodayTab({
               setRefreshing(true)
               void load(true)
             }}
+            // QA4: mismo tinte de marca que el resto de los pull-to-refresh de la app.
+            tintColor={theme.primary}
+            colors={[theme.primary]}
           />
         }
       >
+        {chrome}
+        {/* Tira Lu-Do (SPEC nutrition-week-view): queda PEGADA arriba al scrollear, así nunca se
+            va de pantalla al bajar por el día. HOY queda marcado siempre, aunque el alumno esté
+            mirando otro día. */}
+        <StickyWeekBar>
+          <WeekDayNav cells={weekCells} selectedIso={viewDate} onSelect={onSelectWeekDay} />
+        </StickyWeekBar>
         {showTodayPlanLag ? (
           // Banner de lag del plan (web page.tsx:172-177): Info muted sobre superficie hundida.
           <View className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
@@ -2298,23 +2317,14 @@ export default function StudentNutritionV2Screen() {
     )
   }
 
+  // El chrome (título + tabs) ya NO es fijo: viaja DENTRO del scroll de cada tab
+  // para que al bajar se vaya de pantalla y quede pegada SOLO la tira de días.
+  const chrome = <NutritionChrome value={tab} onChange={setTab} />
+
   return (
-    <View className="flex-1 bg-surface-app">
-      <View
-        className="gap-4 px-4 pb-3"
-        style={{ paddingTop: insets.top + 20 }}
-      >
-        {/* Header 1:1 web (nutrition-v2/page.tsx:62-65): título "Nutrición" +
-            descripción, SIN eyebrow. Adaptación documentada: la web muestra
-            flecha de volver (`backHref={base}/dashboard`, NutritionV2Kit.tsx:122-150)
-            porque /nutrition-v2 es una página; aquí la superficie ES el tab
-            Nutrición y los tabs RN no tienen back — la flecha se omite. */}
-        <NutritionHeader
-          title="Nutrición"
-          description="Prescripción, consumo real e historial en una sola experiencia."
-        />
-        <NutritionTabBar value={tab} onChange={setTab} />
-      </View>
+    // `paddingTop` del notch en el shell (no en el contenido) para que la tira de
+    // días, al quedar pegada, tope contra la barra de estado y no debajo de ella.
+    <View className="flex-1 bg-surface-app" style={{ paddingTop: insets.top }}>
       <MotiView
         key={tab}
         className="flex-1"
@@ -2323,13 +2333,56 @@ export default function StudentNutritionV2Screen() {
         transition={{ type: 'timing', duration: duration('base') }}
       >
         {tab === 'today' ? (
-          <TodayTab selectedDay={selectedDay} onSelectDay={setSelectedDay} focusSlotCode={focusSlotCode} />
+          <TodayTab
+            chrome={chrome}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+            focusSlotCode={focusSlotCode}
+          />
         ) : null}
-        {tab === 'plan' ? <PlanTab /> : null}
-        {tab === 'history' ? <HistoryTab onOpenDay={openDayFromHistory} /> : null}
+        {tab === 'plan' ? <PlanTab chrome={chrome} /> : null}
+        {tab === 'history' ? <HistoryTab chrome={chrome} onOpenDay={openDayFromHistory} /> : null}
       </MotiView>
     </View>
   )
+}
+
+/**
+ * Título + tabs del módulo. Se renderiza como PRIMER hijo del ScrollView de cada
+ * tab (índice 0) para que scrollee; el índice 1 de ese mismo ScrollView es la
+ * tira de días con `stickyHeaderIndices` — lo único que queda pegado arriba.
+ *
+ * Header 1:1 web (nutrition-v2/page.tsx:62-65): título "Nutrición" + descripción,
+ * SIN eyebrow. Adaptación documentada: la web muestra flecha de volver
+ * (`backHref={base}/dashboard`, NutritionV2Kit.tsx:122-150) porque /nutrition-v2
+ * es una página; aquí la superficie ES el tab Nutrición y los tabs RN no tienen
+ * back — la flecha se omite.
+ */
+function NutritionChrome({
+  value,
+  onChange,
+}: {
+  value: NutritionV2Tab
+  onChange: (tab: NutritionV2Tab) => void
+}) {
+  return (
+    <View className="gap-4 pt-5">
+      <NutritionHeader
+        title="Nutrición"
+        description="Prescripción, consumo real e historial en una sola experiencia."
+      />
+      <NutritionTabBar value={value} onChange={onChange} />
+    </View>
+  )
+}
+
+/**
+ * Envoltorio de la tira de días que queda PEGADA arriba (`stickyHeaderIndices`).
+ * El fondo sólido y el `-mx-4` (que anula el `px-4` del contenedor) son
+ * obligatorios: sin ellos el contenido se ve pasar por detrás y por los costados.
+ */
+function StickyWeekBar({ children }: { children: ReactNode }) {
+  return <View className="-mx-4 bg-surface-app px-4 pb-3">{children}</View>
 }
 
 const NUTRITION_V2_TABS: { key: NutritionV2Tab; label: string; Icon: typeof Utensils }[] = [
@@ -2378,8 +2431,9 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
 // Plan tab
 // ---------------------------------------------------------------------------
 
-function PlanTab() {
+function PlanTab({ chrome }: { chrome: ReactNode }) {
   // 4A-01: clearance de la cápsula + minimizado por scroll (ver TodayTab).
+  const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   const onScrollChrome = useAlumnoScrollHandler()
   const [userId, setUserId] = useState<string | null>(null)
@@ -2433,7 +2487,8 @@ function PlanTab() {
         })
         if (mountedRef.current && cached) {
           setPlan(cached.payload)
-          setOffline(cached.stale)
+          // `stale` = TTL vencido, no conectividad (ver TodayTab): el banner
+          // "Sin conexión" solo lo prende el catch del fetch.
           setLoading(false)
         }
       }
@@ -2498,12 +2553,16 @@ function PlanTab() {
         setRefreshing(true)
         void load(true)
       }}
+      // QA4: mismo tinte de marca que el resto de los pull-to-refresh de la app.
+      tintColor={theme.primary}
+      colors={[theme.primary]}
     />
   )
 
   if (loading) {
     return (
-      <View className="flex-1 px-4 pt-2">
+      <View className="flex-1 gap-5 px-4">
+        {chrome}
         <NutritionSkeleton variant="today" />
       </View>
     )
@@ -2513,12 +2572,13 @@ function PlanTab() {
     return (
       <ScrollView
         className="flex-1"
-        contentContainerClassName="px-4 pt-2"
+        contentContainerClassName="gap-5 px-4"
         contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
         onScroll={onScrollChrome}
         scrollEventThrottle={16}
         refreshControl={refreshControl}
       >
+        {chrome}
         <NutritionStatePanel
           icon={offline ? 'offline' : 'empty'}
           illustration={offline ? undefined : 'sin-plan'}
@@ -2545,23 +2605,26 @@ function PlanTab() {
 
   return (
     <View className="flex-1">
-      {/* Tira Lu-Do fija: el selector no se va de pantalla al bajar por las franjas del día. */}
-      <View className="px-4 pb-3">
-        <WeekDayNav
-          cells={weekCells}
-          selectedIso={viewIso}
-          onSelect={onSelectWeekDay}
-          label="Días del plan"
-        />
-      </View>
       <ScrollView
         className="flex-1"
         contentContainerClassName="gap-4 px-4"
         contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
         onScroll={onScrollChrome}
         scrollEventThrottle={16}
+        // [0] chrome (scrollea) · [1] tira de días (PEGADA) · [2+] contenido.
+        stickyHeaderIndices={[1]}
         refreshControl={refreshControl}
       >
+        {chrome}
+        {/* Tira Lu-Do pegada: el selector no se va de pantalla al bajar por las franjas del día. */}
+        <StickyWeekBar>
+          <WeekDayNav
+            cells={weekCells}
+            selectedIso={viewIso}
+            onSelect={onSelectWeekDay}
+            label="Días del plan"
+          />
+        </StickyWeekBar>
         {offline ? (
           <View className="items-end">
             <SyncOfflineState state="offline" />
@@ -2821,9 +2884,11 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
 // ---------------------------------------------------------------------------
 
 function HistoryTab({
+  chrome,
   /** Abre ese día en el tab "Hoy" en modo lectura (SPEC nutrition-week-view). */
   onOpenDay,
 }: {
+  chrome: ReactNode
   onOpenDay: (isoDate: string) => void
 }) {
   // 4A-01: clearance de la cápsula + minimizado por scroll (ver TodayTab).
@@ -2880,7 +2945,8 @@ function HistoryTab({
         if (mountedRef.current && cached) {
           setPage(cached.payload)
           setItems(cached.payload.items)
-          setOffline(cached.stale)
+          // `stale` = TTL vencido, no conectividad (ver TodayTab): el banner
+          // "Sin conexión" solo lo prende el catch del fetch.
           setLoading(false)
         }
       }
@@ -2974,7 +3040,8 @@ function HistoryTab({
 
   if (loading) {
     return (
-      <View className="flex-1 px-4 pt-2">
+      <View className="flex-1 gap-5 px-4">
+        {chrome}
         <NutritionSkeleton variant="history" />
       </View>
     )
@@ -2991,14 +3058,19 @@ function HistoryTab({
         setRefreshing(true)
         void loadFirst(true)
       }}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
       onScroll={onScrollChrome}
       scrollEventThrottle={16}
       ItemSeparatorComponent={() => <View className="h-3" />}
       ListHeaderComponent={
-        <Text className="mb-3 text-xs text-subtle">
-          Semanas anteriores — la semana en curso vive en el tab Hoy
-        </Text>
+        // Historial no tiene tira de días propia (cada semana trae la suya dentro
+        // de su card): el chrome simplemente scrollea con la lista.
+        <View className="mb-3 gap-5">
+          {chrome}
+          <Text className="text-xs text-subtle">
+            Semanas anteriores — la semana en curso vive en el tab Hoy
+          </Text>
+        </View>
       }
       ListEmptyComponent={
         <NutritionStatePanel

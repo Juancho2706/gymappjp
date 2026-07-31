@@ -6,7 +6,9 @@ import { Sun, Moon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export function ThemeToggle() {
-    const { theme, setTheme } = useTheme()
+    // `resolvedTheme` (no `theme`): con enableSystem el valor puede ser 'system' y el toggle
+    // debe reflejar/alternar lo que el usuario VE (QA F13).
+    const { resolvedTheme, setTheme } = useTheme()
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => setMounted(true), [])
@@ -17,7 +19,7 @@ export function ThemeToggle() {
         )
     }
 
-    const isDark = theme === 'dark'
+    const isDark = resolvedTheme === 'dark'
 
     return (
         <motion.button

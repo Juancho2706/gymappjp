@@ -133,8 +133,10 @@ export function ImportWatchSheet({
     }
     let workouts: HubWorkout[] = []
     try {
-      // Permisos JUST-IN-TIME: recién acá (nunca al abrir la app ni al terminar la sesión).
-      const granted = await requestHealthPermissions()
+      // Permisos JUST-IN-TIME: recién acá (nunca al abrir la app ni al terminar la sesión). El
+      // scope 'workouts' es lo que hace honesto el "concedido": en Android sólo cuenta como éxito
+      // si quedó `ExerciseSession`, que es lo único que puede traer la sesión del reloj.
+      const granted = await requestHealthPermissions('workouts')
       if (!granted) {
         setPhase('denied')
         return

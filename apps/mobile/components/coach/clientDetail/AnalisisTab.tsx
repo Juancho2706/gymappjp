@@ -24,7 +24,12 @@ import {
 } from '../../../lib/coach-client-detail-logic'
 import { FONT } from '../../../lib/typography'
 import { getTodayInSantiago } from '../../../lib/date-utils'
+import { themeLucideIcons } from '../../../lib/themed-lucide'
 import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine } from '@eva/workout-engine'
+
+// QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado en
+// nativewind (RN no tiene `currentColor`); sin esto el glyph cae al negro por defecto.
+themeLucideIcons(AlertTriangle, ArrowRightLeft, StickyNote)
 
 const GLOSSARY = {
   e1rm: { title: '1RM estimado', content: '1RM estimado por fórmula Epley a partir de tus series.' },

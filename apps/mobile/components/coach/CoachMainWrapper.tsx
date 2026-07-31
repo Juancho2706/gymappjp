@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useEffect, type ReactElement, type ReactNode } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import type { RefreshControlProps } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -6,6 +6,7 @@ import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 import { AppBackground } from '../AppBackground'
 import { useCoachTabbarScroll } from './CoachTabbarScroll'
+import { bootstrapOwnCoachBranding } from '../../lib/branding'
 
 interface CoachMainWrapperProps {
   children: ReactNode
@@ -14,9 +15,27 @@ interface CoachMainWrapperProps {
 }
 
 export function CoachMainWrapper({ children, scroll = true, refreshControl }: CoachMainWrapperProps) {
-  const { theme } = useTheme()
+  const { theme, setBranding } = useTheme()
   const { onScroll } = useCoachTabbarScroll()
   const insets = useSafeAreaInsets()
+
+  // QA4 (P1-3/P1-4) — el coach ES la marca: al entrar a su panel se resuelve y cachea SU PROPIA
+  // marca. Antes la cache solo la escribia el flujo del alumno o el Guardar de Mi Marca, asi que
+  // un coach en un device limpio veia EVA y uno que habia usado el enlace de OTRO coach veia la
+  // marca ajena. `bootstrapOwnCoachBranding` es idempotente (memo por usuario), best-effort y no
+  // bloquea el render; si el coach apago "usar mi marca en mi panel" devuelve null (panel neutro,
+  // paridad con BrandCoachLoadingShell en web).
+  useEffect(() => {
+    let alive = true
+    bootstrapOwnCoachBranding()
+      .then((result) => {
+        if (alive && result.handled) setBranding(result.branding)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [setBranding])
   // Clear the translucent blur tab bar + iPhone home indicator.
   const bottomPad = insets.bottom + 88
   // Sin header global: el wrapper paga el inset superior (status bar / notch).

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -25,7 +25,6 @@ import {
   MacroChipRow,
   NutritionHeader,
   NutritionMotionButton,
-  NutritionSkeleton,
   NutritionStatePanel,
   NutritionCard,
   PlanDowSelector,
@@ -52,8 +51,17 @@ import {
 import { formatNutritionShortDate } from '../../../lib/date-utils'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
 import { isEnabled } from '../../../lib/flags'
-import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../lib/entitlements'
+import { useEntitlements, useNutritionV2CoachFlagForClientState } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
+import { useOnline } from '../../../lib/use-online'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import {
+  DETAIL_ERROR_COPY,
+  classifyDetailError,
+  resolveDetailErrorKind,
+  resolveDetailPhase,
+  type DetailErrorKind,
+} from '../../../lib/coach-nutrition-detail-phase'
 import {
   archiveNutritionPlan,
   assignNutritionPlanToClients,
@@ -205,19 +213,36 @@ function genAssignOperationId(): string {
 export default function CoachNutritionV2ClientScreen() {
   const router = useRouter()
   const { theme } = useTheme()
+  // QA2-B4: ruta de stack SIN header nativo (root Stack headerShown:false) — el inset
+  // superior lo pone la pantalla. Mismo patrón que `coach/nutrition-v2/index.tsx`.
+  const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ clientId: string }>()
   const clientId = Array.isArray(params.clientId) ? params.clientId[0] : params.clientId
   const entitlements = useEntitlements()
   const {
     ready: workspaceReady,
+    loading: workspaceLoading,
+    refresh: refreshWorkspace,
     kind: workspaceKind,
     teamId: workspaceTeamId,
     orgId: workspaceOrgId,
   } = useWorkspace()
-  const [userId, setUserId] = useState<string | null>(null)
+  // Identidad estable (ambos son la función a nivel de módulo del store), apta para deps de hooks.
+  const refreshEntitlements = entitlements.refresh
+  // QA4 H3: la sesión necesita "resuelto" explícito. Sin eso no se distingue "todavía no sé quién
+  // es" (= sigo cargando) de "no hay sesión" (= veredicto), y esa confusión era la que pintaba el
+  // panel ámbar "No pudimos abrir la ficha" en el primer commit tras montar, con red perfecta.
+  const [session, setSession] = useState<{ resolved: boolean; userId: string | null }>({
+    resolved: false,
+    userId: null,
+  })
+  const userId = session.userId
   const [detail, setDetail] = useState<NutritionClientDetailReadModel | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [offline, setOffline] = useState(false)
+  // `errorKind` SOLO lo escribe el catch del fetch y solo si no hay ficha en pantalla.
+  const [errorKind, setErrorKind] = useState<DetailErrorKind | null>(null)
+  // Ex-`offline`: "el refresco falló, lo que ves puede no ser lo vigente". NUNCA se deriva de
+  // `cached.stale` (eso es TTL vencido, no falta de red): ese era el aviso falso a los 11 minutos.
+  const [refreshFailed, setRefreshFailed] = useState(false)
   // Modo edicion in-place del plan vigente (quick-edit) + nonce para re-leer la ficha
   // tras publicar (el read model re-hidrata el baseline con la version nueva).
   const [editing, setEditing] = useState(false)
@@ -244,26 +269,44 @@ export default function CoachNutritionV2ClientScreen() {
   )
   const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
   // Canary por alumno: alcanza esta ficha aunque el flag global del coach esté apagado; el flag global
-  // sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta.
-  const clientCanaryV2 = useNutritionV2CoachFlagForClient(clientId)
-  const enabled = entitlements.ready && (isEnabled('nutritionV2Coach') || clientCanaryV2)
+  // sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta. QA4 H3: se usa la variante con
+  // `resolved` para no pintar "Ficha V2 no habilitada" mientras el canary viaja (mentira + segundo flash).
+  const clientCanary = useNutritionV2CoachFlagForClientState(clientId)
+  const globalV2 = isEnabled('nutritionV2Coach')
+  const rolloutResolved = entitlements.ready && (globalV2 || clientCanary.resolved)
+  const enabled = entitlements.ready && (globalV2 || clientCanary.value)
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
   useEffect(() => {
     let active = true
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setUserId(data.session?.user.id ?? null)
-    })
+    void supabase.auth.getSession().then(
+      ({ data }) => {
+        if (active) setSession({ resolved: true, userId: data.session?.user.id ?? null })
+      },
+      () => {
+        if (active) setSession({ resolved: true, userId: null })
+      },
+    )
     return () => {
       active = false
     }
   }, [])
 
+  // Prerrequisitos: mientras alguno no resuelva NO se puede opinar sobre "hay datos o no".
+  const gatesResolved = entitlements.ready && workspaceReady && rolloutResolved && session.resolved
+  // Un store que dejó de cargar SIN llegar a `ready` (workspace.ts deja `ready:false` para siempre si
+  // no hay cache en disco y el refresh falla) no puede quedar como loader eterno: se trata como fallo.
+  const gatesStalled =
+    (!workspaceReady && !workspaceLoading) || (!entitlements.ready && !entitlements.loading)
+  const canFetch =
+    gatesResolved && enabled && !!clientId && !!scope && !!scopeCacheKey && !!userId
+  // Ref para leer la ficha vigente dentro del efecto sin re-dispararlo.
+  const detailRef = useRef<NutritionClientDetailReadModel | null>(null)
+  detailRef.current = detail
+
   useEffect(() => {
-    if (!enabled || !userId || !clientId || !scope || !scopeCacheKey) {
-      if (entitlements.ready && workspaceReady) setLoading(false)
-      return
-    }
+    // Sin prerrequisitos NO se toca ningún flag de carga: seguimos "cargando", nunca "error".
+    if (!canFetch || !clientId || !scope || !scopeCacheKey || !userId) return
 
     // Fold the workspace scope into the cache key so two pools of the same coach never collide.
     const detailScopeKey = `${scopeCacheKey}:${date}`
@@ -271,20 +314,24 @@ export default function CoachNutritionV2ClientScreen() {
     let active = true
 
     void (async () => {
-      const cached = await readNutritionV2Cache({
-        userId,
-        clientId,
-        kind: 'clientDetail',
-        scopeKey: detailScopeKey,
-        schema: NutritionClientDetailReadModelSchema,
-        allowStale: true,
-      })
-      if (active && cached) {
-        setDetail(cached.payload)
-        setOffline(cached.stale)
-        setLoading(false)
+      // 1) Copia local: pinta al toque, pero NO declara nada sobre la conectividad. Solo se aplica
+      // si no hay ficha en pantalla, para que un re-fetch (cambio de workspace) no pise datos frescos.
+      if (detailRef.current == null) {
+        const cached = await readNutritionV2Cache({
+          userId,
+          clientId,
+          kind: 'clientDetail',
+          scopeKey: detailScopeKey,
+          schema: NutritionClientDetailReadModelSchema,
+          allowStale: true,
+        })
+        if (active && cached && detailRef.current == null) {
+          setDetail(cached.payload)
+          setErrorKind(null)
+        }
       }
 
+      // 2) Verdad remota.
       try {
         const fresh = await getNutritionClientDetailV2({
           clientId,
@@ -294,7 +341,8 @@ export default function CoachNutritionV2ClientScreen() {
         })
         if (!active) return
         setDetail(fresh)
-        setOffline(false)
+        setErrorKind(null)
+        setRefreshFailed(false)
         await writeNutritionV2Cache({
           userId,
           clientId,
@@ -304,9 +352,13 @@ export default function CoachNutritionV2ClientScreen() {
         })
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return
-        if (active) setOffline(true)
-      } finally {
-        if (active) setLoading(false)
+        if (!active) return
+        if (detailRef.current != null) {
+          // Hay ficha en pantalla: aviso de refresco fallido, jamás una pantalla de error.
+          setRefreshFailed(true)
+        } else {
+          setErrorKind(classifyDetailError(error))
+        }
       }
     })()
 
@@ -314,7 +366,25 @@ export default function CoachNutritionV2ClientScreen() {
       active = false
       controller.abort()
     }
-  }, [clientId, date, enabled, entitlements.ready, workspaceReady, userId, scope, scopeCacheKey, reloadNonce])
+  }, [canFetch, clientId, date, userId, scope, scopeCacheKey, reloadNonce])
+
+  const retry = useCallback(() => {
+    setErrorKind(null)
+    setRefreshFailed(false)
+    void refreshWorkspace()
+    void refreshEntitlements()
+    setReloadNonce((n) => n + 1)
+  }, [refreshEntitlements, refreshWorkspace])
+
+  // Reintento automático al recuperar señal. La identidad de `onReconnect` debe ser ESTABLE:
+  // `useOnline` re-suscribe el listener cuando cambia el callback y reinicia su `wasOffline`
+  // interno, así que con un callback nuevo por render una reconexión podría perderse.
+  const needsRetryRef = useRef(false)
+  needsRetryRef.current = errorKind != null || refreshFailed || gatesStalled
+  const onReconnect = useCallback(() => {
+    if (needsRetryRef.current) retry()
+  }, [retry])
+  useOnline(onReconnect)
 
   const recentDays = useMemo(() => {
     if (!detail) return []
@@ -369,17 +439,27 @@ export default function CoachNutritionV2ClientScreen() {
     }
   }, [activePlanId])
 
-  if (!entitlements.ready || !workspaceReady || loading) {
-    return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
-        <NutritionSkeleton variant="coach" />
-      </View>
-    )
+  // QA4 H3: la fase se DERIVA (no se setea), así es imposible quedar en un estado inconsistente
+  // donde "todavía no pedí nada" se renderiza como "la lectura remota falló".
+  const phase = resolveDetailPhase({
+    gatesResolved,
+    gatesStalled,
+    enabled: enabled && !!clientId && !!scope,
+    hasDetail: detail != null,
+    errorKind,
+  })
+
+  if (phase === 'resolving' || phase === 'loading') {
+    // Loader de marca del coach (honra logo/texto/color del branding), igual que la ficha del
+    // alumno en RN y que el `loading.tsx` de la ruta web equivalente.
+    return <EvaLoaderScreen subtitle="Abriendo la ficha…" />
   }
 
-  if (!enabled || !clientId || !scope) {
+  // `!clientId || !scope` ya está contemplado en `enabled` de la fase; se repite aquí para que TS
+  // estreche los tipos en todo el cuerpo de abajo (scope viaja a los diálogos y al quick-edit).
+  if (phase === 'blocked' || !clientId || !scope) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionStatePanel
           icon="permission"
           title="Ficha V2 no habilitada"
@@ -398,14 +478,21 @@ export default function CoachNutritionV2ClientScreen() {
     )
   }
 
-  if (!detail) {
+  if (phase === 'failed' || !detail) {
+    // Copy honesto por causa: un 403 de scope o un contrato roto ya no se disfrazan de "sin conexión".
+    const errorCopy = DETAIL_ERROR_COPY[resolveDetailErrorKind({ errorKind, gatesStalled })]
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionStatePanel
-          icon="offline"
+          icon={errorCopy.icon}
           tone="warning"
-          title="No pudimos abrir la ficha"
-          description="No existe una copia local y la lectura remota falló."
+          title={errorCopy.title}
+          description={errorCopy.description}
+          action={
+            <NutritionMotionButton accessibilityLabel="Reintentar abrir la ficha" onPress={retry}>
+              Reintentar
+            </NutritionMotionButton>
+          }
         />
       </View>
     )
@@ -477,7 +564,8 @@ export default function CoachNutritionV2ClientScreen() {
   return (
     <ScrollView
       className="flex-1 bg-surface-app"
-      contentContainerClassName="gap-5 px-4 pb-12 pt-5"
+      contentContainerClassName="gap-5 px-4 pb-12"
+      contentContainerStyle={{ paddingTop: insets.top + 12 }}
     >
       <View className="flex-row items-center gap-3">
         <Pressable
@@ -493,7 +581,9 @@ export default function CoachNutritionV2ClientScreen() {
           <NutritionHeader
             eyebrow="Ficha nutricional"
             title={detail.client.fullName}
-            description={offline ? 'Mostrando la última copia disponible.' : 'Resumen del día del alumno.'}
+            description={
+              refreshFailed ? 'Mostrando la última copia disponible.' : 'Resumen del día del alumno.'
+            }
           />
         </View>
       </View>
@@ -509,24 +599,25 @@ export default function CoachNutritionV2ClientScreen() {
           <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
           {/* Disparador secundario "Asignar a otros alumnos" (delta 2): en la fila de badges, a
               la derecha (ml-auto), NUNCA en el header. Gateado por canAssign (delta 1).
-              NUT-012 — fail-closed con cache stale: `offline` significa que la ficha se está
-              mostrando desde la copia local (el refresco falló), así que el plan visible puede no
-              ser el vigente. Se deshabilita el disparador en vez de arriesgar copiar un plan viejo
-              a otros alumnos; al recuperar señal la ficha se re-lee y el CTA vuelve. */}
+              NUT-012 — fail-closed con refresco fallido: `refreshFailed` significa que el ÚLTIMO
+              fetch de la ficha falló, así que el plan visible puede no ser el vigente. Se deshabilita
+              el disparador en vez de arriesgar copiar un plan viejo a otros alumnos; al recuperar
+              señal la ficha se re-lee y el CTA vuelve. QA4 H3: antes esto se derivaba de
+              `cached.stale` (TTL de 10 min), así que el CTA moría con red perfecta a los 11 minutos. */}
           {canAssign && userId ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Asignar a otros alumnos"
-              accessibilityState={{ disabled: offline }}
-              disabled={offline}
+              accessibilityState={{ disabled: refreshFailed }}
+              disabled={refreshFailed}
               onPress={() => setAssignOpen(true)}
-              className={`ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-subtle bg-surface-card px-3 ${offline ? 'opacity-50' : ''}`}
+              className={`ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-subtle bg-surface-card px-3 ${refreshFailed ? 'opacity-50' : ''}`}
             >
-              <UserPlus color={offline ? theme.textSecondary : theme.primary} size={14} />
+              <UserPlus color={refreshFailed ? theme.textSecondary : theme.primary} size={14} />
               <Text className="text-xs font-semibold text-body">Asignar a otros alumnos</Text>
             </Pressable>
           ) : null}
-          {canAssign && userId && offline ? (
+          {canAssign && userId && refreshFailed ? (
             <Text className="w-full text-[11px] text-muted">
               Sin conexión no podemos confirmar que este sea el plan vigente: reintenta al recuperar señal.
             </Text>
@@ -1546,7 +1637,7 @@ function AssignPlanModal({
                     className="min-h-11 rounded-control border border-default bg-surface-card px-3 py-2 text-base text-strong"
                   />
                   <Text className="mt-1 text-xs text-muted">
-                    Formato AAAA-MM-DD. Para quienes ya tienen plan, debe ser posterior a la de su versión
+                    Formato AAAA-MM-DD. Para quienes ya tienen plan, debe ser posterior a la de su plan
                     vigente.
                   </Text>
                 </View>

@@ -22,9 +22,9 @@ import { FONT } from '../../../lib/typography'
  * trabajo por grupo que el overlay ya tiene en memoria (fuerza kg + proxy movilidad/roller, cardio
  * excluido) — cero queries.
  *
- * Canvas dark-inmersivo (1:1 con el overlay sobre ink-950), pero el neutro del cuerpo base / regiones
- * sin trabajar es el ÚNICO bloque THEME-AWARE del mapa (spec §6/§8.3, web MuscleMapSvg.tsx:88-107):
- * dark = alfas de blanco, light = alfas de slate-950. Las regiones trabajadas usan la rampa de MARCA
+ * Canvas dark-inmersivo (1:1 con el overlay sobre ink-950): el neutro del cuerpo base / regiones sin
+ * trabajar son alfas de blanco SIEMPRE (no sigue al esquema de la cuenta: con el alumno en tema claro
+ * la silueta quedaba oscura sobre oscuro). Las regiones trabajadas usan la rampa de MARCA
  * del coach (`theme.primary`) por 4 niveles de alfa. El nivel máximo lleva stroke marcado
  * (accesibilidad: canal no-cromático).
  */
@@ -50,11 +50,11 @@ const AnimatedG = Animated.createAnimatedComponent(G)
 // Alfa por nivel de intensidad (1 = menos, 4 = más) — mismos valores que el web.
 const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.18, 2: 0.38, 3: 0.62, 4: 0.92 }
 
-// Neutro del cuerpo base / regiones sin trabajar — THEME-AWARE (el único bloque del mapa que flipea
-// con el tema del sitio, spec §8.3). Espejo EXACTO del <style> inline web (MuscleMapSvg.tsx:88-107):
-// dark = blanco 5.5%/10%, light = slate-950 rgba(15,23,42) 6%/14%. Se elige por `resolvedScheme`.
-const NEUTRAL_DARK = { fill: 'rgba(255,255,255,0.055)', stroke: 'rgba(255,255,255,0.10)' }
-const NEUTRAL_LIGHT = { fill: 'rgba(15,23,42,0.06)', stroke: 'rgba(15,23,42,0.14)' }
+// Neutro del cuerpo base / regiones sin trabajar. ANTES flipeaba con el esquema de la CUENTA y con el
+// alumno en tema claro pintaba slate-950 (oscuro) sobre el canvas ink-950 del resumen ⇒ silueta
+// invisible. El canvas del mapa es SIEMPRE dark-inmersivo (igual que los rótulos, blanco 55%), así que
+// el neutro es fijo: alfas de blanco.
+const NEUTRAL = { fill: 'rgba(255,255,255,0.055)', stroke: 'rgba(255,255,255,0.10)' }
 // Rótulos FRENTE/ESPALDA dentro del SVG: web usa `var(--on-dark-muted, rgba(255,255,255,0.55))`
 // y --on-dark-muted NO está definida en globals.css → cae al fallback blanco 55% (MuscleMapSvg.tsx:174).
 const LABEL_FILL = 'rgba(255,255,255,0.55)'
@@ -114,11 +114,10 @@ export interface MuscleMapSvgProps {
 }
 
 export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', showLegend = true }: MuscleMapSvgProps) {
-  const { theme, resolvedScheme } = useTheme()
+  const { theme } = useTheme()
   const brand = theme.primary
-  // Neutro theme-aware: en tema CLARO del sitio el web pinta la silueta base en slate translúcido
-  // (casi invisible sobre el velo ink-950), no en blanco — espejo del <style> web (MuscleMapSvg.tsx:88-107).
-  const neutral = resolvedScheme === 'light' ? NEUTRAL_LIGHT : NEUTRAL_DARK
+  // Neutro FIJO dark: el mapa siempre se dibuja sobre el velo ink-950 del resumen (ver NEUTRAL).
+  const neutral = NEUTRAL
   const intensity = useMemo(() => muscleGroupsToRegionIntensity(groups), [groups])
 
   // Una opacidad animada por región (9 fijas → hooks estables). Sólo las encendidas animan; las

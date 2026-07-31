@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Save } from 'lucide-react-native'
@@ -12,6 +12,7 @@ import { getCardioClient, saveCardioProfile, type CardioClientRow } from '../../
 import { AppBackground } from '../../../components/AppBackground'
 import { Button } from '../../../components/Button'
 import { Card } from '../../../components/Card'
+import { DateField } from '../../../components/DateField'
 import { Input } from '../../../components/Input'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
@@ -129,15 +130,16 @@ export default function CardioClientScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Card padding="md" style={{ gap: 16 }}>
-            <Input
+            {/* QA2-B5: campo segmentado Día/Mes/Año (100% JS, OTA-safe) en vez del
+                TextInput crudo "AAAA-MM-DD". Emite el ISO que el backend ya espera. */}
+            <DateField
               testID="cardio-birth-date"
               label="Fecha de nacimiento"
-              placeholder="AAAA-MM-DD"
-              value={birthDate}
-              onChangeText={(t) => /^[\d-]*$/.test(t) && setBirthDate(t)}
-              maxLength={10}
-              keyboardType="numbers-and-punctuation"
-              autoCapitalize="none"
+              value={birthDate === '' ? null : birthDate}
+              onChange={(iso) => {
+                setBirthDate(iso ?? '')
+                if (errors.birth_date) setErrors((prev) => ({ ...prev, birth_date: undefined }))
+              }}
               hint="Habilita FCmax por Tanaka y las zonas Z1–Z5."
               error={errors.birth_date ?? null}
             />

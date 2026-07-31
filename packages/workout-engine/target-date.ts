@@ -1,8 +1,13 @@
 /**
  * target-date — validación pura de la fecha objetivo para la edición de un día PASADO (Ola 1,
- * decisión CEO 10). Compartida entre la query (`workout-execution.queries.ts`, ventana de logs de
- * esa fecha) y la action (`workout-log.actions.ts`, modo solo-UPDATE). Sin acceso a red ni fecha
+ * decisión CEO 10). Compartida por web (la query `workout-execution.queries.ts` que arma la ventana
+ * de logs de esa fecha y la action `workout-log.actions.ts` en modo solo-UPDATE) y por RN (la ruta
+ * `app/alumno/workout/[planId].tsx` + el motor `lib/workout-session.ts`). Sin acceso a red ni fecha
  * del sistema: el "hoy Santiago" se INYECTA (`todayIso`) para que sea determinista y testeable.
+ *
+ * Vivía en `apps/web/src/app/c/[coach_slug]/workout/[planId]/_data/target-date.ts` y bajó al paquete
+ * SIN cambios de comportamiento cuando el editor de día pasado se portó a RN: mobile tenía una copia
+ * parcial (`validateRepeatDate` en la ruta) que ya empezaba a driftear.
  *
  * Regla: `yyyy-mm-dd` estricto y calendario real (rechaza `2026-13-40`), fecha PASADA u HOY; el
  * FUTURO se rechaza (imposible pre-cargar adherencia). La comparación con `todayIso` es lexicográfica
@@ -14,6 +19,21 @@ export type TargetDateValidation =
     | { ok: false; reason: 'format' | 'future' }
 
 const ISO_YMD = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Copy ÚNICA del rechazo del modo solo-UPDATE: la serie que se intenta corregir no existe en esa
+ * fecha, así que jamás se inserta (imposible farmear adherencia retroactiva). La devuelve la action
+ * web (`code: 'past_set_not_found'`) y el motor RN (`logSet`), y la UI la muestra SIN "Reintentar":
+ * no hay nada que reintentar, el registro no existe. Vive acá para que las dos plataformas no
+ * driftéen el texto.
+ *
+ * Copy HUMANO (QA4 H7-D): el texto viejo ("No existe un registro de esa serie para editar en esa
+ * fecha.") describía la fila de la base de datos, no lo que le pasa al alumno ni qué hacer. Ahora
+ * nombra el hecho y da la salida real — "Repetir hoy" del sheet de doble intención es el ÚNICO camino
+ * para completar una serie que nunca se registró (la política anti-farmeo retroactivo no cambia: el
+ * modo solo-UPDATE sigue sin insertar jamás). Debe caber en 2 líneas de caption (SetRow RN).
+ */
+export const PAST_SET_NOT_FOUND_ERROR = 'Esta serie no se registró ese día. Usa "Repetir hoy" para completarla.'
 
 /**
  * Valida una fecha objetivo ISO `yyyy-mm-dd` contra `todayIso` (día ya resuelto en Santiago).

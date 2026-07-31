@@ -3,16 +3,19 @@ import {
   Alert,
   AppState,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { AlertTriangle, ChevronLeft, Search, Star } from 'lucide-react-native'
+import { AlertTriangle, ChevronLeft, Search, Star, X } from 'lucide-react-native'
 import {
   FoodThumbnail,
   MacroChipRow,
@@ -126,6 +129,9 @@ export default function NutritionV2AddFoodScreen() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
+  // Foto del alimento a pantalla completa: la miniatura de 48px no deja leer la
+  // etiqueta del producto (el catálogo trae fotos de envase).
+  const [lightbox, setLightbox] = useState<{ uri: string; alt: string } | null>(null)
   const celebrationNonce = useRef(0)
   const fireCelebration = useCallback((decision: CelebrationDecision) => {
     celebrationNonce.current += 1
@@ -581,6 +587,7 @@ export default function NutritionV2AddFoodScreen() {
                       favBusy={favBusyId === food.id}
                       onPick={pickFood}
                       onToggleFavorite={toggleFavorite}
+                      onOpenImage={setLightbox}
                     />
                   ))}
                 </View>
@@ -637,6 +644,7 @@ export default function NutritionV2AddFoodScreen() {
                     favBusy={favBusyId === food.id}
                     onPick={pickFood}
                     onToggleFavorite={toggleFavorite}
+                    onOpenImage={setLightbox}
                   />
                 ))}
               </View>
@@ -654,10 +662,11 @@ export default function NutritionV2AddFoodScreen() {
                 marca" + macros base "por {servingSize} {servingUnit}" (sin preview
                 de totales: ese extra RN se retiró por paridad). */}
             <View className="flex-row items-start gap-3 rounded-card border border-subtle bg-surface-sunken p-3">
-              <FoodThumbnail
+              <FoodThumbnailButton
                 alt={selected.name}
                 src={foodMediaThumbnailUrl(selected.media)}
                 fallbackEmoji={foodCategoryEmoji(selected.category)}
+                onOpen={setLightbox}
               />
               <View className="min-w-0 flex-1">
                 <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
@@ -814,7 +823,91 @@ export default function NutritionV2AddFoodScreen() {
     </ScrollView>
     </KeyboardAvoidingView>
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
+      <FoodImageLightbox value={lightbox} onClose={() => setLightbox(null)} />
     </View>
+  )
+}
+
+/**
+ * Foto del alimento a pantalla completa. Se abre tocando la miniatura (Pressable
+ * anidada que NO dispara el pick de la fila). Toque en cualquier parte del fondo
+ * o la X cierran; back de Android también (`onRequestClose`).
+ */
+function FoodImageLightbox({
+  value,
+  onClose,
+}: {
+  value: { uri: string; alt: string } | null
+  onClose: () => void
+}) {
+  const insets = useSafeAreaInsets()
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={value != null}
+      statusBarTranslucent
+    >
+      <Pressable
+        accessibilityLabel="Cerrar la foto"
+        accessibilityRole="button"
+        className="flex-1 items-center justify-center px-4"
+        onPress={onClose}
+        style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}
+      >
+        {value ? (
+          <Image
+            accessibilityLabel={value.alt}
+            cachePolicy="memory-disk"
+            contentFit="contain"
+            source={{ uri: value.uri }}
+            style={StyleSheet.absoluteFillObject}
+            transition={120}
+          />
+        ) : null}
+      </Pressable>
+      <Pressable
+        accessibilityLabel="Cerrar la foto"
+        accessibilityRole="button"
+        className="absolute right-4 h-11 w-11 items-center justify-center rounded-full bg-black/60"
+        hitSlop={8}
+        onPress={onClose}
+        style={{ top: insets.top + 8 }}
+      >
+        <X color="#FFFFFF" size={22} />
+      </Pressable>
+    </Modal>
+  )
+}
+
+/**
+ * Miniatura del alimento tocable: si hay foto, la envuelve en su propia Pressable
+ * (patrón de la estrella de favoritos — RN responde al hijo más profundo, así el
+ * toque NO dispara el pick de la fila). Sin foto se comporta igual que antes.
+ */
+function FoodThumbnailButton({
+  alt,
+  src,
+  fallbackEmoji,
+  onOpen,
+}: {
+  alt: string
+  src: string | null
+  fallbackEmoji: string
+  onOpen: (value: { uri: string; alt: string }) => void
+}) {
+  const thumb = <FoodThumbnail alt={alt} src={src} fallbackEmoji={fallbackEmoji} />
+  if (!src) return thumb
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Ver la foto de ${alt}`}
+      hitSlop={6}
+      onPress={() => onOpen({ uri: src, alt })}
+    >
+      {thumb}
+    </Pressable>
   )
 }
 
@@ -864,6 +957,7 @@ function CatalogPickRow({
   favBusy,
   onPick,
   onToggleFavorite,
+  onOpenImage,
 }: {
   food: FoodCatalogItem
   index: number
@@ -871,6 +965,7 @@ function CatalogPickRow({
   favBusy: boolean
   onPick: (food: FoodCatalogItem) => void
   onToggleFavorite: (food: FoodCatalogItem) => void
+  onOpenImage: (value: { uri: string; alt: string }) => void
 }) {
   const meta = [food.brand, food.category].filter(Boolean).join(' · ')
   return (
@@ -881,10 +976,11 @@ function CatalogPickRow({
         onPress={() => onPick(food)}
         className="min-w-0 flex-1 flex-row items-center gap-3 py-3"
       >
-        <FoodThumbnail
+        <FoodThumbnailButton
           alt={food.name}
           src={foodMediaThumbnailUrl(food.media)}
           fallbackEmoji={foodCategoryEmoji(food.category)}
+          onOpen={onOpenImage}
         />
         <View className="min-w-0 flex-1">
           <Text className="text-sm font-semibold text-strong" numberOfLines={1}>

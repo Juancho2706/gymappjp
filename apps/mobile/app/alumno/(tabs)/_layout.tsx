@@ -4,11 +4,15 @@ import { Tabs, useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { getClientProfile } from '../../../lib/client'
+import { getPoolConsentStatus } from '../../../lib/pool-consent'
 import { sessionFlags } from '../../../lib/session-flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 import { StudentAccessBlocked } from '../../../components/alumno/StudentAccessBlocked'
-import { SessionMorphProvider } from '../../../components/alumno/workout/v3/session-morph'
+// NOTA: `SessionMorphProvider` YA NO vive acá — se montó al layout RAÍZ (`app/_layout.tsx`). El
+// overlay del Despegue se pinta en un <Modal> nativo y, en Android, al hacer `router.push` a la ruta
+// del ejecutor (hermana de (tabs) en el Stack raíz) esta pantalla se detacha y RN cierra el Dialog sin
+// avisar a JS → la ceremonia se iba sola a los ~1,3s. Desde el root nunca se detacha.
 
 export default function AlumnoTabsLayout() {
   const router = useRouter()
@@ -25,15 +29,32 @@ export default function AlumnoTabsLayout() {
 
   // Ola 0: gate de acceso a nivel navegación (cubre TODAS las tabs, no solo Home).
   // Alumno pausado/archivado → /alumno/suspended. Cambio de clave forzado → /change-password.
+  // Consentimiento de pool (Ley 21.719) → /alumno/consent — mismo ORDEN que el proxy web
+  // (blocked → password → consent, proxy.ts:657-685). Fail-open si el estado no resuelve
+  // (espejo exacto del proxy: solo redirige con contexto presente y no consentido).
   useEffect(() => {
     let mounted = true
     getClientProfile()
-      .then((c) => {
+      .then(async (c) => {
         if (!mounted || !c) return
         if (c.blocked) {
           redirecting.current = true
           router.replace('/alumno/suspended')
-        } else if (c.forcePasswordChange && !sessionFlags.pwChanged) router.replace('/change-password')
+          return
+        }
+        if (c.forcePasswordChange && !sessionFlags.pwChanged) {
+          router.replace('/change-password')
+          return
+        }
+        const consent = await getPoolConsentStatus()
+        if (!mounted || redirecting.current) return
+        if (consent?.pool && !consent.granted) {
+          redirecting.current = true
+          router.replace({
+            pathname: '/alumno/consent',
+            params: { team: consent.teamSlug, name: consent.teamName },
+          })
+        }
       })
       .catch(() => {})
     return () => { mounted = false }
@@ -50,12 +71,22 @@ export default function AlumnoTabsLayout() {
         if (pendingWorkout > 0) flushLogQueue(supabase)
 
         // Re-evaluar el gate al volver del background — el alumno pudo ser
-        // pausado/archivado mientras la app estaba suspendida.
+        // pausado/archivado (o revocar su consentimiento desde la web) mientras
+        // la app estaba suspendida.
         if (!redirecting.current) {
           const c = await getClientProfile().catch(() => null)
           if (c?.blocked && !redirecting.current) {
             redirecting.current = true
             router.replace('/alumno/suspended')
+          } else if (!redirecting.current) {
+            const consent = await getPoolConsentStatus()
+            if (consent?.pool && !consent.granted && !redirecting.current) {
+              redirecting.current = true
+              router.replace({
+                pathname: '/alumno/consent',
+                params: { team: consent.teamSlug, name: consent.teamName },
+              })
+            }
           }
         }
       }
@@ -85,7 +116,6 @@ export default function AlumnoTabsLayout() {
   }
 
   return (
-    <SessionMorphProvider>
     <View className="flex-1 bg-surface-app">
       <Tabs
         tabBar={(props) => <AlumnoMobileChrome {...props} />}
@@ -145,6 +175,5 @@ export default function AlumnoTabsLayout() {
         <Tabs.Screen name="nutrition-v2/scanner" options={{ href: null }} />
       </Tabs>
     </View>
-    </SessionMorphProvider>
   )
 }

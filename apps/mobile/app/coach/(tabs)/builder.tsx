@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
 import { ArrowDownUp, CalendarClock, Dumbbell, LayoutGrid, LayoutTemplate, List, Plus, Search, SearchX } from 'lucide-react-native'
@@ -16,6 +16,7 @@ import { Input, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
+import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import { themedIcon, type ThemedIcon } from '../../../components/coach/programs/themed-icon'
 import { ProgramRow } from '../../../components/coach/programs/ProgramRow'
 import { ProgramPreviewCard } from '../../../components/coach/programs/ProgramPreviewCard'
@@ -64,6 +65,7 @@ const TABS: { value: FilterType; label: string }[] = [
 
 export default function BuilderScreen() {
   const { onScroll } = useCoachTabbarScroll()
+  const insets = useSafeAreaInsets()
   const { resolvedScheme } = useTheme()
   const router = useRouter()
   const [programs, setPrograms] = useState<ProgramItem[]>([])
@@ -276,7 +278,9 @@ export default function BuilderScreen() {
   return (
     <View className="flex-1 bg-surface-app">
       <AppBackground />
-      <SafeAreaView edges={[]} style={{ flex: 1 }}>
+      {/* QA F4: el header quedaba bajo el status bar — edges 'top' espeja el hub
+          nutrición (insets.top, coach/nutrition-v2/index.tsx:361). */}
+      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
         {/* Header minimal (1:1 web): eyebrow + Programas + Nueva */}
         <View className="flex-row items-end justify-between gap-space-3 px-space-5 pb-space-3 pt-space-6">
           <View className="min-w-0 flex-1">
@@ -298,7 +302,7 @@ export default function BuilderScreen() {
         <FlashList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 110 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE }}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}

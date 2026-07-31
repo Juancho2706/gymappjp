@@ -447,7 +447,7 @@ export function CardioScreenV3({
       )}
 
       {coachNote && (
-        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" forceDark nativeModal snapPoints={['35%']}>
           <View style={{ paddingVertical: 8 }}>
             <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">{coachNote}</Text>
           </View>
@@ -611,7 +611,8 @@ function CountdownHero({
   onRunningChange?: (running: boolean) => void
 }) {
   const s = exec.surface
-  const countdown = useCountdown(durationSec, () => timerHaptics.holdDone(), true)
+  // QA4 h8a: NO auto-arranca (paridad web: `useExecCountdown(durationSec, { autoStart: false })`).
+  const countdown = useCountdown(durationSec, () => timerHaptics.holdDone(), false)
   useEffect(() => {
     onRunningChange?.(countdown.running)
   }, [countdown.running, onRunningChange])
@@ -639,7 +640,7 @@ function CountdownHero({
         </ProgressRing>
         <RingRestart onPress={() => countdown.restart(durationSec)} />
       </View>
-      <PauseButton running={countdown.running} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
+      <PauseButton running={countdown.running} started={countdown.started} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
       {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
       <CardioChipsRow>
         <MetricChipRN icon={<Timer size={16} color={hexToRgba(exec.accent, 0.85)} />} value={formatClock(durationSec)} label="Objetivo" wide={distObj == null} />
@@ -835,7 +836,7 @@ function IntervalHero({
           />
         </View>
       ) : (
-        <PauseButton running={runner.running} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />
+        <PauseButton running={runner.running} started={runner.started} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />
       ))}
     </View>
   )
@@ -857,7 +858,8 @@ function StopwatchHero({
   onRunningChange?: (running: boolean) => void
 }) {
   const s = exec.surface
-  const stopwatch = useStopwatch(true)
+  // QA4 h8a: el cronómetro NO corre solo — el alumno lo arranca con el botón de abajo.
+  const stopwatch = useStopwatch(false)
   useEffect(() => {
     onRunningChange?.(stopwatch.running)
   }, [stopwatch.running, onRunningChange])
@@ -882,7 +884,7 @@ function StopwatchHero({
           Objetivo: <Text style={{ color: s.text }}>{distanceObjective}</Text>
         </Text>
       ) : null}
-      <PauseButton running={stopwatch.running} onToggle={stopwatch.toggle} exec={exec} reducedMotion={reducedMotion} />
+      <PauseButton running={stopwatch.running} started={stopwatch.started} onToggle={stopwatch.toggle} exec={exec} reducedMotion={reducedMotion} />
     </View>
   )
 }
@@ -951,28 +953,35 @@ function MetricChipRN({
   )
 }
 
+/**
+ * Botón de arranque/pausa del hero. QA4 h8a: tres estados (nunca arrancó ⇒ "Iniciar"), porque ahora
+ * ningún timer auto-arranca y el alumno necesita una affordance clara de partida.
+ */
 function PauseButton({
   running,
+  started = true,
   onToggle,
   exec,
   reducedMotion,
 }: {
   running: boolean
+  started?: boolean
   onToggle: () => void
   exec: ExecTheme
   reducedMotion: boolean
 }) {
+  const label = running ? 'Pausar' : started ? 'Reanudar' : 'Iniciar'
   return (
     <View style={{ width: '100%' }}>
       <JuicyButton
         testID="btn-cardio-pause-v3"
-        label={running ? 'Pausar' : 'Reanudar'}
+        label={label}
         icon={running ? <Pause size={18} color={exec.accentText} fill={exec.accentText} /> : <Play size={18} color={exec.accentText} fill={exec.accentText} />}
         onPress={onToggle}
         exec={exec}
         height={56}
         reducedMotion={reducedMotion}
-        accessibilityLabel={running ? 'Pausar el temporizador' : 'Reanudar el temporizador'}
+        accessibilityLabel={running ? 'Pausar el temporizador' : started ? 'Reanudar el temporizador' : 'Iniciar el temporizador'}
       />
     </View>
   )
