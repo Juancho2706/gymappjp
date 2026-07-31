@@ -17,6 +17,12 @@ import { EMBER_400, EMBER_500 } from './types'
 cssInterop(Flame, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 /**
+ * @deprecated SIN USOS desde el rediseño "Mock C" del home del alumno (CEO 2026-07-30): la
+ * sección §3 la ocupa ahora `WeekStrip.tsx` ("Tu semana" = 7 dots Lun→Dom + chip de racha).
+ * Se conserva como referencia del copy/anim (llama pulsante, count-up, barra al hito) hasta
+ * la limpieza posterior; NO montar en pantallas nuevas. `nextMilestone`/`MILESTONES` viven
+ * portados en `WeekStrip.tsx`.
+ *
  * §3 StreakRibbon (web `streak/StreakRibbon.tsx`): protagonista de retencion.
  * `streak` = RPC `get_client_current_streak` (MISMA fuente/regla que el web:
  * dias ASIGNADOS hechos, dia sin asignacion neutro — migracion 20260723110000). El

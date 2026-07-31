@@ -18,13 +18,13 @@ import { Skeleton } from '../../../components/Skeleton'
 import { WelcomeModal } from '../../../components/WelcomeModal'
 import { DashboardHeader, DashboardHeaderSkeleton } from '../../../components/alumno/home/DashboardHeader'
 import { SectionTitle } from '../../../components/alumno/home/SectionTitle'
-import { StreakRibbon } from '../../../components/alumno/home/StreakRibbon'
+import { WeekStrip } from '../../../components/alumno/home/WeekStrip'
 import { CheckInBanner } from '../../../components/alumno/home/CheckInBanner'
 import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
 import { programWeekIndex1Based, weekIndexToVariantLetter, effectiveWeekVariantFromPlans, workoutPlanMatchesVariant } from '../../../lib/program-week-variant'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
 import { useSessionMorph } from '../../../components/alumno/workout/v3/session-morph'
-import { greedyPlanDone, weekDatesMondayToSunday, type PlanWeekCompletionSource } from '../../../components/alumno/workout/v3/weekly-streak'
+import { deriveWeeklyStreak, greedyPlanDone, plannedDatesForWeek, weekDatesMondayToSunday, type PlanWeekCompletionSource } from '../../../components/alumno/workout/v3/weekly-streak'
 import { CoachPresenceCard } from '../../../components/alumno/home/CoachPresenceCard'
 import { MomentumCard, type MomentumDay } from '../../../components/alumno/home/MomentumCard'
 import { ActiveProgramSection } from '../../../components/alumno/home/ActiveProgramSection'
@@ -381,6 +381,28 @@ export default function AlumnoHomeScreen() {
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
     const todayPlanId = planDays.find((d) => d.isToday)?.plan.id ?? todayPlan?.id ?? null
 
+    // §3 "Tu semana" (WeekStrip) — se alimenta de los MISMOS insumos que las day-cards, sin
+    // re-derivar la regla: `planDays` ya trae el estado GREEDY por slot (`greedyPlanDone`), asi
+    // que las fechas done/in_progress salen de ahi tal cual. `plannedDates` usa el helper puro
+    // compartido `plannedDatesForWeek` sobre `programPlans` (la MISMA lista filtrada por variante
+    // A/B que pinta las day-cards) — no sobre `plannedDays`, que ignora la variante y es de la
+    // tira de momentum. Empate de dos planes en un slot (A/B mal armado): el cerrado gana al
+    // parcial, sin dot ambiguo (mismo desempate que `greedyStatesForWeek`).
+    const weekDoneDates = new Set<string>()
+    const weekInProgressDates = new Set<string>()
+    for (const d of planDays) {
+      if (d.status === 'done') weekDoneDates.add(d.dateIso)
+      else if (d.status === 'in_progress') weekInProgressDates.add(d.dateIso)
+    }
+    for (const iso of weekDoneDates) weekInProgressDates.delete(iso)
+    const weeklyStreak = deriveWeeklyStreak({
+      weekDates,
+      plannedDates: plannedDatesForWeek(programPlans, weekDates),
+      doneDates: weekDoneDates,
+      inProgressDates: weekInProgressDates,
+      todayIso,
+    })
+
     // Semana actual del programa — vía programWeekIndex1Based (C3, paridad web
     // ActiveProgramSection.tsx:82: `currentWeek = weekIdx ?? 1`).
     const totalWeeks = data?.program?.weeksToRepeat ?? 1
@@ -434,6 +456,7 @@ export default function AlumnoHomeScreen() {
       nutritionEmpty: data ? (data.nutritionDates.size ?? 0) === 0 : true,
       checkInEmpty: data ? checkIns.length === 0 : true,
       streak, ciVariant, ciDays, ciRelative, doneToday,
+      weeklyStreak, todayIso,
     }
   }, [data, loggedSetsByPlanDay])
 
@@ -484,8 +507,9 @@ export default function AlumnoHomeScreen() {
         {/* §1 Anuncios de la org */}
         <OrgAnnouncementBanner announcements={data?.announcements ?? []} />
 
-        {/* §3 Racha */}
-        <StreakRibbon streak={derived.streak} />
+        {/* §3 Tu semana — rediseño Mock C (CEO 2026-07-30): la tira de 7 dias (mismo estado
+            que las day-cards) reemplaza al StreakRibbon; la racha del RPC queda como chip. */}
+        <WeekStrip week={derived.weeklyStreak} streak={derived.streak} todayIso={derived.todayIso} />
 
         {/* §4 Check-in (variant-aware; <3d oculto) */}
         {derived.ciVariant ? (
