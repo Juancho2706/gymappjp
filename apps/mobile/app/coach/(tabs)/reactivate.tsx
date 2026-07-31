@@ -13,6 +13,7 @@ import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScrol
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { useWorkspace } from '../../../lib/workspace'
+import { refreshEntitlements } from '../../../lib/entitlements'
 import { refreshCoachAccess } from '../../../lib/coach-access'
 import {
   FREE_CLIENT_LIMIT,
@@ -92,9 +93,11 @@ export default function CoachReactivateScreen() {
     try {
       await activateFreePlan()
       // El guard vive en `coach-access`: sin este refresh forzado el layout seguiría creyendo que
-      // el coach está bloqueado y lo devolvería a este muro.
+      // el coach está bloqueado y lo devolvería a este muro. Los entitlements también cambian
+      // (en Free los 4 módulos dejan de venir incluidos), así que se revalidan en el mismo acto
+      // para no aterrizar en un dashboard que ofrece lo que ya no hay.
       await refreshCoachAccess(true)
-      await workspace.refresh()
+      await Promise.all([workspace.refresh(), refreshEntitlements().catch(() => {})])
       router.replace('/coach/home')
     } catch (err) {
       setFreeError(err instanceof Error ? err.message : 'No se pudo activar el plan gratuito.')
