@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshControl, Text, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { AlertTriangle, RotateCcw } from 'lucide-react-native'
@@ -20,6 +20,7 @@ import {
   MobileTodayAgenda,
 } from '../../../components/coach/CoachDashboardSections'
 import { useTheme } from '../../../context/ThemeContext'
+import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
 import { getCoachDashboardDataMobile, type MobileDashboardData } from '../../../lib/coach-dashboard'
 
 export default function CoachHomeScreen() {
@@ -59,6 +60,14 @@ export default function CoachHomeScreen() {
       void load(dataRef.current ? 'refresh' : 'initial')
     }, [load])
   )
+
+  // QA-5 — el splash de marca ES el loader de este dashboard: se retira cuando el PRIMER
+  // load resolvió, con datos o con error (`load()` baja `loading` en su `finally`). El
+  // EvaLoaderScreen de abajo queda como fallback de los focos posteriores en 'initial'.
+  const markDashboardReady = useMarkDashboardReady()
+  useEffect(() => {
+    if (!loading) markDashboardReady()
+  }, [loading, markDashboardReady])
 
   if (loading) {
     return <EvaLoaderScreen subtitle="Cargando tu panel…" />

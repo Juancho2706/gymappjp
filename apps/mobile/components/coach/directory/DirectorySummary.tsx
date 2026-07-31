@@ -147,6 +147,8 @@ function MetricChip({
 
 export function DirectorySummary({
   stats,
+  urgentCount,
+  reviewCount,
   riskFilter,
   onToggleRisk,
   onSetAllRisk,
@@ -154,6 +156,9 @@ export function DirectorySummary({
   nutritionLowCount,
 }: {
   stats: DirectoryStats
+  /** Contadores del pulso CRUDO (espejo CoachWarRoom.tsx:220-221), no del roster con fallback. */
+  urgentCount: number
+  reviewCount: number
   riskFilter: DirectoryRiskFilter
   onToggleRisk: (f: DirectoryRiskFilter) => void
   onSetAllRisk: () => void
@@ -181,8 +186,8 @@ export function DirectorySummary({
 
   // Pulso de prioridad (2 números jerárquicos) — botones-filtro de riesgo.
   const pulseTiles = [
-    { key: 'urgent', label: 'Riesgo', value: stats.urgentCount, filter: 'urgent' as DirectoryRiskFilter, tone: 'danger' as const, icon: AlertOctagon, hint: stats.urgentCount ? (stats.urgentCount === 1 ? 'Necesita atención hoy' : 'Necesitan atención hoy') : 'Todo en orden' },
-    { key: 'review', label: 'Atención', value: stats.reviewCount, filter: 'review' as DirectoryRiskFilter, tone: 'warning' as const, icon: AlertTriangle, hint: stats.reviewCount ? 'Para revisar pronto' : 'Sin pendientes' },
+    { key: 'urgent', label: 'Riesgo', value: urgentCount, filter: 'urgent' as DirectoryRiskFilter, tone: 'danger' as const, icon: AlertOctagon, hint: urgentCount ? (urgentCount === 1 ? 'Necesita atención hoy' : 'Necesitan atención hoy') : 'Todo en orden' },
+    { key: 'review', label: 'Atención', value: reviewCount, filter: 'review' as DirectoryRiskFilter, tone: 'warning' as const, icon: AlertTriangle, hint: reviewCount ? 'Para revisar pronto' : 'Sin pendientes' },
   ]
   // Métricas secundarias — grilla de 4 (1:1 web: Total · Activos · Adher.% · Nutri.).
   const metricTiles: { key: string; label: string; value: number; suffix?: string; color: string; selected: boolean; onPress?: () => void }[] = [
@@ -199,8 +204,8 @@ export function DirectorySummary({
         {!open ? (
           <Text numberOfLines={1} style={[styles.collapsed, { color: theme.mutedForeground }]}>
             {stats.active} activos
-            {stats.urgentCount > 0 ? (
-              <Text style={{ color: danger600, fontFamily: FONT.uiBold }}> · {stats.urgentCount} en riesgo</Text>
+            {urgentCount > 0 ? (
+              <Text style={{ color: danger600, fontFamily: FONT.uiBold }}> · {urgentCount} en riesgo</Text>
             ) : null}
             {` · ${avgAdherence}% adher.`}
           </Text>

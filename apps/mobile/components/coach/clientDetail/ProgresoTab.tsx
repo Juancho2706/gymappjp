@@ -4,6 +4,8 @@ import { Image } from 'expo-image'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Path } from 'react-native-svg'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { ArrowDown, ArrowRightLeft, ArrowUp, Images, Pencil, Ruler, Scale, Target, Trash2 } from 'lucide-react-native'
 import type { BiaMetrics } from '@eva/bodycomp'
@@ -31,7 +33,12 @@ import {
   type IsakView,
 } from '../../../lib/bodycomp-coach'
 import { InfoTooltip } from '../../../components/InfoTooltip'
+import { themeLucideIcons } from '../../../lib/themed-lucide'
 import type { ClientActionWorkspace } from '../../../lib/client-actions'
+
+// QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado en
+// nativewind (RN no tiene `currentColor`); sin esto el glyph cae al negro por defecto.
+themeLucideIcons(ArrowRightLeft)
 
 const BMI_MIN = 16
 const BMI_MAX = 36
@@ -49,10 +56,20 @@ function formatBodyCompDate(iso: string): string {
   return date.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'America/Santiago' })
 }
 
-function SectionHeading({ title, right }: { title: string; right?: ReactNode }) {
+// QA4 H12: el titulo vive SIEMPRE dentro de `sectionTitleWithInfo` (fila que hugea su
+// contenido, sin `flexGrow` adentro). Asi `justifyContent: 'space-between'` manda el
+// bloque `right` al borde derecho DENTRO de la card en vez de desbordarlo.
+function SectionHeading({ title, right, info }: {
+  title: string
+  right?: ReactNode
+  info?: { title: string; content: string }
+}) {
   return (
     <View style={styles.sectionHeader}>
-      <Text className="text-strong" style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionTitleWithInfo}>
+        <Text className="text-strong" numberOfLines={1} style={styles.sectionTitle}>{title}</Text>
+        {info ? <InfoTooltip title={info.title} content={info.content} size={13} /> : null}
+      </View>
       {right}
     </View>
   )
@@ -256,18 +273,16 @@ export function ProgresoTab({
 
       {/* IMC */}
       <StatCard>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleWithInfo}>
-            <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>IMC</Text>
-            <InfoTooltip title="IMC" content="Índice de masa corporal = peso / altura²." size={13} />
-          </View>
-          {bmi != null ? (
+        <SectionHeading
+          title="IMC"
+          info={{ title: 'IMC', content: 'Índice de masa corporal = peso / altura².' }}
+          right={bmi != null ? (
             <View style={styles.bmiHeadline}>
-              <Text style={[styles.bmiValue, { color: theme.foreground, fontFamily: FONT.displayBlack }]}>{bmi.toFixed(1)}</Text>
-              <Text className={bmiCategory(bmi) === 'Normal' ? 'text-success-600' : 'text-ember-700'} style={[styles.bmiCategory, { fontFamily: FONT.uiBold }]}>{bmiCategory(bmi)}</Text>
+              <Text numberOfLines={1} style={[styles.bmiValue, { color: theme.foreground, fontFamily: FONT.displayBlack }]}>{bmi.toFixed(1)}</Text>
+              <Text numberOfLines={1} className={bmiCategory(bmi) === 'Normal' ? 'text-success-600' : 'text-ember-700'} style={[styles.bmiCategory, { fontFamily: FONT.uiBold }]}>{bmiCategory(bmi)}</Text>
             </View>
-          ) : null}
-        </View>
+          ) : undefined}
+        />
         {bmi != null ? (
           <>
             <BmiBar bmi={bmi} />
@@ -489,6 +504,9 @@ function PhotoComparator({ checkIns }: { checkIns: CheckInEntry[] }) {
         description="Desliza para comparar"
         nativeModal
         forceDark
+        // QA4 H11: sin ScrollView detras nadie le arrebata el gesto al comparador
+        // (el unico hijo es el stage y ya cabe en el alto del sheet).
+        scrollable={false}
         snapPoints={['88%']}
       >
         <ComparisonSlider base={a} compare={b} />
@@ -497,43 +515,88 @@ function PhotoComparator({ checkIns }: { checkIns: CheckInEntry[] }) {
   )
 }
 
+/**
+ * QA4 H11 — El divisor temblaba porque el gesto usaba el responder system de RN y
+ * `nativeEvent.locationX` se mide contra el VIEW TOCADO, no contra el stage: al agarrar
+ * el knob (que se re-posiciona con el estado) se armaba un lazo estado→layout→medicion.
+ * Fix canonico: `Gesture.Pan` de gesture-handler (su `e.x` SI es relativo al detector),
+ * shared values de reanimated (cero re-render por frame, las `expo-image` no se remontan)
+ * y todos los hijos con `pointerEvents="none"` para que nada compita por el toque.
+ */
 function ComparisonSlider({ base, compare }: { base: CheckInEntry; compare: CheckInEntry }) {
   const { theme } = useTheme()
   const { height: windowHeight } = useWindowDimensions()
-  const [width, setWidth] = useState(1)
-  const [reveal, setReveal] = useState(0.5)
-  const move = (locationX: number) => setReveal(Math.max(0, Math.min(1, locationX / Math.max(1, width))))
-  const stageHeight = Math.min(640, Math.max(320, Math.round(windowHeight * 0.68)))
+  const [width, setWidth] = useState(0)
+  // Espejo en JS del reveal, solo para el lector de pantalla (el drag vive en el UI thread).
+  const [a11yReveal, setA11yReveal] = useState(0.5)
+  const stageWidth = useSharedValue(0)
+  const reveal = useSharedValue(0.5)
+
+  const applyX = (x: number) => {
+    'worklet'
+    const w = stageWidth.value
+    if (w <= 0) return
+    reveal.value = Math.min(1, Math.max(0, x / w))
+  }
+
+  const pan = Gesture.Pan()
+    .minDistance(0)
+    .shouldCancelWhenOutside(false)
+    .onBegin((event) => applyX(event.x))
+    .onUpdate((event) => applyX(event.x))
+
+  const clipStyle = useAnimatedStyle(() => ({ width: stageWidth.value * reveal.value }))
+  const dividerStyle = useAnimatedStyle(() => ({ left: stageWidth.value * reveal.value - 1 }))
+  const knobStyle = useAnimatedStyle(() => ({ left: stageWidth.value * reveal.value - 24 }))
+
+  const nudge = (delta: number) => {
+    const next = Math.min(1, Math.max(0, reveal.value + delta))
+    reveal.value = next
+    setA11yReveal(next)
+  }
+
+  const stageHeight = Math.min(560, Math.max(300, Math.round(windowHeight * 0.6)))
   return (
     <View style={{ gap: 10 }}>
-      <View
-        className="bg-ink-950"
-        style={[styles.comparisonStage, { height: stageHeight, borderColor: theme.border }]}
-        onLayout={(event) => setWidth(Math.max(1, event.nativeEvent.layout.width))}
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderGrant={(event) => move(event.nativeEvent.locationX)}
-        onResponderMove={(event) => move(event.nativeEvent.locationX)}
-        accessibilityRole="adjustable"
-        accessibilityLabel="Desliza para comparar las fotos"
-        accessibilityValue={{ min: 0, max: 100, now: Math.round(reveal * 100), text: `${Math.round(reveal * 100)}% antes` }}
-        accessibilityActions={[{ name: 'increment', label: 'Mostrar más de antes' }, { name: 'decrement', label: 'Mostrar más de después' }]}
-        onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === 'increment') setReveal((value) => Math.min(1, value + 0.1))
-          if (event.nativeEvent.actionName === 'decrement') setReveal((value) => Math.max(0, value - 0.1))
-        }}
-      >
-        <Image source={{ uri: compare.front_photo_url! }} style={StyleSheet.absoluteFill} contentFit="contain" />
-        <Text className="bg-sport-500 text-on-sport" style={[styles.comparisonDateBadge, styles.comparisonAfterBadge, { fontFamily: FONT.uiBold }]}>{formatDate(compare.created_at ?? compare.date)}</Text>
-        <View style={[styles.comparisonClip, { width: width * reveal }]}>
-          <Image source={{ uri: base.front_photo_url! }} style={{ width, height: '100%' }} contentFit="contain" />
-          <Text className="bg-white text-ink-950" style={[styles.comparisonDateBadge, styles.comparisonBeforeBadge, { fontFamily: FONT.uiBold }]}>{formatDate(base.created_at ?? base.date)}</Text>
+      <GestureDetector gesture={pan}>
+        <View
+          className="bg-ink-950"
+          style={[styles.comparisonStage, { height: stageHeight, borderColor: theme.border }]}
+          onLayout={(event) => {
+            const next = event.nativeEvent.layout.width
+            stageWidth.value = next
+            setWidth(next)
+          }}
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel="Desliza para comparar las fotos"
+          accessibilityValue={{ min: 0, max: 100, now: Math.round(a11yReveal * 100), text: `${Math.round(a11yReveal * 100)}% antes` }}
+          accessibilityActions={[{ name: 'increment', label: 'Mostrar más de antes' }, { name: 'decrement', label: 'Mostrar más de después' }]}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'increment') nudge(0.1)
+            if (event.nativeEvent.actionName === 'decrement') nudge(-0.1)
+          }}
+        >
+          <Image pointerEvents="none" source={{ uri: compare.front_photo_url! }} style={StyleSheet.absoluteFill} contentFit="contain" />
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Text className="bg-sport-500 text-on-sport" style={[styles.comparisonDateBadge, styles.comparisonAfterBadge, { fontFamily: FONT.uiBold }]}>{formatDate(compare.created_at ?? compare.date)}</Text>
+          </View>
+          <Animated.View pointerEvents="none" style={[styles.comparisonClip, clipStyle]}>
+            <Image source={{ uri: base.front_photo_url! }} style={{ width, height: '100%' }} contentFit="contain" />
+            <Text className="bg-white text-ink-950" style={[styles.comparisonDateBadge, styles.comparisonBeforeBadge, { fontFamily: FONT.uiBold }]}>{formatDate(base.created_at ?? base.date)}</Text>
+          </Animated.View>
+          {/* El `Animated.View` solo posiciona; el color va en un hijo normal para no
+              depender de que nativewind interprete `className` sobre un componente animado. */}
+          <Animated.View pointerEvents="none" style={[styles.comparisonDivider, dividerStyle]}>
+            <View className="bg-white" style={StyleSheet.absoluteFill} />
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[styles.comparisonKnob, knobStyle]}>
+            <View className="border-ink-200 bg-white" style={styles.comparisonKnobFace}>
+              <ArrowRightLeft size={20} className="text-ink-950" />
+            </View>
+          </Animated.View>
         </View>
-        <View className="bg-white" style={[styles.comparisonDivider, { left: width * reveal - 1 }]} />
-        <View className="border-ink-200 bg-white" style={[styles.comparisonKnob, { left: width * reveal - 24 }]}>
-          <ArrowRightLeft size={20} className="text-ink-950" />
-        </View>
-      </View>
+      </GestureDetector>
     </View>
   )
 }
@@ -1091,9 +1154,11 @@ function IsakTiles({ latest, validated }: { latest: IsakView | null; validated: 
 const styles = StyleSheet.create({
   emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
-  sectionTitleWithInfo: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  sectionTitle: { flex: 1, fontSize: 17, fontFamily: FONT.displayBold, letterSpacing: -0.34 },
-  weightHeadline: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  // QA4 H12: encoge y trunca el titulo; NUNCA crece (un `flexGrow` aca estira la fila
+  // al ancho completo de la card y expulsa el bloque de la derecha fuera del borde).
+  sectionTitleWithInfo: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1, minWidth: 0 },
+  sectionTitle: { flexShrink: 1, fontSize: 17, fontFamily: FONT.displayBold, letterSpacing: -0.34 },
+  weightHeadline: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexShrink: 0 },
   goalEditorRow: { alignItems: 'flex-end' },
   weightValue: { fontSize: 22, letterSpacing: -0.35, fontVariant: ['tabular-nums'] },
   weightUnit: { fontSize: 12 },
@@ -1121,7 +1186,7 @@ const styles = StyleSheet.create({
   tipPhoto: { width: 48, height: 60, borderRadius: 8, borderWidth: 1 },
   tipDate: { fontSize: 13 },
   tipMeta: { fontSize: 12 },
-  bmiHeadline: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  bmiHeadline: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexShrink: 0 },
   bmiValue: { fontSize: 22, letterSpacing: -0.35, fontVariant: ['tabular-nums'] },
   bmiCategory: { fontSize: 13 },
   bmiTrack: { height: 8, position: 'relative', marginTop: 2 },
@@ -1139,7 +1204,8 @@ const styles = StyleSheet.create({
   comparisonStage: { overflow: 'hidden', borderWidth: 1, borderRadius: 14 },
   comparisonClip: { position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' },
   comparisonDivider: { position: 'absolute', top: 0, bottom: 0, width: 2 },
-  comparisonKnob: { position: 'absolute', top: '50%', marginTop: -24, width: 48, height: 48, borderRadius: 24, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  comparisonKnob: { position: 'absolute', top: '50%', marginTop: -24, width: 48, height: 48 },
+  comparisonKnobFace: { flex: 1, borderRadius: 24, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   comparisonDateBadge: { position: 'absolute', bottom: 24, zIndex: 10, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5 },
   comparisonBeforeBadge: { left: 24 },
   comparisonAfterBadge: { right: 24 },

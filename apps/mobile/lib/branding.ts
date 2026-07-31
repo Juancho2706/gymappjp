@@ -48,6 +48,16 @@ export interface CoachBranding {
    * colores del coach, 'eva' usa la paleta EVA. Lo consume la Ola 2; hoy solo se transporta.
    */
   executorTheme?: 'coach' | 'eva' | string | null
+  /**
+   * QA4 — `use_brand_colors_coach`: si el coach apaga el toggle, su PROPIO panel va neutro
+   * (paridad con `BrandCoachLoadingShell` + `coach/layout.tsx` en web). Tri-estado a proposito:
+   * `null`/`undefined` = desconocido ⇒ se trata como ACTIVADO (regla web: `!== false`).
+   *
+   * SOLO lo llena el camino AUTENTICADO del coach (`fetchOwnCoachBranding`). El select anonimo
+   * del login del alumno NO pide esta columna a proposito: si le faltara el GRANT a `anon`, el
+   * select rich fallaria y se apagaria TODO el white-label del login.
+   */
+  useBrandColorsCoach?: boolean | null
 }
 
 const BRANDING_KEY = 'eva_coach_branding'
@@ -89,6 +99,11 @@ export async function fetchBrandingByCoachIdentifier(identifierInput: string): P
   if (res.error) throw new CoachBrandingLookupError()
   if (!data) return null
 
+  return mapCoachRowToBranding(data)
+}
+
+/** Fila cruda de `coaches` → payload de marca. Unica fuente del mapeo (anon + autenticado). */
+function mapCoachRowToBranding(data: any): CoachBranding {
   const rawLoaderConfig = data.loader_config
   const branding: CoachBranding = {
     coachId: data.id,
@@ -119,9 +134,27 @@ export async function fetchBrandingByCoachIdentifier(identifierInput: string): P
     loaderIconMode: data.loader_icon_mode ?? null,
     loaderTextColor: data.loader_text_color ?? null,
     executorTheme: data.executor_theme ?? 'coach',
+    // Solo viene por el camino autenticado; ausente ⇒ null (= desconocido = activado).
+    useBrandColorsCoach: data.use_brand_colors_coach ?? null,
   }
 
   return branding
+}
+
+/**
+ * QA4 (P1-3) — marca PROPIA del coach logueado, leida bajo su sesion (RLS: id = auth.uid()).
+ * Camino AUTENTICADO: es el unico que pide `use_brand_colors_coach` (ver nota del tipo).
+ * Fail-soft por DB-compat: rich+toggle → rich → minimo.
+ */
+export async function fetchOwnCoachBranding(userId: string): Promise<CoachBranding | null> {
+  const runQuery = (cols: string) => supabase.from('coaches').select(cols).eq('id', userId).maybeSingle()
+
+  let res = (await runQuery(`${BRANDING_COLS_RICH}, use_brand_colors_coach`)) as { data: any; error: any }
+  if (res.error) res = (await runQuery(BRANDING_COLS_RICH)) as { data: any; error: any }
+  if (res.error) res = (await runQuery(BRANDING_COLS_MIN)) as { data: any; error: any }
+  if (res.error || !res.data) return null
+
+  return mapCoachRowToBranding(res.data)
 }
 
 export async function fetchBrandingByInviteCode(inviteCode: string): Promise<CoachBranding | null> {
@@ -130,6 +163,82 @@ export async function fetchBrandingByInviteCode(inviteCode: string): Promise<Coa
 
 export async function saveStoredBranding(branding: CoachBranding): Promise<void> {
   await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(branding))
+}
+
+/**
+ * QA4 (P0-2) — escritura NO destructiva de la cache de marca.
+ *
+ * `saveStoredBranding` reemplaza el objeto entero: un caller que solo conoce parte del payload
+ * (el editor de Mi Marca) borraba en silencio logo, loader, welcome_message, login_layout,
+ * executor_theme… (todos opcionales ⇒ TypeScript no lo veia). Este helper mergea sobre lo
+ * almacenado y persiste el resultado.
+ *
+ * Reglas:
+ *  - `undefined` en el patch NO pisa (se conserva lo guardado); `null` SI limpia explicitamente.
+ *  - El merge solo ocurre si es el MISMO coach; si `coachId` difiere, reemplazo total (nunca
+ *    revivir campos de otra marca cacheada en el device).
+ *  - Devuelve el payload final (o null si el resultado no seria un branding valido).
+ */
+export async function mergeStoredBranding(patch: Partial<CoachBranding>): Promise<CoachBranding | null> {
+  const prev = await loadStoredBranding()
+  const sameCoach = !!prev && (!patch.coachId || prev.coachId === patch.coachId)
+  const defined = Object.fromEntries(
+    Object.entries(patch).filter(([, v]) => v !== undefined),
+  ) as Partial<CoachBranding>
+  const next = { ...(sameCoach ? prev : null), ...defined } as CoachBranding
+  if (!isStoredCoachBranding(next)) return null
+  await saveStoredBranding(next)
+  return next
+}
+
+// QA4 (P1-3) — memo del bootstrap de la marca propia: una sola resolucion por usuario y por
+// arranque de app. `clearBranding()` lo resetea (cierre de sesion) para que el proximo coach
+// que entre en el mismo device vuelva a resolver la suya.
+let ownBrandingBootstrappedFor: string | null = null
+
+export interface OwnBrandingBootstrapResult {
+  /** true ⇒ el caller debe aplicar `branding` (puede ser null = panel neutro EVA). */
+  handled: boolean
+  branding: CoachBranding | null
+}
+
+const BOOTSTRAP_SKIPPED: OwnBrandingBootstrapResult = { handled: false, branding: null }
+
+/**
+ * QA4 (P1-3 + P1-4) — al entrar el COACH a su panel, carga y cachea SU PROPIA marca.
+ *
+ * Antes nadie lo hacia: la cache solo la escribia el flujo del ALUMNO (codigo/enlace del coach) y
+ * el Guardar de Mi Marca ⇒ un coach en un device limpio veia EVA, y un device que antes uso el
+ * flujo de alumno de OTRO coach pintaba el panel con la marca ajena.
+ *
+ * Honra `use_brand_colors_coach` como la web: si esta explicitamente en false, el panel del coach
+ * va neutro (se limpia la cache). `null` (columna sin valor) = ACTIVADO.
+ *
+ * Es best-effort y no bloquea nada: ante error de red no memoiza y se reintenta en el proximo montaje.
+ */
+export async function bootstrapOwnCoachBranding(): Promise<OwnBrandingBootstrapResult> {
+  try {
+    // getSession() lee la sesion LOCAL (sin round-trip): esto corre en el arranque del panel.
+    const { data } = await supabase.auth.getSession()
+    const userId = data.session?.user?.id
+    if (!userId) return BOOTSTRAP_SKIPPED
+    if (ownBrandingBootstrappedFor === userId) return BOOTSTRAP_SKIPPED
+
+    const own = await fetchOwnCoachBranding(userId)
+    if (!own) return BOOTSTRAP_SKIPPED // no es coach, o fallo la lectura ⇒ no memoizar
+
+    // OJO con el orden: `clearBranding()` resetea el memo, asi que se marca DESPUES de limpiar.
+    if (own.useBrandColorsCoach === false) {
+      await clearBranding()
+      ownBrandingBootstrappedFor = userId
+      return { handled: true, branding: null }
+    }
+    await saveStoredBranding(own)
+    ownBrandingBootstrappedFor = userId
+    return { handled: true, branding: own }
+  } catch {
+    return BOOTSTRAP_SKIPPED
+  }
 }
 
 export async function loadStoredBranding(): Promise<CoachBranding | null> {
@@ -147,6 +256,8 @@ export async function loadStoredBranding(): Promise<CoachBranding | null> {
 }
 
 export async function clearBranding(): Promise<void> {
+  // Cierre de sesion / cambio de marca: el proximo coach del device debe re-resolver la suya.
+  ownBrandingBootstrappedFor = null
   await AsyncStorage.removeItem(BRANDING_KEY)
 }
 

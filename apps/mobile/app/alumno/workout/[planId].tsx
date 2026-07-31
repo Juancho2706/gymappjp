@@ -1,25 +1,8 @@
+import { validateTargetDate } from '@eva/workout-engine'
 import { useLocalSearchParams } from 'expo-router'
 import ExecutorV3 from '../../../components/alumno/workout/v3/ExecutorV3'
 import { getTodayInSantiago } from '../../../lib/date-utils'
-
-const ISO_YMD = /^\d{4}-\d{2}-\d{2}$/
-
-/**
- * Valida el `?repetir=YYYY-MM-DD`: patrón estricto, calendario real (rechaza 2026-13-40) y fecha
- * PASADA. Espejo del `validateTargetDate` de la web (`_data/target-date.ts`), que hoy vive dentro de
- * `apps/web` y no es importable desde RN; cuando ese helper baje a `packages/*` esta copia se retira.
- * El día IGUAL a hoy también se descarta: el índice único de la DB es por día, así que "repetir hoy
- * sobre hoy" pisaría la misma fila (decisión CEO). Inválido/futuro/hoy ⇒ null y el ejecutor abre como
- * un día normal, sin regresión.
- */
-function validateRepeatDate(input: string, todayIso: string): string | null {
-  if (!ISO_YMD.test(input)) return null
-  const [y, m, d] = input.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null
-  // Comparación lexicográfica: segura en `yyyy-mm-dd` zero-padded (mismo orden que el cronológico).
-  return input < todayIso ? input : null
-}
+import { resolveExecutorDateParams } from '../../../lib/workout-executor-nav'
 
 /**
  * Pantalla de ejecución de rutina del alumno. V3 es el ÚNICO camino (decisión CEO 2026-07-23): el
@@ -27,21 +10,36 @@ function validateRepeatDate(input: string, todayIso: string): string | null {
  * y los componentes `ExecutorV2`/`LegacyExecutor` se retiraron del árbol (cierre EC.2, 2026-07-25).
  */
 export default function WorkoutExecutionScreen() {
-  // `recuperar` (dia pendiente de la semana) y `fecha` (dia ya hecho a revisar) los envia el sheet
-  // doble intencion / la cola de pendientes del dashboard (E1.7). Por ahora solo alimentan un banner
-  // INFORMATIVO en el ejecutor; el flujo de guardado RN no cambia (escribe el log de hoy).
-  // `repetir` (dia ya hecho en OTRA fecha) SI cambia lo que se ve: precarga cada serie con lo que el
-  // alumno registro ese dia (editable) y la sesion corre normal, escribiendo el log de HOY — los
-  // registros del dia original quedan intactos.
+  // Params de la doble intención / cola de pendientes del dashboard (E1.7):
+  //  · `recuperar` (dia pendiente de la semana) → solo banner INFORMATIVO; se entrena HOY y el log cae hoy.
+  //  · `fecha` (dia ya hecho a revisar) → EDITOR DE DIA PASADO: el motor conmuta a solo-UPDATE sobre la
+  //    ventana de esa fecha y JAMAS inserta (paridad con el server action web, `workout-log.actions.ts`).
+  //  · `repetir` (dia ya hecho en OTRA fecha) → precarga cada serie con lo que el alumno registro ese dia
+  //    (editable) y la sesion corre normal escribiendo el log de HOY; el dia original queda intacto.
+  //
+  // La validacion y la exclusion mutua (fecha gana sobre repetir; `fecha` = HOY se ignora) las resuelve
+  // `resolveExecutorDateParams`, que reusa el helper compartido `validateTargetDate` de
+  // @eva/workout-engine — antes vivia acá una copia parcial (`validateRepeatDate`) propensa al drift.
   const { planId, recuperar, fecha, repetir } = useLocalSearchParams<{
     planId: string
     recuperar?: string
     fecha?: string
     repetir?: string
   }>()
-  const recoverDate = typeof recuperar === 'string' ? recuperar : undefined
-  const editDate = typeof fecha === 'string' ? fecha : undefined
-  const repeatDate =
-    typeof repetir === 'string' ? validateRepeatDate(repetir, getTodayInSantiago().iso) ?? undefined : undefined
-  return <ExecutorV3 planId={planId} recoverDate={recoverDate} editDate={editDate} repeatDate={repeatDate} />
+  const todayIso = getTodayInSantiago().iso
+  // `recuperar` también pasa por `validateTargetDate` (paridad con la página web, page.tsx:36-37):
+  // sin esto un deep link con basura (`?recuperar=chao`) o una fecha FUTURA pintaba el banner ámbar
+  // "Recuperando: Invalid date". Formato/calendario inválido o futuro ⇒ se ignora el param y la
+  // sesión abre normal (el banner es puramente informativo, el log siempre cae en HOY).
+  const recoverCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
+  const recoverDate = recoverCheck?.ok ? recoverCheck.iso : undefined
+  const { editDate, repeatDate } = resolveExecutorDateParams({ fecha, repetir }, todayIso)
+  return (
+    <ExecutorV3
+      planId={planId}
+      recoverDate={recoverDate}
+      editDate={editDate ?? undefined}
+      repeatDate={repeatDate ?? undefined}
+    />
+  )
 }

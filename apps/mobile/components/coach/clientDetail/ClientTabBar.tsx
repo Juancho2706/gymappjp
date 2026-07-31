@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { BlurView } from 'expo-blur'
 import { MotiView } from 'moti'
@@ -25,44 +25,93 @@ export interface TabItem {
 // inactiva = superficie con borde. Full-bleed contra el gutter. Fade + chevron
 // animado a la derecha cuando las pills desbordan y no se llego al final.
 // El comportamiento sticky lo maneja el ScrollView de la pantalla.
-export function ClientTabBar({ items, value, onChange, stuck = false }: { items: TabItem[]; value: ClientTab; onChange: (v: ClientTab) => void; stuck?: boolean }) {
+//
+// QA2 A4 — el backdrop (blur + tinte `surface-app` al 80%) y el borde inferior se pintaban
+// SIEMPRE, así que mientras la tira NO estaba anclada se veía como una banda casi negra
+// tapando el gradiente de la app (imagen 10 del QA). Ahora ambos viven en una capa cuya
+// opacidad la maneja `backdropProgress` (Animated.Value que la pantalla alimenta desde el
+// onScroll que ya tenía): transparente lejos → superficie al anclarse. La capa se MONTA solo
+// cerca del anclaje (`near`): en Android `dimezisBlurView` es caro y tenerlo vivo durante
+// todo el scroll agregaba jank.
+export function ClientTabBar({
+  items,
+  value,
+  onChange,
+  stuck = false,
+  near = true,
+  backdropProgress,
+}: {
+  items: TabItem[]
+  value: ClientTab
+  onChange: (v: ClientTab) => void
+  stuck?: boolean
+  /** ¿La tira está lo bastante cerca del anclaje para que el backdrop aporte? */
+  near?: boolean
+  /** 0 = lejos del anclaje (sin fondo) · 1 = anclada (fondo glass del tema). */
+  backdropProgress?: Animated.Value
+}) {
   const { theme, resolvedScheme } = useTheme()
   const isDark = resolvedScheme === 'dark'
   const [viewW, setViewW] = useState(0)
   const [contentW, setContentW] = useState(0)
-  const [scrollX, setScrollX] = useState(0)
+  /** Boolean de borde (no la posición cruda): solo flipea al llegar/salir del final. */
+  const [atEnd, setAtEnd] = useState(false)
   const [hintDismissed, setHintDismissed] = useState(false)
   const reducedMotion = useReducedMotion()
+  const canScrollRight = contentW > viewW + 4 && !atEnd
 
-  const canScrollRight = contentW > viewW + 4 && scrollX + viewW < contentW - 4
+  // Sin `backdropProgress` (uso fuera de la ficha) el backdrop queda opaco como antes.
+  // `useState` con inicializador lazy (no `useRef().current`): el valor SÍ participa del
+  // render y `react-hooks/refs` prohíbe leer un ref en render.
+  const [fallbackProgress] = useState(() => new Animated.Value(1))
+  const progress = backdropProgress ?? fallbackProgress
+  const showBackdrop = backdropProgress ? near || stuck : true
 
-  const onLayout = (e: LayoutChangeEvent) => setViewW(e.nativeEvent.layout.width)
+  // Nota: NO se guarda la posición horizontal en state. Antes cada evento de scroll de la
+  // tira (throttle 16ms) hacía `setScrollX` → re-render completo del componente (BlurView +
+  // gradiente + MotiView) a ~60fps, y esa era la fricción al deslizarla (QA2 A4).
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const x = e.nativeEvent.contentOffset.x
-    setScrollX(x)
-    if (x > 10) setHintDismissed(true)
+    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent
+    const end = contentOffset.x + layoutMeasurement.width >= contentSize.width - 4
+    setAtEnd((current) => (current === end ? current : end))
+    if (contentOffset.x > 10 && !hintDismissed) setHintDismissed(true)
   }
 
   return (
-    <View className={`border-b ${stuck ? 'border-default' : 'border-subtle'}`} style={[styles.wrap, stuck ? shadow('sm', resolvedScheme) : null]}>
-      {/* Glass: surface-app 80% + backdrop-blur 12px (1:1 con el contenedor sticky web). */}
-      <BlurView
-        intensity={isDark ? 20 : 30}
-        tint={isDark ? 'dark' : 'light'}
-        experimentalBlurMethod="dimezisBlurView"
-        pointerEvents="none"
-        style={StyleSheet.absoluteFill}
-      />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.background, 0.8) }]} />
+    <View style={[styles.wrap, stuck ? shadow('sm', resolvedScheme) : null]}>
+      {showBackdrop ? (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: progress }]}>
+          {/* Glass: surface-app 80% + blur (1:1 con el contenedor sticky web). */}
+          <BlurView
+            intensity={isDark ? 20 : 30}
+            tint={isDark ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
+            pointerEvents="none"
+            style={StyleSheet.absoluteFill}
+          />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.background, 0.8) }]} />
+          {/* Hairline inferior DENTRO de la capa: se desvanece junto al fondo. */}
+          <View pointerEvents="none" className={stuck ? 'border-b border-default' : 'border-b border-subtle'} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+      ) : null}
       <View style={styles.inner}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
-          onLayout={onLayout}
+          onLayout={(e) => setViewW(e.nativeEvent.layout.width)}
           onScroll={onScroll}
-          scrollEventThrottle={16}
+          // 64ms alcanza para el fade/chevron (ya no se re-renderiza por posición) y baja la
+          // presión de eventos JS sobre el gesto horizontal.
+          scrollEventThrottle={64}
           onContentSizeChange={(w) => setContentW(w)}
+          // A4: el padre es un ScrollView vertical CON sticky header. Sin estos flags un
+          // arrastre con la menor componente vertical se lo llevaba el padre y la tira
+          // "no respondía": lock direccional (iOS) + scroll anidado (Android).
+          directionalLockEnabled
+          nestedScrollEnabled
+          overScrollMode="never"
+          keyboardShouldPersistTaps="handled"
         >
           {items.map((it) => {
             const on = it.value === value
@@ -74,6 +123,9 @@ export function ClientTabBar({ items, value, onChange, stuck = false }: { items:
                 activeOpacity={0.8}
                 onPress={() => { onChange(it.value); Haptics.selectionAsync().catch(() => {}) }}
                 testID={`ficha-tab-${it.value}`}
+                // hitSlop vertical: los chips miden 38px dentro de una tira de 54px; sin esto
+                // un tap algo alto o bajo caía fuera del pill (QA2 A4).
+                hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
                 className={`rounded-pill border-[1.5px] ${on ? 'bg-sport-500 border-sport-500' : 'bg-surface-card border-default'}`}
                 style={styles.tab}
               >
@@ -96,7 +148,7 @@ export function ClientTabBar({ items, value, onChange, stuck = false }: { items:
         {canScrollRight ? (
           <View pointerEvents="none" style={styles.fade}>
             <LinearGradient
-              colors={['transparent', theme.background]}
+              colors={[hexToRgba(theme.background, 0), theme.background]}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
               style={StyleSheet.absoluteFill}

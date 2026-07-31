@@ -1,5 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { MotiView } from 'moti'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Play } from 'lucide-react-native'
 import { FONT } from '../../../../lib/typography'
@@ -22,6 +23,9 @@ export interface StartChip {
   label: string
   plain?: boolean
 }
+
+/** Alto reservado para el renglón de racha (dot más alto del track = halo del `done`, ver WeekStreakDots). */
+const STREAK_ROW_H = 20
 
 /**
  * Pantalla "Inicio" del ejecutor V3 (E2.2) — traducción RN del `.a3a-start` del mockup
@@ -263,12 +267,21 @@ export function SessionStart({
         {/* Empuje al fondo: CTA + saltar. */}
         <View style={{ flex: 1, minHeight: 16 }} />
 
-        {/* Racha semanal (E4.4) — dots Lun→Dom sobre el CTA. Se auto-oculta sin senal honesta. */}
-        {weeklyStreak ? (
-          <View style={{ marginBottom: 14 }}>
-            <WeekStreakDots streak={weeklyStreak} exec={exec} compact />
-          </View>
-        ) : null}
+        {/* Racha semanal (E4.4) — dots Lun→Dom sobre el CTA. Se auto-oculta sin senal honesta.
+            La racha llega por una lectura APARTE (más tarde que el plan): el renglón reserva SIEMPRE su
+            alto (`STREAK_ROW_H`) para que al aterrizar no empuje el CTA — aparece con un fade corto, sin
+            salto de layout. El hueco reservado se lo come el espaciador flexible de arriba. */}
+        <View style={{ marginBottom: 14, minHeight: STREAK_ROW_H, justifyContent: 'center' }}>
+          {weeklyStreak ? (
+            <MotiView
+              from={{ opacity: reducedMotion ? 1 : 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ type: 'timing', duration: reducedMotion ? 0 : 180 }}
+            >
+              <WeekStreakDots streak={weeklyStreak} exec={exec} compact />
+            </MotiView>
+          ) : null}
+        </View>
 
         {/* QA7 (decisión CEO): sin atajo "Saltar al ejercicio" — EMPEZAR es la única salida. */}
 

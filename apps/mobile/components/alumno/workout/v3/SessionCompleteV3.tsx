@@ -4,7 +4,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { MotiView } from 'moti'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { Confetti } from 'react-native-fast-confetti'
-import { AlertTriangle, Check, ChevronRight, ClipboardCheck, CloudOff, GitCommit, HeartPulse, Medal, Move, Share2 } from 'lucide-react-native'
+import { AlertTriangle, Check, ChevronRight, ClipboardCheck, CloudOff, GitCommit, HeartPulse, Medal, Move, Share2, Watch } from 'lucide-react-native'
 import {
   compactDistance,
   formatCardioReps,
@@ -214,6 +214,19 @@ export interface SessionCompleteV3Props {
   /** Recordatorio de check-in post-entreno (E2-18), null cuando no toca. */
   checkInReminder?: CheckInReminder | null
   checkInLastRelative?: string | null
+  /**
+   * "Importar de tu reloj" (specs/cardio-conectado F2) — MISMO patrón que `checkInReminder`: la card
+   * solo existe si el host manda el callback. Es el host quien sabe si hay agregador de salud en esta
+   * build (`isHealthAvailable()`), si la sesión tuvo bloques cardio y si quedaron ejes vacíos; acá no
+   * se importa nada nativo. null/ausente ⇒ pantalla byte-idéntica a la previa.
+   */
+  onImportFromWatch?: (() => void) | null
+  /**
+   * Hoja del import, montada DENTRO de esta ventana (el resumen es un `<Modal>` y anidar otro Modal
+   * deja la pantalla gris en Android al volver de una Activity — mismo motivo que `ShareCardPreview
+   * embedded`). El host arma el nodo y lo pasa acá; esta pantalla solo lo ubica.
+   */
+  watchImportSlot?: React.ReactNode
   /** Sincronización en background de la cola de series (chip discreto bajo el título). */
   syncState?: FinalSyncState
   onCheckIn: () => void
@@ -245,6 +258,8 @@ export function SessionCompleteV3({
   weeklyStreak,
   checkInReminder = null,
   checkInLastRelative = null,
+  onImportFromWatch = null,
+  watchImportSlot = null,
   syncState,
   onCheckIn,
   onDone,
@@ -369,9 +384,19 @@ export function SessionCompleteV3({
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#execFinalBg)" />
           </Svg>
           {/* Confeti sutil de cierre (react-native-fast-confetti, ya usado por el resumen legacy). Ligeramente
-              mas denso si hubo PRs. reduced-motion ⇒ sin confeti. */}
+              mas denso si hubo PRs. reduced-motion ⇒ sin confeti.
+              `isInfinite={false}`: la libreria trae `isInfinite` en TRUE por defecto — sin esto el confeti
+              se reciclaba PARA SIEMPRE en la pantalla Final (QA device). Una sola pasada y muere; la caida
+              se acorta a 3,5s (default 8s) para que la celebracion no tape las estadisticas. */}
           {visible && !reducedMotion ? (
-            <Confetti autoplay fadeOutOnEnd count={detectedPRs.length > 0 ? 160 : 90} colors={[brand, gold, '#4ADE80', '#38BDF8']} />
+            <Confetti
+              autoplay
+              isInfinite={false}
+              fallDuration={3500}
+              fadeOutOnEnd
+              count={detectedPRs.length > 0 ? 160 : 90}
+              colors={[brand, gold, '#4ADE80', '#38BDF8']}
+            />
           ) : null}
 
           <ScrollView
@@ -531,6 +556,14 @@ export function SessionCompleteV3({
               </View>
             </FadeIn>
 
+            {/* "Importar de tu reloj" (cardio-conectado F2) — entre lo que hiciste y las acciones. Solo
+                aparece si el host lo habilita (agregador disponible + cardio con ejes vacíos). */}
+            {onImportFromWatch ? (
+              <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={260} duration={340}>
+                <WatchImportRow onPress={onImportFromWatch} exec={exec} />
+              </FadeIn>
+            ) : null}
+
             {/* Racha semanal (E4.4) — dots Lun→Dom + copy neutro. Se auto-oculta si no hay senal. */}
             {weeklyStreak ? (
               <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={280} duration={340}>
@@ -585,6 +618,10 @@ export function SessionCompleteV3({
             </Pressable>
           </View>
         </SafeAreaView>
+
+        {/* Hoja del import del reloj (cardio-conectado F2): overlay en ESTA ventana, nunca un Modal
+            anidado (mismo motivo que la share-card embedded). */}
+        {watchImportSlot}
 
         {/* Share-card branded del resumen de sesion (reusa ShareCardPreview, embedded para evitar el brick
             gris del Modal anidado en Android — mismo patron que WorkoutSummaryOverlay). */}
@@ -735,6 +772,36 @@ function TickerWithUnit({
       <NumberTicker value={value} format={format} play={play} reduced={reduced} style={{ fontFamily: FONT.monoBold, fontSize: 26, color: brand, fontVariant: ['tabular-nums'] }} testID={testID} />
       <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, color: muted }}>{unit}</Text>
     </View>
+  )
+}
+
+/**
+ * Fila "Importar de tu reloj" (cardio-conectado F2) — mismo chrome que la de check-in, acento del
+ * ejecutor. Solo se monta si el host mandó el callback (ver `onImportFromWatch`): esta pantalla no
+ * consulta el agregador de salud ni conoce los bloques cardio.
+ */
+function WatchImportRow({ onPress, exec }: { onPress: () => void; exec: ExecTheme }) {
+  const s = exec.surface
+  const accent = exec.accent
+  return (
+    <Pressable
+      testID="btn-watch-import-open"
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Importar el entrenamiento que registró tu reloj"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 14, borderWidth: 1.5, borderColor: hexToRgba(accent, 0.34), backgroundColor: hexToRgba(accent, 0.1), paddingHorizontal: 12, paddingVertical: 12 }}
+    >
+      <View style={{ width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: accent }}>
+        <Watch size={18} color={exec.accentText} strokeWidth={2.25} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, color: accent }} numberOfLines={1}>Importar de tu reloj</Text>
+        <Text style={{ fontFamily: FONT.ui, fontSize: 12, color: s.textMuted }} numberOfLines={2}>
+          Completa lo que dejaste en blanco del cardio
+        </Text>
+      </View>
+      <ChevronRight size={18} color={accent} />
+    </Pressable>
   )
 }
 

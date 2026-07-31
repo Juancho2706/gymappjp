@@ -4,11 +4,16 @@ import { Tabs, useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { getClientProfile } from '../../../lib/client'
-import { sessionFlags } from '../../../lib/session-flags'
+// `getPoolConsentStatus` sigue acá para la re-evaluación por AppState; el chequeo de MONTAJE
+// (blocked → password → consent) vive ahora en `app/alumno/_layout.tsx`.
+import { getPoolConsentStatus } from '../../../lib/pool-consent'
 import { useEntitlements } from '../../../lib/entitlements'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 import { StudentAccessBlocked } from '../../../components/alumno/StudentAccessBlocked'
-import { SessionMorphProvider } from '../../../components/alumno/workout/v3/session-morph'
+// NOTA: `SessionMorphProvider` YA NO vive acá — se montó al layout RAÍZ (`app/_layout.tsx`). El
+// overlay del Despegue se pinta en un <Modal> nativo y, en Android, al hacer `router.push` a la ruta
+// del ejecutor (hermana de (tabs) en el Stack raíz) esta pantalla se detacha y RN cierra el Dialog sin
+// avisar a JS → la ceremonia se iba sola a los ~1,3s. Desde el root nunca se detacha.
 
 export default function AlumnoTabsLayout() {
   const router = useRouter()
@@ -23,21 +28,12 @@ export default function AlumnoTabsLayout() {
   // montar y el de AppState pueden coincidir; el flag evita dos router.replace).
   const redirecting = useRef(false)
 
-  // Ola 0: gate de acceso a nivel navegación (cubre TODAS las tabs, no solo Home).
-  // Alumno pausado/archivado → /alumno/suspended. Cambio de clave forzado → /change-password.
-  useEffect(() => {
-    let mounted = true
-    getClientProfile()
-      .then((c) => {
-        if (!mounted || !c) return
-        if (c.blocked) {
-          redirecting.current = true
-          router.replace('/alumno/suspended')
-        } else if (c.forcePasswordChange && !sessionFlags.pwChanged) router.replace('/change-password')
-      })
-      .catch(() => {})
-    return () => { mounted = false }
-  }, [])
+  // Ola 0: el gate de MONTAJE (blocked → /alumno/suspended; password forzado → /change-password;
+  // consentimiento de pool Ley 21.719 → /alumno/consent, en ese mismo orden que el proxy web)
+  // subió a `app/alumno/_layout.tsx`. Vivía acá, y por eso no cubría las rutas alumno fuera del
+  // grupo de tabs (workout/[planId], exercise/[id], add-food, onboarding), alcanzables por deep
+  // link o por el tap de una notificación push.
+  // Acá queda solo la re-evaluación al volver de background, específica de esta sesión de tabs.
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (nextState) => {
@@ -50,12 +46,22 @@ export default function AlumnoTabsLayout() {
         if (pendingWorkout > 0) flushLogQueue(supabase)
 
         // Re-evaluar el gate al volver del background — el alumno pudo ser
-        // pausado/archivado mientras la app estaba suspendida.
+        // pausado/archivado (o revocar su consentimiento desde la web) mientras
+        // la app estaba suspendida.
         if (!redirecting.current) {
           const c = await getClientProfile().catch(() => null)
           if (c?.blocked && !redirecting.current) {
             redirecting.current = true
             router.replace('/alumno/suspended')
+          } else if (!redirecting.current) {
+            const consent = await getPoolConsentStatus()
+            if (consent?.pool && !consent.granted && !redirecting.current) {
+              redirecting.current = true
+              router.replace({
+                pathname: '/alumno/consent',
+                params: { team: consent.teamSlug, name: consent.teamName },
+              })
+            }
           }
         }
       }
@@ -85,7 +91,6 @@ export default function AlumnoTabsLayout() {
   }
 
   return (
-    <SessionMorphProvider>
     <View className="flex-1 bg-surface-app">
       <Tabs
         tabBar={(props) => <AlumnoMobileChrome {...props} />}
@@ -145,6 +150,5 @@ export default function AlumnoTabsLayout() {
         <Tabs.Screen name="nutrition-v2/scanner" options={{ href: null }} />
       </Tabs>
     </View>
-    </SessionMorphProvider>
   )
 }

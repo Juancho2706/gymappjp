@@ -142,10 +142,11 @@ export function ExerciseListV3({
                     </View>
                   ) : null}
 
-                  {/* Nombre (mockup `.snm`, 13/800; actual en blanco). */}
+                  {/* Nombre (mockup `.snm`, 13/800; actual en blanco). Dos líneas (QA ronda 2): con una
+                      sola, los nombres largos del catálogo se cortaban con "…" y no se distinguían entre sí. */}
                   <Text
-                    style={{ flex: 1, minWidth: 0, fontFamily: FONT.uiExtra, fontSize: 13, color: isNow ? '#fff' : '#d4d4dc' }}
-                    numberOfLines={1}
+                    style={{ flex: 1, minWidth: 0, fontFamily: FONT.uiExtra, fontSize: 13, lineHeight: 17, color: isNow ? '#fff' : '#d4d4dc' }}
+                    numberOfLines={2}
                   >
                     {item.title}
                   </Text>

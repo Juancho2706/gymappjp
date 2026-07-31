@@ -12,7 +12,10 @@ import {
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import * as FileSystem from 'expo-file-system'
+// SDK 54: la API clasica (getInfoAsync) vive SOLO en el subpath `/legacy`. Importarla del entry
+// principal devuelve shims que LANZAN siempre (expo-file-system/src/legacyWarnings.ts) => la foto
+// del check-in nunca se seteaba. Mismo import que ImportClientsForm / ShareCard / client-dossier-pdf.
+import * as FileSystem from 'expo-file-system/legacy'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { decode } from 'base64-arraybuffer'
@@ -20,6 +23,7 @@ import { ArrowRight, Camera, Check, ChevronLeft, History, Lock, Minus, Plus, Ref
 import { MotiView } from 'moti'
 import { Confetti } from 'react-native-fast-confetti'
 import { supabase } from '../../../lib/supabase'
+import { apiFetch } from '../../../lib/api'
 import { clearAppBadge } from '../../../lib/badge'
 import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
@@ -138,27 +142,40 @@ export default function CheckInScreen() {
   async function processAsset(asset: ImagePicker.ImagePickerAsset, type: 'front' | 'back') {
     // Toda nueva seleccion limpia el error previo del lado (web CheckInForm.tsx:185).
     setPhotoErrors((e) => ({ ...e, [type]: undefined }))
-    // NO pre-filtramos por mime: el re-encode a JPEG de abajo normaliza cualquier formato,
-    // incluido HEIC de iPhone (bloquearlo antes rompía a los alumnos con cámara Apple). Solo
-    // rechazamos algo declarado que NO sea imagen. Copy verbatim web :195.
-    if (asset.mimeType && !asset.mimeType.startsWith('image/')) {
-      setPhotoErrors((e) => ({ ...e, [type]: 'El archivo no es una imagen. Usa una foto (JPG, PNG, HEIC…).' }))
-      return
+    // NUNCA fallar en silencio: si algo revienta aca (manipulator, medicion del archivo, permisos
+    // del uri) el alumno solo veia el tile vacio y creia que la app "no agarro" la foto.
+    try {
+      // NO pre-filtramos por mime: el re-encode a JPEG de abajo normaliza cualquier formato,
+      // incluido HEIC de iPhone (bloquearlo antes rompía a los alumnos con cámara Apple). Solo
+      // rechazamos algo declarado que NO sea imagen. Copy verbatim web :195.
+      if (asset.mimeType && !asset.mimeType.startsWith('image/')) {
+        setPhotoErrors((e) => ({ ...e, [type]: 'El archivo no es una imagen. Usa una foto (JPG, PNG, HEIC…).' }))
+        return
+      }
+      const compressed = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1920 } }],
+        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG }
+      )
+      const info = await FileSystem.getInfoAsync(compressed.uri)
+      if (info.exists && 'size' in info && info.size > MAX_BYTES) {
+        // Estado "no se pudo optimizar" del web (copy verbatim :217).
+        setPhotoErrors((e) => ({ ...e, [type]: 'No pudimos optimizar esta imagen y pesa más de 5MB. Prueba con otra.' }))
+        return
+      }
+      if (type === 'front') setFrontPhotoUri(compressed.uri)
+      else setBackPhotoUri(compressed.uri)
+    } catch (e: any) {
+      console.warn('[checkin] no se pudo procesar la foto:', e?.message ?? e)
+      setPhotoErrors((prev) => ({ ...prev, [type]: 'No pudimos procesar esta foto. Prueba con otra.' }))
     }
-    const compressed = await ImageManipulator.manipulateAsync(
-      asset.uri,
-      [{ resize: { width: 1920 } }],
-      { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG }
-    )
-    const info = await FileSystem.getInfoAsync(compressed.uri)
-    if (info.exists && 'size' in info && info.size > MAX_BYTES) {
-      // Estado "no se pudo optimizar" del web (copy verbatim :217).
-      setPhotoErrors((e) => ({ ...e, [type]: 'No pudimos optimizar esta imagen y pesa más de 5MB. Prueba con otra.' }))
-      return
-    }
-    if (type === 'front') setFrontPhotoUri(compressed.uri)
-    else setBackPhotoUri(compressed.uri)
   }
+
+  // `aspect` es Android-only: en iOS `allowsEditing` fuerza un recorte CUADRADO 1:1 que mutila la
+  // foto de progreso (y el slot 3:4 la vuelve a recortar). En iOS no editamos: el resize a 1920
+  // del processAsset ya normaliza y la foto llega completa (igual que la web, que sube tal cual).
+  const editingOptions: { allowsEditing: boolean; aspect?: [number, number] } =
+    Platform.OS === 'android' ? { allowsEditing: true, aspect: [3, 4] } : { allowsEditing: false }
 
   async function pickFromGallery(type: 'front' | 'back') {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
@@ -166,7 +183,7 @@ export default function CheckInScreen() {
       Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar una foto.')
       return
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true, aspect: [3, 4] })
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, ...editingOptions })
     if (result.canceled || !result.assets[0]) return
     await processAsset(result.assets[0], type)
   }
@@ -178,15 +195,22 @@ export default function CheckInScreen() {
       Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara para tomar la foto.')
       return
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: true, aspect: [3, 4] })
+    const result = await ImagePicker.launchCameraAsync({ quality: 1, ...editingOptions })
     if (result.canceled || !result.assets[0]) return
     await processAsset(result.assets[0], type)
   }
 
+  function onPhotoFailure(type: 'front' | 'back', e: any) {
+    console.warn('[checkin] fallo al agregar la foto:', e?.message ?? e)
+    setPhotoErrors((prev) => ({ ...prev, [type]: 'No pudimos procesar esta foto. Prueba con otra.' }))
+  }
+
   function choosePhotoSource(type: 'front' | 'back') {
     Alert.alert('Foto de progreso', '¿Cómo quieres agregarla?', [
-      { text: 'Tomar foto', onPress: () => takePhoto(type) },
-      { text: 'Elegir de galería', onPress: () => pickFromGallery(type) },
+      // Alert descarta la promesa del onPress => cualquier rechazo quedaba como unhandled
+      // rejection invisible. Lo cerramos aca y pintamos el error inline del lado.
+      { text: 'Tomar foto', onPress: () => { void takePhoto(type).catch((e: any) => onPhotoFailure(type, e)) } },
+      { text: 'Elegir de galería', onPress: () => { void pickFromGallery(type).catch((e: any) => onPhotoFailure(type, e)) } },
       { text: 'Cancelar', style: 'cancel' },
     ])
   }
@@ -272,14 +296,14 @@ export default function CheckInScreen() {
     // NO seteamos `date` (espejo web check-in.actions.ts:193-200): el insert web solo escribe
     // weight/energy/notes/fotos y la lectura ordena por created_at. Setearlo generaba un residual
     // de off-by-one en la vista del coach vs filas creadas por web (date NULL).
-    const { error } = await supabase.from('check_ins').insert({
+    const { data: inserted, error } = await supabase.from('check_ins').insert({
       client_id: client.id,
       weight: weight ? parseFloat(weight) : null,
       energy_level: energyLevel,
       front_photo_url: frontPhotoPath,
       back_photo_url: backPhotoPath,
       notes: notes.trim() || null,
-    })
+    }).select('id').single()
 
     submittingRef.current = false
     setSubmitting(false)
@@ -295,6 +319,15 @@ export default function CheckInScreen() {
           : 'No se pudo enviar el check-in. Intenta de nuevo.'
       )
     } else {
+      // Push W1 `checkin_received` al coach — bridge best-effort (patrón assignment-notifications:
+      // la fila ya está por RLS, el server solo revalida y notifica; fallo = silencio, jamás UI).
+      if (inserted?.id) {
+        apiFetch('/api/mobile/checkin-submitted', {
+          method: 'POST',
+          authenticated: true,
+          body: { checkInId: inserted.id },
+        }).catch(() => {})
+      }
       setDone(true) // celebración: confetti + pantalla de éxito se montan con `done`
       setStep(1)
       setFrontPhotoUri(null)
@@ -419,7 +452,7 @@ export default function CheckInScreen() {
         </View>
 
         {/* Disclaimer medico */}
-        <View className="border border-warning-500 bg-warning-100" style={styles.disclaimer}>
+        <View className="border border-warning-500/40 bg-warning-100 dark:bg-warning-100/[0.16]" style={styles.disclaimer}>
           <ShieldAlert size={15} color={resolvedScheme === 'dark' ? '#FFC861' : '#A8690A'} strokeWidth={2} />
           <Text className="text-warning-600" style={[textStyle('3xs', FONT.uiMedium, { lh: 'snug' }), { flex: 1 }]}>
             EVA no es un dispositivo médico ni sustituye consejo profesional.

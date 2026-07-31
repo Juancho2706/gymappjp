@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Image } from 'expo-image'
 import { useTheme } from '../context/ThemeContext'
@@ -17,6 +18,12 @@ export interface AvatarProps {
   ring?: AvatarRing
   /** Rounded-square thumbnail instead of a circle. */
   square?: boolean
+  /**
+   * Cómo encaja `src` en el círculo. 'cover' (default) para fotos de persona;
+   * 'contain' para LOGOS de marca — no recorta y pinta un fondo neutro detrás con
+   * un margen interno para que el logo respire (QA2-B2).
+   */
+  fit?: 'cover' | 'contain'
   style?: StyleProp<ViewStyle>
 }
 
@@ -40,8 +47,13 @@ function getInitials(name: string): string {
     .toUpperCase()
 }
 
-export function Avatar({ src, name = '', size = 'md', ring = false, square = false, style }: AvatarProps) {
+export function Avatar({ src, name = '', size = 'md', ring = false, square = false, fit = 'cover', style }: AvatarProps) {
   const { theme } = useTheme()
+  // Si la imagen falla (URL muerta, logo borrado del bucket) el avatar NO puede quedar
+  // hueco: cae a iniciales. Se resetea al cambiar de src.
+  const [failed, setFailed] = useState(false)
+  useEffect(() => { setFailed(false) }, [src])
+  const showImage = !!src && !failed
 
   const dim = typeof size === 'number' ? size : SIZES[size] ?? SIZES.md
   const initials = getInitials(name ?? '')
@@ -67,7 +79,7 @@ export function Avatar({ src, name = '', size = 'md', ring = false, square = fal
       ]}
     >
       <View
-        className={src ? undefined : 'bg-surface-inverse'}
+        className={showImage ? (fit === 'contain' ? 'bg-surface-card' : undefined) : 'bg-surface-inverse'}
         style={{
           flex: 1,
           alignItems: 'center',
@@ -76,10 +88,16 @@ export function Avatar({ src, name = '', size = 'md', ring = false, square = fal
           overflow: 'hidden',
           borderWidth: hasRing ? 2 : 0,
           borderColor: theme.card, // 2px surface-card gap between ring and avatar
+          padding: showImage && fit === 'contain' ? Math.round(dim * 0.11) : 0,
         }}
       >
-        {src ? (
-          <Image source={{ uri: src }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+        {showImage ? (
+          <Image
+            source={{ uri: src }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit={fit}
+            onError={() => setFailed(true)}
+          />
         ) : (
           <Text
             className="font-display-bold text-sport-400"

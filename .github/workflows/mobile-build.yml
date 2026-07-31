@@ -8,9 +8,10 @@ on:
         required: true
         default: 'mobile'
         type: choice
+        # enterprise retirada del picker 2026-07-29 (app archivada, estrategia Teams-first);
+        # el input se conserva porque los paths del job usan apps/${{ inputs.app }}.
         options:
           - mobile
-          - enterprise
       platform:
         description: 'Platform'
         required: true
@@ -23,13 +24,14 @@ on:
       profile:
         description: 'Build profile'
         required: true
-        default: 'staging'
+        default: 'production'
         type: choice
+        # 2026-07-29: staging (Supabase local por IP LAN, muerto en CI) y prodpreview
+        # (subset de production sin submit) retirados. previewv2 se conserva: es la única
+        # vía de probar endpoints de la RAMA en device (API = preview Vercel de rnmobiledenuevo).
         options:
-          - staging
-          - prodpreview
-          - previewv2
           - production
+          - previewv2
       submit_ios:
         description: 'Auto-submit iOS IPA to TestFlight after build'
         required: false
@@ -68,8 +70,7 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Inject prod env vars into eas.json for prodpreview/production
-        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'previewv2' || inputs.profile == 'production' }}
+      - name: Inject prod env vars into eas.json (previewv2/production)
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -97,7 +98,7 @@ jobs:
           "
 
       # production (sin buildType) genera AAB — formato que exige Google Play.
-      # staging/prodpreview generan APK para sideload directo.
+      # previewv2 genera APK para sideload directo.
       - name: Determine Android artifact type
         id: android_artifact
         run: |
@@ -166,8 +167,7 @@ jobs:
             exit 1
           fi
 
-      - name: Inject prod env vars into eas.json for prodpreview/production
-        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'previewv2' || inputs.profile == 'production' }}
+      - name: Inject prod env vars into eas.json (previewv2/production)
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}

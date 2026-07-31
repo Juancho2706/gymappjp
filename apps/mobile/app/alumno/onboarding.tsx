@@ -206,7 +206,7 @@ function AlumnoOnboardingScreen() {
             <Text className="text-muted" style={[TYPE.body, styles.subtitle]}>
               Tu coach necesita estos datos para personalizar tu entrenamiento y nutrición.
             </Text>
-            <View className="bg-warning-100 border border-warning-500/30 rounded-control" style={styles.warnBox}>
+            <View className="bg-warning-100 dark:bg-warning-100/[0.16] border border-warning-500/30 rounded-control" style={styles.warnBox}>
               <Text className="text-warning-700" style={TYPE.caption}>
                 EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
               </Text>
@@ -312,7 +312,7 @@ function AlumnoOnboardingScreen() {
                   style={styles.stepInner}
                 >
                   <StepHeading title="Salud y seguridad" subtitle="Esta información es vital para evitar lesiones." />
-                  <View className="bg-warning-100 border border-warning-500/30 rounded-control" style={styles.warnBox}>
+                  <View className="bg-warning-100 dark:bg-warning-100/[0.16] border border-warning-500/30 rounded-control" style={styles.warnBox}>
                     <Text className="text-warning-700" style={TYPE.caption}>
                       EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
                     </Text>

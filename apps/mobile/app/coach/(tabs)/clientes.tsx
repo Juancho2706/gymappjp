@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useRouter } from 'expo-router'
 import {
@@ -30,18 +29,16 @@ import { Button, Input, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
+import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import { DirRowCard } from '../../../components/coach/directory/DirRowCard'
 import { ClientActionsSheet } from '../../../components/coach/directory/ClientActionsSheet'
 import { DirectorySummary } from '../../../components/coach/directory/DirectorySummary'
-import { DirectoryAlertBanner } from '../../../components/coach/directory/DirectoryAlertBanner'
 import { DirectoryOptionSheet } from '../../../components/coach/directory/DirectoryOptionSheet'
 import { DirectoryFilterSheet } from '../../../components/coach/directory/DirectoryFilterSheet'
 import { CreateClientModal } from '../../../components/coach/directory/CreateClientModal'
 import { ImportClientsForm } from '../../../components/coach/directory/ImportClientsForm'
 import {
   DANGER,
-  EMBER,
-  INFO,
   RISK_LABELS,
   SORT_OPTIONS,
   STATUS_OPTIONS,
@@ -70,7 +67,6 @@ import { getCoachOrgContext, type CoachOrgContext } from '../../../lib/org'
 import { useWorkspace } from '../../../lib/workspace'
 import { FONT } from '../../../lib/typography'
 import { GLOWS, shadow } from '../../../lib/shadows'
-import { getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
 import { supabase } from '../../../lib/supabase'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -299,6 +295,7 @@ function DirectoryScreenHeader({ theme, trailing }: { theme: any; trailing?: Rea
 
 export default function ClientesScreen() {
   const { onScroll: onTabbarScroll } = useCoachTabbarScroll()
+  const insets = useSafeAreaInsets()
   const { theme } = useTheme()
   const router = useRouter()
   const workspace = useWorkspace()
@@ -321,7 +318,6 @@ export default function ClientesScreen() {
   const [showImport, setShowImport] = useState(false)
   const [importBlocking, setImportBlocking] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
   const [visibleTableCount, setVisibleTableCount] = useState(48)
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -396,11 +392,6 @@ export default function ClientesScreen() {
   function toggleView() {
     setViewMode((current) => current === 'cards' ? 'table' : 'cards')
   }
-  useEffect(() => {
-    AsyncStorage.getItem('eva_alumnos_alerts_dismissed').then((raw) => {
-      if (raw) { try { setDismissed(JSON.parse(raw)) } catch {} }
-    })
-  }, [])
 
   async function load(silent = false) {
     if (!silent) setLoading(true)
@@ -469,12 +460,19 @@ export default function ClientesScreen() {
     setVisibleTableCount(48)
   }, [search, riskFilter, programFilter, statusFilter, sortKey, sortDir, viewMode])
 
-  const urgentBanner = stats.urgentCount > 0
-  const expiredBanner = stats.expiredProgramCount > 0
-  const syncBanner = stats.pendingSyncCount > 0
-  // A-F10: contador de adherencia nutricional baja (desde el pulse) para banner de triage.
+  // A-F10 + QA F2: los contadores del resumen salen del array pulse CRUDO, no del
+  // roster con fallback 0 — espejo exacto de CoachWarRoom.tsx:220-229. Nutri. cuenta
+  // solo el flag NUTRICION_RIESGO (la web no suma el umbral pct<60 aquí).
   const nutritionLowCount = useMemo(
-    () => [...pulseById.values()].filter((p) => (p.attentionFlags?.includes('NUTRICION_RIESGO')) || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60)).length,
+    () => [...pulseById.values()].filter((p) => (p.attentionFlags ?? []).includes('NUTRICION_RIESGO')).length,
+    [pulseById]
+  )
+  const pulseUrgentCount = useMemo(
+    () => [...pulseById.values()].filter((p) => p.attentionScore >= 50).length,
+    [pulseById]
+  )
+  const pulseReviewCount = useMemo(
+    () => [...pulseById.values()].filter((p) => p.attentionScore >= 25 && p.attentionScore < 50).length,
     [pulseById]
   )
   // Adherencia promedio (espejo web CoachWarRoom) + total archivados — métricas derivadas del pulse/lista ya cargados.
@@ -483,18 +481,6 @@ export default function ClientesScreen() {
     return vals.length ? Math.round(vals.reduce((a, p) => a + p.percentage, 0) / vals.length) : 0
   }, [pulseById])
   const archivedCount = useMemo(() => clients.filter((c) => c.isArchived).length, [clients])
-
-  // Swipe-to-dismiss alerts: hidden until the next day OR until the count changes.
-  const todayIso = getSantiagoIsoYmdForUtcInstant(new Date().toISOString())
-  const isDismissed = (key: string, count: number) => {
-    const d = dismissed[key]
-    return !!d && d.date === todayIso && d.count === count
-  }
-  const dismissAlert = (key: string, count: number) => {
-    const next = { ...dismissed, [key]: { date: todayIso, count } }
-    setDismissed(next)
-    AsyncStorage.setItem('eva_alumnos_alerts_dismissed', JSON.stringify(next)).catch(() => {})
-  }
 
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
   const sportTokens = useMemo(() => deriveSportTokens(coachPrimaryColor || theme.primary), [coachPrimaryColor, theme.primary])
@@ -678,6 +664,8 @@ export default function ClientesScreen() {
       {/* Resumen · hoy — pulso de prioridad + métricas secundarias (espejo CoachWarRoom) */}
       <DirectorySummary
         stats={stats}
+        urgentCount={pulseUrgentCount}
+        reviewCount={pulseReviewCount}
         riskFilter={riskFilter}
         onToggleRisk={toggleRisk}
         onSetAllRisk={() => setRiskFilter('all')}
@@ -685,19 +673,9 @@ export default function ClientesScreen() {
         nutritionLowCount={nutritionLowCount}
       />
 
-      {/* Alert banners */}
-      {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
-        <DirectoryAlertBanner testID="directory-alert-urgent" message={`${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`} color={DANGER} onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('urgent', stats.urgentCount)} />
-      )}
-      {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
-        <DirectoryAlertBanner testID="directory-alert-expired" message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`} color={WARNING} onPress={() => setProgramFilter('expired_program')} onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)} />
-      )}
-      {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
-        <DirectoryAlertBanner testID="directory-alert-sync" message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color={INFO} onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
-      )}
-      {nutritionLowCount > 0 && !isDismissed('nutrition_low', nutritionLowCount) && (
-        <DirectoryAlertBanner testID="directory-alert-nutrition" message={`${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con adherencia nutricional baja`} color={EMBER} onPress={() => setRiskFilter('nutrition_low')} onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)} />
-      )}
+      {/* QA2-B1: los banners de triage (urgente/vencido/sync/nutrición) se retiraron —
+          la web no tiene ese patrón: el mismo triage se expresa como tiles del resumen
+          + filtros/chips. Ver DirectorySummary + DirectoryFilterSheet. */}
       {pulseError && (
         <TouchableOpacity testID="directory-pulse-retry" activeOpacity={0.85} onPress={loadPulse} style={[styles.pulseErr, { backgroundColor: DANGER + '14', borderColor: DANGER + '40' }]}>
           <Text style={[styles.pulseErrTxt, { color: DANGER }]}>No se pudieron cargar las métricas (peso/adherencia).</Text>
@@ -789,7 +767,7 @@ export default function ClientesScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <DirectoryScreenHeader theme={theme} />
         <EvaLoaderScreen subtitle="Cargando alumnos…" />
       </SafeAreaView>
@@ -798,7 +776,7 @@ export default function ClientesScreen() {
 
   if (loadError && clients.length === 0) {
     return (
-      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
         <DirectoryScreenHeader theme={theme} />
         <View style={styles.filteredEmptyWrap}>
@@ -813,7 +791,7 @@ export default function ClientesScreen() {
   }
 
   return (
-    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
 
       {viewMode === 'cards' ? (
@@ -840,7 +818,7 @@ export default function ClientesScreen() {
               />
             </View>
           )}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           onScroll={onTabbarScroll}
           scrollEventThrottle={16}
@@ -854,7 +832,7 @@ export default function ClientesScreen() {
           data={[] as DirectoryClient[]}
           keyExtractor={(c) => c.id}
           renderItem={() => null}
-          contentContainerStyle={styles.tableList}
+          contentContainerStyle={[styles.tableList, { paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           onScroll={onTabbarScroll}
           scrollEventThrottle={16}

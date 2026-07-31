@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
+import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
+import { MotiView } from 'moti'
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -17,6 +19,7 @@ import {
   buildStepModel,
   cardioHasDistanceAxis,
   countLoggedSetsByBlock,
+  derivedPaceSecPerKm,
   effectiveExerciseType,
   firstIncompleteInRounds,
   firstIncompleteStepIndex,
@@ -24,6 +27,7 @@ import {
   isRoundComplete,
   isStepComplete,
   metersToDistanceCapture,
+  PAST_SET_NOT_FOUND_ERROR,
   repsUnitForModality,
   sessionLogKey,
   typedTargetFor,
@@ -35,7 +39,15 @@ import {
   type TypedKeypadContext,
   type WorkoutCelebrationEvent,
 } from '@eva/workout-engine'
-import { useTheme } from '../../../../context/ThemeContext'
+import {
+  downsampleSeries,
+  hubImportPatch,
+  hubZoneSec,
+  type HrMetadataV1,
+  type HrZone,
+  type HubWorkout,
+} from '@eva/cardio'
+import { ForceScheme, useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
 import { hexToRgba } from '../../../../lib/theme'
 import { FONT } from '../../../../lib/typography'
@@ -62,6 +74,8 @@ import { StepperExecution, type StepperStepView } from '../StepperExecution'
 import { KeypadHost, type KeypadTarget } from '../KeypadHost'
 import { TechniqueSheet } from '../TechniqueSheet'
 import { SessionCompleteV3, type FinalSyncState } from './SessionCompleteV3'
+import { ImportWatchSheet, type WatchImportTarget } from './ImportWatchSheet'
+import { isHealthAvailable } from '../../../../lib/health-aggregators'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
@@ -109,6 +123,8 @@ const WORK_SEC_PER_SET = 40
 const START_PREVIEW_COUNT = 4
 // Fases de presentacion del ejecutor V3: splash (una vez por apertura) → Inicio → sesion (stepper).
 type ExecPhase = 'intro' | 'start' | 'session'
+// Crossfade entre el Inicio (EMPEZAR) y la sesion. Corto a proposito: transicion, no ceremonia.
+const PHASE_FADE_MS = 220
 
 // Media/tecnica del sustituto (paridad ExecutorV2): el modal de tecnica y la CTA dependen de que el
 // gif/video/instrucciones viajen aqui.
@@ -118,6 +134,7 @@ type ActiveSub = {
   reason: string | null
   prescribedName: string
   gif_url: string | null
+  thumbnail_url: string | null
   video_url: string | null
   video_start_time: number | null
   video_end_time: number | null
@@ -170,16 +187,30 @@ function typedSeedValues(entry: RepeatSeedEntry | null | undefined, mode: string
  * V3 completa (media, prescripcion rica, efecto juicy) llega en la wave 2.
  */
 export default function ExecutorV3({ planId, recoverDate, editDate, repeatDate }: ExecutorV3Props) {
+  // El ejecutor es DARK-ONLY por contrato (exec-theme), pero los componentes COMPARTIDOS que monta
+  // (Sheet, keypad, mapa muscular, sombras, status bar) resolvían tokens con el esquema de la CUENTA:
+  // con el alumno en tema claro salía una barra BLANCA abajo (footer del sheet `bg-surface-sunken`),
+  // títulos negros sobre negro y glifos oscuros en la status bar. `ForceScheme` re-declara las CSS-vars
+  // de NativeWind al juego dark y anida un ThemeContext con `resolvedScheme:'dark'` para TODO el
+  // subárbol, así el ejecutor se ve igual con la cuenta en claro o en oscuro.
   return (
-    <WorkoutTimerProvider>
-      <ExecutorV3Inner planId={planId} recoverDate={recoverDate} editDate={editDate} repeatDate={repeatDate} />
-    </WorkoutTimerProvider>
+    <ForceScheme scheme="dark">
+      <WorkoutTimerProvider>
+        <ExecutorV3Inner planId={planId} recoverDate={recoverDate} editDate={editDate} repeatDate={repeatDate} />
+      </WorkoutTimerProvider>
+    </ForceScheme>
   )
 }
 
 interface ExecutorV3Props {
   planId: string
   recoverDate?: string
+  /**
+   * Día PASADO cuyos registros se están EDITANDO (`?fecha`, ya validado por la ruta como pasado
+   * ESTRICTO). Conmuta el motor a modo SOLO-UPDATE: la ventana del día (logs, historial, máximos) es esa
+   * fecha y `logSet` corrige la fila existente sin insertar jamás una nueva. También alimenta el banner
+   * "Editando registros del {día}".
+   */
   editDate?: string
   /**
    * Día ya entrenado que se está REPITIENDO hoy (`?repetir=`, ya validado por la ruta). La sesión corre
@@ -207,7 +238,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const { theme, branding } = useTheme()
   const motion = useEvaMotion()
   const timers = useWorkoutTimers()
-  const session = useWorkoutSession(planId, repeatDate)
+  const session = useWorkoutSession(planId, repeatDate, editDate)
   // Finalizar en curso: el REF es el guard de reentrada (bloquea el 2.º tap dentro del mismo render) y el
   // ESTADO es lo que ve el alumno (botones deshabilitados + spinner). Antes sólo existía el ref, así que
   // finalizar no daba ninguna señal visual mientras corría (paridad con el fix de la web).
@@ -231,6 +262,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, ActiveSub>>({})
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
+  // Import del reloj (specs/cardio-conectado F2): hoja del resumen + ventana REAL de la sesión, congelada
+  // al finalizar (el matching con el hub exige ≥50% de solape con ella).
+  const [watchImportOpen, setWatchImportOpen] = useState(false)
+  const [sessionWindow, setSessionWindow] = useState<{ startMs: number; endMs: number } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false) // Vista "Ver todo" (E2.6) — capa sobre el stepper.
   // QA4: el banner contextual ("Recuperando…" / "Editando registros…") se puede descartar con una X
@@ -262,6 +297,24 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const viaMorphRef = useRef<boolean | null>(null)
   if (viaMorphRef.current === null) viaMorphRef.current = consumeMorphLaunch()
   const [phase, setPhase] = useState<ExecPhase>(viaMorphRef.current ? 'start' : 'intro')
+  // Crossfade Inicio → sesión (QA device: el swap era un corte seco). El Inicio se desvanece
+  // (`startExiting`) y la sesión entra con un fade del mismo largo: como ambas pantallas comparten el
+  // fondo del ejecutor, se lee como una disolvencia. reduced-motion ⇒ swap directo, sin timer.
+  const [startExiting, setStartExiting] = useState(false)
+  const startExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (startExitTimer.current) clearTimeout(startExitTimer.current) }, [])
+  const handleStartSession = useCallback(() => {
+    if (motion.reduced) {
+      setPhase('session')
+      return
+    }
+    if (startExitTimer.current) return
+    setStartExiting(true)
+    startExitTimer.current = setTimeout(() => {
+      startExitTimer.current = null
+      setPhase('session')
+    }, PHASE_FADE_MS)
+  }, [motion.reduced])
 
   useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
 
@@ -317,6 +370,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           reason: log.substitution_reason ?? null,
           prescribedName: resolveExercise(block)?.name ?? 'Ejercicio',
           gif_url: null,
+          thumbnail_url: null,
           video_url: null,
           video_start_time: null,
           video_end_time: null,
@@ -606,13 +660,91 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         cel.celebrate(baseEvent)
       }
 
+      // ── Decisión de descanso — SÍNCRONA, ANTES del await de red (QA: flash de la próxima serie) ──
+      // `logSet` empuja la serie a `sessionLogs` de forma optimista y SÍNCRONA antes de su await, así que
+      // decidir el descanso después del await dejaba 1+ frames con la siguiente serie/ejercicio a la vista
+      // antes de que montara el overlay. La decisión usa SÓLO datos previos al await (`projected`/
+      // `wasLogged` derivados de `sessionLogs`, `payload`, `supersetMembersByBlock`, ajustes) ⇒ adelantarla
+      // no cambia el resultado. Lo que depende de la red (errores + `signalCommitted`) sigue post-await.
+      const maybeStartRest = () => {
+        // Superserie: descanso SOLO al cerrar la ronda (paridad ExecutorV2/web).
+        const members = supersetMembersByBlock.get(payload.blockId)
+        if (members && members.length >= 2) {
+          const roundBlocks = members.map((m) => ({ id: m.id, sets: m.sets }))
+          const round = payload.setNumber
+          const roundClosed = isRoundComplete(roundBlocks, round, projected)
+          if (!wasLogged) {
+            if (!isRestAutoTimerEnabled()) {
+              timers.cancelRest()
+            } else if (roundClosed) {
+              const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
+              const label = resolveExercise(members[0])?.name
+              if (groupRest > 0) {
+                // Contexto de "ronda cerrada" (E3.5): el interstitial muestra banner + dots + siguiente
+                // ronda. Se deriva del engine (round = la ronda recién cerrada; total = maxSets del grupo).
+                const totalRounds = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
+                const nextRound = round + 1
+                let next: RestRoundContext['next'] = null
+                if (nextRound <= totalRounds) {
+                  const firstMember = members.find((m) => m.sets >= nextRound)
+                  if (firstMember) {
+                    const prescribed = resolveExercise(firstMember)
+                    const nextSub = getSubstitution(firstMember)
+                    const nm = nextSub?.name ?? prescribed?.name ?? 'Ejercicio'
+                    const eff = effByBlock.get(firstMember.id) ?? null
+                    const w = eff?.weightKg ?? firstMember.target_weight_kg
+                    const prescription = `${firstMember.sets} × ${firstMember.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
+                    const idx = members.findIndex((m) => m.id === firstMember.id)
+                    const exercise: SessionExercise | null = prescribed
+                      ? (nextSub
+                          ? { ...prescribed, id: nextSub.exerciseId ?? prescribed.id, name: nextSub.name, gif_url: nextSub.gif_url, thumbnail_url: nextSub.thumbnail_url, video_url: nextSub.video_url, video_start_time: nextSub.video_start_time, video_end_time: nextSub.video_end_time, instructions: nextSub.instructions }
+                          : prescribed)
+                      : null
+                    next = { name: nm, prescription, exercise, tag: `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextRound}` }
+                  }
+                }
+                restRoundContextRef.current = { roundNumber: round, totalRounds, next }
+                timers.startRest(groupRest, { autoStart: true, label })
+              }
+            } else {
+              timers.cancelRest()
+            }
+          }
+          // El aviso "Sigue sin detenerte" entre miembros de la ronda lo pinta la barra deslizante de
+          // SupersetScreenV3 (QA3); ya no se usa un toast "Sin descanso — sigue con {label}" (decisión CEO).
+          return
+        }
+
+        // Bloque suelto.
+        const ex = block ? resolveExercise(block) : null
+        // QA4: en V3 se ELIMINA la snackbar "Serie registrada" (el alumno corrige después con el lápiz o
+        // desde la tarjeta ya hecha, "Deshacer" de cada card). V2 la conserva (ExecutorV2.tsx). El resto del
+        // flujo (descanso/scroll) NO cambia.
+        if (!wasLogged) {
+          const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
+          const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
+          const secs = parseRestTime(restStr)
+          if (!isRestAutoTimerEnabled()) {
+            timers.cancelRest()
+          } else if (secs > 0) {
+            timers.startRest(secs, { autoStart: true, label: ex?.name, warmup: useWarmup })
+          } else {
+            timers.cancelRest()
+          }
+        }
+      }
+      maybeStartRest()
+
       const { error } = await logSet(
         payload,
         sub ? { substitution: { exerciseId: sub.exerciseId, name: sub.name, reason: sub.reason } } : undefined,
       )
       const setKey = `${payload.blockId}:${payload.setNumber}`
       if (error) {
-        failedPayloads.current[setKey] = payload
+        // El rechazo del editor de día pasado es PERMANENTE: no se guarda el payload para reintento (no
+        // hay fila que corregir en esa fecha y el solo-UPDATE nunca la crea). La fila de error lo pinta
+        // sin botones; cualquier otro error sí conserva el payload para el Reintentar.
+        if (error !== PAST_SET_NOT_FOUND_ERROR) failedPayloads.current[setKey] = payload
         setSyncErrors((m) => ({ ...m, [setKey]: error }))
       } else {
         delete failedPayloads.current[setKey]
@@ -624,72 +756,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         })
       }
       signalCommitted(payload.blockId, payload.setNumber, isPrLive && !error)
-
-      // Superserie: descanso SOLO al cerrar la ronda (paridad ExecutorV2/web).
-      const members = supersetMembersByBlock.get(payload.blockId)
-      if (members && members.length >= 2) {
-        const roundBlocks = members.map((m) => ({ id: m.id, sets: m.sets }))
-        const round = payload.setNumber
-        const roundClosed = isRoundComplete(roundBlocks, round, projected)
-        if (!wasLogged) {
-          if (!isRestAutoTimerEnabled()) {
-            timers.cancelRest()
-          } else if (roundClosed) {
-            const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
-            const label = resolveExercise(members[0])?.name
-            if (groupRest > 0) {
-              // Contexto de "ronda cerrada" (E3.5): el interstitial muestra banner + dots + siguiente
-              // ronda. Se deriva del engine (round = la ronda recién cerrada; total = maxSets del grupo).
-              const totalRounds = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
-              const nextRound = round + 1
-              let next: RestRoundContext['next'] = null
-              if (nextRound <= totalRounds) {
-                const firstMember = members.find((m) => m.sets >= nextRound)
-                if (firstMember) {
-                  const prescribed = resolveExercise(firstMember)
-                  const sub = getSubstitution(firstMember)
-                  const nm = sub?.name ?? prescribed?.name ?? 'Ejercicio'
-                  const eff = effByBlock.get(firstMember.id) ?? null
-                  const w = eff?.weightKg ?? firstMember.target_weight_kg
-                  const prescription = `${firstMember.sets} × ${firstMember.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
-                  const idx = members.findIndex((m) => m.id === firstMember.id)
-                  const exercise: SessionExercise | null = prescribed
-                    ? (sub
-                        ? { ...prescribed, id: sub.exerciseId ?? prescribed.id, name: sub.name, gif_url: sub.gif_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions }
-                        : prescribed)
-                    : null
-                  next = { name: nm, prescription, exercise, tag: `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextRound}` }
-                }
-              }
-              restRoundContextRef.current = { roundNumber: round, totalRounds, next }
-              timers.startRest(groupRest, { autoStart: true, label })
-            }
-          } else {
-            timers.cancelRest()
-          }
-        }
-        // El aviso "Sigue sin detenerte" entre miembros de la ronda lo pinta la barra deslizante de
-        // SupersetScreenV3 (QA3); ya no se usa un toast "Sin descanso — sigue con {label}" (decisión CEO).
-        return
-      }
-
-      // Bloque suelto.
-      const ex = block ? resolveExercise(block) : null
-      // QA4: en V3 se ELIMINA la snackbar "Serie registrada" (el alumno corrige después con el lápiz o
-      // desde la tarjeta ya hecha, "Deshacer" de cada card). V2 la conserva (ExecutorV2.tsx). El resto del
-      // flujo (descanso/scroll) NO cambia.
-      if (!wasLogged) {
-        const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
-        const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
-        const secs = parseRestTime(restStr)
-        if (!isRestAutoTimerEnabled()) {
-          timers.cancelRest()
-        } else if (secs > 0) {
-          timers.startRest(secs, { autoStart: true, label: ex?.name, warmup: useWarmup })
-        } else {
-          timers.cancelRest()
-        }
-      }
     },
     [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes],
   )
@@ -731,6 +797,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
 
   const finalizeSession = useCallback(async () => {
     setFinishedElapsed(elapsedSec)
+    // Ventana de la sesión para el import del reloj: el cronómetro del motor ya cuenta desde el
+    // `startedAt` REAL (snapshot incluido), así que el inicio se deriva de él en vez de inventar una hora.
+    const endMs = Date.now()
+    setSessionWindow({ startMs: endMs - Math.max(0, elapsedSec) * 1000, endMs })
     await finishSession()
     // Épica de FIN DE SESIÓN (E4.1): emite el evento por el host (hoy = haptic épico; el overlay final
     // de coreografía llega en Wave 2/E4.3). El hook ya deja el evento cableado para esa pantalla.
@@ -870,6 +940,121 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   )
   const checkInLastRelative = checkInReminder?.lastDay ? formatRelativeDate(checkInReminder.lastDay, todayIso) : null
 
+  // ── Import del reloj (specs/cardio-conectado · F2) ──
+  // La card del resumen SOLO existe si: (a) esta build tiene agregador de salud (guard dinámico, false en
+  // Expo Go/web), (b) la sesión registró series de cardio y (c) a esas series les falta algún eje que el
+  // reloj podría completar. Sin candidatos no se pinta nada — jamás un botón muerto.
+  const healthAvailable = useMemo(() => isHealthAvailable(), [])
+  const watchImportTargets = useMemo<WatchImportTarget[]>(() => {
+    if (!healthAvailable) return []
+    const out: WatchImportTarget[] = []
+    for (const b of blocks) {
+      const ex = resolveExercise(b)
+      if (!ex || effectiveExerciseType(b, ex) !== 'cardio') continue
+      // La distancia solo cuenta como "eje vacío" si la modalidad la captura (la elíptica no la pide).
+      const wantsDistance = cardioHasDistanceAxis(ex.cardio_modality ?? null)
+      const pending = sessionLogs
+        .filter((l) => l.block_id === b.id)
+        .sort((a, z) => a.set_number - z.set_number)
+        .find(
+          (l) =>
+            !(l.actual_duration_sec != null && l.actual_duration_sec > 0) ||
+            !(l.actual_avg_hr != null && l.actual_avg_hr > 0) ||
+            (wantsDistance && !(l.actual_distance_m != null && l.actual_distance_m > 0)),
+        )
+      if (!pending) continue
+      out.push({
+        blockId: b.id,
+        setNumber: pending.set_number,
+        name: ex.name,
+        detail: b.sets > 1 ? `Serie ${pending.set_number} de ${b.sets}` : null,
+        hrZone: b.hr_zone != null && b.hr_zone >= 1 && b.hr_zone <= 5 ? (b.hr_zone as HrZone) : null,
+      })
+    }
+    return out
+  }, [healthAvailable, blocks, sessionLogs])
+
+  /**
+   * Aplica el workout del reloj a UNA serie de cardio. Reglas duras del SPEC, todas resueltas por el
+   * dominio puro: `hubImportPatch` solo devuelve ejes VACÍOS (jamás pisa lo tipeado) y el `metadata.hr`
+   * del stream BLE en vivo tiene precedencia (no se reemplaza con el del hub). La escritura va por el
+   * pipeline existente (`logSet`: optimista + select-then-update + cola offline) — sin acceso nuevo.
+   */
+  const applyWatchImport = useCallback(
+    async (workout: HubWorkout, target: WatchImportTarget) => {
+      const block = blocks.find((b) => b.id === target.blockId)
+      const log = sessionLogs.find((l) => l.block_id === target.blockId && l.set_number === target.setNumber)
+      if (!block || !log) {
+        setWatchImportOpen(false)
+        return
+      }
+      const ex = resolveExercise(block)
+      const patch = hubImportPatch(workout, {
+        actual_duration_sec: log.actual_duration_sec ?? null,
+        actual_distance_m: log.actual_distance_m ?? null,
+        actual_avg_hr: log.actual_avg_hr ?? null,
+      })
+      // Modalidad sin eje de distancia: el hub puede traer metros, pero esa serie NO los captura.
+      if (!cardioHasDistanceAxis(ex?.cardio_modality ?? null)) delete patch.actual_distance_m
+
+      const existingHr = log.metadata?.hr ?? null
+      const targetZone: HrZone | null =
+        block.hr_zone != null && block.hr_zone >= 1 && block.hr_zone <= 5 ? (block.hr_zone as HrZone) : null
+      const zoneSec = hubZoneSec(workout.hrSamples, hrProfile)
+      const series = downsampleSeries(workout.hrSamples ?? [])
+      const hasSeries = series.samples.length > 0
+      const hr: HrMetadataV1 | null =
+        existingHr?.source === 'ble'
+          ? null
+          : {
+              v: 1,
+              source: 'health_import',
+              avg: workout.avgHr != null && workout.avgHr > 0 ? Math.round(workout.avgHr) : 0,
+              max: workout.maxHr != null && workout.maxHr > 0 ? Math.round(workout.maxHr) : 0,
+              duration_sec: Math.round(workout.durationSec),
+              target_zone: targetZone,
+              zone_sec: zoneSec,
+              in_target_sec: zoneSec != null && targetZone != null ? zoneSec[String(targetZone) as keyof typeof zoneSec] : null,
+              sample_period_sec: hasSeries ? series.samplePeriodSec : null,
+              samples: hasSeries ? series.samples : null,
+              ...(workout.source ? { hub_source: workout.source } : {}),
+              ...(workout.distanceM != null && workout.distanceM > 0 ? { distance_m: Math.round(workout.distanceM) } : {}),
+              ...(workout.calories != null && workout.calories > 0 ? { calories: Math.round(workout.calories) } : {}),
+            }
+      const hasPatch =
+        patch.actual_duration_sec != null || patch.actual_distance_m != null || patch.actual_avg_hr != null
+      if (!hasPatch && hr == null) {
+        setWatchImportOpen(false)
+        return
+      }
+
+      // El payload REPITE los ejes ya guardados: `logSet` escribe peso/reps/RPE/RIR siempre y el log
+      // optimista se reconstruye entero, así que mandar solo el parche borraría el resto de la pantalla.
+      const durationSec = patch.actual_duration_sec ?? log.actual_duration_sec ?? null
+      const distanceM = patch.actual_distance_m ?? log.actual_distance_m ?? null
+      const pace = derivedPaceSecPerKm(durationSec, distanceM)
+      const metadata = hr ? { ...(log.metadata ?? {}), hr } : log.metadata ?? null
+      await logSet({
+        blockId: target.blockId,
+        setNumber: target.setNumber,
+        weightKg: log.weight_kg ?? null,
+        repsDone: log.reps_done ?? null,
+        rpe: log.rpe ?? null,
+        rir: log.rir ?? null,
+        note: log.note ?? null,
+        actualDurationSec: durationSec,
+        actualDistanceM: distanceM,
+        actualHoldSec: log.actual_hold_sec ?? null,
+        actualAvgHr: patch.actual_avg_hr ?? log.actual_avg_hr ?? null,
+        ...(pace != null ? { actualPaceSecPerKm: pace } : {}),
+        ...(metadata != null ? { metadata } : {}),
+      })
+      void haptics.success()
+      setWatchImportOpen(false)
+    },
+    [blocks, sessionLogs, hrProfile, logSet],
+  )
+
   // ── Racha semanal (E4.4) ── Lectura acotada a la semana (best-effort, gateada por clientId) que espeja
   // la atribucion del dashboard (home.tsx momentumDays). FUENTE: `workout_plans` del alumno (dias con plan
   // via day_of_week/assigned_date) + `workout_logs` de esta semana (fechas reales, huso Santiago). El motor
@@ -983,6 +1168,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       return { name: ex?.name ?? 'Ejercicio', typeLabel: EXERCISE_TYPE_META[t].label, typeColor: exerciseTypeColor(t, exec.accent) }
     })
     const moreCount = Math.max(0, blocks.length - START_PREVIEW_COUNT)
+    // Media del PRIMER ejercicio: se precarga durante el splash/Inicio (ver efecto de prefetch) para que
+    // el gif no aterrice tarde al entrar al primer paso. Sólo el gif (es lo que pinta `ExecMediaV3`).
+    const firstMediaUrl = blocks.length > 0 ? resolveExercise(blocks[0])?.gif_url ?? null : null
 
     // "La ultima vez": volumen = Σ(peso × reps) del historial previo (previousHistory ya viene acotado
     // a los ejercicios del plan y al dia mas reciente por ejercicio). fmtVolume ⇒ null si 0.
@@ -991,8 +1179,21 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       for (const ps of list) lastVolKg += (ps.weight_kg ?? 0) * (ps.reps_done ?? 0)
     }
 
-    return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, estimatedMin: minutes, lastVolumeLabel: fmtVolume(lastVolKg) }
+    return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, estimatedMin: minutes, lastVolumeLabel: fmtVolume(lastVolKg), firstMediaUrl }
   }, [planTitle, programName, programStructure, dayOfWeek, currentWeek, phaseName, activeWeekVariant, blocks, previousHistory, exec.accent])
+
+  // Precarga del gif del PRIMER ejercicio mientras el alumno mira el splash / el Inicio (QA device: el gif
+  // llegaba tarde al entrar al primer paso). Best-effort: si falla, el paso lo carga como siempre. Se
+  // dispara UNA vez por URL (`prefetchedMediaRef`) y jamás durante la sesión (ahí ya no aporta).
+  const prefetchedMediaRef = useRef<string | null>(null)
+  useEffect(() => {
+    const url = startData.firstMediaUrl
+    if (!url || phase === 'session') return
+    if (prefetchedMediaRef.current === url) return
+    prefetchedMediaRef.current = url
+    // `memory-disk` = misma politica que pinta `ExecMediaV3`, si no el prefetch no le sirve al paso.
+    void Image.prefetch(url, 'memory-disk').catch(() => {})
+  }, [startData.firstMediaUrl, phase])
 
   // ── Contexto de la pantalla Final V3 (E4.3) — titulo celebratorio corto + subtitulo de contexto. ──
   const finalContext = useMemo(() => {
@@ -1029,7 +1230,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             showEffort={execSettings.showRpeRir}
             getMemberSub={(b): SupersetMemberSub | null => {
               const sub = getSubstitution(b)
-              return sub ? { exerciseId: sub.exerciseId, name: sub.name, prescribedName: sub.prescribedName, gif_url: sub.gif_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions } : null
+              return sub ? { exerciseId: sub.exerciseId, name: sub.name, prescribedName: sub.prescribedName, gif_url: sub.gif_url, thumbnail_url: sub.thumbnail_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions } : null
             }}
             onOpenTechnique={(ex) => setTechniqueExercise(ex)}
             onOpenSet={openSet}
@@ -1059,6 +1260,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             video_start_time: sub.video_start_time,
             video_end_time: sub.video_end_time,
             gif_url: sub.gif_url,
+            thumbnail_url: sub.thumbnail_url,
             instructions: sub.instructions,
           }
         : prescribed
@@ -1418,6 +1620,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           coachInitial={coachInitial}
           coachLogoUrl={coachLogoUrl}
           dayTitle={startData.dayTitle}
+          ready={!loading}
           reducedMotion={motion.reduced}
           onDone={() => setPhase('start')}
         />
@@ -1428,24 +1631,30 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   // ── Fase Inicio (E2.2): contexto + CTA EMPEZAR. "Saltar al ejercicio" si ya hay series hoy. ──
   if (phase === 'start') {
     return (
-      <SessionStart
-        exec={exec}
-        eyebrow={startData.eyebrow}
-        dayTitle={startData.dayTitle}
-        chips={startData.chips}
-        summaryLine={startData.summaryLine}
-        exercises={startData.preview}
-        moreCount={startData.moreCount}
-        lastVolumeLabel={startData.lastVolumeLabel}
-        estimatedMin={startData.estimatedMin}
-        coachNote={null}
-        coachName={coachName}
-        hasPartialSession={sessionLogs.length > 0}
-        weeklyStreak={weeklyStreak}
-        reducedMotion={motion.reduced}
-        onStart={() => setPhase('session')}
-        onSkipToExercise={() => setPhase('session')}
-      />
+      <MotiView
+        style={{ flex: 1, backgroundColor: exec.surface.appBgDeep }}
+        animate={{ opacity: startExiting ? 0 : 1 }}
+        transition={{ type: 'timing', duration: motion.reduced ? 0 : PHASE_FADE_MS }}
+      >
+        <SessionStart
+          exec={exec}
+          eyebrow={startData.eyebrow}
+          dayTitle={startData.dayTitle}
+          chips={startData.chips}
+          summaryLine={startData.summaryLine}
+          exercises={startData.preview}
+          moreCount={startData.moreCount}
+          lastVolumeLabel={startData.lastVolumeLabel}
+          estimatedMin={startData.estimatedMin}
+          coachNote={null}
+          coachName={coachName}
+          hasPartialSession={sessionLogs.length > 0}
+          weeklyStreak={weeklyStreak}
+          reducedMotion={motion.reduced}
+          onStart={handleStartSession}
+          onSkipToExercise={handleStartSession}
+        />
+      </MotiView>
     )
   }
 
@@ -1657,6 +1866,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
               reason: SUBSTITUTION_REASON,
               prescribedName: resolveExercise(substituteBlock)?.name ?? 'Ejercicio',
               gif_url: opt.gif_url,
+              thumbnail_url: opt.thumbnail_url ?? null,
               video_url: opt.video_url,
               video_start_time: opt.video_start_time,
               video_end_time: opt.video_end_time,
@@ -1683,10 +1893,44 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         weeklyStreak={weeklyStreak}
         checkInReminder={checkInReminder}
         checkInLastRelative={checkInLastRelative}
+        // Import del reloj (cardio-conectado F2): la card solo aparece con agregador disponible, cardio
+        // en la sesión y ejes vacíos. La hoja viaja como slot para vivir DENTRO del Modal del resumen.
+        onImportFromWatch={
+          sessionWindow != null && watchImportTargets.length > 0 ? () => setWatchImportOpen(true) : null
+        }
+        watchImportSlot={
+          sessionWindow != null && watchImportTargets.length > 0 ? (
+            <ImportWatchSheet
+              open={watchImportOpen}
+              onClose={() => setWatchImportOpen(false)}
+              exec={exec}
+              reducedMotion={!!motion.reduced}
+              sessionStartMs={sessionWindow.startMs}
+              sessionEndMs={sessionWindow.endMs}
+              targets={watchImportTargets}
+              hrProfile={hrProfile}
+              onApply={applyWatchImport}
+            />
+          ) : null
+        }
         syncState={syncState}
         onCheckIn={() => router.replace('/alumno/check-in')}
         onDone={() => router.replace('/alumno/home')}
       />
+
+      {/* Mitad de entrada del crossfade EMPEZAR → sesión: un velo del fondo del ejecutor que arranca opaco
+          y se desvanece al montar la fase de sesión (el Inicio se desvanece a la par, ver `startExiting`).
+          Se anima UN solo View barato en vez de la opacidad del árbol entero; `pointerEvents="none"` para
+          que jamás intercepte un tap. reduced-motion ⇒ ni se monta (swap directo). */}
+      {!motion.reduced ? (
+        <MotiView
+          pointerEvents="none"
+          from={{ opacity: 1 }}
+          animate={{ opacity: 0 }}
+          transition={{ type: 'timing', duration: PHASE_FADE_MS }}
+          style={{ ...StyleSheet.absoluteFillObject, backgroundColor: exec.surface.appBg }}
+        />
+      ) : null}
     </SafeAreaView>
   )
 }

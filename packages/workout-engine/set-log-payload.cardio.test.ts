@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { HrMetadataV1 } from '@eva/cardio'
 import { buildTypedPayload, typedLogValues, derivedPaceSecPerKm } from './set-log-payload'
 
 /**
@@ -171,5 +172,118 @@ describe('buildTypedPayload — cardio con unidad prescrita y pace derivado', ()
     expect(
       buildTypedPayload('roller', { actual_duration_sec: '50', reps_done: '4' }, 'b4', 1, { distanceUnit: 'km' }),
     ).toMatchObject({ actualDurationSec: 50, repsDone: 4, actualDistanceM: null })
+  })
+})
+
+// ── FC del bloque (specs/cardio-conectado): `metadata.hr` ────────────────────────────────────────
+/**
+ * El ctx opcional `hrMetadata` es el ÚNICO camino por el que el resumen/curva de FC llega al log.
+ * Contrato: sin la key el payload queda byte-idéntico al previo (los asserts de arriba son la prueba);
+ * con ella, y solo en cardio, el payload gana `metadata.hr` sin tocar ningún eje.
+ */
+const HR_BLE: HrMetadataV1 = {
+  v: 1,
+  source: 'ble',
+  avg: 139,
+  max: 165,
+  duration_sec: 1500,
+  target_zone: 2,
+  zone_sec: { '1': 60, '2': 1200, '3': 180, '4': 60, '5': 0 },
+  in_target_sec: 1200,
+  sample_period_sec: 5,
+  samples: [
+    [0, 120],
+    [5, 132],
+    [10, 141],
+  ],
+}
+
+describe('buildTypedPayload — metadata.hr del bloque cardio', () => {
+  it('sin la key el payload NO gana `metadata` (byte-idéntico al previo)', () => {
+    const sinCtx = buildTypedPayload('cardio', { cardio_min: '25' }, 'b1', 1)
+    const ctxVacio = buildTypedPayload('cardio', { cardio_min: '25' }, 'b1', 1, { distanceUnit: 'km' })
+    expect(sinCtx).not.toHaveProperty('metadata')
+    expect(ctxVacio).not.toHaveProperty('metadata')
+    // `hrMetadata: null` explícito (bloque cerrado SIN stream) tampoco escribe la key.
+    expect(
+      buildTypedPayload('cardio', { cardio_min: '25' }, 'b1', 1, { hrMetadata: null }),
+    ).not.toHaveProperty('metadata')
+    expect(buildTypedPayload('cardio', { cardio_min: '25' }, 'b1', 1, { hrMetadata: null })).toEqual(sinCtx)
+  })
+
+  it('cardio con hrMetadata: el resumen viaja bajo `metadata.hr`, los ejes quedan intactos', () => {
+    const payload = buildTypedPayload(
+      'cardio',
+      { cardio_min: '25', actual_distance_m: '5', actual_avg_hr: '139' },
+      'b1',
+      1,
+      { distanceUnit: 'km', hrMetadata: HR_BLE },
+    )
+    expect(payload).toEqual({
+      blockId: 'b1',
+      setNumber: 1,
+      weightKg: null,
+      repsDone: null,
+      rpe: null,
+      rir: null,
+      actualDurationSec: 1500,
+      actualDistanceM: 5000,
+      actualHoldSec: null,
+      actualAvgHr: 139,
+      actualPaceSecPerKm: 300,
+      metadata: { hr: HR_BLE },
+    })
+  })
+
+  it('el resumen viaja verbatim: no se recorta la serie ni se muta el objeto recibido', () => {
+    const snapshot = JSON.parse(JSON.stringify(HR_BLE))
+    const payload = buildTypedPayload('cardio', { cardio_min: '25' }, 'b1', 1, { hrMetadata: HR_BLE })
+    expect(payload.metadata?.hr).toEqual(HR_BLE)
+    expect(HR_BLE).toEqual(snapshot)
+  })
+
+  it('el import del reloj usa el mismo camino con source health_import', () => {
+    const hrImport: HrMetadataV1 = {
+      v: 1,
+      source: 'health_import',
+      avg: 142,
+      max: 171,
+      duration_sec: 1800,
+      target_zone: null,
+      zone_sec: null,
+      in_target_sec: null,
+      sample_period_sec: null,
+      samples: null,
+      hub_source: 'Apple Watch',
+      distance_m: 5234,
+      calories: 320,
+    }
+    const payload = buildTypedPayload('cardio', { cardio_min: '30' }, 'b9', 2, { hrMetadata: hrImport })
+    expect(payload.metadata).toEqual({ hr: hrImport })
+  })
+
+  it('movilidad y roller ignoran `hrMetadata` (no tienen stream ni import)', () => {
+    expect(
+      buildTypedPayload('mobility', { actual_hold_sec: '40' }, 'b3', 1, { hrMetadata: HR_BLE }),
+    ).not.toHaveProperty('metadata')
+    expect(
+      buildTypedPayload('roller', { actual_duration_sec: '50', reps_done: '4' }, 'b4', 1, { hrMetadata: HR_BLE }),
+    ).not.toHaveProperty('metadata')
+  })
+
+  it('movilidad per_side conserva su metadata {left_sec, right_sec} sin contaminarse con FC', () => {
+    const payload = buildTypedPayload(
+      'mobility',
+      { hold_left_sec: '30', hold_right_sec: '25' },
+      'b3',
+      1,
+      { sideMode: 'per_side', hrMetadata: HR_BLE },
+    )
+    expect(payload.metadata).toEqual({ left_sec: 30, right_sec: 25 })
+    expect(payload.actualHoldSec).toBe(55)
+  })
+
+  it('el 3er argumento histórico (`sideMode` suelto) sigue sin metadata de FC', () => {
+    expect(buildTypedPayload('cardio', { cardio_min: '25' }, 'b1', 1, 'per_side')).not.toHaveProperty('metadata')
   })
 })

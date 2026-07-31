@@ -10,7 +10,7 @@ import { Badge } from '../../Badge'
 import { Card } from '../../Card'
 import { Sheet } from '../../Sheet'
 import { ProgramPhaseBar } from './ProgramPhaseBar'
-import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
+import { measureMorphOriginSafe, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
 import { DAY_FULL, DAY_SHORT } from './types'
 import type { PendingDay, PlanDayView, Program } from './types'
 
@@ -20,13 +20,15 @@ function fmtSheetDate(ymd: string): string {
 }
 
 // Rampas DS FIJAS (nunca white-label) resueltas por esquema para props de color
-// de iconos lucide (className no las expresa). Valores verbatim de TOKENS.md:
-// ember-700 (light globals.css/LIGHT_SCHEME_VARS #C23E14, dark #FFB79E) y ink-300
-// (light #A8B1BD, dark #414C5A). `text-on-ember` = ink-950 #0B0E13, constante en
-// ambos modos (icono casi negro sobre el fondo ember-500).
-const EMBER_700_ICON = { light: '#C23E14', dark: '#FFB79E' } as const
+// de iconos lucide (className no las expresa). Valores verbatim de `global.css`:
+// warning-700 (light #8F5A05, dark #FFD489) y ink-300 (light #A8B1BD, dark #414C5A).
+// El icono sobre warning-500 (#F5A524) usa ink-950 #0B0E13 (`text-on-warning`),
+// constante en ambos modos.
+// QA3: el bloque "día pendiente" pasó de la rampa `ember` a `warning` — el rojo-naranja
+// se leía como error y no como el aviso ámbar informativo que es.
+const WARNING_700_ICON = { light: '#8F5A05', dark: '#FFD489' } as const
 const INK_300 = { light: '#A8B1BD', dark: '#414C5A' } as const
-const ON_EMBER = '#0B0E13'
+const ON_WARNING = '#0B0E13'
 
 // className→color del glyph Calendar: el header web lo pinta `text-sport-500`
 // (ActiveProgramSection.tsx:90, rampa de marca verbatim SIN contrast-clamp) — con
@@ -50,6 +52,7 @@ export function ActiveProgramSection({
   weekVariant = null,
   onStart,
   onRecover,
+  onReview,
 }: {
   program: Program | null
   currentWeek: number
@@ -69,10 +72,16 @@ export function ActiveProgramSection({
   /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). `origin` = rect del
    *  trigger (banner o day-card) para que el Despegue nazca de él, igual que el CTA y las day-cards. */
   onRecover: (planId: string, dateIso: string, origin?: MorphOrigin | null, label?: string) => void
+  /** "Revisar y editar" del sheet: abre los registros de esa sesión. `sessionDate` = fecha REAL del log
+   *  (`doneOnDate ?? dateIso`) y `isTodayCell` = la celda tocada es la de hoy; el caller traduce eso a
+   *  los params del ejecutor con `buildWorkoutDoneEditParams` (día pasado ⇒ `?fecha=` solo-UPDATE).
+   *  Sin esta prop el sheet no ofrece la opción. */
+  onReview?: (planId: string, sessionDate: string, isTodayCell: boolean) => void
 }) {
   const { theme, resolvedScheme } = useTheme()
-  // Sheet doble intencion (E1.7): el day-card de un dia YA HECHO de OTRO dia lo abre; hoy/pendiente/
-  // futuro navegan directo. Guarda la vista tocada para pintar dia/fecha del subtitulo.
+  // Sheet doble intencion (E1.7): lo abre el day-card de un dia YA HECHO (hoy incluido, paridad web) y
+  // el de un dia a medias de OTRO dia; hoy-a-medias/pendiente/futuro navegan directo. Guarda la vista
+  // tocada para pintar dia/fecha del subtitulo.
   const [sheetView, setSheetView] = useState<PlanDayView | null>(null)
   // Banner de pendientes: dispara el MISMO Despegue que el CTA/day-cards. Mide su rect y se oculta
   // durante el morph (el clon lo reemplaza).
@@ -80,16 +89,21 @@ export function ActiveProgramSection({
   const { hidden: bannerHidden, hide: hideBanner } = useTriggerMorphHide()
 
   // Enrutado por estado del day-card:
-  //  · done && !isToday        → sheet "Ya hiciste este entrenamiento" (revisar/repetir).
+  //  · done (HOY incluido)     → sheet "Ya hiciste este entrenamiento" (revisar/repetir). Paridad web
+  //    QA7 (`WorkoutPlanCard.tsx:153`, `opensSheet = done || (inProgress && !isToday)`): antes el día
+  //    hecho HOY entraba directo al ejecutor saltándose la ventanita, y el hero de esta misma pantalla
+  //    sí la abría → dos comportamientos para el mismo hecho. En ese caso el sheet sale sin "Repetir
+  //    hoy" (`showRepeat` false, la sesión ya es de hoy) y "Revisar y editar" navega con
+  //    `{ desde: 'hecho' }` (flujo normal de hoy, jamás `?fecha=<hoy>` — guard del incidente 2026-07-26).
   //  · in_progress && !isToday → MISMO sheet con copy "Entrenamiento incompleto" (spec
   //    `workout-day-in-progress`): la sesión de ese día quedó a medias y el camino sigue siendo el de
   //    siempre (editar esa fecha / repetir hoy), solo cambia lo que se le dice al alumno.
   //  · in_progress && isToday  → Despegue directo (continuar la sesión de hoy, NUNCA el sheet: ése era
   //    el trap del incidente P0 — "Ya hiciste este entrenamiento" a mitad de entreno).
   //  · pending                 → recuperar (param `recuperar`, banner ambar, se entrena hoy) — vía Despegue.
-  //  · resto (today/upcoming/done-hoy) → Despegue directo.
+  //  · resto (today/upcoming) → Despegue directo.
   function handleDayPress(view: PlanDayView, origin: MorphOrigin | null) {
-    if ((view.status === 'done' || view.status === 'in_progress') && !view.isToday) { setSheetView(view); return }
+    if (view.status === 'done' || (view.status === 'in_progress' && !view.isToday)) { setSheetView(view); return }
     // Las day-cards son angostas (96px) → el overlay NO pinta la etiqueta (solo rects anchos); se pasa el
     // título del plan por si la medición cae al origen sintético (ancho), donde sí se veria.
     if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso, origin, view.plan.title); return }
@@ -142,33 +156,37 @@ export function ActiveProgramSection({
       {oldestPending ? (
         // Wrapper medible + ocultable: el banner de pendientes dispara el MISMO Despegue que el CTA/cards
         // (mide su rect, se oculta durante el vuelo del clon).
+        // `dark:bg-warning-100/[0.16]`: en dark `--color-warning-100` ES warning-500 sólido (pensado
+        // para usarse con alpha, ver Badge.tsx) — sin el alpha el bloque quedaría naranja pleno.
         <View ref={bannerRef} collapsable={false} style={{ opacity: bannerHidden ? 0 : 1 }}>
           <TouchableOpacity
             testID="program-pending-cta"
             onPress={() => {
               hideBanner()
               // El banner es ancho → la píldora del Despegue SÍ muestra la etiqueta: texto de recuperación.
-              measureMorphOrigin(bannerRef.current, theme.radius.control, (origin) =>
+              // `…Safe` = la navegación NO cuelga de que la medición nativa conteste (QA5 · MIUI): si no
+              // contesta en 120ms se recupera igual con origen sintético.
+              measureMorphOriginSafe(bannerRef.current, theme.radius.control, (origin) =>
                 onRecover(oldestPending.planId, oldestPending.dateIso, origin, 'Recuperar entrenamiento'),
               )
             }}
             activeOpacity={0.82}
             accessibilityRole="button"
-            className="rounded-control border border-ember-200 bg-ember-100"
+            className="rounded-control border border-warning-500/25 bg-warning-100 dark:bg-warning-100/[0.16]"
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
           >
-            <View className="bg-ember-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
-              <RotateCcw size={18} color={ON_EMBER} strokeWidth={2.25} />
+            <View className="bg-warning-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
+              <RotateCcw size={18} color={ON_WARNING} strokeWidth={2.25} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-ember-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
+              <Text className="text-warning-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
                 {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
               </Text>
-              <Text className="text-ember-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
+              <Text className="text-warning-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
                 Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
               </Text>
             </View>
-            <ArrowRight size={16} color={EMBER_700_ICON[resolvedScheme]} />
+            <ArrowRight size={16} color={WARNING_700_ICON[resolvedScheme]} />
           </TouchableOpacity>
         </View>
       ) : null}
@@ -186,6 +204,9 @@ export function ActiveProgramSection({
       // `repeatDate` = fecha REAL de la sesión de ese día (la del log si fue recuperado): viaja como
       // param `repetir` para precargar cada serie con lo que se registró esa vez.
       onRepeat={(id, repeatDate) => { setSheetView(null); onStart(id, null, 'Repetir hoy', repeatDate ?? undefined) }}
+      // Revisar: los días que abren este sheet son SIEMPRE de otra fecha (hoy navega directo), así que
+      // acá `isTodayCell` es false y el caller manda `?fecha=` → editor de día pasado (solo-UPDATE).
+      onReview={onReview ? (id, sessionDate, isTodayCell) => { setSheetView(null); onReview(id, sessionDate, isTodayCell) } : undefined}
     />
     </>
   )
@@ -197,14 +218,15 @@ export function ActiveProgramSection({
  * nueva sesión de hoy PRECARGADA con lo registrado esa vez; Cancelar. Theme-aware (nivel dashboard,
  * claro/oscuro + safe areas vía Sheet).
  *
- * DECISIÓN RN (justificada): "Revisar y editar" queda DESHABILITADA con sublabel "Disponible pronto"
- * para días PASADOS. El guardado del ejecutor RN escribe SIEMPRE el log de HOY (habla PostgREST
- * directo); el solo-UPDATE por `target_date` que edita la fecha pasada es un server action WEB (E1.5),
- * aún no portado a RN. Si lo habilitáramos, el banner diría "editando el martes" pero cada serie crearía
- * un log NUEVO de hoy → duplicaría en vez de corregir, violando el invariante "editar jamás duplica".
- * Excepción: cuando el día hecho es HOY (`view.isToday`, único caller = el hero de la home) revisar ES
- * el flujo normal de hoy — abrir el ejecutor sin params corrige la MISMA fila — así que ahí sí se
- * habilita, vía `onReview` (espejo del `?desde=hecho` de la web, WorkoutHeroCard.tsx:165-166).
+ * "Revisar y editar" ya es accionable TAMBIÉN para días pasados (editor de día pasado RN): el motor
+ * (`useWorkoutSession(..., editDate)`) conmuta a SOLO-UPDATE sobre la ventana de esa fecha y corrige la
+ * fila existente sin insertar jamás una nueva — el invariante "editar jamás duplica" lo garantiza el
+ * motor, no la ausencia del botón. Antes quedaba deshabilitada con "Disponible pronto" porque el
+ * guardado RN escribía SIEMPRE el log de HOY (el solo-UPDATE existía sólo como server action web, E1.5)
+ * y habilitarla habría duplicado series en vez de corregirlas. `onReview` recibe la FECHA REAL de la
+ * sesión + si la celda es la de hoy, y el caller decide el param (`?fecha=` pasado vs `?desde=hecho`
+ * hoy) con `buildWorkoutDoneEditParams` — espejo del `buildWorkoutDoneEditHref` de la web. Sin `onReview`
+ * la opción no se pinta (nada que ofrecer si el caller no sabe navegar).
  *
  * "Repetir hoy" NO se ofrece cuando la sesión hecha es de HOY (decisión CEO): el índice único de la DB
  * es por día, así que repetir hoy sobre hoy pisaría la misma fila. Cuenta la FECHA REAL del log
@@ -216,10 +238,12 @@ export function ActiveProgramSection({
  * dejar un CTA muerto).
  *
  * DÍA PASADO A MEDIAS (spec `workout-day-in-progress`): el mismo sheet, con el título "Entrenamiento
- * incompleto" y un subtítulo honesto. Las acciones NO cambian (misma semántica: editar esa fecha —hoy
- * deshabilitada en RN— o repetir hoy); lo que se corrige es la mentira de decirle "ya hiciste este
- * entrenamiento" a alguien que dejó series sin registrar. El día de HOY a medias jamás llega acá: su
- * day-card navega directo al ejecutor a continuar.
+ * incompleto" y un subtítulo honesto. Las acciones NO cambian (misma semántica: editar esa fecha o
+ * repetir hoy); lo que se corrige es la mentira de decirle "ya hiciste este entrenamiento" a alguien que
+ * dejó series sin registrar. El día de HOY a medias jamás llega acá: su day-card navega directo al
+ * ejecutor a continuar. OJO: en un día a medias las series que NO se registraron no existen como fila,
+ * así que el modo solo-UPDATE las rechaza (copy honesto en la fila de la serie) — corregir lo registrado
+ * sí funciona; completarlo se hace con "Repetir hoy".
  */
 export function DoubleIntentSheet({
   view,
@@ -231,9 +255,13 @@ export function DoubleIntentSheet({
   onClose: () => void
   /** `repeatDate` = fecha real de la sesión que se repite (param `repetir` del ejecutor). */
   onRepeat: (planId: string, repeatDate: string | null) => void
-  /** Solo se usa cuando el día hecho es HOY: abre el ejecutor de hoy (revisar/corregir). Sin esta prop
-   *  la opción queda deshabilitada, como en los días pasados. */
-  onReview?: (planId: string) => void
+  /**
+   * Abre los registros de la sesión para corregirlos. `sessionDate` = fecha REAL de la sesión
+   * (`doneOnDate ?? dateIso`); `isTodayCell` = la celda tocada es la de hoy. El caller traduce eso a los
+   * params del ejecutor (`buildWorkoutDoneEditParams`): día pasado ⇒ `?fecha=` (solo-UPDATE), hoy ⇒
+   * flujo normal. Sin esta prop la opción no se ofrece.
+   */
+  onReview?: (planId: string, sessionDate: string, isTodayCell: boolean) => void
 }) {
   const { theme } = useTheme()
   const dow = view?.plan.day_of_week ?? 1
@@ -246,8 +274,12 @@ export function DoubleIntentSheet({
   // banner, pisando la fila de hoy serie por serie. Espejo exacto del `showRepeat` de la web
   // (WorkoutPlanCard.tsx:183: `(doneOnDate ?? dateIso) !== getTodayInSantiago().iso`).
   const showRepeat = !!reviewDate && reviewDate !== getTodayInSantiago().iso
-  // Revisar solo es accionable para HOY (ver nota del componente).
-  const canReview = !!view?.isToday && !!onReview
+  // Revisar es accionable para HOY y para días PASADOS (el motor RN ya tiene el modo solo-UPDATE); lo
+  // único que la apaga es que el caller no sepa navegar o que no haya fecha de sesión que abrir.
+  const canReview = !!reviewDate && !!onReview
+  // Copy del sublabel: para hoy son "tus registros de hoy"; para un día pasado, los de ESE día (misma
+  // copia que el sheet web, WorkoutDoneSheet.tsx:96).
+  const reviewIsToday = !!view?.isToday || reviewDate === getTodayInSantiago().iso
   // Día a medias → otro título/subtítulo, mismas acciones (ver nota del componente).
   const incomplete = view?.status === 'in_progress'
 
@@ -278,12 +310,12 @@ export function DoubleIntentSheet({
           </View>
         ) : null}
 
-        {/* Revisar y editar — accionable SOLO si el día hecho es HOY; deshabilitada en días pasados
-            (el editor por `target_date` aún no existe en RN, ver nota del componente). */}
+        {/* Revisar y editar — abre los registros de esa sesión para corregirlos: día pasado ⇒ modo
+            solo-UPDATE (`?fecha=`), hoy ⇒ flujo normal. Sólo se omite si el caller no pasó `onReview`. */}
         {canReview ? (
           <TouchableOpacity
             testID="double-intent-review"
-            onPress={() => view && onReview?.(view.plan.id)}
+            onPress={() => view && reviewDate && onReview?.(view.plan.id, reviewDate, !!view.isToday)}
             activeOpacity={0.85}
             accessibilityRole="button"
             className="rounded-control border border-sport-500 bg-sport-100"
@@ -294,26 +326,13 @@ export function DoubleIntentSheet({
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
-              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Abre tus registros de hoy y corrige lo que quieras</Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>
+                {reviewIsToday ? 'Abre tus registros de hoy y corrige lo que quieras' : 'Abre tus registros de ese día y corrige lo que quieras'}
+              </Text>
             </View>
             <ChevronRight size={18} color={theme.mutedForeground} />
           </TouchableOpacity>
-        ) : (
-          <View
-            accessibilityRole="button"
-            accessibilityState={{ disabled: true }}
-            className="rounded-control border border-subtle bg-surface-sunken/30"
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, opacity: 0.55 }}
-          >
-            <View className="bg-surface-sunken" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
-              <Pencil size={17} color={theme.mutedForeground} strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
-              <Text className="text-muted" numberOfLines={1} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Disponible pronto</Text>
-            </View>
-          </View>
-        )}
+        ) : null}
 
         {/* Repetir hoy — instancia NUEVA de hoy, con cada serie precargada con lo que se registró esa
             vez (editable). No se ofrece cuando la sesión hecha ya es de HOY (decisión CEO, ver nota). */}
@@ -351,7 +370,7 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   // de la day-card clickeada (mismo patrón que el CTA del hero). Si la medición falla → origen sintético.
   const ref = useRef<View>(null)
   // Ocultar la card real durante el Despegue (el clon la reemplaza) — SÓLO cuando de verdad morfea:
-  // los estados que abren el sheet (done de otro día) o recuperan (pending) NO lanzan el morph.
+  // los estados que abren el sheet (done, hoy incluido) o recuperan (pending) NO lanzan el morph.
   const { hidden: cardHidden, hide: hideCard } = useTriggerMorphHide()
   const { plan, status, isToday, doneOnLabel } = view
   const dow = plan.day_of_week ?? 1
@@ -362,24 +381,27 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   // (hoy manda en el color) y un día pasado a medias se distingue del neutro con un borde sport tenue,
   // sin robarle el ámbar al pendiente (ése sí no tiene nada registrado).
   const inProgress = status === 'in_progress'
-  // handleDayPress morfea en TODO salvo done/in_progress de otro día (abren el sheet): hoy/futuro/
-  // done-hoy/in_progress-hoy → Despegue (onStart) y pending → Despegue de recuperación (onRecover).
-  const willMorph = !((done || inProgress) && !isToday)
+  // handleDayPress morfea en TODO salvo los estados que abren el sheet — done (hoy incluido) e
+  // in_progress de otro día. Espejo exacto del `opensSheet` web (WorkoutPlanCard.tsx:153). Si esto se
+  // desalinea de handleDayPress, la card queda invisible detrás del sheet (hideCard sin morph que la
+  // reemplace). hoy/futuro/in_progress-hoy → Despegue (onStart); pending → Despegue de recuperación.
+  const willMorph = !(done || (inProgress && !isToday))
   // "Hecho el jueves" solo cuando el dia se cerro por una sesion de OTRO dia (recuperacion):
   // label discreto que espeja el copy web (doneOnLabel). Done en su propia fecha → "Día N".
   const doneElsewhere = done && !!doneOnLabel
 
   // Superficie y neutros via clases DS (theme + white-label aware): hoy=sport,
-  // pendiente=ember, resto=neutro. Espejo de web WorkoutPlanCard.tsx:48-84.
+  // pendiente=warning (ámbar informativo), resto=neutro. Espejo de web WorkoutPlanCard.tsx:48-84.
+  // El alpha de `dark:bg-warning-100/[0.16]` es obligatorio (en dark el token es warning-500 sólido).
   const cardClass = isToday
     ? 'border-sport-500 bg-sport-100'
     : pending
-      ? 'border-ember-200 bg-ember-100'
+      ? 'border-warning-500/25 bg-warning-100 dark:bg-warning-100/[0.16]'
       : inProgress
         ? 'border-sport-500/40 bg-surface-card'
         : 'border-subtle bg-surface-card'
-  const labelClass = isToday ? 'text-sport-600' : pending ? 'text-ember-700' : inProgress ? 'text-sport-600' : 'text-subtle'
-  const pieClass = pending ? 'text-ember-700' : inProgress ? 'text-sport-600' : 'text-subtle'
+  const labelClass = isToday ? 'text-sport-600' : pending ? 'text-warning-700' : inProgress ? 'text-sport-600' : 'text-subtle'
+  const pieClass = pending ? 'text-warning-700' : inProgress ? 'text-sport-600' : 'text-subtle'
   // Play (hoy) = sport-600 resuelto por esquema (dark aclara el foreground); web usa
   // text-sport-600, no sport-500. Solo se deriva en la card de hoy.
   const playColor = resolvedScheme === 'dark' ? deriveSportTokens(theme.primary).dark['600'] : deriveSportTokens(theme.primary).ramp['600']
@@ -402,7 +424,11 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
         testID={`program-day-${plan.id}`}
         onPress={() => {
           if (willMorph) hideCard()
-          measureMorphOrigin(ref.current, theme.radius.control, (origin) => onPress(origin))
+          // QA5 (MIUI/HyperOS): la navegación NO puede colgar del callback de `measureInWindow` — en esos
+          // ROMs a veces no dispara nunca y el tap quedaba MUERTO (la tarjeta ni siquiera abría el sheet).
+          // `measureMorphOriginSafe` garantiza el disparo: rect si midió a tiempo, `null` si no (el Despegue
+          // nace del origen sintético; los estados que abren el sheet ignoran el origin de todos modos).
+          measureMorphOriginSafe(ref.current, theme.radius.control, (origin) => onPress(origin))
         }}
         activeOpacity={0.8}
         accessibilityRole="button"
@@ -422,7 +448,7 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
           ) : isToday ? (
             <Play size={12} color={playColor} strokeWidth={2.6} />
           ) : pending ? (
-            <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
+            <View className="bg-warning-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
           ) : (
             <ChevronRight size={13} color={INK_300[resolvedScheme]} />
           )}

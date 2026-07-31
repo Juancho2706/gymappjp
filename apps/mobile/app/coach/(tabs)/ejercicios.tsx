@@ -161,14 +161,14 @@ export default function EjerciciosScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
         <EvaLoaderScreen subtitle="Cargando biblioteca…" />
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScreenHeader
         title="Ejercicios"

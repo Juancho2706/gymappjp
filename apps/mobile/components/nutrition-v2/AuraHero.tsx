@@ -56,6 +56,15 @@ const MACRO_LABEL_CLASSES: Record<NutritionMacroKey, string> = {
   fats: 'text-aqua-700',
 }
 
+/**
+ * Alpha del track (anillo de fondo). En dark el alpha bajo del light mezcla el
+ * color con la superficie oscura y ensucia el tono (marrón/verdoso); se sube
+ * para que el aro se lea como una versión tenue del mismo color, no como barro.
+ */
+function ringTrackAlpha(scheme: 'light' | 'dark'): number {
+  return scheme === 'dark' ? 0.24 : 0.16
+}
+
 interface MacroValue {
   consumed: number
   target: number | null
@@ -138,12 +147,13 @@ function MacroMiniRing({
   value: MacroValue
   color: string
 }) {
+  const { theme } = useTheme()
   const meta = NUTRITION_MACROS[macro]
   const ratio = energyProgressRatio(value.consumed, value.target)
   const hasTarget = value.target != null && value.target > 0
   const accessibilityLabel = hasTarget
     ? `${meta.label}: ${Math.round(value.consumed)} de ${Math.round(value.target as number)} g`
-    : `${meta.label}: ${Math.round(value.consumed)} g`
+    : `${meta.label}: ${Math.round(value.consumed)} g, sin meta`
 
   return (
     <View style={styles.miniWrap}>
@@ -153,16 +163,15 @@ function MacroMiniRing({
         stroke={MINI_STROKE}
         ratio={ratio}
         color={color}
-        trackColor={hexToRgba(color, 0.16)}
+        trackColor={hexToRgba(color, ringTrackAlpha(theme.scheme))}
       >
         <Text className="text-strong" style={styles.miniValue}>
           {Math.round(value.consumed)}
         </Text>
-        {hasTarget ? (
-          <Text className="text-subtle" style={styles.miniTarget}>
-            / {Math.round(value.target as number)}
-          </Text>
-        ) : null}
+        {/* Sin meta el denominador se mantiene ("/ —") para no romper la simetría de los 3 anillos. */}
+        <Text className="text-subtle" style={styles.miniTarget}>
+          {hasTarget ? `/ ${Math.round(value.target as number)}` : '/ —'}
+        </Text>
       </AuraRing>
       <Text accessible={false} className={MACRO_LABEL_CLASSES[macro]} style={styles.miniLabel}>
         {meta.shortLabel}
@@ -279,7 +288,7 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
             stroke={MAIN_STROKE}
             ratio={ratio}
             color={theme.primary}
-            trackColor={hexToRgba(theme.primary, 0.13)}
+            trackColor={hexToRgba(theme.primary, ringTrackAlpha(theme.scheme))}
           >
             <Text
               className="text-strong"

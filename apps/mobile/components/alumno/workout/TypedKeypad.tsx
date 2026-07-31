@@ -14,7 +14,6 @@ import {
   KEYPAD_MAX_DECIMALS,
   KEYPAD_STEP_PRESETS,
 } from '@eva/workout-engine'
-import { useTheme } from '@/context/ThemeContext'
 import { FONT, TYPE, textStyle } from '@/lib/typography'
 import { shadow } from '@/lib/shadows'
 import { haptics } from '@/lib/haptics'
@@ -418,6 +417,13 @@ export function TypedKeypad(props: {
   onNext(): void
   onDone(): void
   /**
+   * Qué HACE el botón primario "Listo" en el caller (QA5): 'save' (default, mirror web) cierra Y guarda la
+   * serie; 'close' sólo baja el teclado porque la serie la cierra un CTA dedicado de la pantalla (hero V3
+   * "Aplastar serie"). Sólo cambia el `accessibilityLabel` — el rótulo visible sigue siendo "Listo" en ambos
+   * casos (para el alumno "Listo" = terminé de tipear) y `onDone` sigue siendo el único callback.
+   */
+  doneIntent?: 'save' | 'close'
+  /**
    * Cierre explícito SIN guardar — alimenta el botón X del panel (mirror web `NumericKeypadSheet.tsx:193-200`,
    * que SIEMPRE renderiza la X junto al grabber). Sin `onClose` el panel omite la X (el scrim del Modal padre
    * sigue cerrando por tap-fuera).
@@ -436,16 +442,16 @@ export function TypedKeypad(props: {
    */
   header?: { exerciseName?: string; objectiveLine?: string; last?: { weightKg: number | null; reps: number | null } | null }
 }) {
-  const { mode, value, onChange, onNext, onDone, onClose, unit, tabs, header } = props
-  const { resolvedScheme } = useTheme()
+  const { mode, value, onChange, onNext, onDone, onClose, unit, tabs, header, doneIntent = 'save' } = props
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
   const cfg = MODE_CFG[mode]
 
+  // Sombra SIEMPRE dark: el panel es `bg-ink-950` fijo (no sigue al esquema de la cuenta).
   const panelShadow = useMemo(() => {
-    const base = shadow('xl', resolvedScheme)
+    const base = shadow('xl', 'dark')
     return { ...base, shadowOffset: { width: 0, height: -16 } }
-  }, [resolvedScheme])
+  }, [])
 
   const onDigit = (d: string) => {
     haptics.select()
@@ -554,7 +560,7 @@ export function TypedKeypad(props: {
           <Pressable
             testID={primaryIsNext ? 'keypad-next' : 'keypad-done'}
             accessibilityRole="button"
-            accessibilityLabel={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
+            accessibilityLabel={primaryIsNext ? 'Siguiente' : doneIntent === 'close' ? 'Listo, cerrar el teclado' : 'Listo, guardar serie'}
             onPress={primaryIsNext ? handleNext : handleDone}
             className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
           >

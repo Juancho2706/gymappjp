@@ -43,7 +43,7 @@ export default function SupportScreen() {
   }, [])
 
   return (
-    <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScreenHeader title="Soporte" subtitle="Ayuda y contacto" />
 

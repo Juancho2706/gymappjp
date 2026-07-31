@@ -21,12 +21,17 @@ export type ExecMedia =
 
 export function resolveExecMedia(exercise: ExerciseType): ExecMedia {
     const url = exercise.video_url
+    // QA4 · hallazgo 17: la detección va por el parser central (allowlist de hosts, incluye
+    // `youtube-nocookie.com`), NUNCA por `url.includes('youtube.com')` — ese substring dejaba fuera los 33
+    // ejercicios guardados como `www.youtube-nocookie.com/embed/<id>`, que caían a `kind:'image'` y el
+    // `<Image>` intentaba renderizar una página HTML de embed.
     const isYouTube = isYoutubeMediaUrl(url)
     if (isYouTube) {
         const videoId = url ? extractYoutubeVideoId(url) : null
         if (videoId) {
             return { kind: 'youtube', videoId, start: exercise.video_start_time, end: exercise.video_end_time }
         }
+        // Host de YouTube sin id extraíble: sin media (tratarlo como imagen siempre falla).
         return exercise.gif_url ? { kind: 'image', src: exercise.gif_url } : { kind: 'none' }
     }
 

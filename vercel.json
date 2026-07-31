@@ -26,6 +26,10 @@
       "schedule": "0 0 * * *"
     },
     {
+      "path": "/api/cron/checkin-reminder",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/cron/trial-expiry",
       "schedule": "0 12 * * *"
     },

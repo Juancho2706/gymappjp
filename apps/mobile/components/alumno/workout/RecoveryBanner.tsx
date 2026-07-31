@@ -8,10 +8,10 @@ import { FONT } from '../../../lib/typography'
  *   · `recoverDate` (param `recuperar`): franja AMBAR solida "Recuperando: {dia}…". El alumno entrena
  *     HOY y su log cae hoy — que es exactamente la semantica de recuperacion (la atribucion greedy del
  *     dashboard, E1.1, marca luego ese dia como hecho). El banner solo comunica el contexto.
- *   · `editDate` (param `fecha`): franja NEUTRA "Editando registros del {dia}". Defensivo/informativo:
- *     el guardado RN aun escribe el log de HOY (el solo-UPDATE por target_date es un server action web,
- *     E1.5), por eso el sheet no habilita "Revisar y editar" todavia; este banner queda cableado para
- *     cuando el modo edicion de fecha pasada llegue a RN.
+ *   · `editDate` (param `fecha`): franja NEUTRA "Editando registros del {dia}". Ya es literal: el motor
+ *     corre en modo SOLO-UPDATE sobre la ventana de ESA fecha (`useWorkoutSession(..., editDate)`) y
+ *     corrige las series de ese dia sin insertar nunca una nueva. Antes era solo informativo (el guardado
+ *     RN escribia HOY) porque el solo-UPDATE existia unicamente como server action web (E1.5).
  *   · `repeatDate` (param `repetir`): franja NEUTRA "Repitiendo el {dia}". El alumno entrena HOY una
  *     instancia NUEVA con las series precargadas con lo que registro ese dia; los registros del dia
  *     original NO se tocan. El banner solo explica de donde salen los valores que ve.

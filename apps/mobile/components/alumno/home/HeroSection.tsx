@@ -10,7 +10,7 @@ import { getTodayInSantiago } from '../../../lib/date-utils'
 import { FONT, textStyle } from '../../../lib/typography'
 import { Button } from '../../Button'
 import { Card } from '../../Card'
-import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
+import { measureMorphOriginSafe, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
 import { InfoTooltip } from '../../InfoTooltip'
 import { ProgressRing } from '../../ProgressRing'
 import { DoubleIntentSheet } from './ActiveProgramSection'
@@ -174,7 +174,11 @@ function WorkoutHero({
             onPress={() => {
               hideCta()
               // `cta` = texto real del botón → la píldora del Despegue muestra el mismo texto (MOBILE-2).
-              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(plan.id, origin, cta))
+              // `…Safe` (QA5 · MIUI): el CTA usa el MISMO mecanismo que las day-cards (measureInWindow), y
+              // en esos ROMs el callback a veces no dispara ⇒ tap muerto. Ahora navega igual a los 120ms
+              // con origen sintético. (El overlay verde "Entrenamiento completado" no mide nada: abre el
+              // sheet directo, así que no tenía este riesgo.)
+              measureMorphOriginSafe(ctaRef.current, 16, (origin) => onStart(plan.id, origin, cta))
             }}
           />
         </View>

@@ -17,6 +17,7 @@ import {
   PersonStanding,
   Scale,
   Share2,
+  ShieldOff,
   Sun,
   Trash2,
   TrendingUp,
@@ -29,6 +30,7 @@ import { passwordRejectionMessage } from '@eva/schemas'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
 import { getClientProfile } from '../../../lib/client'
+import { getPoolConsentStatus, revokePoolConsent, type PoolConsentStatus } from '../../../lib/pool-consent'
 import { getWorkoutDaySummaries } from '../../../lib/history.queries'
 import { getMonthlyRecap, type MonthlyRecap } from '../../../lib/monthly-summary'
 import { clearBranding } from '../../../lib/branding'
@@ -327,6 +329,39 @@ export default function AlumnoPerfilScreen() {
     isBiometricAvailable().then(setBioAvailable).catch(() => {})
     isBiometricLockEnabled().then(setBioEnabled).catch(() => {})
   }, [])
+
+  // Consentimiento de pool (Ley 21.719): fila visible solo para alumnos de pool que ya
+  // consintieron — espejo de /t/[team_slug]/perfil web (RevokeConsentButton). Revocar
+  // devuelve al gate de consentimiento, igual que el proxy web.
+  const [poolConsent, setPoolConsent] = useState<PoolConsentStatus | null>(null)
+  const [revokingConsent, setRevokingConsent] = useState(false)
+  useEffect(() => {
+    getPoolConsentStatus().then(setPoolConsent).catch(() => {})
+  }, [])
+  function handleRevokeConsent() {
+    if (!poolConsent?.pool || revokingConsent) return
+    const { teamSlug, teamName } = poolConsent
+    Alert.alert(
+      'Revocar consentimiento',
+      'Perderás el acceso a la plataforma del equipo hasta que lo autorices de nuevo. ¿Seguro que quieres revocarlo?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Revocar',
+          style: 'destructive',
+          onPress: () => {
+            setRevokingConsent(true)
+            revokePoolConsent(teamSlug)
+              .then(() => {
+                router.replace({ pathname: '/alumno/consent', params: { team: teamSlug, name: teamName } })
+              })
+              .catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo revocar el consentimiento.'))
+              .finally(() => setRevokingConsent(false))
+          },
+        },
+      ]
+    )
+  }
   async function toggleBio(next: boolean) {
     if (next) {
       const ok = await authenticate('Confirma para activar el bloqueo')
@@ -346,6 +381,12 @@ export default function AlumnoPerfilScreen() {
   // Marca del coach para el título "Constancia con {marca}" (mismo fallback que el chrome
   // de la card — ShareCard.tsx:371; web usa brand.brandName → 'EVA', canvas:733).
   const brandName = branding?.displayName?.trim() || 'EVA'
+  // QA-5 FIX-4: el avatar del hero muestra el LOGO del coach (pedido CEO), no las iniciales
+  // del alumno. MISMA precedencia que el header del home y el login (`BrandLogoCircle` /
+  // `login.tsx:161`): `logoUrlDark` en dark → `logoUrl` → null. Con null el `Avatar` cae solo
+  // a las iniciales del alumno (fallback ya existente, también si la URL muere: `Avatar.tsx:52-56`),
+  // que es el caso de los coaches sin logo (tier Pro sanea el logo a null en el branding runtime).
+  const coachLogoUri = (resolvedScheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
   const streakSubtitle = stats.streak > 0
     ? `${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} seguidos activo`
     : 'Enciende tu racha'
@@ -372,7 +413,9 @@ export default function AlumnoPerfilScreen() {
               style={{ marginBottom: 16 }}
             >
               <Card variant="inverse" padding="lg" style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                <Avatar name={detail?.fullName ?? ''} size="xl" ring="sport" />
+                {/* `fit="contain"` = modo LOGO del Avatar (QA2-B2): no recorta la marca, la
+                    apoya en un backplate neutro con margen interno. Ring/size intactos. */}
+                <Avatar src={coachLogoUri} name={detail?.fullName ?? ''} size="xl" ring="sport" fit="contain" />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text className="font-display-black text-on-dark" style={{ fontSize: 22, letterSpacing: -0.4 }} numberOfLines={1}>
                     {detail?.fullName ?? '-'}
@@ -538,6 +581,18 @@ export default function AlumnoPerfilScreen() {
                   showChevron
                   onPress={() => setShowPasswordModal(true)}
                 />
+                {poolConsent?.pool && poolConsent.granted ? (
+                  <>
+                    <RowDivider />
+                    <ListRow
+                      testID="perfil-consent-row"
+                      leading={<IconTile Icon={ShieldOff} tone="danger" />}
+                      title="Revocar consentimiento del equipo"
+                      showChevron
+                      onPress={handleRevokeConsent}
+                    />
+                  </>
+                ) : null}
                 <RowDivider />
                 <ListRow
                   testID="perfil-ayuda-row"

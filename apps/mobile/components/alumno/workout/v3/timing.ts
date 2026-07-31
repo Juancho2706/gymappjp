@@ -17,6 +17,8 @@ export interface CountdownApi {
   remaining: number
   /** ¿Corriendo? (pausable). */
   running: boolean
+  /** ¿Alguna vez arrancó? (distingue "sin iniciar" de "pausado" para el label del botón). */
+  started: boolean
   /** true una vez que llegó a 0. */
   done: boolean
   /** Fracción transcurrida [0,1] contra el objetivo actual. */
@@ -35,6 +37,7 @@ export interface CountdownApi {
 export function useCountdown(seconds: number, onDone?: () => void, autoStart = true): CountdownApi {
   const [remaining, setRemaining] = useState(seconds)
   const [running, setRunning] = useState(autoStart)
+  const [started, setStarted] = useState(autoStart)
   // `target` en estado (no ref) para computar `progress` sin leer refs en render; `targetRef` refleja el
   // mismo valor para lecturas imperativas dentro de `restart` (callback, permitido).
   const [target, setTarget] = useState(seconds)
@@ -78,19 +81,23 @@ export function useCountdown(seconds: number, onDone?: () => void, autoStart = t
     return () => sub.remove()
   }, [triggerDone])
 
-  const toggle = useCallback(() => setRunning((v) => !v), [])
+  const toggle = useCallback(() => {
+    setStarted(true)
+    setRunning((v) => !v)
+  }, [])
   const restart = useCallback((next?: number) => {
     if (next != null) targetRef.current = next
     firedRef.current = false
     endRef.current = null
     setTarget(targetRef.current)
     setRemaining(targetRef.current)
+    setStarted(true)
     setRunning(true)
   }, [])
 
   const done = remaining <= 0
   const progress = target > 0 ? Math.min(1, Math.max(0, (target - remaining) / target)) : 0
-  return { remaining, running, done, progress, toggle, restart }
+  return { remaining, running, started, done, progress, toggle, restart }
 }
 
 // ─── Cronómetro count-up (roller opcional · cardio por distancia) ─────────────────────────────────
@@ -107,28 +114,36 @@ export interface StopwatchApi {
   reset: () => void
 }
 
-/** Cronómetro count-up background-safe. Mirror de `StopwatchTimer` (startRef + accumulated + 250 ms). */
+/**
+ * Cronómetro count-up background-safe. Mirror de `StopwatchTimer` (startRef + accumulated + 250 ms).
+ *
+ * QA4 h5: el efecto NO puede depender de `elapsed` — si lo hace, cada tick re-arma el intervalo y pisa
+ * `startRef` con `Date.now()`, dejando el reloj atrapado entre 0:00 y 0:01 (y guardando duraciones
+ * basura en roller). La acumulación del tramo corrido vive en `toggle` (igual que `StopwatchTimer`),
+ * nunca en el efecto.
+ */
 export function useStopwatch(autoStart = false): StopwatchApi {
   const [elapsed, setElapsed] = useState(0)
   const [running, setRunning] = useState(autoStart)
   const [started, setStarted] = useState(autoStart)
   const startRef = useRef(0)
   const accumulatedRef = useRef(0)
+  // Espejo del transcurrido para lecturas imperativas (sin leer estado stale en callbacks).
+  const elapsedRef = useRef(0)
+  const runningRef = useRef(autoStart)
 
   const recompute = useCallback(() => {
-    setElapsed(accumulatedRef.current + Math.floor((Date.now() - startRef.current) / 1000))
+    const next = accumulatedRef.current + Math.floor((Date.now() - startRef.current) / 1000)
+    elapsedRef.current = next
+    setElapsed(next)
   }, [])
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined
-    if (running) {
-      startRef.current = Date.now()
-      interval = setInterval(recompute, 250)
-    } else {
-      accumulatedRef.current = elapsed
-    }
+    if (!running) return
+    startRef.current = Date.now()
+    const interval = setInterval(recompute, 250)
     return () => clearInterval(interval)
-  }, [running, recompute, elapsed])
+  }, [running, recompute])
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -138,12 +153,22 @@ export function useStopwatch(autoStart = false): StopwatchApi {
   }, [running, recompute])
 
   const toggle = useCallback(() => {
+    if (runningRef.current) {
+      // Pausando: congela lo transcurrido del tramo en curso (se pierde la fracción de segundo, igual
+      // que el timer overlay y que la web — deliberado).
+      accumulatedRef.current += Math.floor((Date.now() - startRef.current) / 1000)
+      elapsedRef.current = accumulatedRef.current
+      setElapsed(accumulatedRef.current)
+    }
+    runningRef.current = !runningRef.current
     setStarted(true)
-    setRunning((v) => !v)
+    setRunning(runningRef.current)
   }, [])
   const reset = useCallback(() => {
     accumulatedRef.current = 0
+    elapsedRef.current = 0
     startRef.current = Date.now()
+    runningRef.current = false
     setElapsed(0)
     setRunning(false)
     setStarted(false)
@@ -158,6 +183,8 @@ export interface IntervalRunnerApi {
   phase: IntervalPhase | null
   remaining: number
   running: boolean
+  /** ¿Alguna vez arrancó? (distingue "sin iniciar" de "pausado" para el label del botón). */
+  started: boolean
   finished: boolean
   /** ¿La fase actual espera avance MANUAL (prescrita por distancia)? */
   isManual: boolean
@@ -183,11 +210,15 @@ export interface IntervalRunnerApi {
  */
 export function useIntervalRunner(
   phases: IntervalPhase[],
-  opts?: { onPhaseChange?: () => void; onFinish?: () => void },
+  opts?: { onPhaseChange?: () => void; onFinish?: () => void; autoStart?: boolean },
 ): IntervalRunnerApi {
+  // QA4 h8a: default `false` = paridad con el web (`useIntervalRunner.ts`, `isActive` inicial false).
+  // El alumno arranca la secuencia con un toque; nada corre solo al abrir la pantalla.
+  const autoStart = opts?.autoStart ?? false
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [remaining, setRemaining] = useState(phases[0]?.durationSec ?? 0)
-  const [running, setRunning] = useState(true)
+  const [running, setRunning] = useState(autoStart)
+  const [started, setStarted] = useState(autoStart)
   const [finished, setFinished] = useState(phases.length === 0)
   const endRef = useRef<number | null>(null)
   const phaseIndexRef = useRef(0)
@@ -243,13 +274,17 @@ export function useIntervalRunner(
     return () => sub.remove()
   }, [advance, finished])
 
-  const toggle = useCallback(() => setRunning((v) => !v), [])
+  const toggle = useCallback(() => {
+    setStarted(true)
+    setRunning((v) => !v)
+  }, [])
   const skip = useCallback(() => advance(), [advance])
   /** CTA "Fase siguiente" de las fases por distancia: avanza y deja corriendo la fase siguiente. */
   const next = useCallback(() => {
     if (finished) return
     const isLast = phaseIndexRef.current + 1 >= phases.length
     endRef.current = null
+    setStarted(true)
     advance()
     if (!isLast) setRunning(true)
   }, [finished, advance, phases.length])
@@ -259,11 +294,12 @@ export function useIntervalRunner(
     setPhaseIndex(0)
     setRemaining(phases[0]?.durationSec ?? 0)
     setFinished(phases.length === 0)
+    setStarted(true)
     setRunning(true)
   }, [phases])
 
   const phase = phases[phaseIndex] ?? null
   // Fase manual ⇒ progreso 0 (anillo lleno y estático: no hay cuenta que drenar).
   const phaseProgress = !isManual && phase && phase.durationSec > 0 ? (phase.durationSec - remaining) / phase.durationSec : 0
-  return { phaseIndex, phase, remaining, running, finished, isManual, phaseProgress, toggle, skip, next, restart }
+  return { phaseIndex, phase, remaining, running, started, finished, isManual, phaseProgress, toggle, skip, next, restart }
 }

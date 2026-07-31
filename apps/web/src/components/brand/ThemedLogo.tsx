@@ -29,6 +29,12 @@ type ThemedLogoBase = {
     style?: React.CSSProperties
     priority?: boolean
     sizes?: string
+    /**
+     * Se dispara si la imagen no carga (URL muerta, bucket borrado, offline). Sólo lo pueden
+     * pasar client components; los server components lo omiten y el comportamiento es idéntico
+     * al previo. Lo usa CoachBrandAvatar para caer a las iniciales sin dejar el hueco roto.
+     */
+    onError?: () => void
 }
 
 type ThemedLogoProps = ThemedLogoBase &
@@ -55,6 +61,7 @@ export function ThemedLogo({
     fill,
     width,
     height,
+    onError,
 }: ThemedLogoProps) {
     const { light: lightSrc, dark: darkSrc } = resolveThemedLogoSrcs(light, dark)
     if (!lightSrc) return null
@@ -62,7 +69,7 @@ export function ThemedLogo({
     const dims = fill
         ? ({ fill: true } as const)
         : ({ width: width as number, height: height as number } as const)
-    const common = { sizes, priority, style, ...dims }
+    const common = { sizes, priority, style, onError, ...dims }
 
     // Sin variante dark real → una sola imagen (comportamiento idéntico al previo).
     if (!darkSrc || darkSrc === lightSrc) {

@@ -11,7 +11,7 @@ import {
     Dumbbell,
     PieChart,
     Scale,
-    CalendarRange,
+    CalendarDays,
     ArrowUpRight,
     ArrowDownRight,
     Minus,
@@ -208,12 +208,18 @@ export function ProfileOverviewB3({
     const nutColor =
         nutAvg == null ? mutedHex : nutAvg >= 70 ? emeraldHex : nutAvg >= 50 ? amberHex : redHex
 
+    // ===== 5 KPIs de la ficha (QA2 D3) =====
+    // Contrato COMPARTIDO con la ficha de RN (mismos copys, mismos íconos, mismos tonos):
+    // el label viaja COMPLETO — antes se concatenaba `label · hint` en una línea de 10.5px
+    // que se cortaba a mitad de palabra ("Adherencia e…", "Sem. programa …"). El período
+    // ahora vive DENTRO del copy ("Sesiones (30d)"), así que el hint ya no hace falta; el
+    // delta de adherencia sigue publicado en el anillo "Entreno" de Cumplimiento semanal.
+    type KpiTone = 'ember' | 'sport' | 'success' | 'aqua' | 'neutral'
     const kpiItems: {
         icon: typeof Star
         label: string
         value: string
-        hint: string
-        tone: 'ember' | 'sport' | 'success'
+        tone: KpiTone
         /** Término del glosario para el ícono de explicabilidad (opcional). */
         infoTerm?: MetricTerm
     }[] = [
@@ -221,49 +227,44 @@ export function ProfileOverviewB3({
             icon: Flame,
             label: 'Mejor racha',
             value: `${longestStreak} día${longestStreak === 1 ? '' : 's'}`,
-            hint: 'histórico',
             tone: 'ember',
         },
         {
             icon: Dumbbell,
-            label: 'Sesiones',
+            label: 'Sesiones (30d)',
             value: `${sessions30d}`,
-            hint: 'últimos 30 días',
             tone: 'sport',
         },
         {
             icon: PieChart,
             label: 'Adherencia entreno',
             value: `${workoutPct}%`,
-            hint:
-                workoutDelta == null
-                    ? 'esta semana'
-                    : workoutDelta >= 0
-                      ? `+${workoutDelta}% vs sem. ant.`
-                      : `${workoutDelta}% vs sem. ant.`,
-            tone: 'sport',
+            tone: 'success',
             infoTerm: 'adherencia',
         },
         {
             icon: Scale,
-            label: 'Δ Peso (30d)',
+            label: 'Δ peso (30d)',
             value: weightDelta30d == null ? '—' : `${weightDelta30d > 0 ? '+' : ''}${weightDelta30d} kg`,
-            hint: 'check-ins',
-            tone: weightDelta30d != null && weightDelta30d > 0 ? 'ember' : 'success',
+            tone: 'aqua',
         },
         {
-            icon: CalendarRange,
-            label: 'Sem. programa',
+            icon: CalendarDays,
+            label: 'Semana de programa',
             value: `${planCur} / ${planTot}`,
-            hint: 'ciclo activo',
-            tone: 'sport',
+            tone: 'neutral',
         },
     ]
 
-    const kpiToneClass: Record<'ember' | 'sport' | 'success', string> = {
+    // Tile tonal del ícono: los pares fondo/tinta existen en AMBOS temas (el bloque `.dark`
+    // de globals.css redefine `--*-100` como rgba del hue y aclara la tinta), así que el
+    // contraste se mantiene sin variantes `dark:`.
+    const kpiToneClass: Record<KpiTone, string> = {
         ember: 'bg-[var(--ember-100)] text-[var(--ember-700)]',
         sport: 'bg-sport-100 text-sport-600',
         success: 'bg-[var(--success-100)] text-[var(--success-600)]',
+        aqua: 'bg-[var(--aqua-100)] text-[var(--aqua-600)]',
+        neutral: 'bg-[var(--surface-sunken)] text-[var(--text-muted)]',
     }
 
     // Módulos de pago — gateados por entitlement (espejo del gate server-side).
@@ -324,6 +325,10 @@ export function ProfileOverviewB3({
             </Card>
 
             {/* ===== 5 KPIs ===== */}
+            {/* Grid de 2 columnas; con 5 items la última card ocupa la fila completa (nada de
+                una card huérfana a media fila). El label NO se trunca ni se recorta: envuelve
+                por palabras completas y los 5 copys son cortos y fijos ⇒ máximo 2 líneas.
+                `h-full` en la Card iguala la altura de las dos cards de cada fila. */}
             <div className="grid grid-cols-2 gap-3">
                 {kpiItems.map((item, i) => (
                     <motion.div
@@ -331,6 +336,9 @@ export function ProfileOverviewB3({
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.05, duration: 0.25 }}
+                        className={cn(
+                            kpiItems.length % 2 === 1 && i === kpiItems.length - 1 && 'col-span-2'
+                        )}
                     >
                         <Card padding="md" className="h-full flex-row items-center gap-3">
                             <div
@@ -341,16 +349,18 @@ export function ProfileOverviewB3({
                             >
                                 <item.icon className="h-[18px] w-[18px]" />
                             </div>
-                            <div className="min-w-0">
-                                <p className="font-display text-lg font-black leading-tight text-strong">
+                            <div className="min-w-0 flex-1">
+                                <p className="font-display text-xl font-black leading-none tracking-[-0.02em] text-strong tabular-nums">
                                     {item.value}
                                 </p>
-                                <p className="mt-0.5 flex items-center gap-1 text-[10.5px] font-medium text-muted">
-                                    <span>
-                                        {item.label} · {item.hint}
-                                    </span>
+                                <p className="mt-1 text-[11px] font-medium leading-[1.3] text-muted">
+                                    {item.label}
                                     {item.infoTerm ? (
-                                        <MetricInfo term={item.infoTerm} />
+                                        <MetricInfo
+                                            term={item.infoTerm}
+                                            className="ml-1 align-[-3px]"
+                                            iconClassName="[&>svg]:size-3.5"
+                                        />
                                     ) : null}
                                 </p>
                             </div>

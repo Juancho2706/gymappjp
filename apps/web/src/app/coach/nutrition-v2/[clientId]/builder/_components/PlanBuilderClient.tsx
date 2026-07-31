@@ -2272,7 +2272,7 @@ export function PlanBuilderClient({
           <p className="flex items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2 text-xs leading-relaxed text-muted">
             <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
             <span>
-              Al publicar se creará la versión {existingPlan.versionNumber + 1} y la actual pasará a histórico.
+              Al publicar, este plan reemplaza al vigente para el alumno.
             </span>
           </p>
         ) : null}

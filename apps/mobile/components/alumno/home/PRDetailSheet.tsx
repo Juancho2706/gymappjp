@@ -108,21 +108,11 @@ export function PRDetailSheet({
     }
   }, [open, exerciseId, clientId])
 
-  const name = detail?.exerciseName ?? exerciseName
   const currentWeight = detail?.currentPr.weightKg ?? fallbackWeight
   const currentAt = detail?.currentPr.achievedAt ?? null
   const latest1RM = detail?.history.length ? detail.history[detail.history.length - 1].estimated1RM : null
   const spark = (detail?.history ?? []).map((p) => p.topWeightKg)
   const milestones = [...(detail?.milestones ?? [])].reverse()
-
-  // ── Share-card del record (P0, espejo web PRDetailSheet.tsx:74-92) ──
-  // Salto previo → actual desde el hito que alcanzo el maximo actual (si lo hay).
-  const topMilestone = detail?.milestones.length ? detail.milestones[detail.milestones.length - 1] : null
-  const prevWeightKg = topMilestone && currentWeight != null && topMilestone.weightKg === currentWeight ? topMilestone.prevKg : 0
-  const pct =
-    prevWeightKg > 0 && currentWeight != null ? Math.round(((currentWeight - prevWeightKg) / prevWeightKg) * 1000) / 10 : 0
-  const best1RM = (detail?.history ?? []).reduce((mx, p) => Math.max(mx, p.estimated1RM), 0)
-  const shareEstimated1RM = best1RM > 0 ? best1RM : latest1RM ?? currentWeight ?? 0
   const canShare = currentWeight != null && exerciseId != null
 
   return (
@@ -231,38 +221,120 @@ export function PRDetailSheet({
       </View>
     </Sheet>
 
-      {/* share-card branded del record (motor ShareCard, mirror WorkoutSummaryOverlay PR block).
-          MONTAJE (QA-6): se pinta como HERMANO del <Sheet>, NO dentro de su cuerpo. El <Sheet> es un
-          @gorhom BottomSheetModal que se teletransporta vía <Portal> (BottomSheetModal.tsx:537,
-          containerComponent=React.Fragment :54) hacia un <PortalHost> que es JSX plano DENTRO de la misma
-          ventana de la Activity — NO es un <Modal> RN nativo. Por eso este ShareCardPreview (un <Modal> RN)
-          es un ÚNICO Dialog sobre la Activity: el caso documentado SEGURO ("Top-level consumers keep the
-          default Modal", ShareCard.tsx:502-503), NO el brick de dos Dialogs anidados de QA-5 (que exige
-          Modal-dentro-de-Modal RN, ShareCard.tsx:498-501). Sacarlo del BottomSheetScrollView del cuerpo
-          desacopla su ciclo de vida del teardown animado del sheet y elimina toda fragilidad de "Modal RN
-          dentro del portal @gorhom" cuando la Activity nativa de compartir manda la app a background y vuelve.
-          NO se usa `embedded`: ese overlay absolute-fill necesita un ancestro full-screen que aquí no existe
-          (el único host de portal es el root dinámico de @gorhom `bottom-sheet-portal-<id>`, inalcanzable por
-          nombre; un <Portal> plano apunta al host 'root' que nadie renderiza — PortalProvider lo renombra).
-          El <Modal> RN nativo es el único mecanismo full-screen en scope, y aquí es el patrón seguro. */}
-      <ShareCardPreview
+      {/* share-card branded del record — ver `RecordShareCard` abajo (montaje HERMANO del <Sheet>). */}
+      <RecordShareCard
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
-        variant="record"
-        shareMessage={`Nuevo récord personal en ${name}`}
-        fileName={`record-${slugify(name)}`}
-      >
-        <ShareCardEyebrow color={theme.primary}>RÉCORD PERSONAL</ShareCardEyebrow>
-        <ShareCardTitle>{name}</ShareCardTitle>
-        <ShareCardHero value={fmtDecimalCL(currentWeight ?? 0)} unit="KG" color={theme.primary} />
-        {prevWeightKg > 0 ? (
-          <ShareCardPill tone="success">{fmtDecimalCL(prevWeightKg)} → {fmtDecimalCL(currentWeight ?? 0)} kg · +{fmtDecimalCL(pct)}%</ShareCardPill>
-        ) : (
-          <ShareCardPill>Primer récord personal</ShareCardPill>
-        )}
-        <ShareCardDate />
-        <ShareCardPill>1RM estimado · {fmtDecimalCL(shareEstimated1RM)} kg</ShareCardPill>
-      </ShareCardPreview>
+        clientId={clientId}
+        exerciseId={exerciseId}
+        exerciseName={exerciseName}
+        fallbackWeight={fallbackWeight}
+        detail={detail}
+      />
     </>
+  )
+}
+
+/**
+ * Share-card branded del récord (P0, espejo web PRDetailSheet.tsx:74-92), extraída del cuerpo
+ * del sheet en QA-5 FIX-5 para que el atajo de 1 tap del tile (`PersonalRecordsCard`) monte
+ * EXACTAMENTE la misma tarjeta sin pasar por el sheet de detalle. Cero lógica de tarjeta nueva:
+ * es el mismo bloque que vivía inline aquí.
+ *
+ * `detail`: si el consumidor ya lo tiene cargado (el sheet) lo pasa y no hay fetch; si no (el
+ * atajo del tile) se pide aquí al abrir. Mientras llega, la tarjeta ya es correcta en lo esencial
+ * — nombre y kilos vienen del tile vía `exerciseName`/`fallbackWeight` — y el salto previo→actual
+ * y el 1RM estimado se refinan al resolver. La captura PNG sólo ocurre cuando el usuario toca
+ * "Compartir" dentro del preview, nunca al montar.
+ *
+ * MONTAJE (QA-6): se pinta como HERMANO del <Sheet>, NO dentro de su cuerpo. El <Sheet> es un
+ * @gorhom BottomSheetModal que se teletransporta vía <Portal> (BottomSheetModal.tsx:537,
+ * containerComponent=React.Fragment :54) hacia un <PortalHost> que es JSX plano DENTRO de la misma
+ * ventana de la Activity — NO es un <Modal> RN nativo. Por eso este ShareCardPreview (un <Modal> RN)
+ * es un ÚNICO Dialog sobre la Activity: el caso documentado SEGURO ("Top-level consumers keep the
+ * default Modal", ShareCard.tsx:502-503), NO el brick de dos Dialogs anidados de QA-5 (que exige
+ * Modal-dentro-de-Modal RN, ShareCard.tsx:498-501). Sacarlo del BottomSheetScrollView del cuerpo
+ * desacopla su ciclo de vida del teardown animado del sheet y elimina toda fragilidad de "Modal RN
+ * dentro del portal @gorhom" cuando la Activity nativa de compartir manda la app a background y vuelve.
+ * NO se usa `embedded`: ese overlay absolute-fill necesita un ancestro full-screen que aquí no existe
+ * (el único host de portal es el root dinámico de @gorhom `bottom-sheet-portal-<id>`, inalcanzable por
+ * nombre; un <Portal> plano apunta al host 'root' que nadie renderiza — PortalProvider lo renombra).
+ * El <Modal> RN nativo es el único mecanismo full-screen en scope, y aquí es el patrón seguro.
+ */
+export function RecordShareCard({
+  visible,
+  onClose,
+  clientId,
+  exerciseId,
+  exerciseName,
+  fallbackWeight,
+  detail: detailProp = null,
+}: {
+  visible: boolean
+  onClose: () => void
+  clientId: string
+  exerciseId: string | null
+  exerciseName: string
+  fallbackWeight: number | null
+  /** Detalle ya cargado por el consumidor; si falta, se carga aquí al abrir. */
+  detail?: ExercisePRDetail | null
+}) {
+  const { theme } = useTheme()
+  const [fetched, setFetched] = useState<ExercisePRDetail | null>(null)
+
+  // Mismo patrón "adjusting state during render" del sheet: al cambiar de ejercicio, el detalle
+  // cacheado del anterior NO puede pintarse ni un frame en la tarjeta del nuevo récord.
+  const [prevExerciseId, setPrevExerciseId] = useState<string | null>(exerciseId)
+  if (exerciseId !== prevExerciseId) {
+    setPrevExerciseId(exerciseId)
+    setFetched(null)
+  }
+
+  useEffect(() => {
+    if (detailProp || !visible || !exerciseId) return
+    let cancelled = false
+    getExercisePRHistory(clientId, exerciseId)
+      .then((d) => {
+        if (!cancelled) setFetched(d)
+      })
+      .catch(() => {
+        // Fail-open: sin historial la tarjeta se comparte igual con los datos del tile.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [detailProp, visible, exerciseId, clientId])
+
+  const detail = detailProp ?? fetched
+  const name = detail?.exerciseName ?? exerciseName
+  const currentWeight = detail?.currentPr.weightKg ?? fallbackWeight
+  const latest1RM = detail?.history.length ? detail.history[detail.history.length - 1].estimated1RM : null
+  // Salto previo → actual desde el hito que alcanzo el maximo actual (si lo hay).
+  const topMilestone = detail?.milestones.length ? detail.milestones[detail.milestones.length - 1] : null
+  const prevWeightKg = topMilestone && currentWeight != null && topMilestone.weightKg === currentWeight ? topMilestone.prevKg : 0
+  const pct =
+    prevWeightKg > 0 && currentWeight != null ? Math.round(((currentWeight - prevWeightKg) / prevWeightKg) * 1000) / 10 : 0
+  const best1RM = (detail?.history ?? []).reduce((mx, p) => Math.max(mx, p.estimated1RM), 0)
+  const shareEstimated1RM = best1RM > 0 ? best1RM : latest1RM ?? currentWeight ?? 0
+
+  return (
+    <ShareCardPreview
+      visible={visible}
+      onClose={onClose}
+      variant="record"
+      shareMessage={`Nuevo récord personal en ${name}`}
+      fileName={`record-${slugify(name)}`}
+    >
+      <ShareCardEyebrow color={theme.primary}>RÉCORD PERSONAL</ShareCardEyebrow>
+      <ShareCardTitle>{name}</ShareCardTitle>
+      <ShareCardHero value={fmtDecimalCL(currentWeight ?? 0)} unit="KG" color={theme.primary} />
+      {prevWeightKg > 0 ? (
+        <ShareCardPill tone="success">{fmtDecimalCL(prevWeightKg)} → {fmtDecimalCL(currentWeight ?? 0)} kg · +{fmtDecimalCL(pct)}%</ShareCardPill>
+      ) : (
+        <ShareCardPill>Primer récord personal</ShareCardPill>
+      )}
+      <ShareCardDate />
+      <ShareCardPill>1RM estimado · {fmtDecimalCL(shareEstimated1RM)} kg</ShareCardPill>
+    </ShareCardPreview>
   )
 }

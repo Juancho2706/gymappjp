@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
@@ -42,6 +42,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import { Button } from '../../../components/Button'
 import { Card } from '../../../components/Card'
 import { EmptyState } from '../../../components/EmptyState'
+import { BrandedLoader } from '../../../components/loaders/BrandedLoader'
 import { Input } from '../../../components/Input'
 import { ProgressRing } from '../../../components/ProgressRing'
 import { Sheet } from '../../../components/Sheet'
@@ -248,8 +249,11 @@ export default function CoachTeamScreen() {
   if (!ws.ready || (loading && isTeam)) {
     return (
       <Shell>
+        {/* QA4: la carga de ruta honra la marca del coach (antes: ActivityIndicator gris del SO).
+            Va INLINE y no `EvaLoaderScreen` porque el Shell ya pinta AppBackground + BackHeader,
+            y el loader de pantalla completa (absoluteFill) taparia el boton de volver. */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator />
+          <BrandedLoader subtitle="Cargando tu equipo..." />
         </View>
       </Shell>
     )

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Dumbbell, Search, X, Play, Loader2, ChevronDown } from "lucide-react";
-import { extractYoutubeVideoId } from "@/lib/youtube";
+import { extractYoutubeVideoId, isYoutubeMediaUrl } from "@/lib/youtube";
 import { ExerciseVideo } from "@/components/exercise/ExerciseVideo";
 import {
   exerciseGridThumb,
@@ -377,8 +377,7 @@ export function ClientExerciseCatalog({
                   }
 
                   const url = selectedExercise.video_url;
-                  const isYouTube =
-                    url?.includes("youtube.com") || url?.includes("youtu.be");
+                  const isYouTube = isYoutubeMediaUrl(url);
                   if (isYouTube) {
                     const ytId = extractYoutubeVideoId(url!);
                     const ex = selectedExercise;

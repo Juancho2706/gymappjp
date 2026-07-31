@@ -1,3 +1,5 @@
+import type { HrMetadataV1 } from '@eva/cardio'
+
 /**
  * Metadata jsonb de la serie (`workout_logs.metadata`). Hoy solo transporta el hold de movilidad
  * POR LADO (E0.5 · executor-v3): segundos de sostén izquierdo/derecho de un ejercicio unilateral
@@ -10,6 +12,20 @@
 export type WorkoutLogSideMetadata = {
     left_sec?: number | null
     right_sec?: number | null
+}
+
+/**
+ * La columna `workout_logs.metadata` COMPLETA: el hold por lado de movilidad unilateral Y/O el
+ * resumen+curva de FC del bloque cardio bajo la clave `hr` (specs/cardio-conectado — reusa el jsonb
+ * existente, sin migración DB; un bloque es de un tipo o del otro, así que no colisionan).
+ *
+ * Superset de `WorkoutLogSideMetadata`: todo consumidor histórico que lea `left_sec`/`right_sec`
+ * sigue compilando igual. El tipo del resumen se importa (solo tipo, se borra en runtime) de
+ * `@eva/cardio` — fuente única del shape, mismo criterio que `pr-detect` con `@eva/profile-analytics`;
+ * duplicarlo acá garantizaría drift entre lo que el acumulador escribe y lo que el motor transporta.
+ */
+export type WorkoutLogMetadata = WorkoutLogSideMetadata & {
+    hr?: HrMetadataV1 | null
 }
 
 /**
@@ -45,10 +61,10 @@ export type WorkoutOfflineLog = {
     substitutedExerciseId?: string | null
     substitutedExerciseName?: string | null
     substitutionReason?: string | null
-    // ── Hold POR LADO (E0.5) — metadata jsonb {left_sec, right_sec} ──
+    // ── Hold POR LADO (E0.5) + FC del bloque cardio (cardio-conectado) — metadata jsonb ──
     // Opcional/aditivo: los items legacy encolados (sin la key) siguen parseando; el flush lo reenvía
     // intacto a `workout_logs.metadata`.
-    metadata?: WorkoutLogSideMetadata | null
+    metadata?: WorkoutLogMetadata | null
     // ── Edición de día pasado (E1.5/E1.6) — fecha objetivo yyyy-mm-dd Santiago ──
     // Opcional/aditivo: solo presente cuando la serie se editó con `?fecha=` (modo solo-UPDATE).
     // Sin ella, el flush escribe HOY como siempre. CRÍTICO que viaje EN el item: el flush global de
@@ -83,9 +99,9 @@ export type ReconciledSessionLog = {
     substituted_exercise_id?: string | null
     substituted_exercise_name?: string | null
     substitution_reason?: string | null
-    // Hold POR LADO (E0.5): espejo de `workout_logs.metadata` jsonb {left_sec, right_sec}. El server
-    // devuelve la columna tal cual tras reload; la fila tipada per_side la pintará en Ola 3.
-    metadata?: WorkoutLogSideMetadata | null
+    // Espejo de `workout_logs.metadata` jsonb: hold por lado (E0.5) y/o `hr` del bloque cardio
+    // (cardio-conectado). El server devuelve la columna tal cual tras reload.
+    metadata?: WorkoutLogMetadata | null
     /** true ⇒ en la cola offline, sin confirmar por el server (ver doc del tipo). */
     _pending?: boolean
 }

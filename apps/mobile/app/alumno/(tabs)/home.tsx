@@ -9,22 +9,25 @@ import { getDailyHabits } from '../../../lib/habits.queries'
 import { getActiveOrgAnnouncements } from '../../../lib/org-announcements'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useTheme } from '../../../context/ThemeContext'
+import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
 import { resetChromeScroll, useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { countLoggedSetsByBlock, deriveDayCompletion, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay, getTodayInSantiago, formatRelativeDate, isoDateAddDays, timeGreeting } from '../../../lib/date-utils'
+import { buildWorkoutDoneEditParams } from '../../../lib/workout-executor-nav'
 import { AppBackground } from '../../../components/AppBackground'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { Skeleton } from '../../../components/Skeleton'
 import { WelcomeModal } from '../../../components/WelcomeModal'
+import { StudentOnboarding } from '../../../components/alumno/home/StudentOnboarding'
 import { DashboardHeader, DashboardHeaderSkeleton } from '../../../components/alumno/home/DashboardHeader'
 import { SectionTitle } from '../../../components/alumno/home/SectionTitle'
-import { StreakRibbon } from '../../../components/alumno/home/StreakRibbon'
+import { WeekStrip } from '../../../components/alumno/home/WeekStrip'
 import { CheckInBanner } from '../../../components/alumno/home/CheckInBanner'
 import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
 import { programWeekIndex1Based, weekIndexToVariantLetter, effectiveWeekVariantFromPlans, workoutPlanMatchesVariant } from '../../../lib/program-week-variant'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
 import { useSessionMorph } from '../../../components/alumno/workout/v3/session-morph'
-import { greedyPlanDone, weekDatesMondayToSunday, type PlanWeekCompletionSource } from '../../../components/alumno/workout/v3/weekly-streak'
+import { deriveWeeklyStreak, greedyPlanDone, plannedDatesForWeek, weekDatesMondayToSunday, type PlanWeekCompletionSource } from '../../../components/alumno/workout/v3/weekly-streak'
 import { CoachPresenceCard } from '../../../components/alumno/home/CoachPresenceCard'
 import { MomentumCard, type MomentumDay } from '../../../components/alumno/home/MomentumCard'
 import { ActiveProgramSection } from '../../../components/alumno/home/ActiveProgramSection'
@@ -96,9 +99,27 @@ export default function AlumnoHomeScreen() {
   // onSaved) puede resolver DESPUÉS de uno nuevo y pisar el estado fresco (p.ej.
   // un check-in recién guardado desaparece del widget).
   const loadIdRef = useRef(0)
+  // Onboarding corto del alumno (primera entrada al dashboard). `false` hasta que el
+  // overlay se resuelve — ya sea porque el alumno ya lo vio o porque acaba de cerrarlo.
+  // Encadena con el WelcomeModal del coach: onboarding primero, welcome después (nunca
+  // solapados). Sin `data` todavía no hay pantalla, así que el overlay se monta recién
+  // cuando la home terminó de cargar.
+  const [onboardingResolved, setOnboardingResolved] = useState(false)
+  const handleOnboardingResolved = useCallback(() => setOnboardingResolved(true), [])
+
+  // QA-5 — el splash de marca ES el loader de este dashboard (ver el efecto de `loading`
+  // más abajo). Se declara acá arriba porque el desvío al onboarding también lo retira.
+  const markDashboardReady = useMarkDashboardReady()
 
   useEffect(() => {
-    getOnboardingStatus().then((done) => { if (!done) router.replace('/alumno/onboarding') })
+    getOnboardingStatus().then((done) => {
+      if (!done) {
+        // El alumno nuevo NO vuelve a esta pantalla: su primer load nunca resolverá y el
+        // splash quedaría tapando el onboarding hasta el tope. El desvío ES la resolución.
+        markDashboardReady()
+        router.replace('/alumno/onboarding')
+      }
+    })
   }, [])
 
   // MOBILE-1 — refetch al ENFOCAR: antes la home solo cargaba al montar (deps []), asi el dia recien
@@ -381,6 +402,28 @@ export default function AlumnoHomeScreen() {
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
     const todayPlanId = planDays.find((d) => d.isToday)?.plan.id ?? todayPlan?.id ?? null
 
+    // §3 "Tu semana" (WeekStrip) — se alimenta de los MISMOS insumos que las day-cards, sin
+    // re-derivar la regla: `planDays` ya trae el estado GREEDY por slot (`greedyPlanDone`), asi
+    // que las fechas done/in_progress salen de ahi tal cual. `plannedDates` usa el helper puro
+    // compartido `plannedDatesForWeek` sobre `programPlans` (la MISMA lista filtrada por variante
+    // A/B que pinta las day-cards) — no sobre `plannedDays`, que ignora la variante y es de la
+    // tira de momentum. Empate de dos planes en un slot (A/B mal armado): el cerrado gana al
+    // parcial, sin dot ambiguo (mismo desempate que `greedyStatesForWeek`).
+    const weekDoneDates = new Set<string>()
+    const weekInProgressDates = new Set<string>()
+    for (const d of planDays) {
+      if (d.status === 'done') weekDoneDates.add(d.dateIso)
+      else if (d.status === 'in_progress') weekInProgressDates.add(d.dateIso)
+    }
+    for (const iso of weekDoneDates) weekInProgressDates.delete(iso)
+    const weeklyStreak = deriveWeeklyStreak({
+      weekDates,
+      plannedDates: plannedDatesForWeek(programPlans, weekDates),
+      doneDates: weekDoneDates,
+      inProgressDates: weekInProgressDates,
+      todayIso,
+    })
+
     // Semana actual del programa — vía programWeekIndex1Based (C3, paridad web
     // ActiveProgramSection.tsx:82: `currentWeek = weekIdx ?? 1`).
     const totalWeeks = data?.program?.weeksToRepeat ?? 1
@@ -434,6 +477,7 @@ export default function AlumnoHomeScreen() {
       nutritionEmpty: data ? (data.nutritionDates.size ?? 0) === 0 : true,
       checkInEmpty: data ? checkIns.length === 0 : true,
       streak, ciVariant, ciDays, ciRelative, doneToday,
+      weeklyStreak, todayIso,
     }
   }, [data, loggedSetsByPlanDay])
 
@@ -442,6 +486,13 @@ export default function AlumnoHomeScreen() {
   // sola vez ya final (P0-3: evita el swap "Hola/Buenas tardes" -> "..., Nombre").
   const firstName = data?.client?.fullName?.split(' ')[0] ?? 'Atleta'
   const greeting = `${timeGreeting()}, ${firstName}`
+
+  // QA-5 — el splash de marca se retira cuando el PRIMER load resolvió, con datos o con
+  // error (`load()` baja `loading` en los dos caminos). El skeleton de abajo queda como
+  // fallback de las navegaciones posteriores, que ya no llevan splash.
+  useEffect(() => {
+    if (!loading) markDashboardReady()
+  }, [loading, markDashboardReady])
 
   if (loading) {
     return (
@@ -484,8 +535,9 @@ export default function AlumnoHomeScreen() {
         {/* §1 Anuncios de la org */}
         <OrgAnnouncementBanner announcements={data?.announcements ?? []} />
 
-        {/* §3 Racha */}
-        <StreakRibbon streak={derived.streak} />
+        {/* §3 Tu semana — rediseño Mock C (CEO 2026-07-30): la tira de 7 dias (mismo estado
+            que las day-cards) reemplaza al StreakRibbon; la racha del RPC queda como chip. */}
+        <WeekStrip week={derived.weeklyStreak} streak={derived.streak} todayIso={derived.todayIso} />
 
         {/* §4 Check-in (variant-aware; <3d oculto) */}
         {derived.ciVariant ? (
@@ -546,13 +598,20 @@ export default function AlumnoHomeScreen() {
             }
             // Recuperar un dia pendiente: se entrena HOY y el log cae hoy (semantica correcta de
             // recuperacion, ver E1.1); el param `recuperar` solo pinta el banner informativo ambar.
-            // El camino "editar fecha pasada" (param `fecha`) queda cableado en [planId].tsx + banner
-            // neutro pero SIN entrada de UI aun: el sheet deshabilita "Revisar y editar" porque el
-            // guardado RN todavia escribe HOY (el solo-UPDATE por target_date es un server action web,
-            // E1.5). El editor de fecha pasada RN llega en ola posterior y reactivara ese onReview.
             // Recuperar dispara el MISMO Despegue que el CTA/day-cards (con el param `recuperar`); el
             // origin (rect del banner/card) lo pasa ActiveProgramSection para que el morph nazca de él.
             onRecover={(id, fecha, origin, label) => startMorph({ planId: id, origin, params: { recuperar: fecha }, label })}
+            // "Revisar y editar" del sheet: EDITOR DE DIA PASADO. `buildWorkoutDoneEditParams` decide el
+            // param igual que la web (`buildWorkoutDoneEditHref`): sesion realmente pasada ⇒ `?fecha=`
+            // (el motor conmuta a solo-UPDATE y corrige esa fecha sin insertar), sesion de HOY ⇒
+            // `?desde=hecho` (flujo normal de hoy, que ya corrige la misma fila por upsert).
+            onReview={(id, sessionDate, isTodayCell) =>
+              startMorph({
+                planId: id,
+                label: 'Revisar y editar',
+                params: buildWorkoutDoneEditParams(sessionDate, getTodayInSantiago().iso, isTodayCell),
+              })
+            }
           />
         </View>
 
@@ -624,11 +683,14 @@ export default function AlumnoHomeScreen() {
         </View>
       </ScrollView>
 
-      {/* §13 WelcomeModal */}
+      {/* §13a Onboarding corto del alumno — 3 slides, una sola vez (AsyncStorage) */}
+      <StudentOnboarding onResolved={handleOnboardingResolved} />
+
+      {/* §13b WelcomeModal del coach — espera a que el onboarding esté resuelto */}
       {data?.welcomeModal ? (
         <WelcomeModal
           brandName={data.welcomeModal.brandName}
-          enabled={data.welcomeModal.enabled}
+          enabled={data.welcomeModal.enabled && onboardingResolved}
           content={data.welcomeModal.content}
           type={data.welcomeModal.type}
           version={data.welcomeModal.version}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Move, RotateCcw } from 'lucide-react-native'
+import { Move, Pause, Play, RotateCcw } from 'lucide-react-native'
 import {
   formatTypedObjective,
   type OptimisticLogPayload,
@@ -78,18 +78,17 @@ export function MobilityScreenV3({
   }
 
   // Secuencia de lados de la serie ACTIVA. `sideIdx` recorre `sides`; `timed` acumula los segundos por
-  // lado; `ready` = secuencia terminada → aparece la fila de captura seedada. Sin hold prescrito
-  // (holdSec<=0) o sin serie activa se salta directo a `ready` (captura manual).
+  // lado; `seedNonce` remonta la fila de captura cada vez que hay prefill nuevo. QA4 h8b: la fila de
+  // captura y el historial se muestran SIEMPRE (paridad web) — el anillo es la GUÍA, las filas son el
+  // registro; ya no hay flag que esconda una cosa detrás de la otra.
   const [sideIdx, setSideIdx] = useState(0)
   const [timed, setTimed] = useState<{ left?: number; right?: number; single?: number }>({})
-  const [ready, setReady] = useState(holdSec <= 0)
   const [seedNonce, setSeedNonce] = useState(0)
 
   // Reinicia la secuencia al cambiar de serie activa.
   useEffect(() => {
     setSideIdx(0)
     setTimed({})
-    setReady(holdSec <= 0)
     setSeedNonce((n) => n + 1)
   }, [firstUnlogged, holdSec])
 
@@ -103,19 +102,21 @@ export function MobilityScreenV3({
         ...t,
         ...(currentSide === 'left' ? { left: heldSec } : currentSide === 'right' ? { right: heldSec } : { single: heldSec }),
       }))
+      // El nonce sube en CADA lado (no solo en el último): lo cronometrado cae en la caja apenas se
+      // cierra el lado, igual que el `hpNonce` de la web (`recordSide`).
+      setSeedNonce((n) => n + 1)
       if (sideIdx + 1 < sides.length) {
         setSideIdx((i) => i + 1)
+        // El lado 2 SÍ auto-arranca (eyes-free, paridad web `autoStart: perSide && side === 'right'`).
         countdown.restart(holdSec)
-      } else {
-        setReady(true)
-        setSeedNonce((n) => n + 1)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentSide, sideIdx, sides.length, holdSec],
   )
 
-  const countdown = useCountdown(holdSec, () => finishSide(holdSec), holdSec > 0)
+  // QA4 h8a: el primer lado lo inicia el ALUMNO (paridad web). Nada corre solo al abrir la pantalla.
+  const countdown = useCountdown(holdSec, () => finishSide(holdSec), false)
 
   const seedValues = useMemo(() => holdSeedValues(sideMode, timed), [sideMode, timed])
   const objectiveLine = formatTypedObjective(block, 'mobility')
@@ -180,11 +181,9 @@ export function MobilityScreenV3({
         </Text>
       ) : null}
 
-      {firstUnlogged == null ? (
-        // Todas las series completas: solo los chips (editables).
-        <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>
-      ) : !ready && holdSec > 0 ? (
-        // ── Secuencia de hold (anillo sereno + lado) ──
+      {/* ── Secuencia de hold (anillo sereno + lado) — GUÍA. Convive con la fila de registro de abajo
+             (QA4 h8b, paridad web): el anillo nunca se desmonta por registrar. ── */}
+      {firstUnlogged != null && holdSec > 0 && (
         <>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 999, borderWidth: 2, paddingHorizontal: 20, paddingVertical: 10, backgroundColor: hexToRgba(accent, 0.15), borderColor: hexToRgba(accent, 0.36) }}>
             <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: accent }} />
@@ -232,30 +231,65 @@ export function MobilityScreenV3({
             </Text>
           ) : null}
 
+          {/* CTAs APILADOS (nunca dos w-full en fila): control del contador arriba, cierre del lado
+              abajo. Sólo UNO es juicy a la vez — antes de arrancar manda "Iniciar hold"; con el hold
+              corriendo manda "Listo este lado" y el control pasa a secundario. */}
           <View style={{ width: '100%', gap: 8 }}>
-            <JuicyButton
-              testID="btn-mobility-side-done-v3"
-              label={perSide && sideIdx + 1 < sides.length ? 'Listo este lado' : 'Listo'}
-              onPress={() => finishSide(Math.max(0, holdSec - countdown.remaining) || holdSec)}
-              exec={{ ...exec, accent, accentText: '#08222b' }}
-              height={58}
-              reducedMotion={reducedMotion}
-              accessibilityLabel={perSide && sideIdx + 1 < sides.length ? 'Terminé este lado, pasar al otro' : 'Terminé el hold'}
-            />
-            <Pressable
-              testID="btn-mobility-manual-v3"
-              onPress={() => { setReady(true); setSeedNonce((n) => n + 1) }}
-              hitSlop={8}
-              style={{ alignSelf: 'center', minHeight: 36, justifyContent: 'center' }}
-              accessibilityRole="button"
-              accessibilityLabel="Registrar el hold a mano"
-            >
-              <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: s.textMuted }}>Registrar a mano</Text>
-            </Pressable>
+            {countdown.running || countdown.started ? (
+              <Pressable
+                testID="btn-mobility-play-v3"
+                onPress={countdown.toggle}
+                style={{ width: '100%', height: 52, borderRadius: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, borderWidth: 2, borderColor: '#2f2f3a', backgroundColor: '#1c1c24' }}
+                accessibilityRole="button"
+                accessibilityLabel={countdown.running ? 'Pausar el hold' : 'Reanudar el hold'}
+              >
+                {countdown.running ? <Pause size={17} color="#e8e8ee" fill="#e8e8ee" /> : <Play size={17} color="#e8e8ee" fill="#e8e8ee" />}
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 16, letterSpacing: 0.3, color: '#e8e8ee' }}>
+                  {countdown.running ? 'Pausar' : 'Reanudar'}
+                </Text>
+              </Pressable>
+            ) : (
+              <JuicyButton
+                testID="btn-mobility-play-v3"
+                label="Iniciar hold"
+                icon={<Play size={18} color="#08222b" fill="#08222b" />}
+                onPress={countdown.toggle}
+                exec={{ ...exec, accent, accentText: '#08222b' }}
+                height={52}
+                reducedMotion={reducedMotion}
+                accessibilityLabel="Iniciar el hold"
+              />
+            )}
+            {countdown.running || countdown.started ? (
+              <JuicyButton
+                testID="btn-mobility-side-done-v3"
+                label={perSide && sideIdx + 1 < sides.length ? 'Listo este lado' : 'Listo'}
+                onPress={() => finishSide(Math.max(0, holdSec - countdown.remaining) || holdSec)}
+                exec={{ ...exec, accent, accentText: '#08222b' }}
+                height={58}
+                reducedMotion={reducedMotion}
+                accessibilityLabel={perSide && sideIdx + 1 < sides.length ? 'Terminé este lado, pasar al otro' : 'Terminé el hold'}
+              />
+            ) : (
+              <Pressable
+                testID="btn-mobility-side-done-v3"
+                onPress={() => finishSide(Math.max(0, holdSec - countdown.remaining) || holdSec)}
+                style={{ width: '100%', height: 52, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#2f2f3a', backgroundColor: '#1c1c24' }}
+                accessibilityRole="button"
+                accessibilityLabel={perSide && sideIdx + 1 < sides.length ? 'Terminé este lado, pasar al otro' : 'Terminé el hold'}
+              >
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 16, letterSpacing: 0.3, color: '#e8e8ee' }}>
+                  {perSide && sideIdx + 1 < sides.length ? 'Listo este lado' : 'Listo'}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </>
-      ) : (
-        // ── Captura tipada (prefill de lo cronometrado, editable) ──
+      )}
+
+      {/* ── Captura tipada — SIEMPRE visible mientras haya serie activa (prefill de lo cronometrado,
+             editable). Con hold prescrito convive con el anillo de arriba. ── */}
+      {firstUnlogged != null && (
         <View style={{ width: '100%', gap: 10 }}>
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', color: s.textMuted }}>
             {perSide ? 'Hold por lado (segundos)' : 'Hold registrado (segundos)'}
@@ -278,12 +312,14 @@ export function MobilityScreenV3({
             onDraftChange={(values, fieldIndex) => onDraftChange(block.id, firstUnlogged as number, values, fieldIndex)}
             onCommit={onCommitSet}
           />
-          {loggedRows.some(Boolean) && <View style={{ gap: 6 }}>{loggedRows}</View>}
         </View>
       )}
 
+      {/* Historial de series ya registradas — SIEMPRE (antes vivía escondido tras el flag). */}
+      {loggedRows.some(Boolean) && <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>}
+
       {coachNote && (
-        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" forceDark nativeModal snapPoints={['35%']}>
           <View style={{ paddingVertical: 8 }}>
             <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">{coachNote}</Text>
           </View>

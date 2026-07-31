@@ -21,16 +21,15 @@ Política operativa para `apps/mobile`. La configuración ejecutable prevalece:
 - Expo SDK 54, React Native 0.81 y Expo Router 6.
 - `runtimeVersion.policy = appVersion`: un OTA solo llega a binarios con la misma versión compatible.
 - EAS CLI no está fijado a una versión exacta: `eas.json` exige `>= 14.0.0` y GitHub Actions instala `latest`.
-- Solo `staging` y `production` declaran un canal OTA.
-- `prodpreview` y `previewv2` generan binarios internos, pero no declaran canal; no prometer ni publicar OTA para esos binarios sin configurar primero un canal explícito.
+- Solo `production` declara un canal OTA.
+- `previewv2` genera binarios internos, pero no declara canal; no prometer ni publicar OTA para esos binarios sin configurar primero un canal explícito.
+- 2026-07-29: `staging` (apuntaba a un Supabase local por IP de LAN, inusable en CI) y `prodpreview` (subset de `production` sin submit) fueron retirados de `eas.json` y del workflow. La opción `enterprise` salió del picker del workflow (app archivada, estrategia Teams-first).
 - El build ocurre localmente dentro de GitHub Actions con `eas build --local`; no consume créditos de EAS Build.
 
 | Perfil | Uso | Android | iOS | OTA |
 |---|---|---|---|---|
 | `development` | cliente de desarrollo/simulador | interno | simulador | no configurado |
-| `staging` | QA interna | APK | IPA firmada (`distribution=store`) | canal `staging` |
-| `prodpreview` | QA contra backend live | APK | IPA firmada para distribución | sin canal |
-| `previewv2` | QA de la rama móvil | APK | IPA firmada para distribución | sin canal |
+| `previewv2` | QA de la rama móvil (API = preview Vercel de la rama) | APK | IPA firmada para distribución | sin canal |
 | `production` | stores | AAB | IPA | canal `production` |
 
 ## Elegir OTA o binario nuevo
@@ -51,7 +50,7 @@ Ante duda, usar binario nuevo. Una migración de base de datos nunca se revierte
 
 1. Esperar CI verde, incluido `Mobile Integration CI` para cambios en `apps/mobile` o `packages`.
 2. En GitHub Actions, ejecutar `Mobile Build (Local — no EAS credits)` con `app=mobile`, plataforma y perfil correctos.
-3. Para `prodpreview`, `previewv2` y `production`, el workflow inyecta las variables públicas de Supabase desde GitHub Secrets y falla si faltan.
+3. Para `previewv2` y `production`, el workflow inyecta las variables públicas de Supabase desde GitHub Secrets y falla si faltan.
 4. Descargar y probar el artefacto el mismo día. El workflow solicita 14 días, pero la política efectiva actual del repositorio limita la retención a un día; no depender del valor solicitado sin verificar primero la configuración del repositorio.
 5. Activar `submit_ios` solo para una IPA destinada a TestFlight. Activar `submit_android` solo con perfil `production`; el destino es el track interno de Google Play.
 6. Promover a producción solo después de smoke test en dispositivo real, sin errores de arranque, autenticación, navegación, cámara, notificaciones ni persistencia offline.
@@ -66,17 +65,16 @@ Antes de publicar:
 
 - confirmar por diff que no hay cambios nativos;
 - correr `pnpm --filter @eva/mobile exec tsc --noEmit` y las pruebas afectadas;
-- registrar commit, versión de app, canal y motivo;
-- probar primero en `staging` con un binario de la misma `runtimeVersion`.
+- registrar commit, versión de app, canal y motivo.
 
-Publicación:
+Publicación (el canal `staging` fue retirado 2026-07-29; `production` es el único canal OTA):
 
 ```bash
 cd apps/mobile
-eas update --channel staging --message "<motivo y commit>"
+eas update --channel production --message "<motivo y commit>"
 ```
 
-Tras validar `staging`, repetir explícitamente para `production`. No usar `prodpreview` ni `previewv2` como destino mientras sigan sin canal.
+No usar `previewv2` como destino mientras siga sin canal.
 
 En runtime, `checkForOtaUpdate()` consulta al abrir y al volver a foreground, con máximo un intento por hora. Descarga en segundo plano y ofrece reiniciar; en desarrollo, cuando Updates está deshabilitado o ante error, no altera el arranque.
 

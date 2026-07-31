@@ -169,7 +169,7 @@ export default function ToolsHubScreen() {
             className="flex-row items-center"
             style={{ gap: 2, paddingVertical: 6, paddingHorizontal: 4 }}
           >
-            <ChevronLeft size={22} strokeWidth={2.2} className="text-sport-600" />
+            <ChevronLeft size={24} strokeWidth={2} className="text-sport-600" />
             <Text className="font-sans-bold text-sport-600" style={{ fontSize: 15 }}>Opciones</Text>
           </Pressable>
         </View>
@@ -180,7 +180,9 @@ export default function ToolsHubScreen() {
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
             {/* Header: tile de módulos + título */}
             <View className="flex-row items-center" style={{ gap: 10, paddingTop: 8, paddingBottom: 12 }}>
-              <View className="items-center justify-center rounded-control bg-sport-100" style={{ width: 36, height: 36 }}>
+              {/* renderToHardwareTextureAndroid: Skia rasteriza el borderRadius con AA (en Android
+                  los tiles redondeados se ven dentados, RN #50029, peor con newArch). No-op en iOS. */}
+              <View renderToHardwareTextureAndroid className="items-center justify-center rounded-control bg-sport-100" style={{ width: 36, height: 36 }}>
                 <LayoutGrid size={18} strokeWidth={2} className="text-sport-600" />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -208,7 +210,7 @@ export default function ToolsHubScreen() {
               <View style={{ gap: 12 }}>
                 {/* Comprar ≠ usar — recordatorio (espejo del banner web). */}
                 <View className="flex-row items-center rounded-control bg-surface-sunken" style={{ gap: 9, paddingHorizontal: 13, paddingVertical: 10 }}>
-                  <Info size={15} strokeWidth={2.2} className="text-subtle" style={{ marginTop: 1 }} />
+                  <Info size={16} strokeWidth={2} className="text-subtle" style={{ marginTop: 1 }} />
                   <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 12, lineHeight: 17 }}>
                     Elige el módulo y después el alumno. Se mide a una persona a la vez.
                   </Text>
@@ -287,6 +289,7 @@ function SellCard({ managed, onExplore }: { managed: boolean; onExplore: () => v
   return (
     <Card variant="inverse" padding="lg" style={{ alignItems: 'center', gap: 0 }}>
       <View
+        renderToHardwareTextureAndroid
         className="items-center justify-center rounded-2xl"
         style={{ width: 60, height: 60, marginBottom: 14, backgroundColor: `${theme.primary}2E` }}
       >
@@ -336,10 +339,11 @@ function ModuleHubCard({
     <Card padding="md" style={{ gap: 13 }}>
       <View className="flex-row items-start" style={{ gap: 13 }}>
         <View
+          renderToHardwareTextureAndroid
           className={`items-center justify-center rounded-xl ${active ? 'bg-sport-100' : 'bg-surface-sunken'}`}
           style={{ width: 48, height: 48 }}
         >
-          <Icon size={23} strokeWidth={2} className={active ? 'text-sport-600' : 'text-subtle'} />
+          <Icon size={24} strokeWidth={2} className={active ? 'text-sport-600' : 'text-subtle'} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text className="font-display-bold text-strong" style={{ fontSize: 16.5, letterSpacing: -0.2 }}>{label}</Text>
@@ -351,9 +355,9 @@ function ModuleHubCard({
       <View className="flex-row flex-wrap items-center" style={{ gap: 7 }}>
         <View className="flex-row items-center rounded-pill bg-surface-sunken" style={{ gap: 5, paddingHorizontal: 9, height: 24 }}>
           {isPlan ? (
-            <ClipboardList size={12} strokeWidth={2.2} className="text-muted" />
+            <ClipboardList size={12} strokeWidth={2} className="text-muted" />
           ) : (
-            <UserRound size={12} strokeWidth={2.2} className="text-muted" />
+            <UserRound size={12} strokeWidth={2} className="text-muted" />
           )}
           <Text className="font-sans-bold text-muted" style={{ fontSize: 11 }}>
             {isPlan ? 'Se configura en el plan' : 'Se usa con un alumno'}
@@ -382,7 +386,7 @@ function ModuleHubCard({
         />
       ) : managed ? (
         <View className="flex-row items-center rounded-control bg-surface-sunken" style={{ gap: 8, paddingHorizontal: 14, paddingVertical: 11 }}>
-          <Lock size={15} strokeWidth={2.2} className="text-subtle" />
+          <Lock size={16} strokeWidth={2} className="text-subtle" />
           <Text className="font-sans-semibold text-muted" style={{ flex: 1, fontSize: 12.5, lineHeight: 18 }}>
             Pídelo al owner de tu equipo
           </Text>
@@ -465,7 +469,7 @@ function StudentPicker({
             <Text className="font-sans-bold text-strong" style={{ flex: 1, fontSize: 14.5 }} numberOfLines={1}>
               {c.full_name ?? 'Alumno'}
             </Text>
-            <ChevronRight size={17} strokeWidth={2.2} className="text-ink-300" />
+            <ChevronRight size={16} strokeWidth={2} className="text-ink-300" />
           </Pressable>
         ))
       )}

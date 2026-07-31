@@ -22,6 +22,7 @@ import { haptics } from '../../../../lib/haptics'
 import type { RestTimerEngine, RestInterstitialHostControls } from '../timers'
 import type { SessionExercise } from '../../../../lib/workout-session'
 import type { ExecTheme } from './exec-theme'
+import { execThumbUri } from './ExecMediaV3'
 import type { ExerciseListItem } from './ExerciseListV3'
 import { closedRoundDots } from './superset-screen-model'
 
@@ -211,6 +212,16 @@ export function RestInterstitialV3({
   const nextMedia = next?.exercise ?? null
   const nextEyebrow = rc?.next ? 'Siguiente ronda' : 'Siguiente'
   const nextTag = rc?.next?.tag ?? null
+  // Miniatura de la tarjeta SIGUIENTE (QA4 · hallazgo 1): antes miraba SOLO `gif_url`, que esta vacio en
+  // TODO el catalogo (la media real vive en `video_url`), asi que la card caia SIEMPRE al placeholder de
+  // mancuerna. `execThumbUri` resuelve thumbnail_url -> gif_url -> poster de YouTube -> gif/imagen de
+  // Storage reescrita a `render/image` (webp chico, no el gif crudo para un recuadro de 58px).
+  const nextThumb = nextMedia ? execThumbUri(nextMedia, 128) : null
+  const [thumbFailed, setThumbFailed] = useState(false)
+  // La miniatura que murio no debe arrastrarse al proximo ejercicio.
+  useEffect(() => {
+    setThumbFailed(false)
+  }, [nextThumb])
 
   return (
     <MotiView
@@ -373,8 +384,16 @@ export function RestInterstitialV3({
           {next && (
             <View style={{ width: '100%', flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: s.surface, borderWidth: 2, borderColor: s.borderStrong, borderRadius: 18, padding: 11 }}>
               <View style={{ width: 58, height: 58, borderRadius: 12, overflow: 'hidden', borderWidth: 1.5, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised, alignItems: 'center', justifyContent: 'center' }}>
-                {nextMedia?.gif_url ? (
-                  <Image source={{ uri: nextMedia.gif_url }} alt={next.name} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                {nextThumb && !thumbFailed ? (
+                  <Image
+                    source={{ uri: nextThumb }}
+                    alt={next.name}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={160}
+                    onError={() => setThumbFailed(true)}
+                  />
                 ) : (
                   <Dumbbell size={24} color={hexToRgba(exec.accent, 0.5)} strokeWidth={1.8} />
                 )}
@@ -470,7 +489,8 @@ export function RestInterstitialV3({
                       <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, color: isNow ? exec.accent : '#9a9aa6' }}>{item.letter}</Text>
                     </View>
                   ) : null}
-                  <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 13, color: isNow ? s.text : hexToRgba(s.text, 0.85) }} numberOfLines={1}>
+                  {/* Dos líneas (QA ronda 2): con una sola los nombres largos se cortaban con "…". */}
+                  <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 17, color: isNow ? s.text : hexToRgba(s.text, 0.85) }} numberOfLines={2}>
                     {item.title}
                   </Text>
                   <Text

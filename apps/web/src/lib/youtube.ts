@@ -28,7 +28,15 @@ export function isYoutubeUrl(url: string): boolean {
   return YOUTUBE_HOSTS.has(parsed.hostname.toLowerCase())
 }
 
-/** Detector único para clasificar media de ejercicios, incluyendo embeds de youtube-nocookie.com. */
+/**
+ * ¿La URL apunta a YouTube? — detector ÚNICO para la REGLA DE MEDIA (ejecutor V3, modal de técnica).
+ *
+ * QA4 · hallazgo 17: la regla de media clasificaba con `url.includes('youtube.com') || includes('youtu.be')`,
+ * que NO reconoce `www.youtube-nocookie.com/embed/<id>` (hay `-nocookie` entre `youtube` y `.com`). Los 33
+ * ejercicios del catálogo guardados con ese host caían a `kind:'image'` y el `<Image>` intentaba renderizar
+ * una página HTML de embed. Usa la allowlist de hosts real (`isYoutubeUrl`) + red de seguridad textual para
+ * URLs sin protocolo. NUNCA volver al `includes`: toda superficie que clasifique media llama acá.
+ */
 export function isYoutubeMediaUrl(url: string | null | undefined): boolean {
   if (!url) return false
   if (isYoutubeUrl(url)) return true

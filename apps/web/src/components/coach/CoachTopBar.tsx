@@ -9,8 +9,7 @@ import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { CoachGlobalSearch } from '@/components/coach/CoachGlobalSearch'
 import { useRosterView } from '@/components/coach/RosterViewContext'
 import { useCoachSignOut } from '@/app/coach/settings/_components/CoachSignOut'
-import { Avatar } from '@/components/ui/avatar'
-import { ThemedLogo } from '@/components/brand/ThemedLogo'
+import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
 import { cn } from '@/lib/utils'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 
@@ -273,13 +272,14 @@ export function CoachTopBar({ coachName, coachBrand, logoUrl, logoUrlDark, works
                             : 'w-10 justify-center'
                     )}
                 >
-                    {logoUrl ? (
-                        <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
-                            <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
-                        </span>
-                    ) : (
-                        <Avatar name={avatarName} size="sm" />
-                    )}
+                    {/* Identidad del coach: logo de su marca si existe, iniciales si no (o si la
+                        imagen no carga). Ver CoachBrandAvatar. */}
+                    <CoachBrandAvatar
+                        name={avatarName}
+                        logoUrl={logoUrl}
+                        logoDarkUrl={logoUrlDark}
+                        size="sm"
+                    />
                     {hasMultiWorkspace && (
                         <ChevronsUpDown
                             className="h-3.5 w-3.5 flex-shrink-0 text-[var(--text-subtle)]"

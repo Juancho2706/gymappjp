@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Dimensions, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useRouter } from 'expo-router'
 import * as Sentry from '@sentry/react-native'
@@ -21,6 +21,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { useTheme } from '../../../../context/ThemeContext'
+import { resolveOrFallback } from '../../../../lib/measure-guard'
 import { FONT } from '../../../../lib/typography'
 import { resolveExecTheme, type ExecTheme } from './exec-theme'
 
@@ -52,7 +53,15 @@ import { resolveExecTheme, type ExecTheme } from './exec-theme'
  * `color-mix(in srgb, var(--b) X%, …)` del web). Motor de guardado / navegación de destino: INTOCABLE.
  */
 
+// Métrica de MÓDULO (congelada al cargar el bundle): sólo para el ancho de la ola y el origen
+// sintético. Para el WIPE del fondo NO se usa: el Modal `statusBarTranslucent` de Android es más alto
+// que `Dimensions.get('window')` (status/nav bar, edge-to-edge SDK 54) y el fondo arrancaría con su
+// borde superior YA dentro de pantalla. La altura real se mide con el `onLayout` del overlay.
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
+/** Colchón sobre la métrica congelada para el punto de partida del wipe ANTES del primer layout:
+ *  garantiza que el fondo nace fuera de cuadro en cualquier métrica de Android. Sin costo visual
+ *  (el fondo recorta a sus hijos y sólo se ve al subir). */
+const WIPE_START_SLACK = 240
 
 // ── Tiempos de la coreografía (1:1 con el web). ──
 /** Animación "arribada" (logo aterrizado + PREPARANDO visible). Tras esto se habilita el tap. */
@@ -343,6 +352,32 @@ export function measureMorphOrigin(
   }
 }
 
+/**
+ * Ventana máxima que se espera la medición nativa antes de navegar IGUAL (QA5). En MIUI/HyperOS el
+ * callback de `measureInWindow` a veces NUNCA dispara (nodo colapsado por su optimizador de vistas /
+ * frame descartado): como toda la navegación colgaba de ese callback, el tap quedaba MUERTO — el alumno
+ * tocaba la tarjeta del día y no pasaba nada. 120ms es holgado para una medición real (llega en el
+ * siguiente frame, ~16ms) e imperceptible como retraso.
+ */
+const MEASURE_TIMEOUT_MS = 120
+
+/**
+ * `measureMorphOrigin` con GARANTÍA DE DISPARO: llama `cb` exactamente UNA vez — con el rect si la
+ * medición contestó dentro de `timeoutMs`, o con `null` si no contestó. `null` es un camino ya soportado
+ * (el Despegue cae a `syntheticOrigin()`: misma ceremonia, la píldora nace del centro-bajo en vez de la
+ * tarjeta), así que la degradación es sólo visual y la navegación JAMÁS se pierde. Una medición que llega
+ * tarde, después del fallback, se IGNORA (guard `fired`) para no disparar dos veces la navegación.
+ */
+export function measureMorphOriginSafe(
+  node: { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void } | null,
+  radius: number,
+  cb: (origin: MorphOrigin | null) => void,
+  timeoutMs: number = MEASURE_TIMEOUT_MS,
+) {
+  // El guard (once + ventana) es puro y vive en `lib/measure-guard` para tener suite propia.
+  measureMorphOrigin(node, radius, resolveOrFallback<MorphOrigin | null>(cb, null, timeoutMs))
+}
+
 /** Ventana que el trigger real permanece OCULTO tras lanzar el Despegue: cubre el morph + wipe + nav
  *  (~1,3s) con margen, para que NO se vea la caja del botón/card detrás del clon que colapsa. */
 const TRIGGER_HIDE_MS = 1500
@@ -532,7 +567,12 @@ function DespegueOverlay({
   const morph = useSharedValue(0) // píldora morph+despegue
   const labelFade = useSharedValue(1) // label del clon (fade a 0 al colapsar a burbuja)
   const trail = useSharedValue(0) // estela de la píldora
-  const bgTY = useSharedValue(reducedMotion ? 0 : SCREEN_H) // wipe del fondo (100% → 0)
+  // Wipe del fondo (100% → 0). El punto de partida NO sale de la métrica congelada del módulo: nace
+  // sobre-dimensionado y se corrige con la ALTURA REAL del overlay en su primer `onLayout` (el Dialog
+  // de Android es más alto que `window`). `wipeStartedRef` cierra la corrección al arrancar el wipe.
+  const bgTY = useSharedValue(reducedMotion ? 0 : SCREEN_H + WIPE_START_SLACK)
+  const overlayHRef = useRef(SCREEN_H + WIPE_START_SLACK)
+  const wipeStartedRef = useRef(false)
   const land = useSharedValue(reducedMotion ? 1 : 0) // aterrizaje del logo
   const logoOpacity = useSharedValue(reducedMotion ? 0 : 1) // reduced: fade-in; vuelo: siempre visible
   const ringScale = useSharedValue(0.5)
@@ -561,6 +601,17 @@ function DespegueOverlay({
 
   // Suscripción a "escena lista" del ejecutor (via-morph).
   useEffect(() => subscribeMorphScene(() => setSceneReady(true)), [])
+
+  // Altura REAL del overlay (la del Dialog del Modal, no la de `Dimensions`): mientras el wipe no
+  // arrancó, reposiciona el fondo exactamente fuera de cuadro. Así en Android (Modal
+  // statusBarTranslucent, edge-to-edge) el fondo de marca no asoma antes de tiempo.
+  const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height
+    if (h <= 0) return
+    overlayHRef.current = h
+    if (!wipeStartedRef.current && !reducedMotion) bgTY.value = h
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reducedMotion])
 
   // Lanzamiento de la píldora (morph desde el rect + label fade + estela). Se dispara desde el onLayout
   // de la píldora (garantiza que el nodo YA está montado y medido en el Modal antes de animar; si se
@@ -599,8 +650,18 @@ function DespegueOverlay({
       // La píldora (morph + label fade + estela) se dispara aparte, en su onLayout (`launchPill`), NO
       // aquí: si se lanza antes de que el nodo esté montado/medido dentro del Modal, el clon queda
       // CONGELADO en su rect y no despega (bug QA). Espejo del callback-ref `runPillMorph` del web.
-      // exec-dsp-wipe 0.6s cubic-bezier(.76,0,.19,1) 0.6s → translateY 100%→0.
-      bgTY.value = withDelay(600, withTiming(0, { duration: 600, easing: BEZIER_WIPE }))
+      // exec-dsp-wipe 0.6s cubic-bezier(.76,0,.19,1) 0.6s → translateY 100%→0. Se dispara por timer (no
+      // por `withDelay`) para poder fijar el punto de partida con la ALTURA REAL ya medida por el
+      // onLayout del overlay; el primer tramo (duración 0) ancla ese valor y el segundo hace el wipe.
+      timers.push(
+        setTimeout(() => {
+          wipeStartedRef.current = true
+          bgTY.value = withSequence(
+            withTiming(overlayHRef.current, { duration: 0 }),
+            withTiming(0, { duration: 600, easing: BEZIER_WIPE }),
+          )
+        }, 600),
+      )
       // exec-dsp-logoland 0.95s cubic-bezier(.5,0,.6,1) 1.1s — segmentos 0→52→62→76→88→100%; el tramo
       // 52→62% usa ease-out (override per-keyframe del CSS).
       land.value = withDelay(
@@ -761,9 +822,12 @@ function DespegueOverlay({
       // dashboard/ejecutor. Escape-hatch — funciona aun durante la ceremonia (los taps sí se bloquean).
       onRequestClose={() => doneRef.current()}
     >
-      <Animated.View style={[StyleSheet.absoluteFill, styles.root, rootStyle]}>
-        {/* Fondo de marca que sube (wipe) + estelas de luz. */}
-        <Animated.View style={[StyleSheet.absoluteFill, bgStyle]} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, styles.root, rootStyle]} onLayout={handleOverlayLayout}>
+        {/* Fondo de marca que sube (wipe) + estelas de luz. `overflow:hidden` = paridad EXACTA con
+            `.exec-dsp-bg` del web: las crestas (top:-26) y las estelas (translateY negativo) cuelgan
+            POR ENCIMA del borde del fondo, así que sin recorte se pintaban en la franja inferior de la
+            pantalla desde el frame 0 (banda ondulada + 3 rayitas antes de tiempo, hallazgo QA). */}
+        <Animated.View style={[StyleSheet.absoluteFill, styles.bg, bgStyle]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: bgBottom }]} />
           <LinearGradient
             colors={[bgTop, bgMid, bgBottom]}
@@ -835,7 +899,12 @@ function DespegueOverlay({
                 style={StyleSheet.absoluteFill}
               />
               {coachLogoUrl ? (
-                <Image source={{ uri: coachLogoUrl }} alt="Logo del coach" style={styles.logoImg} contentFit="contain" />
+                // Máscara circular PROPIA (no alcanza el overflow del círculo de 112: la imagen nunca
+                // toca sus bordes) + `cover`: un logo con fondo opaco ya no se ve como un cuadrado
+                // negro sobre el círculo de marca. Mismo criterio que `SessionIntro`.
+                <View style={styles.logoMask}>
+                  <Image source={{ uri: coachLogoUrl }} alt="Logo del coach" style={styles.logoImg} contentFit="cover" />
+                </View>
               ) : coachInitial ? (
                 <Text style={styles.logoInitial}>{coachInitial}</Text>
               ) : (
@@ -844,20 +913,23 @@ function DespegueOverlay({
             </Animated.View>
           </View>
           <Animated.View style={[styles.prep, prepStyle]}>
-            {/* Crossfade PREPARANDO → LISTO: "PREPARANDO…" queda en flujo (define el ancho) y "LISTO"
-                se superpone absoluto encima; al quedar listo el primero se desvanece y el segundo entra. */}
-            <View style={styles.prepTextStack}>
-              <Animated.Text style={[styles.prepText, { color: prepColor }, prepLabelStyle]}>
-                PREPARANDO TU SESIÓN
-              </Animated.Text>
-              <Animated.Text style={[styles.prepText, styles.readyText, { color: readyColor }, readyLabelStyle]}>
-                LISTO
-              </Animated.Text>
-            </View>
+            {/* Crossfade PREPARANDO → LISTO: "PREPARANDO…" + dots quedan en flujo (definen el ancho de
+                la fila) y "LISTO" se superpone CENTRADO SOBRE LA FILA COMPLETA (texto + gap + dots),
+                espejo del `.exec-dsp-prep-ready { left:50%; translateX(-50%) }` del web — antes se
+                anclaba al borde izquierdo del texto largo y caía a la izquierda del centro óptico. */}
+            <Animated.Text style={[styles.prepText, { color: prepColor }, prepLabelStyle]}>
+              PREPARANDO TU SESIÓN
+            </Animated.Text>
             <Animated.View style={[styles.dots, dotsWrapStyle]}>
               <Animated.View style={[styles.dot, { backgroundColor: dotColor }, dot0Style]} />
               <Animated.View style={[styles.dot, { backgroundColor: dotColor }, dot1Style]} />
               <Animated.View style={[styles.dot, { backgroundColor: dotColor }, dot2Style]} />
+            </Animated.View>
+            <Animated.View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, styles.readyOverlay, readyLabelStyle]}
+            >
+              <Text style={[styles.prepText, { color: readyColor }]}>LISTO</Text>
             </Animated.View>
           </Animated.View>
         </View>
@@ -889,6 +961,8 @@ function DespegueOverlay({
 
 const styles = StyleSheet.create({
   root: { overflow: 'hidden' },
+  // Recorta a los hijos que cuelgan por ARRIBA del fondo (crestas + estelas), igual que `.exec-dsp-bg`.
+  bg: { overflow: 'hidden' },
   pill: {
     position: 'absolute',
     alignItems: 'center',
@@ -928,12 +1002,15 @@ const styles = StyleSheet.create({
     gap: 48,
   },
   logoWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  // `opacity: 0` de base (espejo del CSS web `.exec-dsp-ring`): si el commit de la style animada de
+  // reanimated llega un frame después del layout, el estado base NO puede pintarse a opacidad 1.
   ring: {
     position: 'absolute',
     width: 128,
     height: 128,
     borderRadius: 64,
     borderWidth: 2,
+    opacity: 0,
   },
   logo: {
     width: 112,
@@ -947,19 +1024,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
     elevation: 16,
   },
-  // Logo ~72 dentro del círculo de 112 (contain): deja ~20px de anillo de marca alrededor (el logo
-  // "respira", como el padding:20 del web). Centrado por el logo (alignItems/justifyContent: center).
-  logoImg: { width: 72, height: 72 },
+  // Máscara circular interna: 96 de diámetro dentro del círculo de 112 ⇒ 8px de anillo de marca (el
+  // logo sigue "respirando", como el padding:20 del web, pero SIEMPRE circular).
+  logoMask: { width: 96, height: 96, borderRadius: 48, overflow: 'hidden' },
+  // `borderRadius` también en la imagen: en Android/Fabric el clip del padre sobre <Image> ha fallado
+  // históricamente; expo-image respeta su propio radio ⇒ doble seguro.
+  logoImg: { width: 96, height: 96, borderRadius: 48 },
   logoInitial: { fontFamily: FONT.displayBlack, fontSize: 44, color: '#ffffff' },
-  prep: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  // Pila de textos PREPARANDO/LISTO: el primero define el ancho (en flujo), el segundo se superpone.
-  prepTextStack: { position: 'relative', justifyContent: 'center' },
+  // `position:relative` para anclar el "LISTO" absoluto sobre la fila; `opacity:0` de base (el bloque
+  // entra por keyframe a los 1900ms, como el `.exec-dsp-prep` del web).
+  prep: { flexDirection: 'row', alignItems: 'center', gap: 12, position: 'relative', opacity: 0 },
   prepText: { fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 2.86 },
-  // "LISTO" superpuesto sobre "PREPARANDO…" (misma línea), anclado a la izquierda para crossfade en sitio.
-  readyText: { position: 'absolute', left: 0, top: 0 },
+  // Capa del "LISTO": mismo box que la fila (absoluteFill) y centrado ⇒ cae en el centro óptico de la
+  // pantalla, igual que el `left:50% / translateX(-50%)` del web.
+  readyOverlay: { alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', gap: 4 },
   dot: { width: 5, height: 5, borderRadius: 2.5 },
-  hintWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  hintWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', opacity: 0 },
   // Prominente (tamaño/peso/contraste): al quedar listo es la llamada a la acción principal del Despegue.
   hintText: {
     fontFamily: FONT.uiExtra,

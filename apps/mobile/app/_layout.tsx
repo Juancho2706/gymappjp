@@ -37,11 +37,14 @@ import { registerSessionCacheJanitor } from '../lib/auth-actions'
 import { brandDisplayFontMap } from '../lib/brand-fonts'
 import { loadStoredBranding, type CoachBranding } from '../lib/branding'
 import { ThemeProvider, useTheme } from '../context/ThemeContext'
+import { DashboardReadyProvider } from '../context/DashboardReadyContext'
+import { DashboardSplashOverlay } from '../components/entry/DashboardSplashOverlay'
 import { ENTRY_TOKENS } from '../lib/theme'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
 import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
+import { SessionMorphProvider } from '../components/alumno/workout/v3/session-morph'
 import { isBiometricLockEnabled } from '../lib/biometric'
 import { checkForOtaUpdate } from '../lib/ota'
 import { AppState, View } from 'react-native'
@@ -191,10 +194,20 @@ function RootLayoutNav() {
     return () => sub.remove()
   }, [session?.user.id])
 
+  const biometricUp = locked && !!session
+
   return (
     <>
       <Stack screenOptions={{ headerShown: false }} />
-      {locked && session ? <BiometricLock onUnlock={() => setLocked(false)} /> : null}
+      {biometricUp ? <BiometricLock onUnlock={() => setLocked(false)} /> : null}
+      {/* QA-5 — el splash de marca ES el loader del dashboard. Vive ACA, hermano del Stack
+          (mismo patrón que Toaster/BiometricLock), porque el `SplashGate` de `app/index.tsx`
+          se desmontaba en el `router.replace` y descubría el skeleton intermedio. Solo se
+          arma en cold start CON sesión (su único emisor es el gate cuando rutea a un
+          dashboard) y se retira cuando la home resuelve su primer load — o al vencer su tope.
+          Va DESPUÉS del BiometricLock y `suppressed` con él: el splash nunca puede tapar una
+          pantalla que exige interacción. */}
+      <DashboardSplashOverlay suppressed={biometricUp} />
     </>
   )
 }
@@ -271,19 +284,35 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
             share-card…). Con ThemeProvider afuera, el host —y su `themeVars`
             View— quedan dentro del contexto y los sheets resuelven tokens/marca. */}
         <ThemeProvider>
-          <BottomSheetModalProvider>
-            <ThemedStatusBar />
-            {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
-                MotiView que animaba opacity — vista animada persistente sobre
-                react-native-screens bajo Fabric, un anti-patrón que amplifica el
-                robo de foco. La transición de arranque termina al ocultar el splash
-                nativo después del primer layout listo, sin animar el navegador. */}
-            <View style={{ flex: 1 }}>
-              <RootLayoutNav />
-            </View>
-            {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
-            <Toaster />
-          </BottomSheetModalProvider>
+          {/* Señal `ready` del dashboard + handoff de identidad del splash (QA-5). El store
+              vive en el módulo, así que montar el provider cuesta cero renders y la señal de
+              la home no re-renderiza el árbol. Va DENTRO de ThemeProvider para no alterar el
+              orden que exige el comentario de arriba. */}
+          <DashboardReadyProvider>
+            <BottomSheetModalProvider>
+              <ThemedStatusBar />
+              {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
+                  MotiView que animaba opacity — vista animada persistente sobre
+                  react-native-screens bajo Fabric, un anti-patrón que amplifica el
+                  robo de foco. La transición de arranque termina al ocultar el splash
+                  nativo después del primer layout listo, sin animar el navegador. */}
+              {/* Despegue (ceremonia de arranque del workout): el provider vive en el ROOT —dentro de
+                  ThemeProvider, que el overlay consume para el acento/logo del coach— y NO en el layout
+                  de tabs del alumno. Su overlay se pinta en un <Modal> nativo y en Android RN CIERRA el
+                  Dialog (onDetachedFromWindow → dismiss, sin callback a JS) cuando la pantalla que lo
+                  monta se detacha; como la ruta del ejecutor es hermana de (tabs) en el Stack raíz, el
+                  `router.push` de los ~1,3s mataba la ceremonia y el alumno aterrizaba sin el "TOCA PARA
+                  COMENZAR". Desde el root el host nunca se detacha (espejo del portal-a-body + provider
+                  persistente del layout /c de la web). `useSessionMorph()` sigue resolviendo igual. */}
+              <SessionMorphProvider>
+                <View style={{ flex: 1 }}>
+                  <RootLayoutNav />
+                </View>
+              </SessionMorphProvider>
+              {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
+              <Toaster />
+            </BottomSheetModalProvider>
+          </DashboardReadyProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

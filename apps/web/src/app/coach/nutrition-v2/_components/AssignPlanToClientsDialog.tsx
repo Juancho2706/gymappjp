@@ -208,7 +208,7 @@ export function AssignPlanToClientsDialog({
             <DialogTitle className="normal-case tracking-tight">Asignar plan a otros alumnos</DialogTitle>
             <DialogDescription>
               Se copiara la estructura de <span className="font-semibold text-strong">{sourcePlanName}</span> a los
-              alumnos que elijas. A quienes ya tengan un plan se les creara una nueva version vigente.
+              alumnos que elijas. A quienes ya tengan un plan se les reemplaza por este.
             </DialogDescription>
           </DialogHeader>
 
@@ -242,7 +242,7 @@ export function AssignPlanToClientsDialog({
                       {!item.ok && item.error ? (
                         <span className="block text-xs text-muted">{item.error}</span>
                       ) : (
-                        <span className="block text-xs text-muted">Nueva version publicada.</span>
+                        <span className="block text-xs text-muted">Plan publicado.</span>
                       )}
                     </span>
                   </li>
@@ -373,7 +373,7 @@ export function AssignPlanToClientsDialog({
                       className="mt-1 min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong outline-none focus:ring-2 focus:ring-ring"
                     />
                     <p className="mt-1 text-xs text-muted">
-                      Para quienes ya tienen plan, la fecha debe ser posterior a la de su version vigente.
+                      Para quienes ya tienen plan, la fecha debe ser posterior a la de su plan vigente.
                     </p>
                   </div>
 

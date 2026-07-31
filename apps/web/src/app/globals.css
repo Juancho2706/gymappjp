@@ -117,6 +117,12 @@
   --color-ember-600: var(--ember-600);
   --color-ember-700: var(--ember-700);
 
+  /* Warning ramp (estado informativo ámbar; NO es el acento de nutrición) → bg-warning-500, etc. */
+  --color-warning-100: var(--warning-100);
+  --color-warning-500: var(--warning-500);
+  --color-warning-600: var(--warning-600);
+  --color-warning-700: var(--warning-700);
+
   /* Aqua ramp (recovery — fijo; sin paso 300) → bg-aqua-500, etc. */
   --color-aqua-100: var(--aqua-100);
   --color-aqua-200: var(--aqua-200);
@@ -716,6 +722,36 @@ html {
 }
 
 /* ============================================================
+   Lienzo del documento bajo pantallas DARK-ONLY del alumno (QA2 D1)
+   ============================================================ */
+/* SÍNTOMA (iPhone Safari, alumno en eva-app.cl, pantalla final de sesión): el fondo oscuro de
+   la app termina y debajo sigue un bloque BLANCO gigante hasta la barra del navegador.
+   CAUSA RAÍZ: el ejecutor del alumno es dark-only POR CONTRATO — `[data-exec-v3]` pinta
+   `--exec-canvas` (#121218) y la pantalla final (`.exec-v3-final`) su gradiente cálido, sea
+   cual sea el tema activo. El lienzo del documento, en cambio, SÍ sigue al tema: la regla de
+   arriba resuelve `--background` → `--surface-app` → `--paper` (#FBFCFD) cuando el alumno está
+   en modo CLARO, y `color-scheme: light` le dice además al navegador que pinte de blanco lo que
+   nadie cubra. Como la pantalla final es un overlay `position: fixed; inset: 0`, y iOS Safari
+   maqueta los boxes `fixed` contra el viewport CHICO (barras desplegadas) y recompone esa capa
+   de forma asíncrona durante el scroll con inercia, cualquier franja que el overlay no alcance
+   a cubrir — más la zona de rubber-band — deja ver ese blanco. En modo OSCURO el mismo hueco
+   existe pero es invisible (lienzo #0A0D12), y por eso no se reportaba siempre.
+   FIX: mientras hay una pantalla de entrenamiento montada (`.is-workout-page`, la marca que ya
+   pone el wrapper del ejecutor y que este árbol ya usa vía `has-[.is-workout-page]:pb-0` en el
+   <main> de /c), el lienzo Y el color-scheme pasan a la superficie del ejecutor. Blanco
+   imposible en AMBOS temas. `:has()` en <html> es la misma técnica del <main> de /c (Safari
+   15.4+ / Chrome 105+); si el navegador no lo soporta, la regla se ignora y el comportamiento
+   queda exactamente como hoy. Scoped al árbol del alumno: `.is-workout-page` sólo existe en
+   /c (y en /t y /e, que sirven el mismo árbol), nunca en el panel /coach. */
+html:has(.is-workout-page) {
+  background-color: var(--exec-canvas);
+  color-scheme: dark;
+}
+html:has(.is-workout-page) body {
+  background-color: var(--exec-canvas);
+}
+
+/* ============================================================
    Glassmorphism & Clean UI Utilities
    ============================================================ */
 .glass {
@@ -1156,6 +1192,18 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* QA2 D1 — `min-h-dvh` de Tailwind emite SOLO `min-height:100dvh`. En un navegador sin unidades
+   dinámicas (iOS Safari < 15.4) la declaración se descarta ENTERA y el contenedor colapsa a la
+   altura de su contenido: es el otro camino por el que el lienzo del documento quedaba expuesto
+   debajo de la app (el shell del alumno y el del ejecutor dependen los dos de `min-h-dvh`).
+   Fallback estático; sin `@supports` la regla ganaría siempre (no-layered > layered) y anularía
+   el dvh real. */
+@supports not (height: 100dvh) {
+  .min-h-dvh {
+    min-height: 100vh;
+  }
+}
+
 /* Evita que hijos directos del body empujen el ancho */
 body > * {
   max-width: 100%;
@@ -1411,6 +1459,12 @@ body > * {
 .dt-set-embed { max-width: var(--dt-read-narrow); margin: 0 auto; padding: 20px var(--dt-page-x) 40px; }
 
 /* ============ Ejecutor V3 — shell dark-only (E2.1) ============ */
+/* Superficie base del ejecutor. Vive en :root (no dentro de [data-exec-v3]) porque el LIENZO del
+   documento — html/body, fuera del subárbol del ejecutor — tiene que poder igualarla. Ver el
+   bloque "Lienzo del documento" más abajo. */
+:root {
+  --exec-canvas: #121218;
+}
 /* V3 es el único ejecutor (el flag `executor_v3` se eliminó — decisión CEO 2026-07-23). El wrapper
    del ejecutor recibe [data-exec-v3]; el acento --exec-brand lo resuelve exec-theme.ts en runtime
    (coach → white-label / eva → Sport). Fallback aquí por si el helper aún no corrió. Dark-only:
@@ -1431,7 +1485,7 @@ body > * {
   --exec-brand-ink: color-mix(in srgb, var(--exec-brand) 30%, #000);
   /* Base sólida de respaldo; el gradiente cálido va en la capa fija [data-exec-v3]::before (abajo).
      Se evita background-attachment:fixed (roto/janky en iOS Safari y PWA standalone). */
-  background: #121218;
+  background: var(--exec-canvas);
 }
 /* Capa fija del fondo cálido del mockup (concepto-a-v3-core .a3a-screen): pintada al viewport,
    detrás del contenido (z-index:-1 → sobre el #121218 del root, bajo los hijos). Reemplaza el
@@ -2794,6 +2848,78 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* Bandas marquee PERSISTENTES del miembro activo de la superserie (pedido CEO): recordatorio "continúa
+   sin descanso" arriba y abajo de la tarjeta mientras la superserie sigue viva. Decorativas
+   (aria-hidden + pointer-events:none) — el aviso efímero sigue siendo `exec-v3-ss-cuebar`.
+   La tarjeta reserva el alto de las dos bandas con padding vertical extra. */
+[data-exec-v3] .exec-v3-excard.is-active.exec-v3-ss-hasmarquee {
+  position: relative;
+  padding-top: 32px;
+  padding-bottom: 32px;
+}
+[data-exec-v3] .exec-v3-ss-marquee {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--exec-brand) 14%, transparent);
+}
+[data-exec-v3] .exec-v3-ss-marquee.is-top {
+  top: 0;
+  border-radius: 16px 16px 0 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--exec-brand) 26%, transparent);
+}
+[data-exec-v3] .exec-v3-ss-marquee.is-bottom {
+  bottom: 0;
+  border-radius: 0 0 16px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--exec-brand) 26%, transparent);
+}
+/* Las dos copias del track son idénticas ⇒ -50% cae justo en el inicio de la segunda: loop sin costura. */
+[data-exec-v3] .exec-v3-ss-marquee-track {
+  display: flex;
+  width: max-content;
+  flex: none;
+  animation: exec-v3-ss-marquee-slide 9s linear infinite;
+  will-change: transform;
+}
+[data-exec-v3] .exec-v3-ss-marquee-track > span,
+[data-exec-v3] .exec-v3-ss-marquee-static {
+  flex: none;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--exec-brand) 80%, #ffffff);
+}
+[data-exec-v3] .exec-v3-ss-marquee-static {
+  display: none;
+}
+@keyframes exec-v3-ss-marquee-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-exec-v3] .exec-v3-ss-marquee {
+    justify-content: center;
+  }
+  [data-exec-v3] .exec-v3-ss-marquee-track {
+    display: none;
+  }
+  [data-exec-v3] .exec-v3-ss-marquee-static {
+    display: block;
   }
 }
 

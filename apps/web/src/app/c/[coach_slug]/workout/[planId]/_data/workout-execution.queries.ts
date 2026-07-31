@@ -3,11 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { resolveActiveWeekVariantForDisplay, programWeekIndex1Based } from '@/lib/workout/programWeekVariant'
-import { classicSlugForAreaId } from '@eva/workout-engine'
+import { classicSlugForAreaId, validateTargetDate } from '@eva/workout-engine'
 import type { IntervalConfig, WorkoutArea } from '@/domain/workout/types'
 import type { HrZoneRange } from '@eva/cardio'
 import { getClientZonesForContext } from '@/services/cardio-zones.service'
-import { validateTargetDate } from './target-date'
 
 export interface ExerciseType {
     id: string

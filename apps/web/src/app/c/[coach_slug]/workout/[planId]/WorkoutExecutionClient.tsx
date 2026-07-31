@@ -2863,8 +2863,10 @@ export function WorkoutExecutionClient({
                         {(() => {
                             const exercise = selectedExercise
                             if (!exercise) return null
+                            // QA4 · hallazgo 17: parser central (allowlist de hosts, incluye `youtube-nocookie.com`),
+                            // nunca el substring `includes('youtube.com')` que dejaba fuera los embeds nocookie.
                             const isYouTube = isYoutubeMediaUrl(exercise.video_url);
-                            
+
                             const ytId = exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null;
                             
                             if (isYouTube && ytId) {
@@ -2895,6 +2897,7 @@ export function WorkoutExecutionClient({
                                 );
                             }
                             
+                            // Host de YouTube sin id extraíble: no cae acá (el <Image> de una página de embed siempre falla).
                             if (exercise.video_url && !isYouTube) {
                                 const urlLower = exercise.video_url.toLowerCase();
                                 const isMp4 = urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.webm') || (urlLower.includes('supabase.co/storage') && !urlLower.includes('.gif') && !urlLower.includes('.jpg') && !urlLower.includes('.png'));

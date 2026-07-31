@@ -4,6 +4,7 @@ import { resolveMobileClientMutationContext } from '@/app/api/mobile/coach/clien
 import { createProgramAssignmentNotificationRepository } from '@/infrastructure/db/program-assignment-notification.repository'
 import { resendIdempotentEmailSender } from '@/infrastructure/email/resend-idempotent-email.repository'
 import { sendProgramAssignmentNotifications } from '@/services/workout/program-assignment-notification.service'
+import { notifyProgramAssigned } from '@/lib/push-events'
 
 /**
  * Side effect posterior a la asignación RN. La app ya persistió los programas por RLS; este bridge
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       appUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || null,
       repository: createProgramAssignmentNotificationRepository(context.admin),
       emailSender: resendIdempotentEmailSender,
+      pushSender: notifyProgramAssigned,
     })
     if (result.skipped.some((item) => item.reason === 'provider_error')) {
       console.error('[mobile-program-assignment-notifications] one or more emails failed', {

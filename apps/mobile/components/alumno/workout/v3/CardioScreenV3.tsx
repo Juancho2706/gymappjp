@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
 import { HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, SkipForward, Timer, Watch, Zap } from 'lucide-react-native'
@@ -13,10 +13,20 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
 } from '@eva/workout-engine'
-import { hrToZone, type HrToZoneProfile } from '@eva/cardio'
+import {
+  addSample,
+  createZoneSession,
+  hrToZone,
+  updateOutOfZone,
+  zoneSessionSummary,
+  type HrMetadataV1,
+  type HrToZoneProfile,
+  type HrZone,
+  type ZoneSessionState,
+} from '@eva/cardio'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
-import { timerHaptics } from '../../../../lib/haptics'
+import { haptics, timerHaptics } from '../../../../lib/haptics'
 import { isBleAvailable, useBleHr } from '../../../../lib/ble-hr'
 import { Sheet } from '../../../Sheet'
 import { ConnectSensorSheet } from './ConnectSensorSheet'
@@ -51,6 +61,11 @@ import type { ExecTheme } from './exec-theme'
  * La zona objetivo SIEMPRE visible con su rango bpm concreto si el perfil FC del alumno viajó
  * (`hrZones`); si no, solo "Z{n}". FC MANUAL (BLE = Ola 6): sub-chip honesto "Compara con tu reloj".
  * Captura post-esfuerzo por el keypad tipado EXISTENTE (`ActiveSetRow` cardio: min/metros/FC).
+ *
+ * CON SENSOR CONECTADO (specs/cardio-conectado · F1) el chip de BPM crece a un HUD: tiempo acumulado
+ * EN la zona pedida, barra de 5 zonas (marcador vivo + objetivo), promedio/máximo del stream y aviso
+ * háptico al salirse de zona ≥10 s sostenidos. Al cerrar la serie el resumen + la curva downsampleada
+ * viajan como `metadata.hr` por el MISMO `buildTypedPayload` → `logSet` (motor intocable).
  */
 /** Cue corto por zona (es-neutro) — respaldo del chip cuando no viaja el perfil FC (sin rango bpm). */
 const ZONE_CUE: Record<number, string> = {
@@ -120,6 +135,69 @@ export function CardioScreenV3({
   const streaming = ble.state.status === 'streaming'
   const liveBpm = streaming ? ble.state.bpm : null
   const liveZone = liveBpm != null && hrProfile ? hrToZone(liveBpm, hrProfile) : null
+
+  // ── HUD conectado (specs/cardio-conectado · F1) ───────────────────────────────────────────────
+  // El acumulador es PURO (`@eva/cardio/zone-session`): cada muestra del sensor entra UNA sola vez
+  // (guard por `lastSampleAtMs`) y de ahí salen el tiempo en la zona pedida, el max/avg y la curva que
+  // se persiste al cerrar la serie. Acá no se calcula nada de zonas a mano — se clasifica con el MISMO
+  // `hrToZone` de la prescripción (cero drift).
+  const targetZone: HrZone | null =
+    block.hr_zone != null && block.hr_zone >= 1 && block.hr_zone <= 5 ? (block.hr_zone as HrZone) : null
+  const zoneSessionRef = useRef<ZoneSessionState>(createZoneSession(targetZone))
+  const [zoneSession, setZoneSession] = useState<ZoneSessionState>(zoneSessionRef.current)
+  // Marca de la última muestra YA integrada: el efecto puede re-correr por otras dependencias y una
+  // muestra contada dos veces inflaría el tiempo en zona.
+  const lastSampleRef = useRef<number | null>(null)
+  // El timer vive DENTRO de cada hero (countdown/intervalos/cronómetro); el HUD solo necesita saber si
+  // corre para NO vibrar en pausa. Ref (no estado): no repinta nada al pausar.
+  const timerRunningRef = useRef(true)
+  const handleTimerRunning = useCallback((running: boolean) => {
+    timerRunningRef.current = running
+  }, [])
+
+  useEffect(() => {
+    if (!streaming) return
+    const bpm = ble.state.bpm
+    const atMs = ble.state.lastSampleAtMs
+    if (bpm == null || atMs == null || lastSampleRef.current === atMs) return
+    lastSampleRef.current = atMs
+    let next = addSample(zoneSessionRef.current, bpm, atMs, hrProfile ?? null)
+    if (targetZone != null && hrProfile) {
+      const paused = !timerRunningRef.current
+      // En pausa el aviso se REARMA (se trata como "en zona"): el alumno detuvo el bloque a propósito,
+      // no está fallando la prescripción. Fuera de pausa dispara una vez por tramo (debounce 10 s).
+      const inTarget = paused || hrToZone(bpm, hrProfile)?.zone === targetZone
+      const upd = updateOutOfZone(next, inTarget, atMs)
+      next = upd.state
+      // Aviso sutil de "te saliste de zona": mismo helper háptico del resto del ejecutor. reduced-motion
+      // ⇒ sin vibración (el HUD sigue mostrando el dato).
+      if (upd.fire && !paused && !reducedMotion) haptics.warning()
+    }
+    zoneSessionRef.current = next
+    setZoneSession(next)
+  }, [ble.state.bpm, ble.state.lastSampleAtMs, streaming, hrProfile, targetZone, reducedMotion])
+
+  /**
+   * `metadata.hr` de la serie que se está cerrando (resumen + curva downsampleada ≤360 puntos). null
+   * sin una sola muestra ⇒ el ctx no gana la key y `buildTypedPayload` devuelve el payload byte-idéntico
+   * al de siempre. Identidad ESTABLE (lee el ref) para no repintar la fila de captura con cada muestra.
+   */
+  const hrMetadataForCommit = useCallback((): HrMetadataV1 | null => {
+    const st = zoneSessionRef.current
+    return st.count > 0 ? zoneSessionSummary(st) : null
+  }, [])
+
+  const handleCommitSet = useCallback(
+    (payload: OptimisticLogPayload) => {
+      // Serie cerrada ⇒ el acumulador arranca limpio: cada serie del bloque persiste SU propia curva.
+      const fresh = createZoneSession(targetZone)
+      zoneSessionRef.current = fresh
+      lastSampleRef.current = null
+      setZoneSession(fresh)
+      onCommitSet(payload)
+    },
+    [onCommitSet, targetZone],
+  )
 
   // Congela el promedio de la sesión de stream para auto-rellenar `actual_avg_hr` una vez, al cerrar
   // el bloque (transición streaming → detenido). El athlete captura el esfuerzo DESPUÉS de detener,
@@ -207,7 +285,7 @@ export function CardioScreenV3({
 
       {/* HERO por modo */}
       {mode === 'interval' ? (
-        <IntervalHero block={block} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} />
+        <IntervalHero block={block} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} />
       ) : mode === 'countdown' ? (
         <CountdownHero
           durationSec={block.duration_sec as number}
@@ -215,9 +293,10 @@ export function CardioScreenV3({
           zoneColor={zoneColor}
           reducedMotion={reducedMotion}
           exec={exec}
+          onRunningChange={handleTimerRunning}
         />
       ) : (
-        <StopwatchHero distanceObjective={distanceObjective} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} />
+        <StopwatchHero distanceObjective={distanceObjective} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} />
       )}
 
       {/* Zona objetivo SIEMPRE visible + sub-chip honesto */}
@@ -255,7 +334,7 @@ export function CardioScreenV3({
       {/* Sensor BLE (E6.1): chip BPM VIVO con zona en vivo mientras hay stream; botón discreto si no.
           Todo el bloque solo aparece cuando hay backend BLE nativo (oculto en Expo Go). */}
       {bleSupported && (
-        <View style={{ alignItems: 'center' }}>
+        <View style={{ alignItems: 'center', gap: 10 }}>
           {liveBpm != null ? (
             <TouchableOpacity
               testID="chip-bpm-vivo"
@@ -295,6 +374,19 @@ export function CardioScreenV3({
               <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted }}>Conectar sensor de pulso</Text>
             </TouchableOpacity>
           )}
+
+          {/* HUD conectado: SOLO con stream activo y perfil FC del alumno. Sin perfil no hay zona que
+              mostrar (el chip de bpm crudo de arriba es toda la verdad disponible). */}
+          {streaming && hrProfile ? (
+            <HrHud
+              session={zoneSession}
+              targetZone={targetZone}
+              liveZone={liveZone?.zone ?? null}
+              avgHr={ble.state.avgHr}
+              maxHr={ble.state.maxHr}
+              exec={exec}
+            />
+          ) : null}
         </View>
       )}
 
@@ -332,8 +424,12 @@ export function CardioScreenV3({
             suggestedWeight={null}
             seedValues={captureSeed}
             header={{ exerciseName: exercise.name, objectiveLine }}
+            // FC del bloque (specs/cardio-conectado F1): la fila pide el resumen al confirmar y lo pasa
+            // como `ctx.hrMetadata` a `buildTypedPayload` → `workout_logs.metadata.hr`. Sin stream (o sin
+            // una sola muestra) devuelve null y el payload queda byte-idéntico al de siempre.
+            getHrMetadata={hrMetadataForCommit}
             onDraftChange={(values, fieldIndex) => onDraftChange(block.id, firstUnlogged as number, values, fieldIndex)}
-            onCommit={onCommitSet}
+            onCommit={handleCommitSet}
           />
         </View>
       )}
@@ -351,12 +447,148 @@ export function CardioScreenV3({
       )}
 
       {coachNote && (
-        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" forceDark nativeModal snapPoints={['35%']}>
           <View style={{ paddingVertical: 8 }}>
             <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">{coachNote}</Text>
           </View>
         </Sheet>
       )}
+    </View>
+  )
+}
+
+// ─── HUD conectado (F1): tiempo en zona + barra de zonas + avg/max del stream ────────────────────
+
+/** Duración hablada para lectores de pantalla ("3 minutos y 20 segundos"); "3:20" se leería como hora. */
+function spokenDuration(totalSec: number): string {
+  const total = Math.max(0, Math.round(totalSec))
+  const min = Math.floor(total / 60)
+  const sec = total % 60
+  if (min <= 0) return `${sec} segundo${sec === 1 ? '' : 's'}`
+  if (sec === 0) return `${min} minuto${min === 1 ? '' : 's'}`
+  return `${min} minuto${min === 1 ? '' : 's'} y ${sec} segundo${sec === 1 ? '' : 's'}`
+}
+
+/**
+ * HUD del bloque cardio con sensor conectado (specs/cardio-conectado F1): cuánto llevas EN la zona
+ * pedida, dónde estás en las 5 zonas y el promedio/máximo de la sesión de stream. Todo sale del
+ * acumulador puro (`zone-session`) y del estado del controlador BLE — nada se estima acá.
+ *
+ * Degradación: sin zona prescrita no hay fila de tiempo-en-zona ni objetivo marcado en la barra (solo
+ * el marcador vivo); sin perfil FC este HUD ni se monta (lo decide el padre).
+ */
+function HrHud({
+  session,
+  targetZone,
+  liveZone,
+  avgHr,
+  maxHr,
+  exec,
+}: {
+  session: ZoneSessionState
+  targetZone: HrZone | null
+  liveZone: HrZone | null
+  avgHr: number | null
+  maxHr: number | null
+  exec: ExecTheme
+}) {
+  const s = exec.surface
+  const inTargetSec = Math.round(session.inTargetSec)
+  const targetColor = zoneRingColor(targetZone, exec.accent)
+  const hasStats = (avgHr != null && avgHr > 0) || (maxHr != null && maxHr > 0)
+
+  return (
+    <View
+      testID="hr-hud-v3"
+      style={{ width: '100%', gap: 10, borderRadius: 16, borderWidth: 1.5, borderColor: s.borderSubtle, backgroundColor: s.surfaceSunken, paddingHorizontal: 12, paddingVertical: 10 }}
+    >
+      {targetZone != null ? (
+        <View
+          accessibilityRole="text"
+          accessibilityLabel={`Llevas ${spokenDuration(inTargetSec)} en la zona ${targetZone}`}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }}
+        >
+          <Timer size={14} color={targetColor} />
+          <Text style={{ fontFamily: FONT.displayBlack, fontSize: 19, color: targetColor, fontVariant: ['tabular-nums'] }}>
+            {formatClock(inTargetSec)}
+          </Text>
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(s.text, 0.75) }}>en Z{targetZone}</Text>
+        </View>
+      ) : null}
+
+      <ZoneBar liveZone={liveZone} targetZone={targetZone} exec={exec} />
+
+      {hasStats ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          {avgHr != null && avgHr > 0 ? <HudStat label="Promedio" value={avgHr} exec={exec} /> : null}
+          {maxHr != null && maxHr > 0 ? <HudStat label="Máximo" value={maxHr} exec={exec} /> : null}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+/** Barra de las 5 zonas: segmento LLENO en la zona viva, contorno en la zona objetivo. */
+function ZoneBar({
+  liveZone,
+  targetZone,
+  exec,
+}: {
+  liveZone: HrZone | null
+  targetZone: HrZone | null
+  exec: ExecTheme
+}) {
+  const s = exec.surface
+  const label = liveZone != null
+    ? `Zonas de frecuencia cardiaca. Estás en la zona ${liveZone}${targetZone != null ? `, objetivo zona ${targetZone}` : ''}`
+    : `Zonas de frecuencia cardiaca${targetZone != null ? `, objetivo zona ${targetZone}` : ''}`
+  return (
+    <View
+      testID="hr-zonebar-v3"
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 5 }}
+    >
+      {([1, 2, 3, 4, 5] as HrZone[]).map((z) => {
+        const color = zoneRingColor(z, exec.accent)
+        const live = liveZone === z
+        const target = targetZone === z
+        return (
+          <View key={z} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+            {/* Halo del segmento vivo (mismo recurso que la barra de intervalos: padding + fondo translúcido). */}
+            <View style={{ width: '100%', padding: live ? 3 : 0, borderRadius: live ? 8 : 5, backgroundColor: live ? hexToRgba(color, 0.22) : 'transparent' }}>
+              <View
+                style={{
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor: live ? color : hexToRgba(color, 0.28),
+                  borderWidth: target ? 2 : 0,
+                  borderColor: target ? hexToRgba(color, 0.95) : 'transparent',
+                }}
+              />
+            </View>
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 9, color: live ? color : target ? hexToRgba(color, 0.85) : s.textDim }}>
+              Z{z}
+            </Text>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+/** Stat compacto del HUD (promedio / máximo de la sesión de stream). */
+function HudStat({ label, value, exec }: { label: string; value: number; exec: ExecTheme }) {
+  const s = exec.surface
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
+      <Text style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: s.textDim }}>
+        {label}
+      </Text>
+      <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, color: hexToRgba(s.text, 0.9), fontVariant: ['tabular-nums'] }}>
+        {value}
+      </Text>
+      <Text style={{ fontFamily: FONT.uiBold, fontSize: 10, color: s.textDim }}>bpm</Text>
     </View>
   )
 }
@@ -368,15 +600,22 @@ function CountdownHero({
   zoneColor,
   reducedMotion,
   exec,
+  onRunningChange,
 }: {
   durationSec: number
   block: SessionBlock
   zoneColor: string
   reducedMotion: boolean
   exec: ExecTheme
+  /** Avisa al HUD si el conteo corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
+  onRunningChange?: (running: boolean) => void
 }) {
   const s = exec.surface
-  const countdown = useCountdown(durationSec, () => timerHaptics.holdDone(), true)
+  // QA4 h8a: NO auto-arranca (paridad web: `useExecCountdown(durationSec, { autoStart: false })`).
+  const countdown = useCountdown(durationSec, () => timerHaptics.holdDone(), false)
+  useEffect(() => {
+    onRunningChange?.(countdown.running)
+  }, [countdown.running, onRunningChange])
   const progress = computeCardioProgress(cardioObjective(block), { elapsed_sec: durationSec - countdown.remaining })
   const fill = progress ? 1 - progress.pct : countdown.remaining / (durationSec || 1)
 
@@ -401,7 +640,7 @@ function CountdownHero({
         </ProgressRing>
         <RingRestart onPress={() => countdown.restart(durationSec)} />
       </View>
-      <PauseButton running={countdown.running} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
+      <PauseButton running={countdown.running} started={countdown.started} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
       {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
       <CardioChipsRow>
         <MetricChipRN icon={<Timer size={16} color={hexToRgba(exec.accent, 0.85)} />} value={formatClock(durationSec)} label="Objetivo" wide={distObj == null} />
@@ -417,11 +656,14 @@ function IntervalHero({
   zoneColor,
   reducedMotion,
   exec,
+  onRunningChange,
 }: {
   block: SessionBlock
   zoneColor: string
   reducedMotion: boolean
   exec: ExecTheme
+  /** Avisa al HUD si el runner corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
+  onRunningChange?: (running: boolean) => void
 }) {
   const s = exec.surface
   // Fase D (G2/RF7): secuencia COMPLETA — incluye las fases por distancia (avance manual) además de
@@ -435,6 +677,9 @@ function IntervalHero({
     onPhaseChange: () => { setFlash((f) => f + 1); timerHaptics.intervalPhase() },
     onFinish: () => { setFlash((f) => f + 1); timerHaptics.intervalFinish() },
   })
+  useEffect(() => {
+    onRunningChange?.(runner.running)
+  }, [runner.running, onRunningChange])
 
   const phase = runner.phase
   const phaseColor = phase ? PHASE_COLORS[phase.kind] : zoneColor
@@ -591,7 +836,7 @@ function IntervalHero({
           />
         </View>
       ) : (
-        <PauseButton running={runner.running} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />
+        <PauseButton running={runner.running} started={runner.started} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />
       ))}
     </View>
   )
@@ -603,14 +848,21 @@ function StopwatchHero({
   zoneColor,
   reducedMotion,
   exec,
+  onRunningChange,
 }: {
   distanceObjective: string | null
   zoneColor: string
   reducedMotion: boolean
   exec: ExecTheme
+  /** Avisa al HUD si el cronómetro corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
+  onRunningChange?: (running: boolean) => void
 }) {
   const s = exec.surface
-  const stopwatch = useStopwatch(true)
+  // QA4 h8a: el cronómetro NO corre solo — el alumno lo arranca con el botón de abajo.
+  const stopwatch = useStopwatch(false)
+  useEffect(() => {
+    onRunningChange?.(stopwatch.running)
+  }, [stopwatch.running, onRunningChange])
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
       <ProgressRing size={196} strokeWidth={22} fill={stopwatch.running ? 1 : 0.001} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>
@@ -632,7 +884,7 @@ function StopwatchHero({
           Objetivo: <Text style={{ color: s.text }}>{distanceObjective}</Text>
         </Text>
       ) : null}
-      <PauseButton running={stopwatch.running} onToggle={stopwatch.toggle} exec={exec} reducedMotion={reducedMotion} />
+      <PauseButton running={stopwatch.running} started={stopwatch.started} onToggle={stopwatch.toggle} exec={exec} reducedMotion={reducedMotion} />
     </View>
   )
 }
@@ -701,28 +953,35 @@ function MetricChipRN({
   )
 }
 
+/**
+ * Botón de arranque/pausa del hero. QA4 h8a: tres estados (nunca arrancó ⇒ "Iniciar"), porque ahora
+ * ningún timer auto-arranca y el alumno necesita una affordance clara de partida.
+ */
 function PauseButton({
   running,
+  started = true,
   onToggle,
   exec,
   reducedMotion,
 }: {
   running: boolean
+  started?: boolean
   onToggle: () => void
   exec: ExecTheme
   reducedMotion: boolean
 }) {
+  const label = running ? 'Pausar' : started ? 'Reanudar' : 'Iniciar'
   return (
     <View style={{ width: '100%' }}>
       <JuicyButton
         testID="btn-cardio-pause-v3"
-        label={running ? 'Pausar' : 'Reanudar'}
+        label={label}
         icon={running ? <Pause size={18} color={exec.accentText} fill={exec.accentText} /> : <Play size={18} color={exec.accentText} fill={exec.accentText} />}
         onPress={onToggle}
         exec={exec}
         height={56}
         reducedMotion={reducedMotion}
-        accessibilityLabel={running ? 'Pausar el temporizador' : 'Reanudar el temporizador'}
+        accessibilityLabel={running ? 'Pausar el temporizador' : started ? 'Reanudar el temporizador' : 'Iniciar el temporizador'}
       />
     </View>
   )

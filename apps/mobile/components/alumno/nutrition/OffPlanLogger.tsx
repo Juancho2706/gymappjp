@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native'
 import { History, Plus, Search, Trash2, X } from 'lucide-react-native'
@@ -34,7 +37,7 @@ import {
  * OffPlanLogger (E4-11, seam // E4-SEAM-offplan) — diario de CONSUMO REAL del
  * alumno. El nombre técnico/DB se conserva por compatibilidad, pero la interfaz
  * usa lenguaje neutral y profesional:
- *  - trigger "Registrar alimento" → hoja inferior con búsqueda debounced sobre el
+ *  - trigger "Registrar alimento" → diálogo centrado con búsqueda debounced sobre el
  *    catálogo (RLS: global + coach) + fila de "Recientes" para quick-add,
  *  - al elegir un alimento se pide CANTIDAD (+ unidad g/ml/un) y se inserta,
  *  - lista de lo registrado hoy (con borrar) y su subtotal de macros.
@@ -73,6 +76,7 @@ export interface OffPlanLoggerProps {
 
 export function OffPlanLogger({ clientId, logDate, isToday, onTotalsChange }: OffPlanLoggerProps) {
   const { theme } = useTheme()
+  const { height: windowHeight } = useWindowDimensions()
 
   const [entries, setEntries] = useState<IntakeEntry[]>([])
   const [open, setOpen] = useState(false)
@@ -112,7 +116,7 @@ export function OffPlanLogger({ clientId, logDate, isToday, onTotalsChange }: Of
     listRecentIntakeFoods(clientId).then(setRecents).catch(() => setRecents([]))
   }, [open, clientId])
 
-  // Búsqueda debounced sobre el catálogo (solo con la hoja abierta y sin food elegido).
+  // Búsqueda debounced sobre el catálogo (solo con el diálogo abierto y sin food elegido).
   useEffect(() => {
     if (!open || selected) return
     const trimmed = term.trim()
@@ -299,266 +303,280 @@ export function OffPlanLogger({ clientId, logDate, isToday, onTotalsChange }: Of
         </Pressable>
       )}
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setOpen(false)} />
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            maxHeight: '85%',
-            backgroundColor: theme.card,
-            borderTopLeftRadius: theme.radius['3xl'],
-            borderTopRightRadius: theme.radius['3xl'],
-            borderTopWidth: 1,
-            borderColor: theme.border,
-            paddingBottom: 28,
-          }}
-        >
-          <View style={{ alignItems: 'center', paddingTop: 8 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: theme.mutedForeground, opacity: 0.35 }} />
-          </View>
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 }}>
-            <Text className="text-strong" style={{ flex: 1, fontFamily: FONT.displayBold, fontSize: 18, letterSpacing: -0.3 }}>
-              {selected ? '¿Cuánto consumiste?' : 'Registrar alimento'}
-            </Text>
+      {/* Diálogo CENTRADO (pedido del dueño): antes era hoja inferior con `animationType="slide"`.
+          El KeyboardAvoidingView sube la tarjeta en iOS cuando aparece el teclado; en Android lo
+          resuelve `adjustResize` del sistema. */}
+      <Modal visible={open} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <Pressable
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+            }}
+            onPress={() => setOpen(false)}
+          >
             <Pressable
-              testID="off-plan-close"
-              onPress={() => setOpen(false)}
-              hitSlop={10}
-              accessibilityLabel="Cerrar"
-              style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: 440,
+                maxHeight: '80%',
+                backgroundColor: theme.card,
+                borderRadius: theme.radius['3xl'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                overflow: 'hidden',
+                paddingBottom: 18,
+              }}
             >
-              <X size={20} color={theme.mutedForeground} strokeWidth={2} />
-            </Pressable>
-          </View>
-
-          {selected ? (
-            <View style={{ paddingHorizontal: 18, gap: 14 }}>
-              <View style={{ backgroundColor: theme.muted, borderRadius: theme.radius.xl, padding: 14, gap: 10 }}>
-                <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 15 }} numberOfLines={2}>
-                  {selected.food.name}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 }}>
+                <Text className="text-strong" style={{ flex: 1, fontFamily: FONT.displayBold, fontSize: 18, letterSpacing: -0.3 }}>
+                  {selected ? '¿Cuánto consumiste?' : 'Registrar alimento'}
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <TextInput
-                    testID="off-plan-qty"
-                    value={qty}
-                    onChangeText={setQty}
-                    keyboardType="numeric"
-                    selectTextOnFocus
-                    placeholder="0"
-                    placeholderTextColor={theme.mutedForeground}
-                    style={{
-                      width: 96,
-                      height: 48,
-                      borderRadius: theme.radius.lg,
-                      borderWidth: 1.5,
-                      borderColor: theme.border,
-                      backgroundColor: theme.card,
-                      paddingHorizontal: 12,
-                      color: theme.foreground,
-                      fontFamily: FONT.monoMedium,
-                      fontSize: 16,
-                    }}
-                  />
-                  <View style={{ flexDirection: 'row', gap: 6, flex: 1 }}>
-                    {UNITS.map((u) => {
-                      const active = u === unit
-                      return (
-                        <Pressable
-                          key={u}
-                          testID={`off-plan-unit-${u}`}
-                          onPress={() => setUnit(u)}
-                          style={{
-                            flex: 1,
-                            height: 48,
-                            borderRadius: theme.radius.lg,
-                            borderWidth: 1.5,
-                            borderColor: active ? EMBER_500 : theme.border,
-                            backgroundColor: active ? `${EMBER_500}1A` : theme.card,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: active ? EMBER_700 : theme.mutedForeground,
-                              fontFamily: FONT.uiSemibold,
-                              fontSize: 13,
-                            }}
-                          >
-                            {u}
-                          </Text>
-                        </Pressable>
-                      )
-                    })}
-                  </View>
-                </View>
-                <MacroPreview food={selected.food} qty={qty} unit={unit} />
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
-                  testID="off-plan-cancel"
-                  onPress={() => setSelected(null)}
-                  style={{
-                    flex: 1,
-                    height: 50,
-                    borderRadius: theme.radius.lg,
-                    borderWidth: 1.5,
-                    borderColor: theme.border,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  testID="off-plan-close"
+                  onPress={() => setOpen(false)}
+                  hitSlop={10}
+                  accessibilityLabel="Cerrar"
+                  style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 14 }}>
-                    Volver
-                  </Text>
-                </Pressable>
-                <Pressable
-                  testID="off-plan-confirm"
-                  onPress={confirmAdd}
-                  disabled={pending}
-                  style={{
-                    flex: 1.4,
-                    height: 50,
-                    borderRadius: theme.radius.lg,
-                    backgroundColor: EMBER_500,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: pending ? 0.6 : 1,
-                    flexDirection: 'row',
-                    gap: 8,
-                  }}
-                >
-                  {pending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Plus size={17} color="#FFFFFF" strokeWidth={2.5} />
-                  )}
-                  <Text style={{ color: '#FFFFFF', fontFamily: FONT.uiBold, fontSize: 14 }}>Agregar</Text>
+                  <X size={20} color={theme.mutedForeground} strokeWidth={2} />
                 </Pressable>
               </View>
-            </View>
-          ) : (
-            <>
-              <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    height: 48,
-                    borderRadius: theme.radius.lg,
-                    borderWidth: 1.5,
-                    borderColor: theme.border,
-                    backgroundColor: theme.muted,
-                    paddingHorizontal: 12,
-                    gap: 8,
-                  }}
-                >
-                  <Search size={18} color={theme.mutedForeground} strokeWidth={2} />
-                  <TextInput
-                    testID="off-plan-search"
-                    value={term}
-                    onChangeText={setTerm}
-                    placeholder="Buscar alimento (ej: Pollo, Manzana…)"
-                    placeholderTextColor={theme.mutedForeground}
-                    autoCorrect={false}
-                    style={{ flex: 1, color: theme.foreground, fontFamily: FONT.uiMedium, fontSize: 15, paddingVertical: 0 }}
-                  />
-                  {searching && <ActivityIndicator size="small" color={theme.mutedForeground} />}
-                </View>
-              </View>
 
-              {showRecents && (
-                <View style={{ paddingHorizontal: 18, paddingBottom: 6 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <History size={13} color={theme.mutedForeground} strokeWidth={2} />
-                    <Text className="text-muted" style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}>
-                      Recientes
+              {selected ? (
+                <View style={{ paddingHorizontal: 18, gap: 14 }}>
+                  <View style={{ backgroundColor: theme.muted, borderRadius: theme.radius.xl, padding: 14, gap: 10 }}>
+                    <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 15 }} numberOfLines={2}>
+                      {selected.food.name}
                     </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {recents.map((f) => (
-                      <Pressable
-                        key={f.id}
-                        testID={`off-plan-recent-${f.id}`}
-                        onPress={() => pickFood(f, 'recent')}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <TextInput
+                        testID="off-plan-qty"
+                        value={qty}
+                        onChangeText={setQty}
+                        keyboardType="numeric"
+                        selectTextOnFocus
+                        placeholder="0"
+                        placeholderTextColor={theme.mutedForeground}
                         style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 6,
-                          height: 40,
-                          maxWidth: '100%',
-                          borderRadius: 999,
-                          borderWidth: 1,
+                          width: 96,
+                          height: 48,
+                          borderRadius: theme.radius.lg,
+                          borderWidth: 1.5,
                           borderColor: theme.border,
-                          backgroundColor: theme.muted,
+                          backgroundColor: theme.card,
                           paddingHorizontal: 12,
+                          color: theme.foreground,
+                          fontFamily: FONT.monoMedium,
+                          fontSize: 16,
                         }}
-                      >
-                        <Plus size={13} color={theme.mutedForeground} strokeWidth={2} />
-                        <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 12.5 }} numberOfLines={1}>
-                          {f.name}
-                        </Text>
-                      </Pressable>
-                    ))}
+                      />
+                      <View style={{ flexDirection: 'row', gap: 6, flex: 1 }}>
+                        {UNITS.map((u) => {
+                          const active = u === unit
+                          return (
+                            <Pressable
+                              key={u}
+                              testID={`off-plan-unit-${u}`}
+                              onPress={() => setUnit(u)}
+                              style={{
+                                flex: 1,
+                                height: 48,
+                                borderRadius: theme.radius.lg,
+                                borderWidth: 1.5,
+                                borderColor: active ? EMBER_500 : theme.border,
+                                backgroundColor: active ? `${EMBER_500}1A` : theme.card,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: active ? EMBER_700 : theme.mutedForeground,
+                                  fontFamily: FONT.uiSemibold,
+                                  fontSize: 13,
+                                }}
+                              >
+                                {u}
+                              </Text>
+                            </Pressable>
+                          )
+                        })}
+                      </View>
+                    </View>
+                    <MacroPreview food={selected.food} qty={qty} unit={unit} />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <Pressable
+                      testID="off-plan-cancel"
+                      onPress={() => setSelected(null)}
+                      style={{
+                        flex: 1,
+                        height: 50,
+                        borderRadius: theme.radius.lg,
+                        borderWidth: 1.5,
+                        borderColor: theme.border,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 14 }}>
+                        Volver
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID="off-plan-confirm"
+                      onPress={confirmAdd}
+                      disabled={pending}
+                      style={{
+                        flex: 1.4,
+                        height: 50,
+                        borderRadius: theme.radius.lg,
+                        backgroundColor: EMBER_500,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: pending ? 0.6 : 1,
+                        flexDirection: 'row',
+                        gap: 8,
+                      }}
+                    >
+                      {pending ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Plus size={17} color="#FFFFFF" strokeWidth={2.5} />
+                      )}
+                      <Text style={{ color: '#FFFFFF', fontFamily: FONT.uiBold, fontSize: 14 }}>Agregar</Text>
+                    </Pressable>
                   </View>
                 </View>
-              )}
-
-              <ScrollView
-                style={{ maxHeight: 320 }}
-                contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 8 }}
-                keyboardShouldPersistTaps="handled"
-              >
-                {trimmed.length < SEARCH_MIN_CHARS && !showRecents && (
-                  <Text className="text-subtle" style={{ paddingVertical: 34, textAlign: 'center', fontFamily: FONT.ui, fontSize: 12 }}>
-                    Escribe al menos 2 letras para buscar un alimento del catálogo.
-                  </Text>
-                )}
-                {showEmpty && (
-                  <Text className="text-subtle" style={{ paddingVertical: 34, textAlign: 'center', fontFamily: FONT.ui, fontSize: 12 }}>
-                    No se encontraron alimentos con “{trimmed}”.
-                  </Text>
-                )}
-                {!selected &&
-                  results.map((f) => (
-                    <Pressable
-                      key={f.id}
-                      testID={`off-plan-result-${f.id}`}
-                      onPress={() => pickFood(f, 'offplan')}
+              ) : (
+                <>
+                  <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
+                    <View
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        gap: 12,
-                        minHeight: 52,
-                        paddingVertical: 8,
-                        borderBottomWidth: 1,
-                        borderBottomColor: theme.border,
+                        height: 48,
+                        borderRadius: theme.radius.lg,
+                        borderWidth: 1.5,
+                        borderColor: theme.border,
+                        backgroundColor: theme.muted,
+                        paddingHorizontal: 12,
+                        gap: 8,
                       }}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 14 }} numberOfLines={1}>
-                          {f.name}
+                      <Search size={18} color={theme.mutedForeground} strokeWidth={2} />
+                      <TextInput
+                        testID="off-plan-search"
+                        value={term}
+                        onChangeText={setTerm}
+                        placeholder="Buscar alimento (ej: Pollo, Manzana…)"
+                        placeholderTextColor={theme.mutedForeground}
+                        autoCorrect={false}
+                        // Teclado arriba apenas abre el diálogo: el alumno escribe sin un tap extra.
+                        autoFocus
+                        style={{ flex: 1, color: theme.foreground, fontFamily: FONT.uiMedium, fontSize: 15, paddingVertical: 0 }}
+                      />
+                      {searching && <ActivityIndicator size="small" color={theme.mutedForeground} />}
+                    </View>
+                  </View>
+
+                  {showRecents && (
+                    <View style={{ paddingHorizontal: 18, paddingBottom: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <History size={13} color={theme.mutedForeground} strokeWidth={2} />
+                        <Text className="text-muted" style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}>
+                          Recientes
                         </Text>
-                        {f.brand ? (
-                          <Text className="text-muted" style={{ fontFamily: FONT.uiMedium, fontSize: 11.5 }} numberOfLines={1}>
-                            {f.brand}
-                          </Text>
-                        ) : null}
                       </View>
-                      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: theme.muted, alignItems: 'center', justifyContent: 'center' }}>
-                        <Plus size={17} color={theme.foreground} strokeWidth={2.25} />
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {recents.map((f) => (
+                          <Pressable
+                            key={f.id}
+                            testID={`off-plan-recent-${f.id}`}
+                            onPress={() => pickFood(f, 'recent')}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              height: 40,
+                              maxWidth: '100%',
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              borderColor: theme.border,
+                              backgroundColor: theme.muted,
+                              paddingHorizontal: 12,
+                            }}
+                          >
+                            <Plus size={13} color={theme.mutedForeground} strokeWidth={2} />
+                            <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 12.5 }} numberOfLines={1}>
+                              {f.name}
+                            </Text>
+                          </Pressable>
+                        ))}
                       </View>
-                    </Pressable>
-                  ))}
-              </ScrollView>
-            </>
-          )}
-        </View>
+                    </View>
+                  )}
+
+                  <ScrollView
+                    // Relativo a la pantalla (no 320 fijo): en equipos chicos con el teclado
+                    // arriba la lista ya no empuja el diálogo fuera de la vista.
+                    style={{ maxHeight: Math.round(windowHeight * 0.4) }}
+                    contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 8 }}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {trimmed.length < SEARCH_MIN_CHARS && !showRecents && (
+                      <Text className="text-subtle" style={{ paddingVertical: 34, textAlign: 'center', fontFamily: FONT.ui, fontSize: 12 }}>
+                        Escribe al menos 2 letras para buscar un alimento del catálogo.
+                      </Text>
+                    )}
+                    {showEmpty && (
+                      <Text className="text-subtle" style={{ paddingVertical: 34, textAlign: 'center', fontFamily: FONT.ui, fontSize: 12 }}>
+                        No se encontraron alimentos con “{trimmed}”.
+                      </Text>
+                    )}
+                    {!selected &&
+                      results.map((f) => (
+                        <Pressable
+                          key={f.id}
+                          testID={`off-plan-result-${f.id}`}
+                          onPress={() => pickFood(f, 'offplan')}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 12,
+                            minHeight: 52,
+                            paddingVertical: 8,
+                            borderBottomWidth: 1,
+                            borderBottomColor: theme.border,
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 14 }} numberOfLines={1}>
+                              {f.name}
+                            </Text>
+                            {f.brand ? (
+                              <Text className="text-muted" style={{ fontFamily: FONT.uiMedium, fontSize: 11.5 }} numberOfLines={1}>
+                                {f.brand}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: theme.muted, alignItems: 'center', justifyContent: 'center' }}>
+                            <Plus size={17} color={theme.foreground} strokeWidth={2.25} />
+                          </View>
+                        </Pressable>
+                      ))}
+                  </ScrollView>
+                </>
+              )}
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   )

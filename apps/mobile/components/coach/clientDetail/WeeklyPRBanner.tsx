@@ -9,8 +9,12 @@ import { Badge } from '../../../components'
 import { SHADOWS } from '../../../lib/shadows'
 import { FONT } from '../../../lib/typography'
 import { resolveCelebrationSurfaceRamp } from '../../../lib/theme'
+import { themeLucideIcons } from '../../../lib/themed-lucide'
 import { PHASE_COLORS } from '../ProgramConfigSheet'
 import type { WeeklyWeightPR } from '../../../lib/profile-analytics'
+
+// QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado.
+themeLucideIcons(Trophy)
 
 // Contrato DS de ProgramConfigSheet: sport · violet · success · warning · ember · aqua.
 const VIOLET = PHASE_COLORS[1]

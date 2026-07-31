@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
@@ -38,16 +38,24 @@ const RING_C = 2 * Math.PI * RING_R
  *
  * reduced-motion ⇒ fade simple, sin springs/halo/latido (sigue auto-avanzando). El auto-avance y el tap
  * comparten un guard (`doneRef`) para no llamar `onDone` dos veces.
+ *
+ * GATE DE DATOS (QA device: el Inicio "cargaba por partes"): el splash NO sale sólo por tiempo. Espera
+ * `SPLASH_MS` **y** `ready` (paridad con el overlay web, que cubre hasta que la pantalla está lista de
+ * verdad). Si la red se cuelga hay un FALLBACK DURO a `SPLASH_MAX_MS`: jamás se atrapa al alumno en el
+ * splash, y el tap para saltar sigue vivo desde el primer frame.
  */
 
 // Duración del splash antes del auto-avance. Contrato: <1,5s → 1400ms (en device se salta con un tap).
 const SPLASH_MS = 1400
+// Techo duro del splash aunque `ready` siga en false (red lenta / lectura colgada): se avanza igual.
+const SPLASH_MAX_MS = 4500
 
 export function SessionIntro({
   exec,
   coachInitial,
   coachLogoUrl,
   dayTitle,
+  ready = true,
   reducedMotion = false,
   onDone,
 }: {
@@ -58,21 +66,40 @@ export function SessionIntro({
   coachLogoUrl?: string | null
   /** Título del día (nombre del plan / "Día N · Empuje"). */
   dayTitle: string
+  /**
+   * ¿Los datos del Inicio ya están resueltos? El auto-avance espera `SPLASH_MS` **y** esto (con techo
+   * duro `SPLASH_MAX_MS`) para que la pantalla siguiente no aparezca vacía y se llene "por partes".
+   */
+  ready?: boolean
   reducedMotion?: boolean
   onDone: () => void
 }) {
   const doneRef = useRef(false)
-  const finish = () => {
+  // `onDone` en un ref: los timers se arman UNA vez (montaje) y no deben re-armarse porque el padre
+  // recree el callback; `finish` queda estable y sirve igual al tap y al auto-avance.
+  const onDoneRef = useRef(onDone)
+  useEffect(() => { onDoneRef.current = onDone })
+  const finish = useCallback(() => {
     if (doneRef.current) return
     doneRef.current = true
-    onDone()
-  }
+    onDoneRef.current()
+  }, [])
+
+  // Reloj del splash: `minElapsed` (mínimo de animación cumplido) + `ready` (datos resueltos) mandan el
+  // auto-avance; el timer de techo corre en paralelo y avanza sí o sí.
+  const [minElapsed, setMinElapsed] = useState(false)
+  useEffect(() => {
+    const tMin = setTimeout(() => setMinElapsed(true), SPLASH_MS)
+    const tMax = setTimeout(finish, SPLASH_MAX_MS)
+    return () => {
+      clearTimeout(tMin)
+      clearTimeout(tMax)
+    }
+  }, [finish])
 
   useEffect(() => {
-    const t = setTimeout(finish, SPLASH_MS)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    if (minElapsed && ready) finish()
+  }, [minElapsed, ready, finish])
 
   const s = exec.surface
   const springIn = { type: 'spring' as const, ...SPRING_SPATIAL }

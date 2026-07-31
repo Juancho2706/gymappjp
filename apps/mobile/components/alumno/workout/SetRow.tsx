@@ -12,7 +12,11 @@ import {
   buildStrengthPayload,
   buildTypedPayload,
   int,
+  // Copia compartida del rechazo permanente del editor de día pasado: si la serie no existe en esa
+  // fecha no hay nada que reintentar ni que corregir → la fila de error se pinta SIN acciones.
+  PAST_SET_NOT_FOUND_ERROR,
 } from '@eva/workout-engine'
+import type { HrMetadataV1 } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { hexToRgba } from '../../../lib/theme'
 import { haptics } from '../../../lib/haptics'
@@ -20,9 +24,11 @@ import { fmtTypedLoggedLine } from './workout-ui'
 import { JuicyButton } from './v3/JuicyButton'
 import { EffortTicksV3 } from './v3/EffortTicksV3'
 import { resolveExecTheme, type ExecTheme } from './v3/exec-theme'
+import { WHEEL_LONG_PRESS_MS } from './v3/wheel-hint'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
+import { useEnsureVisibleInStep } from './StepperExecution'
 import { useEvaMotion } from '../../../lib/motion'
 
 const SPORT_400 = '#5C9DFF'
@@ -94,6 +100,11 @@ function effortUpdatePayload(
  * corrección/reintento (antes la tipada con `onRpeUpdate` retornaba temprano y nunca lo mostraba).
  * `onEdit` abre la fila editable (keypad sembrado, adaptación RN del `setEditing(true)` web);
  * `onRetry` re-dispara el commit del mismo payload para el error transitorio de red.
+ *
+ * Rechazo TERMINAL (`PAST_SET_NOT_FOUND_ERROR`, editor de día pasado): sólo el mensaje. Ni "Editar" ni
+ * "Reintentar" pueden hacer nada — no existe fila de esa serie en esa fecha y el modo solo-UPDATE jamás
+ * la crea, así que ofrecer acciones sería mentirle al alumno (mismo criterio que la cola web, que mete
+ * `past_set_not_found` en PERMANENT_FAILURE_CODES en vez de reintentar).
  */
 function SyncErrorRow({
   setNumber,
@@ -106,41 +117,46 @@ function SyncErrorRow({
   onEdit: () => void
   onRetry?: () => void
 }) {
+  const terminal = message === PAST_SET_NOT_FOUND_ERROR
   return (
     <View className="flex-row items-center gap-2 px-1">
       <Text style={TYPE.caption} className="flex-1 text-danger-500" numberOfLines={2}>
         {message}
       </Text>
-      <Pressable
-        testID={`edit-set-${setNumber}`}
-        onPress={onEdit}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`Editar la serie ${setNumber} para corregir el valor`}
-        className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
-      >
-        <Text
-          style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
-          className="text-danger-500"
-        >
-          Editar
-        </Text>
-      </Pressable>
-      <Pressable
-        testID={`retry-set-${setNumber}`}
-        onPress={onRetry}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`Reintentar guardar la serie ${setNumber}`}
-        className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
-      >
-        <Text
-          style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
-          className="text-danger-500"
-        >
-          Reintentar
-        </Text>
-      </Pressable>
+      {terminal ? null : (
+        <>
+          <Pressable
+            testID={`edit-set-${setNumber}`}
+            onPress={onEdit}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar la serie ${setNumber} para corregir el valor`}
+            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+          >
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+              className="text-danger-500"
+            >
+              Editar
+            </Text>
+          </Pressable>
+          <Pressable
+            testID={`retry-set-${setNumber}`}
+            onPress={onRetry}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Reintentar guardar la serie ${setNumber}`}
+            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+          >
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+              className="text-danger-500"
+            >
+              Reintentar
+            </Text>
+          </Pressable>
+        </>
+      )}
     </View>
   )
 }
@@ -567,7 +583,7 @@ function FieldBox({
   active: boolean
   onPress: () => void
   /**
-   * Mantener presionado (~400ms) sobre la caja — captura por RUEDA del ejecutor V3 (E2.5). Aditivo y
+   * Mantener presionado (`WHEEL_LONG_PRESS_MS`) sobre la caja — captura por RUEDA del ejecutor V3 (E2.5). Aditivo y
    * opcional: solo V3 lo pasa; sin la prop el Pressable no registra long-press y la fila se comporta
    * IGUAL que en V2 (el `delayLongPress` queda inerte sin handler). El tap corto abre el teclado como
    * siempre.
@@ -581,7 +597,7 @@ function FieldBox({
       testID={testID}
       onPress={onPress}
       onLongPress={onLongPress}
-      delayLongPress={onLongPress ? 400 : undefined}
+      delayLongPress={onLongPress ? WHEEL_LONG_PRESS_MS : undefined}
       className="flex-1"
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
@@ -650,6 +666,7 @@ export function ActiveSetRow({
   header,
   isActive = true,
   isEditing = false,
+  getHrMetadata,
   onDraftChange,
   onCommit,
   onLongPressValue,
@@ -708,6 +725,15 @@ export function ActiveSetRow({
    * representa una edición, en vez de hardcodear 'Listo'.
    */
   isEditing?: boolean
+  /**
+   * Resumen + curva de FC del bloque CARDIO al confirmar la serie (specs/cardio-conectado F1). La fila
+   * no acumula nada: solo PIDE el resumen en el instante del commit (`CardioScreenV3` lo arma con el
+   * reducer puro `zone-session` alimentado por el stream BLE) y lo pasa como `ctx.hrMetadata` a
+   * `buildTypedPayload` → `workout_logs.metadata.hr`. ADITIVO: sin la prop (o devolviendo null) el ctx
+   * NO gana la key y el payload es byte-idéntico al previo. Se ignora fuera de cardio (lo filtra el
+   * propio motor).
+   */
+  getHrMetadata?: () => HrMetadataV1 | null
   /**
    * Header de objetivo repetido DENTRO del teclado (DB-5: "SIEMPRE visible"; mirror web
    * `NumericKeypadSheet.tsx:204-228`). El scrim atenúa el objetivo/"Última vez" de la card mientras el
@@ -796,6 +822,12 @@ export function ActiveSetRow({
   // (mismo carril que rpe/rir → viaja al draft y al `buildStrengthPayload`).
   const [noteOpen, setNoteOpen] = useState(false)
   const noteTrimmed = (values.note ?? '').trim()
+  // El input de nota es el ÚNICO campo de la fila que abre el teclado del sistema (los números usan el
+  // keypad propio) y vive al pie del hero ⇒ quedaba tapado. Al enfocar se le pide al pager (contexto de
+  // `StepperExecution`) que lo suba sobre el teclado; fuera del pager el hook es `null` y no hace nada.
+  const noteInputRef = useRef<TextInput>(null)
+  const ensureVisibleInStep = useEnsureVisibleInStep()
+  const onNoteFocus = () => ensureVisibleInStep?.(noteInputRef.current)
 
   // Escritura única: sincroniza ref + estado + reporta el draft (resiliencia). idx = campo tocado.
   const patch = (p: Record<string, string>, idx = 0) => {
@@ -829,8 +861,16 @@ export function ActiveSetRow({
   }
 
   const commit = () => {
+    // FC del bloque cardio: se pide EN el commit (el acumulador vive en la pantalla, no acá) y solo entra
+    // al ctx si hay datos reales — sin la key el payload es byte-idéntico al de siempre.
+    const hrMetadata = typedMode === 'cardio' ? getHrMetadata?.() ?? null : null
     const payload = typedMode
-      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, { sideMode, distanceUnit, cardioModality })
+      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, {
+          sideMode,
+          distanceUnit,
+          cardioModality,
+          ...(hrMetadata ? { hrMetadata } : {}),
+        })
       : buildStrengthPayload(valuesRef.current, blockId, setNumber)
     onCommit(payload)
   }
@@ -854,7 +894,10 @@ export function ActiveSetRow({
 
   // Botón "teclado" del pie del hero (E-QA1): al cambiar el nonce abre el teclado en el tile de peso
   // (o el primer campo). Reusa `openField` — sin efecto sobre draft/commit.
-  const lastKbNonce = useRef<number | null>(null)
+  // Lazy-init con el valor inicial del prop: si arrancara en null, el primer render (y cada remount del
+  // hero, que se recrea por `key={hero-${setNumber}}` tras cada serie) vería un nonce "distinto" y abriría
+  // el keypad solo. Sólo debe abrir cuando el nonce CAMBIA respecto del que ya montó.
+  const lastKbNonce = useRef<number | null>(openKeypadNonce ?? null)
   useEffect(() => {
     if (openKeypadNonce == null || openKeypadNonce === lastKbNonce.current) return
     lastKbNonce.current = openKeypadNonce
@@ -863,6 +906,10 @@ export function ActiveSetRow({
   }, [openKeypadNonce])
 
   const currentField = openKey ? fields.find((f) => f.key === openKey) ?? null : null
+
+  // ¿Estamos en la captura HERO del ejecutor V3? (mismo predicado que la rama de render de abajo; se
+  // adelanta acá porque el teclado —que se arma antes— cambia de semántica en ese modo).
+  const heroCapture = heroMode && !typedMode && !!exec
 
   // Teclado numérico (Modal) — MISMO nodo para la fila V2 y el hero V3. Extraído a variable para no
   // duplicarlo entre ramas de render (la lógica de entrada/commit es idéntica).
@@ -888,9 +935,16 @@ export function ActiveSetRow({
           value={values[openKey] ?? ''}
           onChange={(v) => patch({ [openKey]: v }, idxOf(openKey))}
           onNext={goNext}
+          // QA5 (CEO): en el HERO V3 el "Listo" del teclado SOLO baja el teclado — la serie se cierra con el
+          // CTA dedicado "Aplastar serie", no con el teclado (el alumno todavía quiere ver/ajustar esfuerzo y
+          // nota antes de aplastar). No se pierde nada: cada tecla ya pasó por `patch` → `values`/`valuesRef`,
+          // así que los tiles muestran lo tipeado al cerrar y el CTA commitea esos MISMOS valores.
+          // Fuera del hero (fila V2 y pantallas tipadas) se conserva cerrar+guardar = mirror web
+          // (`NumericKeypadSheet` "Listo" registra la serie).
+          doneIntent={heroCapture ? 'close' : 'save'}
           onDone={() => {
             setOpenKey(null)
-            handleConfirm(false)
+            if (!heroCapture) handleConfirm(false)
           }}
           onClose={() => setOpenKey(null)}
           tabs={
@@ -1002,6 +1056,8 @@ export function ActiveSetRow({
                 transition={{ type: 'timing', duration: motion.reduced ? 0 : 200 }}
               >
                 <TextInput
+                  ref={noteInputRef}
+                  onFocus={onNoteFocus}
                   testID={`note-input-${setNumber}`}
                   value={values.note ?? ''}
                   onChangeText={(t) => patch({ note: t })}
@@ -1249,6 +1305,8 @@ export function ActiveSetRow({
                 transition={{ type: 'timing', duration: motion.reduced ? 0 : 200 }}
               >
                 <TextInput
+                  ref={noteInputRef}
+                  onFocus={onNoteFocus}
                   testID={`note-input-${setNumber}`}
                   value={values.note ?? ''}
                   onChangeText={(t) => patch({ note: t })}
@@ -1306,7 +1364,7 @@ function ValueTile({
       testID={testID}
       onPress={onPress}
       onLongPress={onLongPress}
-      delayLongPress={onLongPress ? 400 : undefined}
+      delayLongPress={onLongPress ? WHEEL_LONG_PRESS_MS : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
       accessibilityHint={onLongPress ? 'Mantén presionado para abrir la rueda de valores' : undefined}
