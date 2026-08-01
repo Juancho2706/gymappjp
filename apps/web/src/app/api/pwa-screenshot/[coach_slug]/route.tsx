@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { coachIdentifierColumn } from '@/lib/coach/invite-code'
 import { safeColor, rasterLogo } from '@/lib/records/pr-card'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { BRAND_APP_ICON, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import {
     PWA_SCREENSHOT_WIDTH,
     PWA_SCREENSHOT_HEIGHT,
@@ -24,7 +26,6 @@ export const runtime = 'nodejs'
 // Tokens DS concretos (satori no lee CSS vars) — ver globals.css / pr-card.
 const INK_950 = '#0B0E13'
 const INK_900 = '#12161D'
-const EVA_GREEN = '#10B981'
 
 interface Params {
     params: Promise<{ coach_slug: string }>
@@ -60,17 +61,19 @@ async function loadGoogleFont(family: string, weight: number, text: string): Pro
  */
 async function resolveBrand(
     supabase: Awaited<ReturnType<typeof createClient>>,
-    coachSlug: string
+    coachSlug: string,
+    evaLogoUrl: string,
 ): Promise<Brand> {
     const { data: coach } = await supabase
         .from('coaches')
-        .select('brand_name, primary_color, logo_url')
+        .select('brand_name, primary_color, logo_url, subscription_tier')
         .eq(coachIdentifierColumn(coachSlug), coachSlug)
         .maybeSingle()
 
+    const brandingAllowed = isBrandingAllowed((coach?.subscription_tier ?? 'free') as SubscriptionTier)
     let brandName = coach?.brand_name ?? 'EVA'
-    let logoUrl = coach?.logo_url ?? null
-    let accent = safeColor(coach?.primary_color, EVA_GREEN)
+    let logoUrl = brandingAllowed && coach?.logo_url ? coach.logo_url : evaLogoUrl
+    let accent = safeColor(brandingAllowed ? coach?.primary_color : SYSTEM_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR)
 
     // getClaims(): verificación LOCAL del JWT (ES256), sin /user. Identity-only best-effort; la
     // screenshot es pública y cacheada → no requiere revocación fresca.
@@ -337,7 +340,11 @@ export async function GET(request: NextRequest, { params }: Params) {
     const variant = searchParams.get('v') === '2' ? 2 : 1
 
     const supabase = await createClient()
-    const brand = await resolveBrand(supabase, coach_slug)
+    const brand = await resolveBrand(
+        supabase,
+        coach_slug,
+        new URL(BRAND_APP_ICON, request.url).toString(),
+    )
     const brandUpper = brand.brandName.toUpperCase()
 
     // Subset de glifos: base latina es-CL + strings fijos de AMBAS variantes + marca.
@@ -424,7 +431,7 @@ export async function GET(request: NextRequest, { params }: Params) {
             height: PWA_SCREENSHOT_HEIGHT,
             ...(fonts.length ? { fonts } : {}),
             headers: {
-                'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+                'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=300',
             },
         }
     )

@@ -3,12 +3,15 @@ import { createClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/admin-client';
 import { BRAND_APP_ICON_512, BRAND_APP_ICON_MASKABLE } from '@/lib/brand-assets';
 import { resolveBrandTheme } from '@eva/brand-kit';
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers';
+import { SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets';
 import { PWA_SCREENSHOT_SIZES } from '@/lib/pwa/screenshot-dimensions';
 
 type ManifestBrand = {
   brand_name: string
   logo_url: string | null
   primary_color: string | null
+  subscription_tier?: string | null
   // Cuando el alumno es de pool (clients.team_id NO NULL, org_id NULL), el manifest
   // se ancla al árbol /t/[team_slug]; en standalone/org queda NULL y se usa /c/[slug].
   team_slug?: string | null
@@ -29,14 +32,25 @@ export async function GET(
 
   // Gap 7: support invite_code (5 uppercase chars) in addition to slug
   const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
-  const coachQuery = supabase.from('coaches').select('id, brand_name, logo_url, primary_color')
+  const coachQuery = supabase.from('coaches').select('id, brand_name, logo_url, primary_color, subscription_tier')
   const { data: coach } = await (
     INVITE_CODE_RE.test(slug)
       ? coachQuery.eq('invite_code', slug).maybeSingle()
       : coachQuery.eq('slug', slug).maybeSingle()
   )
 
-  const brand = coach ? await resolveManifestBrand(supabase, coach) : null
+  const brandingAllowed = coach
+    ? isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)
+    : false
+  const coachPresentation = coach
+    ? {
+        ...coach,
+        // El storage conserva los assets; el manifest solo expone la presentación efectiva.
+        logo_url: brandingAllowed ? coach.logo_url : null,
+        primary_color: brandingAllowed ? coach.primary_color : SYSTEM_PRIMARY_COLOR,
+      }
+    : null
+  const brand = coachPresentation ? await resolveManifestBrand(supabase, coachPresentation) : null
 
   // Alumno de pool: anclar el PWA al árbol /t/[team_slug] (start_url + scope), nunca a /c.
   const teamSlug = brand?.team_slug ?? null
@@ -76,7 +90,7 @@ export async function GET(
     display: "standalone",
     orientation: "portrait",
     background_color: backgroundColor,
-    theme_color: brand?.primary_color || "#000000",
+    theme_color: brand?.primary_color || SYSTEM_PRIMARY_COLOR,
     icons: buildIcons(brand?.logo_url ?? null),
     screenshots,
   };
@@ -85,7 +99,8 @@ export async function GET(
     headers: {
       'Content-Type': 'application/manifest+json',
       'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600'
+      // El tier puede cambiar sin redeploy; no mantengas un manifest personalizado durante 24 h.
+      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=300'
     },
   });
 }

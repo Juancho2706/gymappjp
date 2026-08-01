@@ -1,4 +1,8 @@
 import { supabase } from './supabase'
+import { isBrandingAllowed } from '@eva/tiers'
+
+// Contrato de color del panel coach cuando el branding white-label no está incluido.
+const SYSTEM_PRIMARY_COLOR = '#007AFF'
 // F6 (plan 04): el union de tiers vive en @eva/tiers (fuente única web+mobile). NO redeclarar acá.
 import type { SubscriptionTier } from '@eva/tiers'
 
@@ -39,19 +43,23 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
     .maybeSingle()
 
   if (!data) return null
+  const subscriptionTier = normalizeSubscriptionTier(data.subscription_tier)
+  const brandingAllowed = isBrandingAllowed(subscriptionTier)
   return {
     id: data.id,
     fullName: data.full_name,
     brandName: data.brand_name,
     slug: data.slug,
     inviteCode: (data as { invite_code?: string | null }).invite_code ?? null,
-    primaryColor: data.primary_color,
+    // El valor personalizado sigue guardado en `coaches`; el perfil de runtime expone
+    // solamente la presentación efectiva para evitar fugas en pantallas que no usan ThemeContext.
+    primaryColor: brandingAllowed ? data.primary_color : SYSTEM_PRIMARY_COLOR,
     subscriptionStatus: data.subscription_status,
-    subscriptionTier: normalizeSubscriptionTier(data.subscription_tier),
+    subscriptionTier,
     currentPeriodEnd: data.current_period_end,
     trialEndsAt: data.trial_ends_at,
     maxClients: data.max_clients,
-    hasCoachLogo: Boolean(data.logo_url?.trim()),
-    logoUrl: data.logo_url ?? null,
+    hasCoachLogo: brandingAllowed && Boolean(data.logo_url?.trim()),
+    logoUrl: brandingAllowed ? data.logo_url ?? null : null,
   }
 }

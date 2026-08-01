@@ -65,6 +65,8 @@ type EvaRouteLoaderProps = {
     coachLogoUrl?: string
     /** Coach's dark-mode logo (used when iconMode === 'coach'); falls back to the light logo. */
     coachLogoDarkUrl?: string
+    /** EVA Free fallback can show only the figurative white mark, without the wordmark. */
+    showWordmark?: boolean
 }
 
 export function EvaRouteLoader({
@@ -78,6 +80,7 @@ export function EvaRouteLoader({
     iconMode = 'eva',
     coachLogoUrl,
     coachLogoDarkUrl,
+    showWordmark = true,
 }: EvaRouteLoaderProps) {
     const loaderVariant = useCoachLoaderVariant()
     const loaderConfig = useCoachLoaderConfig()
@@ -181,16 +184,18 @@ export function EvaRouteLoader({
                         />
                     </div>
                 )}
-                <span
-                    className={cn(
-                        'font-display font-extrabold leading-none',
-                        textClassName,
-                        wordClass
-                    )}
-                    style={textStyle}
-                >
-                    {displayText}
-                </span>
+                {showWordmark ? (
+                    <span
+                        className={cn(
+                            'font-display font-extrabold leading-none',
+                            textClassName,
+                            wordClass
+                        )}
+                        style={textStyle}
+                    >
+                        {displayText}
+                    </span>
+                ) : null}
             </div>
             {subtitle ? (
                 <p className="text-muted-foreground text-sm font-medium max-w-xs">{subtitle}</p>

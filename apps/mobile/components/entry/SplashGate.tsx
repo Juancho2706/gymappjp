@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { ENTRY_TOKENS, isCoachBrandingPresentationAllowed } from '../../lib/theme'
+import { useTheme } from '../../context/ThemeContext'
 import { EASE } from '../../lib/motion'
 import { loadStoredBranding, type CoachBranding } from '../../lib/branding'
 import { supabase } from '../../lib/supabase'
@@ -107,6 +108,7 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   const router = useRouter()
   const reduced = useReducedMotion()
   const { width, height } = useWindowDimensions()
+  const { setBranding } = useTheme()
 
   const [branded, setBranded] = useState<SplashBrandMark | null>(null)
   const [target, setTarget] = useState<GateTarget | null>(null)
@@ -170,9 +172,10 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
 
     void (async () => {
       try {
-        const [sessionResult, storedBranding] = await Promise.all([
+        const [sessionResult, storedBranding, ownCoach] = await Promise.all([
           supabase.auth.getSession(),
           loadStoredBranding(),
+          getCoachProfile(),
         ])
         if (!active || routed.current) return
 
@@ -184,19 +187,30 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
           return
         }
 
-        // Gate real del white-label: vive en el payload de branding (tier), no en la UI.
-        const allowed = storedBranding && isCoachBrandingPresentationAllowed(storedBranding)
+        // La cache conserva los assets, pero el tier actual del coach decide si se presentan.
+        // También evitamos reutilizar la marca de otro coach guardada en el device.
+        const sameCoachBranding = ownCoach && storedBranding?.coachId === ownCoach.id
+        const currentBranding = sameCoachBranding && storedBranding
+          ? { ...storedBranding, subscriptionTier: ownCoach.subscriptionTier }
+          : ownCoach
+            ? null
+            : storedBranding
+        const allowed = currentBranding && isCoachBrandingPresentationAllowed(currentBranding)
         decided.current = true
 
-        if (allowed && storedBranding) {
+        // El provider recibe el mismo veredicto antes de navegar: Free queda neutralizado
+        // por resolveEffectiveCoachBrandPresentation, sin un frame personalizado stale.
+        if (ownCoach) setBranding(currentBranding)
+
+        if (allowed && currentBranding) {
           const metadata = session.user.user_metadata as { full_name?: string; name?: string } | undefined
           const mark: SplashBrandMark = {
             // Orden de resolucion del ACENTO (§2.4): accentDark → primaryColor → azul EVA.
-            accent: entrySolidHex(storedBranding.accentDark ?? storedBranding.primaryColor, ENTRY_ACCENT),
-            displayName: storedBranding.displayName,
+            accent: entrySolidHex(currentBranding.accentDark ?? currentBranding.primaryColor, ENTRY_ACCENT),
+            displayName: currentBranding.displayName,
             greetingName: firstName(metadata?.full_name ?? metadata?.name ?? null),
             // Orden de resolucion de la MARCA (§2.4): logoUrlDark → logoUrl → tile de iniciales.
-            logoUri: storedBranding.logoUrlDark ?? storedBranding.logoUrl ?? null,
+            logoUri: currentBranding.logoUrlDark ?? currentBranding.logoUrl ?? null,
           }
           // El hold de continuidad se respeta aunque AsyncStorage conteste en 40 ms (§4 R1):
           // el crossfade nunca arranca antes de t0+120.
@@ -215,9 +229,8 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
 
         // Consulta de RED. Define el DESTINO, no la marca: por eso corre despues de haber
         // lanzado el crossfade y no antes.
-        const coach = await getCoachProfile()
         if (!active || routed.current) return
-        setTarget(coach ? '/coach/home' : '/alumno/home')
+        setTarget(ownCoach ? '/coach/home' : '/alumno/home')
       } catch {
         if (active && !routed.current) onAnonymousRef.current({ branding: null, failed: true })
       }

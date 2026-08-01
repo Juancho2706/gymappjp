@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
 import { parseLoaderConfig } from './brand-loaders'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 
 // slug + invite_code son INMUTABLES (set-once en el registro). No hay edición desde mobile.
 // El slug legacy se sigue leyendo (getCoachBrandSettings) y mostrando como alias read-only.
@@ -197,9 +198,15 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
   // Bump welcome_modal_version when the modal changes so students re-see it (web parity).
   const { data: current } = await supabase
     .from('coaches')
-    .select('welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version')
+    .select('welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version, subscription_tier')
     .eq('id', user.id)
     .maybeSingle()
+
+  // La fila conserva el branding personalizado durante Free, pero este camino de escritura
+  // también debe ser fail-closed: una llamada directa no puede modificar el visual bloqueado.
+  const brandingAllowed = isBrandingAllowed(
+    (current?.subscription_tier ?? 'free') as SubscriptionTier,
+  )
 
   const modalContent = input.welcomeModalContent?.trim() || null
   const modalChanged =
@@ -208,18 +215,10 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
     ((current?.welcome_modal_type as string) ?? 'text') !== input.welcomeModalType
   const modalVersion = (current?.welcome_modal_version ?? 0) + (modalChanged ? 1 : 0)
 
-  const { error } = await supabase
-    .from('coaches')
-    .update({
+  const updatePayload: Record<string, unknown> = {
       // M-F2: full_name editable desde Mi Marca (antes no se escribía).
       ...(input.fullName != null && input.fullName.trim() ? { full_name: input.fullName.trim() } : {}),
       brand_name: name,
-      primary_color: input.primaryColor,
-      use_brand_colors_coach: input.useBrandColors,
-      loader_text: input.loaderText?.trim() || null,
-      loader_text_color: input.loaderTextColor?.trim() || null,
-      loader_icon_mode: input.loaderIconMode || 'eva',
-      use_custom_loader: input.useCustomLoader,
       welcome_message: input.welcomeMessage?.trim() || null,
       welcome_modal_enabled: input.welcomeModalEnabled,
       welcome_modal_content: modalContent,
@@ -229,6 +228,20 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
       // E7-10 — white-label v2 avanzado (GRANT UPDATE verificado: migraciones 20260621220000 +
       // 20260702210000). Escritas directo bajo RLS coaches_update_own (id = auth.uid()). undefined
       // ⇒ JSON.stringify lo omite ⇒ columna intacta; null ⇒ se limpia explícitamente.
+      // QA4 — aditivos y OPT-IN: solo viajan si el caller los mandó. Un editor que no los conoce
+      // (`undefined`) deja las columnas intactas y el update sale igual que antes.
+      ...(input.executorTheme !== undefined ? { executor_theme: input.executorTheme === 'eva' ? 'eva' : 'coach' } : {}),
+      updated_at: new Date().toISOString(),
+  }
+
+  if (brandingAllowed) {
+    Object.assign(updatePayload, {
+      primary_color: input.primaryColor,
+      use_brand_colors_coach: input.useBrandColors,
+      loader_text: input.loaderText?.trim() || null,
+      loader_text_color: input.loaderTextColor?.trim() || null,
+      loader_icon_mode: input.loaderIconMode || 'eva',
+      use_custom_loader: input.useCustomLoader,
       theme_preset_key: input.themePresetKey ?? null,
       login_layout_key: input.loginLayoutKey || 'clasico',
       brand_secondary_color: sec.value,
@@ -237,12 +250,13 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
       neutral_tint: !!input.neutralTint,
       brand_font_key: input.brandFontKey || null,
       loader_variant: input.loaderVariant || 'eva',
-      // QA4 — aditivos y OPT-IN: solo viajan si el caller los mandó. Un editor que no los conoce
-      // (`undefined`) deja las columnas intactas y el update sale igual que antes.
       ...(input.loaderConfig !== undefined ? { loader_config: parseLoaderConfig(input.loaderConfig) } : {}),
-      ...(input.executorTheme !== undefined ? { executor_theme: input.executorTheme === 'eva' ? 'eva' : 'coach' } : {}),
-      updated_at: new Date().toISOString(),
     })
+  }
+
+  const { error } = await supabase
+    .from('coaches')
+    .update(updatePayload)
     .eq('id', user.id)
 
   if (error) return { ok: false, error: error.message }
@@ -261,6 +275,16 @@ export async function uploadCoachLogo(
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'No autenticado.' }
+
+  const { data: coach, error: coachError } = await supabase
+    .from('coaches')
+    .select('subscription_tier')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (coachError || !coach) return { ok: false, error: 'No se pudo verificar tu plan.' }
+  if (!isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)) {
+    return { ok: false, error: 'El logo personalizado requiere un plan que incluya branding.' }
+  }
 
   try {
     const manipulated = await ImageManipulator.manipulateAsync(

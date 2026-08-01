@@ -184,11 +184,11 @@ export default function CoachSettingsHubScreen() {
   const isTeam = ws.kind === 'team_owner' || ws.kind === 'team_member'
   const managed = ws.isManaged
   const tier = profile?.subscriptionTier ?? 'starter'
+  const brandingOk = canUseBranding(tier)
   const displayName = profile?.brandName?.trim() || profile?.fullName?.trim() || 'Coach'
   // QA2-B2: el hero pinta el LOGO de la marca cuando existe (`coaches.logo_url`, la misma
   // columna que edita `coach/settings/brand.tsx`); sin logo cae a las iniciales del DS.
-  const heroLogoUrl = profile?.logoUrl?.trim() || null
-  const brandingOk = canUseBranding(tier)
+  const heroLogoUrl = brandingOk ? profile?.logoUrl?.trim() || null : null
 
   const roleBadge = isTeam
     ? ws.kind === 'team_owner'
