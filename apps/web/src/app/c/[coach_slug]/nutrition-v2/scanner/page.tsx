@@ -2,15 +2,15 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { FoodScannerClient } from '@/components/nutrition-v2/FoodScannerClient'
-import { NutritionPageShell } from '@/components/nutrition-v2'
+import { NutritionDomainOff, NutritionPageShell } from '@/components/nutrition-v2'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getTodayInSantiago } from '@/lib/date-utils'
-import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
-import { getClientScope } from '../../nutrition/_data/client-scope.queries'
+import {
+  getCurrentStudentNutritionScope,
+  getCurrentStudentNutritionSession,
+} from '@/services/auth/current-student-nutrition.service'
 import { getNutritionTodayV2ForWeb } from '@/services/nutrition-v2-read.service'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
-import { NutritionDomainOff } from '../../nutrition/_components/NutritionDomainOff'
 
 export const metadata = { title: 'Escanear alimento' }
 
@@ -21,27 +21,18 @@ interface Props {
 export default async function NutritionV2ScannerPage({ params }: Props) {
   const { coach_slug } = await params
   const base = await getClientBasePath(coach_slug)
-  const { user, hasClientRow } = await getClientNutritionUser()
+  const { user, hasClientRow } = await getCurrentStudentNutritionSession()
   if (!user || !hasClientRow) redirect(`${base}/login`)
 
-  const scope = await getClientScope(user.id)
-  const [enabled, domainEnabled] = await Promise.all([
-    isNutritionV2Enabled({
-      surface: 'webStudent',
-      userId: user.id,
-      clientId: user.id,
-      coachId: scope.coachId,
-      teamId: scope.teamId,
-      orgId: scope.orgId,
-    }),
-    resolveNutritionDomainEnabled({
+  const scope = await getCurrentStudentNutritionScope(user.id)
+  if (scope.orgId) redirect(`${base}/nutrition`)
+
+  const domainEnabled = await resolveNutritionDomainEnabled({
       coachId: scope.coachId ?? '',
       clientId: user.id,
       clientTeamId: scope.teamId,
       clientOrgId: scope.orgId,
-    }),
-  ])
-  if (!enabled) redirect(`${base}/nutrition`)
+    })
   if (!domainEnabled) return <NutritionDomainOff coachSlug={coach_slug} />
 
   // Contexto de registro (P0 QA: el scan no dejaba registrar): mismo read model del Today

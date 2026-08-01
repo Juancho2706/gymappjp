@@ -142,11 +142,10 @@ function failure(
   startedAt: number,
   code: string,
   error: string,
-  extra: Record<string, unknown> = {},
-  rolloutReason?: string,
+  extra: Record<string, unknown> = {}
 ) {
   const status = statusForCode(code)
-  logNutritionV2Api({ route: ROUTE, startedAt, status, errorCode: code, rolloutReason })
+  logNutritionV2Api({ route: ROUTE, startedAt, status, errorCode: code })
   return jsonNoStore({ ok: false, code, error, ...extra }, status)
 }
 
@@ -244,7 +243,7 @@ export async function POST(request: NextRequest) {
 
   const limited = await rateLimitNutritionCoachWrite(gate.userId)
   if (!limited.ok) {
-    logNutritionV2Api({ route: ROUTE, startedAt, status: 429, errorCode: 'RATE_LIMIT', rolloutReason: gate.rolloutReason })
+    logNutritionV2Api({ route: ROUTE, startedAt, status: 429, errorCode: 'RATE_LIMIT' })
     return jsonRateLimited(limited.retryAfter)
   }
 
@@ -262,7 +261,7 @@ export async function POST(request: NextRequest) {
     case 'createFood':
       return handleCreateFood(gate, db, raw, startedAt)
     default:
-      return failure(startedAt, 'INVALID_ACTION', 'Acción inválida.', {}, gate.rolloutReason)
+      return failure(startedAt, 'INVALID_ACTION', 'Acción inválida.', {})
   }
 }
 
@@ -279,7 +278,6 @@ async function handlePublish(
       'INVALID_PAYLOAD',
       'El plan tiene datos inválidos.',
       { fields: zodFields(parsed.error) },
-      gate.rolloutReason,
     )
   }
   const { draft, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = parsed.data
@@ -291,7 +289,6 @@ async function handlePublish(
       'UPGRADE_REQUIRED',
       `Activa Nutrición Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]}.`,
       { feature: pro.feature },
-      gate.rolloutReason,
     )
   }
 
@@ -314,7 +311,7 @@ async function handlePublish(
       .maybeSingle()
     // Fail-closed: sin la version base no podemos garantizar que la publicacion no borre notas.
     if (baseRes.error) {
-      return failure(startedAt, 'SCOPE_DENIED', 'No pudimos leer la versión vigente del plan.', {}, gate.rolloutReason)
+      return failure(startedAt, 'SCOPE_DENIED', 'No pudimos leer la versión vigente del plan.', {})
     }
     const base = baseRes.data
     // Anti-confusion de ids: la version base debe pertenecer al plan que el draft republica.
@@ -338,14 +335,13 @@ async function handlePublish(
     ...(expectedCurrentVersionId ? { expectedCurrentVersionId } : {}),
   })
   if (!result.ok) {
-    return failure(startedAt, result.code, result.error, {}, gate.rolloutReason)
+    return failure(startedAt, result.code, result.error, {})
   }
 
   const payload = { ok: true as const, versionId: result.versionId, planId: result.planId }
-  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload, rolloutReason: gate.rolloutReason })
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
   return jsonNoStore(payload)
 }
-
 async function handleQuickEditPublish(
   gate: NutritionV2ApiGate,
   db: NutritionV2Db,
@@ -359,7 +355,6 @@ async function handleQuickEditPublish(
       'INVALID_PAYLOAD',
       'El plan tiene datos inválidos.',
       { fields: zodFields(parsed.error) },
-      gate.rolloutReason,
     )
   }
   const { draft, baseVersionId, idempotencyKey, effectiveFrom } = parsed.data
@@ -372,7 +367,7 @@ async function handleQuickEditPublish(
     .eq('id', baseVersionId)
     .maybeSingle()
   if (baseRes.error) {
-    return failure(startedAt, 'SCOPE_DENIED', 'No pudimos leer la versión vigente del plan.', {}, gate.rolloutReason)
+    return failure(startedAt, 'SCOPE_DENIED', 'No pudimos leer la versión vigente del plan.', {})
   }
   const base = baseRes.data
   if (!base || !draft.planId || base.plan_id !== draft.planId) {
@@ -381,7 +376,6 @@ async function handleQuickEditPublish(
       'PLAN_NOT_FOUND',
       'No se encontró la versión vigente de este plan. Recarga la ficha e intenta de nuevo.',
       {},
-      gate.rolloutReason,
     )
   }
 
@@ -402,7 +396,6 @@ async function handleQuickEditPublish(
       'UPGRADE_REQUIRED',
       `Activa Nutrición Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]}.`,
       { feature: pro.feature },
-      gate.rolloutReason,
     )
   }
 
@@ -415,11 +408,11 @@ async function handleQuickEditPublish(
     expectedCurrentVersionId: baseVersionId,
   })
   if (!result.ok) {
-    return failure(startedAt, result.code, result.error, {}, gate.rolloutReason)
+    return failure(startedAt, result.code, result.error, {})
   }
 
   const payload = { ok: true as const, versionId: result.versionId, planId: result.planId }
-  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload, rolloutReason: gate.rolloutReason })
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
   return jsonNoStore(payload)
 }
 
@@ -437,14 +430,13 @@ async function handleAssign(
       'INVALID_PAYLOAD',
       'La asignación tiene datos inválidos.',
       { fields: zodFields(parsed.error) },
-      gate.rolloutReason,
     )
   }
   const { sourceClientId, expectedVersionId, targetClientIds, effectiveFrom, operationId } = parsed.data
 
   const targetsCheck = validateAssignTargets(sourceClientId, targetClientIds)
   if (!targetsCheck.ok) {
-    return failure(startedAt, targetsCheck.code, targetsCheck.error, {}, gate.rolloutReason)
+    return failure(startedAt, targetsCheck.code, targetsCheck.error, {})
   }
   const targets = targetsCheck.targets
 
@@ -464,16 +456,15 @@ async function handleAssign(
       sourceRes.error.code === '42501' ? 'SCOPE_DENIED' : 'SOURCE_READ_FAILED',
       'No pudimos releer el plan de origen. Intenta de nuevo.',
       {},
-      gate.rolloutReason,
     )
   }
   const detail = NutritionClientDetailReadModelSchema.safeParse(sourceRes.data)
   if (!detail.success) {
-    return failure(startedAt, 'SOURCE_READ_FAILED', 'No pudimos releer el plan de origen. Intenta de nuevo.', {}, gate.rolloutReason)
+    return failure(startedAt, 'SOURCE_READ_FAILED', 'No pudimos releer el plan de origen. Intenta de nuevo.', {})
   }
   const source = detail.data.plan
   if (!source.plan || source.dayVariants.length === 0) {
-    return failure(startedAt, 'SOURCE_NO_PLAN', 'El alumno de origen no tiene un plan V2 vigente para copiar.', {}, gate.rolloutReason)
+    return failure(startedAt, 'SOURCE_NO_PLAN', 'El alumno de origen no tiene un plan V2 vigente para copiar.', {})
   }
   if (source.plan.versionId !== expectedVersionId) {
     return failure(
@@ -481,14 +472,13 @@ async function handleAssign(
       'SOURCE_VERSION_MISMATCH',
       'El plan de origen cambió. Vuelve a abrir el diálogo e intenta de nuevo.',
       {},
-      gate.rolloutReason,
     )
   }
 
   // Gate Pro sobre el draft RESULTANTE (idéntico para todos los destinos): se checa UNA vez.
   const probe = buildDraftForTarget({ source, targetClientId: targets[0], effectiveFrom })
   if (!probe.ok) {
-    return failure(startedAt, 'SOURCE_NO_PLAN', probe.error, {}, gate.rolloutReason)
+    return failure(startedAt, 'SOURCE_NO_PLAN', probe.error, {})
   }
   const pro = await proGate(gate, probe.draft)
   if (!pro.ok) {
@@ -497,7 +487,6 @@ async function handleAssign(
       'UPGRADE_REQUIRED',
       `Activa Nutrición Pro para asignar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]}.`,
       { feature: pro.feature },
-      gate.rolloutReason,
     )
   }
 
@@ -537,7 +526,7 @@ async function handleAssign(
   }
 
   const payload = { ok: true as const, results, summary: aggregateAssignResults(results) }
-  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload, rolloutReason: gate.rolloutReason })
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
   return jsonNoStore(payload)
 }
 
@@ -560,12 +549,12 @@ async function handleArchive(
 ) {
   const parsed = ArchiveSchema.safeParse(raw)
   if (!parsed.success) {
-    return failure(startedAt, 'INVALID_PAYLOAD', 'La solicitud tiene datos inválidos.', {}, gate.rolloutReason)
+    return failure(startedAt, 'INVALID_PAYLOAD', 'La solicitud tiene datos inválidos.', {})
   }
   // Doble validación deliberada: el contrato compartido con la web es el que manda sobre los ids.
   const ids = ArchivePlanInputSchema.safeParse({ clientId: parsed.data.clientId, planId: parsed.data.planId })
   if (!ids.success) {
-    return failure(startedAt, 'INVALID_PAYLOAD', 'La solicitud tiene datos inválidos.', {}, gate.rolloutReason)
+    return failure(startedAt, 'INVALID_PAYLOAD', 'La solicitud tiene datos inválidos.', {})
   }
   const { clientId, planId } = ids.data
 
@@ -587,11 +576,11 @@ async function handleArchive(
 
   const outcome = classifyArchiveWrite({ errorCode: error?.code, rowsAffected: data?.length ?? 0 })
   if (outcome.code !== 'OK') {
-    return failure(startedAt, outcome.code, outcome.error, {}, gate.rolloutReason)
+    return failure(startedAt, outcome.code, outcome.error, {})
   }
 
   const payload = { ok: true as const }
-  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload, rolloutReason: gate.rolloutReason })
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
   return jsonNoStore(payload)
 }
 
@@ -614,16 +603,15 @@ async function handleCreateFood(
       'INVALID_PAYLOAD',
       'El alimento tiene datos inválidos.',
       { fields: zodFields(parsed.error) },
-      gate.rolloutReason,
     )
   }
   // `insertCoachFood` re-valida con `CoachFoodInputSchema`, que descarta `action`/`workspace`.
   const created = await insertCoachFood({ db, userId: gate.userId, input: parsed.data })
   if (!created.ok) {
-    return failure(startedAt, created.code, created.error, {}, gate.rolloutReason)
+    return failure(startedAt, created.code, created.error, {})
   }
 
   const payload = { ok: true as const, food: created.food }
-  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload, rolloutReason: gate.rolloutReason })
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
   return jsonNoStore(payload)
 }

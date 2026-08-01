@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import {
   NutritionHistoryPageReadModelSchema,
+  NutritionLegacyHistoryDetailReadModelSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
 } from '@eva/nutrition-v2'
@@ -77,6 +78,10 @@ export async function GET(request: NextRequest) {
     rpcName = 'get_nutrition_history_page_v2'
     args = { p_client_id: clientId, p_before: before || null, p_page_size: pageSize }
     parse = (data) => NutritionHistoryPageReadModelSchema.parse(data)
+  } else if (view === 'history-detail') {
+    rpcName = 'get_nutrition_legacy_history_detail_v2'
+    args = { p_client_id: clientId, p_local_date: date }
+    parse = (data) => NutritionLegacyHistoryDetailReadModelSchema.parse(data)
   } else {
     logNutritionV2Api({ route, startedAt, status: 400, errorCode: 'INVALID_VIEW' })
     return jsonNoStore({ error: 'Vista inválida.', code: 'INVALID_VIEW' }, 400)
@@ -90,7 +95,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: response.status,
       errorCode: error.code || 'NUTRITION_V2_READ_FAILED',
-      rolloutReason: gate.rolloutReason,
     })
     return response
   }
@@ -102,7 +106,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: 200,
       payload,
-      rolloutReason: gate.rolloutReason,
     })
     return jsonNoStore(payload)
   } catch {
@@ -111,7 +114,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: 500,
       errorCode: 'READ_MODEL_CONTRACT_MISMATCH',
-      rolloutReason: gate.rolloutReason,
     })
     return jsonNoStore(
       { error: 'Contrato de lectura inválido.', code: 'READ_MODEL_CONTRACT_MISMATCH' },

@@ -23,10 +23,8 @@ import {
  * Resuelve el resumen de Nutrición V2 del tab "Nutrición" de la ficha del alumno.
  *
  * Poda 2026-07-29 (docs/specs/nutrition-ui-poda/SPEC.md, decisión del owner "V1 al olvido"):
- * ya NO hay canary ni swap en esta superficie. El tab es SIEMPRE V2 — se retiró
- * `isNutritionV2Enabled({ surface: 'webCoach' })` de este camino porque su única razón de ser
- * era caer a `NutritionTabB5` (V1), que dejó de existir. El rollback por Edge Config de las
- * superficies del ALUMNO (`webStudent`) queda intacto: este resolver no lo consulta.
+ * ya no hay canary ni swap en esta superficie. El tab es siempre V2 en standalone/Team; Enterprise
+ * queda aislado fuera de este read model hasta su retiro dedicado.
  *
  * Vive en `_data/` (no en la page) porque lo consumen DOS superficies con la misma ficha:
  * la ruta standalone `/coach/clients/[clientId]` y el panel derecho del master-detail de

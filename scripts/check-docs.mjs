@@ -21,7 +21,7 @@ const canonicalFiles = [
   'docs/operations/MANUAL_TASKS.md',
   'docs/operations/APP_REVIEW_NOTES.md',
   'docs/operations/RUNBOOK.md',
-  'docs/operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md',
+  'docs/operations/NUTRITION_V2_CUTOVER_RUNBOOK.md',
   'docs/operations/FOOD_CATALOG_CL_IMPORT.md',
   'docs/operations/MOBILE_RELEASES_OTA.md',
   'docs/operations/RN-PARITY-DB-CHECKLIST.md',

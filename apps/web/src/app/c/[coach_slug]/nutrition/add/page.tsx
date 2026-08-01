@@ -6,7 +6,6 @@ import { getClientNutritionUser } from '../_data/nutrition-auth.queries'
 import { getFavoriteIntakeFoods, getRecentIntakeFoods } from '../_data/intake.queries'
 import { getClientScope } from '../_data/client-scope.queries'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { AddFoodClient } from './AddFoodClient'
 
 export const metadata: Metadata = { title: 'Registrar alimento' }
@@ -34,16 +33,8 @@ export default async function AddNutritionFoodPage({ params }: Props) {
   })
   if (!domainEnabled) redirect(`${base}/nutrition`)
 
-  // Deprecación por etapas: con V2 activo, el registro vive en /nutrition-v2.
-  const v2Enabled = await isNutritionV2Enabled({
-    surface: 'webStudent',
-    userId: user.id,
-    clientId: user.id,
-    coachId: clientScope.coachId,
-    teamId: clientScope.teamId,
-    orgId: clientScope.orgId,
-  })
-  if (v2Enabled) redirect(`${base}/nutrition-v2`)
+  // Standalone y Team usan V2; Enterprise conserva este flujo aislado temporalmente.
+  if (!clientScope.orgId) redirect(`${base}/nutrition-v2`)
 
   const [recents, favorites] = await Promise.all([
     getRecentIntakeFoods(12),

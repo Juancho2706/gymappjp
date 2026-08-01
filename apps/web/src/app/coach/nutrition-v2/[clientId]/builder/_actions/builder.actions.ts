@@ -26,8 +26,8 @@ import {
 } from '@/app/coach/nutrition-v2/_actions/plan-persistence'
 
 // Builder V2 (web coach): publicacion de un plan de nutricion versionado.
-// Fail-closed: cada accion re-verifica el gate (isNutritionV2Enabled, webCoach) y el
-// scope del workspace via authorizeCoach. El draft se valida contra NutritionPlanDraftSchema.
+// Fail-closed: cada acción re-verifica el scope V2 del workspace vía authorizeCoach. El draft se
+// valida contra NutritionPlanDraftSchema.
 // La persistencia + publicacion transaccional vive en `persistAndPublishDraft` (modulo
 // compartido `_actions/plan-persistence.ts`), reusado por `assignPlanToClientsAction`.
 

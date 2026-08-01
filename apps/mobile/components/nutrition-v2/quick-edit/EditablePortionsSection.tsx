@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { Minus, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react-native'
 import { exchangeGroupColor, type ExchangeGroup } from '@eva/nutrition-engine'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { GroupDot as PortionGroupDot } from '../../alumno/nutrition-v2/PortionChip'
 import { Sheet } from '../../Sheet'
 import { ExchangeGroupFormSheet, type ExchangeGroupFormInitial } from '../ExchangeGroupFormSheet'
@@ -23,6 +24,7 @@ import {
  * administración de grupos: la sección se pinta EXACTAMENTE como antes (cero UI nueva).
  */
 export interface QuickEditGroupAdmin {
+  scope: NutritionV2CoachScope
   /** Ids de grupos propios del coach; los del sistema no llevan afordancia de edición. */
   ownGroupIds: ReadonlySet<string>
   /** Carga perezosa de la propiedad (se dispara al abrir el picker). Best-effort. */
@@ -323,6 +325,7 @@ function GroupPickerSheet({
         <ExchangeGroupFormSheet
           open={formOpen}
           initial={editingGroup}
+          scope={groupAdmin.scope}
           onClose={() => setFormOpen(false)}
           onSaved={groupAdmin.onSaved}
           onDeleted={groupAdmin.onDeleted}

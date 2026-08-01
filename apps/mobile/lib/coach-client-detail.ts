@@ -1367,27 +1367,6 @@ export function unmarkCoachCheckInReviewed(clientId: string, checkInId: string, 
   return setCoachCheckInReviewed(clientId, checkInId, false, workspace)
 }
 
-export async function setCoachClientArchived(clientId: string, archived: boolean): Promise<{ ok: boolean; error?: string }> {
-  // A-F13 (parcial): al REACTIVAR, rechequear el límite del plan (la web bloquea si está lleno).
-  // El email de archivado/reactivado sigue requiriendo endpoint server (Resend).
-  if (!archived) {
-    const coach = await getCoachProfile()
-    if (coach?.maxClients && coach.maxClients > 0) {
-      const { count } = await supabase
-        .from('clients')
-        .select('id', { count: 'exact', head: true })
-        .eq('coach_id', coach.id)
-        .eq('is_archived', false)
-      if ((count ?? 0) >= coach.maxClients) {
-        return { ok: false, error: `Alcanzaste el límite de tu plan (${coach.maxClients} alumnos activos). Sube de plan para reactivar.` }
-      }
-    }
-  }
-  const { error } = await supabase.from('clients').update({ is_archived: archived }).eq('id', clientId)
-  if (error) return { ok: false, error: error.message }
-  return { ok: true }
-}
-
 export async function deleteCoachClientPayment(clientId: string, paymentId: string): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from('client_payments').delete().eq('id', paymentId).eq('client_id', clientId)
   if (error) return { ok: false, error: error.message }

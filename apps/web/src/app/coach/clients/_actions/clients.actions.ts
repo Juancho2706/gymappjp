@@ -25,7 +25,24 @@ import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/publ
 import { resolveCoachScope as getCoachClientScope, applyCoachClientScope } from '@/services/auth/coach-scope.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import {
+    archiveClient,
+    bulkArchiveClients,
+    setClientAccessState,
+    unarchiveClient,
+    type ClientArchiveWorkspace,
+} from '@/services/client/client-archive.service'
 import { generateStudentTempPassword } from '@/lib/auth/temp-credentials'
+
+function archiveWorkspaceFromCoachScope(scope: {
+    orgId: string | null
+    activeTeamId: string | null
+    isEnterprise: boolean
+}): ClientArchiveWorkspace {
+    if (scope.activeTeamId) return { type: 'team', teamId: scope.activeTeamId }
+    if (scope.isEnterprise && scope.orgId) return { type: 'enterprise', orgId: scope.orgId }
+    return { type: 'standalone' }
+}
 
 export type CreateClientState = {
     error?: string
@@ -358,13 +375,14 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
 
     let clientQuery = supabase
         .from('clients')
-        .select('id')
+        .select('id, is_archived')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
     clientQuery = applyCoachClientScope(clientQuery, scope)
     const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
+    if (client.is_archived) return { error: 'Los alumnos archivados son de solo lectura. Desarchívalo para volver a gestionarlo.' }
 
     // El borrado vive en el service (misma logica que la API movil y que el borrado de cuenta del
     // coach). La rama coach-como-alumno antes usaba el cliente user-scoped (RLS): pasar a service
@@ -425,25 +443,12 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
     const scope = await getCoachClientScope(supabase, coachUser.id)
     if (!scope.ok) return { error: scope.error }
 
-    let clientQuery = supabase
-        .from('clients')
-        .select('id, full_name, email, coach_id')
-        .eq('id', clientId)
-        .eq('coach_id', coachUser.id)
-    clientQuery = applyCoachClientScope(clientQuery, scope)
-    const { data: client } = await clientQuery.maybeSingle()
-
-    if (!client) return { error: 'Alumno no encontrado.' }
-
-    let archiveQuery = supabase
-        .from('clients')
-        .update({ is_archived: true })
-        .eq('id', clientId)
-        .eq('coach_id', coachUser.id)
-    archiveQuery = applyCoachClientScope(archiveQuery, scope)
-    const { error } = await archiveQuery
-
-    if (error) return { error: error.message }
+    const result = await archiveClient(createServiceRoleClient(), {
+        coachId: coachUser.id,
+        workspace: archiveWorkspaceFromCoachScope(scope),
+    }, clientId)
+    if (!result.ok) return { error: result.error }
+    const client = result.client
 
     if (client.email) {
         const { data: coach } = await supabase
@@ -460,7 +465,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
             primaryColor: coach?.primary_color,
         })
         const { subject, html } = buildClientArchivedEmail({
-            clientName: client.full_name,
+            clientName: client.fullName,
             coachBrandName: coach?.brand_name ?? coach?.full_name ?? 'EVA',
             coachName: coach?.full_name ?? 'Tu entrenador',
             coachEmail: coachUser.email ?? null,
@@ -482,63 +487,29 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
     const scope = await getCoachClientScope(supabase, coachUser.id)
     if (!scope.ok) return { error: scope.error }
 
-    let clientQuery = supabase
-        .from('clients')
-        .select('id, full_name, email, coach_id')
-        .eq('id', clientId)
-        .eq('coach_id', coachUser.id)
-    clientQuery = applyCoachClientScope(clientQuery, scope)
-    const { data: client } = await clientQuery.maybeSingle()
-
-    if (!client) return { error: 'Alumno no encontrado.' }
-
-    const { data: coach } = await supabase
-        .from('coaches')
-        .select('id, max_clients, subscription_tier')
-        .eq('id', coachUser.id)
-        .maybeSingle()
-
-    if (!coach) return { error: 'Coach no encontrado.' }
-
-    const maxClients = coach.max_clients ?? getTierMaxClients((coach.subscription_tier ?? 'starter') as SubscriptionTier)
-    let activeCountQuery = supabase
-        .from('clients')
-        .select('id', { count: 'exact', head: true })
-        .eq('coach_id', coachUser.id)
-        .eq('is_archived', false)
-    activeCountQuery = applyCoachClientScope(activeCountQuery, scope)
-    const { count: activeCount } = await activeCountQuery
-
-    if (!scope.isEnterprise && (activeCount ?? 0) >= maxClients) {
-        return { error: `Alcanzaste el límite de ${maxClients} alumnos activos. Archiva otro alumno antes de reactivar este.` }
-    }
-
-    let unarchiveQuery = supabase
-        .from('clients')
-        .update({ is_archived: false })
-        .eq('id', clientId)
-        .eq('coach_id', coachUser.id)
-    unarchiveQuery = applyCoachClientScope(unarchiveQuery, scope)
-    const { error } = await unarchiveQuery
-
-    if (error) return { error: error.message }
+    const result = await unarchiveClient(createServiceRoleClient(), {
+        coachId: coachUser.id,
+        workspace: archiveWorkspaceFromCoachScope(scope),
+    }, clientId)
+    if (!result.ok) return { error: result.error }
+    const client = result.client
 
     if (client.email) {
         const { data: coachInfo } = await supabase
             .from('coaches')
-            .select('full_name, brand_name, slug, invite_code, primary_color, logo_url')
+            .select('full_name, brand_name, slug, invite_code, subscription_tier, primary_color, logo_url')
             .eq('id', coachUser.id)
             .maybeSingle()
 
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
         const emailBrand = resolveStudentEmailBranding({
             isStandalone: !scope.orgId && !scope.activeTeamId,
-            tier: coach.subscription_tier,
+            tier: coachInfo?.subscription_tier,
             logoUrl: coachInfo?.logo_url,
             primaryColor: coachInfo?.primary_color,
         })
         const { subject, html } = buildClientUnarchivedEmail({
-            clientName: client.full_name,
+            clientName: client.fullName,
             coachBrandName: coachInfo?.brand_name ?? coachInfo?.full_name ?? 'EVA',
             coachName: coachInfo?.full_name ?? 'Tu entrenador',
             loginUrl: buildCoachStudentUrl(appUrl, coachInfo, '/login'),
@@ -564,17 +535,13 @@ export async function bulkArchiveClientsAction(clientIds: string[]): Promise<{ a
     const scope = await getCoachClientScope(supabase, coachUser.id)
     if (!scope.ok) return { error: scope.error }
 
-    let archiveQuery = supabase
-        .from('clients')
-        .update({ is_archived: true })
-        .in('id', parsed.data)
-        .eq('coach_id', coachUser.id)
-    archiveQuery = applyCoachClientScope(archiveQuery, scope)
-    const { data: archived, error } = await archiveQuery.select('id, full_name, email')
+    const archived = await bulkArchiveClients(createServiceRoleClient(), {
+        coachId: coachUser.id,
+        workspace: archiveWorkspaceFromCoachScope(scope),
+    }, parsed.data)
+    if (!archived.ok) return { error: archived.error }
 
-    if (error) return { error: error.message }
-
-    const rows = archived ?? []
+    const rows = archived.clients
     const withEmail = rows.filter((r) => r.email)
 
     if (withEmail.length > 0) {
@@ -595,7 +562,7 @@ export async function bulkArchiveClientsAction(clientIds: string[]): Promise<{ a
         void Promise.allSettled(
             withEmail.map((r) => {
                 const { subject, html } = buildClientArchivedEmail({
-                    clientName: r.full_name,
+                    clientName: r.fullName,
                     coachBrandName: coach?.brand_name ?? coach?.full_name ?? 'EVA',
                     coachName: coach?.full_name ?? 'Tu entrenador',
                     coachEmail: coachUser.email ?? null,
@@ -609,6 +576,12 @@ export async function bulkArchiveClientsAction(clientIds: string[]): Promise<{ a
     }
 
     revalidatePath('/coach/clients')
+    if (archived.authFailures.length > 0) {
+        return {
+            archived: rows.length,
+            error: `${archived.authFailures.length} alumno(s) quedaron archivados, pero falta sincronizar Auth. Reintenta el archivado para cerrar sus sesiones.`,
+        }
+    }
     return { archived: rows.length }
 }
 
@@ -619,17 +592,11 @@ export async function toggleClientStatusAction(clientId: string, isActive: boole
     const scope = await getCoachClientScope(supabase, coachUser.id)
     if (!scope.ok) return { error: scope.error }
 
-    let statusQuery = supabase
-        .from('clients')
-        .update({ is_active: isActive })
-        .eq('id', clientId)
-        .eq('coach_id', coachUser.id)
-    statusQuery = applyCoachClientScope(statusQuery, scope)
-    const { error } = await statusQuery
-
-    if (error) {
-        return { error: `Error al actualizar el estado: ${error.message}` }
-    }
+    const result = await setClientAccessState(createServiceRoleClient(), {
+        coachId: coachUser.id,
+        workspace: archiveWorkspaceFromCoachScope(scope),
+    }, clientId, isActive)
+    if (!result.ok) return { error: result.error }
 
     revalidatePath('/coach/clients')
     return {}

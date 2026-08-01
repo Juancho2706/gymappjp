@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildNutritionPortionIntakeKey } from '@eva/nutrition-v2'
 
-const { rpc, getUser, getScope, isEnabled, domainEnabled, revalidate, rateIntake, rateSearch } = vi.hoisted(() => ({
+const { rpc, getUser, getScope, domainEnabled, revalidate, rateIntake, rateSearch } = vi.hoisted(() => ({
   rpc: vi.fn(),
   getUser: vi.fn(),
   getScope: vi.fn(),
-  isEnabled: vi.fn(),
   domainEnabled: vi.fn(),
   revalidate: vi.fn(),
   rateIntake: vi.fn(),
@@ -14,9 +13,10 @@ const { rpc, getUser, getScope, isEnabled, domainEnabled, revalidate, rateIntake
 
 vi.mock('next/cache', () => ({ revalidatePath: revalidate }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }))
-vi.mock('../../nutrition/_data/nutrition-auth.queries', () => ({ getClientNutritionUser: getUser }))
-vi.mock('../../nutrition/_data/client-scope.queries', () => ({ getClientScope: getScope }))
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: isEnabled }))
+vi.mock('@/services/auth/current-student-nutrition.service', () => ({
+  getCurrentStudentNutritionSession: getUser,
+  getCurrentStudentNutritionScope: getScope,
+}))
 vi.mock('@/services/feature-prefs.service', () => ({ resolveNutritionDomainEnabled: domainEnabled }))
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitNutritionIntake: rateIntake,
@@ -54,7 +54,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   getUser.mockResolvedValue({ user: { id: CLIENT_ID }, hasClientRow: true })
   getScope.mockResolvedValue({ coachId: null, teamId: null, orgId: null })
-  isEnabled.mockResolvedValue(true)
   domainEnabled.mockResolvedValue(true)
   rpc.mockResolvedValue({ data: NEW_ID, error: null })
   rateIntake.mockResolvedValue({ ok: true })

@@ -6,10 +6,9 @@ import { NutritionPlanDraftSchema, type NutritionPlanDraft } from '@eva/nutritio
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/services/auth/workspace-render-cache', () => ({ getPreferredWorkspaceForRender: vi.fn() }))
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: vi.fn() }))
 vi.mock('@/services/nutrition-v2-read.service', () => ({ nutritionV2CoachScopeFromWorkspace: vi.fn() }))
-vi.mock('@/app/coach/nutrition-plans/_data/nutrition-page.queries', () => ({
-  getNutritionPlansPageCoach: vi.fn(),
+vi.mock('@/services/auth/current-coach.service', () => ({
+  getCurrentCoachSession: vi.fn(),
 }))
 
 import { persistAndPublishDraft, type NutritionV2Db } from './plan-persistence'

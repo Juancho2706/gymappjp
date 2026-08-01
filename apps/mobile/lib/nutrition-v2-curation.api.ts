@@ -80,7 +80,6 @@ function isValidScope(scope: NutritionV2CoachScope | null | undefined): scope is
   if (!scope) return false
   if (scope.scopeType === 'standalone') return true
   if (scope.scopeType === 'team') return typeof scope.teamId === 'string' && scope.teamId.length > 0
-  if (scope.scopeType === 'organization') return typeof scope.orgId === 'string' && scope.orgId.length > 0
   return false
 }
 

@@ -1,93 +1,47 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-28 @ 0fbf850d"
+last_verified: "2026-07-31"
 canonical: true
 ---
 
 # Current status
 
-Esta es la única vista global de qué está en producción, qué está en integración y qué sigue. El detalle de paridad, pruebas y acciones humanas vive en sus trackers canónicos; no se duplica aquí.
-
-## Corte verificado
-
-| Referencia | Estado al revisar |
-|---|---|
-| Rescate UI Nutrición V2 (olas 0-4, 2026-07-29) | Olas 0-2 mergeadas y pusheadas a `rnmobiledenuevo` (`484b55b5`); olas 3-4 en rama `worktree-nutricion-ui-rescate` (`9bf856b8..17f2ea95`, base master `74a8765c`) integradas al mismo destino en el corte siguiente. Ola 0: P0s de la auditoría UI (carry-over `visible_notes`/`protocol_notes` web+RN al republicar del asistente, porciones prescritas visibles, z-index cápsula web/RN, teclado en sheets RN, menú de franja alcanzable, dead-end del wizard RN, refresh debounced de porciones). Ola 1: semana completa Lu-Do en las 4 superficies (`packages/nutrition-v2/week-view.ts` + `WeekDayNav` web/RN; pasado read-only, futuro preview, coach `?date=` sin backend nuevo). Ola 1.5: barrido de 677 clases muertas `text-text-*`/`border-border-*` en mobile (texto caía a negro incluso en dark). Ola 2: `COPY_SLOT_TO_VARIANTS` en los 4 reducers + builder/quick-edit que explican la semana. Ola 3 (poda, decisiones owner): Hoy del alumno sin eco (registros bajo su franja), historial por semanas, home card alumno, ficha coach en 4 bloques, hub con dots, tab de alumnos = card resumen, permisos a 2 reales + fix reset de estrategia, claim de micros retirado del addon. Ola 4: wizard a 2 pasos (Revisar eliminado, hybrid fuera del selector) y selector "tocas el día" en creador y ficha (PlanDowSelector compartido; mueren DayVariantBar y "+ Agregar día"). Gates sobre `17f2ea95`: typecheck web+mobile, lint, boundaries y 4754 tests verdes. Pendiente: QA visual web (preview) y QA física RN. Fuentes: `docs/specs/nutrition-week-view/`, auditoría en `D:\tmp\nutricion-ui-audit-20260729\` |
-| Rama de trabajo | `rnmobiledenuevo`, única rama viva junto a `master` |
-| Corte de `master` integrado | merge de `rnmobiledenuevo` completo (ola post-incidente P0) — ramas igualadas por decisión del owner 2026-07-26 |
-| Relación de ramas | `master` == `rnmobiledenuevo` tras el merge de la ola post-incidente; trabajo nuevo sigue en `rnmobiledenuevo` |
-| Hotfix P0 2026-07-26 (PR #171, EN PROD) | Ejecutor alumno perdía series al reentrar un día recuperado: `?fecha=<hoy>` activaba el modo solo-UPDATE (jamás inserta) y la cola offline descartaba cada rechazo `past_set_not_found`. Fix en 3 capas (action, page, `buildWorkoutDoneEditHref`); `?fecha=` queda reservado a días realmente pasados. CI quality verde ([run 30214247333](https://github.com/Juancho2706/gymappjp/actions/runs/30214247333)), Vercel prod READY |
-| Ola post-incidente (PR #172, EN PROD) | Telemetría de descartes por code en la cola offline (web+RN, evento Sentry por causa, chip RN honesto), `CountUpText` compartido que extingue la clase EVA-NEXTJS-10/E (7 superficies migradas), dedup (plan, día) en la atribución semanal, banner RN acotado al plan de hoy. Issues Sentry EVA-NEXTJS-10/E/11 resueltos con evidencia |
-| Estado "En progreso" (O2) | Implementado sobre `docs/specs/workout-day-in-progress`: `deriveDayCompletion` en `@eva/workout-engine` (12 fixtures de paridad), day-cards/sheet/banner/dots en web y RN con visual y copy espejados; racha RPC intacta. Suite completa 4054 tests verdes. QA manual del owner aprobado (2026-07-26, preview vs prod DB); QA física device RN pendiente. Backlog nuevo: la resolución de celda semanal no debe honrar `assigned_date` de planes de programas inactivos |
-| Notas visibles editables en quick-edit (`c159d67a`) | Reporte de coach en prod: `visible_notes` del plan V2 no tenía superficie de edición (quick-edit read-only, builder "Rehacer" la resetea a null). Ahora editable en el quick-edit web y RN (textarea/TextInput, tope 8000, trim→null, contador de cambios, borradores pre-notas compatibles); publish deja de pisar la nota con la base (protocol/private siguen carry-over). QA owner en preview aprobado; deuda anotada: carry-over de la nota en el builder "Rehacer" |
-| PR #170 (mergeada) | Ejecutor V3 (ceremonia logo dark + ignición del CTA Finalizar), home alumno (link retirado + scroll-top), cardio fases A-D completas (ejes por modalidad, coach ve registros, intervalos por distancia), pulido del creador de ejercicios |
-| Migración DB | `20260725221804_cardio_modality_axes` APLICADA en LIVE antes del merge (aditiva: `exercises.cardio_modality`, Escaladora, `reps_unit` +jumps/floors) |
-| Gate `quality` | Verde en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 3940 aprobados / 4 omitidos (330 archivos). `tsc --noEmit` web+mobile+enterprise re-ejecutados verdes en local sobre `a59acfd1` (2026-07-25) |
-| QA | Ronda funcional del owner aprobada en web/emulador; QA física fina Android/iOS pendiente (háptico, reduced-motion) |
-
-Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks remotos antes de integrar.
+Esta es la vista global vigente. El código y las migraciones ejecutables prevalecen sobre este
+resumen; antes de integrar o desplegar, verificar branch, deployment y estado remoto.
 
 ## Estado por frente
 
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
-| Web/PWA | Plataforma productiva; `master` es la línea de producción | [Testing](../testing/TEST_STATUS.md), [Runbook](../operations/RUNBOOK.md) |
-| App nativa | Entrada cerrada estática sobre `rnmobiledenuevo`; nueva config de splash requiere build y QA física antes de certificar | [Mobile parity](MOBILE_PARITY.md) |
-| Nutrition V2 | Auditoría verificada y remediación completa (42 hallazgos: P0-P2 cerrados, P3 estructurales salvo types); migraciones `202607281*` + saneos APLICADOS a LIVE el 2026-07-28; features nuevas: multi-día por semana (builder/quick-edit/alumno web+RN) y porciones propias del coach (grupos custom + clasificar alimentos). Pendiente: QA física y OTA/build de la app | [Auditoría coach/alumno](../audits/nutricion-v2-coach-alumno-2026-07-28.md), [Specs multi-día](../../specs/nutrition-multiday/SPEC.md), [Runbook V2](../operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md) |
-| Teams | Pool compartido, membresías, marca, módulos y workspace coach/alumno implementados | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
-| Enterprise | Panel org, roles, asignaciones, programas, reportes, pagos, marca y auditoría presentes en web; Nutrition queda fuera de ese flujo | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
-| Dependencias | Automatización limitada a seguridad; previews de ramas Dependabot deshabilitadas en Vercel | `vercel.json`, `.github/dependabot.yml` |
-| Documentación | Núcleo canónico reducido; material histórico no gobierna decisiones | [Docs index](../README.md) |
+| Web/PWA | Productivo; verificar deployment activo antes de incidentes o despliegues | [Runbook](../operations/RUNBOOK.md) |
+| App nativa | Paridad estática amplia; build y QA físico Android/iOS siguen pendientes de certificación | [Mobile parity](MOBILE_PARITY.md) |
+| Archivado de alumnos | Implementación local lista para integración: servicio scoped, ban/unban Auth, cuenta suspendida RN, RLS/migraciones y prueba SQL. No aplicado en producción. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
+| Nutrition V2 | Canónica en código para Standalone/Team; V1 queda como historial solo lectura. Conversión, preflight y desactivación V1 remota pendientes de entorno controlado. | [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
+| Teams | Pool, membresías y workspaces implementados; la nutrición V2 usa scope explícito Team/Standalone. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
+| Enterprise | Fuera del corte de Nutrition V2 y de la eliminación de legacy en esta entrega. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
 
 ## Prioridad actual
 
-1. Generar un build EAS Android/iOS del corte de [experiencia de entrada mobile](../../specs/mobile-entry-experience/SPEC.md): código, auth autoritativa, assets, selector, splash y exports están cerrados estáticamente; la nueva configuración nativa no sale por OTA.
-2. Ejecutar QA física del tramo completo en Android/iOS, incluidos cold/warm start, teclado, código/slug/links, EVA/custom, light/dark, offline y lectores de pantalla.
-3. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
-4. Retener los artefactos Android/iOS del corte nuevo y verificar procesamiento en App Store Connect/Play Console.
-5. Sin P0/P1/P2 de entrada, abrir la ola 5 (builder y programas del coach) según `MOBILE_PARITY.md`.
+1. Autorizar y preparar un entorno Supabase controlado (branch o snapshot) para aplicar y validar
+   las migraciones de archivado con JWTs reales.
+2. Ejecutar conversión/preflight V1→V2 y reconciliar todos los enlaces antes de desactivar V1.
+3. Desplegar Web/PWA y la versión RN V2, mantener compatibilidad temporal y medir errores/scope.
+4. Ejecutar Playwright responsive y QA físico Android/iOS, claro/oscuro, online/offline y deep links.
+5. Tras versión mínima RN y la ventana web, retirar aliases/rutas/endpoints V1 de Standalone/Team.
 
-## Gates que siguen abiertos
+## Criterio de corte Nutrition V2
 
-- ~~Build firmado Android/iOS del corte actual~~ → HECHO (`856829fa`, run `30185211552`, submits incluidos). Quedan: retener artefactos, verificar App Store Connect/Play Console y QA física.
-- Certificación física de cámara, gestos, teclado, safe areas, offline y notificaciones en ambos sistemas.
-- Cierre verificable de la paridad móvil restante; código presente no equivale a QA aprobada.
-- Nutrition V2: migraciones y saneos ya aplicados a LIVE (2026-07-28). Quedan: QA física del tramo nutrición (multi-día, porciones propias, void, permisos) en Android/iOS; OTA/build de la app para que el boundary coach mobile y los fixes RN rijan en dispositivos; `_PENDING_AUDIT_nutrition_v2_prescribed_intent_once` (índice duro de doble-registro requiere decisión de producto: ¿repetir plato el mismo día es válido?); regenerar `database.types.ts` exige un PR dedicado de nulabilidad (~130 call sites V1 legacy).
+- V2 es la única experiencia operativa de nutrición para Standalone y Team.
+- V1 se preserva como historial auditable, no como rollback de producto.
+- El preflight bloquea el corte si falta un V2 publicado equivalente o una trazabilidad de conversión.
+- Enterprise permanece aislado hasta un proyecto separado.
+- No marcar el corte como terminado sin migraciones aplicadas, validación RLS con JWTs reales,
+  cero V1 activos soportados y QA físico aprobado.
 
-Builds `production`: el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` (2026-07-25) dejó **Android e iOS verdes end-to-end con submits incluidos** (AAB a Play internal testing + IPA a TestFlight), usando el profile regenerado con HealthKit + Associated Domains (la falla de capability de los runs 07-23/24 quedó cerrada; diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116)). Ese binario incluye la deuda cardio saldada y los universal links repuestos. Pendiente humano: retener artefactos (1 día), verificar procesamiento en App Store Connect/Play Console y QA física — nada de esto certifica QA device.
+## Reglas de actualización
 
-## Nutrition V2: criterio actual
-
-- V2 es el destino funcional para trabajo nuevo.
-- V1 se conserva como compatibilidad y rollback, no como segunda línea de producto.
-- Edge Config y el gate server-side controlan entrada/lecturas. En esta rama las mutaciones coach mobile (publish, quick-edit, assign, archive) pasan por `/api/mobile/nutrition-v2/coach/mutate` con rollout + entitlement server-side; el kill-switch queda completo cuando esta rama esté deployada, con migraciones aplicadas y app actualizada. Excepción conocida: el alta de alimento coach RN (`createCoachFoodV2`) aún escribe directo bajo RLS.
-- Intake y catálogo mobile pasan por endpoints autoritativos; los permisos del alumno y el retiro (`voided`) se imponen también dentro de las RPC.
-- El alcance Nutrition soportado es standalone + Team; Enterprise queda fuera de este flujo.
-- Importaciones del catálogo chileno requieren fuente y licencia verificables; no inventar GTIN ni nutrientes.
-
-Acciones operativas o manuales pendientes van en [MANUAL_TASKS.md](../operations/MANUAL_TASKS.md), no en este archivo.
-
-## Reglas para cambiar el estado
-
-- `master` significa código integrado, no necesariamente deploy sano: verificar Vercel.
-- Un build EAS verde no certifica el flujo: falta QA física y, si aplica, submit.
-- Una ruta o migración existente no significa rollout habilitado.
-- Marcar un frente “cerrado” requiere evidencia enlazada en testing/paridad.
-- Toda nueva prioridad desplaza o elimina una anterior; no acumular backlog histórico aquí.
-
-## Fuentes canónicas
-
-| Pregunta | Documento |
-|---|---|
-| ¿Qué hace el producto? | [PRODUCT_OVERVIEW.md](../product/PRODUCT_OVERVIEW.md) |
-| ¿Dónde vive el código? | [PROJECT_STRUCTURE.md](../architecture/PROJECT_STRUCTURE.md) |
-| ¿Cómo viajan datos y permisos? | [FLOWS_AND_COMPONENTS.md](../architecture/FLOWS_AND_COMPONENTS.md) |
-| ¿Qué falta para paridad RN? | [MOBILE_PARITY.md](MOBILE_PARITY.md) |
-| ¿Qué pruebas/gates están vigentes? | [TEST_STATUS.md](../testing/TEST_STATUS.md) |
-| ¿Qué debe hacer manualmente el owner? | [MANUAL_TASKS.md](../operations/MANUAL_TASKS.md) |
-| ¿Cómo responder incidentes? | [RUNBOOK.md](../operations/RUNBOOK.md) |
-
-## Cuándo actualizar
-
-Actualizar este documento al cambiar la rama de integración, la prioridad principal, un gate de release o el estado productivo de un frente. No usarlo para registrar cada commit.
+- `master` integrado no implica production sana: confirmar Vercel y Supabase.
+- Un build EAS verde no sustituye QA físico.
+- Una migración en el repositorio no significa que esté aplicada.
+- Las acciones operativas/manuales viven en [MANUAL_TASKS.md](../operations/MANUAL_TASKS.md).

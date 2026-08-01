@@ -168,14 +168,12 @@ secuencial tras SWAP (ya cerrado @ commit `76d8ea2f`). Métricas del hub ya en p
     Cierre: insignia de versión presente en paridad.
 
 11. **Copys de la fila del roster (deltas menores).**
-    - Fallback de plan: web `"Sin plan publicado"` (`HubRoster.tsx:261`) vs RN `"Sin plan V2"`
-      (`index.tsx:318`). **Delta:** alinear a `"Sin plan publicado"`.
+    - Fallback de plan: web y RN usan `"Sin plan publicado"`.
     - Métrica: web tercer tile `"Activos hoy"` (`HubRoster.tsx:143`) vs RN `"Actividad hoy"`
       (`index.tsx:247`). **Delta:** alinear a `"Activos hoy"`.
-    - Chip de atención "Sin plan V2" (RN `nutrition-v2-hub.ts:26`) vs web "Sin plan"
-      (`_lib/hub-roster.ts:36`): el chip RN aclara que es el plan V2; conservar es aceptable
-      (no rompe paridad funcional), pero registrarlo. Sin cambio salvo que el owner pida verbatim.
-    Cierre: fallback "Sin plan publicado" y métrica "Activos hoy"; chip "Sin plan V2" documentado.
+    - Chip de atención: web y RN usan "Sin plan". El filtro específico de falta de plan V2 fue
+      retirado del producto durante el corte V2 canónico.
+    Cierre: fallback "Sin plan publicado", métrica "Activos hoy" y chip "Sin plan".
 
 12. **Card del roster — "Abrir ficha" explícito (delta de estructura).**
     Web (móvil, `HubRoster.tsx:264-279`): DOS botones en fila — `"Abrir ficha"` (borde neutro,
@@ -320,8 +318,7 @@ Implementado en `apps/mobile/lib/nutrition-v2-hub.ts`, `apps/mobile/app/coach/nu
   título/descripción/tono por motivo (`nutritionAttentionCardTitle/Description/Tone`, `no_plan`→warning
   resto→info, `actionLabel:'Revisar'` → abre la ficha).
 - **10. `PlanVersionBadge`:** presente cuando `versionNumber && planStatus === 'published'`.
-- **11. Copys:** fallback "Sin plan publicado"; métrica "Activos hoy". Chip "Sin plan V2"
-  conservado (documentado, R4/decisión previa).
+- **11. Copys:** fallback "Sin plan publicado"; métrica "Activos hoy"; chip "Sin plan".
 - **12/13.** Card tappable RN + stats como tiles: conservados como adaptación nativa (sin cambio
   estructural obligatorio).
 - **14. Estados:** "Sin coincidencias" con acción "Limpiar filtros" (+ nota de otras páginas) para

@@ -5,9 +5,8 @@ import type { NutritionPlanDraft } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch, rateLimitNutritionCoachWrite } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
-import { getNutritionPlansPageCoach } from '@/app/coach/nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 import {
   nutritionProCtxFromWorkspace,
   type NutritionProCtx,
@@ -48,8 +47,8 @@ import {
 // recalcular las macros en SQL divergiria del motor unico (@eva/nutrition-engine). Ver la
 // cabecera de la migracion para el detalle de la decision.
 //
-// Fail-closed: authorizeCoach re-verifica el gate (rollout + webCoach) y el scope del
-// workspace; la RPC revalida `can_manage_client` y deriva `created_by`/`updated_by` de
+// Fail-closed: authorizeCoach re-verifica el workspace V2 y la RPC revalida
+// `can_manage_client` y deriva `created_by`/`updated_by` de
 // `auth.uid()` (NUT-034). Las macros de snapshot se re-derivan de foods en el servidor.
 
 export type DbError = { message: string; code?: string }
@@ -137,7 +136,7 @@ export interface AuthorizedCoach {
 }
 
 export async function authorizeCoach(
-  clientId: string,
+  _clientId: string,
   limiter: 'coach-write' | 'catalog-search' = 'coach-write',
 ): Promise<AuthorizedCoach | ActionFailure> {
   const { user } = await getNutritionPlansPageCoach()
@@ -155,18 +154,6 @@ export async function authorizeCoach(
   }
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
-  const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
-  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webCoach',
-    userId: user.id,
-    clientId,
-    coachId: user.id,
-    teamId,
-    orgId,
-  })
-  if (!enabled) return fail('ROLLOUT_DISABLED', 'La nueva experiencia de nutricion no esta habilitada.')
 
   try {
     nutritionV2CoachScopeFromWorkspace(workspace)

@@ -5,7 +5,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { Button } from '../Button'
 import { Card } from '../Card'
 import { TYPE, textStyle, FONT } from '../../lib/typography'
-import { deleteClient, setClientStatus, type ClientActionWorkspace } from '../../lib/client-actions'
+import { archiveClient, deleteClient, type ClientActionWorkspace } from '../../lib/client-actions'
 import type { ReactivateArchiveClient } from '../../lib/coach-subscription'
 
 interface Props {
@@ -27,8 +27,8 @@ interface Props {
  * Dos salidas sobre la MISMA seleccion: archivar (reversible, default) o eliminar definitivamente
  * (borra cuenta + datos). El borrado exige confirmacion explicita.
  *
- * Ambas acciones reusan los endpoints mobile que ya existian (`PATCH`/`DELETE`
- * /api/mobile/coach/clients/[clientId]): no se agrega superficie de mutacion nueva.
+ * Archivar usa el endpoint de ciclo de vida explícito: allí se desactivan asignaciones
+ * y se bloquea el acceso del alumno. El borrado mantiene su endpoint específico.
  */
 export function ReactivateArchivePanel({ clients, activeClientCount, freeLimit, workspace, onChanged }: Props) {
   const { theme } = useTheme()
@@ -55,7 +55,7 @@ export function ReactivateArchivePanel({ clients, activeClientCount, freeLimit, 
     })
   }
 
-  // Secuencial a proposito: cada PATCH dispara un correo transaccional al alumno y cada DELETE toca
+  // Secuencial a propósito: cada archivado dispara efectos de acceso y cada DELETE toca
   // GoTrue Admin + Storage. En paralelo un lote grande se comeria el rate limit.
   const runOverSelection = async (
     kind: 'archive' | 'delete',
@@ -91,7 +91,7 @@ export function ReactivateArchivePanel({ clients, activeClientCount, freeLimit, 
   const handleArchive = () =>
     runOverSelection(
       'archive',
-      (id) => setClientStatus(id, { is_archived: true }, workspace),
+      (id) => archiveClient(id, workspace),
       'No se pudieron archivar los alumnos.',
     )
 

@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { View } from 'react-native'
 import { Stack, usePathname, useRouter } from 'expo-router'
-import { getClientProfile } from '../../lib/client'
 import { getPoolConsentStatus } from '../../lib/pool-consent'
 import { sessionFlags } from '../../lib/session-flags'
 import { useEntitlements } from '../../lib/entitlements'
 import { StudentAccessBlocked } from '../../components/alumno/StudentAccessBlocked'
+import { getStudentAccountStatus } from '../../lib/student-account-status'
+import { signOutAndCleanup } from '../../lib/auth-actions'
 
 /**
  * Rutas del arbol alumno que siguen siendo alcanzables con el acceso bloqueado:
@@ -52,15 +53,17 @@ export default function AlumnoLayout() {
   useEffect(() => {
     if (allowed) return
     let mounted = true
-    getClientProfile()
-      .then(async (c) => {
-        if (!mounted || !c || redirecting.current) return
-        if (c.blocked) {
+    getStudentAccountStatus()
+      .then(async (status) => {
+        if (!mounted || !status || redirecting.current) return
+        if (status.access === 'blocked') {
           redirecting.current = true
+          await signOutAndCleanup({ preserveStudentAccountStatus: true })
+          if (!mounted) return
           router.replace('/alumno/suspended')
           return
         }
-        if (c.forcePasswordChange && !sessionFlags.pwChanged) {
+        if (status.forcePasswordChange && !sessionFlags.pwChanged) {
           router.replace('/change-password')
           return
         }

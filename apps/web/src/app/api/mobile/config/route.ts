@@ -19,18 +19,12 @@ import {
     type Preset,
     type SectionPrefs,
 } from '@eva/feature-prefs'
-import { resolveNutritionV2RolloutDecision } from '@/services/nutrition-v2-rollout.service'
-import { resolveMobileCoachRolloutContext } from '@/services/mobile-nutrition-v2-rollout-context'
-import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
 
 /**
  * Config operacional + entitlements para el cliente mobile. Fuente única de verdad de:
  *  - módulos de pago efectivos del scope,
- *  - master switch y secciones de Nutrición V1,
- *  - rollout técnico fail-closed de Nutrición V2.
- *
- * El rollout V2 NO es un entitlement comercial y NO se mezcla con feature prefs.
+ *  - master switch y secciones de Nutrición.
  */
 
 type DB = ReturnType<typeof createServiceRoleClient>
@@ -152,41 +146,6 @@ async function resolveNutritionPrefs(
     }
 }
 
-/**
- * Decisión de rollout de la superficie `mobileCoach`. El contexto (workspace + alumno validado) lo
- * arma el helper COMPARTIDO con la API de Nutrición V2 (`mobile-nutrition-v2-rollout-context`), para
- * que el flag que enciende la UI y el gate que sirve los datos no puedan volver a divergir (NUT-013).
- * `membershipVerified`: la pertenencia al team/org ya la resolvió `resolveMobileClientMutationContext`
- * (o es el coach standalone del propio bearer), así que no se repiten esas consultas.
- * Fail-closed: un `clientId` ajeno o inexistente se ignora y se evalúa el flag global del coach.
- */
-async function resolveMobileCoachV2Decision(
-    admin: DB,
-    scope: NutritionScope,
-    userId: string,
-    requestedClientId: string | null,
-) {
-    const coachScope: NutritionV2CoachScope = scope.orgId
-        ? { scopeType: 'organization', teamId: null, orgId: scope.orgId }
-        : scope.teamId
-          ? { scopeType: 'team', teamId: scope.teamId, orgId: null }
-          : { scopeType: 'standalone', teamId: null, orgId: null }
-
-    const resolved = await resolveMobileCoachRolloutContext(admin, userId, coachScope, requestedClientId, {
-        membershipVerified: true,
-    })
-    if (!resolved.ok) return { enabled: false }
-
-    return resolveNutritionV2RolloutDecision({
-        surface: 'mobileCoach',
-        userId,
-        coachId: resolved.context.coachId,
-        clientId: resolved.context.clientId,
-        teamId: resolved.context.teamId,
-        orgId: resolved.context.orgId,
-    })
-}
-
 export async function GET(request: NextRequest) {
     const token = bearerToken(request)
     if (!token) {
@@ -213,9 +172,6 @@ export async function GET(request: NextRequest) {
         orgId: null,
     }
     const requestedKind = request.nextUrl.searchParams.get('workspaceKind')
-    // Opcional: id del alumno de la ficha/constructor abierto en mobile, para alcanzar un canary
-    // acotado por alumno en la rama coach. Ausente => comportamiento idéntico al histórico.
-    const requestedClientId = request.nextUrl.searchParams.get('clientId')
 
     if (requestedKind) {
         const requestedWorkspace = {
@@ -287,32 +243,13 @@ export async function GET(request: NextRequest) {
         : null
 
     const featurePrefsEnabled = await readFeaturePrefsEnabled()
-    const [{ nutritionEnabled, sections }, studentV2, coachV2] = await Promise.all([
-        resolveNutritionPrefs(admin, featurePrefsEnabled, scope, applied),
-        scope.clientId
-            ? resolveNutritionV2RolloutDecision({
-                  surface: 'mobileStudent',
-                  userId,
-                  clientId: scope.clientId,
-                  coachId: scope.coachId,
-                  teamId: scope.teamId,
-                  orgId: scope.orgId,
-              })
-            : Promise.resolve({ enabled: false }),
-        coachRow.data
-            ? resolveMobileCoachV2Decision(admin, scope, userId, requestedClientId)
-            : Promise.resolve({ enabled: false }),
-    ])
+    const { nutritionEnabled, sections } = await resolveNutritionPrefs(admin, featurePrefsEnabled, scope, applied)
 
     return NextResponse.json({
         enabledModules,
         disabledModules,
         featurePrefs: { nutritionEnabled, sections },
         featurePrefsEnabled,
-        flags: {
-            nutritionV2Student: studentV2.enabled === true,
-            nutritionV2Coach: coachV2.enabled === true,
-        },
         studentAccess: studentAccess
             ? { state: studentAccess.state, graceEndsAt: studentAccess.graceEndsAt }
             : null,

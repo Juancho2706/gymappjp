@@ -13,66 +13,8 @@ import {
   describeLegacyHistoryDay,
   portionCoverageKey,
   reconstructExchangeGroups,
-  resolveNutritionV2Rollout,
   type NutritionSlotExchangeTargetRead,
 } from './index'
-
-const clientId = '11111111-1111-4111-8111-111111111111'
-const coachId = '22222222-2222-4222-8222-222222222222'
-
-describe('nutrition V2 rollout', () => {
-  it('fails closed on invalid or absent config', () => {
-    expect(resolveNutritionV2Rollout(undefined, { surface: 'webStudent', clientId })).toEqual({
-      enabled: false,
-      mode: 'off',
-      reason: 'invalid_config',
-    })
-  })
-
-  it('enables only an allowed canary surface and subject', () => {
-    const config = {
-      mode: 'canary',
-      clientIds: [clientId],
-      coachIds: [],
-      teamIds: [],
-      orgIds: [],
-      surfaces: {
-        webStudent: true,
-        webCoach: false,
-        mobileStudent: true,
-        mobileCoach: false,
-      },
-    }
-
-    expect(resolveNutritionV2Rollout(config, { surface: 'webStudent', clientId }).enabled).toBe(true)
-    expect(resolveNutritionV2Rollout(config, { surface: 'webCoach', coachId }).reason).toBe('surface_off')
-  })
-
-  it('reaches the mobileCoach surface via a client-only canary (drift A)', () => {
-    const config = {
-      mode: 'canary',
-      clientIds: [clientId],
-      coachIds: [],
-      teamIds: [],
-      orgIds: [],
-      surfaces: {
-        webStudent: false,
-        webCoach: false,
-        mobileStudent: false,
-        mobileCoach: true,
-      },
-    }
-
-    // Con el clientId de la ficha en el contexto, un canary acotado solo por alumno alcanza al coach.
-    expect(resolveNutritionV2Rollout(config, { surface: 'mobileCoach', coachId, clientId })).toEqual({
-      enabled: true,
-      mode: 'canary',
-      reason: 'client_canary',
-    })
-    // Sin el clientId (roster global del coach) el alumno no entra al canary del coach => queda en V1.
-    expect(resolveNutritionV2Rollout(config, { surface: 'mobileCoach', coachId }).reason).toBe('not_in_canary')
-  })
-})
 
 describe('nutrition V2 read contracts', () => {
   it('accepts an empty today response without inventing a plan', () => {

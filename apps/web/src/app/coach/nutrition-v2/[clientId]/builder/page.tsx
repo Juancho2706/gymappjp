@@ -1,13 +1,12 @@
 import { redirect } from 'next/navigation'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getTodayInSantiago } from '@/lib/date-utils'
-import { getNutritionPlansPageCoach } from '../../../nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionClientDetailV2ForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { createClient } from '@/lib/supabase/server'
 import {
   hasNutritionProV2,
@@ -60,17 +59,7 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
   if (!user) redirect('/login')
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
-  const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
-  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webCoach',
-    userId: user.id,
-    clientId,
-    coachId: user.id,
-    teamId,
-    orgId,
-  })
-  if (!enabled) redirect('/coach/nutrition-plans')
+  if (workspace?.type === 'enterprise_coach') redirect('/coach/nutrition-plans')
 
   // Propagate the active workspace: the scoped RPC denies (42501) a client outside this pool.
   const scope = nutritionV2CoachScopeFromWorkspace(workspace)

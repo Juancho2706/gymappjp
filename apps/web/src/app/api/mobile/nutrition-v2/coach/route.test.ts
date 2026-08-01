@@ -25,11 +25,6 @@ vi.mock('@/lib/supabase/admin-client', () => ({
   createServiceRoleClient: vi.fn(() => fakeAdmin),
 }))
 
-const resolveNutritionV2RolloutDecision = vi.fn()
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({
-  resolveNutritionV2RolloutDecision: (...a: unknown[]) => resolveNutritionV2RolloutDecision(...a),
-}))
-
 const userRpc = vi.fn()
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ rpc: userRpc })),
@@ -38,7 +33,6 @@ vi.mock('@supabase/supabase-js', () => ({
 import { GET } from './route'
 
 const TEAM_ID = '11111111-1111-4111-8111-111111111111'
-const ORG_ID = '22222222-2222-4222-8222-222222222222'
 const CLIENT_ID = '33333333-3333-4333-8333-333333333333'
 
 const EMPTY_HUB_PAGE = {
@@ -73,7 +67,6 @@ beforeEach(() => {
     teams: { id: TEAM_ID },
     organization_members: { id: 'om-1' },
   })
-  resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: true, reason: 'test' })
   userRpc.mockResolvedValue({ data: EMPTY_HUB_PAGE, error: null })
 })
 
@@ -110,13 +103,11 @@ describe('GET /api/mobile/nutrition-v2/coach · workspace scope', () => {
     )
   })
 
-  it('acepta organization con orgId y propaga p_org_id', async () => {
-    const res = await GET(req(`view=hub&scopeType=organization&orgId=${ORG_ID}`))
-    expect(res.status).toBe(200)
-    expect(userRpc).toHaveBeenCalledWith(
-      'get_nutrition_coach_hub_scoped_v2',
-      expect.objectContaining({ p_scope_type: 'organization', p_team_id: null, p_org_id: ORG_ID }),
-    )
+  it('rechaza organization porque Enterprise no pertenece aún a V2', async () => {
+    const res = await GET(req('view=hub&scopeType=organization&orgId=22222222-2222-4222-8222-222222222222'))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('INVALID_WORKSPACE_SCOPE')
+    expect(userRpc).not.toHaveBeenCalled()
   })
 
   it('la ficha usa la RPC scoped de detalle con clientId + scope', async () => {
@@ -135,69 +126,13 @@ describe('GET /api/mobile/nutrition-v2/coach · workspace scope', () => {
   })
 })
 
-// NUT-013: el rollout se resolvia con teamId/orgId/clientId en null para CUALQUIER coach, asi que un
-// canary por Team o por alumno encendia la UI (config/route si manda el scope) y esta ruta devolvia
-// 404. Ahora el contexto se arma ANTES del gate con el workspace declarado y el alumno validado.
-describe('GET /api/mobile/nutrition-v2/coach · contexto de rollout (NUT-013)', () => {
-  it('allowlist por Team: el scope declarado llega al resolver y la lectura pasa (200)', async () => {
-    const res = await GET(req(`view=hub&scopeType=team&teamId=${TEAM_ID}`))
-    expect(res.status).toBe(200)
-    expect(resolveNutritionV2RolloutDecision).toHaveBeenCalledWith(
-      expect.objectContaining({
-        surface: 'mobileCoach',
-        userId: 'coach-1',
-        coachId: 'coach-1',
-        teamId: TEAM_ID,
-        orgId: null,
-        clientId: null,
-      }),
-    )
-  })
-
-  it('workspace AJENO (sin membresia activa): 403 y jamas se consulta el rollout', async () => {
+describe('GET /api/mobile/nutrition-v2/coach · autorización de workspace', () => {
+  it('workspace ajeno (sin membresía activa): 403 y jamás consulta la RPC', async () => {
     admin({ coaches: { id: 'coach-1' }, teams: { id: TEAM_ID } }) // sin fila en team_members
     const res = await GET(req(`view=hub&scopeType=team&teamId=${TEAM_ID}`))
     const body = await res.json()
     expect(res.status).toBe(403)
     expect(body.code).toBe('WORKSPACE_NOT_ALLOWED')
-    expect(resolveNutritionV2RolloutDecision).not.toHaveBeenCalled()
     expect(userRpc).not.toHaveBeenCalled()
-  })
-
-  it('coach fuera de todo canary: 404 NUTRITION_V2_DISABLED', async () => {
-    resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: false, reason: 'not_in_canary' })
-    const res = await GET(req('view=hub&scopeType=standalone'))
-    const body = await res.json()
-    expect(res.status).toBe(404)
-    expect(body.code).toBe('NUTRITION_V2_DISABLED')
-    expect(userRpc).not.toHaveBeenCalled()
-  })
-
-  it('canary por alumno: el clientId de la ficha viaja si el workspace lo posee', async () => {
-    admin({ coaches: { id: 'coach-1' }, clients: { id: CLIENT_ID } })
-    await GET(req(`view=client&clientId=${CLIENT_ID}&scopeType=standalone`))
-    expect(resolveNutritionV2RolloutDecision).toHaveBeenCalledWith(
-      expect.objectContaining({ surface: 'mobileCoach', coachId: 'coach-1', clientId: CLIENT_ID }),
-    )
-  })
-
-  it('clientId AJENO al workspace: se ignora (canary global del coach), no autoriza nada', async () => {
-    admin({ coaches: { id: 'coach-1' } }) // el lookup de `clients` no devuelve fila
-    await GET(req(`view=client&clientId=${CLIENT_ID}&scopeType=standalone`))
-    expect(resolveNutritionV2RolloutDecision).toHaveBeenCalledWith(
-      expect.objectContaining({ clientId: null }),
-    )
-  })
-
-  it('coach que ADEMAS es alumno de otro coach: su membresia de alumno no contamina el contexto', async () => {
-    admin({
-      coaches: { id: 'coach-1' },
-      // Fila `clients` del PROPIO usuario (cuenta que tambien es alumno): team/org ajenos.
-      clients: { id: 'coach-1', coach_id: 'otro-coach', team_id: ORG_ID, org_id: null },
-    })
-    await GET(req('view=hub&scopeType=standalone'))
-    expect(resolveNutritionV2RolloutDecision).toHaveBeenCalledWith(
-      expect.objectContaining({ coachId: 'coach-1', teamId: null, orgId: null, clientId: null }),
-    )
   })
 })

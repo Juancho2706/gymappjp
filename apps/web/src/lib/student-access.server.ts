@@ -18,7 +18,7 @@ import {
 const STUDENT_ACCESS_GATE_KEY = 'STUDENT_ACCESS_GATE'
 
 /**
- * Kill-switch de operador (Edge Config, mismo patron que `nutrition-v2-rollout.service`).
+ * Kill-switch de operador resuelto desde Edge Config.
  * Ausente / `true` / error de Edge Config → gate ACTIVO (default seguro). SOLO el booleano `false`
  * lo apaga. Afecta EXCLUSIVAMENTE las capas UI/actions — la RLS de la base NO lee Edge Config.
  */

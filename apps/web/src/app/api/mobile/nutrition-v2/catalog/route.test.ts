@@ -20,11 +20,6 @@ vi.mock('@/lib/mobile-auth', async (importOriginal) => ({
   verifyMobileBearer: (...a: unknown[]) => verifyMobileBearer(...a),
 }))
 
-const resolveNutritionV2RolloutDecision = vi.fn()
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({
-  resolveNutritionV2RolloutDecision: (...a: unknown[]) => resolveNutritionV2RolloutDecision(...a),
-}))
-
 const resolveNutritionDomainEnabled = vi.fn()
 vi.mock('@/services/feature-prefs.service', () => ({
   resolveNutritionDomainEnabled: (...a: unknown[]) => resolveNutritionDomainEnabled(...a),
@@ -84,7 +79,6 @@ beforeEach(() => {
         }
       : { data: null, error: null },
   )
-  resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: true, reason: 'test' })
   resolveNutritionDomainEnabled.mockResolvedValue(true)
   userRpc.mockResolvedValue({ data: { schemaVersion: 1, items: [], nextCursor: null, hasMore: false }, error: null })
 })

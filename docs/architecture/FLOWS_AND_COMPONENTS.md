@@ -120,8 +120,8 @@ Los motores de objetivos, ejes de captura cardio por modalidad (`cardio-modality
 
 El alcance funcional de Nutrition es standalone + Team; Enterprise no participa en este flujo.
 
-1. Web valida rollout, entitlement y scope antes de mutar. Mobile aún conserva escrituras coach
-   directas bajo RLS que no revalidan rollout/entitlement y deben converger al mismo boundary.
+1. Web y mobile validan identidad, entitlement y scope explícito antes de mutar. No hay rollout ni
+   flags de entrada para Standalone/Team.
 2. El hub carga alumnos y planes del workspace activo.
 3. El coach crea o edita un draft versionado.
 4. Publicar valida el draft completo y detecta conflictos.
@@ -133,11 +133,11 @@ El alcance funcional de Nutrition es standalone + Team; Enterprise no participa 
 | Hub | `/coach/nutrition-v2` | `app/coach/nutrition-v2/index.tsx` |
 | Detalle/quick edit | `/coach/nutrition-v2/[clientId]` | `app/coach/nutrition-v2/[clientId].tsx` |
 | Builder | `/coach/nutrition-v2/[clientId]/builder` | `app/coach/nutrition-v2/builder/[clientId].tsx` |
-| Persistencia | `_actions/plan-persistence.ts` | helpers mobile con escrituras Supabase/RPC directas bajo RLS |
+| Persistencia | `_actions/plan-persistence.ts` | endpoints/RPC V2 scoped |
 | Contratos/read models | `@eva/nutrition-v2` | `@eva/nutrition-v2` |
-| Autorización | `nutrition-v2-rollout.service.ts`, actions y RPCs scoped | config/API para entrada y lectura; RLS/RPC para writes, con gap conocido de rollout/Pro |
+| Autorización | servicios de identidad neutrales, actions y RPCs scoped | `mobile-nutrition-v2-workspace-context`, API/RLS/RPC scoped |
 
-Nutrition V1 permanece como fallback/compatibilidad. No mezclar tablas o actions V1/V2 en un recorrido nuevo sin una estrategia explícita de conversión.
+Nutrition V1 permanece solo como historial compatible. No mezclar rutas, UI o actions V1/V2 en un recorrido nuevo; el detalle histórico se entrega por el read-model V2 de solo lectura.
 
 ## Nutrition V2: alumno registra
 

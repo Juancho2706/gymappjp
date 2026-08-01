@@ -73,7 +73,6 @@ async function executeMutation(input: {
         startedAt: input.startedAt,
         status: 403,
         errorCode: NUTRITION_V2_PERMISSION_DENIED_CODE,
-        rolloutReason: input.gate.rolloutReason,
       })
       return jsonNoStore(
         { error: 'Tu coach no permite este cambio en el plan de hoy.', code: NUTRITION_V2_PERMISSION_DENIED_CODE },
@@ -86,7 +85,6 @@ async function executeMutation(input: {
       startedAt: input.startedAt,
       status: response.status,
       errorCode: error.code || 'NUTRITION_V2_INTAKE_FAILED',
-      rolloutReason: input.gate.rolloutReason,
     })
     return response
   }
@@ -98,7 +96,6 @@ async function executeMutation(input: {
       startedAt: input.startedAt,
       status: 500,
       errorCode: 'INVALID_RPC_RESPONSE',
-      rolloutReason: input.gate.rolloutReason,
     })
     return jsonNoStore(
       { error: 'Respuesta de escritura inválida.', code: 'INVALID_RPC_RESPONSE' },
@@ -113,7 +110,6 @@ async function executeMutation(input: {
     startedAt: input.startedAt,
     status,
     payload: responsePayload,
-    rolloutReason: input.gate.rolloutReason,
   })
   return jsonNoStore(responsePayload, status)
 }
@@ -133,7 +129,7 @@ export async function POST(request: NextRequest) {
 
   const limited = await rateLimitNutritionIntake(gate.userId)
   if (!limited.ok) {
-    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT', rolloutReason: gate.rolloutReason })
+    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT' })
     return jsonRateLimited(limited.retryAfter)
   }
 

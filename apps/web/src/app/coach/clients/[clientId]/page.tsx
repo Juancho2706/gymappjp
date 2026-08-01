@@ -114,7 +114,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 compliance={compliance}
                 profileLastActivityAt={data.profileLastActivityAt}
                 // Score final = base del service (que ya NO mira nutrición) + la señal V2 de esta
-                // misma carga. Sin plan V2 vigente no penaliza (rescate §2.2).
+                // misma carga. Sin plan publicado no penaliza (rescate §2.2).
                 attentionScore={applyNutritionAttentionScore(
                     data.attentionScore,
                     nutritionTabV2View?.isAtRisk ?? null

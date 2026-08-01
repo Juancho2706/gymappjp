@@ -22,11 +22,12 @@ import {
 } from '@/services/nutrition-v2-student-permissions.service'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch, rateLimitNutritionIntake } from '@/lib/rate-limit'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY } from '@/lib/student-access'
 import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
-import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
-import { getClientScope } from '../../nutrition/_data/client-scope.queries'
+import {
+  getCurrentStudentNutritionScope,
+  getCurrentStudentNutritionSession,
+} from '@/services/auth/current-student-nutrition.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 
 /**
@@ -36,8 +37,7 @@ import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
  * - Toda escritura pasa por un RPC idempotente (record_/correct_/void_/ensure_),
  *   nunca por PATCH directo. La clave de idempotencia la genera el cliente y se
  *   propaga tal cual (reintento del MISMO gesto = no-op en el servidor).
- * - Fail-closed: cada acción re-verifica el gate de rollout con el MISMO servicio
- *   que las pages (isNutritionV2Enabled, surface webStudent). Sin gate -> error.
+ * - Fail-closed: cada acción re-verifica la sesión y que el workspace no sea Enterprise.
  * - El alumno solo puede escribir su propia fila: clientId debe ser auth.uid().
  * - Zod v4 valida toda entrada antes de tocar la base.
  */
@@ -155,7 +155,7 @@ async function authorizeStudentWrite(
   clientId: string,
   limiter: 'intake' | 'catalog-search' = 'intake',
 ): Promise<{ ok: true; supabase: RpcClient; userId: string } | ActionFailure> {
-  const { user, hasClientRow } = await getClientNutritionUser()
+  const { user, hasClientRow } = await getCurrentStudentNutritionSession()
   if (!user || !hasClientRow) {
     return fail('UNAUTHENTICATED', 'Debes iniciar sesión para registrar tu consumo.')
   }
@@ -172,26 +172,17 @@ async function authorizeStudentWrite(
     return fail('RATE_LIMITED', 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.')
   }
 
-  const scope = await getClientScope(user.id)
-  const [enabled, domainEnabled] = await Promise.all([
-    isNutritionV2Enabled({
-      surface: 'webStudent',
-      userId: user.id,
-      clientId: user.id,
-      coachId: scope.coachId,
-      teamId: scope.teamId,
-      orgId: scope.orgId,
-    }),
-    resolveNutritionDomainEnabled({
+  const scope = await getCurrentStudentNutritionScope(user.id)
+  if (scope.orgId) {
+    return fail('WORKSPACE_NOT_ALLOWED', 'Esta experiencia aún no está disponible para Enterprise.')
+  }
+
+  const domainEnabled = await resolveNutritionDomainEnabled({
       coachId: scope.coachId ?? '',
       clientId: user.id,
       clientTeamId: scope.teamId,
       clientOrgId: scope.orgId,
-    }),
-  ])
-  if (!enabled) {
-    return fail('ROLLOUT_DISABLED', 'La nueva experiencia de nutrición no está habilitada para tu cuenta.')
-  }
+    })
   if (!domainEnabled) {
     return fail('NUTRITION_DOMAIN_DISABLED', 'Tu coach no tiene activada la sección de nutrición por ahora.')
   }

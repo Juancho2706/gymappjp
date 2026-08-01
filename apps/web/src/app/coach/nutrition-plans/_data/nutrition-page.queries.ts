@@ -1,21 +1,9 @@
-import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { cache } from 'react'
+import { getCurrentCoachSession } from '@/services/auth/current-coach.service'
 
-export const getNutritionPlansPageCoach = cache(async () => {
-    const supabase = await createClient()
-    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
-    const { data: __cl } = await supabase.auth.getClaims()
-    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return { user: null, coach: null }
-
-    const { data: coach } = await supabase
-        .from('coaches')
-        .select('subscription_tier, active_org_id')
-        .eq('id', user.id)
-        .maybeSingle()
-
-    return { user, coach }
-})
+// Compatibility export for the legacy V1 page only. New V2 code imports the neutral service.
+export const getNutritionPlansPageCoach = getCurrentCoachSession
 
 export type OrgNutritionTemplate = {
     id: string

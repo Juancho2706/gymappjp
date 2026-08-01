@@ -1,6 +1,6 @@
 // NUT-005 — el endpoint de escrituras del coach movil es la barrera que RN no tenia:
-// rollout (Edge Config), pertenencia al workspace y entitlement "Nutricion Pro" se re-validan
-// SERVER-SIDE, y la persistencia corre con el cliente RLS del propio coach (nunca service_role).
+// pertenencia al workspace y entitlement "Nutricion Pro" se re-validan SERVER-SIDE, y la
+// persistencia corre con el cliente RLS del propio coach (nunca service_role).
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { NutritionPlanDraftSchema, type NutritionPlanDraft } from '@eva/nutrition-v2'
@@ -25,11 +25,6 @@ vi.mock('@/lib/supabase/admin-client', () => ({
 vi.mock('@/lib/mobile-auth', () => ({
   verifyMobileBearer: vi.fn(async () => ({ ok: true, userId: COACH })),
   isBlockedClientRow: () => false,
-}))
-
-const resolveNutritionV2RolloutDecision = vi.fn()
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({
-  resolveNutritionV2RolloutDecision: (...a: unknown[]) => resolveNutritionV2RolloutDecision(...a),
 }))
 
 const userRpc = vi.fn()
@@ -141,23 +136,13 @@ beforeEach(() => {
   vi.clearAllMocks()
   getUser.mockResolvedValue({ data: { user: { id: COACH } }, error: null })
   admin({ coaches: { id: COACH }, clients: { id: CLIENT }, team_members: { id: 'tm' }, teams: { id: TEAM_ID } })
-  resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: true, reason: 'global_on' })
   hasNutritionProV2.mockResolvedValue(true)
   persistAndPublishDraft.mockResolvedValue({ ok: true, versionId: VERSION_ID, planId: PLAN_ROOT })
   mockBaseVersionRead({ data: baseVersionRow() })
 })
 
-describe('POST coach/mutate · gate de rollout y workspace', () => {
-  it('rollout OFF => 404 NUTRITION_V2_DISABLED y NO persiste nada', async () => {
-    resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: false, reason: 'mode_off' })
-    const res = await POST(req({ action: 'publish', workspace: SCOPE, draft: draft(), idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-28' }))
-    const body = await res.json()
-    expect(res.status).toBe(404)
-    expect(body.code).toBe('NUTRITION_V2_DISABLED')
-    expect(persistAndPublishDraft).not.toHaveBeenCalled()
-  })
-
-  it('workspace ajeno (team sin membresia) => 403 y sin consultar el rollout', async () => {
+describe('POST coach/mutate · workspace', () => {
+  it('workspace ajeno (team sin membresía) => 403 sin persistir', async () => {
     admin({ coaches: { id: COACH }, teams: { id: TEAM_ID } })
     const res = await POST(
       req({
@@ -169,7 +154,6 @@ describe('POST coach/mutate · gate de rollout y workspace', () => {
       }),
     )
     expect(res.status).toBe(403)
-    expect(resolveNutritionV2RolloutDecision).not.toHaveBeenCalled()
     expect(persistAndPublishDraft).not.toHaveBeenCalled()
   })
 
@@ -419,15 +403,6 @@ describe('POST coach/mutate · createFood', () => {
     // El sobre del transporte no debe filtrarse a la fila.
     expect(row.action).toBeUndefined()
     expect(row.workspace).toBeUndefined()
-  })
-
-  it('rollout OFF => 404 NUTRITION_V2_DISABLED y NO inserta nada', async () => {
-    resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: false, reason: 'mode_off' })
-    const res = await POST(req(FOOD))
-    const body = await res.json()
-    expect(res.status).toBe(404)
-    expect(body.code).toBe('NUTRITION_V2_DISABLED')
-    expect(userFrom).not.toHaveBeenCalled()
   })
 
   it('campos invalidos (nombre vacio, macros negativas) => 400 INVALID_PAYLOAD sin tocar la BD', async () => {

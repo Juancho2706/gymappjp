@@ -396,6 +396,75 @@ export const NutritionHistoryPageReadModelSchema = z.object({
   hasMore: z.boolean(),
 })
 
+/**
+ * Detalle histórico de Nutrition V1 expuesto DENTRO de V2. Es deliberadamente un
+ * read-model distinto: las filas fuente no se convierten en eventos V2 ni la UI
+ * vuelve a montar componentes V1. `source` es una marca visible/auditable para que
+ * cada consumidor lo pinte como solo lectura.
+ */
+export const NutritionLegacyHistoryTargetReadSchema = z.object({
+  planName: z.string().nullable(),
+  calories: NullableNumberSchema,
+  proteinG: NullableNumberSchema,
+  carbsG: NullableNumberSchema,
+  fatsG: NullableNumberSchema,
+})
+
+export const NutritionLegacyHistoryFoodReadSchema = z.object({
+  foodId: z.string().uuid(),
+  name: z.string(),
+  brand: z.string().nullable(),
+  quantity: z.number().finite().positive(),
+  unit: z.string().nullable(),
+})
+
+export const NutritionLegacyHistoryMealReadSchema = z.object({
+  mealId: z.string().uuid(),
+  mealName: z.string(),
+  completedAt: IsoDateTimeSchema,
+  consumedQuantity: NullableNumberSchema,
+  satisfactionScore: z.number().int().min(1).max(3).nullable(),
+  foods: z.array(NutritionLegacyHistoryFoodReadSchema),
+})
+
+export const NutritionLegacyHistorySwapReadSchema = z.object({
+  mealId: z.string().uuid(),
+  originalFoodId: z.string().uuid(),
+  originalFoodName: z.string(),
+  swappedFoodId: z.string().uuid(),
+  swappedFoodName: z.string(),
+  quantity: NullableNumberSchema,
+  unit: z.string().nullable(),
+  createdAt: IsoDateTimeSchema,
+})
+
+export const NutritionLegacyHistoryIntakeReadSchema = z.object({
+  entryId: z.string().uuid(),
+  foodName: z.string(),
+  brand: z.string().nullable(),
+  quantity: z.number().finite().positive(),
+  unit: z.string(),
+  mealSlot: z.string().nullable(),
+  source: z.string().nullable(),
+  note: z.string().nullable(),
+  occurredAt: IsoDateTimeSchema,
+  calories: NullableNumberSchema,
+  proteinG: NullableNumberSchema,
+  carbsG: NullableNumberSchema,
+  fatsG: NullableNumberSchema,
+})
+
+export const NutritionLegacyHistoryDetailReadModelSchema = z.object({
+  schemaVersion: z.literal(NUTRITION_READ_MODEL_SCHEMA_VERSION),
+  generatedAt: IsoDateTimeSchema,
+  source: z.literal('legacy_v1'),
+  localDate: IsoDateSchema,
+  targets: z.array(NutritionLegacyHistoryTargetReadSchema),
+  meals: z.array(NutritionLegacyHistoryMealReadSchema),
+  swaps: z.array(NutritionLegacyHistorySwapReadSchema),
+  intakeEntries: z.array(NutritionLegacyHistoryIntakeReadSchema),
+})
+
 export const NutritionCoachHubItemSchema = z.object({
   clientId: z.string().uuid(),
   clientName: z.string(),
@@ -435,11 +504,11 @@ export const NutritionClientDetailReadModelSchema = z.object({
 /**
  * Active-workspace scope carried by every professional (coach/nutritionist) read.
  * Mirrors the server contract of `nutrition_v2_client_matches_workspace`
- * (migration 20260714211000): a standalone coach pool, a `teams` pool or an
- * `organizations` pool. The cross-field invariant is enforced here so the boundary
+ * (migration 20260714211000): a standalone coach pool or a `teams` pool. Enterprise
+ * remains on its isolated surface and cannot construct a V2 scope. The cross-field invariant is enforced here so the boundary
  * (web gateway + mobile API) fails closed instead of ever reading "sin scope".
  */
-export const NutritionV2CoachScopeTypeSchema = z.enum(['standalone', 'team', 'organization'])
+export const NutritionV2CoachScopeTypeSchema = z.enum(['standalone', 'team'])
 
 export const NutritionV2CoachScopeSchema = z
   .object({
@@ -454,8 +523,8 @@ export const NutritionV2CoachScopeSchema = z
     if (value.scopeType === 'team' && (value.teamId === null || value.orgId !== null)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'team scope requires teamId and no orgId' })
     }
-    if (value.scopeType === 'organization' && (value.orgId === null || value.teamId !== null)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'organization scope requires orgId and no teamId' })
+    if (value.orgId !== null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Nutrition V2 does not support organization scope' })
     }
   })
 
@@ -472,6 +541,12 @@ export type NutritionTodayReadModel = z.infer<typeof NutritionTodayReadModelSche
 export type NutritionPlanReadModel = z.infer<typeof NutritionPlanReadModelSchema>
 export type NutritionHistoryDay = z.infer<typeof NutritionHistoryDaySchema>
 export type NutritionHistoryPageReadModel = z.infer<typeof NutritionHistoryPageReadModelSchema>
+export type NutritionLegacyHistoryTargetRead = z.infer<typeof NutritionLegacyHistoryTargetReadSchema>
+export type NutritionLegacyHistoryFoodRead = z.infer<typeof NutritionLegacyHistoryFoodReadSchema>
+export type NutritionLegacyHistoryMealRead = z.infer<typeof NutritionLegacyHistoryMealReadSchema>
+export type NutritionLegacyHistorySwapRead = z.infer<typeof NutritionLegacyHistorySwapReadSchema>
+export type NutritionLegacyHistoryIntakeRead = z.infer<typeof NutritionLegacyHistoryIntakeReadSchema>
+export type NutritionLegacyHistoryDetailReadModel = z.infer<typeof NutritionLegacyHistoryDetailReadModelSchema>
 export type NutritionCoachHubItem = z.infer<typeof NutritionCoachHubItemSchema>
 export type NutritionCoachHubPageReadModel = z.infer<typeof NutritionCoachHubPageReadModelSchema>
 export type NutritionClientDetailReadModel = z.infer<typeof NutritionClientDetailReadModelSchema>

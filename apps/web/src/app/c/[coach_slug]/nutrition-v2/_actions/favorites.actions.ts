@@ -3,9 +3,10 @@
 import { z } from 'zod'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
-import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
-import { getClientScope } from '../../nutrition/_data/client-scope.queries'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import {
+  getCurrentStudentNutritionScope,
+  getCurrentStudentNutritionSession,
+} from '@/services/auth/current-student-nutrition.service'
 
 /**
  * Favoritos de alimento del alumno para nutrición V2.
@@ -17,10 +18,8 @@ import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
  * reusan tal cual — el `food_id` del catálogo V2 (`search_food_catalog_v2`) es un
  * `public.foods.id`, el mismo FK que ya usa esta tabla.
  *
- * Fail-closed: cada acción re-verifica el gate de rollout con el MISMO servicio que las
- * pages (isNutritionV2Enabled, surface webStudent). Un usuario fuera del canary no puede
- * tocar estas actions ni aunque arme el request a mano. El alumno solo escribe su fila
- * (clientId debe ser auth.uid()).
+ * Fail-closed: cada acción re-verifica sesión y que el workspace no sea Enterprise. El alumno
+ * solo escribe su fila (clientId debe ser auth.uid()); V2 ya no depende de flags de rollout.
  */
 
 type Fail = { ok: false; error: string }
@@ -31,20 +30,12 @@ const ToggleSchema = z.object({ clientId: z.string().uuid(), foodId: z.string().
 async function authorizeFavorite(
   clientId: string,
 ): Promise<{ ok: true; supabase: Awaited<ReturnType<typeof createClient>> } | Fail> {
-  const { user, hasClientRow } = await getClientNutritionUser()
+  const { user, hasClientRow } = await getCurrentStudentNutritionSession()
   if (!user || !hasClientRow) return { ok: false, error: 'Debes iniciar sesión.' }
   if (user.id !== clientId) return { ok: false, error: 'La cuenta no coincide.' }
 
-  const scope = await getClientScope(user.id)
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webStudent',
-    userId: user.id,
-    clientId: user.id,
-    coachId: scope.coachId,
-    teamId: scope.teamId,
-    orgId: scope.orgId,
-  })
-  if (!enabled) return { ok: false, error: 'La nueva experiencia de nutrición no está habilitada.' }
+  const scope = await getCurrentStudentNutritionScope(user.id)
+  if (scope.orgId) return { ok: false, error: 'Esta experiencia aún no está disponible para Enterprise.' }
 
   const supabase = await createClient()
   return { ok: true, supabase }

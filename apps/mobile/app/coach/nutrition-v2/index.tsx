@@ -46,7 +46,6 @@ import {
   type NutritionCoachHubPageReadModel,
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../lib/supabase'
-import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import {
@@ -160,7 +159,7 @@ export default function CoachNutritionV2Screen() {
     [workspaceReady, workspaceKind, workspaceTeamId, workspaceOrgId],
   )
   const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
-  const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
+  const enabled = entitlements.ready && scope !== null
   const todayLocalDate = useMemo(
     () => localDateOf(new Date().toISOString(), COACH_TIMEZONE) ?? '',
     [],
@@ -410,7 +409,7 @@ export default function CoachNutritionV2Screen() {
         <NutritionStatePanel
           icon="permission"
           title="Centro V2 no habilitado"
-          description="El rollout del coach está apagado o este workspace no pertenece al canary."
+           description="Este workspace no es compatible con Nutrición V2."
         />
       </View>
     )

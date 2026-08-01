@@ -8,14 +8,15 @@ import {
   toExchangeGroupSlug,
 } from '@eva/schemas'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { Sheet } from '../Sheet'
 import { useTheme } from '../../context/ThemeContext'
 import { PORTIONS_COPY } from '../../lib/nutrition-portions-copy'
 import {
-  createCoachExchangeGroup,
-  deleteCoachExchangeGroup,
-  updateCoachExchangeGroup,
-} from '../../lib/nutrition-exchanges.coach'
+  createNutritionV2ExchangeGroup,
+  deleteNutritionV2ExchangeGroup,
+  updateNutritionV2ExchangeGroup,
+} from '../../lib/nutrition-v2-exchange-groups.api'
 
 /**
  * Alta/edición de un grupo de porciones PROPIO del coach (porciones propias §P-A, FD6a) —
@@ -68,6 +69,7 @@ export function suggestExchangeGroupCode(name: string): string {
 export function ExchangeGroupFormSheet({
   open,
   initial,
+  scope,
   onClose,
   onSaved,
   onDeleted,
@@ -75,6 +77,7 @@ export function ExchangeGroupFormSheet({
   open: boolean
   /** Presente = edición del grupo propio; ausente = alta. */
   initial?: ExchangeGroupFormInitial | null
+  scope: NutritionV2CoachScope
   onClose: () => void
   onSaved: (group: ExchangeGroup) => void
   onDeleted?: (groupId: string) => void
@@ -151,8 +154,8 @@ export function ExchangeGroupFormSheet({
     const values = { name: trimmedName, code: upperCode, refCalories, refProteinG, refCarbsG, refFatsG, color }
     setSaving(true)
     const res = editing
-      ? await updateCoachExchangeGroup(initial.id, values)
-      : await createCoachExchangeGroup(values)
+      ? await updateNutritionV2ExchangeGroup(scope, initial.id, values)
+      : await createNutritionV2ExchangeGroup(scope, values)
     setSaving(false)
     if (!res.ok) {
       setError(res.error || COPY.writeFailed)
@@ -172,7 +175,7 @@ export function ExchangeGroupFormSheet({
         onPress: () => {
           void (async () => {
             setSaving(true)
-            const res = await deleteCoachExchangeGroup(initial.id)
+            const res = await deleteNutritionV2ExchangeGroup(scope, initial.id)
             setSaving(false)
             if (!res.ok) {
               setError(res.error || COPY.writeFailed)

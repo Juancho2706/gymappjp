@@ -37,9 +37,7 @@ import { RecentWorkouts } from '../../../components/alumno/home/RecentWorkouts'
 import { OrgAnnouncementBanner } from '../../../components/alumno/home/OrgAnnouncementBanner'
 import { StudentAccessBanner } from '../../../components/alumno/home/StudentAccessBanner'
 import { HabitsCard } from '../../../components/alumno/home/HabitsCard'
-import { NutritionDailySummary } from '../../../components/alumno/home/NutritionDailySummary'
 import { NutritionDailySummaryV2 } from '../../../components/alumno/home/NutritionDailySummaryV2'
-import { isEnabled } from '../../../lib/flags'
 import { DAY_FULL, EMBER_500, WEEK_LETTERS } from '../../../components/alumno/home/types'
 import type { HomeData, PendingDay, Plan, PlanDayView, Program } from '../../../components/alumno/home/types'
 
@@ -69,12 +67,8 @@ export default function AlumnoHomeScreen() {
   const router = useRouter()
   const { startMorph } = useSessionMorph()
   const insets = useSafeAreaInsets()
-  const { nutritionEnabled, ready: entitlementsReady, studentAccess } = useEntitlements()
+  const { nutritionEnabled, studentAccess } = useEntitlements()
   const { theme } = useTheme()
-  // Rollout técnico de Nutrición V2 (surface mobileStudent) resuelto por el servidor y espejado
-  // en el flag local; fail-closed hasta que entitlements estén listos. Mismo patrón que la
-  // pantalla /alumno/nutrition-v2.
-  const nutritionV2Enabled = entitlementsReady && isEnabled('nutritionV2Student')
   const onScrollChrome = useAlumnoScrollHandler()
   const scrollRef = useRef<ScrollView>(null)
   const [data, setData] = useState<HomeData | null>(null)
@@ -90,7 +84,7 @@ export default function AlumnoHomeScreen() {
   // describe el fetch de 30 dias, esta lectura es semanal).
   const [loggedSetsByPlanDay, setLoggedSetsByPlanDay] = useState<Map<string, Record<string, number>>>(() => new Map())
   // Señal de frescura para los widgets que fetchean por su cuenta (p.ej.
-  // NutritionDailySummary): se incrementa en cada load() exitoso (montaje,
+  // NutritionDailySummaryV2): se incrementa en cada load() exitoso (montaje,
   // pull-to-refresh, onSaved) para que el widget re-consulte y no quede congelado
   // en el snapshot de su primer montaje (paridad con la frescura RSC de la web).
   const [reloadKey, setReloadKey] = useState(0)
@@ -653,32 +647,25 @@ export default function AlumnoHomeScreen() {
           </View>
         ) : null}
 
-        {/* §12 Nutricion de hoy (gate) — V1 clásica o resumen V2 según el rollout mobileStudent */}
+        {/* §12 Nutrición de hoy — V2 es la única superficie activa para standalone y Team. */}
         {data?.client && nutritionEnabled ? (
-          nutritionV2Enabled ? (
-            <View>
-              <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutrition-v2')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
-              <NutritionDailySummaryV2
-                clientId={data.client.id}
-                reloadSignal={reloadKey}
-                // Deep-link a la franja que le toca ahora (SPEC nutrition-ui-poda #8): `slotCode`
-                // viene de la propia card, calculado sobre el mismo cache que ya lee — sin él,
-                // cae al Hoy sin resaltar ninguna franja.
-                onSeeAll={(slotCode) =>
-                  router.push(
-                    slotCode
-                      ? { pathname: '/alumno/nutrition-v2', params: { slot: slotCode } }
-                      : '/alumno/nutrition-v2',
-                  )
-                }
-              />
-            </View>
-          ) : (
-            <View>
-              <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutricion')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
-              <NutritionDailySummary clientId={data.client.id} reloadSignal={reloadKey} onSeeAll={() => router.push('/alumno/nutricion')} />
-            </View>
-          )
+          <View>
+            <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutricion')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
+            <NutritionDailySummaryV2
+              clientId={data.client.id}
+              reloadSignal={reloadKey}
+              // Deep-link a la franja que le toca ahora (SPEC nutrition-ui-poda #8): `slotCode`
+              // viene de la propia card, calculado sobre el mismo cache que ya lee — sin él,
+              // cae al Hoy sin resaltar ninguna franja.
+              onSeeAll={(slotCode) =>
+                router.push(
+                  slotCode
+                    ? { pathname: '/alumno/nutricion', params: { slot: slotCode } }
+                    : '/alumno/nutricion',
+                )
+              }
+            />
+          </View>
         ) : null}
         </View>
       </ScrollView>

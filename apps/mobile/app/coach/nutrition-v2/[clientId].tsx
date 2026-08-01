@@ -50,8 +50,7 @@ import {
 } from '@eva/nutrition-v2'
 import { formatNutritionShortDate } from '../../../lib/date-utils'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
-import { isEnabled } from '../../../lib/flags'
-import { useEntitlements, useNutritionV2CoachFlagForClientState } from '../../../lib/entitlements'
+import { useEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import { useOnline } from '../../../lib/use-online'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -268,13 +267,7 @@ export default function CoachNutritionV2ClientScreen() {
     [workspaceReady, workspaceKind, workspaceTeamId, workspaceOrgId],
   )
   const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
-  // Canary por alumno: alcanza esta ficha aunque el flag global del coach esté apagado; el flag global
-  // sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta. QA4 H3: se usa la variante con
-  // `resolved` para no pintar "Ficha V2 no habilitada" mientras el canary viaja (mentira + segundo flash).
-  const clientCanary = useNutritionV2CoachFlagForClientState(clientId)
-  const globalV2 = isEnabled('nutritionV2Coach')
-  const rolloutResolved = entitlements.ready && (globalV2 || clientCanary.resolved)
-  const enabled = entitlements.ready && (globalV2 || clientCanary.value)
+  const enabled = entitlements.ready && scope !== null
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
   useEffect(() => {
@@ -293,7 +286,7 @@ export default function CoachNutritionV2ClientScreen() {
   }, [])
 
   // Prerrequisitos: mientras alguno no resuelva NO se puede opinar sobre "hay datos o no".
-  const gatesResolved = entitlements.ready && workspaceReady && rolloutResolved && session.resolved
+  const gatesResolved = entitlements.ready && workspaceReady && session.resolved
   // Un store que dejó de cargar SIN llegar a `ready` (workspace.ts deja `ready:false` para siempre si
   // no hay cache en disco y el refresh falla) no puede quedar como loader eterno: se trata como fallo.
   const gatesStalled =
@@ -463,7 +456,7 @@ export default function CoachNutritionV2ClientScreen() {
         <NutritionStatePanel
           icon="permission"
           title="Ficha V2 no habilitada"
-          description="La ficha requiere rollout de coach y un alumno válido."
+          description="La ficha requiere un workspace compatible y un alumno válido."
           action={
             <NutritionMotionButton
               accessibilityLabel="Volver al centro"
@@ -1239,7 +1232,7 @@ function ConvertedPlanBanner({
 // resolución del juez: consistencia con los flujos coach existentes), NO Sheet. Roster paginado
 // del workspace + buscador acento-insensible + "Vigente desde" YYYY-MM-DD + reporte parcial.
 // La escritura la hace assignNutritionPlanToClients, que POSTea al endpoint de mutaciones del
-// coach (NUT-005): rollout, workspace, gate Pro y relectura de la fuente se validan server-side.
+  // coach (NUT-005): workspace, gate Pro y relectura de la fuente se validan server-side.
 // ---------------------------------------------------------------------------
 
 function AssignPlanModal({

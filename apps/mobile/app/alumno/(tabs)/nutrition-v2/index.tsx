@@ -43,9 +43,10 @@ import { Sheet as ActionSheet } from '../../../../components/Sheet'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
-import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
+import { NutritionDomainOff } from '../../../../components/nutrition-v2'
 import {
   PastDaySummary,
+  LegacyHistoryDetail,
   PortionDayCoverageRow,
   PortionEquivalencesSheet,
   PortionSlotSection,
@@ -100,7 +101,6 @@ import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 import { describeItemGuidance } from '../../../../lib/nutrition-v2-plan'
-import { isEnabled } from '../../../../lib/flags'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../../lib/nutrition-v2.api'
 import {
@@ -261,7 +261,7 @@ function TodayTab({
   // Día local VIVO (NUT-018): se reevalúa al cruzar medianoche y cuando la pantalla lo revalida
   // (foco / vuelta del background). `load` depende de `date`, así que el cambio reencadena el fetch.
   const [date, recheckDate] = useLocalDay(TZ)
-  const enabled = entitlements.ready && isEnabled('nutritionV2Student')
+  const enabled = entitlements.ready
 
   // ── Semana Lu-Do (SPEC nutrition-week-view) ─────────────────────────────────
   // `date` es HOY y sigue siendo el único día que se lee con `view=today` y el único con
@@ -1228,7 +1228,12 @@ function TodayTab({
         />
       )
     } else if (!isFuture) {
-      body = <PastDaySummary cell={selectedCell} ready={weekHistory.ready} />
+      body = (
+        <>
+          <PastDaySummary cell={selectedCell} ready={weekHistory.ready} />
+          {selectedCell.isLegacy ? <LegacyHistoryDetail date={selectedCell.isoDate} /> : null}
+        </>
+      )
     } else if (livePlan == null) {
       body = (
         <NutritionStatePanel
@@ -2245,7 +2250,7 @@ export default function StudentNutritionV2Screen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const entitlements = useEntitlements()
-  const enabled = entitlements.ready && isEnabled('nutritionV2Student')
+  const enabled = entitlements.ready
   const { reduced, duration } = useEvaMotion()
   // Deep-link desde la card "Nutrición" del Home (SPEC nutrition-ui-poda #8): `slot` señala la
   // franja que le toca ahora al alumno; solo resalta una card, jamás abre otra fecha ni dispara
@@ -2262,17 +2267,6 @@ export default function StudentNutritionV2Screen() {
     setTab('today')
   }, [])
 
-  // 4A-01: gate del flag, espejo EXACTO de la ruta web /nutrition-v2
-  // (nutrition-v2/page.tsx:48-56): con `nutritionV2Student` OFF la web hace
-  // `redirect(`${base}/nutrition`)`; aquí replaza al tab `nutricion` (V1) al ganar
-  // foco. Sin loop posible: el gate del tab solo redirige V1→V2 con el MISMO flag ON.
-  const fallbackToV1 = entitlements.ready && !isEnabled('nutritionV2Student')
-  useFocusEffect(
-    useCallback(() => {
-      if (fallbackToV1) router.replace('/alumno/nutricion')
-    }, [fallbackToV1, router]),
-  )
-
   // Volver a la pantalla de Nutrición SIEMPRE aterriza en hoy: el día elegido sobrevive a cambiar
   // de tab (Hoy ⇄ Plan ⇄ Historial, que remontan) pero no a salir del módulo — el tab se llama
   // "Hoy" y reencontrarlo mostrando el miércoles pasado sería desorientador.
@@ -2283,8 +2277,7 @@ export default function StudentNutritionV2Screen() {
   )
 
   if (!entitlements.ready || !enabled) {
-    // Pre-hidratación de entitlements o transición del replace a V1: skeleton
-    // neutro (la web no pinta contenido en ninguno de los dos casos).
+    // Pre-hidratación de entitlements: skeleton neutro sin mostrar datos incompletos.
     return (
       <View
         className="flex-1 bg-surface-app px-4"

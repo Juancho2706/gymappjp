@@ -135,7 +135,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: response.status,
       errorCode: error.code || 'NUTRITION_V2_COACH_READ_FAILED',
-      rolloutReason: gate.rolloutReason,
     })
     return response
   }
@@ -168,7 +167,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: 200,
       payload,
-      rolloutReason: gate.rolloutReason,
     })
     return jsonNoStore(payload)
   } catch {
@@ -177,7 +175,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: 500,
       errorCode: 'READ_MODEL_CONTRACT_MISMATCH',
-      rolloutReason: gate.rolloutReason,
     })
     return jsonNoStore(
       { error: 'Contrato de lectura inválido.', code: 'READ_MODEL_CONTRACT_MISMATCH' },

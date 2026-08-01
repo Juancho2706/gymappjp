@@ -7,6 +7,14 @@ export type ClientActionWorkspace = {
   orgId: string | null
 }
 
+export type ClientUnarchiveCapacity = {
+  /** null = Team pool without a persisted client quota (not an unknown entitlement). */
+  limit: number | null
+  used: number | null
+  label: string
+  available: boolean
+}
+
 // Acciones rápidas por alumno desde el listado del coach.
 // WhatsApp/login/share son 100% cliente; delete/reset/status usan los endpoints mobile.
 
@@ -41,6 +49,45 @@ export async function resetClientPassword(clientId: string, workspace?: ClientAc
   return res.tempPassword
 }
 
-export async function setClientStatus(clientId: string, body: { is_active?: boolean; is_archived?: boolean }, workspace?: ClientActionWorkspace): Promise<void> {
-  await apiFetch(`/api/mobile/coach/clients/${clientId}`, { method: 'PATCH', authenticated: true, body: { ...body, ...(workspace ? { workspace } : {}) } })
+/** Archive transitions have server-side entitlement, assignment and Auth side effects. */
+export async function archiveClient(clientId: string, workspace?: ClientActionWorkspace): Promise<void> {
+  await apiFetch(`/api/mobile/coach/clients/${clientId}/archive`, {
+    method: 'POST',
+    authenticated: true,
+    body: workspace ? { workspace } : {},
+  })
+}
+
+export async function unarchiveClient(clientId: string, workspace?: ClientActionWorkspace): Promise<void> {
+  await apiFetch(`/api/mobile/coach/clients/${clientId}/unarchive`, {
+    method: 'POST',
+    authenticated: true,
+    body: workspace ? { workspace } : {},
+  })
+}
+
+/** Server-derived capacity snapshot used only to disable impossible UI actions. */
+export async function getClientUnarchiveCapacity(workspace?: ClientActionWorkspace): Promise<ClientUnarchiveCapacity> {
+  return apiFetch<ClientUnarchiveCapacity>('/api/mobile/coach/clients/unarchive-capacity', {
+    method: 'POST',
+    authenticated: true,
+    body: workspace ? { workspace } : {},
+  })
+}
+
+export async function archiveClientsBulk(clientIds: string[], workspace?: ClientActionWorkspace): Promise<{ archived: number; authFailures: number }> {
+  return apiFetch('/api/mobile/coach/clients/archive-bulk', {
+    method: 'POST',
+    authenticated: true,
+    body: { clientIds, ...(workspace ? { workspace } : {}) },
+  })
+}
+
+/** Explicit pause/resume; generic profile PATCH is intentionally unable to change access. */
+export async function setClientAccessStatus(clientId: string, isActive: boolean, workspace?: ClientActionWorkspace): Promise<void> {
+  await apiFetch(`/api/mobile/coach/clients/${clientId}/access`, {
+    method: 'POST',
+    authenticated: true,
+    body: { isActive, ...(workspace ? { workspace } : {}) },
+  })
 }

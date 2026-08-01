@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   const limited = await rateLimitNutritionCatalogSearch(gate.userId)
   if (!limited.ok) {
-    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT', rolloutReason: gate.rolloutReason })
+    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT' })
     return jsonRateLimited(limited.retryAfter)
   }
 
@@ -93,7 +93,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: response.status,
       errorCode: error.code || 'FOOD_CATALOG_V2_READ_FAILED',
-      rolloutReason: gate.rolloutReason,
     })
     return response
   }
@@ -105,7 +104,6 @@ export async function GET(request: NextRequest) {
       startedAt,
       status: 200,
       payload,
-      rolloutReason: gate.rolloutReason,
     })
     return jsonNoStore(payload)
   } catch {
@@ -128,7 +126,7 @@ export async function POST(request: NextRequest) {
 
   const limited = await rateLimitNutritionCatalogReport(gate.userId)
   if (!limited.ok) {
-    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT', rolloutReason: gate.rolloutReason })
+    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT' })
     return jsonRateLimited(limited.retryAfter)
   }
 

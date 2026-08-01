@@ -15,7 +15,6 @@ import {
 } from './nutrition-v2-read.service'
 
 const TEAM_ID = '11111111-1111-4111-8111-111111111111'
-const ORG_ID = '22222222-2222-4222-8222-222222222222'
 const CLIENT_ID = '33333333-3333-4333-8333-333333333333'
 
 const EMPTY_HUB_PAGE = {
@@ -51,16 +50,16 @@ describe('nutritionV2CoachScopeFromWorkspace', () => {
       } as WorkspaceSummary),
     ).toEqual({ scopeType: 'team', teamId: TEAM_ID, orgId: null })
 
-    expect(
+    expect(() =>
       nutritionV2CoachScopeFromWorkspace({
         type: 'enterprise_coach',
         userId: 'u',
-        orgId: ORG_ID,
+        orgId: '22222222-2222-4222-8222-222222222222',
         coachId: 'c',
         memberId: 'm',
         label: 'x',
       } as WorkspaceSummary),
-    ).toEqual({ scopeType: 'organization', teamId: null, orgId: ORG_ID })
+    ).toThrow('not available for enterprise')
   })
 
   it('falla cerrado (throw) ante null o un workspace no-coach — jamas sin scope', () => {
@@ -106,16 +105,16 @@ describe('getNutritionClientDetailV2ForWeb', () => {
     await expect(
       getNutritionClientDetailV2ForWeb({
         clientId: CLIENT_ID,
-        scope: { scopeType: 'organization', teamId: null, orgId: ORG_ID },
+        scope: { scopeType: 'team', teamId: TEAM_ID, orgId: null },
         date: '2026-07-14',
       }),
     ).rejects.toThrow()
 
     expect(rpc).toHaveBeenCalledWith('get_nutrition_client_detail_scoped_v2', {
       p_client_id: CLIENT_ID,
-      p_scope_type: 'organization',
-      p_team_id: null,
-      p_org_id: ORG_ID,
+      p_scope_type: 'team',
+      p_team_id: TEAM_ID,
+      p_org_id: null,
       p_local_date: '2026-07-14',
       p_timezone: 'America/Santiago',
     })

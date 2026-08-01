@@ -5,7 +5,7 @@ import type { ExchangeGroup } from '@/domain/nutrition/exchange.types'
  * Server actions de grupos de porciones propios (P-A) + regresion del guard de publish.
  *
  * Se verifica que la action: (1) valide con el contrato compartido ANTES de tocar la sesion,
- * (2) exija el gate real del builder (`authorizeCoach`: sesion + rate limit + rollout +
+ * (2) exija el gate real del builder (`authorizeCoach`: sesión + rate limit + workspace +
  * workspace) y devuelva su ActionFailure tal cual, (3) pase el scope 3-vias del workspace y
  * (4) revalide las superficies del coach. La ultima suite fija la regresion: si el coach borra
  * un grupo que un BORRADOR sigue usando, publicar falla cerrado con EXCHANGE_GROUP_NOT_FOUND
@@ -15,10 +15,9 @@ import type { ExchangeGroup } from '@/domain/nutrition/exchange.types'
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/services/auth/workspace-render-cache', () => ({ getPreferredWorkspaceForRender: vi.fn() }))
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: vi.fn() }))
 vi.mock('@/services/nutrition-v2-read.service', () => ({ nutritionV2CoachScopeFromWorkspace: vi.fn() }))
-vi.mock('@/app/coach/nutrition-plans/_data/nutrition-page.queries', () => ({
-  getNutritionPlansPageCoach: vi.fn(),
+vi.mock('@/services/auth/current-coach.service', () => ({
+  getCurrentCoachSession: vi.fn(),
 }))
 
 const mocks = vi.hoisted(() => ({
@@ -130,15 +129,15 @@ describe('createExchangeGroupAction', () => {
     expect(mocks.authorizeCoach).not.toHaveBeenCalled()
   })
 
-  it('propaga el ActionFailure del gate (rollout apagado, sin sesion, rate limit)', async () => {
+  it('propaga el ActionFailure del gate (sin sesión, scope o rate limit)', async () => {
     mocks.authorizeCoach.mockResolvedValue({
       ok: false,
-      code: 'ROLLOUT_DISABLED',
-      error: 'La nueva experiencia de nutricion no esta habilitada.',
+      code: 'SCOPE_REQUIRED',
+      error: 'Debes tener un espacio de trabajo de coach activo.',
     })
     const res = await createExchangeGroupAction(PAYLOAD)
     expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('ROLLOUT_DISABLED')
+    if (!res.ok) expect(res.code).toBe('SCOPE_REQUIRED')
     expect(mocks.createCoachExchangeGroup).not.toHaveBeenCalled()
   })
 

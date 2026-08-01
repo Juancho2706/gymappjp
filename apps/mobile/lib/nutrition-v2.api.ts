@@ -2,6 +2,7 @@ import {
   NutritionClientDetailReadModelSchema,
   NutritionCoachHubPageReadModelSchema,
   NutritionHistoryPageReadModelSchema,
+  NutritionLegacyHistoryDetailReadModelSchema,
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
   NutritionIntakeVoidSchema,
@@ -11,6 +12,7 @@ import {
   type NutritionClientDetailReadModel,
   type NutritionCoachHubPageReadModel,
   type NutritionHistoryPageReadModel,
+  type NutritionLegacyHistoryDetailReadModel,
   type NutritionIntakeCorrection,
   type NutritionIntakeMutation,
   type NutritionIntakeVoid,
@@ -111,6 +113,18 @@ export async function getNutritionHistoryV2(input: {
     { authenticated: true, signal: input.signal },
   )
   return NutritionHistoryPageReadModelSchema.parse(raw)
+}
+
+/** Detalle solo lectura de un día histórico creado antes del corte Nutrition V2. */
+export async function getNutritionLegacyHistoryDetailV2(input: {
+  date: string
+  signal?: AbortSignal
+}): Promise<NutritionLegacyHistoryDetailReadModel> {
+  const raw = await apiFetch<unknown>(
+    `/api/mobile/nutrition-v2/read${params({ view: 'history-detail', date: input.date })}`,
+    { authenticated: true, signal: input.signal },
+  )
+  return NutritionLegacyHistoryDetailReadModelSchema.parse(raw)
 }
 
 export async function getNutritionCoachHubV2(input: {

@@ -40,8 +40,6 @@ import { NutritionDailyOverview } from './_components/NutritionDailyOverview'
 import { NutritionIntakeLedger } from './_components/NutritionIntakeLedger'
 import { NutritionGuidanceProgress } from './_components/NutritionGuidanceProgress'
 import { getClientBasePath } from '@/lib/client/base-path'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
-import { resolveLegacyNutritionEntry } from './_lib/legacy-entry-order'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -58,39 +56,13 @@ export default async function ClientNutritionPage({ params }: Props) {
 
   const { iso: today } = getTodayInSantiago()
 
-  // Deprecación por etapas (decisión CEO 2026-07-17): con V2 activo para este alumno,
-  // V1 deja de mostrarse — la experiencia canónica vive en /nutrition-v2. El gate se
-  // resuelve ANTES del fan-out de datos V1: con V2 ON, redirigir aquí evita pagar ~13
-  // queries que se descartaban (perf del tap "Nutrición" del menú, QA CEO 2026-07-18).
-  // Con el flag apagado (fail-closed) esta página sigue siendo V1 intacta.
-  //
-  // NUT-015: el gate va ARRIBA del plan V1. Antes el early-return por "sin plan V1"
-  // precedía al redirect, así que el alumno nativo V2 (sin fila V1 — el caso normal)
-  // caía en "Sin plan asignado" desde el tab primario de navegación. El orden vive en
-  // `resolveLegacyNutritionEntry` para poder testearlo (mismo patrón que `nutrition/add`).
-  const entry = await resolveLegacyNutritionEntry({
-    loadScope: () => getClientScope(user.id),
-    isV2Enabled: (scope) =>
-      isNutritionV2Enabled({
-        surface: 'webStudent',
-        userId: user.id,
-        clientId: user.id,
-        coachId: scope.coachId,
-        teamId: scope.teamId,
-        orgId: scope.orgId,
-      }),
-    loadV1Plan: () => getActiveNutritionPlan(user.id),
-  })
+  // V2 es la ruta canónica de standalone y Team. Enterprise sigue aislado temporalmente en V1.
+  // La redirección ocurre antes de cualquier fan-out legacy para no pagar consultas descartadas.
+  const clientScope = await getClientScope(user.id)
+  if (!clientScope.orgId) redirect(`${base}/nutrition-v2`)
 
-  if (entry.kind === 'redirect-v2') {
-    redirect(`${base}/nutrition-v2`)
-  }
-  if (entry.kind === 'no-v1-plan') {
-    return <NutritionNoPlanFromServer coachSlug={coach_slug} userId={user.id} />
-  }
-
-  const clientScope = entry.scope
-  const plan = entry.plan
+  const plan = await getActiveNutritionPlan(user.id)
+  if (!plan) return <NutritionNoPlanFromServer coachSlug={coach_slug} userId={user.id} />
 
   const prefsInput = {
     domain: 'nutrition' as const,

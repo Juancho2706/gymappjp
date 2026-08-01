@@ -25,10 +25,10 @@ import {
   NutritionStatePanel,
   CelebrationOverlay,
   type CelebrationInstance,
+  NutritionDomainOff,
 } from '../../../../components/nutrition-v2'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
-import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
   CATALOG_MACROS_BASIS,
@@ -42,7 +42,6 @@ import {
   type FoodCatalogItem,
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
-import { isEnabled } from '../../../../lib/flags'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { supabase } from '../../../../lib/supabase'
 import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
@@ -52,7 +51,7 @@ import {
   getClientFoodFavorites,
   listFavoriteFoodsV2,
   toggleClientFoodFavorite,
-} from '../../../../lib/nutrition-swaps'
+} from '../../../../lib/nutrition-v2-favorites.api'
 import {
   CATALOG_ODBL_GENERIC_LINE,
   catalogHasOpenFoodFactsSource,
@@ -143,7 +142,7 @@ export default function NutritionV2AddFoodScreen() {
   // lo que el timer NO puede ver — el proceso suspendido en background y el regreso a esta
   // pantalla desde otra (el alumno pudo dejarla abierta y cruzar la medianoche).
   const [date, recheckDate] = useLocalDay()
-  const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
+  const nutritionReady = entitlements.ready
 
   // Revalidar el día al recuperar el foco y al volver del background: si cambió, el efecto del
   // read-model se reencadena solo con la fecha nueva y el registro se persiste en el día correcto.
@@ -483,7 +482,7 @@ export default function NutritionV2AddFoodScreen() {
     )
   }
 
-  if (!rolloutEnabled) {
+  if (!nutritionReady) {
     return (
       <View
         className="flex-1 bg-surface-app px-4"
@@ -491,8 +490,8 @@ export default function NutritionV2AddFoodScreen() {
       >
         <NutritionStatePanel
           icon="permission"
-          title="El registro todavía no está disponible"
-          description="Tu coach todavía no activó esta vista para ti."
+          title="Cargando registro"
+          description="Estamos preparando tu configuración de nutrición."
           action={
             <NutritionMotionButton
               accessibilityLabel="Volver a nutrición actual"

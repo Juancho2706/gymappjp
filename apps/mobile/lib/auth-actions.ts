@@ -39,7 +39,7 @@ export function registerSessionCacheJanitor(): void {
   })
 }
 
-export async function signOutAndCleanup(): Promise<void> {
+export async function signOutAndCleanup(options: { preserveStudentAccountStatus?: boolean } = {}): Promise<void> {
   // Resolvemos el id del usuario SALIENTE ANTES de cerrar la sesión: después se pierde y ya no
   // podríamos revocar el push ni borrar su cache por-usuario. Aislado para que un fallo aquí no
   // impida la limpieza posterior.
@@ -63,6 +63,9 @@ export async function signOutAndCleanup(): Promise<void> {
   }
 
   sessionFlags.pwChanged = false
+  if (!options.preserveStudentAccountStatus) {
+    await AsyncStorage.removeItem('eva:student-account-status:v1').catch(() => {})
+  }
   await supabase.auth.signOut().catch(() => {})
 }
 

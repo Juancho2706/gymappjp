@@ -55,6 +55,26 @@ const FORBIDDEN_IMPORTS = [
     label: 'PlanBuilder V1',
     pattern: /(?:from\s+|import\s*\()['"][^'"]*PlanBuilder(?:\/PlanBuilder)?['"]\)?/,
   },
+  {
+    label: 'componentes alumno Nutrition V1',
+    pattern: /(?:from\s+|import\s*\()['"][^'"]*components\/alumno\/nutrition(?:['"]|\/)/,
+  },
+  {
+    label: 'helper mobile swaps V1',
+    pattern: /(?:from\s+|import\s*\()['"][^'"]*lib\/nutrition-swaps['"]\)?/,
+  },
+  {
+    label: 'helper mobile intercambios V1',
+    pattern: /(?:from\s+|import\s*\()['"][^'"]*lib\/nutrition-exchanges\.coach['"]\)?/,
+  },
+  {
+    label: 'componente de ruta Nutrition V1',
+    pattern: /(?:from\s+|import\s*\()['"][^'"]*\/nutrition\/_components\//,
+  },
+  {
+    label: 'dependencia de rollout/flags retirada',
+    pattern: /(?:from\s+|import\s*\()['"][^'"]*(?:nutrition-v2-rollout|mobile-nutrition-v2-rollout-context|lib\/flags)['"]\)?/,
+  },
 ]
 
 /**

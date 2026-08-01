@@ -43,6 +43,7 @@ export const DirRowCard = memo(function DirRowCard({
   onToggle,
   onArchive,
   onDelete,
+  archiveDisabledReason,
 }: {
   item: DirectoryClient
   index: number
@@ -59,6 +60,7 @@ export const DirRowCard = memo(function DirRowCard({
   onToggle?: (c: DirectoryClient) => void
   onArchive?: (c: DirectoryClient) => void
   onDelete?: (c: DirectoryClient) => void
+  archiveDisabledReason?: string | null
 }) {
   const { branding } = useTheme()
   const [menu, setMenu] = useState(false)
@@ -160,6 +162,7 @@ export const DirRowCard = memo(function DirRowCard({
         onToggle={() => onToggle?.(item)}
         onArchive={onArchive ? () => onArchive(item) : undefined}
         onDelete={() => onDelete?.(item)}
+        archiveDisabledReason={item.isArchived ? archiveDisabledReason : null}
       />
     </View>
   )

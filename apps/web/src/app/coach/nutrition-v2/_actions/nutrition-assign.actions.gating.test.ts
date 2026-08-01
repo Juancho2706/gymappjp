@@ -4,26 +4,24 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/services/entitlements.service', () => ({ hasModule: vi.fn(), assertModule: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/services/auth/workspace-render-cache', () => ({ getPreferredWorkspaceForRender: vi.fn() }))
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: vi.fn() }))
 vi.mock('@/lib/date-utils', () => ({ getTodayInSantiago: vi.fn(() => ({ iso: '2026-07-16' })) }))
 vi.mock('@/services/nutrition-v2-read.service', () => ({
   nutritionV2CoachScopeFromWorkspace: vi.fn(),
   getNutritionClientDetailV2ForWeb: vi.fn(),
   getNutritionCoachHubV2ForWeb: vi.fn(),
 }))
-vi.mock('@/app/coach/nutrition-plans/_data/nutrition-page.queries', () => ({
-  getNutritionPlansPageCoach: vi.fn(),
+vi.mock('@/services/auth/current-coach.service', () => ({
+  getCurrentCoachSession: vi.fn(),
 }))
 
 import { hasModule } from '@/services/entitlements.service'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import {
   getNutritionClientDetailV2ForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
-import { getNutritionPlansPageCoach } from '@/app/coach/nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession } from '@/services/auth/current-coach.service'
 import { assignPlanToClientsAction } from './nutrition-assign.actions'
 
 const COACH = '22222222-2222-4222-8222-222222222222'
@@ -102,9 +100,8 @@ function input(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   dbMock = makeDb()
-  vi.mocked(getNutritionPlansPageCoach).mockResolvedValue({ user: { id: COACH } } as never)
+  vi.mocked(getCurrentCoachSession).mockResolvedValue({ user: { id: COACH } } as never)
   vi.mocked(getPreferredWorkspaceForRender).mockResolvedValue({ type: 'coach_standalone' } as never)
-  vi.mocked(isNutritionV2Enabled).mockResolvedValue(true)
   vi.mocked(nutritionV2CoachScopeFromWorkspace).mockReturnValue({ scopeType: 'standalone', teamId: null, orgId: null } as never)
   vi.mocked(createClient).mockResolvedValue(dbMock as never)
 })
@@ -113,7 +110,7 @@ describe('assignPlanToClientsAction — validacion y gate Pro', () => {
   it('rechaza si la fuente esta en los destinos (antes de auth)', async () => {
     const res = await assignPlanToClientsAction(input({ targetClientIds: [A, SOURCE] }))
     expect(res).toMatchObject({ ok: false, code: 'SOURCE_IN_TARGETS' })
-    expect(getNutritionPlansPageCoach).not.toHaveBeenCalled()
+    expect(getCurrentCoachSession).not.toHaveBeenCalled()
   })
 
   it('SIN addon: plan fuente hibrido => UPGRADE_REQUIRED, sin escribir', async () => {

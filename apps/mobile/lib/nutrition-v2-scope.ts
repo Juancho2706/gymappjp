@@ -8,7 +8,7 @@ import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 
 /**
  * Workspace coach activo tal como lo modela la app (`useWorkspace()` / `ClientActionWorkspace`).
- * El enum `kind` colapsa al scope de lectura profesional (`standalone` | `team` | `organization`).
+ * El enum `kind` colapsa al scope de lectura profesional (`standalone` | `team`).
  */
 export type NutritionV2WorkspaceInput = {
   kind: 'standalone' | 'team_owner' | 'team_member' | 'enterprise'
@@ -31,7 +31,7 @@ export function nutritionV2CoachScope(
     case 'team_member':
       return workspace.teamId ? { scopeType: 'team', teamId: workspace.teamId, orgId: null } : null
     case 'enterprise':
-      return workspace.orgId ? { scopeType: 'organization', teamId: null, orgId: workspace.orgId } : null
+      return null
     default:
       return null
   }

@@ -37,7 +37,14 @@ import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
 import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import { deriveClientStatus } from '@eva/profile-analytics'
-import { deleteClient, resetClientPassword, setClientStatus, type ClientActionWorkspace } from '../../../lib/client-actions'
+import {
+  archiveClient,
+  deleteClient,
+  resetClientPassword,
+  setClientAccessStatus,
+  unarchiveClient,
+  type ClientActionWorkspace,
+} from '../../../lib/client-actions'
 import { clientActionWorkspaceQuery } from '../../../lib/client-action-workspace'
 import { getWorkspaceEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
@@ -360,7 +367,7 @@ export default function ClientDetailScreen() {
           onPress: async () => {
             if (actionBusy) return
             setActionBusy(true)
-            try { await setClientStatus(client.id, { is_active: !client.is_active }, actionWorkspace); await load({ silent: true }) }
+            try { await setClientAccessStatus(client.id, !client.is_active, actionWorkspace); await load({ silent: true }) }
             catch (error) { Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo actualizar.') }
             finally { setActionBusy(false) }
           },
@@ -387,7 +394,7 @@ export default function ClientDetailScreen() {
       archiving ? 'Archivar alumno' : 'Desarchivar alumno',
       archiving
         ? 'Se oculta de la lista y libera cupo de tu plan. No se borra nada: puedes desarchivarlo cuando quieras.'
-        : 'Vuelve a tu lista activa y cuenta para el cupo de tu plan.',
+        : 'Vuelve a tu lista activa y cuenta para el cupo de tu plan. Sus programas y planes no se reactivan: asígnalos nuevamente si corresponde.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -395,7 +402,11 @@ export default function ClientDetailScreen() {
           onPress: async () => {
             if (actionBusy) return
             setActionBusy(true)
-            try { await setClientStatus(client.id, { is_archived: archiving }, actionWorkspace); await load({ silent: true }) }
+            try {
+              if (archiving) await archiveClient(client.id, actionWorkspace)
+              else await unarchiveClient(client.id, actionWorkspace)
+              await load({ silent: true })
+            }
             catch (error) { Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo actualizar.') }
             finally { setActionBusy(false) }
           },
@@ -738,7 +749,7 @@ export default function ClientDetailScreen() {
               dayLoading={nutritionDayLoading || (nutritionDayDetail?.date !== nutritionDate && nutritionDayError == null)}
               dayError={nutritionDayError}
               onRetryDay={() => setNutritionDayRetry((value) => value + 1)}
-              onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
+              onEditNutrition={() => router.push(`/coach/nutrition-v2/builder/${client.id}`)} />
           )}
         </View>
       </ScrollView>

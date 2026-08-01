@@ -19,7 +19,6 @@ import { Sheet } from '../../../components'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { useTheme } from '../../../context/ThemeContext'
-import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import { nutritionV2CoachScope } from '../../../lib/nutrition-v2.api'
@@ -98,7 +97,7 @@ export function CurationQueueScreen({
         : null,
     [workspaceReady, workspaceKind, workspaceTeamId, workspaceOrgId],
   )
-  const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
+  const enabled = entitlements.ready && scope !== null
 
   const [rows, setRows] = useState<MissingCodeRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -177,7 +176,7 @@ export function CurationQueueScreen({
           <NutritionStatePanel
             icon="permission"
             title="Centro V2 no habilitado"
-            description="El rollout del coach está apagado o este workspace no pertenece al canary."
+            description="Este workspace no es compatible con Nutrición V2."
           />
         </View>
       )

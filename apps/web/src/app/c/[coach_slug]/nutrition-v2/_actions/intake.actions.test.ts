@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { rpc, getUser, getScope, isEnabled, domainEnabled, revalidate, rateIntake, rateSearch, requestHeaders } =
+const { rpc, getUser, getScope, domainEnabled, revalidate, rateIntake, rateSearch, requestHeaders } =
   vi.hoisted(() => ({
     rpc: vi.fn(),
     getUser: vi.fn(),
     getScope: vi.fn(),
-    isEnabled: vi.fn(),
     domainEnabled: vi.fn(),
     revalidate: vi.fn(),
     rateIntake: vi.fn(),
@@ -19,9 +18,10 @@ vi.mock('next/headers', () => ({
   headers: async () => ({ get: (key: string) => requestHeaders.get(key) ?? null }),
 }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }))
-vi.mock('../../nutrition/_data/nutrition-auth.queries', () => ({ getClientNutritionUser: getUser }))
-vi.mock('../../nutrition/_data/client-scope.queries', () => ({ getClientScope: getScope }))
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: isEnabled }))
+vi.mock('@/services/auth/current-student-nutrition.service', () => ({
+  getCurrentStudentNutritionSession: getUser,
+  getCurrentStudentNutritionScope: getScope,
+}))
 vi.mock('@/services/feature-prefs.service', () => ({ resolveNutritionDomainEnabled: domainEnabled }))
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitNutritionIntake: rateIntake,
@@ -115,7 +115,6 @@ beforeEach(() => {
   setStandaloneRequest()
   getUser.mockResolvedValue({ user: { id: CLIENT_ID }, hasClientRow: true })
   getScope.mockResolvedValue({ coachId: null, teamId: null, orgId: null })
-  isEnabled.mockResolvedValue(true)
   domainEnabled.mockResolvedValue(true)
   // Por defecto, plan LEGADO: snapshot `{}` => el merge de defaults lo deja permisivo.
   permissionsFixture = {}
@@ -187,12 +186,12 @@ describe('recordIntakeAction', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('falla cerrado si el gate de rollout esta apagado', async () => {
-    isEnabled.mockResolvedValue(false)
+  it('rechaza Enterprise antes de consultar los RPC V2', async () => {
+    getScope.mockResolvedValue({ coachId: null, teamId: null, orgId: '11111111-1111-4111-8111-111111111111' })
     const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('ROLLOUT_DISABLED')
+    if (!res.ok) expect(res.code).toBe('WORKSPACE_NOT_ALLOWED')
     expect(rpc).not.toHaveBeenCalled()
   })
 

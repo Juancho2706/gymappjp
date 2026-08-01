@@ -13,7 +13,6 @@ import {
   nutritionAttentionCardDescription,
   nutritionAttentionCardTitle,
   nutritionAttentionCardTone,
-  nutritionAttentionLabel,
   nutritionHubMetricScopeLabel,
   nutritionPlanCtaLabel,
   nutritionV2BuilderHref,
@@ -228,18 +227,8 @@ describe('nutrition-v2-hub filtro por atencion', () => {
   it('needs_attention excluye solo los none', () => {
     expect(applyNutritionAttentionFilter(items, 'needs_attention').map((i) => i.clientName)).toEqual(['A', 'B', 'C'])
   })
-  it('cada motivo especifico filtra exacto', () => {
-    expect(applyNutritionAttentionFilter(items, 'no_plan').map((i) => i.clientName)).toEqual(['A'])
+  it('cada filtro visible aplica su motivo exacto', () => {
     expect(applyNutritionAttentionFilter(items, 'draft_pending').map((i) => i.clientName)).toEqual(['B'])
-  })
-})
-
-describe('nutrition-v2-hub etiquetas de atencion', () => {
-  it('mapea cada motivo', () => {
-    expect(nutritionAttentionLabel('no_plan')).toBe('Sin plan V2')
-    expect(nutritionAttentionLabel('draft_pending')).toBe('Borrador pendiente')
-    expect(nutritionAttentionLabel('no_recent_intake')).toBe('Sin consumo reciente')
-    expect(nutritionAttentionLabel('none')).toBe('Al día')
   })
 })
 

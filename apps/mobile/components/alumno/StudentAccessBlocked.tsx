@@ -7,9 +7,8 @@ import { useTheme } from '../../context/ThemeContext'
 import { Avatar } from '../Avatar'
 import { Button } from '../Button'
 import { signOutAndCleanup } from '../../lib/auth-actions'
-import { supabase } from '../../lib/supabase'
-import { selectWithFallback } from '../../lib/db-compat'
 import { STUDENT_ACCESS_COPY } from '../../lib/student-access-copy'
+import { getCachedStudentAccountStatus } from '../../lib/student-account-status'
 
 const COPY = STUDENT_ACCESS_COPY.blockScreen
 
@@ -47,27 +46,11 @@ export function StudentAccessBlocked() {
     ;(async () => {
       const next: BlockedData = { loading: false, isTeam: false, brandName: 'Tu coach', whatsapp: null }
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          if (mounted) setS(next)
-          return
-        }
-        // team_id define el contexto pool/team (fallback si la columna no existe en DB vieja).
-        const { data: client } = await selectWithFallback<any>(
-          () => supabase.from('clients').select('coach_id, team_id').eq('id', user.id).maybeSingle(),
-          () => supabase.from('clients').select('coach_id').eq('id', user.id).maybeSingle(),
-        )
-        if (client?.team_id) {
-          next.isTeam = true
-          const { data: team } = await supabase.from('teams').select('name').eq('id', client.team_id).maybeSingle()
-          next.brandName = team?.name || 'Tu equipo'
-        } else if (client?.coach_id) {
-          const { data: coach } = await selectWithFallback<any>(
-            () => supabase.from('coaches').select('display_name, whatsapp').eq('id', client.coach_id).maybeSingle(),
-            () => supabase.from('coaches').select('display_name').eq('id', client.coach_id).maybeSingle(),
-          )
-          next.brandName = coach?.display_name || 'Tu coach'
-          next.whatsapp = coach?.whatsapp ?? null
+        const status = await getCachedStudentAccountStatus()
+        if (status) {
+          next.isTeam = status.isTeam
+          next.brandName = status.brandName
+          next.whatsapp = status.whatsapp
         }
       } catch {
         // fail-safe: valores por defecto (una cuenta en pausa nunca debe crashear la app).

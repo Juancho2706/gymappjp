@@ -14,15 +14,14 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
-> **2026-07-31 (QA archivado/scope/polish)**: corregido el cruce team/standalone en dashboard, pulso
-> y directorio RN/Web; los archivados ya no cuentan como activos, no muestran asignaciones vivas, no
-> aparecen en builders/pickers y su única acción desde el directorio es desarchivar. El perfil directo
-> queda bloqueado como histórico y el servidor rechaza nuevas asignaciones a clientes archivados. Se
-> retiró el filtro “Sin plan V2” en nutrición RN/Web, se cambió el candado por `LockKeyhole` en ambos
-> temas, y el welcome Free usa la figura EVA blanca sobre máscara circular negra con “No volver a mostrar”.
-> Se preparó la migración forward-only `20260731123000_archive_client_deactivates_assignments.sql`
-> para desactivar asignaciones históricas vivas y proteger futuras; no se aplicó a producción en este
-> corte. Pendiente: protocolo Supabase autorizado y QA física Android/iOS.
+> **2026-07-31 (cierre de archivado + V2 canónica, en integración)**: RN/Web usan Nutrition V2 como
+> entrada canónica para Standalone/Team; se retiró el filtro de ausencia de plan V2 y los aliases
+> legacy quedan solo para compatibilidad hasta versión mínima. El directorio RN trata archivados como
+> filas no navegables: su única acción es desarchivar cuando el workspace tiene cupo. El perfil directo
+> queda suspendido, limpia sesión/caché/cola ante `CLIENT_BLOCKED` y no reactiva planes al volver.
+> La migración forward-only de asignaciones y la guarda RLS/read-model histórico siguen **sin aplicar
+> en producción**; falta entorno Supabase controlado, JWTs reales, Playwright y QA físico Android/iOS.
+> El detalle de corte está en [`NUTRITION_V2_CUTOVER_RUNBOOK.md`](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md).
 
 La paridad global **no está certificada todavía**.
 

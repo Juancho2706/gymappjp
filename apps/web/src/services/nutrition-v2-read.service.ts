@@ -6,11 +6,13 @@ import {
   NutritionClientDetailReadModelSchema,
   NutritionCoachHubPageReadModelSchema,
   NutritionHistoryPageReadModelSchema,
+  NutritionLegacyHistoryDetailReadModelSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
   type NutritionClientDetailReadModel,
   type NutritionCoachHubPageReadModel,
   type NutritionHistoryPageReadModel,
+  type NutritionLegacyHistoryDetailReadModel,
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
   type NutritionV2CoachScope,
@@ -103,6 +105,24 @@ export function getNutritionHistoryV2ForWeb(input: {
 }
 
 /**
+ * Detalle inmutable de un día del sistema Nutrition V1, presentado por V2 en modo
+ * lectura. El RPC conserva los datos fuente: no sintetiza ni escribe eventos V2.
+ */
+export function getNutritionLegacyHistoryDetailV2ForWeb(input: {
+  clientId: string
+  date: string
+}): Promise<NutritionLegacyHistoryDetailReadModel> {
+  return rpcRead({
+    name: 'get_nutrition_legacy_history_detail_v2',
+    args: {
+      p_client_id: input.clientId,
+      p_local_date: input.date,
+    },
+    parse: (value) => NutritionLegacyHistoryDetailReadModelSchema.parse(value),
+  })
+}
+
+/**
  * Maps the RSC-resolved workspace (`getPreferredWorkspaceForRender`) to the professional read scope.
  * Fail-closed: any workspace that is not a coach pool (null, enterprise staff, a student workspace)
  * throws instead of degrading to an unscoped read — the coach roster/detail must never mix pools.
@@ -116,7 +136,7 @@ export function nutritionV2CoachScopeFromWorkspace(
     case 'coach_team':
       return { scopeType: 'team', teamId: workspace.teamId, orgId: null }
     case 'enterprise_coach':
-      return { scopeType: 'organization', teamId: null, orgId: workspace.orgId }
+      throw new Error('Nutrition V2 is not available for enterprise workspaces')
     default:
       throw new Error(
         `Nutrition V2 coach read requires a coach workspace, got: ${workspace?.type ?? 'null'}`,

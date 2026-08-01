@@ -60,7 +60,19 @@ import {
   type SortDir,
   type StatusFilter,
 } from '../../../lib/clients-directory'
-import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin, teamClientLoginUrl } from '../../../lib/client-actions'
+import {
+  archiveClient,
+  clientLoginUrl,
+  deleteClient,
+  getClientUnarchiveCapacity,
+  openWhatsApp,
+  resetClientPassword,
+  setClientAccessStatus,
+  shareLogin,
+  teamClientLoginUrl,
+  unarchiveClient,
+  type ClientUnarchiveCapacity,
+} from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
 import { canImportClients, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getCoachOrgContext, type CoachOrgContext } from '../../../lib/org'
@@ -340,6 +352,7 @@ export default function ClientesScreen() {
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
   const [actionsClient, setActionsClient] = useState<DirectoryClient | null>(null)
+  const [unarchiveCapacity, setUnarchiveCapacity] = useState<ClientUnarchiveCapacity | null>(null)
   const lastActionsClientRef = useRef<DirectoryClient | null>(null)
   if (actionsClient) lastActionsClientRef.current = actionsClient
   const actionsSubject = actionsClient ?? lastActionsClientRef.current
@@ -360,6 +373,17 @@ export default function ClientesScreen() {
         fetchDirectoryData().catch(() => {})
       }
     }, [workspace.ready, workspace.kind, workspace.orgId, workspace.teamId])
+  )
+  useFocusEffect(
+    useCallback(() => {
+      if (!workspace.ready) return
+      let active = true
+      setUnarchiveCapacity(null)
+      void getClientUnarchiveCapacity({ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId })
+        .then((capacity) => { if (active) setUnarchiveCapacity(capacity) })
+        .catch(() => { if (active) setUnarchiveCapacity(null) })
+      return () => { active = false }
+    }, [workspace.ready, workspace.kind, workspace.teamId, workspace.orgId]),
   )
   useFocusEffect(
     useCallback(() => {
@@ -481,6 +505,13 @@ export default function ClientesScreen() {
     return vals.length ? Math.round(vals.reduce((a, p) => a + p.percentage, 0) / vals.length) : 0
   }, [pulseById])
   const archivedCount = useMemo(() => clients.filter((c) => c.isArchived).length, [clients])
+  const archiveDisabledReason = !unarchiveCapacity
+    ? 'Validando cupo…'
+    : unarchiveCapacity.available
+      ? null
+      : unarchiveCapacity.used !== null && unarchiveCapacity.limit !== null
+        ? `Sin cupo: ${unarchiveCapacity.used} de ${unarchiveCapacity.limit} en ${unarchiveCapacity.label}`
+        : 'No pudimos validar el cupo del workspace.'
 
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
   const sportTokens = useMemo(() => deriveSportTokens(coachPrimaryColor || theme.primary), [coachPrimaryColor, theme.primary])
@@ -529,7 +560,7 @@ export default function ClientesScreen() {
         {
           text: pausing ? 'Pausar' : 'Activar',
           style: pausing ? 'destructive' : 'default',
-          onPress: () => setClientStatus(c.id, { is_active: !c.isActive }, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+          onPress: () => setClientAccessStatus(c.id, !c.isActive, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
         },
       ]
     )
@@ -581,13 +612,18 @@ export default function ClientesScreen() {
     const archiving = !c.isArchived
     Alert.alert(
       archiving ? 'Archivar alumno' : 'Desarchivar alumno',
-      archiving ? `${c.fullName} se moverá al archivo y dejará de contar como alumno activo.` : `${c.fullName} volverá a tu cartera activa.`,
+      archiving
+        ? `${c.fullName} se moverá al archivo, dejará de contar como alumno activo y ya no podrá acceder a su app.`
+        : `${c.fullName} volverá a tu cartera activa si hay cupo. Sus programas y planes no se reactivan: asígnalos explícitamente.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: archiving ? 'Archivar' : 'Desarchivar',
           style: archiving ? 'destructive' : 'default',
-          onPress: () => setClientStatus(c.id, { is_archived: archiving }, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+          onPress: () => (archiving
+            ? archiveClient(c.id, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId })
+            : unarchiveClient(c.id, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId })
+          ).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
         },
       ]
     )
@@ -816,6 +852,7 @@ export default function ClientesScreen() {
                 onToggle={handleToggle}
                 onArchive={handleArchive}
                 onDelete={handleDelete}
+                archiveDisabledReason={archiveDisabledReason}
               />
             </View>
           )}
@@ -932,6 +969,7 @@ export default function ClientesScreen() {
           onToggle={() => handleToggle(actionsSubject)}
           onArchive={() => handleArchive(actionsSubject)}
           onDelete={() => handleDelete(actionsSubject)}
+          archiveDisabledReason={actionsSubject.isArchived ? archiveDisabledReason : null}
         />
       ) : null}
 

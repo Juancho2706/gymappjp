@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { CalendarDays, History, Info, ListChecks, Utensils } from 'lucide-react'
 import {
   NutritionCard,
+  NutritionDomainOff,
   NutritionPageShell,
   NutritionStatePanel,
   NutritionToolbar,
@@ -27,19 +28,22 @@ import {
 import { formatNutritionShortDate, getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { createClient } from '@/lib/supabase/server'
-import { getClientNutritionUser } from '../nutrition/_data/nutrition-auth.queries'
-import { getClientDisplayName, getClientScope } from '../nutrition/_data/client-scope.queries'
+import {
+  getCurrentStudentNutritionDisplayName,
+  getCurrentStudentNutritionScope,
+  getCurrentStudentNutritionSession,
+} from '@/services/auth/current-student-nutrition.service'
 import {
   getNutritionHistoryV2ForWeb,
+  getNutritionLegacyHistoryDetailV2ForWeb,
   getNutritionPlanV2ForWeb,
   getNutritionTodayV2ForWeb,
 } from '@/services/nutrition-v2-read.service'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
-import { NutritionDomainOff } from '../nutrition/_components/NutritionDomainOff'
 import { TodayExperience } from './_components/TodayExperience'
 import { FutureDayPreview } from './_components/FutureDayPreview'
 import { PastDaySummary } from './_components/PastDaySummary'
+import { LegacyHistoryDetail } from './_components/LegacyHistoryDetail'
 import { PlanVariantCard, type PlanVariant } from './_components/PlanVariantCard'
 import { WeekDayNavigator } from './_components/WeekDayNavigator'
 import { HistoryWeeksList } from './_components/HistoryWeeksList'
@@ -68,27 +72,20 @@ interface Props {
 export default async function StudentNutritionV2Page({ params, searchParams }: Props) {
   const [{ coach_slug }, query] = await Promise.all([params, searchParams])
   const base = await getClientBasePath(coach_slug)
-  const { user, hasClientRow } = await getClientNutritionUser()
+  const { user, hasClientRow } = await getCurrentStudentNutritionSession()
   if (!user || !hasClientRow) redirect(`${base}/login`)
 
-  const scope = await getClientScope(user.id)
-  const [enabled, domainEnabled] = await Promise.all([
-    isNutritionV2Enabled({
-      surface: 'webStudent',
-      userId: user.id,
-      clientId: user.id,
-      coachId: scope.coachId,
-      teamId: scope.teamId,
-      orgId: scope.orgId,
-    }),
-    resolveNutritionDomainEnabled({
+  const scope = await getCurrentStudentNutritionScope(user.id)
+  // Nutrition V2 is canonical for standalone and Team only. Enterprise remains on
+  // its isolated legacy surface until its separately scoped removal project.
+  if (scope.orgId) redirect(`${base}/nutrition`)
+
+  const domainEnabled = await resolveNutritionDomainEnabled({
       coachId: scope.coachId ?? '',
       clientId: user.id,
       clientTeamId: scope.teamId,
       clientOrgId: scope.orgId,
-    }),
-  ])
-  if (!enabled) redirect(`${base}/nutrition`)
+    })
   if (!domainEnabled) return <NutritionDomainOff coachSlug={coach_slug} />
 
   const { iso: today } = getTodayInSantiago()
@@ -275,7 +272,7 @@ async function TodayView({
       before: nutritionWeekHistoryCursor(todayIso),
       pageSize: NUTRITION_WEEK_HISTORY_PAGE_SIZE,
     }),
-    isToday ? getClientDisplayName(clientId) : null,
+    isToday ? getCurrentStudentNutritionDisplayName(clientId) : null,
   ])
 
   // Reemplazos estructurados de la version que el alumno VE hoy (`today.plan`, no `plan.plan`): los
@@ -643,11 +640,14 @@ async function HistoryDayDetailView({
     redirect(historyHref)
   }
 
-  const page = await getNutritionHistoryV2ForWeb({
-    clientId,
-    before: addNutritionDays(dateIso, 1),
-    pageSize: 1,
-  })
+  const [page, legacyDetail] = await Promise.all([
+    getNutritionHistoryV2ForWeb({
+      clientId,
+      before: addNutritionDays(dateIso, 1),
+      pageSize: 1,
+    }),
+    getNutritionLegacyHistoryDetailV2ForWeb({ clientId, date: dateIso }),
+  ])
   const row = page.items.find((item) => item.localDate === dateIso) ?? null
   // Generics explícitos: sin variantes reales que inferir de `[]`, fija el mismo par
   // (PlanVariant, NutritionHistoryDay) que `StudentNutritionWeekCell` espera — la celda vale para
@@ -662,5 +662,10 @@ async function HistoryDayDetailView({
   const cell = cells.find((candidate) => candidate.isoDate === dateIso) ?? null
   if (cell == null) redirect(historyHref)
 
-  return <PastDaySummary backHref={historyHref} backLabel="Volver al historial" cell={cell} />
+  return (
+    <>
+      <PastDaySummary backHref={historyHref} backLabel="Volver al historial" cell={cell} />
+      <LegacyHistoryDetail detail={legacyDetail} />
+    </>
+  )
 }

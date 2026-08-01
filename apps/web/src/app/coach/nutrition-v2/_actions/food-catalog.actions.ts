@@ -10,13 +10,12 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
-import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 
 // Listado de alimentos del hub coach V2 (solo lectura).
-// Fail-closed: re-verifica el gate (isNutritionV2Enabled, webCoach) y el scope del
-// workspace activo en CADA busqueda, igual que el builder. Nunca trae el catalogo
+// Fail-closed: re-verifica el scope V2 del workspace activo en CADA búsqueda, igual que el builder.
+// Nunca trae el catálogo
 // completo: pagina de a ~20 via keyset cursor sobre search_food_catalog_v2 (que ya
 // aplica RLS token-scoped en la funcion SECURITY DEFINER).
 
@@ -57,17 +56,6 @@ async function authorizeHubCoach(): Promise<{ ok: true; db: CatalogRpc } | Actio
   }
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
-  const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
-  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webCoach',
-    userId: user.id,
-    coachId: user.id,
-    teamId,
-    orgId,
-  })
-  if (!enabled) return fail('ROLLOUT_DISABLED', 'La nueva experiencia de nutricion no esta habilitada.')
 
   try {
     nutritionV2CoachScopeFromWorkspace(workspace)
@@ -81,7 +69,7 @@ async function authorizeHubCoach(): Promise<{ ok: true; db: CatalogRpc } | Actio
 
 /**
  * Busca en el catalogo local (Chile por defecto) via search_food_catalog_v2.
- * Solo lectura, gate webCoach re-verificado, paginacion por cursor (pageSize 20).
+ * Solo lectura, scope V2 re-verificado, paginación por cursor (pageSize 20).
  * Devuelve el read model validado (items + nextCursor + hasMore); el mapeo a card
  * ocurre en el cliente con el helper puro.
  */

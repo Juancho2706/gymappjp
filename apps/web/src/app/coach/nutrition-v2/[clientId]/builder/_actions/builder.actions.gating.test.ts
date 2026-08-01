@@ -5,18 +5,16 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/services/entitlements.service', () => ({ hasModule: vi.fn(), assertModule: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/services/auth/workspace-render-cache', () => ({ getPreferredWorkspaceForRender: vi.fn() }))
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: vi.fn() }))
 vi.mock('@/services/nutrition-v2-read.service', () => ({ nutritionV2CoachScopeFromWorkspace: vi.fn() }))
-vi.mock('@/app/coach/nutrition-plans/_data/nutrition-page.queries', () => ({
-  getNutritionPlansPageCoach: vi.fn(),
+vi.mock('@/services/auth/current-coach.service', () => ({
+  getCurrentCoachSession: vi.fn(),
 }))
 
 import { hasModule } from '@/services/entitlements.service'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
-import { getNutritionPlansPageCoach } from '@/app/coach/nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession } from '@/services/auth/current-coach.service'
 import { publishPlanAction } from './builder.actions'
 
 const COACH_ID = '22222222-2222-4222-8222-222222222222'
@@ -70,9 +68,8 @@ function input(draftOverrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   baseVersionRow = null
-  vi.mocked(getNutritionPlansPageCoach).mockResolvedValue({ user: { id: COACH_ID } } as never)
+  vi.mocked(getCurrentCoachSession).mockResolvedValue({ user: { id: COACH_ID } } as never)
   vi.mocked(getPreferredWorkspaceForRender).mockResolvedValue({ type: 'coach_standalone' } as never)
-  vi.mocked(isNutritionV2Enabled).mockResolvedValue(true)
   vi.mocked(nutritionV2CoachScopeFromWorkspace).mockReturnValue({
     scopeType: 'standalone',
     teamId: null,

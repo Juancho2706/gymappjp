@@ -6,8 +6,7 @@ import { useRouter } from 'expo-router'
 import { useTheme } from '../../context/ThemeContext'
 import { Button } from '../../components'
 import { signOutAndCleanup } from '../../lib/auth-actions'
-import { supabase } from '../../lib/supabase'
-import { selectWithFallback } from '../../lib/db-compat'
+import { getCachedStudentAccountStatus } from '../../lib/student-account-status'
 
 // DS warning-700 (status token, NO white-label). Flip por scheme igual que var(--warning-700) en web.
 const WARNING_700 = { light: '#8F5A05', dark: '#FFD489' } as const
@@ -34,26 +33,13 @@ export default function SuspendedScreen() {
     ;(async () => {
       const next: SuspendedState = { loading: false, isTeam: false, brandName: 'tu Coach', whatsapp: null }
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { if (mounted) setS(next); return }
-
-        // team_id define el contexto pool/team (fallback si la columna no existe en DB vieja).
-        const { data: client } = await selectWithFallback<any>(
-          () => supabase.from('clients').select('coach_id, team_id').eq('id', user.id).maybeSingle(),
-          () => supabase.from('clients').select('coach_id').eq('id', user.id).maybeSingle()
-        )
-
-        if (client?.team_id) {
-          next.isTeam = true
-          const { data: team } = await supabase.from('teams').select('name').eq('id', client.team_id).maybeSingle()
-          next.brandName = team?.name || 'tu equipo'
-        } else if (client?.coach_id) {
-          const { data: coach } = await selectWithFallback<any>(
-            () => supabase.from('coaches').select('display_name, whatsapp').eq('id', client.coach_id).maybeSingle(),
-            () => supabase.from('coaches').select('display_name').eq('id', client.coach_id).maybeSingle()
-          )
-          next.brandName = coach?.display_name || 'tu Coach'
-          next.whatsapp = coach?.whatsapp ?? null
+        // RLS correctly denies PostgREST reads once archived. The root gate stored this minimal
+        // server-verified state before clearing the session, so this screen never probes data.
+        const status = await getCachedStudentAccountStatus()
+        if (status) {
+          next.isTeam = status.isTeam
+          next.brandName = status.brandName
+          next.whatsapp = status.whatsapp
         }
       } catch {
         // fail-safe: valores por defecto (cuenta pausada nunca debe crashear).

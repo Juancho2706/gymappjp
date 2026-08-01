@@ -35,14 +35,13 @@ import {
 import { QuantityStepper } from '../../../../components/nutrition-v2/quick-edit/QuantityStepper'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
-import { foodCategoryFromName, type FoodCatalogItem, type NutritionStrategy } from '@eva/nutrition-v2'
+import { foodCategoryFromName, type FoodCatalogItem, type NutritionStrategy, type NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { exchangeGroupColor, hasUnconfirmedMacros, type ExchangeGroup } from '@eva/nutrition-engine'
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
 import { useTheme } from '../../../../context/ThemeContext'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
-import { isEnabled } from '../../../../lib/flags'
-import { fetchCoachExchangeGroups } from '../../../../lib/nutrition-exchanges.coach'
+import { fetchNutritionV2ExchangeGroups } from '../../../../lib/nutrition-v2-exchange-groups.api'
 import { PORTIONS_COPY } from '../../../../lib/nutrition-portions-copy'
 import {
   PORTIONS_MAX,
@@ -67,7 +66,7 @@ import {
   loadBuilderSubstitutionsForVersion,
   rehydrateBuilderState,
 } from '../../../../lib/nutrition-v2-builder-rehydrate'
-import { useEntitlements, useNutritionV2CoachFlagForClientState } from '../../../../lib/entitlements'
+import { useEntitlements } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import {
   archiveNutritionPlan,
@@ -305,6 +304,7 @@ const PERMISSION_FIELDS: Array<[keyof BuilderPermissions, string, string]> = [
 // ---------------------------------------------------------------------------
 
 interface PortionsController {
+  scope: NutritionV2CoachScope | null
   bySlot: PortionsBySlot
   groups: ExchangeGroup[] | null
   groupsLoading: boolean
@@ -345,7 +345,7 @@ interface PortionsController {
   dropCatalogGroup: (exchangeGroupId: string) => void
 }
 
-function usePortionsBuilder(): PortionsController {
+function usePortionsBuilder(scope: NutritionV2CoachScope | null): PortionsController {
   const [bySlot, setBySlot] = useState<PortionsBySlot>({})
   const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
   const [groupsLoading, setGroupsLoading] = useState(false)
@@ -361,12 +361,16 @@ function usePortionsBuilder(): PortionsController {
   }, [])
 
   const load = useCallback(async () => {
+    if (!scope) {
+      setGroupsError(PORTIONS_COPY.builder.pickerError)
+      return
+    }
     if (loadingRef.current) return
     loadingRef.current = true
     setGroupsLoading(true)
     setGroupsError(null)
     try {
-      const res = await fetchCoachExchangeGroups()
+      const res = await fetchNutritionV2ExchangeGroups(scope)
       if (mountedRef.current) setGroups(sortGroupsForPicker(res))
     } catch {
       if (mountedRef.current) setGroupsError(PORTIONS_COPY.builder.pickerError)
@@ -374,7 +378,7 @@ function usePortionsBuilder(): PortionsController {
       loadingRef.current = false
       if (mountedRef.current) setGroupsLoading(false)
     }
-  }, [])
+  }, [scope])
 
   const ensureGroupsLoaded = useCallback(() => {
     if (groups == null && !loadingRef.current) void load()
@@ -448,6 +452,7 @@ function usePortionsBuilder(): PortionsController {
   }, [])
 
   return {
+    scope,
     bySlot,
     groups,
     groupsLoading,
@@ -483,19 +488,12 @@ export default function CoachNutritionV2BuilderScreen() {
     () => (workspaceReady ? nutritionV2CoachScope({ kind, teamId, orgId }) : null),
     [workspaceReady, kind, teamId, orgId],
   )
-  // Canary por alumno: alcanza el constructor aunque el flag global del coach esté apagado; el flag
-  // global sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta. QA4 H3: se usa la variante
-  // con `resolved` para no pintar "Constructor no habilitado" mientras el canary viaja (mentira +
-  // flash al abrir el constructor desde la ficha).
-  const clientCanary = useNutritionV2CoachFlagForClientState(clientId)
-  const globalV2 = isEnabled('nutritionV2Coach')
-  const rolloutResolved = entitlements.ready && (globalV2 || clientCanary.resolved)
-  const enabled = entitlements.ready && (globalV2 || clientCanary.value)
+  const enabled = entitlements.ready && scope !== null
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
   const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
   // Controlador de porciones a elección (4B-11): estado hermano del wizard, threadeado por el árbol.
-  const portions = usePortionsBuilder()
+  const portions = usePortionsBuilder(scope)
   const [showErrors, setShowErrors] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
@@ -1077,7 +1075,7 @@ export default function CoachNutritionV2BuilderScreen() {
       }
       const idempotencyKey = stableIdempotencyKey(draft, chosenFrom)
       setPublishing(true)
-      // NUT-005: la publicacion pasa por la API movil (rollout + entitlement + RLS server-side).
+        // NUT-005: la publicacion pasa por la API movil (workspace + entitlement + RLS server-side).
       // CAS (NUT-011): al publicar una version NUEVA del plan vigente mandamos la version base que
       // el wizard tenia en pantalla; si otra sesion publico entremedio, el servidor corta con
       // STALE_BASE en vez de superponer una version calculada sobre datos viejos.
@@ -1213,7 +1211,7 @@ export default function CoachNutritionV2BuilderScreen() {
   // y, al OK, despacha UPDATE_ITEM para que el item pase a referenciarlo (deja de ser libre). El
   // componente profundo (ItemEditor) no toca la red: recibe este callback (patron de onSearch).
   // NUT-005: el alta pasa por la API móvil (acción `createFood`), NO por un insert directo en
-  // `foods` — así el rollout y el gate del workspace también cubren este camino.
+  // `foods` — así el gate del workspace también cubre este camino.
   const handleSaveCustomFood = useCallback(
     async (
       item: BuilderItem,
@@ -1323,7 +1321,7 @@ export default function CoachNutritionV2BuilderScreen() {
     return () => sub.remove()
   }, [state, router])
 
-  if (!entitlements.ready || !workspaceReady || !rolloutResolved) {
+  if (!entitlements.ready || !workspaceReady) {
     return (
       <SafeAreaView edges={['top']} className="flex-1 bg-surface-app">
         <View className="flex-1 px-4 pt-6">
@@ -1340,7 +1338,7 @@ export default function CoachNutritionV2BuilderScreen() {
           <NutritionStatePanel
             icon="permission"
             title="Constructor no habilitado"
-            description="El constructor de planes requiere rollout de coach y un alumno válido."
+            description="El constructor de planes requiere un workspace compatible y un alumno válido."
             action={
               <NutritionMotionButton accessibilityLabel="Volver" tone="neutral" onPress={() => router.back()}>
                 Volver
@@ -1978,13 +1976,16 @@ function PortionsGroupPickerSheet({
       )}
 
       {/* Anidado DENTRO del picker a propósito (dos Modal hermanos no apilan bien en iOS). */}
-      <ExchangeGroupFormSheet
-        open={formOpen}
-        initial={editingGroup}
-        onClose={() => setFormOpen(false)}
-        onSaved={(group) => controller.upsertCatalogGroup(group)}
-        onDeleted={(groupId) => controller.dropCatalogGroup(groupId)}
-      />
+      {controller.scope ? (
+        <ExchangeGroupFormSheet
+          open={formOpen}
+          initial={editingGroup}
+          scope={controller.scope}
+          onClose={() => setFormOpen(false)}
+          onSaved={(group) => controller.upsertCatalogGroup(group)}
+          onDeleted={(groupId) => controller.dropCatalogGroup(groupId)}
+        />
+      ) : null}
     </Sheet>
   )
 }

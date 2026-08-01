@@ -1,13 +1,12 @@
 'use server'
 
 import { z } from 'zod'
-import { getNutritionPlansPageCoach } from '@/app/coach/nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionCoachRosterV2ForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 
 /**
  * NUT-026 — Búsqueda server-side del roster para los selectores de alumno del Centro V2.
@@ -49,17 +48,6 @@ export async function searchCoachRosterAction(input: {
   if (!user) return { ok: false, error: 'Debes iniciar sesión.' }
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
-  const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
-  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webCoach',
-    userId: user.id,
-    coachId: user.id,
-    teamId,
-    orgId,
-  })
-  if (!enabled) return { ok: false, error: 'La nueva experiencia de nutrición no está habilitada.' }
 
   try {
     const scope = nutritionV2CoachScopeFromWorkspace(workspace)

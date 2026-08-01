@@ -1,13 +1,12 @@
 import { redirect } from 'next/navigation'
 import { NutritionPageShell } from '@/components/nutrition-v2'
-import { getNutritionPlansPageCoach } from '../nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionCoachHubV2ForWeb,
   getNutritionCoachRosterV2ForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { NutritionHubTabs } from './_components/NutritionHubTabs'
 import { HubRoster } from './_components/HubRoster'
 import { NewPlanPickerButton, type NewPlanPickerEntry } from './_components/NewPlanPickerButton'
@@ -31,16 +30,7 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
   if (!user) redirect('/login')
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
-  const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
-  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webCoach',
-    userId: user.id,
-    coachId: user.id,
-    teamId,
-    orgId,
-  })
-  if (!enabled) redirect('/coach/nutrition-plans')
+  if (workspace?.type === 'enterprise_coach') redirect('/coach/nutrition-plans')
 
   // Propagate the active workspace to the scoped RPC so the roster never mixes coach pools.
   const scope = nutritionV2CoachScopeFromWorkspace(workspace)

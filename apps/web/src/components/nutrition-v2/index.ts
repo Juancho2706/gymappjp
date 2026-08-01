@@ -28,6 +28,7 @@ export { DayVariantWeekStrip } from './DayVariantWeekStrip'
 export { WeekDayNav, type WeekDayNavProps } from './WeekDayNav'
 export { PlanDowSelector } from './PlanDowSelector'
 export { PrescribedPortionChips } from './PrescribedPortionChips'
+export { NutritionDomainOff } from './NutritionDomainOff'
 export * from './NutritionV2Motion'
 export {
   NUTRITION_ILLUSTRATIONS,

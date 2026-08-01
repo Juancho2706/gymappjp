@@ -80,7 +80,7 @@ import {
   type QuickEditPortionTarget,
 } from './portions-state'
 import type { QuickEditGroupAdmin } from './EditablePortionsSection'
-import { fetchCoachExchangeGroups } from '../../../lib/nutrition-exchanges.coach'
+import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
 import { publishQuickEditRN } from '../../../lib/nutrition-v2.api'
 import {
@@ -505,11 +505,12 @@ export function QuickEditMode({
   // apuntando a un grupo borrado (publicar así rompería el freeze con EXCHANGE_GROUP_NOT_FOUND).
   const portionGroupAdmin: QuickEditGroupAdmin = useMemo(
     () => ({
+      scope,
       ownGroupIds,
       ensureLoaded: () => {
         if (ownGroupsRequestedRef.current) return
         ownGroupsRequestedRef.current = true
-        void fetchCoachExchangeGroups()
+        void fetchNutritionV2ExchangeGroups(scope)
           .then((groups) => {
             if (!mountedRef.current) return
             setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
@@ -543,7 +544,7 @@ export function QuickEditMode({
         }
       },
     }),
-    [ownGroupIds, portionsState.bySlot],
+    [scope, ownGroupIds, portionsState.bySlot],
   )
 
   const handleRemoveSlot = useCallback(

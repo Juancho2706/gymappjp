@@ -26,7 +26,7 @@ Leer primero [CURRENT.md](status/CURRENT.md). Este es el único índice manual d
 
 ## Runbooks especializados
 
-- [Nutrition V2 rollout](operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md)
+- [Nutrition V2 cutover](operations/NUTRITION_V2_CUTOVER_RUNBOOK.md)
 - [Importación del catálogo chileno](operations/FOOD_CATALOG_CL_IMPORT.md)
 - [Releases OTA móvil](operations/MOBILE_RELEASES_OTA.md)
 - [Checklist DB de paridad RN](operations/RN-PARITY-DB-CHECKLIST.md)

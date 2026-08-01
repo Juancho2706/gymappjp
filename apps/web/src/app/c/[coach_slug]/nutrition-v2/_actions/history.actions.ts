@@ -2,9 +2,10 @@
 
 import { z } from 'zod'
 import { getNutritionHistoryV2ForWeb } from '@/services/nutrition-v2-read.service'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
-import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
-import { getClientScope } from '../../nutrition/_data/client-scope.queries'
+import {
+  getCurrentStudentNutritionScope,
+  getCurrentStudentNutritionSession,
+} from '@/services/auth/current-student-nutrition.service'
 import { groupHistoryDaysByWeek, type HistoryWeekBucket } from '../_components/week-nav.logic'
 
 /**
@@ -14,8 +15,8 @@ import { groupHistoryDaysByWeek, type HistoryWeekBucket } from '../_components/w
  * `get_nutrition_today_v2`) y el mismo agrupador puro (`groupHistoryDaysByWeek`) que la página.
  *
  * Autorización idéntica a `favorites.actions.ts`: re-verifica sesión + que `clientId` sea el
- * propio `auth.uid()` + el canary de rollout, para que esta action no sea una puerta trasera al
- * historial de otro alumno ni a un usuario fuera de la nueva experiencia.
+ * propio `auth.uid()` + workspace standalone/Team, para que esta action no sea una puerta trasera
+ * al historial de otro alumno ni a Enterprise mientras esa superficie siga aislada.
  */
 
 type Fail = { ok: false; error: string }
@@ -34,20 +35,12 @@ export async function fetchNutritionHistoryWeeksAction(
   if (!parsed.success) return { ok: false, error: 'Datos inválidos.' }
   const { clientId, before, pageSize, todayIso } = parsed.data
 
-  const { user, hasClientRow } = await getClientNutritionUser()
+  const { user, hasClientRow } = await getCurrentStudentNutritionSession()
   if (!user || !hasClientRow) return { ok: false, error: 'Debes iniciar sesión.' }
   if (user.id !== clientId) return { ok: false, error: 'La cuenta no coincide.' }
 
-  const scope = await getClientScope(user.id)
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webStudent',
-    userId: user.id,
-    clientId: user.id,
-    coachId: scope.coachId,
-    teamId: scope.teamId,
-    orgId: scope.orgId,
-  })
-  if (!enabled) return { ok: false, error: 'La nueva experiencia de nutrición no está habilitada.' }
+  const scope = await getCurrentStudentNutritionScope(user.id)
+  if (scope.orgId) return { ok: false, error: 'Esta experiencia aún no está disponible para Enterprise.' }
 
   const page = await getNutritionHistoryV2ForWeb({ clientId, before, pageSize })
   return {

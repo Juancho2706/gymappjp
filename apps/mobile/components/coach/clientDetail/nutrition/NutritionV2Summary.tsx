@@ -5,10 +5,8 @@
  * vistazo: estrategia + semana en puntos + energía de hoy + racha, y los dos CTAs de siempre
  * (abrir ficha / crear-versionar plan).
  *
- * Gating (paralelo del server-resolve web `resolveNutritionTabV2`, clients/[clientId]/page.tsx:240):
- * cuando el flag/canary `nutritionV2Coach` está ON Y el fetch del read model responde,
- * `NutricionTab` renderiza este tab; ante flag OFF o CUALQUIER fallo cae al tab V1 exactamente
- * igual (fail-open, cero regresión) — el mismo `null ⇒ NutritionTabB5` del web.
+ * Gating: V2 es canónica en standalone y Team. Enterprise conserva su superficie aislada hasta su
+ * retiro explícito; un fallo de lectura V2 no vuelve silenciosamente a la UI V1.
  *
  * Adaptaciones nativas (documentadas en verify-fix/ficha-nutricion-v2.md):
  *  - `PendingNavLink` (spinner "Abriendo ficha…") es un fix de latencia RSC del web; en RN la
@@ -32,8 +30,7 @@ import {
   type NutritionClientDetailReadModel,
   type NutritionWeekCell,
 } from '@eva/nutrition-v2'
-import { isEnabled } from '../../../../lib/flags'
-import { useEntitlements, useNutritionV2CoachFlagForClientState } from '../../../../lib/entitlements'
+import { useEntitlements } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import {
   getNutritionClientDetailV2,
@@ -74,13 +71,16 @@ export type CoachNutritionV2Gate = {
   detail: NutritionClientDetailReadModel | null
   offline: boolean
   active: boolean
+  /** Solo standalone/Team con un identificador válido pueden usar V2. */
+  workspaceSupported: boolean
+  /** Enterprise conserva la superficie aislada hasta el trabajo de retiro dedicado. */
+  legacyWorkspace: boolean
   /**
-   * QA2 A3: `true` mientras TODAVÍA no se sabe qué versión corresponde (entitlements,
-   * canary por alumno, sesión, workspace o el fetch del read model sin resolver). El caller
-   * debe pintar un skeleton: renderizar V1 en esta ventana es lo que producía el flash
-   * "sale la versión antigua y luego la actual" al abrir el tab.
+   * `true` mientras sesión, workspace, entitlements o el fetch V2 no se resuelven. El caller
+   * pinta un skeleton para no sustituir una superficie por otra durante la carga.
    */
   resolving: boolean
+  retry: () => void
 }
 
 export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gate {
@@ -97,6 +97,7 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
   const [offline, setOffline] = useState(false)
   /** `false` mientras el fetch/lectura de cache del read model está en vuelo. */
   const [detailSettled, setDetailSettled] = useState(false)
+  const [retryNonce, setRetryNonce] = useState(0)
   const date = useMemo(todayInSantiago, [])
 
   const scope = useMemo(
@@ -107,11 +108,7 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
     [workspaceReady, workspaceKind, workspaceTeamId, workspaceOrgId],
   )
   const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
-  // Canary por alumno: el resumen V2 aparece en la ficha aunque el flag global del coach esté apagado;
-  // el flag global sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta.
-  const { value: clientCanaryV2, resolved: canaryResolved } = useNutritionV2CoachFlagForClientState(clientId)
-  const globalFlagV2 = entitlements.ready && isEnabled('nutritionV2Coach')
-  const enabled = entitlements.ready && (globalFlagV2 || clientCanaryV2)
+  const enabled = entitlements.ready && scope !== null
 
   useEffect(() => {
     let active = true
@@ -167,7 +164,7 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
         })
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return
-        // Fail-open: sin copia previa el detail sigue null y el caller renderiza V1.
+        // Sin copia previa el caller muestra un estado V2 recuperable, nunca la UI V1.
         if (active && hasCopy) setOffline(true)
       } finally {
         // Settled = ya se sabe si hay V2 o hay que caer a V1 (éxito, cache o fallo).
@@ -179,28 +176,31 @@ export function useCoachNutritionV2Detail(clientId: string): CoachNutritionV2Gat
       active = false
       controller.abort()
     }
-  }, [clientId, date, enabled, userId, scope, scopeCacheKey])
+  }, [clientId, date, enabled, userId, scope, scopeCacheKey, retryNonce])
 
-  // ¿Aún no se sabe qué versión toca? Todas las señales que pueden FLIPEAR la decisión:
-  //  - entitlements sin asentar (el flag global aún no se conoce),
-  //  - canary por alumno en vuelo (puede prender V2 con el flag global apagado),
-  //  - sesión/workspace sin resolver (el fetch del read model no arranca sin ellos),
-  //  - fetch del read model en vuelo.
-  // El global ON corta el suspenso del canary: V2 ya está decidido, solo falta el detail.
-  //
-  // IMPORTANTE: cada término se apoya en señales que SIEMPRE asientan, para que un fallo no
-  // deje el skeleton colgado. Por eso se usa "asentado" (`ready || !loading`) y no `ready`:
-  // sin cache en disco y con la red caída, `ready` se queda en false para siempre mientras
-  // `loading` sí baja ⇒ con `ready` el tab habría quedado en skeleton eterno. Y el fetch solo
-  // cuenta como pendiente cuando sus prerequisitos (userId, scope) EXISTEN; si resolvieron a
-  // null el read model no se va a pedir nunca y corresponde caer a V1 (fail-open).
+  // Cada término se apoya en señales que siempre asientan; un fallo de red no deja el skeleton
+  // colgado. `ready || !loading` cubre el caso sin cache y con una revalidación fallida.
   const entitlementsSettled = entitlements.ready || !entitlements.loading
-  const gateUndecided = !entitlementsSettled || (!globalFlagV2 && !canaryResolved)
+  const gateUndecided = !entitlementsSettled
   const prereqsPending = enabled && (!sessionResolved || !workspaceReady)
   const fetchPending = enabled && userId != null && scope != null && !detailSettled
   const resolving = detail == null && (gateUndecided || prereqsPending || fetchPending)
 
-  return { enabled, detail, offline, active: enabled && detail != null, resolving }
+  return {
+    enabled,
+    detail,
+    offline,
+    active: enabled && detail != null,
+    workspaceSupported: workspaceReady && scope !== null,
+    legacyWorkspace: workspaceReady && workspaceKind === 'enterprise',
+    resolving,
+    retry: () => {
+      setDetail(null)
+      setOffline(false)
+      setDetailSettled(false)
+      setRetryNonce((value) => value + 1)
+    },
+  }
 }
 
 /** CTA sólida ember del tab (web NutritionTabV2.tsx:91,109: bg-ember-500 hover:bg-ember-600). */
@@ -389,7 +389,7 @@ export function NutritionV2Summary({
       {!view.hasActivePlan ? (
         <NutritionStatePanel
           icon="empty"
-          title="Sin plan V2 vigente"
+          title="Sin plan publicado"
           description="Este alumno todavía no tiene un plan de nutrición publicado. Crea la primera para ver metas, franjas y adherencia."
           action={<EmberCta label="Crear plan" accessibilityLabel="Crear plan" onPress={openBuilder} />}
         />

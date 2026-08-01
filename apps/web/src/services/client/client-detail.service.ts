@@ -301,7 +301,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
     //
     //    Fuente única ahora: `_data/nutrition-tab-v2.data.ts` → `NutritionV2Signal`
     //    (`nutritionTabV2.logic.ts`), que la page/el panel/el dossier resuelven una vez y pasan por
-    //    props. Sin plan V2 vigente la señal se OMITE; nunca se cae a V1.
+    //    props. Sin plan publicado la señal se OMITE; nunca se cae a V1.
 
     // 3. Progreso del Plan de Ejercicios
     let currentWeek = 0;

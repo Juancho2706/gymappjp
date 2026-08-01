@@ -790,8 +790,7 @@ const styles = StyleSheet.create({
 })
 
 /**
- * Skeleton del tab mientras se resuelve QUÉ versión corresponde (QA2 A3). Imita la silueta
- * del resumen V2 (eyebrow + título + 2 CTAs + card de vistazo) para que el swap posterior no
+ * Skeleton del tab mientras se resuelve el read model V2. Imita su silueta para que la carga no
  * salte de layout.
  */
 function NutricionTabResolving() {
@@ -817,22 +816,12 @@ function NutricionTabResolving() {
   )
 }
 
-// ── Composicion V2 (espejo del swap server-side web) ─────────────────────────
-// Web ficha (clients/[clientId]/ClientProfileDashboard.tsx:487-527): con view model V2 resuelto
-// se monta `NutritionTabV2`; con null se monta `NutritionTabB5` (V1) sin cambio alguno. Aqui:
-// flag/canary `nutritionV2Coach` ON Y fetch del read model resuelto ⇒ NutritionV2Summary
-// (espejo 1:1 de NutritionTabV2.tsx); sin flag o ante CUALQUIER fallo ⇒ tab V1 (fail-open).
-//
-// QA2 A3 — causa raíz del flash "sale la versión antigua y luego la actual": la decisión V1/V2
-// depende de 4 señales ASÍNCRONAS (entitlements, canary por alumno, sesión + workspace, fetch
-// del read model) y este swap era un `if` sobre el resultado FINAL, así que en la ventana en
-// que aún faltaba alguna señal el tab pintaba V1 y después lo reemplazaba por V2. La web no
-// tiene el bug porque resuelve V1/V2 en el server ANTES de mandar HTML. Fix: mientras
-// `gate.resolving`, skeleton — nunca contenido viejo que después se reemplaza. Fail-open
-// intacto: cuando el gate se resuelve en contra (flag off, canary off o fallo del fetch),
-// `resolving` cae a false y se monta V1 igual que antes.
+// ── Composición V2 canónica ───────────────────────────────────────────────────
+// Standalone y Team permanecen en V2 incluso ante un fallo de lectura: se ofrece reintento en vez
+// de esconder el problema con datos V1. Enterprise conserva el tab aislado temporalmente.
 export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
   const gate = useCoachNutritionV2Detail(props.clientId)
+  if (gate.resolving) return <NutricionTabResolving />
   if (gate.active && gate.detail) {
     return (
       <NutritionV2Summary
@@ -842,6 +831,14 @@ export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
       />
     )
   }
-  if (gate.resolving) return <NutricionTabResolving />
-  return <NutricionTabV1 {...props} />
+  if (gate.legacyWorkspace) return <NutricionTabV1 {...props} />
+  return (
+    <Card padding={20} radius="card" style={{ gap: 12 }}>
+      <Text style={{ fontSize: 18, fontFamily: FONT.displayBlack }}>No pudimos cargar Nutrición</Text>
+      <Text className="text-sm leading-5 text-muted">
+        Revisa tu conexión e inténtalo de nuevo. El alumno no se mostrará en la superficie anterior.
+      </Text>
+      <Button label="Reintentar" variant="secondary" onPress={gate.retry} full />
+    </Card>
+  )
 }

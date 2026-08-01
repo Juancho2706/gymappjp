@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { bulkArchiveClients } from '@/services/client/client-archive.service'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
@@ -18,9 +19,9 @@ const ClientIdsSchema = z.array(z.guid()).min(1).max(500)
  * bajar a ≤3 y habilitar "Continuar gratis" (que a su vez re-valida el cupo server-side en
  * `/api/payments/activate-free`).
  *
- * Solo toca alumnos STANDALONE propios (`org_id IS NULL`): el techo real es la RLS
- * `clients_standalone_coach_manage` (`org_id IS NULL AND coach_id = auth.uid()`); el filtro
- * explícito evita rozar alumnos de org por accidente. Archivar es reversible (no borra nada).
+ * Solo toca alumnos STANDALONE propios. El servicio central vuelve a validar scope, apaga
+ * asignaciones y sincroniza Auth; esta ruta no puede saltarse la invariante mediante un UPDATE
+ * genérico. Archivar es reversible (no borra nada).
  */
 export async function archiveClientsForFreeAction(
     clientIds: string[]
@@ -34,21 +35,22 @@ export async function archiveClientsForFreeAction(
     } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
-    const { data: archived, error } = await supabase
-        .from('clients')
-        .update({ is_archived: true })
-        .in('id', parsed.data)
-        .eq('coach_id', user.id)
-        .is('org_id', null)
-        .eq('is_archived', false)
-        .select('id')
-
-    if (error) return { error: 'No se pudieron archivar los alumnos. Intenta de nuevo.' }
+    const archived = await bulkArchiveClients(createServiceRoleClient(), {
+        coachId: user.id,
+        workspace: { type: 'standalone' },
+    }, parsed.data)
+    if (!archived.ok) return { error: archived.error }
 
     // El panel recarga la página tras archivar → el server recomputa activeClientCount y habilita
     // "Continuar gratis". No hace falta devolver el conteo (era un round-trip muerto).
     revalidatePath('/coach/reactivate')
-    return { archived: archived?.length ?? 0 }
+    if (archived.authFailures.length > 0) {
+        return {
+            archived: archived.clients.length,
+            error: `${archived.authFailures.length} alumno(s) quedaron archivados; falta sincronizar Auth. Reintenta para cerrar sus sesiones.`,
+        }
+    }
+    return { archived: archived.clients.length }
 }
 
 /**

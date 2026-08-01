@@ -3,13 +3,14 @@ import { AppState, View } from 'react-native'
 import { Tabs, useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
-import { getClientProfile } from '../../../lib/client'
 // `getPoolConsentStatus` sigue acá para la re-evaluación por AppState; el chequeo de MONTAJE
 // (blocked → password → consent) vive ahora en `app/alumno/_layout.tsx`.
 import { getPoolConsentStatus } from '../../../lib/pool-consent'
 import { useEntitlements } from '../../../lib/entitlements'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 import { StudentAccessBlocked } from '../../../components/alumno/StudentAccessBlocked'
+import { getStudentAccountStatus } from '../../../lib/student-account-status'
+import { signOutAndCleanup } from '../../../lib/auth-actions'
 // NOTA: `SessionMorphProvider` YA NO vive acá — se montó al layout RAÍZ (`app/_layout.tsx`). El
 // overlay del Despegue se pinta en un <Modal> nativo y, en Android, al hacer `router.push` a la ruta
 // del ejecutor (hermana de (tabs) en el Stack raíz) esta pantalla se detacha y RN cierra el Dialog sin
@@ -49,9 +50,10 @@ export default function AlumnoTabsLayout() {
         // pausado/archivado (o revocar su consentimiento desde la web) mientras
         // la app estaba suspendida.
         if (!redirecting.current) {
-          const c = await getClientProfile().catch(() => null)
-          if (c?.blocked && !redirecting.current) {
+          const status = await getStudentAccountStatus().catch(() => null)
+          if (status?.access === 'blocked' && !redirecting.current) {
             redirecting.current = true
+            await signOutAndCleanup({ preserveStudentAccountStatus: true })
             router.replace('/alumno/suspended')
           } else if (!redirecting.current) {
             const consent = await getPoolConsentStatus()
@@ -140,11 +142,10 @@ export default function AlumnoTabsLayout() {
             layout c/[coach_slug] con la cápsula ClientNav siempre montada y el ítem
             "Nutrición" activo (nutrition-v2/page.tsx:62-100, scanner/page.tsx:49-66);
             aquí lo mismo: la cápsula persiste y AlumnoMobileChrome pliega
-            `nutrition-v2/*` al tile "Nutrición". El tab visible sigue siendo
-            `nutricion`, que con el flag `nutritionV2Student` ON redirige a
-            /alumno/nutrition-v2 (espejo del redirect V1→V2 de la web,
-            nutrition/page.tsx:67-81); los deep links /alumno/nutrition-v2* no
-            cambian porque el grupo (tabs) no participa de la URL. */}
+             `nutrition-v2/*` al tile "Nutrición". El tab visible `nutricion`
+             monta V2 directamente; los deep links /alumno/nutrition-v2* se
+             mantienen como aliases de compatibilidad porque el grupo (tabs) no
+             participa de la URL. */}
         <Tabs.Screen name="nutrition-v2/index" options={{ href: null }} />
         <Tabs.Screen name="nutrition-v2/add-food-v2" options={{ href: null }} />
         <Tabs.Screen name="nutrition-v2/scanner" options={{ href: null }} />

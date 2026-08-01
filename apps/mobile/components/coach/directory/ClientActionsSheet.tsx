@@ -73,6 +73,7 @@ export function ClientActionsSheet({
   onToggle,
   onArchive,
   onDelete,
+  archiveDisabledReason = null,
   includeNativeShortcuts = true,
 }: {
   visible: boolean
@@ -89,6 +90,8 @@ export function ClientActionsSheet({
   onToggle: () => void
   onArchive?: () => void
   onDelete: () => void
+  /** Archived rows keep exactly one lifecycle action; capacity can disable it before mutation. */
+  archiveDisabledReason?: string | null
   /** Directory keeps RN shortcuts; profile uses the exact web action set. */
   includeNativeShortcuts?: boolean
 }) {
@@ -110,8 +113,15 @@ export function ClientActionsSheet({
     action?.()
   }
 
-  const actions: { key: string; icon: LucideIcon; label: string; toneClass: string; danger?: boolean; on: () => void }[] = archived ? [
-    ...(onArchive ? [{ key: 'archive', icon: ArchiveRestore, label: 'Desarchivar', toneClass: 'text-ink-700', on: onArchive }] : []),
+  const actions: { key: string; icon: LucideIcon; label: string; toneClass: string; danger?: boolean; disabled?: boolean; on: () => void }[] = archived ? [
+    ...(onArchive ? [{
+      key: 'archive',
+      icon: ArchiveRestore,
+      label: archiveDisabledReason ?? 'Desarchivar',
+      toneClass: 'text-ink-700',
+      disabled: Boolean(archiveDisabledReason),
+      on: onArchive,
+    }] : []),
   ] : [
     { key: 'profile', icon: IdCard, label: 'Ver ficha completa', toneClass: 'text-strong', on: onProfile },
     ...(onWhatsApp ? [{ key: 'whatsapp', icon: MessageCircle, label: 'Enviar WhatsApp', toneClass: 'text-success-600', on: onWhatsApp }] : []),
@@ -167,9 +177,12 @@ export function ClientActionsSheet({
                 testID={`client-actions-${a.key}`}
                 accessibilityRole="button"
                 accessibilityLabel={a.label}
+                accessibilityState={{ disabled: a.disabled === true }}
+                disabled={a.disabled}
                 activeOpacity={0.75}
-                style={styles.action}
+                style={[styles.action, a.disabled ? styles.actionDisabled : null]}
                 onPress={() => {
+                  if (a.disabled) return
                   pendingActionRef.current = a.on
                   onClose()
                   if (Platform.OS !== 'ios') setTimeout(runPendingAction, 250)
@@ -206,5 +219,6 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 4 },
   actionsScroll: { flexShrink: 1 },
   action: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 12 },
+  actionDisabled: { opacity: 0.48 },
   actionLabel: { fontSize: 14.5, fontFamily: FONT.uiSemibold },
 })

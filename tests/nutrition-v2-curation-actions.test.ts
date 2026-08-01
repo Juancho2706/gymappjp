@@ -10,12 +10,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * `CURATION_ALREADY_RESOLVED` en vez de un exito falso.
  */
 
-const { createClientMock, revalidatePathMock, coachMock, rolloutMock, workspaceMock, rateLimitMock } =
+const { createClientMock, revalidatePathMock, coachMock, workspaceMock, rateLimitMock } =
   vi.hoisted(() => ({
     createClientMock: vi.fn(),
     revalidatePathMock: vi.fn(),
     coachMock: vi.fn(),
-    rolloutMock: vi.fn(),
     workspaceMock: vi.fn(),
     rateLimitMock: vi.fn(),
   }))
@@ -29,9 +28,8 @@ vi.mock('@/lib/rate-limit', () => ({ rateLimitNutritionCoachWrite: rateLimitMock
 vi.mock('@/services/auth/workspace-render-cache', () => ({
   getPreferredWorkspaceForRender: workspaceMock,
 }))
-vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: rolloutMock }))
-vi.mock('@/app/coach/nutrition-plans/_data/nutrition-page.queries', () => ({
-  getNutritionPlansPageCoach: coachMock,
+vi.mock('@/services/auth/current-coach.service', () => ({
+  getCurrentCoachSession: coachMock,
 }))
 
 import {
@@ -42,7 +40,6 @@ import {
 
 const COACH_ID = '11111111-1111-4111-8111-111111111111'
 const TEAM_ID = '22222222-2222-4222-8222-222222222222'
-const ORG_ID = '33333333-3333-4333-8333-333333333333'
 const MISSING_ID = '44444444-4444-4444-8444-444444444444'
 const FOOD_ID = '55555555-5555-4555-8555-555555555555'
 
@@ -73,12 +70,10 @@ beforeEach(() => {
   createClientMock.mockReset()
   revalidatePathMock.mockReset()
   coachMock.mockReset()
-  rolloutMock.mockReset()
   workspaceMock.mockReset()
   rateLimitMock.mockReset()
 
   coachMock.mockResolvedValue({ user: { id: COACH_ID } })
-  rolloutMock.mockResolvedValue(true)
   rateLimitMock.mockResolvedValue({ ok: true })
   workspaceMock.mockResolvedValue(TEAM_WORKSPACE)
 })
@@ -107,21 +102,19 @@ describe('listMissingFoodCodesHubAction', () => {
     )
   })
 
-  it('pasa el scope de organizacion tal cual (la RPC lo resuelve fail-closed)', async () => {
+  it('rechaza Enterprise antes de consultar la RPC V2', async () => {
     workspaceMock.mockResolvedValue({
       type: 'enterprise_coach',
       userId: COACH_ID,
       coachId: COACH_ID,
-      orgId: ORG_ID,
+      orgId: '33333333-3333-4333-8333-333333333333',
       memberId: 'm1',
       label: 'Org',
     })
-    const rpc = mockDb({ data: [], error: null })
-    await listMissingFoodCodesHubAction({ offset: 0 })
-    expect(rpc).toHaveBeenCalledWith(
-      'list_missing_food_codes_scoped_v2',
-      expect.objectContaining({ p_scope_type: 'organization', p_team_id: null, p_org_id: ORG_ID }),
-    )
+    mockDb({ data: [], error: null })
+    const result = await listMissingFoodCodesHubAction({ offset: 0 })
+    expect(result).toMatchObject({ ok: false, code: 'SCOPE_REQUIRED' })
+    expect(createClientMock).not.toHaveBeenCalled()
   })
 
   it('sin workspace de coach devuelve SCOPE_REQUIRED sin tocar la DB', async () => {

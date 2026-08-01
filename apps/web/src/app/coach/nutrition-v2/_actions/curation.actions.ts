@@ -6,13 +6,12 @@ import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCoachWrite } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
-import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
-import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
+import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 
 // Cola de curacion del Centro V2 (hub coach): codigos escaneados (GTIN) que aun no
-// existen en el catalogo local. Cada accion re-verifica el gate (isNutritionV2Enabled,
-// webCoach), deriva el scope del workspace activo (fail-closed) y lo PASA al servidor:
+// existen en el catálogo local. Cada acción re-verifica el scope V2 del workspace activo
+// (fail-closed) y lo pasa al servidor:
 // las tres operaciones van por las RPC scoped `*_scoped_v2`
 // (20260728131000_nutrition_v2_curation_scoped.sql), que filtran con
 // private.nutrition_v2_client_matches_workspace y devuelven error real cuando no
@@ -68,17 +67,6 @@ async function authorizeHubCoach(
   }
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
-  const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
-  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webCoach',
-    userId: user.id,
-    coachId: user.id,
-    teamId,
-    orgId,
-  })
-  if (!enabled) return fail('ROLLOUT_DISABLED', 'La nueva experiencia de nutricion no esta habilitada.')
 
   // El scope VIAJA al servidor (antes se calculaba y se descartaba): es el filtro real de
   // la bandeja y de cada mutacion, no solo un gate de render.

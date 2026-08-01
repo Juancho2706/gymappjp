@@ -42,7 +42,7 @@ export async function getClientFichaPanel(clientId: string) {
  *
  * La nutrición del PDF sale de la MISMA señal V2 que el tab (`resolveNutritionTabV2`, scoped al
  * workspace): antes exportaba el plan V1 del alumno (posiblemente convertido u obsoleto) y una
- * adherencia V1 en 0 % (auditoría §2.2). Sin plan V2 vigente la sección se omite con su nota.
+ * adherencia V1 en 0 % (auditoría §2.2). Sin plan publicado la sección se omite con su nota.
  */
 export async function getClientDossier(clientId: string) {
     if (typeof clientId !== 'string' || clientId.trim() === '') {

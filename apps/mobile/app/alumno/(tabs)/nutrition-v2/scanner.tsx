@@ -23,7 +23,7 @@ import {
 import { Sheet } from '../../../../components/Sheet'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
-import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
+import { NutritionDomainOff } from '../../../../components/nutrition-v2'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
   CATALOG_MACROS_BASIS,
@@ -36,7 +36,6 @@ import {
   type FoodBarcodeLookupReadModel,
   type FoodCatalogItem,
 } from '@eva/nutrition-v2'
-import { isEnabled } from '../../../../lib/flags'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { supabase } from '../../../../lib/supabase'
 import {
@@ -129,8 +128,8 @@ export default function NutritionV2ScannerScreen() {
     return () => subscription.remove()
   }, [recheckDate])
 
-  const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
-  const enabled = rolloutEnabled && entitlements.nutritionEnabled
+  const nutritionReady = entitlements.ready
+  const enabled = nutritionReady && entitlements.nutritionEnabled
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
 
   useEffect(() => {
@@ -258,7 +257,7 @@ export default function NutritionV2ScannerScreen() {
     )
   }
 
-  if (!rolloutEnabled) {
+  if (!nutritionReady) {
     return (
       <View
         className="flex-1 bg-surface-app px-4"
@@ -266,8 +265,8 @@ export default function NutritionV2ScannerScreen() {
       >
         <NutritionStatePanel
           icon="permission"
-          title="El lector todavía no está disponible"
-          description="Tu coach todavía no activó esta vista para ti."
+          title="Cargando lector"
+          description="Estamos preparando tu configuración de nutrición."
         />
       </View>
     )

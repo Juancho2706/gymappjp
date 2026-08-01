@@ -60,7 +60,7 @@ No pegar secrets, JWT, service-role keys ni payloads personales en Slack, issues
 
 ### Nutrición V2
 
-Usar [NUTRITION_V2_ROLLOUT_RUNBOOK.md](NUTRITION_V2_ROLLOUT_RUNBOOK.md). `mode=off` es la primera contención; no eliminar planes ni intake.
+Usar [NUTRITION_V2_CUTOVER_RUNBOOK.md](NUTRITION_V2_CUTOVER_RUNBOOK.md). Contener writers con rollback de deployment o servidor; no eliminar planes ni intake ni reabrir V1.
 
 ### Catálogo
 

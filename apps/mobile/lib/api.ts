@@ -1,7 +1,9 @@
 import * as Sentry from '@sentry/react-native'
+import { router } from 'expo-router'
 import type { MobileStudentWorkspaceValidationResponse } from '@eva/schemas'
 import { supabase } from './supabase'
 import { humanizeStudentWriteError, isCoachAccountPausedError } from './student-access-copy'
+import { signOutAndCleanup } from './auth-actions'
 
 // P0 (expulsion alumno): DEBE ser el host CANONICO. El apex `eva-app.cl` responde 307 -> `www.eva-app.cl`
 // (redirect CROSS-ORIGIN); `fetch` sigue el redirect pero DESCARTA el header `Authorization` al cambiar
@@ -35,6 +37,21 @@ export class ApiError extends Error {
 type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: unknown
   authenticated?: boolean
+}
+
+let clientBlockedCleanupInFlight = false
+
+async function clearBlockedStudentSession(): Promise<void> {
+  if (clientBlockedCleanupInFlight) return
+  clientBlockedCleanupInFlight = true
+  try {
+    // Keep the tiny account-status cache only long enough for `/alumno/suspended` to render;
+    // session, nutrition cache and offline mutation queue are removed before navigation.
+    await signOutAndCleanup({ preserveStudentAccountStatus: true })
+    router.replace('/alumno/suspended')
+  } finally {
+    clientBlockedCleanupInFlight = false
+  }
 }
 
 export function getApiBaseUrl(): string {
@@ -90,6 +107,9 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   const payload = await res.json().catch(() => null)
   if (!res.ok) {
+    if (payload?.code === 'CLIENT_BLOCKED') {
+      await clearBlockedStudentSession()
+    }
     // COACH_ACCOUNT_PAUSED (gate de suscripcion del coach, politica CEO 2026-07-18): el codigo
     // tecnico jamas llega crudo a una pantalla — se humaniza aca, en el borde de red compartido.
     const raw = payload?.error || 'No se pudo completar la solicitud.'

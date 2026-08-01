@@ -47,20 +47,6 @@ export const NUTRITION_ATTENTION_FILTER_OPTIONS: ReadonlyArray<{
   { value: 'no_recent_intake', label: 'Sin consumo reciente' },
 ]
 
-/** Etiqueta legible del motivo de atencion (para la card del alumno). */
-export function nutritionAttentionLabel(reason: NutritionAttentionReason): string {
-  switch (reason) {
-    case 'no_plan':
-      return 'Sin plan V2'
-    case 'draft_pending':
-      return 'Borrador pendiente'
-    case 'no_recent_intake':
-      return 'Sin consumo reciente'
-    default:
-      return 'Al día'
-  }
-}
-
 /** Tono de atencion nutricional (espeja el criterio web: solo `no_plan` es warning). */
 export type NutritionAttentionTone = 'warning' | 'info'
 

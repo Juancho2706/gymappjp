@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { verifyMobileBearer, isBlockedClientRow } from '@/lib/mobile-auth'
-import { resolveNutritionV2RolloutDecision } from '@/services/nutrition-v2-rollout.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
-import { resolveMobileCoachRolloutContext } from '@/services/mobile-nutrition-v2-rollout-context'
-import type { NutritionV2CoachScope, NutritionV2Surface } from '@eva/nutrition-v2'
+import { resolveMobileCoachNutritionContext } from '@/services/mobile-nutrition-v2-workspace-context'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
+
+type NutritionV2Surface = 'mobileStudent' | 'mobileCoach'
 
 type RpcError = { message: string; code?: string; details?: string | null }
 
@@ -24,7 +25,6 @@ export type NutritionV2ApiGate = {
   teamId: string | null
   orgId: string | null
   rpc: NutritionV2RpcClient
-  rolloutReason: string
 }
 
 export type NutritionV2ApiGateError = {
@@ -41,12 +41,10 @@ export function bearerToken(request: NextRequest): string | null {
 /**
  * Gate unico de la API movil de Nutricion V2.
  *
- * NUT-013 — superficie COACH: el contexto de rollout se deriva del WORKSPACE que el llamador
- * declara (`coachScope`, ya validado de forma) y del alumno de la pantalla (`requestedClientId`),
- * resueltos por `resolveMobileCoachRolloutContext` ANTES de consultar Edge Config. La fila
- * `clients` del propio usuario se IGNORA en esa rama: un coach que ademas es alumno de otro coach
- * ya no arrastra el team/org de esa membresia a su decision de rollout. Sin `coachScope` (rutas
- * que aun no lo declaran, p.ej. el catalogo) el contexto queda acotado al coach, sin team/org.
+ * Superficie COACH: el contexto se deriva del WORKSPACE que el llamador declara (`coachScope`,
+ * validado de forma) y del alumno de la pantalla (`requestedClientId`). La fila `clients` del
+ * propio coach se ignora: una persona que también sea alumno no contamina el workspace operado.
+ * Nutrition V2 es canónica para standalone/Team; Enterprise se rechaza antes de tocar una RPC.
  */
 export async function gateNutritionV2Api(
   request: NextRequest,
@@ -55,7 +53,7 @@ export async function gateNutritionV2Api(
     mutation?: boolean
     /** Workspace coach declarado por el cliente; su pertenencia se valida server-side. */
     coachScope?: NutritionV2CoachScope | null
-    /** Alumno de la pantalla; solo alimenta el canary por alumno si el workspace lo posee. */
+    /** Alumno de la pantalla; se valida dentro del workspace declarado. */
     requestedClientId?: string | null
   },
 ): Promise<NutritionV2ApiGate | NutritionV2ApiGateError> {
@@ -70,12 +68,15 @@ export async function gateNutritionV2Api(
   const admin = createServiceRoleClient()
   let userId: string | null = null
 
+  // Las mutaciones deben pasar por GoTrue: la verificación local de firma es suficiente para
+  // lecturas de bajo riesgo, pero no observa revocaciones/bans recientes. Esto es especialmente
+  // importante al archivar, porque un JWT emitido antes del ban no puede seguir escribiendo.
   if (options.mutation) {
     const { data, error } = await admin.auth.getUser(token)
     if (!error && data.user) userId = data.user.id
   } else {
-    const result = await verifyMobileBearer(token)
-    if (result.ok) userId = result.userId
+    const verified = await verifyMobileBearer(token)
+    if (verified.ok) userId = verified.userId
   }
 
   if (!userId) {
@@ -104,8 +105,8 @@ export async function gateNutritionV2Api(
     is_active: boolean | null
   } | null
 
-  const studentSurface = options.surface === 'mobileStudent' || options.surface === 'webStudent'
-  const coachSurface = options.surface === 'mobileCoach' || options.surface === 'webCoach'
+  const studentSurface = options.surface === 'mobileStudent'
+  const coachSurface = options.surface === 'mobileCoach'
 
   if ((studentSurface && !client) || (coachSurface && !coach)) {
     return {
@@ -123,13 +124,22 @@ export async function gateNutritionV2Api(
     }
   }
 
-  // Contexto de rollout. ALUMNO: sale de su propia fila `clients`. COACH: sale del workspace
-  // declarado + el alumno validado (helper compartido con `api/mobile/config`), jamas de la fila
-  // `clients` del propio coach.
-  let rolloutContext: { clientId: string | null; coachId: string | null; teamId: string | null; orgId: string | null }
+  if (studentSurface && client?.org_id) {
+    return {
+      ok: false,
+      response: jsonNoStore(
+        { error: 'Nutrition V2 is not available for this workspace.', code: 'NUTRITION_V2_WORKSPACE_UNSUPPORTED' },
+        404,
+      ),
+    }
+  }
+
+  // Contexto de autorización. ALUMNO: sale de su propia fila `clients`. COACH: sale del
+  // workspace declarado + el alumno validado, jamás de la fila `clients` del propio coach.
+  let workspaceContext: { clientId: string | null; coachId: string | null; teamId: string | null; orgId: string | null }
   if (coachSurface) {
     if (options.coachScope) {
-      const resolved = await resolveMobileCoachRolloutContext(
+      const resolved = await resolveMobileCoachNutritionContext(
         admin,
         userId,
         options.coachScope,
@@ -144,35 +154,16 @@ export async function gateNutritionV2Api(
           ),
         }
       }
-      rolloutContext = resolved.context
+      workspaceContext = resolved.context
     } else {
-      rolloutContext = { clientId: null, coachId: userId, teamId: null, orgId: null }
+      workspaceContext = { clientId: null, coachId: userId, teamId: null, orgId: null }
     }
   } else {
-    rolloutContext = {
+    workspaceContext = {
       clientId: client?.id ?? null,
       coachId: studentSurface ? client?.coach_id ?? null : coach?.id ?? null,
       teamId: client?.team_id ?? null,
       orgId: client?.org_id ?? null,
-    }
-  }
-
-  const decision = await resolveNutritionV2RolloutDecision({
-    surface: options.surface,
-    userId,
-    clientId: rolloutContext.clientId,
-    coachId: rolloutContext.coachId,
-    teamId: rolloutContext.teamId,
-    orgId: rolloutContext.orgId,
-  })
-
-  if (!decision.enabled) {
-    return {
-      ok: false,
-      response: jsonNoStore(
-        { error: 'Nutrition V2 is not enabled for this scope.', code: 'NUTRITION_V2_DISABLED' },
-        404,
-      ),
     }
   }
 
@@ -185,9 +176,9 @@ export async function gateNutritionV2Api(
     },
   )
 
-  // El rollout técnico no reemplaza el master switch funcional del alumno.
-  // El scope proviene de la fila autenticada, nunca del body; el servicio conserva
-  // su fail-open deliberado cuando FEATURE_PREFS está apagado/no disponible.
+  // El master switch funcional del alumno sigue separado del acceso técnico. El scope
+  // proviene de la fila autenticada, nunca del body; el servicio conserva su fail-open
+  // deliberado cuando FEATURE_PREFS está apagado/no disponible.
   if (studentSurface) {
     const domainEnabled = await resolveNutritionDomainEnabled(
       {
@@ -212,14 +203,13 @@ export async function gateNutritionV2Api(
   return {
     ok: true,
     userId,
-    // Superficie coach: los ids describen el WORKSPACE operado (y el alumno validado del canary),
-    // no una eventual membresia de alumno del propio coach.
-    clientId: coachSurface ? rolloutContext.clientId : client?.id ?? null,
+    // Superficie coach: los ids describen el WORKSPACE operado, no una eventual membresia de
+    // alumno del propio coach.
+    clientId: coachSurface ? workspaceContext.clientId : client?.id ?? null,
     coachId: coachSurface ? userId : client?.coach_id ?? null,
-    teamId: rolloutContext.teamId,
-    orgId: rolloutContext.orgId,
+    teamId: workspaceContext.teamId,
+    orgId: workspaceContext.orgId,
     rpc: userClient as unknown as NutritionV2RpcClient,
-    rolloutReason: decision.reason,
   }
 }
 
@@ -239,7 +229,6 @@ export function logNutritionV2Api(input: {
   status: number
   payload?: unknown
   errorCode?: string
-  rolloutReason?: string
 }): void {
   let payloadBytes: number | null = null
   try {
@@ -256,7 +245,6 @@ export function logNutritionV2Api(input: {
     status: input.status,
     payloadBytes,
     errorCode: input.errorCode ?? null,
-    rolloutReason: input.rolloutReason ?? null,
   })
 }
 

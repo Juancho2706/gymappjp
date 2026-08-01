@@ -2,8 +2,8 @@
 //
 // Antes `publishDraftRN`, `publishQuickEditRN`, `assignNutritionPlanToClients` y
 // `archiveNutritionPlan` escribian directo contra PostgREST/RPC con el JWT de la sesion: ni la RLS
-// ni `publish_nutrition_plan_v2` miran rollout ni entitlement, asi que el kill-switch de Edge Config
-// y el addon Nutricion Pro no tenian barrera server-side en ese camino.
+// ni `publish_nutrition_plan_v2` miran el workspace ni entitlement, asi que el addon
+// Nutricion Pro no tenia barrera server-side en ese camino.
 //
 // Estos tests fijan el invariante: las cuatro operaciones POSTean a
 // /api/mobile/nutrition-v2/coach/mutate con la accion y el workspace correctos, y el modulo no
@@ -87,7 +87,7 @@ describe('frontera: la lib del coach RN ya no expone escrituras directas', () =>
 
   it('nutrition-v2-builder ya no expone el alta de alimento con insert directo', () => {
     // `createCoachFoodV2` insertaba en `foods` con el JWT de la sesion: la RLS acotaba la fila al
-    // coach dueno, pero el rollout de Nutricion V2 no miraba ese camino.
+    // coach dueno, pero el endpoint autoritativo no cubria ese camino.
     expect('createCoachFoodV2' in builderLib).toBe(false)
     // La validacion de forma SI se queda (la comparten pantalla y cliente de la API).
     expect(typeof builderLib.CoachFoodInputSchema.safeParse).toBe('function')
@@ -167,9 +167,9 @@ describe('publishDraftRN', () => {
     expect(apiFetchMock).not.toHaveBeenCalled()
   })
 
-  it('propaga el codigo del servidor (rollout OFF => NUTRITION_V2_DISABLED)', async () => {
+  it('propaga un rechazo autoritativo de workspace del servidor', async () => {
     apiFetchMock.mockRejectedValue(
-      new FakeApiError('Nutrition V2 is not enabled for this scope.', 404, 'NUTRITION_V2_DISABLED'),
+      new FakeApiError('Workspace no autorizado.', 403, 'WORKSPACE_NOT_ALLOWED'),
     )
     const res = await api.publishDraftRN({
       scope: SCOPE,
@@ -179,7 +179,7 @@ describe('publishDraftRN', () => {
       hasNutritionPro: true,
     })
     expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('NUTRITION_V2_DISABLED')
+    if (!res.ok) expect(res.code).toBe('WORKSPACE_NOT_ALLOWED')
   })
 })
 
@@ -321,13 +321,13 @@ describe('createCoachFoodRN (alta de alimento coach-scoped)', () => {
     expect(apiFetchMock).not.toHaveBeenCalled()
   })
 
-  it('rollout OFF => propaga NUTRITION_V2_DISABLED del servidor', async () => {
+  it('rechazo de workspace => propaga el código del servidor', async () => {
     apiFetchMock.mockRejectedValue(
-      new FakeApiError('Nutrition V2 is not enabled for this scope.', 404, 'NUTRITION_V2_DISABLED'),
+      new FakeApiError('Workspace no autorizado.', 403, 'WORKSPACE_NOT_ALLOWED'),
     )
     const res = await api.createCoachFoodRN({ scope: SCOPE, input: FOOD })
     expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.code).toBe('NUTRITION_V2_DISABLED')
+    if (!res.ok) expect(res.code).toBe('WORKSPACE_NOT_ALLOWED')
   })
 })
 

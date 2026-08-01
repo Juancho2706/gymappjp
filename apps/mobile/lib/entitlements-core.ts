@@ -31,8 +31,6 @@ export interface MobileFeaturePrefs {
     nutritionSections: Partial<Record<NutritionSectionKey, boolean>>
 }
 
-export type RemoteFlagsPayload = Record<string, boolean>
-
 /**
  * Estado de acceso del ALUMNO por suscripcion de su coach (politica CEO 2026-07-18), resuelto
  * server-side por /api/mobile/config:
@@ -59,7 +57,6 @@ export interface RawMobileConfig {
     disabledModules?: unknown
     featurePrefs?: { nutritionEnabled?: unknown; sections?: unknown } | null
     featurePrefsEnabled?: unknown
-    flags?: unknown
     studentAccess?: unknown
 }
 
@@ -68,7 +65,6 @@ export interface MobileConfig {
     enabledModules: ModuleKey[]
     disabledModules: ModuleKey[]
     featurePrefs: MobileFeaturePrefs
-    flags: RemoteFlagsPayload
     studentAccess: StudentAccess
 }
 
@@ -77,7 +73,6 @@ export const DEFAULT_CONFIG: MobileConfig = {
     enabledModules: [],
     disabledModules: [],
     featurePrefs: { nutritionEnabled: true, nutritionSections: {} },
-    flags: {},
     studentAccess: DEFAULT_STUDENT_ACCESS,
 }
 
@@ -89,15 +84,6 @@ function toModuleKeys(v: unknown): ModuleKey[] {
     if (!Array.isArray(v)) return []
     const out: ModuleKey[] = []
     for (const item of v) if (isModuleKey(item) && !out.includes(item)) out.push(item)
-    return out
-}
-
-function toFlags(v: unknown): RemoteFlagsPayload {
-    if (!v || typeof v !== 'object') return {}
-    const out: RemoteFlagsPayload = {}
-    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-        if (typeof val === 'boolean') out[k] = val
-    }
     return out
 }
 
@@ -136,7 +122,6 @@ export function normalizeConfig(raw: RawMobileConfig | null | undefined): Mobile
         enabledModules: toModuleKeys(raw.enabledModules),
         disabledModules: toModuleKeys(raw.disabledModules),
         featurePrefs: { nutritionEnabled, nutritionSections: toSectionFlags(raw.featurePrefs?.sections) },
-        flags: toFlags(raw.flags),
         studentAccess: toStudentAccess(raw.studentAccess),
     }
 }
@@ -181,42 +166,29 @@ export function parseCachedConfig(raw: string | null | undefined): MobileConfig 
 }
 
 /**
- * TTL de los flags de rollout tecnico (Nutricion V2) en la cache de entitlements. El enforcement real
- * es server-side (el gate movil revalida el rollout por request); este TTL solo acota cuanto tiempo la
- * UI puede seguir mostrando V2 tras un apagado, sin romper el arranque offline del alumno dentro de la
- * ventana. Los modulos comerciales conservan su semantica actual (no expiran aca).
+ * TTL de `studentAccess` en la cache de entitlements. Un estado suspendido cacheado no debe impedir
+ * volver a entrar si el coach ya reactivó su cuenta; el gate duro sigue viviendo en servidor/RLS.
  */
-export const ENTITLEMENTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+export const STUDENT_ACCESS_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
-/** Flags fail-closed que NO deben sobrevivir un cache vencido (quedan en su default local `false`). */
-const ROLLOUT_FLAG_KEYS = ['nutritionV2Student', 'nutritionV2Coach'] as const
-
-/** Envelope persistido: config + momento de la ultima obtencion exitosa (para el TTL de rollout). */
+/** Envelope persistido: config + momento de la ultima obtencion exitosa. */
 export function serializeConfigEnvelope(config: MobileConfig, fetchedAt: number): string {
     return JSON.stringify({ fetchedAt, config })
 }
 
-function stripRolloutFlags(config: MobileConfig): MobileConfig {
-    const flags = { ...config.flags }
-    let changed = false
-    for (const key of ROLLOUT_FLAG_KEYS) {
-        if (key in flags) {
-            delete flags[key]
-            changed = true
-        }
-    }
-    // studentAccess tampoco sobrevive un cache vencido: un 'grace'/'blocked' viejo no debe seguir
-    // banneando a un alumno cuyo coach ya reactivo (fail-open; el guard duro vive en DB).
+function resetStaleStudentAccess(config: MobileConfig): MobileConfig {
+    // Un `grace`/`blocked` viejo no debe seguir suspendiendo a un alumno cuyo coach ya reactivó.
+    // El enforcement duro vive en DB y el endpoint de estado de cuenta.
     if (config.studentAccess.state !== 'active') {
-        return { ...config, flags, studentAccess: DEFAULT_STUDENT_ACCESS }
+        return { ...config, studentAccess: DEFAULT_STUDENT_ACCESS }
     }
-    return changed ? { ...config, flags } : config
+    return config
 }
 
 /**
- * Parsea el envelope cacheado y decide que flags aplican. Si la ultima obtencion exitosa supera el TTL
- * (o el formato es viejo sin timestamp, imposible de fechar), descarta SOLO los flags de rollout V2 —
- * los deja fail-closed — y conserva el resto del config. Cualquier corrupcion => DEFAULT_CONFIG.
+ * Parsea el envelope cacheado. Si la ultima obtencion exitosa supera el TTL (o el formato es viejo sin
+ * timestamp), conserva módulos/preferencias pero reinicia el estado informativo de acceso del alumno.
+ * Cualquier corrupción devuelve DEFAULT_CONFIG.
  */
 export function parseCachedConfigEnvelope(raw: string | null | undefined, now: number): MobileConfig {
     if (!raw) return DEFAULT_CONFIG
@@ -234,6 +206,6 @@ export function parseCachedConfigEnvelope(raw: string | null | undefined, now: n
         !!envelope.config &&
         typeof envelope.config === 'object'
     const config = normalizeConfig((hasEnvelope ? envelope.config : parsed) as RawMobileConfig)
-    const fresh = hasEnvelope && now - (envelope.fetchedAt as number) <= ENTITLEMENTS_CACHE_TTL_MS
-    return fresh ? config : stripRolloutFlags(config)
+    const fresh = hasEnvelope && now - (envelope.fetchedAt as number) <= STUDENT_ACCESS_CACHE_TTL_MS
+    return fresh ? config : resetStaleStudentAccess(config)
 }
