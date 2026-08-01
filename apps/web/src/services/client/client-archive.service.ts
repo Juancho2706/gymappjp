@@ -54,7 +54,7 @@ type Filterable<T> = T & {
  * Same pool semantics as `applyCoachClientScope`, but intentionally local to the archive
  * service so its service-role queries cannot accidentally escape the active workspace.
  */
-function applyArchiveScope<T>(query: Filterable<T>, actor: ClientArchiveActor): Filterable<T> {
+export function applyArchiveScope<T>(query: Filterable<T>, actor: ClientArchiveActor): Filterable<T> {
   switch (actor.workspace.type) {
     case 'team':
       return query.is('org_id', null).eq('team_id', actor.workspace.teamId)
@@ -114,6 +114,16 @@ export function isDedicatedStudentAuthIdentity(facts: ArchiveAuthIdentityFacts):
     && !facts.hasCoachProfile
     && !facts.hasActiveOrganizationRole
     && !facts.hasOtherActiveStudentMembership
+}
+
+/** A roster row may exist before its student creates an Auth identity. That is not a ban failure. */
+export function isMissingAuthIdentityError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { status?: unknown; code?: unknown; message?: unknown }
+  const message = typeof candidate.message === 'string' ? candidate.message.toLowerCase() : ''
+  return candidate.status === 404
+    || candidate.code === 'user_not_found'
+    || message.includes('user not found')
 }
 
 async function clientAuthAccountIds(db: Db, clientId: string): Promise<string[]> {
@@ -183,7 +193,7 @@ async function syncAuthBan(db: Db, clientId: string, banned: boolean): Promise<b
     const { error } = await db.auth.admin.updateUserById(accountId, {
       ban_duration: banned ? '876000h' : 'none',
     })
-    return !error
+    return !error || isMissingAuthIdentityError(error)
   }))
   return results.every(Boolean)
 }
