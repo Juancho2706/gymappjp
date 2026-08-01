@@ -4,12 +4,12 @@ import { redirect } from 'next/navigation'
 import { CalendarDays, History, Info, ListChecks, Utensils } from 'lucide-react'
 import {
   NutritionCard,
-  NutritionDomainOff,
   NutritionPageShell,
   NutritionStatePanel,
   NutritionToolbar,
   StrategyBadge,
 } from '@/components/nutrition-v2'
+import { NutritionDomainOff } from '@/components/nutrition-v2/NutritionDomainOff'
 import {
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
   addNutritionDays,

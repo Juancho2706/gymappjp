@@ -28,7 +28,9 @@ export { DayVariantWeekStrip } from './DayVariantWeekStrip'
 export { WeekDayNav, type WeekDayNavProps } from './WeekDayNav'
 export { PlanDowSelector } from './PlanDowSelector'
 export { PrescribedPortionChips } from './PrescribedPortionChips'
-export { NutritionDomainOff } from './NutritionDomainOff'
+// NutritionDomainOff NO se re-exporta aca a proposito: es un Server Component que lee
+// `next/headers` via getClientBasePath, y este barrel lo consumen componentes 'use client'
+// (NutritionTabV2). Importarlo por ruta directa: '@/components/nutrition-v2/NutritionDomainOff'.
 export * from './NutritionV2Motion'
 export {
   NUTRITION_ILLUSTRATIONS,
