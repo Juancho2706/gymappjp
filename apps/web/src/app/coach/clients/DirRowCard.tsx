@@ -101,10 +101,11 @@ export function DirRowCard({
         <div
             role={selectable ? 'checkbox' : 'button'}
             aria-checked={selectable ? selected : undefined}
-            aria-label={selectable ? `Seleccionar ${client.full_name}` : undefined}
+            aria-label={selectable ? `Seleccionar ${client.full_name}` : archived ? `Acciones de ${client.full_name}` : `Ver ficha de ${client.full_name}`}
             tabIndex={0}
             onClick={() => {
                 if (selectable) onToggleSelect?.()
+                else if (archived) onActions()
                 else router.push(profileHref)
             }}
             onKeyDown={(e) => {
@@ -113,6 +114,8 @@ export function DirRowCard({
                         e.preventDefault()
                         onToggleSelect?.()
                     }
+                } else if (e.key === 'Enter' && archived) {
+                    onActions()
                 } else if (e.key === 'Enter') {
                     router.push(profileHref)
                 }

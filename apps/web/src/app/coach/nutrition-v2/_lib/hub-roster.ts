@@ -11,7 +11,6 @@ export type AttentionReason = 'no_plan' | 'draft_pending' | 'no_recent_intake' |
 export type AttentionFilter =
   | 'all'
   | 'needs_attention'
-  | 'no_plan'
   | 'draft_pending'
   | 'no_recent_intake'
 
@@ -32,7 +31,6 @@ export const DEFAULT_ROSTER_FILTERS: RosterFilters = {
 export const ATTENTION_FILTER_OPTIONS: Array<{ value: AttentionFilter; label: string }> = [
   { value: 'all', label: 'Todos' },
   { value: 'needs_attention', label: 'Requieren atencion' },
-  { value: 'no_plan', label: 'Sin plan' },
   { value: 'draft_pending', label: 'Borrador pendiente' },
   { value: 'no_recent_intake', label: 'Sin consumo reciente' },
 ]

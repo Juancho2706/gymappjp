@@ -19,6 +19,7 @@ export const getWorkoutProgramsWithClients = cache(async (coachId: string, scope
         .from('clients')
         .select('id, full_name, workout_programs(id, name, is_active)')
         .eq('is_active', true)
+        .eq('is_archived', false)
         .order('full_name')
 
     if (scope.orgId) {

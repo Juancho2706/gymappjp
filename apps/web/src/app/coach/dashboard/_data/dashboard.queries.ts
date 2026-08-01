@@ -7,6 +7,7 @@ import {
     type AttentionFlag,
     mapDirectoryPulseToAdherenceStats,
     mapDirectoryPulseToNutritionStats,
+    type DashboardClientScope,
     type DirectoryPulseRow,
 } from '@/services/dashboard.service'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
@@ -75,10 +76,40 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
     return orgId ? query.eq(column, orgId) : query.is(column, null)
 }
 
-async function resolveCoachDashboardOrgScope(db: DbClient, userId: string): Promise<string | null> {
+function applyJoinedClientScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    scope: DashboardClientScope,
+): T {
+    let scoped = scope.orgId
+        ? query.eq('clients.org_id', scope.orgId)
+        : query.is('clients.org_id', null)
+    return scope.teamId
+        ? scoped.eq('clients.team_id', scope.teamId)
+        : scoped.is('clients.team_id', null)
+}
+
+function applyJoinedClientOwnerScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    userId: string,
+    scope: DashboardClientScope,
+): T {
+    const scoped = applyJoinedClientScope(query, scope)
+    return scope.teamId ? scoped : scoped.eq('clients.coach_id', userId)
+}
+
+function applyResourceOwnerScope<T extends { eq: (column: string, value: string) => T }>(
+    query: T,
+    userId: string,
+    scope: DashboardClientScope,
+): T {
+    return scope.teamId ? query : query.eq('coach_id', userId)
+}
+
+async function resolveCoachDashboardScope(db: DbClient, userId: string): Promise<DashboardClientScope> {
     const workspace = await resolvePreferredWorkspace(db, userId)
-    if (workspace?.type === 'enterprise_coach') return workspace.orgId
-    return null
+    if (workspace?.type === 'enterprise_coach') return { orgId: workspace.orgId, teamId: null }
+    if (workspace?.type === 'coach_team') return { orgId: null, teamId: workspace.teamId }
+    return { orgId: null, teamId: null }
 }
 
 function monthKeyFromYm(y: number, month0: number): string {
@@ -142,9 +173,9 @@ export interface RiskAlertItem {
 export async function getCoachDashboardDataV2(userId: string) {
     return measureServer('getCoachDashboardDataV2', async () => {
         const supabase = await createClient()
-        const orgId = await resolveCoachDashboardOrgScope(supabase, userId)
-        const base = await getCoachDashboardDataInner(userId, supabase, undefined, orgId)
-        const pulse = await getCachedDirectoryPulse(userId, orgId)
+        const scope = await resolveCoachDashboardScope(supabase, userId)
+        const base = await getCoachDashboardDataInner(userId, supabase, undefined, scope)
+        const pulse = await getCachedDirectoryPulse(userId, scope)
 
         const mrrDeltaPct =
             base.mrrPreviousMonth > 0
@@ -174,11 +205,11 @@ export async function getCoachDashboardDataV2(userId: string) {
     })
 }
 
-export async function getCoachDashboardDataV2WithClient(userId: string, supabase: DbClient, orgId?: string | null) {
+export async function getCoachDashboardDataV2WithClient(userId: string, supabase: DbClient, scope?: DashboardClientScope) {
     return measureServer('getCoachDashboardDataV2WithClient', async () => {
-        const scopeOrgId = orgId === undefined ? await resolveCoachDashboardOrgScope(supabase, userId) : orgId
-        const pulse = await new DashboardService(supabase).getDirectoryPulse(userId, scopeOrgId)
-        const base = await getCoachDashboardDataInner(userId, supabase, pulse, scopeOrgId)
+        const activeScope = scope ?? await resolveCoachDashboardScope(supabase, userId)
+        const pulse = await new DashboardService(supabase).getDirectoryPulse(userId, activeScope)
+        const base = await getCoachDashboardDataInner(userId, supabase, pulse, activeScope)
 
         const mrrDeltaPct =
             base.mrrPreviousMonth > 0
@@ -265,7 +296,7 @@ async function getCoachDashboardDataInner(
     userId: string,
     db?: DbClient,
     pulseOverride?: DirectoryPulseRow[],
-    orgId: string | null = null
+    scope: DashboardClientScope = { orgId: null, teamId: null }
 ) {
     const supabase = db ?? await createClient()
 
@@ -291,81 +322,92 @@ async function getCoachDashboardDataInner(
         pulse,
         coachSubscription,
     ] = await Promise.all([
-        countCoachClients(supabase, userId, orgId),
-        // workout_plans NO tiene columna org_id (el scope org va por el cliente, no por la tabla);
-        // applyOrgScope(...,'org_id') tiraba 400 para coaches enterprise. El conteo de planes del
-        // coach se acota por coach_id, que ya es suficiente.
-        supabase.from('workout_plans').select('id', { count: 'exact', head: true }).eq('coach_id', userId),
-        findCoachRecentClients(supabase, userId, 5, orgId),
-        applyOrgScope(
+        countCoachClients(supabase, userId, scope.orgId, scope.teamId),
+        // workout_plans no tiene org_id/team_id: el scope y el filtro de archivado van por el alumno.
+        applyJoinedClientScope(
+            applyResourceOwnerScope(
+                supabase
+                .from('workout_plans')
+                .select('id, clients!inner(org_id, team_id, is_archived)', { count: 'exact', head: true })
+                .eq('clients.is_archived', false),
+                userId,
+                scope,
+            ),
+            scope,
+        ),
+        findCoachRecentClients(supabase, userId, 5, scope.orgId, scope.teamId),
+        applyJoinedClientOwnerScope(
             supabase
                 .from('check_ins')
-                .select('id, created_at, reviewed_at, front_photo_url, back_photo_url, clients!inner(id, full_name, coach_id, org_id)')
-                .eq('clients.coach_id', userId),
-            'clients.org_id',
-            orgId
+                .select('id, created_at, reviewed_at, front_photo_url, back_photo_url, clients!inner(id, full_name, coach_id, org_id, team_id, is_archived)')
+                .eq('clients.is_archived', false),
+            userId,
+            scope
         )
             .order('created_at', { ascending: false })
             .limit(5),
         // Onboarding paso "alumno activo": al menos un check-in en ventana 30d (alineado a workout_logs 30d abajo).
-        applyOrgScope(
+        applyJoinedClientOwnerScope(
             supabase
                 .from('check_ins')
-                .select('id, clients!inner(coach_id, org_id)')
-                .eq('clients.coach_id', userId),
-            'clients.org_id',
-            orgId
+                .select('id, clients!inner(coach_id, org_id, team_id, is_archived)')
+                .eq('clients.is_archived', false),
+            userId,
+            scope
         )
             .gte('created_at', thirtyDaysAgo)
             .limit(1),
-        applyOrgScope(
-            supabase
+        applyJoinedClientScope(
+            applyResourceOwnerScope(
+                supabase
                 .from('workout_programs')
-                .select('id, name, end_date, client_id, clients:client_id (id, full_name)')
-                .eq('coach_id', userId)
-                .eq('is_active', true),
-            'org_id',
-            orgId
+                .select('id, name, end_date, client_id, clients:client_id!inner(id, full_name, org_id, team_id, is_archived)')
+                .eq('is_active', true)
+                .eq('clients.is_archived', false),
+                userId,
+                scope,
+            ),
+            scope
         )
             .not('end_date', 'is', null)
             .gte('end_date', expiringEndLower)
             .lte('end_date', expiringEndUpper)
             .order('end_date', { ascending: true })
             .limit(200),
-        supabase.rpc('get_coach_client_signups_last_6_months', { p_coach_id: userId }),
+        Promise.resolve({ data: null, error: { message: 'scoped dashboard uses clients table' } }),
         // Agregacion server-side: sesiones unicas por dia (zona Santiago) calculadas en DB.
         // Si la RPC devuelve vacio/error, el consumo cae al fallback JS sobre workoutLogs30d (abajo).
-        supabase.rpc('get_coach_workout_sessions_30d', { p_coach_id: userId }),
+        Promise.resolve({ data: null, error: { message: 'scoped dashboard uses workout_logs table' } }),
         // 30-day workout sessions: fallback crudo del AreaChart (se mantiene un ciclo; solo columnas necesarias)
-        applyOrgScope(
+        applyJoinedClientOwnerScope(
             supabase
                 .from('workout_logs')
-                .select('logged_at, client_id, clients!inner(coach_id, org_id)')
-                .eq('clients.coach_id', userId),
-            'clients.org_id',
-            orgId
+                .select('logged_at, client_id, clients!inner(coach_id, org_id, team_id, is_archived)')
+                .eq('clients.is_archived', false),
+            userId,
+            scope
         ).gte('logged_at', thirtyDaysAgo),
         // Recent workout completions for activity feed
-        applyOrgScope(
+        applyJoinedClientOwnerScope(
             supabase
                 .from('workout_logs')
-                .select('id, logged_at, client_id, clients!inner(id, full_name, coach_id, org_id)')
-                .eq('clients.coach_id', userId),
-            'clients.org_id',
-            orgId
+                .select('id, logged_at, client_id, clients!inner(id, full_name, coach_id, org_id, team_id, is_archived)')
+                .eq('clients.is_archived', false),
+            userId,
+            scope
         )
             .order('logged_at', { ascending: false })
             .limit(50),
         // Coach revenue: payments registered from clients (same month windows as before)
-        applyOrgScope(
+        applyJoinedClientScope(
             supabase
                 .from('client_payments')
-                .select('client_id, payment_date, amount, status, period_months, clients!inner(org_id)')
-                .eq('coach_id', userId),
-            'clients.org_id',
-            orgId
+                .select('client_id, payment_date, amount, status, period_months, clients!inner(org_id, team_id, is_archived)')
+                .eq('coach_id', userId)
+                .eq('clients.is_archived', false),
+            scope
         ).gte('payment_date', clientPaymentsLookbackStart),
-        pulseOverride ? Promise.resolve(pulseOverride) : getCachedDirectoryPulse(userId, orgId),
+        pulseOverride ? Promise.resolve(pulseOverride) : getCachedDirectoryPulse(userId, scope),
         findCoachById(supabase, userId),
     ])
 
@@ -408,7 +450,7 @@ async function getCoachDashboardDataInner(
         if (signupsByMonthRaw.error) {
             console.error('[dashboard] RPC get_coach_client_signups_last_6_months failed:', signupsByMonthRaw.error)
         }
-        const clientsFallback = await findCoachClientSignupDates(supabase, userId, orgId)
+        const clientsFallback = await findCoachClientSignupDates(supabase, userId, scope.orgId, scope.teamId)
         if (clientsFallback && clientsFallback.length > 0) {
             const monthCounts = new Map<string, number>()
             for (const c of clientsFallback) {

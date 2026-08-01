@@ -460,6 +460,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
   const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [dontShowAgain, setDontShowAgain] = useState(true)
   const dark = resolvedScheme === 'dark'
   const sport = deriveSportTokens(theme.primary)
   const sport100 = dark ? hexToRgba(theme.primary, 0.2) : sport.ramp['100']
@@ -481,7 +482,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
   }, [enabled])
 
   async function dismiss() {
-    await AsyncStorage.setItem(FREE_WELCOME_KEY, '1')
+    if (dontShowAgain) await AsyncStorage.setItem(FREE_WELCOME_KEY, '1')
     setOpen(false)
   }
 
@@ -494,8 +495,13 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           end={{ x: 1, y: 1 }}
           style={[styles.freeWelcomeHero, { borderBottomColor: theme.border }]}
         >
-          <View style={[styles.freeWelcomeIcon, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: sport100, borderRadius: theme.radius.md }]}>
-            <Sparkles size={32} color={sport600} />
+          <View style={[styles.freeWelcomeLogo, { borderColor: hexToRgba(theme.primary, 0.3) }]}>
+            <Image
+              source={require('../../assets/eva-icon.png')}
+              contentFit="contain"
+              accessibilityLabel="Logo de EVA"
+              style={styles.freeWelcomeLogoImage}
+            />
           </View>
           <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
             ¡Bienvenido a EVA!
@@ -550,6 +556,19 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
             ))}
           </View>
         </View>
+
+        <TouchableOpacity
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: dontShowAgain }}
+          onPress={() => setDontShowAgain((value) => !value)}
+          style={styles.freeWelcomeDontShow}
+          activeOpacity={0.75}
+        >
+          <View style={[styles.freeWelcomeCheckbox, { borderColor: dontShowAgain ? sport600 : theme.border, backgroundColor: dontShowAgain ? sport600 : 'transparent' }]}>
+            {dontShowAgain ? <Check size={13} color="#fff" strokeWidth={3} /> : null}
+          </View>
+          <Text style={[styles.freeWelcomeDontShowText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No volver a mostrar</Text>
+        </TouchableOpacity>
 
         <View style={styles.freeWelcomeActions}>
           <Button label="Empezar ahora →" variant="sport" onPress={dismiss} full />
@@ -3702,14 +3721,18 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  freeWelcomeIcon: {
-    width: 64,
-    height: 64,
+  freeWelcomeLogo: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 1,
+    backgroundColor: '#000',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
+  freeWelcomeLogoImage: { width: 72, height: 72 },
   freeWelcomeTitle: {
     fontSize: 20,
     lineHeight: 24,
@@ -3777,6 +3800,22 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     gap: 8,
   },
+  freeWelcomeDontShow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingHorizontal: 24,
+    paddingTop: 18,
+  },
+  freeWelcomeCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  freeWelcomeDontShowText: { fontSize: 12.5 },
   onboardingSkeleton: {
     minHeight: 120,
     borderWidth: 1,

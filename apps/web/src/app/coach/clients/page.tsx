@@ -45,7 +45,7 @@ export default async function CoachClientsPage() {
     const [clients, headersList, pulse, toolsEnabled] = await Promise.all([
         getCoachClientsWithPrograms(coachSession.id, { orgId, activeTeamId }),
         headers(),
-        getCoachClientsPulse(coachSession.id, orgId),
+        getCoachClientsPulse(coachSession.id, { orgId, activeTeamId }),
         resolveToolsEnabled(),
     ])
 
@@ -62,4 +62,3 @@ export default async function CoachClientsPage() {
         </div>
     )
 }
-

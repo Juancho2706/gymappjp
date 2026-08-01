@@ -6,7 +6,7 @@ import {
   Activity,
   Check,
   HeartPulse,
-  Lock,
+  LockKeyhole,
   Ruler,
   Utensils,
   type LucideIcon,
@@ -68,7 +68,7 @@ function addonBadge(
 ): { label: string; tone: BadgeTone; icon: LucideIcon | null; lit: boolean } {
   const hasLiveRow = row !== undefined && row.status !== 'cancelled'
   if (hasPaidPlan || hasLiveRow) return { label: 'Incluido en tu plan', tone: 'success', icon: Check, lit: true }
-  return { label: 'No incluido', tone: 'neutral', icon: Lock, lit: false }
+  return { label: 'No incluido', tone: 'neutral', icon: LockKeyhole, lit: false }
 }
 
 /** Una fila paga (self_service) manda sobre la cortesía; solo grant => "Cortesía EVA". */
@@ -118,7 +118,7 @@ export default function SubscriptionScreen() {
         >
           <Header />
           <Card variant="default" padding={16} radius="card" style={styles.lockCard}>
-            <Lock size={18} color={theme.mutedForeground} />
+            <LockKeyhole size={18} color={theme.mutedForeground} />
             <Text style={[TYPE.caption, styles.flex1]} className="text-muted">
               {managedBy === 'org'
                 ? name ? `Tu plan lo gestiona ${name}.` : 'Tu plan lo gestiona tu organización.'
@@ -135,7 +135,7 @@ export default function SubscriptionScreen() {
       <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app">
         <AppBackground />
         <EmptyState
-          icon={Lock}
+          icon={LockKeyhole}
           title="No se pudo cargar tu plan"
           subtitle="Vuelve a intentarlo en unos segundos."
         />

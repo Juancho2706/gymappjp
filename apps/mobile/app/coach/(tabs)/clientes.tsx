@@ -169,7 +169,7 @@ function DenseDirectoryTable({
             <TouchableOpacity
               key={client.id}
               activeOpacity={0.76}
-              onPress={() => onOpen(client)}
+              onPress={() => client.isArchived ? onActions(client) : onOpen(client)}
               className={`bg-surface-card ${index < clients.length - 1 ? 'border-b border-subtle' : ''}`}
               style={[styles.denseNameCell, { width: DENSE_COLS.name }]}
             >
@@ -216,7 +216,7 @@ function DenseDirectoryTable({
                 <TouchableOpacity
                   key={client.id}
                   activeOpacity={0.76}
-                  onPress={() => onOpen(client)}
+                  onPress={() => client.isArchived ? onActions(client) : onOpen(client)}
                   className={`bg-surface-card ${index < clients.length - 1 ? 'border-b border-subtle' : ''}`}
                   style={styles.denseDataRow}
                 >
@@ -359,7 +359,7 @@ export default function ClientesScreen() {
       } else {
         fetchDirectoryData().catch(() => {})
       }
-    }, [workspace.ready, workspace.orgId, workspace.teamId])
+    }, [workspace.ready, workspace.kind, workspace.orgId, workspace.teamId])
   )
   useFocusEffect(
     useCallback(() => {
@@ -410,7 +410,7 @@ export default function ClientesScreen() {
   async function fetchDirectoryData() {
     const [clientsResult, pulseResult] = await Promise.allSettled([
       getCoachDirectoryClients({ orgId: workspace.orgId, teamId: workspace.teamId }),
-      getCoachDirectoryPulse(),
+      getCoachDirectoryPulse({ orgId: workspace.orgId, teamId: workspace.teamId, kind: workspace.kind }),
     ])
     if (clientsResult.status === 'rejected') throw clientsResult.reason
     setClients(clientsResult.value)
@@ -429,7 +429,7 @@ export default function ClientesScreen() {
   // Ya NO se traga el error en silencio: marca pulseError → banner con reintento.
   function loadPulse() {
     setPulseError(false)
-    getCoachDirectoryPulse()
+    getCoachDirectoryPulse({ orgId: workspace.orgId, teamId: workspace.teamId, kind: workspace.kind })
       .then(setPulseById)
       .catch(() => setPulseError(true))
   }
@@ -806,6 +806,7 @@ export default function ClientesScreen() {
                 theme={theme}
                 pulse={pulseById.get(item.id)}
                 onOpen={goProfile}
+                onActions={setActionsClient}
                 onWhatsApp={item.phone && portalUrl ? handleWhatsApp : undefined}
                 onEdit={handleEdit}
                 onShare={handleShare}

@@ -214,6 +214,17 @@ export async function assignTemplateToClients(templateId: string, clientIds: str
   const coachId = await currentCoachId()
   if (!coachId) return { ok: false, error: 'No autenticado.' }
   if (!clientIds.length) return { ok: true }
+  const { data: activeClients, error: clientsError } = await supabase
+    .from('clients')
+    .select('id')
+    .in('id', clientIds)
+    .eq('coach_id', coachId)
+    .eq('is_active', true)
+    .eq('is_archived', false)
+  if (clientsError) return { ok: false, error: 'No se pudieron validar los alumnos seleccionados.' }
+  if ((activeClients ?? []).length !== new Set(clientIds).size) {
+    return { ok: false, error: 'Solo puedes asignar nutrición a alumnos activos y no archivados.' }
+  }
   const ctx = await getCoachOrgContext()
   const orgId = ctx.orgId
 

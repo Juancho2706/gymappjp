@@ -83,8 +83,18 @@ export function subscriptionDaysRemaining(startDate: string | null): number | nu
 }
 
 /** Pulse (métricas ricas) por id de alumno, vía endpoint mobile (reusa el cálculo web). */
-export async function getCoachDirectoryPulse(): Promise<Map<string, PulseRow>> {
-  const res = await apiFetch<{ pulse: PulseRow[] }>('/api/mobile/coach/clients/pulse', { authenticated: true })
+export async function getCoachDirectoryPulse(scope?: CoachDirectoryScope): Promise<Map<string, PulseRow>> {
+  const params = new URLSearchParams()
+  if (scope) {
+    const kind = scope.kind ?? (scope.teamId ? 'team_member' : scope.orgId ? 'enterprise' : 'standalone')
+    params.set('workspaceKind', kind)
+    if (scope.teamId) params.set('teamId', scope.teamId)
+    if (scope.orgId) params.set('orgId', scope.orgId)
+  }
+  const path = params.toString()
+    ? `/api/mobile/coach/clients/pulse?${params.toString()}`
+    : '/api/mobile/coach/clients/pulse'
+  const res = await apiFetch<{ pulse: PulseRow[] }>(path, { authenticated: true })
   return new Map((res.pulse ?? []).map((p) => [p.clientId, p]))
 }
 
@@ -112,6 +122,7 @@ function calcPlanDaysRemaining(
 export interface CoachDirectoryScope {
   orgId: string | null
   teamId: string | null
+  kind?: 'standalone' | 'team_owner' | 'team_member' | 'enterprise'
 }
 
 export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Promise<DirectoryClient[]> {
@@ -127,22 +138,18 @@ export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Pro
   const teamId = scope?.teamId ?? null
   const clientsSelect = 'id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)'
 
+  const scopedClientsQuery = () => {
+    let q = supabase.from('clients').select(clientsSelect)
+    if (orgId) return q.eq('coach_id', coach.id).eq('org_id', orgId).is('team_id', null).order('full_name')
+    if (teamId) return q.is('org_id', null).eq('team_id', teamId).order('full_name')
+    return q.eq('coach_id', coach.id).is('org_id', null).is('team_id', null).order('full_name')
+  }
+
   const [clientsRes, workoutLogsRes, checkInsRes] = await Promise.all([
     selectWithFallback<any>(
-      () => {
-        const q = supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id)
-        if (orgId) return q.eq('org_id', orgId).order('full_name')
-        if (teamId) {
-          return supabase
-            .from('clients')
-            .select(clientsSelect)
-            .is('org_id', null)
-            .eq('team_id', teamId)
-            .order('full_name')
-        }
-        return q.is('org_id', null).is('team_id', null).order('full_name')
-      },
-      () => supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id).order('full_name')
+      scopedClientsQuery,
+      // Compatibilidad de columnas antiguas sin abrir el fallback a todos los pools.
+      scopedClientsQuery,
     ),
     supabase
       .from('workout_logs')
@@ -174,7 +181,9 @@ export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Pro
 
   return clients.map((c) => {
     const programs = (c.workout_programs ?? []) as any[]
-    const activeProgram = programs.find((p) => p.is_active) ?? null
+    // Archived rows are history-only: do not surface live assignments even if a
+    // pre-cleanup database still contains an active legacy row.
+    const activeProgram = c.is_archived === true ? null : programs.find((p) => p.is_active) ?? null
     const planDaysRemaining = activeProgram
       ? calcPlanDaysRemaining(activeProgram.start_date, activeProgram.weeks_to_repeat)
       : null

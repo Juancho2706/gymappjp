@@ -81,6 +81,7 @@ export function AssignClientsSheet({ open, onClose, programName, workspace, coac
         .from('clients')
         .select('id, full_name, avatar_url, coach_id, team_id, org_id')
         .eq('is_active', true)
+        .eq('is_archived', false)
         .order('full_name')
         .order('id')
 

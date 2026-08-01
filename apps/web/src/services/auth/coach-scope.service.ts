@@ -43,3 +43,27 @@ export function applyOrgScope<T extends { eq: (column: string, value: string) =>
 ): T {
     return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
 }
+
+/**
+ * Scope completo para filas de `clients` (y tablas que tienen el mismo composite
+ * org/team scope). `applyOrgScope` se conserva para tablas que solo tienen org_id.
+ */
+export function applyCoachClientScope<
+    T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T },
+>(
+    query: T,
+    scope: Pick<Extract<CoachScope, { ok: true }>, 'orgId' | 'activeTeamId'>,
+): T {
+    if (scope.activeTeamId) return query.is('org_id', null).eq('team_id', scope.activeTeamId)
+    if (scope.orgId) return query.eq('org_id', scope.orgId).is('team_id', null)
+
+    // `.or()` keeps the two NULL predicates in one PostgREST operation and also
+    // avoids relying on every lightweight query double to support chained `.is()`.
+    const maybeOr = query as T & { or?: (filters: string) => T }
+    if (typeof maybeOr.or === 'function') return maybeOr.or('and(org_id.is.null,team_id.is.null)')
+
+    const orgScoped = query.is('org_id', null)
+    return typeof (orgScoped as T & { is?: unknown }).is === 'function'
+        ? (orgScoped as T & { is: (column: string, value: null) => T }).is('team_id', null)
+        : orgScoped
+}

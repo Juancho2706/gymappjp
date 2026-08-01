@@ -12,7 +12,7 @@ export const mobileClientWorkspaceSchema = z.object({
 })
 
 type RequestedWorkspace = z.infer<typeof mobileClientWorkspaceSchema>
-type ClientMutationScope =
+export type MobileCoachDataScope =
     | { type: 'standalone' }
     | { type: 'team'; teamId: string }
     | { type: 'enterprise'; orgId: string }
@@ -22,7 +22,7 @@ export type MobileClientMutationContext = {
     /** Cliente request-scoped para dominios sensibles que deben conservar RLS como techo. */
     userDb: SupabaseClient<Database>
     userId: string
-    scope: ClientMutationScope
+    scope: MobileCoachDataScope
 }
 
 type Resolution = { error: NextResponse } | MobileClientMutationContext
@@ -32,11 +32,11 @@ function bearerToken(request: NextRequest): string | null {
     return match?.[1]?.trim() || null
 }
 
-async function resolveExplicitScope(
+export async function resolveExplicitScope(
     admin: ReturnType<typeof createServiceRoleClient>,
     userId: string,
     requested: RequestedWorkspace,
-): Promise<ClientMutationScope | null> {
+): Promise<MobileCoachDataScope | null> {
     if (requested.kind === 'standalone') {
         if (requested.teamId || requested.orgId) return null
         const { data: coach } = await admin
@@ -87,6 +87,29 @@ async function resolveExplicitScope(
     return membership ? { type: 'enterprise', orgId: requested.orgId } : null
 }
 
+/** Resuelve el workspace que una lectura mobile declara en la URL, con validación contra DB. */
+export async function resolveMobileCoachDataScope(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    userId: string,
+    params: URLSearchParams,
+): Promise<MobileCoachDataScope | null> {
+    const workspaceKind = params.get('workspaceKind')
+    if (workspaceKind) {
+        const parsed = mobileClientWorkspaceSchema.safeParse({
+            kind: workspaceKind,
+            teamId: params.get('teamId') || null,
+            orgId: params.get('orgId') || null,
+        })
+        return parsed.success ? resolveExplicitScope(admin, userId, parsed.data) : null
+    }
+
+    const workspace = await resolvePreferredWorkspace(admin, userId)
+    if (workspace?.type === 'coach_standalone') return { type: 'standalone' }
+    if (workspace?.type === 'coach_team') return { type: 'team', teamId: workspace.teamId }
+    if (workspace?.type === 'enterprise_coach') return { type: 'enterprise', orgId: workspace.orgId }
+    return null
+}
+
 export async function resolveMobileClientMutationContext(
     request: NextRequest,
     rawWorkspace: unknown,
@@ -100,7 +123,7 @@ export async function resolveMobileClientMutationContext(
         return { error: NextResponse.json({ error: 'Unauthorized', code: 'INVALID_TOKEN' }, { status: 401 }) }
     }
 
-    let scope: ClientMutationScope | null = null
+    let scope: MobileCoachDataScope | null = null
     if (rawWorkspace !== undefined) {
         const parsed = mobileClientWorkspaceSchema.safeParse(rawWorkspace)
         if (!parsed.success) {

@@ -34,7 +34,6 @@ export function resolveNutritionHubInitialTab(
 export type NutritionAttentionFilter =
   | 'all'
   | 'needs_attention'
-  | 'no_plan'
   | 'draft_pending'
   | 'no_recent_intake'
 
@@ -44,7 +43,6 @@ export const NUTRITION_ATTENTION_FILTER_OPTIONS: ReadonlyArray<{
 }> = [
   { value: 'all', label: 'Todos' },
   { value: 'needs_attention', label: 'Requieren atención' },
-  { value: 'no_plan', label: 'Sin plan V2' },
   { value: 'draft_pending', label: 'Borrador pendiente' },
   { value: 'no_recent_intake', label: 'Sin consumo reciente' },
 ]

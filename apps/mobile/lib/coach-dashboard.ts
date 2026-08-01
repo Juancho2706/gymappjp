@@ -2,6 +2,7 @@ import { getCoachProfile, type CoachProfile } from './coach'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
 import { selectWithFallback } from './db-compat'
+import { getActiveCoachWorkspace } from './workspace'
 
 export type MobileKpiSummary = {
   mrrCurrentMonth: number
@@ -439,6 +440,8 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
   const coach = await getCoachProfile()
   if (!coach) return null
 
+  const workspace = await getActiveCoachWorkspace()
+
   const now = new Date()
   const today = startOfDay(now)
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -446,6 +449,16 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
   const paymentsLookbackStart = new Date(now.getFullYear(), now.getMonth() - 13, 1).toISOString()
   const expiringEndUpper = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const expiringEndLower = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+  let clientsQuery: any = supabase
+    .from('clients')
+    .select('id, full_name, created_at, onboarding_completed')
+    .eq('coach_id', coach.id)
+    .eq('is_archived', false)
+    .eq('is_active', true)
+  if (workspace?.orgId) clientsQuery = clientsQuery.eq('org_id', workspace.orgId).is('team_id', null)
+  else if (workspace?.teamId) clientsQuery = clientsQuery.is('org_id', null).eq('team_id', workspace.teamId)
+  else clientsQuery = clientsQuery.is('org_id', null).is('team_id', null)
 
   const [
     clientsResult,
@@ -455,15 +468,10 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     expiringProgramsResult,
     paymentsResult,
   ] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('id, full_name, created_at, onboarding_completed')
-      .eq('coach_id', coach.id)
-      .eq('is_archived', false)
-      .eq('is_active', true),
+    clientsQuery,
     supabase
       .from('workout_plans')
-      .select('id', { count: 'exact', head: true })
+      .select('id, client_id')
       .eq('coach_id', coach.id),
     // reviewed_at alimenta el badge/filtro de Novedades; puede faltar en DBs legacy → fallback sin ella.
     selectWithFallback<CheckInRow[]>(
@@ -508,7 +516,9 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
   const clientIds = new Set(clients.map((c) => c.id))
   const checkIns = ((checkInsResult.data ?? []) as CheckInRow[]).filter((row) => clientIds.has(row.client_id))
   const workoutLogs = ((workoutLogsResult.data ?? []) as WorkoutLogRow[]).filter((row) => clientIds.has(row.client_id))
-  const payments = (paymentsResult.data ?? []) as ClientPaymentRow[]
+  const payments = ((paymentsResult.data ?? []) as ClientPaymentRow[]).filter((row) => clientIds.has(row.client_id ?? ''))
+  const activePlanCount = ((plansCountResult.data ?? []) as Array<{ id: string; client_id: string | null }>)
+    .filter((row) => row.client_id != null && clientIds.has(row.client_id)).length
 
   const latestCheckIn = latestByClient(checkIns, 'created_at')
   const latestWorkout = latestByClient(workoutLogs, 'logged_at')
@@ -769,7 +779,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     coach,
     publicCode: coach.inviteCode ? { inviteCode: coach.inviteCode, shouldConfirm: false } : null,
     onboardingGuide: {},
-    activePlans: plansCountResult.count ?? 0,
+    activePlans: activePlanCount,
     hasStudentSignal30d: checkIns.length > 0 || workoutLogs.length > 0,
     clientList: clients.map((client) => ({ id: client.id, name: client.full_name })),
     clientPaymentSummary: buildClientPaymentSummary(payments, clients),
@@ -799,7 +809,15 @@ export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData
   // D-F1: reintentar el endpoint una vez antes de degradar al cálculo local.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const payload = await apiFetch<MobileDashboardApiResponse>('/api/mobile/coach/dashboard', {
+      const workspace = await getActiveCoachWorkspace()
+      const params = new URLSearchParams()
+      if (workspace) {
+        params.set('workspaceKind', workspace.kind)
+        if (workspace.teamId) params.set('teamId', workspace.teamId)
+        if (workspace.orgId) params.set('orgId', workspace.orgId)
+      }
+      const path = params.toString() ? `/api/mobile/coach/dashboard?${params.toString()}` : '/api/mobile/coach/dashboard'
+      const payload = await apiFetch<MobileDashboardApiResponse>(path, {
         method: 'GET',
         authenticated: true,
       })

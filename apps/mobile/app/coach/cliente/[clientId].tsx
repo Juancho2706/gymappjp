@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { BlurView } from 'expo-blur'
 import { useReducedMotion } from 'react-native-reanimated'
-import { User } from 'lucide-react-native'
+import { ArchiveRestore, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { hexToRgba } from '../../../lib/theme'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
@@ -516,6 +516,22 @@ export default function ClientDetailScreen() {
     )
   }
 
+  const isArchived = client.is_archived === true
+  if (isArchived) {
+    return (
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
+        <TopBar back title="Alumno archivado" onBack={() => router.back()} />
+        <EmptyState
+          icon={ArchiveRestore}
+          title="Alumno archivado"
+          subtitle="Su historial se conserva, pero la ficha y sus planes no están disponibles mientras permanezca archivado."
+          action={<Button label="Desarchivar alumno" variant="primary" onPress={confirmArchive} />}
+        />
+      </SafeAreaView>
+    )
+  }
+
   // ── Hero: eyebrow, estado, chips ──────────────────────────────────────────
   const programName = data.activeProgram?.name?.trim() || null
   const planCur = derived.planCurrentWeek
@@ -732,7 +748,7 @@ export default function ClientDetailScreen() {
 
       <ClientActionsSheet
         visible={moreOpen}
-        client={{ id: client.id, fullName: client.full_name, email: client.email, phone: client.phone, isActive: client.is_active !== false, isArchived: client.is_archived === true }}
+        client={{ id: client.id, fullName: client.full_name, email: client.email, phone: client.phone, isActive: client.is_active !== false, isArchived }}
         theme={theme}
         onClose={() => setMoreOpen(false)}
         onProfile={() => {}}

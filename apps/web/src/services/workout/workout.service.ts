@@ -281,6 +281,8 @@ async function resolveCoachClientAccess(
             .eq('id', clientId)
             .eq('team_id', activeTeamId)
             .is('org_id', null)
+            .eq('is_active', true)
+            .eq('is_archived', false)
             .maybeSingle()
         if (poolClient && (await currentUserHasTeamAccessToClient(db, clientId))) {
             return { ok: true, viaTeam: true }
@@ -293,6 +295,8 @@ async function resolveCoachClientAccess(
         .select('id')
         .eq('id', clientId)
         .eq('coach_id', coachId)
+        .eq('is_active', true)
+        .eq('is_archived', false)
     clientQuery = applyOrgScope(clientQuery, orgId)
     if (!orgId) clientQuery = clientQuery.is('team_id', null)
     const { data: client, error } = await clientQuery.maybeSingle()
@@ -913,6 +917,8 @@ export async function assignProgramToClientsAction(
             .from('clients')
             .select('id, full_name, email')
             .in('id', clientIds)
+            .eq('is_active', true)
+            .eq('is_archived', false)
         if (scope.activeTeamId) {
             ownedClientsQuery = ownedClientsQuery.eq('team_id', scope.activeTeamId).is('org_id', null)
         } else {
@@ -1439,6 +1445,8 @@ export async function getCoachClientsAction(): Promise<{
     let clientsQuery = supabase
         .from('clients')
         .select('id, full_name')
+        .eq('is_active', true)
+        .eq('is_archived', false)
         .order('full_name', { ascending: true })
     if (scope.activeTeamId) {
         clientsQuery = clientsQuery.eq('team_id', scope.activeTeamId).is('org_id', null)

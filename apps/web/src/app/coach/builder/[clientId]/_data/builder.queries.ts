@@ -35,6 +35,8 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         .from('clients')
         .select('id, full_name, email')
         .eq('id', clientId)
+        .eq('is_active', true)
+        .eq('is_archived', false)
     if (activeTeamId) {
         clientQuery = clientQuery.eq('team_id', activeTeamId).is('org_id', null)
     } else {

@@ -20,6 +20,11 @@ import {
 const CHECKIN_OVERDUE_AFTER_DAYS = 30
 const WORKOUT_INACTIVE_AFTER_DAYS = 7
 
+export type DashboardClientScope = {
+    orgId: string | null
+    teamId: string | null
+}
+
 // ─── TASK A0: Attention Score ─────────────────────────────────────────────
 
 export type AttentionFlag =
@@ -328,20 +333,42 @@ export class DashboardService {
      * Full per-client metrics for coach directory + attention score.
      * Use React.cache in actions when pairing with getAdherenceStats/getNutritionStats.
      */
-    async getDirectoryPulse(coachId: string, orgId?: string | null): Promise<DirectoryPulseRow[]> {
+    async getDirectoryPulse(
+        coachId: string,
+        scope?: DashboardClientScope | string | null,
+    ): Promise<DirectoryPulseRow[]> {
         return measureServer(`getDirectoryPulse coach=${coachId.slice(0, 8)}`, async () =>
-            this.getDirectoryPulseInner(coachId, orgId)
+            this.getDirectoryPulseInner(coachId, scope)
         );
     }
 
-    private async getDirectoryPulseInner(coachId: string, orgId?: string | null): Promise<DirectoryPulseRow[]> {
+    private async getDirectoryPulseInner(
+        coachId: string,
+        scopeArg?: DashboardClientScope | string | null,
+    ): Promise<DirectoryPulseRow[]> {
+        // `string | null` mantiene compatibilidad con callers antiguos mientras todos migran al
+        // scope compuesto. El dashboard y los endpoints mobile pasan siempre el objeto explícito.
+        const scoped = typeof scopeArg === 'object' && scopeArg !== null
+        const scope: DashboardClientScope | undefined = scoped
+            ? scopeArg
+            : scopeArg === undefined
+                ? undefined
+                : { orgId: scopeArg, teamId: null }
         let clientsQuery = this.supabase
             .from('clients')
             .select('id, full_name')
-            .eq('coach_id', coachId)
+            .eq('is_archived', false)
 
-        if (orgId !== undefined) {
-            clientsQuery = orgId ? clientsQuery.eq('org_id', orgId) : clientsQuery.is('org_id', null)
+        // Team workspaces are collaborative pools: the active team scopes the rows,
+        // while standalone/enterprise remain coach-owned.
+        if (!scope?.teamId) clientsQuery = clientsQuery.eq('coach_id', coachId)
+
+        if (scope) {
+            clientsQuery = scope.orgId
+                ? clientsQuery.eq('org_id', scope.orgId).is('team_id', null)
+                : clientsQuery.is('org_id', null)
+            if (scope.teamId) clientsQuery = clientsQuery.eq('team_id', scope.teamId)
+            else clientsQuery = clientsQuery.is('team_id', null)
         }
 
         const { data: clients, error: clientsError } = await clientsQuery;

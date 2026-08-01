@@ -38,9 +38,12 @@ export const getCoachClientsWithPrograms = cache(async (
     }
 
     const { data } = await query
-    return (data ?? []) as ClientWithProgram[]
+    return (data ?? []).map((client) => ({
+        ...client,
+        workout_programs: client.is_archived ? [] : client.workout_programs,
+    })) as ClientWithProgram[]
 })
 
-export const getCoachClientsPulse = cache(async (coachId: string, orgId: string | null) => {
-    return getCachedDirectoryPulse(coachId, orgId)
+export const getCoachClientsPulse = cache(async (coachId: string, scope: CoachClientScope) => {
+    return getCachedDirectoryPulse(coachId, { orgId: scope.orgId, teamId: scope.activeTeamId })
 })

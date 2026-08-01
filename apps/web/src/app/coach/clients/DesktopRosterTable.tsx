@@ -247,13 +247,14 @@ export function DesktopRosterTable({
 
     // La selección solo cuenta sobre filas VISIBLES: al cambiar de búsqueda o al pasar a
     // "Archivados" no arrastramos ids que ya no están en pantalla.
-    const selectedRows = rows.filter((r) => sel[r.id])
+    const selectedRows = rows.filter((r) => sel[r.id] && !r.archived)
     const selIds = selectedRows.map((r) => r.id)
     // Archivar nunca debe tocar a un ya-archivado.
     const archivableIds = selectedRows.filter((r) => !r.archived).map((r) => r.id)
-    const allOn = rows.length > 0 && rows.every((r) => sel[r.id])
+    const selectableRows = rows.filter((r) => !r.archived)
+    const allOn = selectableRows.length > 0 && selectableRows.every((r) => sel[r.id])
     const toggleAll = () =>
-        setSel(allOn ? {} : Object.fromEntries(rows.map((r) => [r.id, true])))
+        setSel(allOn ? {} : Object.fromEntries(selectableRows.map((r) => [r.id, true])))
     const setSort = (k: SortKey) => {
         if (sortKey === k) setDir((d) => (d === 1 ? -1 : 1))
         else {
@@ -263,6 +264,11 @@ export function DesktopRosterTable({
     }
 
     const open = (id: string) => {
+        const row = rows.find((candidate) => candidate.id === id)
+        if (row?.archived) {
+            onActions?.(row.raw)
+            return
+        }
         setActiveId(id)
         router.push(`/coach/clients/${id}`)
     }
@@ -406,13 +412,13 @@ export function DesktopRosterTable({
                     <thead>
                         <tr>
                             <th className="sticky top-0 z-[1] w-[44px] border-b border-subtle bg-surface-card px-4 py-[11px] text-left">
-                                <input
+                                {!showArchived && <input
                                     type="checkbox"
                                     checked={allOn}
                                     onChange={toggleAll}
                                     aria-label="Seleccionar todos"
                                     className="h-4 w-4 cursor-pointer accent-sport-500"
-                                />
+                                />}
                             </th>
                             <SortHeader label="Alumno" colKey="name" sortKey={sortKey} dir={dir} onSort={setSort} />
                             <SortHeader label="Estado" colKey="status" sortKey={sortKey} dir={dir} onSort={setSort} />
@@ -450,7 +456,7 @@ export function DesktopRosterTable({
                                             className="w-[44px] px-4 py-[10px] align-middle"
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            <input
+                                            {!s.archived && <input
                                                 type="checkbox"
                                                 checked={!!sel[s.id]}
                                                 onChange={() =>
@@ -458,7 +464,7 @@ export function DesktopRosterTable({
                                                 }
                                                 aria-label={`Seleccionar ${s.name}`}
                                                 className="h-4 w-4 cursor-pointer accent-sport-500"
-                                            />
+                                            />}
                                         </td>
                                         {/* Alumno */}
                                         <td className="min-w-[170px] px-4 py-[10px] align-middle">

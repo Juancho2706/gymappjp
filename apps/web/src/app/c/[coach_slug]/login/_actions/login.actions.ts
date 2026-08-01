@@ -70,7 +70,7 @@ export async function clientLoginAction(
 
     const { data: clientData, error: clientError } = await supabase
         .from('clients')
-        .select('id, force_password_change, is_active, coach_id, org_id')
+        .select('id, force_password_change, is_active, is_archived, coach_id, org_id')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -78,10 +78,10 @@ export async function clientLoginAction(
         console.error('[LoginAction] Error fetching client:', clientError)
     }
 
-    type ClientRow = Pick<Client, 'id' | 'force_password_change' | 'is_active'> & { coach_id?: string | null; org_id?: string | null }
+    type ClientRow = Pick<Client, 'id' | 'force_password_change' | 'is_active' | 'is_archived'> & { coach_id?: string | null; org_id?: string | null }
     const rawClient = clientData as ClientRow | null
 
-    let client: Pick<Client, 'id' | 'force_password_change' | 'is_active'> | null = null
+    let client: Pick<Client, 'id' | 'force_password_change' | 'is_active' | 'is_archived'> | null = null
     let matchedWorkspace: WorkspaceSummary | null = null
 
     if (rawClient) {
@@ -146,6 +146,11 @@ export async function clientLoginAction(
     if (client.is_active === false) {
         await supabase.auth.signOut()
         return { error: 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.' }
+    }
+
+    if (client.is_archived === true) {
+        await supabase.auth.signOut()
+        return { error: 'Tu cuenta esta archivada. Contacta a tu coach para reactivarla.' }
     }
 
     if (matchedWorkspace) {

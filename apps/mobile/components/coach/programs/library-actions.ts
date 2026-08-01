@@ -228,6 +228,18 @@ export async function duplicateProgramAsTemplate(program: ProgramItem, name: str
 export async function assignTemplateToClients(template: ProgramItem, clientIds: string[], options: { durationWeeks: number }): Promise<{ ok: boolean; error?: string }> {
   const coach = await getCoachProfile()
   if (!coach) return { ok: false, error: 'Coach no encontrado.' }
+  const { data: activeClients, error: clientsError } = await supabase
+    .from('clients')
+    .select('id')
+    .in('id', clientIds)
+    .eq('coach_id', coach.id)
+    .eq('is_active', true)
+    .eq('is_archived', false)
+  if (clientsError) return { ok: false, error: 'No se pudieron validar los alumnos seleccionados.' }
+  const activeClientIds = new Set((activeClients ?? []).map((client) => client.id))
+  if (clientIds.some((clientId) => !activeClientIds.has(clientId))) {
+    return { ok: false, error: 'Solo puedes asignar programas a alumnos activos y no archivados.' }
+  }
   const { orgId } = await getCoachOrgContext()
   const start = todayIso()
   const end = addDays(start, options.durationWeeks * 7)

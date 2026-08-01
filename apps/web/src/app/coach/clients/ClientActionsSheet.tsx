@@ -153,7 +153,16 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
         tone: string
         danger?: boolean
         on: () => void
-    }[] = [
+    }[] = archived
+        ? [
+              {
+                  icon: ArchiveRestore,
+                  label: 'Desarchivar',
+                  tone: 'var(--ink-600)',
+                  on: () => setConfirm('archive'),
+              },
+          ]
+        : [
         {
             icon: IdCard,
             label: 'Ver ficha completa',
@@ -198,8 +207,8 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
             on: () => setConfirm('pause'),
         },
         {
-            icon: archived ? ArchiveRestore : Archive,
-            label: archived ? 'Desarchivar' : 'Archivar alumno',
+            icon: Archive,
+            label: 'Archivar alumno',
             tone: 'var(--ink-600)',
             on: () => setConfirm('archive'),
         },
@@ -210,7 +219,7 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
             danger: true,
             on: () => setConfirm('delete'),
         },
-    ]
+          ]
 
     let content: React.ReactNode
     if (confirm === 'reset') {

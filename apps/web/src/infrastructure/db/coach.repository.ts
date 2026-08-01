@@ -71,34 +71,52 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
     return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
 }
 
-export async function countCoachClients(db: DB, coachId: string, orgId?: string | null): Promise<number> {
+export async function countCoachClients(db: DB, coachId: string, orgId?: string | null, teamId?: string | null): Promise<number> {
     let query = db
         .from('clients')
         .select('id', { count: 'exact', head: true })
-        .eq('coach_id', coachId)
-    query = applyOrgScope(query, orgId)
+        .eq('is_archived', false)
+    if (teamId) {
+        query = query.is('org_id', null).eq('team_id', teamId)
+    } else {
+        query = query.eq('coach_id', coachId)
+        query = applyOrgScope(query, orgId)
+        if (teamId !== undefined) query = query.is('team_id', null)
+    }
     const { count } = await query
 
     return count ?? 0
 }
 
-export async function findCoachRecentClients(db: DB, coachId: string, limit = 5, orgId?: string | null) {
+export async function findCoachRecentClients(db: DB, coachId: string, limit = 5, orgId?: string | null, teamId?: string | null) {
     let query = db
         .from('clients')
         .select('id, full_name, email, created_at, onboarding_completed')
-        .eq('coach_id', coachId)
-    query = applyOrgScope(query, orgId)
+        .eq('is_archived', false)
+    if (teamId) {
+        query = query.is('org_id', null).eq('team_id', teamId)
+    } else {
+        query = query.eq('coach_id', coachId)
+        query = applyOrgScope(query, orgId)
+        if (teamId !== undefined) query = query.is('team_id', null)
+    }
     const { data } = await query.order('created_at', { ascending: false }).limit(limit)
 
     return data ?? []
 }
 
-export async function findCoachClientSignupDates(db: DB, coachId: string, orgId?: string | null) {
+export async function findCoachClientSignupDates(db: DB, coachId: string, orgId?: string | null, teamId?: string | null) {
     let query = db
         .from('clients')
         .select('created_at')
-        .eq('coach_id', coachId)
-    query = applyOrgScope(query, orgId)
+        .eq('is_archived', false)
+    if (teamId) {
+        query = query.is('org_id', null).eq('team_id', teamId)
+    } else {
+        query = query.eq('coach_id', coachId)
+        query = applyOrgScope(query, orgId)
+        if (teamId !== undefined) query = query.is('team_id', null)
+    }
     const { data } = await query
 
     return data ?? []

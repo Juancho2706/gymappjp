@@ -33,6 +33,7 @@ export const DirRowCard = memo(function DirRowCard({
   theme,
   pulse,
   onOpen,
+  onActions,
   onWhatsApp,
   onEdit,
   onShare,
@@ -48,6 +49,7 @@ export const DirRowCard = memo(function DirRowCard({
   theme: any
   pulse?: PulseRow
   onOpen: (c: DirectoryClient) => void
+  onActions?: (c: DirectoryClient) => void
   onWhatsApp?: (c: DirectoryClient) => void
   onEdit?: (c: DirectoryClient) => void
   onShare?: (c: DirectoryClient) => void
@@ -80,7 +82,7 @@ export const DirRowCard = memo(function DirRowCard({
       <TouchableOpacity
         testID={`directory-row-${item.id}`}
         style={[styles.card, shadow('xs', theme.scheme), { backgroundColor: theme.card, borderColor: theme.border }]}
-        onPress={() => onOpen(item)}
+        onPress={() => item.isArchived ? onActions?.(item) : onOpen(item)}
         activeOpacity={0.75}
       >
         {/* Anillo de adherencia con inicial + dot de última actividad */}

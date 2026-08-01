@@ -110,7 +110,9 @@ export function ClientActionsSheet({
     action?.()
   }
 
-  const actions: { key: string; icon: LucideIcon; label: string; toneClass: string; danger?: boolean; on: () => void }[] = [
+  const actions: { key: string; icon: LucideIcon; label: string; toneClass: string; danger?: boolean; on: () => void }[] = archived ? [
+    ...(onArchive ? [{ key: 'archive', icon: ArchiveRestore, label: 'Desarchivar', toneClass: 'text-ink-700', on: onArchive }] : []),
+  ] : [
     { key: 'profile', icon: IdCard, label: 'Ver ficha completa', toneClass: 'text-strong', on: onProfile },
     ...(onWhatsApp ? [{ key: 'whatsapp', icon: MessageCircle, label: 'Enviar WhatsApp', toneClass: 'text-success-600', on: onWhatsApp }] : []),
     ...(onEdit ? [{ key: 'edit', icon: UserPen, label: 'Editar datos', toneClass: 'text-strong', on: onEdit }] : []),
@@ -124,7 +126,7 @@ export function ClientActionsSheet({
     ...(onArchive
       // `ink-700` (no `ink-600`): la rampa neutra solo flipea 100/200/300/700/800 en dark
       // (global.css) ⇒ `text-ink-600` seguiría siendo gris oscuro sobre el sheet oscuro.
-      ? [{ key: 'archive', icon: archived ? ArchiveRestore : Archive, label: archived ? 'Desarchivar' : 'Archivar alumno', toneClass: 'text-ink-700', on: onArchive }]
+      ? [{ key: 'archive', icon: Archive, label: 'Archivar alumno', toneClass: 'text-ink-700', on: onArchive }]
       : []),
     { key: 'delete', icon: Trash2, label: 'Eliminar alumno', toneClass: 'text-danger-600', danger: true, on: onDelete },
   ]

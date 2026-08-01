@@ -677,6 +677,15 @@ async function insertItems(mealId: string, items: DraftFoodItem[]): Promise<void
 export async function setPlanActive(clientId: string, planId: string): Promise<{ ok: boolean; error?: string }> {
   const coachId = await currentCoachId()
   if (!coachId) return { ok: false, error: 'No autenticado.' }
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('id', clientId)
+    .eq('coach_id', coachId)
+    .eq('is_active', true)
+    .eq('is_archived', false)
+    .maybeSingle()
+  if (!client) return { ok: false, error: 'El alumno está archivado o ya no está disponible.' }
   await supabase.from('nutrition_plans').update({ is_active: false }).eq('client_id', clientId).eq('coach_id', coachId)
   const { error } = await supabase.from('nutrition_plans').update({ is_active: true }).eq('id', planId).eq('coach_id', coachId)
   if (error) return { ok: false, error: error.message }
@@ -725,6 +734,16 @@ export async function duplicatePlanToClient(sourcePlanId: string, targetClientId
   const orgId = ctx.orgId
 
   try {
+    const { data: targetClient } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('id', targetClientId)
+      .eq('coach_id', coachId)
+      .eq('is_active', true)
+      .eq('is_archived', false)
+      .maybeSingle()
+    if (!targetClient) return { ok: false, error: 'El alumno está archivado o ya no está disponible.' }
+
     const { data: src } = await supabase
       .from('nutrition_plans')
       .select('id, name, daily_calories, protein_g, carbs_g, fats_g, instructions')

@@ -8,6 +8,7 @@ import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
+import { useWorkspace } from '../../../lib/workspace'
 import { selectWithFallback } from '../../../lib/db-compat'
 import { useTheme } from '../../../context/ThemeContext'
 import { SHADOWS } from '../../../lib/shadows'
@@ -68,6 +69,7 @@ export default function BuilderScreen() {
   const insets = useSafeAreaInsets()
   const { resolvedScheme } = useTheme()
   const router = useRouter()
+  const workspace = useWorkspace()
   const [programs, setPrograms] = useState<ProgramItem[]>([])
   const [clients, setClients] = useState<ClientLite[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,8 +88,9 @@ export default function BuilderScreen() {
   const [actionBusy, setActionBusy] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!workspace.ready) return
     loadLibrary().catch(() => setLoading(false))
-  }, [])
+  }, [workspace.ready, workspace.kind, workspace.teamId, workspace.orgId])
 
   async function loadLibrary() {
     setLoading(true)
@@ -98,7 +101,7 @@ export default function BuilderScreen() {
     }
 
     const planBlock = `
-          client:clients(id, full_name),
+          client:clients(id, full_name, is_archived),
           workout_plans (
             id, day_of_week, title, group_name, week_variant, assigned_date,
             workout_blocks (
@@ -120,15 +123,25 @@ export default function BuilderScreen() {
         () => supabase.from('workout_programs').select(richCols).eq('coach_id', coach.id).order('updated_at', { ascending: false }),
         () => supabase.from('workout_programs').select(minCols).eq('coach_id', coach.id).order('updated_at', { ascending: false })
       ),
-      supabase
+      (() => {
+        let query: any = supabase
         .from('clients')
         .select('id, full_name, workout_programs(id, name, is_active)')
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
-        .order('full_name'),
+        .order('full_name')
+        if (workspace.orgId) query = query.eq('org_id', workspace.orgId).is('team_id', null)
+        else if (workspace.teamId) query = query.is('org_id', null).eq('team_id', workspace.teamId)
+        else query = query.is('org_id', null).is('team_id', null)
+        return query
+      })(),
     ])
 
-    setPrograms(((programRes.data as unknown as ProgramItem[] | null) ?? []).map(normalizeProgram))
+    const visibleClientIds = new Set(((clientsRes.data as unknown as ClientLite[] | null) ?? []).map((client) => client.id))
+    const scopedPrograms = ((programRes.data as unknown as ProgramItem[] | null) ?? [])
+      .filter((program) => !program.client_id || visibleClientIds.has(program.client_id))
+      .map(normalizeProgram)
+    setPrograms(scopedPrograms)
     setClients((clientsRes.data as unknown as ClientLite[] | null) ?? [])
     setLoading(false)
   }

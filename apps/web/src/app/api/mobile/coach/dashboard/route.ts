@@ -6,6 +6,7 @@ import { isValidInviteCode } from '@/lib/coach/invite-code'
 import type { Json } from '@/lib/database.types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { verifyMobileBearer } from '@/lib/mobile-auth'
+import { resolveMobileCoachDataScope } from '@/app/api/mobile/coach/clients/_mutation-auth'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -50,13 +51,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Coach no encontrado.', code: 'COACH_NOT_FOUND' }, { status: 404 })
     }
 
-    const workspace = await resolvePreferredWorkspace(admin, userId)
-    if (!workspace || (workspace.type !== 'coach_standalone' && workspace.type !== 'enterprise_coach')) {
+    const dataScope = await resolveMobileCoachDataScope(admin, userId, request.nextUrl.searchParams)
+    if (!dataScope) {
         return NextResponse.json({ error: 'Workspace no autorizado para dashboard coach.', code: 'WORKSPACE_NOT_ALLOWED' }, { status: 403 })
     }
-    const orgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
+    const preferredWorkspace = await resolvePreferredWorkspace(admin, userId)
+    const orgId = dataScope.type === 'enterprise' ? dataScope.orgId : null
+    const teamId = dataScope.type === 'team' ? dataScope.teamId : null
 
-    const dashboard = await getCoachDashboardDataV2WithClient(userId, admin, orgId)
+    const dashboard = await getCoachDashboardDataV2WithClient(userId, admin, { orgId, teamId })
     const onboardingGuide =
         coach.onboarding_guide != null &&
         typeof coach.onboarding_guide === 'object' &&
@@ -83,12 +86,13 @@ export async function GET(request: NextRequest) {
             hasCoachLogo: Boolean(coach.logo_url?.trim()),
         },
         workspace: {
-            type: workspace.type,
+            type: preferredWorkspace?.type ?? (dataScope.type === 'enterprise' ? 'enterprise_coach' : dataScope.type === 'team' ? 'coach_team' : 'coach_standalone'),
             orgId,
+            teamId,
         },
         publicCode: {
             inviteCode,
-            shouldConfirm: workspace.type === 'coach_standalone' && shouldConfirmPublicCode,
+            shouldConfirm: dataScope.type === 'standalone' && shouldConfirmPublicCode,
         },
         onboardingGuide,
         dashboard,

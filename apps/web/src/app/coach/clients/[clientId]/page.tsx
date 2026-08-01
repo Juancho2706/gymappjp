@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 import { getClientProfileData } from './_actions/client-detail.actions'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
@@ -37,6 +38,12 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
 async function ProfileContent({ clientId }: { clientId: string }) {
     const data = await getClientProfileData(clientId)
     const { client, nutritionPlans, checkIns, compliance } = data
+
+    // Archived clients are history-only from the coach UI. The only allowed action is
+    // unarchive from the archived roster, where the current plan capacity is checked server-side.
+    if ((client as { is_archived?: boolean | null }).is_archived === true) {
+        redirect('/coach/clients')
+    }
 
     const nutritionClient = client as {
         coach_id?: string | null

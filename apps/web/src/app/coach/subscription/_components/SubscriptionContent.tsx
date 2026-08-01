@@ -27,7 +27,7 @@ import {
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
 import Link from 'next/link'
-import { Check, CheckCircle2, Info, Lock, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
+import { Check, CheckCircle2, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './CouponRedeemCard'
 
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
@@ -630,7 +630,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-bold text-strong">{cfg.label}</p>
                                             <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${included ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-surface-sunken text-muted'}`}>
-                                                {included ? <Check className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                                                {included ? <Check className="h-3 w-3" /> : <LockKeyhole className="h-3 w-3" />}
                                                 {included ? 'Incluido en tu plan' : 'Con plan pago'}
                                             </span>
                                         </div>
@@ -750,7 +750,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                         {badge && !isBlocked && (
                                             <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>{badge.label}</span>
                                         )}
-                                        {isBlocked && <Lock className="h-3.5 w-3.5 shrink-0 text-subtle" aria-hidden="true" />}
+                                        {isBlocked && <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-subtle" aria-hidden="true" />}
                                     </div>
                                     <div className="shrink-0 text-right">
                                         <span className="eva-metric text-[18px] text-strong">${price.toLocaleString('es-CL')}</span>
@@ -769,7 +769,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
 
                 {blockedMsg && (
                     <div ref={blockedMsgRef} role="alert" className="flex items-start gap-2 rounded-control border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-300">
-                        <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>{blockedMsg}</span>
                     </div>
                 )}

@@ -22,7 +22,7 @@ import {
 } from '@/lib/auth/platform-email'
 import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
-import { resolveCoachScope as getCoachClientScope, applyOrgScope as applyClientScope } from '@/services/auth/coach-scope.service'
+import { resolveCoachScope as getCoachClientScope, applyCoachClientScope } from '@/services/auth/coach-scope.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
 import { generateStudentTempPassword } from '@/lib/auth/temp-credentials'
@@ -79,7 +79,7 @@ export async function createClientAction(
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
-    activeClientsQuery = applyClientScope(activeClientsQuery, scope.orgId)
+    activeClientsQuery = applyCoachClientScope(activeClientsQuery, scope)
     const { count: activeClientsCount, error: countError } = await activeClientsQuery
 
     if (countError) {
@@ -258,7 +258,7 @@ export async function getClientIntakeAction(clientId: string): Promise<{ data?: 
         .select('full_name, phone, coach_id, client_intake(weight_kg, height_cm, goals, experience_level, availability, injuries, medical_conditions)')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    clientQuery = applyCoachClientScope(clientQuery, scope)
     const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
@@ -322,7 +322,7 @@ export async function updateClientDataAction(
         })
         .eq('id', parsed.data.client_id)
         .eq('coach_id', coachUser.id)
-    updateClientQuery = applyClientScope(updateClientQuery, scope.orgId)
+    updateClientQuery = applyCoachClientScope(updateClientQuery, scope)
     const { error: clientErr } = await updateClientQuery
 
     if (clientErr) return { error: 'Error al actualizar datos del alumno.' }
@@ -361,7 +361,7 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
         .select('id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    clientQuery = applyCoachClientScope(clientQuery, scope)
     const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
@@ -388,7 +388,7 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
         .select('id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    clientQuery = applyCoachClientScope(clientQuery, scope)
     const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
@@ -409,7 +409,7 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
         .from('clients')
         .update({ force_password_change: true })
         .eq('id', clientId)
-    resetQuery = applyClientScope(resetQuery, scope.orgId)
+    resetQuery = applyCoachClientScope(resetQuery, scope)
     const { error: dbError } = await resetQuery
 
     if (dbError) return { error: 'Error al actualizar base de datos.' }
@@ -430,7 +430,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
         .select('id, full_name, email, coach_id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    clientQuery = applyCoachClientScope(clientQuery, scope)
     const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
@@ -440,7 +440,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
         .update({ is_archived: true })
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    archiveQuery = applyClientScope(archiveQuery, scope.orgId)
+    archiveQuery = applyCoachClientScope(archiveQuery, scope)
     const { error } = await archiveQuery
 
     if (error) return { error: error.message }
@@ -487,7 +487,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
         .select('id, full_name, email, coach_id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    clientQuery = applyCoachClientScope(clientQuery, scope)
     const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
@@ -506,7 +506,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coachUser.id)
         .eq('is_archived', false)
-    activeCountQuery = applyClientScope(activeCountQuery, scope.orgId)
+    activeCountQuery = applyCoachClientScope(activeCountQuery, scope)
     const { count: activeCount } = await activeCountQuery
 
     if (!scope.isEnterprise && (activeCount ?? 0) >= maxClients) {
@@ -518,7 +518,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
         .update({ is_archived: false })
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    unarchiveQuery = applyClientScope(unarchiveQuery, scope.orgId)
+    unarchiveQuery = applyCoachClientScope(unarchiveQuery, scope)
     const { error } = await unarchiveQuery
 
     if (error) return { error: error.message }
@@ -569,7 +569,7 @@ export async function bulkArchiveClientsAction(clientIds: string[]): Promise<{ a
         .update({ is_archived: true })
         .in('id', parsed.data)
         .eq('coach_id', coachUser.id)
-    archiveQuery = applyClientScope(archiveQuery, scope.orgId)
+    archiveQuery = applyCoachClientScope(archiveQuery, scope)
     const { data: archived, error } = await archiveQuery.select('id, full_name, email')
 
     if (error) return { error: error.message }
@@ -624,7 +624,7 @@ export async function toggleClientStatusAction(clientId: string, isActive: boole
         .update({ is_active: isActive })
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-    statusQuery = applyClientScope(statusQuery, scope.orgId)
+    statusQuery = applyCoachClientScope(statusQuery, scope)
     const { error } = await statusQuery
 
     if (error) {

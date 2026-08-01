@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-30"
+last_verified: "2026-07-31"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -13,6 +13,16 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
 ## Resumen ejecutivo
+
+> **2026-07-31 (QA archivado/scope/polish)**: corregido el cruce team/standalone en dashboard, pulso
+> y directorio RN/Web; los archivados ya no cuentan como activos, no muestran asignaciones vivas, no
+> aparecen en builders/pickers y su única acción desde el directorio es desarchivar. El perfil directo
+> queda bloqueado como histórico y el servidor rechaza nuevas asignaciones a clientes archivados. Se
+> retiró el filtro “Sin plan V2” en nutrición RN/Web, se cambió el candado por `LockKeyhole` en ambos
+> temas, y el welcome Free usa la figura EVA blanca sobre máscara circular negra con “No volver a mostrar”.
+> Se preparó la migración forward-only `20260731123000_archive_client_deactivates_assignments.sql`
+> para desactivar asignaciones históricas vivas y proteger futuras; no se aplicó a producción en este
+> corte. Pendiente: protocolo Supabase autorizado y QA física Android/iOS.
 
 La paridad global **no está certificada todavía**.
 

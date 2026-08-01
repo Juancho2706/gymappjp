@@ -39,6 +39,10 @@ describe('normalizeText', () => {
   })
 })
 
+it('does not expose the legacy no-plan filter', () => {
+  expect(ATTENTION_FILTER_OPTIONS.some((option) => (option.value as string) === 'no_plan')).toBe(false)
+})
+
 describe('applyRosterFilters — attention', () => {
   const items = [
     item({ clientId: 'a', attentionReason: 'no_plan' }),
@@ -58,8 +62,8 @@ describe('applyRosterFilters — attention', () => {
 
   it('specific reason filters to that reason', () => {
     expect(
-      applyRosterFilters(items, filters({ attention: 'no_plan' })).map((i) => i.clientId),
-    ).toEqual(['a'])
+      applyRosterFilters(items, filters({ attention: 'draft_pending' })).map((i) => i.clientId),
+    ).toEqual(['c'])
   })
 })
 
@@ -141,9 +145,9 @@ describe('applyRosterFilters — sort', () => {
 
 describe('parseRosterFilters', () => {
   it('reads valid params', () => {
-    expect(parseRosterFilters({ q: 'ana', attn: 'no_plan', sort: 'name' })).toEqual({
+    expect(parseRosterFilters({ q: 'ana', attn: 'draft_pending', sort: 'name' })).toEqual({
       search: 'ana',
-      attention: 'no_plan',
+      attention: 'draft_pending',
       sort: 'name',
     })
   })
@@ -168,8 +172,8 @@ describe('serializeRosterFilters', () => {
 
   it('emits only non-default params, trimmed', () => {
     expect(
-      serializeRosterFilters({ search: '  ana ', attention: 'no_plan', sort: 'name' }),
-    ).toEqual({ q: 'ana', attn: 'no_plan', sort: 'name' })
+      serializeRosterFilters({ search: '  ana ', attention: 'draft_pending', sort: 'name' }),
+    ).toEqual({ q: 'ana', attn: 'draft_pending', sort: 'name' })
   })
 
   it('round-trips through parse', () => {

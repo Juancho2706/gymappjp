@@ -1,6 +1,6 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { DashboardService, type DirectoryPulseRow } from '@/services/dashboard.service'
+import { DashboardService, type DashboardClientScope, type DirectoryPulseRow } from '@/services/dashboard.service'
 
 /**
  * Tag reservado para futuras invalidaciones con `revalidateTag` desde server actions.
@@ -11,8 +11,8 @@ export const DIRECTORY_PULSE_CACHE_TAG = 'directory-pulse'
 /** Una sola carga de pulse por request (dashboard stats + directorio). */
 export const getCachedDirectoryPulse = cache(async (
     coachId: string,
-    orgId?: string | null
+    scope?: DashboardClientScope | string | null
 ): Promise<DirectoryPulseRow[]> => {
     const supabase = await createClient()
-    return new DashboardService(supabase).getDirectoryPulse(coachId, orgId)
+    return new DashboardService(supabase).getDirectoryPulse(coachId, scope)
 })
