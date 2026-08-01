@@ -3,6 +3,7 @@ import type { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { getTierMaxClients, SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import type { SubscriptionTier } from '@/lib/constants'
+import { countActiveStandaloneClients } from './capacity.service'
 
 type AdminClient = ReturnType<typeof createServiceRoleClient>
 
@@ -57,14 +58,7 @@ export async function activateFreePlanForCoach(
         return { ok: false, status: 403, error: 'Esta acción solo está disponible para suscripciones bloqueadas.' }
     }
 
-    const { count } = await admin
-        .from('clients')
-        .select('id', { count: 'exact', head: true })
-        .eq('coach_id', coachId)
-        .is('org_id', null)
-        .eq('is_archived', false)
-
-    const activeCount = count ?? 0
+    const activeCount = await countActiveStandaloneClients(admin, coachId)
     const freeLimit = getTierMaxClients('free' as SubscriptionTier)
 
     if (activeCount > freeLimit) {

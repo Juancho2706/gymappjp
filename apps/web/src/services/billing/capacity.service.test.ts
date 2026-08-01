@@ -21,17 +21,17 @@ function makeDb(count: number | null) {
         calls.eqs.push([col, val])
         return builder
     })
-    // .is(...) es el último eslabón → resuelve la promesa con { count }.
+    // .is('team_id', ...) es el último eslabón → resuelve la promesa con { count }.
     builder.is = vi.fn((col: string, val: unknown) => {
         calls.iss.push([col, val])
-        return Promise.resolve({ count, error: null })
+        return col === 'team_id' ? Promise.resolve({ count, error: null }) : builder
     })
     const db = { from: vi.fn(() => builder) } as never
     return { db, calls, builder }
 }
 
 describe('countActiveStandaloneClients — filtro canónico standalone', () => {
-    it('aplica coach_id + is_archived=false + org_id IS NULL con head/count exact', async () => {
+    it('aplica coach_id + is_archived=false + org_id/team_id IS NULL con head/count exact', async () => {
         const { db, calls, builder } = makeDb(7)
         const n = await countActiveStandaloneClients(db, 'coach-1')
         expect(n).toBe(7)
@@ -49,8 +49,9 @@ describe('countActiveStandaloneClients — filtro canónico standalone', () => {
         expect(calls.eqs).toContainEqual(['coach_id', 'coach-1'])
         expect(calls.eqs).toContainEqual(['is_archived', false])
         expect(calls.eqs.find(([c]) => c === 'is_active')).toBeUndefined()
-        // scope standalone: org_id IS NULL
+        // scope standalone: org_id/team_id IS NULL
         expect(calls.iss).toContainEqual(['org_id', null])
+        expect(calls.iss).toContainEqual(['team_id', null])
     })
 
     it('count null → 0 (fallback)', async () => {

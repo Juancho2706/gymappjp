@@ -164,7 +164,7 @@ export default function CoachReactivateScreen() {
             activeClientCount={clientCount}
             freeLimit={FREE_CLIENT_LIMIT}
             workspace={{ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }}
-            onChanged={() => { void load() }}
+            onChanged={() => { void Promise.all([load(), refreshCoachAccess(true)]) }}
           />
         ) : null}
 

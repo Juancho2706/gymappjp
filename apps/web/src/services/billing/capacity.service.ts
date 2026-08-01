@@ -16,17 +16,20 @@ type DB = SupabaseClient<Database>
  * alumnos de org/team (scope standalone). `head: true` + `count: 'exact'` → no trae filas.
  *
  * `db` puede ser cualquier cliente (la consulta queda acotada por RLS coach-scoped o por
- * service-role). Devuelve 0 si el count viene null.
+ * service-role). Devuelve 0 si el count viene null y propaga errores de consulta para que los
+ * callers de billing puedan fallar cerrado en vez de tratar una lectura rota como cupo libre.
  */
 export async function countActiveStandaloneClients(
     db: DB,
     coachId: string
 ): Promise<number> {
-    const { count } = await db
+    const { count, error } = await db
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coachId)
         .eq('is_archived', false)
         .is('org_id', null)
+        .is('team_id', null)
+    if (error) throw error
     return count ?? 0
 }

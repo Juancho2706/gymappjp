@@ -251,6 +251,27 @@ describe('subscriptionState + guard de reactivar', () => {
         expect(resolveReactivateRequired('expired', null, NOW)).toBe(true)
         expect(resolveReactivateRequired('org_managed', null, NOW)).toBe(false) // managed nunca
         expect(resolveReactivateRequired('team_managed', null, NOW)).toBe(false)
+        expect(
+            resolveReactivateRequired('active', null, NOW, {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 4,
+                workspaceKind: 'standalone',
+            }),
+        ).toBe(true)
+        expect(
+            resolveReactivateRequired('active', null, NOW, {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 3,
+                workspaceKind: 'standalone',
+            }),
+        ).toBe(false)
+        expect(
+            resolveReactivateRequired('active', null, NOW, {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 4,
+                workspaceKind: 'team_owner',
+            }),
+        ).toBe(false)
         expect(resolveReactivateRequired(null, null, NOW)).toBe(false)
     })
 })

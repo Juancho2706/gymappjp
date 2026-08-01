@@ -19,9 +19,9 @@ const REACTIVATE_PATH = '/coach/reactivate'
  * arranque (el layout de tabs no se desmonta al cambiar de tab), asi que un back-gesture bastaba
  * para volver al dashboard.
  *
- * Aca el gate es ESTADO (`useCoachAccess`), no un efecto de una pasada: mientras `blocked` sea true
- * no se renderiza ninguna ruta coach salvo /coach/reactivate. Se revalida al volver de background y
- * en cada navegacion dentro de /coach (throttled en el store).
+ * Aca el gate es ESTADO (`useCoachAccess`), no un efecto de una pasada: mientras el acceso no esté
+ * resuelto o `blocked` sea true no se renderiza ninguna ruta coach salvo /coach/reactivate. Se
+ * revalida al volver de background y en cada navegacion dentro de /coach (throttled en el store).
  *
  * El `Stack` replica exactamente las opciones del navegador raiz (`headerShown: false`) para no
  * alterar la presentacion de ninguna pantalla existente: este layout agrega el gate, nada mas.
@@ -31,7 +31,7 @@ export default function CoachLayout() {
   const router = useRouter()
   const pathname = usePathname()
   const segments = useSegments()
-  const { blocked } = useCoachAccess()
+  const { blocked, ready } = useCoachAccess()
 
   const onReactivate = pathname === REACTIVATE_PATH
 
@@ -45,6 +45,10 @@ export default function CoachLayout() {
   useEffect(() => {
     if (blocked && !onReactivate) router.replace(REACTIVATE_PATH)
   }, [blocked, onReactivate, router])
+
+  useEffect(() => {
+    if (ready && !blocked && onReactivate) router.replace('/coach/home')
+  }, [blocked, onReactivate, ready, router])
 
   // Bloqueado y todavia fuera del muro: no renderizar el arbol coach ni un frame (antes se veia el
   // dashboard real por un instante mientras resolvia el `replace`).

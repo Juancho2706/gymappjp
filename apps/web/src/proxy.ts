@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
 import type { EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
+import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import {
     STUDENT_ACCESS_STATE_HEADER,
     STUDENT_ACCESS_GRACE_UNTIL_HEADER,
@@ -434,7 +435,29 @@ export async function proxy(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
-        const redirectPath = resolveCoachSubscriptionRedirect(pathname, coach.subscription_status, coach.current_period_end)
+        // Free capacity belongs to the active standalone workspace. Team rows are a separate pool
+        // and must never consume the personal cap.
+        let activeStandaloneClientCount: number | null = null
+        if (coach.subscription_tier === 'free' && activeWorkspace?.type === 'coach_standalone') {
+            try {
+                activeStandaloneClientCount = await countActiveStandaloneClients(supabase, user.id)
+            } catch {
+                // No permitir dashboard Free sin confirmar capacidad. Reactivate seguirá mostrando
+                // su estado de lectura y podrá reintentar cuando la base vuelva a responder.
+                activeStandaloneClientCount = Number.MAX_SAFE_INTEGER
+            }
+        }
+        const redirectPath = resolveCoachSubscriptionRedirect(
+            pathname,
+            coach.subscription_status,
+            coach.current_period_end,
+            Date.now(),
+            {
+                subscriptionTier: coach.subscription_tier,
+                activeStandaloneClientCount,
+                workspaceType: activeWorkspace?.type ?? null,
+            },
+        )
         if (redirectPath) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = redirectPath

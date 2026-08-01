@@ -24,7 +24,7 @@ export const getReactivatePageData = cache(async () => {
             .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id')
             .eq('id', user.id)
             .maybeSingle(),
-        // Cupo STANDALONE (`org_id IS NULL`): mismo scoping que la lista archivable, el archivado
+        // Cupo STANDALONE (`coach_id` + `org_id IS NULL` + `team_id IS NULL`): mismo scoping que la lista archivable, el archivado
         // (`archiveClientsForFreeAction`) y el gate de dinero (`/api/payments/activate-free`). Sin
         // el filtro, este count sería un superset y en data drifteada (coach standalone bloqueado
         // con alumnos de org bajo su coach_id) sobre-contaría → escondería el path Free / dejaría
@@ -34,6 +34,7 @@ export const getReactivatePageData = cache(async () => {
             .select('id', { count: 'exact', head: true })
             .eq('coach_id', user.id)
             .is('org_id', null)
+            .is('team_id', null)
             .eq('is_archived', false),
         // Alumnos STANDALONE activos (archivables) para el panel de salida del deadlock de cupo:
         // el coach bloqueado + sobre-cupo archiva desde aquí para bajar a Free. Mismo filtro que
@@ -43,6 +44,7 @@ export const getReactivatePageData = cache(async () => {
             .select('id, full_name')
             .eq('coach_id', user.id)
             .is('org_id', null)
+            .is('team_id', null)
             .eq('is_archived', false)
             .order('full_name', { ascending: true }),
         // SELECT propio (RLS) — el client user-scoped solo ve las filas del coach.

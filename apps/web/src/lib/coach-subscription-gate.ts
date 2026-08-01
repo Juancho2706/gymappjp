@@ -1,6 +1,13 @@
 import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
+import { getTierMaxClients } from '@eva/tiers'
 
 export type CoachSubscriptionRedirect = '/coach/reactivate' | '/coach/dashboard' | null
+
+export type CoachSubscriptionGateContext = {
+    subscriptionTier?: string | null
+    activeStandaloneClientCount?: number | null
+    workspaceType?: string | null
+}
 
 /**
  * Coaches "managed" (sin billing individual): plan gestionado por la organización (enterprise)
@@ -55,7 +62,8 @@ export function resolveCoachSubscriptionRedirect(
     pathname: string,
     subscriptionStatus: string | null | undefined,
     currentPeriodEnd?: string | null,
-    now: number = Date.now()
+    now: number = Date.now(),
+    context?: CoachSubscriptionGateContext,
 ): CoachSubscriptionRedirect {
     // org_managed / team_managed: acceso siempre — plan gestionado por org o team
     if (!subscriptionStatus || isManagedSubscription(subscriptionStatus)) return null
@@ -63,7 +71,12 @@ export function resolveCoachSubscriptionRedirect(
     const isReactivatePage = pathname.startsWith('/coach/reactivate')
     const isSubscriptionProcessingPage = pathname.startsWith('/coach/subscription/processing')
     const isSubscriptionGatePage = isReactivatePage || isSubscriptionProcessingPage
-    const isBlocked = !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd, now)
+    const isFreeStandaloneOverCapacity =
+        context?.subscriptionTier === 'free' &&
+        context.workspaceType === 'coach_standalone' &&
+        typeof context.activeStandaloneClientCount === 'number' &&
+        context.activeStandaloneClientCount > getTierMaxClients('free')
+    const isBlocked = !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd, now) || isFreeStandaloneOverCapacity
 
     if (isBlocked && !isSubscriptionGatePage) {
         return '/coach/reactivate'

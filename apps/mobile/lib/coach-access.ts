@@ -20,9 +20,10 @@
  *     (throttled: ver REVALIDATE_MS),
  *  3. sin sesion / sin fila de coach => estado neutro (un alumno jamas queda "bloqueado" por esto).
  *
- * FAIL-OPEN deliberado (mismo contrato que el gate del alumno): hasta la primera resolucion
- * `blocked` es false. El techo real de autorizacion es la DB/RLS + los endpoints, no esta pantalla;
- * un fail-closed aca solo lograria mostrar un muro falso ante una red lenta.
+ * FAIL-CLOSED para el arbol coach: hasta resolver el estado actual y el cupo del workspace,
+ * `blocked` permanece true y el layout solo muestra el loader. La autorizacion real sigue siendo
+ * DB/RLS + endpoints; este cierre evita exponer el dashboard mientras una cuenta cambiada o vencida
+ * aun no fue revalidada.
  *
  * NO usa el store de `workspace.ts` a proposito: ese contexto no lee `current_period_end`, y sin esa
  * fecha `hasEffectiveAccess` trataria a un cancelado CON gracia viva como bloqueado.
@@ -32,27 +33,43 @@ import { AppState, type AppStateStatus } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
 import { getCoachProfile } from './coach'
-import { resolveReactivateRequired } from './workspace-core'
+import { getActiveCoachWorkspace } from './workspace'
+import { resolveReactivateRequired, type WorkspaceKind } from './workspace-core'
 
-const CACHE_KEY = 'eva_coach_access'
+const CACHE_KEY_PREFIX = 'eva_coach_access_v2:'
+const LEGACY_CACHE_KEY = 'eva_coach_access'
 /** Ventana de throttle de la revalidacion por navegacion (una query PostgREST por salto es flood). */
 const REVALIDATE_MS = 30_000
 
 interface AccessState {
+    coachId: string | null
     /** `subscription_status` crudo. null = sin resolver o sin fila de coach (alumno). */
     subscriptionStatus: string | null
+    subscriptionTier: string | null
     /** Necesario para la GRACIA de canceled/trialing/paused/past_due. */
     currentPeriodEnd: string | null
-    /** `true` si se resolvio al menos una vez (cache o red). */
+    /** Cupo personal ya resuelto; Team nunca entra en este número. */
+    activeStandaloneClientCount: number | null
+    workspaceKind: WorkspaceKind | null
+    /** `true` si se resolvio contra el estado actual de servidor, no solo desde cache. */
     ready: boolean
 }
 
-let state: AccessState = { subscriptionStatus: null, currentPeriodEnd: null, ready: false }
+let state: AccessState = {
+    coachId: null,
+    subscriptionStatus: null,
+    subscriptionTier: null,
+    currentPeriodEnd: null,
+    activeStandaloneClientCount: null,
+    workspaceKind: null,
+    ready: false,
+}
 const listeners = new Set<() => void>()
 let inFlight: Promise<void> | null = null
 let lastResolvedAt = 0
 let hydratedFromCache = false
 let globalListenersWired = false
+let cacheKey: string | null = null
 
 function emit() {
     for (const l of listeners) l()
@@ -80,13 +97,24 @@ async function hydrateFromCache(): Promise<void> {
     if (hydratedFromCache) return
     hydratedFromCache = true
     try {
-        const raw = await AsyncStorage.getItem(CACHE_KEY)
+        const { data: { session } } = await supabase.auth.getSession()
+        const currentUserId = session?.user.id ?? null
+        cacheKey = currentUserId ? `${CACHE_KEY_PREFIX}${currentUserId}` : null
+        const raw = cacheKey ? await AsyncStorage.getItem(cacheKey) : null
         if (!raw) return
-        const parsed = JSON.parse(raw) as Partial<AccessState>
+        const parsed = JSON.parse(raw) as Partial<AccessState> & { accessVersion?: number }
+        if (parsed.accessVersion !== 2 || parsed.coachId !== currentUserId) return
         setState({
+            coachId: parsed.coachId ?? null,
             subscriptionStatus: typeof parsed.subscriptionStatus === 'string' ? parsed.subscriptionStatus : null,
+            subscriptionTier: typeof parsed.subscriptionTier === 'string' ? parsed.subscriptionTier : null,
             currentPeriodEnd: typeof parsed.currentPeriodEnd === 'string' ? parsed.currentPeriodEnd : null,
-            ready: true,
+            activeStandaloneClientCount:
+                typeof parsed.activeStandaloneClientCount === 'number' ? parsed.activeStandaloneClientCount : null,
+            workspaceKind: parsed.workspaceKind ?? null,
+            // A cache is only a warm start. The gate stays closed until the current account and
+            // current workspace capacity are revalidated against the server.
+            ready: false,
         })
     } catch {
         /* cache ilegible: la revalidacion la reemplaza */
@@ -102,26 +130,54 @@ export function refreshCoachAccess(force = false): Promise<void> {
     if (!force && lastResolvedAt > 0 && Date.now() - lastResolvedAt < REVALIDATE_MS) {
         return Promise.resolve()
     }
+    setState({ ready: false })
     inFlight = (async () => {
         try {
-            const profile = await getCoachProfile()
+            const [profile, workspace] = await Promise.all([getCoachProfile(), getActiveCoachWorkspace()])
             lastResolvedAt = Date.now()
             if (!profile) {
                 // Sin fila de coach (alumno, o sesion cerrada): estado neutro, nunca bloqueante.
-                setState({ subscriptionStatus: null, currentPeriodEnd: null, ready: true })
-                await AsyncStorage.removeItem(CACHE_KEY).catch(() => {})
+                setState({
+                    coachId: null,
+                    subscriptionStatus: null,
+                    subscriptionTier: null,
+                    currentPeriodEnd: null,
+                    activeStandaloneClientCount: null,
+                    workspaceKind: null,
+                    ready: true,
+                })
+                if (cacheKey) await AsyncStorage.removeItem(cacheKey).catch(() => {})
+                await AsyncStorage.removeItem(LEGACY_CACHE_KEY).catch(() => {})
                 return
             }
+            const workspaceKind = workspace?.kind ?? null
+            let activeStandaloneClientCount: number | null = null
+            if (profile.subscriptionTier === 'free' && workspaceKind === 'standalone') {
+                const { count, error } = await supabase
+                    .from('clients')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('coach_id', profile.id)
+                    .is('org_id', null)
+                    .is('team_id', null)
+                    .eq('is_archived', false)
+                if (error) throw error
+                activeStandaloneClientCount = count ?? 0
+            }
             const next: AccessState = {
+                coachId: profile.id,
                 subscriptionStatus: profile.subscriptionStatus,
+                subscriptionTier: profile.subscriptionTier,
                 currentPeriodEnd: profile.currentPeriodEnd,
+                activeStandaloneClientCount,
+                workspaceKind,
                 ready: true,
             }
             setState(next)
-            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(next)).catch(() => {})
+            if (!cacheKey) cacheKey = `${CACHE_KEY_PREFIX}${profile.id}`
+            await AsyncStorage.setItem(cacheKey, JSON.stringify({ ...next, accessVersion: 2 })).catch(() => {})
         } catch {
-            // Fallo de red: conservamos lo cacheado y solo salimos de "sin resolver".
-            setState({ ready: true })
+            // Fail-closed: sin capacidad actual no se renderiza el dashboard ni se opera por deep link.
+            setState({ ready: false })
         } finally {
             inFlight = null
         }
@@ -138,8 +194,18 @@ async function bootstrap(): Promise<void> {
 export function resetCoachAccess(): void {
     hydratedFromCache = false
     lastResolvedAt = 0
-    setState({ subscriptionStatus: null, currentPeriodEnd: null, ready: false })
-    void AsyncStorage.removeItem(CACHE_KEY).catch(() => {})
+    setState({
+        coachId: null,
+        subscriptionStatus: null,
+        subscriptionTier: null,
+        currentPeriodEnd: null,
+        activeStandaloneClientCount: null,
+        workspaceKind: null,
+        ready: false,
+    })
+    if (cacheKey) void AsyncStorage.removeItem(cacheKey).catch(() => {})
+    void AsyncStorage.removeItem(LEGACY_CACHE_KEY).catch(() => {})
+    cacheKey = null
 }
 
 function wireGlobalListeners(): void {
@@ -159,7 +225,7 @@ function wireGlobalListeners(): void {
 }
 
 export interface CoachAccessValue {
-    /** `true` si ya se resolvio al menos una vez (cache o red). */
+    /** `true` si ya se resolvio contra el estado actual de servidor. */
     ready: boolean
     /** `true` si el coach perdio acceso EFECTIVO y debe ir a /coach/reactivate. */
     blocked: boolean
@@ -178,7 +244,13 @@ export function useCoachAccess(): CoachAccessValue {
     const s = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
     return {
         ready: s.ready,
-        blocked: resolveReactivateRequired(s.subscriptionStatus, s.currentPeriodEnd),
+        blocked:
+            !s.ready ||
+            resolveReactivateRequired(s.subscriptionStatus, s.currentPeriodEnd, Date.now(), {
+                subscriptionTier: s.subscriptionTier,
+                activeStandaloneClientCount: s.activeStandaloneClientCount,
+                workspaceKind: s.workspaceKind,
+            }),
         subscriptionStatus: s.subscriptionStatus,
         refresh: refreshCoachAccess,
     }

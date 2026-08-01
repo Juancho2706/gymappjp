@@ -26,6 +26,28 @@ describe('resolveCoachSubscriptionRedirect', () => {
         expect(resolveCoachSubscriptionRedirect('/coach/dashboard', 'active')).toBeNull()
         expect(resolveCoachSubscriptionRedirect('/coach/clients', 'trialing', periodEndFuture)).toBeNull()
     })
+
+    it('blocks an over-capacity Free standalone workspace', () => {
+        const context = {
+            subscriptionTier: 'free',
+            activeStandaloneClientCount: 4,
+            workspaceType: 'coach_standalone',
+        }
+        expect(resolveCoachSubscriptionRedirect('/coach/dashboard', 'active', null, Date.now(), context)).toBe(
+            '/coach/reactivate',
+        )
+        expect(resolveCoachSubscriptionRedirect('/coach/reactivate', 'active', null, Date.now(), context)).toBeNull()
+    })
+
+    it('does not count Team capacity against standalone Free', () => {
+        expect(
+            resolveCoachSubscriptionRedirect('/coach/dashboard', 'active', null, Date.now(), {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 4,
+                workspaceType: 'coach_team',
+            }),
+        ).toBeNull()
+    })
 })
 
 // P0-3a: dunning involuntario (paused/past_due) conserva acceso hasta current_period_end (gracia,

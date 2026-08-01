@@ -1,3 +1,5 @@
+import { getTierMaxClients } from '@eva/tiers'
+
 /**
  * workspace-core — logica PURA de derivacion del contexto de workspace del coach en mobile (E7-01).
  * CERO react-native / expo / supabase: toma las filas CRUDAS (coaches + team_members + org meta) y
@@ -149,10 +151,20 @@ export function resolveReactivateRequired(
     subscriptionStatus: string | null | undefined,
     currentPeriodEnd: string | null | undefined,
     now: number = Date.now(),
+    capacity?: {
+        subscriptionTier?: string | null
+        activeStandaloneClientCount?: number | null
+        workspaceKind?: WorkspaceKind | null
+    },
 ): boolean {
     if (!subscriptionStatus) return false
     if (isManagedSubscription(subscriptionStatus)) return false
-    return !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd, now)
+    const isFreeStandaloneOverCapacity =
+        capacity?.subscriptionTier === 'free' &&
+        capacity.workspaceKind === 'standalone' &&
+        typeof capacity.activeStandaloneClientCount === 'number' &&
+        capacity.activeStandaloneClientCount > getTierMaxClients('free')
+    return !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd, now) || isFreeStandaloneOverCapacity
 }
 
 // ── Derivacion del contexto ──────────────────────────────────────────────────────────────────────

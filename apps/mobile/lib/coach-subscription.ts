@@ -46,13 +46,16 @@ export async function getCoachSubscriptionOverview(): Promise<CoachSubscriptionO
   // solo el count) porque el panel de archivado de la pantalla de reactivacion los lista; el conteo
   // sale de la misma lectura en vez de una segunda query.
   //
-  // `org_id IS NULL`: el panel solo puede tocar alumnos STANDALONE propios — mismo scope que
+  // `coach_id` + `org_id IS NULL` + `team_id IS NULL`: el panel solo puede tocar alumnos
+  // STANDALONE propios — mismo scope que
   // `archiveClientsForFreeAction` en web. En managed (org/team) el muro ni siquiera se muestra.
   const { data } = await supabase
     .from('clients')
     .select('id, full_name')
+    .eq('coach_id', profile.id)
     .or('is_archived.is.null,is_archived.eq.false')
     .is('org_id', null)
+    .is('team_id', null)
     .order('full_name')
 
   const activeClients: ReactivateArchiveClient[] = (data ?? []).map((c: { id: string; full_name: string | null }) => ({
