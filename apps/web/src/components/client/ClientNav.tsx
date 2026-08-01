@@ -25,6 +25,7 @@ import { PwaNavButton } from './PwaNavButton'
 import { NavIcon, type NavConcept } from './NavIcon'
 import { ThemedLogo } from '@/components/brand/ThemedLogo'
 import { NavPendingFeedback } from '@/components/navigation/NavPendingFeedback'
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 
 interface Props {
     coachSlug: string
@@ -64,6 +65,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
     // icon-only (TabBar `minimized`: insets 14→72, labels fade).
     const [minimized, setMinimized] = useState(false)
     const reduce = useReducedMotion()
+    const isEvaLogo = coachLogoUrl === BRAND_APP_ICON
 
     // Confirmación: la ruta cambió (commit) → limpiar pending (el activo vuelve a pathname).
     useEffect(() => {
@@ -331,7 +333,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
                                 alt={`${coachBrand} logo`}
                                 fill
                                 sizes={isCollapsed ? '40px' : '108px'}
-                                className={cn('object-contain', isCollapsed && 'p-1')}
+                                className={cn('object-contain', isCollapsed && 'p-1', isEvaLogo && 'eva-system-mark')}
                                 priority
                             />
                         </div>

@@ -6,6 +6,7 @@ import { getCoach, getActiveStandaloneClientCount } from '@/lib/coach/get-coach'
 import { BrandCoachLoadingShell } from '../_components/BrandCoachLoadingShell'
 import type { SubscriptionTier } from '@/lib/constants'
 import type { Json } from '@/lib/database.types'
+import { isBrandingAllowed } from '@eva/tiers'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -25,6 +26,7 @@ export default async function CoachDashboardPage() {
     if (!coach) redirect('/login')
 
     const subscriptionTier = normalizeCoachSubscriptionTier(coach.subscription_tier)
+    const coachBrandingVisible = isBrandingAllowed(subscriptionTier) && coach.use_brand_colors_coach !== false
 
     // Conteo activo real (mismo servicio que el cap gate) solo para el banner del plan gratuito;
     // React.cache lo deduplica con el layout /coach. Los otros tiers no muestran ese banner.
@@ -40,8 +42,8 @@ export default async function CoachDashboardPage() {
                 coachInviteCode={coach.invite_code}
                 initialOnboardingGuide={coach.onboarding_guide ?? DEFAULT_COACH_ONBOARDING_GUIDE}
                 subscriptionTier={subscriptionTier}
-                hasCoachLogo={Boolean(coach.logo_url?.trim())}
-                coachLogoUrl={coach.logo_url}
+                hasCoachLogo={coachBrandingVisible && Boolean(coach.logo_url?.trim())}
+                coachLogoUrl={coachBrandingVisible ? coach.logo_url : null}
                 activeClientCount={activeClientCount}
             />
         </Suspense>

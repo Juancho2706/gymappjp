@@ -48,14 +48,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
 }
 
-/** Initials del nombre de marca para el brand-mark cuando no hay logo (estilo diseño). */
-function brandInitials(name: string): string {
-    const parts = name.trim().split(/\s+/).filter(Boolean)
-    if (parts.length === 0) return 'EVA'
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-    return (parts[0][0] + parts[1][0]).toUpperCase()
-}
-
 export default async function ClientLoginPage({ params }: Props) {
     const { coach_slug } = await params
     const coach = await getClientLoginCoach(coach_slug)
@@ -87,7 +79,6 @@ export default async function ClientLoginPage({ params }: Props) {
     const loaderConfig = brandingAllowed ? parseLoaderConfig(coach.loader_config) : null
     const loaderVariant = brandingAllowed ? resolveLoaderVariant(presetBrand.loader_variant) : 'eva'
 
-    const initials = brandInitials(coach.brand_name)
     const tagline = coach.welcome_message?.trim() || 'Tu plataforma de entrenamiento personalizado'
     const accentVars = { '--theme-primary': theme.light.accent, '--theme-primary-rgb': accentRgb } as React.CSSProperties
 
@@ -108,17 +99,23 @@ export default async function ClientLoginPage({ params }: Props) {
             </div>
         ) : (
             <div
-                className="flex items-center justify-center rounded-2xl font-display font-black"
+                className="relative flex items-center justify-center overflow-hidden rounded-2xl"
                 style={{
                     width: px, height: px, fontSize: px * 0.36,
-                    color: glass ? '#fff' : 'var(--login-accent)',
-                    background: glass ? 'rgba(255,255,255,0.16)' : 'color-mix(in srgb, var(--login-accent) 12%, transparent)',
+                    background: glass ? 'rgba(255,255,255,0.16)' : 'var(--surface-sunken)',
                     border: glass ? '1px solid rgba(255,255,255,0.28)' : '1px solid color-mix(in srgb, var(--login-accent) 25%, transparent)',
                     backdropFilter: glass ? 'blur(6px)' : undefined,
                     WebkitBackdropFilter: glass ? 'blur(6px)' : undefined,
                 }}
             >
-                {initials}
+                <ThemedLogo
+                    light={BRAND_APP_ICON}
+                    dark={BRAND_APP_ICON}
+                    alt="EVA"
+                    fill
+                    className="eva-system-mark object-contain"
+                    style={{ padding: px * 0.2 }}
+                />
             </div>
         )
 
@@ -142,12 +139,13 @@ export default async function ClientLoginPage({ params }: Props) {
     ) : (
         <EvaRouteLoader
             size="lg"
-            useCustom
-            customText={coach.brand_name}
+            useCustom={brandingAllowed}
+            customText={brandingAllowed ? coach.brand_name : undefined}
             iconMode={logoUrl ? 'coach' : 'eva'}
             coachLogoUrl={logoUrl || undefined}
             coachLogoDarkUrl={logoUrlDark || undefined}
             primaryColor={theme.light.accent}
+            showWordmark={brandingAllowed}
         />
     )
 

@@ -500,7 +500,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
               source={require('../../assets/eva-icon.png')}
               contentFit="contain"
               accessibilityLabel="Logo de EVA"
-              style={styles.freeWelcomeLogoImage}
+              style={[styles.freeWelcomeLogoImage, dark ? null : { tintColor: theme.foreground }]}
             />
           </View>
           <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
@@ -1923,7 +1923,7 @@ export function MobileGreetingHeader({
           testID="coach-avatar-workspace"
           style={{ position: 'relative' }}
         >
-          <Avatar src={logoUrl} name={coachName} size={40} />
+          <Avatar src={logoUrl} name={coachName} size={40} fallback="eva" />
           {hasMultipleWorkspaces ? (
             <View
               pointerEvents="none"

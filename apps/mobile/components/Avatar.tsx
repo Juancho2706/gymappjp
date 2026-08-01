@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Image } from 'expo-image'
 import { useTheme } from '../context/ThemeContext'
+import { EvaFigure } from './entry/EvaFigure'
 
-// EVA Avatar — user image or initials fallback (ink fill, sport initials),
+// EVA Avatar — user image or initials/EVA fallback,
 // with an optional colored status ring. Mirrors the web DS component 1:1.
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
@@ -24,6 +25,8 @@ export interface AvatarProps {
    * un margen interno para que el logo respire (QA2-B2).
    */
   fit?: 'cover' | 'contain'
+  /** Fallback visual para identidades de marca sin logo (EVA en vez de iniciales). */
+  fallback?: 'initials' | 'eva'
   style?: StyleProp<ViewStyle>
 }
 
@@ -47,8 +50,8 @@ function getInitials(name: string): string {
     .toUpperCase()
 }
 
-export function Avatar({ src, name = '', size = 'md', ring = false, square = false, fit = 'cover', style }: AvatarProps) {
-  const { theme } = useTheme()
+export function Avatar({ src, name = '', size = 'md', ring = false, square = false, fit = 'cover', fallback = 'initials', style }: AvatarProps) {
+  const { theme, resolvedScheme } = useTheme()
   // Si la imagen falla (URL muerta, logo borrado del bucket) el avatar NO puede quedar
   // hueco: cae a iniciales. Se resetea al cambiar de src.
   const [failed, setFailed] = useState(false)
@@ -79,7 +82,7 @@ export function Avatar({ src, name = '', size = 'md', ring = false, square = fal
       ]}
     >
       <View
-        className={showImage ? (fit === 'contain' ? 'bg-surface-card' : undefined) : 'bg-surface-inverse'}
+        className={showImage ? (fit === 'contain' ? 'bg-surface-card' : undefined) : fallback === 'eva' ? 'bg-surface-card' : 'bg-surface-inverse'}
         style={{
           flex: 1,
           alignItems: 'center',
@@ -97,6 +100,11 @@ export function Avatar({ src, name = '', size = 'md', ring = false, square = fal
             style={{ width: '100%', height: '100%' }}
             contentFit={fit}
             onError={() => setFailed(true)}
+          />
+        ) : fallback === 'eva' ? (
+          <EvaFigure
+            size={Math.max(16, Math.round(dim * 0.58))}
+            style={resolvedScheme === 'light' ? { tintColor: theme.foreground } : undefined}
           />
         ) : (
           <Text

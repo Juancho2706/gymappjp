@@ -239,7 +239,7 @@ export default function CoachSettingsHubScreen() {
             <Card variant="inverse" padding="lg" style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
               {/* QA2-B2: con logo de marca el círculo muestra el LOGO (contain sobre fondo
                   neutro); sin logo — o si la imagen falla — cae a las iniciales del DS. */}
-              <Avatar name={displayName} src={heroLogoUrl} fit="contain" size="xl" ring="sport" />
+              <Avatar name={displayName} src={heroLogoUrl} fit="contain" size="xl" ring="sport" fallback="eva" />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text className="font-display-black text-on-dark" style={{ fontSize: 20, letterSpacing: -0.4 }} numberOfLines={1}>
                   {displayName}

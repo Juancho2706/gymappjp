@@ -191,11 +191,13 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     // por tier (es una preferencia, no branding). Fail-safe: valor desconocido/ausente => 'coach'.
     const executorThemeRaw = headersList.get('x-coach-executor-theme')
     const executorTheme = executorThemeRaw === 'eva' ? 'eva' : 'coach'
-    const loaderText = headersList.get('x-coach-loader-text') ?? ''
-    const useCustomLoader = headersList.get('x-coach-use-custom-loader') === 'true'
-    const loaderTextColor = headersList.get('x-coach-loader-text-color') ?? undefined
+    const loaderText = isFreeTier ? '' : (headersList.get('x-coach-loader-text') ?? '')
+    const useCustomLoader = !isFreeTier && headersList.get('x-coach-use-custom-loader') === 'true'
+    const loaderTextColor = isFreeTier ? undefined : (headersList.get('x-coach-loader-text-color') ?? undefined)
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
-    const loaderIconMode = (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
+    const loaderIconMode = isFreeTier
+        ? 'eva'
+        : (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
     // white-label v2 — fuente curada + variante de loader + logo dark (todos gateados a Pro+ por isFreeTier).
     const fontKey = isFreeTier ? '' : (preset.brand_font_key ?? '')
     const brandFontStack = resolveBrandFontStack(fontKey) // server-side; nunca el string crudo del coach

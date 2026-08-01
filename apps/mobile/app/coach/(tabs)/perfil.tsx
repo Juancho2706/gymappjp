@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Apple, Bell, ChevronRight, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
+import { Apple, Bell, ChevronRight, CreditCard, ExternalLink, LogOut } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { signOutAndRedirectHome } from '../../../lib/auth-actions'
@@ -15,6 +15,7 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import * as Notifications from 'expo-notifications'
 import { syncPushToken } from '../../../lib/push'
+import { EvaFigure } from '../../../components/entry/EvaFigure'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
@@ -36,7 +37,7 @@ function formatDate(iso: string | null): string | null {
 }
 
 export default function CoachPerfilScreen() {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
   const [coach, setCoach] = useState<CoachProfile | null>(null)
   const [org, setOrg] = useState<CoachOrgContext | null>(null)
@@ -144,7 +145,10 @@ export default function CoachPerfilScreen() {
               // los bordes de logos anchos). El fondo neutro lo pone el contenedor.
               <Image source={{ uri: coach.logoUrl }} style={styles.avatarLogo} contentFit="contain" transition={150} />
             ) : (
-              <User size={30} color={theme.primary} strokeWidth={1.75} />
+              <EvaFigure
+                size={36}
+                style={resolvedScheme === 'light' ? { tintColor: theme.foreground } : undefined}
+              />
             )}
           </View>
           <Text style={[styles.heroName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>

@@ -1,7 +1,7 @@
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { Image } from 'expo-image'
 import { useTheme } from '../context/ThemeContext'
-import { FONT } from '../lib/typography'
+import { EvaFigure } from './entry/EvaFigure'
 
 /**
  * Círculo de marca del coach (logo o inicial). Extraído del `BrandDot` local de
@@ -14,10 +14,9 @@ import { FONT } from '../lib/typography'
  * `logoUrlDark` en dark → `logoUrl` → inicial sobre `theme.primary`. Cero hex de marca
  * hardcodeado.
  */
-export function BrandLogoCircle({ size, brandName }: { size: number; brandName?: string | null }) {
+export function BrandLogoCircle({ size }: { size: number; brandName?: string | null }) {
   const { theme, branding, resolvedScheme } = useTheme()
   const logoUri = (resolvedScheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
-  const initial = (brandName || branding?.displayName || 'E').trim().charAt(0).toUpperCase() || 'E'
 
   if (logoUri) {
     return (
@@ -44,19 +43,15 @@ export function BrandLogoCircle({ size, brandName }: { size: number; brandName?:
         borderRadius: size / 2,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.primary,
+        backgroundColor: theme.card,
+        borderWidth: 1,
+        borderColor: theme.border,
       }}
     >
-      <Text
-        style={{
-          fontFamily: FONT.uiExtra,
-          fontSize: Math.round(size * 0.5),
-          color: theme.primaryForeground,
-          textAlign: 'center',
-        }}
-      >
-        {initial}
-      </Text>
+      <EvaFigure
+        size={Math.max(14, Math.round(size * 0.58))}
+        style={resolvedScheme === 'light' ? { tintColor: theme.foreground } : undefined}
+      />
     </View>
   )
 }

@@ -16,6 +16,7 @@ import { CalendarCheck, Dumbbell, Sparkles } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useReducedMotion } from 'react-native-reanimated'
 import { useTheme } from '../../../context/ThemeContext'
+import { EvaFigure } from '../../entry/EvaFigure'
 
 /**
  * Onboarding corto del alumno — PRIMERA entrada al dashboard (post-login). No es el
@@ -153,6 +154,11 @@ export function StudentOnboarding({ onResolved }: { onResolved: () => void }) {
                 >
                   {slide.key === 'marca' && logoUri ? (
                     <Image source={{ uri: logoUri }} style={styles.logo} contentFit="contain" transition={150} />
+                  ) : slide.key === 'marca' ? (
+                    <EvaFigure
+                      size={42}
+                      style={resolvedScheme === 'light' ? { tintColor: theme.foreground } : undefined}
+                    />
                   ) : (
                     // Lucide en RN ignora className salvo registro cssInterop: el color va
                     // imperativo desde el tema runtime.

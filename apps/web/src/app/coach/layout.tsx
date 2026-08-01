@@ -182,6 +182,10 @@ export default async function CoachLayout({
         iconMode: 'eva' as const,
         coachLogoUrl: undefined,
     }
+    // Free/Starter conservan el logo en DB, pero el panel autenticado también muestra EVA
+    // mientras no exista entitlement white-label. Team/Enterprise siguen usando su contexto.
+    const coachPanelLogoUrl = isManaged || standaloneBrandOn ? coach.logo_url : null
+    const coachPanelLogoDarkUrl = isManaged || standaloneBrandOn ? coach.logo_url_dark : null
 
     const onboardingGuide =
         coach.onboarding_guide != null &&
@@ -280,8 +284,8 @@ export default async function CoachLayout({
                     activeWorkspaceType={activeWorkspace?.type ?? null}
                     enabledModules={enabledModules}
                     disabledDomains={disabledDomains}
-                    logoUrl={coach.logo_url}
-                    logoUrlDark={coach.logo_url_dark}
+                    logoUrl={coachPanelLogoUrl}
+                    logoUrlDark={coachPanelLogoDarkUrl}
                 />
                 <div className="flex min-w-0 flex-1 flex-col has-[.coach-builder-shell]:min-h-0">
                     {/* RosterViewProvider: puente topbar ↔ pantalla /coach/clients para el
@@ -291,8 +295,8 @@ export default async function CoachLayout({
                             coachName={coach.full_name}
                             coachBrand={enterpriseContext?.orgName ?? teamContext?.teamName ?? coach.brand_name ?? ''}
                             primaryColor={primaryColor}
-                            logoUrl={coach.logo_url}
-                            logoUrlDark={coach.logo_url_dark}
+                            logoUrl={coachPanelLogoUrl}
+                            logoUrlDark={coachPanelLogoDarkUrl}
                             workspaces={workspaces}
                             currentWorkspaceLabel={currentWorkspaceLabel}
                         />
@@ -318,4 +322,3 @@ export default async function CoachLayout({
         </>
     )
 }
-

@@ -3,8 +3,7 @@
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { Sparkles, ChevronDown } from 'lucide-react'
-import { Avatar } from '@/components/ui/avatar'
-import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
+import { CoachBrandAvatar, EvaBrandFallback } from '@/components/coach/CoachBrandAvatar'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { AmbientBrandGlow } from '@/components/coach/AmbientBrandGlow'
 import { BillingBanners } from './banners/BillingBanners'
@@ -234,15 +233,14 @@ export function DashboardShell({
  * Tamaño `md` (40px) para igualar la huella del avatar previo del header.
  */
 function HeaderBrandTile({ logoUrl, name }: { logoUrl?: string | null; name: string }) {
-    // Contrato compartido con el topbar/sidebar (CoachBrandAvatar): logo → iniciales, con caída
-    // automática a las iniciales si la imagen no carga. El fallback conserva el anillo sport que
-    // este header ya tenía.
+    // Contrato compartido con el topbar/sidebar: logo custom cuando corresponde y EVA cuando
+    // el white-label no está disponible. El fallback conserva el anillo sport del header.
     return (
         <CoachBrandAvatar
             name={name}
             logoUrl={logoUrl}
             size="md"
-            fallback={<Avatar name={name} size="md" ring="sport" />}
+            fallback={<EvaBrandFallback size="md" className="ring-2 ring-[var(--sport-500)]/40" />}
         />
     )
 }

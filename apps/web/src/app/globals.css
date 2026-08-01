@@ -1352,6 +1352,15 @@ body > * {
     animation: eva-loader-float 2.5s ease-in-out infinite;
   }
 
+  /* El asset EVA base es blanco. En Free se conserva el mismo logo figurativo,
+     pero se invierte solo en tema claro para mantener contraste sin tocar el asset. */
+  .eva-system-mark {
+    filter: brightness(0) !important;
+  }
+  .dark .eva-system-mark {
+    filter: none !important;
+  }
+
   @keyframes eva-loader-text-shine {
     0% {
       background-position: 0% center;

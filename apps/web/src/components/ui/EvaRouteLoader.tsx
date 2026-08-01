@@ -178,7 +178,7 @@ export function EvaRouteLoader({
                             alt=""
                             width={iconPx}
                             height={iconPx}
-                            className="drop-shadow-md"
+                            className={cn('drop-shadow-md', !isCoachIcon && 'eva-system-mark')}
                             style={{ width: iconPx, height: iconPx }}
                             priority={false}
                         />

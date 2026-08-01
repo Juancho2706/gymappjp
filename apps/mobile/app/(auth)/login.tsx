@@ -773,7 +773,6 @@ function BrandMark({
   px,
   glass,
   logoUrl,
-  initials,
   accent,
   accentText = '#FFFFFF',
 }: {
@@ -786,6 +785,7 @@ function BrandMark({
    *  iniciales se derivan de aca para no asumir blanco sobre una marca clara. */
   accentText?: string
 }) {
+  const { theme, resolvedScheme } = useTheme()
   const radius = Math.round(px * 0.2)
   if (logoUrl) {
     return (
@@ -826,9 +826,10 @@ function BrandMark({
         borderColor: glass ? withAlpha(accentText, 0.28) : accent + '40',
       }}
     >
-      <Text style={{ fontFamily: FONT.displayBlack, fontSize: Math.round(px * 0.36), color: glass ? accentText : accent }}>
-        {initials}
-      </Text>
+      <EvaFigure
+        size={Math.max(20, Math.round(px * 0.58))}
+        style={resolvedScheme === 'light' ? { tintColor: theme.foreground } : undefined}
+      />
     </View>
   )
 }

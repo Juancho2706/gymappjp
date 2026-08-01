@@ -13,13 +13,14 @@ import { getCoachSettingsForUser } from './_data/settings.queries'
 import { BrandSettingsForm } from './BrandSettingsForm'
 import { ModulesForm } from './modules/_components/ModulesForm'
 import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
-import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
+import { CoachBrandAvatar, EvaBrandFallback } from '@/components/coach/CoachBrandAvatar'
 import { AreasManager } from './areas/_components/AreasManager'
 import { getModulesContext } from './modules/_data/modules.queries'
 import { getFuncionesContext } from './funciones/_data/funciones.queries'
 import { getAreasContext } from './areas/_data/areas.queries'
 import { CoachSettingsDesktop, type SettingsSectionId } from './_components/CoachSettingsDesktop'
 import type { Metadata } from 'next'
+import { isBrandingAllowed, type SubscriptionTier as EvaSubscriptionTier } from '@eva/tiers'
 
 export const metadata: Metadata = {
     title: 'Opciones | EVA',
@@ -134,7 +135,6 @@ function IdentityHero({
     logoUrl?: string | null
     logoDarkUrl?: string | null
 }) {
-    const initial = (name?.trim()?.charAt(0) || 'C').toUpperCase()
     return (
         <div className="flex items-center gap-4 rounded-card p-5 bg-[var(--surface-inverse)]">
             <CoachBrandAvatar
@@ -143,11 +143,7 @@ function IdentityHero({
                 logoDarkUrl={logoDarkUrl}
                 size="lg"
                 className="ring-2 ring-[var(--sport-400)]/40"
-                fallback={
-                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-display text-2xl font-black bg-[var(--sport-500)] text-[var(--text-on-sport)] ring-2 ring-[var(--sport-400)]/40">
-                        {initial}
-                    </span>
-                }
+                fallback={<EvaBrandFallback size="lg" className="ring-2 ring-[var(--sport-400)]/40" />}
             />
             <div className="min-w-0 flex-1">
                 <p className="truncate font-display text-xl font-black text-on-dark">{name}</p>
@@ -179,6 +175,7 @@ export default async function CoachSettingsPage() {
     if (coach.subscription_status === 'org_managed') redirect('/coach/dashboard')
 
     const displayName = coach.brand_name || coach.full_name || 'Coach'
+    const standaloneBrandingVisible = isBrandingAllowed((coach.subscription_tier ?? 'free') as EvaSubscriptionTier)
     const clientLabel = `${clientCount} ${clientCount === 1 ? 'alumno' : 'alumnos'}`
     const enabledModules = (coach.enabled_modules && typeof coach.enabled_modules === 'object'
         ? (coach.enabled_modules as Record<string, unknown>)
@@ -366,8 +363,8 @@ export default async function CoachSettingsPage() {
                     name={displayName}
                     subtitle={`Coach · ${clientLabel}`}
                     badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`}
-                    logoUrl={coach.logo_url}
-                    logoDarkUrl={coach.logo_url_dark}
+                    logoUrl={standaloneBrandingVisible ? coach.logo_url : null}
+                    logoDarkUrl={standaloneBrandingVisible ? coach.logo_url_dark : null}
                 />
 
                 <div className="space-y-3">
