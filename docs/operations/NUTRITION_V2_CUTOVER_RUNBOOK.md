@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: "2026-07-31"
+last_verified: "2026-08-01"
 canonical: true
 ---
 
@@ -11,8 +11,10 @@ Nutrition V2 es la experiencia canónica para Standalone y Team. Nutrition V1 no
 fallback operativo: sus filas, logs y alimentos se conservan como historial auditable de solo
 lectura dentro de V2. Enterprise queda fuera de este corte.
 
-Este runbook no autoriza cambios remotos por sí mismo. Al momento de esta revisión, las migraciones
-de archivado y el corte V1 siguen **sin aplicar en producción**.
+Este runbook no autoriza cambios remotos por sí mismo. Las migraciones aditivas de archivado,
+guardas RLS y el read-model histórico se aplicaron en producción el 2026-08-01 mediante Supabase
+MCP. Supabase registró los nombres de migración con versiones remotas `20260801152809` y
+`20260801152818`. El corte de asignaciones V1 todavía no se ha ejecutado.
 
 ## Fuentes de verdad
 
@@ -26,8 +28,10 @@ de archivado y el corte V1 siguen **sin aplicar en producción**.
 
 ## Estado de preflight auditado
 
-- El proyecto remoto no tiene una rama de desarrollo provisionada. Crear una puede implicar costo;
-  no se reemplaza por un `db push` a LIVE. Sin rama, el paso 1 exige snapshot y ventana controlada.
+- El proyecto remoto no tiene una rama de desarrollo provisionada. La aplicación se hizo en una
+  ventana controlada de LIVE con migraciones aditivas; no se usó `db push` ciego. El smoke SQL
+  sintético terminó correctamente en `ROLLBACK`. No hay evidencia de una rama efímera disponible
+  ni de un snapshot manual tomado por MCP.
 - El preflight remoto de solo lectura verificó 46 planes V1 y encontró 7 enlaces V1→V2 faltantes.
   El conversor confirma que esos casos ya tienen un plan V2 o son duplicados V1: hay que
   reconciliar cada enlace con su reporte de fidelidad antes de desactivar V1.
@@ -37,14 +41,12 @@ de archivado y el corte V1 siguen **sin aplicar en producción**.
 
 ## Orden obligatorio de despliegue
 
-1. Confirmar un branch efímero de Supabase. Si no está disponible, tomar snapshot, registrar
-   conteos y usar un entorno/ventana controlada con datos sintéticos antes de LIVE.
-2. Aplicar las dos migraciones en el orden anterior; son aditivas y forward-only. No editar ni
-   revertir DDL aplicado.
-3. Ejecutar la prueba SQL de archivado y una matriz con JWTs reales: alumno archivado, coach que
-   además es alumno, standalone y Team.
-4. Ejecutar el conversor V1 en modo dry-run y resolver toda diferencia de fidelidad o enlace.
-5. Ejecutar el preflight bloqueante:
+1. [Completado] Aplicar las dos migraciones en el orden anterior; son aditivas y forward-only.
+   No editar ni revertir DDL aplicado. El smoke SQL sintético pasó y quedó en `ROLLBACK`.
+2. Ejecutar una matriz con JWTs reales: alumno archivado, coach que además es alumno, Standalone
+   y Team.
+3. Ejecutar el conversor V1 en modo dry-run y resolver toda diferencia de fidelidad o enlace.
+4. Ejecutar el preflight bloqueante:
 
    ```bash
    pnpm nutrition:v2:preflight -- --strict
@@ -52,7 +54,7 @@ de archivado y el corte V1 siguen **sin aplicar en producción**.
 
    El corte no continúa hasta que no haya bloqueos. Los enlaces de conversión incompletos se
    reconcilian; no se omiten alumnos.
-6. Desactivar únicamente las asignaciones V1 ya verificadas, con confirmación explícita y el
+5. Desactivar únicamente las asignaciones V1 ya verificadas, con confirmación explícita y el
    mismo reporte en cero bloqueos:
 
    ```bash
@@ -60,7 +62,7 @@ de archivado y el corte V1 siguen **sin aplicar en producción**.
    ```
 
    Este comando no borra planes, logs, alimentos ni identidades V1.
-7. Desplegar Web/PWA y publicar la versión RN que contiene V2 canónica. Mantener redirects web
+6. Desplegar Web/PWA y publicar la versión RN que contiene V2 canónica. Mantener redirects web
    V1 durante 30 días y aliases RN hasta imponer una versión mínima; después retirar las rutas y
    endpoints legacy alcanzables para Standalone/Team.
 

@@ -44,6 +44,9 @@ select habit_id, client_id, probe_date from archive_smoke_ctx;
 insert into public.check_ins (id, client_id, date)
 select checkin_id, client_id, probe_date from archive_smoke_ctx;
 
+-- El tramo RLS cambia temporalmente al rol authenticated; pg_temp necesita permiso explicito.
+grant select on archive_smoke_ctx to authenticated;
+
 -- Archivar como operación de servidor: el trigger debe apagar asignaciones existentes.
 update public.clients c
 set is_archived = true
