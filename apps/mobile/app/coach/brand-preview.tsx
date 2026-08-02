@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Image } from 'expo-image'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Activity, Apple, ChevronLeft, Dumbbell, Home, Moon, Sun, User } from 'lucide-react-native'
-import { ComplianceRing } from '../../components'
+import { CircularBrandLogo, ComplianceRing } from '../../components'
 
 // M-F6: preview full-screen de la app del alumno con la marca del coach (mockup fiel,
 // no datos en vivo). Recibe color/nombre/logo/loaderText por params para reflejar
@@ -43,7 +42,7 @@ export default function BrandPreviewScreen() {
         <View style={[styles.brandHeader, { backgroundColor: accent }]}>
           <View style={styles.brandRow}>
             <View style={styles.logoBox}>
-              {logo ? <Image source={{ uri: logo }} style={styles.logoImg} contentFit="cover" /> : <Text style={styles.logoInitial}>{brand.charAt(0).toUpperCase()}</Text>}
+              {logo ? <CircularBrandLogo uri={logo} size={48} backgroundColor="rgba(255,255,255,0.2)" /> : <Text style={styles.logoInitial}>{brand.charAt(0).toUpperCase()}</Text>}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text numberOfLines={1} style={styles.brandName}>{brand}</Text>
@@ -114,8 +113,7 @@ const styles = StyleSheet.create({
   scroll: { padding: 14, gap: 12, paddingBottom: 40 },
   brandHeader: { borderRadius: 18, padding: 18 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logoBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  logoImg: { width: 48, height: 48 },
+  logoBox: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   logoInitial: { fontSize: 22, color: '#fff', fontFamily: 'Archivo_800ExtraBold' },
   brandName: { fontSize: 18, color: '#fff', fontFamily: 'Archivo_800ExtraBold', letterSpacing: -0.3 },
   brandHi: { fontSize: 12.5, color: 'rgba(255,255,255,0.85)', fontFamily: 'HankenGrotesk_600SemiBold', marginTop: 2 },

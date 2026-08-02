@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { Apple, Bell, ChevronRight, CreditCard, ExternalLink, LogOut } from 'lucide-react-native'
 import { MotiView } from 'moti'
@@ -16,6 +15,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import * as Notifications from 'expo-notifications'
 import { syncPushToken } from '../../../lib/push'
 import { EvaFigure } from '../../../components/entry/EvaFigure'
+import { CircularBrandLogo } from '../../../components/CircularBrandLogo'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
@@ -143,7 +143,7 @@ export default function CoachPerfilScreen() {
             {coach?.logoUrl ? (
               // QA2-B2: `contain` — un logo de marca NO se recorta (antes 'cover' comía
               // los bordes de logos anchos). El fondo neutro lo pone el contenedor.
-              <Image source={{ uri: coach.logoUrl }} style={styles.avatarLogo} contentFit="contain" transition={150} />
+              <CircularBrandLogo uri={coach.logoUrl} size={72} backgroundColor={theme.card} padding={5} />
             ) : (
               <EvaFigure
                 size={36}
@@ -275,7 +275,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
-  avatarLogo: { width: 72, height: 72 },
   heroName: { fontSize: 19, letterSpacing: -0.3, marginTop: 4 },
   heroBrand: { fontSize: 14 },
   heroSlug: { fontSize: 12 },

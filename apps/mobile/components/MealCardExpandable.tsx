@@ -27,9 +27,7 @@ interface Props {
   isCompleted: boolean
   isToday: boolean
   isToggling?: boolean
-  satisfactionScore?: number | null
   onToggle: () => void
-  onSatisfaction?: (score: 1 | 2 | 3 | null) => void
   activeSwapMealIds?: Set<string>
   /** Abre el SwapSheet para un alimento con alternativas del coach (E4-08). */
   onSwapFood?: (item: FoodItemForMacros) => void
@@ -54,9 +52,7 @@ export function MealCardExpandable({
   isCompleted,
   isToday,
   isToggling,
-  satisfactionScore,
   onToggle,
-  onSatisfaction,
   activeSwapMealIds,
   onSwapFood,
   favoriteFoodIds,
@@ -233,38 +229,6 @@ export function MealCardExpandable({
               </View>
             )}
 
-            {/* Satisfacción — solo si completado y es hoy */}
-            {isCompleted && isToday && onSatisfaction && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
-                  ¿CÓMO ESTUVO?
-                </Text>
-                <View style={styles.satisfactionRow}>
-                  {([
-                    { score: 1 as const, emoji: '😕' },
-                    { score: 2 as const, emoji: '😐' },
-                    { score: 3 as const, emoji: '😋' },
-                  ]).map(({ score, emoji }) => {
-                    const active = satisfactionScore === score
-                    return (
-                      <TouchableOpacity
-                        key={score}
-                        style={[
-                          styles.satisfactionBtn,
-                          active
-                            ? { backgroundColor: EMBER_500 + '26', borderColor: EMBER_500 + '66' }
-                            : { backgroundColor: theme.secondary, borderColor: theme.border },
-                        ]}
-                        onPress={() => onSatisfaction(active ? null : score)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.satisfactionEmoji}>{emoji}</Text>
-                      </TouchableOpacity>
-                    )
-                  })}
-                </View>
-              </View>
-            )}
           </View>
         </MotiView>
       )}
@@ -289,7 +253,4 @@ const styles = StyleSheet.create({
   portionRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   portionBtn: { minWidth: 46, height: 36, paddingHorizontal: 8, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   planBtn: { height: 36, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  satisfactionRow: { flexDirection: 'row', gap: 8 },
-  satisfactionBtn: { flex: 1, height: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  satisfactionEmoji: { fontSize: 22 },
 })

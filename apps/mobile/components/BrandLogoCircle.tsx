@@ -1,7 +1,7 @@
 import { View } from 'react-native'
-import { Image } from 'expo-image'
 import { useTheme } from '../context/ThemeContext'
 import { EvaFigure } from './entry/EvaFigure'
+import { CircularBrandLogo } from './CircularBrandLogo'
 
 /**
  * Círculo de marca del coach (logo o inicial). Extraído del `BrandDot` local de
@@ -19,20 +19,7 @@ export function BrandLogoCircle({ size }: { size: number; brandName?: string | n
   const logoUri = (resolvedScheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
 
   if (logoUri) {
-    return (
-      <View
-        className="bg-surface-sunken border border-subtle"
-        style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }}
-      >
-        <Image
-          alt=""
-          source={{ uri: logoUri }}
-          style={{ width: size, height: size }}
-          contentFit="cover"
-          transition={150}
-        />
-      </View>
-    )
+    return <CircularBrandLogo uri={logoUri} size={size} contentFit="cover" backgroundColor={theme.card} style={{ borderWidth: 1, borderColor: theme.border }} />
   }
 
   return (

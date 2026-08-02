@@ -96,8 +96,9 @@ export function Avatar({ src, name = '', size = 'md', ring = false, square = fal
       >
         {showImage ? (
           <Image
+            alt={name ? `Avatar de ${name}` : ''}
             source={{ uri: src }}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', borderRadius: innerRadius }}
             contentFit={fit}
             onError={() => setFailed(true)}
           />

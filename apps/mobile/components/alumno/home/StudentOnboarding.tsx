@@ -11,12 +11,12 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Image } from 'expo-image'
 import { CalendarCheck, Dumbbell, Sparkles } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useReducedMotion } from 'react-native-reanimated'
 import { useTheme } from '../../../context/ThemeContext'
 import { EvaFigure } from '../../entry/EvaFigure'
+import { CircularBrandLogo } from '../../CircularBrandLogo'
 
 /**
  * Onboarding corto del alumno — PRIMERA entrada al dashboard (post-login). No es el
@@ -153,7 +153,7 @@ export function StudentOnboarding({ onResolved }: { onResolved: () => void }) {
                   ]}
                 >
                   {slide.key === 'marca' && logoUri ? (
-                    <Image source={{ uri: logoUri }} style={styles.logo} contentFit="contain" transition={150} />
+                    <CircularBrandLogo uri={logoUri} size={46} backgroundColor={theme.card} padding={4} />
                   ) : slide.key === 'marca' ? (
                     <EvaFigure
                       size={42}

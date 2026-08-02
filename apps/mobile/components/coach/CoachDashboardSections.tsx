@@ -500,7 +500,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
               source={require('../../assets/eva-icon.png')}
               contentFit="contain"
               accessibilityLabel="Logo de EVA"
-              style={[styles.freeWelcomeLogoImage, dark ? null : { tintColor: theme.foreground }]}
+              style={[styles.freeWelcomeLogoImage, { borderRadius: 36 }, dark ? null : { tintColor: theme.foreground }]}
             />
           </View>
           <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>

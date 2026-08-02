@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, Share, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useReducedMotion } from 'react-native-reanimated'
-import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { cssInterop } from 'nativewind'
@@ -24,6 +23,7 @@ import { RefreshPlanButton } from '../../../components/coach/RefreshPlanButton'
 import { toast } from '../../../components/Toast'
 import { SHADOWS } from '../../../lib/shadows'
 import { FONT } from '../../../lib/typography'
+import { CircularBrandLogo } from '../../../components/CircularBrandLogo'
 import { getCoachOrgContext } from '../../../lib/org'
 import { getCoachProfile } from '../../../lib/coach'
 import { canUseBranding, type SubscriptionTier } from '../../../lib/coach-tiers'
@@ -474,9 +474,9 @@ export default function MiMarcaScreen() {
             <Card variant="default" padding="md" style={{ gap: 14, overflow: 'hidden' }}>
               <AmbientBrandGlow accent={HEX6.test(effectivePrimary) ? effectivePrimary : undefined} />
               <View className="flex-row items-center" style={{ gap: 14 }}>
-                <View className="items-center justify-center overflow-hidden rounded-xl border border-subtle bg-surface-sunken" style={{ width: 64, height: 64 }}>
+                <View className="items-center justify-center overflow-hidden rounded-full border border-subtle bg-surface-sunken" style={{ width: 64, height: 64 }}>
                   {logoUrl ? (
-                    <Image source={{ uri: logoUrl }} style={{ width: 64, height: 64 }} contentFit="cover" transition={150} />
+                    <CircularBrandLogo uri={logoUrl} size={64} backgroundColor="transparent" />
                   ) : (
                     <Text style={{ color: effectivePrimary, fontFamily: FONT.displayBold, fontSize: 30 }}>{(brandName || 'E').charAt(0).toUpperCase()}</Text>
                   )}
@@ -1162,7 +1162,7 @@ function LoaderPreview({
   return (
     <View className="items-center justify-center" style={{ gap: 10 }}>
       {logoUri ? (
-        <Image source={{ uri: logoUri }} style={{ width: 44, height: 44 }} contentFit="contain" transition={150} />
+        <CircularBrandLogo uri={logoUri} size={44} backgroundColor={theme.card} padding={4} />
       ) : showIcon ? (
         <EvaFigure size={44} style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }} />
       ) : null}
@@ -1234,7 +1234,7 @@ function LoaderComposer({ value, onChange, logoUrl, brandName }: {
               >
                 {key === 'logo' ? (
                   logoUrl ? (
-                    <Image source={{ uri: logoUrl }} style={{ width: 26, height: 26 }} contentFit="contain" transition={150} />
+                    <CircularBrandLogo uri={logoUrl} size={26} backgroundColor={theme.card} padding={2} />
                   ) : (
                     <Text className="font-sans-semibold text-muted" style={{ fontSize: 9.5 }}>Logo</Text>
                   )
@@ -1397,7 +1397,7 @@ function LogoSlot({ label, hint, dark, logo, brandName, accent, uploading, onPre
         style={{ aspectRatio: 16 / 9, backgroundColor: dark ? '#0A0D12' : undefined }}
       >
         {logo ? (
-          <Image source={{ uri: logo }} style={{ width: '100%', height: '100%' }} contentFit="contain" transition={150} />
+          <CircularBrandLogo uri={logo} size={80} backgroundColor={dark ? '#0A0D12' : '#FFFFFF'} padding={7} />
         ) : (
           <Text style={{ color: dark ? '#94A3B8' : accent, fontFamily: FONT.displayBold, fontSize: 22 }}>{(brandName || 'E').charAt(0).toUpperCase()}</Text>
         )}

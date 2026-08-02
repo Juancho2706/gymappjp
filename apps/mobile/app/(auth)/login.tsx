@@ -12,7 +12,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Image } from 'expo-image'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowRight, Check, ChevronLeft, Eye, EyeOff, Info, Lock, Mail } from 'lucide-react-native'
@@ -40,6 +39,7 @@ import { EvaLoader, EvaLoaderScreen } from '../../components/EvaLoader'
 import { EntryGrain } from '../../components/entry/EntryBackground'
 import { EvaFigure } from '../../components/entry/EvaFigure'
 import { ENTRY_LIGHT, LightLayer } from '../../components/entry/LightLayer'
+import { CircularBrandLogo } from '../../components/CircularBrandLogo'
 
 const REMEMBER_KEY = 'eva_remember_email'
 
@@ -786,31 +786,16 @@ function BrandMark({
   accentText?: string
 }) {
   const { theme, resolvedScheme } = useTheme()
-  const radius = Math.round(px * 0.2)
+  const radius = Math.round(px / 2)
   if (logoUrl) {
     return (
-      <View
-        className={glass ? '' : 'bg-surface-sunken border border-subtle'}
-        style={{
-          width: px,
-          height: px,
-          borderRadius: radius,
-          overflow: 'hidden',
-          alignItems: 'center',
-          justifyContent: 'center',
-          ...(glass
-            ? { backgroundColor: withAlpha(accentText, 0.16), borderWidth: 1, borderColor: withAlpha(accentText, 0.28) }
-            : null),
-        }}
-      >
-        <Image
-          alt="Logo de la marca"
-          source={{ uri: logoUrl }}
-          style={{ width: px, height: px, padding: Math.round(px * 0.16) }}
-          contentFit="contain"
-          transition={150}
-        />
-      </View>
+      <CircularBrandLogo
+        uri={logoUrl}
+        size={px}
+        padding={Math.round(px * 0.16)}
+        backgroundColor={glass ? withAlpha(accentText, 0.16) : theme.card}
+        style={glass ? { borderWidth: 1, borderColor: withAlpha(accentText, 0.28) } : undefined}
+      />
     )
   }
   return (

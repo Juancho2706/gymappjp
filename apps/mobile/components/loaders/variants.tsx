@@ -10,11 +10,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import Svg, { Circle } from 'react-native-svg'
-import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Activity, Dumbbell, Flame, Heart, Star, Zap, type LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { EvaFigure, evaFigureHeight } from '../entry/EvaFigure'
+import { CircularBrandLogo } from '../CircularBrandLogo'
 import { hexToRgba } from '../../lib/theme'
 import type { LoaderComposite, LoaderSymbol, LoaderVariant } from '../../lib/brand-loaders'
 
@@ -104,7 +104,7 @@ function LoaderIcon({ logoUri, px, reduceMotion }: { logoUri?: string | null; px
   const { resolvedScheme, theme } = useTheme()
   const height = logoUri ? px : evaFigureHeight(px)
   const content = logoUri ? (
-    <Image source={{ uri: logoUri }} style={{ width: px, height: px }} contentFit="contain" transition={150} />
+    <CircularBrandLogo uri={logoUri} size={px} backgroundColor={theme.card} padding={Math.round(px * 0.08)} />
   ) : (
     // El asset EVA es blanco puro: sobre tema claro se tiñe con la tinta del tema.
     <EvaFigure size={px} style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }} />
@@ -440,7 +440,7 @@ function CompositeSymbol({
 }) {
   const { resolvedScheme, theme } = useTheme()
   if (symbol === 'logo' && logoUri) {
-    return <Image source={{ uri: logoUri }} style={{ width: px, height: px }} contentFit="contain" transition={150} />
+    return <CircularBrandLogo uri={logoUri} size={px} backgroundColor={theme.card} padding={Math.round(px * 0.08)} />
   }
   if (symbol === 'logo' && evaFallback) {
     return <EvaFigure size={px} style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }} />

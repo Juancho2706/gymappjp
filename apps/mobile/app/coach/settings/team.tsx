@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { Image } from 'expo-image'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { cssInterop } from 'nativewind'
@@ -27,6 +26,7 @@ import {
 } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { ApiError, getApiBaseUrl } from '../../../lib/api'
+import { CircularBrandLogo } from '../../../components/CircularBrandLogo'
 import { useWorkspace } from '../../../lib/workspace'
 import {
   addTeamMember,
@@ -384,11 +384,11 @@ export default function CoachTeamScreen() {
           <Card variant="inverse" padding={18} radius="card">
             <View className="flex-row items-center" style={{ gap: 13 }}>
               <View
-                className="items-center justify-center overflow-hidden rounded-xl"
+                className="items-center justify-center overflow-hidden rounded-full"
                 style={{ width: 54, height: 54, backgroundColor: team.logoUrl ? 'rgba(255,255,255,0.10)' : accent }}
               >
                 {team.logoUrl
-                  ? <Image source={{ uri: team.logoUrl }} style={{ width: 54, height: 54 }} contentFit="contain" />
+                  ? <CircularBrandLogo uri={team.logoUrl} size={54} backgroundColor="rgba(255,255,255,0.10)" padding={4} />
                   : <Text className="font-display-black" style={{ fontSize: 21, color: onAccent }}>{initialsOf(team.name) || '·'}</Text>}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -464,9 +464,9 @@ export default function CoachTeamScreen() {
 
         <Card padding={16}>
           <View className="flex-row items-center" style={{ gap: 12 }}>
-            <View className="items-center justify-center overflow-hidden rounded-xl" style={{ width: 46, height: 46, backgroundColor: team.logoUrl ? undefined : accent }}>
+            <View className="items-center justify-center overflow-hidden rounded-full" style={{ width: 46, height: 46, backgroundColor: team.logoUrl ? undefined : accent }}>
               {team.logoUrl
-                ? <Image source={{ uri: team.logoUrl }} style={{ width: 46, height: 46 }} contentFit="contain" />
+                ? <CircularBrandLogo uri={team.logoUrl} size={46} backgroundColor={accent} padding={3} />
                 : <Text className="font-display-black" style={{ fontSize: 17, color: onAccent }}>{initialsOf(team.name) || '·'}</Text>}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>

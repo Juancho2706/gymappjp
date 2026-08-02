@@ -17,8 +17,8 @@ import * as FileSystem from 'expo-file-system/legacy'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
 import { BlurView } from 'expo-blur'
-import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { CircularBrandLogo } from './CircularBrandLogo'
 import {
   Share2,
   X,
@@ -358,31 +358,23 @@ function LogoChip({
   brandName,
   accent,
   size,
-  radius,
   initialSize,
 }: {
   logoUrl: string | null | undefined
   brandName: string
   accent: string
   size: number
-  radius: number
   initialSize: number
 }) {
   if (logoUrl) {
     // Coach logo on a neutral white backplate so a light logo survives the dark
     // canvas (mirror of drawLogoChip `needsBackplate` in the web generator).
     return (
-      <View style={{ width: size, height: size, borderRadius: radius, backgroundColor: '#FFFFFF', padding: size * 0.14 }}>
-        <Image
-          source={{ uri: logoUrl }}
-          style={{ flex: 1, borderRadius: Math.max(4, radius - size * 0.14) }}
-          contentFit="contain"
-        />
-      </View>
+      <CircularBrandLogo uri={logoUrl} size={size} backgroundColor="#FFFFFF" padding={size * 0.14} />
     )
   }
   return (
-    <View style={{ width: size, height: size, borderRadius: radius, backgroundColor: accent, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: accent, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ fontFamily: FONT.displayBold, fontSize: initialSize, color: '#FFFFFF' }}>
         {brandName.charAt(0).toUpperCase()}
       </Text>
@@ -442,7 +434,7 @@ export const ShareCardCanvas = function ShareCardCanvas({
       <View style={{ flex: 1, paddingHorizontal: sizes.padX, paddingTop: sizes.padTop, paddingBottom: sizes.padBottom }}>
         {/* ── Brand header ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: sizes.headerGap }}>
-          <LogoChip logoUrl={logoUrl} brandName={brandName} accent={accent} size={sizes.headerLogo} radius={sizes.headerLogoRadius} initialSize={sizes.headerLogoInitial} />
+          <LogoChip logoUrl={logoUrl} brandName={brandName} accent={accent} size={sizes.headerLogo} initialSize={sizes.headerLogoInitial} />
           <Text style={{ fontFamily: FONT.displayBold, fontSize: sizes.headerNameFont, letterSpacing: sizes.headerNameLS, color: W88 }} numberOfLines={1}>
             {brandName.toUpperCase()}
           </Text>
@@ -457,7 +449,7 @@ export const ShareCardCanvas = function ShareCardCanvas({
         <View style={{ gap: sizes.footerGap }}>
           <View style={{ height: 1, backgroundColor: W10 }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: sizes.footerRowGap }}>
-            <LogoChip logoUrl={logoUrl} brandName={brandName} accent={accent} size={sizes.footerChip} radius={sizes.footerChipRadius} initialSize={sizes.footerChipInitial} />
+            <LogoChip logoUrl={logoUrl} brandName={brandName} accent={accent} size={sizes.footerChip} initialSize={sizes.footerChipInitial} />
             <Text style={{ fontFamily: FONT.displayBold, fontSize: sizes.footerNameFont, letterSpacing: sizes.footerNameLS, color: W72 }} numberOfLines={1}>
               {brandName.toUpperCase()}
             </Text>

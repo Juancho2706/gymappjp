@@ -3,11 +3,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
 import Svg, { Circle } from 'react-native-svg'
-import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { SPRING_SPATIAL } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
+import { CircularBrandLogo } from '../../../CircularBrandLogo'
 import type { ExecTheme } from './exec-theme'
 
 /** Mezcla un acento hacia blanco: `accentRatio` de acento + resto blanco. Espeja el
@@ -165,7 +165,7 @@ export function SessionIntro({
             style={{ width: 116, height: 116, borderRadius: 58, overflow: 'hidden' }}
           >
             {coachLogoUrl ? (
-              <Image source={{ uri: coachLogoUrl }} alt="Logo del coach" style={{ width: '100%', height: '100%' }} contentFit="cover" />
+              <CircularBrandLogo uri={coachLogoUrl} size={116} contentFit="cover" />
             ) : (
               <LinearGradient
                 colors={[exec.accent, hexToRgba(exec.accent, 0.5)]}

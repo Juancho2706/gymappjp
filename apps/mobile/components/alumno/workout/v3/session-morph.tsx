@@ -3,7 +3,6 @@ import { Dimensions, Modal, Pressable, StyleSheet, Text, View, type LayoutChange
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useRouter } from 'expo-router'
 import * as Sentry from '@sentry/react-native'
-import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Path } from 'react-native-svg'
 import { Play } from 'lucide-react-native'
@@ -24,6 +23,7 @@ import { useTheme } from '../../../../context/ThemeContext'
 import { resolveOrFallback } from '../../../../lib/measure-guard'
 import { FONT } from '../../../../lib/typography'
 import { resolveExecTheme, type ExecTheme } from './exec-theme'
+import { CircularBrandLogo } from '../../../CircularBrandLogo'
 
 /**
  * Espejo RN del "DESPEGUE" (loader de lanzamiento del workout, diseño del CEO "Despegue Final") —
@@ -903,7 +903,7 @@ function DespegueOverlay({
                 // toca sus bordes) + `cover`: un logo con fondo opaco ya no se ve como un cuadrado
                 // negro sobre el círculo de marca. Mismo criterio que `SessionIntro`.
                 <View style={styles.logoMask}>
-                  <Image source={{ uri: coachLogoUrl }} alt="Logo del coach" style={styles.logoImg} contentFit="cover" />
+                  <CircularBrandLogo uri={coachLogoUrl} size={96} contentFit="cover" />
                 </View>
               ) : coachInitial ? (
                 <Text style={styles.logoInitial}>{coachInitial}</Text>
@@ -1029,7 +1029,6 @@ const styles = StyleSheet.create({
   logoMask: { width: 96, height: 96, borderRadius: 48, overflow: 'hidden' },
   // `borderRadius` también en la imagen: en Android/Fabric el clip del padre sobre <Image> ha fallado
   // históricamente; expo-image respeta su propio radio ⇒ doble seguro.
-  logoImg: { width: 96, height: 96, borderRadius: 48 },
   logoInitial: { fontFamily: FONT.displayBlack, fontSize: 44, color: '#ffffff' },
   // `position:relative` para anclar el "LISTO" absoluto sobre la fila; `opacity:0` de base (el bloque
   // entra por keyframe a los 1900ms, como el `.exec-dsp-prep` del web).

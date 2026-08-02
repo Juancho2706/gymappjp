@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { MotiView } from 'moti'
 import { useReducedMotion } from 'react-native-reanimated'
-import { Image } from 'expo-image'
 import { useTheme } from '../../context/ThemeContext'
 import { EvaFigure, evaFigureHeight } from '../entry/EvaFigure'
+import { CircularBrandLogo } from '../CircularBrandLogo'
 
 // EVA brand loader — la FIGURA blanca de EVA con respiración sutil (QA2 2026-07-29:
 // muere el wordmark tricolor "EVA" viejo; el sistema actual es la figura — misma marca
@@ -49,7 +49,12 @@ export function EvaLegacyLoader({ size = 'lg', subtitle }: { size?: EvaLoaderSiz
         <View style={styles.customWrap}>
           {showCoachLogo ? (
             <MotiView from={{ opacity: 0.5, scale: 0.92 }} animate={{ opacity: 1, scale: reduceMotion ? 0.92 : 1.04 }} transition={pulse}>
-              <Image source={{ uri: coachLogo as string }} style={{ width: LOGO[size], height: LOGO[size] }} contentFit="contain" transition={150} />
+              <CircularBrandLogo
+                uri={coachLogo as string}
+                size={LOGO[size]}
+                backgroundColor={theme.card}
+                padding={Math.round(LOGO[size] * 0.08)}
+              />
             </MotiView>
           ) : iconMode === 'none' ? null : (
             <DefaultEvaFigure size={size} reduceMotion={reduceMotion} />

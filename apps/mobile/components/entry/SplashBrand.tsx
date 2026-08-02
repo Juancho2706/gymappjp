@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { MotiView } from 'moti'
 import Animated, {
@@ -18,6 +17,7 @@ import { FONT } from '../../lib/typography'
 import type { SplashBrandMark } from '../../context/DashboardReadyContext'
 import { entryDarken, entryLighten } from './EntryBackground'
 import { EvaFigure, evaFigureHeight } from './EvaFigure'
+import { CircularBrandLogo } from '../CircularBrandLogo'
 
 /**
  * Piezas de MARCA del splash — frames 01 y 06 de la entrada dark v1
@@ -108,13 +108,7 @@ export function SplashCoachMark({ mark }: { mark: SplashBrandMark }) {
   return (
     <>
       {mark.logoUri ? (
-        <Image
-          source={{ uri: mark.logoUri }}
-          style={styles.coachLogo}
-          contentFit="contain"
-          transition={0}
-          cachePolicy="memory-disk"
-        />
+        <CircularBrandLogo uri={mark.logoUri} size={96} backgroundColor="#0B0E13" padding={8} transition={0} />
       ) : (
         <CoachInitialsTile accent={mark.accent} name={mark.displayName} />
       )}
@@ -238,11 +232,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: 'rgba(244,246,248,0.55)',
   },
-  coachLogo: { width: 96, height: 96, borderRadius: 28 },
   coachTile: {
     width: 96,
     height: 96,
-    borderRadius: 28,
+    borderRadius: 48,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -257,7 +250,7 @@ const styles = StyleSheet.create({
   },
   coachTileBorder: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
+    borderRadius: 48,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
   },

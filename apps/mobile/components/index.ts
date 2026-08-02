@@ -1,4 +1,5 @@
 export { Avatar } from './Avatar'
+export { CircularBrandLogo } from './CircularBrandLogo'
 export { Badge } from './Badge'
 export { BottomSheet } from './BottomSheet'
 export { Sheet, type SheetProps, type OverlayCommonProps } from './Sheet'
