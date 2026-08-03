@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-01"
+last_verified: "2026-08-03"
 canonical: true
 ---
 
@@ -16,15 +16,16 @@ resumen; antes de integrar o desplegar, verificar branch, deployment y estado re
 |---|---|---|
 | Web/PWA | Productivo; verificar deployment activo antes de incidentes o despliegues | [Runbook](../operations/RUNBOOK.md) |
 | App nativa | Paridad estática amplia; build y QA físico Android/iOS siguen pendientes de certificación | [Mobile parity](MOBILE_PARITY.md) |
-| Archivado de alumnos | Migraciones aditivas aplicadas en producción el 2026-08-01; smoke SQL de rollback aprobado. Falta matriz con JWTs reales y QA físico. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
+| Archivado de alumnos | Migraciones aplicadas en producción el 2026-08-01. Rompieron el alta de alumnos (P0, ningún coach pudo crear entre el 01 y el 03-08) y dejaron inalcanzable la pantalla de cuenta suspendida en web; ambas corregidas el 2026-08-03 con migraciones aditivas y smoke ampliado. Falta QA físico y la matriz Team/Enterprise. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
 | Nutrition V2 | Canónica en código para Standalone/Team; historial V1 de solo lectura disponible. El preflight remoto mantiene 7 enlaces V1→V2 por reconciliar antes del corte definitivo. | [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
 | Teams | Pool, membresías y workspaces implementados; la nutrición V2 usa scope explícito Team/Standalone. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
 | Enterprise | Fuera del corte de Nutrition V2 y de la eliminación de legacy en esta entrega. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
 
 ## Prioridad actual
 
-1. Ejecutar matriz con JWTs reales: alumno archivado, coach que también es alumno,
-   Standalone y Team.
+1. Ejecutar matriz con JWTs reales: alumno archivado, alumno pausado, coach que también es alumno,
+   Standalone y Team. Toda policy `AS RESTRICTIVE FOR ALL` exige probar además el ALTA (su
+   `WITH CHECK` corre en INSERT) y el `RETURNING`, no solo la lectura.
 2. Ejecutar conversión/preflight V1→V2 y reconciliar los 7 enlaces antes de desactivar V1.
 3. Desplegar Web/PWA y la versión RN V2, mantener compatibilidad temporal y medir errores/scope.
 4. Ejecutar Playwright responsive y QA físico Android/iOS, claro/oscuro, online/offline y deep links.

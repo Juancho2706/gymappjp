@@ -20,9 +20,9 @@
  *    tildes correctas (la web tenia "ultimo/critica/ultima" sin tilde; aqui van con tilde).
  *  - buildProfileActivityCalendar / longestActivityStreak / formatTrainingAgeLabel /
  *    checkInRegularityPercentAsOf: reimplementacion date-fns-free (parseYmd @12:00) — mismos buckets
- *    y etiquetas que la copia RN. formatTrainingAgeLabel usa diffMonths calendario (no dia-del-mes),
- *    igual que la copia RN; la web conserva su version date-fns local (differenceInMonths) que puede
- *    diferir <=1 mes en el borde del mes — no se toca el numero de la web.
+ *    y etiquetas que la copia RN. formatTrainingAgeLabel cuenta meses COMPLETOS (dia-del-mes),
+ *    igual que differenceInMonths de date-fns: asi coincide con la web y deja de decir "1 mes" a un
+ *    alumno de 5 dias solo por cruzar el cambio de mes (fix 2026-08-03).
  */
 
 export * from './types'

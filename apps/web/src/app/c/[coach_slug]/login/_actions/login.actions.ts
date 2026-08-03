@@ -143,14 +143,14 @@ export async function clientLoginAction(
         return { error: 'No tienes acceso a esta plataforma.' }
     }
 
-    if (client.is_active === false) {
-        await supabase.auth.signOut()
-        return { error: 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.' }
-    }
-
-    if (client.is_archived === true) {
-        await supabase.auth.signOut()
-        return { error: 'Tu cuenta esta archivada. Contacta a tu coach para reactivarla.' }
+    // Alumno pausado o archivado: NO se cierra la sesion. Entra y aterriza en la pantalla de cuenta
+    // suspendida, que explica el estado con la marca de su coach/equipo y ofrece el contacto. Cerrar
+    // sesion con un texto de error lo dejaba sin ningun camino; el proxy ya sirve esa misma pantalla
+    // para el resto del arbol /c, asi que este era el unico punto de entrada que faltaba.
+    if (client.is_active === false || client.is_archived === true) {
+        const suspendedBase = await getClientBasePath(coach_slug)
+        const reason = client.is_archived === true ? 'archived' : 'paused'
+        return { success: true, redirectUrl: `${suspendedBase}/suspended?reason=${reason}` }
     }
 
     if (matchedWorkspace) {

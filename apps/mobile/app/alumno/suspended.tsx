@@ -16,6 +16,8 @@ interface SuspendedState {
   isTeam: boolean
   brandName: string
   whatsapp: string | null
+  /** `archived` cambia el copy (espacio archivado, no pausa manual) — paridad con la web. */
+  reason: 'archived' | 'paused' | null
 }
 
 /**
@@ -26,12 +28,12 @@ interface SuspendedState {
 export default function SuspendedScreen() {
   const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
-  const [s, setS] = useState<SuspendedState>({ loading: true, isTeam: false, brandName: 'tu Coach', whatsapp: null })
+  const [s, setS] = useState<SuspendedState>({ loading: true, isTeam: false, brandName: 'tu Coach', whatsapp: null, reason: null })
 
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const next: SuspendedState = { loading: false, isTeam: false, brandName: 'tu Coach', whatsapp: null }
+      const next: SuspendedState = { loading: false, isTeam: false, brandName: 'tu Coach', whatsapp: null, reason: null }
       try {
         // RLS correctly denies PostgREST reads once archived. The root gate stored this minimal
         // server-verified state before clearing the session, so this screen never probes data.
@@ -40,6 +42,7 @@ export default function SuspendedScreen() {
           next.isTeam = status.isTeam
           next.brandName = status.brandName
           next.whatsapp = status.whatsapp
+          next.reason = status.reason
         }
       } catch {
         // fail-safe: valores por defecto (cuenta pausada nunca debe crashear).
@@ -77,8 +80,17 @@ export default function SuspendedScreen() {
         ) : (
           <>
             <Text className="text-muted font-sans" style={styles.body}>
-              {owner} pausó temporalmente tu acceso. Contacta a{' '}
-              <Text className="text-strong font-sans-semibold">{s.brandName}</Text> para reactivar tu cuenta.
+              {s.reason === 'archived' ? (
+                <>
+                  {owner} archivó tu espacio por ahora. Contacta a{' '}
+                  <Text className="text-strong font-sans-semibold">{s.brandName}</Text> para reactivar tu cupo.
+                </>
+              ) : (
+                <>
+                  {owner} pausó temporalmente tu acceso. Contacta a{' '}
+                  <Text className="text-strong font-sans-semibold">{s.brandName}</Text> para reactivar tu cuenta.
+                </>
+              )}
             </Text>
             <Text className="text-subtle font-sans" style={styles.subtle}>
               Tus datos y todo tu historial siguen guardados.

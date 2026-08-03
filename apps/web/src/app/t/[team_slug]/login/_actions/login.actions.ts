@@ -99,9 +99,12 @@ export async function teamClientLoginAction(
         .select('is_active, is_archived')
         .eq('id', clientId)
         .maybeSingle()
+    // Paridad con /c: el alumno pausado/archivado entra y aterriza en la pantalla de cuenta
+    // suspendida del equipo (el proxy /t la sirve vía rewrite a /c/[coach]/suspended con la marca
+    // del team). Cerrar sesión con un error lo dejaba sin explicación ni contacto.
     if (clientState?.is_active === false || clientState?.is_archived === true) {
-        await supabase.auth.signOut()
-        return { error: 'Tu cuenta está pausada. Contacta a tu equipo.' }
+        const reason = clientState?.is_archived === true ? 'archived' : 'paused'
+        return { success: true, redirectUrl: `/t/${teamSlug}/suspended?reason=${reason}` }
     }
 
     return { success: true, redirectUrl: `/t/${teamSlug}/dashboard` }

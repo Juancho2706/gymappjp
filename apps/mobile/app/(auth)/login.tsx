@@ -23,6 +23,8 @@ import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { supabase } from '../../lib/supabase'
 import { ApiError, validateStudentWorkspace } from '../../lib/api'
 import { translateAuthError } from '../../lib/auth-errors'
+import { signOutAndCleanup } from '../../lib/auth-actions'
+import { getStudentAccountStatus } from '../../lib/student-account-status'
 import {
   GoogleSignInError,
   isGoogleSignInAvailable,
@@ -200,7 +202,18 @@ export default function LoginScreen() {
         forcePasswordChange = validation.forcePasswordChange
       } catch (validationError) {
         const apiError = validationError instanceof ApiError ? validationError : null
-        // Un scope denegado/pausado o un token confirmado como inválido no debe dejar sesión viva.
+        // Cuenta pausada o archivada: mismo destino que cuando el bloqueo aparece con la app ya
+        // abierta (`clearBlockedStudentSession`) — se cachea el estado server-verified CON la sesión
+        // todavía viva, se limpia todo y se aterriza en /alumno/suspended. Un texto de error en el
+        // login dejaba al alumno sin explicación ni contacto.
+        if (apiError?.code === 'ACCOUNT_PAUSED') {
+          await getStudentAccountStatus().catch(() => {})
+          await signOutAndCleanup({ preserveStudentAccountStatus: true }).catch(() => {})
+          setLoading(false)
+          router.replace('/alumno/suspended')
+          return
+        }
+        // Un scope denegado o un token confirmado como inválido no debe dejar sesión viva.
         if (
           apiError?.status === 403 ||
           apiError?.code === 'INVALID_TOKEN'

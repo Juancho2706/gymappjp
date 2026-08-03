@@ -3,6 +3,14 @@
 -- Requiere que se hayan aplicado, EN ESTE ORDEN:
 --   20260731123000_archive_client_deactivates_assignments.sql
 --   20260801023414_archive_client_access_and_nutrition_v2_history.sql
+--   20260803150806_fix_archive_gate_clients_insert.sql
+--   20260803162000_clients_self_row_visible_when_blocked.sql
+--   20260803171000_archive_gate_returning_and_loud_assignment_guards.sql
+--
+-- Cobertura (2026-08-03): ademas del cierre de datos del alumno archivado, cubre el ALTA de alumno
+-- por el coach (el P0 que la version anterior no veia), el INSERT ... RETURNING sobre `clients`, la
+-- lectura de la ficha propia que necesita la pantalla de cuenta suspendida y el rechazo ruidoso al
+-- asignar trabajo activo a un archivado.
 --
 -- Ejecutar con una conexión SQL privilegiada sobre un entorno controlado. El test modifica
 -- una ficha existente y agrega dos filas sintéticas, pero termina siempre en ROLLBACK.
@@ -91,9 +99,20 @@ begin
   select count(*) into visible_habits from public.daily_habits where id = ctx.habit_id;
   select count(*) into visible_checkins from public.check_ins where id = ctx.checkin_id;
 
-  if visible_clients <> 0 or visible_habits <> 0 or visible_checkins <> 0 then
-    raise exception 'SMOKE FALLO: archived JWT still reads own rows (clients %, habits %, checkins %)',
-      visible_clients, visible_habits, visible_checkins;
+  -- Su PROPIA ficha sigue visible a proposito (fix 2026-08-03): la web la necesita para servir la
+  -- pantalla de cuenta suspendida; sin ella el alumno rebotaba al login sin explicacion. Lo que
+  -- debe quedar cerrado son sus DATOS.
+  if visible_clients <> 1 then
+    raise exception 'SMOKE FALLO: archived JWT no puede leer su propia ficha (clients %) — la pantalla suspended queda inalcanzable', visible_clients;
+  end if;
+
+  if visible_habits <> 0 or visible_checkins <> 0 then
+    raise exception 'SMOKE FALLO: archived JWT still reads own data (habits %, checkins %)',
+      visible_habits, visible_checkins;
+  end if;
+
+  if exists (select 1 from public.clients where id <> ctx.client_id) then
+    raise exception 'SMOKE FALLO: archived JWT lee fichas ajenas';
   end if;
 
   begin
@@ -106,6 +125,70 @@ end;
 $$;
 
 reset role;
+
+-- Asignar trabajo ACTIVO a un alumno archivado debe FALLAR fuerte (guardas ruidosas 2026-08-03).
+-- Antes se forzaba `is_active := false` en silencio y el coach creia haber asignado.
+do $$
+declare
+  ctx archive_smoke_ctx%rowtype;
+begin
+  select * into ctx from archive_smoke_ctx;
+  begin
+    insert into public.workout_programs (client_id, coach_id, name, is_active)
+    values (ctx.client_id, ctx.coach_id, 'SMOKE archived assign', true);
+    raise exception 'SMOKE FALLO: se pudo asignar un programa ACTIVO a un alumno archivado';
+  exception
+    when insufficient_privilege then null;
+  end;
+end;
+$$;
+
+-- Alta de alumno por el COACH (regresion P0 2026-08-03: la policy restrictiva FOR ALL evaluaba su
+-- WITH CHECK tambien en el INSERT y ningun coach podia crear alumnos). El INSERT lleva RETURNING a
+-- proposito: asi se ejercita ademas la policy de SELECT sobre la fila recien creada, que es el otro
+-- filo del mismo gate. `clients.id` referencia `auth.users`, por eso se toma una identidad libre.
+create temporary table archive_smoke_alta (auth_id uuid) on commit drop;
+
+insert into archive_smoke_alta (auth_id)
+select u.id
+from auth.users u
+where not exists (select 1 from public.clients c where c.id = u.id)
+  and not exists (select 1 from public.coaches co where co.id = u.id)
+limit 1;
+
+grant select on archive_smoke_alta to authenticated;
+
+select set_config('request.jwt.claim.sub', (select coach_id::text from archive_smoke_ctx), true);
+set local role authenticated;
+
+insert into public.clients (id, coach_id, full_name, email, force_password_change, age_confirmed_at)
+select a.auth_id, ctx.coach_id, 'SMOKE alta alumno',
+       'smoke-alta-' || a.auth_id || '@example.invalid', true, now()
+from archive_smoke_alta a, archive_smoke_ctx ctx
+returning id;
+
+reset role;
+
+do $$
+declare
+  candidates integer;
+  created integer;
+begin
+  select count(*) into candidates from archive_smoke_alta;
+  if candidates = 0 then
+    raise notice 'SMOKE OMITIDO: no hay identidad Auth libre para probar el alta de alumno';
+    return;
+  end if;
+
+  select count(*) into created
+  from public.clients c
+  join archive_smoke_alta a on a.auth_id = c.id;
+
+  if created <> 1 then
+    raise exception 'SMOKE FALLO: el coach no pudo crear un alumno (RLS bloqueo el INSERT/RETURNING)';
+  end if;
+end;
+$$;
 
 -- Desarchivar sólo restituye roster/Auth: las asignaciones permanecen apagadas/archivadas.
 update public.clients c

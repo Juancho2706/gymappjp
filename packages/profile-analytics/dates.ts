@@ -28,9 +28,15 @@ export function diffDays(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / DAY_MS)
 }
 
-/** Diferencia de meses calendario (no considera dia-del-mes). */
+/**
+ * Meses COMPLETOS entre a y b. Equivale a date-fns differenceInMonths: el mes solo cuenta cuando
+ * se cumple el dia-del-mes. Contar solo el cruce de calendario hacia que un alumno que empezo el
+ * 29-jul apareciera con "1 mes" de antiguedad el 1-ago (y ponia rojo el test de etiquetas en cada
+ * cambio de mes).
+ */
 export function diffMonths(a: Date, b: Date): number {
-  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+  const calendarMonths = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+  return b.getDate() < a.getDate() ? calendarMonths - 1 : calendarMonths
 }
 
 /** Lunes 00:00 de la semana de `d` (weekStartsOn=1). Equivale a date-fns startOfWeek. */

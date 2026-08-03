@@ -439,12 +439,19 @@ export async function proxy(request: NextRequest) {
         // and must never consume the personal cap.
         let activeStandaloneClientCount: number | null = null
         if (coach.subscription_tier === 'free' && activeWorkspace?.type === 'coach_standalone') {
-            try {
-                activeStandaloneClientCount = await countActiveStandaloneClients(supabase, user.id)
-            } catch {
-                // No permitir dashboard Free sin confirmar capacidad. Reactivate seguirá mostrando
-                // su estado de lectura y podrá reintentar cuando la base vuelva a responder.
-                activeStandaloneClientCount = Number.MAX_SAFE_INTEGER
+            // Un timeout de la base NO puede expulsar del dashboard a un coach que está dentro de su
+            // cupo: se reintenta una vez y, si sigue cayendo, la capacidad queda "desconocida" (null)
+            // y esta capa no bloquea. El fail-closed real vive en el WRITE (`createClientAction`
+            // rechaza el alta si no puede validar el límite), que es donde el cupo importa.
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    activeStandaloneClientCount = await countActiveStandaloneClients(supabase, user.id)
+                    break
+                } catch (error) {
+                    if (attempt === 1) {
+                        console.error('[proxy] free capacity check unavailable — no bloquea:', error)
+                    }
+                }
             }
         }
         const redirectPath = resolveCoachSubscriptionRedirect(
