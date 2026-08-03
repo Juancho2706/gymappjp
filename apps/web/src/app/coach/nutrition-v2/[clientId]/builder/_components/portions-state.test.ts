@@ -15,6 +15,7 @@ import {
   clonePortionsForVariant,
   combineSubtotals,
   copySlotPortionsToVariants,
+  daysMissingBasePortions,
   derivePortionTotals,
   dropVariantPortions,
   esDecimal,
@@ -439,6 +440,44 @@ describe('claves de porciones por día', () => {
     expect(result.dayVariants[1].mealSlots[0].exchangeTargets).toEqual([
       { exchangeGroupId: ID_C, portions: 2, notes: null, orderIndex: 0 },
     ])
+  })
+
+  describe('daysMissingBasePortions (defecto B4: porciones que se quedan en el día base)', () => {
+    const base = { key: BASE_VARIANT_KEY, isDefault: true, slots: [{ key: 's1', name: 'Desayuno' }] }
+
+    it('reporta el día cuya franja homónima quedó sin porciones, con el par para copiarlas', () => {
+      const map: PortionsBySlot = {
+        [portionsKey(BASE_VARIANT_KEY, 's1')]: [{ exchangeGroupId: ID_C, portions: 2 }],
+      }
+      const dia = { key: 'v-lu', isDefault: false, slots: [{ key: 'd1', name: 'desayuno ' }] }
+      expect(daysMissingBasePortions(map, [base, dia])).toEqual([
+        { variantKey: 'v-lu', slotKeyPairs: [{ from: 's1', to: 'd1' }], unmatched: false },
+      ])
+    })
+
+    it('marca unmatched el día SIN franjas: copiar no alcanza (el alumno ve el día vacío)', () => {
+      const map: PortionsBySlot = {
+        [portionsKey(BASE_VARIANT_KEY, 's1')]: [{ exchangeGroupId: ID_C, portions: 1 }],
+      }
+      const vacio = { key: 'v-ma', isDefault: false, slots: [] }
+      expect(daysMissingBasePortions(map, [base, vacio])).toEqual([
+        { variantKey: 'v-ma', slotKeyPairs: [], unmatched: true },
+      ])
+    })
+
+    it('no reporta el día que ya tiene porciones propias en esa franja (decisión del coach)', () => {
+      const map: PortionsBySlot = {
+        [portionsKey(BASE_VARIANT_KEY, 's1')]: [{ exchangeGroupId: ID_C, portions: 2 }],
+        [portionsKey('v-lu', 'd1')]: [{ exchangeGroupId: ID_P, portions: 1 }],
+      }
+      const dia = { key: 'v-lu', isDefault: false, slots: [{ key: 'd1', name: 'Desayuno' }] }
+      expect(daysMissingBasePortions(map, [base, dia])).toEqual([])
+    })
+
+    it('sin porciones en el día base no hay nada que avisar', () => {
+      const dia = { key: 'v-lu', isDefault: false, slots: [{ key: 'd1', name: 'Desayuno' }] }
+      expect(daysMissingBasePortions({}, [base, dia])).toEqual([])
+    })
   })
 
   it('dropVariantPortions limpia solo el día eliminado', () => {
