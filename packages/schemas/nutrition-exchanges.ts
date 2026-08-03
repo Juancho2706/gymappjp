@@ -137,6 +137,42 @@ export function toExchangeGroupSlug(name: string): string {
         .replace(/^-+|-+$/g, '')
 }
 
+/**
+ * "Colación Fran" → "COL". Solo sugerencia: el coach puede sobrescribirla.
+ * Vive acá (y no en la UI del builder) porque web y RN tienen que sugerir lo MISMO: hasta F2
+ * había dos copias de esta función, una por superficie.
+ */
+export function suggestExchangeGroupCode(name: string): string {
+    return toExchangeGroupSlug(name)
+        .replace(/[^a-z]/g, '')
+        .slice(0, 3)
+        .toUpperCase()
+}
+
+const EXCHANGE_CODE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+/**
+ * Código LIBRE derivado de otro ("C" → "CA", "CB"…) para duplicar un grupo del sistema sin
+ * chocar con la unicidad que impone el servicio. El schema solo acepta 1-3 LETRAS, así que no
+ * sirve el clásico sufijo numérico: se prueban sufijos de una y dos letras.
+ */
+export function suggestFreeExchangeGroupCode(base: string, taken: readonly string[]): string {
+    const ocupados = new Set(taken.map((code) => code.trim().toUpperCase()))
+    const raiz = base.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'G'
+    for (const letra of EXCHANGE_CODE_LETTERS) {
+        const candidato = (raiz.slice(0, 2) + letra).slice(0, 3)
+        if (!ocupados.has(candidato)) return candidato
+    }
+    for (const primera of EXCHANGE_CODE_LETTERS) {
+        for (const segunda of EXCHANGE_CODE_LETTERS) {
+            const candidato = raiz.slice(0, 1) + primera + segunda
+            if (!ocupados.has(candidato)) return candidato
+        }
+    }
+    // Inalcanzable con 26² combinaciones libres por raíz; el servidor es el techo real igual.
+    return raiz
+}
+
 /** kcal sugeridas por 1 porción con los factores Atwater del repo (4/4/9), redondeadas. */
 export function exchangeGroupKcalFromMacros(input: {
     refProteinG: number
@@ -316,6 +352,65 @@ export function normalizeFoodExchangeEquivalence(value: FoodExchangeEquivalenceI
         exchangePortionLabel: label.length > 0 ? label : null,
     }
 }
+
+// ─── Listas de equivalencia propias del coach (F2 — specs/nutrition-exchange-lists) ──
+//
+// A diferencia del trío `foods.exchange_*` (una verdad GLOBAL por alimento), estas operaciones
+// escriben una fila en `exchange_group_foods` con DUEÑO. El dueño no viaja en el payload: lo
+// resuelve el servidor desde la sesión y el workspace activo — el body jamás es autoridad de
+// identidad (AGENTS.md).
+
+const exchangeListGroupId = z.guid('Grupo de porciones inválido')
+const exchangeListFoodId = z.guid('Alimento inválido')
+
+/** Alta o edición de "1 porción de este grupo = N g de este alimento" en MI lista. */
+export const UpsertExchangeGroupFoodSchema = z.object({
+    exchangeGroupId: exchangeListGroupId,
+    foodId: exchangeListFoodId,
+    portionGrams: z
+        .number({ error: 'Los gramos por porción deben ser un número' })
+        .positive('Los gramos por porción deben ser mayores a 0')
+        .max(EXCHANGE_PORTION_GRAMS_MAX, `Máximo ${EXCHANGE_PORTION_GRAMS_MAX} g por porción`),
+    portionLabel: z
+        .string()
+        .trim()
+        .max(EXCHANGE_PORTION_LABEL_MAX, `Máximo ${EXCHANGE_PORTION_LABEL_MAX} caracteres`)
+        .nullish(),
+})
+export type UpsertExchangeGroupFoodInput = z.infer<typeof UpsertExchangeGroupFoodSchema>
+
+/**
+ * Sacar un alimento de MI lista sin tocar el catálogo: escribe la fila-lápida (`is_excluded`).
+ * Es distinto de `RemoveExchangeGroupFoodSchema`, que borra mi fila y devuelve el alimento a
+ * lo que diga el catálogo global.
+ */
+export const ExcludeExchangeGroupFoodSchema = z.object({
+    exchangeGroupId: exchangeListGroupId,
+    foodId: exchangeListFoodId,
+})
+export type ExcludeExchangeGroupFoodInput = z.infer<typeof ExcludeExchangeGroupFoodSchema>
+
+/** Borra MI fila (valor propio o lápida) ⇒ el alimento vuelve al valor del catálogo. */
+export const RemoveExchangeGroupFoodSchema = z.object({
+    exchangeGroupId: exchangeListGroupId,
+    foodId: exchangeListFoodId,
+})
+export type RemoveExchangeGroupFoodInput = z.infer<typeof RemoveExchangeGroupFoodSchema>
+
+/**
+ * "Duplicar y ajustar" un grupo: crea un grupo propio y, si `copyList`, copia la lista completa
+ * del origen reescalada por regla de tres (`rescalePortionGrams`). Sin la copia el grupo nuevo
+ * nace vacío y el alumno abre un sheet sin un solo ejemplo — el defecto que F1 dejó abierto.
+ */
+export const DuplicateExchangeGroupSchema = z.object({
+    sourceGroupId: exchangeListGroupId,
+    ...exchangeGroupWritableShape,
+    copyList: z.boolean().default(true),
+})
+export type DuplicateExchangeGroupInput = z.infer<typeof DuplicateExchangeGroupSchema>
+
+/** Tope de filas que puede copiar una duplicación (Cereales tiene 715). */
+export const EXCHANGE_LIST_COPY_MAX = 2000
 
 export const ExchangePdfFormatSchema = z.enum(['compact', 'equivalences', 'full'])
 export type ExchangePdfFormatInput = z.infer<typeof ExchangePdfFormatSchema>

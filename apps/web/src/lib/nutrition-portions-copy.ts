@@ -164,6 +164,54 @@ export const PORTIONS_COPY = {
     groupUnavailable: 'Ese grupo de porciones ya no está disponible.',
     saved: 'Equivalencia guardada',
   },
+  /**
+   * Lista de equivalencias del grupo (F2 — specs/nutrition-exchange-lists). Es la pantalla
+   * donde el coach responde la pregunta que hacen los alumnos: "¿qué cuenta como 1 porción?".
+   * Se habla en gramos y en medidas caseras, nunca en "filas" ni "registros".
+   */
+  exchangeList: {
+    sectionTitle: '¿Qué cuenta como 1 porción?',
+    sectionHint: 'Define cuántos gramos de cada alimento equivalen a 1 porción de este grupo.',
+    manageEntry: 'Porciones',
+    manageEntryHint: 'Crea grupos y decide qué alimentos equivalen a 1 porción.',
+    pickGroup: 'Elige un grupo para ver su lista',
+    searchPlaceholder: 'Buscar en todo el catálogo',
+    searchAria: 'Buscar alimento para clasificar en este grupo',
+    addFood: 'Agregar alimento',
+    gramsLabel: 'Gramos que equivalen a 1 porción',
+    labelLabel: 'Medida casera (opcional)',
+    labelPlaceholder: 'Ej: 1 taza',
+    /** La sugerencia es un punto de partida: se dice explícito para que el coach la corrija. */
+    suggested: (gramos: string) => `Sugerido: ${gramos} g según sus macros`,
+    suggestedApply: 'Usar sugerencia',
+    suggestedNone: 'No podemos sugerir gramos para este alimento: escríbelos tú.',
+    previewTitle: 'Tu alumno verá',
+    save: 'Guardar equivalencia',
+    saving: 'Guardando…',
+    saved: 'Equivalencia guardada',
+    /** Origen de cada fila: el coach tiene que distinguir lo suyo de lo heredado. */
+    badgeOwn: 'Tuyo',
+    badgeCatalog: 'Del catálogo',
+    /** Sacar un alimento de MI lista sin tocarlo en el catálogo. */
+    exclude: 'Quitar de mi lista',
+    excludeAria: (alimento: string) => `Quitar ${alimento} de mi lista`,
+    excluded: 'Quitado de tu lista',
+    restore: 'Volver al valor del catálogo',
+    restoreAria: (alimento: string) => `Devolver ${alimento} al valor del catálogo`,
+    restored: 'Volvió al valor del catálogo',
+    removeFailed: 'No pudimos actualizar la lista. Intenta nuevamente.',
+    empty: 'Este grupo todavía no tiene alimentos: tu alumno no verá ejemplos.',
+    emptySearch: 'Ningún alimento de este grupo coincide con tu búsqueda.',
+    loadFailed: 'No pudimos cargar la lista.',
+    /** Duplicar copiando la lista: sin esto el grupo nuevo nace vacío (defecto que dejó F1). */
+    copyListLabel: 'Copiar también su lista de alimentos',
+    copyListHint: 'Los gramos se ajustan solos a las macros que definas.',
+    copied: (n: number) => (n === 1 ? 'Se copió 1 alimento' : `Se copiaron ${n} alimentos`),
+    copyPartial: (n: number, total: number) => `Se copiaron ${n} de ${total} alimentos`,
+    copyFailed: 'El grupo se creó, pero no pudimos copiar su lista.',
+    groupUnavailable: 'Ese grupo de porciones ya no está disponible.',
+    foodUnavailable: 'Ese alimento ya no está disponible.',
+  },
   coach: {
     dayCoverage: 'Porciones',
     derivedNote:

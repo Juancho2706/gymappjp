@@ -5,6 +5,7 @@ import { getFoodLibrary } from '@/app/coach/nutrition-plans/_data/nutrition-coac
 import { FoodBrowser } from './_components/FoodBrowser'
 import { AddFoodSheet } from './_components/AddFoodSheet'
 import { ClassifyFoodSheet } from './_components/ClassifyFoodSheet'
+import { ExchangePortionsSection } from './_components/ExchangePortionsSection'
 import { getCoachFoodsUser } from './_data/foods.queries'
 import { createClient } from '@/lib/supabase/server'
 import { resolveCoachScope } from '@/services/auth/coach-scope.service'
@@ -62,6 +63,12 @@ export default async function CoachFoodsPage() {
       </div>
 
       <FoodBrowser coachId={coachId} initialFoods={foods} totalFoods={total} />
+
+      {/*
+        Gestión de listas de equivalencia (F2). Vive acá, y no solo en el builder de un alumno,
+        porque el catálogo de porciones es del COACH: un coach sin alumnos no tenía cómo llegar.
+      */}
+      <ExchangePortionsSection />
     </div>
   )
 }

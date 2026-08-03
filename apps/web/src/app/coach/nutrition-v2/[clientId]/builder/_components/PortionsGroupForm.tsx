@@ -24,6 +24,8 @@ import {
   EXCHANGE_GROUP_NAME_MAX,
   EXCHANGE_GROUP_PALETTE,
   exchangeGroupKcalFromMacros,
+  suggestExchangeGroupCode,
+  suggestFreeExchangeGroupCode,
   toExchangeGroupSlug,
 } from '@eva/schemas/nutrition-exchanges'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
@@ -39,34 +41,12 @@ export type ExchangeGroupFormValues = {
   color: string | null
 }
 
-/** "Colación Fran" -> "COL". Solo sugerencia: el coach puede sobrescribirla. */
-export function suggestExchangeGroupCode(name: string): string {
-  return toExchangeGroupSlug(name).replace(/[^a-z]/g, '').slice(0, 3).toUpperCase()
-}
-
-const A_Z = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-
 /**
- * Codigo LIBRE derivado de otro ("C" -> "CA", "CB"…) para duplicar un grupo del sistema sin
- * chocar con la unicidad que impone el servicio. El schema solo acepta 1-3 letras, asi que no
- * sirve el clasico sufijo numerico: se prueban sufijos de una y dos letras.
+ * Las dos sugerencias de código viven en `@eva/schemas/nutrition-exchanges` desde F2: RN tenía
+ * su propia copia de `suggestExchangeGroupCode` y las dos superficies debían sugerir lo MISMO.
+ * Se re-exportan acá para no mover a sus consumidores (picker y tests).
  */
-export function suggestFreeExchangeGroupCode(base: string, taken: readonly string[]): string {
-  const ocupados = new Set(taken.map((code) => code.trim().toUpperCase()))
-  const raiz = base.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'G'
-  for (const letra of A_Z) {
-    const candidato = (raiz.slice(0, 2) + letra).slice(0, 3)
-    if (!ocupados.has(candidato)) return candidato
-  }
-  for (const primera of A_Z) {
-    for (const segunda of A_Z) {
-      const candidato = raiz.slice(0, 1) + primera + segunda
-      if (!ocupados.has(candidato)) return candidato
-    }
-  }
-  // Inalcanzable con 26² combinaciones libres por raiz; el servidor es el techo real igual.
-  return raiz
-}
+export { suggestExchangeGroupCode, suggestFreeExchangeGroupCode }
 
 /** Acepta coma decimal es-CL ("1,5"); vacío = 0. `null` = entrada inválida. */
 function parseNumberEs(raw: string): number | null {

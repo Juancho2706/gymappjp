@@ -7,6 +7,7 @@ import {
   refineFoodExchangeEquivalence,
 } from '@eva/schemas/nutrition-exchanges'
 import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
+import { syncFoodExchangeListRow } from '@/services/nutrition-exchanges/exchange-lists.service'
 import type { BuilderFood } from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 import {
   fail,
@@ -110,6 +111,16 @@ export async function insertCoachFood(input: {
     .select('id')
     .single()
   if (ins.error || !ins.data) return mapWriteError(ins.error ?? { message: 'no food' }, 'alimento')
+
+  // Doble escritura (F2): la clasificación también entra en `exchange_group_foods` como fila
+  // del coach. Best-effort — si falla, el alimento igual quedó clasificado en sus columnas.
+  await syncFoodExchangeListRow(input.db as unknown as SupabaseClient<Database>, {
+    actorCoachId: input.userId,
+    foodId: ins.data.id,
+    exchangeGroupId: equivalence.exchangeGroupId,
+    portionGrams: equivalence.exchangePortionGrams,
+    portionLabel: equivalence.exchangePortionLabel,
+  })
 
   const food: BuilderFood = {
     id: ins.data.id,

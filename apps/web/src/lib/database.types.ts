@@ -1619,6 +1619,80 @@ export type Database = {
           },
         ]
       }
+      exchange_group_foods: {
+        Row: {
+          coach_id: string | null
+          created_at: string
+          created_by: string | null
+          exchange_group_id: string
+          food_id: string
+          id: string
+          is_excluded: boolean
+          org_id: string | null
+          portion_grams: number | null
+          portion_label: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          coach_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          exchange_group_id: string
+          food_id: string
+          id?: string
+          is_excluded?: boolean
+          org_id?: string | null
+          portion_grams?: number | null
+          portion_label?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          exchange_group_id?: string
+          food_id?: string
+          id?: string
+          is_excluded?: boolean
+          org_id?: string | null
+          portion_grams?: number | null
+          portion_label?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exchange_group_foods_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exchange_group_foods_exchange_group_id_fkey"
+            columns: ["exchange_group_id"]
+            isOneToOne: false
+            referencedRelation: "exchange_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exchange_group_foods_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exchange_group_foods_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exchange_groups: {
         Row: {
           coach_id: string | null
@@ -1903,6 +1977,7 @@ export type Database = {
           household_label: string | null
           id: string
           is_liquid: boolean
+          macros_basis: string
           name: string
           name_search: string | null
           org_id: string | null
@@ -1929,6 +2004,7 @@ export type Database = {
           household_label?: string | null
           id?: string
           is_liquid?: boolean
+          macros_basis?: string
           name: string
           name_search?: string | null
           org_id?: string | null
@@ -1955,6 +2031,7 @@ export type Database = {
           household_label?: string | null
           id?: string
           is_liquid?: boolean
+          macros_basis?: string
           name?: string
           name_search?: string | null
           org_id?: string | null

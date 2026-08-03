@@ -35,6 +35,7 @@ import {
   refineFoodExchangeEquivalence,
 } from '@eva/schemas/nutrition-exchanges'
 import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
+import { syncFoodExchangeListRow } from '@/services/nutrition-exchanges/exchange-lists.service'
 
 const InputSchema = z
   .object({
@@ -85,6 +86,16 @@ export async function setFoodExchangeEquivalenceAction(input: unknown): Promise<
     return { success: false, error: 'No pudimos guardar la equivalencia. Intenta nuevamente.' }
   }
   if (!data) return { success: false, error: 'Ese alimento no es tuyo o ya no existe.' }
+
+  // Doble escritura (F2): la misma clasificación como fila propia de `exchange_group_foods`.
+  // Reclasificar de grupo borra la fila vieja, así el alumno no ve el alimento en dos grupos.
+  await syncFoodExchangeListRow(supabase, {
+    actorCoachId: user.id,
+    foodId: parsed.data.foodId,
+    exchangeGroupId: equivalence.exchangeGroupId,
+    portionGrams: equivalence.exchangePortionGrams,
+    portionLabel: equivalence.exchangePortionLabel,
+  })
 
   revalidatePath('/coach/foods')
   revalidatePath('/coach/nutrition-plans')

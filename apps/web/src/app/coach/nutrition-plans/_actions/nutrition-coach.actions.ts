@@ -20,6 +20,7 @@ import {
   type FoodExchangeEquivalenceInput,
 } from '@eva/schemas/nutrition-exchanges'
 import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
+import { syncFoodExchangeListRow } from '@/services/nutrition-exchanges/exchange-lists.service'
 import { fetchClientPlanSnapshotPayload } from '@/lib/nutrition-plan-snapshot'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { reconcileMealsById } from '@/services/nutrition-exchanges/meal-reconcile'
@@ -957,25 +958,40 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       if (!visible) return { error: 'Ese grupo de porciones ya no está disponible.', success: false }
     }
 
-    const { error } = await supabase.from('foods').insert({
-      name: parsed.data.name,
-      calories: parsed.data.calories,
-      protein_g: parsed.data.protein_g,
-      carbs_g: parsed.data.carbs_g,
-      fats_g: parsed.data.fats_g,
-      serving_size: parsed.data.serving_size,
-      serving_unit: parsed.data.serving_unit,
-      is_liquid,
-      category: parsed.data.category,
-      coach_id: coachId,
-      household_grams: parsed.data.household_grams ?? null,
-      household_label: parsed.data.household_label ?? null,
-      exchange_group_id: equivalence.exchangeGroupId,
-      exchange_portion_grams: equivalence.exchangePortionGrams,
-      exchange_portion_label: equivalence.exchangePortionLabel,
-    })
+    const { data: inserted, error } = await supabase
+      .from('foods')
+      .insert({
+        name: parsed.data.name,
+        calories: parsed.data.calories,
+        protein_g: parsed.data.protein_g,
+        carbs_g: parsed.data.carbs_g,
+        fats_g: parsed.data.fats_g,
+        serving_size: parsed.data.serving_size,
+        serving_unit: parsed.data.serving_unit,
+        is_liquid,
+        category: parsed.data.category,
+        coach_id: coachId,
+        household_grams: parsed.data.household_grams ?? null,
+        household_label: parsed.data.household_label ?? null,
+        exchange_group_id: equivalence.exchangeGroupId,
+        exchange_portion_grams: equivalence.exchangePortionGrams,
+        exchange_portion_label: equivalence.exchangePortionLabel,
+      })
+      .select('id')
+      .single()
 
     if (error) throw error
+
+    // Doble escritura (F2): la clasificación también como fila propia de la lista del grupo.
+    if (inserted?.id) {
+      await syncFoodExchangeListRow(supabase, {
+        actorCoachId: coachId,
+        foodId: inserted.id as string,
+        exchangeGroupId: equivalence.exchangeGroupId,
+        portionGrams: equivalence.exchangePortionGrams,
+        portionLabel: equivalence.exchangePortionLabel,
+      })
+    }
 
     revalidatePath('/coach/nutrition-plans')
     revalidatePath('/coach/foods')
