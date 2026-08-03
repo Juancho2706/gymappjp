@@ -2899,6 +2899,108 @@ export type Database = {
           },
         ]
       }
+      nutrition_plan_templates_v2: {
+        Row: {
+          coach_id: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          draft: Json
+          id: string
+          is_favorite: boolean
+          legacy_template_id: string | null
+          name: string
+          org_id: string | null
+          schema_version: number
+          source: string
+          source_plan_id: string | null
+          strategy: string
+          summary: Json | null
+          team_id: string | null
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          coach_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          draft: Json
+          id?: string
+          is_favorite?: boolean
+          legacy_template_id?: string | null
+          name: string
+          org_id?: string | null
+          schema_version?: number
+          source?: string
+          source_plan_id?: string | null
+          strategy: string
+          summary?: Json | null
+          team_id?: string | null
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          coach_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          draft?: Json
+          id?: string
+          is_favorite?: boolean
+          legacy_template_id?: string | null
+          name?: string
+          org_id?: string | null
+          schema_version?: number
+          source?: string
+          source_plan_id?: string | null
+          strategy?: string
+          summary?: Json | null
+          team_id?: string | null
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plan_templates_v2_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_templates_v2_legacy_template_id_fkey"
+            columns: ["legacy_template_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_templates_v2_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_templates_v2_source_plan_id_fkey"
+            columns: ["source_plan_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_templates_v2_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_plans: {
         Row: {
           carbs_g: number | null
