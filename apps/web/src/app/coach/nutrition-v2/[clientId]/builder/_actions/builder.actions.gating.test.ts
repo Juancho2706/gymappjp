@@ -57,6 +57,13 @@ function draft(overrides: Record<string, unknown> = {}) {
 
 const variant = (key: string) => ({ key, label: key, targets: {}, mealSlots: [] })
 
+// Franja minima: las estrategias con franjas (structured/hybrid) NO pueden publicar un dia
+// vacio (guard de `buildPersistDraftPayload`), asi que el fixture de esos casos trae una.
+// `flexible` sigue con `mealSlots: []`, que ahi es su estado correcto.
+const conFranja = [
+  { key: 'default', label: 'Todos los dias', targets: {}, mealSlots: [{ code: 'slot-1', name: 'Desayuno', items: [] }] },
+]
+
 function input(draftOverrides: Record<string, unknown> = {}) {
   return {
     draft: draft(draftOverrides),
@@ -107,7 +114,7 @@ describe('publishPlanAction — gate del addon Nutricion Pro', () => {
 
   it('CON addon: hibrida pasa el gate y prosigue la publicacion', async () => {
     vi.mocked(hasModule).mockResolvedValue(true)
-    const res = await publishPlanAction(input({ strategy: 'hybrid' }))
+    const res = await publishPlanAction(input({ strategy: 'hybrid', dayVariants: conFranja }))
     expect(res).toMatchObject({ ok: true, versionId: PUBLISHED_VERSION, planId: PUBLISHED_PLAN })
     expect(dbRpc).toHaveBeenCalledWith('persist_and_publish_nutrition_plan_v2', expect.anything())
   })
@@ -122,7 +129,7 @@ describe('publishPlanAction — gate del addon Nutricion Pro', () => {
 
   it('BASE sin addon: structured con 1 variante tambien publica (structured = BASE, CEO)', async () => {
     vi.mocked(hasModule).mockResolvedValue(false)
-    const res = await publishPlanAction(input({ strategy: 'structured' }))
+    const res = await publishPlanAction(input({ strategy: 'structured', dayVariants: conFranja }))
     expect(res).toMatchObject({ ok: true })
     expect(hasModule).not.toHaveBeenCalled()
   })

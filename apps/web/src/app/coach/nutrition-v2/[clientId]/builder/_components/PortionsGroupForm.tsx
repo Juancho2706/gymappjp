@@ -44,6 +44,30 @@ export function suggestExchangeGroupCode(name: string): string {
   return toExchangeGroupSlug(name).replace(/[^a-z]/g, '').slice(0, 3).toUpperCase()
 }
 
+const A_Z = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+/**
+ * Codigo LIBRE derivado de otro ("C" -> "CA", "CB"…) para duplicar un grupo del sistema sin
+ * chocar con la unicidad que impone el servicio. El schema solo acepta 1-3 letras, asi que no
+ * sirve el clasico sufijo numerico: se prueban sufijos de una y dos letras.
+ */
+export function suggestFreeExchangeGroupCode(base: string, taken: readonly string[]): string {
+  const ocupados = new Set(taken.map((code) => code.trim().toUpperCase()))
+  const raiz = base.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'G'
+  for (const letra of A_Z) {
+    const candidato = (raiz.slice(0, 2) + letra).slice(0, 3)
+    if (!ocupados.has(candidato)) return candidato
+  }
+  for (const primera of A_Z) {
+    for (const segunda of A_Z) {
+      const candidato = raiz.slice(0, 1) + primera + segunda
+      if (!ocupados.has(candidato)) return candidato
+    }
+  }
+  // Inalcanzable con 26² combinaciones libres por raiz; el servidor es el techo real igual.
+  return raiz
+}
+
 /** Acepta coma decimal es-CL ("1,5"); vacío = 0. `null` = entrada inválida. */
 function parseNumberEs(raw: string): number | null {
   const trimmed = raw.trim()
@@ -62,6 +86,7 @@ const labelClass = 'block text-xs font-medium text-muted'
 
 export function PortionsGroupForm({
   group,
+  initial,
   submitting,
   serverError,
   onCancel,
@@ -69,21 +94,28 @@ export function PortionsGroupForm({
 }: {
   /** null = creación; grupo = edición de uno propio. */
   group: ExchangeGroup | null
+  /**
+   * Valores de arranque de una creación PRECARGADA ("Duplicar y ajustar" de un grupo del
+   * sistema). Solo se lee cuando `group` es null: en edición manda el grupo. El código ya
+   * viene libre de colisiones, así que arranca "tocado" y el form no lo re-sugiere.
+   */
+  initial?: ExchangeGroupFormValues | null
   submitting: boolean
   serverError: string | null
   onCancel: () => void
   onSubmit: (values: ExchangeGroupFormValues) => void
 }) {
   const copy = PORTIONS_COPY.groupEditor
-  const [name, setName] = useState(group?.name ?? '')
-  const [code, setCode] = useState(group?.code ?? '')
-  const [codeTouched, setCodeTouched] = useState(group != null)
-  const [protein, setProtein] = useState(group ? formatNumberEs(group.refProteinG) : '0')
-  const [carbs, setCarbs] = useState(group ? formatNumberEs(group.refCarbsG) : '0')
-  const [fats, setFats] = useState(group ? formatNumberEs(group.refFatsG) : '0')
-  const [kcal, setKcal] = useState(group ? formatNumberEs(group.refCalories) : '0')
-  const [kcalTouched, setKcalTouched] = useState(group != null)
-  const [color, setColor] = useState<string | null>(group?.color ?? null)
+  const seed = group ?? initial ?? null
+  const [name, setName] = useState(seed ? (group?.name ?? initial?.name ?? '') : '')
+  const [code, setCode] = useState(seed ? (group?.code ?? initial?.code ?? '') : '')
+  const [codeTouched, setCodeTouched] = useState(seed != null)
+  const [protein, setProtein] = useState(seed ? formatNumberEs(group?.refProteinG ?? initial!.refProteinG) : '0')
+  const [carbs, setCarbs] = useState(seed ? formatNumberEs(group?.refCarbsG ?? initial!.refCarbsG) : '0')
+  const [fats, setFats] = useState(seed ? formatNumberEs(group?.refFatsG ?? initial!.refFatsG) : '0')
+  const [kcal, setKcal] = useState(seed ? formatNumberEs(group?.refCalories ?? initial!.refCalories) : '0')
+  const [kcalTouched, setKcalTouched] = useState(seed != null)
+  const [color, setColor] = useState<string | null>(group?.color ?? initial?.color ?? null)
   const [localError, setLocalError] = useState<string | null>(null)
 
   /** Recalcula las kcal sugeridas salvo que el coach ya las haya escrito a mano. */
@@ -136,7 +168,20 @@ export function PortionsGroupForm({
 
   return (
     <div className="space-y-3 p-1.5">
-      <p className="text-sm font-semibold text-strong">{group ? copy.editTitle : copy.createTitle}</p>
+      <p className="text-sm font-semibold text-strong">
+        {group ? copy.editTitle : initial ? copy.duplicateTitle : copy.createTitle}
+      </p>
+
+      {/* Duplicado: se dice explicitamente que es una copia y que el original no se toca. */}
+      {!group && initial ? <p className="text-[11px] leading-relaxed text-muted">{copy.duplicateHint}</p> : null}
+
+      {/* Edicion: los planes publicados llevan los macros CONGELADOS del momento de publicar
+          (`snapshot_ref_*`), asi que este cambio no los alcanza. Antes no lo decia nadie. */}
+      {group ? (
+        <p className="rounded-control bg-surface-sunken px-2 py-1.5 text-[11px] leading-relaxed text-muted">
+          {copy.publishedFrozenNotice}
+        </p>
+      ) : null}
 
       <div>
         <label className={labelClass} htmlFor="portions-group-name">

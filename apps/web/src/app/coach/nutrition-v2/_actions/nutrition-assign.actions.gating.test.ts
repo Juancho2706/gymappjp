@@ -84,9 +84,18 @@ function detail(strategy: 'structured' | 'hybrid') {
           dayOfWeek: null,
           isDefault: true,
           targets: { calories: 2000, proteinG: null, carbsG: null, fatsG: null, fiberG: null, sodiumMg: null, waterMl: null },
-          mealSlots: strategy === 'structured'
-            ? [{ code: 'slot-1', name: 'Desayuno', startTime: null, endTime: null, mode: 'anchor', required: false, instructions: null, targets: {}, prescriptionItems: [{ foodId: null, recipeId: null, name: 'Avena', quantity: 80, unit: 'g', minimumQuantity: null, maximumQuantity: null, optional: false, notes: null }] }]
-            : [],
+          // Las dos estrategias del fixture usan franjas, asi que las dos traen una: un dia
+          // sin franjas no se puede publicar (guard de `buildPersistDraftPayload`). Los items
+          // solo tienen sentido en structured; hybrid queda con la franja vacia de items.
+          mealSlots: [
+            {
+              code: 'slot-1', name: 'Desayuno', startTime: null, endTime: null, mode: 'anchor',
+              required: false, instructions: null, targets: {},
+              prescriptionItems: strategy === 'structured'
+                ? [{ foodId: null, recipeId: null, name: 'Avena', quantity: 80, unit: 'g', minimumQuantity: null, maximumQuantity: null, optional: false, notes: null }]
+                : [],
+            },
+          ],
         },
       ],
     },

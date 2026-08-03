@@ -14,15 +14,20 @@
  */
 
 import { useState, useSyncExternalStore } from 'react'
-import { Loader2, MoreVertical, Plus, RefreshCcw } from 'lucide-react'
+import { Copy, Loader2, MoreVertical, Plus, RefreshCcw } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { NUTRITION_MOTION } from '@eva/nutrition-v2'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
+import { EXCHANGE_GROUP_NAME_MAX } from '@eva/schemas/nutrition-exchanges'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { PortionsGroupDot } from './PortionsGroupDot'
-import { PortionsGroupForm, type ExchangeGroupFormValues } from './PortionsGroupForm'
+import {
+  PortionsGroupForm,
+  suggestFreeExchangeGroupCode,
+  type ExchangeGroupFormValues,
+} from './PortionsGroupForm'
 import type { PortionsController } from './PortionsSection'
 
 // matchMedia md-up (mismo patrón que useIsDesktopMd del builder de workouts, copiado
@@ -53,16 +58,29 @@ function refHint(group: ExchangeGroup): string {
   return `1 porción ≈ ${kcal} kcal · ${c} C · ${p} P · ${g} G`
 }
 
+/**
+ * Segunda linea de la fila: cuantas equivalencias vera el alumno. `undefined` = el conteo no
+ * viajo (falla tolerada del catalogo) y no se pinta nada — mejor callar que mentir un cero.
+ */
+function foodsHint(count: number | undefined): { text: string; empty: boolean } | null {
+  if (count == null) return null
+  if (count === 0) return { text: PORTIONS_COPY.builder.groupFoodsEmpty, empty: true }
+  return { text: PORTIONS_COPY.builder.groupFoodCount(count), empty: false }
+}
+
 function GroupOption({
   group,
   used,
+  foodCount,
   onPick,
 }: {
   group: ExchangeGroup
   used: boolean
+  foodCount: number | undefined
   onPick: () => void
 }) {
   const reduceMotion = useReducedMotion()
+  const foods = foodsHint(foodCount)
   return (
     <motion.button
       type="button"
@@ -84,6 +102,16 @@ function GroupOption({
         <span className="block truncate text-xs text-muted">
           {used ? PORTIONS_COPY.builder.groupUsed : refHint(group)}
         </span>
+        {!used && foods ? (
+          <span
+            className={
+              'block truncate text-[11px] ' +
+              (foods.empty ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-subtle')
+            }
+          >
+            {foods.text}
+          </span>
+        ) : null}
       </span>
     </motion.button>
   )
@@ -97,6 +125,7 @@ function GroupOption({
 function CustomGroupRow({
   group,
   used,
+  foodCount,
   menuOpen,
   confirmingDelete,
   busy,
@@ -109,6 +138,7 @@ function CustomGroupRow({
 }: {
   group: ExchangeGroup
   used: boolean
+  foodCount: number | undefined
   menuOpen: boolean
   confirmingDelete: boolean
   busy: boolean
@@ -124,7 +154,7 @@ function CustomGroupRow({
     <div>
       <div className="flex items-center gap-0.5">
         <div className="min-w-0 flex-1">
-          <GroupOption group={group} used={used} onPick={onPick} />
+          <GroupOption group={group} used={used} foodCount={foodCount} onPick={onPick} />
         </div>
         <button
           type="button"
@@ -190,6 +220,7 @@ function GroupList({
   usedGroupIds,
   onPick,
   onCreate,
+  onDuplicate,
   onEdit,
   busy,
   actionError,
@@ -198,6 +229,7 @@ function GroupList({
   usedGroupIds: string[]
   onPick: (exchangeGroupId: string) => void
   onCreate: () => void
+  onDuplicate: (group: ExchangeGroup) => void
   onEdit: (group: ExchangeGroup) => void
   busy: boolean
   actionError: string | null
@@ -236,7 +268,29 @@ function GroupList({
   return (
     <div className="space-y-0.5">
       {system.map((group) => (
-        <GroupOption key={group.id} group={group} used={used.has(group.id)} onPick={() => onPick(group.id)} />
+        // Los grupos del sistema son inmutables (RLS `xg_update` los niega), asi que en vez de
+        // "Editar" ofrecen "Duplicar": es la respuesta al pedido real del coach ("el cereal
+        // aporta 15 g de carbos y yo trabajo con 20"). Se crea un grupo PROPIO con los macros
+        // precargados, sin tocar el del sistema ni los planes que ya lo usan.
+        <div key={group.id} className="flex items-center gap-0.5">
+          <div className="min-w-0 flex-1">
+            <GroupOption
+              group={group}
+              used={used.has(group.id)}
+              foodCount={controller.groupFoodCounts[group.id]}
+              onPick={() => onPick(group.id)}
+            />
+          </div>
+          <button
+            type="button"
+            aria-label={PORTIONS_COPY.groupEditor.duplicateAria(group.name)}
+            title={PORTIONS_COPY.groupEditor.duplicate}
+            onClick={() => onDuplicate(group)}
+            className="inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Copy aria-hidden="true" className="h-4 w-4" />
+          </button>
+        </div>
       ))}
       <div className="my-1 border-t border-border-subtle" aria-hidden="true" />
       {custom.map((group) => (
@@ -244,6 +298,7 @@ function GroupList({
           key={group.id}
           group={group}
           used={used.has(group.id)}
+          foodCount={controller.groupFoodCounts[group.id]}
           menuOpen={menuGroupId === group.id}
           confirmingDelete={deletingGroupId === group.id}
           busy={busy}
@@ -304,7 +359,11 @@ export function PortionsGroupPicker({
 }) {
   const [open, setOpen] = useState(false)
   // 'list' = catálogo; 'form' = alta/edición de un grupo propio DENTRO del mismo popover/sheet.
-  const [editing, setEditing] = useState<{ group: ExchangeGroup | null } | null>(null)
+  // `preset` = creacion PRECARGADA desde un grupo del sistema ("Duplicar y ajustar").
+  const [editing, setEditing] = useState<{
+    group: ExchangeGroup | null
+    preset?: ExchangeGroupFormValues
+  } | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const isDesktop = useIsDesktopMd()
@@ -358,6 +417,26 @@ export function PortionsGroupPicker({
       setActionError(null)
       setEditing({ group: null })
     },
+    onDuplicate: (group: ExchangeGroup) => {
+      setActionError(null)
+      // El codigo se sugiere LIBRE contra el catalogo ya cargado (la unicidad la impone el
+      // servicio igual; esto solo evita el viaje que iba a fallar).
+      const taken = (controller.groups ?? []).map((candidate) => candidate.code)
+      setEditing({
+        group: null,
+        preset: {
+          name: PORTIONS_COPY.groupEditor
+            .duplicateSuffix(group.name)
+            .slice(0, EXCHANGE_GROUP_NAME_MAX),
+          code: suggestFreeExchangeGroupCode(group.code, taken),
+          refCalories: group.refCalories,
+          refProteinG: group.refProteinG,
+          refCarbsG: group.refCarbsG,
+          refFatsG: group.refFatsG,
+          color: group.color,
+        },
+      })
+    },
     onEdit: (group: ExchangeGroup) => {
       setActionError(null)
       setEditing({ group })
@@ -369,8 +448,9 @@ export function PortionsGroupPicker({
   const body = editing ? (
     <PortionsGroupForm
       // Remonta el form al cambiar de grupo: el estado local arranca del grupo correcto.
-      key={editing.group?.id ?? 'nuevo'}
+      key={editing.group?.id ?? (editing.preset ? 'duplicado-' + editing.preset.code : 'nuevo')}
       group={editing.group}
+      initial={editing.preset ?? null}
       submitting={busy}
       serverError={actionError}
       onCancel={() => {

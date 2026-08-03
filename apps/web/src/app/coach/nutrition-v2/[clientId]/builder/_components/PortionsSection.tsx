@@ -54,6 +54,12 @@ import {
 export interface PortionsController {
   bySlot: PortionsBySlot
   groups: ExchangeGroup[] | null
+  /**
+   * Cuantos alimentos equivalentes tiene cada grupo (`groupId -> n`), con el mismo alcance
+   * que vera el alumno. Un grupo en 0 no muestra ningun ejemplo en el sheet "1 porcion
+   * equivale a": la UI lo dice en voz alta en vez de dejar que lo descubra el alumno.
+   */
+  groupFoodCounts: Record<string, number>
   groupsLoading: boolean
   groupsError: string | null
   /** Carga el catálogo si aún no está (el picker la dispara al abrirse). */
@@ -114,6 +120,7 @@ export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsByS
   // (initializer perezoso): después manda el estado del wizard.
   const [bySlot, setBySlot] = useState<PortionsBySlot>(() => initialBySlot ?? {})
   const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
+  const [groupFoodCounts, setGroupFoodCounts] = useState<Record<string, number>>({})
   const [groupsLoading, setGroupsLoading] = useState(false)
   const [groupsError, setGroupsError] = useState<string | null>(null)
   const loadingRef = useRef(false)
@@ -131,6 +138,7 @@ export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsByS
       return
     }
     setGroups(sortGroupsForPicker(res.groups))
+    setGroupFoodCounts(res.foodCounts)
   }, [clientId])
 
   const ensureGroupsLoaded = useCallback(() => {
@@ -140,6 +148,7 @@ export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsByS
   return {
     bySlot,
     groups,
+    groupFoodCounts,
     groupsLoading,
     groupsError,
     ensureGroupsLoaded,
@@ -196,6 +205,10 @@ export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsByS
         const res = await createExchangeGroupAction({ clientId, ...values })
         if (!res.ok) return { ok: false, error: res.error }
         setGroups((prev) => sortGroupsForPicker([...(prev ?? []), res.group]))
+        // Un grupo recien creado no tiene equivalencias: se registra el 0 EXPLICITO para que
+        // la fila avise de inmediato (sin esto el mapa no tendria la clave y la UI no sabria
+        // distinguir "vacio" de "todavia no cargado").
+        setGroupFoodCounts((prev) => ({ ...prev, [res.group.id]: 0 }))
         return { ok: true }
       },
       [clientId],
@@ -354,8 +367,12 @@ export function PortionsSection({
             // el fallback cubre re-renders raros sin romper la fila.
             const name = group?.name ?? 'Grupo'
             const label = `porciones de ${name} en ${slotName || 'la franja'}`
+            // Grupo sin equivalencias: el alumno vera el chip y podra marcar porciones, pero
+            // el sheet "1 porcion equivale a" le sale vacio. Se avisa ACA, donde el coach ya
+            // decidio usarlo, y no solo en el picker (de donde ya salio).
+            const sinAlimentos = controller.groupFoodCounts[target.exchangeGroupId] === 0
             return (
-              <li key={target.exchangeGroupId} className="flex items-center gap-2">
+              <li key={target.exchangeGroupId} className="flex flex-wrap items-center gap-2">
                 {group ? (
                   <PortionsGroupDot group={group} />
                 ) : (
@@ -377,6 +394,12 @@ export function PortionsSection({
                 >
                   <Trash2 aria-hidden="true" className="h-4 w-4" />
                 </motion.button>
+                {sinAlimentos ? (
+                  <p className="basis-full text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                    {PORTIONS_COPY.builder.groupFoodsEmpty}.{' '}
+                    <span className="font-normal text-muted">{PORTIONS_COPY.builder.groupFoodsEmptyHint}</span>
+                  </p>
+                ) : null}
               </li>
             )
           })}

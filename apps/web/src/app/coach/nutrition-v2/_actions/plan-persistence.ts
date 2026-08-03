@@ -392,6 +392,31 @@ export function buildPersistDraftPayload(input: {
   resolveBaseGroup: (code: string) => BuilderExchangeGroup | null
 }): { ok: true; payload: Record<string, unknown> } | ActionFailure {
   const { draft, foods, exchangeGroupsById, resolveBaseGroup } = input
+
+  // Guard de dia vacio (defecto 2026-08-03): un plan con franjas NO puede publicar una
+  // variante de dia sin ninguna. El alumno no ve "un dia sin porciones": ve el dia ENTERO
+  // vacio, sin comidas ni nada. Verificado en LIVE: 16 variantes publicadas asi, en 4
+  // versiones de 2 alumnos.
+  //
+  // Vive ACA y no en la UI a proposito: el builder web ya lo bloqueaba
+  // (`draft-builder.ts` valida `variant.slots.length === 0`), y aun asi entraron dias
+  // vacios por el quick-edit y por RN. Este es el unico punto por el que pasan TODAS las
+  // publicaciones, asi que es el unico lugar donde el guard es real. La UI nunca autoriza.
+  //
+  // `flexible` queda fuera por definicion: esa estrategia no tiene franjas en ninguna
+  // variante y un dia sin franjas es su estado correcto.
+  if (draft.strategy !== 'flexible') {
+    const vacia = draft.dayVariants.find((variant) => variant.mealSlots.length === 0)
+    if (vacia != null) {
+      return fail(
+        'EMPTY_DAY_VARIANT',
+        'Hay un día del plan sin ninguna comida (' +
+          (vacia.label.trim() || 'día sin nombre') +
+          '). Tu alumno lo vería vacío: agrégale comidas o elimínalo para que herede el día base.',
+      )
+    }
+  }
+
   const foodFor = (foodId: string | null): BuilderFood | null => (foodId ? foods.get(foodId) ?? null : null)
 
   let variants: Array<Record<string, unknown>>

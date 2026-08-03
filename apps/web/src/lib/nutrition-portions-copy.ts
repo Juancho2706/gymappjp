@@ -29,6 +29,14 @@ export const PORTIONS_COPY = {
     pickerLoading: 'Cargando grupos…',
     pickerError: 'No pudimos cargar los grupos.',
     pickerRetry: 'Reintentar',
+    /**
+     * Equivalencias por grupo: cuantos alimentos vera el alumno en "1 porción equivale a".
+     * El estado vacio se nombra en terminos del ALUMNO, no del sistema ("no verá ejemplos"),
+     * y va acompañado de la accion, porque un grupo propio nace siempre en cero.
+     */
+    groupFoodCount: (n: number) => (n === 1 ? '1 alimento equivalente' : `${n} alimentos equivalentes`),
+    groupFoodsEmpty: 'Sin alimentos: tu alumno no verá ejemplos',
+    groupFoodsEmptyHint: 'Clasifica alimentos en este grupo desde Mis alimentos.',
     /** Labels a11y del stepper 0,5 y de la nota del target (quick-edit RN). */
     stepDownAria: (grupo: string) => `Restar media porción de ${grupo}`,
     stepUpAria: (grupo: string) => `Sumar media porción de ${grupo}`,
@@ -101,6 +109,23 @@ export const PORTIONS_COPY = {
     manageAria: (grupo: string) => `Opciones de ${grupo}`,
     edit: 'Editar',
     delete: 'Eliminar',
+    /**
+     * Los grupos del sistema no se editan (RLS los niega): se duplican. Es la salida al caso
+     * real "el cereal aporta 15 g de carbos y yo trabajo con 20" sin tocar el grupo compartido
+     * ni los planes publicados que lo usan.
+     */
+    duplicate: 'Duplicar y ajustar',
+    duplicateAria: (grupo: string) => `Duplicar ${grupo} y ajustar sus valores`,
+    duplicateSuffix: (grupo: string) => `${grupo} (ajustado)`,
+    duplicateTitle: 'Duplicar grupo',
+    /**
+     * Los targets congelan `snapshot_ref_*` al publicar, pero la lista de alimentos se lee
+     * viva: editar un grupo NO cambia los planes ya publicados y hasta ahora nada lo decia.
+     */
+    publishedFrozenNotice:
+      'Los planes ya publicados mantienen los valores con los que se publicaron. Vuelve a publicar el plan del alumno para aplicarles el cambio.',
+    duplicateHint:
+      'Es una copia tuya: puedes cambiarle los valores sin afectar el grupo original ni a los planes que ya lo usan.',
     deleteConfirmTitle: (grupo: string) => `¿Eliminar ${grupo}?`,
     deleteInUseNotice:
       'Los planes publicados conservan su versión congelada. Se quitará de las franjas que estés editando.',
