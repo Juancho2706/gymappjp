@@ -256,10 +256,20 @@ export function nutritionPlanCtaLabel(planStatus: string | null): 'Crear plan' |
  * (`nutrition_plans_v2` no tiene invariante de una-raiz-activa-por-alumno). Espeja al web, que
  * arma el draft con `existingPlan?.id` (PlanBuilderClient.tsx). Sin plan vigente se omite el
  * query y el builder crea la primera raiz, como siempre.
+ *
+ * `from` (F4, AD-3): ORIGEN del plan — `template:<uuid>` o `plan:<uuid>`, en el formato que produce
+ * `formatPlanBuilderOrigin` y lee `parsePlanBuilderOrigin` (@eva/nutrition-v2). Es la MISMA puerta
+ * que usa la web (`?from=`), asi que no hay dos caminos de creacion que puedan divergir.
  */
-export function nutritionV2BuilderHref(clientId: string, planId?: string | null): string {
+export function nutritionV2BuilderHref(
+  clientId: string,
+  opts?: { planId?: string | null; from?: string | null },
+): string {
   const base = `/coach/nutrition-v2/builder/${encodeURIComponent(clientId)}`
-  return planId ? `${base}?planId=${encodeURIComponent(planId)}` : base
+  const query: string[] = []
+  if (opts?.planId) query.push(`planId=${encodeURIComponent(opts.planId)}`)
+  if (opts?.from) query.push(`from=${encodeURIComponent(opts.from)}`)
+  return query.length === 0 ? base : `${base}?${query.join('&')}`
 }
 
 /** Fecha local (YYYY-MM-DD) de un ISO en la zona horaria dada; null si no parsea. */

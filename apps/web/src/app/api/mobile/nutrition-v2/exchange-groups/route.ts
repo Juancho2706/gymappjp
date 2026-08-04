@@ -15,6 +15,7 @@ import {
   type ExchangeGroupInput,
   type ExchangeGroupScope,
 } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
+import { getExchangeListCounts } from '@/services/nutrition-exchanges/exchange-lists.service'
 import {
   gateNutritionV2Api,
   jsonNoStore,
@@ -74,7 +75,26 @@ async function gateCoach(request: NextRequest, scope: unknown, mutation = false)
   return { ok: true as const, gate, scope: parsedScope.data }
 }
 
-/** Catálogo V2 scoped: system + grupos propios + grupo del Team activo. */
+/**
+ * Cuántas equivalencias VIVAS tiene cada grupo (`exchange_group_foods` resuelto por precedencia
+ * y con las lápidas descontadas — la fuente correcta post-F2). Sin este dato el coach elige
+ * grupos a ciegas y, sobre todo, no se entera de que el grupo propio que acaba de crear nace
+ * VACÍO: su alumno abre "1 porción equivale a" y no ve un solo ejemplo.
+ *
+ * DEGRADACIÓN SILENCIOSA (mismo criterio que el builder web): el conteo es informativo, así que
+ * un fallo suyo devuelve `{}` y JAMÁS rompe el catálogo. La UI distingue "no vino el conteo"
+ * (no pinta nada) de "vino un 0" (avisa en ámbar).
+ */
+async function foodCountsFor(gate: NutritionV2ApiGate, groupIds: string[]): Promise<Record<string, number>> {
+  if (groupIds.length === 0) return {}
+  try {
+    return await getExchangeListCounts(dbOf(gate), groupIds)
+  } catch {
+    return {}
+  }
+}
+
+/** Catálogo V2 scoped: system + grupos propios + grupo del Team activo, con su conteo de equivalencias. */
 export async function GET(request: NextRequest) {
   const startedAt = Date.now()
   const scope = {
@@ -93,7 +113,8 @@ export async function GET(request: NextRequest) {
     resolved.gate.coachId!,
     workspaceOf(resolved.scope),
   )
-  const response = jsonNoStore({ groups })
+  const foodCounts = await foodCountsFor(resolved.gate, groups.map((group) => group.id))
+  const response = jsonNoStore({ groups, foodCounts })
   logNutritionV2Api({ route: ROUTE, startedAt, status: response.status, payload: { count: groups.length } })
   return response
 }

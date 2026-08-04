@@ -161,7 +161,7 @@ export function buildNutritionTabV2ViewModel(
     detailHref: `/coach/nutrition-v2/${clientId}`,
     // NUT-004: si el alumno ya tiene una raiz de plan, el builder debe APPENDear version sobre
     // ella (`?planId=`), nunca insertar otra raiz activa. Espejo del web (`existingPlan?.id`).
-    builderHref: nutritionV2BuilderHref(clientId, detail.plan.plan?.id ?? null),
+    builderHref: nutritionV2BuilderHref(clientId, { planId: detail.plan.plan?.id ?? null }),
     historyUpgradeHref: input.historyUpgradeHref ?? DEFAULT_HISTORY_UPGRADE_HREF,
     builderCtaLabel: hasPlan ? 'Nueva versión' : 'Crear plan',
     plan: activePlan

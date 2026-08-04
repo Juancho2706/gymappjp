@@ -511,7 +511,7 @@ export function QuickEditMode({
         if (ownGroupsRequestedRef.current) return
         ownGroupsRequestedRef.current = true
         void fetchNutritionV2ExchangeGroups(scope)
-          .then((groups) => {
+          .then(({ groups }) => {
             if (!mountedRef.current) return
             setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
           })

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createCoachExchangeGroup: vi.fn(),
   updateCoachExchangeGroup: vi.fn(),
   deleteCoachExchangeGroup: vi.fn(),
+  getExchangeListCounts: vi.fn(),
 }))
 
 vi.mock('../_shared', () => ({
@@ -21,6 +22,10 @@ vi.mock('@/services/nutrition-exchanges/nutrition-exchanges.service', () => ({
   createCoachExchangeGroup: mocks.createCoachExchangeGroup,
   updateCoachExchangeGroup: mocks.updateCoachExchangeGroup,
   deleteCoachExchangeGroup: mocks.deleteCoachExchangeGroup,
+}))
+
+vi.mock('@/services/nutrition-exchanges/exchange-lists.service', () => ({
+  getExchangeListCounts: mocks.getExchangeListCounts,
 }))
 
 import { DELETE, GET, PATCH, POST } from './route'
@@ -80,18 +85,29 @@ beforeEach(() => {
   mocks.createCoachExchangeGroup.mockResolvedValue({ success: true, group: GROUP })
   mocks.updateCoachExchangeGroup.mockResolvedValue({ success: true, group: GROUP })
   mocks.deleteCoachExchangeGroup.mockResolvedValue({ success: true })
+  mocks.getExchangeListCounts.mockResolvedValue({ [GROUP_ID]: 7 })
 })
 
 describe('Nutrition V2 exchange groups', () => {
   it('lee el catálogo standalone con el cliente token-scoped y scope explícito', async () => {
     const response = await GET(request('GET'))
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ groups: [GROUP] })
+    await expect(response.json()).resolves.toEqual({ groups: [GROUP], foodCounts: { [GROUP_ID]: 7 } })
     expect(mocks.getExchangeGroupsForCoach).toHaveBeenCalledWith(
       USER_CLIENT,
       'coach-1',
       { activeTeamId: null, orgId: null },
     )
+    expect(mocks.getExchangeListCounts).toHaveBeenCalledWith(USER_CLIENT, [GROUP_ID])
+  })
+
+  // El conteo es informativo: si revienta, el coach igual necesita su catálogo (criterio del
+  // builder web). Se degrada a `{}`, jamás a un 500 ni a un catálogo vacío.
+  it('un fallo del conteo NO rompe el catálogo', async () => {
+    mocks.getExchangeListCounts.mockRejectedValueOnce(new Error('boom'))
+    const response = await GET(request('GET'))
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ groups: [GROUP], foodCounts: {} })
   })
 
   it('propaga el Team declarado al gate y al servicio, sin fallback standalone', async () => {

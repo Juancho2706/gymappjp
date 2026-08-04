@@ -34,6 +34,9 @@ import {
 // quick-edit sin duplicarlas (afirmación 8). El dict que consume `buildPortionTargetInsertRows`
 // se arma con `buildFrozenPortionGroups`, enriqueciendo `composed_of` con el ref de cada base.
 import type { PortionComposedPart, QuickEditPortionGroup } from './nutrition-v2-quick-edit'
+// Microcopy canónico (espejo de la tabla web). Es un diccionario puro: no rompe la regla de
+// "sin react-native / expo" de este módulo.
+import { PORTIONS_COPY } from './nutrition-portions-copy'
 
 /** Target de porciones de una franja en el wizard (pre-draft, sin notes en F1). */
 export interface PortionTargetDraft {
@@ -228,6 +231,22 @@ export function stepPortionValue(
 /** ¿Hay porciones en alguna franja VIVA? (las claves huérfanas de franjas borradas no cuentan). */
 export function hasAnyPortions(map: PortionsBySlot, liveSlotKeys: string[]): boolean {
   return liveSlotKeys.some((key) => slotPortionTargets(map, key).some((t) => t.portions > 0))
+}
+
+/**
+ * Línea de apoyo "cuántas equivalencias verá el alumno" de un grupo (F1, espejo exacto del
+ * `foodsHint` web `PortionsGroupPicker.tsx:65`).
+ *
+ * Tres estados, no dos: `undefined` = el conteo NO viajó (falla tolerada del catálogo) y no se
+ * pinta nada — mejor callar que mentir un cero; `0` = el grupo no tiene un solo alimento y el
+ * alumno abrirá "1 porción equivale a" vacío, así que se avisa en ámbar (`empty: true`); `n` =
+ * el conteo. Vive acá y no en la pantalla porque lo consumen TRES superficies (chips de
+ * Porciones, picker del builder y aviso por franja) y tienen que decir lo mismo.
+ */
+export function portionsFoodsHint(count: number | undefined): { text: string; empty: boolean } | null {
+  if (count == null) return null
+  if (count === 0) return { text: PORTIONS_COPY.builder.groupFoodsEmpty, empty: true }
+  return { text: PORTIONS_COPY.builder.groupFoodCount(count), empty: false }
 }
 
 /** Grupos para el picker: los system PRIMERO (sortOrder, code), custom del coach después. */

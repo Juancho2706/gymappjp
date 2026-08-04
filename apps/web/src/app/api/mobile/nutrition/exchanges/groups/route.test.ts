@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     createCoachExchangeGroup: vi.fn(),
     updateCoachExchangeGroup: vi.fn(),
     deleteCoachExchangeGroup: vi.fn(),
+    duplicateExchangeGroupWithList: vi.fn(),
 }))
 
 vi.mock('../_shared', () => ({ gateExchanges: mocks.gateExchanges }))
@@ -25,9 +26,14 @@ vi.mock('@/services/nutrition-exchanges/nutrition-exchanges.service', () => ({
     deleteCoachExchangeGroup: mocks.deleteCoachExchangeGroup,
 }))
 
-import { DELETE, PATCH, POST } from './route'
+vi.mock('@/services/nutrition-exchanges/exchange-lists.service', () => ({
+    duplicateExchangeGroupWithList: mocks.duplicateExchangeGroupWithList,
+}))
+
+import { DELETE, PATCH, POST, PUT } from './route'
 
 const GROUP_ID = '44444444-4444-4444-8444-444444444444'
+const SOURCE_GROUP_ID = '55555555-5555-4555-8555-555555555555'
 
 const GROUP: ExchangeGroup = {
     id: GROUP_ID,
@@ -74,6 +80,12 @@ beforeEach(() => {
     mocks.createCoachExchangeGroup.mockResolvedValue({ success: true, group: GROUP })
     mocks.updateCoachExchangeGroup.mockResolvedValue({ success: true, group: GROUP })
     mocks.deleteCoachExchangeGroup.mockResolvedValue({ success: true })
+    mocks.duplicateExchangeGroupWithList.mockResolvedValue({
+        success: true,
+        group: GROUP,
+        copied: 12,
+        attempted: 12,
+    })
 })
 
 describe('POST (crear)', () => {
@@ -139,6 +151,67 @@ describe('PATCH (editar)', () => {
         const res = await PATCH(req({ ...BODY, groupId: GROUP_ID }))
         expect(res.status).toBe(200)
         expect(mocks.updateCoachExchangeGroup.mock.calls[0][1].groupId).toBe(GROUP_ID)
+    })
+})
+
+describe('PUT (duplicar y ajustar)', () => {
+    const DUP = { ...BODY, name: 'Cereales (ajustado)', code: 'CA', sourceGroupId: SOURCE_GROUP_ID }
+
+    it('duplica con el cliente token-scoped, scope standalone y copyList por defecto', async () => {
+        const res = await PUT(req(DUP))
+        expect(res.status).toBe(200)
+        await expect(res.json()).resolves.toEqual({ ok: true, group: GROUP, copied: 12, attempted: 12 })
+        const [db, input] = mocks.duplicateExchangeGroupWithList.mock.calls[0]
+        expect(db).toBe(userClient)
+        expect(db).not.toBe(admin)
+        expect(input.actorCoachId).toBe('coach-1')
+        expect(input.scope).toEqual({ orgId: null, activeTeamId: null })
+        expect(input.sourceGroupId).toBe(SOURCE_GROUP_ID)
+        // `copyList` tiene default true en el schema compartido: el body puede omitirlo.
+        expect(input.copyList).toBe(true)
+    })
+
+    it('respeta copyList: false', async () => {
+        await PUT(req({ ...DUP, copyList: false }))
+        expect(mocks.duplicateExchangeGroupWithList.mock.calls[0][1].copyList).toBe(false)
+    })
+
+    it('exige sourceGroupId valido y no escribe sin el', async () => {
+        expect((await PUT(req(BODY))).status).toBe(400)
+        expect(mocks.duplicateExchangeGroupWithList).not.toHaveBeenCalled()
+    })
+
+    it('el gate corre ANTES de validar/escribir', async () => {
+        mocks.gateExchanges.mockResolvedValue({
+            ok: false,
+            response: NextResponse.json({ error: 'off', code: 'MODULE_OFF' }, { status: 403 }),
+        })
+        expect((await PUT(req(DUP))).status).toBe(403)
+        expect(mocks.duplicateExchangeGroupWithList).not.toHaveBeenCalled()
+    })
+
+    // Falla PARCIAL: el grupo YA existe, deshacerlo dejaria al coach sin lo que si pidio.
+    it('copia fallida ⇒ 200 con copyError (el grupo se conserva)', async () => {
+        mocks.duplicateExchangeGroupWithList.mockResolvedValue({
+            success: true,
+            group: GROUP,
+            copied: 0,
+            attempted: 40,
+            copyError: 'insert failed',
+        })
+        const res = await PUT(req(DUP))
+        expect(res.status).toBe(200)
+        await expect(res.json()).resolves.toMatchObject({ ok: true, copied: 0, attempted: 40, copyError: 'insert failed' })
+    })
+
+    it('grupo origen invisible ⇒ 400 con el mensaje del dominio', async () => {
+        mocks.duplicateExchangeGroupWithList.mockResolvedValue({
+            success: false,
+            error: 'Ese grupo de porciones ya no está disponible.',
+        })
+        const res = await PUT(req(DUP))
+        expect(res.status).toBe(400)
+        await expect(res.json()).resolves.toMatchObject({ code: 'GROUP_WRITE_FAILED' })
     })
 })
 

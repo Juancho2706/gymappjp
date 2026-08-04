@@ -238,12 +238,20 @@ export async function searchExchangeListCandidates(
   }))
 }
 
-/** Cuántas equivalencias vivas tiene cada grupo, con las lápidas ya descontadas. */
+/**
+ * Cuántas equivalencias vivas tiene cada grupo, con las lápidas ya descontadas.
+ *
+ * El mapa es DENSO cuando la lectura fue exhaustiva (un grupo sin filas vale 0, y eso es lo que
+ * habilita el aviso "tu alumno no verá ejemplos"). Si el recorrido se cortó —o falló— el mapa
+ * vuelve SPARSE a propósito: una clave ausente significa "no lo sé" y quien pinte el aviso tiene
+ * que callarse, en vez de acusar de vacío a un grupo con 715 alimentos.
+ */
 export async function getExchangeListCounts(
   db: DB,
   groupIds: string[]
 ): Promise<Record<string, number>> {
-  return countExchangeListRowsByGroup(db, groupIds)
+  const { counts } = await countExchangeListRowsByGroup(db, groupIds)
+  return counts
 }
 
 export type DuplicateExchangeGroupResult =

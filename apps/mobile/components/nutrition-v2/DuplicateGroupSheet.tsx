@@ -1,55 +1,41 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native'
-import { Check, Trash2 } from 'lucide-react-native'
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { Check } from 'lucide-react-native'
 import {
-  EXCHANGE_GROUP_PALETTE,
   EXCHANGE_GROUP_NAME_MAX,
+  EXCHANGE_GROUP_PALETTE,
   exchangeGroupKcalFromMacros,
+  suggestFreeExchangeGroupCode,
   toExchangeGroupSlug,
 } from '@eva/schemas'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
-import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { Sheet } from '../Sheet'
+import { Switch } from '../Switch'
+import { toast } from '../Toast'
 import { useTheme } from '../../context/ThemeContext'
 import { PORTIONS_COPY } from '../../lib/nutrition-portions-copy'
-import {
-  createNutritionV2ExchangeGroup,
-  deleteNutritionV2ExchangeGroup,
-  updateNutritionV2ExchangeGroup,
-} from '../../lib/nutrition-v2-exchange-groups.api'
+import { duplicateNutritionV2ExchangeGroup } from '../../lib/nutrition-v2-exchange-groups.api'
 
 /**
- * Alta/edición de un grupo de porciones PROPIO del coach (porciones propias §P-A, FD6a) —
- * espejo nativo del `PortionsGroupForm` web. Vive como sheet sobre el picker de grupos (builder
- * RN y quick-edit RN), así el coach crea "SHK" sin salir de la franja que está armando.
+ * "Duplicar y ajustar" un grupo de porciones COPIANDO su lista de equivalencias (paridad T4.3
+ * de la web `DuplicateGroupSheet`).
  *
- * ESCRITURA: exclusivamente `/api/mobile/nutrition/exchanges/groups` (POST/PATCH/DELETE) vía
- * `lib/nutrition-exchanges.coach.ts` — JAMÁS Supabase directo (lección NUT-005): el endpoint
- * corre `assertModule` server-side antes de escribir y reusa el mismo schema/servicio de la web,
- * así que la unicidad de código/slug, el cap de grupos propios y `macros_confirmed = false`
- * salen idénticos en las dos superficies.
+ * Por qué existe: los grupos del sistema no se editan (la RLS `xg_update` los niega), así que la
+ * salida al caso real —"el cereal aporta 15 g de carbos y yo trabajo con 20"— es duplicarlos. Pero
+ * F1 duplicaba SOLO los macros: el grupo nuevo nacía vacío y el alumno abría "1 porción equivale
+ * a" sin un solo ejemplo. Acá la lista viaja completa y REESCALADA por regla de tres, así que
+ * ajustar los carbos recalcula los 715 alimentos de Cereales en dos toques.
  *
- * kcal: se autocalculan con Atwater (4/4/9, `exchangeGroupKcalFromMacros` del contrato
- * compartido) mientras el coach no las toque; en cuanto las edita a mano, el campo deja de
- * seguir a las macros (misma regla que la web).
+ * El reescalado es SIEMPRE server-side (`duplicateExchangeGroupWithList`): el teléfono no lleva
+ * una copia de la fórmula y por eso jamás puede producir gramos distintos del navegador. La
+ * escritura va por `/api/mobile/nutrition/exchanges/groups` (PUT) — cero Supabase directo (NUT-005).
+ *
+ * Falla PARCIAL contemplada: si el grupo se creó pero la copia falló, el grupo se CONSERVA y se
+ * avisa con `copyFailed`; deshacerlo dejaría al coach sin lo que sí pidió.
  */
 
 const COPY = PORTIONS_COPY.groupEditor
-
-export interface ExchangeGroupFormInitial {
-  id: string
-  name: string
-  code: string
-  refCalories: number
-  refProteinG: number
-  refCarbsG: number
-  refFatsG: number
-  color: string | null
-}
-
-function numberText(value: number): string {
-  return Number.isFinite(value) ? String(value) : ''
-}
+const LIST_COPY = PORTIONS_COPY.exchangeList
 
 /** Texto libre -> número no negativo. Acepta coma decimal es-CL. `null` = inválido. */
 function parseNonNegative(raw: string): number | null {
@@ -59,60 +45,70 @@ function parseNonNegative(raw: string): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
-/** Código sugerido desde el nombre: primeras letras del slug, en mayúsculas (máx 3). */
-export function suggestExchangeGroupCode(name: string): string {
-  const slug = toExchangeGroupSlug(name)
-  const letters = slug.replace(/[^a-z]/g, '')
-  return letters.slice(0, 3).toUpperCase()
+function numberText(value: number): string {
+  return Number.isFinite(value) ? String(value) : '0'
 }
 
-export function ExchangeGroupFormSheet({
+/**
+ * El color viaja como enum cerrado (`EXCHANGE_GROUP_PALETTE`) al servidor: un grupo del sistema
+ * con un color fuera de la paleta haría fallar la duplicación con un 400 opaco. Se cae al primer
+ * swatch en vez de arrastrar un valor que el schema va a rechazar.
+ */
+function paletteColorOf(color: string | null): string {
+  return color != null && (EXCHANGE_GROUP_PALETTE as readonly string[]).includes(color)
+    ? color
+    : EXCHANGE_GROUP_PALETTE[0]
+}
+
+export function DuplicateGroupSheet({
   open,
-  initial,
-  scope,
+  source,
+  takenCodes,
   onClose,
-  onSaved,
-  onDeleted,
+  onDuplicated,
 }: {
   open: boolean
-  /** Presente = edición del grupo propio; ausente = alta. */
-  initial?: ExchangeGroupFormInitial | null
-  scope: NutritionV2CoachScope
+  /** Grupo ORIGEN: da los macros de partida y es la referencia del reescalado (server-side). */
+  source: ExchangeGroup
+  /** Códigos ya ocupados del catálogo en memoria: evita el viaje que iba a chocar con la unicidad. */
+  takenCodes: readonly string[]
   onClose: () => void
-  onSaved: (group: ExchangeGroup) => void
-  onDeleted?: (groupId: string) => void
+  /** `copied` = equivalencias que efectivamente entraron (0 si no se copió o si la copia falló). */
+  onDuplicated: (group: ExchangeGroup, copied: number) => void
 }) {
   const { theme } = useTheme()
-  const editing = initial != null
 
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
-  const [codeTouched, setCodeTouched] = useState(false)
   const [protein, setProtein] = useState('0')
   const [carbs, setCarbs] = useState('0')
   const [fats, setFats] = useState('0')
   const [kcal, setKcal] = useState('0')
   const [kcalTouched, setKcalTouched] = useState(false)
-  const [color, setColor] = useState<string | null>(EXCHANGE_GROUP_PALETTE[0])
+  const [color, setColor] = useState<string>(EXCHANGE_GROUP_PALETTE[0])
+  const [copyList, setCopyList] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Cada apertura rehidrata desde `initial` (el sheet no se desmonta entre aperturas).
+  // `takenCodes` cambia de identidad en cada render del padre: el prefill solo corre al ABRIR.
   useEffect(() => {
     if (!open) return
-    setName(initial?.name ?? '')
-    setCode(initial?.code ?? '')
-    setCodeTouched(initial != null)
-    setProtein(numberText(initial?.refProteinG ?? 0))
-    setCarbs(numberText(initial?.refCarbsG ?? 0))
-    setFats(numberText(initial?.refFatsG ?? 0))
-    setKcal(numberText(initial?.refCalories ?? 0))
-    setKcalTouched(initial != null)
-    setColor(initial?.color ?? EXCHANGE_GROUP_PALETTE[0])
+    setName(COPY.duplicateSuffix(source.name).slice(0, EXCHANGE_GROUP_NAME_MAX))
+    setCode(suggestFreeExchangeGroupCode(source.code, takenCodes))
+    setProtein(numberText(source.refProteinG))
+    setCarbs(numberText(source.refCarbsG))
+    setFats(numberText(source.refFatsG))
+    setKcal(numberText(source.refCalories))
+    setKcalTouched(true)
+    setColor(paletteColorOf(source.color))
+    setCopyList(true)
     setSaving(false)
     setError(null)
-  }, [open, initial])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, source])
 
+  // kcal se autocalculan con Atwater (4/4/9) en cuanto el coach toca una macro, y dejan de
+  // seguirlas si las escribe a mano — misma regla que la web y que `ExchangeGroupFormSheet`.
   const autoKcal = useMemo(
     () =>
       exchangeGroupKcalFromMacros({
@@ -124,10 +120,11 @@ export function ExchangeGroupFormSheet({
   )
   const kcalValue = kcalTouched ? kcal : String(autoKcal)
 
-  function updateName(value: string) {
-    setName(value)
-    // El código sigue al nombre hasta que el coach lo escribe a mano (alta).
-    if (!codeTouched) setCode(suggestExchangeGroupCode(value))
+  function updateMacro(setter: (value: string) => void) {
+    return (value: string) => {
+      setKcalTouched(false)
+      setter(value)
+    }
   }
 
   async function handleSave() {
@@ -151,55 +148,57 @@ export function ExchangeGroupFormSheet({
       return
     }
 
-    const values = { name: trimmedName, code: upperCode, refCalories, refProteinG, refCarbsG, refFatsG, color }
     setSaving(true)
-    const res = editing
-      ? await updateNutritionV2ExchangeGroup(scope, initial.id, values)
-      : await createNutritionV2ExchangeGroup(scope, values)
+    const res = await duplicateNutritionV2ExchangeGroup({
+      sourceGroupId: source.id,
+      name: trimmedName,
+      code: upperCode,
+      refCalories,
+      refProteinG,
+      refCarbsG,
+      refFatsG,
+      color,
+      copyList,
+    })
     setSaving(false)
     if (!res.ok) {
       setError(res.error || COPY.writeFailed)
       return
     }
-    onSaved(res.group)
+
+    if (res.copyError) {
+      toast.error(LIST_COPY.copyFailed)
+    } else if (copyList) {
+      toast.success(
+        res.copied === res.attempted
+          ? LIST_COPY.copied(res.copied)
+          : LIST_COPY.copyPartial(res.copied, res.attempted),
+      )
+    } else {
+      toast.success(LIST_COPY.saved)
+    }
+    onDuplicated(res.group, res.copyError ? 0 : res.copied)
     onClose()
   }
 
-  function handleDelete() {
-    if (!editing || !onDeleted) return
-    Alert.alert(COPY.deleteConfirmTitle(initial.name), COPY.deleteInUseNotice, [
-      { text: COPY.cancel, style: 'cancel' },
-      {
-        text: COPY.deleteConfirm,
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            setSaving(true)
-            const res = await deleteNutritionV2ExchangeGroup(scope, initial.id)
-            setSaving(false)
-            if (!res.ok) {
-              setError(res.error || COPY.writeFailed)
-              return
-            }
-            onDeleted(initial.id)
-            onClose()
-          })()
-        },
-      },
-    ])
-  }
-
-  const title = editing ? COPY.editTitle : COPY.createTitle
-
   return (
-    <Sheet open={open} onClose={onClose} nativeModal snapPoints={['85%']} title={title} accessibilityLabel={title}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      nativeModal
+      snapPoints={['85%']}
+      title={COPY.duplicateTitle}
+      accessibilityLabel={COPY.duplicateTitle}
+    >
       <View className="gap-3 pb-2">
+        <Text className="text-xs leading-5 text-muted">{COPY.duplicateHint}</Text>
+
         <View>
           <Text className="mb-1.5 text-sm font-semibold text-strong">{COPY.nameLabel}</Text>
           <TextInput
             accessibilityLabel={COPY.nameLabel}
             value={name}
-            onChangeText={updateName}
+            onChangeText={setName}
             maxLength={EXCHANGE_GROUP_NAME_MAX}
             placeholder={COPY.namePlaceholder}
             placeholderTextColor={theme.mutedForeground}
@@ -213,14 +212,11 @@ export function ExchangeGroupFormSheet({
           <TextInput
             accessibilityLabel={COPY.codeLabel}
             value={code}
-            onChangeText={(value) => {
-              setCodeTouched(true)
-              setCode(value.toUpperCase().replace(/[^A-Za-z]/g, '').slice(0, 3))
-            }}
+            onChangeText={(value) => setCode(value.toUpperCase().replace(/[^A-Za-z]/g, '').slice(0, 3))}
             autoCapitalize="characters"
             autoCorrect={false}
             maxLength={3}
-            placeholder="SHK"
+            placeholder="CA"
             placeholderTextColor={theme.mutedForeground}
             editable={!saving}
             className="min-h-11 w-24 rounded-control border border-default bg-surface-card px-3 py-2 text-base font-semibold text-strong"
@@ -243,7 +239,7 @@ export function ExchangeGroupFormSheet({
                 <TextInput
                   accessibilityLabel={label}
                   value={value}
-                  onChangeText={setter}
+                  onChangeText={updateMacro(setter)}
                   keyboardType="decimal-pad"
                   placeholder="0"
                   placeholderTextColor={theme.mutedForeground}
@@ -301,15 +297,19 @@ export function ExchangeGroupFormSheet({
           </View>
         </View>
 
+        {/* Copiar la lista: ON por defecto. Es lo que convierte el duplicado en útil — sin esto el
+            grupo nuevo nace vacío y el alumno no ve un solo ejemplo. */}
+        <View className="min-h-hit-min flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5">
+          <View className="min-w-0 flex-1">
+            <Text className="text-sm font-semibold text-strong">{LIST_COPY.copyListLabel}</Text>
+            <Text className="mt-0.5 text-xs text-muted">{LIST_COPY.copyListHint}</Text>
+          </View>
+          <Switch value={copyList} onValueChange={setCopyList} disabled={saving} />
+        </View>
+
         <View className="rounded-control border border-warning-500/30 bg-warning-500/10 px-3 py-2">
           <Text className="text-xs leading-5 text-warning-700">{COPY.referentialNotice}</Text>
         </View>
-
-        {/* Aviso F1-a (paridad web): los targets congelan `snapshot_ref_*` al publicar, así que
-            editar el grupo NO toca los planes ya publicados. Hasta ahora nada lo decía y el coach
-            creía haber corregido a alumnos que seguían con los valores viejos. Solo en EDICIÓN:
-            en el alta no hay nada publicado que pueda quedar desalineado. */}
-        {editing ? <Text className="text-xs leading-5 text-muted">{COPY.publishedFrozenNotice}</Text> : null}
 
         {error ? (
           <View className="rounded-control border border-danger-500/30 bg-danger-500/10 px-3 py-2">
@@ -317,34 +317,32 @@ export function ExchangeGroupFormSheet({
           </View>
         ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={saving ? COPY.saving : COPY.save}
-          accessibilityState={{ disabled: saving }}
-          disabled={saving}
-          onPress={() => void handleSave()}
-          className={`min-h-12 flex-row items-center justify-center gap-2 rounded-control px-4 ${saving ? 'opacity-60' : ''}`}
-          style={{ backgroundColor: theme.primary }}
-        >
-          {saving ? <ActivityIndicator color={theme.primaryForeground} size="small" /> : null}
-          <Text className="text-sm font-bold" style={{ color: theme.primaryForeground }}>
-            {saving ? COPY.saving : COPY.save}
-          </Text>
-        </Pressable>
-
-        {editing && onDeleted ? (
+        <View className="flex-row gap-2">
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={COPY.delete}
+            accessibilityLabel={COPY.cancel}
             accessibilityState={{ disabled: saving }}
             disabled={saving}
-            onPress={handleDelete}
-            className="min-h-12 flex-row items-center justify-center gap-2 rounded-control border border-danger-500/30 bg-danger-500/10 px-4"
+            onPress={onClose}
+            className="min-h-12 flex-1 flex-row items-center justify-center rounded-control border border-default bg-surface-card px-4"
           >
-            <Trash2 color={theme.destructive} size={16} />
-            <Text className="text-sm font-semibold text-danger-600">{COPY.delete}</Text>
+            <Text className="text-sm font-semibold text-strong">{COPY.cancel}</Text>
           </Pressable>
-        ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={saving ? COPY.saving : COPY.duplicate}
+            accessibilityState={{ disabled: saving }}
+            disabled={saving}
+            onPress={() => void handleSave()}
+            className={`min-h-12 flex-1 flex-row items-center justify-center gap-2 rounded-control px-4 ${saving ? 'opacity-60' : ''}`}
+            style={{ backgroundColor: theme.primary }}
+          >
+            {saving ? <ActivityIndicator color={theme.primaryForeground} size="small" /> : null}
+            <Text className="text-sm font-bold" style={{ color: theme.primaryForeground }}>
+              {saving ? COPY.saving : COPY.duplicate}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </Sheet>
   )

@@ -18,6 +18,7 @@ import { AlertTriangle, CalendarClock, Check, Copy, CopyCheck, History, Lock, Mi
 import {
   BuilderDayStrip,
   BuilderStepList,
+  DuplicateGroupSheet,
   ExchangeGroupFormSheet,
   FoodThumbnail,
   NutritionCard,
@@ -35,10 +36,17 @@ import {
 import { QuantityStepper } from '../../../../components/nutrition-v2/quick-edit/QuantityStepper'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
-import { foodCategoryFromName, type FoodCatalogItem, type NutritionStrategy, type NutritionV2CoachScope } from '@eva/nutrition-v2'
+import {
+  foodCategoryFromName,
+  parsePlanBuilderOrigin,
+  type FoodCatalogItem,
+  type NutritionStrategy,
+  type NutritionV2CoachScope,
+} from '@eva/nutrition-v2'
 import { exchangeGroupColor, hasUnconfirmedMacros, type ExchangeGroup } from '@eva/nutrition-engine'
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
+import { toast } from '../../../../components/Toast'
 import { useTheme } from '../../../../context/ThemeContext'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { fetchNutritionV2ExchangeGroups } from '../../../../lib/nutrition-v2-exchange-groups.api'
@@ -54,6 +62,7 @@ import {
   dropVariantPortions,
   formatPortionsEs,
   hasAnyPortions,
+  portionsFoodsHint,
   portionsKey,
   removePortionGroup,
   slotPortionTargets,
@@ -66,6 +75,11 @@ import {
   loadBuilderSubstitutionsForVersion,
   rehydrateBuilderState,
 } from '../../../../lib/nutrition-v2-builder-rehydrate'
+import {
+  builderStateFromTemplateDraft,
+  templateBuilderDraft,
+} from '../../../../lib/nutrition-v2-builder-template'
+import { fetchNutritionV2PlanTemplate } from '../../../../lib/nutrition-v2-plan-templates.api'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import {
@@ -307,6 +321,13 @@ interface PortionsController {
   scope: NutritionV2CoachScope | null
   bySlot: PortionsBySlot
   groups: ExchangeGroup[] | null
+  /**
+   * Cuántas equivalencias vivas tiene cada grupo (`groupId -> n`), con el mismo alcance que verá
+   * el alumno. Un grupo en 0 no muestra NINGÚN ejemplo en el sheet "1 porción equivale a": la UI
+   * lo dice en voz alta (picker + aviso por franja) en vez de dejar que lo descubra el alumno.
+   * Clave ausente = el conteo no viajó ⇒ no se pinta nada (ver `portionsFoodsHint`).
+   */
+  groupFoodCounts: Record<string, number>
   groupsLoading: boolean
   groupsError: string | null
   /** Carga el catálogo si aún no está (el picker la dispara al abrirse). */
@@ -336,8 +357,12 @@ interface PortionsController {
     sourceSlotKey: string
     targets: ReadonlyArray<{ variantKey: string; slotKey: string }>
   }) => void
-  /** Porciones propias (FD6a): grupo recién creado/editado -> catálogo en memoria, SIN refetch. */
-  upsertCatalogGroup: (group: ExchangeGroup) => void
+  /**
+   * Porciones propias (FD6a): grupo recién creado/editado -> catálogo en memoria, SIN refetch.
+   * `foodCount` registra el conteo conocido del grupo (0 en un alta, lo copiado al duplicar);
+   * omitirlo deja intacto el conteo previo (edición de un grupo que ya tenía su lista).
+   */
+  upsertCatalogGroup: (group: ExchangeGroup, foodCount?: number) => void
   /**
    * Porciones propias (FD6a): grupo eliminado -> fuera del catálogo Y de las franjas en edición.
    * Dejarlo colgando en el borrador rompería el publish (`EXCHANGE_GROUP_NOT_FOUND` al congelar).
@@ -348,6 +373,7 @@ interface PortionsController {
 function usePortionsBuilder(scope: NutritionV2CoachScope | null): PortionsController {
   const [bySlot, setBySlot] = useState<PortionsBySlot>({})
   const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
+  const [groupFoodCounts, setGroupFoodCounts] = useState<Record<string, number>>({})
   const [groupsLoading, setGroupsLoading] = useState(false)
   const [groupsError, setGroupsError] = useState<string | null>(null)
   const loadingRef = useRef(false)
@@ -371,7 +397,12 @@ function usePortionsBuilder(scope: NutritionV2CoachScope | null): PortionsContro
     setGroupsError(null)
     try {
       const res = await fetchNutritionV2ExchangeGroups(scope)
-      if (mountedRef.current) setGroups(sortGroupsForPicker(res))
+      if (mountedRef.current) {
+        setGroups(sortGroupsForPicker(res.groups))
+        // Degradación silenciosa server-side: sin conteo el mapa queda vacío y la UI no pinta
+        // ninguna línea de apoyo (jamás un 0 inventado).
+        setGroupFoodCounts(res.foodCounts ?? {})
+      }
     } catch {
       if (mountedRef.current) setGroupsError(PORTIONS_COPY.builder.pickerError)
     } finally {
@@ -431,14 +462,24 @@ function usePortionsBuilder(scope: NutritionV2CoachScope | null): PortionsContro
 
   // Porciones propias (FD6a): tras un POST/PATCH exitoso el catalogo en memoria se actualiza en el
   // acto (el picker sigue abierto y el grupo ya se puede asignar), sin un refetch de red.
-  const upsertCatalogGroup = useCallback((group: ExchangeGroup) => {
+  const upsertCatalogGroup = useCallback((group: ExchangeGroup, foodCount?: number) => {
     setGroups((prev) => {
       const next = prev == null ? [group] : [...prev.filter((g) => g.id !== group.id), group]
       return sortGroupsForPicker(next)
     })
+    // Un grupo recién creado nace VACÍO: se registra el 0 EXPLÍCITO para que la fila avise en el
+    // acto. Sin la clave, la UI no podría distinguir "vacío" de "conteo no cargado". Al duplicar
+    // copiando la lista el caller pasa cuántas equivalencias entraron.
+    if (foodCount != null) setGroupFoodCounts((prev) => ({ ...prev, [group.id]: foodCount }))
   }, [])
   const dropCatalogGroup = useCallback((exchangeGroupId: string) => {
     setGroups((prev) => (prev == null ? prev : prev.filter((g) => g.id !== exchangeGroupId)))
+    setGroupFoodCounts((prev) => {
+      if (!(exchangeGroupId in prev)) return prev
+      const next = { ...prev }
+      delete next[exchangeGroupId]
+      return next
+    })
     setBySlot((prev) => {
       let changed = false
       const next: PortionsBySlot = {}
@@ -455,6 +496,7 @@ function usePortionsBuilder(scope: NutritionV2CoachScope | null): PortionsContro
     scope,
     bySlot,
     groups,
+    groupFoodCounts,
     groupsLoading,
     groupsError,
     ensureGroupsLoaded,
@@ -473,11 +515,29 @@ function usePortionsBuilder(scope: NutritionV2CoachScope | null): PortionsContro
 
 export default function CoachNutritionV2BuilderScreen() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ clientId: string; planId?: string; versionNumber?: string; clientName?: string }>()
+  const params = useLocalSearchParams<{
+    clientId: string
+    planId?: string
+    versionNumber?: string
+    clientName?: string
+    /** ORIGEN del plan (F4, AD-3): `template:<uuid>` — la MISMA puerta que usa la web (`?from=`). */
+    from?: string
+  }>()
   const clientId = first(params.clientId) ?? ''
   const planId = first(params.planId) ?? null
   const clientName = first(params.clientName) ?? ''
   const versionNumber = Number(first(params.versionNumber) ?? '0') || 0
+  const fromParam = first(params.from) ?? null
+  /**
+   * Plantilla de origen. Solo se soporta `kind: 'template'` en esta ola: `plan:<clientId>` (copiar
+   * el plan vigente de OTRO alumno, que la web ya resuelve server-side) exige leer el read-model de
+   * un alumno distinto al de la pantalla y queda fuera de alcance — si llega, se ignora y el
+   * builder sigue su flujo normal.
+   */
+  const templateOriginId = useMemo(() => {
+    const origin = parsePlanBuilderOrigin(fromParam)
+    return origin?.kind === 'template' ? origin.id : null
+  }, [fromParam])
 
   const entitlements = useEntitlements()
   const { ready: workspaceReady, kind, teamId, orgId } = useWorkspace()
@@ -586,7 +646,12 @@ export default function CoachNutritionV2BuilderScreen() {
         // MISMO plan. Los reemplazos NO viajan en el read-model (misma clase del bug
         // private_notes): se leen aparte, RLS-scoped. Si esa lectura falla NO rehidratamos a
         // medias — el guard anti-colapso es preferible a un wizard mutilado.
-        if (p) {
+        //
+        // F4 — el ORIGEN GANA (misma regla que el web `builder/page.tsx:157-159`): si el coach
+        // entro por "Reutilizar", eso es lo que pidio explicitamente y no se rehidrata el plan
+        // vigente encima. `existingPlan` SI se conserva: sigue gobernando la raiz del publish
+        // (NUT-004/NUT-011) y la rama "Archivar y reemplazar".
+        if (p && !templateOriginId) {
           const subs = await loadBuilderSubstitutionsForVersion(
             supabase as unknown as NutritionV2WriteClient,
             p.versionId,
@@ -628,7 +693,62 @@ export default function CoachNutritionV2BuilderScreen() {
     // `portions` es un controlador estable por callbacks; se omite a proposito para no re-disparar
     // la lectura del plan en cada cambio del mapa de porciones.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, scope, today])
+  }, [clientId, scope, today, templateOriginId])
+
+  // ── F4: aplicar la PLANTILLA de origen ──────────────────────────────────────────────────────
+  //
+  // Espejo de la rama `?from=template:` del web (`builder/page.tsx:161-186`), con la unica
+  // diferencia de transporte: RN nunca lee la tabla de plantillas por Supabase directo, sino por la
+  // API movil (que ademas resuelve los alimentos del catalogo y marca el uso).
+  //
+  //  a. La plantilla nacio del wizard (trae su `builder`) ⇒ se abre EXACTA, con las macros de los
+  //     items libres que el contrato del draft no lleva.
+  //  b. Solo trae el `draft` (las importadas de V1) ⇒ se reconstruye con el adaptador, usando los
+  //     alimentos que resolvio el servidor. Si esa lectura fallo (`foodsComplete: false`) NO se
+  //     aplica: cada item de catalogo quedaria como item libre SIN macros.
+  //
+  // Una sola vez por plantilla (ref): re-ejecutar volveria a marcar el uso y pisaria las ediciones
+  // que el coach ya hizo sobre el wizard.
+  const appliedTemplateRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!templateOriginId || !scope) return
+    if (appliedTemplateRef.current === templateOriginId) return
+    appliedTemplateRef.current = templateOriginId
+    void (async () => {
+      try {
+        const template = await fetchNutritionV2PlanTemplate(templateOriginId, { scope })
+        if (!mountedRef.current) return
+        const applied = template
+          ? templateBuilderDraft(template.builder, today) ??
+            (template.foodsComplete
+              ? builderStateFromTemplateDraft({
+                  draft: template.draft as never,
+                  foods: template.foods,
+                  clientTimezoneToday: today,
+                })
+              : null)
+          : null
+        if (!applied) {
+          toast.error('No pudimos abrir esa plantilla. Puedes armar el plan desde cero.')
+          return
+        }
+        // Aplicar la plantilla NO es una edicion del coach: se salta UN ciclo de autosave para no
+        // dejar un "borrador" que es un clon de la plantilla recien abierta.
+        skipAutosaveOnceRef.current = true
+        dispatch({ type: 'RESTORE', state: applied.state })
+        portions.restoreBySlot(applied.portionsBySlot)
+        setSelectedDow(initialDowFor(applied.state))
+        if (strategyUsesSlots(applied.state.strategy)) portions.ensureGroupsLoaded()
+        // El nombre queda el de la plantilla: el coach lo cambia en el paso "El plan" si quiere.
+        toast.success('Plantilla aplicada', { description: template?.name || undefined })
+      } catch {
+        if (!mountedRef.current) return
+        toast.error('No pudimos abrir esa plantilla. Puedes armar el plan desde cero.')
+      }
+    })()
+    // `portions` es un controlador estable por callbacks (misma omision que la lectura del plan).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateOriginId, scope, today])
 
   // Respaldo local — higiene (4B-13): barre borradores vencidos de AMBOS prefijos (TTL 7d). No
   // depende de la key, asi que corre al montar sin esperar a `existingPlanResolved`. Best-effort.
@@ -644,8 +764,13 @@ export default function CoachNutritionV2BuilderScreen() {
   // Lectura del respaldo: SOLO tras resolver `existingPlan` (la key ya es estable). Si hay un borrador
   // vigente para ESTE alumno lo guarda en el ref (sin re-render hasta tocar Restaurar) y ofrece el
   // banner. AsyncStorage es async: `active`/`mountedRef` evitan tocar estado tras el desmonte (sin flash).
+  //
+  // F4 — con ORIGEN el borrador NO se ofrece: el coach acaba de pedir explicitamente partir de una
+  // plantilla, y un banner "Restaurar borrador" encima de ella es exactamente la ambiguedad que la
+  // regla "el origen gana" existe para evitar (misma decision que en web, donde el origen pisa la
+  // rehidratacion). El borrador sigue en AsyncStorage: nada se borra, solo no se propone.
   useEffect(() => {
-    if (!existingPlanResolved) return
+    if (!existingPlanResolved || templateOriginId) return
     let active = true
     void (async () => {
       const record = await readNutritionDraft<BuilderDraftPayload>(draftKey, Date.now())
@@ -658,7 +783,7 @@ export default function CoachNutritionV2BuilderScreen() {
     return () => {
       active = false
     }
-  }, [existingPlanResolved, draftKey, clientId])
+  }, [existingPlanResolved, draftKey, clientId, templateOriginId])
 
   // Autosave debounced (2000 ms — distinto de los 1500 ms del quick-edit) del arbol del wizard + las
   // porciones. Salta el primer render (la hidratacion inicial no es un cambio del coach) y solo corre
@@ -1844,6 +1969,11 @@ function PortionsStepper({
  * acto (`controller.upsertCatalogGroup`) sin cerrar nada ni volver a pegarle a la red. El menú
  * "Editar/Eliminar" del web se colapsa en una sola entrada: el formulario de edición ya expone
  * Guardar y Eliminar (adaptación nativa, mismas dos acciones).
+ *
+ * T4.3: las filas del SISTEMA ya no son callejones sin salida — llevan "Duplicar y ajustar", que
+ * crea un grupo PROPIO con los macros precargados Y (por defecto) copia su lista de equivalencias
+ * reescalada. Es la respuesta al pedido real del coach ("el cereal aporta 15 g de carbos y yo
+ * trabajo con 20") sin tocar el grupo compartido ni los planes que ya lo usan.
  */
 function PortionsGroupPickerSheet({
   open,
@@ -1862,6 +1992,7 @@ function PortionsGroupPickerSheet({
   const groups = controller.groups
   const [formOpen, setFormOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<ExchangeGroupFormInitial | null>(null)
+  const [duplicateSource, setDuplicateSource] = useState<ExchangeGroup | null>(null)
 
   function openCreate() {
     setEditingGroup(null)
@@ -1911,12 +2042,19 @@ function PortionsGroupPickerSheet({
         <View className="gap-1 pb-2">
           {(groups ?? []).map((group) => {
             const used = usedGroupIds.has(group.id)
+            // Tercera línea (F1): cuántas equivalencias verá el alumno. Solo cuando el grupo es
+            // elegible — si ya está en la franja, la segunda línea dice eso y no hay nada que elegir.
+            const foods = used ? null : portionsFoodsHint(controller.groupFoodCounts[group.id])
             return (
               <View key={group.id} className="flex-row items-center gap-1">
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={
-                    used ? `${group.name}: ${PORTIONS_COPY.builder.groupUsed}` : `Agregar ${group.name}`
+                    used
+                      ? `${group.name}: ${PORTIONS_COPY.builder.groupUsed}`
+                      : foods
+                        ? `Agregar ${group.name}. ${foods.text}`
+                        : `Agregar ${group.name}`
                   }
                   disabled={used}
                   onPress={() => onPick(group.id)}
@@ -1941,10 +2079,19 @@ function PortionsGroupPickerSheet({
                         ? PORTIONS_COPY.builder.groupUsed
                         : `1 porción ≈ ${Math.round(group.refCalories)} kcal · ${Math.round(group.refCarbsG)} C · ${Math.round(group.refProteinG)} P`}
                     </Text>
+                    {foods ? (
+                      <Text
+                        className={`text-[11px] ${foods.empty ? 'font-medium text-warning-700' : 'text-subtle'}`}
+                        numberOfLines={1}
+                      >
+                        {foods.text}
+                      </Text>
+                    ) : null}
                   </View>
                 </Pressable>
-                {/* Grupos PROPIOS del coach: editar/eliminar. Los del sistema no se tocan (la
-                    RLS `xg_update`/`xg_delete` los niega igual). */}
+                {/* Grupos PROPIOS del coach: editar/eliminar. Los del SISTEMA no se editan (la
+                    RLS `xg_update`/`xg_delete` los niega igual) pero sí se duplican: es su única
+                    salida cuando los macros del catálogo no son los que usa el coach. */}
                 {!group.isSystem ? (
                   <Pressable
                     accessibilityRole="button"
@@ -1955,7 +2102,17 @@ function PortionsGroupPickerSheet({
                   >
                     <Pencil color={theme.mutedForeground} size={16} />
                   </Pressable>
-                ) : null}
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={PORTIONS_COPY.groupEditor.duplicateAria(group.name)}
+                    onPress={() => setDuplicateSource(group)}
+                    hitSlop={4}
+                    className="h-11 w-11 items-center justify-center rounded-control"
+                  >
+                    <Copy color={theme.mutedForeground} size={16} />
+                  </Pressable>
+                )}
               </View>
             )
           })}
@@ -1982,8 +2139,30 @@ function PortionsGroupPickerSheet({
           initial={editingGroup}
           scope={controller.scope}
           onClose={() => setFormOpen(false)}
-          onSaved={(group) => controller.upsertCatalogGroup(group)}
+          // Alta ⇒ el grupo nace con 0 equivalencias y la fila lo avisa en el acto. Edición ⇒ el
+          // conteo previo se conserva (editar macros no toca la lista).
+          onSaved={(group) => controller.upsertCatalogGroup(group, editingGroup ? undefined : 0)}
           onDeleted={(groupId) => controller.dropCatalogGroup(groupId)}
+        />
+      ) : null}
+
+      {/* Duplicar y ajustar (T4.3), también anidado. DIVERGENCIA deliberada con la web: al
+          terminar, el grupo nuevo se AGREGA a la franja y el picker se cierra (`onPick`), en vez
+          de volver a la lista con el picker abierto. Dos razones nativas: (1) el coach entró por
+          "Agregar grupo", así que el grupo recién hecho es exactamente lo que venía a poner; (2)
+          los toasts del kit viven en la raíz y un `Modal` nativo los tapa — dejando el picker
+          abierto, el aviso de cuántas equivalencias se copiaron no se vería nunca. */}
+      {duplicateSource ? (
+        <DuplicateGroupSheet
+          open
+          source={duplicateSource}
+          takenCodes={(groups ?? []).map((entry) => entry.code)}
+          onClose={() => setDuplicateSource(null)}
+          onDuplicated={(created, copied) => {
+            controller.upsertCatalogGroup(created, copied)
+            setDuplicateSource(null)
+            onPick(created.id)
+          }}
         />
       ) : null}
     </Sheet>
@@ -2028,33 +2207,50 @@ function BuilderPortionsSection({
             // El builder siempre agrega grupos desde el picker (catálogo cargado); el fallback
             // cubre re-renders raros sin romper la fila.
             const name = group?.name ?? 'Grupo'
+            // PORCIONES HUÉRFANAS: el grupo está prescrito pero no tiene ni una equivalencia. El
+            // alumno verá el chip y podrá marcar la porción, pero el sheet "1 porción equivale a"
+            // le sale VACÍO. Se avisa acá, donde el coach ya decidió usarlo, y no solo en el
+            // picker (de donde ya salió). Clave ausente = conteo no cargado ⇒ no se avisa nada.
+            const sinAlimentos = controller.groupFoodCounts[target.exchangeGroupId] === 0
             return (
-              <View key={target.exchangeGroupId} className="flex-row items-center gap-2">
-                <View className="min-w-0 flex-1 flex-row items-center gap-2">
-                  {group ? (
-                    <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
-                  ) : (
-                    <View accessible={false} className="h-5 w-5 rounded-full bg-border-subtle" />
-                  )}
-                  <Text className="min-w-0 flex-1 text-sm font-medium text-strong" numberOfLines={1}>
-                    {name}
-                  </Text>
+              <View key={target.exchangeGroupId} className="gap-1.5">
+                <View className="flex-row items-center gap-2">
+                  <View className="min-w-0 flex-1 flex-row items-center gap-2">
+                    {group ? (
+                      <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
+                    ) : (
+                      <View accessible={false} className="h-5 w-5 rounded-full bg-border-subtle" />
+                    )}
+                    <Text className="min-w-0 flex-1 text-sm font-medium text-strong" numberOfLines={1}>
+                      {name}
+                    </Text>
+                  </View>
+                  {/* Stepper de ancho fijo: el nombre trunca, el stepper nunca se comprime. */}
+                  <PortionsStepper
+                    groupName={name}
+                    portions={target.portions}
+                    onStep={(direction) => controller.step(slotKey, target.exchangeGroupId, direction)}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Quitar ${name}`}
+                    onPress={() => controller.removeGroup(slotKey, target.exchangeGroupId)}
+                    hitSlop={6}
+                    className="h-11 w-8 items-center justify-center rounded-control"
+                  >
+                    <Trash2 color={theme.destructive} size={16} />
+                  </Pressable>
                 </View>
-                {/* Stepper de ancho fijo: el nombre trunca, el stepper nunca se comprime. */}
-                <PortionsStepper
-                  groupName={name}
-                  portions={target.portions}
-                  onStep={(direction) => controller.step(slotKey, target.exchangeGroupId, direction)}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Quitar ${name}`}
-                  onPress={() => controller.removeGroup(slotKey, target.exchangeGroupId)}
-                  hitSlop={6}
-                  className="h-11 w-8 items-center justify-center rounded-control"
-                >
-                  <Trash2 color={theme.destructive} size={16} />
-                </Pressable>
+                {sinAlimentos ? (
+                  <View className="rounded-control border border-warning-500/30 bg-warning-500/10 p-2.5">
+                    <Text className="text-[11px] font-medium leading-5 text-warning-700">
+                      {PORTIONS_COPY.builder.groupFoodsEmpty}
+                    </Text>
+                    <Text className="text-[11px] leading-5 text-muted">
+                      {PORTIONS_COPY.builder.groupFoodsEmptyHint}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             )
           })}

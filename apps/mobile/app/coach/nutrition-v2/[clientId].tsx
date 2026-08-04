@@ -508,7 +508,7 @@ export default function CoachNutritionV2ClientScreen() {
   const ctaLabel = nutritionPlanCtaLabel(planStatus)
   // NUT-004: con plan vigente el builder DEBE recibir la raiz (`?planId=`) para publicar una
   // version nueva sobre ella; sin plan queda sin query y crea la primera raiz. Espejo del web.
-  const builderHref = nutritionV2BuilderHref(detail.client.id, activePlan?.id ?? null)
+  const builderHref = nutritionV2BuilderHref(detail.client.id, { planId: activePlan?.id ?? null })
   const showTodayPlanLag = activePlan !== null && (todayPlan === null || todayPlan.id !== activePlan.id)
   const todayPlanLagMessage =
     todayPlan === null

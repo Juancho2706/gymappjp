@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Plus, RotateCcw, Search, X } from 'lucide-react-native'
+import { Copy, Plus, RotateCcw, Search, X } from 'lucide-react-native'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { formatPortionSentence } from '@eva/nutrition-v2'
-import { NutritionHeader, NutritionStatePanel } from '../../../components/nutrition-v2'
+import { DuplicateGroupSheet, NutritionHeader, NutritionStatePanel } from '../../../components/nutrition-v2'
+import { Sheet } from '../../../components/Sheet'
 import { useTheme } from '../../../context/ThemeContext'
 import { useWorkspace } from '../../../lib/workspace'
 import { nutritionV2CoachScope } from '../../../lib/nutrition-v2-scope'
+import { portionsFoodsHint } from '../../../lib/nutrition-v2-builder-portions'
 import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import {
   excludeExchangeListEntry,
@@ -21,6 +23,7 @@ import {
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 
 const COPY = PORTIONS_COPY.exchangeList
+const GROUP_COPY = PORTIONS_COPY.groupEditor
 
 /**
  * Porciones del coach en RN (F4, paridad de F2) — "¿Qué cuenta como 1 porción?".
@@ -32,6 +35,11 @@ const COPY = PORTIONS_COPY.exchangeList
  *
  * Toda escritura pasa por `/api/mobile/nutrition/exchanges/group-foods` (lección NUT-005): cero
  * escrituras Supabase directas nuevas desde el teléfono.
+ *
+ * Presentación: tokens semánticos del DS vía NativeWind (`bg-surface-*`, `text-*`, `border-*`,
+ * `rounded-control`, `hit-min`). Lo único que sigue viviendo en `style` es el color de marca del
+ * coach (`theme.primary` / `theme.primaryForeground`), que es runtime y no tiene clase propia
+ * cuando se usa como relleno sólido — mismo patrón que `ExchangeGroupFormSheet`.
  */
 export default function CoachPortionsScreen() {
   const { theme } = useTheme()
@@ -43,6 +51,12 @@ export default function CoachPortionsScreen() {
   )
 
   const [groups, setGroups] = useState<ExchangeGroup[]>([])
+  /**
+   * Cuántas equivalencias vivas tiene cada grupo (F1). `undefined` en una clave = el conteo no
+   * viajó y el chip NO pinta nada; un 0 explícito sí se grita en ámbar, porque ese grupo le sale
+   * vacío al alumno.
+   */
+  const [foodCounts, setFoodCounts] = useState<Record<string, number> | undefined>(undefined)
   const [groupId, setGroupId] = useState<string | null>(null)
   const [rows, setRows] = useState<ExchangeListRow[]>([])
   const [search, setSearch] = useState('')
@@ -50,6 +64,9 @@ export default function CoachPortionsScreen() {
   const [loadingRows, setLoadingRows] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+  /** Fuerza el refetch del catálogo tras duplicar (el grupo nuevo y su conteo tienen que aparecer). */
+  const [groupsNonce, setGroupsNonce] = useState(0)
 
   const group = useMemo(() => groups.find((entry) => entry.id === groupId) ?? null, [groups, groupId])
 
@@ -58,10 +75,11 @@ export default function CoachPortionsScreen() {
     let alive = true
     setLoadingGroups(true)
     fetchNutritionV2ExchangeGroups(scope)
-      .then((list) => {
+      .then((result) => {
         if (!alive) return
-        setGroups(list)
-        setGroupId((current) => current ?? list[0]?.id ?? null)
+        setGroups(result.groups)
+        setFoodCounts(result.foodCounts)
+        setGroupId((current) => current ?? result.groups[0]?.id ?? null)
       })
       .catch(() => {
         if (alive) setError(PORTIONS_COPY.builder.pickerError)
@@ -72,7 +90,7 @@ export default function CoachPortionsScreen() {
     return () => {
       alive = false
     }
-  }, [scope])
+  }, [scope, groupsNonce])
 
   const loadRows = useCallback(
     async (id: string, term: string) => {
@@ -116,11 +134,13 @@ export default function CoachPortionsScreen() {
     void loadRows(groupId, search.trim())
   }
 
-  if (!workspaceReady || loadingGroups) {
+  // El loader a pantalla completa es SOLO del arranque: el refetch tras duplicar ya tiene su
+  // catálogo en pantalla y no debe parpadear.
+  if (!workspaceReady || (loadingGroups && groups.length === 0)) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+      <SafeAreaView className="flex-1 bg-surface-app" edges={['top']}>
         <NutritionHeader title={COPY.manageEntry} description={COPY.manageEntryHint} />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={theme.primary} />
         </View>
       </SafeAreaView>
@@ -130,7 +150,7 @@ export default function CoachPortionsScreen() {
   // Enterprise no tiene scope de coach V2 (fail-closed en `nutritionV2CoachScope`).
   if (!scope) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+      <SafeAreaView className="flex-1 bg-surface-app" edges={['top']}>
         <NutritionHeader title={COPY.manageEntry} description={COPY.manageEntryHint} />
         <NutritionStatePanel
           title="No disponible en este espacio"
@@ -142,54 +162,49 @@ export default function CoachPortionsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+    <SafeAreaView className="flex-1 bg-surface-app" edges={['top']}>
       <NutritionHeader title={COPY.manageEntry} description={COPY.manageEntryHint} />
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingVertical: 8 }}
+        contentContainerClassName="gap-2 px-4 py-2"
       >
         {groups.map((entry) => {
           const active = entry.id === groupId
+          // Segunda línea del chip (F1): cuántas equivalencias verá el alumno. Un grupo en 0
+          // le abre el sheet "1 porción equivale a" vacío, y eso se dice en voz alta acá en vez
+          // de dejar que lo descubra el alumno.
+          const foods = portionsFoodsHint(foodCounts?.[entry.id])
           return (
             <Pressable
               key={entry.id}
               onPress={() => setGroupId(entry.id)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              style={{
-                minHeight: 44,
-                paddingHorizontal: 12,
-                justifyContent: 'center',
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: active ? theme.primary : theme.border,
-                backgroundColor: active ? `${theme.primary}1A` : theme.card,
-              }}
+              accessibilityLabel={foods ? `${entry.code} ${entry.name}. ${foods.text}` : `${entry.code} ${entry.name}`}
+              className={`min-h-hit-min justify-center rounded-pill border px-3 py-1.5 ${
+                active ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card'
+              }`}
             >
-              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13 }}>
+              <Text className="text-[13px] font-sans-semibold text-strong">
                 {entry.code} · {entry.name}
               </Text>
+              {foods ? (
+                <Text
+                  className={`text-[10px] ${foods.empty ? 'font-sans-semibold text-warning-700' : 'text-muted'}`}
+                  numberOfLines={1}
+                >
+                  {foods.text}
+                </Text>
+              ) : null}
             </Pressable>
           )
         })}
       </ScrollView>
 
-      <View style={{ paddingHorizontal: 16, gap: 8 }}>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            borderWidth: 1,
-            borderColor: theme.border,
-            backgroundColor: theme.card,
-            borderRadius: 12,
-            paddingHorizontal: 12,
-            minHeight: 44,
-          }}
-        >
+      <View className="gap-2 px-4">
+        <View className="min-h-hit-min flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
           <Search size={16} color={theme.mutedForeground} />
           <TextInput
             value={search}
@@ -197,51 +212,59 @@ export default function CoachPortionsScreen() {
             placeholder={COPY.searchPlaceholder}
             placeholderTextColor={theme.mutedForeground}
             accessibilityLabel={COPY.searchAria}
-            style={{ flex: 1, color: theme.text, paddingVertical: 10 }}
+            className="flex-1 py-2.5 text-strong"
           />
           {loadingRows ? <ActivityIndicator size="small" color={theme.primary} /> : null}
         </View>
 
-        <Pressable
-          onPress={() => setAdding(true)}
-          accessibilityRole="button"
-          disabled={!groupId}
-          style={{
-            minHeight: 44,
-            borderRadius: 12,
-            backgroundColor: theme.primary,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'row',
-            gap: 8,
-            opacity: groupId ? 1 : 0.5,
-          }}
-        >
-          <Plus size={16} color="#fff" />
-          <Text style={{ color: '#fff', fontWeight: '800' }}>{COPY.addFood}</Text>
-        </Pressable>
+        {/* Par de acciones: alta (primaria) + duplicar (secundaria, icono). Ambas hijas llevan
+            ancho propio — la primaria `flex-1` y la secundaria cuadrada `shrink-0` — para que
+            la fila no desborde en pantallas angostas. */}
+        <View className="flex-row items-stretch gap-2">
+          <Pressable
+            onPress={() => setAdding(true)}
+            accessibilityRole="button"
+            accessibilityLabel={COPY.addFood}
+            disabled={!groupId}
+            className={`min-h-hit-min flex-1 flex-row items-center justify-center gap-2 rounded-control ${
+              groupId ? '' : 'opacity-50'
+            }`}
+            style={{ backgroundColor: theme.primary }}
+          >
+            <Plus size={16} color={theme.primaryForeground} />
+            <Text className="font-sans-bold" style={{ color: theme.primaryForeground }}>
+              {COPY.addFood}
+            </Text>
+          </Pressable>
+          {/* "Duplicar y ajustar" sobre CUALQUIER grupo visible: los del sistema no se editan
+              (la RLS los niega) y esta pantalla tampoco ofrece editar los propios, así que
+              duplicar es la única salida para trabajar con otros valores. Icono a secas para no
+              competir con el alta: el sheet ya se abre explicando qué hace. */}
+          <Pressable
+            onPress={() => setDuplicating(true)}
+            accessibilityRole="button"
+            accessibilityLabel={group ? GROUP_COPY.duplicateAria(group.name) : GROUP_COPY.duplicate}
+            disabled={!group}
+            className={`min-h-hit-min min-w-hit-min shrink-0 items-center justify-center rounded-control border border-default bg-surface-card px-3 ${
+              group ? '' : 'opacity-50'
+            }`}
+          >
+            <Copy size={16} color={theme.mutedForeground} />
+          </Pressable>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
+      <ScrollView contentContainerClassName="gap-2 p-4">
         {rows.map((row) => (
           <View
             key={row.id}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-              borderWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: theme.card,
-              borderRadius: 12,
-              padding: 12,
-            }}
+            className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card p-3"
           >
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontWeight: '700' }} numberOfLines={1}>
+            <View className="flex-1">
+              <Text className="font-sans-semibold text-strong" numberOfLines={1}>
                 {row.foodName}
               </Text>
-              <Text style={{ color: theme.mutedForeground, fontSize: 12 }} numberOfLines={1}>
+              <Text className="text-xs text-muted" numberOfLines={1}>
                 {formatPortionSentence({
                   foodName: row.foodName,
                   portionGrams: row.portionGrams,
@@ -250,11 +273,7 @@ export default function CoachPortionsScreen() {
               </Text>
             </View>
             <Text
-              style={{
-                fontSize: 10,
-                fontWeight: '800',
-                color: row.isOwn ? theme.primary : theme.mutedForeground,
-              }}
+              className={`text-[10px] font-sans-bold ${row.isOwn ? 'text-primary' : 'text-muted'}`}
             >
               {row.isOwn ? COPY.badgeOwn : COPY.badgeCatalog}
             </Text>
@@ -262,7 +281,7 @@ export default function CoachPortionsScreen() {
               onPress={() => void (row.isOwn ? onRestore(row) : onExclude(row))}
               accessibilityRole="button"
               accessibilityLabel={row.isOwn ? COPY.restoreAria(row.foodName) : COPY.excludeAria(row.foodName)}
-              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+              className="min-h-hit-min min-w-hit-min items-center justify-center"
             >
               {row.isOwn ? (
                 <RotateCcw size={16} color={theme.mutedForeground} />
@@ -282,7 +301,7 @@ export default function CoachPortionsScreen() {
         ) : null}
 
         {error ? (
-          <Text style={{ color: theme.destructive, fontWeight: '700', textAlign: 'center' }}>
+          <Text className="text-center font-sans-semibold text-danger-600">
             {error}
           </Text>
         ) : null}
@@ -296,6 +315,23 @@ export default function CoachPortionsScreen() {
           onSaved={() => {
             setAdding(false)
             void loadRows(groupId, search.trim())
+            // El alta cambia el conteo del chip: se recarga el catálogo (sin loader a pantalla
+            // completa) para que la línea "N alimentos equivalentes" no quede vieja.
+            setGroupsNonce((n) => n + 1)
+          }}
+        />
+      ) : null}
+
+      {duplicating && group ? (
+        <DuplicateGroupSheet
+          open
+          source={group}
+          takenCodes={groups.map((entry) => entry.code)}
+          onClose={() => setDuplicating(false)}
+          onDuplicated={(created) => {
+            // Se salta al grupo NUEVO: es el que el coach acaba de pedir y el que va a ajustar.
+            setGroupId(created.id)
+            setGroupsNonce((n) => n + 1)
           }}
         />
       ) : null}
@@ -306,6 +342,11 @@ export default function CoachPortionsScreen() {
 /**
  * Alta de una equivalencia. La sugerencia de gramos la trae el servidor ya resuelta: el teléfono
  * no lleva una copia de la fórmula, así que jamás puede sugerir algo distinto del navegador.
+ *
+ * Chrome del DS: `components/Sheet` (mismo bottom sheet que el resto del dominio) en modo
+ * `nativeModal`, porque esta pantalla se monta EMBEBIDA en el hub por pestaña y el contenedor de
+ * @gorhom no es confiable en ese arranque (ver `SheetProps.nativeModal`). El montaje sigue siendo
+ * condicional desde la pantalla, así que `open` va fijo en true.
  */
 function AddEntrySheet({
   groupId,
@@ -368,203 +409,136 @@ function AddEntrySheet({
   }
 
   return (
-    <View
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        top: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
-      }}
+    <Sheet
+      open
+      onClose={onClose}
+      title={COPY.sectionTitle}
+      description={groupName ? `${COPY.sectionHint} · ${groupName}` : COPY.sectionHint}
+      accessibilityLabel={COPY.sectionTitle}
+      snapPoints={['85%']}
+      nativeModal
     >
-      <View
-        style={{
-          backgroundColor: theme.background,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          padding: 16,
-          gap: 12,
-          maxHeight: '85%',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ color: theme.text, fontWeight: '800', fontSize: 16, flex: 1 }}>
-            {COPY.sectionTitle}
+      {selected ? (
+        <View className="gap-2.5">
+          <Pressable onPress={() => setSelected(null)} accessibilityRole="button" className="min-h-hit-min justify-center">
+            <Text className="font-sans-semibold text-primary">← {selected.name}</Text>
+          </Pressable>
+
+          <Text className="text-[11px] font-sans-bold text-muted">
+            {COPY.gramsLabel}
           </Text>
+          <TextInput
+            value={grams}
+            onChangeText={setGrams}
+            keyboardType="decimal-pad"
+            placeholder={PORTIONS_COPY.foodEquivalence.gramsPlaceholder}
+            placeholderTextColor={theme.mutedForeground}
+            className="min-h-hit-min rounded-control border border-default bg-surface-card px-3 text-strong"
+          />
+          {selected.suggestedGrams != null && String(selected.suggestedGrams) !== grams.trim() ? (
+            <Pressable
+              onPress={() => setGrams(String(selected.suggestedGrams))}
+              accessibilityRole="button"
+              className="min-h-hit-min justify-center"
+            >
+              <Text className="text-xs font-sans-bold text-primary">
+                {COPY.suggestedApply} · {selected.suggestedGrams} g
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <Text className="text-[11px] font-sans-bold text-muted">
+            {COPY.labelLabel}
+          </Text>
+          <TextInput
+            value={label}
+            onChangeText={setLabel}
+            maxLength={40}
+            placeholder={COPY.labelPlaceholder}
+            placeholderTextColor={theme.mutedForeground}
+            className="min-h-hit-min rounded-control border border-default bg-surface-card px-3 text-strong"
+          />
+
+          <View className="rounded-control border border-default p-3">
+            <Text className="text-[10px] font-sans-bold text-muted">
+              {COPY.previewTitle}
+            </Text>
+            <Text className="mt-1 font-sans-semibold text-strong">
+              {formatPortionSentence({
+                foodName: selected.name,
+                portionGrams: parsedGrams,
+                portionLabel: label,
+              })}
+            </Text>
+          </View>
+
           <Pressable
-            onPress={onClose}
+            onPress={() => void save()}
+            disabled={saving}
             accessibilityRole="button"
-            accessibilityLabel="Cerrar"
-            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            className={`min-h-12 items-center justify-center rounded-control ${saving ? 'opacity-60' : ''}`}
+            style={{ backgroundColor: theme.primary }}
           >
-            <X size={20} color={theme.mutedForeground} />
+            <Text className="font-sans-bold" style={{ color: theme.primaryForeground }}>
+              {saving ? COPY.saving : COPY.save}
+            </Text>
           </Pressable>
         </View>
-        <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-          {groupName ? `${COPY.sectionHint} · ${groupName}` : COPY.sectionHint}
-        </Text>
-
-        {selected ? (
-          <View style={{ gap: 10 }}>
-            <Pressable onPress={() => setSelected(null)} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }}>
-              <Text style={{ color: theme.primary, fontWeight: '700' }}>← {selected.name}</Text>
-            </Pressable>
-
-            <Text style={{ color: theme.mutedForeground, fontSize: 11, fontWeight: '800' }}>
-              {COPY.gramsLabel}
-            </Text>
+      ) : (
+        <View className="gap-2">
+          <View className="min-h-hit-min flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
+            <Search size={16} color={theme.mutedForeground} />
             <TextInput
-              value={grams}
-              onChangeText={setGrams}
-              keyboardType="decimal-pad"
-              placeholder={PORTIONS_COPY.foodEquivalence.gramsPlaceholder}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={COPY.searchPlaceholder}
               placeholderTextColor={theme.mutedForeground}
-              style={{
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.card,
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                minHeight: 44,
-                color: theme.text,
-              }}
+              accessibilityLabel={COPY.searchAria}
+              className="flex-1 py-2.5 text-strong"
             />
-            {selected.suggestedGrams != null && String(selected.suggestedGrams) !== grams.trim() ? (
+            {loading ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+          </View>
+          {/* El scroll lo aporta el propio Sheet (`scrollable`), así que la lista no anida otro
+              ScrollView — misma decisión que `NewPlanPickerSheet` en el índice del hub. */}
+          <View className="gap-1.5">
+            {candidates.map((candidate) => (
               <Pressable
-                onPress={() => setGrams(String(selected.suggestedGrams))}
+                key={candidate.id}
+                onPress={() => {
+                  setSelected(candidate)
+                  setGrams(candidate.suggestedGrams != null ? String(candidate.suggestedGrams) : '')
+                  setError(null)
+                }}
                 accessibilityRole="button"
-                style={{ minHeight: 44, justifyContent: 'center' }}
+                className="min-h-hit-min justify-center rounded-control border border-default p-3"
               >
-                <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 12 }}>
-                  {COPY.suggestedApply} · {selected.suggestedGrams} g
+                <Text className="font-sans-semibold text-strong" numberOfLines={1}>
+                  {candidate.name}
+                  {candidate.alreadyInList ? ' ✓' : ''}
                 </Text>
-              </Pressable>
-            ) : null}
-
-            <Text style={{ color: theme.mutedForeground, fontSize: 11, fontWeight: '800' }}>
-              {COPY.labelLabel}
-            </Text>
-            <TextInput
-              value={label}
-              onChangeText={setLabel}
-              maxLength={40}
-              placeholder={COPY.labelPlaceholder}
-              placeholderTextColor={theme.mutedForeground}
-              style={{
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.card,
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                minHeight: 44,
-                color: theme.text,
-              }}
-            />
-
-            <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 12 }}>
-              <Text style={{ color: theme.mutedForeground, fontSize: 10, fontWeight: '800' }}>
-                {COPY.previewTitle}
-              </Text>
-              <Text style={{ color: theme.text, fontWeight: '700', marginTop: 4 }}>
-                {formatPortionSentence({
-                  foodName: selected.name,
-                  portionGrams: parsedGrams,
-                  portionLabel: label,
-                })}
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={() => void save()}
-              disabled={saving}
-              accessibilityRole="button"
-              style={{
-                minHeight: 48,
-                borderRadius: 12,
-                backgroundColor: theme.primary,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: saving ? 0.6 : 1,
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '800' }}>{saving ? COPY.saving : COPY.save}</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={{ gap: 8 }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.card,
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                minHeight: 44,
-              }}
-            >
-              <Search size={16} color={theme.mutedForeground} />
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder={COPY.searchPlaceholder}
-                placeholderTextColor={theme.mutedForeground}
-                accessibilityLabel={COPY.searchAria}
-                style={{ flex: 1, color: theme.text, paddingVertical: 10 }}
-              />
-              {loading ? <ActivityIndicator size="small" color={theme.primary} /> : null}
-            </View>
-            <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: 6 }}>
-              {candidates.map((candidate) => (
-                <Pressable
-                  key={candidate.id}
-                  onPress={() => {
-                    setSelected(candidate)
-                    setGrams(candidate.suggestedGrams != null ? String(candidate.suggestedGrams) : '')
-                    setError(null)
-                  }}
-                  accessibilityRole="button"
-                  style={{
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 12,
-                    padding: 12,
-                  }}
-                >
-                  <Text style={{ color: theme.text, fontWeight: '700' }} numberOfLines={1}>
-                    {candidate.name}
-                    {candidate.alreadyInList ? ' ✓' : ''}
+                {candidate.suggestedGrams != null ? (
+                  <Text className="text-[11px] text-muted">
+                    {COPY.suggested(String(candidate.suggestedGrams))}
                   </Text>
-                  {candidate.suggestedGrams != null ? (
-                    <Text style={{ color: theme.mutedForeground, fontSize: 11 }}>
-                      {COPY.suggested(String(candidate.suggestedGrams))}
-                    </Text>
-                  ) : (
-                    <Text style={{ color: theme.mutedForeground, fontSize: 11 }}>{COPY.suggestedNone}</Text>
-                  )}
-                </Pressable>
-              ))}
-              {candidates.length === 0 && !loading ? (
-                <Text style={{ color: theme.mutedForeground, textAlign: 'center', paddingVertical: 16 }}>
-                  {COPY.emptySearch}
-                </Text>
-              ) : null}
-            </ScrollView>
+                ) : (
+                  <Text className="text-[11px] text-muted">{COPY.suggestedNone}</Text>
+                )}
+              </Pressable>
+            ))}
+            {candidates.length === 0 && !loading ? (
+              <Text className="py-4 text-center text-muted">
+                {COPY.emptySearch}
+              </Text>
+            ) : null}
           </View>
-        )}
+        </View>
+      )}
 
-        {error ? (
-          <Text style={{ color: theme.destructive, fontWeight: '700', textAlign: 'center' }}>
-            {error}
-          </Text>
-        ) : null}
-      </View>
-    </View>
+      {error ? (
+        <Text className="text-center font-sans-semibold text-danger-600">
+          {error}
+        </Text>
+      ) : null}
+    </Sheet>
   )
 }

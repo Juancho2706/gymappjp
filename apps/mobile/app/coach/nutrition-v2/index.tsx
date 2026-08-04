@@ -15,14 +15,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import {
   Apple,
+  ArrowLeft,
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   FilePlus2,
   Plus,
   ScanLine,
   Scale,
   Search,
+  Star,
   Users,
   X,
 } from 'lucide-react-native'
@@ -43,6 +46,7 @@ import {
 } from '../../../components/coach/CoachTabbarScroll'
 import {
   NutritionCoachHubPageReadModelSchema,
+  formatPlanBuilderOrigin,
   type NutritionCoachHubItem,
   type NutritionCoachHubPageReadModel,
 } from '@eva/nutrition-v2'
@@ -58,6 +62,10 @@ import {
   readNutritionV2Cache,
   writeNutritionV2Cache,
 } from '../../../lib/nutrition-v2-cache'
+import {
+  fetchNutritionV2PlanTemplates,
+  type NutritionV2PlanTemplateListItem,
+} from '../../../lib/nutrition-v2-plan-templates.api'
 import {
   DEFAULT_NUTRITION_ROSTER_FILTERS,
   NUTRITION_ATTENTION_FILTER_OPTIONS,
@@ -151,6 +159,12 @@ export default function CoachNutritionV2Screen() {
   const [pickerRoster, setPickerRoster] = useState<PickerEntry[]>([])
   const [pickerLoading, setPickerLoading] = useState(false)
   const pickerLoadedRef = useRef(false)
+  // Pestaña "Reutilizar" del picker (F4, espejo del modal web `NewPlanPickerButton`): la biblioteca
+  // de plantillas se carga PEREZOSAMENTE al entrar a esa pestaña — quien crea desde cero no paga
+  // una consulta que no pidió. `null` = todavía no se intentó.
+  const [pickerTemplates, setPickerTemplates] = useState<NutritionV2PlanTemplateListItem[] | null>(null)
+  const [pickerTemplatesLoading, setPickerTemplatesLoading] = useState(false)
+  const [pickerTemplatesError, setPickerTemplatesError] = useState<string | null>(null)
   // Pila de cursores ancestros: cursors[i] es el cursor con que se cargo la pagina i (null = primera).
   const cursorsRef = useRef<Array<HubCursor | null>>([null])
   // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
@@ -305,16 +319,46 @@ export default function CoachNutritionV2Screen() {
     }
   }, [scope])
 
+  // Biblioteca de plantillas del coach (pestaña "Reutilizar"). Perezosa y con reintento: el orden
+  // lo fija el servidor (favoritas → más usadas → más recientes) y la UI NO lo toca.
+  const loadPickerTemplates = useCallback(async () => {
+    if (!scope) return
+    setPickerTemplatesLoading(true)
+    setPickerTemplatesError(null)
+    try {
+      const templates = await fetchNutritionV2PlanTemplates({ scope })
+      setPickerTemplates(templates)
+    } catch {
+      setPickerTemplates([])
+      setPickerTemplatesError('No pudimos cargar tus plantillas. Revisa tu conexión e intenta de nuevo.')
+    } finally {
+      setPickerTemplatesLoading(false)
+    }
+  }, [scope])
+
   const openPicker = useCallback(() => {
     setPickerSearch('')
     setPickerOpen(true)
     if (!pickerLoadedRef.current) void loadPickerRoster()
   }, [loadPickerRoster])
 
+  /**
+   * Alumno elegido en el picker. Con ORIGEN (plantilla) se navega a la MISMA ruta del builder con
+   * `?from=template:<id>` (AD-3): no hay un segundo camino de creación que pueda divergir del
+   * wizard normal.
+   *
+   * `planId` viaja SIEMPRE, con origen o sin él: son cosas distintas — el origen dice de qué CONTENIDO
+   * partir, y `planId` dice sobre qué RAÍZ publicar la versión (NUT-004). Mezclarlos crearía una
+   * segunda raíz activa para un alumno que ya tenía plan.
+   */
   const choosePickerClient = useCallback(
-    (clientId: string, planId: string | null) => {
+    (clientId: string, planId: string | null, origin: string | null) => {
       setPickerOpen(false)
-      router.push(nutritionV2BuilderHref(clientId, planId))
+      router.push(
+        origin
+          ? nutritionV2BuilderHref(clientId, { planId, from: origin })
+          : nutritionV2BuilderHref(clientId, { planId }),
+      )
     },
     [router],
   )
@@ -622,7 +666,7 @@ export default function CoachNutritionV2Screen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
-              onPress={() => router.push(nutritionV2BuilderHref(item.clientId, item.planId))}
+              onPress={() => router.push(nutritionV2BuilderHref(item.clientId, { planId: item.planId }))}
               className="mt-3 min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
             >
               <Plus color={theme.primary} size={15} />
@@ -713,6 +757,11 @@ export default function CoachNutritionV2Screen() {
         loading={pickerLoading}
         onChoose={choosePickerClient}
         textSecondary={theme.textSecondary}
+        favoriteColor={theme.warning}
+        templates={pickerTemplates}
+        templatesLoading={pickerTemplatesLoading}
+        templatesError={pickerTemplatesError}
+        onLoadTemplates={loadPickerTemplates}
       />
     </View>
   )
@@ -849,9 +898,31 @@ function HubSortSheet({
   )
 }
 
+/**
+ * Resumen de una plantilla en una línea (espejo verbatim del modal web `NewPlanPickerButton`):
+ * kcal del día base · franjas · veces usada. Sin datos legibles cae a "Plantilla".
+ */
+function planTemplateSubtitle(template: NutritionV2PlanTemplateListItem): string {
+  if (!template.readable) return 'No se puede abrir: se guardó con una versión anterior.'
+  const parts = [
+    template.summary?.calories ? `${template.summary.calories} kcal` : null,
+    template.summary?.dayVariantCount && template.summary.dayVariantCount > 1
+      ? `${template.summary.dayVariantCount} días`
+      : null,
+    template.summary?.mealSlotCount ? `${template.summary.mealSlotCount} franjas` : null,
+    template.usageCount > 0 ? `usada ${template.usageCount}×` : null,
+  ].filter((part): part is string => part != null)
+  return parts.length === 0 ? 'Plantilla' : parts.join(' · ')
+}
+
 // CTA global "Nuevo plan" (espejo de `NewPlanPickerButton` web): el hub no tiene alumno
 // seleccionado, asi que abre un selector buscable con el roster COMPLETO del workspace y navega al
 // builder del alumno elegido. Sheet nativo (nativeModal) para abrir con teclado de forma robusta.
+//
+// F4 — DOS puertas, una sola ruta de destino (AD-3): "Desde cero" es el flujo de siempre;
+// "Reutilizar" elige primero una PLANTILLA y despues el alumno, y navega al MISMO builder con
+// `?from=template:<id>`. Copiar el plan vigente de otro alumno (`plan:<clientId>` en web) queda
+// fuera de esta ola: el builder RN todavia no resuelve ese origen.
 function NewPlanPickerSheet({
   open,
   onClose,
@@ -861,6 +932,11 @@ function NewPlanPickerSheet({
   loading,
   onChoose,
   textSecondary,
+  favoriteColor,
+  templates,
+  templatesLoading,
+  templatesError,
+  onLoadTemplates,
 }: {
   open: boolean
   onClose: () => void
@@ -868,75 +944,223 @@ function NewPlanPickerSheet({
   onSearch: (value: string) => void
   roster: PickerEntry[]
   loading: boolean
-  onChoose: (clientId: string, planId: string | null) => void
+  onChoose: (clientId: string, planId: string | null, origin: string | null) => void
   textSecondary: string
+  /** `--warning-500` imperativo: única forma de teñir el glifo lucide de la plantilla favorita. */
+  favoriteColor: string
+  /** `null` = la biblioteca todavía no se intentó cargar (pestaña "Reutilizar" sin abrir). */
+  templates: NutritionV2PlanTemplateListItem[] | null
+  templatesLoading: boolean
+  templatesError: string | null
+  onLoadTemplates: () => void
 }) {
+  const [tab, setTab] = useState<'scratch' | 'reuse'>('scratch')
+  // Origen elegido: hasta que exista, "Reutilizar" muestra la biblioteca; después, el roster.
+  const [source, setSource] = useState<{ id: string; name: string } | null>(null)
   const filtered = useMemo(() => filterNutritionPickerEntries(roster, search), [roster, search])
+
+  // Cada apertura empieza en "Desde cero" y sin origen: reabrir el sheet nunca hereda la intención
+  // de la vez anterior (mismo criterio que `onOpenChange` del modal web).
+  useEffect(() => {
+    if (open) {
+      setTab('scratch')
+      setSource(null)
+    }
+  }, [open])
+
+  // Las plantillas se cargan al ENTRAR a "Reutilizar", no al abrir el sheet.
+  useEffect(() => {
+    if (!open || tab !== 'reuse' || templates !== null || templatesLoading) return
+    onLoadTemplates()
+  }, [open, tab, templates, templatesLoading, onLoadTemplates])
+
+  const description = source
+    ? `Partirás de «${source.name}». Elige el alumno que recibe el plan.`
+    : tab === 'reuse'
+      ? 'Elige la plantilla de la que quieres partir.'
+      : 'Elige el alumno para abrir su builder y crear (o versionar) su plan.'
+
+  const showTemplates = tab === 'reuse' && source == null
+
   return (
     <Sheet
       open={open}
       onClose={onClose}
       title="Nuevo plan de nutrición"
-      description="Elige el alumno para abrir su builder y crear (o versionar) su plan."
+      description={description}
       accessibilityLabel="Nuevo plan de nutrición"
       snapPoints={['85%']}
       nativeModal
     >
-      {roster.length === 0 && !loading ? (
-        <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">
-          <Users color={textSecondary} size={26} />
-          <Text className="mt-2 text-center text-sm text-muted">
-            No hay alumnos en tu espacio para crear un plan.
-          </Text>
+      <View className="gap-4">
+        <View
+          accessibilityRole="tablist"
+          accessibilityLabel="Origen del plan"
+          className="flex-row gap-1 rounded-control bg-surface-sunken p-1"
+        >
+          {(
+            [
+              { id: 'scratch', label: 'Desde cero' },
+              { id: 'reuse', label: 'Reutilizar' },
+            ] as const
+          ).map((entry) => {
+            const on = tab === entry.id
+            return (
+              <Pressable
+                key={entry.id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={entry.label}
+                onPress={() => {
+                  setTab(entry.id)
+                  setSource(null)
+                }}
+                className={`min-h-11 flex-1 items-center justify-center rounded-control px-3 ${on ? 'bg-surface-card' : ''}`}
+              >
+                <Text className={`text-sm font-semibold ${on ? 'text-strong' : 'text-muted'}`}>
+                  {entry.label}
+                </Text>
+              </Pressable>
+            )
+          })}
         </View>
-      ) : (
-        <View className="gap-4">
-          <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
-            <Search color={textSecondary} size={16} />
-            <TextInput
-              value={search}
-              onChangeText={(text) => onSearch(text.slice(0, 120))}
-              placeholder="Buscar alumno…"
-              placeholderTextColor={textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              maxLength={120}
-              accessibilityLabel="Buscar alumno"
-              className="flex-1 py-2 text-sm text-strong"
-            />
-          </View>
 
-          {loading && roster.length === 0 ? (
-            <Text className="py-6 text-center text-sm text-muted">Cargando…</Text>
-          ) : (
-            <View className="gap-1.5">
-              {filtered.map((entry) => (
-                <Pressable
-                  key={entry.clientId}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${nutritionPlanCtaLabel(entry.planStatus)} para ${entry.clientName}`}
-                  onPress={() => onChoose(entry.clientId, entry.planId)}
-                  className="min-h-11 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5"
-                >
-                  <Text className="min-w-0 flex-1 font-semibold text-strong" numberOfLines={1}>
-                    {entry.clientName}
-                  </Text>
-                  <View className="flex-row items-center gap-1.5 rounded-pill border border-subtle bg-surface-sunken px-2 py-0.5">
-                    <FilePlus2 color={textSecondary} size={12} />
-                    <Text className="text-[11px] font-semibold text-muted">
-                      {nutritionPlanCtaLabel(entry.planStatus)}
-                    </Text>
-                  </View>
-                  <ChevronRight color={textSecondary} size={16} />
-                </Pressable>
-              ))}
-              {filtered.length === 0 ? (
-                <Text className="py-6 text-center text-sm text-muted">Sin coincidencias.</Text>
-              ) : null}
+        {showTemplates ? (
+          <View className="gap-2">
+            <Text className="text-xs font-bold uppercase tracking-wide text-muted">Tus plantillas</Text>
+            {templatesLoading ? (
+              // Tambien durante el REINTENTO: sin esto, recargar tras un error mostraria el estado
+              // vacio (la lista ya no es `null`) y parpadearia "Aún no tienes plantillas".
+              <NutritionSkeleton variant="coach" rows={2} />
+            ) : templatesError ? (
+              <NutritionStatePanel
+                icon="error"
+                tone="danger"
+                title="No pudimos cargar tus plantillas"
+                description={templatesError}
+                action={
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Reintentar cargar plantillas"
+                    onPress={onLoadTemplates}
+                    className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
+                  >
+                    <Text className="text-sm font-semibold text-strong">Reintentar</Text>
+                  </Pressable>
+                }
+              />
+            ) : (templates?.length ?? 0) === 0 ? (
+              <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">
+                <Copy color={textSecondary} size={26} />
+                <Text className="mt-2 text-center text-sm text-muted">
+                  Aún no tienes plantillas. Guarda el plan de un alumno como plantilla —desde la web o
+                  desde un plan ya publicado— y aparecerá acá.
+                </Text>
+              </View>
+            ) : (
+              <View className="gap-1.5">
+                {(templates ?? []).map((template) => (
+                  <Pressable
+                    key={template.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !template.readable }}
+                    accessibilityLabel={`Partir de la plantilla ${template.name}`}
+                    disabled={!template.readable}
+                    onPress={() => setSource({ id: template.id, name: template.name })}
+                    className={`min-h-11 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5 ${template.readable ? '' : 'opacity-50'}`}
+                  >
+                    {template.isFavorite ? (
+                      <Star color={favoriteColor} size={16} />
+                    ) : (
+                      <Copy color={textSecondary} size={16} />
+                    )}
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-semibold text-strong" numberOfLines={1}>
+                        {template.name}
+                      </Text>
+                      <Text className="text-xs text-muted" numberOfLines={1}>
+                        {planTemplateSubtitle(template)}
+                      </Text>
+                    </View>
+                    <ChevronRight color={textSecondary} size={16} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : roster.length === 0 && !loading ? (
+          <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">
+            <Users color={textSecondary} size={26} />
+            <Text className="mt-2 text-center text-sm text-muted">
+              No hay alumnos en tu espacio para crear un plan.
+            </Text>
+          </View>
+        ) : (
+          <View className="gap-4">
+            {source ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cambiar el origen"
+                onPress={() => setSource(null)}
+                className="min-h-11 flex-row items-center gap-1.5 self-start"
+              >
+                <ArrowLeft color={textSecondary} size={16} />
+                <Text className="text-sm font-semibold text-muted">Cambiar el origen</Text>
+              </Pressable>
+            ) : null}
+            <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
+              <Search color={textSecondary} size={16} />
+              <TextInput
+                value={search}
+                onChangeText={(text) => onSearch(text.slice(0, 120))}
+                placeholder="Buscar alumno…"
+                placeholderTextColor={textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={120}
+                accessibilityLabel="Buscar alumno"
+                className="flex-1 py-2 text-sm text-strong"
+              />
             </View>
-          )}
-        </View>
-      )}
+
+            {loading && roster.length === 0 ? (
+              <Text className="py-6 text-center text-sm text-muted">Cargando…</Text>
+            ) : (
+              <View className="gap-1.5">
+                {filtered.map((entry) => (
+                  <Pressable
+                    key={entry.clientId}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${nutritionPlanCtaLabel(entry.planStatus)} para ${entry.clientName}`}
+                    onPress={() =>
+                      onChoose(
+                        entry.clientId,
+                        entry.planId,
+                        source ? formatPlanBuilderOrigin({ kind: 'template', id: source.id }) : null,
+                      )
+                    }
+                    className="min-h-11 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5"
+                  >
+                    <Text className="min-w-0 flex-1 font-semibold text-strong" numberOfLines={1}>
+                      {entry.clientName}
+                    </Text>
+                    <View className="flex-row items-center gap-1.5 rounded-pill border border-subtle bg-surface-sunken px-2 py-0.5">
+                      <FilePlus2 color={textSecondary} size={12} />
+                      <Text className="text-[11px] font-semibold text-muted">
+                        {nutritionPlanCtaLabel(entry.planStatus)}
+                      </Text>
+                    </View>
+                    <ChevronRight color={textSecondary} size={16} />
+                  </Pressable>
+                ))}
+                {filtered.length === 0 ? (
+                  <Text className="py-6 text-center text-sm text-muted">Sin coincidencias.</Text>
+                ) : null}
+              </View>
+            )}
+          </View>
+        )}
+      </View>
     </Sheet>
   )
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
     CreateExchangeGroupSchema,
     DeleteExchangeGroupSchema,
+    DuplicateExchangeGroupSchema,
     UpdateExchangeGroupSchema,
 } from '@eva/schemas/nutrition-exchanges'
 import {
@@ -10,6 +11,7 @@ import {
     updateCoachExchangeGroup,
     type ExchangeGroupInput,
 } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
+import { duplicateExchangeGroupWithList } from '@/services/nutrition-exchanges/exchange-lists.service'
 import { gateExchanges } from '../_shared'
 
 /**
@@ -93,6 +95,47 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: result.error, code: 'GROUP_WRITE_FAILED' }, { status: 400 })
     }
     return NextResponse.json({ ok: true, group: result.group })
+}
+
+/**
+ * "Duplicar y ajustar" CON copia de la lista (paridad de T4.3 web). Verbo PUT porque POST ya
+ * es el alta desde cero: duplicar crea un grupo pero su entrada, su payload y su resultado son
+ * otros (trae `sourceGroupId` y devuelve cuantas equivalencias se copiaron).
+ *
+ * Mismo schema y mismo servicio que la server action web (`duplicateExchangeGroupAction`), asi
+ * que el reescalado por regla de tres, el tope de filas y la unicidad de codigo/slug salen
+ * identicos en las dos superficies. El reescalado vive SIEMPRE server-side: el telefono jamas
+ * lleva una copia de la formula.
+ *
+ * Falla PARCIAL: si el grupo se creo pero la copia de la lista fallo, la respuesta sigue siendo
+ * 200 con `copyError` — deshacer el grupo dejaria al coach sin lo que si pidio (mismo criterio
+ * que el servicio). La UI lo distingue con el toast `copyFailed`.
+ */
+export async function PUT(request: NextRequest) {
+    const gate = await gateExchanges(request)
+    if (!gate.ok) return gate.response
+
+    const body = await request.json().catch(() => null)
+    const parsed = DuplicateExchangeGroupSchema.safeParse(body)
+    if (!parsed.success) return invalid(parsed.error.issues.map((i) => i.message))
+
+    const result = await duplicateExchangeGroupWithList(gate.userClient, {
+        actorCoachId: gate.coachId,
+        scope: MOBILE_SCOPE,
+        sourceGroupId: parsed.data.sourceGroupId,
+        values: valuesOf(parsed.data),
+        copyList: parsed.data.copyList,
+    })
+    if (!result.success) {
+        return NextResponse.json({ error: result.error, code: 'GROUP_WRITE_FAILED' }, { status: 400 })
+    }
+    return NextResponse.json({
+        ok: true,
+        group: result.group,
+        copied: result.copied,
+        attempted: result.attempted,
+        ...(result.copyError ? { copyError: result.copyError } : {}),
+    })
 }
 
 export async function DELETE(request: NextRequest) {

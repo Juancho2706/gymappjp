@@ -410,48 +410,88 @@ export async function searchFoodsForExchangeList(
   })
 }
 
-/** Cuántas equivalencias VIVAS tiene cada grupo (las lápidas no cuentan). */
+/**
+ * Página del recorrido del contador. PostgREST corta CUALQUIER select en `max_rows` (1000 en este
+ * proyecto, `supabase/config.toml:18`) y la tabla ya pasa las 2500 filas globales, así que una
+ * sola lectura devolvía un tercio del catálogo: los grupos que quedaban fuera de la ventana
+ * desaparecían del mapa y los que entraban a medias reportaban un número más chico que el real.
+ */
+const COUNT_PAGE_SIZE = 1000
+/** Techo duro del recorrido (20 páginas). Un catálogo mayor se declara TRUNCADO, no se adivina. */
+const COUNT_MAX_PAGES = 20
+
+export type ExchangeListCounts = {
+  counts: Record<string, number>
+  /**
+   * true ⇒ la lectura se cortó y el mapa NO es exhaustivo: un grupo ausente puede tener
+   * equivalencias igual. Quien pinte "sin alimentos" a partir de una clave ausente DEBE callarse
+   * en este caso — un falso "tu alumno no verá ejemplos" sobre un grupo con 715 alimentos es peor
+   * que no decir nada.
+   */
+  truncated: boolean
+}
+
+/**
+ * Cuántas equivalencias VIVAS tiene cada grupo (las lápidas no cuentan). Los grupos SIN una sola
+ * fila vuelven con `0` explícito: distinguir "vacío de verdad" de "no lo sé" es justamente lo que
+ * habilita el aviso de porciones huérfanas.
+ */
 export async function countExchangeListRowsByGroup(
   db: DB,
   groupIds: string[]
-): Promise<Record<string, number>> {
-  if (groupIds.length === 0) return {}
-  const { data, error } = await db
-    .from('exchange_group_foods')
-    .select('exchange_group_id, food_id, coach_id, org_id, is_excluded')
-    .in('exchange_group_id', groupIds)
-  if (error || data == null) return {}
+): Promise<ExchangeListCounts> {
+  if (groupIds.length === 0) return { counts: {}, truncated: false }
 
   // Se resuelve la precedencia antes de contar: si el coach excluyó un alimento global, el
   // contador tiene que bajar. Un COUNT plano mentiría al alza justo en el caso que importa.
   const byGroup = new Map<string, Map<string, { rank: number; excluded: boolean }>>()
-  for (const raw of data) {
-    const row = raw as {
-      exchange_group_id: string
-      food_id: string
-      coach_id: string | null
-      org_id: string | null
-      is_excluded: boolean
+  let truncated = false
+
+  for (let page = 0; page < COUNT_MAX_PAGES; page += 1) {
+    const from = page * COUNT_PAGE_SIZE
+    const { data, error } = await db
+      .from('exchange_group_foods')
+      .select('exchange_group_id, food_id, coach_id, org_id, is_excluded')
+      .in('exchange_group_id', groupIds)
+      // Orden estable: sin él, dos páginas pueden repetir u omitir filas (el plan es libre de
+      // devolverlas en otro orden entre requests).
+      .order('id', { ascending: true })
+      .range(from, from + COUNT_PAGE_SIZE - 1)
+    if (error || data == null) return { counts: {}, truncated: true }
+
+    for (const raw of data) {
+      const row = raw as {
+        exchange_group_id: string
+        food_id: string
+        coach_id: string | null
+        org_id: string | null
+        is_excluded: boolean
+      }
+      const rank =
+        row.coach_id != null
+          ? EXCHANGE_LIST_OWNER_RANK.coach
+          : row.org_id != null
+            ? EXCHANGE_LIST_OWNER_RANK.org
+            : EXCHANGE_LIST_OWNER_RANK.global
+      const group = byGroup.get(row.exchange_group_id) ?? new Map()
+      const current = group.get(row.food_id)
+      if (current == null || rank < current.rank) {
+        group.set(row.food_id, { rank, excluded: row.is_excluded })
+      }
+      byGroup.set(row.exchange_group_id, group)
     }
-    const rank =
-      row.coach_id != null
-        ? EXCHANGE_LIST_OWNER_RANK.coach
-        : row.org_id != null
-          ? EXCHANGE_LIST_OWNER_RANK.org
-          : EXCHANGE_LIST_OWNER_RANK.global
-    const group = byGroup.get(row.exchange_group_id) ?? new Map()
-    const current = group.get(row.food_id)
-    if (current == null || rank < current.rank) {
-      group.set(row.food_id, { rank, excluded: row.is_excluded })
-    }
-    byGroup.set(row.exchange_group_id, group)
+
+    if (data.length < COUNT_PAGE_SIZE) break
+    if (page === COUNT_MAX_PAGES - 1) truncated = true
   }
 
   const counts: Record<string, number> = {}
+  // Denso a propósito: un grupo pedido y sin filas vale 0, no "ausente".
+  if (!truncated) for (const groupId of groupIds) counts[groupId] = 0
   for (const [groupId, foods] of byGroup) {
     let alive = 0
     for (const winner of foods.values()) if (!winner.excluded) alive += 1
     counts[groupId] = alive
   }
-  return counts
+  return { counts, truncated }
 }

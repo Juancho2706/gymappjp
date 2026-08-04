@@ -31,4 +31,8 @@
 - [x] T5.3 Gates: `pnpm test` 5096 pass, `tsc --noEmit` web limpio, `pnpm lint` 0 errores / 445 warnings (baseline),
       `check:nutrition-v2-boundaries` 256/8, `check:tokens` 86.
 - [ ] T5.4 QA visual del coach en `/coach/foods → Porciones` (pendiente: nadie lo abrio en un navegador todavia).
-- [ ] T5.5 Paridad RN de esta superficie — es F4.
+- [x] T5.5 Paridad RN de esta superficie (F4 ola 2): pestaña Porciones en NativeWind, "Duplicar y
+      ajustar" con copia+reescalado via `PUT /api/mobile/nutrition/exchanges/groups`, conteo de
+      equivalencias (`foodCounts` en el GET de grupos) y aviso de porciones huerfanas en el builder RN.
+      Bonus: fix del truncamiento de `countExchangeListRowsByGroup` (PostgREST max_rows=1000 sobre
+      2.525 filas) que ya afectaba `/coach/foods`. Pendiente: QA fisica + build EAS.

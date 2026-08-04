@@ -64,12 +64,15 @@ describe('nutrition-v2-hub builder href', () => {
     expect(nutritionV2BuilderHref('abc 123')).toBe('/coach/nutrition-v2/builder/abc%20123')
   })
   it('NUT-004: propaga la raiz del plan vigente como ?planId= (no crea otra raiz)', () => {
-    expect(nutritionV2BuilderHref('cli-1', 'plan 9')).toBe('/coach/nutrition-v2/builder/cli-1?planId=plan%209')
+    expect(nutritionV2BuilderHref('cli-1', { planId: 'plan 9' })).toBe(
+      '/coach/nutrition-v2/builder/cli-1?planId=plan%209',
+    )
   })
   it('omite el query sin plan vigente (null/undefined/vacio)', () => {
-    expect(nutritionV2BuilderHref('cli-1', null)).toBe('/coach/nutrition-v2/builder/cli-1')
+    expect(nutritionV2BuilderHref('cli-1', { planId: null })).toBe('/coach/nutrition-v2/builder/cli-1')
+    expect(nutritionV2BuilderHref('cli-1', {})).toBe('/coach/nutrition-v2/builder/cli-1')
     expect(nutritionV2BuilderHref('cli-1', undefined)).toBe('/coach/nutrition-v2/builder/cli-1')
-    expect(nutritionV2BuilderHref('cli-1', '')).toBe('/coach/nutrition-v2/builder/cli-1')
+    expect(nutritionV2BuilderHref('cli-1', { planId: '' })).toBe('/coach/nutrition-v2/builder/cli-1')
   })
 })
 

@@ -111,6 +111,23 @@ export const PORTIONS_COPY = {
     manageAria: (grupo: string) => `Opciones de ${grupo}`,
     edit: 'Editar',
     delete: 'Eliminar',
+    /**
+     * Los grupos del sistema no se editan (RLS los niega): se duplican. Es la salida al caso
+     * real "el cereal aporta 15 g de carbos y yo trabajo con 20" sin tocar el grupo compartido
+     * ni los planes publicados que lo usan.
+     */
+    duplicate: 'Duplicar y ajustar',
+    duplicateAria: (grupo: string) => `Duplicar ${grupo} y ajustar sus valores`,
+    duplicateSuffix: (grupo: string) => `${grupo} (ajustado)`,
+    duplicateTitle: 'Duplicar grupo',
+    /**
+     * Los targets congelan `snapshot_ref_*` al publicar, pero la lista de alimentos se lee
+     * viva: editar un grupo NO cambia los planes ya publicados y hasta ahora nada lo decia.
+     */
+    publishedFrozenNotice:
+      'Los planes ya publicados mantienen los valores con los que se publicaron. Vuelve a publicar el plan del alumno para aplicarles el cambio.',
+    duplicateHint:
+      'Es una copia tuya: puedes cambiarle los valores sin afectar el grupo original ni a los planes que ya lo usan.',
     deleteConfirmTitle: (grupo: string) => `¿Eliminar ${grupo}?`,
     deleteInUseNotice:
       'Los planes publicados conservan su versión congelada. Se quitará de las franjas que estés editando.',
@@ -160,6 +177,12 @@ export const PORTIONS_COPY = {
     empty: 'Este grupo todavía no tiene alimentos: tu alumno no verá ejemplos.',
     emptySearch: 'Ningún alimento de este grupo coincide con tu búsqueda.',
     loadFailed: 'No pudimos cargar la lista.',
+    /** Duplicar copiando la lista: sin esto el grupo nuevo nace vacío (defecto que dejó F1). */
+    copyListLabel: 'Copiar también su lista de alimentos',
+    copyListHint: 'Los gramos se ajustan solos a las macros que definas.',
+    copied: (n: number) => (n === 1 ? 'Se copió 1 alimento' : `Se copiaron ${n} alimentos`),
+    copyPartial: (n: number, total: number) => `Se copiaron ${n} de ${total} alimentos`,
+    copyFailed: 'El grupo se creó, pero no pudimos copiar su lista.',
     groupUnavailable: 'Ese grupo de porciones ya no está disponible.',
     foodUnavailable: 'Ese alimento ya no está disponible.',
   },
