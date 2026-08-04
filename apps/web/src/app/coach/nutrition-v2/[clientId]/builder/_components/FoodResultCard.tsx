@@ -1,19 +1,20 @@
 'use client'
 
+import { useState } from 'react'
 import { BadgeCheck, ShieldCheck } from 'lucide-react'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { MacroChipRow } from '@/components/nutrition-v2'
+import { ImageLightbox } from '@/components/ImageLightbox'
 import { foodCardImage } from './food-card-presentation'
 import { FoodCoverImage } from './FoodImage'
 
-// Resultado de busqueda del catalogo. DOS densidades con el mismo markup:
+// Resultado de busqueda del catalogo: SIEMPRE una fila horizontal delgada (QA CEO 08-04) —
+// thumbnail cuadrado a la izquierda (clickeable: abre la foto en lightbox), nombre + marca +
+// envase al centro y, en md+, las macros por 100 en la MISMA linea a la derecha (en movil
+// caen debajo del nombre). Sin variante vertical: la grilla vive en una sola columna.
 //
-// - Movil (<sm) y desktop (md+): FILA compacta — thumbnail cuadrado a la izquierda y, al
-//   lado, nombre (2 lineas), marca, envase/categoria y macros por 100. Es lo que el coach
-//   necesita para escanear 20 resultados sin scrollear (queja del CEO 08-04: en desktop la
-//   grilla pintaba imagenes de ~300 px y cortaba los nombres a "18 HUE...").
-// - Banda intermedia (sm..md, tablets angostas): card VERTICAL con la foto arriba, que es
-//   donde una grilla de 2 columnas justifica el formato grande.
+// La capsula "Catalogo XX" se elimino (ruido para el coach); solo quedan las capsulas con
+// senal real: "Verificado EVA" y "Propio".
 //
 // Solo presentacion (tokens del DS, cero hex).
 
@@ -24,7 +25,7 @@ interface FoodBadge {
   className: string
 }
 
-function foodBadge(item: FoodCatalogItem): FoodBadge {
+function foodBadge(item: FoodCatalogItem): FoodBadge | null {
   if (item.verificationStatus === 'eva_verified') {
     return {
       label: 'Verificado EVA',
@@ -39,13 +40,7 @@ function foodBadge(item: FoodCatalogItem): FoodBadge {
         'border-sport-300/60 bg-sport-100/70 text-sport-700 dark:border-sport-600/40 dark:bg-sport-100/20 dark:text-sport-300',
     }
   }
-  if (item.countryCode) {
-    return {
-      label: 'Catalogo ' + item.countryCode.toUpperCase(),
-      className: 'border-border-subtle bg-surface-sunken text-muted',
-    }
-  }
-  return { label: 'Catalogo', className: 'border-border-subtle bg-surface-sunken text-muted' }
+  return null
 }
 
 function BadgeIcon({ status }: { status: FoodCatalogItem['verificationStatus'] }) {
@@ -68,7 +63,7 @@ export function FoodResultCard({
 }: {
   item: FoodCatalogItem
   onPick: () => void
-  /** Oculta la capsula de verificacion/catalogo para dar todo el ancho al nombre (sheet movil). */
+  /** Oculta la capsula de verificacion para dar todo el ancho al nombre (sheet movil). */
   showBadge?: boolean
 }) {
   const image = foodCardImage(item, SUPABASE_BASE)
@@ -76,39 +71,63 @@ export function FoodResultCard({
   const pkg = packageLabel(item)
   const unitPer100 = item.servingUnit === 'ml' ? 'ml' : 'g'
   const meta = [pkg, item.category].filter(Boolean).join(' · ')
+  const [zoomOpen, setZoomOpen] = useState(false)
 
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      aria-label={`Agregar ${item.name}${item.brand ? ` (${item.brand})` : ''}`}
-      className="group flex h-full w-full flex-row items-center gap-3 overflow-hidden rounded-card border border-border-subtle bg-surface-card p-2 text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-col sm:items-stretch sm:gap-0 sm:p-0 md:flex-row md:items-center md:gap-3 md:p-2"
-    >
-      <span className="w-14 shrink-0 overflow-hidden rounded-control sm:w-full sm:rounded-none md:w-16 md:rounded-control">
-        <FoodCoverImage imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={item.name} />
-      </span>
+    <div className="group flex w-full flex-row items-center gap-3 overflow-hidden rounded-card border border-border-subtle bg-surface-card p-2 transition focus-within:border-primary/50 hover:border-primary/50">
+      {/* Con foto real el thumbnail es un boton propio (zoom en lightbox); con icono de
+          categoria no hay nada que ampliar y queda estatico. */}
+      {image.imageUrl ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setZoomOpen(true)}
+            aria-label={`Ver foto de ${item.name}`}
+            className="w-14 shrink-0 cursor-zoom-in overflow-hidden rounded-control transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-16"
+          >
+            <FoodCoverImage imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={item.name} />
+          </button>
+          <ImageLightbox
+            open={zoomOpen}
+            onOpenChange={setZoomOpen}
+            src={image.imageUrl}
+            alt={item.name}
+            title={item.name}
+          />
+        </>
+      ) : (
+        <span className="w-14 shrink-0 overflow-hidden rounded-control md:w-16">
+          <FoodCoverImage imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={item.name} />
+        </span>
+      )}
 
-      <span className="flex min-w-0 flex-1 flex-col gap-1.5 p-0 sm:p-3 md:gap-1 md:p-0">
-        <span className="flex items-start justify-between gap-2">
-          <span className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-strong">{item.name}</span>
-          {showBadge ? (
-            <span
-              className={
-                'inline-flex shrink-0 items-center gap-1 rounded-pill border px-1.5 py-0.5 text-[10px] font-semibold ' +
-                badge.className
-              }
-            >
-              <BadgeIcon status={item.verificationStatus} />
-              {badge.label}
-            </span>
-          ) : null}
+      <button
+        type="button"
+        onClick={onPick}
+        aria-label={`Agregar ${item.name}${item.brand ? ` (${item.brand})` : ''}`}
+        className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-control text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:flex-row md:items-center md:gap-3"
+      >
+        <span className="flex min-w-0 flex-col gap-0.5 md:flex-1">
+          <span className="flex items-start gap-2">
+            <span className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-strong">{item.name}</span>
+            {showBadge && badge ? (
+              <span
+                className={
+                  'inline-flex shrink-0 items-center gap-1 rounded-pill border px-1.5 py-0.5 text-[10px] font-semibold ' +
+                  badge.className
+                }
+              >
+                <BadgeIcon status={item.verificationStatus} />
+                {badge.label}
+              </span>
+            ) : null}
+          </span>
+
+          {item.brand ? <span className="truncate text-xs font-medium text-body">{item.brand}</span> : null}
+          {meta ? <span className="truncate text-[11px] text-muted">{meta}</span> : null}
         </span>
 
-        {item.brand ? <span className="truncate text-xs font-medium text-body">{item.brand}</span> : null}
-        {meta ? <span className="truncate text-[11px] text-muted">{meta}</span> : null}
-
-        {/* En fila compacta (md+) el divisor sobra: cada resultado ya es su propia tarjeta. */}
-        <span className="mt-auto block border-t border-border-subtle pt-2 md:mt-0 md:border-t-0 md:pt-0">
+        <span className="md:shrink-0">
           <MacroChipRow
             calories={item.calories}
             proteinG={item.proteinG}
@@ -118,7 +137,7 @@ export function FoodResultCard({
             size="sm"
           />
         </span>
-      </span>
-    </button>
+      </button>
+    </div>
   )
 }

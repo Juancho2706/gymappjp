@@ -162,9 +162,9 @@ export function FoodPickerSheet({
 
       {items.length > 0 ? (
         <div className="mt-3 space-y-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
-          {/* En desktop el dialogo ya acota el ancho (max-w-2xl) y las cards son filas
-              compactas: una sola columna deja el nombre completo y los macros en linea. */}
-          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
+          {/* Filas horizontales a una columna en TODOS los anchos (las cards ya no tienen
+              variante vertical): nombre completo y macros en linea. */}
+          <ul className="grid grid-cols-1 gap-2">
             {items.map((item) => (
               <li key={item.id} className="min-w-0">
                 <FoodResultCard item={item} onPick={() => pick(item)} showBadge={false} />

@@ -285,9 +285,10 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
       {error ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">{error}</p> : null}
       {items.length > 0 ? (
         <div className="mt-3 space-y-3">
-          {/* Desktop = filas compactas (ver FoodResultCard): dos o tres columnas alcanzan y el
-              panel no crece — el scroll vive DENTRO de la lista (max-h), no en la pagina. */}
-          <ul className="grid max-h-[26rem] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 md:max-h-[22rem] xl:grid-cols-3">
+          {/* Filas horizontales delgadas a UNA columna (QA CEO 08-04): nombre y macros de
+              izquierda a derecha sin truncar — el scroll vive DENTRO de la lista (max-h),
+              no en la pagina. */}
+          <ul className="grid max-h-[26rem] grid-cols-1 gap-2 overflow-y-auto pr-1 md:max-h-[22rem]">
             {items.map((item) => (
               <li key={item.id} className="min-w-0">
                 <FoodResultCard item={item} onPick={() => pick(item)} />
@@ -1552,7 +1553,10 @@ function ConstructionStep({
           />
         ) : null}
 
-        <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 lg:hidden">
+        {/* En movil (<md) la capsula de navegacion del coach flota fija abajo (z-50,
+            ~62px + 16px de aire + safe-area): sin este offset la tapaba por completo
+            (QA CEO 08-04). En md+ la capsula no existe y el total vuelve a bottom-0. */}
+        <div className="sticky bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 md:bottom-0 lg:hidden">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">
             {variant.isDefault ? 'Total del día base' : 'Total de ' + variant.label}
           </span>
