@@ -6,8 +6,14 @@
  * alimento"). Misma fila grupo+stepper del builder: circulito con el codigo del grupo
  * (color de identidad `exchangeGroupColor`, letra blanca) + nombre + StepperField adaptado
  * a paso 0,5 (minimo 0,5) + eliminar con snackbar Deshacer. Altas via bottom sheet con los
- * grupos que el plan YA usa (snapshots congelados del read model — el quick-edit no tiene
- * canal de catalogo vivo en F1; grupos nuevos al plan se agregan desde el builder).
+ * grupos que el plan YA usa (snapshots congelados del read model; los grupos NUEVOS al plan
+ * se siguen agregando desde el builder).
+ *
+ * F4: el conteo de equivalencias (`portionFoodCounts` del provider) SI viene del catalogo
+ * vivo — es la unica lectura viva de esta seccion, y es informativa: dice cuantos alimentos
+ * vera el alumno en "1 porción equivale a" y avisa el grupo vacio, que es el defecto real
+ * (el alumno abre el sheet y no encuentra ningun ejemplo). Si no llega, se calla.
+ *
  * Los cambios cuentan en la barra "N cambios sin publicar" y publican por el pipeline
  * existente (persistAndPublishDraft congela snapshots server-side; cero RPC nuevo).
  * Plan sin porciones => la seccion NO se pinta (capa invisible, SPEC UX-c).
@@ -27,6 +33,17 @@ import {
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { StepperField } from './StepperField'
 import { QE_COPY } from './microcopy'
+
+/**
+ * Linea de apoyo con las equivalencias del grupo. `undefined` = el conteo no viajo y NO se
+ * pinta nada: mejor callar que mentir un cero (misma semantica que `foodsHint` del picker del
+ * builder, `PortionsGroupPicker`).
+ */
+function foodsHint(count: number | undefined): { text: string; empty: boolean } | null {
+  if (count == null) return null
+  if (count === 0) return { text: PORTIONS_COPY.builder.groupFoodsEmpty, empty: true }
+  return { text: PORTIONS_COPY.builder.groupFoodCount(count), empty: false }
+}
 
 /** Circulito de identidad del grupo: color del catalogo SOLO aqui, letra blanca (SPEC UX). */
 function GroupDot({ group, sortOrder }: { group: { groupCode: string; color: string | null }; sortOrder: number }) {
@@ -83,6 +100,11 @@ export function EditablePortionsCard({ variantKey, slot }: { variantKey: string;
         </button>
       ) : null}
 
+      {/* Una sola vez por seccion (no por fila): que pasa con lo que ya esta publicado. */}
+      <p className="mt-2 rounded-control bg-surface-sunken px-2 py-1.5 text-[11px] leading-relaxed text-muted">
+        {QE_COPY.portionsPublishNotice}
+      </p>
+
       <GroupPickerSheet
         open={pickerOpen}
         onOpenChange={setPickerOpen}
@@ -109,8 +131,11 @@ function PortionTargetRow({
   index: number
   sortOrder: number
 }) {
-  const { dispatch, errors, showErrors, isPending } = useQuickEdit()
+  const { dispatch, errors, showErrors, isPending, portionFoodCounts } = useQuickEdit()
   const portionsError = showErrors ? errors[`portion.${target.key}.portions`] : undefined
+  // Grupo sin equivalencias: el alumno vera el chip y podra marcar porciones, pero el sheet
+  // "1 porción equivale a" le sale vacio. Se avisa ACA, donde el coach ya decidio usarlo.
+  const sinAlimentos = portionFoodCounts?.[target.exchangeGroupId] === 0
 
   function handleRemove() {
     const removed = target
@@ -164,6 +189,12 @@ function PortionTargetRow({
           <Trash2 aria-hidden="true" className="h-4 w-4" />
         </button>
       </div>
+      {sinAlimentos ? (
+        <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+          {PORTIONS_COPY.builder.groupFoodsEmpty}.{' '}
+          <span className="font-normal text-muted">{PORTIONS_COPY.builder.groupFoodsEmptyHint}</span>
+        </p>
+      ) : null}
       {portionsError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{portionsError}</p> : null}
     </div>
   )
@@ -171,7 +202,8 @@ function PortionTargetRow({
 
 /**
  * Bottom sheet de altas: lista los grupos del plan (circulito + nombre + referencia por
- * porcion); los ya presentes en la franja quedan deshabilitados ("Ya esta en esta comida").
+ * porcion + equivalencias que vera el alumno); los ya presentes en la franja quedan
+ * deshabilitados ("Ya esta en esta comida").
  */
 function GroupPickerSheet({
   open,
@@ -190,7 +222,7 @@ function GroupPickerSheet({
   slotKey: string
   onPicked: () => void
 }) {
-  const { dispatch } = useQuickEdit()
+  const { dispatch, portionFoodCounts } = useQuickEdit()
 
   function handlePick(group: QePortionGroup) {
     dispatch({ type: 'ADD_PORTION_TARGET', variantKey, slotKey, key: genQuickEditKey(), group })
@@ -208,6 +240,7 @@ function GroupPickerSheet({
         <ul className="max-h-[60vh] space-y-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom,0px),1rem)]">
           {groups.map((group, index) => {
             const used = usedGroupIds.has(group.exchangeGroupId)
+            const foods = foodsHint(portionFoodCounts?.[group.exchangeGroupId])
             return (
               <li key={group.exchangeGroupId}>
                 <button
@@ -231,6 +264,16 @@ function GroupPickerSheet({
                         ? PORTIONS_COPY.builder.groupUsed
                         : `1 porción ≈ ${Math.round(group.ref.calories)} kcal · ${Math.round(group.ref.carbsG)} C · ${Math.round(group.ref.proteinG)} P`}
                     </span>
+                    {!used && foods ? (
+                      <span
+                        className={
+                          'block truncate text-[11px] ' +
+                          (foods.empty ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-subtle')
+                        }
+                      >
+                        {foods.text}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               </li>

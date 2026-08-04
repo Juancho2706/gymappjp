@@ -32,6 +32,10 @@ import {
 } from '@eva/nutrition-v2'
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
 import {
+  loadExchangeGroupsForBuilderAction,
+  type ExchangeGroupFoodCounts,
+} from '../builder/_components/PortionsGroupsAction'
+import {
   applyQuickEditToDraft,
   buildSubstitutionMap,
   collectPortionGroups,
@@ -100,6 +104,12 @@ interface QuickEditContextValue {
    * porciones a eleccion. [] = plan sin porciones.
    */
   exchangeGroups: QeExchangeGroup[]
+  /**
+   * Cuantas equivalencias tiene cada grupo (`groupId -> n`) segun el catalogo VIVO del coach:
+   * es lo que su alumno vera en "1 porción equivale a". `null` = el dato no viajo (plan sin
+   * porciones, o la lectura fallo): la UI no pinta nada — callar, no mentir un cero.
+   */
+  portionFoodCounts: ExchangeGroupFoodCounts | null
   /**
    * NUT-008: la carga server-side de los reemplazos autorizados fallo. Publicar los
    * borraria (la publicacion reescribe el arbol completo), asi que "Publicar" queda
@@ -212,6 +222,9 @@ export function QuickEditProvider({
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false)
   // Arbol de una sesion anterior recuperado del respaldo local; alimenta el banner "Restaurar".
   const [pendingRestore, setPendingRestore] = useState<QuickEditState | null>(null)
+  // Equivalencias por grupo (catalogo vivo). Informativo puro: null hasta que llegue, y null
+  // para siempre si la lectura falla — jamas bloquea ni retrasa la edicion.
+  const [portionFoodCounts, setPortionFoodCounts] = useState<ExchangeGroupFoodCounts | null>(null)
   const [isPending, startTransition] = useTransition()
   // Clave de idempotencia por "intencion de publicar": se fija al abrir el confirm sheet y
   // se REUSA en todos los reintentos de esa intencion (§2.5). Editar despues de un fallo
@@ -302,6 +315,27 @@ export function QuickEditProvider({
     }, 1500)
     return () => clearTimeout(timer)
   }, [state, changeCount, draftKey, clientId, planId, planVersionId])
+
+  // Equivalencias por grupo: una sola lectura al montar el modo edicion, y SOLO si el plan
+  // usa porciones (sin capa de porciones la seccion ni se pinta, asi que el viaje sobra).
+  // Reusa la server action del builder tal cual (mismo scope de tenant que vera el alumno).
+  // Degradacion en silencio: !ok o excepcion => se queda en null y ninguna fila dice nada.
+  const hasPortionsLayer = portionGroups.length > 0
+  useEffect(() => {
+    if (!hasPortionsLayer) return
+    let alive = true
+    void (async () => {
+      try {
+        const res = await loadExchangeGroupsForBuilderAction({ clientId })
+        if (alive && res.ok) setPortionFoodCounts(res.foodCounts)
+      } catch {
+        // Informativo: el quick-edit sigue funcionando sin la linea de apoyo.
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [clientId, hasPortionsLayer])
 
   const futureDateLabel = useMemo(() => {
     const effectiveFrom = planModel.plan?.effectiveFrom ?? null
@@ -487,6 +521,7 @@ export function QuickEditProvider({
     hasNutritionPro,
     portionGroups,
     exchangeGroups,
+    portionFoodCounts,
     substitutionsFailed: substitutionsLoadFailed,
     retrySubstitutions,
     futureDateLabel,

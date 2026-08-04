@@ -79,6 +79,28 @@ export const QE_COPY = {
   copySlotReplaces: 'Reemplaza',
   copySlotCta: (n: number) => (n === 0 ? 'Elige al menos un día' : `Copiar a ${n} ${n === 1 ? 'día' : 'días'}`),
   copySlotDone: (n: number) => `Franja copiada a ${n} ${n === 1 ? 'día' : 'días'}`,
+  // ── Porciones que se quedaron SOLO en el día base (defecto B4). Las porciones pertenecen
+  //    a la franja de UN día: cargarlas en el base y publicar deja a los días asignados sin
+  //    ninguna. `dias` llega ya formateado ("Sábado, Domingo") y `n` es cuántos son.
+  //    Claves propias (no se reusa `copySlotAll`) porque es OTRA acción: acá se bajan las
+  //    porciones del base, allá se copia una franja completa elegida por el coach.
+  portionsGapTitle: 'Tus porciones están solo en el día base.',
+  portionsGapDays: (dias: string, n: number) =>
+    `${dias} no ${n === 1 ? 'las mostrará' : 'las mostrarán'} a tu alumno.`,
+  portionsGapUnmatched: (dias: string, n: number) =>
+    n === 1
+      ? `${dias} no tiene ninguna comida: tu alumno verá ese día vacío. Agrégale comidas o elimínalo para que herede el día base.`
+      : `${dias} no tienen ninguna comida: tu alumno verá esos días vacíos. Agrégales comidas o elimínalos para que hereden el día base.`,
+  portionsGapApply: 'Aplicar a todos los días',
+  portionsGapApplied: 'Porciones aplicadas a los días del plan.',
+  /**
+   * Nota estática de la sección "Porciones a elección": los targets congelan sus valores al
+   * publicar, así que lo que se edita acá viaja recién con esta publicación y los planes que
+   * ya salieron no se mueven solos. Reformulación del aviso del editor de grupos del builder
+   * para el contexto del quick-edit (acá el coach edita el PLAN, no el grupo).
+   */
+  portionsPublishNotice:
+    'Tus cambios de porciones se aplican al publicar esta edición. Los planes que ya publicaste mantienen los valores con los que salieron.',
   // ── Multi-día (FD5): menú por día en el modo edición. El alta vive en `AddDayPopover`
   //    (compartido con el builder), que trae su propio copy y su upsell del gate Pro.
   baseDayEyebrow: 'Día base',

@@ -33,6 +33,16 @@ import {
   type BuilderFood,
   type ItemMacros,
 } from '../builder/_lib/draft-builder'
+// Diagnostico de porciones huerfanas (defecto B4): la logica pura ya vive en el builder y es
+// framework-neutral, asi que el quick-edit la REUSA en vez de reimplementar el emparejamiento
+// por nombre de franja (precedente del import cruzado: `AddDayPopover` en QuickEditPlanView).
+import {
+  daysMissingBasePortions,
+  portionsKey,
+  type PortionsBySlot,
+  type PortionsDayGap,
+  type PortionsDayLike,
+} from '../builder/_components/portions-state'
 
 export const ZERO_ITEM_MACROS: ItemMacros = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 }
 
@@ -411,6 +421,13 @@ export type QuickEditAction =
   | { type: 'REMOVE_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string }
   | { type: 'RESTORE_PORTION_TARGET'; variantKey: string; slotKey: string; index: number; target: QePortionTarget }
   | { type: 'ADD_PORTION_TARGET'; variantKey: string; slotKey: string; key: string; group: QePortionGroup }
+  /**
+   * Baja las porciones del dia base a los dias que se quedaron sin ellas (defecto B4). Sin
+   * payload a proposito: los huecos se recalculan del estado en el momento de aplicar, asi
+   * que jamas se copia contra un diagnostico viejo. Deshacer: `RESTORE_DRAFT` con el arbol
+   * previo (toca N dias, ningun `RESTORE_*` puntual la cubre).
+   */
+  | { type: 'APPLY_BASE_PORTIONS' }
   | { type: 'RESET'; state: QuickEditState }
   | { type: 'RESTORE_DRAFT'; state: QuickEditState }
 
@@ -857,6 +874,99 @@ export function qeSlotCopyTargets(
     }))
 }
 
+// ---------------------------------------------------------------------------
+// Porciones huerfanas: los dias que se quedaron SIN las porciones del dia base (defecto B4,
+// 2026-08-03). Es el MISMO defecto que el builder ya avisa: las porciones pertenecen a la
+// franja de UN dia, asi que cargarlas en el base y publicar deja a los dias asignados sin
+// ninguna y el alumno no ve nada. El quick-edit tambien crea dias (FD5), asi que tambien lo
+// puede provocar; hasta ahora era la unica superficie sin la señal.
+//
+// La logica de diagnostico NO se reimplementa: se proyecta el arbol editable a la forma que
+// consume `daysMissingBasePortions` (mapa `variantKey::slotKey` + dias con nombres de franja).
+// ---------------------------------------------------------------------------
+
+/**
+ * Proyeccion del arbol editable a la forma de porciones del builder. `map` solo lleva las
+ * franjas con porciones VALIDAS (>0): una porcion vacia o mal escrita no cuenta como cargada
+ * (y ya bloquea el publish por validacion), asi que jamas se reporta como "el dia si las
+ * tiene".
+ */
+export function qePortionsProjection(variants: readonly QeVariant[]): {
+  map: PortionsBySlot
+  days: PortionsDayLike[]
+} {
+  const map: PortionsBySlot = {}
+  const days: PortionsDayLike[] = []
+  for (const variant of variants) {
+    days.push({
+      key: variant.key,
+      isDefault: variant.isDefault,
+      slots: variant.slots.map((slot) => ({ key: slot.key, name: slot.name })),
+    })
+    for (const slot of variant.slots) {
+      const targets = slot.portionTargets
+        .map((target) => ({
+          exchangeGroupId: target.exchangeGroupId,
+          portions: parsePortionsValue(target.portions) ?? 0,
+        }))
+        .filter((target) => target.portions > 0)
+      if (targets.length === 0) continue
+      map[portionsKey(variant.key, slot.key)] = targets
+    }
+  }
+  return { map, days }
+}
+
+/** Dias del quick-edit que se quedaron sin las porciones del dia base (con sus pares copiables). */
+export function qeDaysMissingBasePortions(variants: readonly QeVariant[]): PortionsDayGap[] {
+  const { map, days } = qePortionsProjection(variants)
+  return daysMissingBasePortions(map, days)
+}
+
+/**
+ * Baja las porciones del dia base a los dias con hueco, franja homonima por franja homonima
+ * (`slotKeyPairs` del diagnostico). Solo AGREGA: una franja que ya tiene porciones propias es
+ * una decision del coach y no se pisa. Los targets copiados nacen como filas nuevas (`id`
+ * null, keys de UI propias), igual que en `copiedQeSlot`.
+ *
+ * Determinista e idempotente: tras aplicarla no queda ningun hueco copiable, asi que
+ * despacharla de nuevo devuelve el MISMO estado (misma referencia).
+ */
+function applyBasePortions(state: QuickEditState): QuickEditState {
+  const base = defaultQeVariant(state)
+  if (!base) return state
+  const copiables = qeDaysMissingBasePortions(state.variants).filter((gap) => gap.slotKeyPairs.length > 0)
+  if (copiables.length === 0) return state
+  const pairsByVariant = new Map(copiables.map((gap) => [gap.variantKey, gap.slotKeyPairs]))
+  const baseSlots = new Map(base.slots.map((slot) => [slot.key, slot]))
+  let touched = false
+  const variants = state.variants.map((variant) => {
+    const pairs = pairsByVariant.get(variant.key)
+    if (!pairs) return variant
+    let variantTouched = false
+    const slots = variant.slots.map((slot) => {
+      // Cinturon: el diagnostico ya excluye las franjas con porciones propias.
+      if (slot.portionTargets.length > 0) return slot
+      const pair = pairs.find((candidate) => candidate.to === slot.key)
+      const source = pair == null ? undefined : baseSlots.get(pair.from)
+      if (!source || source.portionTargets.length === 0) return slot
+      variantTouched = true
+      return {
+        ...slot,
+        portionTargets: source.portionTargets.map((target) => ({
+          ...target,
+          key: `${slot.key}:${target.key}`,
+          id: null,
+        })),
+      }
+    })
+    if (!variantTouched) return variant
+    touched = true
+    return { ...variant, slots }
+  })
+  return touched ? { ...state, variants } : state
+}
+
 function normalizeBuilderUnit(servingUnit: string | null | undefined): string {
   const u = String(servingUnit ?? '').toLowerCase()
   if (u === 'ml') return 'ml'
@@ -980,6 +1090,8 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
           ? slot
           : { ...slot, portionTargets: [...slot.portionTargets, createPortionTarget(action.key, action.group)] },
       )
+    case 'APPLY_BASE_PORTIONS':
+      return applyBasePortions(state)
     case 'SET_VISIBLE_NOTES':
       return { ...state, visibleNotes: action.value }
     case 'ADD_VARIANT':

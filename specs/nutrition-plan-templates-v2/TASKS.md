@@ -22,8 +22,8 @@
 - [x] T4.1 "Guardar como plantilla" desde el plan vigente de un alumno (biblioteca del hub).
 - [x] T4.2 Modal de dos pestañas (Desde cero / Reutilizar) en el `+` del Centro V2.
 - [x] T4.3 Biblioteca de plantillas (pestaña nueva del hub): renombrar, favorita, eliminar.
-- [ ] T4.4 Boton "Guardar como plantilla" DENTRO del builder, sobre el borrador en pantalla.
-      Hoy solo se puede desde un plan ya publicado. Requiere tocar `PlanBuilderClient.tsx`.
+- [x] T4.4 Boton "Guardar como plantilla" DENTRO del builder, sobre el borrador en pantalla
+      (paso de dias, dialogo nombre+descripcion, `source: 'builder'`, error del servidor inline).
 
 ## T5 — Rescate de las V1
 - [x] T5.1 Importador con dry-run y reporte por coach (`scripts/nutrition-v1-templates/import-v1-templates.sql`).

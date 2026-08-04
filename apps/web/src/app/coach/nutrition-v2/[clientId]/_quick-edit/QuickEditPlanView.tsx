@@ -10,6 +10,7 @@
 
 import { useMemo, useState } from 'react'
 import {
+  AlertTriangle,
   CalendarDays,
   History,
   Info,
@@ -39,6 +40,7 @@ import { PublishConfirmSheet } from './PublishConfirmSheet'
 import { StaleBaseDialog } from './StaleBaseDialog'
 import {
   defaultQeVariant,
+  qeDaysMissingBasePortions,
   takenDayVariantDows,
   VARIANT_LABEL_MAX,
   type QeVariant,
@@ -170,6 +172,9 @@ export function QuickEditPlanView() {
 
         {/* FD5: "+ Agregar día" al final de la lista de días (multi-select Lu-Do + origen). */}
         <AddDayButton />
+
+        {/* Defecto B4: las porciones se quedaron solo en el día base (con un día no aplica). */}
+        {multiDay ? <PortionsDayGapNotice /> : null}
 
         {/* Notas visibles EDITABLES (visible_notes); permisos siguen read-only con hint. */}
         <section className="rounded-card border border-border-subtle bg-surface-card p-4">
@@ -519,6 +524,66 @@ function AddDayButton() {
           dispatch({ type: 'ADD_VARIANT', days, source: origin === 'copy-base' ? 'clone' : 'empty' })
         }
       />
+    </div>
+  )
+}
+
+/**
+ * Aviso "tus porciones se quedaron en el día base" (defecto B4), hermano del que ya pinta el
+ * builder. Las porciones pertenecen a la franja de UN día: el coach las carga en el base,
+ * agrega días con "+ Agregar día" y publica sin que nada le diga que esos días no las
+ * heredaron — el alumno no ve ninguna. "Aplicar a todos los días" las baja franja homónima
+ * por franja homónima (`APPLY_BASE_PORTIONS`), sin pisar las que el día ya tenga.
+ *
+ * Un día SIN franjas homónimas (`unmatched`) no se arregla copiando: se nombra aparte porque
+ * ahí el alumno ve el día entero vacío, no solo sin porciones.
+ */
+function PortionsDayGapNotice() {
+  const { state, dispatch, isPending } = useQuickEdit()
+  const gaps = useMemo(() => qeDaysMissingBasePortions(state.variants), [state.variants])
+  if (gaps.length === 0) return null
+
+  const copiables = gaps.filter((gap) => gap.slotKeyPairs.length > 0)
+  const sinFranjas = gaps.filter((gap) => gap.unmatched)
+  const labelsOf = (list: typeof gaps) =>
+    list
+      .map((gap) => state.variants.find((variant) => variant.key === gap.variantKey)?.label ?? 'ese día')
+      .join(', ')
+
+  return (
+    <div
+      role="status"
+      className="rounded-card border border-amber-300/70 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10"
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">{QE_COPY.portionsGapTitle}</p>
+          {copiables.length > 0 ? (
+            <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300/90">
+              {QE_COPY.portionsGapDays(labelsOf(copiables), copiables.length)}
+            </p>
+          ) : null}
+          {sinFranjas.length > 0 ? (
+            <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300/90">
+              {QE_COPY.portionsGapUnmatched(labelsOf(sinFranjas), sinFranjas.length)}
+            </p>
+          ) : null}
+          {copiables.length > 0 ? (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                dispatch({ type: 'APPLY_BASE_PORTIONS' })
+                toast(QE_COPY.portionsGapApplied, { duration: 4000 })
+              }}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-amber-400/70 bg-white/70 px-3 text-xs font-semibold text-amber-900 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-amber-500/40 dark:bg-transparent dark:text-amber-200"
+            >
+              {QE_COPY.portionsGapApply}
+            </button>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

@@ -62,6 +62,9 @@ import {
   searchFoodCatalogCoachAction,
 } from '../_actions/builder.actions'
 import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-archive.actions'
+// Guardar el BORRADOR en pantalla como plantilla (F3): mismo action que usa la biblioteca del
+// hub, pero con `source: 'builder'` — aca todavia no hay plan publicado que copiar.
+import { savePlanTemplateAction } from '@/app/coach/nutrition-v2/_actions/plan-templates.actions'
 import { canProceedToPublishAfterArchive, effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
 import { FoodResultCard } from './FoodResultCard'
 import { PublishConflictDialog } from './PublishConflictDialog'
@@ -75,6 +78,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 // Porciones a elección (T1.1): capa opcional sobre structured/hybrid (SPEC R1). El estado
 // vive en un controller hermano del reducer (no se toca _lib/draft-builder) y se inyecta
 // al draft canónico justo antes de publicar (attachPortionsAndValidate).
@@ -1681,6 +1691,14 @@ const LEAVE_GUARD_COPY = 'Tienes un borrador sin publicar. ¿Salir y descartarlo
 const MULTI_DAY_LOCK_COPY =
   'No pudimos cargar los días de este plan. Rehacerlo aquí lo reduciría a uno: usa Edición rápida.'
 
+// Copy de "Guardar como plantilla". Inline en el componente igual que la biblioteca del hub
+// (PlanTemplatesLibrary): no hay archivo canónico de microcopy para plantillas todavía.
+const SAVE_TEMPLATE_LABEL = 'Guardar como plantilla'
+const SAVE_TEMPLATE_EMPTY_COPY = 'Arma el plan primero: todavía no hay nada que guardar como plantilla.'
+const SAVE_TEMPLATE_DEFAULT_NAME = 'Mi plantilla'
+const DRAFT_INCOMPLETE_COPY =
+  'El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.'
+
 export function PlanBuilderClient({
   clientId,
   existingPlan,
@@ -1738,6 +1756,14 @@ export function PlanBuilderClient({
   const [conflictOpen, setConflictOpen] = useState(false)
   const [conflictError, setConflictError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  // "Guardar como plantilla" (F3): estado LOCAL, fuera del `startTransition` del publish. Guardar
+  // una plantilla no toca el plan del alumno, así que no tiene por qué bloquear la CTA de publicar
+  // ni compartir su spinner.
+  const [templateOpen, setTemplateOpen] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateDescription, setTemplateDescription] = useState('')
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateError, setTemplateError] = useState<string | null>(null)
   const operationId = useRef(genId())
   // Estado de recuperacion del "Archivar y reemplazar" (ver handleReplaceToday). Sobreviven a un
   // fallo parcial para que el REINTENTO no repita el paso ya cumplido ni cree planes duplicados:
@@ -2274,6 +2300,69 @@ export function PlanBuilderClient({
     })
   }
 
+  /**
+   * "Guardar como plantilla" (F3): congela el BORRADOR que el coach tiene en pantalla como
+   * material reutilizable. No publica, no toca el plan del alumno y no mueve el respaldo local
+   * del wizard: el coach sigue exactamente donde estaba. La biblioteca del hub ya sabía guardar
+   * planes PUBLICADOS; esta es la otra mitad (`source: 'builder'`).
+   */
+  const canSaveTemplate = builderHasSignificantContent(state)
+
+  function handleOpenSaveTemplate() {
+    setTemplateName(state.planName.trim() || SAVE_TEMPLATE_DEFAULT_NAME)
+    setTemplateDescription('')
+    setTemplateError(null)
+    setTemplateOpen(true)
+  }
+
+  function handleTemplateOpenChange(next: boolean) {
+    // Cerrar a mitad del guardado dejaría al coach sin saber si quedó guardada.
+    if (templateSaving) return
+    setTemplateOpen(next)
+    if (!next) setTemplateError(null)
+  }
+
+  async function handleSaveTemplate() {
+    const name = templateName.trim()
+    if (name === '' || templateSaving) return
+    setTemplateError(null)
+
+    // MISMO ensamblado canónico del publish (draft del contrato + porciones inyectadas), pero
+    // con `planId: null`: una plantilla no pertenece a ningún plan. El envoltorio versionado lo
+    // arma el servidor (stripDraftIdentity), acá viaja el draft crudo.
+    let draft
+    try {
+      draft = assembleAndValidateDraft(state, { clientId, planId: null })
+      draft = attachPortionsAndValidate(draft, variantPortionKeys(state.variants), portions.bySlot)
+    } catch {
+      setShowErrors(true)
+      setTemplateOpen(false)
+      toast.error(DRAFT_INCOMPLETE_COPY)
+      return
+    }
+
+    setTemplateSaving(true)
+    const res = await savePlanTemplateAction({
+      name,
+      description: templateDescription.trim() || null,
+      draft,
+      // Reabrir la plantilla en el wizard necesita las DOS piezas (árbol del reducer + mapa
+      // hermano de porciones); ver `isUsableBuilderPayload` en la page del builder.
+      builder: { state, portionsBySlot: portions.bySlot },
+      source: 'builder',
+      sourcePlanId: existingPlan?.id ?? null,
+    })
+    setTemplateSaving(false)
+    if (!res.ok) {
+      // Errores legibles del servidor (tope de 100 plantillas, nombre repetido, permisos): se
+      // muestran DENTRO del diálogo para que el coach corrija sin perder lo que escribió.
+      setTemplateError(res.error)
+      return
+    }
+    setTemplateOpen(false)
+    toast.success('Plantilla guardada')
+  }
+
   return (
     <>
     {/* Anuncio de los cambios de día/franja para lectores de pantalla (P1-4): el toast es el
@@ -2405,23 +2494,43 @@ export function PlanBuilderClient({
             <ChevronLeft className="h-4 w-4" />
             Atras
           </button>
-          {state.step < BUILDER_STEP_DAYS ? (
-            <button type="button" onClick={handleNext} className={primaryButtonClass + ' flex-1 justify-center sm:flex-none'}>
-              Siguiente
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handlePublish}
-              disabled={isPending || multiDayLocked}
-              title={multiDayLocked ? MULTI_DAY_LOCK_COPY : undefined}
-              className={primaryButtonClass + ' flex-1 justify-center gap-2 sm:flex-none'}
-            >
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Publicar plan
-            </button>
-          )}
+          {/* Par de la derecha: en móvil el bloque toma el ancho sobrante y la CTA primaria
+              crece dentro (el botón de plantilla queda como icono, sin robarle thumb zone);
+              en sm+ el par vuelve a su ancho natural, alineado al borde. */}
+          <div className="flex flex-1 items-center justify-end gap-3 sm:flex-none">
+            {/* Guardar el borrador como plantilla: solo en el paso de días, que es donde el plan
+                ya tiene forma. Antes esto solo se podía desde un plan PUBLICADO. */}
+            {state.step === BUILDER_STEP_DAYS ? (
+              <button
+                type="button"
+                onClick={handleOpenSaveTemplate}
+                disabled={!canSaveTemplate || isPending}
+                aria-label={SAVE_TEMPLATE_LABEL}
+                title={canSaveTemplate ? SAVE_TEMPLATE_LABEL : SAVE_TEMPLATE_EMPTY_COPY}
+                className={secondaryButtonClass + ' shrink-0'}
+              >
+                <Copy aria-hidden="true" className="h-4 w-4" />
+                <span className="hidden sm:inline">{SAVE_TEMPLATE_LABEL}</span>
+              </button>
+            ) : null}
+            {state.step < BUILDER_STEP_DAYS ? (
+              <button type="button" onClick={handleNext} className={primaryButtonClass + ' flex-1 justify-center sm:flex-none'}>
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handlePublish}
+                disabled={isPending || multiDayLocked}
+                title={multiDayLocked ? MULTI_DAY_LOCK_COPY : undefined}
+                className={primaryButtonClass + ' flex-1 justify-center gap-2 sm:flex-none'}
+              >
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Publicar plan
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -2436,6 +2545,64 @@ export function PlanBuilderClient({
       onStartTomorrow={handleStartTomorrow}
       onReplaceToday={handleReplaceToday}
     />
+
+    {/* Nombre de la plantilla. Molde tomado de la biblioteca del hub (PlanTemplatesLibrary)
+        para que guardar desde el builder y desde un plan publicado se vean igual. */}
+    <Dialog open={templateOpen} onOpenChange={handleTemplateOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="normal-case tracking-tight">{SAVE_TEMPLATE_LABEL}</DialogTitle>
+          <DialogDescription>
+            Se guarda lo que tienes en pantalla, tal cual. No se publica nada y el alumno no se
+            entera.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-1 space-y-3">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wide text-muted">
+              Nombre de la plantilla
+            </span>
+            <input
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value.slice(0, 180))}
+              placeholder={SAVE_TEMPLATE_DEFAULT_NAME}
+              className="min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wide text-muted">
+              Descripción (opcional)
+            </span>
+            <textarea
+              value={templateDescription}
+              onChange={(event) => setTemplateDescription(event.target.value.slice(0, 2000))}
+              rows={2}
+              placeholder="Para quién te sirve o cuándo la usas"
+              className="w-full rounded-control border border-border-default bg-surface-card px-3 py-2 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void handleSaveTemplate()}
+            disabled={templateSaving || templateName.trim() === ''}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+          >
+            {templateSaving ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
+            {templateSaving ? 'Guardando…' : 'Guardar plantilla'}
+          </button>
+        </div>
+
+        {templateError ? (
+          <p
+            role="alert"
+            className="rounded-control border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300"
+          >
+            {templateError}
+          </p>
+        ) : null}
+      </DialogContent>
+    </Dialog>
     </>
   )
 }

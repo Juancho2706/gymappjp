@@ -16,6 +16,8 @@ import {
   qeItemMacros,
   qeSlotCopyTargets,
   qeSlotPortionTotals,
+  qeDaysMissingBasePortions,
+  qePortionsProjection,
   qeSlotSubtotal,
   qeSlotSubtotalWithPortions,
   qeVariantPortionTotals,
@@ -29,6 +31,7 @@ import {
   type QePortionGroup,
   type QuickEditState,
 } from './quick-edit-state'
+import { portionsKey } from '../builder/_components/portions-state'
 import type { BuilderFood } from '../builder/_lib/draft-builder'
 
 // Invariante central del quick-edit web: hidratar el read model y proyectarlo SIN editar
@@ -1086,5 +1089,131 @@ describe('quick-edit-state — multi-dia (FD5)', () => {
     const validation = validateQuickEdit(blank)
     expect(validation.ok).toBe(false)
     expect(validation.errors[`variant.${withDay.variants[1].key}.label`]).toBeTruthy()
+  })
+})
+
+// ── Porciones huerfanas: los dias que se quedaron SIN las del dia base (defecto B4) ──────
+//
+// El quick-edit tambien crea dias (FD5), asi que tambien puede dejar las porciones colgadas
+// en el base. El diagnostico se delega en `daysMissingBasePortions` del builder; lo que se
+// prueba aca es la PROYECCION del arbol editable y la accion que baja las porciones.
+
+describe('quick-edit-state — porciones huerfanas en los dias del plan (B4)', () => {
+  const SATURDAY = 6
+  const SUNDAY = 0
+  const SAT_SLOT_KEY = 'sab-desayuno'
+
+  /** Base con porciones + un dia especifico con una franja HOMONIMA todavia sin porciones. */
+  function withSaturdayHomonym() {
+    const fixture = hydratePortions()
+    const withDay = quickEditReducer(fixture.state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY],
+      source: 'empty',
+    })
+    const saturdayKey = withDay.variants[1].key
+    // Nombre con mayuscula/espacios distintos: el emparejamiento es por nombre normalizado.
+    const withSlot = quickEditReducer(withDay, {
+      type: 'ADD_SLOT',
+      variantKey: saturdayKey,
+      key: SAT_SLOT_KEY,
+      name: '  desayuno ',
+      startTime: '09:00',
+    })
+    return { ...fixture, state: withSlot, saturdayKey }
+  }
+
+  it('la proyeccion arma la clave por dia y omite las franjas sin porciones validas', () => {
+    const { state, saturdayKey } = withSaturdayHomonym()
+    const { map, days } = qePortionsProjection(state.variants)
+
+    // Solo el dia base tiene porciones: la franja homonima del sabado no entra al mapa.
+    expect(Object.keys(map)).toEqual([portionsKey(VARIANT_ID, SLOT_ID)])
+    expect(map[portionsKey(VARIANT_ID, SLOT_ID)]).toEqual([
+      { exchangeGroupId: GROUP_C_ID, portions: 2 },
+      { exchangeGroupId: GROUP_V_ID, portions: 1.5 },
+    ])
+    expect(days.map((day) => day.key)).toEqual([VARIANT_ID, saturdayKey])
+    expect(days[1].slots).toEqual([{ key: SAT_SLOT_KEY, name: '  desayuno ' }])
+
+    // Un texto de porciones invalido NO cuenta como cargado (y ya bloquea el publish).
+    const invalid = quickEditReducer(state, {
+      type: 'SET_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetKey: TARGET_ID,
+      value: '',
+    })
+    expect(qePortionsProjection(invalid.variants).map[portionsKey(VARIANT_ID, SLOT_ID)]).toEqual([
+      { exchangeGroupId: GROUP_V_ID, portions: 1.5 },
+    ])
+  })
+
+  it('caso feliz: reporta la franja homonima vacia y APPLY_BASE_PORTIONS la llena con filas nuevas', () => {
+    const { state, saturdayKey, currentOf } = withSaturdayHomonym()
+    expect(qeDaysMissingBasePortions(state.variants)).toEqual([
+      { variantKey: saturdayKey, slotKeyPairs: [{ from: SLOT_ID, to: SAT_SLOT_KEY }], unmatched: false },
+    ])
+
+    const applied = quickEditReducer(state, { type: 'APPLY_BASE_PORTIONS' })
+    const copied = applied.variants[1].slots[0].portionTargets
+    expect(copied.map((target) => target.groupCode)).toEqual(['C', 'V'])
+    expect(copied.map((target) => target.portions)).toEqual(['2', '1.5'])
+    // Filas NUEVAS del dia destino: sin id (el publish inserta) y con keys de UI propias.
+    expect(copied.every((target) => target.id === null)).toBe(true)
+    expect(copied.some((target) => target.key === TARGET_ID)).toBe(false)
+    // El dia base no se toca (misma referencia) y el hueco desaparece.
+    expect(applied.variants[0]).toBe(state.variants[0])
+    expect(qeDaysMissingBasePortions(applied.variants)).toEqual([])
+
+    // Viaja al draft (es lo que veria el alumno) y pasa el contrato.
+    const draft = currentOf(applied)
+    expect(draft.dayVariants[1].mealSlots[0].exchangeTargets).toHaveLength(2)
+    expect(() => NutritionPlanDraftSchema.parse(draft)).not.toThrow()
+  })
+
+  it('un dia sin franja homonima se reporta como unmatched y no se puede arreglar copiando', () => {
+    const { state } = hydratePortions()
+    const withEmptyDay = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SUNDAY], source: 'empty' })
+    expect(qeDaysMissingBasePortions(withEmptyDay.variants)).toEqual([
+      { variantKey: withEmptyDay.variants[1].key, slotKeyPairs: [], unmatched: true },
+    ])
+    // Nada copiable => estado INTACTO (misma referencia, sin re-render inutil).
+    expect(quickEditReducer(withEmptyDay, { type: 'APPLY_BASE_PORTIONS' })).toBe(withEmptyDay)
+  })
+
+  it('no pisa las porciones que el dia ya eligio para esa franja', () => {
+    const { state, saturdayKey, groups } = withSaturdayHomonym()
+    const verduras = groups.find((group) => group.groupCode === 'V') as QePortionGroup
+    const conPropias = quickEditReducer(state, {
+      type: 'ADD_PORTION_TARGET',
+      variantKey: saturdayKey,
+      slotKey: SAT_SLOT_KEY,
+      key: 'sab-v',
+      group: verduras,
+    })
+    // Porciones propias en la franja = decision del coach, no un hueco.
+    expect(qeDaysMissingBasePortions(conPropias.variants)).toEqual([])
+    const applied = quickEditReducer(conPropias, { type: 'APPLY_BASE_PORTIONS' })
+    expect(applied).toBe(conPropias)
+    expect(applied.variants[1].slots[0].portionTargets.map((target) => target.groupCode)).toEqual(['V'])
+  })
+
+  it('idempotente: aplicarla de nuevo devuelve el MISMO estado', () => {
+    const { state } = withSaturdayHomonym()
+    const once = quickEditReducer(state, { type: 'APPLY_BASE_PORTIONS' })
+    expect(quickEditReducer(once, { type: 'APPLY_BASE_PORTIONS' })).toBe(once)
+  })
+
+  it('con un solo dia (o sin porciones en el base) no hay nada que avisar', () => {
+    const conPorciones = hydratePortions()
+    expect(qeDaysMissingBasePortions(conPorciones.state.variants)).toEqual([])
+    const sinPorciones = hydrate()
+    const withDay = quickEditReducer(sinPorciones.state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY],
+      source: 'empty',
+    })
+    expect(qeDaysMissingBasePortions(withDay.variants)).toEqual([])
   })
 })
