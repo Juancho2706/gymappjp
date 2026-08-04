@@ -4,6 +4,7 @@ import {
   formatPlanBuilderOrigin,
   hydrateTemplateDraft,
   parsePlanBuilderOrigin,
+  parseTemplatePayload,
   stripDraftIdentity,
   summarizeTemplateDraft,
 } from './plan-templates'
@@ -166,5 +167,103 @@ describe('parsePlanBuilderOrigin', () => {
   it('ida y vuelta', () => {
     const origin = { kind: 'template', id: CLIENT } as const
     expect(parsePlanBuilderOrigin(formatPlanBuilderOrigin(origin))).toEqual(origin)
+  })
+})
+
+/**
+ * Forma EXACTA que produce el importador de las 33 plantillas V1 (F3 T5). Si el contrato del
+ * draft cambia, este test avisa antes de que 33 plantillas rescatadas queden ilegibles.
+ */
+describe('payload del importador V1', () => {
+  const importado = {
+    schemaVersion: 1,
+    draft: {
+      name: 'Dieta Jessica',
+      strategy: 'structured',
+      timezone: 'America/Santiago',
+      permissions: {
+        canRegisterFreely: false,
+        canAdjustPrescribedQuantity: false,
+        quantityAdjustmentPercent: null,
+        canSubstitute: false,
+        canMoveMealSlot: false,
+        canSkipOptionalItems: true,
+      },
+      visibleNotes: 'Hola 👋',
+      privateNotes: null,
+      protocolNotes: null,
+      dayVariants: [
+        {
+          key: 'default',
+          label: 'Todos los días',
+          dayOfWeek: null,
+          default: true,
+          targets: { calories: 2224, proteinG: 140, carbsG: 367, fatsG: 108, fiberG: null, sodiumMg: null, waterMl: null },
+          orderIndex: 0,
+          mealSlots: [
+            {
+              code: 'slot-1',
+              name: 'Comida 1',
+              startTime: null,
+              endTime: null,
+              mode: 'anchor',
+              required: false,
+              targets: {},
+              instructions: null,
+              orderIndex: 0,
+              items: [
+                {
+                  foodId: 'fdaac422-2273-4e92-9174-ca8592eedd26',
+                  recipeId: null,
+                  customName: null,
+                  quantity: 3,
+                  unit: 'un',
+                  minimumQuantity: null,
+                  maximumQuantity: null,
+                  optional: false,
+                  substitutionGroupId: null,
+                  notes: null,
+                  orderIndex: 0,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'dow-6',
+          label: 'Día 6',
+          dayOfWeek: 6,
+          default: false,
+          targets: { calories: 2224, proteinG: 140, carbsG: 367, fatsG: 108, fiberG: null, sodiumMg: null, waterMl: null },
+          orderIndex: 7,
+          mealSlots: [],
+        },
+      ],
+    },
+  }
+
+  it('valida contra el contrato guardado', () => {
+    expect(parseTemplatePayload(importado)).not.toBeNull()
+  })
+
+  it('una plantilla V1 SIN comidas (caso mindgym) tambien valida', () => {
+    const soloMacros = {
+      ...importado,
+      draft: {
+        ...importado.draft,
+        strategy: 'flexible',
+        permissions: { ...importado.draft.permissions, canRegisterFreely: true },
+        dayVariants: [{ ...importado.draft.dayVariants[0], mealSlots: [] }],
+      },
+    }
+    expect(parseTemplatePayload(soloMacros)).not.toBeNull()
+  })
+
+  it('se puede hidratar para un alumno y resumir para la biblioteca', () => {
+    const payload = parseTemplatePayload(importado)
+    expect(payload).not.toBeNull()
+    const hidratado = hydrateTemplateDraft(payload!.draft, { clientId: OTRO_CLIENTE })
+    expect(hidratado.clientId).toBe(OTRO_CLIENTE)
+    expect(summarizeTemplateDraft(payload!.draft).mealSlotCount).toBe(1)
   })
 })

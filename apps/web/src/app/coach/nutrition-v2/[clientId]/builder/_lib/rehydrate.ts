@@ -261,3 +261,141 @@ export function collectPlanFoodIds(
   }
   return [...ids]
 }
+
+// ─── Plantillas (F3) ────────────────────────────────────────────────────────────
+//
+// Una plantilla guarda el DRAFT del contrato (`NutritionPlanTemplateDraft`), que es lo unico
+// compartible con RN. Cuando la plantilla nace del wizard web tambien guarda el `BuilderState`
+// exacto y esta funcion no hace falta; se usa para las plantillas IMPORTADAS de V1, cuyos items
+// siempre referencian un alimento del catalogo.
+//
+// Las claves de UI se generan aqui (`t{v}-{s}`): `assembleDraft` NO emite ids de fila — solo
+// `key` —, asi que ninguna clave de una plantilla puede hacer que el builder escriba sobre
+// filas de otro plan.
+
+type TemplateDraftLike = {
+  name: string
+  strategy: BuilderState['strategy']
+  visibleNotes?: string | null
+  permissions?: { canRegisterFreely?: boolean; canAdjustPrescribedQuantity?: boolean; canSubstitute?: boolean }
+  dayVariants: Array<{
+    key: string
+    label: string
+    dayOfWeek: number | null
+    default?: boolean
+    targets?: { calories?: number | null; proteinG?: number | null; carbsG?: number | null; fatsG?: number | null }
+    mealSlots?: Array<{
+      name: string
+      startTime?: string | null
+      items?: Array<{
+        foodId?: string | null
+        customName?: string | null
+        quantity: number
+        unit: string
+        optional?: boolean
+        notes?: string | null
+      }>
+      exchangeTargets?: Array<{ exchangeGroupId: string; portions: number }>
+    }>
+  }>
+}
+
+function targetsFromDraft(targets: TemplateDraftLike['dayVariants'][number]['targets']): BuilderTargets {
+  return {
+    calories: targetText(targets?.calories),
+    proteinG: targetText(targets?.proteinG),
+    carbsG: targetText(targets?.carbsG),
+    fatsG: targetText(targets?.fatsG),
+  }
+}
+
+/**
+ * Convierte una plantilla en estado del wizard. `foods` son los alimentos ya resueltos
+ * server-side por id; un alimento que ya no existe degrada a item LIBRE con su nombre, en vez
+ * de desaparecer sin avisar.
+ */
+export function builderStateFromTemplateDraft(input: {
+  draft: TemplateDraftLike
+  foods: Record<string, BuilderFood>
+  clientTimezoneToday: string
+  portionKeyOf: (variantKey: string, slotKey: string) => string
+}): RehydratedBuilderDraft | null {
+  const { draft, foods, clientTimezoneToday, portionKeyOf } = input
+  if (!draft || (draft.dayVariants?.length ?? 0) === 0) return null
+
+  const portionsBySlot: RehydratedPortionsBySlot = {}
+  const variants: BuilderVariant[] = draft.dayVariants.map((variant, variantIndex) => {
+    const slots: BuilderSlot[] = (variant.mealSlots ?? []).map((slot, slotIndex) => {
+      const slotKey = `t${variantIndex}-${slotIndex}`
+      const targets = (slot.exchangeTargets ?? []).map((target) => ({
+        exchangeGroupId: target.exchangeGroupId,
+        portions: target.portions,
+      }))
+      if (targets.length > 0) portionsBySlot[portionKeyOf(variant.key, slotKey)] = targets
+      return {
+        key: slotKey,
+        name: slot.name,
+        startTime: startTimeFromRead(slot.startTime ?? null),
+        items: (slot.items ?? []).map((item, itemIndex) => {
+          const food = item.foodId ? foods[item.foodId] ?? null : null
+          return {
+            ...createEmptyItem(`${slotKey}-i${itemIndex}`),
+            food,
+            // Alimento borrado o fuera de scope: se conserva como item libre con su nombre.
+            customName: food ? null : item.customName ?? 'Alimento',
+            quantity: Number.isFinite(item.quantity) ? String(item.quantity) : '',
+            unit: toBuilderUnit(item.unit),
+            optional: item.optional ?? false,
+            notes: item.notes ?? null,
+          } satisfies BuilderItem
+        }),
+      }
+    })
+    return {
+      key: variant.key,
+      label: variant.label.trim() === '' ? (variant.default ? BASE_VARIANT_LABEL : autoVariantLabel(variant.dayOfWeek)) : variant.label,
+      dayOfWeek: variant.default ? null : variant.dayOfWeek,
+      isDefault: variant.default === true,
+      targetsMode: variant.default ? 'inherit' : 'custom',
+      targets: targetsFromDraft(variant.targets),
+      slots,
+    }
+  })
+
+  const normalized = normalizeBuilderVariants(variants)
+  const base = normalized.find((variant) => variant.isDefault) ?? normalized[0]
+  const baseSource = draft.dayVariants.find((variant) => variant.default) ?? draft.dayVariants[0]
+
+  return {
+    state: {
+      step: 0,
+      strategy: draft.strategy,
+      planName: draft.name,
+      // La plantilla NO trae fecha de vigencia: arranca hoy, como un wizard en blanco.
+      effectiveFrom: clientTimezoneToday,
+      targets: targetsFromDraft(baseSource?.targets),
+      permissions: {
+        canRegisterFreely: draft.permissions?.canRegisterFreely ?? false,
+        canAdjustPrescribedQuantity: draft.permissions?.canAdjustPrescribedQuantity ?? false,
+        canSubstitute: draft.permissions?.canSubstitute ?? false,
+      },
+      visibleNotes: draft.visibleNotes ?? null,
+      variants: normalized,
+      activeVariantKey: base.key,
+    },
+    portionsBySlot,
+  }
+}
+
+/** Ids de alimentos referenciados por una plantilla, para resolverlos de una sola lectura. */
+export function collectTemplateFoodIds(draft: TemplateDraftLike): string[] {
+  const ids = new Set<string>()
+  for (const variant of draft.dayVariants ?? []) {
+    for (const slot of variant.mealSlots ?? []) {
+      for (const item of slot.items ?? []) {
+        if (item.foodId) ids.add(item.foodId)
+      }
+    }
+  }
+  return [...ids]
+}

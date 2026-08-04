@@ -1,0 +1,196 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database, Json } from '@/lib/database.types'
+import {
+  MAX_PLAN_TEMPLATES_PER_COACH,
+  TEMPLATE_SCHEMA_VERSION,
+  buildTemplatePayload,
+  parseTemplatePayload,
+  summarizeTemplateDraft,
+  type NutritionPlanTemplateDraft,
+  type NutritionPlanTemplateSummary,
+} from '@eva/nutrition-v2'
+import {
+  bumpPlanTemplateUsage,
+  countPlanTemplatesForCoach,
+  findPlanTemplateById,
+  findPlanTemplates,
+  insertPlanTemplate,
+  updatePlanTemplate,
+  type PlanTemplateRow,
+} from '@/infrastructure/db/plan-templates.repository'
+
+/**
+ * Servicio de plantillas de plan V2 (F3 — specs/nutrition-plan-templates-v2).
+ *
+ * Sin imports de Next (Clean Architecture): recibe el cliente DB del caller, que SIEMPRE es el
+ * user-scoped del coach. El techo de autorizacion lo pone el caller (server action con el mismo
+ * gate del builder / API movil) y, debajo, la RLS de la tabla.
+ *
+ * El `draft` guardado es JSON client-controlled: se valida con Zod al GUARDAR y OTRA VEZ al
+ * abrirlo. Confiar en lo que quedo escrito es exactamente como se cuela un draft corrupto al
+ * builder de un alumno real.
+ */
+
+type DB = SupabaseClient<Database>
+
+export type PlanTemplateListItem = {
+  id: string
+  name: string
+  description: string | null
+  strategy: string
+  summary: NutritionPlanTemplateSummary | null
+  isFavorite: boolean
+  usageCount: number
+  source: string
+  /** false ⇒ el draft guardado ya no valida contra el contrato: la UI la muestra, pero no deja abrirla. */
+  readable: boolean
+  updatedAt: string
+}
+
+function toListItem(row: PlanTemplateRow): PlanTemplateListItem {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    strategy: row.strategy,
+    summary: row.summary,
+    isFavorite: row.isFavorite,
+    usageCount: row.usageCount,
+    source: row.source,
+    readable: parseTemplatePayload(row.payload) != null,
+    updatedAt: row.updatedAt,
+  }
+}
+
+export async function listPlanTemplates(
+  db: DB,
+  input: { search?: string | null } = {}
+): Promise<PlanTemplateListItem[]> {
+  const rows = await findPlanTemplates(db, { search: input.search })
+  return rows.map(toListItem)
+}
+
+export type SavePlanTemplateResult =
+  | { success: true; template: PlanTemplateListItem }
+  | { success: false; error: string }
+
+/**
+ * Guarda una plantilla desde el borrador del builder o desde un plan publicado.
+ *
+ * `buildTemplatePayload` es quien quita la identidad (plan, version, alumno y los ids de cada
+ * fila hija). El `builder` opcional conserva el estado exacto del wizard web — con las macros de
+ * los items libres, que el contrato no lleva — para que reutilizar devuelva el plan identico.
+ */
+export async function savePlanTemplate(
+  db: DB,
+  input: {
+    actorCoachId: string
+    name: string
+    description?: string | null
+    draft: unknown
+    builder?: unknown
+    source: 'builder' | 'plan'
+    sourcePlanId?: string | null
+  }
+): Promise<SavePlanTemplateResult> {
+  const used = await countPlanTemplatesForCoach(db, input.actorCoachId)
+  if (used >= MAX_PLAN_TEMPLATES_PER_COACH) {
+    return {
+      success: false,
+      error: `Alcanzaste el máximo de ${MAX_PLAN_TEMPLATES_PER_COACH} plantillas. Elimina alguna para guardar otra.`,
+    }
+  }
+
+  let payload: ReturnType<typeof buildTemplatePayload>
+  try {
+    payload = buildTemplatePayload({
+      draft: input.draft as never,
+      builder: input.builder,
+    })
+  } catch {
+    return { success: false, error: 'Ese plan todavía no se puede guardar como plantilla.' }
+  }
+
+  // Segunda barrera: lo que se va a escribir tiene que poder volver a leerse.
+  const roundTrip = parseTemplatePayload(payload)
+  if (!roundTrip) return { success: false, error: 'Ese plan todavía no se puede guardar como plantilla.' }
+
+  const summary = summarizeTemplateDraft(roundTrip.draft)
+  const { template, error } = await insertPlanTemplate(db, {
+    coachId: input.actorCoachId,
+    name: input.name.trim(),
+    description: (input.description ?? '').trim() || null,
+    strategy: roundTrip.draft.strategy,
+    payload: payload as unknown as Json,
+    schemaVersion: TEMPLATE_SCHEMA_VERSION,
+    summary: summary as unknown as Json,
+    source: input.source,
+    sourcePlanId: input.sourcePlanId ?? null,
+    createdBy: input.actorCoachId,
+  })
+  if (error || !template) return { success: false, error: error ?? 'No se pudo guardar la plantilla.' }
+  return { success: true, template: toListItem(template) }
+}
+
+export type LoadedPlanTemplate = {
+  id: string
+  name: string
+  draft: NutritionPlanTemplateDraft
+  /** Estado del wizard web guardado con la plantilla, si existe. */
+  builder: unknown
+  usageCount: number
+}
+
+/**
+ * Abre una plantilla para aplicarla. Devuelve `null` si no existe o si su draft ya no valida:
+ * preferimos "no se puede abrir" a rehidratar el wizard a medias, porque publicar reescribe la
+ * version completa y un dato faltante seria una perdida silenciosa (misma regla que el guard
+ * anti-colapso del builder).
+ */
+export async function loadPlanTemplate(db: DB, id: string): Promise<LoadedPlanTemplate | null> {
+  const row = await findPlanTemplateById(db, id)
+  if (!row) return null
+  const payload = parseTemplatePayload(row.payload)
+  if (!payload) return null
+  return {
+    id: row.id,
+    name: row.name,
+    draft: payload.draft,
+    builder: payload.builder,
+    usageCount: row.usageCount,
+  }
+}
+
+/** Marca que la plantilla se uso. Best-effort: nunca debe impedir abrir el builder. */
+export async function markPlanTemplateUsed(db: DB, template: LoadedPlanTemplate): Promise<void> {
+  try {
+    await bumpPlanTemplateUsage(db, template.id, template.usageCount)
+  } catch {
+    // Señal de ordenamiento de la biblioteca, no un dato con el que se decida nada.
+  }
+}
+
+export async function renamePlanTemplate(
+  db: DB,
+  input: { id: string; name: string; description?: string | null }
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await updatePlanTemplate(db, input.id, {
+    name: input.name.trim(),
+    description: input.description === undefined ? undefined : (input.description ?? '').trim() || null,
+  })
+  return error ? { success: false, error } : { success: true }
+}
+
+export async function setPlanTemplateFavorite(
+  db: DB,
+  input: { id: string; isFavorite: boolean }
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await updatePlanTemplate(db, input.id, { isFavorite: input.isFavorite })
+  return error ? { success: false, error } : { success: true }
+}
+
+/** Soft-delete: la fila queda para trazabilidad y el unico parcial libera el `legacy_template_id`. */
+export async function deletePlanTemplate(db: DB, id: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await updatePlanTemplate(db, id, { deletedAt: new Date().toISOString() })
+  return error ? { success: false, error } : { success: true }
+}

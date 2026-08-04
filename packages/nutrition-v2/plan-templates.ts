@@ -138,8 +138,57 @@ export function summarizeTemplateDraft(draft: NutritionPlanTemplateDraft): Nutri
 }
 
 /**
- * `?from=template:<id>` / `?from=plan:<id>` — la UNICA puerta al builder con origen (AD-3).
- * Parsear acá (y no en cada pantalla) evita que el modal y los enlaces profundos diverjan.
+ * Lo que se guarda REALMENTE en la columna `draft` de `nutrition_plan_templates_v2`.
+ *
+ * Por que un envoltorio y no el draft pelado: el contrato de item
+ * (`NutritionPrescriptionItemSchema`) NO lleva macros, asi que un item LIBRE (sin `foodId`)
+ * perderia sus macros al serializarse. El campo `builder` guarda ademas el estado exacto del
+ * wizard web — que si las lleva, junto con el snapshot del alimento — para que "reutilizar"
+ * devuelva el plan IDENTICO a como se guardo.
+ *
+ *  · `draft`   canonico y compartible: lo entiende RN y lo produce el importador de las V1.
+ *  · `builder` opcional: presente cuando la plantilla nace del wizard web. Las plantillas
+ *              importadas de V1 no lo traen (sus items siempre tienen `foodId`, asi que el
+ *              adaptador las reconstruye sin perder nada).
+ *
+ * `builder` viaja como `unknown` a proposito: su forma pertenece al wizard web y este paquete
+ * lo consume tambien RN, que no debe conocerla ni arrastrarla.
+ */
+export const NutritionPlanTemplatePayloadSchema = z.object({
+  schemaVersion: z.number().int().positive(),
+  draft: NutritionPlanTemplateDraftSchema,
+  builder: z.unknown().optional(),
+})
+export type NutritionPlanTemplatePayload = z.infer<typeof NutritionPlanTemplatePayloadSchema>
+
+/**
+ * Lee el envoltorio guardado. Devuelve `null` en vez de lanzar: la columna es JSON
+ * client-controlled y una plantilla vieja o corrupta debe degradar a "no se puede abrir",
+ * nunca reventar el Centro V2 entero.
+ */
+export function parseTemplatePayload(raw: unknown): NutritionPlanTemplatePayload | null {
+  const parsed = NutritionPlanTemplatePayloadSchema.safeParse(raw)
+  return parsed.success ? parsed.data : null
+}
+
+export function buildTemplatePayload(input: {
+  draft: NutritionPlanDraft | NutritionPlanTemplateDraft
+  builder?: unknown
+}): NutritionPlanTemplatePayload {
+  return {
+    schemaVersion: TEMPLATE_SCHEMA_VERSION,
+    draft: stripDraftIdentity(input.draft),
+    ...(input.builder === undefined ? {} : { builder: input.builder }),
+  }
+}
+
+/**
+ * `?from=template:<templateId>` / `?from=plan:<clientId>` — la UNICA puerta al builder con
+ * origen (AD-3). Parsear acá (y no en cada pantalla) evita que el modal y los enlaces profundos
+ * diverjan.
+ *
+ * En `plan:` el id es el del ALUMNO fuente, no el del plan: lo que se copia es su plan VIGENTE,
+ * que es lo único que el read-model scoped sirve y lo único que el coach elige en el selector.
  */
 export type PlanBuilderOrigin =
   | { kind: 'template'; id: string }

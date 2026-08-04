@@ -14,12 +14,36 @@ import {
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { fetchItemSubstitutionsForVersion } from '@/app/coach/nutrition-v2/_data/item-substitutions.data'
 import { fetchBuilderFoodsByIds } from './_data/plan-foods.data'
-import { collectPlanFoodIds, rehydrateBuilderState } from './_lib/rehydrate'
+import {
+  builderStateFromTemplateDraft,
+  collectPlanFoodIds,
+  collectTemplateFoodIds,
+  rehydrateBuilderState,
+} from './_lib/rehydrate'
+import { parsePlanBuilderOrigin } from '@eva/nutrition-v2'
+import { loadPlanTemplate, markPlanTemplateUsed } from '@/services/nutrition-v2/plan-templates.service'
 import { portionsKey } from './_components/portions-state'
 import { PlanBuilderClient } from './_components/PlanBuilderClient'
 
 interface Props {
   params: Promise<{ clientId: string }>
+  /**
+   * `?from=template:<id>` o `?from=plan:<id>` — la UNICA puerta con origen (AD-3, F3). El modal
+   * del `+` del Centro V2 y cualquier enlace profundo terminan en esta misma URL, asi no hay dos
+   * caminos de creacion que diverjan en cada cambio del builder.
+   */
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+
+/**
+ * ¿El `builder` guardado con la plantilla tiene la forma que espera el wizard? Es JSON
+ * client-controlled: si no cuadra, se cae al adaptador sobre el draft del contrato en vez de
+ * pasarle basura al reducer.
+ */
+function isUsableBuilderPayload(value: unknown): value is Awaited<ReturnType<typeof buildInitialDraft>> {
+  if (value == null || typeof value !== 'object') return false
+  const candidate = value as { state?: { variants?: unknown; strategy?: unknown } }
+  return Array.isArray(candidate.state?.variants) && candidate.state.variants.length > 0
 }
 
 type PlanReadModel = Awaited<ReturnType<typeof getNutritionClientDetailV2ForWeb>>['plan']
@@ -53,8 +77,41 @@ async function buildInitialDraft(planModel: PlanReadModel, versionId: string, to
   })
 }
 
-export default async function CoachNutritionV2BuilderPage({ params }: Props) {
+/**
+ * "Reutilizar el plan de otro alumno" (`?from=plan:<clientId>`).
+ *
+ * El id que viaja es el del ALUMNO fuente, no el del plan: lo que se copia es su plan VIGENTE,
+ * que es lo unico que el read-model scoped sirve y lo unico que el coach ve en el selector. El
+ * scope del workspace vuelve a aplicarse aca — el RPC niega (42501) un alumno de otro pool, asi
+ * que un id pegado a mano no copia nada.
+ */
+async function buildDraftFromSourcePlan(input: {
+  sourceClientId: string
+  scope: ReturnType<typeof nutritionV2CoachScopeFromWorkspace>
+  today: string
+}): Promise<{ draft: Awaited<ReturnType<typeof buildInitialDraft>>; name: string } | null> {
+  let sourceDetail: Awaited<ReturnType<typeof getNutritionClientDetailV2ForWeb>>
+  try {
+    sourceDetail = await getNutritionClientDetailV2ForWeb({
+      clientId: input.sourceClientId,
+      scope: input.scope,
+      date: input.today,
+    })
+  } catch {
+    return null
+  }
+  const sourcePlan = sourceDetail.plan.plan
+  if (!sourcePlan) return null
+
+  const draft = await buildInitialDraft(sourceDetail.plan, sourcePlan.versionId, input.today)
+  if (!draft) return null
+  return { draft, name: sourcePlan.name }
+}
+
+export default async function CoachNutritionV2BuilderPage({ params, searchParams }: Props) {
   const { clientId } = await params
+  const query = await searchParams
+  const origin = parsePlanBuilderOrigin(typeof query.from === 'string' ? query.from : null)
   const { user } = await getNutritionPlansPageCoach()
   if (!user) redirect('/login')
 
@@ -95,10 +152,49 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
     initialDraft = await buildInitialDraft(detail.plan, existing.versionId, today)
   }
 
+  const supabase = await createClient()
+
+  // ORIGEN (F3). Si el coach entro por "Reutilizar", eso GANA sobre la rehidratacion del plan
+  // vigente: es lo que pidio explicitamente. Un origen que no se puede leer degrada al camino
+  // normal (wizard con el plan vigente, o en blanco) en vez de dejar la pantalla rota.
+  let originName: string | null = null
+  if (origin?.kind === 'template') {
+    const template = await loadPlanTemplate(supabase as never, origin.id)
+    if (template) {
+      const fromBuilder = isUsableBuilderPayload(template.builder) ? template.builder : null
+      if (fromBuilder) {
+        // La plantilla nacio del wizard web: se abre EXACTA, con las macros de los items libres
+        // que el contrato del draft no lleva.
+        initialDraft = fromBuilder
+      } else {
+        // Plantilla importada de V1 (o guardada por otra superficie): se reconstruye desde el
+        // draft del contrato, resolviendo sus alimentos contra el catalogo visible del coach.
+        const foodsLoad = await fetchBuilderFoodsByIds(collectTemplateFoodIds(template.draft as never))
+        if (foodsLoad.ok) {
+          initialDraft = builderStateFromTemplateDraft({
+            draft: template.draft as never,
+            foods: foodsLoad.foods,
+            clientTimezoneToday: today,
+            portionKeyOf: portionsKey,
+          })
+        }
+      }
+      if (initialDraft) {
+        originName = template.name
+        await markPlanTemplateUsed(supabase as never, template)
+      }
+    }
+  } else if (origin?.kind === 'plan' && origin.id !== clientId) {
+    const copied = await buildDraftFromSourcePlan({ sourceClientId: origin.id, scope, today })
+    if (copied) {
+      initialDraft = copied.draft
+      originName = copied.name
+    }
+  }
+
   // Espejo UI del addon Nutricion Pro: candado en "Personalizar {dia}" (dias con contenido propio)
   // y en el checkbox de registro libre sobre planes con franjas. La barrera real vive en
   // publishPlanAction (re-valida server-side y responde UPGRADE_REQUIRED).
-  const supabase = await createClient()
   const nutritionProEnabled = await hasNutritionProV2(
     supabase,
     nutritionProCtxFromWorkspace(user.id, workspace),
@@ -113,7 +209,11 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
       backHref={`/coach/nutrition-v2/${clientId}`}
       eyebrow={existingPlan ? 'Nueva versión' : 'Nuevo plan'}
       title={detail.client.fullName}
-      description="El plan y sus días, en dos pasos"
+      description={
+        originName
+          ? `Partiendo de «${originName}». Ajusta lo que quieras antes de publicar.`
+          : 'El plan y sus días, en dos pasos'
+      }
     >
       <PlanBuilderClient
         clientId={clientId}

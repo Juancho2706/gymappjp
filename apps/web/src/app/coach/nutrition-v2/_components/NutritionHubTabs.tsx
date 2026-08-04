@@ -1,14 +1,16 @@
 'use client'
 
 import { useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Apple, ScanLine, Users } from 'lucide-react'
+import { Apple, Copy, ScanLine, Users } from 'lucide-react'
 import { FoodCatalogBrowser } from './FoodCatalogBrowser'
 import { CurationQueue } from './CurationQueue'
+import { PlanTemplatesLibrary } from './PlanTemplatesLibrary'
 
-type TabKey = 'roster' | 'foods' | 'curation'
+type TabKey = 'roster' | 'templates' | 'foods' | 'curation'
 
 const TABS: Array<{ key: TabKey; label: string; icon: typeof Users }> = [
   { key: 'roster', label: 'Alumnos', icon: Users },
+  { key: 'templates', label: 'Plantillas', icon: Copy },
   { key: 'foods', label: 'Alimentos', icon: Apple },
   { key: 'curation', label: 'Curación', icon: ScanLine },
 ]
@@ -118,6 +120,15 @@ export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
         hidden={active !== 'roster'}
       >
         {active === 'roster' ? roster : null}
+      </div>
+      <div
+        role="tabpanel"
+        id={panelId('templates')}
+        aria-labelledby={tabId('templates')}
+        tabIndex={0}
+        hidden={active !== 'templates'}
+      >
+        {active === 'templates' ? <PlanTemplatesLibrary /> : null}
       </div>
       <div
         role="tabpanel"

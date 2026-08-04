@@ -9,6 +9,9 @@ vi.mock('./FoodCatalogBrowser', () => ({
 vi.mock('./CurationQueue', () => ({
   CurationQueue: () => <div>curacion</div>,
 }))
+vi.mock('./PlanTemplatesLibrary', () => ({
+  PlanTemplatesLibrary: () => <div>plantillas</div>,
+}))
 
 import { NutritionHubTabs } from './NutritionHubTabs'
 
@@ -20,7 +23,7 @@ describe('NutritionHubTabs (NUT-040 — patrón ARIA APG)', () => {
   it('cada tab apunta con aria-controls a un panel existente rotulado por él', () => {
     renderTabs()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(3)
+    expect(tabs).toHaveLength(4)
 
     for (const tab of tabs) {
       const panelId = tab.getAttribute('aria-controls')
@@ -50,11 +53,12 @@ describe('NutritionHubTabs (NUT-040 — patrón ARIA APG)', () => {
 
     fireEvent.keyDown(tablist, { key: 'ArrowRight' })
     fireEvent.keyDown(tablist, { key: 'ArrowRight' })
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' })
     // cicla al primero
     expect(screen.getAllByRole('tab')[0].getAttribute('aria-selected')).toBe('true')
 
     fireEvent.keyDown(tablist, { key: 'ArrowLeft' })
-    expect(screen.getAllByRole('tab')[2].getAttribute('aria-selected')).toBe('true')
+    expect(screen.getAllByRole('tab')[3].getAttribute('aria-selected')).toBe('true')
   })
 
   it('Home/End saltan al primer y último tab', () => {
@@ -62,7 +66,7 @@ describe('NutritionHubTabs (NUT-040 — patrón ARIA APG)', () => {
     const tablist = screen.getByRole('tablist')
 
     fireEvent.keyDown(tablist, { key: 'End' })
-    expect(screen.getAllByRole('tab')[2].getAttribute('aria-selected')).toBe('true')
+    expect(screen.getAllByRole('tab')[3].getAttribute('aria-selected')).toBe('true')
 
     fireEvent.keyDown(tablist, { key: 'Home' })
     expect(screen.getAllByRole('tab')[0].getAttribute('aria-selected')).toBe('true')
@@ -73,7 +77,7 @@ describe('NutritionHubTabs (NUT-040 — patrón ARIA APG)', () => {
     expect(screen.getByText('roster')).toBeTruthy()
     expect(screen.queryByText('catalogo')).toBeNull()
 
-    fireEvent.click(screen.getAllByRole('tab')[1])
+    fireEvent.click(screen.getAllByRole('tab')[2])
     expect(screen.getByText('catalogo')).toBeTruthy()
     expect(screen.queryByText('roster')).toBeNull()
   })
