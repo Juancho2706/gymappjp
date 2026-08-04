@@ -13,7 +13,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, Loader2, Pencil, Plus, Search, Star, Trash2 } from 'lucide-react'
+import Link from 'next/link'
+import { Copy, Loader2, Pencil, Plus, Search, SlidersHorizontal, Star, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -30,6 +31,17 @@ import {
   setPlanTemplateFavoriteAction,
 } from '../_actions/plan-templates.actions'
 import type { PlanTemplateListItem } from '@/services/nutrition-v2/plan-templates.service'
+
+/**
+ * Builder de plantillas SIN alumno (CEO 2026-08-04). Es la puerta que faltaba: hasta ahora la
+ * unica alta era "desde el plan de un alumno", asi que un coach sin alumnos —o que queria
+ * material generico— no podia crear ni una.
+ */
+const TEMPLATE_BUILDER_HREF = '/coach/nutrition-v2/plantillas/builder'
+
+function editTemplateHref(templateId: string): string {
+  return `${TEMPLATE_BUILDER_HREF}?template=${templateId}`
+}
 
 function summaryLine(template: PlanTemplateListItem): string {
   if (!template.readable) return 'No se puede abrir: se guardó con una versión anterior.'
@@ -95,17 +107,29 @@ export function PlanTemplatesLibrary() {
     <section className="space-y-4 py-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted">
-          Guarda un plan que te sirvió y reutilízalo con cualquier alumno desde «Nuevo plan →
+          Arma un plan reutilizable y aplícalo a cualquier alumno desde «Nuevo plan →
           Reutilizar».
         </p>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
-        >
-          <Plus className="size-4" />
-          Nueva desde un alumno
-        </button>
+        {/* Dos altas, la de cero como primaria: crear desde el plan de un alumno exige tener
+            alumnos CON plan, así que no puede ser la única puerta. `flex-1` en ambos para que
+            el par no desborde en 360 px (dos w-full en una fila desbordan). */}
+        <div className="flex items-center gap-2">
+          <Link
+            href={TEMPLATE_BUILDER_HREF}
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 sm:flex-none"
+          >
+            <Plus className="size-4 shrink-0" />
+            Nueva plantilla
+          </Link>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong hover:bg-surface-sunken sm:flex-none"
+          >
+            <Users className="size-4 shrink-0" />
+            Desde un alumno
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -119,8 +143,14 @@ export function PlanTemplatesLibrary() {
       ) : templates.length === 0 ? (
         <div className="rounded-control border border-border-subtle bg-surface-sunken px-4 py-10 text-center text-sm text-muted">
           <Copy className="mx-auto mb-2 size-7 opacity-30" />
-          Todavía no tienes plantillas. Crea una desde el plan de un alumno y podrás aplicarla a
-          cualquier otro.
+          <p>Todavía no tienes plantillas. Arma una desde cero y aplícala al alumno que quieras.</p>
+          <Link
+            href={TEMPLATE_BUILDER_HREF}
+            className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
+          >
+            <Plus className="size-4 shrink-0" />
+            Nueva plantilla
+          </Link>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -142,10 +172,23 @@ export function PlanTemplatesLibrary() {
               >
                 <Star className={`size-4 ${template.isFavorite ? 'fill-current text-amber-500' : 'text-subtle'}`} />
               </button>
+              {/* Editar el CONTENIDO en el builder. Solo si el draft guardado todavía valida:
+                  una plantilla ilegible abriría un wizard en blanco y "guardar" la vaciaría. */}
+              {template.readable ? (
+                <Link
+                  href={editTemplateHref(template.id)}
+                  aria-label={`Editar ${template.name}`}
+                  title="Editar plantilla"
+                  className="shrink-0 rounded-control p-2 hover:bg-surface-sunken"
+                >
+                  <SlidersHorizontal className="size-4 text-subtle" />
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setRenaming(template)}
                 aria-label={`Renombrar ${template.name}`}
+                title="Renombrar"
                 className="shrink-0 rounded-control p-2 hover:bg-surface-sunken"
               >
                 <Pencil className="size-4 text-subtle" />

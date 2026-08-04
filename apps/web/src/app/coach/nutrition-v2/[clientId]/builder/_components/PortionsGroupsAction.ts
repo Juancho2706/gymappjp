@@ -25,6 +25,7 @@ import {
   authorizeCoach,
   fail,
   type ActionFailure,
+  type AuthorizedCoach,
 } from '@/app/coach/nutrition-v2/_actions/plan-persistence'
 
 const InputSchema = z.object({ clientId: z.string().uuid() })
@@ -82,15 +83,11 @@ async function countExchangeFoodsByGroup(
   return counts
 }
 
-export async function loadExchangeGroupsForBuilderAction(input: unknown): Promise<LoadExchangeGroupsResult> {
-  const parsed = InputSchema.safeParse(input)
-  if (!parsed.success) {
-    return fail('INVALID_PAYLOAD', 'Solicitud invalida.')
-  }
-
-  const auth = await authorizeCoach(parsed.data.clientId, 'catalog-search')
-  if (!auth.ok) return auth
-
+/**
+ * Cuerpo compartido: los grupos son del COACH (system + propios + team activo), nunca del
+ * alumno, asi que con o sin ficha se resuelve exactamente el mismo catalogo.
+ */
+async function loadGroupsForAuthorizedCoach(auth: AuthorizedCoach): Promise<LoadExchangeGroupsResult> {
   const workspace = auth.workspace
   const scope = {
     orgId: workspace?.type === 'enterprise_coach' ? workspace.orgId : null,
@@ -107,4 +104,28 @@ export async function loadExchangeGroupsForBuilderAction(input: unknown): Promis
     // de la franja nunca se bloquean por esta falla.
     return fail('GROUPS_LOAD_FAILED', PORTIONS_COPY.builder.pickerError)
   }
+}
+
+export async function loadExchangeGroupsForBuilderAction(input: unknown): Promise<LoadExchangeGroupsResult> {
+  const parsed = InputSchema.safeParse(input)
+  if (!parsed.success) {
+    return fail('INVALID_PAYLOAD', 'Solicitud invalida.')
+  }
+
+  const auth = await authorizeCoach(parsed.data.clientId, 'catalog-search')
+  if (!auth.ok) return auth
+
+  return loadGroupsForAuthorizedCoach(auth)
+}
+
+/**
+ * Mismo catalogo, SIN alumno: lo pide el builder de PLANTILLAS. Una plantilla es material
+ * interno del coach, asi que no hay ficha que autorizar y el `clientId` no tendria a que
+ * apuntar. El gate (sesion + rate limit de catalogo + workspace con scope V2) es el mismo.
+ */
+export async function loadExchangeGroupsForCoachAction(): Promise<LoadExchangeGroupsResult> {
+  const auth = await authorizeCoach(null, 'catalog-search')
+  if (!auth.ok) return auth
+
+  return loadGroupsForAuthorizedCoach(auth)
 }

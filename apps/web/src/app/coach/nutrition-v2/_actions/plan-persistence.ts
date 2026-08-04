@@ -135,8 +135,17 @@ export interface AuthorizedCoach {
   workspace: WorkspaceSummary | null
 }
 
+/**
+ * Techo de autorizacion de TODA accion V2 del coach: sesion, rate limit y workspace con scope
+ * V2 activo. El `clientId` NO participa (nunca participo: el scope real lo pone la RLS del
+ * cliente user-scoped y, en las escrituras, `can_manage_client` dentro de la RPC).
+ *
+ * Acepta `null` a proposito: el builder de PLANTILLAS trabaja SIN alumno (una plantilla es
+ * material interno del coach), y pasar un uuid de relleno solo para satisfacer la firma seria
+ * fingir un scope que no existe.
+ */
 export async function authorizeCoach(
-  _clientId: string,
+  _clientId: string | null,
   limiter: 'coach-write' | 'catalog-search' = 'coach-write',
 ): Promise<AuthorizedCoach | ActionFailure> {
   const { user } = await getNutritionPlansPageCoach()

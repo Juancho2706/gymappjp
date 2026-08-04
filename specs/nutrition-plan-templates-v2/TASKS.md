@@ -24,6 +24,15 @@
 - [x] T4.3 Biblioteca de plantillas (pestaña nueva del hub): renombrar, favorita, eliminar.
 - [x] T4.4 Boton "Guardar como plantilla" DENTRO del builder, sobre el borrador en pantalla
       (paso de dias, dialogo nombre+descripcion, `source: 'builder'`, error del servidor inline).
+- [x] T4.5 Crear plantilla DESDE CERO sin alumno (pedido CEO 08-04): ruta
+      `/coach/nutrition-v2/plantillas/builder` (+`?template=<id>` para editar), modo plantilla en
+      `PlanBuilderClient` (`templateMode`), acciones coach-scoped de catalogo/grupos,
+      `updatePlanTemplateDraft` en service+repository, altas "Nueva plantilla"/"Desde un alumno"
+      y accion Editar en la biblioteca. Anti-duplicado via `history.replaceState`.
+- [x] T4.6 Pasada UX desktop (pedido CEO 08-04): `QeBottomSheet` renderiza Dialog centrado en
+      `md+` (todos los modales del quick-edit), FoodPicker/GroupPicker compactos, resultados de
+      busqueda del builder en fila compacta con thumb 64px, y el picker "Agregar grupo" del
+      quick-edit ofrece TODO el catalogo del coach (no solo los grupos del plan).
 
 ## T5 — Rescate de las V1
 - [x] T5.1 Importador con dry-run y reporte por coach (`scripts/nutrition-v1-templates/import-v1-templates.sql`).

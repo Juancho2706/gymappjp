@@ -25,7 +25,10 @@ import {
   deleteExchangeGroupAction,
   updateExchangeGroupAction,
 } from '@/app/coach/nutrition-v2/_actions/exchange-groups.actions'
-import { loadExchangeGroupsForBuilderAction } from './PortionsGroupsAction'
+import {
+  loadExchangeGroupsForBuilderAction,
+  loadExchangeGroupsForCoachAction,
+} from './PortionsGroupsAction'
 import { PortionsGroupDot } from './PortionsGroupDot'
 import { PortionsGroupPicker } from './PortionsGroupPicker'
 import type { ExchangeGroupFormValues } from './PortionsGroupForm'
@@ -115,7 +118,15 @@ export interface PortionsController {
 
 export type GroupWriteOutcome = { ok: true } | { ok: false; error: string }
 
-export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsBySlot): PortionsController {
+/**
+ * `clientId` en `null` = MODO PLANTILLA: el builder trabaja sin alumno, asi que el catalogo de
+ * grupos se pide por la puerta coach-scoped. Los grupos siempre fueron del coach (system +
+ * propios + team activo); el alumno nunca decidio cual se veia.
+ */
+export function usePortionsBuilder(
+  clientId: string | null,
+  initialBySlot?: PortionsBySlot,
+): PortionsController {
   // `initialBySlot` = porciones rehidratadas del plan vigente (FD1c). Solo se lee al montar
   // (initializer perezoso): después manda el estado del wizard.
   const [bySlot, setBySlot] = useState<PortionsBySlot>(() => initialBySlot ?? {})
@@ -130,7 +141,10 @@ export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsByS
     loadingRef.current = true
     setGroupsLoading(true)
     setGroupsError(null)
-    const res = await loadExchangeGroupsForBuilderAction({ clientId })
+    const res =
+      clientId == null
+        ? await loadExchangeGroupsForCoachAction()
+        : await loadExchangeGroupsForBuilderAction({ clientId })
     loadingRef.current = false
     setGroupsLoading(false)
     if (!res.ok) {

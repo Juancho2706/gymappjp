@@ -23,6 +23,7 @@ import {
   renamePlanTemplate,
   savePlanTemplate,
   setPlanTemplateFavorite,
+  updatePlanTemplateDraft,
   type PlanTemplateListItem,
 } from '@/services/nutrition-v2/plan-templates.service'
 
@@ -85,6 +86,41 @@ export async function savePlanTemplateAction(input: unknown): Promise<SavePlanTe
     builder: parsed.data.builder,
     source: parsed.data.source,
     sourcePlanId: parsed.data.sourcePlanId ?? null,
+  })
+  if (!result.success) return { ok: false, error: result.error }
+  revalidateHub()
+  return { ok: true, template: result.template }
+}
+
+const UpdateDraftSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1, 'Ponle un nombre a la plantilla').max(180).optional(),
+  description: z.string().trim().max(2000).nullish(),
+  /** Draft del contrato. Se valida entero en el servicio: el body no es autoridad. */
+  draft: z.unknown(),
+  /** Estado del wizard web (opcional): conserva las macros de los items libres. */
+  builder: z.unknown().optional(),
+})
+
+/**
+ * Guardar una plantilla que se abrio para EDITAR (`?template=<id>` del builder de plantillas).
+ * Sin esto, "guardar" tras editar crearia una segunda plantilla y la biblioteca del coach se
+ * llenaria de copias con el mismo nombre.
+ */
+export async function updatePlanTemplateDraftAction(input: unknown): Promise<SavePlanTemplateActionResult> {
+  const parsed = UpdateDraftSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Revisa los datos de la plantilla.' }
+  }
+  const actor = await resolveActor()
+  if (!actor) return { ok: false, error: 'No autorizado.' }
+
+  const result = await updatePlanTemplateDraft(actor.db, {
+    id: parsed.data.id,
+    ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }),
+    ...(parsed.data.description === undefined ? {} : { description: parsed.data.description ?? null }),
+    draft: parsed.data.draft,
+    builder: parsed.data.builder,
   })
   if (!result.success) return { ok: false, error: result.error }
   revalidateHub()

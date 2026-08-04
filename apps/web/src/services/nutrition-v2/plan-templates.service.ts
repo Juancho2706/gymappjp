@@ -16,6 +16,7 @@ import {
   findPlanTemplates,
   insertPlanTemplate,
   updatePlanTemplate,
+  updatePlanTemplateDraft as updatePlanTemplateDraftRow,
   type PlanTemplateRow,
 } from '@/infrastructure/db/plan-templates.repository'
 
@@ -132,9 +133,67 @@ export async function savePlanTemplate(
   return { success: true, template: toListItem(template) }
 }
 
+/**
+ * Reescribe una plantilla EXISTENTE con el contenido que el coach acaba de armar en el builder
+ * de plantillas (`/coach/nutrition-v2/plantillas/builder?template=<id>`).
+ *
+ * Es el gemelo de `savePlanTemplate` y comparte sus DOS barreras — quitar la identidad
+ * (`buildTemplatePayload`) y el round-trip Zod antes de escribir — porque el riesgo es el
+ * mismo: dejar en la columna un draft que despues no se pueda volver a abrir. Lo que NO
+ * comparte es el tope por coach: actualizar no suma filas, asi que un coach en el limite
+ * igual puede seguir editando lo que ya tiene (cobrarle el tope ahi seria dejarlo encerrado).
+ *
+ * El dueño no se verifica aca: lo pone la RLS de la tabla sobre el cliente user-scoped del
+ * coach — un id de otro coach no matchea ninguna fila y el repository responde "ya no esta
+ * disponible" en vez de escribir.
+ */
+export async function updatePlanTemplateDraft(
+  db: DB,
+  input: {
+    id: string
+    name?: string
+    description?: string | null
+    draft: unknown
+    builder?: unknown
+  }
+): Promise<SavePlanTemplateResult> {
+  let payload: ReturnType<typeof buildTemplatePayload>
+  try {
+    payload = buildTemplatePayload({
+      draft: input.draft as never,
+      builder: input.builder,
+    })
+  } catch {
+    return { success: false, error: 'Ese plan todavía no se puede guardar como plantilla.' }
+  }
+
+  // Segunda barrera: lo que se va a escribir tiene que poder volver a leerse.
+  const roundTrip = parseTemplatePayload(payload)
+  if (!roundTrip) return { success: false, error: 'Ese plan todavía no se puede guardar como plantilla.' }
+
+  const summary = summarizeTemplateDraft(roundTrip.draft)
+  const { template, error } = await updatePlanTemplateDraftRow(db, input.id, {
+    ...(input.name === undefined ? {} : { name: input.name.trim() }),
+    ...(input.description === undefined
+      ? {}
+      : { description: (input.description ?? '').trim() || null }),
+    strategy: roundTrip.draft.strategy,
+    payload: payload as unknown as Json,
+    schemaVersion: TEMPLATE_SCHEMA_VERSION,
+    summary: summary as unknown as Json,
+  })
+  if (error || !template) return { success: false, error: error ?? 'No se pudo guardar la plantilla.' }
+  return { success: true, template: toListItem(template) }
+}
+
 export type LoadedPlanTemplate = {
   id: string
   name: string
+  /**
+   * Viaja para que EDITAR la plantilla pueda precargarla: el guardado reescribe la fila
+   * completa, asi que abrir el dialogo con la descripcion vacia la borraria en silencio.
+   */
+  description: string | null
   draft: NutritionPlanTemplateDraft
   /** Estado del wizard web guardado con la plantilla, si existe. */
   builder: unknown
@@ -155,6 +214,7 @@ export async function loadPlanTemplate(db: DB, id: string): Promise<LoadedPlanTe
   return {
     id: row.id,
     name: row.name,
+    description: row.description,
     draft: payload.draft,
     builder: payload.builder,
     usageCount: row.usageCount,

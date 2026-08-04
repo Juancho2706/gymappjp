@@ -1,6 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useTransition,
+} from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -60,11 +69,15 @@ import {
   createCoachFoodAction,
   publishPlanAction,
   searchFoodCatalogCoachAction,
+  searchFoodCatalogForCoachAction,
 } from '../_actions/builder.actions'
 import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-archive.actions'
 // Guardar el BORRADOR en pantalla como plantilla (F3): mismo action que usa la biblioteca del
 // hub, pero con `source: 'builder'` — aca todavia no hay plan publicado que copiar.
-import { savePlanTemplateAction } from '@/app/coach/nutrition-v2/_actions/plan-templates.actions'
+import {
+  savePlanTemplateAction,
+  updatePlanTemplateDraftAction,
+} from '@/app/coach/nutrition-v2/_actions/plan-templates.actions'
 import { canProceedToPublishAfterArchive, effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
 import { FoodResultCard } from './FoodResultCard'
 import { PublishConflictDialog } from './PublishConflictDialog'
@@ -119,12 +132,27 @@ import {
 } from '@/lib/nutrition-coach-draft-store'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import type { ExchangeGroup, ExchangeMacroTotals } from '@eva/nutrition-engine'
-import { loadExchangeGroupsForBuilderAction } from './PortionsGroupsAction'
+import {
+  loadExchangeGroupsForBuilderAction,
+  loadExchangeGroupsForCoachAction,
+} from './PortionsGroupsAction'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
 
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
+
+/**
+ * ¿El wizard esta armando una PLANTILLA (sin alumno)? Viaja por contexto y no por props para
+ * no re-firmar ConstructionStep -> SlotEditor -> ItemRow -> FreeFoodFields solo para que las
+ * dos hojas que llaman al servidor (buscador de catalogo y bloque de equivalencia) elijan la
+ * puerta coach-scoped.
+ */
+const TemplateModeContext = createContext(false)
+
+function useIsTemplateMode(): boolean {
+  return useContext(TemplateModeContext)
+}
 
 type Dispatch = (action: import('../_lib/draft-builder').BuilderAction) => void
 
@@ -176,6 +204,13 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const activeQuery = useRef('')
+  // Modo plantilla: no hay alumno que autorizar, asi que el catalogo se pide por la puerta
+  // coach-scoped (mismo gate, mismo RPC, sin `clientId` inventado).
+  const templateMode = useIsTemplateMode()
+  const search = (input: { query: string; cursor?: FoodCatalogCursor }) =>
+    templateMode
+      ? searchFoodCatalogForCoachAction(input)
+      : searchFoodCatalogCoachAction({ clientId, ...input })
 
   async function run() {
     const q = query.trim()
@@ -183,7 +218,7 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
     setLoading(true)
     setError(null)
     activeQuery.current = q
-    const res = await searchFoodCatalogCoachAction({ clientId, query: q })
+    const res = await search({ query: q })
     setLoading(false)
     if (!res.ok) {
       setError(res.error)
@@ -200,7 +235,7 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
   async function loadMore() {
     if (!cursor || loadingMore) return
     setLoadingMore(true)
-    const res = await searchFoodCatalogCoachAction({ clientId, query: activeQuery.current, cursor })
+    const res = await search({ query: activeQuery.current, cursor })
     setLoadingMore(false)
     if (!res.ok) {
       setError(res.error)
@@ -250,7 +285,9 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
       {error ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">{error}</p> : null}
       {items.length > 0 ? (
         <div className="mt-3 space-y-3">
-          <ul className="grid max-h-[30rem] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {/* Desktop = filas compactas (ver FoodResultCard): dos o tres columnas alcanzan y el
+              panel no crece — el scroll vive DENTRO de la lista (max-h), no en la pagina. */}
+          <ul className="grid max-h-[26rem] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 md:max-h-[22rem] xl:grid-cols-3">
             {items.map((item) => (
               <li key={item.id} className="min-w-0">
                 <FoodResultCard item={item} onPick={() => pick(item)} />
@@ -317,13 +354,16 @@ function FreeFoodEquivalenceBlock({
   const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const templateMode = useIsTemplateMode()
 
   async function expand() {
     setExpanded(true)
     if (groups || loading) return
     setLoading(true)
     setLoadError(null)
-    const res = await loadExchangeGroupsForBuilderAction({ clientId })
+    const res = templateMode
+      ? await loadExchangeGroupsForCoachAction()
+      : await loadExchangeGroupsForBuilderAction({ clientId })
     setLoading(false)
     if (!res.ok) {
       setLoadError(PORTIONS_COPY.foodEquivalence.groupsError)
@@ -1028,6 +1068,10 @@ function PlanStep({
   errors: Record<string, string>
   nutritionProEnabled: boolean
 }) {
+  // Modo plantilla: "Vigente desde" no existe — el contrato de plantilla omite `effectiveFrom`
+  // (la fecha la elige el coach al aplicarla). Mostrar un campo cuyo valor se descarta al
+  // guardar es peor que no mostrarlo.
+  const templateMode = useIsTemplateMode()
   const options: NutritionStrategy[] = ['structured', 'flexible']
   // Confirmacion antes de perder franjas (bug 2.3.5 de la auditoria): elegir "flexible" con
   // contenido en cualquier dia BORRABA todas las franjas sin aviso ni deshacer. El reducer sigue
@@ -1216,17 +1260,19 @@ function PlanStep({
       </div>
 
       {/* Vigencia: subio del paso "Revisar" (era su unico control editable) y queda a la vista
-          junto al resto de lo que define el plan. */}
-      <div className="max-w-xs">
-        <label className={labelClass} htmlFor="effective-from">Vigente desde</label>
-        <input
-          id="effective-from"
-          className={inputClass}
-          type="date"
-          value={state.effectiveFrom}
-          onChange={(e) => dispatch({ type: 'SET_EFFECTIVE_FROM', value: e.target.value })}
-        />
-      </div>
+          junto al resto de lo que define el plan. Una plantilla no la lleva. */}
+      {templateMode ? null : (
+        <div className="max-w-xs">
+          <label className={labelClass} htmlFor="effective-from">Vigente desde</label>
+          <input
+            id="effective-from"
+            className={inputClass}
+            type="date"
+            value={state.effectiveFrom}
+            onChange={(e) => dispatch({ type: 'SET_EFFECTIVE_FROM', value: e.target.value })}
+          />
+        </div>
+      )}
 
       <AlertDialog open={confirmFlexible} onOpenChange={setConfirmFlexible}>
         <AlertDialogContent>
@@ -1380,6 +1426,9 @@ function ConstructionStep({
   /** Precarga las metas del dia base con los totales derivados de sus porciones. */
   onApplyDerivedTargets: (totals: ExchangeMacroTotals) => void
 }) {
+  // Modo plantilla: no hay nada que publicar, asi que el cierre del plan flexible no puede
+  // prometerlo.
+  const templateMode = useIsTemplateMode()
   // El dia en pantalla resuelve a UNA variante (regla del snapshot); los totales, el resumen
   // lateral y las porciones son de ella.
   const variant = builderVariantForDayOfWeek(state, selectedDow)
@@ -1422,7 +1471,7 @@ function ConstructionStep({
       <NutritionCard tone="neutral">
         <p className="text-sm text-body">
           Los planes flexibles no definen franjas ni alimentos prescritos: el alumno registra libremente contra las
-          metas del paso anterior. Ya puedes publicar.
+          metas del paso anterior. {templateMode ? 'Ya puedes guardar la plantilla.' : 'Ya puedes publicar.'}
         </p>
       </NutritionCard>
     )
@@ -1699,13 +1748,39 @@ const SAVE_TEMPLATE_DEFAULT_NAME = 'Mi plantilla'
 const DRAFT_INCOMPLETE_COPY =
   'El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.'
 
+// Copy del builder de PLANTILLAS (sin alumno). La CTA primaria deja de ser "Publicar plan":
+// aquí no hay nada que publicar ni nadie a quien le llegue.
+const TEMPLATE_SAVE_LABEL = 'Guardar plantilla'
+const TEMPLATE_UPDATE_LABEL = 'Guardar cambios'
+const TEMPLATE_EMPTY_COPY = 'Arma la plantilla primero: todavía no hay nada que guardar.'
+const TEMPLATE_DIALOG_HINT =
+  'Se guarda tal cual la tienes en pantalla. No se publica nada: la aplicas cuando quieras, al alumno que quieras.'
+
+/**
+ * MODO PLANTILLA (CEO 2026-08-04). Hasta ahora una plantilla solo podía nacer del borrador o
+ * del plan publicado de un ALUMNO: un coach sin alumnos —o que quiere material genérico— no
+ * tenía puerta. Con esta prop el MISMO wizard se monta sin ficha: nada de publicar, de
+ * conflictos de vigencia ni de archivar, y la CTA primaria guarda en la biblioteca.
+ */
+export interface PlanBuilderTemplateMode {
+  /** Plantilla que se está EDITANDO; `null` = plantilla nueva. */
+  templateId: string | null
+  /** Descripción guardada: precarga el diálogo para que guardar no la borre. */
+  description?: string | null
+}
+
 export function PlanBuilderClient({
   clientId,
   existingPlan,
   initialDraft,
   today,
   nutritionProEnabled,
+  templateMode,
 }: {
+  /**
+   * Alumno dueño del plan. En modo plantilla llega `TEMPLATE_MODE_CLIENT_ID` (uuid NIL): el
+   * wizard lo necesita para armar el draft, pero no viaja a la base ni autoriza nada.
+   */
   clientId: string
   existingPlan: {
     id: string
@@ -1726,8 +1801,11 @@ export function PlanBuilderClient({
   initialDraft: { state: BuilderState; portionsBySlot: PortionsBySlot } | null
   today: string
   nutritionProEnabled: boolean
+  /** Presente ⇒ el wizard arma una PLANTILLA, sin alumno. Ausente ⇒ builder de siempre. */
+  templateMode?: PlanBuilderTemplateMode
 }) {
   const router = useRouter()
+  const isTemplateMode = templateMode != null
   // Estado inicial: el plan vigente rehidratado si lo hay; si no, el wizard vacío de siempre.
   const [state, dispatch] = useReducer(builderReducer, initialDraft, (draft) =>
     draft ? draft.state : createEmptyBuilderState(today),
@@ -1735,7 +1813,7 @@ export function PlanBuilderClient({
   // Porciones a elección: controller hermano del reducer (mapa `variantKey::slotKey` → targets
   // + catálogo de grupos con carga perezosa). Claves de franjas/días borrados quedan huérfanas
   // sin efecto: attach/derive filtran por las franjas vivas de state.variants.
-  const portions = usePortionsBuilder(clientId, initialDraft?.portionsBySlot)
+  const portions = usePortionsBuilder(isTemplateMode ? null : clientId, initialDraft?.portionsBySlot)
   /**
    * Día del strip que el coach tiene en pantalla (`null` = el día base cuando ya no le aplica a
    * ningún día). Es estado de UI a propósito: el MODELO sigue siendo "día base + días propios"
@@ -1764,6 +1842,12 @@ export function PlanBuilderClient({
   const [templateDescription, setTemplateDescription] = useState('')
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateError, setTemplateError] = useState<string | null>(null)
+  /**
+   * Id de la plantilla que se está editando en el builder de plantillas. Arranca en el de la
+   * URL (`?template=<id>`) y se FIJA al guardar una nueva: sin esto, tocar "Guardar" dos veces
+   * dejaría dos plantillas idénticas en la biblioteca.
+   */
+  const [templateId, setTemplateId] = useState<string | null>(templateMode?.templateId ?? null)
   const operationId = useRef(genId())
   // Estado de recuperacion del "Archivar y reemplazar" (ver handleReplaceToday). Sobreviven a un
   // fallo parcial para que el REINTENTO no repita el paso ya cumplido ni cree planes duplicados:
@@ -1781,9 +1865,16 @@ export function PlanBuilderClient({
   // Respaldo local del wizard (W3b): key estable por alumno+plan, banner de restauración y
   // el payload leído al montar (guardado en un ref para no re-renderizar hasta tocar Restaurar).
   // La key va versionada (`:v2`) desde multi-día; `legacyDraftKey` es la del formato viejo.
+  // Modo plantilla: key propia (`template:<id|new>`), NUNCA la del alumno — el clientId de
+  // relleno es el mismo para todas las plantillas y compartirían un solo borrador. Se ancla al
+  // id INICIAL (no al `templateId` que se fija al guardar) para que la key no cambie a mitad
+  // de sesión y deje un borrador huérfano en la key vieja.
   const legacyDraftKey = useMemo(
-    () => builderDraftKey(clientId, existingPlan?.id ?? null),
-    [clientId, existingPlan?.id],
+    () =>
+      isTemplateMode
+        ? builderDraftKey('template', templateMode?.templateId ?? null)
+        : builderDraftKey(clientId, existingPlan?.id ?? null),
+    [isTemplateMode, templateMode?.templateId, clientId, existingPlan?.id],
   )
   const draftKey = legacyDraftKey + BUILDER_DRAFT_KEY_V2_SUFFIX
   const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -2310,7 +2401,9 @@ export function PlanBuilderClient({
 
   function handleOpenSaveTemplate() {
     setTemplateName(state.planName.trim() || SAVE_TEMPLATE_DEFAULT_NAME)
-    setTemplateDescription('')
+    // Editando una plantilla: la descripción guardada se precarga. El guardado reescribe la
+    // fila entera, así que abrir el diálogo en blanco la borraría sin que el coach lo pidiera.
+    setTemplateDescription(templateId ? (templateMode?.description ?? '') : '')
     setTemplateError(null)
     setTemplateOpen(true)
   }
@@ -2342,16 +2435,22 @@ export function PlanBuilderClient({
     }
 
     setTemplateSaving(true)
-    const res = await savePlanTemplateAction({
-      name,
-      description: templateDescription.trim() || null,
-      draft,
-      // Reabrir la plantilla en el wizard necesita las DOS piezas (árbol del reducer + mapa
-      // hermano de porciones); ver `isUsableBuilderPayload` en la page del builder.
-      builder: { state, portionsBySlot: portions.bySlot },
-      source: 'builder',
-      sourcePlanId: existingPlan?.id ?? null,
-    })
+    // Reabrir la plantilla en el wizard necesita las DOS piezas (árbol del reducer + mapa
+    // hermano de porciones); ver `isUsableBuilderPayload` en la page del builder.
+    const builder = { state, portionsBySlot: portions.bySlot }
+    const description = templateDescription.trim() || null
+    // Plantilla ya existente ⇒ se REESCRIBE. Guardar de nuevo tiene que dejar UNA plantilla,
+    // no una copia por cada vez que el coach tocó el botón.
+    const res = templateId
+      ? await updatePlanTemplateDraftAction({ id: templateId, name, description, draft, builder })
+      : await savePlanTemplateAction({
+          name,
+          description,
+          draft,
+          builder,
+          source: 'builder',
+          sourcePlanId: existingPlan?.id ?? null,
+        })
     setTemplateSaving(false)
     if (!res.ok) {
       // Errores legibles del servidor (tope de 100 plantillas, nombre repetido, permisos): se
@@ -2360,11 +2459,32 @@ export function PlanBuilderClient({
       return
     }
     setTemplateOpen(false)
-    toast.success('Plantilla guardada')
+
+    if (!isTemplateMode) {
+      // Builder de un alumno: guardar una plantilla es una acción lateral — el coach sigue
+      // exactamente donde estaba, con su borrador intacto.
+      toast.success('Plantilla guardada')
+      return
+    }
+
+    // Builder de plantillas: lo guardado YA vive en el servidor, así que el respaldo local
+    // deja de tener sentido (y arrastrarlo haría aparecer el banner "tienes un borrador" sobre
+    // una plantilla que acaba de guardarse).
+    const created = templateId == null
+    setTemplateId(res.template.id)
+    clearNutritionDraft(draftKey)
+    clearNutritionDraft(legacyDraftKey)
+    setDirty(false)
+    if (created && typeof window !== 'undefined') {
+      // La URL pasa a apuntar a la plantilla recién creada: recargar vuelve a EDITARLA en vez
+      // de abrir un builder en blanco (y de crear una segunda al guardar).
+      window.history.replaceState(null, '', `${window.location.pathname}?template=${res.template.id}`)
+    }
+    toast.success(created ? 'Plantilla creada' : 'Plantilla actualizada')
   }
 
   return (
-    <>
+    <TemplateModeContext.Provider value={isTemplateMode}>
     {/* Anuncio de los cambios de día/franja para lectores de pantalla (P1-4): el toast es el
         canal visual; esto es el auditivo. `sr-only` para no ocupar layout. */}
     <p aria-live="polite" role="status" className="sr-only">
@@ -2499,8 +2619,10 @@ export function PlanBuilderClient({
               en sm+ el par vuelve a su ancho natural, alineado al borde. */}
           <div className="flex flex-1 items-center justify-end gap-3 sm:flex-none">
             {/* Guardar el borrador como plantilla: solo en el paso de días, que es donde el plan
-                ya tiene forma. Antes esto solo se podía desde un plan PUBLICADO. */}
-            {state.step === BUILDER_STEP_DAYS ? (
+                ya tiene forma. Antes esto solo se podía desde un plan PUBLICADO.
+                En el builder de PLANTILLAS esto no es una acción lateral sino LA acción, así
+                que sube a CTA primaria (abajo) y este botón secundario no se monta. */}
+            {state.step === BUILDER_STEP_DAYS && !isTemplateMode ? (
               <button
                 type="button"
                 onClick={handleOpenSaveTemplate}
@@ -2517,6 +2639,17 @@ export function PlanBuilderClient({
               <button type="button" onClick={handleNext} className={primaryButtonClass + ' flex-1 justify-center sm:flex-none'}>
                 Siguiente
                 <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : isTemplateMode ? (
+              <button
+                type="button"
+                onClick={handleOpenSaveTemplate}
+                disabled={!canSaveTemplate || templateSaving}
+                title={canSaveTemplate ? undefined : TEMPLATE_EMPTY_COPY}
+                className={primaryButtonClass + ' flex-1 justify-center gap-2 sm:flex-none'}
+              >
+                {templateSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                {templateId ? TEMPLATE_UPDATE_LABEL : TEMPLATE_SAVE_LABEL}
               </button>
             ) : (
               <button
@@ -2535,26 +2668,37 @@ export function PlanBuilderClient({
       </div>
     </div>
 
-    <PublishConflictDialog
-      open={conflictOpen}
-      planName={existingPlan?.name ?? ''}
-      canReplace={existingPlan != null}
-      isPending={isPending}
-      error={conflictError}
-      onOpenChange={handleConflictOpenChange}
-      onStartTomorrow={handleStartTomorrow}
-      onReplaceToday={handleReplaceToday}
-    />
+    {/* Conflicto de vigencia / "archivar y reemplazar": no existen sin alumno — una plantilla
+        no rige para nadie ni desplaza a ningún plan. */}
+    {isTemplateMode ? null : (
+      <PublishConflictDialog
+        open={conflictOpen}
+        planName={existingPlan?.name ?? ''}
+        canReplace={existingPlan != null}
+        isPending={isPending}
+        error={conflictError}
+        onOpenChange={handleConflictOpenChange}
+        onStartTomorrow={handleStartTomorrow}
+        onReplaceToday={handleReplaceToday}
+      />
+    )}
 
     {/* Nombre de la plantilla. Molde tomado de la biblioteca del hub (PlanTemplatesLibrary)
         para que guardar desde el builder y desde un plan publicado se vean igual. */}
     <Dialog open={templateOpen} onOpenChange={handleTemplateOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="normal-case tracking-tight">{SAVE_TEMPLATE_LABEL}</DialogTitle>
+          <DialogTitle className="normal-case tracking-tight">
+            {isTemplateMode
+              ? templateId
+                ? TEMPLATE_UPDATE_LABEL
+                : TEMPLATE_SAVE_LABEL
+              : SAVE_TEMPLATE_LABEL}
+          </DialogTitle>
           <DialogDescription>
-            Se guarda lo que tienes en pantalla, tal cual. No se publica nada y el alumno no se
-            entera.
+            {isTemplateMode
+              ? TEMPLATE_DIALOG_HINT
+              : 'Se guarda lo que tienes en pantalla, tal cual. No se publica nada y el alumno no se entera.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -2589,7 +2733,7 @@ export function PlanBuilderClient({
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
           >
             {templateSaving ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
-            {templateSaving ? 'Guardando…' : 'Guardar plantilla'}
+            {templateSaving ? 'Guardando…' : templateId ? TEMPLATE_UPDATE_LABEL : TEMPLATE_SAVE_LABEL}
           </button>
         </div>
 
@@ -2603,6 +2747,6 @@ export function PlanBuilderClient({
         ) : null}
       </DialogContent>
     </Dialog>
-    </>
+    </TemplateModeContext.Provider>
   )
 }

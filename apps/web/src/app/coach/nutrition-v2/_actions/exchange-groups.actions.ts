@@ -40,7 +40,13 @@ import {
   type AuthorizedCoach,
 } from '@/app/coach/nutrition-v2/_actions/plan-persistence'
 
-const ClientScopedSchema = z.object({ clientId: z.string().uuid('Alumno inválido') })
+/**
+ * `clientId` es una PISTA DE REVALIDACIÓN, no autorización: el grupo es del coach
+ * (`coach_id = auth.uid()` en la RLS `xg_insert/update/delete`) y `authorizeCoach` nunca lo
+ * miró. Por eso acepta `null`: el builder de PLANTILLAS crea grupos propios sin ningún alumno
+ * en pantalla, y ahí no hay ficha que revalidar.
+ */
+const ClientScopedSchema = z.object({ clientId: z.string().uuid('Alumno inválido').nullable().default(null) })
 
 export type ExchangeGroupActionResult = { ok: true; group: ExchangeGroup } | ActionFailure
 export type DeleteExchangeGroupActionResult = { ok: true; groupId: string } | ActionFailure
@@ -63,7 +69,10 @@ function dbOf(auth: AuthorizedCoach): SupabaseClient<Database> {
  * revalidan ambas rutas para que un refresh no muestre el catálogo viejo (el picker además
  * actualiza su lista en memoria para poder seleccionar el grupo recién creado sin cerrarse).
  */
-function revalidateCoachSurfaces(clientId: string) {
+function revalidateCoachSurfaces(clientId: string | null) {
+  // Builder de plantillas: no hay ficha de alumno que refrescar (el picker igual actualiza su
+  // lista en memoria, que es lo que el coach ve al instante).
+  if (clientId == null) return
   revalidatePath('/coach/nutrition-v2/' + clientId)
   revalidatePath('/coach/nutrition-v2/' + clientId + '/builder')
 }

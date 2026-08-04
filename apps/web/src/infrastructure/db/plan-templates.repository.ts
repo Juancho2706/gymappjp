@@ -181,6 +181,55 @@ export async function updatePlanTemplate(
 }
 
 /**
+ * Reescribe el CONTENIDO de una plantilla (el coach la reabrio en el builder y la guardo).
+ *
+ * Separado de `updatePlanTemplate` a proposito: aquel toca metadatos (nombre, favorita,
+ * soft-delete) y devuelve solo el id; este reescribe `draft`/`strategy`/`summary`/
+ * `schema_version` juntos —los cuatro tienen que moverse en el MISMO UPDATE o la fila queda
+ * con un resumen que miente sobre su draft— y devuelve la fila completa para refrescar la
+ * biblioteca sin una segunda lectura.
+ *
+ * Las cuatro columnas estan dentro del `GRANT UPDATE` column-level de la migracion
+ * (20260804120000_nutrition_plan_templates_v2.sql); la procedencia (`source`,
+ * `legacy_template_id`, `source_plan_id`) y el dueno siguen sin grant, o sea inmutables.
+ */
+export type UpdatePlanTemplateDraftInput = {
+  name?: string
+  description?: string | null
+  strategy: string
+  payload: Json
+  schemaVersion: number
+  summary: Json
+}
+
+export async function updatePlanTemplateDraft(
+  db: DB,
+  id: string,
+  input: UpdatePlanTemplateDraftInput
+): Promise<{ template?: PlanTemplateRow; error?: string }> {
+  const payload: Record<string, unknown> = {
+    draft: input.payload,
+    strategy: input.strategy,
+    schema_version: input.schemaVersion,
+    summary: input.summary,
+  }
+  if (input.name !== undefined) payload.name = input.name
+  if (input.description !== undefined) payload.description = input.description
+
+  const { data, error } = await db
+    .from('nutrition_plan_templates_v2')
+    .update(payload)
+    .eq('id', id)
+    .is('deleted_at', null)
+    .select(COLUMNS)
+    .maybeSingle()
+  if (error) return { error: error.message }
+  // Sin fila: la plantilla es de otro coach (RLS) o ya se elimino. Nunca se crea una nueva.
+  if (!data) return { error: 'Esa plantilla ya no esta disponible.' }
+  return { template: mapRow(data as unknown as Raw) }
+}
+
+/**
  * Suma 1 al contador de uso. Best-effort y sin transaccion: es una señal de ordenamiento de la
  * biblioteca, no un dato con el que se decida nada. Perder un incremento por una carrera es
  * preferible a bloquear la apertura del builder.
