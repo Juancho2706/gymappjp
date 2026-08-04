@@ -27,6 +27,9 @@
 //
 
 import ActivityKit
+// AppIntents: `LiveActivityIntent` (constraint de EvaTimerActionButton) y la sobrecarga
+// `Button(intent:)` viven ahí — sin este import el target de la extensión no compila (build #3).
+import AppIntents
 import SwiftUI
 import WidgetKit
 
