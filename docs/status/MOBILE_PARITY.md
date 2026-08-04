@@ -30,9 +30,37 @@ source_of_truth: apps/web responsive + apps/mobile
 > escritura pasa por `/api/mobile/nutrition/exchanges/group-foods` (NUT-005), que comparte servicio
 > con la web para que no puedan divergir. **Sin QA en dispositivo ni build EAS todavía.**
 >
-> Deuda conocida de esta ola: la pantalla usa `style` inline con tokens de `theme` en vez de
-> NativeWind; falta llevar a RN el "Duplicar y ajustar" con copia de lista y las plantillas de plan
-> (F3), que en RN aún no se pueden aplicar desde el builder.
+> Deuda conocida de esta ola: ~~la pantalla usa `style` inline~~ (saldada el 2026-08-04: la pestaña
+> quedó 100% NativeWind, los únicos `style` que sobreviven son el color de marca runtime, y el
+> `#fff` hardcodeado de los CTA pasó a `theme.primaryForeground` — antes rompía white-label con
+> marcas claras); el resto de la deuda la cierran las olas siguientes de esta misma fecha.
+
+> **2026-08-04 (F4 ola 2 — duplicar con copia de lista + conteo de equivalencias)**: cierra dos de
+> las deudas del bloque anterior. (a) **"Duplicar y ajustar"** llega a RN
+> (`apps/mobile/components/nutrition-v2/DuplicateGroupSheet.tsx`) desde la pestaña Porciones y desde
+> el picker de grupos del builder: crea un grupo propio y, por defecto, copia su lista completa
+> **reescalada por regla de tres**. El reescalado vive solo en el servidor
+> (`duplicateExchangeGroupWithList`), al que RN llega por el handler `PUT` nuevo de
+> `/api/mobile/nutrition/exchanges/groups` — mismo schema y mismo servicio que la server action web,
+> así que web y teléfono no pueden producir gramos distintos. La copia es best-effort: si falla, el
+> grupo creado se conserva y se avisa. (b) **Conteo de equivalencias por grupo**: el GET de
+> `/api/mobile/nutrition-v2/exchange-groups` devuelve `foodCounts` y RN lo pinta en los chips de
+> Porciones, en el picker del builder y —cuando un grupo prescrito está en 0— como aviso ámbar de
+> **porciones huérfanas** en la franja. Un fallo del conteo nunca rompe el catálogo: se degrada a
+> mapa vacío y la UI calla en vez de acusar de vacío a un grupo lleno. Además,
+> `countExchangeListRowsByGroup` ahora pagina: PostgREST cortaba en `max_rows` (1000) y la tabla ya
+> pasa las 2.500 filas, así que el conteo que también usa `/coach/foods` venía truncado.
+> **Sin QA en dispositivo ni build EAS todavía.**
+
+> **2026-08-04 (F4 ola 3 — plantillas de plan en el builder RN)**: el `+` del hub RN gana las dos
+> pestañas de la web ("Desde cero" / "Reutilizar"): elegir plantilla → elegir alumno → el builder
+> abre con `?from=template:<id>` (misma puerta única AD-3 que la web, `parsePlanBuilderOrigin`).
+> Endpoint móvil nuevo `GET /api/mobile/nutrition-v2/plan-templates` (lista y carga-para-aplicar;
+> reusa `plan-templates.service` con el cliente token-scoped y resuelve server-side los alimentos
+> del draft). Con `builder` payload usable se aplica vía `RESTORE`; las 33 plantillas importadas de
+> V1 (solo `draft`) pasan por el port RN de `builderStateFromTemplateDraft`
+> (`apps/mobile/lib/nutrition-v2-builder-template.ts`). `effectiveFrom` se fuerza a hoy en ambas
+> ramas. `?from=plan:` aún no está en RN. **Sin QA en dispositivo ni build EAS todavía.**
 
 La paridad global **no está certificada todavía**.
 

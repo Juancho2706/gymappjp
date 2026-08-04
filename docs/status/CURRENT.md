@@ -24,7 +24,8 @@ resumen; antes de integrar o desplegar, verificar branch, deployment y estado re
 
 ## Prioridad actual
 
-0. **Desplegar el programa de nutrición F2+F3+F4-ola-1** (4 commits en `master` local sin push).
+0. **Desplegar el programa de nutrición completo** (commits en `master` local sin push: F2, F3,
+   F4 olas 1 y 2, T4.4, avisos F1 en quick-edit, y el canje de cupón para coach free).
    La base de datos ya tiene todo aplicado; la web en producción sigue funcionando porque el
    read-model conserva su rama legacy, así que el despliegue es la pieza que falta para que los
    coaches vean las listas de equivalencia, las plantillas y sus 33 plantillas rescatadas.
@@ -45,10 +46,10 @@ Origen: dos preguntas de coaches reales por WhatsApp. Plan maestro y decisiones 
 | Fase | Estado | Qué queda |
 |---|---|---|
 | F0 · defectos de porciones (B1/B2/B4) + guard de día vacío | Cerrada y desplegada | — |
-| F1 · conteo de equivalencias, estado vacío, duplicar grupo | Cerrada y desplegada | Llevar el aviso al quick-edit web |
+| F1 · conteo de equivalencias, estado vacío, duplicar grupo | Cerrada y desplegada; avisos llevados al quick-edit web el 2026-08-03 (conteo + porciones huérfanas + nota de publicación) | — |
 | F2 · listas de equivalencia propias del coach | **Cerrada**; DB en producción, código sin desplegar | QA visual del coach |
-| F3 · plantillas de plan V2 + rescate de las 33 V1 | **Cerrada**; 33 plantillas importadas en producción | Avisar a joaquinamr7 |
-| F4 · paridad React Native | Ola 1 (porciones) cerrada en código | Plantillas en el builder RN, NativeWind, build EAS, QA física |
+| F3 · plantillas de plan V2 + rescate de las 33 V1 | **Cerrada**; 33 plantillas importadas en producción; T4.4 (guardar plantilla desde el builder) cerrado en código | Avisar a joaquinamr7 |
+| F4 · paridad React Native | Olas 1 y 2 cerradas en código: pestaña Porciones (NativeWind), plantillas en el builder RN (`GET /api/mobile/nutrition-v2/plan-templates`), "Duplicar y ajustar" con copia de lista, conteo de equivalencias y aviso de porciones huérfanas | Build EAS + QA física |
 | F5 · retiro físico de V1 | **Detenida por decisión del owner** | Nada: no se borra V1; el delta del mapa queda como referencia |
 
 Regla vigente del owner (2026-08-03): **no borrar nada de V1**. El objetivo es que todos los
