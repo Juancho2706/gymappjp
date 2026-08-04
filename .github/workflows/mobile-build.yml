@@ -198,24 +198,69 @@ jobs:
         env:
           IOS_DIST_CERT_BASE64: ${{ secrets.IOS_DIST_CERT_BASE64 }}
           IOS_PROV_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_EXT_PROV_PROFILE_BASE64: ${{ secrets.IOS_EXT_PROVISIONING_PROFILE_BASE64 }}
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
         run: |
           echo "$IOS_DIST_CERT_BASE64" | base64 --decode > /tmp/dist.p12
           echo "$IOS_PROV_PROFILE_BASE64" | base64 --decode > /tmp/app.mobileprovision
+          echo "$IOS_EXT_PROV_PROFILE_BASE64" | base64 --decode > /tmp/ext.mobileprovision
           python3 - <<'PYEOF'
-          import json, os
+          import json, os, re, sys
+
+          app = "${{ inputs.app }}"
+
+          # Ola 7A: la app dejo de ser un target unico. La widget extension de las Live Activities
+          # (`targets/eva-timer-activity`) es un target Xcode propio con su PROPIO bundle id
+          # (`cl.evaapp.eva.timeractivity`) y por lo tanto su propio provisioning profile. Cuando hay
+          # extensiones, EAS exige el `credentials.json` en formato MULTI-TARGET, indexado por NOMBRE
+          # DE TARGET de Xcode (no por bundle id). El certificado .p12 si se comparte entre ambos.
+          # Ref: https://docs.expo.dev/app-signing/local-credentials/
+          #
+          # `EVA` = sanitizedName(expo.name) de @expo/config-plugins; con un nombre sin caracteres
+          # raros el sanitizado es identidad. Se afirma abajo para que un rename de la app falle acá
+          # con un mensaje claro en vez de morir dentro de xcodebuild.
+          MAIN_TARGET = "EVA"
+
+          cfg = json.load(open(f"apps/{app}/app.json", encoding="utf-8"))
+          if cfg["expo"]["name"] != MAIN_TARGET:
+              sys.exit(
+                  f"ERROR: expo.name es '{cfg['expo']['name']}' pero el target principal esperado es "
+                  f"'{MAIN_TARGET}'. Actualiza MAIN_TARGET en este workflow (debe ser "
+                  "sanitizedName(expo.name) de @expo/config-plugins)."
+              )
+
+          # El nombre del target de la extension se lee de su config en vez de duplicarlo, para que no
+          # puedan divergir.
+          target_cfg = open(f"apps/{app}/targets/eva-timer-activity/expo-target.config.js", encoding="utf-8").read()
+          m = re.search(r"^\s*name:\s*'([^']+)'", target_cfg, re.M)
+          if not m:
+              sys.exit("ERROR: no pude leer `name` de targets/eva-timer-activity/expo-target.config.js")
+          EXT_TARGET = m.group(1)
+
+          # Secret vacio -> base64 --decode escribe un archivo de 0 bytes y el build muere mucho mas
+          # tarde con un error de firma indescifrable.
+          for label, path in (("IOS_DIST_CERT_BASE64", "/tmp/dist.p12"),
+                              ("IOS_PROVISIONING_PROFILE_BASE64", "/tmp/app.mobileprovision"),
+                              ("IOS_EXT_PROVISIONING_PROFILE_BASE64", "/tmp/ext.mobileprovision")):
+              if not os.path.exists(path) or os.path.getsize(path) == 0:
+                  sys.exit(f"ERROR: secret {label} vacio o ausente; configuralo en GitHub Actions secrets.")
+
+          cert = {"path": "/tmp/dist.p12", "password": os.environ["IOS_DIST_CERT_PASSWORD"]}
           creds = {
             "ios": {
-              "distributionCertificate": {
-                "path": "/tmp/dist.p12",
-                "password": os.environ["IOS_DIST_CERT_PASSWORD"]
+              MAIN_TARGET: {
+                "distributionCertificate": cert,
+                "provisioningProfilePath": "/tmp/app.mobileprovision"
               },
-              "provisioningProfilePath": "/tmp/app.mobileprovision"
+              EXT_TARGET: {
+                "distributionCertificate": cert,
+                "provisioningProfilePath": "/tmp/ext.mobileprovision"
+              }
             }
           }
-          app = "${{ inputs.app }}"
-          with open(f"apps/{app}/credentials.json", "w") as f:
+          with open(f"apps/{app}/credentials.json", "w", encoding="utf-8") as f:
               json.dump(creds, f, indent=2)
+          print(f"credentials.json multi-target: {MAIN_TARGET} + {EXT_TARGET}")
           PYEOF
 
       - name: Build iOS (${{ inputs.profile }})
