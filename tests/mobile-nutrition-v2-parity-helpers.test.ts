@@ -91,8 +91,15 @@ describe('nutrition-v2-hub resolveNutritionHubInitialTab (NUT-027)', () => {
     expect(resolveNutritionHubInitialTab(' FOODS ')).toBe('foods')
     expect(resolveNutritionHubInitialTab([])).toBe('roster')
   })
-  it('solo expone las 3 claves del tablist', () => {
-    expect([...NUTRITION_HUB_TAB_KEYS]).toEqual(['roster', 'foods', 'curation'])
+  it('expone exactamente las claves del tablist, en su orden', () => {
+    // 'portions' entro con F4 (paridad de la seccion Porciones de la web). El orden importa:
+    // el chrome del hub y el deep link `?tab=` lo espejan.
+    expect([...NUTRITION_HUB_TAB_KEYS]).toEqual(['roster', 'portions', 'foods', 'curation'])
+  })
+
+  it('el deep link ?tab=portions abre la gestion de porciones', () => {
+    expect(resolveNutritionHubInitialTab('portions')).toBe('portions')
+    expect(resolveNutritionHubInitialTab(' PORTIONS ')).toBe('portions')
   })
 })
 

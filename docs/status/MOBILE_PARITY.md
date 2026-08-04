@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-31"
+last_verified: "2026-08-03"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -22,6 +22,17 @@ source_of_truth: apps/web responsive + apps/mobile
 > La migración forward-only de asignaciones y la guarda RLS/read-model histórico siguen **sin aplicar
 > en producción**; falta entorno Supabase controlado, JWTs reales, Playwright y QA físico Android/iOS.
 > El detalle de corte está en [`NUTRITION_V2_CUTOVER_RUNBOOK.md`](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md).
+
+> **2026-08-04 (F4 ola 1 — porciones del coach en RN)**: la pestaña **Porciones** del hub V2
+> (`apps/mobile/app/coach/nutrition-v2/portions.tsx`, deep link `?tab=portions`) espeja la sección
+> Porciones de `/coach/foods` en web: buscador sobre TODO el catálogo, gramos sugeridos por el
+> servidor, preview de la frase del alumno, y quitar/restaurar alimentos de la lista propia. Toda
+> escritura pasa por `/api/mobile/nutrition/exchanges/group-foods` (NUT-005), que comparte servicio
+> con la web para que no puedan divergir. **Sin QA en dispositivo ni build EAS todavía.**
+>
+> Deuda conocida de esta ola: la pantalla usa `style` inline con tokens de `theme` en vez de
+> NativeWind; falta llevar a RN el "Duplicar y ajustar" con copia de lista y las plantillas de plan
+> (F3), que en RN aún no se pueden aplicar desde el builder.
 
 La paridad global **no está certificada todavía**.
 

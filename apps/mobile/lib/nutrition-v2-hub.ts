@@ -11,7 +11,7 @@
 export type NutritionAttentionReason = 'no_plan' | 'draft_pending' | 'no_recent_intake' | 'none'
 
 /** Claves del tablist del hub V2 (orden fijo, espejo de web `NutritionHubTabs`). */
-export const NUTRITION_HUB_TAB_KEYS = ['roster', 'foods', 'curation'] as const
+export const NUTRITION_HUB_TAB_KEYS = ['roster', 'portions', 'foods', 'curation'] as const
 export type NutritionHubTabKey = (typeof NUTRITION_HUB_TAB_KEYS)[number]
 
 /**
@@ -28,6 +28,9 @@ export function resolveNutritionHubInitialTab(
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
   if (value === 'foods') return 'foods'
   if (value === 'curation') return 'curation'
+  // `portions` (F4): la gestion de listas de equivalencia del coach, espejo de la seccion
+  // "Porciones" de /coach/foods en web.
+  if (value === 'portions') return 'portions'
   return 'roster'
 }
 

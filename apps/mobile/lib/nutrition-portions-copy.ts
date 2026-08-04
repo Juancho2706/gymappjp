@@ -29,6 +29,14 @@ export const PORTIONS_COPY = {
     pickerLoading: 'Cargando grupos…',
     pickerError: 'No pudimos cargar los grupos.',
     pickerRetry: 'Reintentar',
+    /**
+     * Equivalencias por grupo: cuantos alimentos vera el alumno en "1 porción equivale a".
+     * El estado vacio se nombra en terminos del ALUMNO, no del sistema, porque un grupo propio
+     * nace siempre en cero y ese silencio es lo que hacia invisible la funcion.
+     */
+    groupFoodCount: (n: number) => (n === 1 ? '1 alimento equivalente' : `${n} alimentos equivalentes`),
+    groupFoodsEmpty: 'Sin alimentos: tu alumno no verá ejemplos',
+    groupFoodsEmptyHint: 'Clasifica alimentos en este grupo desde Porciones.',
     /** Labels a11y del stepper 0,5 y de la nota del target (quick-edit RN). */
     stepDownAria: (grupo: string) => `Restar media porción de ${grupo}`,
     stepUpAria: (grupo: string) => `Sumar media porción de ${grupo}`,
@@ -117,6 +125,44 @@ export const PORTIONS_COPY = {
    * alimentos propios — specs/nutrition-custom-portions §P-B). Vive colapsado: la enorme
    * mayoría de las altas no clasifica nada. Espejo EXACTO de la tabla web (FD6b).
    */
+  /**
+   * Lista de equivalencias del grupo (F2). Espejo EXACTO de la tabla web: el coach tiene que
+   * leer lo mismo en el telefono y en el navegador.
+   */
+  exchangeList: {
+    sectionTitle: '¿Qué cuenta como 1 porción?',
+    sectionHint: 'Define cuántos gramos de cada alimento equivalen a 1 porción de este grupo.',
+    manageEntry: 'Porciones',
+    manageEntryHint: 'Crea grupos y decide qué alimentos equivalen a 1 porción.',
+    pickGroup: 'Elige un grupo para ver su lista',
+    searchPlaceholder: 'Buscar en todo el catálogo',
+    searchAria: 'Buscar alimento para clasificar en este grupo',
+    addFood: 'Agregar alimento',
+    gramsLabel: 'Gramos que equivalen a 1 porción',
+    labelLabel: 'Medida casera (opcional)',
+    labelPlaceholder: 'Ej: 1 taza',
+    suggested: (gramos: string) => `Sugerido: ${gramos} g según sus macros`,
+    suggestedApply: 'Usar sugerencia',
+    suggestedNone: 'No podemos sugerir gramos para este alimento: escríbelos tú.',
+    previewTitle: 'Tu alumno verá',
+    save: 'Guardar equivalencia',
+    saving: 'Guardando…',
+    saved: 'Equivalencia guardada',
+    badgeOwn: 'Tuyo',
+    badgeCatalog: 'Del catálogo',
+    exclude: 'Quitar de mi lista',
+    excludeAria: (alimento: string) => `Quitar ${alimento} de mi lista`,
+    excluded: 'Quitado de tu lista',
+    restore: 'Volver al valor del catálogo',
+    restoreAria: (alimento: string) => `Devolver ${alimento} al valor del catálogo`,
+    restored: 'Volvió al valor del catálogo',
+    removeFailed: 'No pudimos actualizar la lista. Intenta nuevamente.',
+    empty: 'Este grupo todavía no tiene alimentos: tu alumno no verá ejemplos.',
+    emptySearch: 'Ningún alimento de este grupo coincide con tu búsqueda.',
+    loadFailed: 'No pudimos cargar la lista.',
+    groupUnavailable: 'Ese grupo de porciones ya no está disponible.',
+    foodUnavailable: 'Ese alimento ya no está disponible.',
+  },
   foodEquivalence: {
     sectionTitle: 'Equivalencia de porciones',
     sectionHint: 'Opcional: permite que este alimento cuente en las porciones a elección del plan.',

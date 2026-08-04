@@ -21,6 +21,7 @@ import {
   FilePlus2,
   Plus,
   ScanLine,
+  Scale,
   Search,
   Users,
   X,
@@ -83,6 +84,7 @@ import { useTheme } from '../../../context/ThemeContext'
 // `foods.tsx` expone la variante `embedded` sobre su default; `curation.tsx` (4B-07) expone el
 // cuerpo embebible como export nombrado `CurationQueueScreen` — se usa el export REAL entregado.
 import CoachNutritionCatalogScreen from './foods'
+import CoachPortionsScreen from './portions'
 import { CurationQueueScreen } from './curation'
 
 const PAGE_SIZE = 25
@@ -107,6 +109,7 @@ type PickerEntry = { clientId: string; clientName: string; planStatus: string | 
 type HubTabKey = NutritionHubTabKey
 const HUB_TABS: Array<{ key: HubTabKey; label: string; icon: typeof Users }> = [
   { key: 'roster', label: 'Alumnos', icon: Users },
+  { key: 'portions', label: 'Porciones', icon: Scale },
   { key: 'foods', label: 'Alimentos', icon: Apple },
   { key: 'curation', label: 'Curación', icon: ScanLine },
 ]
@@ -436,7 +439,9 @@ export default function CoachNutritionV2Screen() {
           chrome en el árbol: el overlay es hermano posterior, así pinta y recibe toques encima
           en Android sin depender solo de `zIndex`. */}
       <View className="flex-1">
-        {activeTab === 'foods' ? (
+        {activeTab === 'portions' ? (
+          <CoachPortionsScreen />
+        ) : activeTab === 'foods' ? (
           <CoachNutritionCatalogScreen embedded chromeHeight={chromeHeight} onScroll={onBodyScroll} />
         ) : activeTab === 'curation' ? (
           <CurationQueueScreen embedded chromeHeight={chromeHeight} onScroll={onBodyScroll} />
