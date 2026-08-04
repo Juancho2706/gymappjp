@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { BadgeCheck, Ticket } from 'lucide-react'
+import type { BillingCycle, SaleTier } from '@/lib/constants'
 
 type Preview = {
     baseBeforeDiscountClp: number
@@ -17,10 +18,27 @@ const clp = (n: number) => `$${n.toLocaleString('es-CL')}`
 /**
  * Tarjeta de canje de código (coach). Flujo SERNAC: Aplicar → PREVIEW server-priced → disclosure
  * bloqueante (texto + precio del SERVER) → Confirmar (commit). Self-contained: lee subscription-status
- * para el gate (plan pago activo) + el cupón vigente. UI funcional; el pulido (focus-trap, motion) es posterior.
+ * para el gate (plan pago activo O free activo) + el cupón vigente.
+ *
+ * Coach FREE ACTIVO: también puede canjear ANTES de suscribirse, pero el precio del preview depende del
+ * plan que esté eligiendo más abajo en la pantalla → recibe `selectedTier`/`selectedCycle` del padre y los
+ * manda como `previewTier`/`previewCycle`. Sin plan elegido no se dispara el POST (el server responde
+ * 422 PLAN_REQUIRED igual). Para un coach PAGO el body NO cambia: sigue siendo `{ code, commit }`.
  */
-export function CouponRedeemCard() {
+export function CouponRedeemCard({
+    selectedTier,
+    selectedCycle,
+    onRedeemed,
+}: {
+    /** Plan elegido en el selector de la página — solo se usa (y se envía) cuando el coach es free. */
+    selectedTier?: SaleTier
+    selectedCycle?: BillingCycle
+    /** Se dispara tras un commit exitoso de un coach FREE, para que el padre recargue el precio con descuento. */
+    onRedeemed?: () => void
+}) {
     const [enabled, setEnabled] = useState(false)
+    // Coach en plan gratuito con cuenta activa: canje pre-checkout (precia sobre el plan elegido).
+    const [isFreePlan, setIsFreePlan] = useState(false)
     const [activeCode, setActiveCode] = useState<string | null>(null)
     const [code, setCode] = useState('')
     const [phase, setPhase] = useState<'idle' | 'checking' | 'preview' | 'applying' | 'done'>('idle')
@@ -67,7 +85,11 @@ export function CouponRedeemCard() {
             const data = await res.json()
             const tier = data?.coach?.subscription_tier
             const status = data?.coach?.subscription_status
-            setEnabled(tier && tier !== 'free' && (status === 'active' || status === 'trialing'))
+            const paidActive = tier && tier !== 'free' && (status === 'active' || status === 'trialing')
+            // Free ACTIVO = puede canjear pre-checkout (el server acepta esa combinación exacta).
+            const freeActive = tier === 'free' && status === 'active'
+            setEnabled(Boolean(paidActive || freeActive))
+            setIsFreePlan(Boolean(freeActive))
             setActiveCode(data?.activeCoupon?.code ?? null)
         } catch {
             /* tolerante a fallos */
@@ -77,18 +99,36 @@ export function CouponRedeemCard() {
         void loadStatus()
     }, [])
 
+    // Coach free: si cambia el plan/ciclo elegido, el preview pre-commit deja de coincidir con lo
+    // que se cobrará → se invalida y hay que re-aplicar (la disclosure SERNAC debe mostrar el plan real).
+    // Una redención YA confirmada (activeCode) se conserva: el server la re-precia en el checkout.
+    useEffect(() => {
+        if (!isFreePlan) return
+        setPhase((p) => (p === 'preview' || p === 'checking' ? 'idle' : p))
+        setPreview((pv) => (pv ? null : pv))
+    }, [isFreePlan, selectedTier, selectedCycle])
+
+    // Sin plan elegido un coach free no tiene sobre qué preciar el código (422 PLAN_REQUIRED del server).
+    const needsPlan = isFreePlan && !selectedTier
+
     async function post(commit: boolean) {
         const res = await fetch('/api/payments/redeem-coupon', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: code.trim(), commit }),
+            // previewTier/previewCycle SOLO para el coach free: el server los ignora en el path pago, pero
+            // no los mandamos para dejar el body del coach pago idéntico al histórico.
+            body: JSON.stringify(
+                isFreePlan && selectedTier
+                    ? { code: code.trim(), commit, previewTier: selectedTier, previewCycle: selectedCycle }
+                    : { code: code.trim(), commit }
+            ),
         })
         const data = await res.json().catch(() => ({}))
         return { res, data }
     }
 
     async function onAplicar() {
-        if (!code.trim()) return
+        if (!code.trim() || needsPlan) return
         setError('')
         setPhase('checking')
         const { res, data } = await post(false)
@@ -112,6 +152,9 @@ export function CouponRedeemCard() {
         }
         setPhase('done')
         setActiveCode(data?.preview?.couponCode ?? code.trim())
+        // Free: el precio con descuento del selector de planes vive en el padre (activeCoupon de
+        // subscription-status) → hay que recargarlo para que el CTA "Continuar" muestre el neto.
+        if (isFreePlan) onRedeemed?.()
     }
 
     if (!enabled && !activeCode) return null
@@ -168,24 +211,34 @@ export function CouponRedeemCard() {
             ) : phase === 'done' ? (
                 <div className="flex items-center gap-2.5 rounded-control bg-[var(--success-100)] px-3 py-2.5">
                     <BadgeCheck className="h-[18px] w-[18px] shrink-0 text-[var(--success-700)]" />
-                    <p className="text-[13.5px] font-bold text-strong">¡Código aplicado! Se reflejará en tu próximo cobro.</p>
+                    <p className="text-[13.5px] font-bold text-strong">
+                        {isFreePlan
+                            ? '¡Código aplicado! Se descontará cuando actives tu plan.'
+                            : '¡Código aplicado! Se reflejará en tu próximo cobro.'}
+                    </p>
                 </div>
             ) : (
-                <div className="flex gap-2">
-                    <input
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        placeholder="Ingresa tu código"
-                        className="h-11 min-h-[44px] flex-1 rounded-control border border-default bg-surface-card px-3 text-sm text-strong placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
-                    />
-                    <button
-                        onClick={onAplicar}
-                        disabled={!code.trim() || phase === 'checking'}
-                        className="rounded-control bg-surface-sunken px-4 text-sm font-semibold text-strong disabled:opacity-40 min-h-[44px]"
-                    >
-                        {phase === 'checking' ? '…' : 'Aplicar'}
-                    </button>
-                </div>
+                <>
+                    <div className="flex gap-2">
+                        <input
+                            value={code}
+                            onChange={(e) => setCode(e.target.value)}
+                            placeholder="Ingresa tu código"
+                            className="h-11 min-h-[44px] flex-1 rounded-control border border-default bg-surface-card px-3 text-sm text-strong placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                        />
+                        <button
+                            onClick={onAplicar}
+                            disabled={!code.trim() || phase === 'checking' || needsPlan}
+                            title={needsPlan ? 'Elige un plan más abajo para aplicar tu código.' : undefined}
+                            className="rounded-control bg-surface-sunken px-4 text-sm font-semibold text-strong disabled:opacity-40 min-h-[44px]"
+                        >
+                            {phase === 'checking' ? '…' : 'Aplicar'}
+                        </button>
+                    </div>
+                    {needsPlan && (
+                        <p className="mt-2 text-xs text-muted">Elige un plan más abajo para aplicar tu código.</p>
+                    )}
+                </>
             )}
 
             {error && <p className="mt-2 text-xs text-[var(--danger-600)]">{error}</p>}

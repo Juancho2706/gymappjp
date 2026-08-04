@@ -102,3 +102,56 @@ describe('POST /api/payments/redeem-coupon — escritor único Flow (U6.2)', () 
         expect(updateCheckoutAmount).toHaveBeenCalledWith('mp_pre_1', 9990, 'coupon-amt|coach-1|9990')
     })
 })
+
+// ── Coach FREE + ACTIVO (canje pre-checkout) ─────────────────────────────────────────────────────
+// El deal 20% no operaba por UI: un coach en plan gratuito no tenía puerta de canje (redeem-coupon lo
+// rechazaba con NO_PAID_PLAN y redeem-coupon-signup solo acepta estados pre-checkout). Ahora free+active
+// canjea acá, preciando sobre el plan ELEGIDO en pantalla; el cobro real lo recalcula create-preference.
+const FREE_ACTIVE = {
+    subscription_tier: 'free',
+    subscription_status: 'active',
+    billing_cycle: 'monthly',
+    subscription_mp_id: null,
+    subscription_provider: null,
+    subscription_provider_external_id: null,
+    active_coupon_redemption_id: null,
+}
+
+describe('POST /api/payments/redeem-coupon — coach FREE activo', () => {
+    it('free + active con previewTier/previewCycle → 200, precia sobre el plan elegido y NO toca el gateway', async () => {
+        coachRow = { ...FREE_ACTIVE }
+        const res = await POST(req({ code: 'TEST10', commit: true, previewTier: 'pro', previewCycle: 'annual' }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toMatchObject({ ok: true, redemptionId: 'red_1' })
+        expect(redeemCoupon).toHaveBeenCalledOnce()
+        const arg = redeemCoupon.mock.calls[0][1] as { tier: string; cycle: string; billable: unknown[] }
+        expect(arg.tier).toBe('pro')
+        expect(arg.cycle).toBe('annual')
+        // Sin preapproval que tocar: el descuento entra en el primer checkout (create-preference).
+        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+    })
+
+    it('free + active SIN previewTier → 422 PLAN_REQUIRED y NO canjea', async () => {
+        coachRow = { ...FREE_ACTIVE }
+        const res = await POST(req({ code: 'TEST10', commit: true }))
+        expect(res.status).toBe(422)
+        expect((await res.json()).code).toBe('PLAN_REQUIRED')
+        expect(redeemCoupon).not.toHaveBeenCalled()
+    })
+
+    it('free + expired → sigue en 422 NO_PAID_PLAN (ese hueco es de redeem-coupon-signup)', async () => {
+        coachRow = { ...FREE_ACTIVE, subscription_status: 'expired' }
+        const res = await POST(req({ code: 'TEST10', commit: true, previewTier: 'pro' }))
+        expect(res.status).toBe(422)
+        expect((await res.json()).code).toBe('NO_PAID_PLAN')
+        expect(redeemCoupon).not.toHaveBeenCalled()
+    })
+
+    it('free + active con un código ya apuntado → 409 ALREADY_HAS_COUPON (un canje a la vez)', async () => {
+        coachRow = { ...FREE_ACTIVE, active_coupon_redemption_id: 'red_previo' }
+        const res = await POST(req({ code: 'TEST10', commit: true, previewTier: 'pro' }))
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('ALREADY_HAS_COUPON')
+        expect(redeemCoupon).not.toHaveBeenCalled()
+    })
+})

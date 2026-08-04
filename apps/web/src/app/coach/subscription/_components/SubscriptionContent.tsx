@@ -604,9 +604,15 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 </section>
             ) : null}
 
-            {/* Cupón — código de descuento (cupones, F5) — self-gated: se oculta sin plan pago activo / flag OFF. */}
+            {/* Cupón — código de descuento (cupones, F5) — self-gated: se oculta sin plan pago activo ni
+                free activo / flag OFF. Para el coach FREE el código se precia sobre el plan ELEGIDO abajo
+                (previewTier/previewCycle); 'free' nunca viaja (el server solo acepta starter/pro/elite). */}
             <div className="mb-4">
-                <CouponRedeemCard />
+                <CouponRedeemCard
+                    selectedTier={isSaleTier(selectedTier) && selectedTier !== 'free' ? selectedTier : undefined}
+                    selectedCycle={selectedCycle}
+                    onRedeemed={() => void refreshStatus()}
+                />
             </div>
 
             {/* ── Módulos incluidos — informativo, ya NO es superficie de venta (CEO 2026-07-17):
