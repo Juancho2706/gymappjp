@@ -14,6 +14,7 @@
 import type {
   NutritionExchangeComposedPart,
   NutritionExchangeGroupRead,
+  NutritionExchangeRef,
   NutritionItemSubstitution,
   NutritionItemSubstitutionRead,
   NutritionMacroTargets,
@@ -26,7 +27,7 @@ import {
   reconstructExchangeGroups,
   sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
-import { macrosForTargets, type ExchangeMacroTotals } from '@eva/nutrition-engine'
+import { macrosForTargets, type ExchangeGroup, type ExchangeMacroTotals } from '@eva/nutrition-engine'
 import {
   computeItemMacros,
   slotMergeName,
@@ -338,6 +339,86 @@ export function collectPortionGroups(planModel: NutritionPlanReadModel): QePorti
     }
   }
   return [...byId.values()].sort((a, b) => a.groupCode.localeCompare(b.groupCode))
+}
+
+/** Orden del picker del creador (`PortionsGroupPicker`): sistema primero, luego los propios. */
+function compareCatalogGroups(a: ExchangeGroup, b: ExchangeGroup): number {
+  if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1
+  if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
+  return a.code.localeCompare(b.code)
+}
+
+/**
+ * Catalogo VIVO de grupos del coach (`loadExchangeGroupsForBuilderAction`) proyectado a la
+ * forma del picker. Existe porque el quick-edit solo ofrecia los grupos que el plan YA usa:
+ * el coach que queria SUMAR otro grupo a una comida se topaba con una lista donde todo decia
+ * "Ya está en esta comida" y tenia que irse al creador.
+ *
+ * El `composedOf` del catalogo trae solo `{code, portions}` (tipo del engine) mientras el
+ * read-model exige ademas el `ref` de cada base para expandir el compuesto; se resuelve por
+ * codigo contra el MISMO catalogo y, si alguna base falta, el grupo viaja como SIMPLE (null):
+ * el engine cae entonces al ref propio del compuesto — honesto — en vez de sumar bases en cero.
+ */
+export function catalogToPortionGroups(groups: readonly ExchangeGroup[]): QePortionGroup[] {
+  const refByCode = new Map<string, NutritionExchangeRef>()
+  for (const group of groups) {
+    if (refByCode.has(group.code)) continue
+    refByCode.set(group.code, {
+      calories: group.refCalories,
+      proteinG: group.refProteinG,
+      carbsG: group.refCarbsG,
+      fatsG: group.refFatsG,
+    })
+  }
+
+  return [...groups].sort(compareCatalogGroups).map((group) => {
+    const parts = group.composedOf ?? null
+    const resolved: NutritionExchangeComposedPart[] = []
+    for (const part of parts ?? []) {
+      const ref = refByCode.get(part.code)
+      if (!ref) {
+        resolved.length = 0
+        break
+      }
+      resolved.push({ code: part.code, portions: part.portions, ref })
+    }
+    return {
+      exchangeGroupId: group.id,
+      groupCode: group.code,
+      groupName: group.name,
+      color: group.color,
+      ref: {
+        calories: group.refCalories,
+        proteinG: group.refProteinG,
+        carbsG: group.refCarbsG,
+        fatsG: group.refFatsG,
+      },
+      composedOf: resolved.length > 0 ? resolved : null,
+      macrosConfirmed: group.macrosConfirmed,
+    }
+  })
+}
+
+/**
+ * Grupos que ofrece el picker de "Agregar grupo": primero los que el plan YA usa (snapshots
+ * CONGELADOS del read model) y despues el resto del catalogo vivo del coach.
+ *
+ * El orden importa dos veces: (1) los grupos del plan conservan su indice, que es el que
+ * alimenta el color de identidad de las filas, asi que cargar el catalogo no repinta nada;
+ * (2) el mismo orden se usa para reconstruir el diccionario del engine — como
+ * `reconstructExchangeGroups` deduplica por id quedandose con el PRIMERO, los snapshots del
+ * plan siguen ganandole al catalogo vivo en los subtotales (invariante de la capa).
+ *
+ * `catalog === null` (no cargo o fallo la lectura) => exactamente los grupos del plan, o sea
+ * el comportamiento previo: la degradacion es invisible.
+ */
+export function mergePortionGroupChoices(
+  planGroups: readonly QePortionGroup[],
+  catalog: readonly QePortionGroup[] | null,
+): QePortionGroup[] {
+  if (catalog === null || catalog.length === 0) return [...planGroups]
+  const inPlan = new Set(planGroups.map((group) => group.exchangeGroupId))
+  return [...planGroups, ...catalog.filter((group) => !inPlan.has(group.exchangeGroupId))]
 }
 
 function targetText(value: number | null): string {

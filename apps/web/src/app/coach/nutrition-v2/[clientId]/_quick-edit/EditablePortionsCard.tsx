@@ -5,9 +5,10 @@
  * alimentos DENTRO de la card de franja (EditableSlotCard la monta bajo "+ Agregar
  * alimento"). Misma fila grupo+stepper del builder: circulito con el codigo del grupo
  * (color de identidad `exchangeGroupColor`, letra blanca) + nombre + StepperField adaptado
- * a paso 0,5 (minimo 0,5) + eliminar con snackbar Deshacer. Altas via bottom sheet con los
- * grupos que el plan YA usa (snapshots congelados del read model; los grupos NUEVOS al plan
- * se siguen agregando desde el builder).
+ * a paso 0,5 (minimo 0,5) + eliminar con snackbar Deshacer. Altas via picker (bottom sheet en
+ * movil, dialogo centrado en desktop) con los grupos del plan MAS el catalogo vivo del coach
+ * (`portionGroupChoices`): hasta 08-04 solo ofrecia los del plan y el coach que queria sumar
+ * otro grupo veia una lista donde todo decia "Ya está en esta comida".
  *
  * F4: el conteo de equivalencias (`portionFoodCounts` del provider) SI viene del catalogo
  * vivo — es la unica lectura viva de esta seccion, y es informativa: dice cuantos alimentos
@@ -24,13 +25,13 @@ import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { exchangeGroupColor } from '@eva/nutrition-engine'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   type QePortionGroup,
   type QePortionTarget,
   type QeSlot,
 } from './quick-edit-state'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
+import { QeBottomSheet } from './QeBottomSheet'
 import { StepperField } from './StepperField'
 import { QE_COPY } from './microcopy'
 
@@ -59,7 +60,7 @@ function GroupDot({ group, sortOrder }: { group: { groupCode: string; color: str
 }
 
 export function EditablePortionsCard({ variantKey, slot }: { variantKey: string; slot: QeSlot }) {
-  const { portionGroups } = useQuickEdit()
+  const { portionGroups, portionGroupChoices } = useQuickEdit()
   const [pickerOpen, setPickerOpen] = useState(false)
 
   // Plan sin capa de porciones: CERO UI nueva (SPEC UX-c). Los grupos elegibles derivan
@@ -89,7 +90,7 @@ export function EditablePortionsCard({ variantKey, slot }: { variantKey: string;
         </div>
       ) : null}
 
-      {portionGroups.length > 0 ? (
+      {portionGroupChoices.length > 0 ? (
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
@@ -108,7 +109,7 @@ export function EditablePortionsCard({ variantKey, slot }: { variantKey: string;
       <GroupPickerSheet
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        groups={portionGroups}
+        groups={portionGroupChoices}
         usedGroupIds={usedGroupIds}
         onPicked={() => setPickerOpen(false)}
         variantKey={variantKey}
@@ -201,9 +202,10 @@ function PortionTargetRow({
 }
 
 /**
- * Bottom sheet de altas: lista los grupos del plan (circulito + nombre + referencia por
- * porcion + equivalencias que vera el alumno); los ya presentes en la franja quedan
- * deshabilitados ("Ya esta en esta comida").
+ * Picker de altas (sheet en movil / dialogo en desktop): lista los grupos del plan y despues
+ * el resto del catalogo del coach (circulito + nombre + referencia por porcion + equivalencias
+ * que vera el alumno); los ya presentes en la franja quedan deshabilitados ("Ya esta en esta
+ * comida").
  */
 function GroupPickerSheet({
   open,
@@ -230,57 +232,56 @@ function GroupPickerSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-card bg-surface-card text-body dark:bg-surface-card">
-        <SheetHeader className="border-border-subtle bg-transparent p-4 pb-2 dark:border-border-subtle">
-          <SheetTitle className="pr-10 font-display text-lg font-semibold normal-case tracking-tight text-strong">
-            {PORTIONS_COPY.builder.addGroup}
-          </SheetTitle>
-        </SheetHeader>
-        <ul className="max-h-[60vh] space-y-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom,0px),1rem)]">
-          {groups.map((group, index) => {
-            const used = usedGroupIds.has(group.exchangeGroupId)
-            const foods = foodsHint(portionFoodCounts?.[group.exchangeGroupId])
-            return (
-              <li key={group.exchangeGroupId}>
-                <button
-                  type="button"
-                  disabled={used}
-                  onClick={() => handlePick(group)}
-                  className="flex min-h-12 w-full items-center gap-3 rounded-control px-2 py-2 text-left transition-colors hover:bg-surface-sunken active:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <GroupDot group={group} sortOrder={index} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold text-strong">{group.groupName}</span>
-                      {!group.macrosConfirmed ? (
-                        <span className="shrink-0 rounded-pill border border-amber-300 bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                          {PORTIONS_COPY.builder.referentialBadge}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="block truncate text-xs text-muted">
-                      {used
-                        ? PORTIONS_COPY.builder.groupUsed
-                        : `1 porción ≈ ${Math.round(group.ref.calories)} kcal · ${Math.round(group.ref.carbsG)} C · ${Math.round(group.ref.proteinG)} P`}
-                    </span>
-                    {!used && foods ? (
-                      <span
-                        className={
-                          'block truncate text-[11px] ' +
-                          (foods.empty ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-subtle')
-                        }
-                      >
-                        {foods.text}
+    <QeBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={PORTIONS_COPY.builder.addGroup}
+      bodyClassName="space-y-2"
+    >
+      <p className="text-xs leading-5 text-muted">{QE_COPY.portionsPickerHint}</p>
+      <ul className="-mx-1 space-y-1 px-1">
+        {groups.map((group, index) => {
+          const used = usedGroupIds.has(group.exchangeGroupId)
+          const foods = foodsHint(portionFoodCounts?.[group.exchangeGroupId])
+          return (
+            <li key={group.exchangeGroupId}>
+              <button
+                type="button"
+                disabled={used}
+                onClick={() => handlePick(group)}
+                className="flex min-h-12 w-full items-center gap-3 rounded-control px-2 py-2 text-left transition-colors hover:bg-surface-sunken active:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <GroupDot group={group} sortOrder={index} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-semibold text-strong">{group.groupName}</span>
+                    {!group.macrosConfirmed ? (
+                      <span className="shrink-0 rounded-pill border border-amber-300 bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                        {PORTIONS_COPY.builder.referentialBadge}
                       </span>
                     ) : null}
                   </span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      </SheetContent>
-    </Sheet>
+                  <span className="block truncate text-xs text-muted">
+                    {used
+                      ? PORTIONS_COPY.builder.groupUsed
+                      : `1 porción ≈ ${Math.round(group.ref.calories)} kcal · ${Math.round(group.ref.carbsG)} C · ${Math.round(group.ref.proteinG)} P`}
+                  </span>
+                  {!used && foods ? (
+                    <span
+                      className={
+                        'block truncate text-[11px] ' +
+                        (foods.empty ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-subtle')
+                      }
+                    >
+                      {foods.text}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </QeBottomSheet>
   )
 }

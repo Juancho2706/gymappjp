@@ -1,20 +1,20 @@
 'use client'
 
 /**
- * Bottom sheet de busqueda de catalogo para el modo edicion: swap de un item existente o
- * agregar alimento a una franja. Reusa por import searchFoodCatalogCoachAction y
- * FoodResultCard del builder (sin editarlos). El buscador replica el minimo del
- * FoodSearch interno de PlanBuilderClient.tsx (no exportado; nota de origen — regla de
- * archivos disjuntos del diseno QE §5).
+ * Buscador de catalogo del modo edicion (swap de un item existente o agregar alimento a una
+ * franja): bottom sheet en movil, dialogo centrado en desktop via `QeBottomSheet`. Reusa por
+ * import searchFoodCatalogCoachAction y FoodResultCard del builder (sin editarlos). El
+ * buscador replica el minimo del FoodSearch interno de PlanBuilderClient.tsx (no exportado;
+ * nota de origen — regla de archivos disjuntos del diseno QE §5).
  */
 
 import { useRef, useState } from 'react'
 import { Loader2, Plus, Search } from 'lucide-react'
 import type { FoodCatalogCursor, FoodCatalogItem } from '@eva/nutrition-v2'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { searchFoodCatalogCoachAction } from '../builder/_actions/builder.actions'
 import { FoodResultCard } from '../builder/_components/FoodResultCard'
 import type { BuilderFood } from '../builder/_lib/draft-builder'
+import { QeBottomSheet } from './QeBottomSheet'
 import { QE_COPY } from './microcopy'
 
 function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
@@ -116,88 +116,78 @@ export function FoodPickerSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="max-h-[85dvh] rounded-t-card bg-surface-card text-body dark:bg-surface-card"
-      >
-        <SheetHeader className="border-border-subtle bg-transparent p-4 pb-3 dark:border-border-subtle">
-          <SheetTitle className="pr-10 font-display text-base font-semibold normal-case tracking-tight text-strong">
-            {title}
-          </SheetTitle>
-        </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-3">
-          <div className="flex gap-2">
-            <input
-              className="min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-base text-strong outline-none transition-colors placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/25 md:text-sm"
-              type="search"
-              inputMode="search"
-              aria-label="Buscar alimento del catalogo"
-              placeholder="Buscar alimento del catalogo"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void run()
-                }
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => void run()}
-              disabled={loading}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control bg-primary/100 px-3 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              Buscar
-            </button>
-          </div>
+    <QeBottomSheet open={open} onOpenChange={handleOpenChange} title={title} size="lg" bodyClassName="space-y-0 pt-3">
+      <div className="flex gap-2">
+        <input
+          className="min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-base text-strong outline-none transition-colors placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/25 md:text-sm"
+          type="search"
+          inputMode="search"
+          aria-label="Buscar alimento del catalogo"
+          placeholder="Buscar alimento del catalogo"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void run()
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => void run()}
+          disabled={loading}
+          className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control bg-primary/100 px-3 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          Buscar
+        </button>
+      </div>
 
-          {allowCustom && onPickCustom ? (
+      {allowCustom && onPickCustom ? (
+        <button
+          type="button"
+          onClick={() => {
+            onPickCustom()
+            handleOpenChange(false)
+          }}
+          className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Plus className="h-4 w-4" />
+          {QE_COPY.freeFood}
+        </button>
+      ) : null}
+
+      {error ? <p className="mt-3 text-xs text-rose-600 dark:text-rose-300">{error}</p> : null}
+
+      {items.length > 0 ? (
+        <div className="mt-3 space-y-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
+          {/* En desktop el dialogo ya acota el ancho (max-w-2xl) y las cards son filas
+              compactas: una sola columna deja el nombre completo y los macros en linea. */}
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
+            {items.map((item) => (
+              <li key={item.id} className="min-w-0">
+                <FoodResultCard item={item} onPick={() => pick(item)} showBadge={false} />
+              </li>
+            ))}
+          </ul>
+          {hasMore ? (
             <button
               type="button"
-              onClick={() => {
-                onPickCustom()
-                handleOpenChange(false)
-              }}
-              className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-control border border-border-default bg-surface-card text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken disabled:opacity-50"
             >
-              <Plus className="h-4 w-4" />
-              {QE_COPY.freeFood}
+              {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Mas resultados
             </button>
           ) : null}
-
-          {error ? <p className="mt-3 text-xs text-rose-600 dark:text-rose-300">{error}</p> : null}
-
-          {items.length > 0 ? (
-            <div className="mt-3 space-y-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
-              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {items.map((item) => (
-                  <li key={item.id} className="min-w-0">
-                    <FoodResultCard item={item} onPick={() => pick(item)} showBadge={false} />
-                  </li>
-                ))}
-              </ul>
-              {hasMore ? (
-                <button
-                  type="button"
-                  onClick={() => void loadMore()}
-                  disabled={loadingMore}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-control border border-border-default bg-surface-card text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken disabled:opacity-50"
-                >
-                  {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Mas resultados
-                </button>
-              ) : null}
-            </div>
-          ) : (
-            <p className="mt-6 pb-6 text-center text-sm text-muted">
-              Busca en tu catalogo y el catalogo EVA para {allowCustom ? 'agregar' : 'reemplazar'} el alimento.
-            </p>
-          )}
         </div>
-      </SheetContent>
-    </Sheet>
+      ) : (
+        <p className="mt-6 pb-6 text-center text-sm text-muted">
+          Busca en tu catalogo y el catalogo EVA para {allowCustom ? 'agregar' : 'reemplazar'} el alimento.
+        </p>
+      )}
+    </QeBottomSheet>
   )
 }

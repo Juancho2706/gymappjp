@@ -6,10 +6,16 @@ import { MacroChipRow } from '@/components/nutrition-v2'
 import { foodCardImage } from './food-card-presentation'
 import { FoodCoverImage } from './FoodImage'
 
-// Resultado de busqueda del catalogo como CARD VERTICAL: foto del producto (o icono
-// de categoria) arriba en formato cuadrado, y debajo nombre, marca, badge de
-// verificacion y macros por 100. Reemplaza la fila plana por una tarjeta legible que
-// entra en una grilla responsive. Solo presentacion (tokens del DS, cero hex).
+// Resultado de busqueda del catalogo. DOS densidades con el mismo markup:
+//
+// - Movil (<sm) y desktop (md+): FILA compacta — thumbnail cuadrado a la izquierda y, al
+//   lado, nombre (2 lineas), marca, envase/categoria y macros por 100. Es lo que el coach
+//   necesita para escanear 20 resultados sin scrollear (queja del CEO 08-04: en desktop la
+//   grilla pintaba imagenes de ~300 px y cortaba los nombres a "18 HUE...").
+// - Banda intermedia (sm..md, tablets angostas): card VERTICAL con la foto arriba, que es
+//   donde una grilla de 2 columnas justifica el formato grande.
+//
+// Solo presentacion (tokens del DS, cero hex).
 
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
@@ -76,13 +82,13 @@ export function FoodResultCard({
       type="button"
       onClick={onPick}
       aria-label={`Agregar ${item.name}${item.brand ? ` (${item.brand})` : ''}`}
-      className="group flex h-full w-full flex-row items-center gap-3 overflow-hidden rounded-card border border-border-subtle bg-surface-card p-2 text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-col sm:items-stretch sm:gap-0 sm:p-0"
+      className="group flex h-full w-full flex-row items-center gap-3 overflow-hidden rounded-card border border-border-subtle bg-surface-card p-2 text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-col sm:items-stretch sm:gap-0 sm:p-0 md:flex-row md:items-center md:gap-3 md:p-2"
     >
-      <span className="w-14 shrink-0 overflow-hidden rounded-control sm:w-full sm:rounded-none">
+      <span className="w-14 shrink-0 overflow-hidden rounded-control sm:w-full sm:rounded-none md:w-16 md:rounded-control">
         <FoodCoverImage imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={item.name} />
       </span>
 
-      <span className="flex min-w-0 flex-1 flex-col gap-1.5 p-0 sm:p-3">
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5 p-0 sm:p-3 md:gap-1 md:p-0">
         <span className="flex items-start justify-between gap-2">
           <span className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-strong">{item.name}</span>
           {showBadge ? (
@@ -101,7 +107,8 @@ export function FoodResultCard({
         {item.brand ? <span className="truncate text-xs font-medium text-body">{item.brand}</span> : null}
         {meta ? <span className="truncate text-[11px] text-muted">{meta}</span> : null}
 
-        <span className="mt-auto block border-t border-border-subtle pt-2">
+        {/* En fila compacta (md+) el divisor sobra: cada resultado ya es su propia tarjeta. */}
+        <span className="mt-auto block border-t border-border-subtle pt-2 md:mt-0 md:border-t-0 md:pt-0">
           <MacroChipRow
             calories={item.calories}
             proteinG={item.proteinG}

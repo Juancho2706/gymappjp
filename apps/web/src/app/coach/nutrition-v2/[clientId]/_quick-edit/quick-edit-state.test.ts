@@ -6,11 +6,14 @@ import {
   type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
+import { macrosForTargets, type ExchangeGroup } from '@eva/nutrition-engine'
 import {
   applyQuickEditToDraft,
   buildSubstitutionMap,
+  catalogToPortionGroups,
   collectPortionGroups,
   createCatalogItem,
+  mergePortionGroupChoices,
   normalizeTimeHHMM,
   qeExchangeGroups,
   qeItemMacros,
@@ -450,6 +453,149 @@ describe('quick-edit-state — porciones', () => {
     expect(groups.map((g) => g.groupCode)).toEqual(['C', 'V'])
     expect(groups[0].ref.carbsG).toBe(15)
     expect(groups[1].macrosConfirmed).toBe(false)
+  })
+})
+
+// ── Catalogo VIVO en el picker de porciones (queja del CEO 08-04: "Agregar grupo" solo
+//    ofrecia los grupos que el plan YA usaba, todos deshabilitados con "Ya está en esta
+//    comida") ──────────────────────────────────────────────────────────────────────────────
+
+const GROUP_P_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+const GROUP_LEG_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const GROUP_MIX_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+
+function catalogGroup(over: Partial<ExchangeGroup> & Pick<ExchangeGroup, 'id' | 'code' | 'name'>): ExchangeGroup {
+  return {
+    slug: over.code.toLowerCase(),
+    coachId: null,
+    teamId: null,
+    isSystem: true,
+    refCalories: 0,
+    refProteinG: 0,
+    refCarbsG: 0,
+    refFatsG: 0,
+    color: null,
+    sortOrder: 0,
+    composedOf: null,
+    macrosConfirmed: true,
+    ...over,
+  }
+}
+
+/** Catalogo del coach: 3 del sistema (uno compuesto) + 1 propio, en desorden a proposito. */
+function makeCatalog(): ExchangeGroup[] {
+  return [
+    catalogGroup({
+      id: GROUP_MIX_ID,
+      code: 'MIX',
+      name: 'Mi mezcla',
+      isSystem: false,
+      sortOrder: 1,
+      refCalories: 120,
+      refProteinG: 5,
+      refCarbsG: 12,
+      refFatsG: 4,
+      macrosConfirmed: false,
+      color: '#123456',
+    }),
+    catalogGroup({
+      id: GROUP_LEG_ID,
+      code: 'LEG',
+      name: 'Legumbres',
+      sortOrder: 3,
+      refCalories: 130,
+      refProteinG: 9,
+      refCarbsG: 20,
+      refFatsG: 0.5,
+      composedOf: [
+        { code: 'P', portions: 1 },
+        { code: 'C', portions: 1 },
+      ],
+    }),
+    catalogGroup({
+      id: GROUP_P_ID,
+      code: 'P',
+      name: 'Proteinas',
+      sortOrder: 2,
+      refCalories: 60,
+      refProteinG: 7,
+      refCarbsG: 0,
+      refFatsG: 3,
+    }),
+    catalogGroup({
+      id: GROUP_C_ID,
+      code: 'C',
+      name: 'Carbohidratos / Cereales',
+      sortOrder: 1,
+      refCalories: 999,
+      refProteinG: 99,
+      refCarbsG: 99,
+      refFatsG: 99,
+    }),
+  ]
+}
+
+describe('quick-edit-state — catalogo de grupos del picker', () => {
+  it('catalogToPortionGroups: sistema primero por sortOrder, propios al final, con ref del catalogo', () => {
+    const mapped = catalogToPortionGroups(makeCatalog())
+    expect(mapped.map((g) => g.groupCode)).toEqual(['C', 'P', 'LEG', 'MIX'])
+    const propio = mapped[3]
+    expect(propio.exchangeGroupId).toBe(GROUP_MIX_ID)
+    expect(propio.ref).toEqual({ calories: 120, proteinG: 5, carbsG: 12, fatsG: 4 })
+    expect(propio.color).toBe('#123456')
+    expect(propio.macrosConfirmed).toBe(false)
+  })
+
+  it('catalogToPortionGroups: el compuesto resuelve el ref de cada base por codigo', () => {
+    const leg = catalogToPortionGroups(makeCatalog()).find((g) => g.groupCode === 'LEG')
+    expect(leg?.composedOf).toEqual([
+      { code: 'P', portions: 1, ref: { calories: 60, proteinG: 7, carbsG: 0, fatsG: 3 } },
+      { code: 'C', portions: 1, ref: { calories: 999, proteinG: 99, carbsG: 99, fatsG: 99 } },
+    ])
+  })
+
+  it('catalogToPortionGroups: base ausente => el compuesto viaja SIMPLE (nunca bases en cero)', () => {
+    const sinBases = makeCatalog().filter((g) => g.code === 'LEG')
+    const leg = catalogToPortionGroups(sinBases)[0]
+    expect(leg.composedOf).toBeNull()
+    // El engine cae al ref propio del compuesto: 2 porciones de LEG = 260 kcal, no 0.
+    expect(macrosForTargets([{ exchangeGroupId: GROUP_LEG_ID, portions: 2 }], qeExchangeGroups([leg]))).toEqual({
+      calories: 260,
+      proteinG: 18,
+      carbsG: 40,
+      fatsG: 1,
+    })
+  })
+
+  it('mergePortionGroupChoices: sin catalogo (null o vacio) ofrece exactamente los grupos del plan', () => {
+    const { groups } = hydratePortions()
+    expect(mergePortionGroupChoices(groups, null)).toEqual(groups)
+    expect(mergePortionGroupChoices(groups, [])).toEqual(groups)
+  })
+
+  it('mergePortionGroupChoices: plan primero + resto del catalogo, sin repetir el grupo compartido', () => {
+    const { groups } = hydratePortions()
+    const choices = mergePortionGroupChoices(groups, catalogToPortionGroups(makeCatalog()))
+    // C y V vienen del plan (C tambien esta en el catalogo y NO se duplica).
+    expect(choices.map((g) => g.groupCode)).toEqual(['C', 'V', 'P', 'LEG', 'MIX'])
+    expect(choices.filter((g) => g.exchangeGroupId === GROUP_C_ID)).toHaveLength(1)
+    // El snapshot congelado del plan es el que sobrevive: el catalogo vivo no repisa macros.
+    expect(choices[0].ref.carbsG).toBe(15)
+    expect(choices[0].groupName).toBe('Cereales')
+  })
+
+  it('el diccionario del engine hereda el orden: snapshots del plan mandan y el grupo nuevo suma', () => {
+    const { groups } = hydratePortions()
+    const dict = qeExchangeGroups(mergePortionGroupChoices(groups, catalogToPortionGroups(makeCatalog())))
+    // C prescrito: 2 porciones siguen valiendo el snapshot (70 kcal), no las 999 del catalogo.
+    expect(macrosForTargets([{ exchangeGroupId: GROUP_C_ID, portions: 2 }], dict).calories).toBe(140)
+    // Y un grupo recien agregado desde el catalogo ya suma en vivo (antes quedaba en 0).
+    expect(macrosForTargets([{ exchangeGroupId: GROUP_P_ID, portions: 2 }], dict)).toEqual({
+      calories: 120,
+      proteinG: 14,
+      carbsG: 0,
+      fatsG: 6,
+    })
   })
 })
 

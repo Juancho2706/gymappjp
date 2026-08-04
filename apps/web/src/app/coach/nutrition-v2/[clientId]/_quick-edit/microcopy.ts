@@ -101,6 +101,12 @@ export const QE_COPY = {
    */
   portionsPublishNotice:
     'Tus cambios de porciones se aplican al publicar esta edición. Los planes que ya publicaste mantienen los valores con los que salieron.',
+  /**
+   * Ayuda del picker "Agregar grupo": desde 08-04 la lista ofrece TODO el catálogo de grupos
+   * del coach y no solo los que el plan ya usaba, así que conviene decir de dónde sale y por
+   * qué algunos están desactivados (antes la lista completa venía deshabilitada y parecía rota).
+   */
+  portionsPickerHint: 'Elige cualquier grupo de tu catálogo. Los que ya están en esta comida aparecen desactivados.',
   // ── Multi-día (FD5): menú por día en el modo edición. El alta vive en `AddDayPopover`
   //    (compartido con el builder), que trae su propio copy y su upsell del gate Pro.
   baseDayEyebrow: 'Día base',

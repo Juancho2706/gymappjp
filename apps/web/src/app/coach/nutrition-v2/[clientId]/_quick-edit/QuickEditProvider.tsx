@@ -38,8 +38,10 @@ import {
 import {
   applyQuickEditToDraft,
   buildSubstitutionMap,
+  catalogToPortionGroups,
   collectPortionGroups,
   countVariantHeaderChanges,
+  mergePortionGroupChoices,
   qeExchangeGroups,
   quickEditReducer,
   readModelToEditState,
@@ -98,6 +100,13 @@ interface QuickEditContextValue {
    * seccion no se pinta — SPEC UX-c "capa invisible").
    */
   portionGroups: QePortionGroup[]
+  /**
+   * Grupos que ofrece el picker "Agregar grupo": los del plan MAS el catalogo vivo del coach
+   * (mismo canal que ya alimenta `portionFoodCounts`). Sin esto el coach solo podia repetir
+   * los grupos que el plan ya usaba y tenia que irse al creador para sumar uno nuevo. Si el
+   * catalogo no llego, es exactamente `portionGroups` (degradacion invisible).
+   */
+  portionGroupChoices: QePortionGroup[]
   /**
    * Diccionario del engine reconstruido desde los snapshots congelados de los targets
    * (incluye las bases de los grupos compuestos): alimenta los subtotales que SUMAN las
@@ -195,9 +204,6 @@ export function QuickEditProvider({
   // §2.3); las visibles viajan editadas desde el estado.
   const baseDraft = useMemo(() => readModelToDraft(planModel, clientId), [planModel, clientId])
   const portionGroups = useMemo(() => collectPortionGroups(planModel), [planModel])
-  // Diccionario del engine (grupos directos + bases de compuestos) para sumar las porciones
-  // a eleccion en los subtotales de franja y en el total prescrito.
-  const exchangeGroups = useMemo(() => qeExchangeGroups(portionGroups), [portionGroups])
 
   if (!initialState || !baseDraft) {
     throw new Error('QuickEditProvider requiere un plan vigente en el read model')
@@ -225,7 +231,20 @@ export function QuickEditProvider({
   // Equivalencias por grupo (catalogo vivo). Informativo puro: null hasta que llegue, y null
   // para siempre si la lectura falla — jamas bloquea ni retrasa la edicion.
   const [portionFoodCounts, setPortionFoodCounts] = useState<ExchangeGroupFoodCounts | null>(null)
+  // Catalogo vivo de grupos del coach (misma respuesta que trae los conteos). null = todavia
+  // no llego o la lectura fallo: el picker vuelve a ofrecer solo los grupos del plan.
+  const [portionGroupCatalog, setPortionGroupCatalog] = useState<QePortionGroup[] | null>(null)
   const [isPending, startTransition] = useTransition()
+  // Grupos ofrecidos por el picker: plan primero, catalogo despues (ver `mergePortionGroupChoices`).
+  const portionGroupChoices = useMemo(
+    () => mergePortionGroupChoices(portionGroups, portionGroupCatalog),
+    [portionGroups, portionGroupCatalog],
+  )
+  // Diccionario del engine (grupos directos + bases de compuestos) para sumar las porciones
+  // a eleccion en los subtotales de franja y en el total prescrito. Se arma sobre la lista
+  // COMPLETA para que un grupo recien agregado desde el catalogo tambien sume en vivo; los
+  // snapshots del plan van primero, asi que siguen mandando ellos donde hay id repetido.
+  const exchangeGroups = useMemo(() => qeExchangeGroups(portionGroupChoices), [portionGroupChoices])
   // Clave de idempotencia por "intencion de publicar": se fija al abrir el confirm sheet y
   // se REUSA en todos los reintentos de esa intencion (§2.5). Editar despues de un fallo
   // arranca una intencion nueva (clave nueva) para que el retry no resucite un draft viejo.
@@ -316,10 +335,11 @@ export function QuickEditProvider({
     return () => clearTimeout(timer)
   }, [state, changeCount, draftKey, clientId, planId, planVersionId])
 
-  // Equivalencias por grupo: una sola lectura al montar el modo edicion, y SOLO si el plan
-  // usa porciones (sin capa de porciones la seccion ni se pinta, asi que el viaje sobra).
-  // Reusa la server action del builder tal cual (mismo scope de tenant que vera el alumno).
-  // Degradacion en silencio: !ok o excepcion => se queda en null y ninguna fila dice nada.
+  // Equivalencias por grupo Y catalogo de grupos: una sola lectura al montar el modo edicion,
+  // y SOLO si el plan usa porciones (sin capa de porciones la seccion ni se pinta, asi que el
+  // viaje sobra). Reusa la server action del builder tal cual (mismo scope de tenant que vera
+  // el alumno). Degradacion en silencio: !ok o excepcion => ambos quedan en null, ninguna fila
+  // dice nada y el picker sigue ofreciendo los grupos del plan.
   const hasPortionsLayer = portionGroups.length > 0
   useEffect(() => {
     if (!hasPortionsLayer) return
@@ -327,7 +347,9 @@ export function QuickEditProvider({
     void (async () => {
       try {
         const res = await loadExchangeGroupsForBuilderAction({ clientId })
-        if (alive && res.ok) setPortionFoodCounts(res.foodCounts)
+        if (!alive || !res.ok) return
+        setPortionFoodCounts(res.foodCounts)
+        setPortionGroupCatalog(catalogToPortionGroups(res.groups))
       } catch {
         // Informativo: el quick-edit sigue funcionando sin la linea de apoyo.
       }
@@ -520,6 +542,7 @@ export function QuickEditProvider({
     permissions: planModel.permissions,
     hasNutritionPro,
     portionGroups,
+    portionGroupChoices,
     exchangeGroups,
     portionFoodCounts,
     substitutionsFailed: substitutionsLoadFailed,
