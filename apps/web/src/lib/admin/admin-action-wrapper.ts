@@ -1,5 +1,6 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { isAllowedAdminEmail, isAdminMfaEnforced } from './admin-gate'
@@ -33,6 +34,24 @@ export async function assertAdmin() {
     return { user, adminClient: createServiceRoleClient() }
 }
 
+/**
+ * IP del admin, best-effort. La columna `ip_address` existe desde el día 1 y NUNCA se escribía.
+ * `headers()` revienta fuera de un request scope (tests, jobs) → try/catch y `null`: el audit log
+ * jamás debe tumbar la acción que lo origina.
+ */
+async function resolveClientIp(): Promise<string | null> {
+    try {
+        const h = await headers()
+        // x-forwarded-for = "client, proxy1, proxy2" → el primero es el cliente real.
+        const first = h.get('x-forwarded-for')?.split(',')[0]?.trim()
+        if (first) return first
+        const realIp = h.get('x-real-ip')?.trim()
+        return realIp || null
+    } catch {
+        return null
+    }
+}
+
 export async function logAdminAction(
     adminClient: SupabaseClient<Database>,
     action: string,
@@ -57,6 +76,7 @@ export async function logAdminAction(
             target_table: targetTable,
             target_id: targetId,
             payload: payload ? (payload as Json) : null,
+            ip_address: await resolveClientIp(),
         })
     } catch (err) {
         // eslint-disable-next-line no-console

@@ -1,4 +1,14 @@
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import {
+    computeDiscountedClp,
+    getTierPriceClp,
+    TIER_CONFIG,
+    type BillingCycle,
+    type DiscountSpec,
+    type DiscountTarget,
+    type DiscountType,
+    type SubscriptionTier,
+} from '@eva/tiers'
 
 /**
  * _data/codigos.queries — lecturas service-role del catálogo de cupones para el panel CEO (F5).
@@ -29,11 +39,99 @@ export type AdminCouponRow = {
 export type RedemptionRow = {
     redemptionId: string
     codeDisplay: string | null
+    /** Necesario para linkear a la ficha del coach y para el blast radius de la revocación. */
+    coachId: string | null
     coachSlug: string | null
+    /** Nombre para mostrar (marca > nombre > slug). */
+    coachName: string | null
     status: string
     redeemedAt: string
+    /** Descuento REAL en CLP sobre el plan vigente del coach (lista − neto). null = no computable. */
     discountClp: number | null
+    /** Etiqueta congelada del snapshot: "-25%" / "-$5.000". null = snapshot inválido. */
+    discountLabel: string | null
+    /** Precio de lista del plan del coach (tier + ciclo). Al revocar, el próximo cobro vuelve acá. */
+    listPriceClp: number | null
+    /** Neto que paga hoy con el cupón vivo. */
+    netPriceClp: number | null
     couponCode: string | null
+}
+
+const BILLING_CYCLES = new Set<string>(['monthly', 'quarterly', 'annual'])
+
+function asTier(v: unknown): SubscriptionTier | null {
+    return typeof v === 'string' && v in TIER_CONFIG ? (v as SubscriptionTier) : null
+}
+function asCycle(v: unknown): BillingCycle | null {
+    return typeof v === 'string' && BILLING_CYCLES.has(v) ? (v as BillingCycle) : null
+}
+
+type SnapshotRead = {
+    type: DiscountType | null
+    value: number | null
+    target: DiscountTarget
+    code: string | null
+    floorClp: number | undefined
+}
+
+/** Lee el `discount_value_snapshot` congelado (jsonb) sin confiar en su forma (evidencia histórica). */
+function readSnapshot(raw: unknown): SnapshotRead {
+    const s = (raw ?? {}) as Record<string, unknown>
+    const type = s.type === 'percent' || s.type === 'fixed_clp' ? (s.type as DiscountType) : null
+    const value = typeof s.value === 'number' && Number.isFinite(s.value) ? s.value : null
+    const target =
+        s.target === 'base' || s.target === 'module' || s.target === 'total' ? (s.target as DiscountTarget) : 'total'
+    const floorRaw = s.floorClp
+    return {
+        type,
+        value,
+        target,
+        code: typeof s.code === 'string' ? s.code : null,
+        floorClp:
+            typeof floorRaw === 'number' && Number.isFinite(floorRaw) && floorRaw >= 0 ? Math.round(floorRaw) : undefined,
+    }
+}
+
+/** "-25%" / "-$5.000" — el descuento tal como quedó congelado al canje. */
+function discountLabelFrom(snap: SnapshotRead): string | null {
+    if (!snap.type || snap.value == null) return null
+    return snap.type === 'percent' ? `-${snap.value}%` : `-$${snap.value.toLocaleString('es-CL')}`
+}
+
+/**
+ * Precio lista/neto del canje usando el MISMO motor puro que cobra (`computeDiscountedClp`) — nunca
+ * una regla de redondeo paralela. Sobre el plan del coach (tier + ciclo): los 4 módulos vienen
+ * INCLUIDOS en todo plan pago (decisión CEO 2026-07-17), así que composite == base y no hay add-ons
+ * que sumar. Un snapshot `target='module'` daría descuento 0 acá — inalcanzable en la práctica
+ * (el mint deshabilita esa opción y el canje corta con MODULE_DEFERRED).
+ */
+function priceFor(
+    snap: SnapshotRead,
+    tier: SubscriptionTier | null,
+    cycle: BillingCycle | null
+): { list: number | null; net: number | null; discount: number | null } {
+    if (!tier || !cycle) return { list: null, net: null, discount: null }
+    const list = getTierPriceClp(tier, cycle)
+    if (!snap.type || snap.value == null) return { list, net: list, discount: null }
+    const spec: DiscountSpec = { type: snap.type, value: snap.value, target: snap.target, remainingCycles: null }
+    const r = computeDiscountedClp({ baseClp: list, spec, floorClp: snap.floorClp })
+    return { list: r.baseBeforeDiscountClp, net: r.netClp, discount: r.discountClp }
+}
+
+type CoachEmbed = {
+    id?: string
+    slug?: string | null
+    full_name?: string | null
+    brand_name?: string | null
+    subscription_tier?: string | null
+    billing_cycle?: string | null
+}
+
+/** El embed PostgREST puede llegar como objeto (to-one) o array según la inferencia de la FK. */
+function firstCoach(raw: unknown): CoachEmbed | null {
+    if (!raw) return null
+    const c = Array.isArray(raw) ? raw[0] : raw
+    return (c ?? null) as CoachEmbed | null
 }
 
 /** Canjes recientes (todos los códigos) con el coach + descuento aplicado — para el panel CEO. */
@@ -41,20 +139,28 @@ export async function getRecentRedemptions(limit = 50): Promise<RedemptionRow[]>
     const db = createServiceRoleClient()
     const { data } = await db
         .from('coupon_redemptions')
-        .select('id, status, redeemed_at, discount_value_snapshot, coaches:coach_id(slug)')
+        .select(
+            'id, status, redeemed_at, discount_value_snapshot, coach_id, coaches:coach_id(id, slug, full_name, brand_name, subscription_tier, billing_cycle)'
+        )
         .order('redeemed_at', { ascending: false })
         .limit(limit)
     return (data ?? []).map((r) => {
-        const snap = (r.discount_value_snapshot ?? {}) as Record<string, unknown>
-        const coach = (r.coaches ?? null) as { slug?: string } | null
+        const snap = readSnapshot(r.discount_value_snapshot)
+        const coach = firstCoach(r.coaches)
+        const price = priceFor(snap, asTier(coach?.subscription_tier), asCycle(coach?.billing_cycle))
         return {
             redemptionId: r.id,
-            codeDisplay: typeof snap.code === 'string' ? snap.code : null,
+            codeDisplay: snap.code,
+            coachId: r.coach_id ?? coach?.id ?? null,
             coachSlug: coach?.slug ?? null,
+            coachName: coach?.brand_name ?? coach?.full_name ?? coach?.slug ?? null,
             status: r.status,
             redeemedAt: r.redeemed_at,
-            discountClp: null,
-            couponCode: typeof snap.code === 'string' ? snap.code : null,
+            discountClp: price.discount,
+            discountLabel: discountLabelFrom(snap),
+            listPriceClp: price.list,
+            netPriceClp: price.net,
+            couponCode: snap.code,
         }
     })
 }

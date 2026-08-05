@@ -113,16 +113,43 @@ export async function updateNewsItemAction(
 export async function publishNewsItemAction(id: string): Promise<NewsActionResult> {
   const { adminClient } = await assertAdmin()
 
+  // published_at se sella UNA sola vez. Esta misma accion sirve para publicar un borrador y
+  // para restaurar un archivado: si al restaurar reescribieramos la fecha, una novedad de
+  // enero archivada y restaurada en agosto figuraria como publicada en agosto (miente en el
+  // feed de los coaches y en el orden del historial). Solo se setea cuando nunca la tuvo.
+  const { data: current, error: readError } = await adminClient
+    .from('news_items')
+    .select('published_at')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (readError) {
+    return { success: false, error: readError.message }
+  }
+  if (!current) {
+    return { success: false, error: 'La novedad ya no existe' }
+  }
+
+  const patch: { status: string; published_at?: string } = { status: 'published' }
+  if (!current.published_at) {
+    patch.published_at = new Date().toISOString()
+  }
+
   const { error } = await adminClient
     .from('news_items')
-    .update({ status: 'published', published_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', id)
 
   if (error) {
     return { success: false, error: error.message }
   }
 
-  await logAdminAction(adminClient, 'publish_news_item', 'news_items', id, { status: 'published' })
+  await logAdminAction(adminClient, 'publish_news_item', 'news_items', id, {
+    status: 'published',
+    published_at: current.published_at ?? patch.published_at,
+    // true = restauracion que conservo la fecha original (no es una publicacion nueva).
+    published_at_preserved: Boolean(current.published_at),
+  })
   revalidatePath('/admin/novedades')
   return { success: true }
 }

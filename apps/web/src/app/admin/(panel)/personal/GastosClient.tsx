@@ -1,14 +1,46 @@
 'use client'
 
-import { useActionState, useState, useRef } from 'react'
+import { useActionState, useMemo, useState, useRef } from 'react'
 import { PlusCircle, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminConfirmDialog } from '../_components/AdminConfirmDialog'
 import { addGastoAction, deleteGastoAction } from './_actions/gasto-actions'
 import type { Gasto } from './_data/gastos.queries'
 
+// Todo el modulo habla es-CL: antes las fechas salian en es-AR y los montos en es-CL.
+const LOCALE = 'es-CL'
+
 const fmt = (n: number) =>
-    n.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })
+    n.toLocaleString(LOCALE, { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(LOCALE)
+
+const monthFormatter = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' })
+
+function monthLabel(d: Date) {
+    // es-CL devuelve "agosto de 2026"; en un separador de tabla se lee mejor "Agosto 2026".
+    const raw = monthFormatter.format(d).replace(' de ', ' ')
+    return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
+type MonthGroup = { key: string; label: string; gastos: Gasto[]; subtotal: number }
+
+/** Los gastos ya vienen ordenados por fecha desc, asi que basta recorrerlos una vez. */
+function groupByMonth(gastos: Gasto[]): MonthGroup[] {
+    const groups: MonthGroup[] = []
+    for (const g of gastos) {
+        const d = new Date(g.created_at)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        let current = groups[groups.length - 1]
+        if (!current || current.key !== key) {
+            current = { key, label: monthLabel(d), gastos: [], subtotal: 0 }
+            groups.push(current)
+        }
+        current.gastos.push(g)
+        current.subtotal += g.subtotal
+    }
+    return groups
+}
 
 function AddGastoForm() {
     const formRef = useRef<HTMLFormElement>(null)
@@ -26,20 +58,23 @@ function AddGastoForm() {
         null,
     )
 
+    const inputClass =
+        'rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none'
+
     return (
         <form ref={formRef} action={action} className="rounded-lg border border-subtle bg-surface-card p-4">
             <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">
                 Nuevo gasto
             </h3>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="flex flex-col gap-1">
                     <label className="text-[11px] text-muted">Nombre</label>
                     <input
                         name="nombre"
                         required
                         placeholder="Ej: Hosting"
-                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
+                        className={inputClass}
                     />
                 </div>
 
@@ -52,12 +87,12 @@ function AddGastoForm() {
                         step="any"
                         required
                         defaultValue="1"
-                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
+                        className={inputClass}
                     />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                    <label className="text-[11px] text-muted">Costo ($)</label>
+                    <label className="text-[11px] text-muted">Costo unitario ($)</label>
                     <input
                         name="costo"
                         type="number"
@@ -65,7 +100,7 @@ function AddGastoForm() {
                         step="any"
                         required
                         placeholder="0.00"
-                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
+                        className={inputClass}
                     />
                 </div>
 
@@ -75,8 +110,18 @@ function AddGastoForm() {
                         name="pagador"
                         required
                         placeholder="Ej: Juan"
-                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
+                        className={inputClass}
                     />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                    <label className="text-[11px] text-muted">Fecha (opcional)</label>
+                    <input
+                        name="fecha"
+                        type="date"
+                        className={inputClass}
+                    />
+                    <span className="text-[10px] text-muted">Vacío = hoy</span>
                 </div>
             </div>
 
@@ -132,7 +177,7 @@ function DeleteButton({ gasto }: { gasto: Gasto }) {
                 open={open}
                 onOpenChange={setOpen}
                 title="Eliminar gasto"
-                description={`"${gasto.nombre}" (${fmt(gasto.costo)}, pago ${gasto.pagador}) sale del registro. No se puede deshacer.`}
+                description={`"${gasto.nombre}" (${gasto.cantidad} × ${fmt(gasto.costo)} = ${fmt(gasto.subtotal)}, pagó ${gasto.pagador}) sale del registro. No se puede deshacer.`}
                 severity="danger"
                 confirmLabel="Eliminar"
                 onConfirm={handleConfirm}
@@ -142,14 +187,17 @@ function DeleteButton({ gasto }: { gasto: Gasto }) {
 }
 
 export function GastosClient({ gastos }: { gastos: Gasto[] }) {
-    const totalCosto = gastos.reduce((acc, g) => acc + g.costo, 0)
-    const totalItems = gastos.length
+    const { totalGastado, porPagador, groups } = useMemo(() => ({
+        // Los KPI suman subtotales (cantidad × costo), no el costo unitario.
+        totalGastado: gastos.reduce((acc, g) => acc + g.subtotal, 0),
+        porPagador: gastos.reduce<Record<string, number>>((acc, g) => {
+            acc[g.pagador] = (acc[g.pagador] ?? 0) + g.subtotal
+            return acc
+        }, {}),
+        groups: groupByMonth(gastos),
+    }), [gastos])
 
-    const porPagador = gastos.reduce<Record<string, number>>((acc, g) => {
-        const key = g.pagador
-        acc[key] = (acc[key] ?? 0) + g.costo
-        return acc
-    }, {})
+    const totalItems = gastos.length
 
     return (
         <div className="space-y-6">
@@ -163,7 +211,7 @@ export function GastosClient({ gastos }: { gastos: Gasto[] }) {
                 </div>
                 <div className="rounded-lg border border-subtle bg-surface-card px-4 py-3 col-span-1 sm:col-span-2">
                     <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-muted">Total acumulado</p>
-                    <p className="font-mono text-2xl font-bold tabular-nums text-strong">{fmt(totalCosto)}</p>
+                    <p className="font-mono text-2xl font-bold tabular-nums text-strong">{fmt(totalGastado)}</p>
                 </div>
                 {Object.entries(porPagador).map(([pagador, total]) => (
                     <div key={pagador} className="rounded-lg border border-subtle bg-surface-card px-4 py-3">
@@ -191,30 +239,46 @@ export function GastosClient({ gastos }: { gastos: Gasto[] }) {
                                     <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Nombre</th>
                                     <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-widest text-muted">Cantidad</th>
                                     <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-widest text-muted">Costo</th>
+                                    <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-widest text-muted">Subtotal</th>
                                     <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Pagó</th>
                                     <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Fecha</th>
                                     <th className="px-4 py-2.5 w-10" />
                                 </tr>
                             </thead>
-                            <tbody>
-                                {gastos.map((g, i) => (
-                                    <tr
-                                        key={g.id}
-                                        className={`border-b border-subtle last:border-0 ${i % 2 === 0 ? '' : 'bg-surface-sunken/30'}`}
-                                    >
-                                        <td className="px-4 py-2.5 text-strong">{g.nombre}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums text-body">{g.cantidad}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums text-strong">{fmt(g.costo)}</td>
-                                        <td className="px-4 py-2.5 text-body">{g.pagador}</td>
-                                        <td className="px-4 py-2.5 text-muted whitespace-nowrap">
-                                            {new Date(g.created_at).toLocaleDateString('es-AR')}
+                            {groups.map((group) => (
+                                <tbody key={group.key}>
+                                    {/* Separador de mes con su subtotal: el registro se lee por periodo. */}
+                                    <tr className="border-b border-subtle bg-surface-sunken/60">
+                                        <td colSpan={3} className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-body">
+                                            {group.label}
                                         </td>
-                                        <td className="px-4 py-2.5 text-right">
-                                            <DeleteButton gasto={g} />
+                                        <td className="px-4 py-2 text-right font-mono text-xs font-bold tabular-nums text-[var(--sport-500)]">
+                                            {fmt(group.subtotal)}
+                                        </td>
+                                        <td colSpan={3} className="px-4 py-2 text-[10px] text-muted">
+                                            {group.gastos.length} {group.gastos.length === 1 ? 'gasto' : 'gastos'}
                                         </td>
                                     </tr>
-                                ))}
-                            </tbody>
+                                    {group.gastos.map((g, i) => (
+                                        <tr
+                                            key={g.id}
+                                            className={`border-b border-subtle last:border-0 ${i % 2 === 0 ? '' : 'bg-surface-sunken/30'}`}
+                                        >
+                                            <td className="px-4 py-2.5 text-strong">{g.nombre}</td>
+                                            <td className="px-4 py-2.5 text-right font-mono tabular-nums text-body">{g.cantidad}</td>
+                                            <td className="px-4 py-2.5 text-right font-mono tabular-nums text-body">{fmt(g.costo)}</td>
+                                            <td className="px-4 py-2.5 text-right font-mono font-bold tabular-nums text-strong">{fmt(g.subtotal)}</td>
+                                            <td className="px-4 py-2.5 text-body">{g.pagador}</td>
+                                            <td className="px-4 py-2.5 text-muted whitespace-nowrap">
+                                                {fmtDate(g.created_at)}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-right">
+                                                <DeleteButton gasto={g} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            ))}
                         </table>
                     </div>
                 )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -30,14 +30,20 @@ import {
 } from '@/components/ui/select'
 import { createNewsItemAction, updateNewsItemAction } from '../_actions/novedades-actions'
 import { toast } from 'sonner'
-import { Loader2, Plus, Save, Upload, X, ImageIcon } from 'lucide-react'
+import { Loader2, Plus, Upload, X, ImageIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
 
+export const NEWS_TYPES = ['feature', 'improvement', 'fix', 'announcement'] as const
+export type NewsType = (typeof NEWS_TYPES)[number]
+
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+
 const formSchema = z.object({
   title: z.string().min(3).max(200),
-  type: z.enum(['feature', 'improvement', 'fix', 'announcement']),
+  type: z.enum(NEWS_TYPES),
   content: z.string().min(10).max(10000),
   image_url: z.string().url().optional().or(z.literal('')),
   cta_url: z.string().max(500).optional().or(z.literal('')),
@@ -47,81 +53,169 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>
 
-interface Props {
-  newsItem?: {
-    id: string
-    title: string
-    type: string
-    content: string
-    image_url: string | null
-    cta_url: string | null
-    cta_label: string | null
-    is_pinned: boolean | null
-  } | null
-  onSuccess?: () => void
+export type NewsFormItem = {
+  id: string
+  title: string
+  type: string
+  content: string
+  image_url: string | null
+  cta_url: string | null
+  cta_label: string | null
+  is_pinned: boolean | null
 }
 
-export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
-  const [open, setOpen] = useState(false)
+interface Props {
+  newsItem?: NewsFormItem | null
+  onSuccess?: () => void
+  /**
+   * Modo controlado: la lista monta UN solo sheet para las N filas y le pasa cual editar
+   * (antes cada fila montaba su propio formulario: 30 novedades = 30 forms en el DOM).
+   * Sin `open` el sheet es autonomo y dibuja su propio boton "Crear novedad".
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+const EMPTY_VALUES: FormValues = {
+  title: '',
+  type: 'feature',
+  content: '',
+  image_url: '',
+  cta_url: '',
+  cta_label: '',
+  is_pinned: false,
+}
+
+function toFormValues(item?: NewsFormItem | null): FormValues {
+  if (!item) return EMPTY_VALUES
+  return {
+    title: item.title,
+    // `type` viene como string suelto de la DB: si trae un valor fuera del enum, el resolver
+    // bloquearia el submit sin explicar por que. Caemos a 'feature' en vez de castear a any.
+    type: (NEWS_TYPES as readonly string[]).includes(item.type) ? (item.type as NewsType) : 'feature',
+    content: item.content,
+    image_url: item.image_url ?? '',
+    cta_url: item.cta_url ?? '',
+    cta_label: item.cta_label ?? '',
+    is_pinned: item.is_pinned ?? false,
+  }
+}
+
+export function NewsCreateSheet({
+  newsItem,
+  onSuccess,
+  open: controlledOpen,
+  onOpenChange,
+}: Props) {
+  const isControlled = controlledOpen !== undefined
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = isControlled ? controlledOpen : internalOpen
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const isEditing = !!newsItem
+
+  const editingId = newsItem?.id ?? null
+  const isEditing = editingId !== null
+
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!isControlled) setInternalOpen(next)
+      onOpenChange?.(next)
+    },
+    [isControlled, onOpenChange]
+  )
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      title: newsItem?.title ?? '',
-      type: (newsItem?.type as any) ?? 'feature',
-      content: newsItem?.content ?? '',
-      image_url: newsItem?.image_url ?? '',
-      cta_url: newsItem?.cta_url ?? '',
-      cta_label: newsItem?.cta_label ?? '',
-      is_pinned: newsItem?.is_pinned ?? false,
-    },
+    defaultValues: toFormValues(newsItem),
   })
+
+  // Un solo sheet sirve a todas las filas, asi que los valores se cargan al abrirlo (o al
+  // saltar de una novedad a otra). La sincronizacion va por id y NO por identidad del objeto:
+  // un router.refresh() con el sheet abierto no puede pisar lo que el admin esta escribiendo.
+  const newsItemRef = useRef(newsItem)
+  newsItemRef.current = newsItem
+  useEffect(() => {
+    if (!open) return
+    form.reset(toFormValues(newsItemRef.current))
+  }, [open, editingId, form])
 
   const imageUrl = form.watch('image_url')
 
-  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const uploadFile = useCallback(
+    async (file: File) => {
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast.error('La imagen no puede superar los 2MB')
+        return
+      }
 
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('La imagen no puede superar los 2MB')
-      return
-    }
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        toast.error('Solo se permiten imágenes PNG, JPG o WebP')
+        return
+      }
 
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('Solo se permiten imágenes PNG, JPG o WebP')
-      return
-    }
+      setUploadingImage(true)
+      try {
+        const supabase = createClient()
+        const ext = file.name.split('.').pop()
+        const path = `news/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
-    setUploadingImage(true)
-    try {
-      const supabase = createClient()
-      const ext = file.name.split('.').pop()
-      const path = `news/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        const { error } = await supabase.storage.from('news').upload(path, file, {
+          contentType: file.type,
+          upsert: false,
+        })
 
-      const { error } = await supabase.storage.from('news').upload(path, file, {
-        contentType: file.type,
-        upsert: false,
-      })
+        if (error) throw error
 
-      if (error) throw error
+        const { data: { publicUrl } } = supabase.storage.from('news').getPublicUrl(path)
+        form.setValue('image_url', publicUrl)
+        toast.success('Imagen subida correctamente')
+      } catch (err) {
+        console.error('Upload error:', err)
+        toast.error('No se pudo subir la imagen')
+      } finally {
+        setUploadingImage(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+    },
+    [form]
+  )
 
-      const { data: { publicUrl } } = supabase.storage.from('news').getPublicUrl(path)
-      form.setValue('image_url', publicUrl)
-      toast.success('Imagen subida correctamente')
-    } catch (err) {
-      console.error('Upload error:', err)
-      toast.error('No se pudo subir la imagen')
-    } finally {
-      setUploadingImage(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }, [form])
+  const handleImageUpload = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) void uploadFile(file)
+    },
+    [uploadFile]
+  )
+
+  // La zona decia "arrastra una imagen" pero no escuchaba drop: sin preventDefault el browser
+  // navega al archivo soltado y se pierde el formulario entero.
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    // dragleave tambien dispara al cruzar los hijos: solo apagamos el resalte cuando el
+    // cursor sale de la zona completa.
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    setIsDragging(false)
+  }, [])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      setIsDragging(false)
+      if (uploadingImage) return
+      const file = e.dataTransfer.files?.[0]
+      if (file) void uploadFile(file)
+    },
+    [uploadFile, uploadingImage]
+  )
 
   const removeImage = useCallback(() => {
     form.setValue('image_url', '')
@@ -139,19 +233,19 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
       formData.set('cta_label', values.cta_label || '')
       formData.set('is_pinned', values.is_pinned ? 'on' : 'off')
 
-      const result = isEditing
-        ? await updateNewsItemAction(newsItem.id, null, formData)
+      const result = editingId
+        ? await updateNewsItemAction(editingId, null, formData)
         : await createNewsItemAction(null, formData)
 
       if (result.success) {
-        toast.success(isEditing ? 'Novedad actualizada' : 'Novedad creada')
+        toast.success(editingId ? 'Novedad actualizada' : 'Novedad creada')
         setOpen(false)
-        if (!isEditing) form.reset()
+        if (!editingId) form.reset(EMPTY_VALUES)
         onSuccess?.()
       } else {
         toast.error(result.error || 'Error')
       }
-    } catch (err) {
+    } catch {
       toast.error('Error inesperado')
     } finally {
       setIsSubmitting(false)
@@ -160,21 +254,12 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <Button
-        variant={isEditing ? 'outline' : 'default'}
-        size={isEditing ? 'sm' : 'default'}
-        onClick={() => setOpen(true)}
-        className={isEditing ? '' : 'gap-2'}
-      >
-        {isEditing ? (
-          <Save className="h-4 w-4" />
-        ) : (
-          <>
-            <Plus className="h-4 w-4" />
-            Crear novedad
-          </>
-        )}
-      </Button>
+      {!isControlled && (
+        <Button onClick={() => setOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Crear novedad
+        </Button>
+      )}
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="pb-4">
           <SheetTitle>{isEditing ? 'Editar novedad' : 'Crear novedad'}</SheetTitle>
@@ -200,7 +285,7 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tipo</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona tipo" />
@@ -260,19 +345,39 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
                         </div>
                       ) : (
                         <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() => fileInputRef.current?.click()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              fileInputRef.current?.click()
+                            }
+                          }}
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
                           className={cn(
-                            'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-subtle p-6 cursor-pointer transition-colors hover:border-[var(--sport-500)]/50 hover:bg-[var(--sport-500)]/[0.02]',
+                            'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 cursor-pointer transition-colors hover:border-[var(--sport-500)]/50 hover:bg-[var(--sport-500)]/[0.02] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]',
+                            isDragging
+                              ? 'border-[var(--sport-500)] bg-[var(--sport-500)]/[0.06]'
+                              : 'border-subtle',
                             uploadingImage && 'opacity-60 pointer-events-none'
                           )}
                         >
                           {uploadingImage ? (
                             <Loader2 className="h-6 w-6 animate-spin text-muted" />
+                          ) : isDragging ? (
+                            <Upload className="h-6 w-6 text-[var(--sport-500)]" />
                           ) : (
                             <ImageIcon className="h-6 w-6 text-muted" />
                           )}
                           <p className="text-xs text-muted text-center">
-                            {uploadingImage ? 'Subiendo...' : 'Haz clic o arrastra una imagen'}
+                            {uploadingImage
+                              ? 'Subiendo...'
+                              : isDragging
+                                ? 'Suelta la imagen aquí'
+                                : 'Haz clic o arrastra una imagen'}
                           </p>
                           <p className="text-[10px] text-subtle">PNG, JPG, WebP · Max 2MB</p>
                         </div>

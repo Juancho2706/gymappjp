@@ -15,15 +15,15 @@ const AUDIT_INFO = [
     },
     {
         heading: 'Columnas',
-        body: 'Timestamp — fecha y hora exacta de la acción.\nAdmin — email del administrador que ejecutó la acción.\nAcción — tipo de operación (ver filtro para lista completa).\nTabla — tabla de base de datos afectada (coaches, clients).\nTarget — UUID del registro modificado.\nPayload — datos antes/después del cambio, expandibles al hacer click.',
+        body: 'Timestamp — fecha y hora exacta de la acción.\nAdmin — email del administrador (o "cron" / "coach-self-action" cuando la escribe un proceso).\nAcción — tipo de operación, con etiqueta y color según el catálogo; una acción sin catalogar se muestra con su código crudo.\nTabla — tabla de base de datos afectada.\nTarget ID — UUID del registro modificado; si es un coach enlaza a su ficha, y el botón de copiar entrega el UUID completo.\nIP — IP de origen del admin (solo en registros nuevos; los históricos aparecen con —).\nPayload — datos del cambio, expandibles al hacer click.',
     },
     {
         heading: 'Tipos de acciones',
-        body: 'coach.update — edición de datos del coach (nombre, tier, etc.)\ncoach.suspend — coach suspendido manualmente\ncoach.force_expire — trial forzado a expirado\ncoach.reactivate — reactivación manual por admin\ncoach.period_extend — extensión del período activo\ncoach.period_end_update — cambio de fecha de vencimiento\ncoach.bulk_status — cambio masivo de estado\ncoach.bulk_tier — cambio masivo de tier\ncoach.delete — eliminación permanente\nclient.update — edición de alumno\nclient.delete — eliminación de alumno',
+        body: 'El desplegable de acciones lista el catálogo completo agrupado por área (Coaches, Alumnos, Cupones, Equipos, Organizaciones, Novedades, Procesos automáticos). Además del panel CEO, acá aterrizan las acciones automáticas de los crons de vencimiento y de la conciliación de pagos.',
     },
     {
         heading: 'Filtros',
-        body: 'Puedes filtrar por tipo de acción, rango de fechas (Desde / Hasta) y UUID del target para ver el historial de un coach específico. El botón "Exportar CSV" descarga hasta 5.000 filas con los filtros activos.',
+        body: 'Filtra por tipo de acción, email del admin, rango de fechas (Desde / Hasta o los presets Hoy / 7d / 30d) y UUID del target. Si "Hasta" queda antes de "Desde" se ignora en vez de vaciar la tabla. El botón "Exportar CSV" descarga hasta 5.000 filas con los filtros activos; si se alcanza el tope, el archivo lo avisa en su última fila.',
     },
     {
         heading: 'Fuente de datos',
@@ -36,6 +36,7 @@ const LIMIT = 50
 interface Props {
     searchParams: Promise<{
         action?: string
+        admin?: string
         from?: string
         to?: string
         target?: string
@@ -45,10 +46,12 @@ interface Props {
 
 export default async function AdminAuditoriaPage({ searchParams }: Props) {
     const sp = await searchParams
-    const page = Math.max(1, parseInt(sp.page ?? '1', 10))
+    const parsedPage = parseInt(sp.page ?? '1', 10)
+    const page = Number.isFinite(parsedPage) ? Math.max(1, parsedPage) : 1
 
     const { rows, totalCount } = await getAuditLogs({
         action: sp.action,
+        admin: sp.admin,
         from: sp.from,
         to: sp.to,
         target: sp.target,
@@ -75,7 +78,7 @@ export default async function AdminAuditoriaPage({ searchParams }: Props) {
                 </Suspense>
             </div>
 
-            <AuditTable rows={rows} totalCount={totalCount} page={page} limit={LIMIT} />
+            <AuditTable rows={rows} />
 
             <Suspense>
                 <AdminPagination total={totalCount} pageSize={LIMIT} />

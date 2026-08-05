@@ -6,7 +6,10 @@ export type Gasto = {
     cantidad: number
     costo: number
     pagador: string
+    /** Puede venir de la fecha manual del formulario, no solo del default now(). */
     created_at: string
+    /** cantidad × costo — la plata REAL que salio por esta fila. */
+    subtotal: number
 }
 
 export async function getGastos(): Promise<Gasto[]> {
@@ -17,5 +20,11 @@ export async function getGastos(): Promise<Gasto[]> {
         .order('created_at', { ascending: false })
 
     if (error) throw error
-    return (data ?? []) as Gasto[]
+
+    // El subtotal se calcula UNA vez aca: los totales y los KPI sumaban `costo` a secas, asi que
+    // "Hosting x3 $10.000" aportaba $10.000 en vez de $30.000.
+    return (data ?? []).map((g) => ({
+        ...g,
+        subtotal: g.cantidad * g.costo,
+    }))
 }
