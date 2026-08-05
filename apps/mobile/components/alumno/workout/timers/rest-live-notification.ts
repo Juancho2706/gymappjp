@@ -32,7 +32,11 @@ import { showLiveTimer, stopLiveTimer } from './live-timer-notification'
 import { isRestTimerMuted } from './rest-timer-preferences'
 
 export const REST_LIVE_NOTIF_ID = 'eva-rest-live'
-const LIVE_CHANNEL_ID = 'rest-live'
+// `-v2` a propósito: el canal v1 nació IMPORTANCE_LOW (y en builds 07-11→07-30 sin visibility, o
+// sea PRIVATE grabado) y es inmutable en los devices que ya corrieron un descanso — sólo un id
+// nuevo hace efectiva la importance DEFAULT que lo vuelve visible en lockscreen (ver la cabecera
+// de `live-timer-notification.ts`).
+const LIVE_CHANNEL_ID = 'rest-live-v2'
 const LIVE_CHANNEL_NAME = 'Descanso en curso'
 // EVA DS brand accent (sport-500 = rgb 38 128 255), espeja el lightColor de `setupAndroidChannel`.
 const BRAND_COLOR = '#2680FF'

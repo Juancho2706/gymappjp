@@ -48,6 +48,19 @@
  * reintenta UNA vez sin `smallIcon` y se desactiva para el resto de la sesión → el comportamiento
  * histórico (sin ícono explícito) queda garantizado como fallback.
  *
+ * ── LOCKSCREEN (diagnóstico 2026-08-04, verificado contra AOSP) ────────────────
+ * El keyguard de Android OCULTA las notificaciones "silenciosas" (canal con importance < DEFAULT):
+ * el setting "mostrar silenciosas en pantalla bloqueada" viene apagado de fábrica
+ * (`LOCK_SCREEN_SHOW_SILENT_NOTIFICATIONS` default 0, `KeyguardNotificationVisibilityProvider`),
+ * así que un canal LOW se ve en la bandeja desbloqueada pero NO en el lockscreen — ni `ongoing`,
+ * ni foreground service, ni visibility lo cambian. Por eso los canales son DEFAULT **sin sonido**:
+ * el default de sonido de notifee es mudo, heads-up recién existe con HIGH y `onlyAlertOnce`
+ * evita re-alertas → silencioso en la práctica, "alerting" para SystemUI. Un canal ya creado es
+ * INMUTABLE (la importance sólo puede bajar), de ahí los ids `-v2` + `purgeLegacyChannels()`.
+ * La visibility que cuenta es la de la NOTIFICACIÓN: la del canal en PUBLIC la resetea AOSP a
+ * NO_OVERRIDE. Paridad real estilo Spotify (tarjeta fija) = Live Updates de Android 16 QPR1
+ * (promoted ongoing), que notify-kit aún no expone — ver spec en docs/specs/live-updates-a16/.
+ *
  * ── 7A · ANDROID 16 LIVE UPDATES / ProgressStyle (evaluación) — DIFERIDO ─────────
  * Android 16 (API 36) agrega `Notification.ProgressStyle` + Live Updates (notificaciones promovidas
  * ongoing con barra de progreso segmentada, ideal para un temporizador). `react-native-notify-kit@10.4.8`
@@ -78,7 +91,6 @@ interface NotifeeAndroidNotification {
   color?: string
   pressAction?: { id: string }
   actions?: NotifeeAndroidAction[]
-  importance?: number
   visibility?: number
 }
 /**
@@ -109,6 +121,7 @@ export interface NotifeeLike {
     android?: NotifeeAndroidNotification
   }) => Promise<string>
   cancelNotification: (id: string) => Promise<void>
+  deleteChannel: (channelId: string) => Promise<void>
   /**
    * Handler HEADLESS de Android: corre aunque la app esté en background o cerrada (Notifee
    * levanta el bundle JS para atenderlo). Se registra UNA sola vez por proceso; volver a
@@ -121,27 +134,27 @@ export interface NotifeeLike {
 
 // require GUARDADO: fork mantenido primero, notifee archivado como fallback. Sin ninguno → null.
 let notifee: NotifeeLike | null = null
-// AndroidImportance.LOW (canal silencioso para el ongoing). Notifee lo exporta como named;
-// LOW = 2 en su enum → fallback numérico si el módulo no está.
-let IMPORTANCE_LOW = 2
+// AndroidImportance.DEFAULT (3): el mínimo que el keyguard considera "alerting" y por lo tanto
+// visible en lockscreen (ver cabecera). Sin `sound` en el canal sigue siendo mudo.
+let IMPORTANCE_DEFAULT = 3
 // AndroidVisibility.PUBLIC (visible completa en lockscreen, incluso con pantalla bloqueada).
 // PUBLIC = 1 en el enum de Notifee/notify-kit → fallback numérico si el módulo no está.
 let VISIBILITY_PUBLIC = 1
 // EventType.ACTION_PRESS = 2 en el enum de Notifee/notify-kit (verificado en
 // `dist/types/Notification.d.ts` de react-native-notify-kit@10.4.8: UNKNOWN=-1, DISMISSED=0,
-// PRESS=1, ACTION_PRESS=2…). Mismo patrón que IMPORTANCE_LOW: se lee del módulo si está y
+// PRESS=1, ACTION_PRESS=2…). Mismo patrón que IMPORTANCE_DEFAULT: se lee del módulo si está y
 // si no queda el fallback numérico, para que el puente de acciones no dependa del enum.
 let EVENT_TYPE_ACTION_PRESS = 2
 
 type NotifeeModule = {
   default?: NotifeeLike
-  AndroidImportance?: { LOW?: number }
+  AndroidImportance?: { DEFAULT?: number }
   AndroidVisibility?: { PUBLIC?: number }
   EventType?: { ACTION_PRESS?: number }
 }
 function adoptNotifeeModule(mod: NotifeeModule): void {
   notifee = (mod.default ?? (mod as unknown as NotifeeLike)) || null
-  if (typeof mod.AndroidImportance?.LOW === 'number') IMPORTANCE_LOW = mod.AndroidImportance.LOW
+  if (typeof mod.AndroidImportance?.DEFAULT === 'number') IMPORTANCE_DEFAULT = mod.AndroidImportance.DEFAULT
   if (typeof mod.AndroidVisibility?.PUBLIC === 'number') VISIBILITY_PUBLIC = mod.AndroidVisibility.PUBLIC
   if (typeof mod.EventType?.ACTION_PRESS === 'number') EVENT_TYPE_ACTION_PRESS = mod.EventType.ACTION_PRESS
 }
@@ -174,13 +187,28 @@ export function getActionPressEventType(): number {
 
 /** Ids/canal del cronómetro vivo de cardio (los consume la sesión de cardio). */
 export const CARDIO_LIVE_ID = 'eva-cardio-live'
-export const CARDIO_CHANNEL_ID = 'cardio-live'
+// `-v2` a propósito: el canal v1 nació IMPORTANCE_LOW y quedó grabado inmutable en los devices
+// que ya corrieron un cardio — sólo un id nuevo hace efectiva la importance DEFAULT (ver cabecera).
+export const CARDIO_CHANNEL_ID = 'cardio-live-v2'
 export const CARDIO_CHANNEL_NAME = 'Cardio en curso'
 
 // Drawable generado por el plugin de expo-notifications (ver cabecera). Se apaga solo si el
 // binario no lo resolviera, para no perder nunca la notificación por un ícono.
 const SMALL_ICON = 'notification_icon'
 let smallIconEnabled = true
+
+// Canales v1 (importance LOW, inmutables): se borran una vez por proceso para que no queden
+// huérfanos en los ajustes de notificaciones de la app. Recrearlos con el mismo id NO serviría:
+// Android restaura los parámetros originales del canal.
+const LEGACY_CHANNEL_IDS = ['rest-live', 'cardio-live']
+let legacyChannelsPurged = false
+function purgeLegacyChannels(): void {
+  if (!notifee || legacyChannelsPurged) return
+  legacyChannelsPurged = true
+  for (const legacyId of LEGACY_CHANNEL_IDS) {
+    notifee.deleteChannel(legacyId).catch(() => {})
+  }
+}
 
 // Un canal por id, cacheado: crear el canal es idempotente pero no gratis, y notifee exige que
 // exista antes del primer display.
@@ -189,18 +217,20 @@ function ensureChannel(channelId: string, channelName: string): Promise<void> {
   if (!notifee) return Promise.resolve()
   const cached = channelReady.get(channelId)
   if (cached) return cached
+  purgeLegacyChannels()
   const pending = notifee
     .createChannel({
       id: channelId,
       name: channelName,
-      // LOW = sin heads-up ni sonido: es un contador de estado, no una alerta. Las alertas
-      // (beep/háptica) las cubren la UI in-app y las notificaciones puntuales de expo.
-      importance: IMPORTANCE_LOW,
+      // DEFAULT sin `sound` = mudo pero "alerting": el keyguard oculta del lockscreen todo canal
+      // con importance < DEFAULT (ver cabecera). Heads-up recién existe con HIGH, así que esto no
+      // se vuelve intrusivo; las alertas reales (beep/háptica) siguen en la UI in-app y en las
+      // notificaciones puntuales de expo.
+      importance: IMPORTANCE_DEFAULT,
       vibration: false,
-      // Visible completa en lockscreen (no oculta como notif "sensible"). Nota: canales ya
-      // creados en dispositivos existentes NO se actualizan solos — esto aplica en
-      // instalaciones frescas o tras limpiar datos de la app; la visibility a nivel
-      // notificación (abajo, en displayNotification) cubre el resto de los casos.
+      // La visibility del canal en PUBLIC la resetea AOSP a NO_OVERRIDE (PreferencesHelper), con
+      // lo que decide la visibility de la NOTIFICACIÓN (displayNotification, abajo). Se manda
+      // igual por prolijidad y para OEMs que no apliquen ese reset.
       visibility: VISIBILITY_PUBLIC,
     })
     .then(() => undefined)
@@ -274,9 +304,8 @@ export async function showLiveTimer(opts: LiveTimerOptions): Promise<void> {
     ongoing: true,
     onlyAlertOnce: true,
     autoCancel: false,
-    importance: IMPORTANCE_LOW,
-    // PUBLIC = visible completa en lockscreen (algunos OEM esconden IMPORTANCE_LOW sin
-    // visibility explícito).
+    // PUBLIC = contenido completo en lockscreen (sin redactar como "sensible"). Esta es la
+    // visibility efectiva en API 26+: la del canal queda en NO_OVERRIDE (ver ensureChannel).
     visibility: VISIBILITY_PUBLIC,
     pressAction: { id: 'default' },
   }
