@@ -5,6 +5,7 @@ import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render
 import { hasModule } from '@/services/entitlements.service'
 import { NUTRITION_EXCHANGES_MODULE } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
+import { shouldSwapCockpitToNutritionV2 } from '../_lib/nutrition-v2-swap'
 
 export const metadata: Metadata = { title: 'Nutrición Pro | EVA' }
 
@@ -34,6 +35,11 @@ export default async function NutritionExchangesPage() {
     })
     if (!enabled) return <ModuleOffNotice moduleKey="nutrition_exchanges" />
 
-    // Módulo ON: el modo intercambios se activa por alumno dentro del builder del plan.
-    redirect('/coach/nutrition-plans')
+    // Módulo ON: el modo intercambios se activa por alumno dentro del builder del plan. Standalone
+    // y Team van DIRECTO al Centro V2 (el hub V1 los reboteria igual: un solo salto, no dos).
+    redirect(
+        (await shouldSwapCockpitToNutritionV2(user.id))
+            ? '/coach/nutrition-v2'
+            : '/coach/nutrition-plans',
+    )
 }

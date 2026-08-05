@@ -20,6 +20,7 @@ import {
   resolveFeaturePrefs,
   resolveNutritionDomainEnabled,
 } from '@/services/feature-prefs.service'
+import { nutritionV2ClientPath, shouldSwapCockpitToNutritionV2 } from '../../_lib/nutrition-v2-swap'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -29,6 +30,13 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
   const { clientId } = await params
   const { user, client, intake, orgId, activeTeamId } = await getClientNutritionPlanPageAuthData(clientId)
   if (!user) redirect('/login')
+
+  // Sellado V1: standalone y Team editan el plan del alumno en V2. Espejo del swap del cockpit,
+  // antes de las queries del builder legacy. La autorización sobre el alumno la vuelve a hacer
+  // la ruta destino; acá solo evitamos interpolar un segmento que no parezca uuid.
+  if (await shouldSwapCockpitToNutritionV2(user.id)) {
+    redirect(nutritionV2ClientPath(clientId))
+  }
 
   // El query de auth ya scopeó por workspace activo (team = pool colaborativo, sin
   // exigir coach_id propio; standalone/org sí lo exigen dentro del query).

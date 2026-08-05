@@ -280,11 +280,19 @@ export function getTierBillingCycleSummary(tier: SubscriptionTier): string {
     return 'Solo cobro trimestral o anual'
 }
 
-/** Texto corto para badges: nutrición en el plan. */
-export function getTierNutritionSummary(tier: SubscriptionTier): string {
-    return getTierCapabilities(tier).canUseNutrition
-        ? 'Incluye planes de nutrición'
-        : 'Sin módulo de nutrición'
+/**
+ * Texto corto para badges: nutrición en el plan.
+ *
+ * La superficie de nutrición V2 no tiene gate de tier — está incluida en TODOS los
+ * planes, Free incluido. Por eso este resumen es constante y NO deriva de
+ * `canUseNutrition`, que solo gatea la COMPRA del add-on en billing.
+ *
+ * Se mantiene el parámetro `tier` para no romper a los consumidores existentes
+ * (`/pricing`, onboarding, reactivate) y por si algún plan vuelve a diferenciarse.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function getTierNutritionSummary(_tier: SubscriptionTier): string {
+    return 'Incluye planes de nutrición'
 }
 
 export function getRecommendedTier(clientCount: number): SubscriptionTier {

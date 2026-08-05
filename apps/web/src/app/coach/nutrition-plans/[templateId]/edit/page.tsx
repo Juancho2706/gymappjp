@@ -10,6 +10,7 @@ import {
   resolveFeaturePrefs,
   resolveNutritionDomainEnabled,
 } from '@/services/feature-prefs.service'
+import { shouldSwapCockpitToNutritionV2 } from '../../_lib/nutrition-v2-swap'
 
 interface Props {
   params: Promise<{ templateId: string }>
@@ -19,6 +20,12 @@ export default async function EditNutritionTemplatePage({ params }: Props) {
   const { templateId } = await params
   const user = await getEditNutritionTemplateUser()
   if (!user) redirect('/login')
+
+  // Sellado V1: standalone y Team no editan plantillas legacy (las plantillas V1 no existen en
+  // V2, así que no hay destino equivalente por id) — van al Centro V2. Enterprise sigue igual.
+  if (await shouldSwapCockpitToNutritionV2(user.id)) {
+    redirect('/coach/nutrition-v2')
+  }
 
   // Resolve workspace so org-scoped coach can only edit their org's templates
   const workspace = await getPreferredWorkspaceForRender(user.id)

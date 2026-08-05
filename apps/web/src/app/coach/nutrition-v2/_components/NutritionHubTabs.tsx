@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Apple, Copy, ScanLine, Users } from 'lucide-react'
 import { FoodCatalogBrowser } from './FoodCatalogBrowser'
 import { CurationQueue } from './CurationQueue'
@@ -14,6 +15,30 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof Users }> = [
   { key: 'foods', label: 'Alimentos', icon: Apple },
   { key: 'curation', label: 'Curación', icon: ScanLine },
 ]
+
+// El tab activo vive en `?tab=` (compartible: "mándame el link de tus plantillas" ya no
+// aterriza siempre en el roster). Los slugs son los de la UI, no las claves internas.
+const TAB_PARAM = 'tab'
+
+const TAB_SLUG: Record<TabKey, string> = {
+  roster: 'alumnos',
+  templates: 'plantillas',
+  foods: 'alimentos',
+  curation: 'curacion',
+}
+
+const TAB_BY_SLUG: Record<string, TabKey> = {
+  alumnos: 'roster',
+  plantillas: 'templates',
+  alimentos: 'foods',
+  curacion: 'curation',
+}
+
+/** Slug de la URL → tab. Ausente o desconocido cae al roster (el default de siempre). */
+function parseTabParam(raw: string | null): TabKey {
+  if (!raw) return 'roster'
+  return TAB_BY_SLUG[raw] ?? 'roster'
+}
 
 /**
  * Tabs del hub coach V2. El roster llega ya renderizado en el servidor (prop `roster`)
@@ -29,21 +54,52 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof Users }> = [
  *   al activarse);
  * - los paneles son focalizables (`tabIndex 0`) para que el lector llegue al contenido
  *   con un solo Tab desde el tablist.
+ *
+ * QW4 — el tab activo se refleja en `?tab=`: el estado inicial se lee de la URL (deep-link) y
+ * cada cambio se escribe con `history.replaceState`, el mismo patron que el roster usa para
+ * q/attn/sort. Es a proposito que NO se use el router: `push`/`replace` de Next refetchearian
+ * el RSC de la pagina (roster + picker, dos round-trips) por cambiar de pestaña, y `push`
+ * ademas llenaria el historial de entradas por cada click.
  */
 export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
-  const [active, setActive] = useState<TabKey>('roster')
+  const searchParams = useSearchParams()
+  // Solo el valor INICIAL viene de la URL; despues manda el estado local. La URL es un espejo,
+  // no la fuente de verdad: el roster reescribe sus propios params al montarse y no debe poder
+  // arrastrar la pestaña visible con el.
+  const [active, setActive] = useState<TabKey>(() => parseTabParam(searchParams.get(TAB_PARAM)))
   const baseId = useId()
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([])
 
   const tabId = (key: TabKey) => `${baseId}-tab-${key}`
   const panelId = (key: TabKey) => `${baseId}-panel-${key}`
 
-  const focusTab = useCallback((index: number) => {
-    const target = TABS[index]
-    if (!target) return
-    setActive(target.key)
-    buttonsRef.current[index]?.focus()
+  /**
+   * Cambia de pestaña y espeja el valor en la URL sin navegar ni tocar el historial.
+   * Se lee `window.location.search` (y no el snapshot de `useSearchParams`) para no pisar los
+   * params que el roster acaba de escribir: cursor, pila de paginacion y filtros. El roster es
+   * el default, asi que se omite el param — igual que `serializeRosterFilters` omite sus
+   * defaults, y ademas evita pelear con la reescritura de URL del propio roster.
+   */
+  const selectTab = useCallback((key: TabKey) => {
+    setActive(key)
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (key === 'roster') params.delete(TAB_PARAM)
+    else params.set(TAB_PARAM, TAB_SLUG[key])
+    const qs = params.toString()
+    const path = window.location.pathname
+    window.history.replaceState(window.history.state, '', qs ? `${path}?${qs}` : path)
   }, [])
+
+  const focusTab = useCallback(
+    (index: number) => {
+      const target = TABS[index]
+      if (!target) return
+      selectTab(target.key)
+      buttonsRef.current[index]?.focus()
+    },
+    [selectTab],
+  )
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -96,7 +152,7 @@ export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
               aria-selected={on}
               aria-controls={panelId(tab.key)}
               tabIndex={on ? 0 : -1}
-              onClick={() => setActive(tab.key)}
+              onClick={() => selectTab(tab.key)}
               // min-w-0 permite que flex-1 encoja el pill activo dentro del contenedor en 360px;
               // el ícono se oculta bajo sm para que los 3 labels quepan sin desbordar ni truncar.
               className={

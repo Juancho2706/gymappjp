@@ -90,8 +90,11 @@ export function FreeWelcomeModal() {
                             { ok: true,  text: 'Entrenos ilimitados' },
                             { ok: true,  text: 'App para tus alumnos' },
                             { ok: true,  text: 'Check-ins' },
+                            // La superficie de nutrición V2 no tiene gate de tier: viene incluida en
+                            // todos los planes, Free incluido. `canUseNutrition` solo gatea la COMPRA
+                            // del add-on en billing, no el acceso al módulo.
+                            { ok: true,  text: 'Nutrición' },
                             { ok: false, text: 'Marca personalizada' },
-                            { ok: false, text: 'Nutrición' },
                         ].map(({ ok, text }) => (
                             <div key={text} className={`flex items-center gap-1.5 ${ok ? 'text-muted' : 'text-subtle opacity-70'}`}>
                                 {ok

@@ -10,7 +10,6 @@ import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
-    getTierCapabilities,
     getTierBillingCycleSummary,
     getTierNutritionSummary,
     getTierPriceClp,
@@ -129,7 +128,6 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                         <h2 className="text-sm font-semibold text-foreground">Elige tu plan</h2>
                         <div className="grid gap-2">
                             {tierOptions.map(([key, option]) => {
-                                const caps = getTierCapabilities(key)
                                 const nutritionText = getTierNutritionSummary(key)
                                 const cycleText = getTierBillingCycleSummary(key)
                                 const defaultCycleForKey = getDefaultBillingCycleForTier(key)
@@ -156,12 +154,9 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className={cn(
-                                                'shrink-0 rounded-pill px-1.5 py-0.5 text-[10px] font-bold',
-                                                caps.canUseNutrition
-                                                    ? 'bg-[var(--success-100)] text-[var(--success-600)]'
-                                                    : 'bg-[var(--warning-100)] text-[var(--warning-700)]'
-                                            )}>
+                                            {/* Nutrición viene incluida en todos los planes, así que
+                                                el badge es siempre positivo (no deriva de caps). */}
+                                            <span className="shrink-0 rounded-pill bg-[var(--success-100)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--success-600)]">
                                                 {nutritionText}
                                             </span>
                                         </div>

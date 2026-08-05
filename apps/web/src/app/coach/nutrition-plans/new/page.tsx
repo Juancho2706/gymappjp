@@ -11,6 +11,7 @@ import {
   resolveFeaturePrefs,
   resolveNutritionDomainEnabled,
 } from '@/services/feature-prefs.service'
+import { shouldSwapCockpitToNutritionV2 } from '../_lib/nutrition-v2-swap'
 
 interface Props {
   searchParams: Promise<{ org_template?: string }>
@@ -19,6 +20,13 @@ interface Props {
 export default async function NewNutritionTemplatePage({ searchParams }: Props) {
   const user = await getNewNutritionTemplateUser()
   if (!user) redirect('/login')
+
+  // Sellado V1: standalone y Team crean plantillas en V2. Espejo del swap del cockpit, ANTES de
+  // cualquier query pesada, porque esta sub-ruta es alcanzable por deep-link (y por el CTA
+  // "+ Nutrición" del dashboard). Enterprise conserva el builder legacy.
+  if (await shouldSwapCockpitToNutritionV2(user.id)) {
+    redirect('/coach/nutrition-v2/plantillas/builder')
+  }
 
   // Contexto de workspace del coach (template = coach-scoped, no client-scoped).
   const workspace = await getPreferredWorkspaceForRender(user.id)

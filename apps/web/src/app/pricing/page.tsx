@@ -353,13 +353,10 @@ function PlanCard({
                 <span className="rounded-md bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {getTierBillingCycleSummary(plan.id)}
                 </span>
-                <span
-                    className={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                        getTierNutritionSummary(plan.id).startsWith('Sin')
-                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    }`}
-                >
+                {/* Nutrición está incluida en todos los planes (Free incluido), así que el badge
+                    es siempre positivo. Antes se pintaba ámbar cuando el resumen empezaba con
+                    "Sin" — esa rama ya no existe. */}
+                <span className="rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
                     {getTierNutritionSummary(plan.id)}
                 </span>
             </div>

@@ -12,7 +12,7 @@
  * diverjan.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Copy, Loader2, Pencil, Plus, Search, SlidersHorizontal, Star, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -43,6 +43,26 @@ function editTemplateHref(templateId: string): string {
   return `${TEMPLATE_BUILDER_HREF}?template=${templateId}`
 }
 
+/**
+ * Ventana de gracia del "Deshacer" al eliminar. Es tambien lo que tarda el borrado real en
+ * salir hacia el servidor (ver `remove`), asi que subirla alarga la baja diferida.
+ */
+const DELETE_UNDO_MS = 8000
+
+/**
+ * Favoritas primero, conservando dentro de cada grupo el orden que mando el servidor.
+ * Ordena por indice ante empate para que el sort sea estable de forma explicita.
+ */
+function withFavoritesFirst(items: readonly PlanTemplateListItem[]): PlanTemplateListItem[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      if (a.item.isFavorite !== b.item.isFavorite) return a.item.isFavorite ? -1 : 1
+      return a.index - b.index
+    })
+    .map((entry) => entry.item)
+}
+
 function summaryLine(template: PlanTemplateListItem): string {
   if (!template.readable) return 'No se puede abrir: se guardó con una versión anterior.'
   const parts = [
@@ -65,6 +85,12 @@ export function PlanTemplatesLibrary() {
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState<PlanTemplateListItem | null>(null)
 
+  /**
+   * Bajas en vuelo (`id` → fila + posicion original), a la espera de que expire su toast.
+   * En un ref y no en estado: no pinta nada y cambiarlo no debe re-renderizar la lista.
+   */
+  const pendingDeletesRef = useRef(new Map<string, { template: PlanTemplateListItem; index: number }>())
+
   const load = useCallback(async () => {
     setLoading(true)
     const result = await listPlanTemplatesAction()
@@ -74,12 +100,53 @@ export function PlanTemplatesLibrary() {
       return
     }
     setError(null)
-    setTemplates(result.templates)
+    // Las bajas en vuelo todavia existen en la DB (el DELETE viaja al expirar el toast), asi
+    // que una recarga por otra causa —renombrar, marcar favorita, crear— las resucitaria.
+    setTemplates(result.templates.filter((item) => !pendingDeletesRef.current.has(item.id)))
   }, [])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  // Si el coach se va (cambia de pestaña del hub, navega, cierra la biblioteca) con bajas en
+  // vuelo, se confirman ahora: el toast se va con el componente y nadie quedaria para dispararlas.
+  useEffect(() => {
+    const pending = pendingDeletesRef.current
+    return () => {
+      for (const id of Array.from(pending.keys())) {
+        pending.delete(id)
+        void deletePlanTemplateAction({ id })
+      }
+    }
+  }, [])
+
+  /** Confirma la baja contra el servidor. No-op si el coach alcanzo a deshacerla. */
+  const commitDelete = useCallback(
+    async (id: string) => {
+      if (!pendingDeletesRef.current.delete(id)) return
+      const result = await deletePlanTemplateAction({ id })
+      if (result.ok) return
+      // No se borro: el servidor manda, asi que la fila vuelve recargando la biblioteca.
+      toast.error(result.error)
+      void load()
+    },
+    [load],
+  )
+
+  /** Cancela la baja y devuelve la fila a su posicion original. */
+  const undoDelete = useCallback((id: string) => {
+    const pending = pendingDeletesRef.current.get(id)
+    if (!pending) return
+    pendingDeletesRef.current.delete(id)
+    setTemplates((prev) => {
+      if (prev.some((item) => item.id === id)) return prev
+      const next = [...prev]
+      next.splice(Math.min(pending.index, next.length), 0, pending.template)
+      return next
+    })
+    toast.success('Plantilla restaurada')
+  }, [])
 
   async function toggleFavorite(template: PlanTemplateListItem) {
     const result = await setPlanTemplateFavoriteAction({
@@ -93,15 +160,36 @@ export function PlanTemplatesLibrary() {
     void load()
   }
 
-  async function remove(template: PlanTemplateListItem) {
-    const result = await deletePlanTemplateAction({ id: template.id })
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    toast.success('Plantilla eliminada')
-    void load()
+  /**
+   * Baja DIFERIDA con deshacer (QW3). La lista no trae el draft de la plantilla
+   * (`PlanTemplateListItem` es puro metadato: nombre, resumen, favorita…), asi que "Deshacer"
+   * no puede re-crearla llamando a `savePlanTemplateAction` — perderia el contenido, que es
+   * justo lo que el coach cree estar recuperando. Por eso la fila se saca optimista de la
+   * lista y el DELETE viaja recien cuando el toast expira (`onAutoClose`) o el coach lo cierra
+   * a mano (`onDismiss`); deshacer solo cancela y reinserta. Click en la accion del toast NO
+   * dispara ninguno de esos dos callbacks en sonner, asi que no hay carrera.
+   */
+  function remove(template: PlanTemplateListItem) {
+    if (pendingDeletesRef.current.has(template.id)) return
+    const index = templates.findIndex((item) => item.id === template.id)
+    pendingDeletesRef.current.set(template.id, {
+      template,
+      index: index < 0 ? templates.length : index,
+    })
+    setTemplates((prev) => prev.filter((item) => item.id !== template.id))
+    toast.success('Plantilla eliminada', {
+      description: template.name,
+      duration: DELETE_UNDO_MS,
+      action: { label: 'Deshacer', onClick: () => undoDelete(template.id) },
+      onAutoClose: () => void commitDelete(template.id),
+      onDismiss: () => void commitDelete(template.id),
+    })
   }
+
+  // Favoritas arriba: es el unico gesto de curacion que tiene el coach sobre su biblioteca y
+  // hasta ahora no cambiaba nada de lo que veia. Se deriva en el render para que la baja
+  // optimista y el "Deshacer" operen sobre la lista cruda (reinsertar por indice).
+  const visibleTemplates = useMemo(() => withFavoritesFirst(templates), [templates])
 
   return (
     <section className="space-y-4 py-4">
@@ -140,7 +228,7 @@ export function PlanTemplatesLibrary() {
         <p className="rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
-      ) : templates.length === 0 ? (
+      ) : visibleTemplates.length === 0 ? (
         <div className="rounded-control border border-border-subtle bg-surface-sunken px-4 py-10 text-center text-sm text-muted">
           <Copy className="mx-auto mb-2 size-7 opacity-30" />
           <p>Todavía no tienes plantillas. Arma una desde cero y aplícala al alumno que quieras.</p>
@@ -154,7 +242,7 @@ export function PlanTemplatesLibrary() {
         </div>
       ) : (
         <ul className="space-y-2">
-          {templates.map((template) => (
+          {visibleTemplates.map((template) => (
             <li
               key={template.id}
               className="flex items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 py-2.5"
@@ -195,7 +283,7 @@ export function PlanTemplatesLibrary() {
               </button>
               <button
                 type="button"
-                onClick={() => void remove(template)}
+                onClick={() => remove(template)}
                 aria-label={`Eliminar ${template.name}`}
                 className="shrink-0 rounded-control p-2 hover:bg-surface-sunken"
               >

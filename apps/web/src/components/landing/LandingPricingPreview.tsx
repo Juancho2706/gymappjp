@@ -13,7 +13,6 @@ import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
-    getTierCapabilities,
     getTierPriceClp,
     SALE_TIERS,
     TIER_CONFIG,
@@ -346,17 +345,11 @@ function PlanCard({ plan, billingCycle, suppressEntrance, inlinePopularBadge }: 
                 <span className="rounded-md bg-secondary px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {TIER_STUDENT_RANGE_LABEL[plan.id]}
                 </span>
-                <span
-                    className={cn(
-                        'rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
-                        getTierCapabilities(plan.id).canUseNutrition
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
-                    )}
-                >
-                    {getTierCapabilities(plan.id).canUseNutrition
-                        ? t('landing.pricing.badge.nutritionYes')
-                        : t('landing.pricing.badge.nutritionNo')}
+                {/* Nutrición base (V2) viene incluida en TODOS los tiers, Free incluido — la
+                    superficie no tiene gate de tier. `canUseNutrition` solo gatea el billing del
+                    add-on, por eso este badge NO deriva de las capabilities. */}
+                <span className="rounded-md bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                    {t('landing.pricing.badge.nutritionYes')}
                 </span>
             </div>
 
@@ -543,15 +536,10 @@ function PlanCardCompact({ plan, billingCycle }: PlanCardCompactProps) {
                 <span className="rounded bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {TIER_STUDENT_RANGE_LABEL[plan.id]}
                 </span>
-                <span
-                    className={cn(
-                        'rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
-                        getTierCapabilities(plan.id).canUseNutrition
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
-                    )}
-                >
-                    {getTierCapabilities(plan.id).canUseNutrition ? '✓ Nutrición' : '✗ Nutrición'}
+                {/* Nutrición base (V2) incluida en todos los tiers — no deriva de canUseNutrition,
+                    que solo gatea la compra del add-on en billing. */}
+                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                    ✓ Nutrición
                 </span>
             </div>
 

@@ -481,7 +481,10 @@ export default function RegisterPage() {
                                         // La fila "no incluida" (dash) muestra la escalera de upgrade.
                                         const features = [
                                             { label: `Hasta ${option.maxClients} alumnos`, included: true },
-                                            { label: 'Planes de nutrición', included: caps.canUseNutrition },
+                                            // Nutrición base (V2) no tiene gate de tier: incluida en todos los
+                                            // planes, Free incluido. `caps.canUseNutrition` solo gatea la compra
+                                            // del add-on en billing, por eso esta fila no lo consulta.
+                                            { label: 'Planes de nutrición', included: true },
                                             { label: 'Branding personalizado', included: caps.canUseBranding },
                                         ]
                                         return (
@@ -678,11 +681,10 @@ export default function RegisterPage() {
                                         <span className="font-semibold text-text-strong">{BILLING_CYCLE_CONFIG[billingCycle].label}</span>
                                     </div>
                                 )}
+                                {/* Nutrición base (V2) incluida en todos los planes, Free incluido. */}
                                 <div className="flex justify-between">
                                     <span className="text-text-muted">Nutrición</span>
-                                    <span className={cn('font-semibold', getTierCapabilities(tier).canUseNutrition ? 'text-[var(--success-600)]' : 'text-[var(--warning-700)]')}>
-                                        {getTierCapabilities(tier).canUseNutrition ? 'Incluida' : 'No incluida'}
-                                    </span>
+                                    <span className="font-semibold text-[var(--success-600)]">Incluida</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-text-muted">Tu marca (white-label)</span>

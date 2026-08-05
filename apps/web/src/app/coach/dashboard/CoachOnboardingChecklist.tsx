@@ -2,12 +2,12 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, PartyPopper, Rocket, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, PartyPopper, Rocket, X } from 'lucide-react'
 import { toast } from 'sonner'
 import confetti from 'canvas-confetti'
 import { cn } from '@/lib/utils'
 import type { Json } from '@/lib/database.types'
-import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
+import { type SubscriptionTier } from '@/lib/constants'
 import { brandTourSeenStorageKey, BRAND_TOUR_SEEN_CHANGED_EVENT } from '@/lib/coach-brand-tour'
 import { persistOnboardingGuideAction } from './_actions/onboarding-guide.actions'
 import { postGuideEngagement } from './_lib/onboarding-telemetry.client'
@@ -110,7 +110,6 @@ export function CoachOnboardingChecklist({
     const [brandTourSeen, setBrandTourSeen] = useState(false)
     const [guideOpenOverride, setGuideOpenOverride] = useState<boolean | null>(null)
     const isFree = subscriptionTier === 'free'
-    const { canUseNutrition } = getTierCapabilities(subscriptionTier)
     const previousStateRef = useRef<Partial<Record<StepKey, boolean>>>({})
     const ahaRef = useRef(false)
     const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -472,22 +471,8 @@ export function CoachOnboardingChecklist({
                             )
                         })}
                     </div>
-                    {!canUseNutrition && (
-                        <div className="mt-3 flex items-center gap-[9px] border-t border-[var(--sport-200)] pt-3">
-                            <span className="flex shrink-0 text-[var(--sport-600)]">
-                                <Sparkles className="size-[15px]" />
-                            </span>
-                            <span className="flex-1 text-xs leading-[1.35] text-[var(--sport-700)]">
-                                Suma planes de nutrición con <b>Pro</b>.
-                            </span>
-                            <Link
-                                href="/coach/subscription"
-                                className="-my-2 inline-flex min-h-11 shrink-0 touch-manipulation items-center px-1 text-xs font-extrabold text-[var(--sport-700)]"
-                            >
-                                Mejorar
-                            </Link>
-                        </div>
-                    )}
+                    {/* Se retiró el upsell "Suma planes de nutrición con Pro": la nutrición V2 ya
+                        viene incluida en todos los planes, Free incluido. */}
                     <button
                         type="button"
                         onClick={dismiss}

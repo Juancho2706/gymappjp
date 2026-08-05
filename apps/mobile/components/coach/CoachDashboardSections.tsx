@@ -72,7 +72,6 @@ import type {
 import type { CoachProfile } from '../../lib/coach'
 import { isUuid } from '../../lib/safe-uuid'
 import { TIER_CONFIG } from '../../lib/coach-tiers'
-import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
 import { Sheet } from '../Sheet'
 import { Button } from '../Button'
@@ -531,8 +530,9 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
               { ok: true, text: 'Entrenos ilimitados' },
               { ok: true, text: 'App para tus alumnos' },
               { ok: true, text: 'Check-ins' },
+              // Nutricion incluida en todos los planes, Free incluido (paridad con web).
+              { ok: true, text: 'Nutrición' },
               { ok: false, text: 'Marca personalizada' },
-              { ok: false, text: 'Nutrición' },
             ].map((item) => (
               <View key={item.text} style={styles.freePlanItem}>
                 {item.ok ? (
@@ -909,7 +909,7 @@ export function MobileOnboardingChecklist({
         />
       </View>
 
-      <MobileNutritionTierBlock subscriptionTier={coach.subscriptionTier} />
+      <MobileNutritionTierBlock />
 
       {allDone ? (
         <View style={[styles.activationReady, { borderColor: 'rgba(16,185,129,0.32)', backgroundColor: 'rgba(16,185,129,0.1)' }]}>
@@ -935,8 +935,9 @@ function MobileOnboardingFreePlan() {
     { ok: true, text: 'Entrenos ilimitados' },
     { ok: true, text: 'App para tus alumnos' },
     { ok: true, text: 'Check-ins' },
+    // Nutricion incluida en todos los planes, Free incluido (paridad con web).
+    { ok: true, text: 'Nutricion' },
     { ok: false, text: 'Marca personalizada' },
-    { ok: false, text: 'Nutricion' },
   ]
   return (
     <View style={[styles.onboardingFreeBox, { borderColor: hexToRgba(theme.primary, 0.2), backgroundColor: hexToRgba(theme.primary, 0.06), borderRadius: theme.radius.xl }]}>
@@ -1073,31 +1074,30 @@ function MobileOnboardingStepBlock({
   )
 }
 
-function MobileNutritionTierBlock({ subscriptionTier }: { subscriptionTier: CoachProfile['subscriptionTier'] }) {
+/**
+ * Nutricion viene incluida en TODOS los planes (Free incluido): la superficie V2 no
+ * tiene gate de tier. Por eso este bloque ya no consulta `canUseNutrition` — ese flag
+ * solo gatea la COMPRA del add-on en billing, no el acceso al modulo.
+ */
+function MobileNutritionTierBlock() {
   const { theme } = useTheme()
   const router = useRouter()
-  const enabled = canUseNutrition(subscriptionTier)
   return (
-    <View style={[styles.nutritionBlock, { borderColor: enabled ? 'rgba(16,185,129,0.24)' : theme.border, backgroundColor: enabled ? 'rgba(16,185,129,0.08)' : theme.muted, borderRadius: theme.radius.xl }]}>
-      <Text style={[styles.eyebrow, { color: enabled ? '#10B981' : theme.mutedForeground, fontFamily: FONT.uiBold }]}>
-        NUTRICION {enabled ? '(OPCIONAL)' : ''}
+    <View style={[styles.nutritionBlock, { borderColor: 'rgba(16,185,129,0.24)', backgroundColor: 'rgba(16,185,129,0.08)', borderRadius: theme.radius.xl }]}>
+      <Text style={[styles.eyebrow, { color: '#10B981', fontFamily: FONT.uiBold }]}>
+        NUTRICION (OPCIONAL)
       </Text>
       <Text style={[styles.nutritionTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
-        {enabled ? 'Cuando quieras, sigue esta ruta' : 'Nutrición no incluida en tu plan'}
+        Cuando quieras, sigue esta ruta
       </Text>
       <Text style={[styles.nutritionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {enabled
-          ? 'Tu plan ya incluye nutricion. Puedes crear plantillas, catalogo y asignar planes nutricionales.'
-          : 'Tu plan actual incluye entrenos. Las plantillas, el catálogo y la asignación nutricional no están incluidos.'}
+        Tu plan ya incluye nutricion. Puedes crear plantillas, catalogo y asignar planes nutricionales.
       </Text>
       <Button
-        label={enabled ? 'Abrir nutricion' : 'Ver mi plan'}
+        label="Abrir nutricion"
         variant="secondary"
         size="sm"
-        onPress={() => {
-          if (enabled) router.push('/coach/(tabs)/nutricion')
-          else router.push('/coach/(tabs)/subscription')
-        }}
+        onPress={() => router.push('/coach/(tabs)/nutricion')}
         style={styles.nutritionButton}
       />
     </View>
@@ -1278,7 +1278,6 @@ export function MobileOnboardingGuideChip({
   const success100 = dark ? 'rgba(31,184,119,0.18)' : '#DBF5EA'
   const success700 = dark ? '#6FE3B4' : '#0E7A50'
   const isFree = coach.subscriptionTier === 'free'
-  const nutritionEnabled = canUseNutrition(coach.subscriptionTier)
   const [brandOverride, setBrandOverride] = useState<boolean | null>(null)
   const brandDone = brandOverride ?? Boolean(coach.hasCoachLogo)
   const steps = [
@@ -1465,18 +1464,8 @@ export function MobileOnboardingGuideChip({
             ))}
           </View>
 
-          {!nutritionEnabled ? <View
-            className="flex-row items-center"
-            style={{ gap: 9, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sport200 }}
-          >
-            <Sparkles size={15} color={sport600} />
-            <Text className="flex-1 font-sans text-[12px]" style={{ color: sport700, lineHeight: 16 }}>
-              Los planes de nutrición <Text className="font-sans-bold">no están incluidos</Text> en tu plan.
-            </Text>
-            <TouchableOpacity onPress={() => router.push('/coach/(tabs)/subscription')} hitSlop={6}>
-              <Text className="font-sans-extra text-[12px]" style={{ color: sport700 }}>Ver mi plan</Text>
-            </TouchableOpacity>
-          </View> : null}
+          {/* Se retiro el aviso "los planes de nutricion no estan incluidos": la nutricion
+              V2 viene incluida en todos los planes, Free incluido. */}
 
           <TouchableOpacity onPress={skip} className="mt-1 min-h-11 justify-center pr-2">
             <Text className="font-sans-bold text-[12px]" style={{ color: sport600 }}>Saltar guía</Text>

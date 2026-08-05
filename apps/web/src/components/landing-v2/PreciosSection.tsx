@@ -291,9 +291,11 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                                 String(exerciseCount),
                             )}
                         </li>
-                        <li style={{ ...liStyle, color: '#8A8A93' }}>
-                            <span style={{ color: '#8A8A93' }}>✗</span>
-                            {t('pf_4', 'Sin módulo de nutrición')}
+                        {/* Nutrición base (V2) viene incluida también en Free: la superficie no
+                            tiene gate de tier. Solo la compra del add-on depende del plan. */}
+                        <li style={liStyle}>
+                            <span style={{ color: '#4ADE80' }}>✓</span>
+                            {t('pf_4', 'Planes de nutrición incluidos')}
                         </li>
                         <li style={{ ...liStyle, color: '#8A8A93' }}>
                             <span style={{ color: '#8A8A93' }}>✗</span>
