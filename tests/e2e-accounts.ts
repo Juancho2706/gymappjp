@@ -10,7 +10,8 @@
  * un slug/email/clientId fuera de la lista, para que el próximo spec nuevo no vuelva a apuntar
  * a josefit por accidente.
  *
- * Cuentas fuente: tests/separation/personas.ts (las 9 personas @evatest.cl + shells) y los
+ * Cuentas fuente (historicas; las suites de separation se retiraron 2026-08-05 junto con
+ * las cuentas prod): las 9 personas @evatest.cl + shells y los
  * alumnos de prueba permanentes (STUDENT_IDS). Ver también memoria del repo:
  * "Cuentas de prueba permanentes" y "Cuentas prueba excluidas de finanzas".
  */

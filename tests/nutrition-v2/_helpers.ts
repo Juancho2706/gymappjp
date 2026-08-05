@@ -113,7 +113,7 @@ export async function loginCoach(page: Page) {
 
 /**
  * El coach canary es multi-contexto (standalone + pool). Fija el workspace standalone vía
- * /workspace/select (mismo patrón que tests/separation/switcher.spec.ts). Para un coach
+ * /workspace/select (mismo patron que usaba la suite separation, retirada 2026-08-05). Para un coach
  * single-contexto /workspace/select redirige solo y no hay entrada que clickear (no-op).
  */
 export async function ensureCoachWorkspace(page: Page) {
