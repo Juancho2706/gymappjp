@@ -7,7 +7,15 @@ export interface PlatformOverview {
     arrEstimate: number
     mrrDeltaPct: number | null
     churnLast30d: number
+    /** Quien churneo en los ultimos 30d (el RPC siempre lo devolvio; antes se descartaba). */
+    churnRecent: { coach_id: string; coach_name: string | null; tier: string | null; churned_at: string }[]
     checkinsLast7d: number
+    /** Sesiones de los ultimos 7 dias (suma server-side de la serie de 30). */
+    sessionsLast7d: number
+    /** Delta % de sesiones: ultimos 7d vs los 7 anteriores. */
+    sessions7dDeltaPct: number | null
+    /** Cambio absoluto de coaches activos mes contra mes (serie por tier). */
+    activeCoachesDeltaMoM: number | null
     recentCoachSignups: {
         id: string
         full_name: string | null

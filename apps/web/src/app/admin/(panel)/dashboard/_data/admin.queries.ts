@@ -59,6 +59,8 @@ export const getPlatformOverview = cache(
             checkinsRes,
             betaInvitesRes,
             trialConversionRes,
+            expiringSoonRes,
+            pendingPaymentRes,
         ] = await Promise.all([
             admin.rpc('get_platform_coaches_count'),
             admin.rpc('get_platform_clients_count'),
@@ -73,6 +75,15 @@ export const getPlatformOverview = cache(
             (admin.rpc as any)('get_platform_checkins_7d'),
             countBetaAdminInvites(admin),
             (admin.rpc as any)('get_platform_trial_conversion_rate'),
+            // Antes iban en un segundo Promise.all sin depender de nada del primero —
+            // un round-trip extra gratis por render (F2 08-05).
+            findExpiringSoonAdminCoaches(
+                admin,
+                new Date(Date.now() + 7 * 86_400_000).toISOString(),
+                new Date().toISOString(),
+                10
+            ),
+            findPendingPaymentAdminCoaches(admin, 20),
         ])
 
         const totalCoaches = coachesCountRes.data ?? 0
@@ -106,15 +117,34 @@ export const getPlatformOverview = cache(
             ? parseFloat(((mrrEstimate - prevMrr) / prevMrr * 100).toFixed(1))
             : null
 
-        const [expiringSoonRes, pendingPaymentRes] = await Promise.all([
-            findExpiringSoonAdminCoaches(
-                admin,
-                new Date(Date.now() + 7 * 86_400_000).toISOString(),
-                new Date().toISOString(),
-                10
-            ),
-            findPendingPaymentAdminCoaches(admin, 20),
-        ])
+        // Deltas derivados de series que YA viajan (sin queries nuevas, F2 08-05):
+        // sesiones = ultimos 7 dias vs los 7 anteriores de la serie de 30.
+        const sessionsSeries = (workoutSessionsRes.data ?? []) as { day: string; sessions: number }[]
+        const sessionsLast7d = sessionsSeries.slice(-7).reduce((s, d) => s + (d.sessions ?? 0), 0)
+        const sessionsPrev7d = sessionsSeries.slice(-14, -7).reduce((s, d) => s + (d.sessions ?? 0), 0)
+        const sessions7dDeltaPct = sessionsPrev7d > 0
+            ? parseFloat(((sessionsLast7d - sessionsPrev7d) / sessionsPrev7d * 100).toFixed(1))
+            : null
+
+        // Coaches activos mes contra mes desde la serie por tier (suma de todos los tiers).
+        const tierMonthly = (tierSeriesRes.data ?? []) as { ym: string; tier: string; coach_count: number }[]
+        const coachesByMonth = new Map<string, number>()
+        for (const r of tierMonthly) {
+            coachesByMonth.set(r.ym, (coachesByMonth.get(r.ym) ?? 0) + Number(r.coach_count ?? 0))
+        }
+        const monthKeys = [...coachesByMonth.keys()].sort()
+        const coachesThisMonth = coachesByMonth.get(monthKeys[monthKeys.length - 1] ?? '') ?? 0
+        const coachesPrevMonth = coachesByMonth.get(monthKeys[monthKeys.length - 2] ?? '') ?? 0
+        const activeCoachesDeltaMoM = monthKeys.length >= 2 ? coachesThisMonth - coachesPrevMonth : null
+
+        // Filas de churn: el RPC devuelve quien/tier/cuando y antes se descartaba todo
+        // haciendo .length — la informacion mas accionable del panel (F2 08-05).
+        const churnRows = ((churnRes.data ?? []) as any[]).map((r) => ({
+            coach_id: String(r.coach_id ?? ''),
+            coach_name: (r.coach_name ?? null) as string | null,
+            tier: (r.tier ?? null) as string | null,
+            churned_at: String(r.churned_at ?? ''),
+        }))
 
         return {
             totalCoaches,
@@ -124,8 +154,12 @@ export const getPlatformOverview = cache(
             mrrEstimate,
             arrEstimate: mrrEstimate * 12,
             mrrDeltaPct,
-            churnLast30d: ((churnRes.data ?? []) as unknown as unknown[]).length,
+            churnLast30d: churnRows.length,
+            churnRecent: churnRows,
             checkinsLast7d: (checkinsRes.data as number) ?? 0,
+            sessionsLast7d,
+            sessions7dDeltaPct,
+            activeCoachesDeltaMoM,
             recentCoachSignups: recentSignupsRes,
             recentAuditEvents: recentAuditRes as PlatformOverview['recentAuditEvents'],
             mrrSeries,

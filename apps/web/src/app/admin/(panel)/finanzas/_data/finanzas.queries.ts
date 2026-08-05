@@ -32,6 +32,9 @@ export interface FinanzasData {
     mrrDiscountClp: number
     byProvider: { provider: string; mrrClp: number; coachCount: number }[]
     liveDiscounts: LiveDiscountRow[]
+    /** Cobrado REAL (billing_snapshots recurring, 30d) — reconciliacion contra el MRR teorico. */
+    charged30dClp: number
+    charged30dCount: number
     paidCoachCount: number
     arpc: number
     mrrSeries: { ym: string; mrr_clp: number; coach_count: number }[]
@@ -67,6 +70,7 @@ export const getFinanzasData = cache(
             revByTierRes,
             legacyTierCountsRes,
             eventsRes,
+            charged30dRes,
             testIds,
         ] = await Promise.all([
             // Pagando = suscripcion real en su gateway (MP con mp_id, Flow con external_id).
@@ -85,6 +89,12 @@ export const getFinanzasData = cache(
                 .select('id, coach_id, provider, provider_event_id, provider_status, payload, created_at')
                 .order('created_at', { ascending: false })
                 .limit(50),
+            // Cobros reales de los ultimos 30d (evidencia de pasarela): si divergen del MRR
+            // teorico hay un problema de cobro, no de reporte (F2 08-05).
+            admin.from('billing_snapshots')
+                .select('coach_id, total_clp')
+                .eq('kind', 'recurring')
+                .gte('charged_at', new Date(Date.now() - 30 * 86_400_000).toISOString()),
             // Cuentas de prueba a excluir de las métricas agregadas en TS (los RPCs de MRR
             // se filtran en SQL con el mismo predicado — ver migración exclude_test_coaches).
             getTestCoachIds(admin),
@@ -159,6 +169,12 @@ export const getFinanzasData = cache(
         const paidCoachCount = paidCoaches.length
         const arpc = paidCoachCount > 0 ? Math.round(mrrEstimate / paidCoachCount) : 0
 
+        // Cobrado real 30d (excluye cuentas de prueba, mismo criterio que el MRR).
+        const chargedRows = ((charged30dRes.data ?? []) as Array<{ coach_id: string; total_clp: number }>)
+            .filter((r) => !testIds.has(r.coach_id))
+        const charged30dClp = chargedRows.reduce((sum, r) => sum + (r.total_clp ?? 0), 0)
+        const charged30dCount = chargedRows.length
+
         // Enrich events with coach names
         const coachIds = [...new Set((eventsRes.data ?? []).map(e => e.coach_id).filter(Boolean))]
         let coachMap: Record<string, string> = {}
@@ -189,6 +205,8 @@ export const getFinanzasData = cache(
             mrrDiscountClp: mrrGross - mrrEstimate,
             byProvider,
             liveDiscounts,
+            charged30dClp,
+            charged30dCount,
             paidCoachCount,
             arpc,
             mrrSeries: (mrrSeriesRes.data ?? []) as unknown as { ym: string; mrr_clp: number; coach_count: number }[],
