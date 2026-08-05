@@ -118,6 +118,12 @@ export interface NotifeeLike {
     id?: string
     title?: string
     body?: string
+    /**
+     * Pass-through VERBATIM a `Notification.extras` top-level en Android: el fork llama
+     * `builder.setExtras(data)` sin filtrar claves (NotificationManager.java:158 de notify-kit).
+     * Es la puerta que usa el spike de Xiaomi Focus (abajo).
+     */
+    data?: { [key: string]: string | number | object }
     android?: NotifeeAndroidNotification
   }) => Promise<string>
   cancelNotification: (id: string) => Promise<void>
@@ -241,6 +247,43 @@ function ensureChannel(channelId: string, channelName: string): Promise<void> {
   return pending
 }
 
+/**
+ * ── SPIKE · XIAOMI FOCUS NOTIFICATION (2026-08-04, experimental) ────────────────
+ * HyperOS renderiza la capsula fija del lockscreen (la del Temporizador del reloj de Xiaomi)
+ * cuando la notificacion trae los extras `miui.focus.param` (JSON param_v2). La evidencia dice
+ * que hay un gate por whitelist (`canShowFocus` via ContentProvider, tramite por email a Xiaomi
+ * China), asi que lo esperable es que HyperOS IGNORE estos extras y muestre la notificacion
+ * normal — pero notify-kit pasa `data` verbatim a `Notification.extras`, con lo que probarlo
+ * cuesta cero nativo. Criterio: si en QA device (Xiaomi HyperOS 2) no aparece la capsula,
+ * BORRAR este bloque y documentar el resultado en docs/specs/live-updates-a16/SPEC.md.
+ * Formato param_v2: https://help.aliyun.com/zh/document_detail/3037956.html
+ */
+const androidConstants =
+  Platform.OS === 'android'
+    ? (Platform.constants as { Manufacturer?: string; Brand?: string })
+    : undefined
+const isXiaomiFamily = /xiaomi|redmi|poco/i.test(
+  `${androidConstants?.Manufacturer ?? ''} ${androidConstants?.Brand ?? ''}`,
+)
+// Anti-desorden de updates exigido por el protocolo focus (updates con sequence menor se ignoran).
+let focusSequence = 0
+function xiaomiFocusData(title: string): { 'miui.focus.param': string } | undefined {
+  if (!isXiaomiFamily) return undefined
+  focusSequence += 1
+  return {
+    'miui.focus.param': JSON.stringify({
+      param_v2: {
+        protocol: 1,
+        business: 'eva-live-timer',
+        updatable: true,
+        sequence: focusSequence,
+        ticker: title,
+        aodTitle: title,
+      },
+    }),
+  }
+}
+
 export interface LiveTimerOptions {
   /** Id estable de la notificación: reusarlo ACTUALIZA la misma en vez de apilar otra. */
   id: string
@@ -326,6 +369,7 @@ export async function showLiveTimer(opts: LiveTimerOptions): Promise<void> {
     }))
   }
 
+  const data = xiaomiFocusData(opts.title)
   try {
     await ensureChannel(opts.channelId, opts.channelName)
     if (smallIconEnabled) android.smallIcon = SMALL_ICON
@@ -333,6 +377,7 @@ export async function showLiveTimer(opts: LiveTimerOptions): Promise<void> {
       id: opts.id,
       title: opts.title,
       body: opts.body,
+      ...(data ? { data } : {}),
       android,
     })
   } catch {
@@ -346,6 +391,7 @@ export async function showLiveTimer(opts: LiveTimerOptions): Promise<void> {
         id: opts.id,
         title: opts.title,
         body: opts.body,
+        ...(data ? { data } : {}),
         android,
       })
     } catch {
