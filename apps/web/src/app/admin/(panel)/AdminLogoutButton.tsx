@@ -10,7 +10,9 @@ export function AdminLogoutButton({ iconOnly = false }: { iconOnly?: boolean }) 
     const supabase = createClient()
 
     async function handleSignOut() {
-        await supabase.auth.signOut()
+        // scope global: cierra la sesion del panel en TODOS los dispositivos, no solo este
+        // browser — la cuenta admin no debe dejar sesiones vivas por ahi (F4 08-05).
+        await supabase.auth.signOut({ scope: 'global' })
         router.push('/admin/login')
         router.refresh()
     }

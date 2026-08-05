@@ -2,12 +2,12 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { isAdminEmail } from './admin-gate'
+import { isAllowedAdminEmail, isAdminMfaEnforced } from './admin-gate'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 
 export async function assertAdmin() {
-    // Solo lee la sesion de cookies para el gate por ADMIN_EMAILS — el cliente anon normal basta
+    // Solo lee la sesion de cookies para el gate — el cliente anon normal basta
     // (el antiguo createAdminClient con service key + cookies era superficie innecesaria).
     const supabase = await createClient()
     const {
@@ -15,8 +15,19 @@ export async function assertAdmin() {
         error,
     } = await supabase.auth.getUser()
 
-    if (error || !user?.email || !isAdminEmail(user.email)) {
+    if (error || !user?.email || !(await isAllowedAdminEmail(user.email))) {
         throw new Error('Unauthorized: admin access required')
+    }
+
+    // Defensa en profundidad del MFA (F4 08-05): las server actions son endpoints POST que
+    // no pasan por el redirect del proxy — una sesion password-only (aal1) de un admin con
+    // TOTP verificado NO puede mutar nada. Si aun no enrolo (nextLevel aal1) se permite:
+    // el proxy ya lo tiene atrapado en /admin/setup-mfa y bloquearlo aqui impediria el alta.
+    if (isAdminMfaEnforced()) {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+            throw new Error('Unauthorized: MFA verification required')
+        }
     }
 
     return { user, adminClient: createServiceRoleClient() }

@@ -125,6 +125,9 @@ export async function proxy(request: NextRequest) {
             pathname === '/forgot-password' ||
             pathname === '/reset-password' ||
             pathname === '/org/login' ||
+            // F4: el login del CEO caia en el bucket admin: generico; es un POST de auth
+            // y debe throttlearse como tal (signInWithPassword sin limite propio).
+            pathname === '/admin/login' ||
             /^\/c\/[^/]+\/login$/.test(pathname) ||
             /^\/e\/[^/]+\/login$/.test(pathname) ||
             // §3.5: la puerta de login del pool team (Movida = 300+ alumnos) debe ir throttled
@@ -307,27 +310,49 @@ export async function proxy(request: NextRequest) {
     }
 
     // ============================================================
-    // ADMIN ROUTE PROTECTION
+    // ADMIN ROUTE PROTECTION (F4 08-05: allowlist DB+env, MFA por AAL, ?next=)
     // ============================================================
     if (pathname.startsWith('/admin')) {
-        // Allow admin login page without check
+        // Login y pantallas de MFA pasan sin gate (el login valida; las MFA exigen sesion abajo)
         if (pathname === '/admin/login') {
             return supabaseResponse
         }
 
-        // Must be authenticated
+        // Must be authenticated. Se conserva el destino en ?next= (validado al consumirlo:
+        // el login solo redirige a paths que empiecen con /admin — anti open-redirect).
         if (!user) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/admin/login'
+            redirectUrl.search = ''
+            if (pathname !== '/admin' && pathname !== '/admin/dashboard') {
+                redirectUrl.searchParams.set('next', pathname + request.nextUrl.search)
+            }
             return NextResponse.redirect(redirectUrl)
         }
 
-        // Must be in admin allowlist
-        const { isAdminEmail } = await import('@/lib/admin/admin-gate')
-        if (!isAdminEmail(user.email)) {
+        // Allowlist: union(env ADMIN_EMAILS, tabla platform_admins) — cacheada 60s.
+        const { isAllowedAdminEmail, isAdminMfaEnforced } = await import('@/lib/admin/admin-gate')
+        if (!(await isAllowedAdminEmail(user.email))) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/'
             return NextResponse.redirect(redirectUrl)
+        }
+
+        // MFA obligatoria para el panel (unica cuenta service-role del sistema): sin factor
+        // TOTP verificado → enrolar; con factor pero sesion aal1 (solo password) → verificar.
+        // Kill-switch ADMIN_MFA_ENFORCED=false; recovery = borrar el factor en Supabase Auth.
+        const isMfaScreen = pathname === '/admin/setup-mfa' || pathname === '/admin/verify-mfa'
+        if (isAdminMfaEnforced() && !isMfaScreen) {
+            const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+            if (aal && aal.currentLevel !== 'aal2') {
+                const redirectUrl = request.nextUrl.clone()
+                redirectUrl.pathname = aal.nextLevel === 'aal2' ? '/admin/verify-mfa' : '/admin/setup-mfa'
+                redirectUrl.search = ''
+                if (pathname !== '/admin' && pathname !== '/admin/dashboard') {
+                    redirectUrl.searchParams.set('next', pathname + request.nextUrl.search)
+                }
+                return NextResponse.redirect(redirectUrl)
+            }
         }
 
         return supabaseResponse

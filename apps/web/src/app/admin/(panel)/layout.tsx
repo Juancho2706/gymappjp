@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { isAdminEmail } from '@/lib/admin/admin-gate'
+import { isAllowedAdminEmail } from '@/lib/admin/admin-gate'
 import { AdminDarkWrapper } from './AdminDarkWrapper'
 import { AdminSidebar } from './AdminSidebar'
 import type { Metadata } from 'next'
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
     const { user, error } = await getAdminLayoutAuth()
 
-    if (error || !user?.email || !isAdminEmail(user.email)) {
+    if (error || !user?.email || !(await isAllowedAdminEmail(user.email))) {
         redirect('/admin/login')
     }
 

@@ -1,13 +1,24 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { isAdminEmail } from '@/lib/admin/admin-gate'
+import { isAllowedAdminEmail, isAdminMfaEnforced } from '@/lib/admin/admin-gate'
 import { redirect } from 'next/navigation'
 import { LoginSchema } from '@eva/schemas'
 
 export type AdminLoginState = {
     error?: string
     success?: boolean
+}
+
+// Mensaje UNICO para credenciales invalidas Y cuentas fuera de la allowlist: mensajes
+// distintos permitian enumerar que cuentas existen desde la pantalla del panel (F4 08-05).
+const GENERIC_ERROR = 'Credenciales incorrectas o cuenta sin acceso.'
+
+/** Solo paths internos del panel — un ?next= externo o con esquema es open redirect. */
+function safeNext(raw: FormDataEntryValue | null): string | null {
+    if (typeof raw !== 'string' || !raw.startsWith('/admin')) return null
+    if (raw.startsWith('//') || raw.includes('://')) return null
+    return raw
 }
 
 export async function adminLoginAction(
@@ -18,6 +29,7 @@ export async function adminLoginAction(
         email: formData.get('email') as string,
         password: formData.get('password') as string,
     }
+    const next = safeNext(formData.get('next'))
 
     const parsed = LoginSchema.safeParse(raw)
     if (!parsed.success) {
@@ -32,20 +44,28 @@ export async function adminLoginAction(
     })
 
     if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-            return { error: 'Email o contraseña incorrectos.' }
-        }
-        return { error: error.message }
+        // Nunca devolver error.message crudo de GoTrue (filtra detalles internos, F4).
+        console.warn('[admin-login] signIn fallido:', error.message)
+        return { error: GENERIC_ERROR }
     }
 
-    // Verify the user is in admin allowlist
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Error al obtener la sesión.' }
+    if (!user) return { error: GENERIC_ERROR }
 
-    if (!isAdminEmail(user.email)) {
+    if (!(await isAllowedAdminEmail(user.email))) {
         await supabase.auth.signOut()
-        return { error: 'Esta cuenta no tiene acceso al Panel CEO.' }
+        return { error: GENERIC_ERROR }
     }
 
-    redirect('/admin/dashboard')
+    // MFA obligatoria: con factor verificado la sesion password-only (aal1) debe subir a aal2
+    // en /admin/verify-mfa; sin factor, primero se enrola. El proxy re-verifica en cada request.
+    if (isAdminMfaEnforced()) {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        if (aal && aal.currentLevel !== 'aal2') {
+            const mfaPath = aal.nextLevel === 'aal2' ? '/admin/verify-mfa' : '/admin/setup-mfa'
+            redirect(next ? `${mfaPath}?next=${encodeURIComponent(next)}` : mfaPath)
+        }
+    }
+
+    redirect(next ?? '/admin/dashboard')
 }

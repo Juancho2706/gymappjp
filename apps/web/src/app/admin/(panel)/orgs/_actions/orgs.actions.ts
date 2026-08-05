@@ -3,7 +3,7 @@
 import { z } from 'zod/v4'
 import { revalidatePath } from 'next/cache'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { isAdminEmail } from '@/lib/admin/admin-gate'
+import { isAllowedAdminEmail } from '@/lib/admin/admin-gate'
 import { createClient } from '@/lib/supabase/server'
 
 const ResendSchema = z.object({
@@ -22,7 +22,7 @@ export async function resendOwnerInviteAction(
 ) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email || !isAdminEmail(user.email)) return { error: 'No autorizado' }
+    if (!user?.email || !(await isAllowedAdminEmail(user.email))) return { error: 'No autorizado' }
 
     const parsed = ResendSchema.safeParse({
         orgId: formData.get('orgId'),
@@ -62,7 +62,7 @@ export type SetOrgStatusResult = { success: true } | { error: string }
 export async function setOrgStatusAction(orgId: string, status: 'active' | 'suspended'): Promise<SetOrgStatusResult> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email || !isAdminEmail(user.email)) return { error: 'No autorizado' }
+    if (!user?.email || !(await isAllowedAdminEmail(user.email))) return { error: 'No autorizado' }
 
     const parsed = SetOrgStatusSchema.safeParse({ orgId, status })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
