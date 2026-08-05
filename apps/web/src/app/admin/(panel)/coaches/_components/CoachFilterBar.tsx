@@ -21,10 +21,14 @@ const TIER_OPTIONS = (Object.keys(TIER_CONFIG) as Array<keyof typeof TIER_CONFIG
     label: TIER_CONFIG[t].label,
 }))
 
+// Proveedores REALES de la DB (F0 08-05): flow y admin/internal existian y no se podian
+// filtrar; stripe no opera en Chile y no tiene ninguna fila — fuera.
 const PROVIDER_OPTIONS = [
-    { value: 'beta',         label: 'Beta' },
     { value: 'mercadopago',  label: 'MercadoPago' },
-    { value: 'stripe',       label: 'Stripe' },
+    { value: 'flow',         label: 'Flow' },
+    { value: 'admin',        label: 'Admin (cortesia)' },
+    { value: 'internal',     label: 'Internal' },
+    { value: 'beta',         label: 'Beta' },
 ]
 
 const STAGE_OPTIONS = [

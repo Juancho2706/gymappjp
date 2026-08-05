@@ -59,6 +59,8 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
         status:   sp.status,
         tier:     sp.tier,
         beta:     sp.beta === 'true' ? true : sp.provider === 'beta' ? true : undefined,
+        // 'beta' ya viaja como flag propio; el resto de proveedores filtra de verdad (ROTO-2).
+        provider: sp.provider && sp.provider !== 'beta' ? sp.provider : undefined,
         stage:    sp.stage,
         atRisk:   sp.atRisk === 'true' ? true : undefined,
         sort:     sp.sort,
@@ -77,7 +79,7 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <CoachExportButton params={{ search: sp.q, status: sp.status, tier: sp.tier, beta: sp.beta === 'true' || sp.provider === 'beta' ? true : undefined, stage: sp.stage, atRisk: sp.atRisk === 'true' ? true : undefined, sort: sp.sort, dir: sp.dir }} />
+                    <CoachExportButton params={{ search: sp.q, status: sp.status, tier: sp.tier, beta: sp.beta === 'true' || sp.provider === 'beta' ? true : undefined, provider: sp.provider && sp.provider !== 'beta' ? sp.provider : undefined, stage: sp.stage, atRisk: sp.atRisk === 'true' ? true : undefined, sort: sp.sort, dir: sp.dir }} />
                     <AnnouncementEmailButton />
                     <PageInfoButton title="Coaches — Guía completa" sections={COACHES_INFO} />
                 </div>

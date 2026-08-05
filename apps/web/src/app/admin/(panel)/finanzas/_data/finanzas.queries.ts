@@ -1,14 +1,37 @@
 import { cache } from 'react'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { TIER_CONFIG } from '@/lib/constants'
 import { isAddonBillable } from '@/services/billing/addons.service'
+import { discountSpecFromSnapshot } from '@/services/billing/discount.service'
+import {
+    PAID_COACH_OR_FILTER,
+    listMonthlyEquivalentClp,
+    netMonthlyClpForCoach,
+} from '@/services/billing/mrr.service'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import { getTestCoachIds } from '@/lib/test-accounts'
 import { MODULE_LABELS } from '../../_components/module-labels'
 
+/** Descuento vivo de un coach pagando: lo que paga vs el precio de lista (F0 auditoria 08-05). */
+export interface LiveDiscountRow {
+    coachId: string
+    coachLabel: string
+    code: string | null
+    discountLabel: string
+    listMonthlyClp: number
+    netMonthlyClp: number
+    remainingCycles: number | null
+}
+
 export interface FinanzasData {
+    /** MRR NETO: lo que de verdad entra por mes (lista mensualizada − cupones vivos). */
     mrrEstimate: number
     arrEstimate: number
+    /** MRR bruto (lista mensualizada, sin cupones) — contexto del neto. */
+    mrrGross: number
+    /** Total regalado por cupones vivos al mes (bruto − neto). */
+    mrrDiscountClp: number
+    byProvider: { provider: string; mrrClp: number; coachCount: number }[]
+    liveDiscounts: LiveDiscountRow[]
     paidCoachCount: number
     arpc: number
     mrrSeries: { ym: string; mrr_clp: number; coach_count: number }[]
@@ -29,11 +52,6 @@ export interface FinanzasData {
     }[]
 }
 
-// Precio mensual derivado de TIER_CONFIG (fuente única) — antes era una tercera copia hardcodeada que divergió (plan 04 F4.2).
-const TIER_PRICES: Record<string, number> = Object.fromEntries(
-    (Object.keys(TIER_CONFIG) as Array<keyof typeof TIER_CONFIG>).map(t => [t, TIER_CONFIG[t].monthlyPriceClp])
-)
-
 // Nota de arquitectura: se usa `React.cache` (no `unstable_cache`) por la regla del repo
 // (unstable_cache es incompatible con el contexto de cookies de Supabase SSR). Acá NO hay riesgo
 // adicional porque la query corre con `createServiceRoleClient()` SIN cookies — es el patrón correcto.
@@ -51,11 +69,12 @@ export const getFinanzasData = cache(
             eventsRes,
             testIds,
         ] = await Promise.all([
+            // Pagando = suscripcion real en su gateway (MP con mp_id, Flow con external_id).
+            // El filtro viejo por mp_id dejaba a los coaches Flow fuera del MRR (F0 08-05).
             admin.from('coaches')
-                .select('id, full_name, brand_name, subscription_tier')
+                .select('id, full_name, brand_name, slug, subscription_tier, billing_cycle, payment_provider, active_coupon_redemption_id')
                 .eq('subscription_status', 'active')
-                .not('subscription_mp_id', 'is', null)
-                .not('payment_provider', 'in', '(beta,internal)'),
+                .or(PAID_COACH_OR_FILTER),
             (admin.rpc as any)('get_platform_mrr_12_months'),
             (admin.rpc as any)('get_platform_churn_monthly'),
             (admin.rpc as any)('get_platform_revenue_by_cycle'),
@@ -73,7 +92,70 @@ export const getFinanzasData = cache(
 
         // Excluir cuentas de prueba del cálculo TS de MRR/ARPC (los RPCs ya las excluyen en SQL).
         const paidCoaches = (paidCoachesRes.data ?? []).filter((c) => !testIds.has(c.id))
-        const mrrEstimate = paidCoaches.reduce((sum, c) => sum + (TIER_PRICES[c.subscription_tier ?? ''] ?? 0), 0)
+
+        // Cupones vivos de los coaches pagando: puntero coaches.active_coupon_redemption_id →
+        // ledger coupon_redemptions. El spec se valida con discountSpecFromSnapshot (misma
+        // funcion del motor de cobro — drift-safe con lo que MP/Flow cobran de verdad).
+        const redemptionIds = paidCoaches
+            .map((c) => c.active_coupon_redemption_id)
+            .filter((id): id is string => Boolean(id))
+        const redemptionById = new Map<string, { snapshot: unknown; remaining: number | null }>()
+        if (redemptionIds.length > 0) {
+            const { data: redemptions } = await admin
+                .from('coupon_redemptions')
+                .select('id, status, discount_value_snapshot, applied_cycles_remaining')
+                .in('id', redemptionIds)
+                .eq('status', 'active')
+            for (const r of redemptions ?? []) {
+                redemptionById.set(r.id, {
+                    snapshot: r.discount_value_snapshot,
+                    remaining: r.applied_cycles_remaining,
+                })
+            }
+        }
+
+        let mrrEstimate = 0
+        let mrrGross = 0
+        const providerAgg = new Map<string, { mrrClp: number; coachCount: number }>()
+        const liveDiscounts: LiveDiscountRow[] = []
+        for (const c of paidCoaches) {
+            const redemption = c.active_coupon_redemption_id
+                ? redemptionById.get(c.active_coupon_redemption_id)
+                : undefined
+            const spec = redemption
+                ? discountSpecFromSnapshot(redemption.snapshot, redemption.remaining)
+                : null
+            const gross = listMonthlyEquivalentClp(c.subscription_tier, c.billing_cycle)
+            const net = netMonthlyClpForCoach(c.subscription_tier, c.billing_cycle, spec)
+            mrrGross += gross
+            mrrEstimate += net
+
+            const provider = c.payment_provider ?? 'desconocido'
+            const agg = providerAgg.get(provider) ?? { mrrClp: 0, coachCount: 0 }
+            agg.mrrClp += net
+            agg.coachCount += 1
+            providerAgg.set(provider, agg)
+
+            if (net < gross && spec) {
+                const snap = (redemption?.snapshot ?? {}) as Record<string, unknown>
+                liveDiscounts.push({
+                    coachId: c.id,
+                    coachLabel: c.brand_name || c.full_name || c.slug || c.id,
+                    code: typeof snap.code === 'string' ? snap.code : null,
+                    discountLabel: spec.type === 'percent'
+                        ? `−${spec.value}%`
+                        : `−$${Math.round(spec.value).toLocaleString('es-CL')}`,
+                    listMonthlyClp: gross,
+                    netMonthlyClp: net,
+                    remainingCycles: spec.remainingCycles ?? null,
+                })
+            }
+        }
+        const byProvider = [...providerAgg.entries()]
+            .map(([provider, agg]) => ({ provider, ...agg }))
+            .sort((a, b) => b.mrrClp - a.mrrClp)
+        liveDiscounts.sort((a, b) => (b.listMonthlyClp - b.netMonthlyClp) - (a.listMonthlyClp - a.netMonthlyClp))
+
         const paidCoachCount = paidCoaches.length
         const arpc = paidCoachCount > 0 ? Math.round(mrrEstimate / paidCoachCount) : 0
 
@@ -103,6 +185,10 @@ export const getFinanzasData = cache(
         return {
             mrrEstimate,
             arrEstimate: mrrEstimate * 12,
+            mrrGross,
+            mrrDiscountClp: mrrGross - mrrEstimate,
+            byProvider,
+            liveDiscounts,
             paidCoachCount,
             arpc,
             mrrSeries: (mrrSeriesRes.data ?? []) as unknown as { ym: string; mrr_clp: number; coach_count: number }[],

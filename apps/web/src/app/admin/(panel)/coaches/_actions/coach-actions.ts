@@ -306,13 +306,30 @@ export async function updateCoachPeriodEndAction(coachId: string, newDate: strin
     return { success: true }
 }
 
-// Bulk status update
+// Bulk status update.
+// 'expired' y 'active' DEBEN pasar por las acciones completas por coach: expirar tiene que
+// anclar la gracia de alumnos Y cancelar la suscripcion en la pasarela (MP/Flow), y reactivar
+// tiene que extender periodo + limpiar el ancla. El update plano dejaba suscripciones VIVAS
+// cobrando tras un bulk expire (SEC-3, F0 08-05). Otros estados siguen como update simple.
 export async function bulkCoachStatusAction(coachIds: string[], status: string) {
     const statusSchema = z.enum(['active', 'trialing', 'canceled', 'pending_payment', 'expired', 'past_due', 'paused'])
     if (!statusSchema.safeParse(status).success) return { error: 'Status inválido' }
     if (!coachIds.length) return { error: 'Sin coaches seleccionados' }
 
     const { adminClient } = await assertAdmin()
+
+    if (status === 'expired' || status === 'active') {
+        const errors: string[] = []
+        for (const id of coachIds) {
+            const result = status === 'expired'
+                ? await expireCoachAction(id)
+                : await reactivateCoachAdminAction(id)
+            if ('error' in result && result.error) errors.push(`${id}: ${result.error}`)
+        }
+        if (errors.length) return { error: `Fallaron ${errors.length}/${coachIds.length}: ${errors.join('; ')}` }
+        revalidateAdmin()
+        return { success: true }
+    }
 
     const { error } = await adminClient.from('coaches')
         .update({ subscription_status: status })
@@ -462,6 +479,10 @@ export type SubscriptionEventRow = {
 }
 
 export async function getCoachSubscriptionEvents(coachId: string): Promise<SubscriptionEventRow[]> {
+    // Gate obligatorio: server action exportada = endpoint POST publico; sin esto cualquier
+    // sesion (o nadie) podia leer eventos de suscripcion de cualquier coach (SEC-1, F0 08-05).
+    await assertAdmin()
+    if (!z.string().uuid().safeParse(coachId).success) return []
     const admin = createServiceRoleClient()
     const { data } = await admin
         .from('subscription_events')
@@ -499,7 +520,11 @@ export async function getCoachNotesAction(coachId: string): Promise<string> {
 
 export async function saveCoachNotesAction(coachId: string, notes: string): Promise<void> {
     const { adminClient, user } = await assertAdmin()
-    await adminClient.from('coaches').update({ admin_notes: notes }).eq('id', coachId)
-    await logAdminAction(adminClient, user.email ?? 'admin', 'coach.update', 'coaches', coachId)
+    // Mismo limite que UpdateCoachSchema.admin_notes — antes esta ruta lo saltaba.
+    const trimmed = notes.slice(0, 2000)
+    await adminClient.from('coaches').update({ admin_notes: trimmed }).eq('id', coachId)
+    // Args en orden de la firma (adminClient, action, targetTable, targetId, payload, actorEmail) —
+    // el orden viejo corrompia admin_audit_logs (action=email, target_id='coaches') (ROTO-8, F0 08-05).
+    await logAdminAction(adminClient, 'coach.notes_update', 'coaches', coachId, { length: trimmed.length }, user.email)
     revalidateAdmin()
 }

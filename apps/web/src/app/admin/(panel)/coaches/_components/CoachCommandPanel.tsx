@@ -10,15 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import {
+    deleteCoachAction,
     extendCoachPeriodAction,
     suspendCoachAction,
     expireCoachAction,
     reactivateCoachAdminAction,
     updateCoachAction,
     sendIndividualCoachEmailAction,
+    getCoachModulesAction,
     getCoachSubscriptionEvents,
     type SubscriptionEventRow,
 } from '../_actions/coach-actions'
+import { MODULE_KEYS, MODULE_LABELS } from '../../_components/module-labels'
 import {
     ExternalLink, Copy, CheckCircle, AlertTriangle, Clock,
     RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail, Palette
@@ -97,11 +100,23 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     const [editTier, setEditTier] = useState(coach.subscription_tier ?? 'starter')
     const [editMaxClients, setEditMaxClients] = useState(coach.max_clients ?? 10)
     const [editColorHex, setEditColorHex] = useState((coach as any).primary_color ?? '#10B981')
+    const [modules, setModules] = useState<Record<string, boolean> | null>(null)
 
     useEffect(() => {
         setEditTier(coach.subscription_tier ?? 'starter')
         setEditMaxClients(coach.max_clients ?? 10)
         setEditColorHex((coach as any).primary_color ?? '#10B981')
+        // El historial solo se cargaba al CAMBIAR de tab, pero el tab inicial ya es Info —
+        // habia que salir y volver para verlo (ROTO-6, F0 08-05). Ahora carga al abrir.
+        setEvents(null)
+        setLoadingEvents(true)
+        void getCoachSubscriptionEvents(coach.id).then(data => {
+            setEvents(data)
+            setLoadingEvents(false)
+        })
+        // Modulos del coach para el bloque de override del tab Editar (ROTO-9).
+        setModules(null)
+        void getCoachModulesAction(coach.id).then(setModules)
     }, [coach.id])
 
     function refresh() {
@@ -515,6 +530,34 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                 </div>
                             </div>
 
+                            {/* Modulos habilitados — el backend (updateCoachAction → syncAdminGrants) existia
+                                completo pero su unico form (CoachEditSheet) era codigo muerto sin importar:
+                                el CEO no tenia NINGUN punto de entrada para el override (ROTO-9, F0 08-05). */}
+                            <div className="rounded-lg border border-[--admin-border] p-3">
+                                <p className="text-xs font-medium text-[--admin-text-2]">Módulos habilitados</p>
+                                <p className="mt-0.5 text-[10px] text-[--admin-text-3]">Override del CEO — activa o desactiva módulos de pago para este coach (cortesía admin_grant).</p>
+                                {modules === null ? (
+                                    <p className="mt-2 text-xs text-[--admin-text-3]">Cargando módulos...</p>
+                                ) : (
+                                    <>
+                                        <input type="hidden" name="modules_present" value="1" />
+                                        <div className="mt-2 grid grid-cols-1 gap-2">
+                                            {MODULE_KEYS.map(key => (
+                                                <label key={key} className="flex items-center gap-2 text-xs text-[--admin-text-1]">
+                                                    <input
+                                                        type="checkbox"
+                                                        name={`module_${key}`}
+                                                        defaultChecked={modules[key] === true}
+                                                        className="h-4 w-4 rounded border-[--admin-border] bg-[--admin-bg-elevated]"
+                                                    />
+                                                    {MODULE_LABELS[key]}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
                             {/* Notas */}
                             <div>
                                 <Label className="text-xs text-[--admin-text-2]">Notas internas (admin)</Label>
@@ -648,6 +691,8 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                                 if (key === 'expire') await runAction('expire', () => expireCoachAction(coach.id))
                                                 else if (key === 'suspend') await runAction('suspend', () => suspendCoachAction(coach.id))
                                                 else if (key === 'reactivate') await runAction('reactivate', () => reactivateCoachAdminAction(coach.id))
+                                                // El caso 'delete' faltaba: Confirmar cerraba el dialogo sin hacer NADA (ROTO-3, F0 08-05).
+                                                else if (key === 'delete') await runAction('delete', () => deleteCoachAction(coach.id))
                                             }}
                                             className="flex-1 rounded bg-[--admin-red] py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
                                         >

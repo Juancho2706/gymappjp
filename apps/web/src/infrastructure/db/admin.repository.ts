@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import { PAID_COACH_OR_FILTER } from '@/lib/constants'
 
 type DB = SupabaseClient<Database>
 type Tables = Database['public']['Tables']
@@ -44,12 +45,13 @@ export async function countActiveAdminCoaches(db: DB): Promise<number> {
 }
 
 export async function findPaidAdminCoachTiers(db: DB): Promise<AdminPaidCoachTierRow[]> {
+    // Pagando = suscripcion real en su gateway (MP o Flow) — el filtro viejo por mp_id
+    // dejaba a los coaches Flow fuera del fallback de MRR del dashboard (F0 08-05).
     const { data } = await db
         .from('coaches')
         .select('subscription_tier')
-        .not('subscription_mp_id', 'is', null)
         .eq('subscription_status', 'active')
-        .not('payment_provider', 'in', '(beta,internal)')
+        .or(PAID_COACH_OR_FILTER)
 
     return (data ?? []) as AdminPaidCoachTierRow[]
 }

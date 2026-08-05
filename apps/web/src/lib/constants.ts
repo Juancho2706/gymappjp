@@ -131,6 +131,16 @@ export const SELF_SERVICE_ADDONS_ENABLED =
 // valor stale, ningún cobro Flow ocurre sin el gate del servidor.
 export const FLOW_ENABLED = process.env.NEXT_PUBLIC_FLOW_ENABLED === 'true'
 
+/**
+ * Filtro PostgREST `.or(...)` de "coach pagando": suscripcion real en su gateway.
+ * MP exige `subscription_mp_id`; Flow exige `subscription_provider_external_id`. Excluye por
+ * construccion beta/internal/admin (cortesias). Es el MISMO predicado del SQL
+ * (migracion `fix_platform_mrr_net_flow_coupons`) — mantener ambos en sync (F0 auditoria 08-05).
+ */
+export const PAID_COACH_OR_FILTER =
+    'and(payment_provider.eq.mercadopago,subscription_mp_id.not.is.null),' +
+    'and(payment_provider.eq.flow,subscription_provider_external_id.not.is.null)'
+
 // ── Cambio de tarjeta self-service (feat/coach-change-card, Modalidad A) ──────
 // Gate de LANZAMIENTO del cambio de tarjeta in-place. SERVER-ONLY a propósito (NO NEXT_PUBLIC):
 // el gate de dinero de /api/payments/change-card debe ser legible en el servidor y NO inlinearse

@@ -85,9 +85,18 @@ export async function getSistemaData(): Promise<SistemaData> {
             }
         })
 
+        // supabase-js NO lanza en error: devuelve { data: null, error }. El try/catch de abajo
+        // nunca se disparaba y dbConnected era SIEMPRE true con todos los contadores en 0 verde
+        // (ROTO-7, F0 08-05). Salud real = ninguna query core con error.
+        const coreErrors = [coachesRes, clientsRes, activeRes, betaRes, expiredRes, overdueRes, auditRecentRes]
+            .filter((r) => r.error)
+        if (coreErrors.length > 0) {
+            console.error('[admin/sistema] health check: queries con error', coreErrors.map((r) => r.error?.message))
+        }
+
         return {
             checkedAt: checkedAt.toISOString(),
-            dbConnected: true,
+            dbConnected: coreErrors.length === 0,
             totalCoaches: coachesRes.count ?? 0,
             totalClients: clientsRes.count ?? 0,
             activeCoaches: activeRes.count ?? 0,

@@ -2,35 +2,6 @@
 
 import { useState } from 'react'
 import { Download } from 'lucide-react'
-import { getAllCoachesPaginated } from '../../dashboard/_data/admin.queries'
-import type { CoachListItem } from '../../dashboard/_data/types'
-
-function toCsv(coaches: CoachListItem[]): string {
-    const headers = [
-        'full_name', 'brand_name', 'slug', 'email', 'tier', 'status', 'lifecycle',
-        'billing_cycle', 'provider', 'max_clients', 'active_clients', 'total_clients',
-        'days_until_expiry', 'mrr_clp', 'last_active', 'registered_at',
-    ]
-    const rows = coaches.map(c => [
-        c.full_name ?? '',
-        c.brand_name ?? '',
-        c.slug,
-        c.auth_email ?? '',
-        c.subscription_tier ?? '',
-        c.subscription_status ?? '',
-        c.lifecycle_stage,
-        c.billing_cycle ?? '',
-        c.payment_provider ?? '',
-        String(c.max_clients ?? ''),
-        String(c.active_client_count),
-        String(c.client_count),
-        c.days_until_expiry !== null ? String(c.days_until_expiry) : '',
-        String(c.monthly_revenue),
-        c.coach_last_active_at ?? '',
-        c.created_at,
-    ].map(v => `"${v.replace(/"/g, '""')}"`).join(','))
-    return [headers.join(','), ...rows].join('\n')
-}
 
 interface Props {
     params: {
@@ -38,6 +9,7 @@ interface Props {
         status?: string
         tier?: string
         beta?: boolean
+        provider?: string
         stage?: string
         atRisk?: boolean
         sort?: string
@@ -45,15 +17,28 @@ interface Props {
     }
 }
 
+// El CSV se genera server-side en /admin/coaches/export (gate admin + service-role alla).
+// Este boton solo arma la URL con los filtros activos y descarga el blob (SEC-2, F0 08-05).
 export function CoachExportButton({ params }: Props) {
     const [loading, setLoading] = useState(false)
 
     async function handleExport() {
         setLoading(true)
         try {
-            const { coaches } = await getAllCoachesPaginated({ ...params, page: 1, pageSize: 1000 })
-            const csv = toCsv(coaches)
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+            const qs = new URLSearchParams()
+            if (params.search) qs.set('q', params.search)
+            if (params.status) qs.set('status', params.status)
+            if (params.tier) qs.set('tier', params.tier)
+            if (params.beta) qs.set('beta', 'true')
+            if (params.provider) qs.set('provider', params.provider)
+            if (params.stage) qs.set('stage', params.stage)
+            if (params.atRisk) qs.set('atRisk', 'true')
+            if (params.sort) qs.set('sort', params.sort)
+            if (params.dir) qs.set('dir', params.dir)
+
+            const res = await fetch(`/admin/coaches/export?${qs.toString()}`)
+            if (!res.ok) throw new Error(`export ${res.status}`)
+            const blob = await res.blob()
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url

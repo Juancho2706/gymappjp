@@ -5,6 +5,7 @@ import { RevenueTable } from './_components/RevenueTable'
 import { LegacyTierCard } from './_components/LegacyTierCard'
 import { AddonMetricsSection } from './_components/AddonMetricsSection'
 import { AddonsByCoachSection } from './_components/AddonsByCoachSection'
+import { LiveDiscountsSection } from './_components/LiveDiscountsSection'
 
 export const metadata = { title: 'Finanzas' }
 
@@ -25,9 +26,14 @@ export default async function AdminFinanzasPage() {
             <FinanzasKpis
                 mrrEstimate={data.mrrEstimate}
                 arrEstimate={data.arrEstimate}
+                mrrGross={data.mrrGross}
+                mrrDiscountClp={data.mrrDiscountClp}
+                byProvider={data.byProvider}
                 paidCoachCount={data.paidCoachCount}
                 arpc={data.arpc}
             />
+
+            <LiveDiscountsSection rows={data.liveDiscounts} />
 
             <FinanzasCharts
                 mrrSeries={data.mrrSeries}

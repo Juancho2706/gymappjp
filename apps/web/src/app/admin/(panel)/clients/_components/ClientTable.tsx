@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -19,20 +19,29 @@ interface Props {
 }
 
 export function ClientTable({ clients, total, coaches }: Props) {
-    const [search, setSearch] = useState('')
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    // La busqueda ahora viaja a la URL (?q=) y filtra en el SERVIDOR sobre todo el universo.
+    // Antes era un useState local que solo filtraba los 50 de la pagina visible y el param
+    // `q` del server era codigo muerto (ROTO-4, F0 08-05).
+    const [search, setSearch] = useState(searchParams.get('q') ?? '')
+    const coachIdParam = searchParams.get('coachId') ?? 'all'
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [editingClient, setEditingClient] = useState<ClientListItem | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
-    const router = useRouter()
 
-    const filtered = clients.filter((c) => {
-        const q = search.toLowerCase()
-        return (
-            c.full_name.toLowerCase().includes(q) ||
-            c.email.toLowerCase().includes(q) ||
-            (c.coach_name?.toLowerCase().includes(q) ?? false)
-        )
-    })
+    function handleSearchChange(value: string) {
+        setSearch(value)
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        debounceRef.current = setTimeout(() => {
+            const url = new URL(window.location.href)
+            if (value) url.searchParams.set('q', value)
+            else url.searchParams.delete('q')
+            url.searchParams.delete('page')
+            router.replace(url.pathname + url.search)
+        }, 300)
+    }
 
     async function handleDelete(clientId: string) {
         if (!confirm('¿Estás seguro de eliminar este cliente?')) return
@@ -68,11 +77,13 @@ export function ClientTable({ clients, total, coaches }: Props) {
                     <Input
                         placeholder="Buscar por nombre o email..."
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-9 bg-neutral-900 border-neutral-800 text-white"
                     />
                 </div>
-                <Select onValueChange={handleCoachFilter} defaultValue="all">
+                {/* Controlado por la URL: al llegar con ?coachId= (desde la ficha del coach)
+                    el select mostraba "Todos los coaches" aunque la lista viniera filtrada (ROTO-4b). */}
+                <Select onValueChange={handleCoachFilter} value={coachIdParam}>
                     <SelectTrigger className="w-[200px] bg-neutral-900 border-neutral-800 text-white">
                         <SelectValue placeholder="Todos los coaches" />
                     </SelectTrigger>
@@ -108,7 +119,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-800">
-                            {filtered.map((client) => (
+                            {clients.map((client) => (
                                 <tr key={client.id} className="hover:bg-neutral-900/40">
                                     <td className="px-4 py-3">
                                         <div>
@@ -168,7 +179,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                         </tbody>
                     </table>
                 </div>
-                {filtered.length === 0 && (
+                {clients.length === 0 && (
                     <div className="px-4 py-8 text-center text-sm text-neutral-500">
                         No se encontraron clientes.
                     </div>

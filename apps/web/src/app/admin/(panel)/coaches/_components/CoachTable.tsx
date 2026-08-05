@@ -9,6 +9,7 @@ import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import { AdminSortHeader } from '../../_components/AdminSortHeader'
 import { AdminEmptyState } from '../../_components/AdminEmptyState'
 import { AdminBulkBar } from '../../_components/AdminBulkBar'
+import { AdminPagination } from '../../_components/AdminPagination'
 import { CoachCommandPanel } from './CoachCommandPanel'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { bulkCoachStatusAction, deleteCoachAction, getCoachNotesAction, saveCoachNotesAction } from '../_actions/coach-actions'
@@ -409,6 +410,10 @@ export function CoachTable({ coaches, total }: Props) {
                     </table>
                 </div>
             </div>
+
+            {/* Paginacion: la tabla recibia `total` y nunca lo usaba — con >50 coaches el
+                resto solo existia editando la URL a mano (ROTO-1, F0 08-05). */}
+            <AdminPagination total={total} pageSize={50} />
 
             {/* Bulk action bar */}
             <AdminBulkBar

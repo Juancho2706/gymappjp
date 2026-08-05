@@ -150,6 +150,7 @@ export async function getAllCoachesPaginated(params: {
     status?: string
     tier?: string
     beta?: boolean
+    provider?: string
     stage?: string
     atRisk?: boolean
     sort?: string
@@ -163,6 +164,12 @@ export async function getAllCoachesPaginated(params: {
     const page = params.page ?? 1
     const offset = (page - 1) * pageSize
 
+    // stage/atRisk/provider no existen en el RPC: si estan activos se trae el universo
+    // (cap 1000) y se filtra + pagina ACA. Antes se filtraba la pagina ya cortada y el
+    // total quedaba corrupto ("solo en riesgo" mostraba solo los de la pagina 1, y el
+    // filtro por proveedor directamente no filtraba) (ROTO-2/ROTO-5, F0 08-05).
+    const needsClientFilter = Boolean(params.stage || params.atRisk || params.provider)
+
     const { data, error } = await (admin.rpc as any)('get_admin_coaches_paginated', {
         p_search: params.search || null,
         p_status: params.status || null,
@@ -170,8 +177,8 @@ export async function getAllCoachesPaginated(params: {
         p_beta:   params.beta   ?? null,
         p_sort:   params.sort   || 'created_at',
         p_dir:    params.dir    || 'desc',
-        p_limit:  pageSize,
-        p_offset: offset,
+        p_limit:  needsClientFilter ? 1000 : pageSize,
+        p_offset: needsClientFilter ? 0 : offset,
     })
 
     if (error || !data) {
@@ -223,14 +230,18 @@ export async function getAllCoachesPaginated(params: {
     }))
 
     const AT_RISK_STAGES = new Set(['active_atRisk', 'expiring_soon', 'pending'])
-    const filtered = params.atRisk
-        ? coaches.filter(c => AT_RISK_STAGES.has(c.lifecycle_stage))
-        : params.stage
-            ? coaches.filter(c => c.lifecycle_stage === params.stage)
-            : coaches
+    let filtered = coaches
+    if (params.provider) filtered = filtered.filter(c => c.payment_provider === params.provider)
+    if (params.atRisk) {
+        filtered = filtered.filter(c => AT_RISK_STAGES.has(c.lifecycle_stage))
+    } else if (params.stage) {
+        filtered = filtered.filter(c => c.lifecycle_stage === params.stage)
+    }
 
-    const isClientFiltered = params.atRisk || !!params.stage
-    return { coaches: filtered, total: isClientFiltered ? filtered.length : total }
+    if (needsClientFilter) {
+        return { coaches: filtered.slice(offset, offset + pageSize), total: filtered.length }
+    }
+    return { coaches, total }
 }
 
 // Keep old getAllCoaches for backward compat (clients page still uses it)
