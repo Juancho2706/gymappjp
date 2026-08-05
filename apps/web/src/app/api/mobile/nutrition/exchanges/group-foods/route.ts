@@ -32,6 +32,7 @@ import { gateExchanges } from '../_shared'
  */
 
 const MOBILE_SCOPE = { orgId: null, activeTeamId: null } as const
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function invalid(messages: string[]) {
     return NextResponse.json({ error: messages.join('. '), code: 'INVALID_PAYLOAD' }, { status: 400 })
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const groupId = url.searchParams.get('groupId')
     if (!groupId) return invalid(['Falta el grupo de porciones.'])
+    if (!UUID.test(groupId)) return invalid(['Grupo de porciones invalido.'])
     const search = url.searchParams.get('search')
     const wantsCandidates = url.searchParams.get('candidates') === '1'
 

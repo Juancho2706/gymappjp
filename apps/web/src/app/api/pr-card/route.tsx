@@ -15,6 +15,8 @@ import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 // nombre del coach + color DS por defecto, sin logo custom (respeta el gate de branding pago).
 export const runtime = 'nodejs'
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 // Tokens DS concretos (satori no lee CSS vars) — ver globals.css.
 const INK_950 = '#0B0E13'
 const INK_900 = '#12161D'
@@ -163,6 +165,9 @@ export async function GET(request: NextRequest) {
     // Alumno propio (sin clientId o clientId===self) o flujo coach (clientId de un alumno suyo).
     let targetClientId = userId
     if (clientIdParam && clientIdParam !== userId) {
+        if (!UUID.test(clientIdParam)) {
+            return new Response('Invalid clientId', { status: 400 })
+        }
         try {
             await assertCoachClientReadAccess(supabase, userId, clientIdParam)
         } catch {

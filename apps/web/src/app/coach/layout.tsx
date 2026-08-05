@@ -64,13 +64,24 @@ export default async function CoachLayout({
         redirect('/login')
     }
 
-    const [unreadCount, newsItems] = await Promise.all([
-        getUnreadNewsCount(coach.id),
-        getPublishedNewsItems(),
-    ])
+    const onboardingGuide =
+        coach.onboarding_guide != null &&
+        typeof coach.onboarding_guide === 'object' &&
+        !Array.isArray(coach.onboarding_guide)
+            ? (coach.onboarding_guide as Record<string, unknown>)
+            : {}
+
+    // ensureCoachPublicCode depende SOLO de coach y su resultado recien se usa al final del
+    // layout: se lanza aca (en paralelo con news+workspace) y se espera abajo. El waterfall
+    // historico era 6 saltos seriales antes del shell; queda getCoach → ola unica → contextos.
+    const publicCodePromise = ensureCoachPublicCode(coach.id, coach.invite_code, onboardingGuide)
+    // Si un await intermedio lanza antes del await real de abajo, esto evita el
+    // unhandled-rejection; el await de abajo conserva el error original.
+    publicCodePromise.catch(() => {})
 
     const supabase = await createClient()
-    const [activeWorkspace, workspaces] = await Promise.all([
+    const [[unreadCount, newsItems], activeWorkspace, workspaces] = await Promise.all([
+        Promise.all([getUnreadNewsCount(coach.id), getPublishedNewsItems()]),
         getPreferredWorkspaceForRender(coach.id),
         listUserWorkspacesForRender(coach.id),
     ])
@@ -187,13 +198,7 @@ export default async function CoachLayout({
     const coachPanelLogoUrl = isManaged || standaloneBrandOn ? coach.logo_url : null
     const coachPanelLogoDarkUrl = isManaged || standaloneBrandOn ? coach.logo_url_dark : null
 
-    const onboardingGuide =
-        coach.onboarding_guide != null &&
-        typeof coach.onboarding_guide === 'object' &&
-        !Array.isArray(coach.onboarding_guide)
-            ? (coach.onboarding_guide as Record<string, unknown>)
-            : {}
-    const publicCode = await ensureCoachPublicCode(coach.id, coach.invite_code, onboardingGuide)
+    const publicCode = await publicCodePromise
     const shouldConfirmPublicCode =
         isValidInviteCode(publicCode.inviteCode) &&
         (publicCode.generated || onboardingGuide.invite_code_confirmed !== true)

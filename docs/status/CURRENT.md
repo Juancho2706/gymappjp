@@ -45,8 +45,33 @@ Ademas, fase 4 en web (commit local): el dashboard del coach ya no emite el `con
 fantasma de la RPC retirada, la consulta de altas va acotada a 6 meses dentro del `Promise.all`,
 y los graficos agrupan fechas en zona Chile (el runtime de Vercel es UTC).
 
-Pendiente de este frente: medir el lado no-DB del dashboard (regla: TTFB > 1,5 s ⇒ servidor,
-si domina LCP−TTFB ⇒ code-splitting); reinstalar las 2 RPC agregadas con scope solo como higiene.
+Pendiente de este frente: ~~medir el lado no-DB~~ medido 05-08 (TTFB p75 3,1 s post-deploy ⇒
+servidor; FCP≈LCP ⇒ no es code-splitting); reinstalar las 2 RPC agregadas con scope solo como higiene.
+
+## Plan post-runbook ejecutado (2026-08-05 tarde)
+
+Tres migraciones mas en LIVE + codigo local (commits sin push):
+
+- `20260805181715_drop_public_read_coach_branding_leak` (SEC-B): cierra la fuga cross-tenant de
+  billing en `coaches` (policy `public_read_coach_branding` qual TRUE dejaba a cualquier
+  authenticated leer todas las filas con todas las columnas). El proxy ahora lee el branding /c
+  con un client anon dedicado (column-grants de branding). Smoke tx-rollback: alumno ve solo su
+  coach; coach ajeno = 0; anon (logins) intacto.
+- `20260805182135_nutrition_v2_initplan_wraps_and_fk_indexes` (MIG-D): 11 `auth.uid()` →
+  `(select auth.uid())` en 8 policies de nutricion v2 (expresiones verbatim de pg_policies,
+  verificadas post-aplicacion) + 8 indices FK. `nutrition_v2_set_based_rollback.sql` actualizado
+  para conservar el wrap.
+- `20260805182248_revoke_anon_execute_writer_definer_fns` (F): revoke EXECUTE a `anon` en las 4
+  funciones DEFINER de escritura; las 7 de lectura quedan (hot path anon del proxy).
+
+Codigo (local): PR-A guard del crash `proxy.ts` (slug invalido en /c destructuraba null) +
+validacion uuid en 6 rutas API + catch tipado en `flow-reconcile`; PR-C quick-wins del proxy
+(prefetch /c sin Q1/Q2, cache branding y flag Edge Config por instancia, clients+gate en
+paralelo) y dashboard coach (workspace dedup — antes se resolvia 3 veces —, pulse de 6 olas
+seriales a gate→ola unica→totals, layout de 6 saltos a 3); PR-B guards uuid en RN + filtro en
+`mapApiDashboard` + breadcrumbs (merge listo, **OTA recien post-aprobacion iOS**).
+
+Criterio de exito PR-C: TTFB p75 < 1,5 s por ruta en Sentry a las 48 h del deploy web.
 
 ## Prioridad actual
 

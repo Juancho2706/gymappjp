@@ -380,11 +380,21 @@ export class DashboardService {
         const lastWeekStr = subDays(now, 7).toISOString();
         const logsFrom = subDays(now, 35).toISOString();
 
+        // Todas las lecturas de esta seccion dependen SOLO del gate de `clients` de arriba:
+        // historicamente corrian como 6 olas seriales (logs → lwd → check_ins → programs →
+        // nutricion → streaks) y el TTFB pagaba la suma. Se lanzan JUNTAS en una sola ola;
+        // las unicas dependencias reales quedan abajo (planned_set_totals necesita los ids de
+        // programas; el fallback de streaks necesita el resultado del batch). El numero de
+        // chunks por coach es 1-2 (CLIENT_ID_IN_CHUNK), asi que el paralelismo no presiona el
+        // pool de PostgREST.
+        const clientIdChunks = chunkIds(clientIds, CLIENT_ID_IN_CHUNK);
+        const logDateCutoff = lastWeekStr.split('T')[0]!;
+
         // Cota anti-runaway por chunk (ver WORKOUT_LOGS_ROW_CAP). El volumen real del War Room
-        // no se acerca al tope; y lastWorkoutDate se resuelve por RPC con MAX server-side (abajo),
+        // no se acerca al tope; y lastWorkoutDate se resuelve por RPC con MAX server-side,
         // así que nunca depende de este límite de filas de PostgREST.
-        const logChunks = await Promise.all(
-            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+        const logsPromise = Promise.all(
+            clientIdChunks.map((chunk) =>
                 this.supabase
                     .from('workout_logs')
                     .select('client_id, logged_at, weight_kg, reps_done, plan_name_at_log')
@@ -396,21 +406,17 @@ export class DashboardService {
 
         // True last-workout-date per client via server-side GROUP BY.
         // This bypasses the PostgREST row-count limit that would truncate individual rows.
-        const lastWorkoutDateMap = new Map<string, string>();
-        for (const chunk of chunkIds(clientIds, CLIENT_ID_IN_CHUNK)) {
-            const { data: lwdRows } = await (this.supabase as any).rpc(
-                'get_clients_last_workout_date',
-                { p_client_ids: chunk, p_since: logsFrom }
-            );
-            if (lwdRows) {
-                for (const row of lwdRows as { client_id: string; last_logged_at: string }[]) {
-                    if (row.last_logged_at) lastWorkoutDateMap.set(row.client_id, row.last_logged_at);
-                }
-            }
-        }
+        const lastWorkoutPromise = Promise.all(
+            clientIdChunks.map((chunk) =>
+                (this.supabase as any).rpc('get_clients_last_workout_date', {
+                    p_client_ids: chunk,
+                    p_since: logsFrom,
+                })
+            )
+        );
 
-        const checkChunks = await Promise.all(
-            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+        const checksPromise = Promise.all(
+            clientIdChunks.map((chunk) =>
                 this.supabase
                     .from('check_ins')
                     .select('client_id, created_at, date, weight, energy_level')
@@ -418,8 +424,8 @@ export class DashboardService {
                     .gte('created_at', logsFrom)
             )
         );
-        const programChunks = await Promise.all(
-            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+        const programsPromise = Promise.all(
+            clientIdChunks.map((chunk) =>
                 this.supabase
                     .from('workout_programs')
                     .select(
@@ -431,55 +437,8 @@ export class DashboardService {
             )
         );
 
-        const logsMerged = logChunks.flatMap((r) => r.data ?? []);
-        const checksMerged = checkChunks.flatMap((r) => r.data ?? []);
-        const programsMerged = programChunks.flatMap((r) => r.data ?? []);
-
-        const logsByClient = new Map<string, typeof logsMerged>();
-        for (const row of logsMerged) {
-            const id = row.client_id;
-            if (!logsByClient.has(id)) logsByClient.set(id, []);
-            logsByClient.get(id)!.push(row);
-        }
-
-        const checksByClient = new Map<string, typeof checksMerged>();
-        for (const row of checksMerged) {
-            const id = row.client_id;
-            if (!checksByClient.has(id)) checksByClient.set(id, []);
-            checksByClient.get(id)!.push(row);
-        }
-
-        const programByClient = new Map<string, (typeof programsMerged)[number]>();
-        const sortedPrograms = [...programsMerged].sort(
-            (a, b) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        for (const p of sortedPrograms) {
-            const cid = p.client_id;
-            if (!cid || programByClient.has(cid)) continue;
-            programByClient.set(cid, p);
-        }
-
-        const plannedSetTotals = new Map<string, number>();
-        const programIdsForRpc = [...new Set(programByClient.values().map((p) => p.id))].filter(Boolean);
-        for (const chunk of chunkIds(programIdsForRpc, PROGRAM_ID_RPC_CHUNK)) {
-            if (chunk.length === 0) continue;
-            const { data, error } = await this.supabase.rpc('get_workout_program_planned_set_totals', {
-                p_program_ids: chunk,
-            });
-            if (error || !data) continue;
-            for (const row of data) {
-                plannedSetTotals.set(row.program_id, Number(row.total_planned_sets));
-            }
-        }
-
-        const logDateCutoff = lastWeekStr.split('T')[0]!;
-        const nutritionEndIso = getTodayInSantiago(now).iso;
-        const nutritionMap = new Map<string, any[]>();
-        for (const id of clientIds) nutritionMap.set(id, []);
-
-        const nutritionChunks = await Promise.all(
-            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+        const nutritionPromise = Promise.all(
+            clientIdChunks.map((chunk) =>
                 this.supabase
                     .from('daily_nutrition_logs')
                     .select(
@@ -513,6 +472,82 @@ export class DashboardService {
             )
         );
 
+        // Camino batch (preferido): una sola llamada agrega los streaks de TODOS los alumnos del coach
+        // en Postgres. Requiere `auth.uid() = p_coach_id` (SECURITY DEFINER con guard), por lo que solo
+        // funciona en sesión `authenticated` (web/RSC). Bajo `service_role` (ruta mobile) devuelve [].
+        const streakBatchPromise = this.supabase.rpc('get_coach_clients_streaks', {
+            p_coach_id: coachId,
+        });
+
+        const [logChunks, lwdChunks, checkChunks, programChunks, nutritionChunks, streakBatchRes] =
+            await Promise.all([
+                logsPromise,
+                lastWorkoutPromise,
+                checksPromise,
+                programsPromise,
+                nutritionPromise,
+                streakBatchPromise,
+            ]);
+
+        const lastWorkoutDateMap = new Map<string, string>();
+        for (const { data: lwdRows } of lwdChunks as { data: { client_id: string; last_logged_at: string }[] | null }[]) {
+            if (lwdRows) {
+                for (const row of lwdRows) {
+                    if (row.last_logged_at) lastWorkoutDateMap.set(row.client_id, row.last_logged_at);
+                }
+            }
+        }
+
+        const logsMerged = logChunks.flatMap((r) => r.data ?? []);
+        const checksMerged = checkChunks.flatMap((r) => r.data ?? []);
+        const programsMerged = programChunks.flatMap((r) => r.data ?? []);
+
+        const logsByClient = new Map<string, typeof logsMerged>();
+        for (const row of logsMerged) {
+            const id = row.client_id;
+            if (!logsByClient.has(id)) logsByClient.set(id, []);
+            logsByClient.get(id)!.push(row);
+        }
+
+        const checksByClient = new Map<string, typeof checksMerged>();
+        for (const row of checksMerged) {
+            const id = row.client_id;
+            if (!checksByClient.has(id)) checksByClient.set(id, []);
+            checksByClient.get(id)!.push(row);
+        }
+
+        const programByClient = new Map<string, (typeof programsMerged)[number]>();
+        const sortedPrograms = [...programsMerged].sort(
+            (a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        for (const p of sortedPrograms) {
+            const cid = p.client_id;
+            if (!cid || programByClient.has(cid)) continue;
+            programByClient.set(cid, p);
+        }
+
+        // Unica dependencia real de segunda ola: necesita los ids de programas ya resueltos.
+        const plannedSetTotals = new Map<string, number>();
+        const programIdsForRpc = [...new Set(programByClient.values().map((p) => p.id))].filter(Boolean);
+        const totalsChunks = await Promise.all(
+            chunkIds(programIdsForRpc, PROGRAM_ID_RPC_CHUNK)
+                .filter((chunk) => chunk.length > 0)
+                .map((chunk) =>
+                    this.supabase.rpc('get_workout_program_planned_set_totals', { p_program_ids: chunk })
+                )
+        );
+        for (const { data, error } of totalsChunks) {
+            if (error || !data) continue;
+            for (const row of data) {
+                plannedSetTotals.set(row.program_id, Number(row.total_planned_sets));
+            }
+        }
+
+        const nutritionEndIso = getTodayInSantiago(now).iso;
+        const nutritionMap = new Map<string, any[]>();
+        for (const id of clientIds) nutritionMap.set(id, []);
+
         for (const res of nutritionChunks) {
             if (res.error) continue;
             for (const row of res.data || []) {
@@ -522,14 +557,8 @@ export class DashboardService {
             }
         }
 
-        // Camino batch (preferido): una sola llamada agrega los streaks de TODOS los alumnos del coach
-        // en Postgres. Requiere `auth.uid() = p_coach_id` (SECURITY DEFINER con guard), por lo que solo
-        // funciona en sesión `authenticated` (web/RSC). Bajo `service_role` (ruta mobile) devuelve [].
         const streakMap = new Map<string, number>();
-        const { data: streakBatch, error: streakBatchErr } = await this.supabase.rpc(
-            'get_coach_clients_streaks',
-            { p_coach_id: coachId }
-        );
+        const { data: streakBatch, error: streakBatchErr } = streakBatchRes;
 
         const batchRows = streakBatch ?? [];
         if (!streakBatchErr && batchRows.length > 0) {

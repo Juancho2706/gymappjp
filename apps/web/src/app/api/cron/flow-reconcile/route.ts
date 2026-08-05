@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { mapProviderStatus } from '@/lib/payments/subscription-state'
+import { ProviderRequestError } from '@/lib/payments/provider-error'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { getCompositeAmountClp, toBillableAddons } from '@/services/billing/addons.service'
 import { resolveDiscountSpecByRedemptionId, isChargeableNetClp } from '@/services/billing/discount.service'
@@ -182,8 +183,15 @@ export async function GET(req: Request) {
 
             checked++
         } catch (err) {
-            console.error(`[cron/flow-reconcile] failed for coach ${coach.slug}:`, err)
-            errors++
+            // Sub inexistente en Flow (404): no es un error de la corrida, es una divergencia real
+            // (DB dice viva, Flow no la tiene) — mismo criterio que verifyRemote de paid-expiry.
+            if (err instanceof ProviderRequestError && err.isNotFound) {
+                divergences.push({ coachId: coach.id, slug: coach.slug, kind: 'subscription_not_found', detail: `flow_subscription_id=${subId} not found` })
+                console.warn(`[cron/flow-reconcile] subscription not found in Flow for coach ${coach.slug}:`, err.message)
+            } else {
+                console.error(`[cron/flow-reconcile] failed for coach ${coach.slug}:`, err)
+                errors++
+            }
         }
     }
 

@@ -85,7 +85,8 @@ export async function GET(request: NextRequest) {
             admin,
         ),
         getPlanDayMicros(clientId, ctx.planId, date, admin),
-        getMicroTargetsForClient(ctx.coachId, clientId, admin),
+        // Nil uuid en vez de null crudo — mismo patron de :79 (evita el cast a uuid roto).
+        getMicroTargetsForClient(ctx.coachId ?? '00000000-0000-0000-0000-000000000000', clientId, admin),
     ])
 
     const microsBase = flags.micros_base === true

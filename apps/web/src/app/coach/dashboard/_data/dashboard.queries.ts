@@ -11,6 +11,8 @@ import {
     type DirectoryPulseRow,
 } from '@/services/dashboard.service'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
+import type { WorkspaceSummary } from '@/domain/auth/types'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveCheckinPhotoUrl } from '@/lib/storage/checkin-photos'
 import type { DbClient } from '@/infrastructure/db/interfaces'
@@ -105,11 +107,14 @@ function applyResourceOwnerScope<T extends { eq: (column: string, value: string)
     return scope.teamId ? query : query.eq('coach_id', userId)
 }
 
-async function resolveCoachDashboardScope(db: DbClient, userId: string): Promise<DashboardClientScope> {
-    const workspace = await resolvePreferredWorkspace(db, userId)
+function scopeFromWorkspace(workspace: WorkspaceSummary | null): DashboardClientScope {
     if (workspace?.type === 'enterprise_coach') return { orgId: workspace.orgId, teamId: null }
     if (workspace?.type === 'coach_team') return { orgId: null, teamId: workspace.teamId }
     return { orgId: null, teamId: null }
+}
+
+async function resolveCoachDashboardScope(db: DbClient, userId: string): Promise<DashboardClientScope> {
+    return scopeFromWorkspace(await resolvePreferredWorkspace(db, userId))
 }
 
 function monthKeyFromYm(y: number, month0: number): string {
@@ -173,7 +178,11 @@ export interface RiskAlertItem {
 export async function getCoachDashboardDataV2(userId: string) {
     return measureServer('getCoachDashboardDataV2', async () => {
         const supabase = await createClient()
-        const scope = await resolveCoachDashboardScope(supabase, userId)
+        // Camino RSC (cookies): reusar la resolucion de workspace memoizada por request — el
+        // layout ya la ejecuto, esto era una TERCERA resolucion completa (~7 queries en 2 olas).
+        // El camino mobile/service-role (WithClient, abajo) sigue con resolveCoachDashboardScope:
+        // ahi no hay cookies ni React.cache.
+        const scope = scopeFromWorkspace(await getPreferredWorkspaceForRender(userId))
         const base = await getCoachDashboardDataInner(userId, supabase, undefined, scope)
         const pulse = await getCachedDirectoryPulse(userId, scope)
 

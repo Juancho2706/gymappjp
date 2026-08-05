@@ -1,5 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { createClient as createBareClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
@@ -34,6 +34,35 @@ type Client = Tables<'clients'>
 
 // Phase 2: isPrefetchRequest extraída a `@/lib/http/prefetch-request` (Phase 5 — función pura,
 // testeada con matriz de headers). Salta SOLO efectos colaterales (touch_coach_activity) en prefetch.
+
+// Caches por-instancia (estado de modulo: vive por isolate del runtime, TTL corto).
+// 1) Flag PROXY_USE_GETCLAIMS: evita el round-trip a Edge Config ANTES del auth en cada request.
+// 2) Branding /c por slug: el SELECT de branding corria en CADA request Y CADA prefetch del
+//    portal alumno (flood diagnosticado 2026-07-29). Solo se cachean HITS (data presente):
+//    un miss o error sigue yendo a la DB para no ocultar coaches recien creados ni degradar
+//    el fallback minimal del incidente 2026-06-21.
+const PROXY_CLAIMS_FLAG_TTL_MS = 60_000
+let proxyClaimsFlagCache: { value: boolean; ts: number } | null = null
+const COACH_BRANDING_TTL_MS = 60_000
+type CoachBrandingRow = Record<string, unknown> & { id: string; slug: string }
+const coachBrandingCache = new Map<string, { data: CoachBrandingRow; ts: number }>()
+
+// Branding /c es informacion PUBLICA: se lee SIEMPRE con el rol anon (limitado por los
+// column-grants de branding, migracion 20260617033845), nunca con la sesion del visitante.
+// SEC-B 2026-08-05: esto permite cerrar la policy sobreancha `public_read_coach_branding`
+// (authenticated leia billing de TODOS los coaches) sin que una sesion ajena que visita
+// /c/<otro-coach> reciba 404 por RLS.
+let brandingAnonClientSingleton: SupabaseClient<Database> | null = null
+function brandingAnonClient(): SupabaseClient<Database> {
+    if (!brandingAnonClientSingleton) {
+        brandingAnonClientSingleton = createBareClient<Database>(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { auth: { persistSession: false, autoRefreshToken: false } },
+        )
+    }
+    return brandingAnonClientSingleton
+}
 
 /**
  * F2/B-9: answer "is this coach an active member of this org?" from the proxy. The alumno's
@@ -204,7 +233,11 @@ export async function proxy(request: NextRequest) {
     const SLUG_RE = /^[a-z0-9-]{3,50}$/
     const coachBrandingPromise = cRouteSlug
         ? (() => {
-              const base = supabase
+              const cached = coachBrandingCache.get(cRouteSlug)
+              if (cached && Date.now() - cached.ts < COACH_BRANDING_TTL_MS) {
+                  return Promise.resolve({ data: cached.data, error: null })
+              }
+              const base = brandingAnonClient()
                   .from('coaches')
                   .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant, theme_preset_key, login_layout_key, loader_config, executor_theme')
               if (INVITE_CODE_RE.test(cRouteSlug)) return base.eq('invite_code', cRouteSlug).maybeSingle()
@@ -235,11 +268,21 @@ export async function proxy(request: NextRequest) {
 
     let useClaims = false
     if (!noSessionCookie && !needsFullUser && process.env.EDGE_CONFIG) {
-        try {
-            const { get } = await import('@vercel/edge-config')
-            useClaims = (await get<boolean>('PROXY_USE_GETCLAIMS')) === true
-        } catch {
-            useClaims = false // fail-CLOSED: cualquier falla de Edge Config -> getUser
+        // Cache por-instancia del flag: era un round-trip de red a Edge Config ANTES del auth
+        // en CADA request. TTL corto: apagar el flag sigue tomando efecto en <60s por isolate.
+        const now = Date.now()
+        if (proxyClaimsFlagCache && now - proxyClaimsFlagCache.ts < PROXY_CLAIMS_FLAG_TTL_MS) {
+            useClaims = proxyClaimsFlagCache.value
+        } else {
+            try {
+                const { get } = await import('@vercel/edge-config')
+                useClaims = (await get<boolean>('PROXY_USE_GETCLAIMS')) === true
+                proxyClaimsFlagCache = { value: useClaims, ts: now }
+            } catch {
+                // fail-CLOSED con memoria: si Edge Config falla, usar el ultimo valor conocido
+                // (stale) antes que degradar a getUser en masa; sin valor previo -> getUser.
+                useClaims = proxyClaimsFlagCache?.value ?? false
+            }
         }
     }
 
@@ -749,8 +792,17 @@ export async function proxy(request: NextRequest) {
             return supabaseResponse
         }
 
+        // Slug con formato invalido (no matchea INVITE_CODE_RE ni SLUG_RE): la IIFE de arriba
+        // devolvio null y el await destructuraba null en runtime (bots, typos, mayusculas).
+        // Formato invalido no puede ser un coach real → mismo destino que el coach inexistente.
+        if (!coachBrandingPromise) {
+            const notFoundUrl = request.nextUrl.clone()
+            notFoundUrl.pathname = '/not-found'
+            return NextResponse.redirect(notFoundUrl)
+        }
+
         // Coach branding fetch was started in parallel with getUser() above — await the result
-        let { data: coachData, error: coachBrandingError } = await coachBrandingPromise!
+        let { data: coachData, error: coachBrandingError } = await coachBrandingPromise
 
         // Hardening (incidente 2026-06-21): si el SELECT rich de branding falla —p.ej. una
         // columna nueva del select sin GRANT a `anon` (el login pre-auth corre como anon)—
@@ -766,12 +818,17 @@ export async function proxy(request: NextRequest) {
                 error: coachBrandingError.message,
             })
             const idCol = INVITE_CODE_RE.test(coachSlug) ? 'invite_code' : 'slug'
-            const { data: minData } = await supabase
+            const { data: minData } = await brandingAnonClient()
                 .from('coaches')
                 .select('id, brand_name, primary_color, logo_url, slug')
                 .eq(idCol, coachSlug)
                 .maybeSingle()
             coachData = minData as typeof coachData
+        }
+
+        // Solo HITS limpios entran al cache (ni errores ni misses — ver nota del modulo).
+        if (coachData && !coachBrandingError) {
+            coachBrandingCache.set(coachSlug, { data: coachData as unknown as CoachBrandingRow, ts: Date.now() })
         }
 
         const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant' | 'theme_preset_key' | 'loader_config' | 'executor_theme'> | null
@@ -859,6 +916,15 @@ export async function proxy(request: NextRequest) {
         // Check if client is authenticated for protected /c/* routes (not login page)
         const isLoginPage = pathname.endsWith('/login')
 
+        // Prefetch de /c con sesion viva (el matcher NO excluye prefetch a proposito: los headers
+        // de marca deben viajar tambien en el payload prefetcheado): servir la marca y saltar las
+        // lecturas de cliente/gate — el flood Q1/Q2 diagnosticado 2026-07-29 (~12 prefetch por
+        // pageview del portal). La barrera de datos real es RLS + el gate re-evaluado en la
+        // navegacion real y en toda server action.
+        if (user && isPrefetchRequest(request.headers)) {
+            return buildClientRouteResponse()
+        }
+
         if (isLoginPage && user) {
             // If already logged in, check if it's a client of this coach (direct or via org) and redirect to dashboard
             const { data: clientData } = await supabase
@@ -890,6 +956,16 @@ export async function proxy(request: NextRequest) {
                 })
                 return redirect
             }
+
+            // La fila del cliente (Q1) y el gate de suscripcion del coach (Edge Config + lectura
+            // de sub) no dependen entre si: lanzados juntos ahorran 1-2 round-trips seriales de
+            // TTFB. El .catch(null) preserva el fail-OPEN documentado abajo (un fallo del gate
+            // jamas bloquea, y una promise ya lanzada nunca queda flotando si salimos antes).
+            const studentAccessPromise = isStudentAccessGateEnabled()
+                .then(enabled =>
+                    enabled ? resolveStudentAccessForCoach(supabase, coach.id, { gateEnabled: true }) : null,
+                )
+                .catch(() => null)
 
             // Verify the user is a client belonging to this coach (direct or via org membership)
             const { data: rawClientData } = await supabase
@@ -999,9 +1075,8 @@ export async function proxy(request: NextRequest) {
             // PostgREST directo y no pasa por aca). Fail-OPEN: managed org/team resuelve `ok` por
             // hasEffectiveAccess; un fallo de lectura tambien degrada a `ok` (nunca bloquea por esta capa).
             let studentBlocked = false
-            const studentGateEnabled = await isStudentAccessGateEnabled()
-            if (studentGateEnabled) {
-                const access = await resolveStudentAccessForCoach(supabase, coach.id, { gateEnabled: true })
+            const access = await studentAccessPromise
+            if (access) {
                 if (access.state === 'readonly') {
                     // Bloqueo TOTAL post-gracia (decision CEO #9, ejecutor V3): pasada la gracia el
                     // alumno NO ve nada — ni dashboard, ni plan, ni historial. La UNICA superficie
