@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { headers } from 'next/headers'
+import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { coachIdentifierColumn } from '@/lib/coach/invite-code'
@@ -18,7 +19,7 @@ async function getTeamBrandContext() {
     const basePath = h.get('x-client-base-path') ?? ''
     const isOrgSource = h.get('x-workspace-brand-source') === 'organization'
     const isTeam = isOrgSource || basePath.startsWith('/t')
-    return { isTeam, teamBrandName: isTeam ? h.get('x-coach-brand-name') : null }
+    return { isTeam, teamBrandName: isTeam ? decodeBrandHeaderValue(h.get('x-coach-brand-name')) : null }
 }
 
 export const getClientRootUser = cache(async (): Promise<{ id: string; email: string | null } | null> => {

@@ -1,5 +1,6 @@
 import { headers } from 'next/headers'
 import { ClientLoadingShell } from '@/components/ui/EvaRouteLoader'
+import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 
 export async function BrandClientLoadingShell({
     children,
@@ -9,7 +10,7 @@ export async function BrandClientLoadingShell({
     layout?: 'default' | 'fullscreen'
 }) {
     const h = await headers()
-    const customText = h.get('x-coach-loader-text') || undefined
+    const customText = decodeBrandHeaderValue(h.get('x-coach-loader-text')) || undefined
     const useCustom = h.get('x-coach-use-custom-loader') === 'true'
     const textColor = h.get('x-coach-loader-text-color') || undefined
     const iconModeRaw = h.get('x-coach-loader-icon-mode') ?? 'eva'

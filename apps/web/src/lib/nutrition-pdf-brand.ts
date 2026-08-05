@@ -4,6 +4,7 @@
  */
 
 import type { PdfBrand } from '@/domain/nutrition/exchange.types'
+import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 
 export type Rgb = [number, number, number]
 
@@ -111,7 +112,7 @@ export function pdfBrandFromProxyHeaders(h: {
     get(name: string): string | null
 }): PdfBrand {
     return resolvePdfBrand({
-        brandName: h.get('x-coach-brand-name'),
+        brandName: decodeBrandHeaderValue(h.get('x-coach-brand-name')),
         primaryColor: h.get('x-coach-primary-color'),
         logoUrl: h.get('x-coach-logo-url'),
         subscriptionTier: h.get('x-coach-subscription-tier') ?? 'starter',

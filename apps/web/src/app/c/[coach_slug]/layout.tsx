@@ -1,4 +1,5 @@
 import { headers } from 'next/headers'
+import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 import { redirect } from 'next/navigation'
 import type { Metadata, Viewport } from 'next'
 import {
@@ -63,7 +64,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { coach_slug } = await params
     // Read branding from middleware headers — no extra DB query needed
     const headersList = await headers()
-    const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
+    const brandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name')) ?? 'Mi Coach'
     const logoUrl = headersList.get('x-coach-logo-url') || null
 
     const metadataBase = resolveMetadataBase()
@@ -171,7 +172,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const logoUrl = isFreeTier
         ? BRAND_APP_ICON
         : (headersList.get('x-coach-logo-url') || BRAND_APP_ICON)
-    const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
+    const brandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name')) ?? 'Mi Coach'
     // Gate de suscripcion del coach (politica CEO 2026-07-18): el branch `/c` del proxy setea
     // `x-student-access-state` en 'grace' (ventana de 7 dias post period_end — alumno 100% funcional,
     // banner discreto) o 'readonly' (post-gracia: el proxy sirve SOLO las superficies de lectura —
@@ -184,14 +185,14 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const isStudentReadonly = studentAccessState === 'readonly'
     // B-9: enterprise client whose coach left the org — show a reassignment prompt.
     const isOrphan = headersList.get('x-workspace-orphan') === 'true'
-    const orphanOrgName = headersList.get('x-orphan-org-name') ?? ''
+    const orphanOrgName = decodeBrandHeaderValue(headersList.get('x-orphan-org-name')) ?? ''
     const coachId = headersList.get('x-coach-id') ?? ''
     // Ejecutor V3 (E0.7) — preferencia de tema del ejecutor del alumno. Se EXPONE en el árbol /c
     // (data-executor-theme) para que la Ola 2 lo lea; hoy nada lo consume visualmente. No gateado
     // por tier (es una preferencia, no branding). Fail-safe: valor desconocido/ausente => 'coach'.
     const executorThemeRaw = headersList.get('x-coach-executor-theme')
     const executorTheme = executorThemeRaw === 'eva' ? 'eva' : 'coach'
-    const loaderText = isFreeTier ? '' : (headersList.get('x-coach-loader-text') ?? '')
+    const loaderText = isFreeTier ? '' : (decodeBrandHeaderValue(headersList.get('x-coach-loader-text')) ?? '')
     const useCustomLoader = !isFreeTier && headersList.get('x-coach-use-custom-loader') === 'true'
     const loaderTextColor = isFreeTier ? undefined : (headersList.get('x-coach-loader-text-color') ?? undefined)
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
@@ -218,7 +219,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const safeLoaderText = sanitizeCssStringValue(loaderText || '')
     // Loader COMPUESTO (loader_config jsonb): viaja como JSON string y se emite como CSS var
     // pa' que EvaRouteLoader lo lea post-mount. Solo se acepta JSON válido con shape esperado.
-    const loaderConfigRaw = isFreeTier ? '' : (headersList.get('x-coach-loader-config') ?? '')
+    const loaderConfigRaw = isFreeTier ? '' : (decodeBrandHeaderValue(headersList.get('x-coach-loader-config')) ?? '')
     const safeLoaderConfig = (() => {
         if (!loaderConfigRaw) return ''
         try {

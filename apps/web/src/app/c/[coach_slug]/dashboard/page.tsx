@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 import type { Metadata } from 'next'
 
 import { DashboardShell } from './_components/DashboardShell'
@@ -65,7 +66,7 @@ export default async function ClientDashboardPage({ params }: Props) {
     // PERSONAL del coach (lo gestiona el dueño del team, no el coach). Standalone => sin cambios.
     const basePath = headersList.get('x-client-base-path') ?? ''
     const isTeamContext = headersList.get('x-workspace-brand-source') === 'organization' || basePath.startsWith('/t')
-    const headerTeamBrandName = headersList.get('x-coach-brand-name')
+    const headerTeamBrandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name'))
 
     const greetingBrandName = isTeamContext ? headerTeamBrandName : coachBranding?.brand_name
     const greetingWelcomeMessage = isTeamContext ? null : coachBranding?.welcome_message

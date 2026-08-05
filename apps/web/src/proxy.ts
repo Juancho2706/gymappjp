@@ -27,6 +27,7 @@ import {
     rateLimitAdmin,
 } from '@/lib/rate-limit'
 import { getEnterpriseDomain } from '@/lib/enterprise/domain'
+import { encodeBrandHeaderValue } from '@/lib/brand-header-codec'
 import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 
 type Coach = Tables<'coaches'>
@@ -578,7 +579,7 @@ export async function proxy(request: NextRequest) {
         const eRequestHeaders = new Headers(request.headers)
         eRequestHeaders.set('x-coach-id', eStr(eCtx.coach_id) || eStr(eCtx.org_id))
         eRequestHeaders.set('x-coach-slug', eStr(eCtx.coach_slug))
-        eRequestHeaders.set('x-coach-brand-name', eStr(eCtx.name) || 'EVA')
+        eRequestHeaders.set('x-coach-brand-name', encodeBrandHeaderValue(eStr(eCtx.name) || 'EVA'))
         eRequestHeaders.set('x-coach-primary-color', eStr(eCtx.primary_color) || SYSTEM_PRIMARY_COLOR)
         eRequestHeaders.set('x-coach-logo-url', eStr(eCtx.logo_url).trim() || BRAND_APP_ICON)
         eRequestHeaders.set('x-coach-subscription-tier', 'pro')
@@ -586,7 +587,7 @@ export async function proxy(request: NextRequest) {
         eRequestHeaders.set('x-coach-accent-dark', eStr(eCtx.accent_dark).trim())
         eRequestHeaders.set('x-coach-logo-url-dark', eStr(eCtx.logo_url_dark).trim())
         eRequestHeaders.set('x-coach-neutral-tint', String(eCtx.neutral_tint === true))
-        eRequestHeaders.set('x-coach-loader-text', eStr(eCtx.loader_text).trim())
+        eRequestHeaders.set('x-coach-loader-text', encodeBrandHeaderValue(eStr(eCtx.loader_text).trim()))
         eRequestHeaders.set('x-coach-use-custom-loader', String(eCtx.use_custom_loader === true))
         eRequestHeaders.set('x-coach-loader-text-color', eStr(eCtx.loader_text_color).trim())
         eRequestHeaders.set('x-coach-loader-icon-mode', eCtx.loader_icon_mode === 'text' ? 'none' : 'coach')
@@ -678,7 +679,7 @@ export async function proxy(request: NextRequest) {
         const tRequestHeaders = new Headers(request.headers)
         tRequestHeaders.set('x-coach-id', tStr(tCtx.coach_id) || tStr(tCtx.team_id))
         tRequestHeaders.set('x-coach-slug', tStr(tCtx.coach_slug))
-        tRequestHeaders.set('x-coach-brand-name', tStr(tCtx.name) || 'EVA')
+        tRequestHeaders.set('x-coach-brand-name', encodeBrandHeaderValue(tStr(tCtx.name) || 'EVA'))
         tRequestHeaders.set('x-coach-primary-color', tStr(tCtx.primary_color) || SYSTEM_PRIMARY_COLOR)
         tRequestHeaders.set('x-coach-logo-url', tStr(tCtx.logo_url).trim() || BRAND_APP_ICON)
         tRequestHeaders.set('x-coach-subscription-tier', 'pro')
@@ -689,7 +690,7 @@ export async function proxy(request: NextRequest) {
         tRequestHeaders.set('x-coach-accent-dark', tStr(tCtx.accent_dark).trim())
         tRequestHeaders.set('x-coach-logo-url-dark', tStr(tCtx.logo_url_dark).trim())
         tRequestHeaders.set('x-coach-neutral-tint', String(tCtx.neutral_tint === true))
-        tRequestHeaders.set('x-coach-loader-text', tStr(tCtx.loader_text).trim())
+        tRequestHeaders.set('x-coach-loader-text', encodeBrandHeaderValue(tStr(tCtx.loader_text).trim()))
         tRequestHeaders.set('x-coach-use-custom-loader', String(tCtx.use_custom_loader === true))
         tRequestHeaders.set('x-coach-loader-text-color', tStr(tCtx.loader_text_color).trim())
         tRequestHeaders.set(
@@ -851,7 +852,7 @@ export async function proxy(request: NextRequest) {
         const applyBrandHeaders = (h: Headers) => {
             h.set('x-coach-id', coach.id)
             h.set('x-coach-slug', coach.slug)
-            h.set('x-coach-brand-name', coach.brand_name || 'EVA')
+            h.set('x-coach-brand-name', encodeBrandHeaderValue(coach.brand_name || 'EVA'))
             h.set('x-coach-subscription-tier', tier)
             // Ejecutor V3 (E0.7) — preferencia de tema del ejecutor del alumno: NO es branding visual
             // gateado, solo indica qué paleta usa el ejecutor ('coach' = colores del coach, 'eva' =
@@ -866,7 +867,7 @@ export async function proxy(request: NextRequest) {
                 h.set('x-coach-neutral-tint', String(coach.neutral_tint === true))
                 h.set('x-coach-logo-url-dark', coach.logo_url_dark?.trim() || '')
                 h.set('x-coach-font-key', coach.brand_font_key?.trim() || '')
-                h.set('x-coach-loader-text', coach.loader_text?.trim() || '')
+                h.set('x-coach-loader-text', encodeBrandHeaderValue(coach.loader_text?.trim() || ''))
                 h.set('x-coach-use-custom-loader', String(coach.use_custom_loader ?? false))
                 h.set('x-coach-loader-text-color', coach.loader_text_color?.trim() || '')
                 h.set('x-coach-loader-icon-mode', coach.loader_icon_mode || 'eva')
@@ -875,7 +876,7 @@ export async function proxy(request: NextRequest) {
                 // color/color2/accent/tinte/fuente/loader desde el catálogo (resolvePresetBranding).
                 h.set('x-coach-theme-preset-key', coach.theme_preset_key || '')
                 // Loader compuesto (jsonb) — el layout lo valida/sanitiza antes de emitirlo como CSS var.
-                h.set('x-coach-loader-config', coach.loader_config ? JSON.stringify(coach.loader_config) : '')
+                h.set('x-coach-loader-config', coach.loader_config ? encodeBrandHeaderValue(JSON.stringify(coach.loader_config)) : '')
             } else {
                 // free/starter → TODO EVA system (visual). El nombre del coach se conserva (identidad).
                 h.set('x-coach-primary-color', BRAND_PRIMARY_COLOR)
@@ -1014,7 +1015,7 @@ export async function proxy(request: NextRequest) {
                     const brandName = typeof orgBrand.name === 'string' ? orgBrand.name : ''
                     const orgPrimary = typeof orgBrand.primary_color === 'string' ? orgBrand.primary_color : ''
                     const orgLogo = typeof orgBrand.logo_url === 'string' ? orgBrand.logo_url.trim() : ''
-                    requestHeaders.set('x-coach-brand-name', brandName || coach.brand_name)
+                    requestHeaders.set('x-coach-brand-name', encodeBrandHeaderValue(brandName || coach.brand_name))
                     requestHeaders.set('x-coach-primary-color', orgPrimary || resolvedColor)
                     requestHeaders.set('x-coach-logo-url', orgLogo || coach.logo_url?.trim() || BRAND_APP_ICON)
                     // Per-mode white-label theme inputs (brand-kit resolves on render).
@@ -1026,7 +1027,7 @@ export async function proxy(request: NextRequest) {
                     // Org is the source of truth for the loader (white-label consistency
                     // across all its coaches). org icon mode 'logo'→show logo, 'text'→none.
                     const orgRow = orgBrand as Record<string, unknown>
-                    requestHeaders.set('x-coach-loader-text', String(orgRow.loader_text ?? '').trim())
+                    requestHeaders.set('x-coach-loader-text', encodeBrandHeaderValue(String(orgRow.loader_text ?? '').trim()))
                     requestHeaders.set('x-coach-use-custom-loader', String(orgRow.use_custom_loader ?? false))
                     requestHeaders.set('x-coach-loader-text-color', String(orgRow.loader_text_color ?? '').trim())
                     requestHeaders.set('x-coach-loader-icon-mode', orgRow.loader_icon_mode === 'text' ? 'none' : 'coach')
@@ -1048,7 +1049,7 @@ export async function proxy(request: NextRequest) {
                 requestHeaders.set('x-coach-logo-url', BRAND_APP_ICON)
                 requestHeaders.set('x-workspace-brand-source', 'orphan')
                 requestHeaders.set('x-workspace-orphan', 'true')
-                requestHeaders.set('x-orphan-org-name', typeof orphanName === 'string' ? orphanName : '')
+                requestHeaders.set('x-orphan-org-name', encodeBrandHeaderValue(typeof orphanName === 'string' ? orphanName : ''))
             }
 
             // El alumno SIEMPRE ve el tema del coach: el opt-out por-alumno quedó retirado, así que

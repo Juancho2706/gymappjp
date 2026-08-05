@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 import type { Metadata } from 'next'
 
 import { getClientBasePath } from '@/lib/client/base-path'
@@ -46,7 +47,7 @@ export default async function ProfilePage({ params }: Props) {
     // personal del coach anidada en la fila clients (standalone).
     const coachRow = client.coaches
     const coachBranding = Array.isArray(coachRow) ? coachRow[0] : coachRow
-    const brandName = headersList.get('x-coach-brand-name') || coachBranding?.brand_name || 'tu coach'
+    const brandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name')) || coachBranding?.brand_name || 'tu coach'
 
     return (
         <ProfileClient
