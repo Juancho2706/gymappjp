@@ -465,6 +465,22 @@ export const NutritionLegacyHistoryDetailReadModelSchema = z.object({
   intakeEntries: z.array(NutritionLegacyHistoryIntakeReadSchema),
 })
 
+/**
+ * Señal por-día de la ventana rodante de 7 días del hub del coach (migración
+ * 20260805211949). SOLO viajan los días CON registros: la ausencia de una fecha es
+ * "sin registro" y se pinta como hueco, nunca como cero consumido.
+ *
+ * `targetCalories` es la meta CONGELADA del snapshot de ese día (`null` si el día no
+ * tenía meta evaluable), así que la adherencia se calcula contra lo que el alumno
+ * realmente tenía prescrito, no contra la meta de hoy.
+ */
+export const NutritionCoachHubDaySchema = z.object({
+  date: IsoDateSchema,
+  entryCount: z.number().int().nonnegative(),
+  consumedCalories: z.number().finite(),
+  targetCalories: NullableNumberSchema,
+})
+
 export const NutritionCoachHubItemSchema = z.object({
   clientId: z.string().uuid(),
   clientName: z.string(),
@@ -481,13 +497,34 @@ export const NutritionCoachHubItemSchema = z.object({
   pendingDrafts: z.number().int().nonnegative(),
   attentionReason: z.enum(['no_plan', 'draft_pending', 'no_recent_intake', 'none']),
   updatedAt: IsoDateTimeSchema,
+  // ── Triage (migración 20260805211949) ────────────────────────────────────────────
+  // ADITIVOS y por eso OPCIONALES: el read model lo comparten web y RN, y un cliente
+  // viejo (o un payload cacheado emitido antes de la migración) debe seguir parseando.
+  // Los defaults son la degradación segura: sin teléfono no hay CTA de WhatsApp, sin
+  // `days7d` la semana cae a los puntos agregados de `activeDays7d`.
+  /** Teléfono del alumno para el contacto por WhatsApp (la app NO mensajea alumnos). */
+  phone: z.string().nullable().optional(),
+  /** Días con registro en la semana ANTERIOR (current_date-13..-7); base del delta semanal. */
+  activeDaysPrev7d: z.number().int().nonnegative().default(0),
+  /** Ventana rodante current_date-6..current_date; solo los días CON registros. */
+  days7d: z.array(NutritionCoachHubDaySchema).default([]),
+  /** Más alto = más urgente. Lo calcula el servidor; la UI solo lo transporta al cursor. */
+  attentionScore: z.number().int().nullable().optional(),
 })
 
 export const NutritionCoachHubPageReadModelSchema = z.object({
   schemaVersion: z.literal(NUTRITION_READ_MODEL_SCHEMA_VERSION),
   generatedAt: IsoDateTimeSchema,
   items: z.array(NutritionCoachHubItemSchema),
-  nextCursor: z.object({ updatedAt: IsoDateTimeSchema, clientId: z.string().uuid() }).nullable(),
+  nextCursor: z
+    .object({
+      updatedAt: IsoDateTimeSchema,
+      clientId: z.string().uuid(),
+      // Obligatorio para paginar en modo `attention` (keyset score+updatedAt+id); opcional
+      // en el schema porque el modo `default` no lo necesita y los cursores viejos no lo traen.
+      score: z.number().int().nullable().optional(),
+    })
+    .nullable(),
   hasMore: z.boolean(),
 })
 
@@ -547,6 +584,7 @@ export type NutritionLegacyHistoryMealRead = z.infer<typeof NutritionLegacyHisto
 export type NutritionLegacyHistorySwapRead = z.infer<typeof NutritionLegacyHistorySwapReadSchema>
 export type NutritionLegacyHistoryIntakeRead = z.infer<typeof NutritionLegacyHistoryIntakeReadSchema>
 export type NutritionLegacyHistoryDetailReadModel = z.infer<typeof NutritionLegacyHistoryDetailReadModelSchema>
+export type NutritionCoachHubDay = z.infer<typeof NutritionCoachHubDaySchema>
 export type NutritionCoachHubItem = z.infer<typeof NutritionCoachHubItemSchema>
 export type NutritionCoachHubPageReadModel = z.infer<typeof NutritionCoachHubPageReadModelSchema>
 export type NutritionClientDetailReadModel = z.infer<typeof NutritionClientDetailReadModelSchema>

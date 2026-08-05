@@ -93,7 +93,46 @@ describe('getNutritionCoachHubV2ForWeb', () => {
       p_cursor_updated_at: null,
       p_cursor_client_id: null,
       p_page_size: 25,
+      p_search: null,
+      p_sort: 'default',
+      p_cursor_score: null,
     })
+  })
+
+  it('propaga busqueda, orden y el keyset por score del triage', async () => {
+    rpc.mockResolvedValue({ data: EMPTY_HUB_PAGE, error: null })
+
+    await getNutritionCoachHubV2ForWeb({
+      scope: { scopeType: 'standalone', teamId: null, orgId: null },
+      search: '  ana  ',
+      sort: 'attention',
+      cursorUpdatedAt: '2026-08-05T12:00:00.000Z',
+      cursorClientId: CLIENT_ID,
+      cursorScore: 21000,
+    })
+
+    expect(rpc).toHaveBeenCalledWith('get_nutrition_coach_hub_scoped_v2', {
+      p_scope_type: 'standalone',
+      p_team_id: null,
+      p_org_id: null,
+      p_cursor_updated_at: '2026-08-05T12:00:00.000Z',
+      p_cursor_client_id: CLIENT_ID,
+      p_page_size: 25,
+      p_search: 'ana',
+      p_sort: 'attention',
+      p_cursor_score: 21000,
+    })
+  })
+
+  it('una busqueda en blanco viaja como null (no como cadena vacia)', async () => {
+    rpc.mockResolvedValue({ data: EMPTY_HUB_PAGE, error: null })
+
+    await getNutritionCoachHubV2ForWeb({
+      scope: { scopeType: 'standalone', teamId: null, orgId: null },
+      search: '   ',
+    })
+
+    expect(rpc.mock.calls[0]?.[1]).toMatchObject({ p_search: null })
   })
 })
 

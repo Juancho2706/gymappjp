@@ -10,7 +10,13 @@ import {
 import { NutritionHubTabs } from './_components/NutritionHubTabs'
 import { HubRoster } from './_components/HubRoster'
 import { NewPlanPickerButton, type NewPlanPickerEntry } from './_components/NewPlanPickerButton'
-import { localDateOf, mapHubMetrics, parseRosterFilters } from './_lib/hub-roster'
+import {
+  localDateOf,
+  mapHubMetrics,
+  parseCursorScore,
+  parseRosterFilters,
+  serverSortFor,
+} from './_lib/hub-roster'
 
 const COACH_TIMEZONE = 'America/Santiago'
 
@@ -18,6 +24,7 @@ interface Props {
   searchParams: Promise<{
     cursorUpdatedAt?: string
     cursorClientId?: string
+    cursorScore?: string
     q?: string
     attn?: string
     sort?: string
@@ -34,11 +41,19 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
 
   // Propagate the active workspace to the scoped RPC so the roster never mixes coach pools.
   const scope = nutritionV2CoachScopeFromWorkspace(workspace)
+
+  // Busqueda y orden viajan al RPC (migracion 20260805211949). El triage es el default: sin
+  // `?sort=` el roster llega ordenado por riesgo, no por "quien se edito ultimo". En ese modo
+  // el keyset necesita ademas `cursorScore`, si no la pagina 2 repite a los mas urgentes.
+  const initialFilters = parseRosterFilters(query)
   const hub = await getNutritionCoachHubV2ForWeb({
     scope,
     cursorUpdatedAt: query.cursorUpdatedAt ?? null,
     cursorClientId: query.cursorClientId ?? null,
+    cursorScore: parseCursorScore(query.cursorScore),
     pageSize: 25,
+    search: initialFilters.search,
+    sort: serverSortFor(initialFilters.sort),
   })
 
   // NUT-026: primera pagina alfabetica del roster para el picker global "Nuevo plan". Antes
@@ -53,7 +68,6 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
     planStatus: item.planStatus,
   }))
 
-  const initialFilters = parseRosterFilters(query)
   const todayLocalDate = localDateOf(new Date().toISOString(), COACH_TIMEZONE) ?? ''
   const metrics = mapHubMetrics(hub.items, { todayLocalDate, timeZone: COACH_TIMEZONE })
 
@@ -76,6 +90,8 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
             hasMore={hub.hasMore}
             nextCursor={hub.nextCursor}
             initialFilters={initialFilters}
+            todayIso={todayLocalDate}
+            timeZone={COACH_TIMEZONE}
           />
         }
       />

@@ -144,11 +144,20 @@ export function nutritionV2CoachScopeFromWorkspace(
   }
 }
 
+/**
+ * Roster del hub del coach. Desde la migración 20260805211949 la búsqueda por nombre y el
+ * orden viven SERVER-side: `sort: 'attention'` ordena por riesgo (score desc, updatedAt desc,
+ * id desc) y en ese modo el keyset necesita además `cursorScore` — sin él la página 2 vuelve
+ * a empezar por el más urgente. `sort: 'default'` conserva el keyset histórico por updatedAt.
+ */
 export function getNutritionCoachHubV2ForWeb(input: {
   scope: NutritionV2CoachScope
   cursorUpdatedAt?: string | null
   cursorClientId?: string | null
+  cursorScore?: number | null
   pageSize?: number
+  search?: string | null
+  sort?: 'default' | 'attention'
 }): Promise<NutritionCoachHubPageReadModel> {
   // Scoped RPC: server-side it re-validates coach membership against auth.uid()
   // (private.nutrition_v2_client_matches_workspace). `get_nutrition_coach_hub_v2` is revoked.
@@ -161,6 +170,9 @@ export function getNutritionCoachHubV2ForWeb(input: {
       p_cursor_updated_at: input.cursorUpdatedAt ?? null,
       p_cursor_client_id: input.cursorClientId ?? null,
       p_page_size: input.pageSize ?? 25,
+      p_search: input.search?.trim() ? input.search.trim().slice(0, 120) : null,
+      p_sort: input.sort ?? 'default',
+      p_cursor_score: input.cursorScore ?? null,
     },
     parse: (value) => NutritionCoachHubPageReadModelSchema.parse(value),
   })
