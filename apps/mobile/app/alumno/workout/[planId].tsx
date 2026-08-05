@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { validateTargetDate } from '@eva/workout-engine'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import ExecutorV3 from '../../../components/alumno/workout/v3/ExecutorV3'
 import { getTodayInSantiago } from '../../../lib/date-utils'
+import { isUuid, reportInvalidRouteUuid } from '../../../lib/safe-uuid'
 import { resolveExecutorDateParams } from '../../../lib/workout-executor-nav'
 
 /**
@@ -26,6 +28,18 @@ export default function WorkoutExecutionScreen() {
     fecha?: string
     repetir?: string
   }>()
+  const router = useRouter()
+  // Guard de entrada: un push con plan nulo produce `/alumno/workout/null` y el param llega como el
+  // STRING 'null' (truthy) → el ejecutor lo mandaba tal cual a un filtro uuid de PostgREST
+  // (`invalid input syntax for type uuid`). `replace` al home del alumno (nunca `back()`: puede
+  // rebotar en loop si la pantalla de origen también quedó inválida).
+  const planIdValid = isUuid(planId)
+  useEffect(() => {
+    if (planIdValid) return
+    reportInvalidRouteUuid('alumno/workout/[planId]', planId)
+    router.replace('/alumno/home')
+  }, [planIdValid, planId, router])
+
   const todayIso = getTodayInSantiago().iso
   // `recuperar` también pasa por `validateTargetDate` (paridad con la página web, page.tsx:36-37):
   // sin esto un deep link con basura (`?recuperar=chao`) o una fecha FUTURA pintaba el banner ámbar
@@ -34,6 +48,8 @@ export default function WorkoutExecutionScreen() {
   const recoverCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
   const recoverDate = recoverCheck?.ok ? recoverCheck.iso : undefined
   const { editDate, repeatDate } = resolveExecutorDateParams({ fecha, repetir }, todayIso)
+  // No montar el ejecutor con un id roto: dispararía su fetch antes de que corra el `replace`.
+  if (!planIdValid) return null
   return (
     <ExecutorV3
       planId={planId}

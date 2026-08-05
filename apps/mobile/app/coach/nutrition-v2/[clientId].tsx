@@ -49,6 +49,7 @@ import {
   type NutritionWeekCell,
 } from '@eva/nutrition-v2'
 import { formatNutritionShortDate } from '../../../lib/date-utils'
+import { isUuid, reportInvalidRouteUuid } from '../../../lib/safe-uuid'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
@@ -270,6 +271,15 @@ export default function CoachNutritionV2ClientScreen() {
   const enabled = entitlements.ready && scope !== null
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
+  // Guard de entrada: `/coach/nutrition-v2/null` entrega el STRING 'null' (truthy) y pasaba los
+  // guards `!clientId` de abajo hasta el filtro uuid de PostgREST. `replace` al dashboard del
+  // coach (nunca `back()`: puede rebotar en loop si el origen también quedó inválido).
+  useEffect(() => {
+    if (isUuid(clientId)) return
+    reportInvalidRouteUuid('coach/nutrition-v2/[clientId]', clientId)
+    router.replace('/coach/home')
+  }, [clientId, router])
+
   useEffect(() => {
     let active = true
     void supabase.auth.getSession().then(
@@ -292,14 +302,14 @@ export default function CoachNutritionV2ClientScreen() {
   const gatesStalled =
     (!workspaceReady && !workspaceLoading) || (!entitlements.ready && !entitlements.loading)
   const canFetch =
-    gatesResolved && enabled && !!clientId && !!scope && !!scopeCacheKey && !!userId
+    gatesResolved && enabled && isUuid(clientId) && !!scope && !!scopeCacheKey && !!userId
   // Ref para leer la ficha vigente dentro del efecto sin re-dispararlo.
   const detailRef = useRef<NutritionClientDetailReadModel | null>(null)
   detailRef.current = detail
 
   useEffect(() => {
     // Sin prerrequisitos NO se toca ningún flag de carga: seguimos "cargando", nunca "error".
-    if (!canFetch || !clientId || !scope || !scopeCacheKey || !userId) return
+    if (!canFetch || !isUuid(clientId) || !scope || !scopeCacheKey || !userId) return
 
     // Fold the workspace scope into the cache key so two pools of the same coach never collide.
     const detailScopeKey = `${scopeCacheKey}:${date}`

@@ -49,6 +49,7 @@ import { Sheet } from '../../../../components/Sheet'
 import { toast } from '../../../../components/Toast'
 import { useTheme } from '../../../../context/ThemeContext'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
+import { isUuid, reportInvalidRouteUuid } from '../../../../lib/safe-uuid'
 import { fetchNutritionV2ExchangeGroups } from '../../../../lib/nutrition-v2-exchange-groups.api'
 import { PORTIONS_COPY } from '../../../../lib/nutrition-portions-copy'
 import {
@@ -524,7 +525,11 @@ export default function CoachNutritionV2BuilderScreen() {
     from?: string
   }>()
   const clientId = first(params.clientId) ?? ''
-  const planId = first(params.planId) ?? null
+  // `?? null` NO alcanza: `?planId=null` entrega el STRING 'null', que sobrevive al `??` y viajaba
+  // a un filtro uuid de PostgREST. `planId` es OPCIONAL (sin él el builder crea un plan nuevo) ⇒
+  // un valor inválido se degrada a `null` en silencio, sin redirigir.
+  const planIdParam = first(params.planId)
+  const planId = isUuid(planIdParam) ? planIdParam : null
   const clientName = first(params.clientName) ?? ''
   const versionNumber = Number(first(params.versionNumber) ?? '0') || 0
   const fromParam = first(params.from) ?? null
@@ -538,6 +543,14 @@ export default function CoachNutritionV2BuilderScreen() {
     const origin = parsePlanBuilderOrigin(fromParam)
     return origin?.kind === 'template' ? origin.id : null
   }, [fromParam])
+
+  // Guard de entrada: el `clientId` de la ruta SÍ es obligatorio — con `null`/basura no hay plan
+  // que construir. `replace` al dashboard del coach (nunca `back()`: puede rebotar en loop).
+  useEffect(() => {
+    if (isUuid(clientId)) return
+    reportInvalidRouteUuid('coach/nutrition-v2/builder/[clientId]', clientId)
+    router.replace('/coach/home')
+  }, [clientId, router])
 
   const entitlements = useEntitlements()
   const { ready: workspaceReady, kind, teamId, orgId } = useWorkspace()
@@ -622,7 +635,7 @@ export default function CoachNutritionV2BuilderScreen() {
   // "Archivar y reemplazar" y el pre-chequeo de fecha. No-bloqueante: si falla, degrada a null
   // (sin segunda opcion, igual que un alumno sin plan) — el RPC sigue siendo la barrera real.
   useEffect(() => {
-    if (!clientId || !scope) return
+    if (!isUuid(clientId) || !scope) return
     let active = true
     void (async () => {
       try {

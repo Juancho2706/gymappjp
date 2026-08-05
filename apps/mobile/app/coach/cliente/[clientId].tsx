@@ -31,6 +31,7 @@ import {
   type CoachClientDetail,
   type CoachClientDetailData,
 } from '../../../lib/coach-client-detail'
+import { isUuid, reportInvalidRouteUuid } from '../../../lib/safe-uuid'
 import { formatTrainingAgeLabel } from '../../../lib/profile-analytics'
 import { exportClientDossierPdf } from '../../../lib/client-dossier-pdf'
 import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
@@ -136,8 +137,18 @@ export default function ClientDetailScreen() {
   const loadSeqRef = useRef(0)
   const daySeqRef = useRef(0)
 
+  // Guard de entrada: un push con id nulo produce la URL literal `/coach/cliente/null` y el param
+  // llega como el STRING 'null' — truthy, así que pasaba todo guard `!clientId` y terminaba en un
+  // filtro uuid de PostgREST (`invalid input syntax for type uuid`, ruido de logs prod). `replace`
+  // (nunca `back()`: puede rebotar en loop si el origen también quedó inválido).
+  useEffect(() => {
+    if (isUuid(clientId)) return
+    reportInvalidRouteUuid('coach/cliente/[clientId]', clientId)
+    router.replace('/coach/home')
+  }, [clientId, router])
+
   const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!clientId || !workspace.ready) return
+    if (!isUuid(clientId) || !workspace.ready) return
     const seq = ++loadSeqRef.current
     if (!opts?.silent) setLoading(true)
     setLoadError(null)
@@ -250,7 +261,7 @@ export default function ClientDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!clientId || !activeDayKind || !activeDayDate) return
+      if (!isUuid(clientId) || !activeDayKind || !activeDayDate) return
       const seq = ++daySeqRef.current
       if (activeDayKind === 'training') {
         setTrainingDayLoading(true)

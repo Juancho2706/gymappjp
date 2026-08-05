@@ -6,6 +6,7 @@ import {
 } from './date-utils'
 import { isMissingColumnError, selectWithFallback } from './db-compat'
 import { getCoachProfile } from './coach'
+import { safeUuid } from './safe-uuid'
 import type {
   WorkoutLogRow,
   ExerciseStrengthSeries,
@@ -1409,18 +1410,6 @@ export interface NutritionZoneCData {
   useTeamBase: boolean
   prefsEnabled: boolean
   proEnabled: boolean
-}
-
-const NIL_UUID = '00000000-0000-0000-0000-000000000000'
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-/**
- * Degrada un id inválido (undefined / 'null' / '' / basura) al UUID nil — un uuid VÁLIDO que no
- * matchea ninguna fila. Evita mandar 'null'/'' a un filtro uuid de PostgREST, que responde
- * `invalid input syntax for type uuid` (ruido de logs prod, hallazgo 2026-07-21) sin degradar el
- * happy path: un id real pasa tal cual; un id roto no consulta datos ajenos (nil no matchea).
- */
-function safeUuid(v: string | null | undefined): string {
-  return v && UUID_RE.test(v) ? v : NIL_UUID
 }
 
 export async function getCoachNutritionZoneC(clientId: string, logDate: string): Promise<NutritionZoneCData> {

@@ -70,6 +70,7 @@ import type {
   MobileRiskAlertItem,
 } from '../../lib/coach-dashboard'
 import type { CoachProfile } from '../../lib/coach'
+import { isUuid } from '../../lib/safe-uuid'
 import { TIER_CONFIG } from '../../lib/coach-tiers'
 import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
@@ -2495,12 +2496,16 @@ export function MobileFocusList({
       router.push('/coach/(tabs)/builder')
     } else if (nba.id === 'focus-list') {
       const first = items[0]
-      if (first) router.push(`/coach/cliente/${first.clientId}`)
+      // Guard por uuid (no por truthiness): un `clientId` nulo generaba la URL `/coach/cliente/null`
+      // y el param llegaba como el STRING 'null'. Sin id usable, cae al destino genérico del CTA.
+      if (isUuid(first?.clientId)) router.push(`/coach/cliente/${first.clientId}`)
+      else router.push('/coach/(tabs)/clientes')
     } else if (nba.id === 'adherencia-baja') {
       onAdherencePress()
     } else if (nba.id === 'agenda-hoy') {
       const first = agenda[0]
-      if (first) router.push(`/coach/cliente/${first.clientId}`)
+      if (isUuid(first?.clientId)) router.push(`/coach/cliente/${first.clientId}`)
+      else router.push('/coach/(tabs)/clientes')
     } else {
       router.push('/coach/(tabs)/clientes')
     }
@@ -2752,7 +2757,9 @@ export function MobileNextBestAction({
     }
     if (action.id === 'focus-list') {
       const first = topRiskClients[0]
-      if (first) router.push(`/coach/cliente/${first.clientId}`)
+      // Guard por uuid (no por truthiness): ver `MobileFocusList.handleNba`.
+      if (isUuid(first?.clientId)) router.push(`/coach/cliente/${first.clientId}`)
+      else router.push('/coach/(tabs)/clientes')
       return
     }
     if (action.id === 'adherencia-baja') {
@@ -2765,7 +2772,8 @@ export function MobileNextBestAction({
     }
     if (action.id === 'agenda-hoy') {
       const first = agenda[0]
-      if (first) router.push(`/coach/cliente/${first.clientId}`)
+      if (isUuid(first?.clientId)) router.push(`/coach/cliente/${first.clientId}`)
+      else router.push('/coach/(tabs)/clientes')
       return
     }
     router.push('/coach/(tabs)/clientes')
@@ -2887,7 +2895,7 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
                 }
                 showChevron
                 onPress={() =>
-                  item.clientId
+                  isUuid(item.clientId)
                     ? router.push(`/coach/cliente/${item.clientId}`)
                     : router.push('/coach/(tabs)/builder')
                 }
@@ -2961,8 +2969,8 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
                   title={item.title}
                   subtitle={item.subtitle}
                   trailing={<Text className="font-sans text-[11px] text-muted">{timeAgo(item.date)}</Text>}
-                  disabled={!item.clientId}
-                  onPress={item.clientId ? () => router.push(`/coach/cliente/${item.clientId}`) : undefined}
+                  disabled={!isUuid(item.clientId)}
+                  onPress={isUuid(item.clientId) ? () => router.push(`/coach/cliente/${item.clientId}`) : undefined}
                 />
               </View>
             )
@@ -3078,7 +3086,7 @@ export function MobileNovedades({
                       activeOpacity={0.82}
                       testID={`novedades-program-${it.id}`}
                       onPress={() =>
-                        it.clientId
+                        isUuid(it.clientId)
                           ? router.push(`/coach/cliente/${it.clientId}`)
                           : router.push('/coach/(tabs)/builder')
                       }
@@ -3118,8 +3126,8 @@ export function MobileNovedades({
                 <TouchableOpacity
                   testID={`novedades-activity-${it.id}`}
                   activeOpacity={0.82}
-                  disabled={!it.clientId}
-                  onPress={it.clientId ? () => router.push(`/coach/cliente/${it.clientId}`) : undefined}
+                  disabled={!isUuid(it.clientId)}
+                  onPress={isUuid(it.clientId) ? () => router.push(`/coach/cliente/${it.clientId}`) : undefined}
                   className="flex-row items-center gap-3 px-[14px] py-[11px]"
                 >
                   {isCheckin && it.photoUrl ? (

@@ -38,6 +38,7 @@ import { Badge, Button, ComplianceRing, Input, ProgressBar, Sheet } from '../../
 import { InfoTooltip } from '../../InfoTooltip'
 import { PHASE_COLORS } from '../ProgramConfigSheet'
 import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
+import { isUuid } from '../../../lib/safe-uuid'
 import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 import { StatCard } from './shared'
 import {
@@ -830,6 +831,9 @@ function VisualEvolution({ checkIns, onOpenPhoto }: { checkIns: CoachClientDetai
 function ToolsSection({ clientId, moduleFlags, ready }: { clientId: string; moduleFlags: { cardio: boolean; movement: boolean; bodycomp: boolean }; ready: boolean }) {
   const router = useRouter()
   if (!ready) return null
+  // Guard por uuid: un `clientId` nulo/'null' generaba `/coach/{modulo}/null` y ese STRING 'null'
+  // (truthy) llegaba a un filtro uuid de PostgREST. Sin id usable no se ofrecen los módulos.
+  if (!isUuid(clientId)) return null
   const tools = [
     moduleFlags.cardio ? { label: 'Cardio', icon: HeartPulse, onPress: () => router.push(`/coach/cardio/${clientId}`) } : null,
     moduleFlags.movement ? { label: 'Movimiento', icon: PersonStanding, onPress: () => router.push(`/coach/movement/${clientId}`) } : null,

@@ -25,6 +25,7 @@ import { MODULE_CATALOG, type ModuleKey } from '@eva/module-catalog'
 import { useEntitlements } from '../../lib/entitlements'
 import { useWorkspace } from '../../lib/workspace'
 import { listCardioClients, type CardioClientRow } from '../../lib/cardio-coach'
+import { isUuid } from '../../lib/safe-uuid'
 import { AppBackground } from '../../components/AppBackground'
 import { Badge } from '../../components/Badge'
 import { Button } from '../../components/Button'
@@ -261,7 +262,10 @@ export default function ToolsHubScreen() {
             loading={loadingClients}
             onPick={(id) => {
               setPickerOpen(false)
-              router.push(`/coach/bodycomp/${id}` as never)
+              // Guard por uuid: un id nulo generaba la URL `/coach/bodycomp/null` y el param llegaba
+              // como el STRING 'null' (truthy) hasta un filtro uuid de PostgREST. Sin id usable se
+              // queda en el hub (el picker ya se cerró) en vez de abrir una ficha rota.
+              if (isUuid(id)) router.push(`/coach/bodycomp/${id}` as never)
             }}
             onCreate={() => {
               setPickerOpen(false)

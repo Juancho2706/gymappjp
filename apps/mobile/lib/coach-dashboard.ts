@@ -1,7 +1,9 @@
+import * as Sentry from '@sentry/react-native'
 import { getCoachProfile, type CoachProfile } from './coach'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
 import { selectWithFallback } from './db-compat'
+import { isUuid } from './safe-uuid'
 import { getActiveCoachWorkspace } from './workspace'
 
 export type MobileKpiSummary = {
@@ -330,6 +332,21 @@ type MobileDashboardApiResponse = {
   }
 }
 
+/**
+ * Barrera de datos en la RAÍZ: `topRiskClients` y `agenda` alimentan CTAs que hacen
+ * `router.push(`/coach/cliente/${clientId}`)`. Los tipos declaran `clientId: string`, pero nada lo
+ * valida en runtime: una fila con id nulo produce la URL literal `/coach/cliente/null`, el param
+ * llega como el STRING 'null' (truthy) y termina en un `invalid input syntax for type uuid` de
+ * Postgres. Las filas sin uuid usable se descartan acá — no hay ficha que abrir con ellas.
+ */
+function dropRowsWithInvalidClientId<T extends { clientId: string }>(
+  rows: T[] | undefined,
+): { rows: T[]; dropped: number } {
+  const list = rows ?? []
+  const kept = list.filter((row) => isUuid(row.clientId))
+  return { rows: kept, dropped: list.length - kept.length }
+}
+
 function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardData {
   const adherenceByClient = new Map(payload.dashboard.adherenceStats.map((stat) => [stat.clientId, stat]))
   const nutritionByClient = new Map(payload.dashboard.nutritionStats.map((stat) => [stat.clientId, stat]))
@@ -375,6 +392,23 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
     reviewed: item.type === 'check-in' ? Boolean(item.reviewed) : undefined,
   }))
 
+  const topRisk = dropRowsWithInvalidClientId(payload.dashboard.topRiskClients)
+  const agenda = dropRowsWithInvalidClientId(payload.dashboard.agenda)
+  const droppedRows = topRisk.dropped + agenda.dropped
+  if (droppedRows > 0) {
+    try {
+      // UNA sola migaja con el conteo (nunca una por fila): un payload roto no debe inundar Sentry.
+      Sentry.addBreadcrumb({
+        category: 'nav-uuid-guard',
+        level: 'warning',
+        message: 'coach-dashboard: filas descartadas por clientId no-uuid',
+        data: { topRiskClients: topRisk.dropped, agenda: agenda.dropped },
+      })
+    } catch {
+      // Sentry no inicializado (sin DSN) / versión sin API → no-op silencioso.
+    }
+  }
+
   return {
     coach: payload.coach,
     publicCode: payload.publicCode ?? null,
@@ -387,8 +421,8 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
     areaData: payload.dashboard.areaData ?? [],
     barData: payload.dashboard.barData ?? [],
     kpi: payload.dashboard.kpi,
-    topRiskClients: payload.dashboard.topRiskClients,
-    agenda: payload.dashboard.agenda,
+    topRiskClients: topRisk.rows,
+    agenda: agenda.rows,
     expiringPrograms: payload.dashboard.expiringPrograms,
     recentActivities,
     pendingCheckinsCount: payload.dashboard.pendingCheckinsCount ?? 0,
