@@ -28,6 +28,7 @@ import {
   type BuilderVariant,
 } from '../_lib/draft-builder'
 import { genId, type SlotCopyRequest } from '../_lib/builder-view-model'
+import type { BuilderClientMetrics } from '../_lib/target-suggestion'
 import { primaryButtonClass, secondaryButtonClass } from '../_lib/builder-ui-classes'
 import { publishPlanAction } from '../_actions/builder.actions'
 import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-archive.actions'
@@ -177,6 +178,7 @@ export function PlanBuilderClient({
   nutritionProEnabled,
   templateMode,
   foodPickerPrefs,
+  clientMetrics = null,
 }: {
   /**
    * Alumno dueño del plan. En modo plantilla llega `TEMPLATE_MODE_CLIENT_ID` (uuid NIL): el
@@ -206,6 +208,11 @@ export function PlanBuilderClient({
   templateMode?: PlanBuilderTemplateMode
   /** Solo plumbing del picker de alimentos (ver `PlanBuilderFoodPickerPrefs`). */
   foodPickerPrefs?: PlanBuilderFoodPickerPrefs
+  /**
+   * Datos duros del alumno (edad/peso/estatura/sexo) para precargar "Sugerir metas" del paso 1.
+   * Solo plumbing: el wizard no los lee, los baja a `PlanStep`. Ausente en modo plantilla.
+   */
+  clientMetrics?: BuilderClientMetrics | null
 }) {
   const router = useRouter()
   const isTemplateMode = templateMode != null
@@ -504,6 +511,40 @@ export function PlanBuilderClient({
     announce(`${label} quedó con una copia de ${source.label} — ahora estás editando ${label}`)
   }
 
+  /**
+   * Presets de copia del menu del dia (BD3): "Lu a Vi" / "Fin de semana" / "Todos". Es el MISMO
+   * gesto de `handleCopyDayTo` repetido sobre los dias libres, con dos cuidados:
+   *  - los destinos se filtran UNA vez contra el estado previo (dias ocupados + tope de dias),
+   *    porque `state` es el del render y no se refresca dentro del bucle;
+   *  - el `selectedDow` se mueve al PRIMER dia creado (no al ultimo), que es donde el coach
+   *    espera aterrizar leyendo Lu→Do.
+   * El reducer vuelve a filtrar lo mismo sobre el estado vivo: esto es aceleracion, no permiso.
+   */
+  function handleCopyDayToMany(sourceVariantKey: string, days: readonly number[]) {
+    const source = state.variants.find((variant) => variant.key === sourceVariantKey)
+    if (!source) return
+    const taken = new Set(takenDayOfWeeks(state))
+    let room = MAX_DAY_VARIANTS - taken.size
+    const created: number[] = []
+    for (const dayOfWeek of days) {
+      if (room <= 0) break
+      if (taken.has(dayOfWeek)) continue
+      taken.add(dayOfWeek)
+      room -= 1
+      const key = genId()
+      dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek })
+      cloneVariantPortions(source, key)
+      created.push(dayOfWeek)
+    }
+    if (created.length === 0) return
+    setSelectedDow(created[0])
+    announce(
+      created.length === 1
+        ? `${autoVariantLabel(created[0])} quedó con una copia de ${source.label}`
+        : `${source.label} se copió a ${created.length} días — ahora estás editando ${autoVariantLabel(created[0])}`,
+    )
+  }
+
   /** "Cambiar día": la variante se muda de dia y el strip sigue al dia nuevo. */
   function handleChangeVariantDay(variantKey: string, dayOfWeek: number) {
     if (takenDayOfWeeks(state, variantKey).includes(dayOfWeek)) return
@@ -577,6 +618,7 @@ export function PlanBuilderClient({
     onRename: (variantKey, label) => dispatch({ type: 'SET_VARIANT_LABEL', variantKey, value: label }),
     onChangeDay: handleChangeVariantDay,
     onCopyToDay: handleCopyDayTo,
+    onCopyToDays: handleCopyDayToMany,
     onSetTargetsMode: (variantKey, mode) => dispatch({ type: 'SET_VARIANT_TARGETS_MODE', variantKey, mode }),
     onSetVariantTarget: (variantKey, field, value) =>
       dispatch({ type: 'SET_VARIANT_TARGETS', variantKey, field, value }),
@@ -976,6 +1018,7 @@ export function PlanBuilderClient({
             dispatch={dispatch}
             errors={showErrors ? validation.errors : {}}
             nutritionProEnabled={nutritionProEnabled}
+            clientMetrics={clientMetrics}
           />
         ) : null}
         {state.step === BUILDER_STEP_DAYS ? (

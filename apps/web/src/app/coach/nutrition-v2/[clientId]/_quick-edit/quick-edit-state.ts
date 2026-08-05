@@ -477,6 +477,16 @@ export type QuickEditAction =
   | { type: 'SWAP_ITEM_FOOD'; variantKey: string; slotKey: string; itemKey: string; food: BuilderFood }
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
   | { type: 'RESTORE_ITEM'; variantKey: string; slotKey: string; index: number; item: QeItem }
+  /**
+   * Mueve un item a OTRA franja del mismo dia ("Mover a…" del menu del item), espejo exacto de
+   * `MOVE_ITEM` del wizard. `toIndex` fija la posicion de aterrizaje (la UI la usa para el
+   * Deshacer: mover de vuelta al indice del que salio); ausente = al final.
+   *
+   * El `id` del item VIAJA con el: es la misma fila prescrita cambiando de franja, y en RN es la
+   * llave del carry-over de reemplazos autorizados (mismo criterio que el dia clonado). La
+   * persistencia lo ignora igual — cada publicacion inserta filas nuevas.
+   */
+  | { type: 'MOVE_ITEM'; variantKey: string; fromSlotKey: string; toSlotKey: string; itemKey: string; toIndex?: number }
   | { type: 'ADD_CATALOG_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood }
   | { type: 'ADD_CUSTOM_ITEM'; variantKey: string; slotKey: string; key: string }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<QeSlot, 'name' | 'startTime'>> }
@@ -1098,6 +1108,25 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         ...slot,
         items: insertAt(slot.items, action.index, action.item),
       }))
+    case 'MOVE_ITEM': {
+      if (action.fromSlotKey === action.toSlotKey) return state
+      const variant = state.variants.find((candidate) => candidate.key === action.variantKey)
+      if (!variant) return state
+      const source = variant.slots.find((slot) => slot.key === action.fromSlotKey)
+      const moved = source?.items.find((item) => item.key === action.itemKey)
+      // Destino inexistente => no-op TOTAL (jamas se pierde el item).
+      if (!moved || !variant.slots.some((slot) => slot.key === action.toSlotKey)) return state
+      return mapVariant(state, action.variantKey, (current) => ({
+        ...current,
+        slots: current.slots.map((slot) => {
+          if (slot.key === action.fromSlotKey) {
+            return { ...slot, items: slot.items.filter((item) => item.key !== action.itemKey) }
+          }
+          if (slot.key !== action.toSlotKey) return slot
+          return { ...slot, items: insertAt(slot.items, action.toIndex ?? slot.items.length, moved) }
+        }),
+      }))
+    }
     case 'ADD_CATALOG_ITEM':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
@@ -1259,6 +1288,69 @@ export function qeItemMacros(item: QeItem): ItemMacros {
     return scaleMacros(item.macroBase.macros, qty / item.macroBase.quantity)
   }
   return ZERO_ITEM_MACROS
+}
+
+// ---------------------------------------------------------------------------
+// "Guardar en mi catalogo" desde el quick-edit (BD5)
+//
+// Un alimento LIBRE (custom_name + macros congeladas, sin food_id) es material perdido: sirve una
+// vez y el coach lo vuelve a tipear en el proximo plan. El creador ya sabe promoverlo al catalogo
+// (`FreeFoodFields` -> `createCoachFoodAction`); la edicion rapida no tenia la puerta.
+//
+// El servidor guarda macros POR 100 (serving_size = 100). El item hidratado del read-model NO las
+// trae asi: trae las de la cantidad prescrita (`macroBase`), asi que hay que reescalarlas. Esta
+// funcion es esa traduccion —pura y testeable— MAS el diagnostico de por que no se puede guardar,
+// que es lo que la UI muestra como hint en la opcion deshabilitada.
+// ---------------------------------------------------------------------------
+
+/** Por que un item NO se puede promover al catalogo (alimenta el hint de la opcion apagada). */
+export type QeCoachFoodBlock = 'not-custom' | 'no-name' | 'bad-unit' | 'no-macros'
+
+/** Macros POR 100 g/ml listas para `CoachFoodInputSchema` (sin `clientId`, que lo pone la UI). */
+export interface QeCoachFoodPayload {
+  name: string
+  unit: 'g' | 'ml'
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+}
+
+export type QeCoachFoodCandidate =
+  | { ok: true; payload: QeCoachFoodPayload }
+  | { ok: false; reason: QeCoachFoodBlock }
+
+/**
+ * ¿Este item libre se puede guardar en el catalogo del coach, y con que macros por 100?
+ *
+ * Reglas, en el orden en que el coach las puede resolver: tiene que ser libre (un alimento del
+ * catalogo ya esta guardado), tener nombre, medirse en g/ml (el catalogo guarda por 100 g/ml: una
+ * unidad "un" no se puede convertir sin inventar el peso de la porcion) y traer macros. Un item
+ * libre creado en esta misma sesion todavia no tiene macros —el quick-edit no las edita— y cae
+ * legitimamente en `no-macros`.
+ */
+export function qeCoachFoodCandidate(item: QeItem): QeCoachFoodCandidate {
+  if (!item.isCustom || item.foodId !== null || item.recipeId !== null) return { ok: false, reason: 'not-custom' }
+  const name = item.displayName.trim()
+  if (name === '') return { ok: false, reason: 'no-name' }
+  const unit = item.unit.trim().toLowerCase()
+  if (unit !== 'g' && unit !== 'ml') return { ok: false, reason: 'bad-unit' }
+  const base = item.macroBase
+  if (!base || !(base.quantity > 0)) return { ok: false, reason: 'no-macros' }
+  const factor = 100 / base.quantity
+  const payload: QeCoachFoodPayload = {
+    name,
+    unit,
+    calories: Math.max(0, round1(base.macros.calories * factor)),
+    proteinG: Math.max(0, round1(base.macros.proteinG * factor)),
+    carbsG: Math.max(0, round1(base.macros.carbsG * factor)),
+    fatsG: Math.max(0, round1(base.macros.fatsG * factor)),
+  }
+  const everything =
+    payload.calories === 0 && payload.proteinG === 0 && payload.carbsG === 0 && payload.fatsG === 0
+  // Todo en cero no es un alimento: guardarlo ensuciaria el catalogo con una fila inservible.
+  if (everything) return { ok: false, reason: 'no-macros' }
+  return { ok: true, payload }
 }
 
 function addMacros(a: ItemMacros, b: ItemMacros): ItemMacros {

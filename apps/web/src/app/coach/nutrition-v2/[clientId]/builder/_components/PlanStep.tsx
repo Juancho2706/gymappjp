@@ -13,6 +13,8 @@ import {
 } from '../_lib/draft-builder'
 import { genId, type Dispatch } from '../_lib/builder-view-model'
 import { inputClass, labelClass } from '../_lib/builder-ui-classes'
+import type { BuilderClientMetrics } from '../_lib/target-suggestion'
+import { SuggestTargetsPanel } from './SuggestTargetsPanel'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,11 +58,14 @@ export function PlanStep({
   dispatch,
   errors,
   nutritionProEnabled,
+  clientMetrics = null,
 }: {
   state: BuilderState
   dispatch: Dispatch
   errors: Record<string, string>
   nutritionProEnabled: boolean
+  /** Datos del alumno para precargar "Sugerir metas" (BD1). `null` = plantilla / sin ficha. */
+  clientMetrics?: BuilderClientMetrics | null
 }) {
   // Modo plantilla: "Vigente desde" no existe — el contrato de plantilla omite `effectiveFrom`
   // (la fecha la elige el coach al aplicarla). Mostrar un campo cuyo valor se descarta al
@@ -173,6 +178,18 @@ export function PlanStep({
           </p>
         ) : null}
       </fieldset>
+
+      {/* "Sugerir metas" (BD1): vive SOBRE el fieldset de metas — el coach ve primero de dónde
+          pueden salir los números y después los campos que va a llenar. */}
+      <SuggestTargetsPanel
+        metrics={clientMetrics}
+        onApply={(suggestion) => {
+          dispatch({ type: 'SET_TARGET', field: 'calories', value: String(suggestion.calories) })
+          dispatch({ type: 'SET_TARGET', field: 'proteinG', value: String(suggestion.proteinG) })
+          dispatch({ type: 'SET_TARGET', field: 'carbsG', value: String(suggestion.carbsG) })
+          dispatch({ type: 'SET_TARGET', field: 'fatsG', value: String(suggestion.fatsG) })
+        }}
+      />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <fieldset className="space-y-3">

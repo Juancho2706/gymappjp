@@ -67,6 +67,22 @@ export const QE_COPY = {
   discardConfirm: (n: number) => `¿Descartar ${cambios(n)}? Esta acción no se puede deshacer.`,
   emptySlot: 'Franja sin alimentos',
   addFood: 'Agregar alimento',
+  // ── Menú ⋮ del item: agrupa lo que antes eran dos botones sueltos (reemplazar / eliminar) y
+  //    suma mover de franja (BD7) y guardar en el catálogo (BD5).
+  itemMenu: (name: string) => `Opciones de ${name}`,
+  replaceFood: 'Reemplazar alimento',
+  removeFood: 'Quitar alimento',
+  moveFood: 'Mover a otra franja',
+  moveFoodHint: 'Elige la comida que lo recibe. Conserva su cantidad, su unidad y sus macros.',
+  moveFoodDone: (slotName: string) => `Alimento movido a ${slotName}`,
+  moveFoodSingleSlot: 'Este día tiene una sola franja.',
+  // ── "Guardar en mi catálogo": promueve un alimento libre (nombre + macros, sin food_id) al
+  //    catálogo del coach y deja el item apuntando al alimento creado.
+  saveFood: 'Guardar en mi catálogo',
+  saveFoodDone: 'Guardado en tu catálogo.',
+  saveFoodNoMacros: 'Este alimento libre no trae macros, así que no hay qué guardar.',
+  saveFoodNoName: 'Ponle un nombre al alimento antes de guardarlo.',
+  saveFoodBadUnit: 'Solo se pueden guardar alimentos medidos en gramos o mililitros.',
   addSlot: 'Agregar franja',
   removeSlot: 'Eliminar franja',
   // ── Copiar una franja a otros días (P0-4). El destino se empareja por NOMBRE: si el día ya

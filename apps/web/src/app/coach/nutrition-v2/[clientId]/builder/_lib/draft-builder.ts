@@ -575,6 +575,18 @@ export type BuilderAction =
   | { type: 'COPY_SLOT_TO_VARIANTS'; sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] }
   | { type: 'ADD_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood | null }
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
+  /**
+   * Reinserta un item en su POSICION original (Deshacer del toast al quitarlo). La UI captura
+   * el item y su indice ANTES de despachar `REMOVE_ITEM`; aca solo se vuelve a meter donde
+   * estaba. Idempotencia barata: si la key ya volviera a existir en la franja, no se duplica.
+   */
+  | { type: 'RESTORE_ITEM'; variantKey: string; slotKey: string; index: number; item: BuilderItem }
+  /**
+   * Mueve un item de una franja a OTRA del mismo dia ("Mover a…" del menu del item). `toIndex`
+   * fija la posicion de aterrizaje: la UI lo usa para el Deshacer (mover de vuelta al indice
+   * exacto del que salio); ausente = al final de la franja destino.
+   */
+  | { type: 'MOVE_ITEM'; variantKey: string; fromSlotKey: string; toSlotKey: string; itemKey: string; toIndex?: number }
   | { type: 'UPDATE_ITEM'; variantKey: string; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
   | { type: 'ADD_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; key: string; food: BuilderFood }
   | { type: 'REMOVE_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; subKey: string }
@@ -609,6 +621,12 @@ function mapSlot(
 
 function isValidDow(day: unknown): day is number {
   return typeof day === 'number' && Number.isInteger(day) && day >= 0 && day <= 6
+}
+
+/** Inserta en una posicion acotada al arreglo (indice negativo => al inicio; pasado => al final). */
+function insertItemAt(items: BuilderItem[], index: number, item: BuilderItem): BuilderItem[] {
+  const safe = Number.isFinite(index) ? Math.max(0, Math.min(items.length, Math.trunc(index))) : items.length
+  return [...items.slice(0, safe), item, ...items.slice(safe)]
 }
 
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
@@ -809,6 +827,32 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...slot,
         items: slot.items.filter((item) => item.key !== action.itemKey),
       }))
+    case 'RESTORE_ITEM':
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) =>
+        slot.items.some((item) => item.key === action.item.key)
+          ? slot
+          : { ...slot, items: insertItemAt(slot.items, action.index, action.item) },
+      )
+    case 'MOVE_ITEM': {
+      if (action.fromSlotKey === action.toSlotKey) return state
+      const variant = state.variants.find((candidate) => candidate.key === action.variantKey)
+      if (!variant) return state
+      const source = variant.slots.find((slot) => slot.key === action.fromSlotKey)
+      const moved = source?.items.find((item) => item.key === action.itemKey)
+      // Destino inexistente => no-op TOTAL: perder el item seria peor que no mover nada.
+      if (!moved || !variant.slots.some((slot) => slot.key === action.toSlotKey)) return state
+      return mapVariant(state, action.variantKey, (current) => ({
+        ...current,
+        slots: current.slots.map((slot) => {
+          if (slot.key === action.fromSlotKey) {
+            return { ...slot, items: slot.items.filter((item) => item.key !== action.itemKey) }
+          }
+          if (slot.key !== action.toSlotKey) return slot
+          const index = action.toIndex ?? slot.items.length
+          return { ...slot, items: insertItemAt(slot.items, index, moved) }
+        }),
+      }))
+    }
     case 'UPDATE_ITEM':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,

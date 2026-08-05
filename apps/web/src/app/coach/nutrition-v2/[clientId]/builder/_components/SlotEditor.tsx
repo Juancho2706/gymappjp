@@ -26,6 +26,7 @@ export function SlotEditor({
   slot,
   variantKey,
   variants,
+  daySlots,
   clientId,
   dispatch,
   errors,
@@ -38,6 +39,8 @@ export function SlotEditor({
   variantKey: string
   /** Días del plan: con más de uno aparece el menú "Copiar a otros días". */
   variants: BuilderVariant[]
+  /** Franjas del día en pantalla: destinos de "Mover a otra franja" del menú del item (BD7). */
+  daySlots: readonly BuilderSlot[]
   clientId: string
   dispatch: Dispatch
   errors: Record<string, string>
@@ -102,12 +105,14 @@ export function SlotEditor({
       </div>
 
       <div className="mt-3 space-y-2">
-        {slot.items.map((item) => (
+        {slot.items.map((item, itemIndex) => (
           <ItemRow
             key={item.key}
             item={item}
+            index={itemIndex}
             variantKey={variantKey}
             slotKey={slot.key}
+            daySlots={daySlots}
             clientId={clientId}
             dispatch={dispatch}
             error={{ food: errors['item.' + item.key + '.food'], quantity: errors['item.' + item.key + '.quantity'] }}

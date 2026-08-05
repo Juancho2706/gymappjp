@@ -31,7 +31,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Check, Copy, Lock, MoreVertical, Pencil, Sliders, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, Copy, CopyCheck, Lock, MoreVertical, Pencil, Sliders, Trash2, X } from 'lucide-react'
 import {
   NUTRITION_DAY_LABELS,
   NUTRITION_DAY_SHORT_LABELS,
@@ -64,6 +64,7 @@ import {
   type BuilderTargetsMode,
   type BuilderVariant,
 } from '../_lib/draft-builder'
+import { COPY_PRESETS, freeDaysForCopyPreset } from '../_lib/copy-presets'
 // El candado Pro y el detector de desktop se reusan del módulo de "Agregar día" (que sigue vivo
 // en la edición rápida): mismo límite comercial, mismas palabras, mismo popover/sheet.
 import { UpsellPanel, useIsDesktopMd } from './AddDayPopover'
@@ -103,6 +104,11 @@ export interface DayPlanStripHandlers {
   onChangeDay: (variantKey: string, dayOfWeek: number) => void
   /** Copia el día completo a OTRO día (crea su variante con este contenido). */
   onCopyToDay: (variantKey: string, dayOfWeek: number) => void
+  /**
+   * Copia el día a VARIOS días de una (presets "Lu a Vi" / "Fin de semana" / "Todos", BD3). El
+   * wizard filtra los ocupados y respeta el tope de días; acá solo se le pasan los candidatos.
+   */
+  onCopyToDays: (variantKey: string, days: readonly number[]) => void
   onSetTargetsMode: (variantKey: string, mode: BuilderTargetsMode) => void
   onSetVariantTarget: (variantKey: string, field: keyof BuilderTargets, value: string) => void
   onRemove: (variantKey: string) => void
@@ -183,7 +189,23 @@ function DayMenu({
 
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={!canCopyToAnotherDay}>Copiar a otros días</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-44">
+          <DropdownMenuSubContent className="w-52">
+            {/* Presets (BD3): el recorte que el coach hace siempre, en un toque. Solo cubren los
+                días LIBRES — los ocupados siguen deshabilitados abajo, no se pisan. */}
+            {COPY_PRESETS.map((preset) => {
+              const days = freeDaysForCopyPreset(preset, taken)
+              return (
+                <DropdownMenuItem
+                  key={preset.id}
+                  disabled={days.length === 0}
+                  onClick={() => handlers.onCopyToDays(variant.key, days)}
+                >
+                  <CopyCheck aria-hidden="true" className="h-4 w-4" />
+                  {preset.label}
+                </DropdownMenuItem>
+              )
+            })}
+            <DropdownMenuSeparator />
             {NUTRITION_WEEK_ORDER.map((day) => (
               <DropdownMenuItem key={day} disabled={taken.has(day)} onClick={() => handlers.onCopyToDay(variant.key, day)}>
                 <Copy aria-hidden="true" className="h-4 w-4" />

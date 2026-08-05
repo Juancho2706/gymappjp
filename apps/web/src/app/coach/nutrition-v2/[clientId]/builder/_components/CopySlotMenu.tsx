@@ -5,6 +5,7 @@ import { Copy, CopyCheck } from 'lucide-react'
 import { sortNutritionDayVariantsForDisplay } from '@eva/nutrition-v2'
 import type { BuilderSlot, BuilderVariant } from '../_lib/draft-builder'
 import type { SlotCopyRequest } from '../_lib/builder-view-model'
+import { COPY_PRESETS, targetsForCopyPreset } from '../_lib/copy-presets'
 import { secondaryButtonClass } from '../_lib/builder-ui-classes'
 // El menu "Copiar a otros dias" de la franja usa el MISMO patron responsive que el resto de las
 // afordancias del paso (popover en desktop / bottom sheet en movil), asi que reusa el hook.
@@ -69,6 +70,25 @@ export function CopySlotMenu({
         Aplicar a todos los días
       </button>
       <div>
+        {/* Presets (BD3): un tap MARCA el multi-select de abajo — no copia todavía. El coach
+            sigue viendo (y pudiendo corregir) exactamente a qué días va antes de confirmar. */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Atajos</p>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {COPY_PRESETS.map((preset) => {
+            const keys = targetsForCopyPreset(targets, preset)
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                disabled={keys.length === 0}
+                onClick={() => setSelected(keys)}
+                className="inline-flex min-h-9 items-center rounded-pill border border-border-default bg-surface-card px-3 text-xs font-semibold text-strong transition-colors hover:border-primary/40 hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+              >
+                {preset.label}
+              </button>
+            )
+          })}
+        </div>
         <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">O elige los días</p>
         <div className="flex flex-wrap gap-1.5">
           {targets.map((variant) => {

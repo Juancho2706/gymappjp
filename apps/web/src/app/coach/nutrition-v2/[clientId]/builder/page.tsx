@@ -15,6 +15,7 @@ import {
 import { fetchItemSubstitutionsForVersion } from '@/app/coach/nutrition-v2/_data/item-substitutions.data'
 import { fetchClientFoodPrefsForPicker } from '@/app/coach/nutrition-v2/_data/client-food-prefs.data'
 import { fetchBuilderFoodsByIds } from './_data/plan-foods.data'
+import { fetchBuilderClientMetrics } from './_data/client-metrics.data'
 import {
   builderStateFromTemplateDraft,
   collectPlanFoodIds,
@@ -206,6 +207,10 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
   // vuelve a pedir desde el cliente. Fail-soft en el data-loader — son ayudas visuales.
   const foodPrefs = await fetchClientFoodPrefsForPicker(clientId)
 
+  // Datos duros del alumno para "Sugerir metas" del paso 1 (BD1). Fail-soft en el data-loader:
+  // sin ficha de ingreso (o si la lectura cae) el panel se abre igual con los campos a mano.
+  const clientMetrics = await fetchBuilderClientMetrics(clientId)
+
   return (
     // Header compacto (backHref): flecha de vuelta + nombre del alumno en una sola fila.
     // La flecha reemplaza al boton "Volver a la ficha" (misma ruta), asi el header movil no
@@ -227,6 +232,7 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
         initialDraft={initialDraft}
         today={today}
         nutritionProEnabled={nutritionProEnabled}
+        clientMetrics={clientMetrics}
         foodPickerPrefs={{
           viewerCoachId: user.id,
           clientName: detail.client.fullName,

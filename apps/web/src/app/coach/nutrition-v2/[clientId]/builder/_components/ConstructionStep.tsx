@@ -2,9 +2,6 @@
 
 import { Plus } from 'lucide-react'
 import { NutritionCard } from '@/components/nutrition-v2'
-// Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
-// modulos y respeta el contrato del componente MacroChipRow.
-import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
 import { sortNutritionDayVariantsForDisplay } from '@eva/nutrition-v2'
 import type { ExchangeMacroTotals } from '@eva/nutrition-engine'
 import {
@@ -24,7 +21,7 @@ import { PortionsDeriveCard } from './PortionsDeriveCard'
 // Selector de dia (SPEC nutrition-ui-poda, punto 10): strip Lu-Do + barra de contexto. Reemplaza
 // la barra de chips de variantes, el popover "Agregar dia" y la tira "Se aplica en".
 import { DayPlanStrip, type DayPlanStripHandlers } from './DayPlanStrip'
-import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
+import { DayTotalsBar } from './DayTotalsBar'
 import { DaySummary } from './DaySummary'
 import { SlotEditor } from './SlotEditor'
 import { useIsTemplateMode } from './TemplateModeContext'
@@ -175,6 +172,7 @@ export function ConstructionStep({
             slot={slot}
             variantKey={variant.key}
             variants={state.variants}
+            daySlots={variant.slots}
             clientId={clientId}
             dispatch={dispatch}
             errors={errors}
@@ -206,18 +204,15 @@ export function ConstructionStep({
 
         {/* En movil (<md) la capsula de navegacion del coach flota fija abajo (z-50,
             ~62px + 16px de aire + safe-area): sin este offset la tapaba por completo
-            (QA CEO 08-04). En md+ la capsula no existe y el total vuelve a bottom-0. */}
-        <div className="sticky bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 md:bottom-0 lg:hidden">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-            {variant.isDefault ? 'Total del día base' : 'Total de ' + variant.label}
-          </span>
-          <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
-          {portionDay ? (
-            <p className="w-full text-xs text-muted">
-              {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
-            </p>
-          ) : null}
-        </div>
+            (QA CEO 08-04). En md+ la capsula no existe y el total vuelve a bottom-0.
+            El contenido (toggle Asignado/Restante) vive en `DayTotalsBar` — BD2. */}
+        <DayTotalsBar
+          className="sticky bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] z-10 -mx-1 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 md:bottom-0 lg:hidden"
+          title={variant.isDefault ? 'Total del día base' : 'Total de ' + variant.label}
+          totals={totals}
+          targets={effectiveTargets}
+          portionCalories={portionDay ? portionDay.calories : null}
+        />
       </div>
 
       <div className="hidden lg:block">

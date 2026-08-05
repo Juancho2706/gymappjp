@@ -1,20 +1,40 @@
 'use client'
 
-import { Trash2 } from 'lucide-react'
+import { MoreVertical, MoveRight, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
-import { BUILDER_UNITS, itemMacros, type BuilderItem } from '../_lib/draft-builder'
+import { BUILDER_UNITS, itemMacros, type BuilderItem, type BuilderSlot } from '../_lib/draft-builder'
+import { stepCountedQuantity } from '../_lib/quantity-format'
 import type { Dispatch } from '../_lib/builder-view-model'
-import { iconButtonClass, inputClass } from '../_lib/builder-ui-classes'
+import { inputClass } from '../_lib/builder-ui-classes'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
 import { FreeFoodFields } from './FreeFoodFields'
+import { ItemQuantityField } from './ItemQuantityField'
 import { SubstitutionsField } from './SubstitutionsField'
 
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
+
+/** Ventana del Deshacer de las bajas de item (BD4). Más larga que la de días/franjas a propósito:
+ *  quitar un alimento es el gesto que más se hace de corrido y el que menos se mira. */
+const UNDO_TOAST_MS = 8000
+
+const menuTriggerClass =
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border-0 bg-transparent p-0 normal-case tracking-normal text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-transparent'
 
 function PortionMacros({ item }: { item: BuilderItem }) {
   const m = itemMacros(item)
@@ -33,17 +53,29 @@ function PortionMacros({ item }: { item: BuilderItem }) {
   )
 }
 
+/** "Almuerzo · 13:30" / "Franja sin nombre" — cómo se lee una franja destino en el menú "Mover a…". */
+function slotOptionLabel(slot: BuilderSlot): string {
+  const name = slot.name.trim() || 'Franja sin nombre'
+  return slot.startTime ? name + ' · ' + slot.startTime : name
+}
+
 export function ItemRow({
   item,
+  index,
   variantKey,
   slotKey,
+  daySlots,
   clientId,
   dispatch,
   error,
 }: {
   item: BuilderItem
+  /** Posición dentro de la franja: la necesita el Deshacer para reinsertarlo donde estaba. */
+  index: number
   variantKey: string
   slotKey: string
+  /** Franjas del día en pantalla: alimentan "Mover a otra franja" (BD7). */
+  daySlots: readonly BuilderSlot[]
   clientId: string
   dispatch: Dispatch
   error?: { food?: string; quantity?: string }
@@ -52,6 +84,50 @@ export function ItemRow({
   const displayName = item.food ? item.food.name : item.customName
   const imageUrl = item.food ? resolveFoodImageUrl(item.food.media as FoodCatalogItem['media'], SUPABASE_BASE) : null
   const iconUrl = item.food ? foodCategoryIconUrl(item.food.category) : foodCategoryIconUrlFromName(item.customName)
+  const itemLabel = displayName || 'alimento'
+  const moveTargets = daySlots.filter((slot) => slot.key !== slotKey)
+
+  /**
+   * Quitar = optimista + Deshacer (BD4). Cero confirms: preguntar por cada alimento en una
+   * pantalla donde se quitan cinco seguidos es peor que poder deshacer el único que sobró.
+   * El item y su índice se capturan ANTES del dispatch y viajan cerrados en el callback, así que
+   * el Deshacer reinserta exactamente donde estaba aunque se toque segundos después.
+   */
+  function handleRemove() {
+    const removed = item
+    const removedIndex = index
+    dispatch({ type: 'REMOVE_ITEM', variantKey, slotKey, itemKey: item.key })
+    toast('Alimento quitado', {
+      duration: UNDO_TOAST_MS,
+      action: {
+        label: 'Deshacer',
+        onClick: () =>
+          dispatch({ type: 'RESTORE_ITEM', variantKey, slotKey, index: removedIndex, item: removed }),
+      },
+    })
+  }
+
+  /** Mover a otra franja del MISMO día, con Deshacer que lo devuelve a su posición exacta. */
+  function handleMove(target: BuilderSlot) {
+    const fromIndex = index
+    dispatch({ type: 'MOVE_ITEM', variantKey, fromSlotKey: slotKey, toSlotKey: target.key, itemKey: item.key })
+    toast(`${displayName || 'Alimento'} se movió a ${target.name.trim() || 'la otra franja'}`, {
+      duration: UNDO_TOAST_MS,
+      action: {
+        label: 'Deshacer',
+        onClick: () =>
+          dispatch({
+            type: 'MOVE_ITEM',
+            variantKey,
+            fromSlotKey: target.key,
+            toSlotKey: slotKey,
+            itemKey: item.key,
+            toIndex: fromIndex,
+          }),
+      },
+    })
+  }
+
   return (
     <div className="rounded-control border border-border-subtle bg-surface-card p-2.5">
       <div className="flex items-start gap-2.5">
@@ -75,29 +151,60 @@ export function ItemRow({
           )}
           <PortionMacros item={item} />
         </div>
-        <button
-          type="button"
-          aria-label={`Quitar ${displayName || 'alimento'}`}
-          onClick={() => dispatch({ type: 'REMOVE_ITEM', variantKey, slotKey, itemKey: item.key })}
-          className={iconButtonClass + ' shrink-0'}
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {/* Menú ⋮ (BD7): agrupa lo que antes era un botón suelto de basurero y suma "Mover a…".
+            Con una sola franja en el día la opción vive igual, deshabilitada: la capacidad se
+            descubre antes de necesitarla. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger aria-label={`Opciones de ${itemLabel}`} className={menuTriggerClass}>
+            <MoreVertical aria-hidden="true" className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger disabled={moveTargets.length === 0}>Mover a…</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                {moveTargets.map((target) => (
+                  <DropdownMenuItem key={target.key} onClick={() => handleMove(target)}>
+                    <MoveRight aria-hidden="true" className="h-4 w-4" />
+                    {slotOptionLabel(target)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={handleRemove}>
+              <Trash2 aria-hidden="true" className="h-4 w-4" />
+              Quitar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="mt-2 flex items-center gap-2">
-        <input
-          className={inputClass + ' max-w-32'}
-          inputMode="decimal"
-          aria-label="Cantidad"
-          placeholder="Cantidad"
-          value={item.quantity}
-          onChange={(e) =>
-            dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: { quantity: e.target.value } })
-          }
-        />
+        <div className="min-w-0 flex-1">
+          {/* Híbrido por unidad (BD6): input libre en g/ml, steppers ±0,5 en porciones. */}
+          <ItemQuantityField
+            label={`Cantidad de ${itemLabel}`}
+            value={item.quantity}
+            unit={item.unit}
+            invalid={Boolean(error?.quantity)}
+            onChange={(value) =>
+              dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: { quantity: value } })
+            }
+            onStep={(direction) =>
+              dispatch({
+                type: 'UPDATE_ITEM',
+                variantKey,
+                slotKey,
+                itemKey: item.key,
+                patch: { quantity: stepCountedQuantity(item.quantity, direction) },
+              })
+            }
+          />
+        </div>
+        {/* Clases propias (no `inputClass`): ese preset trae `w-full` y pelearia con el ancho
+            fijo de la unidad dentro de la fila flex. */}
         <select
-          className={inputClass + ' max-w-24'}
+          className="h-11 w-20 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
           aria-label="Unidad"
           value={item.unit}
           onChange={(e) =>
