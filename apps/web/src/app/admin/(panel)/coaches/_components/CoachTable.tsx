@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users, Plus, StickyNote } from 'lucide-react'
+import { toast } from 'sonner'
+import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users, Plus, StickyNote, Settings2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
@@ -10,6 +12,7 @@ import { AdminSortHeader } from '../../_components/AdminSortHeader'
 import { AdminEmptyState } from '../../_components/AdminEmptyState'
 import { AdminBulkBar } from '../../_components/AdminBulkBar'
 import { AdminPagination } from '../../_components/AdminPagination'
+import { AdminConfirmDialog } from '../../_components/AdminConfirmDialog'
 import { CoachCommandPanel } from './CoachCommandPanel'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { bulkCoachStatusAction, deleteCoachAction, getCoachNotesAction, saveCoachNotesAction } from '../_actions/coach-actions'
@@ -101,9 +104,16 @@ function NotesPopover({ coachId, onClose }: { coachId: string; onClose: () => vo
 
     async function save() {
         setSaving(true)
-        await saveCoachNotesAction(coachId, notes)
-        setSaving(false)
-        onClose()
+        // saveCoachNotesAction devuelve void: el unico canal de error es la excepcion.
+        try {
+            await saveCoachNotesAction(coachId, notes)
+            toast.success('Nota guardada')
+            onClose()
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'No se pudo guardar la nota')
+        } finally {
+            setSaving(false)
+        }
     }
 
     return (
@@ -167,8 +177,13 @@ export function CoachTable({ coaches, total }: Props) {
     const [riskOpen, setRiskOpen] = useState(true)
     const [createOpen, setCreateOpen] = useState(false)
     const [notesOpen, setNotesOpen] = useState<string | null>(null)
+    const [confirmDelete, setConfirmDelete] = useState<CoachListItem | null>(null)
+    // Snapshot de ids al abrir: el dialogo muestra el alcance en numeros y la seleccion
+    // no debe poder cambiar bajo sus pies entre "leer el blast radius" y "confirmar".
+    const [confirmBulk, setConfirmBulk] = useState<{ kind: 'expire' | 'reactivate'; ids: string[] } | null>(null)
 
     const atRisk = coaches.filter(isAtRisk)
+    const bulkCount = confirmBulk?.ids.length ?? 0
 
     function toggleSelect(id: string) {
         setSelected(prev => {
@@ -184,24 +199,32 @@ export function CoachTable({ coaches, total }: Props) {
         else setSelected(new Set(coaches.map(c => c.id)))
     }
 
-    async function handleDelete(id: string) {
-        if (!confirm('¿Eliminar este coach? Esta acción es IRREVERSIBLE.')) return
-        setDeleting(id)
-        await deleteCoachAction(id)
+    // Los tres flujos destructivos usaban confirm() nativo y TIRABAN el {error} de la action:
+    // un bulk que fallaba a la mitad se veia identico a uno exitoso (F3 08-05).
+    async function handleDelete(c: CoachListItem) {
+        setDeleting(c.id)
+        const res = await deleteCoachAction(c.id)
         setDeleting(null)
+        if (res?.error) {
+            toast.error(res.error)
+            return
+        }
+        toast.success(`Coach ${c.brand_name || c.full_name || c.slug} eliminado`)
         router.refresh()
     }
 
-    async function bulkExpire() {
-        if (!confirm(`¿Forzar expiración de ${selected.size} coaches? Verán /reactivate en su próxima visita.`)) return
-        await bulkCoachStatusAction([...selected], 'expired')
-        setSelected(new Set())
-        router.refresh()
-    }
-
-    async function bulkReactivate() {
-        if (!confirm(`¿Reactivar ${selected.size} coaches?`)) return
-        await bulkCoachStatusAction([...selected], 'active')
+    async function runBulk(kind: 'expire' | 'reactivate', ids: string[]) {
+        const n = ids.length
+        const res = await bulkCoachStatusAction(ids, kind === 'expire' ? 'expired' : 'active')
+        if (res?.error) {
+            toast.error(res.error)
+            return
+        }
+        toast.success(
+            kind === 'expire'
+                ? `${n} coach${n !== 1 ? 'es' : ''} expirado${n !== 1 ? 's' : ''}`
+                : `${n} coach${n !== 1 ? 'es' : ''} reactivado${n !== 1 ? 's' : ''} (+30 días)`
+        )
         setSelected(new Set())
         router.refresh()
     }
@@ -254,21 +277,116 @@ export function CoachTable({ coaches, total }: Props) {
                 </div>
             )}
 
-            {/* Table */}
-            <div className="rounded-xl border border-subtle bg-surface-card overflow-hidden">
+            {/* ── Mobile: cards (13 columnas bajo md eran scroll horizontal ciego) ── */}
+            <div className="space-y-2 md:hidden">
+                {coaches.length === 0 && (
+                    <div className="rounded-card border border-subtle bg-surface-card">
+                        <AdminEmptyState icon={Users} title="Sin coaches" description="Ajusta los filtros para ver resultados." />
+                    </div>
+                )}
+                {coaches.map(c => {
+                    const isSelected = selected.has(c.id)
+                    return (
+                        <div
+                            key={c.id}
+                            className={`relative rounded-card border bg-surface-card p-3 transition-colors ${
+                                isSelected ? 'border-[var(--sport-500)]' : 'border-subtle'
+                            }`}
+                        >
+                            {/* El bulk existia solo en desktop: sin checkbox en la card, la barra
+                                de acciones masivas era inalcanzable en telefono. */}
+                            <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelect(c.id)}
+                                aria-label={`Seleccionar ${c.brand_name || c.full_name || c.slug}`}
+                                className="absolute right-3 top-3 rounded border-subtle accent-[var(--sport-500)]"
+                            />
+
+                            <div className="pr-8">
+                                <Link
+                                    href={`/admin/coaches/${c.id}`}
+                                    className="text-sm font-medium text-strong hover:text-[var(--sport-500)] transition-colors"
+                                >
+                                    {c.brand_name || c.full_name || '—'}
+                                </Link>
+                                <p className="font-mono text-[10px] text-muted">/c/{c.slug}</p>
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <AdminStatusBadge
+                                    value={c.subscription_tier === 'free' && c.subscription_status === 'active'
+                                        ? 'free_active'
+                                        : (c.subscription_status ?? '')}
+                                />
+                                <AdminStatusBadge value={c.subscription_tier ?? ''} type="tier" />
+                                <LifecycleBadge stage={c.lifecycle_stage} />
+                            </div>
+
+                            <div className="mt-2.5 flex items-center justify-between gap-3 text-xs">
+                                <span className="text-muted">
+                                    MRR{' '}
+                                    {c.monthly_revenue > 0 ? (
+                                        <span className="font-mono tabular-nums text-[var(--success-500)]">
+                                            ${c.monthly_revenue.toLocaleString('es-CL')}
+                                        </span>
+                                    ) : (
+                                        <span className="text-muted">—</span>
+                                    )}
+                                </span>
+                                <span className="flex items-center gap-1 text-muted">
+                                    Vence <ExpiryCell days={c.days_until_expiry} />
+                                </span>
+                            </div>
+
+                            <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+                                <span className="text-muted">
+                                    Alumnos{' '}
+                                    <span className="font-mono tabular-nums text-body">
+                                        {c.active_client_count}/{c.max_clients ?? '?'}
+                                    </span>
+                                </span>
+                                <span className="flex items-center gap-1 text-muted">
+                                    Actividad{' '}
+                                    {c.coach_last_active_at
+                                        ? <LastActivityDays iso={c.coach_last_active_at} />
+                                        : <span className="text-xs text-muted">nunca</span>}
+                                </span>
+                            </div>
+
+                            <button
+                                onClick={() => setEditing(c)}
+                                title="Gestión rápida"
+                                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-pill border border-subtle bg-surface-sunken py-2 text-xs font-medium text-strong transition-colors hover:border-[var(--sport-500)] hover:text-[var(--sport-500)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                            >
+                                <Settings2 className="h-3.5 w-3.5" />
+                                Gestionar
+                            </button>
+                        </div>
+                    )
+                })}
+            </div>
+
+            {/* ── Desktop: tabla ── */}
+            <div className="hidden rounded-xl border border-subtle bg-surface-card overflow-hidden md:block">
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px]">
                         <thead className="border-b border-subtle">
                             <tr>
-                                <th className="w-8 px-3 py-2 text-left">
-                                    <input
-                                        type="checkbox"
-                                        checked={selected.size === coaches.length && coaches.length > 0}
-                                        onChange={toggleAll}
-                                        className="rounded border-subtle accent-[var(--sport-500)]"
-                                    />
+                                {/* Columna identidad sticky: con 12 columnas el nombre del coach se
+                                    perdia al scrollear a la derecha y no sabias que fila mirabas. */}
+                                <th className="sticky left-0 z-20 border-r border-subtle bg-surface-card px-3 py-2 text-left">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={selected.size === coaches.length && coaches.length > 0}
+                                            onChange={toggleAll}
+                                            aria-label="Seleccionar todos"
+                                            className="rounded border-subtle accent-[var(--sport-500)]"
+                                        />
+                                        <span className="text-[11px] font-medium uppercase tracking-widest text-muted">Coach</span>
+                                    </div>
                                 </th>
-                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Coach</th>
                                 <th className="px-3 py-2 text-left">
                                     <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-muted">
                                         Health
@@ -317,26 +435,43 @@ export function CoachTable({ coaches, total }: Props) {
                                 return (
                                     <tr
                                         key={c.id}
-                                        className={`transition-colors hover:bg-surface-sunken ${isSelected ? 'bg-sport-500/5' : ''}`}
+                                        onClick={() => setEditing(c)}
+                                        title="Gestión rápida"
+                                        className={`group cursor-pointer transition-colors hover:bg-surface-sunken ${isSelected ? 'bg-sport-500/5' : ''}`}
                                     >
-                                        <td className="px-3 py-2.5">
-                                            <input
-                                                type="checkbox"
-                                                checked={isSelected}
-                                                onChange={() => toggleSelect(c.id)}
-                                                className="rounded border-subtle accent-[var(--sport-500)]"
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2.5">
-                                            <button onClick={() => setEditing(c)} className="text-left group">
-                                                <p className="text-sm font-medium text-strong group-hover:text-[var(--sport-500)] transition-colors">
-                                                    {c.brand_name || c.full_name || '—'}
-                                                </p>
-                                                <p className="font-mono text-[10px] text-muted">/c/{c.slug}</p>
-                                                {c.auth_email && (
-                                                    <p className="text-[10px] text-muted truncate max-w-[180px]">{c.auth_email}</p>
-                                                )}
-                                            </button>
+                                        {/* Sticky = necesita fondo OPACO propio; el hover de la fila no
+                                            lo alcanza solo, por eso group-hover explicito.
+                                            stopPropagation: aqui viven el Link a la ficha y el checkbox,
+                                            que NO deben disparar el panel de gestion rapida de la fila. */}
+                                        <td
+                                            onClick={e => e.stopPropagation()}
+                                            className={`sticky left-0 z-10 border-r border-subtle bg-surface-card px-3 py-2.5 transition-colors group-hover:bg-surface-sunken ${
+                                                isSelected ? 'shadow-[inset_2px_0_0_var(--sport-500)]' : ''
+                                            }`}
+                                        >
+                                            <div className="flex items-start gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => toggleSelect(c.id)}
+                                                    aria-label={`Seleccionar ${c.brand_name || c.full_name || c.slug}`}
+                                                    className="mt-1 rounded border-subtle accent-[var(--sport-500)]"
+                                                />
+                                                <div className="min-w-0">
+                                                    {/* El nombre lleva a la ficha completa; el resto de la fila
+                                                        sigue abriendo el panel de gestion rapida. */}
+                                                    <Link
+                                                        href={`/admin/coaches/${c.id}`}
+                                                        className="text-sm font-medium text-strong hover:text-[var(--sport-500)] transition-colors"
+                                                    >
+                                                        {c.brand_name || c.full_name || '—'}
+                                                    </Link>
+                                                    <p className="font-mono text-[10px] text-muted">/c/{c.slug}</p>
+                                                    {c.auth_email && (
+                                                        <p className="text-[10px] text-muted truncate max-w-[180px]">{c.auth_email}</p>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="px-3 py-2.5"><HealthBar score={score} isFree={isFree} /></td>
                                         <td className="px-3 py-2.5">
@@ -382,19 +517,20 @@ export function CoachTable({ coaches, total }: Props) {
                                                 {format(new Date(c.created_at), 'dd/MM/yy', { locale: es })}
                                             </span>
                                         </td>
-                                        <td className="relative px-3 py-2.5 text-right">
+                                        <td className="relative px-3 py-2.5 text-right" onClick={e => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
-                                                    onClick={e => { e.stopPropagation(); setNotesOpen(notesOpen === c.id ? null : c.id) }}
+                                                    onClick={() => setNotesOpen(notesOpen === c.id ? null : c.id)}
                                                     className="rounded p-1 text-muted hover:text-[var(--sport-500)] transition-colors"
                                                     title="Nota interna"
                                                 >
                                                     <StickyNote className="h-3.5 w-3.5" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDelete(c.id)}
+                                                    onClick={() => setConfirmDelete(c)}
                                                     disabled={deleting === c.id}
                                                     className="rounded p-1 text-muted hover:text-[var(--danger-500)] transition-colors disabled:opacity-30"
+                                                    title="Eliminar coach"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                 </button>
@@ -419,10 +555,45 @@ export function CoachTable({ coaches, total }: Props) {
             <AdminBulkBar
                 count={selected.size}
                 actions={[
-                    { label: 'Forzar expiración', onClick: bulkExpire, variant: 'danger' },
-                    { label: 'Reactivar', onClick: bulkReactivate, variant: 'default' },
+                    { label: 'Forzar expiración', onClick: () => setConfirmBulk({ kind: 'expire', ids: [...selected] }), variant: 'danger' },
+                    { label: 'Reactivar', onClick: () => setConfirmBulk({ kind: 'reactivate', ids: [...selected] }), variant: 'default' },
                 ]}
                 onClear={() => setSelected(new Set())}
+            />
+
+            {/* Confirmaciones — el CEO decide viendo el alcance en numeros reales */}
+            <AdminConfirmDialog
+                open={confirmDelete !== null}
+                onOpenChange={o => { if (!o) setConfirmDelete(null) }}
+                title="¿Eliminar coach?"
+                description={`Vas a eliminar a ${confirmDelete?.brand_name || confirmDelete?.full_name || confirmDelete?.slug || 'este coach'}.`}
+                blastRadius="Borra el usuario y todos sus datos. Irreversible."
+                severity="danger"
+                confirmLabel="Eliminar coach"
+                requireText={confirmDelete?.slug}
+                onConfirm={async () => { if (confirmDelete) await handleDelete(confirmDelete) }}
+            />
+
+            <AdminConfirmDialog
+                open={confirmBulk?.kind === 'expire'}
+                onOpenChange={o => { if (!o) setConfirmBulk(null) }}
+                title="¿Forzar expiración?"
+                description="Los coaches verán /reactivate en su próxima visita y deberán pagar para continuar."
+                blastRadius={`${bulkCount} coach${bulkCount !== 1 ? 'es' : ''}: cancela sus suscripciones en la pasarela y ancla la gracia de sus alumnos`}
+                severity="danger"
+                confirmLabel="Forzar expiración"
+                onConfirm={async () => { if (confirmBulk) await runBulk('expire', confirmBulk.ids) }}
+            />
+
+            <AdminConfirmDialog
+                open={confirmBulk?.kind === 'reactivate'}
+                onOpenChange={o => { if (!o) setConfirmBulk(null) }}
+                title="¿Reactivar coaches?"
+                description="Pasan a estado activo y se les extiende el período."
+                blastRadius={`${bulkCount} coach${bulkCount !== 1 ? 'es' : ''}: +30 días de acceso`}
+                severity="warning"
+                confirmLabel="Reactivar"
+                onConfirm={async () => { if (confirmBulk) await runBulk('reactivate', confirmBulk.ids) }}
             />
 
             {/* Command panel */}

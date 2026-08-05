@@ -1,26 +1,42 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useState, useTransition } from 'react'
+import { toast } from 'sonner'
+import { Send } from 'lucide-react'
 import { resendOwnerInviteAction } from '../_actions/orgs.actions'
-import { Send, CheckCircle2 } from 'lucide-react'
 
 interface Props {
     orgId: string
     ownerEmail?: string
 }
 
-const initial: { error?: string; success?: boolean } = {}
-
 export function ResendOwnerInviteButton({ orgId, ownerEmail }: Props) {
     const [open, setOpen] = useState(false)
-    const [state, action, pending] = useActionState(resendOwnerInviteAction, initial)
+    const [email, setEmail] = useState(ownerEmail ?? '')
+    const [error, setError] = useState<string | null>(null)
+    const [pending, startTransition] = useTransition()
 
-    if (state.success) {
-        return (
-            <span className="flex items-center gap-1 text-[11px] text-[var(--success-500)]">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Enviado
-            </span>
-        )
+    function submit(e: React.FormEvent<HTMLFormElement>) {
+        // Se llama la server action a mano (firma intacta: prevState + FormData) para poder
+        // reaccionar al resultado; con useActionState el `success` quedaba pegado para siempre
+        // y la fila no se podia reenviar nunca mas.
+        e.preventDefault()
+        const target = email.trim()
+        const fd = new FormData()
+        fd.set('orgId', orgId)
+        fd.set('email', target)
+
+        startTransition(async () => {
+            const res = await resendOwnerInviteAction({}, fd)
+            if (res.error) {
+                setError(res.error)
+                toast.error(res.error)
+                return
+            }
+            setError(null)
+            toast.success(`Invitación enviada a ${target}`)
+            setOpen(false)
+        })
     }
 
     if (!open) {
@@ -28,7 +44,7 @@ export function ResendOwnerInviteButton({ orgId, ownerEmail }: Props) {
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2 whitespace-nowrap"
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2 whitespace-nowrap focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
             >
                 Reenviar invitación
             </button>
@@ -36,18 +52,18 @@ export function ResendOwnerInviteButton({ orgId, ownerEmail }: Props) {
     }
 
     return (
-        <form action={action} className="flex flex-col gap-1.5 min-w-[180px]">
-            <input type="hidden" name="orgId" value={orgId} />
+        <form onSubmit={submit} className="flex flex-col gap-1.5 min-w-[180px]">
             <input
                 name="email"
                 type="email"
                 required
-                defaultValue={ownerEmail ?? ''}
+                value={email}
+                onChange={e => setEmail(e.target.value)}
                 placeholder="email@org.com"
                 className="h-7 px-2 text-[11px] rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-[var(--focus-ring)] w-full"
             />
-            {state.error && (
-                <p className="text-[10px] text-[var(--danger-500)]">{state.error}</p>
+            {error && (
+                <p className="text-[10px] text-[var(--danger-500)]">{error}</p>
             )}
             <div className="flex gap-1">
                 <button
@@ -60,7 +76,7 @@ export function ResendOwnerInviteButton({ orgId, ownerEmail }: Props) {
                 </button>
                 <button
                     type="button"
-                    onClick={() => setOpen(false)}
+                    onClick={() => { setError(null); setOpen(false) }}
                     className="h-6 px-2 text-[11px] border border-border rounded hover:bg-muted transition-colors"
                 >
                     Cancelar

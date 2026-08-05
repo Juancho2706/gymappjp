@@ -1,7 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -11,11 +13,50 @@ import type { ClientListItem } from '../../dashboard/_data/types'
 import { ClientEditSheet } from './ClientEditSheet'
 import { ClientCreateSheet } from './ClientCreateSheet'
 import { AdminPagination } from '../../_components/AdminPagination'
+import { AdminConfirmDialog } from '../../_components/AdminConfirmDialog'
 
 interface Props {
     clients: ClientListItem[]
     total: number
     coaches: { id: string; full_name: string | null; brand_name: string | null; slug: string }[]
+}
+
+// Mismo estilo que los selects nativos de CoachFilterBar — un solo lenguaje de filtros en el panel.
+const selectClass =
+    'rounded border border-subtle bg-surface-sunken px-2 py-1.5 text-xs text-body focus:outline-none focus:border-[var(--sport-500)] transition-colors'
+
+function EstadoBadge({ client }: { client: ClientListItem }) {
+    if (client.is_archived) {
+        return (
+            <Badge variant="outline" className="text-xs bg-[var(--warning-500)]/15 text-[var(--warning-500)] border-[var(--warning-500)]/30">
+                Archivado
+            </Badge>
+        )
+    }
+    const activo = client.is_active !== false
+    return (
+        <Badge
+            variant="outline"
+            className={`text-xs ${activo
+                ? 'bg-[var(--success-500)]/15 text-[var(--success-500)] border-[var(--success-500)]/30'
+                : 'bg-[var(--danger-500)]/15 text-[var(--danger-500)] border-[var(--danger-500)]/30'}`}
+        >
+            {activo ? 'Activo' : 'Inactivo'}
+        </Badge>
+    )
+}
+
+function OnboardingBadge({ done }: { done: boolean }) {
+    return (
+        <Badge
+            variant="outline"
+            className={`text-xs ${done
+                ? 'bg-[var(--sport-500)]/15 text-[var(--sport-500)] border-[var(--sport-500)]/30'
+                : 'bg-[var(--warning-500)]/15 text-[var(--warning-500)] border-[var(--warning-500)]/30'}`}
+        >
+            {done ? 'Completado' : 'Pendiente'}
+        </Badge>
+    )
 }
 
 export function ClientTable({ clients, total, coaches }: Props) {
@@ -26,10 +67,13 @@ export function ClientTable({ clients, total, coaches }: Props) {
     // `q` del server era codigo muerto (ROTO-4, F0 08-05).
     const [search, setSearch] = useState(searchParams.get('q') ?? '')
     const coachIdParam = searchParams.get('coachId') ?? 'all'
+    const estadoParam = searchParams.get('estado') ?? ''
+    const onboardingParam = searchParams.get('onboarding') ?? ''
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [editingClient, setEditingClient] = useState<ClientListItem | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
+    const [confirmDelete, setConfirmDelete] = useState<ClientListItem | null>(null)
 
     function handleSearchChange(value: string) {
         setSearch(value)
@@ -43,15 +87,29 @@ export function ClientTable({ clients, total, coaches }: Props) {
         }, 300)
     }
 
-    async function handleDelete(clientId: string) {
-        if (!confirm('¿Estás seguro de eliminar este cliente?')) return
-        setDeletingId(clientId)
+    /** Escribe un filtro en la URL: el servidor es quien filtra, no la pagina visible. */
+    function pushParam(key: string, value: string) {
+        const url = new URL(window.location.href)
+        if (value) url.searchParams.set(key, value)
+        else url.searchParams.delete(key)
+        url.searchParams.delete('page')
+        router.push(url.pathname + url.search)
+    }
+
+    async function runDelete(client: ClientListItem) {
+        setDeletingId(client.id)
         try {
-            const res = await fetch(`/admin/clients/delete?clientId=${clientId}`, { method: 'POST' })
-            if (!res.ok) throw new Error('Error al eliminar')
+            const res = await fetch(`/admin/clients/delete?clientId=${client.id}`, { method: 'POST' })
+            // La ruta responde 200 aunque la action devuelva {error} (route.ts:13), asi que
+            // mirar solo res.ok reportaba "eliminado" en borrados que fallaron.
+            const body = (await res.json().catch(() => null)) as { error?: string; success?: boolean } | null
+            if (!res.ok || body?.error) {
+                throw new Error(body?.error ?? 'No se pudo eliminar al alumno')
+            }
+            toast.success(`Alumno ${client.full_name} eliminado`)
             router.refresh()
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Error')
+            toast.error(err instanceof Error ? err.message : 'No se pudo eliminar al alumno')
         } finally {
             setDeletingId(null)
         }
@@ -59,14 +117,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
 
     function handleCoachFilter(coachId: string | null) {
         if (!coachId) return
-        const url = new URL(window.location.href)
-        if (coachId === 'all') {
-            url.searchParams.delete('coachId')
-        } else {
-            url.searchParams.set('coachId', coachId)
-        }
-        url.searchParams.delete('page')
-        router.push(url.pathname + url.search)
+        pushParam('coachId', coachId === 'all' ? '' : coachId)
     }
 
     return (
@@ -96,6 +147,31 @@ export function ClientTable({ clients, total, coaches }: Props) {
                         ))}
                     </SelectContent>
                 </Select>
+
+                {/* Estado / Onboarding: filtran en el SERVIDOR (?estado=, ?onboarding=), no
+                    sobre la pagina visible — si no, `total` y la paginacion mentirian. */}
+                <select
+                    value={estadoParam}
+                    onChange={e => pushParam('estado', e.target.value)}
+                    className={selectClass}
+                    aria-label="Filtrar por estado"
+                >
+                    <option value="">Todos los estados</option>
+                    <option value="activo">Activo</option>
+                    <option value="inactivo">Inactivo</option>
+                    <option value="archivado">Archivado</option>
+                </select>
+                <select
+                    value={onboardingParam}
+                    onChange={e => pushParam('onboarding', e.target.value)}
+                    className={selectClass}
+                    aria-label="Filtrar por onboarding"
+                >
+                    <option value="">Todo el onboarding</option>
+                    <option value="completo">Completado</option>
+                    <option value="pendiente">Pendiente</option>
+                </select>
+
                 <button
                     onClick={() => setCreateOpen(true)}
                     className="flex items-center gap-1.5 rounded-lg border border-subtle bg-surface-sunken px-3 py-2 text-xs text-body hover:border-[var(--sport-500)] hover:text-[var(--sport-500)] transition-colors whitespace-nowrap"
@@ -105,7 +181,62 @@ export function ClientTable({ clients, total, coaches }: Props) {
                 </button>
             </div>
 
-            <GlassCard className="overflow-hidden">
+            {/* ── Mobile: cards (la tabla de 6 columnas era ilegible bajo md) ── */}
+            <div className="space-y-2 md:hidden">
+                {clients.map(client => (
+                    <div key={client.id} className="rounded-card border border-subtle bg-surface-card p-3">
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-strong">{client.full_name}</p>
+                                <p className="truncate text-xs text-muted">{client.email}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                                <button
+                                    onClick={() => setEditingClient(client)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-sunken hover:text-strong"
+                                    title="Editar"
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => setConfirmDelete(client)}
+                                    disabled={deletingId === client.id}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-[var(--danger-500)]/15 hover:text-[var(--danger-500)] disabled:opacity-40"
+                                    title="Eliminar"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <p className="mt-2 text-xs text-muted">
+                            Coach:{' '}
+                            {client.coach_id ? (
+                                <Link
+                                    href={`/admin/coaches/${client.coach_id}`}
+                                    className="text-[var(--sport-500)] hover:underline"
+                                >
+                                    {client.coach_name ?? 'Ver ficha'}
+                                </Link>
+                            ) : '—'}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <EstadoBadge client={client} />
+                            <OnboardingBadge done={client.onboarding_completed} />
+                            <span className="ml-auto text-[11px] text-muted">
+                                {new Date(client.created_at).toLocaleDateString('es-CL')}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+                {clients.length === 0 && (
+                    <div className="rounded-card border border-subtle bg-surface-card px-4 py-8 text-center text-sm text-muted">
+                        No se encontraron clientes.
+                    </div>
+                )}
+            </div>
+
+            {/* ── Desktop ── */}
+            <GlassCard className="hidden overflow-hidden md:block">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
@@ -127,30 +258,23 @@ export function ClientTable({ clients, total, coaches }: Props) {
                                             <p className="text-xs text-muted">{client.email}</p>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 text-muted">{client.coach_name ?? '—'}</td>
+                                    <td className="px-4 py-3 text-muted">
+                                        {client.coach_id ? (
+                                            <Link
+                                                href={`/admin/coaches/${client.coach_id}`}
+                                                className="text-body transition-colors hover:text-[var(--sport-500)] hover:underline"
+                                            >
+                                                {client.coach_name ?? 'Ver ficha'}
+                                            </Link>
+                                        ) : '—'}
+                                    </td>
                                     <td className="px-4 py-3">
                                         <div className="flex flex-wrap gap-1">
-                                            {client.is_archived ? (
-                                                <Badge variant="outline" className="text-xs bg-[var(--warning-500)]/15 text-[var(--warning-500)] border-[var(--warning-500)]/30">
-                                                    Archivado
-                                                </Badge>
-                                            ) : (
-                                                <Badge
-                                                    variant="outline"
-                                                    className={`text-xs ${client.is_active !== false ? 'bg-[var(--success-500)]/15 text-[var(--success-500)] border-[var(--success-500)]/30' : 'bg-[var(--danger-500)]/15 text-[var(--danger-500)] border-[var(--danger-500)]/30'}`}
-                                                >
-                                                    {client.is_active !== false ? 'Activo' : 'Inactivo'}
-                                                </Badge>
-                                            )}
+                                            <EstadoBadge client={client} />
                                         </div>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <Badge
-                                            variant="outline"
-                                            className={`text-xs ${client.onboarding_completed ? 'bg-[var(--sport-500)]/15 text-[var(--sport-500)] border-[var(--sport-500)]/30' : 'bg-[var(--warning-500)]/15 text-[var(--warning-500)] border-[var(--warning-500)]/30'}`}
-                                        >
-                                            {client.onboarding_completed ? 'Completado' : 'Pendiente'}
-                                        </Badge>
+                                        <OnboardingBadge done={client.onboarding_completed} />
                                     </td>
                                     <td className="px-4 py-3 text-muted">
                                         {new Date(client.created_at).toLocaleDateString('es-CL')}
@@ -165,9 +289,9 @@ export function ClientTable({ clients, total, coaches }: Props) {
                                                 <Pencil className="h-4 w-4" />
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(client.id)}
+                                                onClick={() => setConfirmDelete(client)}
                                                 disabled={deletingId === client.id}
-                                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-[var(--danger-500)]/15 hover:text-[var(--danger-500)]"
+                                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-[var(--danger-500)]/15 hover:text-[var(--danger-500)] disabled:opacity-40"
                                                 title="Eliminar"
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -187,6 +311,19 @@ export function ClientTable({ clients, total, coaches }: Props) {
             </GlassCard>
 
             <AdminPagination total={total} pageSize={50} />
+
+            <AdminConfirmDialog
+                open={confirmDelete !== null}
+                onOpenChange={o => { if (!o) setConfirmDelete(null) }}
+                title="¿Eliminar alumno?"
+                description={`Elimina al alumno ${confirmDelete?.full_name ?? ''} y su historial. Irreversible.`}
+                blastRadius={confirmDelete
+                    ? `Borra rutinas, planes de nutrición y registros de ${confirmDelete.full_name}. No se puede deshacer.`
+                    : undefined}
+                severity="danger"
+                confirmLabel="Eliminar alumno"
+                onConfirm={async () => { if (confirmDelete) await runDelete(confirmDelete) }}
+            />
 
             {editingClient && (
                 <ClientEditSheet

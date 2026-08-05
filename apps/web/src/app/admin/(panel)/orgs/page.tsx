@@ -110,7 +110,13 @@ export default async function AdminOrgsPage() {
                                                     Ver org →
                                                 </a>
                                                 <ResendOwnerInviteButton orgId={org.id} />
-                                                <OrgStatusButton orgId={org.id} currentStatus={org.status} />
+                                                <OrgStatusButton
+                                                    orgId={org.id}
+                                                    orgName={org.name}
+                                                    currentStatus={org.status}
+                                                    memberCount={org.memberCount}
+                                                    clientCount={org.clientCount}
+                                                />
                                             </div>
                                         </td>
                                     </tr>

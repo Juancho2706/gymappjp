@@ -1,7 +1,9 @@
 'use client'
 
-import { useActionState, useTransition, useRef } from 'react'
+import { useActionState, useState, useRef } from 'react'
 import { PlusCircle, Trash2, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { AdminConfirmDialog } from '../_components/AdminConfirmDialog'
 import { addGastoAction, deleteGastoAction } from './_actions/gasto-actions'
 import type { Gasto } from './_data/gastos.queries'
 
@@ -10,10 +12,15 @@ const fmt = (n: number) =>
 
 function AddGastoForm() {
     const formRef = useRef<HTMLFormElement>(null)
-    const [state, action, pending] = useActionState(
+    const [, action, pending] = useActionState(
         async (prev: unknown, fd: FormData) => {
             const res = await addGastoAction(prev, fd)
-            if (res?.success) formRef.current?.reset()
+            if (res?.success) {
+                formRef.current?.reset()
+                toast.success('Gasto agregado')
+            } else if (res?.error) {
+                toast.error(res.error)
+            }
             return res
         },
         null,
@@ -85,29 +92,52 @@ function AddGastoForm() {
                     }
                     Agregar
                 </button>
-                {state && 'error' in state && (
-                    <p className="text-xs text-[var(--danger-500)]">{state.error}</p>
-                )}
             </div>
         </form>
     )
 }
 
-function DeleteButton({ id }: { id: string }) {
-    const [pending, startTransition] = useTransition()
+function DeleteButton({ gasto }: { gasto: Gasto }) {
+    const [open, setOpen] = useState(false)
+    const [pending, setPending] = useState(false)
+
+    // deleteGastoAction TIRA en error (no devuelve {error}) — de ahi el try/catch.
+    async function handleConfirm() {
+        setPending(true)
+        try {
+            await deleteGastoAction(gasto.id)
+            toast.success('Gasto eliminado')
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'No se pudo eliminar el gasto')
+        } finally {
+            setPending(false)
+        }
+    }
 
     return (
-        <button
-            onClick={() => startTransition(() => deleteGastoAction(id))}
-            disabled={pending}
-            className="rounded p-1 text-muted hover:text-[var(--danger-500)] hover:bg-[var(--danger-500)]/10 disabled:opacity-40 transition-colors"
-            title="Eliminar"
-        >
-            {pending
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Trash2 className="h-3.5 w-3.5" />
-            }
-        </button>
+        <>
+            <button
+                onClick={() => setOpen(true)}
+                disabled={pending}
+                className="rounded p-1 text-muted hover:text-[var(--danger-500)] hover:bg-[var(--danger-500)]/10 disabled:opacity-40 transition-colors"
+                title="Eliminar"
+            >
+                {pending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Trash2 className="h-3.5 w-3.5" />
+                }
+            </button>
+
+            <AdminConfirmDialog
+                open={open}
+                onOpenChange={setOpen}
+                title="Eliminar gasto"
+                description={`"${gasto.nombre}" (${fmt(gasto.costo)}, pago ${gasto.pagador}) sale del registro. No se puede deshacer.`}
+                severity="danger"
+                confirmLabel="Eliminar"
+                onConfirm={handleConfirm}
+            />
+        </>
     )
 }
 
@@ -180,7 +210,7 @@ export function GastosClient({ gastos }: { gastos: Gasto[] }) {
                                             {new Date(g.created_at).toLocaleDateString('es-AR')}
                                         </td>
                                         <td className="px-4 py-2.5 text-right">
-                                            <DeleteButton id={g.id} />
+                                            <DeleteButton gasto={g} />
                                         </td>
                                     </tr>
                                 ))}

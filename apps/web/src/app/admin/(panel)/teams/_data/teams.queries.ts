@@ -15,15 +15,29 @@ export type AdminTeamRow = {
     clientCount: number
 }
 
+/**
+ * Sanea el termino antes de interpolarlo en `or=(...)`: PostgREST parsea ese filtro como
+ * CSV, asi que una coma, un parentesis o una comilla del usuario rompen la query entera,
+ * y `%`/`*` la convierten en un comodin silencioso. Nunca confiar en `?q=`.
+ */
+function sanitizeSearch(raw: string): string {
+    return raw.replace(/[,()%*\\"]/g, ' ').trim().slice(0, 60)
+}
+
 /** Lista de teams para el panel CEO (service-role; admin ya gateado en el layout). */
-export async function getTeamsForAdmin(): Promise<AdminTeamRow[]> {
+export async function getTeamsForAdmin(params?: { search?: string }): Promise<AdminTeamRow[]> {
     const admin = createServiceRoleClient()
 
-    const { data: teams } = await admin
+    let query = admin
         .from('teams')
         .select('id, name, slug, invite_code, seat_limit, suspended_at, owner_coach_id, enabled_modules, created_at')
         .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+
+    // Busqueda server-side por nombre o slug (?q= en la URL).
+    const search = sanitizeSearch(params?.search ?? '')
+    if (search) query = query.or(`name.ilike.%${search}%,slug.ilike.%${search}%`)
+
+    const { data: teams } = await query.order('created_at', { ascending: false })
 
     if (!teams?.length) return []
 

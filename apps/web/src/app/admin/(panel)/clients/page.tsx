@@ -1,7 +1,15 @@
 import { Suspense } from 'react'
-import { getAllClients, getAllCoachesBasic } from '../dashboard/_data/admin.queries'
+import {
+    getAllClients,
+    getAllCoachesBasic,
+    type AdminClientsEstado,
+    type AdminClientsOnboarding,
+} from '../dashboard/_data/admin.queries'
 import { ClientTable } from './_components/ClientTable'
 import { PageInfoButton } from '../_components/PageInfoButton'
+
+const ESTADO_VALUES: AdminClientsEstado[] = ['activo', 'inactivo', 'archivado']
+const ONBOARDING_VALUES: AdminClientsOnboarding[] = ['completo', 'pendiente']
 
 const CLIENTS_INFO = [
     {
@@ -14,7 +22,7 @@ const CLIENTS_INFO = [
     },
     {
         heading: 'Búsqueda y filtros',
-        body: 'El campo de búsqueda filtra por nombre o email del alumno. El selector de coach muestra solo alumnos de ese coach específico. Los filtros se aplican en tiempo real.',
+        body: 'El campo de búsqueda filtra por nombre o email del alumno. El selector de coach muestra solo alumnos de ese coach específico. Los selectores de Estado y Onboarding filtran sobre TODOS los alumnos (no solo la página visible) y quedan guardados en la URL, así que puedes compartir el link con el filtro aplicado.',
     },
     {
         heading: 'Crear alumno',
@@ -33,13 +41,22 @@ const CLIENTS_INFO = [
 export default async function AdminClientsPage({
     searchParams,
 }: {
-    searchParams: Promise<{ q?: string; coachId?: string; page?: string }>
+    searchParams: Promise<{
+        q?: string
+        coachId?: string
+        page?: string
+        estado?: string
+        onboarding?: string
+    }>
 }) {
     const params = await searchParams
     const page = Math.max(1, parseInt(params.page ?? '1', 10))
+    // Whitelist: un ?estado= inventado no debe llegar a PostgREST ni romper la vista.
+    const estado = ESTADO_VALUES.find(v => v === params.estado)
+    const onboarding = ONBOARDING_VALUES.find(v => v === params.onboarding)
 
     const [{ clients, total }, coaches] = await Promise.all([
-        getAllClients(params.q, params.coachId, page, 50),
+        getAllClients(params.q, params.coachId, page, 50, estado, onboarding),
         getAllCoachesBasic(),
     ])
 

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,9 +24,10 @@ import {
     type SubscriptionEventRow,
 } from '../_actions/coach-actions'
 import { MODULE_KEYS, MODULE_LABELS } from '../../_components/module-labels'
+import { AdminConfirmDialog } from '../../_components/AdminConfirmDialog'
 import {
     ExternalLink, Copy, CheckCircle, AlertTriangle, Clock,
-    RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail, Palette
+    RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail, Palette, ArrowRight
 } from 'lucide-react'
 import type { CoachListItem } from '../../dashboard/_data/types'
 import { TIER_CONFIG } from '@eva/tiers'
@@ -94,9 +97,11 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     const [editError, setEditError] = useState('')
     const [copied, setCopied] = useState(false)
     const [confirm, setConfirm] = useState<string | null>(null)
+    // El borrado sale del dialogo inline: es lo unico irreversible aqui y necesita
+    // tipear el slug para habilitarse (AdminConfirmDialog + requireText).
+    const [confirmDelete, setConfirmDelete] = useState(false)
     const [events, setEvents] = useState<SubscriptionEventRow[] | null>(null)
     const [loadingEvents, setLoadingEvents] = useState(false)
-    const [emailResult, setEmailResult] = useState<{ ok: boolean; msg: string } | null>(null)
     const [editTier, setEditTier] = useState(coach.subscription_tier ?? 'starter')
     const [editMaxClients, setEditMaxClients] = useState(coach.max_clients ?? 10)
     const [editColorHex, setEditColorHex] = useState((coach as any).primary_color ?? '#10B981')
@@ -139,10 +144,10 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
 
     async function sendEmail(templateType: 'trial_warning' | 'trial_expired') {
         setLoadingAction(`email-${templateType}`)
-        setEmailResult(null)
         const res = await sendIndividualCoachEmailAction(coach.id, templateType)
         setLoadingAction(null)
-        setEmailResult(res.success ? { ok: true, msg: 'Email enviado.' } : { ok: false, msg: res.error ?? 'Error' })
+        if (res.success) toast.success('Email enviado')
+        else toast.error(res.error ?? 'No se pudo enviar el email')
     }
 
     function copyMpId() {
@@ -154,12 +159,22 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
         }
     }
 
-    async function runAction(key: string, fn: () => Promise<{ success?: boolean; error?: string }>) {
+    // El alert() nativo bloqueaba el hilo y no distinguia exito de "no paso nada":
+    // ahora todo resultado (ok o error) llega por toast.
+    async function runAction(
+        key: string,
+        fn: () => Promise<{ success?: boolean; error?: string }>,
+        successMsg: string
+    ) {
         setLoadingAction(key)
         const res = await fn()
         setLoadingAction(null)
-        if (res.error) alert(`Error: ${res.error}`)
-        else refresh()
+        if (res.error) {
+            toast.error(res.error)
+            return
+        }
+        toast.success(successMsg)
+        refresh()
     }
 
     async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
@@ -168,8 +183,13 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
         const formData = new FormData(e.currentTarget)
         formData.append('coachId', coach.id)
         const res = await updateCoachAction(undefined, formData)
-        if (res?.error) setEditError(res.error)
-        else refresh()
+        if (res?.error) {
+            setEditError(res.error)
+            toast.error(res.error)
+            return
+        }
+        toast.success('Cambios guardados')
+        refresh()
     }
 
     const daysLeft = coach.days_until_expiry
@@ -191,7 +211,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                     <SheetTitle className="text-base font-semibold text-strong">
                         {coach.brand_name || coach.full_name || 'Coach'}
                     </SheetTitle>
-                    <div className="flex items-center gap-1.5 mt-1">
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         {coach.subscription_status && <AdminStatusBadge value={coach.subscription_status} />}
                         {coach.subscription_tier && <AdminStatusBadge value={coach.subscription_tier} type="tier" />}
                         {coach.payment_provider && <AdminStatusBadge value={coach.payment_provider} type="provider" />}
@@ -204,6 +224,14 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                             Ver app <ExternalLink className="h-3 w-3" />
                         </a>
                     </div>
+                    {/* Salida del flujo rapido hacia la ficha completa del coach. */}
+                    <Link
+                        href={`/admin/coaches/${coach.id}`}
+                        onClick={onClose}
+                        className="mt-2 flex w-fit items-center gap-1 text-[11px] font-medium text-[var(--sport-500)] hover:underline"
+                    >
+                        Ver ficha completa <ArrowRight className="h-3 w-3" />
+                    </Link>
                 </SheetHeader>
 
                 {/* Tabs */}
@@ -587,7 +615,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         <button
                                             key={d}
                                             disabled={loadingAction === `extend-${d}`}
-                                            onClick={() => runAction(`extend-${d}`, () => extendCoachPeriodAction(coach.id, d))}
+                                            onClick={() => runAction(`extend-${d}`, () => extendCoachPeriodAction(coach.id, d), `Período extendido +${d} días`)}
                                             className="flex-1 rounded border border-subtle bg-surface-sunken py-2 text-xs font-medium text-strong hover:border-[var(--sport-500)] hover:text-[var(--sport-500)] transition-colors disabled:opacity-50"
                                         >
                                             +{d}d
@@ -645,11 +673,6 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         loading={loadingAction === 'email-trial_expired'}
                                         onClick={() => void sendEmail('trial_expired')}
                                     />
-                                    {emailResult && (
-                                        <p className={`text-xs ${emailResult.ok ? 'text-[var(--success-500)]' : 'text-[var(--danger-500)]'}`}>
-                                            {emailResult.msg}
-                                        </p>
-                                    )}
                                 </div>
                             </div>
 
@@ -661,25 +684,23 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     icon={ShieldOff}
                                     variant="danger"
                                     loading={loadingAction === 'delete'}
-                                    onClick={() => setConfirm('delete')}
+                                    onClick={() => setConfirmDelete(true)}
                                 />
                             </div>
 
-                            {/* Inline confirmation */}
+                            {/* Inline confirmation (expire / suspend / reactivate — reversibles) */}
                             {confirm && (
                                 <div className="rounded-lg border border-[var(--warning-500)]/40 bg-[var(--warning-500)]/5 p-4">
                                     <div className="flex items-center gap-2 mb-3">
                                         <AlertTriangle className="h-4 w-4 text-[var(--warning-500)]" />
                                         <p className="text-sm font-medium text-[var(--warning-500)]">
-                                            {confirm === 'delete' ? '¿Eliminar este coach?' :
-                                             confirm === 'expire' ? '¿Forzar expiración del trial?' :
+                                            {confirm === 'expire' ? '¿Forzar expiración del trial?' :
                                              confirm === 'suspend' ? '¿Suspender acceso?' :
                                              '¿Reactivar coach?'}
                                         </p>
                                     </div>
                                     <p className="text-xs text-muted mb-3">
-                                        {confirm === 'delete' ? 'Esta acción es irreversible. Todos los datos del coach serán eliminados.' :
-                                         confirm === 'expire' ? 'El coach verá /reactivate en su próxima visita y deberá pagar para continuar.' :
+                                        {confirm === 'expire' ? 'El coach verá /reactivate en su próxima visita y deberá pagar para continuar.' :
                                          confirm === 'suspend' ? 'El coach perderá acceso inmediatamente.' :
                                          'El coach recuperará acceso por 30 días adicionales.'}
                                     </p>
@@ -688,11 +709,9 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                             onClick={async () => {
                                                 const key = confirm
                                                 setConfirm(null)
-                                                if (key === 'expire') await runAction('expire', () => expireCoachAction(coach.id))
-                                                else if (key === 'suspend') await runAction('suspend', () => suspendCoachAction(coach.id))
-                                                else if (key === 'reactivate') await runAction('reactivate', () => reactivateCoachAdminAction(coach.id))
-                                                // El caso 'delete' faltaba: Confirmar cerraba el dialogo sin hacer NADA (ROTO-3, F0 08-05).
-                                                else if (key === 'delete') await runAction('delete', () => deleteCoachAction(coach.id))
+                                                if (key === 'expire') await runAction('expire', () => expireCoachAction(coach.id), 'Coach expirado')
+                                                else if (key === 'suspend') await runAction('suspend', () => suspendCoachAction(coach.id), 'Coach suspendido')
+                                                else if (key === 'reactivate') await runAction('reactivate', () => reactivateCoachAdminAction(coach.id), 'Coach reactivado (+30 días)')
                                             }}
                                             className="flex-1 rounded bg-[var(--danger-500)] py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
                                         >
@@ -710,6 +729,20 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                         </div>
                     )}
                 </div>
+
+                {/* Dentro del SheetContent a proposito: asi el focus-trap del Sheet cede
+                    al del AlertDialog y el input de "escribe el slug" es tipeable. */}
+                <AdminConfirmDialog
+                    open={confirmDelete}
+                    onOpenChange={setConfirmDelete}
+                    title="¿Eliminar coach permanentemente?"
+                    description={`Vas a eliminar a ${coach.brand_name || coach.full_name || coach.slug}.`}
+                    blastRadius={`Borra el usuario y todos sus datos, incluidos ${coach.client_count} alumno${coach.client_count !== 1 ? 's' : ''}. Irreversible.`}
+                    severity="danger"
+                    confirmLabel="Eliminar coach"
+                    requireText={coach.slug}
+                    onConfirm={() => runAction('delete', () => deleteCoachAction(coach.id), 'Coach eliminado')}
+                />
             </SheetContent>
         </Sheet>
     )

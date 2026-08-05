@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AdminConfirmDialog } from '../../_components/AdminConfirmDialog'
 import { updateTeamAction, setTeamSuspendedAction } from '../_actions/teams.actions'
 import { MODULE_KEYS, MODULE_LABELS } from '../../_components/module-labels'
 import type { AdminTeamRow } from '../_data/teams.queries'
@@ -19,8 +21,10 @@ export function TeamEditSheet({ team, onClose }: Props) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState<string | null>(null)
+    const [confirmOpen, setConfirmOpen] = useState(false)
 
     const fieldCls = 'mt-1 bg-surface-sunken border-subtle text-strong placeholder:text-muted'
+    const isSuspended = Boolean(team?.suspended_at)
 
     return (
         <Sheet open={!!team} onOpenChange={(o) => !o && onClose()}>
@@ -35,7 +39,12 @@ export function TeamEditSheet({ team, onClose }: Props) {
                             setError(null)
                             startTransition(async () => {
                                 const res = await updateTeamAction(team.id, fd)
-                                if (res && 'error' in res) { setError(res.error); return }
+                                if (res && 'error' in res) {
+                                    setError(res.error)
+                                    toast.error(res.error)
+                                    return
+                                }
+                                toast.success('Equipo actualizado')
                                 router.refresh()
                                 onClose()
                             })
@@ -80,7 +89,7 @@ export function TeamEditSheet({ team, onClose }: Props) {
                     <div className="mt-8 rounded-lg border border-[var(--danger-500)]/30 bg-[var(--danger-500)]/15 p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--danger-500)]">Kill-switch</p>
                         <p className="mt-1 text-xs text-muted">
-                            {team.suspended_at
+                            {isSuspended
                                 ? 'Equipo SUSPENDIDO: alumnos y coaches no pueden entrar. Reactivar lo restaura tal cual.'
                                 : 'Suspende el equipo completo: el shell /t deja de resolver y los coaches pierden el contexto. Reversible, no borra nada.'}
                         </p>
@@ -88,19 +97,38 @@ export function TeamEditSheet({ team, onClose }: Props) {
                             type="button"
                             variant="outline"
                             disabled={isPending}
-                            onClick={() => {
-                                setError(null)
-                                startTransition(async () => {
-                                    const res = await setTeamSuspendedAction(team.id, !team.suspended_at)
-                                    if (res && 'error' in res) { setError(res.error); return }
-                                    router.refresh()
-                                    onClose()
-                                })
-                            }}
-                            className={`mt-3 ${team.suspended_at ? 'border-[var(--success-500)]/30 text-[var(--success-500)] hover:bg-[var(--success-500)]/15' : 'border-[var(--danger-500)]/30 text-[var(--danger-500)] hover:bg-[var(--danger-500)]/15'}`}
+                            onClick={() => setConfirmOpen(true)}
+                            className={`mt-3 ${isSuspended ? 'border-[var(--success-500)]/30 text-[var(--success-500)] hover:bg-[var(--success-500)]/15' : 'border-[var(--danger-500)]/30 text-[var(--danger-500)] hover:bg-[var(--danger-500)]/15'}`}
                         >
-                            {isPending ? 'Aplicando...' : team.suspended_at ? 'Reactivar equipo' : 'Suspender equipo'}
+                            {isSuspended ? 'Reactivar equipo' : 'Suspender equipo'}
                         </Button>
+
+                        {/* El CEO decide viendo el costo real: los conteos vienen de la fila (AdminTeamRow). */}
+                        <AdminConfirmDialog
+                            open={confirmOpen}
+                            onOpenChange={setConfirmOpen}
+                            title={isSuspended ? `Reactivar ${team.name}` : `Suspender ${team.name}`}
+                            description={isSuspended
+                                ? 'El equipo vuelve a resolver: coaches recuperan el workspace y los alumnos entran de nuevo por /t.'
+                                : 'El shell /t deja de resolver y los coaches pierden el contexto del equipo. Es reversible y no borra nada.'}
+                            blastRadius={isSuspended
+                                ? `Restaura el acceso a ${team.memberCount} coaches y ${team.clientCount} alumnos`
+                                : `Deja sin acceso a ${team.memberCount} coaches y ${team.clientCount} alumnos`}
+                            severity={isSuspended ? 'warning' : 'danger'}
+                            confirmLabel={isSuspended ? 'Reactivar equipo' : 'Suspender equipo'}
+                            onConfirm={async () => {
+                                setError(null)
+                                const res = await setTeamSuspendedAction(team.id, !isSuspended)
+                                if (res && 'error' in res) {
+                                    setError(res.error)
+                                    toast.error(res.error)
+                                    return
+                                }
+                                toast.success(isSuspended ? 'Equipo reactivado' : 'Equipo suspendido')
+                                router.refresh()
+                                onClose()
+                            }}
+                        />
                     </div>
                 )}
             </SheetContent>

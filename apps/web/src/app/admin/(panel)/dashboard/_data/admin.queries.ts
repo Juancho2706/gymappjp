@@ -290,11 +290,21 @@ export async function getAllCoachesBasic(): Promise<{ id: string; full_name: str
     return findAdminBasicCoaches(admin)
 }
 
+export type AdminClientsEstado = 'activo' | 'inactivo' | 'archivado'
+export type AdminClientsOnboarding = 'completo' | 'pendiente'
+
+/**
+ * Los filtros de estado/onboarding viajan a PostgREST (no se filtra en cliente):
+ * de otro modo solo recortarian los 50 de la pagina visible y `total`/paginacion
+ * mentirian sobre el universo real (misma clase de bug que ROTO-4 con `q`).
+ */
 export async function getAllClients(
     search?: string,
     coachId?: string,
     page = 1,
-    pageSize = 50
+    pageSize = 50,
+    estado?: AdminClientsEstado,
+    onboarding?: AdminClientsOnboarding
 ): Promise<{ clients: ClientListItem[]; total: number }> {
     noStore()
     const admin = createServiceRoleClient()
@@ -303,6 +313,8 @@ export async function getAllClients(
     const { clients: data, total } = await findAdminClientsForDashboard(admin, {
         search,
         coachId,
+        estado,
+        onboarding,
         pageSize,
         offset,
     })

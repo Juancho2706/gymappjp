@@ -528,3 +528,19 @@ export async function saveCoachNotesAction(coachId: string, notes: string): Prom
     await logAdminAction(adminClient, 'coach.notes_update', 'coaches', coachId, { length: trimmed.length }, user.email)
     revalidateAdmin()
 }
+
+// ── Preview del anuncio masivo ────────────────────────────────────
+// El boton necesita el blast radius REAL (cuantos coaches reciben el mail) ANTES de disparar:
+// antes era un doble-click a ciegas sobre un envio irreversible (F3 08-05). Mismo criterio de
+// seleccion que sendAnnouncementEmailAction: subscription_status='active'. Si los criterios
+// divergen, el numero del dialogo miente.
+export async function countAnnouncementRecipientsAction(): Promise<{ count: number }> {
+    const { adminClient } = await assertAdmin()
+
+    const { count } = await adminClient
+        .from('coaches')
+        .select('id', { count: 'exact', head: true })
+        .eq('subscription_status', 'active')
+
+    return { count: count ?? 0 }
+}

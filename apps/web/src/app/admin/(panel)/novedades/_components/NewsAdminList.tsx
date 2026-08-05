@@ -10,6 +10,7 @@ import {
 } from '../_actions/novedades-actions'
 import { NewsTypeBadge } from './NewsTypeBadge'
 import { NewsCreateSheet } from './NewsCreateSheet'
+import { AdminConfirmDialog } from '../../_components/AdminConfirmDialog'
 import { toast } from 'sonner'
 import { Pin, Archive, Trash2, Send, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -48,53 +49,57 @@ const STATUS_COLORS: Record<string, string> = {
 export function NewsAdminList({ items }: Props) {
   const router = useRouter()
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<NewsItem | null>(null)
 
-  async function handlePublish(id: string) {
-    setLoadingId(id)
-    const res = await publishNewsItemAction(id)
+  async function handlePublish(item: NewsItem, restoring = false) {
+    setLoadingId(item.id)
+    const res = await publishNewsItemAction(item.id)
     setLoadingId(null)
     if (res.success) {
-      toast.success('Novedad publicada')
+      toast.success(restoring ? `"${item.title}" restaurada y publicada` : `"${item.title}" publicada`)
       router.refresh()
     } else {
-      toast.error(res.error)
+      toast.error(res.error || 'No se pudo publicar la novedad')
     }
   }
 
-  async function handleArchive(id: string) {
-    setLoadingId(id)
-    const res = await archiveNewsItemAction(id)
+  async function handleArchive(item: NewsItem) {
+    setLoadingId(item.id)
+    const res = await archiveNewsItemAction(item.id)
     setLoadingId(null)
     if (res.success) {
-      toast.success('Novedad archivada')
+      toast.success(`"${item.title}" archivada`)
       router.refresh()
     } else {
-      toast.error(res.error)
+      toast.error(res.error || 'No se pudo archivar la novedad')
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('¿Eliminar esta novedad permanentemente?')) return
-    setLoadingId(id)
-    const res = await deleteNewsItemAction(id)
+  // El confirm() nativo se cambia por AdminConfirmDialog: es la unica accion irreversible de la seccion.
+  async function handleDeleteConfirm() {
+    const item = pendingDelete
+    if (!item) return
+    setLoadingId(item.id)
+    const res = await deleteNewsItemAction(item.id)
     setLoadingId(null)
     if (res.success) {
-      toast.success('Novedad eliminada')
+      toast.success(`"${item.title}" eliminada`)
       router.refresh()
     } else {
-      toast.error(res.error)
+      toast.error(res.error || 'No se pudo eliminar la novedad')
     }
   }
 
-  async function handleTogglePin(id: string, current: boolean) {
-    setLoadingId(id)
-    const res = await togglePinNewsItemAction(id, !current)
+  async function handleTogglePin(item: NewsItem) {
+    const current = item.is_pinned ?? false
+    setLoadingId(item.id)
+    const res = await togglePinNewsItemAction(item.id, !current)
     setLoadingId(null)
     if (res.success) {
-      toast.success(current ? 'Desfijado' : 'Fijado')
+      toast.success(current ? `"${item.title}" desfijada` : `"${item.title}" fijada arriba`)
       router.refresh()
     } else {
-      toast.error(res.error)
+      toast.error(res.error || 'No se pudo cambiar el pin de la novedad')
     }
   }
 
@@ -140,7 +145,7 @@ export function NewsAdminList({ items }: Props) {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  onClick={() => handlePublish(item.id)}
+                  onClick={() => handlePublish(item)}
                   disabled={loadingId === item.id}
                   title="Publicar"
                 >
@@ -150,7 +155,7 @@ export function NewsAdminList({ items }: Props) {
               <Button
                 size="icon-sm"
                 variant="ghost"
-                onClick={() => handleTogglePin(item.id, item.is_pinned ?? false)}
+                onClick={() => handleTogglePin(item)}
                 disabled={loadingId === item.id}
                 title={item.is_pinned ? 'Desfijar' : 'Fijar'}
               >
@@ -164,7 +169,7 @@ export function NewsAdminList({ items }: Props) {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  onClick={() => handleArchive(item.id)}
+                  onClick={() => handleArchive(item)}
                   disabled={loadingId === item.id}
                   title="Archivar"
                 >
@@ -174,7 +179,7 @@ export function NewsAdminList({ items }: Props) {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  onClick={() => handlePublish(item.id)}
+                  onClick={() => handlePublish(item, true)}
                   disabled={loadingId === item.id}
                   title="Restaurar"
                 >
@@ -184,7 +189,7 @@ export function NewsAdminList({ items }: Props) {
               <Button
                 size="icon-sm"
                 variant="ghost"
-                onClick={() => handleDelete(item.id)}
+                onClick={() => setPendingDelete(item)}
                 disabled={loadingId === item.id}
                 title="Eliminar"
               >
@@ -194,6 +199,21 @@ export function NewsAdminList({ items }: Props) {
           </div>
         </div>
       ))}
+
+      <AdminConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(next) => { if (!next) setPendingDelete(null) }}
+        title="Eliminar novedad"
+        description={`"${pendingDelete?.title ?? ''}" se borra permanentemente. Si prefieres solo sacarla del feed, usa Archivar.`}
+        blastRadius={
+          pendingDelete?.status === 'published'
+            ? 'Esta publicada: desaparece del feed de todos los coaches al instante. No se puede deshacer.'
+            : 'No se puede deshacer.'
+        }
+        severity="danger"
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   )
 }

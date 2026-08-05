@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Download } from 'lucide-react'
+import { toast } from 'sonner'
 import { exportAuditCsvAction } from '../_actions/export-audit'
 
 export function AuditExportButton() {
@@ -20,7 +21,7 @@ export function AuditExportButton() {
         setLoading(false)
 
         if ('error' in res) {
-            alert(`Error al exportar: ${res.error}`)
+            toast.error(`Error al exportar: ${res.error}`)
             return
         }
 
@@ -31,6 +32,7 @@ export function AuditExportButton() {
         a.download = `auditoria-${new Date().toISOString().slice(0, 10)}.csv`
         a.click()
         URL.revokeObjectURL(url)
+        toast.success('CSV descargado')
     }
 
     return (

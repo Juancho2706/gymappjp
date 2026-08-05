@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Download } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface Props {
     params: {
@@ -45,8 +46,9 @@ export function CoachExportButton({ params }: Props) {
             a.download = `coaches-${new Date().toISOString().slice(0, 10)}.csv`
             a.click()
             URL.revokeObjectURL(url)
-        } catch {
-            alert('Error al exportar')
+            toast.success('CSV descargado')
+        } catch (err) {
+            toast.error(err instanceof Error ? `Error al exportar: ${err.message}` : 'Error al exportar')
         } finally {
             setLoading(false)
         }
