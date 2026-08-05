@@ -301,6 +301,16 @@ async function getCoachDashboardDataInner(
     const supabase = db ?? await createClient()
 
     const now = new Date()
+    // Fechas de graficos agrupadas en zona Chile, como lo hacia la RPC retirada: el runtime de
+    // Vercel es UTC y sin esto las sesiones/altas nocturnas caen al dia siguiente.
+    const santiagoYmdFmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
+    })
+    const ymdSantiago = (date: Date) => santiagoYmdFmt.format(date)
+    const [nowY, nowM] = ymdSantiago(now).split('-').map(Number)
+    // Ventana del BarChart de altas: desde el primer dia del mes (hoy - 5 meses). El margen de horas
+    // por usar medianoche UTC es inocuo: la agrupacion posterior por mes Santiago lo reubica.
+    const signupsWindowStartIso = new Date(Date.UTC(nowY, nowM - 6, 1)).toISOString()
     // Incluye filas antiguas que aún reparten ingresos al mes actual (period_months largos)
     const clientPaymentsLookbackStart = new Date(now.getFullYear(), now.getMonth() - 13, 1).toISOString()
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -314,8 +324,7 @@ async function getCoachDashboardDataInner(
         recentCheckinsRaw,
         checkinSignal30dRaw,
         expiringProgramsRaw,
-        signupsByMonthRaw,
-        workoutSessionsSeriesRaw,
+        signupDatesRaw,
         workoutLogs30dRaw,
         recentWorkoutsRaw,
         clientPaymentsRaw,
@@ -374,11 +383,12 @@ async function getCoachDashboardDataInner(
             .lte('end_date', expiringEndUpper)
             .order('end_date', { ascending: true })
             .limit(200),
-        Promise.resolve({ data: null, error: { message: 'scoped dashboard uses clients table' } }),
-        // Agregacion server-side: sesiones unicas por dia (zona Santiago) calculadas en DB.
-        // Si la RPC devuelve vacio/error, el consumo cae al fallback JS sobre workoutLogs30d (abajo).
-        Promise.resolve({ data: null, error: { message: 'scoped dashboard uses workout_logs table' } }),
-        // 30-day workout sessions: fallback crudo del AreaChart (se mantiene un ciclo; solo columnas necesarias)
+        // Altas para el BarChart: consulta directa acotada a la ventana de 6 meses, dentro del
+        // Promise.all (antes corria serializada despues, sin ventana). La RPC
+        // get_coach_client_signups_last_6_months sigue retirada a proposito (95394118: no sabe de
+        // org/team/is_archived); reinstalarla con scope queda para despues de medir TTFB.
+        findCoachClientSignupDates(supabase, userId, scope.orgId, scope.teamId, signupsWindowStartIso),
+        // 30-day workout sessions: fuente del AreaChart (solo columnas necesarias; se agrega en JS abajo)
         applyJoinedClientOwnerScope(
             supabase
                 .from('workout_logs')
@@ -440,40 +450,16 @@ async function getCoachDashboardDataInner(
         })
     )
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
-    let signupsRows =
-        signupsByMonthRaw.error || !signupsByMonthRaw.data
-            ? []
-            : (signupsByMonthRaw.data as { ym: string; client_count: number }[])
-
-    // Fallback: if RPC fails or returns empty, aggregate directly from clients table
-    if (signupsRows.length === 0) {
-        if (signupsByMonthRaw.error) {
-            console.error('[dashboard] RPC get_coach_client_signups_last_6_months failed:', signupsByMonthRaw.error)
-        }
-        const clientsFallback = await findCoachClientSignupDates(supabase, userId, scope.orgId, scope.teamId)
-        if (clientsFallback && clientsFallback.length > 0) {
-            const monthCounts = new Map<string, number>()
-            for (const c of clientsFallback) {
-                const iso = c.created_at as string
-                const m = /^(\d{4})-(\d{2})/.exec(iso)
-                if (m) {
-                    const ym = `${m[1]}-${m[2]}`
-                    monthCounts.set(ym, (monthCounts.get(ym) || 0) + 1)
-                }
-            }
-            signupsRows = Array.from(monthCounts.entries()).map(([ym, client_count]) => ({ ym, client_count }))
-        }
+    // Altas por mes (YYYY-MM en zona Chile) para el BarChart
+    const signupMap = new Map<string, number>()
+    for (const c of signupDatesRaw ?? []) {
+        const ym = ymdSantiago(new Date(c.created_at as string)).slice(0, 7)
+        signupMap.set(ym, (signupMap.get(ym) ?? 0) + 1)
     }
-
-    const signupMap = new Map(signupsRows.map((r) => [r.ym, Number(r.client_count)]))
     const workoutLogs30d = workoutLogs30dRaw.data || []
     const hasCheckinLast30d = ((checkinSignal30dRaw.data as { id: string }[] | null) || []).length > 0
     const hasWorkoutLast30d = workoutLogs30d.length > 0
     const hasStudentSignal30d = hasCheckinLast30d || hasWorkoutLast30d
-    const workoutSessionsSeries =
-        !workoutSessionsSeriesRaw.error && Array.isArray(workoutSessionsSeriesRaw.data)
-            ? (workoutSessionsSeriesRaw.data as { day: string; sessions: number }[])
-            : null
     const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string } }[] | null) || []
     const clientPayments = (clientPaymentsRaw.data || []) as {
         client_id: string | null
@@ -586,35 +572,22 @@ async function getCoachDashboardDataInner(
             label: row.attentionFlags.length > 0 ? FLAG_LABELS[row.attentionFlags[0]] : 'Seguimiento recomendado',
         }))
 
-    // AreaChart: unique workout sessions per day (last 30 days, deduplicated by client+day)
+    // AreaChart: unique workout sessions per day (last 30 days, deduplicated by client+day, zona Chile)
     const sessionsByDay: Record<string, number> = {}
     for (let i = 29; i >= 0; i -= 1) {
-        const d = new Date()
-        d.setDate(d.getDate() - i)
-        const key = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
-        sessionsByDay[key] = 0
+        const [, m, d] = ymdSantiago(new Date(Date.now() - i * 24 * 60 * 60 * 1000)).split('-')
+        sessionsByDay[`${d}/${m}`] = 0
     }
-    if (workoutSessionsSeries && workoutSessionsSeries.length > 0) {
-        for (const row of workoutSessionsSeries) {
-            // row.day is a calendar date string (YYYY-MM-DD) from Postgres.
-            // Parse manually to avoid timezone shifts from new Date('YYYY-MM-DD').
-            const [yStr, mStr, dStr] = row.day.split('-')
-            const dayKey = `${dStr}/${mStr}`
-            if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] = row.sessions
+    const seenSessionKeys = new Set<string>()
+    workoutLogs30d.forEach((w) => {
+        const [, m, d] = ymdSantiago(new Date(w.logged_at)).split('-')
+        const dayKey = `${d}/${m}`
+        const sessionKey = `${(w as { client_id?: string }).client_id ?? ''}|${dayKey}`
+        if (!seenSessionKeys.has(sessionKey)) {
+            seenSessionKeys.add(sessionKey)
+            if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] += 1
         }
-    } else {
-        const seenSessionKeys = new Set<string>()
-        workoutLogs30d.forEach((w) => {
-            const d = new Date(w.logged_at)
-            const dayKey = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
-            // Fallback path: deduplicate by client per day in app.
-            const sessionKey = `${(w as { client_id?: string }).client_id ?? ''}|${dayKey}`
-            if (!seenSessionKeys.has(sessionKey)) {
-                seenSessionKeys.add(sessionKey)
-                if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] += 1
-            }
-        })
-    }
+    })
     // Only show days with sessions to keep the chart clean and tooltip precise
     const areaData = Object.entries(sessionsByDay)
         .filter(([_, sesiones]) => sesiones > 0)
@@ -624,14 +597,13 @@ async function getCoachDashboardDataInner(
             sesiones,
         }))
 
-    // BarChart: new clients per month (last 6 sliding months; counts from RPC by YYYY-MM)
+    // BarChart: new clients per month (last 6 sliding months by YYYY-MM, mes actual segun zona Chile)
     const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
     const growthMap: Record<string, number> = {}
     for (let i = 5; i >= 0; i -= 1) {
-        const d = new Date()
-        d.setMonth(d.getMonth() - i)
-        const key = monthNames[d.getMonth()]
-        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        const d = new Date(Date.UTC(nowY, nowM - 1 - i, 1))
+        const key = monthNames[d.getUTCMonth()]
+        const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
         growthMap[key] = signupMap.get(ym) ?? 0
     }
     const barData = Object.entries(growthMap).map(([name, alumnos]) => ({ name, alumnos }))

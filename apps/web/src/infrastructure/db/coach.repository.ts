@@ -105,11 +105,14 @@ export async function findCoachRecentClients(db: DB, coachId: string, limit = 5,
     return data ?? []
 }
 
-export async function findCoachClientSignupDates(db: DB, coachId: string, orgId?: string | null, teamId?: string | null) {
+export async function findCoachClientSignupDates(db: DB, coachId: string, orgId?: string | null, teamId?: string | null, sinceIso?: string) {
     let query = db
         .from('clients')
         .select('created_at')
         .eq('is_archived', false)
+    if (sinceIso) {
+        query = query.gte('created_at', sinceIso)
+    }
     if (teamId) {
         query = query.is('org_id', null).eq('team_id', teamId)
     } else {

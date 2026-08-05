@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-03"
+last_verified: "2026-08-05"
 canonical: true
 ---
 
@@ -21,6 +21,32 @@ resumen; antes de integrar o desplegar, verificar branch, deployment y estado re
 | Retiro físico de V1 | **No iniciado y sin autorización.** El mapa del 18-jul quedó desactualizado: ejecutarlo hoy borraría código V2 vivo. Decisión vigente del owner: no borrar nada, solo asegurar que todos usen V2. | [Delta del mapa](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados; la nutrición V2 usa scope explícito Team/Standalone. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
 | Enterprise | Fuera del corte de Nutrition V2 y de la eliminación de legacy en esta entrega. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
+
+## Correccion RLS y fuga de respaldo (2026-08-05, aplicado en produccion)
+
+Tres migraciones aplicadas en LIVE la madrugada del 05-08 (horario valle), con equivalencia
+probada antes y despues (0 diferencias en 12.408 + 11.139 comparaciones) y reversion escrita:
+
+- `20260805040625_secure_bak_catalina_logs_rls_revoke`: cierra la fuga de
+  `_bak_catalina_logs_20260722` (estaba sin RLS y con GRANT a `anon`: 46 filas de una alumna
+  real legibles y borrables con la anon key). Verificado por REST: 206 → 401/42501. Con esto
+  desaparecio el unico advisor ERROR del proyecto.
+- `20260805040810_archive_gate_set_based_rls`: el gate del archivado deja de evaluarse por fila
+  (causa de los ~84 statement timeouts/dia). Dashboard coach 11.278 ms → 11,7 ms; alumno tambien
+  mejora. 28 policies reescritas a `= ANY(ARRAY(SELECT private.student_readable_client_ids()))`.
+- `20260805041843_nutrition_v2_set_based_rls_and_or_order`: mismas conversiones para nutricion v2
+  (restrictive + permissive de 5 tablas de detalle). Abrir el plan del alumno: ~310 ms de RLS →
+  ~15 ms. Items 254→9,8 ms; coach 576→5,0 ms.
+
+La red de seguridad son los scripts de `supabase/tests/` (`student_gate_equivalence.sql`,
+`student_gate_org_fixture.sql`, `nutrition_v2_sets_equivalence.sql`): correrlos antes y despues
+de cualquier cambio a esas policies. Rollbacks en `*_rollback.sql` del mismo directorio.
+Ademas, fase 4 en web (commit local): el dashboard del coach ya no emite el `console.error`
+fantasma de la RPC retirada, la consulta de altas va acotada a 6 meses dentro del `Promise.all`,
+y los graficos agrupan fechas en zona Chile (el runtime de Vercel es UTC).
+
+Pendiente de este frente: medir el lado no-DB del dashboard (regla: TTFB > 1,5 s ⇒ servidor,
+si domina LCP−TTFB ⇒ code-splitting); reinstalar las 2 RPC agregadas con scope solo como higiene.
 
 ## Prioridad actual
 
