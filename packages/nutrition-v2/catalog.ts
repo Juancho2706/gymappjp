@@ -62,7 +62,39 @@ export const FoodCatalogItemSchema = z.object({
   source: z.string(),
   sourceRef: z.string().nullable(),
   verificationStatus: FoodVerificationStatusSchema,
+  /**
+   * Dueño del alimento en el catálogo (`foods.coach_id` / `foods.org_id`). Lo expone
+   * `private.food_catalog_v2_item_json` desde 20260805213958 para que el picker agrupe
+   * "Mis alimentos" vs "Catálogo" sin heurísticas sobre `source`.
+   *
+   * OPCIONALES a propósito (compat RN): una build móvil vieja puede tener cacheado un item
+   * emitido antes de esa migración, y el contrato no debe romperse por una clave nueva.
+   * `null` = alimento global (catálogo EVA/importado), no "desconocido".
+   */
+  coachId: z.string().uuid().nullable().optional(),
+  orgId: z.string().uuid().nullable().optional(),
   media: FoodMediaReadSchema.nullable(),
+})
+
+/**
+ * Item de la respuesta de sugerencias. Es el MISMO item del catálogo; `usageCount` solo
+ * viaja en `coachTop` (cuántas veces el coach prescribió ese alimento).
+ */
+export const FoodSuggestionItemSchema = FoodCatalogItemSchema.extend({
+  usageCount: z.number().int().nonnegative().optional(),
+})
+
+/**
+ * Sugerencias pre-búsqueda del picker de alimentos V2 (`get_coach_food_suggestions_v2`).
+ * `clientRecent` y `clientFavorites` llegan vacías cuando no hay alumno en contexto o el
+ * coach no puede leerlo (la RPC ya aplica ese corte server-side).
+ */
+export const CoachFoodSuggestionsReadModelSchema = z.object({
+  schemaVersion: z.literal(1),
+  generatedAt: z.string().datetime({ offset: true }),
+  coachTop: z.array(FoodSuggestionItemSchema),
+  clientRecent: z.array(FoodCatalogItemSchema),
+  clientFavorites: z.array(FoodCatalogItemSchema),
 })
 
 export const FoodCatalogCursorSchema = z.object({
@@ -135,6 +167,8 @@ export const FoodCatalogImportRowSchema = z.object({
 export type FoodVerificationStatus = z.infer<typeof FoodVerificationStatusSchema>
 export type FoodMediaRead = z.infer<typeof FoodMediaReadSchema>
 export type FoodCatalogItem = z.infer<typeof FoodCatalogItemSchema>
+export type FoodSuggestionItem = z.infer<typeof FoodSuggestionItemSchema>
+export type CoachFoodSuggestionsReadModel = z.infer<typeof CoachFoodSuggestionsReadModelSchema>
 export type FoodCatalogCursor = z.infer<typeof FoodCatalogCursorSchema>
 export type FoodCatalogSearchReadModel = z.infer<typeof FoodCatalogSearchReadModelSchema>
 export type FoodBarcodeLookupReadModel = z.infer<typeof FoodBarcodeLookupReadModelSchema>

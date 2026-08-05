@@ -22,8 +22,10 @@ import {
   qeSlotPortionTotals,
   qeSlotSubtotal,
   qeCombineSubtotals,
+  qeVariantTotalWithPortions,
   type QeSlot,
 } from './quick-edit-state'
+import type { FoodPickerSummary } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableItemRow } from './EditableItemRow'
@@ -55,6 +57,31 @@ export function EditableSlotCard({
   const portionTotals = qeSlotPortionTotals(slot, exchangeGroups)
   const subtotal = qeCombineSubtotals(qeSlotSubtotal(slot), portionTotals)
   const nameError = showErrors ? errors[`slot.${slot.key}.name`] : undefined
+  // Barra viva del picker (multi-add): lo que lleva la franja y lo que resta del dia contra las
+  // metas de ESTE dia. Deriva del estado, asi que se recalcula solo en cada alta (sin useMemo:
+  // el React Compiler ya memoiza y la lista de dependencias no aportaba nada).
+  const summaryVariant = state.variants.find((candidate) => candidate.key === variantKey)
+  const summaryDayTotals = summaryVariant
+    ? qeVariantTotalWithPortions(summaryVariant, exchangeGroups)
+    : null
+  const summaryTargetCalories = Number((summaryVariant?.targets.calories ?? '').trim())
+  const summaryTargetProtein = Number((summaryVariant?.targets.proteinG ?? '').trim())
+  const summaryHasTargets =
+    summaryVariant != null &&
+    summaryVariant.targets.calories.trim() !== '' &&
+    Number.isFinite(summaryTargetCalories) &&
+    Number.isFinite(summaryTargetProtein)
+  const pickerSummary: FoodPickerSummary = {
+    slotLabel: slot.name.trim() || 'Franja',
+    slot: { calories: subtotal.calories, proteinG: subtotal.proteinG },
+    remainingDay:
+      summaryHasTargets && summaryDayTotals
+        ? {
+            calories: summaryTargetCalories - summaryDayTotals.calories,
+            proteinG: summaryTargetProtein - summaryDayTotals.proteinG,
+          }
+        : null,
+  }
 
   function handleRemoveSlot() {
     const removed = slot
@@ -327,9 +354,21 @@ export function EditableSlotCard({
         title={`Agregar a ${slot.name.trim() || 'la franja'}`}
         clientId={clientId}
         allowCustom
+        multiAdd
+        slotName={slot.name.trim() || null}
+        summary={pickerSummary}
         onOpenChange={setAddOpen}
         onPick={(food) => dispatch({ type: 'ADD_CATALOG_ITEM', variantKey, slotKey: slot.key, key: genQuickEditKey(), food })}
-        onPickCustom={() => dispatch({ type: 'ADD_CUSTOM_ITEM', variantKey, slotKey: slot.key, key: genQuickEditKey() })}
+        onPickCustom={(query) => {
+          // Alta de alimento libre CON el texto buscado precargado: el coach escribio
+          // "pan amasado", no lo encontro y no tiene por que volver a tipearlo.
+          const key = genQuickEditKey()
+          dispatch({ type: 'ADD_CUSTOM_ITEM', variantKey, slotKey: slot.key, key })
+          const name = query.trim()
+          if (name !== '') {
+            dispatch({ type: 'SET_ITEM_NAME', variantKey, slotKey: slot.key, itemKey: key, value: name })
+          }
+        }}
       />
     </NutritionCard>
   )

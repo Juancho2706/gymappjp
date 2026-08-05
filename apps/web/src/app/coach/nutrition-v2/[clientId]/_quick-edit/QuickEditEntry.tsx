@@ -17,6 +17,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
+import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
 import { QuickEditProvider } from './QuickEditProvider'
 import { QuickEditPlanView } from './QuickEditPlanView'
 import { QE_COPY } from './microcopy'
@@ -29,6 +31,9 @@ export function QuickEditEntry({
   substitutionsLoadFailed = false,
   today,
   hasNutritionPro = false,
+  viewerCoachId = null,
+  foodRestrictions,
+  favoriteFoodIds,
 }: {
   clientId: string
   clientName: string
@@ -47,6 +52,15 @@ export function QuickEditEntry({
    * (`multi_variant` -> UPGRADE_REQUIRED). Default false = fail-closed.
    */
   hasNutritionPro?: boolean
+  /**
+   * Coach autenticado: el picker de alimentos separa "Mis alimentos" comparando `foods.coach_id`
+   * con este id. Ausente = la seccion no se pinta (degradacion invisible).
+   */
+  viewerCoachId?: string | null
+  /** Alergias/intolerancias/disgustos declarados del alumno (resueltos server-side). */
+  foodRestrictions?: readonly FoodPickerRestriction[]
+  /** Favoritos declarados del alumno (estrellita en el picker). */
+  favoriteFoodIds?: readonly string[]
 }) {
   const [editing, setEditing] = useState(false)
 
@@ -98,18 +112,28 @@ export function QuickEditEntry({
       </DropdownMenu>
 
       {editing ? (
-        <QuickEditProvider
-          clientId={clientId}
+        // Las senales del picker de alimentos (coach en pantalla, restricciones y favoritos del
+        // alumno) viajan por contexto: asi ninguna pieza intermedia del quick-edit cambia de
+        // firma para que una fila del buscador pinte una estrellita o bloquee un alergeno.
+        <FoodPickerPrefsProvider
+          viewerCoachId={viewerCoachId}
           clientName={clientName}
-          planModel={planModel}
-          itemSubstitutions={itemSubstitutions}
-          substitutionsLoadFailed={substitutionsLoadFailed}
-          today={today}
-          hasNutritionPro={hasNutritionPro}
-          onExit={() => setEditing(false)}
+          restrictions={foodRestrictions}
+          favoriteIds={favoriteFoodIds}
         >
-          <QuickEditPlanView />
-        </QuickEditProvider>
+          <QuickEditProvider
+            clientId={clientId}
+            clientName={clientName}
+            planModel={planModel}
+            itemSubstitutions={itemSubstitutions}
+            substitutionsLoadFailed={substitutionsLoadFailed}
+            today={today}
+            hasNutritionPro={hasNutritionPro}
+            onExit={() => setEditing(false)}
+          >
+            <QuickEditPlanView />
+          </QuickEditProvider>
+        </FoodPickerPrefsProvider>
       ) : null}
     </>
   )

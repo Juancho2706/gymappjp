@@ -126,6 +126,14 @@ export default async function CoachNutritionV2TemplateBuilderPage({ searchParams
         today={today}
         nutritionProEnabled={nutritionProEnabled}
         templateMode={{ templateId, description: templateDescription }}
+        // Sin alumno no hay restricciones ni favoritos; el coach sí, para que el picker
+        // separe "Mis alimentos" del catálogo global.
+        foodPickerPrefs={{
+          viewerCoachId: user.id,
+          clientName: null,
+          restrictions: [],
+          favoriteIds: [],
+        }}
       />
     </NutritionPageShell>
   )

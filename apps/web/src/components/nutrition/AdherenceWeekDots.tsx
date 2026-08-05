@@ -8,69 +8,26 @@
 // 20260805211949 el read model del hub trae `days7d` con la señal por día, así que cada punto
 // es un día real de la ventana rodante y su color sale de la adherencia de ese día.
 //
-// Los umbrales NO se redefinen acá: se reusa `resolveCoachDayAdherence` de la ficha del coach
-// (única fuente de las bandas 0.9–1.1 = en meta y 0.6–1.3 = desvío moderado). El import
-// cruzado hacia el `_lib` de la ficha es el mismo patrón que ya usa
-// `apps/web/src/app/coach/clients/[clientId]/nutritionTabV2.logic.ts`: el helper es puro
-// (sin React, sin fetch, sin `server-only`).
+// Los umbrales y el copy NO se redefinen acá: viven en `./adherence-week`, el núcleo puro que
+// comparten hub, perfil del alumno y ficha nutricional (y que a su vez reusa
+// `resolveCoachDayAdherence` de la ficha como única fuente de las bandas 0.9–1.1 = en meta y
+// 0.6–1.3 = desvío moderado). Ese módulo está aparte porque la ficha del coach es RSC y los
+// exports de un archivo `'use client'` no son invocables desde el servidor.
 //
 // Se importa por ruta directa a propósito (no vía `components/nutrition/index.ts`) para no
 // arrastrar `@eva/nutrition-v2` al bundle de cliente de las superficies V1 que sí usan el barrel.
 
-import { resolveCoachDayAdherence } from '@/app/coach/nutrition-v2/[clientId]/_lib/week-nav'
+import {
+  formatAdherenceWeekSummaryText,
+  formatAdherenceWeekSummaryTitle,
+  resolveDotState,
+  resolveWeekWindow,
+  summarizeWeek,
+  type AdherenceDotState,
+  type AdherenceWeekDay,
+} from './adherence-week'
 import { cn } from '@/lib/utils'
 
-export interface AdherenceWeekDay {
-  /** `YYYY-MM-DD` en la zona del coach. */
-  date: string
-  entryCount: number
-  consumedCalories: number
-  targetCalories: number | null
-}
-
-export interface AdherenceWeekSummary {
-  /** Días de la ventana con al menos un registro. */
-  registered: number
-  /** Días registrados con meta evaluable Y consumo dentro de la banda (90–110 %). */
-  inRange: number
-  /** Días registrados que tenían meta evaluable (denominador honesto de "en meta"). */
-  evaluable: number
-}
-
-/**
- * Resumen puro de la semana. Cuenta SOLO días con registro: la ausencia de una fecha en
- * `days7d` es "sin registro", nunca "consumió cero" (el RPC omite los días vacíos).
- */
-export function summarizeWeek(
-  days: readonly AdherenceWeekDay[] | null | undefined,
-): AdherenceWeekSummary {
-  let registered = 0
-  let inRange = 0
-  let evaluable = 0
-  for (const day of days ?? []) {
-    if (!day || !Number.isFinite(day.entryCount) || day.entryCount <= 0) continue
-    registered += 1
-    const adherence = resolveCoachDayAdherence(day.consumedCalories, day.targetCalories)
-    if (adherence == null) continue
-    evaluable += 1
-    if (adherence.tone === 'success') inRange += 1
-  }
-  return { registered, inRange, evaluable }
-}
-
-export type AdherenceDotState = 'empty' | 'in-range' | 'off-range' | 'logged'
-
-/** Estado visual de un día. `logged` = registró pero sin meta evaluable (o muy fuera de banda). */
-export function resolveDotState(day: AdherenceWeekDay | undefined): AdherenceDotState {
-  if (!day || !Number.isFinite(day.entryCount) || day.entryCount <= 0) return 'empty'
-  const adherence = resolveCoachDayAdherence(day.consumedCalories, day.targetCalories)
-  if (adherence == null) return 'logged'
-  if (adherence.tone === 'success') return 'in-range'
-  if (adherence.tone === 'warning') return 'off-range'
-  return 'logged'
-}
-
-const MS_PER_DAY = 86_400_000
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 const KCAL_FORMAT = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
@@ -88,34 +45,6 @@ function formatDayChip(isoDate: string): string {
   return `${weekday} ${day}`.trim()
 }
 
-/** Las 7 fechas de la ventana rodante que termina en `anchorIso` (índice 6 = el ancla). */
-function buildWindowDates(anchorIso: string): string[] {
-  if (!ISO_DATE_RE.test(anchorIso)) return []
-  const anchorMs = Date.parse(`${anchorIso}T00:00:00Z`)
-  if (Number.isNaN(anchorMs)) return []
-  return Array.from({ length: 7 }, (_, index) =>
-    new Date(anchorMs - (6 - index) * MS_PER_DAY).toISOString().slice(0, 10),
-  )
-}
-
-/**
- * Las 7 fechas que se pintan. El RPC arma `days7d` con `current_date` de la base (UTC) y
- * `todayIso` es hoy en la zona del coach: entre ~21:00 y medianoche en Chile difieren en un día
- * y el extremo viejo de la ventana quedaría pintado como "sin registro" teniendo uno. Se ancla
- * en el mayor de los dos, lo que NO mueve la semana cuando el alumno simplemente no registró hoy
- * (la fecha más nueva de los datos es entonces <= hoy).
- */
-export function resolveWeekWindow(
-  todayIso: string,
-  days: readonly AdherenceWeekDay[] | null | undefined,
-): string[] {
-  let latest = ''
-  for (const day of days ?? []) {
-    if (day && typeof day.date === 'string' && day.date > latest) latest = day.date
-  }
-  return buildWindowDates(latest > todayIso ? latest : todayIso)
-}
-
 /** Etiqueta completa de un punto: nunca esconde el número real (kcal con separador es-CL). */
 function dotLabel(isoDate: string, day: AdherenceWeekDay | undefined): string {
   const chip = formatDayChip(isoDate)
@@ -127,10 +56,6 @@ function dotLabel(isoDate: string, day: AdherenceWeekDay | undefined): string {
   }
   return `${chip}: ${entries}, ${consumed} de ${KCAL_FORMAT.format(day.targetCalories)} kcal`
 }
-
-const SUMMARY_TOOLTIP =
-  'En meta {inRange} de {evaluable} días registrados. Un día cuenta si el consumo queda entre ' +
-  '90% y 110% de la meta. Banda sana: 75-90% de adherencia semanal.'
 
 const DOT_STYLES: Record<AdherenceDotState, string> = {
   // Hueco = sin registro. La forma (borde vs relleno) ya diferencia sin depender del color.
@@ -148,9 +73,14 @@ const SIZE_STYLES = {
 } as const
 
 export interface AdherenceWeekDotsProps {
-  /** Solo los días CON registros de la ventana rodante (contrato de `days7d`). */
+  /** Solo los días CON registros de la ventana (contrato de `days7d`; el resto es hueco). */
   days7d: readonly AdherenceWeekDay[] | null | undefined
-  /** Hoy en la zona del coach (`YYYY-MM-DD`) o un `Date`. Es el ÚLTIMO punto de la fila. */
+  /**
+   * Ancla de la ventana: es el ÚLTIMO punto de la fila y los otros 6 son los días previos.
+   * El hub pasa HOY en la zona del coach (ventana rodante). El perfil del alumno pasa el
+   * DOMINGO de la semana en curso, porque su card habla de la semana Lu-Do, no de los
+   * últimos 7 días. Acepta `YYYY-MM-DD` o un `Date`.
+   */
   todayIso: string | Date
   size?: 'sm' | 'md'
   /**
@@ -214,15 +144,8 @@ export function AdherenceWeekDots({
     .filter((d): d is AdherenceWeekDay => d != null)
   const summary = summarizeWeek(windowDates.length > 0 ? inWindow : days)
 
-  const summaryText =
-    summary.evaluable > 0
-      ? `${summary.registered}/7 registrados · ${summary.inRange}/${summary.evaluable} en meta`
-      : `${summary.registered}/7 registrados · sin meta evaluable`
-
-  const summaryTitle = SUMMARY_TOOLTIP.replace('{inRange}', String(summary.inRange)).replace(
-    '{evaluable}',
-    String(summary.evaluable),
-  )
+  const summaryText = formatAdherenceWeekSummaryText(summary)
+  const summaryTitle = formatAdherenceWeekSummaryTitle(summary)
 
   return (
     <div className={cn('min-w-0', className)}>

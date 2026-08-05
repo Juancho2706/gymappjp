@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatAdherenceWeekSummaryText,
+  formatAdherenceWeekSummaryTitle,
   resolveDotState,
   resolveWeekWindow,
   summarizeWeek,
+  toAdherenceWeekDays,
   type AdherenceWeekDay,
-} from './AdherenceWeekDots'
+} from './adherence-week'
 
 function day(overrides: Partial<AdherenceWeekDay> & { date: string }): AdherenceWeekDay {
   return {
@@ -114,5 +117,145 @@ describe('resolveDotState', () => {
     expect(
       resolveDotState(day({ date: '2026-08-01', consumedCalories: 200, targetCalories: 2000 })),
     ).toBe('logged')
+  })
+})
+
+describe('formatAdherenceWeekSummary*', () => {
+  it('texto con meta evaluable', () => {
+    expect(formatAdherenceWeekSummaryText({ registered: 5, inRange: 3, evaluable: 4 })).toBe(
+      '5/7 registrados · 3/4 en meta',
+    )
+  })
+
+  it('texto sin ningun dia evaluable (no divide por cero ni inventa 0 %)', () => {
+    expect(formatAdherenceWeekSummaryText({ registered: 2, inRange: 0, evaluable: 0 })).toBe(
+      '2/7 registrados · sin meta evaluable',
+    )
+  })
+
+  it('el tooltip lleva los numeros del alumno + la formula (una sola fuente de copy)', () => {
+    const title = formatAdherenceWeekSummaryTitle({ registered: 5, inRange: 3, evaluable: 4 })
+    expect(title).toContain('En meta 3 de 4 días registrados.')
+    expect(title).toContain('90% y 110%')
+    expect(title).toContain('75-90%')
+  })
+})
+
+describe('toAdherenceWeekDays', () => {
+  const history = [
+    // Orden descendente, como llega `recentDays` del RPC.
+    {
+      localDate: '2026-08-04',
+      activeEntryCount: 3,
+      consumed: { calories: 2100, entryCount: 3 },
+      targets: { calories: 2000 },
+    },
+    {
+      localDate: '2026-08-03',
+      activeEntryCount: 0,
+      consumed: { calories: 0, entryCount: 0 },
+      targets: { calories: 2000 },
+    },
+    {
+      localDate: '2026-07-28',
+      activeEntryCount: 2,
+      consumed: { calories: 1900, entryCount: 2 },
+      targets: { calories: 2000 },
+    },
+  ]
+
+  it('mapea localDate/entryCount/consumo/meta y ordena ascendente', () => {
+    expect(toAdherenceWeekDays({ historyDays: history })).toEqual([
+      { date: '2026-07-28', entryCount: 2, consumedCalories: 1900, targetCalories: 2000 },
+      { date: '2026-08-03', entryCount: 0, consumedCalories: 0, targetCalories: 2000 },
+      { date: '2026-08-04', entryCount: 3, consumedCalories: 2100, targetCalories: 2000 },
+    ])
+  })
+
+  it('recorta a la ventana pintada (la semana Lu-Do)', () => {
+    const week = ['2026-08-03', '2026-08-04', '2026-08-05']
+    expect(toAdherenceWeekDays({ historyDays: history, window: week }).map((d) => d.date)).toEqual([
+      '2026-08-03',
+      '2026-08-04',
+    ])
+  })
+
+  it('inyecta HOY, que nunca viaja en el historial', () => {
+    const days = toAdherenceWeekDays({
+      historyDays: history,
+      window: ['2026-08-03', '2026-08-04', '2026-08-05'],
+      today: {
+        date: '2026-08-05',
+        entryCount: 2,
+        consumedCalories: 1850,
+        targetCalories: 2000,
+      },
+    })
+    expect(days.at(-1)).toEqual({
+      date: '2026-08-05',
+      entryCount: 2,
+      consumedCalories: 1850,
+      targetCalories: 2000,
+    })
+    expect(summarizeWeek(days)).toEqual({ registered: 2, inRange: 2, evaluable: 2 })
+  })
+
+  it('HOY pisa la fila del historial de esa fecha (el read del dia es el dato vivo)', () => {
+    const days = toAdherenceWeekDays({
+      historyDays: [
+        {
+          localDate: '2026-08-04',
+          activeEntryCount: 1,
+          consumed: { calories: 500, entryCount: 1 },
+          targets: { calories: 2000 },
+        },
+      ],
+      today: { date: '2026-08-04', entryCount: 4, consumedCalories: 2050, targetCalories: 2000 },
+    })
+    expect(days).toEqual([
+      { date: '2026-08-04', entryCount: 4, consumedCalories: 2050, targetCalories: 2000 },
+    ])
+  })
+
+  it('HOY fuera de la ventana (el coach mira una semana pasada) NO se inyecta', () => {
+    const days = toAdherenceWeekDays({
+      historyDays: history,
+      window: ['2026-07-27', '2026-07-28'],
+      today: { date: '2026-08-05', entryCount: 2, consumedCalories: 1850, targetCalories: 2000 },
+    })
+    expect(days.map((d) => d.date)).toEqual(['2026-07-28'])
+  })
+
+  it('primera fila gana ante fechas repetidas; campos ausentes degradan sin romper', () => {
+    const days = toAdherenceWeekDays({
+      historyDays: [
+        { localDate: '2026-08-04', activeEntryCount: 3 },
+        { localDate: '2026-08-04', activeEntryCount: 9, targets: { calories: 2000 } },
+        { localDate: '  ' },
+      ],
+    })
+    expect(days).toEqual([
+      { date: '2026-08-04', entryCount: 3, consumedCalories: 0, targetCalories: null },
+    ])
+  })
+
+  it('dia solo del sistema anterior (sin ingestas V2) queda sin registro', () => {
+    const days = toAdherenceWeekDays({
+      historyDays: [
+        {
+          localDate: '2026-08-04',
+          activeEntryCount: 0,
+          consumed: { calories: 0, entryCount: 0 },
+          targets: { calories: 2000 },
+        },
+      ],
+    })
+    expect(resolveDotState(days[0])).toBe('empty')
+    expect(summarizeWeek(days)).toEqual({ registered: 0, inRange: 0, evaluable: 0 })
+  })
+
+  it('sin datos devuelve lista vacia', () => {
+    expect(toAdherenceWeekDays({})).toEqual([])
+    expect(toAdherenceWeekDays({ historyDays: null, today: null })).toEqual([])
   })
 })

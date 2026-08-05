@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { Plus, Repeat, X } from 'lucide-react'
+import { FoodPicker } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
 import { MAX_ITEM_SUBSTITUTIONS, type BuilderItem } from '../_lib/draft-builder'
-import { genId, type Dispatch } from '../_lib/builder-view-model'
+import { genId, mapCatalogItemToFood, type Dispatch } from '../_lib/builder-view-model'
 import { secondaryButtonClass } from '../_lib/builder-ui-classes'
-import { FoodSearch } from './FoodSearch'
+import { useIsTemplateMode } from './TemplateModeContext'
 
 // Reemplazos autorizados por el coach (F-02): afordancia compacta bajo cada item prescrito.
-// "+ Reemplazo" abre el MISMO buscador de catalogo del builder (FoodSearch) y agrega el
+// "+ Reemplazo" abre el MISMO picker de alimentos unificado del coach (FoodPicker) y agrega el
 // alimento elegido como chip removible (tope MAX_ITEM_SUBSTITUTIONS). Solo se monta dentro
 // de ItemRow, que a su vez solo existe en structured/hybrid (SlotEditor). El alumno vera
 // estas opciones; el server congela el snapshot de cada reemplazo al publicar.
@@ -26,6 +27,7 @@ export function SubstitutionsField({
   dispatch: Dispatch
 }) {
   const [open, setOpen] = useState(false)
+  const templateMode = useIsTemplateMode()
   const subs = item.substitutions ?? []
   const atCap = subs.length >= MAX_ITEM_SUBSTITUTIONS
   const prescribedName = item.food ? item.food.name : (item.customName?.trim() || 'este alimento')
@@ -72,15 +74,27 @@ export function SubstitutionsField({
       {atCap ? (
         <p className="mt-1.5 text-[11px] text-subtle">Alcanzaste el maximo de {MAX_ITEM_SUBSTITUTIONS} reemplazos.</p>
       ) : open ? (
-        <div className="mt-2 space-y-2">
-          <FoodSearch
-            clientId={clientId}
-            onPick={(food) =>
-              dispatch({ type: 'ADD_ITEM_SUBSTITUTION', variantKey, slotKey, itemKey: item.key, key: genId(), food })
+        <div className="mt-2 space-y-2 rounded-control border border-border-subtle bg-surface-sunken p-3">
+          {/* Un reemplazo por vez: elegir CIERRA el buscador (mismo gesto que el swap del
+              modo edición). El multi-add es para llenar una franja, no para esta capa. */}
+          <FoodPicker
+            clientId={templateMode ? null : clientId}
+            autoFocus
+            listClassName="max-h-[22rem]"
+            onPick={(catalogItem) =>
+              dispatch({
+                type: 'ADD_ITEM_SUBSTITUTION',
+                variantKey,
+                slotKey,
+                itemKey: item.key,
+                key: genId(),
+                food: mapCatalogItemToFood(catalogItem),
+              })
             }
+            onDone={() => setOpen(false)}
           />
           <button type="button" onClick={() => setOpen(false)} className={secondaryButtonClass + ' min-h-9 px-3 text-xs'}>
-            Listo
+            Cerrar
           </button>
         </div>
       ) : (

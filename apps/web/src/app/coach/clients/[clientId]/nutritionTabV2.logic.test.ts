@@ -3,6 +3,7 @@ import type {
   NutritionClientDetailReadModel,
   NutritionHistoryDay,
 } from '@eva/nutrition-v2'
+import { summarizeWeek } from '@/components/nutrition/adherence-week'
 import {
   buildNutritionTabV2ViewModel,
   computeNutritionStreakDays,
@@ -193,6 +194,42 @@ describe('buildNutritionTabV2ViewModel', () => {
     expect(vm.partialCount).toBe(1)
     // Mié(hoy, con registro) + Mar + Lun + Dom = 4, igual que el mockup.
     expect(vm.streakDays).toBe(4)
+
+    // Los puntos del primitivo compartido: cifras REALES por día, recortadas a la semana Lu-Do
+    // (el domingo 26 alimenta la racha pero es de la semana previa ⇒ fuera de la fila) y con HOY
+    // inyectado desde `detail.today` (nunca viaja en `recentDays`).
+    expect(vm.weekAnchorIso).toBe('2026-08-02')
+    expect(vm.adherenceWeek).toEqual([
+      { date: '2026-07-27', entryCount: 1, consumedCalories: 2350, targetCalories: 2400 },
+      { date: '2026-07-28', entryCount: 1, consumedCalories: 2300, targetCalories: 2400 },
+      { date: '2026-07-29', entryCount: 2, consumedCalories: 1780, targetCalories: 2400 },
+    ])
+  })
+
+  // Coherencia hub ↔ perfil ↔ ficha: la lectura textual de los puntos ("X/7 registrados ·
+  // Y/Z en meta") tiene que salir exactamente igual que los estados de la tira de la card.
+  it('la semana de los puntos cuenta lo MISMO que los estados del view model', () => {
+    const detail = makeDetail({
+      hasAnyPlan: true,
+      hasActivePlan: true,
+      todayCalories: 1780, // 74 % -> registrado, fuera de meta
+      todayTarget: 2400,
+      todayEntryCount: 2,
+    })
+    const vm = buildNutritionTabV2ViewModel({
+      clientId: CLIENT_ID,
+      detail,
+      todayIso: TODAY_ISO,
+      recentDaysForDisplay: [
+        makeDay('2026-07-28', { calories: 2300 }),
+        makeDay('2026-07-27', { calories: 2350 }),
+      ],
+    })
+
+    const summary = summarizeWeek(vm.adherenceWeek)
+    expect(summary.registered).toBe(vm.completedCount + vm.partialCount)
+    expect(summary.inRange).toBe(vm.completedCount)
+    expect(summary).toEqual({ registered: 3, inRange: 2, evaluable: 3 })
   })
 
   // Rescate 2026-07-29 (auditoría §2.2): la señal que consumen hero / anillo / pill / badge /
@@ -298,6 +335,9 @@ describe('buildNutritionTabV2ViewModel', () => {
     expect(vm.hasActivePlan).toBe(false)
     expect(vm.strategy).toBeNull()
     expect(vm.week).toEqual([])
+    // Sin plan vigente no hay fila de puntos que pintar (ni ancla): la card muestra el empty-state.
+    expect(vm.adherenceWeek).toEqual([])
+    expect(vm.weekAnchorIso).toBeNull()
     expect(vm.streakDays).toBe(0)
     expect(vm.completedCount).toBe(0)
     expect(vm.partialCount).toBe(0)

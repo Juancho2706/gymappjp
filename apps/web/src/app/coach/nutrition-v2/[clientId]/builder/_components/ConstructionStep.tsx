@@ -12,6 +12,7 @@ import {
   builderVariantForDayOfWeek,
   inheritedDayOfWeeks,
   strategyUsesSlots,
+  variantEffectiveTargets,
   variantTotals,
   type BuilderState,
 } from '../_lib/draft-builder'
@@ -81,6 +82,18 @@ export function ConstructionStep({
       )
     : null
   const totals = combineSubtotals(variantTotals(variant), portionDay)
+  // "Restan del día" de la barra viva del picker de alimentos: metas EFECTIVAS del día en
+  // pantalla (propias o heredadas del base) menos lo que ya lleva. Sin metas cargadas viaja
+  // `null` y el picker no inventa un restante.
+  const effectiveTargets = variantEffectiveTargets(state, variant)
+  const targetCalories = Number(effectiveTargets.calories.trim())
+  const targetProtein = Number(effectiveTargets.proteinG.trim())
+  const dayRemaining =
+    effectiveTargets.calories.trim() !== '' &&
+    Number.isFinite(targetCalories) &&
+    Number.isFinite(targetProtein)
+      ? { calories: targetCalories - totals.calories, proteinG: targetProtein - totals.proteinG }
+      : null
   // kcal por dia para las celdas del strip (items + porciones, mismo criterio que el total del
   // dia y que el subtotal de cada franja: el strip nunca contradice al editor).
   const kcalByVariantKey: Record<string, number> = {}
@@ -166,6 +179,7 @@ export function ConstructionStep({
             dispatch={dispatch}
             errors={errors}
             portions={portions}
+            dayRemaining={dayRemaining}
             onCopySlot={onCopySlot}
           />
         ))}

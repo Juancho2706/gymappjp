@@ -13,6 +13,7 @@ import {
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { fetchItemSubstitutionsForVersion } from '@/app/coach/nutrition-v2/_data/item-substitutions.data'
+import { fetchClientFoodPrefsForPicker } from '@/app/coach/nutrition-v2/_data/client-food-prefs.data'
 import { fetchBuilderFoodsByIds } from './_data/plan-foods.data'
 import {
   builderStateFromTemplateDraft,
@@ -200,6 +201,11 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
     nutritionProCtxFromWorkspace(user.id, workspace),
   )
 
+  // Señales dietarias del alumno para el picker de alimentos del wizard (alergia bloqueante,
+  // intolerancia/disgusto en ámbar, favoritos con estrellita). Server-side: el picker no las
+  // vuelve a pedir desde el cliente. Fail-soft en el data-loader — son ayudas visuales.
+  const foodPrefs = await fetchClientFoodPrefsForPicker(clientId)
+
   return (
     // Header compacto (backHref): flecha de vuelta + nombre del alumno en una sola fila.
     // La flecha reemplaza al boton "Volver a la ficha" (misma ruta), asi el header movil no
@@ -221,6 +227,12 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
         initialDraft={initialDraft}
         today={today}
         nutritionProEnabled={nutritionProEnabled}
+        foodPickerPrefs={{
+          viewerCoachId: user.id,
+          clientName: detail.client.fullName,
+          restrictions: foodPrefs.restrictions,
+          favoriteIds: foodPrefs.favoriteIds,
+        }}
       />
     </NutritionPageShell>
   )

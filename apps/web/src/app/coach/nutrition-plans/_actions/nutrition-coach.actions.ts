@@ -1196,26 +1196,19 @@ export async function duplicatePlanToClient(
 /**
  * Returns the set of food_ids a client has marked as 'favorite'.
  * Validates coach owns the client before returning data.
+ *
+ * 2026-08-05: pasa a usar el MISMO `coachOwnsClient` que `getClientFoodRestrictions`. La copia
+ * anterior validaba `coach_id = auth.uid()` (+ org) y NO cubría `coach_team`: en un pool de team
+ * los favoritos del alumno de otro coach del equipo degradaban a `[]` en silencio —el picker
+ * dejaba de mostrar la estrellita justo donde el coach no conoce al alumno—. Standalone y
+ * enterprise se comportan exactamente igual que antes; solo se suma el branch de team, que ya
+ * espeja la RLS `team_client_food_prefs_member_all`.
  */
 export async function getClientFoodFavorites(clientId: string): Promise<string[]> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return []
-
-  // Verify this client belongs to the authed coach under their active workspace
-  const workspace = await resolvePreferredWorkspace(supabase, user.id)
-  let clientQuery = supabase
-    .from('clients')
-    .select('id')
-    .eq('id', clientId)
-    .eq('coach_id', user.id)
-  if (workspace?.type === 'enterprise_coach') {
-    clientQuery = clientQuery.eq('org_id', workspace.orgId)
-  } else {
-    clientQuery = clientQuery.is('org_id', null)
-  }
-  const { data: clientRow } = await clientQuery.maybeSingle()
-  if (!clientRow) return []
+  if (!(await coachOwnsClient(supabase, user.id, clientId))) return []
 
   const { data } = await supabase
     .from('client_food_preferences')

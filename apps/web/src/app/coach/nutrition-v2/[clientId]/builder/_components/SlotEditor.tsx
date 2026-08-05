@@ -1,12 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { NutritionCard } from '@/components/nutrition-v2'
+import { FoodPicker } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
 import { slotSubtotal, type BuilderSlot, type BuilderVariant } from '../_lib/draft-builder'
-import { genId, type Dispatch, type SlotCopyRequest } from '../_lib/builder-view-model'
+import { genId, mapCatalogItemToFood, type Dispatch, type SlotCopyRequest } from '../_lib/builder-view-model'
 import {
   iconButtonClass,
   inputClass,
@@ -17,8 +19,8 @@ import { PortionsSection, type PortionsController } from './PortionsSection'
 import { combineSubtotals, portionsKey, slotPortionTotals } from './portions-state'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { CopySlotMenu } from './CopySlotMenu'
-import { FoodSearch } from './FoodSearch'
 import { ItemRow } from './ItemRow'
+import { useIsTemplateMode } from './TemplateModeContext'
 
 export function SlotEditor({
   slot,
@@ -28,6 +30,7 @@ export function SlotEditor({
   dispatch,
   errors,
   portions,
+  dayRemaining = null,
   onCopySlot,
 }: {
   slot: BuilderSlot
@@ -39,8 +42,16 @@ export function SlotEditor({
   dispatch: Dispatch
   errors: Record<string, string>
   portions: PortionsController
+  /** Lo que resta del día contra sus metas; alimenta la barra viva del picker. */
+  dayRemaining?: { calories: number; proteinG: number } | null
   onCopySlot: (request: SlotCopyRequest) => void
 }) {
+  // El picker vive detrás de "Agregar alimento": abierto se queda abierto mientras el coach
+  // suma varios ("Listo (n)" lo cierra). Antes el buscador estaba siempre desplegado en cada
+  // franja, así que un plan de 5 franjas mostraba 5 buscadores compitiendo por la pantalla.
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // Modo plantilla: no hay alumno que autorizar ni historial que sugerir.
+  const templateMode = useIsTemplateMode()
   // Fix QA F1-2: el subtotal de franja combina items fijos + derivado de porciones
   // (Σ porciones × ref del grupo, catálogo VIVO del picker). Catálogo sin cargar o
   // franja sin porciones ⇒ solo items, idéntico a antes (sin NaN jamás).
@@ -105,22 +116,70 @@ export function SlotEditor({
       </div>
 
       <div className="mt-3">
-        <FoodSearch
-          clientId={clientId}
-          onPick={(food) => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food })}
-        />
+        {pickerOpen ? (
+          <div className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+            <FoodPicker
+              clientId={templateMode ? null : clientId}
+              slotName={slot.name.trim() || null}
+              multiAdd
+              autoFocus
+              allowCustom
+              // El scroll vive DENTRO de la lista (QA CEO 08-04), no en la página.
+              listClassName="max-h-[26rem] md:max-h-[22rem]"
+              summary={{
+                slotLabel: slot.name.trim() || 'Franja',
+                slot: { calories: subtotal.calories, proteinG: subtotal.proteinG },
+                remainingDay: dayRemaining,
+              }}
+              onPick={(item) =>
+                dispatch({
+                  type: 'ADD_ITEM',
+                  variantKey,
+                  slotKey: slot.key,
+                  key: genId(),
+                  food: mapCatalogItemToFood(item),
+                })
+              }
+              onCreateCustom={(query) => {
+                // Alimento libre con el texto buscado ya escrito: el coach no vuelve a tipearlo.
+                const key = genId()
+                dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key, food: null })
+                const name = query.trim()
+                if (name !== '') {
+                  dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey: slot.key, itemKey: key, patch: { customName: name } })
+                }
+                setPickerOpen(false)
+              }}
+              onDone={() => setPickerOpen(false)}
+            />
+          </div>
+        ) : null}
         {/* Acciones de la franja. "Copiar a otros días" vive acá —visible, con etiqueta— y no
             escondida tras un ⋯: es la acción que hoy obliga a retipear medio plan (P0-4), y el
             header ya está al límite de ancho en 360 px. Solo aparece en planes multi-día. */}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food: null })}
-            className={secondaryButtonClass}
-          >
-            <Plus className="h-4 w-4" />
-            Alimento libre (con macros)
-          </button>
+        <div className={(pickerOpen ? 'mt-2 ' : '') + 'flex flex-wrap items-center gap-2'}>
+          {/* Con el picker abierto estas dos CTA viven DENTRO de él ("Alimento libre" y
+              "Crear «…»"), así que no se duplican acá. */}
+          {!pickerOpen ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                className={secondaryButtonClass + ' border-dashed'}
+              >
+                <Plus className="h-4 w-4" />
+                Agregar alimento
+              </button>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genId(), food: null })}
+                className={secondaryButtonClass}
+              >
+                <Plus className="h-4 w-4" />
+                Alimento libre (con macros)
+              </button>
+            </>
+          ) : null}
           {canCopyToOtherDays ? (
             <CopySlotMenu slot={slot} variantKey={variantKey} variants={variants} onCopySlot={onCopySlot} />
           ) : null}

@@ -9,6 +9,10 @@ import {
   type NutritionWeekCell,
 } from '@eva/nutrition-v2'
 import { resolveCoachDayAdherence } from '@/app/coach/nutrition-v2/[clientId]/_lib/week-nav'
+import {
+  toAdherenceWeekDays,
+  type AdherenceWeekDay,
+} from '@/components/nutrition/adherence-week'
 
 /**
  * View model PURO del tab Nutrición V2 embebido en la ficha principal del alumno
@@ -111,6 +115,18 @@ export interface NutritionTabV2ViewModel extends NutritionV2Signal {
   strategy: NutritionStrategy | null
   /** Semana en curso (lunes a domingo), 7 celdas; [] sin plan vigente. */
   week: NutritionTabV2SummaryDay[]
+  /**
+   * La MISMA semana en el contrato del primitivo compartido `AdherenceWeekDots` (hub + perfil +
+   * ficha pintan y cuentan igual). Solo los días CON registro: la ausencia de una fecha es "sin
+   * registro", nunca "consumió cero". Las cifras son reales (consumo y meta congelada del día);
+   * HOY entra desde `detail.today`, que es donde vive el día en curso.
+   */
+  adherenceWeek: AdherenceWeekDay[]
+  /**
+   * Ancla de la fila de puntos = DOMINGO de la semana en curso (`week` es Lu-Do, no una ventana
+   * rodante). `null` sin plan vigente ⇒ no se pinta la fila.
+   */
+  weekAnchorIso: string | null
 }
 
 export interface BuildNutritionTabV2Input {
@@ -273,6 +289,24 @@ export function buildNutritionTabV2ViewModel(
     }
   })
 
+  // Misma semana, contrato del primitivo compartido: se mapea desde las MISMAS fuentes que la
+  // tira de estados (`recentDaysForDisplay` para el pasado + `detail.today` para hoy, que nunca
+  // viaja en el historial), recortada a las 7 fechas que la card pinta. Cero datos inventados:
+  // un día sin fila no aparece y el punto queda hueco.
+  const weekDates = weekCells.map((cell) => cell.isoDate)
+  const adherenceWeek = hasActivePlan
+    ? toAdherenceWeekDays({
+        historyDays: recentDaysForDisplay,
+        window: weekDates,
+        today: {
+          date: todayIso,
+          entryCount: num(consumed.entryCount),
+          consumedCalories: num(consumed.calories),
+          targetCalories: numOrNull(targets.calories),
+        },
+      })
+    : []
+
   // Señal semanal + riesgo: se computan UNA vez acá y viajan a hero/anillo/pill/badge/score/PDF.
   const weekly = computeNutritionWeeklyAdherence({
     week,
@@ -292,6 +326,8 @@ export function buildNutritionTabV2ViewModel(
     builderCtaLabel: hasPlan ? 'Nueva versión' : 'Crear plan',
     strategy: activePlan?.strategy ?? null,
     week,
+    adherenceWeek,
+    weekAnchorIso: weekDates.at(-1) ?? null,
     today: {
       calories: { consumed: num(consumed.calories), target: num(targets.calories) },
     },

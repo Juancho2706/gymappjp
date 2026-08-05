@@ -6,7 +6,8 @@ import { useTransition, type ReactNode } from 'react'
 import { ArrowUpRight, LoaderCircle, Plus } from 'lucide-react'
 import { formatNutritionCalories, nutritionProgressPercent } from '@eva/nutrition-v2'
 import { NutritionCard, NutritionStatePanel, StrategyBadge } from '@/components/nutrition-v2'
-import { cn } from '@/lib/utils'
+import { AdherenceWeekDots } from '@/components/nutrition/AdherenceWeekDots'
+import { ADHERENCE_WEEK_FORMULA_TITLE } from '@/components/nutrition/adherence-week'
 import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
 
 /**
@@ -66,44 +67,6 @@ function PendingNavLink({
         children
       )}
     </Link>
-  )
-}
-
-/** Los 7 puntos de la semana en curso del resumen (mockup "flujos podados" sección 01, frame 3).
- *  Reusa la clasificación de la view model: verde = dentro de rango, ámbar = con registro pero
- *  fuera de rango, punto tenue = pasado sin registro, contorno = futuro. */
-function NutritionTabWeekDots({ week }: { week: NutritionTabV2ViewModel['week'] }) {
-  if (week.length === 0) return null
-  return (
-    <div
-      aria-label="Días de la semana en curso"
-      className="grid grid-cols-7 gap-1"
-      role="group"
-    >
-      {week.map((day) => (
-        <div
-          className={cn(
-            'flex flex-col items-center gap-1 rounded-control border py-1.5',
-            day.isToday ? 'border-primary/50 bg-primary/5' : 'border-transparent',
-          )}
-          key={day.isoDate}
-        >
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-subtle">
-            {day.shortLabel}
-          </span>
-          <span
-            aria-hidden="true"
-            className={cn(
-              'h-1.5 w-1.5 rounded-full',
-              day.status === 'done' && 'bg-emerald-500 dark:bg-emerald-400',
-              day.status === 'partial' && 'bg-amber-500 dark:bg-amber-400',
-              day.status === 'none' && 'bg-border-default',
-              day.status === 'future' && 'border border-border-default bg-transparent',
-            )}
-          />
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -183,9 +146,15 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-display text-sm font-semibold text-strong">Esta semana</h3>
           </div>
-          <div className="mt-2">
-            <NutritionTabWeekDots week={view.week} />
-          </div>
+          {/* Mismos puntos, mismos umbrales y misma línea "X/7 registrados · Y/Z en meta" que el
+              hub y la ficha: el primitivo compartido es la única fuente (nada de un código de
+              colores propio por superficie). El ancla es el DOMINGO de la semana en curso porque
+              esta card habla de la semana Lu-Do, no de los últimos 7 días. */}
+          {view.weekAnchorIso != null ? (
+            <div className="mt-2" title={ADHERENCE_WEEK_FORMULA_TITLE}>
+              <AdherenceWeekDots days7d={view.adherenceWeek} todayIso={view.weekAnchorIso} />
+            </div>
+          ) : null}
 
           <div className="mt-4 flex flex-wrap items-end justify-between gap-2 border-t border-border-subtle pt-3">
             <div>
@@ -205,10 +174,11 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
             />
           </div>
 
+          {/* "N cumplidos · M parciales" salió de acá: era la MISMA lectura que ahora entrega la
+              línea del primitivo ("X/7 registrados · Y/Z en meta"), con otro fraseo y otro
+              denominador. Queda solo la racha, que el primitivo no cubre. */}
           <p className="mt-3 text-sm tabular-nums text-muted">
-            {view.completedCount} cumplido{view.completedCount === 1 ? '' : 's'} ·{' '}
-            {view.partialCount} parcial{view.partialCount === 1 ? '' : 'es'} · racha{' '}
-            {view.streakDays}
+            Racha {view.streakDays} día{view.streakDays === 1 ? '' : 's'}
           </p>
 
           <PendingNavLink

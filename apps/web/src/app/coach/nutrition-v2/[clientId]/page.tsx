@@ -27,7 +27,15 @@ import {
   filterHistoryDaysToBaseWindow,
   hasNutritionProV2,
   nutritionProCtxFromWorkspace,
+  NUTRITION_PRO_HISTORY_DAYS_BASE,
+  NUTRITION_PRO_UPGRADE_HREF,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
+import {
+  formatAdherenceWeekSummaryText,
+  formatAdherenceWeekSummaryTitle,
+  summarizeWeek,
+  toAdherenceWeekDays,
+} from '@/components/nutrition/adherence-week'
 import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_components/AssignPlanToClientsDialog'
 import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
@@ -40,6 +48,10 @@ import {
   fetchCoachPrivateNotes,
   type CoachPrivateNotesLoad,
 } from '../_data/coach-private-notes.data'
+import {
+  EMPTY_CLIENT_FOOD_PREFS,
+  fetchClientFoodPrefsForPicker,
+} from '../_data/client-food-prefs.data'
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
 import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
@@ -145,6 +157,25 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   })
   const selectedCell = weekCells.find((cell) => cell.isoDate === weekSelection.selectedIso) ?? null
   const fichaHref = `/coach/nutrition-v2/${clientId}`
+
+  // Lectura textual de la semana pintada, con la MISMA definicion que el hub y el perfil del
+  // alumno ("registrado" = el dia tiene ingestas; "en meta" = banda 0.9-1.1 de la meta congelada
+  // de ese dia). Se deriva de las mismas filas que la tira Lu-Do (`recentDays`, ya recortado por
+  // el gate Pro) mas HOY, que nunca viaja en el historial: vive en el read separado
+  // `detail.today` y sin inyectarlo un alumno que ya registro hoy contaria como "sin registro".
+  // Con `?date=` de una semana pasada, hoy queda fuera de la ventana y no se inyecta.
+  const weekAdherenceSummary = summarizeWeek(
+    toAdherenceWeekDays({
+      historyDays: recentDays,
+      window: weekCells.map((cell) => cell.isoDate),
+      today: {
+        date: today,
+        entryCount: detail.today.consumed.entryCount,
+        consumedCalories: detail.today.consumed.calories,
+        targetCalories: detail.today.targets.calories,
+      },
+    }),
+  )
   // Solo el FUTURO se ancla a "Estructura prescrita": proyectar es legitimo porque replica la regla
   // que el snapshot congelara. Para un dia pasado manda la fila del historial (pudo congelar otra
   // version del plan), asi que la seccion no se preselecciona con la estructura de hoy.
@@ -180,6 +211,12 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     ? await fetchCoachPrivateNotes(clientId)
     : { ok: true, notes: [] }
 
+  // Señales dietarias del alumno para el picker de alimentos del modo edición (alergias,
+  // intolerancias, disgustos y favoritos). Server-side y solo con plan vigente: el picker vive
+  // dentro del quick-edit, que únicamente se monta ahí. Fail-soft (ver el data-loader): son
+  // ayudas visuales, no la barrera de autorización.
+  const foodPrefs = hasPlan ? await fetchClientFoodPrefsForPicker(clientId) : EMPTY_CLIENT_FOOD_PREFS
+
   return (
     // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
     // "Asignar a otros alumnos" se demueve a accion secundaria junto a los badges del plan.
@@ -200,6 +237,9 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             substitutionsLoadFailed={substitutionsLoadFailed}
             today={today}
             hasNutritionPro={nutritionProEnabled}
+            viewerCoachId={user.id}
+            foodRestrictions={foodPrefs.restrictions}
+            favoriteFoodIds={foodPrefs.favoriteIds}
           />
         ) : (
           <Link
@@ -299,12 +339,35 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                   </Link>
                 ) : null}
               </div>
+              {/* Misma frase y misma formula que el hub y el tab Nutricion de la ficha del
+                  alumno: el copy sale del primitivo compartido, no se reescribe por superficie. */}
+              <p
+                className="text-xs text-muted"
+                title={formatAdherenceWeekSummaryTitle(weekAdherenceSummary)}
+              >
+                {formatAdherenceWeekSummaryText(weekAdherenceSummary)}
+              </p>
               <CoachWeekDayNav
                 basePath={fichaHref}
                 cells={weekCells}
                 selectedIso={weekSelection.selectedIso}
                 todayIso={today}
               />
+              {/* QW10 — ventana honesta: sin el addon, `recentDays` viene recortado a la ventana
+                  BASE, asi que la tira no puede retroceder mas alla. Se dice en una linea al pie,
+                  sin banner ni urgencia; el link lleva a planes (los modulos vienen incluidos). */}
+              {!nutritionProEnabled ? (
+                <p className="text-xs text-subtle">
+                  Mostrando {NUTRITION_PRO_HISTORY_DAYS_BASE} días de historial · con{' '}
+                  <Link
+                    className="font-medium text-primary transition-colors hover:text-primary/80"
+                    href={NUTRITION_PRO_UPGRADE_HREF}
+                  >
+                    Nutrición Pro
+                  </Link>{' '}
+                  ves todo
+                </p>
+              ) : null}
             </section>
           ) : null}
 

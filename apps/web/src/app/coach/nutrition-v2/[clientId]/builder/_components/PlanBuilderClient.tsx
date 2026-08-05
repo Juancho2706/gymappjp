@@ -68,6 +68,8 @@ import {
 } from '@/lib/nutrition-coach-draft-store'
 // Pasos y avisos del wizard: cada pieza vive en su archivo (mismo directorio) desde que este
 // componente dejo de ser un monolito. Aca queda SOLO el shell: estado, autosave, publish.
+import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
+import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
 import { TemplateModeContext } from './TemplateModeContext'
 import { PlanStep } from './PlanStep'
 import { ConstructionStep } from './ConstructionStep'
@@ -155,6 +157,18 @@ export interface PlanBuilderTemplateMode {
   description?: string | null
 }
 
+/**
+ * Señales que el picker de alimentos necesita en cada fila (quién es el coach, cómo se llama el
+ * alumno, qué tiene declarado y qué marcó como favorito). Se resuelven SERVER-SIDE en la page y
+ * bajan por contexto; el wizard solo hace de plumbing (no las lee).
+ */
+export interface PlanBuilderFoodPickerPrefs {
+  viewerCoachId: string | null
+  clientName: string | null
+  restrictions: readonly FoodPickerRestriction[]
+  favoriteIds: readonly string[]
+}
+
 export function PlanBuilderClient({
   clientId,
   existingPlan,
@@ -162,6 +176,7 @@ export function PlanBuilderClient({
   today,
   nutritionProEnabled,
   templateMode,
+  foodPickerPrefs,
 }: {
   /**
    * Alumno dueño del plan. En modo plantilla llega `TEMPLATE_MODE_CLIENT_ID` (uuid NIL): el
@@ -189,6 +204,8 @@ export function PlanBuilderClient({
   nutritionProEnabled: boolean
   /** Presente ⇒ el wizard arma una PLANTILLA, sin alumno. Ausente ⇒ builder de siempre. */
   templateMode?: PlanBuilderTemplateMode
+  /** Solo plumbing del picker de alimentos (ver `PlanBuilderFoodPickerPrefs`). */
+  foodPickerPrefs?: PlanBuilderFoodPickerPrefs
 }) {
   const router = useRouter()
   const isTemplateMode = templateMode != null
@@ -870,6 +887,12 @@ export function PlanBuilderClient({
   }
 
   return (
+    <FoodPickerPrefsProvider
+      viewerCoachId={foodPickerPrefs?.viewerCoachId ?? null}
+      clientName={foodPickerPrefs?.clientName ?? null}
+      restrictions={foodPickerPrefs?.restrictions}
+      favoriteIds={foodPickerPrefs?.favoriteIds}
+    >
     <TemplateModeContext.Provider value={isTemplateMode}>
     {/* Anuncio de los cambios de día/franja para lectores de pantalla (P1-4): el toast es el
         canal visual; esto es el auditivo. `sr-only` para no ocupar layout. */}
@@ -1134,5 +1157,6 @@ export function PlanBuilderClient({
       </DialogContent>
     </Dialog>
     </TemplateModeContext.Provider>
+    </FoodPickerPrefsProvider>
   )
 }
