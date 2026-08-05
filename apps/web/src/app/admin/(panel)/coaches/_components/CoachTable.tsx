@@ -159,7 +159,10 @@ function ExpiryCell({ days }: { days: number | null | undefined }) {
 }
 
 function isAtRisk(c: CoachListItem): boolean {
-    if ((c.days_until_expiry ?? 1) <= 7) return true
+    // Sin fecha de vencimiento NO es riesgo: el `?? 1` viejo convertia null en "vence en 1d"
+    // y marcaba en riesgo a TODO coach free/cortesia de por vida (25 falsos positivos en prod).
+    const d = c.days_until_expiry
+    if (d !== null && d !== undefined && d <= 7) return true
     if (['past_due', 'pending_payment'].includes(c.subscription_status ?? '')) return true
     return false
 }
@@ -174,7 +177,8 @@ export function CoachTable({ coaches, total }: Props) {
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [editing, setEditing] = useState<CoachListItem | null>(null)
     const [deleting, setDeleting] = useState<string | null>(null)
-    const [riskOpen, setRiskOpen] = useState(true)
+    // Contraida por defecto (pedido owner 05-08): el contador del header basta; se expande a mano.
+    const [riskOpen, setRiskOpen] = useState(false)
     const [createOpen, setCreateOpen] = useState(false)
     const [notesOpen, setNotesOpen] = useState<string | null>(null)
     const [confirmDelete, setConfirmDelete] = useState<CoachListItem | null>(null)
