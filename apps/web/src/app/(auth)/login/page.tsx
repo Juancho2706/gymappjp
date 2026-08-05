@@ -6,6 +6,7 @@ import { readFailCount, CAPTCHA_THRESHOLD } from '@/lib/auth/fail-counter'
 import { getTurnstileSiteKey } from '@/lib/auth/turnstile'
 import { getAuthErrorMessage } from '@/lib/auth/error-messages'
 import { CoachLoginForm } from './_components/CoachLoginForm'
+import { StudentEntryCard } from '../_components/StudentEntryCard'
 
 interface CoachLoginPageProps {
     searchParams: Promise<{ error?: string }>
@@ -50,6 +51,8 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
                         />
                     </Suspense>
                 </div>
+
+                <StudentEntryCard />
             </div>
         </>
     )

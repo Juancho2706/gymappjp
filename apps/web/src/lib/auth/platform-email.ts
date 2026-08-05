@@ -58,6 +58,29 @@ function rowUnavailable(row: AvailabilityPayload): boolean {
 export const PLATFORM_EMAIL_TAKEN_ES =
     'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.'
 
+/**
+ * Copy para el ALTA de alumno cuando el correo ya tiene cuenta (caso Natalia/jotap 2026-08-05).
+ * Deliberadamente NO revela de qué tipo de cuenta se trata (coach/alumno): un coach autenticado
+ * podría sondear correos ajenos desde el alta. La razón granular queda server-side (`reason`).
+ */
+export const EMAIL_TAKEN_CLIENT_CREATE_ES =
+    'Este correo ya tiene una cuenta en EVA, así que no se puede crear un alumno nuevo con él. Escríbenos a soporte y lo resolvemos contigo.'
+
+export type PlatformEmailUnavailableReason =
+    | 'invalid'
+    | 'blocked_domain'
+    | 'disposable'
+    | 'taken_coach'
+    | 'taken_client'
+    | 'taken_orphan'
+    | 'taken_auth'
+    | 'rpc_error'
+
+/** Correo ocupado por una cuenta/fila existente (vs. inválido o dominio vetado). */
+export function isEmailTakenReason(reason: PlatformEmailUnavailableReason): boolean {
+    return reason.startsWith('taken_')
+}
+
 const BLOCKED_EMAIL_DOMAINS = ['eva-app.cl']
 
 // Top disposable/temporary email domains. Full list: github.com/disposable-email-domains/disposable-email-domains
@@ -100,18 +123,18 @@ export function isDisposableEmail(email: string): boolean {
 export async function assertPlatformEmailAvailable(
     admin: SupabaseClient<Database>,
     email: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; reason: PlatformEmailUnavailableReason }> {
     const normalized = normalizePlatformEmail(email)
     if (!normalized) {
-        return { ok: false, error: 'El correo es obligatorio.' }
+        return { ok: false, error: 'El correo es obligatorio.', reason: 'invalid' }
     }
 
     const domain = normalized.split('@')[1] ?? ''
     if (BLOCKED_EMAIL_DOMAINS.includes(domain)) {
-        return { ok: false, error: 'Este dominio de correo no está permitido para registro.' }
+        return { ok: false, error: 'Este dominio de correo no está permitido para registro.', reason: 'blocked_domain' }
     }
     if (isDisposableEmail(normalized)) {
-        return { ok: false, error: 'Los correos temporales o desechables no están permitidos. Usa tu correo personal o profesional.' }
+        return { ok: false, error: 'Los correos temporales o desechables no están permitidos. Usa tu correo personal o profesional.', reason: 'disposable' }
     }
 
     const { data, error } = await admin.rpc('check_platform_email_availability', {
@@ -123,6 +146,7 @@ export async function assertPlatformEmailAvailable(
         return {
             ok: false,
             error: 'No pudimos verificar el correo. Si el problema continúa, contacta soporte.',
+            reason: 'rpc_error',
         }
     }
 
@@ -131,11 +155,21 @@ export async function assertPlatformEmailAvailable(
         return {
             ok: false,
             error: 'No pudimos verificar el correo. Si el problema continúa, contacta soporte.',
+            reason: 'rpc_error',
         }
     }
 
     if (rowUnavailable(row)) {
-        return { ok: false, error: PLATFORM_EMAIL_TAKEN_ES }
+        // Razón granular SOLO para lógica server-side (p. ej. la futura invitación F2b decide
+        // con esto si procede). El copy hacia el usuario nunca revela la categoría.
+        const reason: PlatformEmailUnavailableReason = row.is_coach
+            ? 'taken_coach'
+            : row.orphan_client_email
+                ? 'taken_orphan'
+                : row.is_client
+                    ? 'taken_client'
+                    : 'taken_auth'
+        return { ok: false, error: PLATFORM_EMAIL_TAKEN_ES, reason }
     }
 
     return { ok: true }

@@ -11,7 +11,9 @@ import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
+    isEmailTakenReason,
     sanitizePlatformEmail,
+    EMAIL_TAKEN_CLIENT_CREATE_ES,
 } from '@/lib/auth/platform-email'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
@@ -227,6 +229,11 @@ export async function POST(request: NextRequest) {
     const emailSan = sanitizePlatformEmail(parsed.data.email)
     const availability = await assertPlatformEmailAvailable(admin, parsed.data.email)
     if (!availability.ok) {
+        // 'EMAIL_TAKEN' = cuenta existente (copy accionable, sin revelar tipo);
+        // 'EMAIL_UNAVAILABLE' se preserva para dominios vetados/desechables (RN ya lo maneja).
+        if (isEmailTakenReason(availability.reason)) {
+            return NextResponse.json({ error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'EMAIL_TAKEN' }, { status: 409 })
+        }
         return NextResponse.json({ error: availability.error, code: 'EMAIL_UNAVAILABLE' }, { status: 409 })
     }
 
@@ -239,10 +246,7 @@ export async function POST(request: NextRequest) {
     if (authError) {
         if (isAuthDuplicateEmailMessage(authError.message)) {
             return NextResponse.json(
-                {
-                    error: 'Este correo ya esta registrado en la plataforma. Usa otro correo o inicia sesion si ya tienes cuenta.',
-                    code: 'EMAIL_UNAVAILABLE',
-                },
+                { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'EMAIL_TAKEN' },
                 { status: 409 }
             )
         }

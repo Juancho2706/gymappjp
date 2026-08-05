@@ -321,6 +321,15 @@ export default function RegisterPage() {
                             Crea tu cuenta de coach
                         </h1>
                         <p className="mt-1.5 text-sm text-text-muted">Tu marca, tus alumnos, tu negocio — en una sola app.</p>
+                        {/* Freno anti registro-coach-por-accidente: los alumnos entran por /c/<coach>,
+                            nunca por aquí (caso real 2026-08-05: alumna eliminada creó cuenta coach free). */}
+                        <div className="mt-3 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2.5 text-xs leading-relaxed text-text-muted">
+                            Estás creando una cuenta de <strong className="text-text-strong">entrenador</strong>.
+                            ¿Eres alumno? No te registres aquí —{' '}
+                            <Link href="/login" className="font-bold text-sport-600 hover:opacity-80 transition-opacity">
+                                entra por el link o código de tu coach
+                            </Link>.
+                        </div>
                     </div>
                     {fromGoogle && email && (
                         <div className="flex items-center gap-2 rounded-control bg-surface-sunken border border-border-subtle px-3 py-2 text-xs text-text-muted">

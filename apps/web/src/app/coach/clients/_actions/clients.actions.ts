@@ -18,7 +18,9 @@ import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
+    isEmailTakenReason,
     sanitizePlatformEmail,
+    EMAIL_TAKEN_CLIENT_CREATE_ES,
 } from '@/lib/auth/platform-email'
 import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
@@ -53,6 +55,8 @@ export type CreateClientState = {
     clientName?: string
     upgradeRequired?: boolean
     currentLimit?: number
+    /** 'email_taken' ⇒ el modal muestra estado informativo (no error destructivo). */
+    code?: 'email_taken'
 }
 
 export async function createClientAction(
@@ -129,6 +133,9 @@ export async function createClientAction(
     // RPC SECURITY DEFINER con GRANT a authenticated → el cliente user-scoped alcanza.
     const availability = await assertPlatformEmailAvailable(supabase, parsed.data.email)
     if (!availability.ok) {
+        if (isEmailTakenReason(availability.reason)) {
+            return { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'email_taken' }
+        }
         return { error: availability.error }
     }
 
@@ -140,7 +147,7 @@ export async function createClientAction(
 
     if (authError) {
         if (isAuthDuplicateEmailMessage(authError.message)) {
-            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
+            return { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'email_taken' }
         }
         return { error: `Error al crear el usuario: ${authError.message}` }
     }
@@ -163,7 +170,7 @@ export async function createClientAction(
     if (dbError) {
         await authAdmin.auth.admin.deleteUser(newAuthUser.user.id)
         if (dbError.code === '23505') {
-            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
+            return { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'email_taken' }
         }
         return { error: 'Error al guardar el alumno en la base de datos.' }
     }

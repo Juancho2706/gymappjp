@@ -282,9 +282,17 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                     )}
 
                     {state.error && (
-                        <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                            {state.error}
-                        </div>
+                        state.code === 'email_taken' ? (
+                            // Correo con cuenta existente: informativo, no destructivo — el coach no
+                            // hizo nada mal y hay un paso siguiente (soporte; invitación llegará en F2b).
+                            <div className="rounded-xl bg-sky-500/10 border border-sky-500/20 px-4 py-3 text-sm text-sky-600 dark:text-sky-400">
+                                {state.error}
+                            </div>
+                        ) : (
+                            <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                                {state.error}
+                            </div>
+                        )
                     )}
 
                     <div className="flex gap-3 pt-2">

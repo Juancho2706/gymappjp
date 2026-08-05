@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
+import { StudentEntryCard } from '../_components/StudentEntryCard'
 
 const initialState: ForgotPasswordState = {}
 
@@ -79,6 +80,16 @@ function ForgotPasswordForm() {
                         <strong className="text-text-strong">{emailValue || 'ese email'}</strong>, te enviamos
                         un enlace para restablecer tu contraseña. El enlace expira en 1 hora.
                     </p>
+                    {/* Solo raíz (sin coach/team slug): corta el camino "me registro como coach para
+                        recuperar acceso" del alumno cuya cuenta fue eliminada. Copy neutro: no
+                        confirma ni niega que el correo exista (anti-enumeración). */}
+                    {!coachSlug && !teamSlug && (
+                        <p className="mt-4 text-[12.5px] leading-relaxed text-text-muted">
+                            ¿No te llega el correo? Si eras <strong className="text-text-strong">alumno</strong> y
+                            tu cuenta fue eliminada, pídele a tu coach que te agregue de nuevo — no necesitas
+                            crear una cuenta aquí.
+                        </p>
+                    )}
                     <Link
                         href={loginHref}
                         className="mt-6 inline-flex h-14 w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] text-[17px] font-bold tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all duration-200 hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)] active:scale-[0.98]"
@@ -137,6 +148,8 @@ function ForgotPasswordForm() {
                             Inicia sesión
                         </Link>
                     </div>
+
+                    {!coachSlug && !teamSlug && <StudentEntryCard />}
                 </>
             )}
         </div>
