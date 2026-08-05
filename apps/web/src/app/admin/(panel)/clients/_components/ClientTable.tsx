@@ -73,21 +73,21 @@ export function ClientTable({ clients, total, coaches }: Props) {
         <>
             <div className="flex flex-wrap items-center gap-2">
                 <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                     <Input
                         placeholder="Buscar por nombre o email..."
                         value={search}
                         onChange={(e) => handleSearchChange(e.target.value)}
-                        className="pl-9 bg-neutral-900 border-neutral-800 text-white"
+                        className="pl-9 bg-surface-sunken border-subtle text-strong"
                     />
                 </div>
                 {/* Controlado por la URL: al llegar con ?coachId= (desde la ficha del coach)
                     el select mostraba "Todos los coaches" aunque la lista viniera filtrada (ROTO-4b). */}
                 <Select onValueChange={handleCoachFilter} value={coachIdParam}>
-                    <SelectTrigger className="w-[200px] bg-neutral-900 border-neutral-800 text-white">
+                    <SelectTrigger className="w-[200px] bg-surface-sunken border-subtle text-strong">
                         <SelectValue placeholder="Todos los coaches" />
                     </SelectTrigger>
-                    <SelectContent className="bg-neutral-900 border-neutral-800 text-white max-h-60">
+                    <SelectContent className="bg-surface-sunken border-subtle text-strong max-h-60">
                         <SelectItem value="all">Todos los coaches</SelectItem>
                         {coaches.map(c => (
                             <SelectItem key={c.id} value={c.id}>
@@ -98,7 +98,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                 </Select>
                 <button
                     onClick={() => setCreateOpen(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-300 hover:border-blue-500 hover:text-blue-400 transition-colors whitespace-nowrap"
+                    className="flex items-center gap-1.5 rounded-lg border border-subtle bg-surface-sunken px-3 py-2 text-xs text-body hover:border-[var(--sport-500)] hover:text-[var(--sport-500)] transition-colors whitespace-nowrap"
                 >
                     <Plus className="h-3.5 w-3.5" />
                     Nuevo Alumno
@@ -109,7 +109,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="border-b border-neutral-800 text-left text-neutral-400">
+                            <tr className="border-b border-subtle text-left text-muted">
                                 <th className="px-4 py-3 font-medium">Alumno</th>
                                 <th className="px-4 py-3 font-medium">Coach</th>
                                 <th className="px-4 py-3 font-medium">Estado</th>
@@ -118,26 +118,26 @@ export function ClientTable({ clients, total, coaches }: Props) {
                                 <th className="px-4 py-3 font-medium text-right">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-neutral-800">
+                        <tbody className="divide-y divide-[var(--border-subtle)]">
                             {clients.map((client) => (
-                                <tr key={client.id} className="hover:bg-neutral-900/40">
+                                <tr key={client.id} className="hover:bg-surface-sunken/40">
                                     <td className="px-4 py-3">
                                         <div>
-                                            <p className="font-medium text-white">{client.full_name}</p>
-                                            <p className="text-xs text-neutral-500">{client.email}</p>
+                                            <p className="font-medium text-strong">{client.full_name}</p>
+                                            <p className="text-xs text-muted">{client.email}</p>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 text-neutral-400">{client.coach_name ?? '—'}</td>
+                                    <td className="px-4 py-3 text-muted">{client.coach_name ?? '—'}</td>
                                     <td className="px-4 py-3">
                                         <div className="flex flex-wrap gap-1">
                                             {client.is_archived ? (
-                                                <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-400 border-amber-500/30">
+                                                <Badge variant="outline" className="text-xs bg-[var(--warning-500)]/15 text-[var(--warning-500)] border-[var(--warning-500)]/30">
                                                     Archivado
                                                 </Badge>
                                             ) : (
                                                 <Badge
                                                     variant="outline"
-                                                    className={`text-xs ${client.is_active !== false ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}
+                                                    className={`text-xs ${client.is_active !== false ? 'bg-[var(--success-500)]/15 text-[var(--success-500)] border-[var(--success-500)]/30' : 'bg-[var(--danger-500)]/15 text-[var(--danger-500)] border-[var(--danger-500)]/30'}`}
                                                 >
                                                     {client.is_active !== false ? 'Activo' : 'Inactivo'}
                                                 </Badge>
@@ -147,19 +147,19 @@ export function ClientTable({ clients, total, coaches }: Props) {
                                     <td className="px-4 py-3">
                                         <Badge
                                             variant="outline"
-                                            className={`text-xs ${client.onboarding_completed ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}
+                                            className={`text-xs ${client.onboarding_completed ? 'bg-[var(--sport-500)]/15 text-[var(--sport-500)] border-[var(--sport-500)]/30' : 'bg-[var(--warning-500)]/15 text-[var(--warning-500)] border-[var(--warning-500)]/30'}`}
                                         >
                                             {client.onboarding_completed ? 'Completado' : 'Pendiente'}
                                         </Badge>
                                     </td>
-                                    <td className="px-4 py-3 text-neutral-500">
+                                    <td className="px-4 py-3 text-muted">
                                         {new Date(client.created_at).toLocaleDateString('es-CL')}
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center justify-end gap-1">
                                             <button
                                                 onClick={() => setEditingClient(client)}
-                                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-sunken hover:text-strong"
                                                 title="Editar"
                                             >
                                                 <Pencil className="h-4 w-4" />
@@ -167,7 +167,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                                             <button
                                                 onClick={() => handleDelete(client.id)}
                                                 disabled={deletingId === client.id}
-                                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 hover:bg-red-950 hover:text-red-400"
+                                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-[var(--danger-500)]/15 hover:text-[var(--danger-500)]"
                                                 title="Eliminar"
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -180,7 +180,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                     </table>
                 </div>
                 {clients.length === 0 && (
-                    <div className="px-4 py-8 text-center text-sm text-neutral-500">
+                    <div className="px-4 py-8 text-center text-sm text-muted">
                         No se encontraron clientes.
                     </div>
                 )}

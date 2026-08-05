@@ -63,13 +63,13 @@ export function CoachFilterBar() {
 
     const hasFilters = sp.has('q') || sp.has('status') || sp.has('tier') || sp.has('provider') || sp.has('beta') || sp.has('stage') || sp.has('atRisk')
 
-    const selectClass = "rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2 py-1.5 text-xs text-[--admin-text-2] focus:outline-none focus:border-[--admin-accent] transition-colors"
+    const selectClass = "rounded border border-subtle bg-surface-sunken px-2 py-1.5 text-xs text-body focus:outline-none focus:border-[var(--sport-500)] transition-colors"
 
     return (
         <div className={`flex flex-wrap items-center gap-2 ${isPending ? 'opacity-60' : ''}`}>
             {/* Search */}
             <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[--admin-text-3]" />
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted" />
                 <input
                     ref={searchRef}
                     type="text"
@@ -79,7 +79,7 @@ export function CoachFilterBar() {
                         if (e.key === 'Enter') push('q', (e.target as HTMLInputElement).value)
                     }}
                     onBlur={e => push('q', e.target.value)}
-                    className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] pl-6 pr-2 py-1.5 text-xs text-[--admin-text-2] placeholder:text-[--admin-text-3] focus:outline-none focus:border-[--admin-accent] w-48 sm:w-56 transition-colors"
+                    className="rounded border border-subtle bg-surface-sunken pl-6 pr-2 py-1.5 text-xs text-body placeholder:text-muted focus:outline-none focus:border-[var(--sport-500)] w-48 sm:w-56 transition-colors"
                 />
             </div>
 
@@ -87,7 +87,6 @@ export function CoachFilterBar() {
             <select
                 value={sp.get('status') ?? ''}
                 onChange={e => push('status', e.target.value)}
-                style={{ colorScheme: 'dark' }}
                 className={selectClass}
             >
                 <option value="">Todos los status</option>
@@ -100,7 +99,6 @@ export function CoachFilterBar() {
             <select
                 value={sp.get('tier') ?? ''}
                 onChange={e => push('tier', e.target.value)}
-                style={{ colorScheme: 'dark' }}
                 className={selectClass}
             >
                 <option value="">Todos los tiers</option>
@@ -113,7 +111,6 @@ export function CoachFilterBar() {
             <select
                 value={sp.get('provider') ?? ''}
                 onChange={e => push('provider', e.target.value)}
-                style={{ colorScheme: 'dark' }}
                 className={selectClass}
             >
                 <option value="">Todos los providers</option>
@@ -126,7 +123,6 @@ export function CoachFilterBar() {
             <select
                 value={sp.get('stage') ?? ''}
                 onChange={e => push('stage', e.target.value)}
-                style={{ colorScheme: 'dark' }}
                 className={selectClass}
             >
                 <option value="">Ciclo de vida</option>
@@ -136,23 +132,23 @@ export function CoachFilterBar() {
             </select>
 
             {/* At-risk quick toggle */}
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[--admin-amber] hover:text-[--admin-text-1] transition-colors select-none">
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--warning-500)] hover:text-strong transition-colors select-none">
                 <input
                     type="checkbox"
                     checked={sp.get('atRisk') === 'true'}
                     onChange={e => push('atRisk', e.target.checked ? 'true' : '')}
-                    className="rounded border-[--admin-border] accent-[--admin-amber]"
+                    className="rounded border-subtle accent-[var(--warning-500)]"
                 />
                 Solo en riesgo
             </label>
 
             {/* Beta only toggle */}
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[--admin-text-3] hover:text-[--admin-text-2] transition-colors select-none">
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted hover:text-body transition-colors select-none">
                 <input
                     type="checkbox"
                     checked={sp.get('beta') === 'true'}
                     onChange={e => push('beta', e.target.checked ? 'true' : '')}
-                    className="rounded border-[--admin-border] accent-[--admin-accent]"
+                    className="rounded border-subtle accent-[var(--sport-500)]"
                 />
                 Solo beta
             </label>
@@ -161,7 +157,7 @@ export function CoachFilterBar() {
             {hasFilters && (
                 <button
                     onClick={reset}
-                    className="flex items-center gap-1 rounded px-2 py-1.5 text-xs text-[--admin-text-3] hover:text-[--admin-text-2] hover:bg-[--admin-bg-elevated] transition-colors"
+                    className="flex items-center gap-1 rounded px-2 py-1.5 text-xs text-muted hover:text-body hover:bg-surface-sunken transition-colors"
                 >
                     <X className="h-3 w-3" />
                     Reset
@@ -172,7 +168,7 @@ export function CoachFilterBar() {
             <button
                 onClick={() => startTransition(() => router.refresh())}
                 disabled={isPending}
-                className="ml-auto flex items-center gap-1.5 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2.5 py-1.5 text-xs text-[--admin-text-3] hover:text-[--admin-text-1] hover:border-[--admin-accent] transition-colors disabled:opacity-50"
+                className="ml-auto flex items-center gap-1.5 rounded border border-subtle bg-surface-sunken px-2.5 py-1.5 text-xs text-muted hover:text-strong hover:border-[var(--sport-500)] transition-colors disabled:opacity-50"
                 title="Actualizar datos desde la base de datos"
             >
                 <RefreshCw className={`h-3 w-3 ${isPending ? 'animate-spin' : ''}`} />

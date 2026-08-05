@@ -20,24 +20,24 @@ function AddGastoForm() {
     )
 
     return (
-        <form ref={formRef} action={action} className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-            <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">
+        <form ref={formRef} action={action} className="rounded-lg border border-subtle bg-surface-card p-4">
+            <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">
                 Nuevo gasto
             </h3>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="flex flex-col gap-1">
-                    <label className="text-[11px] text-[--admin-text-3]">Nombre</label>
+                    <label className="text-[11px] text-muted">Nombre</label>
                     <input
                         name="nombre"
                         required
                         placeholder="Ej: Hosting"
-                        className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2 text-sm text-[--admin-text-1] placeholder:text-[--admin-text-3] focus:border-[--admin-accent] focus:outline-none"
+                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
                     />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                    <label className="text-[11px] text-[--admin-text-3]">Cantidad</label>
+                    <label className="text-[11px] text-muted">Cantidad</label>
                     <input
                         name="cantidad"
                         type="number"
@@ -45,12 +45,12 @@ function AddGastoForm() {
                         step="any"
                         required
                         defaultValue="1"
-                        className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2 text-sm text-[--admin-text-1] placeholder:text-[--admin-text-3] focus:border-[--admin-accent] focus:outline-none"
+                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
                     />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                    <label className="text-[11px] text-[--admin-text-3]">Costo ($)</label>
+                    <label className="text-[11px] text-muted">Costo ($)</label>
                     <input
                         name="costo"
                         type="number"
@@ -58,17 +58,17 @@ function AddGastoForm() {
                         step="any"
                         required
                         placeholder="0.00"
-                        className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2 text-sm text-[--admin-text-1] placeholder:text-[--admin-text-3] focus:border-[--admin-accent] focus:outline-none"
+                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
                     />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                    <label className="text-[11px] text-[--admin-text-3]">Quién pagó</label>
+                    <label className="text-[11px] text-muted">Quién pagó</label>
                     <input
                         name="pagador"
                         required
                         placeholder="Ej: Juan"
-                        className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2 text-sm text-[--admin-text-1] placeholder:text-[--admin-text-3] focus:border-[--admin-accent] focus:outline-none"
+                        className="rounded border border-subtle bg-surface-sunken px-3 py-2 text-sm text-strong placeholder:text-muted focus:border-[var(--sport-500)] focus:outline-none"
                     />
                 </div>
             </div>
@@ -77,7 +77,7 @@ function AddGastoForm() {
                 <button
                     type="submit"
                     disabled={pending}
-                    className="flex items-center gap-2 rounded bg-[--admin-accent] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                    className="flex items-center gap-2 rounded bg-[var(--cta-fill)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                     {pending
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -86,7 +86,7 @@ function AddGastoForm() {
                     Agregar
                 </button>
                 {state && 'error' in state && (
-                    <p className="text-xs text-[--admin-red]">{state.error}</p>
+                    <p className="text-xs text-[var(--danger-500)]">{state.error}</p>
                 )}
             </div>
         </form>
@@ -100,7 +100,7 @@ function DeleteButton({ id }: { id: string }) {
         <button
             onClick={() => startTransition(() => deleteGastoAction(id))}
             disabled={pending}
-            className="rounded p-1 text-[--admin-text-3] hover:text-[--admin-red] hover:bg-[--admin-red]/10 disabled:opacity-40 transition-colors"
+            className="rounded p-1 text-muted hover:text-[var(--danger-500)] hover:bg-[var(--danger-500)]/10 disabled:opacity-40 transition-colors"
             title="Eliminar"
         >
             {pending
@@ -127,42 +127,42 @@ export function GastosClient({ gastos }: { gastos: Gasto[] }) {
 
             {/* Resumen */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] px-4 py-3">
-                    <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Total gastos</p>
-                    <p className="font-mono text-2xl font-bold tabular-nums text-[--admin-text-1]">{totalItems}</p>
+                <div className="rounded-lg border border-subtle bg-surface-card px-4 py-3">
+                    <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-muted">Total gastos</p>
+                    <p className="font-mono text-2xl font-bold tabular-nums text-strong">{totalItems}</p>
                 </div>
-                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] px-4 py-3 col-span-1 sm:col-span-2">
-                    <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Total acumulado</p>
-                    <p className="font-mono text-2xl font-bold tabular-nums text-[--admin-text-1]">{fmt(totalCosto)}</p>
+                <div className="rounded-lg border border-subtle bg-surface-card px-4 py-3 col-span-1 sm:col-span-2">
+                    <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-muted">Total acumulado</p>
+                    <p className="font-mono text-2xl font-bold tabular-nums text-strong">{fmt(totalCosto)}</p>
                 </div>
                 {Object.entries(porPagador).map(([pagador, total]) => (
-                    <div key={pagador} className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] px-4 py-3">
-                        <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">{pagador}</p>
-                        <p className="font-mono text-lg font-bold tabular-nums text-[--admin-text-1]">{fmt(total)}</p>
+                    <div key={pagador} className="rounded-lg border border-subtle bg-surface-card px-4 py-3">
+                        <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-muted">{pagador}</p>
+                        <p className="font-mono text-lg font-bold tabular-nums text-strong">{fmt(total)}</p>
                     </div>
                 ))}
             </div>
 
             {/* Tabla */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] overflow-hidden">
-                <div className="border-b border-[--admin-border] px-4 py-3">
-                    <h3 className="text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">Registro de gastos</h3>
+            <div className="rounded-lg border border-subtle bg-surface-card overflow-hidden">
+                <div className="border-b border-subtle px-4 py-3">
+                    <h3 className="text-xs font-medium uppercase tracking-widest text-muted">Registro de gastos</h3>
                 </div>
 
                 {gastos.length === 0 ? (
-                    <div className="px-4 py-10 text-center text-sm text-[--admin-text-3]">
+                    <div className="px-4 py-10 text-center text-sm text-muted">
                         Sin gastos registrados. Agrega el primero arriba.
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-[--admin-border]">
-                                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Nombre</th>
-                                    <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Cantidad</th>
-                                    <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Costo</th>
-                                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Pagó</th>
-                                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Fecha</th>
+                                <tr className="border-b border-subtle">
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Nombre</th>
+                                    <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-widest text-muted">Cantidad</th>
+                                    <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-widest text-muted">Costo</th>
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Pagó</th>
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Fecha</th>
                                     <th className="px-4 py-2.5 w-10" />
                                 </tr>
                             </thead>
@@ -170,13 +170,13 @@ export function GastosClient({ gastos }: { gastos: Gasto[] }) {
                                 {gastos.map((g, i) => (
                                     <tr
                                         key={g.id}
-                                        className={`border-b border-[--admin-border] last:border-0 ${i % 2 === 0 ? '' : 'bg-[--admin-bg-elevated]/30'}`}
+                                        className={`border-b border-subtle last:border-0 ${i % 2 === 0 ? '' : 'bg-surface-sunken/30'}`}
                                     >
-                                        <td className="px-4 py-2.5 text-[--admin-text-1]">{g.nombre}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums text-[--admin-text-2]">{g.cantidad}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums text-[--admin-text-1]">{fmt(g.costo)}</td>
-                                        <td className="px-4 py-2.5 text-[--admin-text-2]">{g.pagador}</td>
-                                        <td className="px-4 py-2.5 text-[--admin-text-3] whitespace-nowrap">
+                                        <td className="px-4 py-2.5 text-strong">{g.nombre}</td>
+                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums text-body">{g.cantidad}</td>
+                                        <td className="px-4 py-2.5 text-right font-mono tabular-nums text-strong">{fmt(g.costo)}</td>
+                                        <td className="px-4 py-2.5 text-body">{g.pagador}</td>
+                                        <td className="px-4 py-2.5 text-muted whitespace-nowrap">
                                             {new Date(g.created_at).toLocaleDateString('es-AR')}
                                         </td>
                                         <td className="px-4 py-2.5 text-right">

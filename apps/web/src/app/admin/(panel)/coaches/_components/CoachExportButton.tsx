@@ -56,7 +56,7 @@ export function CoachExportButton({ params }: Props) {
         <button
             onClick={handleExport}
             disabled={loading}
-            className="flex items-center gap-1.5 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-1.5 text-xs text-[--admin-text-2] hover:text-[--admin-text-1] hover:border-[--admin-accent] transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded border border-subtle bg-surface-sunken px-3 py-1.5 text-xs text-body hover:text-strong hover:border-[var(--sport-500)] transition-colors disabled:opacity-50"
         >
             <Download className="h-3.5 w-3.5" />
             {loading ? 'Exportando...' : 'Exportar CSV'}

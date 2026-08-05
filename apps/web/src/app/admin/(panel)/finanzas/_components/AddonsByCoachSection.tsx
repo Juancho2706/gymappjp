@@ -38,30 +38,30 @@ export function AddonsByCoachSection({ rows }: { rows: CoachAddonDetailRow[] }) 
         <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                    <h2 className="text-lg font-bold tracking-tight text-[--admin-text-1]">
+                    <h2 className="text-lg font-bold tracking-tight text-strong">
                         Add-ons por coach
                     </h2>
-                    <p className="text-xs text-[--admin-text-3]">
+                    <p className="text-xs text-muted">
                         Quién tiene cada módulo, su origen y si hay evidencia de cobro — para detectar
                         bypass o problemas. Incluye cuentas de prueba (marcadas).
                     </p>
                 </div>
                 {anomalies > 0 && (
-                    <span className="rounded-full bg-[--admin-red]/15 px-2.5 py-1 text-xs font-semibold text-[--admin-red]">
+                    <span className="rounded-full bg-[var(--danger-500)]/15 px-2.5 py-1 text-xs font-semibold text-[var(--danger-500)]">
                         {anomalies} a revisar
                     </span>
                 )}
             </div>
 
             {rows.length === 0 ? (
-                <p className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] px-4 py-10 text-center text-xs text-[--admin-text-3]">
+                <p className="rounded-xl border border-subtle bg-surface-card px-4 py-10 text-center text-xs text-muted">
                     Sin add-ons activos todavía.
                 </p>
             ) : (
-                <div className="overflow-x-auto rounded-lg border border-[--admin-border] bg-[--admin-bg-surface]">
+                <div className="overflow-x-auto rounded-xl border border-subtle bg-surface-card">
                     <table className="w-full min-w-[780px] text-xs">
                         <thead>
-                            <tr className="border-b border-[--admin-border] text-left text-[--admin-text-3]">
+                            <tr className="border-b border-subtle text-left text-muted">
                                 <th className="px-3 py-2 font-medium">Coach</th>
                                 <th className="px-3 py-2 font-medium">Módulo</th>
                                 <th className="px-3 py-2 font-medium">Origen</th>
@@ -75,40 +75,40 @@ export function AddonsByCoachSection({ rows }: { rows: CoachAddonDetailRow[] }) 
                             {sorted.map((r) => (
                                 <tr
                                     key={`${r.coachId}-${r.moduleKey}`}
-                                    className={`border-b border-[--admin-border] last:border-0 ${
-                                        r.flag ? 'bg-[--admin-red]/5' : ''
+                                    className={`border-b border-subtle last:border-0 ${
+                                        r.flag ? 'bg-[var(--danger-500)]/5' : ''
                                     }`}
                                 >
-                                    <td className="px-3 py-2 text-[--admin-text-1]">
+                                    <td className="px-3 py-2 text-strong">
                                         <span className="font-medium">{r.coachLabel}</span>
                                         {r.isTest && (
-                                            <span className="ml-1.5 rounded bg-[--admin-border] px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[--admin-text-3]">
+                                            <span className="ml-1.5 rounded bg-[var(--border-subtle)] px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
                                                 prueba
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-3 py-2 text-[--admin-text-2]">{r.moduleLabel}</td>
+                                    <td className="px-3 py-2 text-body">{r.moduleLabel}</td>
                                     <td className="px-3 py-2">
                                         {r.source === 'admin_grant' ? (
-                                            <span className="text-[--admin-text-3]">Cortesía</span>
+                                            <span className="text-muted">Cortesía</span>
                                         ) : (
-                                            <span className="text-[--admin-text-2]">Pago</span>
+                                            <span className="text-body">Pago</span>
                                         )}
                                     </td>
-                                    <td className="px-3 py-2 text-[--admin-text-2]">
+                                    <td className="px-3 py-2 text-body">
                                         {STATUS_LABEL[r.status] ?? r.status}
                                     </td>
-                                    <td className="px-3 py-2 text-right font-mono tabular-nums text-[--admin-text-2]">
+                                    <td className="px-3 py-2 text-right font-mono tabular-nums text-body">
                                         {r.source === 'admin_grant' ? '—' : clp(r.priceClp)}
                                     </td>
-                                    <td className="px-3 py-2 font-mono tabular-nums text-[--admin-text-3]">
+                                    <td className="px-3 py-2 font-mono tabular-nums text-muted">
                                         {shortDate(r.firstChargedAt)}
                                     </td>
                                     <td className="px-3 py-2">
                                         {r.flag ? (
-                                            <span className="font-medium text-[--admin-red]">⚠ {r.flag}</span>
+                                            <span className="font-medium text-[var(--danger-500)]">⚠ {r.flag}</span>
                                         ) : (
-                                            <span className="text-[--admin-text-3]">—</span>
+                                            <span className="text-muted">—</span>
                                         )}
                                     </td>
                                 </tr>

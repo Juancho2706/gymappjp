@@ -49,36 +49,36 @@ export function ClientEditSheet({ client, open, onClose }: Props) {
 
     return (
         <Sheet open={open} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent className="w-full sm:max-w-md bg-neutral-950 border-neutral-800 text-white">
+            <SheetContent className="w-full sm:max-w-md bg-surface-card border-subtle text-strong">
                 <SheetHeader>
-                    <SheetTitle className="text-white">Editar Cliente</SheetTitle>
+                    <SheetTitle className="text-strong">Editar Cliente</SheetTitle>
                 </SheetHeader>
 
                 <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                     <div>
-                        <Label className="text-neutral-300">Nombre completo</Label>
-                        <Input name="full_name" defaultValue={client.full_name} className="bg-neutral-900 border-neutral-800 text-white mt-1" />
+                        <Label className="text-body">Nombre completo</Label>
+                        <Input name="full_name" defaultValue={client.full_name} className="bg-surface-sunken border-subtle text-strong mt-1" />
                     </div>
                     <div>
-                        <Label className="text-neutral-300">Email</Label>
-                        <Input name="email" type="email" defaultValue={client.email} className="bg-neutral-900 border-neutral-800 text-white mt-1" />
+                        <Label className="text-body">Email</Label>
+                        <Input name="email" type="email" defaultValue={client.email} className="bg-surface-sunken border-subtle text-strong mt-1" />
                     </div>
                     <div>
-                        <Label className="text-neutral-300">Teléfono</Label>
-                        <Input name="phone" defaultValue={''} className="bg-neutral-900 border-neutral-800 text-white mt-1" />
+                        <Label className="text-body">Teléfono</Label>
+                        <Input name="phone" defaultValue={''} className="bg-surface-sunken border-subtle text-strong mt-1" />
                     </div>
-                    <div className="flex items-center justify-between rounded-lg bg-neutral-900/50 p-3">
+                    <div className="flex items-center justify-between rounded-lg bg-surface-sunken/50 p-3">
                         <div>
-                            <Label className="text-neutral-300">Activo</Label>
-                            <p className="text-xs text-neutral-500">El alumno puede acceder a la app</p>
+                            <Label className="text-body">Activo</Label>
+                            <p className="text-xs text-muted">El alumno puede acceder a la app</p>
                         </div>
                         <Switch checked={isActive} onCheckedChange={setIsActive} />
                     </div>
 
-                    {error && <p className="text-sm text-red-400">{error}</p>}
+                    {error && <p className="text-sm text-[var(--danger-500)]">{error}</p>}
 
                     <SheetFooter className="pt-4">
-                        <Button type="button" variant="ghost" onClick={onClose} className="text-neutral-300">
+                        <Button type="button" variant="ghost" onClick={onClose} className="text-body">
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={loading}>

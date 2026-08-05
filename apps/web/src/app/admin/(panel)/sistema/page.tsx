@@ -42,27 +42,27 @@ const SISTEMA_INFO = [
 
 function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
     return (
-        <div className="flex items-center justify-between py-2.5 border-b border-[--admin-border] last:border-0">
+        <div className="flex items-center justify-between py-2.5 border-b border-subtle last:border-0">
             <div className="flex items-center gap-2">
                 {ok
-                    ? <CheckCircle className="h-3.5 w-3.5 text-[--admin-green]" />
-                    : <XCircle className="h-3.5 w-3.5 text-[--admin-red]" />
+                    ? <CheckCircle className="h-3.5 w-3.5 text-[var(--success-500)]" />
+                    : <XCircle className="h-3.5 w-3.5 text-[var(--danger-500)]" />
                 }
-                <span className="text-sm text-[--admin-text-1]">{label}</span>
+                <span className="text-sm text-strong">{label}</span>
             </div>
-            {detail && <span className="font-mono text-xs text-[--admin-text-3]">{detail}</span>}
+            {detail && <span className="font-mono text-xs text-muted">{detail}</span>}
         </div>
     )
 }
 
 function StatCard({ label, value, icon: Icon, warn }: { label: string; value: number; icon: React.ElementType; warn?: boolean }) {
     return (
-        <div className={`rounded-lg border bg-[--admin-bg-surface] px-4 py-3 ${warn && value > 0 ? 'border-[--admin-amber]/40' : 'border-[--admin-border]'}`}>
+        <div className={`rounded-lg border bg-surface-card px-4 py-3 ${warn && value > 0 ? 'border-[var(--warning-500)]/40' : 'border-subtle'}`}>
             <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">{label}</span>
-                <Icon className={`h-3.5 w-3.5 ${warn && value > 0 ? 'text-[--admin-amber]' : 'text-[--admin-text-3]'}`} />
+                <span className="text-[11px] font-medium uppercase tracking-widest text-muted">{label}</span>
+                <Icon className={`h-3.5 w-3.5 ${warn && value > 0 ? 'text-[var(--warning-500)]' : 'text-muted'}`} />
             </div>
-            <span className={`font-mono text-2xl font-bold tabular-nums ${warn && value > 0 ? 'text-[--admin-amber]' : 'text-[--admin-text-1]'}`}>
+            <span className={`font-mono text-2xl font-bold tabular-nums ${warn && value > 0 ? 'text-[var(--warning-500)]' : 'text-strong'}`}>
                 {value}
             </span>
         </div>
@@ -77,16 +77,16 @@ export default async function AdminSistemaPage() {
         <div className="space-y-6">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Sistema</h1>
-                    <p className="text-xs text-[--admin-text-3]">Health check y estado operativo de la plataforma.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-strong">Sistema</h1>
+                    <p className="text-xs text-muted">Health check y estado operativo de la plataforma.</p>
                 </div>
                 <PageInfoButton title="Sistema — Guía completa" sections={SISTEMA_INFO} />
             </div>
 
             {/* Health checks */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface]">
-                <div className="border-b border-[--admin-border] px-4 py-3">
-                    <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">
+            <div className="rounded-xl border border-subtle bg-surface-card">
+                <div className="border-b border-subtle px-4 py-3">
+                    <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted">
                         <Database className="h-3.5 w-3.5" />
                         Conectividad
                     </h3>
@@ -122,7 +122,7 @@ export default async function AdminSistemaPage() {
 
             {/* Platform stats grid */}
             <div>
-                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">Plataforma</h3>
+                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">Plataforma</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                     <StatCard label="Total coaches" value={d.totalCoaches} icon={Users} />
                     <StatCard label="Total alumnos" value={d.totalClients} icon={UserCheck} />
@@ -134,22 +134,22 @@ export default async function AdminSistemaPage() {
             </div>
 
             {/* Audit summary */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] px-4 py-3">
+            <div className="rounded-xl border border-subtle bg-surface-card px-4 py-3">
                 <div className="flex items-center justify-between">
-                    <span className="text-sm text-[--admin-text-2]">Acciones de auditoría (últimas 24h)</span>
-                    <span className="font-mono text-lg font-bold tabular-nums text-[--admin-text-1]">{d.recentAuditCount}</span>
+                    <span className="text-sm text-body">Acciones de auditoría (últimas 24h)</span>
+                    <span className="font-mono text-lg font-bold tabular-nums text-strong">{d.recentAuditCount}</span>
                 </div>
             </div>
 
             {/* Cron monitoring */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface]">
-                <div className="border-b border-[--admin-border] px-4 py-3">
-                    <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">
+            <div className="rounded-xl border border-subtle bg-surface-card">
+                <div className="border-b border-subtle px-4 py-3">
+                    <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted">
                         <Timer className="h-3.5 w-3.5" />
                         Estado de crons
                     </h3>
                 </div>
-                <div className="divide-y divide-[--admin-border]">
+                <div className="divide-y divide-[var(--border-subtle)]">
                     {d.cronStatuses.map(cron => {
                         const lastRun = cron.lastRunAt ? new Date(cron.lastRunAt) : null
                         const hoursAgo = lastRun ? (checkedAtMs - lastRun.getTime()) / 3_600_000 : null
@@ -160,19 +160,19 @@ export default async function AdminSistemaPage() {
                             <div key={cron.action} className="flex items-center justify-between px-4 py-2.5">
                                 <div className="flex items-center gap-2">
                                     {neverRan
-                                        ? <Clock className="h-3.5 w-3.5 text-[--admin-text-3]" />
+                                        ? <Clock className="h-3.5 w-3.5 text-muted" />
                                         : isStale
-                                            ? <XCircle className="h-3.5 w-3.5 text-[--admin-amber]" />
-                                            : <CheckCircle className="h-3.5 w-3.5 text-[--admin-green]" />
+                                            ? <XCircle className="h-3.5 w-3.5 text-[var(--warning-500)]" />
+                                            : <CheckCircle className="h-3.5 w-3.5 text-[var(--success-500)]" />
                                     }
-                                    <span className="text-sm text-[--admin-text-1]">{cron.label}</span>
-                                    <span className="font-mono text-[10px] text-[--admin-text-3]">{cron.action}</span>
+                                    <span className="text-sm text-strong">{cron.label}</span>
+                                    <span className="font-mono text-[10px] text-muted">{cron.action}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     {cron.lastResult && (
-                                        <span className="font-mono text-[10px] text-[--admin-text-3] max-w-[200px] truncate">{cron.lastResult}</span>
+                                        <span className="font-mono text-[10px] text-muted max-w-[200px] truncate">{cron.lastResult}</span>
                                     )}
-                                    <span className={`text-xs font-medium ${neverRan ? 'text-[--admin-text-3]' : isStale ? 'text-[--admin-amber]' : 'text-[--admin-green]'}`}>
+                                    <span className={`text-xs font-medium ${neverRan ? 'text-muted' : isStale ? 'text-[var(--warning-500)]' : 'text-[var(--success-500)]'}`}>
                                         {neverRan
                                             ? 'Nunca ejecutado'
                                             : isStale
@@ -185,7 +185,7 @@ export default async function AdminSistemaPage() {
                         )
                     })}
                     {d.cronStatuses.length === 0 && (
-                        <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">Sin datos de crons</p>
+                        <p className="px-4 py-6 text-center text-xs text-muted">Sin datos de crons</p>
                     )}
                 </div>
             </div>

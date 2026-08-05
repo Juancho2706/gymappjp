@@ -44,14 +44,14 @@ interface Props {
 type Tab = 'info' | 'edit' | 'acciones'
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-    return <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-[--admin-text-3]">{children}</p>
+    return <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted">{children}</p>
 }
 
 function InfoRow({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
     return (
-        <div className="flex items-start justify-between gap-4 py-1.5 border-b border-[--admin-border] last:border-0">
-            <span className="text-xs text-[--admin-text-3] shrink-0">{label}</span>
-            <span className={`text-right text-xs text-[--admin-text-1] ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</span>
+        <div className="flex items-start justify-between gap-4 py-1.5 border-b border-subtle last:border-0">
+            <span className="text-xs text-muted shrink-0">{label}</span>
+            <span className={`text-right text-xs text-strong ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</span>
         </div>
     )
 }
@@ -67,9 +67,9 @@ function ActionButton({
     icon: React.ElementType
 }) {
     const colors = {
-        default: 'border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1] hover:border-[--admin-accent] hover:text-[--admin-accent]',
-        danger:  'border-[--admin-red]/30 bg-[--admin-red]/5 text-[--admin-red] hover:bg-[--admin-red]/15',
-        success: 'border-[--admin-green]/30 bg-[--admin-green]/5 text-[--admin-green] hover:bg-[--admin-green]/15',
+        default: 'border-subtle bg-surface-sunken text-strong hover:border-[var(--sport-500)] hover:text-[var(--sport-500)]',
+        danger:  'border-[var(--danger-500)]/30 bg-[var(--danger-500)]/5 text-[var(--danger-500)] hover:bg-[var(--danger-500)]/15',
+        success: 'border-[var(--success-500)]/30 bg-[var(--success-500)]/5 text-[var(--success-500)] hover:bg-[var(--success-500)]/15',
     }
     return (
         <div className="flex items-start gap-2">
@@ -173,7 +173,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     }
 
     const daysLeft = coach.days_until_expiry
-    const expiryColor = daysLeft === null ? '' : daysLeft < 0 ? 'text-[--admin-text-3]' : daysLeft < 7 ? 'text-[--admin-red]' : daysLeft < 14 ? 'text-[--admin-amber]' : 'text-[--admin-green]'
+    const expiryColor = daysLeft === null ? '' : daysLeft < 0 ? 'text-muted' : daysLeft < 7 ? 'text-[var(--danger-500)]' : daysLeft < 14 ? 'text-[var(--warning-500)]' : 'text-[var(--success-500)]'
 
     const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
         { key: 'info',     label: 'Info',     icon: Activity },
@@ -184,11 +184,11 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     return (
         <Sheet open={open} onOpenChange={o => !o && onClose()}>
             <SheetContent
-                className="w-full sm:max-w-xl flex flex-col gap-0 p-0 border-[--admin-border] bg-[--admin-bg-surface] text-[--admin-text-1]"
+                className="w-full sm:max-w-xl flex flex-col gap-0 p-0 border-subtle bg-surface-card text-strong"
             >
                 {/* Header */}
-                <SheetHeader className="border-b border-[--admin-border] px-5 py-4">
-                    <SheetTitle className="text-base font-semibold text-[--admin-text-1]">
+                <SheetHeader className="border-b border-subtle px-5 py-4">
+                    <SheetTitle className="text-base font-semibold text-strong">
                         {coach.brand_name || coach.full_name || 'Coach'}
                     </SheetTitle>
                     <div className="flex items-center gap-1.5 mt-1">
@@ -199,7 +199,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                             href={`/c/${coach.slug}/login`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="ml-auto flex items-center gap-1 text-[11px] text-[--admin-accent] hover:underline"
+                            className="ml-auto flex items-center gap-1 text-[11px] text-[var(--sport-500)] hover:underline"
                         >
                             Ver app <ExternalLink className="h-3 w-3" />
                         </a>
@@ -207,15 +207,15 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                 </SheetHeader>
 
                 {/* Tabs */}
-                <div className="flex gap-1 border-b border-[--admin-border] px-4 pt-3 pb-0">
+                <div className="flex gap-1 border-b border-subtle px-4 pt-3 pb-0">
                     {tabs.map(t => (
                         <button
                             key={t.key}
                             onClick={() => handleTabChange(t.key)}
                             className={`flex items-center gap-1.5 rounded-t px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
                                 tab === t.key
-                                    ? 'border-[--admin-accent] text-[--admin-accent]'
-                                    : 'border-transparent text-[--admin-text-3] hover:text-[--admin-text-2]'
+                                    ? 'border-[var(--sport-500)] text-[var(--sport-500)]'
+                                    : 'border-transparent text-muted hover:text-body'
                             }`}
                         >
                             <t.icon className="h-3.5 w-3.5" />
@@ -242,17 +242,17 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                                 <span className="font-mono text-[11px]">{coach.auth_email}</span>
                                                 <button
                                                     onClick={() => { navigator.clipboard.writeText(coach.auth_email ?? '') }}
-                                                    className="rounded p-0.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                                                    className="rounded p-0.5 hover:bg-surface-sunken transition-colors"
                                                     title="Copiar email"
                                                 >
-                                                    <Copy className="h-3 w-3 text-[--admin-text-3]" />
+                                                    <Copy className="h-3 w-3 text-muted" />
                                                 </button>
                                             </span>
                                         ) : '—'
                                     }
                                 />
                                 {coach.monthly_revenue > 0 && (
-                                    <InfoRow label="MRR contrib." value={<span className="font-mono text-xs text-emerald-500">${coach.monthly_revenue.toLocaleString('es-CL')}/mes</span>} />
+                                    <InfoRow label="MRR contrib." value={<span className="font-mono text-xs text-[var(--success-500)]">${coach.monthly_revenue.toLocaleString('es-CL')}/mes</span>} />
                                 )}
                             </div>
                             <div>
@@ -286,7 +286,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         {coach.active_client_count} activos / {coach.client_count} total
                                         <a
                                             href={`/admin/clients?coachId=${coach.id}`}
-                                            className="text-[10px] text-[--admin-accent] hover:underline"
+                                            className="text-[10px] text-[var(--sport-500)] hover:underline"
                                         >
                                             Ver alumnos →
                                         </a>
@@ -308,13 +308,13 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         href={`/c/${coach.slug}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-1.5 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2.5 py-1.5 text-xs text-[--admin-text-2] hover:border-[--admin-accent] hover:text-[--admin-accent] transition-colors"
+                                        className="flex items-center gap-1.5 rounded border border-subtle bg-surface-sunken px-2.5 py-1.5 text-xs text-body hover:border-[var(--sport-500)] hover:text-[var(--sport-500)] transition-colors"
                                     >
                                         <ExternalLink className="h-3 w-3" /> App pública
                                     </a>
                                     <a
                                         href={`/admin/clients?coachId=${coach.id}`}
-                                        className="flex items-center gap-1.5 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2.5 py-1.5 text-xs text-[--admin-text-2] hover:border-[--admin-accent] hover:text-[--admin-accent] transition-colors"
+                                        className="flex items-center gap-1.5 rounded border border-subtle bg-surface-sunken px-2.5 py-1.5 text-xs text-body hover:border-[var(--sport-500)] hover:text-[var(--sport-500)] transition-colors"
                                     >
                                         Ver todos los alumnos ({coach.client_count})
                                     </a>
@@ -323,35 +323,35 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                             {(coach as any).subscription_mp_id && (
                                 <div>
                                     <SectionLabel>MercadoPago</SectionLabel>
-                                    <div className="flex items-center gap-2 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2">
-                                        <span className="flex-1 truncate font-mono text-[10px] text-[--admin-text-3]">
+                                    <div className="flex items-center gap-2 rounded border border-subtle bg-surface-sunken px-3 py-2">
+                                        <span className="flex-1 truncate font-mono text-[10px] text-muted">
                                             {(coach as any).subscription_mp_id}
                                         </span>
-                                        <button onClick={copyMpId} className="text-[--admin-text-3] hover:text-[--admin-text-1]">
-                                            {copied ? <CheckCircle className="h-3.5 w-3.5 text-[--admin-green]" /> : <Copy className="h-3.5 w-3.5" />}
+                                        <button onClick={copyMpId} className="text-muted hover:text-strong">
+                                            {copied ? <CheckCircle className="h-3.5 w-3.5 text-[var(--success-500)]" /> : <Copy className="h-3.5 w-3.5" />}
                                         </button>
                                     </div>
                                 </div>
                             )}
                             <div>
                                 <SectionLabel>Historial de suscripción</SectionLabel>
-                                {loadingEvents && <p className="text-xs text-[--admin-text-3]">Cargando...</p>}
+                                {loadingEvents && <p className="text-xs text-muted">Cargando...</p>}
                                 {events !== null && events.length === 0 && (
-                                    <p className="text-xs text-[--admin-text-3]">Sin eventos registrados.</p>
+                                    <p className="text-xs text-muted">Sin eventos registrados.</p>
                                 )}
                                 {events !== null && events.length > 0 && (
                                     <div className="space-y-2">
                                         {events.map((ev) => (
-                                            <div key={ev.id} className="flex items-start gap-2 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2">
+                                            <div key={ev.id} className="flex items-start gap-2 rounded border border-subtle bg-surface-sunken px-3 py-2">
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="font-mono text-[10px] text-[--admin-text-2]">
+                                                    <p className="font-mono text-[10px] text-body">
                                                         {ev.provider_status ?? '—'}
                                                     </p>
-                                                    <p className="truncate font-mono text-[9px] text-[--admin-text-3]" title={ev.provider_event_id ?? ''}>
+                                                    <p className="truncate font-mono text-[9px] text-muted" title={ev.provider_event_id ?? ''}>
                                                         {ev.provider_event_id ?? '—'}
                                                     </p>
                                                 </div>
-                                                <span className="shrink-0 font-mono text-[9px] text-[--admin-text-3]">
+                                                <span className="shrink-0 font-mono text-[9px] text-muted">
                                                     {format(new Date(ev.created_at), 'dd/MM HH:mm', { locale: es })}
                                                 </span>
                                             </div>
@@ -367,35 +367,35 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                         <form onSubmit={handleEdit} className="space-y-4">
                             {/* Identidad */}
                             <div>
-                                <Label className="text-xs text-[--admin-text-2]">Nombre completo</Label>
-                                <Input name="full_name" defaultValue={coach.full_name ?? ''} className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]" />
+                                <Label className="text-xs text-body">Nombre completo</Label>
+                                <Input name="full_name" defaultValue={coach.full_name ?? ''} className="mt-1 border-subtle bg-surface-sunken text-strong" />
                             </div>
                             <div>
-                                <Label className="text-xs text-[--admin-text-2]">Marca</Label>
-                                <Input name="brand_name" defaultValue={coach.brand_name ?? ''} className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]" />
+                                <Label className="text-xs text-body">Marca</Label>
+                                <Input name="brand_name" defaultValue={coach.brand_name ?? ''} className="mt-1 border-subtle bg-surface-sunken text-strong" />
                             </div>
 
                             {/* Slug — read only */}
                             <div>
-                                <Label className="text-xs text-[--admin-text-2]">Slug (URL)</Label>
-                                <div className="mt-1 flex items-center gap-2 rounded-md border border-[--admin-border] bg-[--admin-bg] px-3 py-2">
-                                    <span className="flex-1 font-mono text-xs text-[--admin-text-3]">/c/{coach.slug}</span>
+                                <Label className="text-xs text-body">Slug (URL)</Label>
+                                <div className="mt-1 flex items-center gap-2 rounded-md border border-subtle bg-surface-app px-3 py-2">
+                                    <span className="flex-1 font-mono text-xs text-muted">/c/{coach.slug}</span>
                                     <button
                                         type="button"
                                         onClick={() => navigator.clipboard.writeText(coach.slug)}
-                                        className="rounded p-0.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                                        className="rounded p-0.5 hover:bg-surface-sunken transition-colors"
                                         title="Copiar slug"
                                     >
-                                        <Copy className="h-3 w-3 text-[--admin-text-3]" />
+                                        <Copy className="h-3 w-3 text-muted" />
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-[--admin-text-3] mt-0.5">Inmutable — cambiarlo rompe acceso de alumnos</p>
+                                <p className="text-[10px] text-muted mt-0.5">Inmutable — cambiarlo rompe acceso de alumnos</p>
                             </div>
 
                             {/* Tier + Status */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">Tier</Label>
+                                    <Label className="text-xs text-body">Tier</Label>
                                     <Select
                                         name="subscription_tier"
                                         value={editTier}
@@ -406,15 +406,15 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                             if (cfg) setEditMaxClients(cfg.maxClients)
                                         }}
                                     >
-                                        <SelectTrigger className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]">
+                                        <SelectTrigger className="mt-1 border-subtle bg-surface-sunken text-strong">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
+                                        <SelectContent className="border-subtle bg-surface-sunken">
                                             {ALL_TIERS.map(v => {
                                                 const cfg = TIER_CONFIG[v]
                                                 return (
                                                     <SelectItem key={v} value={v}>
-                                                        {v} <span className="text-[--admin-text-3]">({cfg.maxClients} alumnos)</span>
+                                                        {v} <span className="text-muted">({cfg.maxClients} alumnos)</span>
                                                     </SelectItem>
                                                 )
                                             })}
@@ -422,12 +422,12 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">Estado</Label>
+                                    <Label className="text-xs text-body">Estado</Label>
                                     <Select name="subscription_status" defaultValue={coach.subscription_status ?? undefined}>
-                                        <SelectTrigger className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]">
+                                        <SelectTrigger className="mt-1 border-subtle bg-surface-sunken text-strong">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
+                                        <SelectContent className="border-subtle bg-surface-sunken">
                                             {['active','trialing','canceled','pending_payment','expired','past_due','paused'].map(v => (
                                                 <SelectItem key={v} value={v}>{v}</SelectItem>
                                             ))}
@@ -439,28 +439,28 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                             {/* Max alumnos + Ciclo */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">
+                                    <Label className="text-xs text-body">
                                         Max alumnos
-                                        <span className="ml-1.5 font-normal text-[--admin-text-3]">({coach.active_client_count} activos)</span>
+                                        <span className="ml-1.5 font-normal text-muted">({coach.active_client_count} activos)</span>
                                     </Label>
                                     <Input
                                         name="max_clients"
                                         type="number"
                                         value={editMaxClients}
                                         onChange={e => setEditMaxClients(Number(e.target.value))}
-                                        className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]"
+                                        className="mt-1 border-subtle bg-surface-sunken text-strong"
                                     />
                                     {editMaxClients < coach.active_client_count && (
-                                        <p className="text-[10px] text-[--admin-amber] mt-0.5">⚠ Límite menor que alumnos activos</p>
+                                        <p className="text-[10px] text-[var(--warning-500)] mt-0.5">⚠ Límite menor que alumnos activos</p>
                                     )}
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">Ciclo de facturación</Label>
+                                    <Label className="text-xs text-body">Ciclo de facturación</Label>
                                     <Select name="billing_cycle" defaultValue={coach.billing_cycle ?? undefined}>
-                                        <SelectTrigger className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]">
+                                        <SelectTrigger className="mt-1 border-subtle bg-surface-sunken text-strong">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
+                                        <SelectContent className="border-subtle bg-surface-sunken">
                                             <SelectItem value="monthly">Mensual</SelectItem>
                                             <SelectItem value="quarterly">Trimestral</SelectItem>
                                             <SelectItem value="annual">Anual</SelectItem>
@@ -471,12 +471,12 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
 
                             {/* Provider */}
                             <div>
-                                <Label className="text-xs text-[--admin-text-2]">Provider de pago</Label>
+                                <Label className="text-xs text-body">Provider de pago</Label>
                                 <Select name="payment_provider" defaultValue={coach.payment_provider ?? undefined}>
-                                    <SelectTrigger className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]">
+                                    <SelectTrigger className="mt-1 border-subtle bg-surface-sunken text-strong">
                                         <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
+                                    <SelectContent className="border-subtle bg-surface-sunken">
                                         <SelectItem value="beta">Beta (prueba sin pago)</SelectItem>
                                         <SelectItem value="internal">Internal</SelectItem>
                                         <SelectItem value="admin">Admin</SelectItem>
@@ -489,32 +489,32 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                             {/* Fechas */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">Vencimiento período</Label>
+                                    <Label className="text-xs text-body">Vencimiento período</Label>
                                     <Input
                                         name="current_period_end"
                                         type="datetime-local"
                                         defaultValue={coach.current_period_end
                                             ? new Date(coach.current_period_end).toISOString().slice(0, 16)
                                             : ''}
-                                        className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]"
+                                        className="mt-1 border-subtle bg-surface-sunken text-strong"
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">Fin del trial</Label>
+                                    <Label className="text-xs text-body">Fin del trial</Label>
                                     <Input
                                         name="trial_ends_at"
                                         type="datetime-local"
                                         defaultValue={coach.trial_ends_at
                                             ? new Date(coach.trial_ends_at).toISOString().slice(0, 16)
                                             : ''}
-                                        className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]"
+                                        className="mt-1 border-subtle bg-surface-sunken text-strong"
                                     />
                                 </div>
                             </div>
 
                             {/* Color de marca */}
                             <div>
-                                <Label className="text-xs text-[--admin-text-2] flex items-center gap-1.5">
+                                <Label className="text-xs text-body flex items-center gap-1.5">
                                     <Palette className="h-3 w-3" />
                                     Color de marca
                                 </Label>
@@ -524,31 +524,31 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         name="primary_color"
                                         value={editColorHex}
                                         onChange={e => setEditColorHex(e.target.value)}
-                                        className="h-8 w-8 cursor-pointer rounded border border-[--admin-border] bg-transparent p-0.5"
+                                        className="h-8 w-8 cursor-pointer rounded border border-subtle bg-transparent p-0.5"
                                     />
-                                    <span className="font-mono text-xs text-[--admin-text-2]">{editColorHex}</span>
+                                    <span className="font-mono text-xs text-body">{editColorHex}</span>
                                 </div>
                             </div>
 
                             {/* Modulos habilitados — el backend (updateCoachAction → syncAdminGrants) existia
                                 completo pero su unico form (CoachEditSheet) era codigo muerto sin importar:
                                 el CEO no tenia NINGUN punto de entrada para el override (ROTO-9, F0 08-05). */}
-                            <div className="rounded-lg border border-[--admin-border] p-3">
-                                <p className="text-xs font-medium text-[--admin-text-2]">Módulos habilitados</p>
-                                <p className="mt-0.5 text-[10px] text-[--admin-text-3]">Override del CEO — activa o desactiva módulos de pago para este coach (cortesía admin_grant).</p>
+                            <div className="rounded-lg border border-subtle p-3">
+                                <p className="text-xs font-medium text-body">Módulos habilitados</p>
+                                <p className="mt-0.5 text-[10px] text-muted">Override del CEO — activa o desactiva módulos de pago para este coach (cortesía admin_grant).</p>
                                 {modules === null ? (
-                                    <p className="mt-2 text-xs text-[--admin-text-3]">Cargando módulos...</p>
+                                    <p className="mt-2 text-xs text-muted">Cargando módulos...</p>
                                 ) : (
                                     <>
                                         <input type="hidden" name="modules_present" value="1" />
                                         <div className="mt-2 grid grid-cols-1 gap-2">
                                             {MODULE_KEYS.map(key => (
-                                                <label key={key} className="flex items-center gap-2 text-xs text-[--admin-text-1]">
+                                                <label key={key} className="flex items-center gap-2 text-xs text-strong">
                                                     <input
                                                         type="checkbox"
                                                         name={`module_${key}`}
                                                         defaultChecked={modules[key] === true}
-                                                        className="h-4 w-4 rounded border-[--admin-border] bg-[--admin-bg-elevated]"
+                                                        className="h-4 w-4 rounded border-subtle bg-surface-sunken"
                                                     />
                                                     {MODULE_LABELS[key]}
                                                 </label>
@@ -560,18 +560,18 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
 
                             {/* Notas */}
                             <div>
-                                <Label className="text-xs text-[--admin-text-2]">Notas internas (admin)</Label>
+                                <Label className="text-xs text-body">Notas internas (admin)</Label>
                                 <textarea
                                     name="admin_notes"
                                     defaultValue={(coach as any).admin_notes ?? ''}
                                     rows={3}
                                     placeholder="Notas privadas sobre este coach (no visibles para el coach)..."
-                                    className="mt-1 w-full rounded-md border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2 text-xs text-[--admin-text-1] placeholder:text-[--admin-text-3] focus:outline-none focus:border-[--admin-accent] resize-none"
+                                    className="mt-1 w-full rounded-md border border-subtle bg-surface-sunken px-3 py-2 text-xs text-strong placeholder:text-muted focus:outline-none focus:border-[var(--sport-500)] resize-none"
                                 />
                             </div>
 
-                            {editError && <p className="text-xs text-[--admin-red]">{editError}</p>}
-                            <Button type="submit" className="w-full bg-[--admin-accent] text-white hover:bg-[--admin-accent-dim]">
+                            {editError && <p className="text-xs text-[var(--danger-500)]">{editError}</p>}
+                            <Button type="submit" className="w-full bg-[var(--cta-fill)] text-white hover:bg-[var(--sport-600)]">
                                 Guardar cambios
                             </Button>
                         </form>
@@ -588,7 +588,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                             key={d}
                                             disabled={loadingAction === `extend-${d}`}
                                             onClick={() => runAction(`extend-${d}`, () => extendCoachPeriodAction(coach.id, d))}
-                                            className="flex-1 rounded border border-[--admin-border] bg-[--admin-bg-elevated] py-2 text-xs font-medium text-[--admin-text-1] hover:border-[--admin-accent] hover:text-[--admin-accent] transition-colors disabled:opacity-50"
+                                            className="flex-1 rounded border border-subtle bg-surface-sunken py-2 text-xs font-medium text-strong hover:border-[var(--sport-500)] hover:text-[var(--sport-500)] transition-colors disabled:opacity-50"
                                         >
                                             +{d}d
                                         </button>
@@ -646,7 +646,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         onClick={() => void sendEmail('trial_expired')}
                                     />
                                     {emailResult && (
-                                        <p className={`text-xs ${emailResult.ok ? 'text-[--admin-green]' : 'text-[--admin-red]'}`}>
+                                        <p className={`text-xs ${emailResult.ok ? 'text-[var(--success-500)]' : 'text-[var(--danger-500)]'}`}>
                                             {emailResult.msg}
                                         </p>
                                     )}
@@ -667,17 +667,17 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
 
                             {/* Inline confirmation */}
                             {confirm && (
-                                <div className="rounded-lg border border-[--admin-amber]/40 bg-[--admin-amber]/5 p-4">
+                                <div className="rounded-lg border border-[var(--warning-500)]/40 bg-[var(--warning-500)]/5 p-4">
                                     <div className="flex items-center gap-2 mb-3">
-                                        <AlertTriangle className="h-4 w-4 text-[--admin-amber]" />
-                                        <p className="text-sm font-medium text-[--admin-amber]">
+                                        <AlertTriangle className="h-4 w-4 text-[var(--warning-500)]" />
+                                        <p className="text-sm font-medium text-[var(--warning-500)]">
                                             {confirm === 'delete' ? '¿Eliminar este coach?' :
                                              confirm === 'expire' ? '¿Forzar expiración del trial?' :
                                              confirm === 'suspend' ? '¿Suspender acceso?' :
                                              '¿Reactivar coach?'}
                                         </p>
                                     </div>
-                                    <p className="text-xs text-[--admin-text-3] mb-3">
+                                    <p className="text-xs text-muted mb-3">
                                         {confirm === 'delete' ? 'Esta acción es irreversible. Todos los datos del coach serán eliminados.' :
                                          confirm === 'expire' ? 'El coach verá /reactivate en su próxima visita y deberá pagar para continuar.' :
                                          confirm === 'suspend' ? 'El coach perderá acceso inmediatamente.' :
@@ -694,13 +694,13 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                                 // El caso 'delete' faltaba: Confirmar cerraba el dialogo sin hacer NADA (ROTO-3, F0 08-05).
                                                 else if (key === 'delete') await runAction('delete', () => deleteCoachAction(coach.id))
                                             }}
-                                            className="flex-1 rounded bg-[--admin-red] py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+                                            className="flex-1 rounded bg-[var(--danger-500)] py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
                                         >
                                             Confirmar
                                         </button>
                                         <button
                                             onClick={() => setConfirm(null)}
-                                            className="flex-1 rounded border border-[--admin-border] bg-[--admin-bg-elevated] py-1.5 text-xs text-[--admin-text-2] hover:text-[--admin-text-1] transition-colors"
+                                            className="flex-1 rounded border border-subtle bg-surface-sunken py-1.5 text-xs text-body hover:text-strong transition-colors"
                                         >
                                             Cancelar
                                         </button>

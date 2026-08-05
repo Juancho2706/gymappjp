@@ -14,8 +14,8 @@ export default async function AdminNovedadesPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Novedades</h1>
-          <p className="text-xs text-[--admin-text-3]">
+          <h1 className="text-2xl font-bold tracking-tight text-strong">Novedades</h1>
+          <p className="text-xs text-muted">
             {items.length} novedad{items.length !== 1 ? 'es' : ''} en total.
           </p>
         </div>

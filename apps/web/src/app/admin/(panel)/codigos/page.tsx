@@ -17,8 +17,8 @@ function discountLabel(c: AdminCouponRow): string {
     return `${val} · ${c.fixedClpTarget} · ${dur}`
 }
 
-const th = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[--admin-text-3]'
-const td = 'px-3 py-2 text-sm text-[--admin-text-2]'
+const th = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted'
+const td = 'px-3 py-2 text-sm text-body'
 
 export default async function CodigosPage() {
     const [coupons, redemptions, metrics] = await Promise.all([
@@ -30,22 +30,22 @@ export default async function CodigosPage() {
     return (
         <div className="space-y-6 p-4 md:p-6">
             <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-[--admin-text-3]">Canjes vivos</p>
-                    <p className="text-xl font-semibold text-[--admin-text-1]">{metrics.activeRedemptions}</p>
+                <div className="rounded-lg border border-subtle bg-surface-sunken p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Canjes vivos</p>
+                    <p className="text-xl font-semibold text-strong">{metrics.activeRedemptions}</p>
                 </div>
-                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-[--admin-text-3]">Canjes totales</p>
-                    <p className="text-xl font-semibold text-[--admin-text-1]">{metrics.totalRedemptions}</p>
+                <div className="rounded-lg border border-subtle bg-surface-sunken p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Canjes totales</p>
+                    <p className="text-xl font-semibold text-strong">{metrics.totalRedemptions}</p>
                 </div>
-                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-[--admin-text-3]">Descuento otorgado</p>
-                    <p className="text-xl font-semibold text-[--admin-text-1]">${metrics.totalDiscountGivenClp.toLocaleString('es-CL')}</p>
+                <div className="rounded-lg border border-subtle bg-surface-sunken p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Descuento otorgado</p>
+                    <p className="text-xl font-semibold text-strong">${metrics.totalDiscountGivenClp.toLocaleString('es-CL')}</p>
                 </div>
             </div>
             <div>
-                <h1 className="text-lg font-semibold text-[--admin-text-1]">Códigos de descuento</h1>
-                <p className="text-xs text-[--admin-text-3]">
+                <h1 className="text-lg font-semibold text-strong">Códigos de descuento</h1>
+                <p className="text-xs text-muted">
                     Cupones para coaches. El descuento se aplica server-side en el cobro (drift-safe). Reversa = desactivar
                     (vigentes honran su término).
                 </p>
@@ -53,9 +53,9 @@ export default async function CodigosPage() {
 
             <CouponMintForm />
 
-            <div className="overflow-x-auto rounded-lg border border-[--admin-border]">
+            <div className="overflow-x-auto rounded-lg border border-subtle">
                 <table className="w-full border-collapse">
-                    <thead className="bg-[--admin-bg-elevated]">
+                    <thead className="bg-surface-sunken">
                         <tr>
                             <th className={th}>Código</th>
                             <th className={th}>Descuento</th>
@@ -74,11 +74,11 @@ export default async function CodigosPage() {
                             </tr>
                         )}
                         {coupons.map((c) => (
-                            <tr key={c.codeId} className="border-t border-[--admin-border]">
-                                <td className={`${td} font-mono text-[--admin-text-1]`}>
+                            <tr key={c.codeId} className="border-t border-subtle">
+                                <td className={`${td} font-mono text-strong`}>
                                     {c.codeDisplay ?? c.codeNormalized}
-                                    {c.firstTimeOnly && <span className="ml-2 text-[10px] text-[--admin-text-3]">1ª vez</span>}
-                                    {c.restrictedToCoachId && <span className="ml-2 text-[10px] text-[--admin-text-3]">partner</span>}
+                                    {c.firstTimeOnly && <span className="ml-2 text-[10px] text-muted">1ª vez</span>}
+                                    {c.restrictedToCoachId && <span className="ml-2 text-[10px] text-muted">partner</span>}
                                 </td>
                                 <td className={td}>{discountLabel(c)}</td>
                                 <td className={td}>
@@ -88,9 +88,9 @@ export default async function CodigosPage() {
                                 <td className={td}>{c.perAccountLimit}</td>
                                 <td className={td}>
                                     {c.active ? (
-                                        <span className="text-emerald-500">activo</span>
+                                        <span className="text-[var(--success-500)]">activo</span>
                                     ) : (
-                                        <span className="text-[--admin-text-3]">inactivo</span>
+                                        <span className="text-muted">inactivo</span>
                                     )}
                                 </td>
                                 <td className={`${td} text-right`}>{c.active && <DeactivateButton codeId={c.codeId} />}</td>
@@ -101,10 +101,10 @@ export default async function CodigosPage() {
             </div>
 
             <div>
-                <h2 className="mb-2 text-sm font-semibold text-[--admin-text-1]">Canjes recientes</h2>
-                <div className="overflow-x-auto rounded-lg border border-[--admin-border]">
+                <h2 className="mb-2 text-sm font-semibold text-strong">Canjes recientes</h2>
+                <div className="overflow-x-auto rounded-lg border border-subtle">
                     <table className="w-full border-collapse">
-                        <thead className="bg-[--admin-bg-elevated]">
+                        <thead className="bg-surface-sunken">
                             <tr>
                                 <th className={th}>Código</th>
                                 <th className={th}>Coach</th>
@@ -121,8 +121,8 @@ export default async function CodigosPage() {
                                 </tr>
                             )}
                             {redemptions.map((r) => (
-                                <tr key={r.redemptionId} className="border-t border-[--admin-border]">
-                                    <td className={`${td} font-mono text-[--admin-text-1]`}>{r.couponCode ?? '—'}</td>
+                                <tr key={r.redemptionId} className="border-t border-subtle">
+                                    <td className={`${td} font-mono text-strong`}>{r.couponCode ?? '—'}</td>
                                     <td className={td}>{r.coachSlug ?? '—'}</td>
                                     <td className={td}>{r.status}</td>
                                     <td className={td}>{new Date(r.redeemedAt).toLocaleDateString('es-CL')}</td>

@@ -28,13 +28,13 @@ export function OrgStatusButton({ orgId, currentStatus }: Props) {
                 }}
                 className={`text-[11px] whitespace-nowrap transition-colors disabled:opacity-50 underline underline-offset-2 ${
                     isSuspended
-                        ? 'text-emerald-600 hover:text-emerald-500'
-                        : 'text-red-500 hover:text-red-400'
+                        ? 'text-[var(--success-500)] hover:text-[var(--success-600)]'
+                        : 'text-[var(--danger-500)] hover:text-[var(--danger-600)]'
                 }`}
             >
                 {isPending ? '...' : isSuspended ? 'Activar' : 'Suspender'}
             </button>
-            {error && <span className="text-[11px] text-red-500">{error}</span>}
+            {error && <span className="text-[11px] text-[var(--danger-500)]">{error}</span>}
         </span>
     )
 }

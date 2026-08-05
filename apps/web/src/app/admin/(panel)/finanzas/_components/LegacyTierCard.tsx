@@ -40,48 +40,48 @@ export function LegacyTierCard({ rows }: { rows: LegacyTierRow[] }) {
     const total = rows.reduce((sum, r) => sum + r.total, 0)
 
     return (
-        <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] overflow-hidden">
-            <div className="flex items-center justify-between border-b border-[--admin-border] px-4 py-3">
+        <div className="rounded-xl border border-subtle bg-surface-card overflow-hidden">
+            <div className="flex items-center justify-between border-b border-subtle px-4 py-3">
                 <div>
-                    <h3 className="text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">
+                    <h3 className="text-xs font-medium uppercase tracking-widest text-muted">
                         Legacy (grandfather)
                     </h3>
-                    <p className="mt-0.5 text-[11px] text-[--admin-text-3]">
+                    <p className="mt-0.5 text-[11px] text-muted">
                         Cuentas growth/scale restantes (fuera de venta). Incluye placeholders gestionados.
                     </p>
                 </div>
-                <span className="font-mono text-sm tabular-nums text-[--admin-text-1]">{total}</span>
+                <span className="font-mono text-sm tabular-nums text-strong">{total}</span>
             </div>
 
             {rows.length === 0 ? (
-                <p className="px-4 py-8 text-center text-xs text-[--admin-text-3]">
+                <p className="px-4 py-8 text-center text-xs text-muted">
                     Sin cuentas legacy — el grandfather se extinguió.
                 </p>
             ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[420px]">
-                        <thead className="border-b border-[--admin-border]">
+                        <thead className="border-b border-subtle">
                             <tr>
-                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Tier</th>
-                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Estado</th>
-                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Ciclo</th>
-                                <th className="px-3 py-2 text-right text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Cuentas</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Tier</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Estado</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Ciclo</th>
+                                <th className="px-3 py-2 text-right text-[11px] font-medium uppercase tracking-widest text-muted">Cuentas</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-[--admin-border]">
+                        <tbody className="divide-y divide-[var(--border-subtle)]">
                             {rows.map((r, i) => (
-                                <tr key={`${r.subscription_tier}-${r.subscription_status}-${r.billing_cycle}-${i}`} className="hover:bg-[--admin-bg-elevated] transition-colors">
+                                <tr key={`${r.subscription_tier}-${r.subscription_status}-${r.billing_cycle}-${i}`} className="hover:bg-surface-sunken transition-colors">
                                     <td className="px-3 py-2.5">
-                                        <span className="font-mono text-xs uppercase text-[--admin-text-2]">{r.subscription_tier}</span>
+                                        <span className="font-mono text-xs uppercase text-body">{r.subscription_tier}</span>
                                     </td>
                                     <td className="px-3 py-2.5">
-                                        <span className="text-xs text-[--admin-text-1]">{statusLabel(r.subscription_status)}</span>
+                                        <span className="text-xs text-strong">{statusLabel(r.subscription_status)}</span>
                                     </td>
                                     <td className="px-3 py-2.5">
-                                        <span className="text-xs text-[--admin-text-2]">{cycleLabel(r.billing_cycle)}</span>
+                                        <span className="text-xs text-body">{cycleLabel(r.billing_cycle)}</span>
                                     </td>
                                     <td className="px-3 py-2.5 text-right">
-                                        <span className="font-mono text-xs tabular-nums text-[--admin-text-1]">{r.total}</span>
+                                        <span className="font-mono text-xs tabular-nums text-strong">{r.total}</span>
                                     </td>
                                 </tr>
                             ))}

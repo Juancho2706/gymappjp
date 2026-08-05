@@ -18,7 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
     return (
         <AdminDarkWrapper>
-            <div className="admin-shell flex min-h-[100dvh] flex-col bg-[--admin-bg-base] text-[--admin-text-1] md:flex-row">
+            <div className="flex min-h-[100dvh] flex-col bg-surface-app text-strong md:flex-row">
 
                 {/* Sidebar (desktop) + mobile bottom bar — both rendered by AdminSidebar */}
                 <AdminSidebar userEmail={user.email} />

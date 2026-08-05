@@ -7,9 +7,9 @@ import { OrgStatusButton } from './_components/OrgStatusButton'
 export const metadata: Metadata = { title: 'Organizaciones' }
 
 function StatusIcon({ status }: { status: string }) {
-    if (status === 'active') return <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-    if (status === 'trial') return <AlertTriangle className="w-4 h-4 text-amber-500" />
-    return <XCircle className="w-4 h-4 text-red-500" />
+    if (status === 'active') return <CheckCircle2 className="w-4 h-4 text-[var(--success-500)]" />
+    if (status === 'trial') return <AlertTriangle className="w-4 h-4 text-[var(--warning-500)]" />
+    return <XCircle className="w-4 h-4 text-[var(--danger-500)]" />
 }
 
 export default async function AdminOrgsPage() {
@@ -67,7 +67,7 @@ export default async function AdminOrgsPage() {
                                                 <span className="capitalize text-xs">{org.status}</span>
                                             </div>
                                             {org.trial_ends_at && (
-                                                <p className="text-[10px] text-amber-500 mt-0.5">
+                                                <p className="text-[10px] text-[var(--warning-500)] mt-0.5">
                                                     Trial: {new Date(org.trial_ends_at).toLocaleDateString('es-CL')}
                                                 </p>
                                             )}
@@ -82,9 +82,9 @@ export default async function AdminOrgsPage() {
                                         <td className="px-4 py-3 text-center">
                                             {org.last_health_score !== null ? (
                                                 <span className={`text-sm font-bold ${
-                                                    org.last_health_score >= 70 ? 'text-emerald-500' :
-                                                    org.last_health_score >= 50 ? 'text-amber-500' :
-                                                    'text-red-500'
+                                                    org.last_health_score >= 70 ? 'text-[var(--success-500)]' :
+                                                    org.last_health_score >= 50 ? 'text-[var(--warning-500)]' :
+                                                    'text-[var(--danger-500)]'
                                                 }`}>
                                                     {org.last_health_score}
                                                 </span>
@@ -105,7 +105,7 @@ export default async function AdminOrgsPage() {
                                                     href={`/org/${org.slug}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-[11px] text-violet-500 hover:underline whitespace-nowrap"
+                                                    className="text-[11px] text-[var(--sport-500)] hover:underline whitespace-nowrap"
                                                 >
                                                     Ver org →
                                                 </a>

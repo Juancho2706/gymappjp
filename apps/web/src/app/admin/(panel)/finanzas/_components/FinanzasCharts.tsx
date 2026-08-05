@@ -47,10 +47,10 @@ export function FinanzasCharts({ mrrSeries, churnSeries, revenueByCycle, revenue
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* MRR 12 months */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">MRR 12 meses</h3>
+            <div className="rounded-lg border border-subtle bg-surface-card p-4">
+                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">MRR 12 meses</h3>
                 {mrrData.length === 0 || mrrData.every(d => d.mrr_clp === 0) ? (
-                    <p className="py-10 text-center text-xs text-[--admin-text-3]">Sin datos aún</p>
+                    <p className="py-10 text-center text-xs text-muted">Sin datos aún</p>
                 ) : (
                     <ResponsiveContainer width="100%" height={200}>
                         <ComposedChart data={mrrData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -66,10 +66,10 @@ export function FinanzasCharts({ mrrSeries, churnSeries, revenueByCycle, revenue
             </div>
 
             {/* Churn mensual */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">Churn mensual</h3>
+            <div className="rounded-lg border border-subtle bg-surface-card p-4">
+                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">Churn mensual</h3>
                 {churnData.length === 0 || churnData.every(d => d.churned_count === 0) ? (
-                    <p className="py-10 text-center text-xs text-[--admin-text-3]">Sin churns registrados</p>
+                    <p className="py-10 text-center text-xs text-muted">Sin churns registrados</p>
                 ) : (
                     <ResponsiveContainer width="100%" height={200}>
                         <BarChart data={churnData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -84,10 +84,10 @@ export function FinanzasCharts({ mrrSeries, churnSeries, revenueByCycle, revenue
             </div>
 
             {/* Revenue por billing cycle — donut */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">Revenue por ciclo de facturación</h3>
+            <div className="rounded-lg border border-subtle bg-surface-card p-4">
+                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">Revenue por ciclo de facturación</h3>
                 {revenueByCycle.length === 0 ? (
-                    <p className="py-10 text-center text-xs text-[--admin-text-3]">Sin datos aún</p>
+                    <p className="py-10 text-center text-xs text-muted">Sin datos aún</p>
                 ) : (
                     <div className="flex items-center gap-4">
                         <ResponsiveContainer width={160} height={160}>
@@ -111,8 +111,8 @@ export function FinanzasCharts({ mrrSeries, churnSeries, revenueByCycle, revenue
                             {revenueByCycle.map(d => (
                                 <div key={d.billing_cycle} className="flex items-center gap-2">
                                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: CYCLE_COLORS[d.billing_cycle] ?? '#475569' }} />
-                                    <span className="text-xs text-[--admin-text-2] capitalize">{d.billing_cycle}</span>
-                                    <span className="font-mono text-xs tabular-nums text-[--admin-text-1]">{clpK(d.mrr_clp)}</span>
+                                    <span className="text-xs text-body capitalize">{d.billing_cycle}</span>
+                                    <span className="font-mono text-xs tabular-nums text-strong">{clpK(d.mrr_clp)}</span>
                                 </div>
                             ))}
                         </div>
@@ -121,10 +121,10 @@ export function FinanzasCharts({ mrrSeries, churnSeries, revenueByCycle, revenue
             </div>
 
             {/* Revenue por tier — horizontal bar */}
-            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">Revenue por tier</h3>
+            <div className="rounded-lg border border-subtle bg-surface-card p-4">
+                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">Revenue por tier</h3>
                 {revenueByTier.length === 0 ? (
-                    <p className="py-10 text-center text-xs text-[--admin-text-3]">Sin datos aún</p>
+                    <p className="py-10 text-center text-xs text-muted">Sin datos aún</p>
                 ) : (
                     <ResponsiveContainer width="100%" height={200}>
                         <BarChart data={revenueByTier} layout="vertical" margin={{ top: 4, right: 4, left: 40, bottom: 0 }}>

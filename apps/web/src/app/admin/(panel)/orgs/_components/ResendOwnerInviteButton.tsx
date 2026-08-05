@@ -17,7 +17,7 @@ export function ResendOwnerInviteButton({ orgId, ownerEmail }: Props) {
 
     if (state.success) {
         return (
-            <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+            <span className="flex items-center gap-1 text-[11px] text-[var(--success-500)]">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Enviado
             </span>
         )
@@ -44,16 +44,16 @@ export function ResendOwnerInviteButton({ orgId, ownerEmail }: Props) {
                 required
                 defaultValue={ownerEmail ?? ''}
                 placeholder="email@org.com"
-                className="h-7 px-2 text-[11px] rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-violet-500 w-full"
+                className="h-7 px-2 text-[11px] rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-[var(--focus-ring)] w-full"
             />
             {state.error && (
-                <p className="text-[10px] text-red-500">{state.error}</p>
+                <p className="text-[10px] text-[var(--danger-500)]">{state.error}</p>
             )}
             <div className="flex gap-1">
                 <button
                     type="submit"
                     disabled={pending}
-                    className="flex items-center gap-1 h-6 px-2 text-[11px] bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                    className="flex items-center gap-1 h-6 px-2 text-[11px] bg-[var(--cta-fill)] text-white rounded hover:bg-[var(--sport-600)] disabled:opacity-50 transition-colors"
                 >
                     <Send className="w-2.5 h-2.5" />
                     {pending ? '...' : 'Enviar'}

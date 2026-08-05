@@ -7,8 +7,8 @@ import { mintCouponAction, type MintActionState } from '../_actions/codigos.acti
 const initial: MintActionState = { ok: false, message: '' }
 
 const inputCls =
-    'w-full rounded-md border border-[--admin-border] bg-[--admin-bg-surface] px-3 py-2 text-sm text-[--admin-text-1] focus:outline-none focus:ring-1 focus:ring-[--admin-accent]'
-const labelCls = 'mb-1 block text-xs font-medium text-[--admin-text-2]'
+    'w-full rounded-md border border-subtle bg-surface-card px-3 py-2 text-sm text-strong focus:outline-none focus:ring-1 focus:ring-[var(--sport-500)]'
+const labelCls = 'mb-1 block text-xs font-medium text-body'
 
 /**
  * Formulario de alta de cupón (CEO). Native <select>/<input> (NO Base UI Select — renderiza value no
@@ -25,9 +25,9 @@ export function CouponMintForm() {
     return (
         <form
             action={formAction}
-            className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-4"
+            className="rounded-lg border border-subtle bg-surface-sunken p-4"
         >
-            <h2 className="mb-3 text-sm font-semibold text-[--admin-text-1]">Crear código</h2>
+            <h2 className="mb-3 text-sm font-semibold text-strong">Crear código</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                     <label className={labelCls}>Tipo de descuento</label>
@@ -124,18 +124,18 @@ export function CouponMintForm() {
                 </div>
 
                 <div className="flex items-end gap-4">
-                    <label className="flex items-center gap-2 text-xs text-[--admin-text-2]">
+                    <label className="flex items-center gap-2 text-xs text-body">
                         <input name="firstTimeOnly" type="checkbox" /> Solo primera vez
                     </label>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                     {(['starter', 'pro', 'elite'] as const).map((t) => (
-                        <label key={t} className="flex items-center gap-1 text-xs text-[--admin-text-2]">
+                        <label key={t} className="flex items-center gap-1 text-xs text-body">
                             <input name="scopeTiers" type="checkbox" value={t} /> {t}
                         </label>
                     ))}
-                    <span className="text-[10px] text-[--admin-text-3]">(planes; vacío = todos)</span>
+                    <span className="text-[10px] text-muted">(planes; vacío = todos)</span>
                 </div>
             </div>
 
@@ -152,7 +152,7 @@ export function CouponMintForm() {
 
             {/* R3.8: override del CEO para descuentos > 21%. */}
             {needsOverride && (
-                <label className="mt-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                <label className="mt-3 flex items-center gap-2 rounded-md border border-[var(--warning-500)]/30 bg-[var(--warning-500)]/15 px-3 py-2 text-xs text-[var(--warning-500)]">
                     <input name="high_discount_override" type="checkbox" />
                     Confirmo que el descuento de <strong>{percentValue}%</strong> (mayor a {MAX_PERCENT_WITHOUT_OVERRIDE}%) es intencional.
                 </label>
@@ -162,12 +162,12 @@ export function CouponMintForm() {
                 <button
                     type="submit"
                     disabled={pending}
-                    className="rounded-md bg-[--admin-accent] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    className="rounded-md bg-[var(--cta-fill)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                     {pending ? 'Creando…' : 'Crear código'}
                 </button>
                 {state.message && (
-                    <span className={`text-xs ${state.ok ? 'text-emerald-500' : 'text-red-500'}`}>{state.message}</span>
+                    <span className={`text-xs ${state.ok ? 'text-[var(--success-500)]' : 'text-[var(--danger-500)]'}`}>{state.message}</span>
                 )}
             </div>
         </form>

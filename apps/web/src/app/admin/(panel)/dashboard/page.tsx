@@ -40,8 +40,8 @@ export default async function AdminDashboardPage() {
         <div className="space-y-6">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Dashboard CEO</h1>
-                    <p className="text-xs text-[--admin-text-3]">Visión global de la plataforma EVA.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-strong">Dashboard CEO</h1>
+                    <p className="text-xs text-muted">Visión global de la plataforma EVA.</p>
                 </div>
                 <PageInfoButton title="Dashboard — Guía completa" sections={DASHBOARD_INFO} />
             </div>

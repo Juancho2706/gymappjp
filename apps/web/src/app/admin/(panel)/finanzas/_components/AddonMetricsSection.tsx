@@ -25,8 +25,8 @@ export function AddonMetricsSection({ metrics }: { metrics: AddonMetrics }) {
     return (
         <div className="space-y-4">
             <div>
-                <h2 className="text-lg font-bold tracking-tight text-[--admin-text-1]">Add-ons</h2>
-                <p className="text-xs text-[--admin-text-3]">
+                <h2 className="text-lg font-bold tracking-tight text-strong">Add-ons</h2>
+                <p className="text-xs text-muted">
                     Módulos de pago self-service: MRR mensualizado, adopción y churn.
                 </p>
             </div>
@@ -56,27 +56,27 @@ export function AddonMetricsSection({ metrics }: { metrics: AddonMetrics }) {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {/* Adopción por módulo */}
-                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-                    <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">
+                <div className="rounded-lg border border-subtle bg-surface-card p-4">
+                    <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">
                         Adopción por módulo
                     </h3>
                     <ul className="space-y-3">
                         {adoptionByModule.map((row) => (
                             <li key={row.moduleKey} className="space-y-1">
                                 <div className="flex items-center justify-between text-xs">
-                                    <span className="text-[--admin-text-2]">{row.label}</span>
-                                    <span className="font-mono tabular-nums text-[--admin-text-1]">
+                                    <span className="text-body">{row.label}</span>
+                                    <span className="font-mono tabular-nums text-strong">
                                         {row.payingCoaches}
                                         {row.grantedCoaches > 0 && (
-                                            <span className="ml-1 text-[--admin-text-3]">
+                                            <span className="ml-1 text-muted">
                                                 (+{row.grantedCoaches} cortesía)
                                             </span>
                                         )}
                                     </span>
                                 </div>
-                                <div className="h-1.5 w-full overflow-hidden rounded-full bg-[--admin-border]">
+                                <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--border-subtle)]">
                                     <div
-                                        className="h-full rounded-full bg-[--admin-accent]"
+                                        className="h-full rounded-full bg-[var(--sport-500)]"
                                         style={{
                                             width: `${(row.payingCoaches / maxPaying) * 100}%`,
                                         }}
@@ -88,12 +88,12 @@ export function AddonMetricsSection({ metrics }: { metrics: AddonMetrics }) {
                 </div>
 
                 {/* Churn de add-ons */}
-                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-                    <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">
+                <div className="rounded-lg border border-subtle bg-surface-card p-4">
+                    <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">
                         Churn de add-ons (12 meses)
                     </h3>
                     {churnSeries.length === 0 ? (
-                        <p className="py-10 text-center text-xs text-[--admin-text-3]">
+                        <p className="py-10 text-center text-xs text-muted">
                             Sin bajas registradas
                         </p>
                     ) : (
@@ -103,8 +103,8 @@ export function AddonMetricsSection({ metrics }: { metrics: AddonMetrics }) {
                                     key={row.ym}
                                     className="flex items-center justify-between text-xs"
                                 >
-                                    <span className="text-[--admin-text-2]">{row.ym}</span>
-                                    <span className="font-mono tabular-nums text-[--admin-red]">
+                                    <span className="text-body">{row.ym}</span>
+                                    <span className="font-mono tabular-nums text-[var(--danger-500)]">
                                         {row.cancelled}
                                     </span>
                                 </li>

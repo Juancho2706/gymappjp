@@ -20,13 +20,13 @@ export function TeamEditSheet({ team, onClose }: Props) {
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState<string | null>(null)
 
-    const fieldCls = 'mt-1 bg-neutral-900 border-neutral-800 text-white placeholder:text-neutral-600'
+    const fieldCls = 'mt-1 bg-surface-sunken border-subtle text-strong placeholder:text-muted'
 
     return (
         <Sheet open={!!team} onOpenChange={(o) => !o && onClose()}>
-            <SheetContent className="w-full sm:max-w-lg bg-neutral-950 border-neutral-800 text-white overflow-y-auto">
+            <SheetContent className="w-full sm:max-w-lg bg-surface-card border-subtle text-strong overflow-y-auto">
                 <SheetHeader>
-                    <SheetTitle className="text-white">Editar {team?.name}</SheetTitle>
+                    <SheetTitle className="text-strong">Editar {team?.name}</SheetTitle>
                 </SheetHeader>
 
                 {team && (
@@ -43,20 +43,20 @@ export function TeamEditSheet({ team, onClose }: Props) {
                         className="mt-6 space-y-4"
                     >
                         <div>
-                            <Label className="text-neutral-300 text-xs">Nombre del equipo</Label>
+                            <Label className="text-body text-xs">Nombre del equipo</Label>
                             <Input name="name" defaultValue={team.name} className={fieldCls} required minLength={2} maxLength={80} />
                         </div>
                         <div>
-                            <Label className="text-neutral-300 text-xs">Cupos (seat_limit)</Label>
+                            <Label className="text-body text-xs">Cupos (seat_limit)</Label>
                             <Input name="seat_limit" type="number" min={1} max={500} defaultValue={team.seat_limit} className={fieldCls} required />
-                            <p className="mt-1 text-[10px] text-neutral-500">{team.memberCount} miembros activos · no se puede bajar por debajo de eso</p>
+                            <p className="mt-1 text-[10px] text-muted">{team.memberCount} miembros activos · no se puede bajar por debajo de eso</p>
                         </div>
-                        <div className="rounded-lg border border-neutral-800 p-3">
-                            <p className="text-xs font-medium text-neutral-300">Módulos habilitados</p>
+                        <div className="rounded-lg border border-subtle p-3">
+                            <p className="text-xs font-medium text-body">Módulos habilitados</p>
                             <div className="mt-2 grid grid-cols-1 gap-2">
                                 {MODULE_KEYS.map(key => (
-                                    <label key={key} className="flex items-center gap-2 text-sm text-neutral-200">
-                                        <input type="checkbox" name={`module_${key}`} defaultChecked={team.enabled_modules[key] === true} className="h-4 w-4 rounded border-neutral-700 bg-neutral-900" />
+                                    <label key={key} className="flex items-center gap-2 text-sm text-body">
+                                        <input type="checkbox" name={`module_${key}`} defaultChecked={team.enabled_modules[key] === true} className="h-4 w-4 rounded border-subtle bg-surface-sunken" />
                                         {MODULE_LABELS[key]}
                                     </label>
                                 ))}
@@ -64,22 +64,22 @@ export function TeamEditSheet({ team, onClose }: Props) {
                         </div>
 
                         {error && (
-                            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-                                <p className="text-sm text-red-400">{error}</p>
+                            <div className="rounded-lg border border-[var(--danger-500)]/30 bg-[var(--danger-500)]/15 px-3 py-2">
+                                <p className="text-sm text-[var(--danger-500)]">{error}</p>
                             </div>
                         )}
 
                         <SheetFooter className="pt-2">
-                            <Button type="button" variant="ghost" onClick={onClose} className="text-neutral-300">Cancelar</Button>
+                            <Button type="button" variant="ghost" onClick={onClose} className="text-body">Cancelar</Button>
                             <Button type="submit" disabled={isPending}>{isPending ? 'Guardando...' : 'Guardar cambios'}</Button>
                         </SheetFooter>
                     </form>
                 )}
 
                 {team && (
-                    <div className="mt-8 rounded-lg border border-red-500/25 bg-red-500/5 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-red-400">Kill-switch</p>
-                        <p className="mt-1 text-xs text-neutral-400">
+                    <div className="mt-8 rounded-lg border border-[var(--danger-500)]/30 bg-[var(--danger-500)]/15 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--danger-500)]">Kill-switch</p>
+                        <p className="mt-1 text-xs text-muted">
                             {team.suspended_at
                                 ? 'Equipo SUSPENDIDO: alumnos y coaches no pueden entrar. Reactivar lo restaura tal cual.'
                                 : 'Suspende el equipo completo: el shell /t deja de resolver y los coaches pierden el contexto. Reversible, no borra nada.'}
@@ -97,7 +97,7 @@ export function TeamEditSheet({ team, onClose }: Props) {
                                     onClose()
                                 })
                             }}
-                            className={`mt-3 ${team.suspended_at ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10' : 'border-red-500/40 text-red-400 hover:bg-red-500/10'}`}
+                            className={`mt-3 ${team.suspended_at ? 'border-[var(--success-500)]/30 text-[var(--success-500)] hover:bg-[var(--success-500)]/15' : 'border-[var(--danger-500)]/30 text-[var(--danger-500)] hover:bg-[var(--danger-500)]/15'}`}
                         >
                             {isPending ? 'Aplicando...' : team.suspended_at ? 'Reactivar equipo' : 'Suspender equipo'}
                         </Button>

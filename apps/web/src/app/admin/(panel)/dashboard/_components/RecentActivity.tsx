@@ -84,9 +84,9 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
     const [tab, setTab] = useState<Tab>('signups')
 
     return (
-        <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface]">
+        <div className="rounded-xl border border-subtle bg-surface-card">
             {/* Tabs header */}
-            <div className="flex items-center justify-between border-b border-[--admin-border] px-4 py-3">
+            <div className="flex items-center justify-between border-b border-subtle px-4 py-3">
                 <div className="flex gap-1">
                     {TABS.map(t => (
                         <button
@@ -94,18 +94,18 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                             onClick={() => setTab(t)}
                             className={`relative rounded px-3 py-1 text-xs font-medium transition-colors ${
                                 tab === t
-                                    ? 'bg-[--admin-accent]/15 text-[--admin-accent]'
-                                    : 'text-[--admin-text-3] hover:text-[--admin-text-2]'
+                                    ? 'bg-sport-500/15 text-[var(--sport-500)]'
+                                    : 'text-muted hover:text-body'
                             }`}
                         >
                             {TAB_LABELS[t]}
                             {t === 'expiring' && expiringSoon.length > 0 && (
-                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[--admin-amber] px-1 text-[9px] font-bold text-black">
+                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--warning-500)] px-1 text-[9px] font-bold text-[var(--ink-950)]">
                                     {expiringSoon.length}
                                 </span>
                             )}
                             {t === 'pending' && pendingPayment.length > 0 && (
-                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[--admin-red] px-1 text-[9px] font-bold text-white">
+                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--danger-500)] px-1 text-[9px] font-bold text-white">
                                     {pendingPayment.length}
                                 </span>
                             )}
@@ -114,25 +114,25 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                 </div>
                 <Link
                     href={TAB_LINKS[tab]}
-                    className="text-[11px] text-[--admin-accent] hover:underline"
+                    className="text-[11px] text-[var(--sport-500)] hover:underline"
                 >
                     Ver todos →
                 </Link>
             </div>
 
             {/* Content */}
-            <div className="divide-y divide-[--admin-border]">
+            <div className="divide-y divide-[var(--border-subtle)]">
                 {tab === 'signups' && signups.map(coach => (
                     <Link
                         key={coach.id}
                         href={`/admin/coaches?q=${encodeURIComponent(coach.brand_name || coach.full_name || '')}`}
-                        className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                        className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-sunken transition-colors"
                     >
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-[--admin-text-1]">
+                            <p className="truncate text-sm font-medium text-strong">
                                 {coach.brand_name || coach.full_name || 'Sin nombre'}
                             </p>
-                            <p className="text-[11px] text-[--admin-text-3]">
+                            <p className="text-[11px] text-muted">
                                 {formatDistanceToNow(new Date(coach.created_at), { addSuffix: true, locale: es })}
                             </p>
                         </div>
@@ -152,22 +152,22 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                         ? differenceInDays(new Date(coach.current_period_end), new Date())
                         : null
                     const color = daysLeft !== null && daysLeft <= 2
-                        ? 'text-[--admin-red]'
-                        : 'text-[--admin-amber]'
+                        ? 'text-[var(--danger-500)]'
+                        : 'text-[var(--warning-500)]'
 
                     return (
                         <Link
                             key={coach.id}
                             href={`/admin/coaches?q=${encodeURIComponent(coach.brand_name || coach.full_name || '')}`}
-                            className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                            className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-sunken transition-colors"
                         >
                             <div className="flex items-center gap-2 min-w-0">
                                 <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${color}`} />
                                 <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium text-[--admin-text-1]">
+                                    <p className="truncate text-sm font-medium text-strong">
                                         {coach.brand_name || coach.full_name || 'Sin nombre'}
                                     </p>
-                                    <p className="text-[11px] text-[--admin-text-3]">
+                                    <p className="text-[11px] text-muted">
                                         {coach.current_period_end
                                             ? format(new Date(coach.current_period_end), "d MMM yyyy", { locale: es })
                                             : '—'}
@@ -190,15 +190,15 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                     <Link
                         key={coach.id}
                         href={`/admin/coaches?q=${encodeURIComponent(coach.brand_name || coach.full_name || '')}`}
-                        className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                        className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-sunken transition-colors"
                     >
                         <div className="flex items-center gap-2 min-w-0">
-                            <Clock className="h-3.5 w-3.5 shrink-0 text-[--admin-red]" />
+                            <Clock className="h-3.5 w-3.5 shrink-0 text-[var(--danger-500)]" />
                             <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-[--admin-text-1]">
+                                <p className="truncate text-sm font-medium text-strong">
                                     {coach.brand_name || coach.full_name || 'Sin nombre'}
                                 </p>
-                                <p className="text-[11px] text-[--admin-text-3]">
+                                <p className="text-[11px] text-muted">
                                     Registrado {formatDistanceToNow(new Date(coach.created_at), { addSuffix: true, locale: es })}
                                 </p>
                             </div>
@@ -210,36 +210,36 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                 ))}
 
                 {tab === 'audit' && auditEvents.map(ev => (
-                    <div key={ev.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors">
+                    <div key={ev.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-sunken transition-colors">
                         <div className="min-w-0">
-                            <p className="text-sm font-medium text-[--admin-text-1]">
+                            <p className="text-sm font-medium text-strong">
                                 {ACTION_LABELS[ev.action] ?? ev.action}
                             </p>
-                            <p className="truncate font-mono text-[11px] text-[--admin-text-3]">
+                            <p className="truncate font-mono text-[11px] text-muted">
                                 {ev.admin_email}
                             </p>
                         </div>
-                        <p className="shrink-0 text-[11px] text-[--admin-text-3]">
+                        <p className="shrink-0 text-[11px] text-muted">
                             {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true, locale: es })}
                         </p>
                     </div>
                 ))}
 
                 {tab === 'signups' && signups.length === 0 && (
-                    <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">Sin signups recientes</p>
+                    <p className="px-4 py-6 text-center text-xs text-muted">Sin signups recientes</p>
                 )}
                 {tab === 'expiring' && expiringSoon.length === 0 && (
-                    <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">
+                    <p className="px-4 py-6 text-center text-xs text-muted">
                         Ningún coach vence en los próximos 7 días ✓
                     </p>
                 )}
                 {tab === 'pending' && pendingPayment.length === 0 && (
-                    <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">
+                    <p className="px-4 py-6 text-center text-xs text-muted">
                         Sin coaches en pago pendiente ✓
                     </p>
                 )}
                 {tab === 'audit' && auditEvents.length === 0 && (
-                    <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">Sin actividad reciente</p>
+                    <p className="px-4 py-6 text-center text-xs text-muted">Sin actividad reciente</p>
                 )}
             </div>
         </div>

@@ -19,8 +19,8 @@ export default async function AdminFinanzasPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Finanzas</h1>
-                <p className="text-xs text-[--admin-text-3]">Revenue, churn y eventos de suscripción.</p>
+                <h1 className="text-2xl font-bold tracking-tight text-strong">Finanzas</h1>
+                <p className="text-xs text-muted">Revenue, churn y eventos de suscripción.</p>
             </div>
 
             <FinanzasKpis

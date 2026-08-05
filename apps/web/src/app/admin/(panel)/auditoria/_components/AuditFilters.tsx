@@ -42,8 +42,7 @@ export function AuditFilters() {
             <select
                 value={sp.get('action') ?? ''}
                 onChange={e => push('action', e.target.value)}
-                style={{ colorScheme: 'dark' }}
-                className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2 py-1.5 text-xs text-[--admin-text-2] focus:outline-none focus:border-[--admin-accent] max-w-[180px] sm:max-w-none"
+                className="rounded border border-subtle bg-surface-sunken px-2 py-1.5 text-xs text-body focus:outline-none focus:border-[var(--sport-500)] max-w-[180px] sm:max-w-none"
             >
                 <option value="">Todas las acciones</option>
                 {ACTIONS.map(a => (
@@ -55,8 +54,7 @@ export function AuditFilters() {
                 type="date"
                 value={sp.get('from') ?? ''}
                 onChange={e => push('from', e.target.value)}
-                style={{ colorScheme: 'dark' }}
-                className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2 py-1.5 text-xs text-[--admin-text-2] focus:outline-none focus:border-[--admin-accent] w-36"
+                className="rounded border border-subtle bg-surface-sunken px-2 py-1.5 text-xs text-body focus:outline-none focus:border-[var(--sport-500)] w-36"
                 placeholder="Desde"
             />
 
@@ -64,8 +62,7 @@ export function AuditFilters() {
                 type="date"
                 value={sp.get('to') ?? ''}
                 onChange={e => push('to', e.target.value)}
-                style={{ colorScheme: 'dark' }}
-                className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2 py-1.5 text-xs text-[--admin-text-2] focus:outline-none focus:border-[--admin-accent] w-36"
+                className="rounded border border-subtle bg-surface-sunken px-2 py-1.5 text-xs text-body focus:outline-none focus:border-[var(--sport-500)] w-36"
                 placeholder="Hasta"
             />
 
@@ -74,13 +71,13 @@ export function AuditFilters() {
                 value={sp.get('target') ?? ''}
                 onChange={e => push('target', e.target.value)}
                 placeholder="UUID target..."
-                className="rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2 py-1.5 text-xs text-[--admin-text-2] placeholder:text-[--admin-text-3] focus:outline-none focus:border-[--admin-accent] w-40 sm:w-48"
+                className="rounded border border-subtle bg-surface-sunken px-2 py-1.5 text-xs text-body placeholder:text-muted focus:outline-none focus:border-[var(--sport-500)] w-40 sm:w-48"
             />
 
             {hasFilters && (
                 <button
                     onClick={reset}
-                    className="rounded px-2 py-1.5 text-xs text-[--admin-text-3] hover:text-[--admin-text-2] transition-colors"
+                    className="rounded px-2 py-1.5 text-xs text-muted hover:text-body transition-colors"
                 >
                     Reset
                 </button>

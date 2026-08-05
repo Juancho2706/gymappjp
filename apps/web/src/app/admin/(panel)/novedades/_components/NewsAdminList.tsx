@@ -40,9 +40,9 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'text-muted-foreground',
-  published: 'text-emerald-500',
-  archived: 'text-amber-500',
+  draft: 'text-muted',
+  published: 'text-[var(--success-500)]',
+  archived: 'text-[var(--warning-500)]',
 }
 
 export function NewsAdminList({ items }: Props) {
@@ -100,8 +100,8 @@ export function NewsAdminList({ items }: Props) {
 
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-[--admin-border] bg-[--admin-bg-surface] p-8 text-center">
-        <p className="text-sm text-[--admin-text-3]">No hay novedades creadas aún.</p>
+      <div className="rounded-xl border border-subtle bg-surface-card p-8 text-center">
+        <p className="text-sm text-muted">No hay novedades creadas aún.</p>
       </div>
     )
   }
@@ -114,8 +114,8 @@ export function NewsAdminList({ items }: Props) {
           className={cn(
             'rounded-xl border p-4 transition-colors',
             item.is_pinned
-              ? 'border-primary/20 bg-primary/[0.04]'
-              : 'border-[--admin-border] bg-[--admin-bg-surface]'
+              ? 'border-[var(--sport-500)]/20 bg-[var(--sport-500)]/[0.04]'
+              : 'border-subtle bg-surface-card'
           )}
         >
           <div className="flex items-start justify-between gap-3">
@@ -125,12 +125,12 @@ export function NewsAdminList({ items }: Props) {
                 <span className={cn('text-[10px] font-bold uppercase tracking-wider', STATUS_COLORS[item.status || 'draft'])}>
                   {STATUS_LABELS[item.status || 'draft']}
                 </span>
-                {item.is_pinned && <Pin className="h-3 w-3 text-primary" />}
+                {item.is_pinned && <Pin className="h-3 w-3 text-[var(--sport-500)]" />}
               </div>
-              <h3 className="text-sm font-bold text-[--admin-text-1] truncate">{item.title}</h3>
-              <p className="text-xs text-[--admin-text-3] line-clamp-2 mt-1">{item.content}</p>
+              <h3 className="text-sm font-bold text-strong truncate">{item.title}</h3>
+              <p className="text-xs text-muted line-clamp-2 mt-1">{item.content}</p>
               {item.published_at && (
-                <p className="text-[10px] text-[--admin-text-3] mt-1">
+                <p className="text-[10px] text-muted mt-1">
                   Publicado: {new Date(item.published_at).toLocaleDateString('es-CL')}
                 </p>
               )}
@@ -144,7 +144,7 @@ export function NewsAdminList({ items }: Props) {
                   disabled={loadingId === item.id}
                   title="Publicar"
                 >
-                  <Send className="h-3.5 w-3.5 text-emerald-500" />
+                  <Send className="h-3.5 w-3.5 text-[var(--success-500)]" />
                 </Button>
               )}
               <Button
@@ -154,7 +154,7 @@ export function NewsAdminList({ items }: Props) {
                 disabled={loadingId === item.id}
                 title={item.is_pinned ? 'Desfijar' : 'Fijar'}
               >
-                <Pin className={cn('h-3.5 w-3.5', item.is_pinned ? 'text-primary' : 'text-[--admin-text-3]')} />
+                <Pin className={cn('h-3.5 w-3.5', item.is_pinned ? 'text-[var(--sport-500)]' : 'text-muted')} />
               </Button>
               <NewsCreateSheet
                 newsItem={item}
@@ -168,7 +168,7 @@ export function NewsAdminList({ items }: Props) {
                   disabled={loadingId === item.id}
                   title="Archivar"
                 >
-                  <Archive className="h-3.5 w-3.5 text-amber-500" />
+                  <Archive className="h-3.5 w-3.5 text-[var(--warning-500)]" />
                 </Button>
               ) : (
                 <Button
@@ -178,7 +178,7 @@ export function NewsAdminList({ items }: Props) {
                   disabled={loadingId === item.id}
                   title="Restaurar"
                 >
-                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  <Check className="h-3.5 w-3.5 text-[var(--success-500)]" />
                 </Button>
               )}
               <Button
@@ -188,7 +188,7 @@ export function NewsAdminList({ items }: Props) {
                 disabled={loadingId === item.id}
                 title="Eliminar"
               >
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                <Trash2 className="h-3.5 w-3.5 text-[var(--danger-500)]" />
               </Button>
             </div>
           </div>

@@ -36,15 +36,25 @@ export function AdminSortHeader({ label, sortKey, className = '' }: Props) {
             ? ChevronDown
             : ChevronUp
 
+    const ariaSort: 'ascending' | 'descending' | 'none' = !isActive
+        ? 'none'
+        : currentDir === 'desc'
+            ? 'descending'
+            : 'ascending'
+
     return (
         <th
-            className={`cursor-pointer select-none whitespace-nowrap px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3] hover:text-[--admin-text-2] transition-colors ${className}`}
-            onClick={handleClick}
+            aria-sort={ariaSort}
+            className={`select-none whitespace-nowrap text-left text-[11px] font-medium uppercase tracking-widest ${className}`}
         >
-            <span className="flex items-center gap-1">
+            <button
+                type="button"
+                onClick={handleClick}
+                className="flex w-full cursor-pointer items-center gap-1 px-3 py-2 text-muted transition-colors hover:text-body focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
+            >
                 {label}
-                <Icon className={`h-3 w-3 ${isActive ? 'text-[--admin-accent]' : ''}`} />
-            </span>
+                <Icon className={`h-3 w-3 ${isActive ? 'text-[var(--sport-500)]' : ''}`} />
+            </button>
         </th>
     )
 }

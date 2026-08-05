@@ -8,6 +8,9 @@ interface Props {
     pageSize: number
 }
 
+const NAV_BTN =
+    'flex h-7 w-7 items-center justify-center rounded border border-subtle bg-surface-sunken text-muted transition-colors hover:text-strong disabled:opacity-30 focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none'
+
 export function AdminPagination({ total, pageSize }: Props) {
     const router = useRouter()
     const pathname = usePathname()
@@ -27,25 +30,29 @@ export function AdminPagination({ total, pageSize }: Props) {
     }
 
     return (
-        <div className="flex items-center justify-between border-t border-[--admin-border] px-4 py-3">
-            <span className="font-mono text-xs text-[--admin-text-3]">
+        <div className="flex items-center justify-between border-t border-subtle px-4 py-3">
+            <span className="font-mono text-xs text-muted">
                 {from}–{to} de {total}
             </span>
             <div className="flex items-center gap-1">
                 <button
+                    type="button"
+                    aria-label="Página anterior"
                     disabled={page <= 1}
                     onClick={() => go(page - 1)}
-                    className="flex h-7 w-7 items-center justify-center rounded border border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-3] hover:text-[--admin-text-1] disabled:opacity-30 transition-colors"
+                    className={NAV_BTN}
                 >
                     <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
-                <span className="font-mono text-xs text-[--admin-text-2] px-2">
+                <span className="font-mono text-xs text-body px-2">
                     {page} / {totalPages}
                 </span>
                 <button
+                    type="button"
+                    aria-label="Página siguiente"
                     disabled={page >= totalPages}
                     onClick={() => go(page + 1)}
-                    className="flex h-7 w-7 items-center justify-center rounded border border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-3] hover:text-[--admin-text-1] disabled:opacity-30 transition-colors"
+                    className={NAV_BTN}
                 >
                     <ChevronRight className="h-3.5 w-3.5" />
                 </button>

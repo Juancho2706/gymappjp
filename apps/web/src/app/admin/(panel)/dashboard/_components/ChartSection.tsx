@@ -23,8 +23,8 @@ const TIER_COLORS: Record<string, string> = {
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] p-4">
-            <p className="mb-3 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">{title}</p>
+        <div className="rounded-lg border border-subtle bg-surface-card p-4">
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-widest text-muted">{title}</p>
             {children}
         </div>
     )
@@ -88,7 +88,7 @@ export function ChartSection({ mrrSeries, tierSeries, sessions, coachesByTier }:
             <ChartCard title="Distribución tiers actual">
                 <div className="h-52 flex items-center justify-center">
                     {pieData.length === 0 ? (
-                        <p className="text-xs text-[--admin-text-3]">Sin datos</p>
+                        <p className="text-xs text-muted">Sin datos</p>
                     ) : (
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>

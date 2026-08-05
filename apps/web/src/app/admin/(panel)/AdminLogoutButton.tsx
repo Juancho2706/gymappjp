@@ -20,7 +20,8 @@ export function AdminLogoutButton({ iconOnly = false }: { iconOnly?: boolean }) 
             <button
                 onClick={handleSignOut}
                 title="Cerrar sesión"
-                className="flex h-8 w-8 items-center justify-center rounded text-[--admin-text-3] hover:text-[--admin-red] hover:bg-[--admin-bg-elevated] transition-colors"
+                aria-label="Cerrar sesión"
+                className="flex h-8 w-8 items-center justify-center rounded text-muted hover:text-[var(--danger-500)] hover:bg-surface-sunken transition-colors focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)] focus-visible:outline-none"
             >
                 <LogOut className="h-3.5 w-3.5" />
             </button>
@@ -32,7 +33,7 @@ export function AdminLogoutButton({ iconOnly = false }: { iconOnly?: boolean }) 
             onClick={handleSignOut}
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-xs text-neutral-400 hover:text-neutral-100"
+            className="w-full justify-start text-xs text-muted hover:text-strong"
         >
             <LogOut className="mr-2 h-3.5 w-3.5" />
             Cerrar sesión

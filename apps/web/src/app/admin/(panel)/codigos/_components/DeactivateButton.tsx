@@ -11,7 +11,7 @@ export function DeactivateButton({ codeId }: { codeId: string }) {
             type="button"
             disabled={pending}
             onClick={() => start(async () => { await deactivateCodeAction(codeId) })}
-            className="rounded border border-[--admin-border] px-2 py-1 text-xs text-[--admin-text-2] hover:text-red-500 disabled:opacity-50"
+            className="rounded border border-subtle px-2 py-1 text-xs text-body hover:text-[var(--danger-500)] disabled:opacity-50"
         >
             {pending ? '…' : 'Desactivar'}
         </button>

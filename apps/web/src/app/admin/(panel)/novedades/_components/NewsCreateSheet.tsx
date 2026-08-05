@@ -241,7 +241,7 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
                   <FormControl>
                     <div className="space-y-3">
                       {imageUrl ? (
-                        <div className="relative rounded-lg border border-border overflow-hidden bg-black/20">
+                        <div className="relative rounded-lg border border-subtle overflow-hidden bg-[var(--ink-950)]/20">
                           <Image
                             src={imageUrl}
                             alt="Preview"
@@ -252,7 +252,7 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
                           <button
                             type="button"
                             onClick={removeImage}
-                            className="absolute top-2 right-2 p-1 rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors"
+                            className="absolute top-2 right-2 p-1 rounded-full bg-[var(--danger-500)] text-white hover:bg-[var(--danger-500)]/90 transition-colors"
                             title="Eliminar imagen"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -262,19 +262,19 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
                         <div
                           onClick={() => fileInputRef.current?.click()}
                           className={cn(
-                            'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-6 cursor-pointer transition-colors hover:border-primary/50 hover:bg-primary/[0.02]',
+                            'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-subtle p-6 cursor-pointer transition-colors hover:border-[var(--sport-500)]/50 hover:bg-[var(--sport-500)]/[0.02]',
                             uploadingImage && 'opacity-60 pointer-events-none'
                           )}
                         >
                           {uploadingImage ? (
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            <Loader2 className="h-6 w-6 animate-spin text-muted" />
                           ) : (
-                            <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                            <ImageIcon className="h-6 w-6 text-muted" />
                           )}
-                          <p className="text-xs text-muted-foreground text-center">
+                          <p className="text-xs text-muted text-center">
                             {uploadingImage ? 'Subiendo...' : 'Haz clic o arrastra una imagen'}
                           </p>
-                          <p className="text-[10px] text-muted-foreground/60">PNG, JPG, WebP · Max 2MB</p>
+                          <p className="text-[10px] text-subtle">PNG, JPG, WebP · Max 2MB</p>
                         </div>
                       )}
                       <input
@@ -286,9 +286,9 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
                       />
                       {!imageUrl && (
                         <div className="flex items-center gap-2">
-                          <div className="h-px flex-1 bg-border" />
-                          <span className="text-[10px] text-muted-foreground uppercase">o pegar URL</span>
-                          <div className="h-px flex-1 bg-border" />
+                          <div className="h-px flex-1 bg-[var(--border-subtle)]" />
+                          <span className="text-[10px] text-muted uppercase">o pegar URL</span>
+                          <div className="h-px flex-1 bg-[var(--border-subtle)]" />
                         </div>
                       )}
                       {!imageUrl && (
@@ -343,7 +343,7 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
                       type="checkbox"
                       checked={field.value}
                       onChange={(e) => field.onChange(e.target.checked)}
-                      className="h-4 w-4 rounded border-border text-primary"
+                      className="h-4 w-4 rounded border-subtle text-[var(--sport-500)]"
                     />
                   </FormControl>
                   <FormLabel className="!mt-0">Fijar como importante</FormLabel>

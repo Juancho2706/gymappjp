@@ -60,8 +60,8 @@ export default async function AdminAuditoriaPage({ searchParams }: Props) {
         <div className="space-y-4">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Auditoría</h1>
-                    <p className="text-xs text-[--admin-text-3]">Historial de acciones administrativas.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-strong">Auditoría</h1>
+                    <p className="text-xs text-muted">Historial de acciones administrativas.</p>
                 </div>
                 <PageInfoButton title="Auditoría — Guía completa" sections={AUDIT_INFO} />
             </div>

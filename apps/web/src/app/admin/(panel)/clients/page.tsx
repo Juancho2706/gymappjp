@@ -47,15 +47,15 @@ export default async function AdminClientsPage({
         <div className="space-y-4">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Clientes</h1>
-                    <p className="text-xs text-[--admin-text-3]">
+                    <h1 className="text-2xl font-bold tracking-tight text-strong">Clientes</h1>
+                    <p className="text-xs text-muted">
                         {total} alumno{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''} en la plataforma.
                     </p>
                 </div>
                 <PageInfoButton title="Clientes — Guía completa" sections={CLIENTS_INFO} />
             </div>
 
-            <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-[--admin-bg-surface]" />}>
+            <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-surface-card" />}>
                 <ClientTable clients={clients} total={total} coaches={coaches} />
             </Suspense>
         </div>
