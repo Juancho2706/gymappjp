@@ -1,0 +1,11 @@
+-- SEC-B (2026-08-05): cierra la fuga cross-tenant de billing en coaches.
+-- `public_read_coach_branding` (qual TRUE, rol public) dejaba a CUALQUIER authenticated leer
+-- las filas de TODOS los coaches; como authenticated conserva GRANT de todas las columnas,
+-- eso incluia billing (subscription_mp_id, card_last4, current_period_end, ...).
+-- El acceso legitimo queda cubierto por las policies existentes:
+--   - anon (branding de login /c): coaches_select_anon (qual true + column-grants de branding)
+--   - alumno -> su coach: clients_read_coach_branding y coaches_select_authenticated
+--   - coach -> su propia fila: coaches_select_own / coaches_select_authenticated
+-- El proxy web ya no depende de esta policy: el SELECT de branding usa un client anon dedicado.
+-- Smoke tx-rollback pre-aplicacion: anon=34, alumno ve solo su coach (1), coach ajeno=0.
+drop policy if exists "public_read_coach_branding" on public.coaches;

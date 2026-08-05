@@ -28,9 +28,11 @@ ALTER POLICY archive_gate_nutrition_v2_subs ON public.nutrition_item_substitutio
   USING (private.student_data_read_gate_for_nutrition_v2_version(version_id))
   WITH CHECK (private.student_data_read_gate_for_nutrition_v2_version(version_id));
 
+-- OJO (MIG-D 20260805182135): el wrap (select auth.uid()) del advisor initplan se CONSERVA
+-- en la reversion — revertir el orden del OR no debe deshacer el fix de initplan.
 ALTER POLICY nutrition_plans_v2_select ON public.nutrition_plans_v2
   USING (private.nutrition_v2_can_manage_client(client_id)
-         OR ((auth.uid() = client_id) AND (current_published_version_id IS NOT NULL)));
+         OR (((select auth.uid()) = client_id) AND (current_published_version_id IS NOT NULL)));
 
 -- opcional, tras revertir tambien la fase 2:
 -- DROP FUNCTION private.student_readable_nutrition_v2_version_ids();
