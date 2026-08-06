@@ -76,6 +76,28 @@ export type SavePlanTemplateResult =
   | { success: false; error: string }
 
 /**
+ * Traduce el error crudo de la escritura a algo que el coach pueda accionar.
+ *
+ * El caso que motivo esto (QA del owner, 2026-08-05): un INSERT devolvio `new row violates
+ * row-level security policy for table "nutrition_plan_templates_v2"` y ese texto llego tal cual
+ * al dialogo. La policy `npt2_insert_own` exige `coach_id = auth.uid()` y la app SIEMPRE escribe
+ * `coach_id = <sub del JWT>`, asi que el unico modo de fallarla es que la base haya visto
+ * `auth.uid() = NULL`: el token que viajo a PostgREST no era el de una sesion viva (expirado o
+ * ausente) aunque `getClaims()` —verificacion LOCAL contra el JWKS— ya hubiera devuelto un `sub`
+ * del cookie. Es una carrera de refresco de sesion, no un problema de tenencia: la salida real
+ * para el coach es recargar. Se registra en el server para poder distinguirlo de un 42501 de
+ * scope si vuelve a pasar.
+ */
+function toWriteErrorMessage(raw: string | undefined, phase: 'insert' | 'update'): string {
+  const message = raw ?? ''
+  if (/row-level security|permission denied|42501/i.test(message)) {
+    console.error('nutrition_v2_plan_template_write_denied', { phase, message })
+    return 'Tu sesión ya no tiene permiso para guardar plantillas. Recarga la página e inténtalo de nuevo.'
+  }
+  return message || 'No se pudo guardar la plantilla.'
+}
+
+/**
  * Guarda una plantilla desde el borrador del builder o desde un plan publicado.
  *
  * `buildTemplatePayload` es quien quita la identidad (plan, version, alumno y los ids de cada
@@ -129,7 +151,7 @@ export async function savePlanTemplate(
     sourcePlanId: input.sourcePlanId ?? null,
     createdBy: input.actorCoachId,
   })
-  if (error || !template) return { success: false, error: error ?? 'No se pudo guardar la plantilla.' }
+  if (error || !template) return { success: false, error: toWriteErrorMessage(error, 'insert') }
   return { success: true, template: toListItem(template) }
 }
 
@@ -182,7 +204,7 @@ export async function updatePlanTemplateDraft(
     schemaVersion: TEMPLATE_SCHEMA_VERSION,
     summary: summary as unknown as Json,
   })
-  if (error || !template) return { success: false, error: error ?? 'No se pudo guardar la plantilla.' }
+  if (error || !template) return { success: false, error: toWriteErrorMessage(error, 'update') }
   return { success: true, template: toListItem(template) }
 }
 

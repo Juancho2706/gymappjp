@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react'
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TemplateLibrary, type TemplateLibraryItem } from './TemplateLibrary'
 import { ActivePlansBoard } from './ActivePlansBoard'
@@ -73,14 +73,8 @@ export function NutritionHub({
 
   const actions = (
     <>
-      <Link
-        href="/coach/meal-groups"
-        title="Grupos de comidas"
-        aria-label="Grupos de comidas"
-        className="eva-press hidden h-9 w-9 items-center justify-center rounded-control border-[1.5px] border-[color:var(--border-default)] bg-[var(--surface-card)] text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-sunken)] md:inline-flex"
-      >
-        <BookOpen className="h-[17px] w-[17px]" />
-      </Link>
+      {/* El atajo a /coach/meal-groups se retiró con la ruta (P15): los grupos se crean y se
+          insertan desde el creador de planes, no desde una biblioteca aparte. */}
       <CoachNutritionGuideDialog
         hasClients={hasClients}
         onAssign={() => setHubTab('clients')}

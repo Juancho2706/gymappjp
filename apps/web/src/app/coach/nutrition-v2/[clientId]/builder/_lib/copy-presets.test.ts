@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { COPY_PRESETS, freeDaysForCopyPreset, targetsForCopyPreset } from './copy-presets'
+import { COPY_PRESETS, daysForCopyPreset, replacedDaysOf, targetsForCopyPreset } from './copy-presets'
 
 const WEEKDAYS = COPY_PRESETS[0]
 const WEEKEND = COPY_PRESETS[1]
@@ -47,17 +47,48 @@ describe('targetsForCopyPreset — el preset MARCA destinos, no los inventa', ()
   })
 })
 
-describe('freeDaysForCopyPreset — dias libres del submenu del dia', () => {
-  it('descarta los dias que ya tienen contenido propio', () => {
-    expect(freeDaysForCopyPreset(WEEKDAYS, [2, 4])).toEqual([1, 3, 5])
+describe('daysForCopyPreset — el dia ocupado se ELIGE y se marca "reemplaza"', () => {
+  it('marca los dias que ya tienen contenido propio en vez de descartarlos', () => {
+    expect(daysForCopyPreset(WEEKDAYS, { takenDays: [2, 4], sourceDayOfWeek: null })).toEqual([
+      { dayOfWeek: 1, replaces: false },
+      { dayOfWeek: 2, replaces: true },
+      { dayOfWeek: 3, replaces: false },
+      { dayOfWeek: 4, replaces: true },
+      { dayOfWeek: 5, replaces: false },
+    ])
+  })
+
+  it('el dia de ORIGEN nunca es destino, aunque el preset lo abarque', () => {
+    const days = daysForCopyPreset(WEEKDAYS, { takenDays: [1], sourceDayOfWeek: 1 })
+    expect(days.map((day) => day.dayOfWeek)).toEqual([2, 3, 4, 5])
   })
 
   it('"Todos" cubre la semana completa en orden Lu→Do', () => {
-    expect(freeDaysForCopyPreset(ALL, [])).toEqual([1, 2, 3, 4, 5, 6, 0])
+    const days = daysForCopyPreset(ALL, { takenDays: [], sourceDayOfWeek: null })
+    expect(days.map((day) => day.dayOfWeek)).toEqual([1, 2, 3, 4, 5, 6, 0])
+    expect(days.every((day) => !day.replaces)).toBe(true)
   })
 
-  it('con todo ocupado devuelve vacio (opcion deshabilitada)', () => {
-    expect(freeDaysForCopyPreset(WEEKEND, [6, 0])).toEqual([])
-    expect(freeDaysForCopyPreset(ALL, [0, 1, 2, 3, 4, 5, 6])).toEqual([])
+  it('con la semana entera ocupada el preset SIGUE teniendo destinos (todos reemplazan)', () => {
+    const days = daysForCopyPreset(ALL, { takenDays: [0, 1, 2, 3, 4, 5, 6], sourceDayOfWeek: 6 })
+    expect(days.map((day) => day.dayOfWeek)).toEqual([1, 2, 3, 4, 5, 0])
+    expect(days.every((day) => day.replaces)).toBe(true)
+  })
+
+  it('sin destinos fuera del origen devuelve vacio (la UI apaga la opcion)', () => {
+    expect(daysForCopyPreset(WEEKEND, { takenDays: [6, 0], sourceDayOfWeek: 6 })).toHaveLength(1)
+    expect(daysForCopyPreset({ id: 'weekend', label: 'x', days: [6] }, { takenDays: [], sourceDayOfWeek: 6 })).toEqual([])
+  })
+})
+
+describe('replacedDaysOf — lo que el aviso de confirmacion tiene que nombrar', () => {
+  it('devuelve solo los dias que se sobrescriben, en el orden recibido', () => {
+    expect(
+      replacedDaysOf(daysForCopyPreset(WEEKDAYS, { takenDays: [3, 1], sourceDayOfWeek: null })),
+    ).toEqual([1, 3])
+  })
+
+  it('sin ocupados devuelve vacio (se copia sin preguntar)', () => {
+    expect(replacedDaysOf(daysForCopyPreset(WEEKEND, { takenDays: [], sourceDayOfWeek: null }))).toEqual([])
   })
 })

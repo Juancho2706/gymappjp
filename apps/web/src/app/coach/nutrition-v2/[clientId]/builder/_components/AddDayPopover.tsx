@@ -13,9 +13,9 @@
  * deshabilitados, origen del contenido (copiar el día base o empezar vacío) y CTA
  * "Crear N días". Un solo viaje crea Sa+Do de una.
  *
- * Coach BASE (sin Nutrición Pro): el trigger lleva candado y el panel muestra el upsell
- * inline en vez del selector. La barrera REAL es el servidor (`publishPlanAction` responde
- * `UPGRADE_REQUIRED` con feature `multi_variant`); esto solo evita el callejón sin salida.
+ * Coach FREE (sin plan pago): el trigger lleva candado y el panel explica el límite inline en vez
+ * del selector. La barrera REAL es el servidor (`publishPlanAction` responde `UPGRADE_REQUIRED`
+ * con feature `multi_variant`); esto solo evita el callejón sin salida.
  */
 
 import { useState, useSyncExternalStore } from 'react'
@@ -64,14 +64,17 @@ const triggerClass =
   'inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-dashed border-border-default bg-surface-card px-3 text-xs font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
 
 /**
- * Upsell de "dias distintos" (gate Pro). Se EXPORTA porque el selector de dia del creador
- * (`DayPlanStrip`) lo reusa tal cual cuando el coach BASE toca "Personalizar {dia}": es el mismo
- * limite comercial contado con las mismas palabras, en el mismo popover/sheet.
+ * Panel de "dias distintos" para el coach FREE. Se EXPORTA porque el selector de dia del creador
+ * (`DayPlanStrip`) lo reusa tal cual cuando toca "Personalizar {dia}": es el mismo limite
+ * comercial contado con las mismas palabras, en el mismo popover/sheet.
+ *
+ * NO es un upsell de modulo: los modulos ya no se compran sueltos, vienen con CUALQUIER plan
+ * pago de EVA. Por eso el CTA es "Ver planes" y apunta a la suscripcion.
  */
 export function UpsellPanel() {
   return (
     <div className="flex items-start gap-2.5 p-1">
-      {/* Ícono del módulo Nutrición Pro (asset del CEO, estático @2x). */}
+      {/* Ícono del módulo de nutrición avanzada (asset del CEO, estático @2x). */}
       <Image
         src="/module-icons/nutrition-pro@2x.webp"
         alt=""
@@ -82,16 +85,16 @@ export function UpsellPanel() {
         className="h-8 w-8 shrink-0 object-contain"
       />
       <div className="min-w-0 space-y-1">
-        <p className="text-sm font-semibold text-strong">Días distintos con Nutrición Pro</p>
+        <p className="text-sm font-semibold text-strong">Días distintos</p>
         <p className="text-xs leading-relaxed text-muted">
-          Armar un día especial (por ejemplo, el fin de semana) es parte de Nutrición Pro, incluido en los planes
-          pagos. Tu plan actual publica un solo día para toda la semana.
+          Armar un día especial (por ejemplo, el fin de semana) viene incluido en cualquier plan pago de EVA. Tu
+          plan actual publica un solo día para toda la semana.
         </p>
         <Link
           href={NUTRITION_PRO_UPGRADE_HREF}
           className="inline-flex min-h-9 items-center text-xs font-semibold text-primary underline underline-offset-2"
         >
-          Mejorar mi plan
+          Ver planes
         </Link>
       </div>
     </div>
@@ -205,7 +208,7 @@ export function AddDayPopover({
   takenDays: readonly number[]
   /** El día base tiene contenido que valga la pena clonar. */
   canCopyBase: boolean
-  /** Coach sin Nutrición Pro: candado + upsell en vez del selector. */
+  /** Coach free (sin plan pago): candado + panel explicativo en vez del selector. */
   locked: boolean
   onCreate: (days: number[], origin: AddDayOrigin) => void
 }) {
@@ -223,23 +226,24 @@ export function AddDayPopover({
     <DaySelector takenDays={takenDays} canCopyBase={canCopyBase} onCreate={handleCreate} />
   )
 
-  // Gate Pro LEGIBLE antes de abrir (P1-7): candado + pastilla "Pro" en el propio chip, para
-  // que el coach base no descubra el límite recién dentro del panel.
+  // Límite LEGIBLE antes de abrir (P1-7): candado + pastilla "Plan pago" en el propio chip, para
+  // que el coach free no descubra el límite recién dentro del panel. No dice "Pro": los módulos
+  // no se compran aparte, vienen con cualquier plan pago.
   const trigger = (
     <>
       {locked ? <Lock aria-hidden="true" className="h-3.5 w-3.5" /> : <Plus aria-hidden="true" className="h-3.5 w-3.5" />}
       Agregar día
       {locked ? (
         <span className="rounded-pill border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15">
-          Pro
+          Plan pago
         </span>
       ) : null}
     </>
   )
   const triggerLabel = locked
-    ? 'Agregar un día distinto al plan (disponible con Nutrición Pro)'
+    ? 'Agregar un día distinto al plan (incluido en los planes pagos)'
     : 'Agregar un día distinto al plan'
-  const triggerTitle = locked ? 'Días distintos: disponible con Nutrición Pro' : undefined
+  const triggerTitle = locked ? 'Días distintos: incluido en cualquier plan pago' : undefined
 
   if (isDesktop) {
     return (

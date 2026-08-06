@@ -316,4 +316,70 @@ describe('quickEditPublishAction — mapeo de fallos del RPC', () => {
     const res = await quickEditPublishAction(input())
     expect(res).toEqual({ ok: false, code: 'FORBIDDEN' })
   })
+
+  // Defecto reportado por el owner (2026-08-05): el plan tenia dias sin ninguna comida (5 en
+  // LIVE), el guard server-side lo rechazaba y este mapeo lo colapsaba a UNKNOWN => la barra
+  // decia "No se pudo publicar. Reintentar" sin decir QUE dia, y el plan quedaba imposible de
+  // republicar. Ahora viaja con codigo propio y con el mensaje del servidor.
+  it('EMPTY_DAY_VARIANT del pipeline => EMPTY_DAY con el mensaje del servidor', async () => {
+    authOk(makeDb({ baseVersion: baseVersionRow(), plan: { id: PLAN, client_id: CLIENT }, variants: [{ id: 'v1' }], versionNumber: 4 }))
+    vi.mocked(persistAndPublishDraft).mockResolvedValue({
+      ok: false,
+      code: 'EMPTY_DAY_VARIANT',
+      error: 'Hay un día del plan sin ninguna comida (Lunes).',
+    } as never)
+    const res = await quickEditPublishAction(input())
+    expect(res).toEqual({
+      ok: false,
+      code: 'EMPTY_DAY',
+      message: 'Hay un día del plan sin ninguna comida (Lunes).',
+    })
+  })
+
+  it('EXCHANGE_GROUP_NOT_FOUND => VALIDATION con mensaje accionable', async () => {
+    authOk(makeDb({ baseVersion: baseVersionRow(), plan: { id: PLAN, client_id: CLIENT }, variants: [{ id: 'v1' }], versionNumber: 4 }))
+    vi.mocked(persistAndPublishDraft).mockResolvedValue({
+      ok: false,
+      code: 'EXCHANGE_GROUP_NOT_FOUND',
+      error: 'Un grupo de porciones del plan ya no esta disponible.',
+    } as never)
+    const res = await quickEditPublishAction(input())
+    expect(res).toEqual({
+      ok: false,
+      code: 'VALIDATION',
+      message: 'Un grupo de porciones del plan ya no esta disponible.',
+    })
+  })
+
+  it('un fallo sin mapeo conserva el copy del servidor en vez de perderlo', async () => {
+    authOk(makeDb({ baseVersion: baseVersionRow(), plan: { id: PLAN, client_id: CLIENT }, variants: [{ id: 'v1' }], versionNumber: 4 }))
+    vi.mocked(persistAndPublishDraft).mockResolvedValue({
+      ok: false,
+      code: 'WRITE_FAILED',
+      error: 'No se pudo guardar el plan (publicacion). Intenta nuevamente.',
+    } as never)
+    const res = await quickEditPublishAction(input())
+    expect(res).toEqual({
+      ok: false,
+      code: 'UNKNOWN',
+      message: 'No se pudo guardar el plan (publicacion). Intenta nuevamente.',
+    })
+  })
+})
+
+describe('quickEditPublishAction — identificadores vacios (22P02)', () => {
+  it('un uuid vacio en el draft corta ANTES del schema, con mensaje claro y sin tocar auth', async () => {
+    const bad = draft() as Record<string, unknown>
+    const variants = bad.dayVariants as Array<Record<string, unknown>>
+    const slots = variants[0].mealSlots as Array<Record<string, unknown>>
+    const items = slots[0].items as Array<Record<string, unknown>>
+    items[0].foodId = ''
+
+    const res = await quickEditPublishAction(input({ draft: bad }))
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.code).toBe('VALIDATION')
+    expect(res.message).toContain('sin identificador')
+    expect(authorizeCoach).not.toHaveBeenCalled()
+  })
 })

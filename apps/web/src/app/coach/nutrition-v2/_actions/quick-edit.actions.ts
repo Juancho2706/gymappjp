@@ -16,6 +16,7 @@ import {
   type ActionFailure,
   type NutritionV2Db,
 } from '@/app/coach/nutrition-v2/_actions/plan-persistence'
+import { collectBlankUuidPaths } from '@/app/coach/nutrition-v2/[clientId]/_quick-edit/quick-edit-state'
 
 // Quick-edit V2 (edicion fluida del plan, web coach): publica una VERSION NUEVA por el MISMO
 // pipeline canonico del builder (persistAndPublishDraft -> publish_nutrition_plan_v2), pero con:
@@ -42,8 +43,28 @@ export type QuickEditPublishResult =
   | { ok: true; versionId: string; versionNumber: number }
   | {
       ok: false
-      code: 'STALE_BASE' | 'EFFECTIVE_DATE' | 'UPGRADE_REQUIRED' | 'FORBIDDEN' | 'RATE_LIMITED' | 'VALIDATION' | 'UNKNOWN'
+      code:
+        | 'STALE_BASE'
+        | 'EFFECTIVE_DATE'
+        | 'UPGRADE_REQUIRED'
+        | 'FORBIDDEN'
+        | 'RATE_LIMITED'
+        | 'VALIDATION'
+        /** Un dia del plan quedo sin ninguna comida: el alumno lo veria vacio. */
+        | 'EMPTY_DAY'
+        | 'UNKNOWN'
       feature?: NutritionProFeature
+      /**
+       * Mensaje YA redactado para el coach (es-CL) cuando el servidor sabe algo accionable.
+       *
+       * Existe por el defecto que reporto el owner (2026-08-05): `persistAndPublishDraft`
+       * devuelve fallos con copy util —"Hay un día del plan sin ninguna comida (Lunes)…",
+       * "Un grupo de porciones del plan ya no está disponible"— y este mapeo los colapsaba a
+       * `UNKNOWN`, asi que la barra mostraba siempre "No se pudo publicar. Reintentar" y el
+       * coach reintentaba en loop sin forma de saber que arreglar. Ausente = la UI usa su
+       * copy generico de siempre.
+       */
+      message?: string
     }
 
 const QuickEditInputSchema = z.object({
@@ -67,15 +88,23 @@ function toQuickEditFailure(failure: ActionFailure): QuickEditPublishResult {
     case 'ROLLOUT_DISABLED':
     case 'SCOPE_REQUIRED':
       return { ok: false, code: 'FORBIDDEN' }
+    // Dia sin comidas: es el fallo que dejaba planes imposibles de republicar. Viaja con su
+    // propio codigo para que la UI marque el dia culpable, no solo pinte un error.
+    case 'EMPTY_DAY_VARIANT':
+      return { ok: false, code: 'EMPTY_DAY', message: failure.error }
+    // Grupos de porciones que ya no resuelven: accionable ("recarga y vuelve a intentar").
+    case 'EXCHANGE_GROUP_NOT_FOUND':
+    case 'EXCHANGE_BASE_GROUP_NOT_FOUND':
+      return { ok: false, code: 'VALIDATION', message: failure.error }
     case 'INVALID_PAYLOAD':
     case 'INVALID_DRAFT':
     case 'NEEDS_SLOT':
     case 'NEEDS_VARIANT':
     case 'PLAN_NOT_FOUND':
     case 'CLIENT_NOT_FOUND':
-      return { ok: false, code: 'VALIDATION' }
+      return { ok: false, code: 'VALIDATION', message: failure.error }
     default:
-      return { ok: false, code: 'UNKNOWN' }
+      return { ok: false, code: 'UNKNOWN', message: failure.error }
   }
 }
 
@@ -113,6 +142,22 @@ function hasText(value: string | null | undefined): boolean {
  * camino nuevo de escritura es este ensamblado (carry-over + delta-gate + effectiveFrom + guard).
  */
 export async function quickEditPublishAction(input: unknown): Promise<QuickEditPublishResult> {
+  // (0) Identificadores VACIOS antes que nada. El schema ya los rechaza (`z.string().uuid()` /
+  // `z.guid()`), pero su fallo llega como un "datos inválidos" generico: un '' colado por un
+  // adaptador del picker o por un respaldo local viejo quedaria indistinguible de una cantidad
+  // mal escrita. Nombrarlo aca deja el rastro exacto en el server y un mensaje claro en la UI,
+  // y garantiza que jamas se convierta en un `invalid input syntax for type uuid: ""` (22P02)
+  // opaco mas abajo.
+  const blankIds = collectBlankUuidPaths((input as { draft?: unknown } | null)?.draft ?? null)
+  if (blankIds.length > 0) {
+    console.error('nutrition_v2_quick_edit_blank_uuid', { paths: blankIds.slice(0, 20) })
+    return {
+      ok: false,
+      code: 'VALIDATION',
+      message: 'Un alimento o grupo del plan quedó sin identificador. Recarga la pantalla e inténtalo de nuevo.',
+    }
+  }
+
   const parsed = QuickEditInputSchema.safeParse(input)
   if (!parsed.success) {
     // El detalle de campos se pierde a proposito (contrato tipado del quick-edit); el log de zod

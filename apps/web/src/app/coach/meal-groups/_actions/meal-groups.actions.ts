@@ -1,10 +1,18 @@
 'use server'
 
+/**
+ * Acciones de "grupos de comidas" (`saved_meals`).
+ *
+ * La RUTA `/coach/meal-groups` se retiró (P15): la biblioteca dedicada ya no existe. Estas
+ * acciones siguen VIVAS porque el creador de planes V1 las consume: `PlanBuilder` guarda una
+ * comida como grupo (`saveMealGroup`) y `FoodSearchDrawer` los lista para insertarlos
+ * (`listCoachMealGroups`). Por eso tampoco quedan `revalidatePath` de la ruta muerta.
+ */
+
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { getMealGroups } from '../_data/meal-groups.queries'
-import { revalidatePath } from 'next/cache'
 
 const listMealGroupsSchema = z.object({ coachId: z.string().uuid() })
 
@@ -90,29 +98,9 @@ export async function saveMealGroup(
 
         if (error) throw new Error(error.message)
 
-        revalidatePath('/coach/meal-groups')
         return { success: true, group: fullGroup }
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error)
         return { error: 'Error al guardar el grupo de alimentos.', details: message }
-    }
-}
-
-export async function deleteMealGroup(groupId: string, coachId: string) {
-    const supabase = await createClient()
-
-    try {
-        const { error } = await supabase
-            .from('saved_meals')
-            .delete()
-            .eq('id', groupId)
-            .eq('coach_id', coachId)
-
-        if (error) throw error
-
-        revalidatePath('/coach/meal-groups')
-        return { success: true }
-    } catch {
-        return { error: 'No se pudo eliminar el grupo de alimentos.' }
     }
 }

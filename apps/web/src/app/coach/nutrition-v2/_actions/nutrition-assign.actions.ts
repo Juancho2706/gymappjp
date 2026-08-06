@@ -93,7 +93,7 @@ export async function assignPlanToClientsAction(input: unknown): Promise<AssignP
         ok: false,
         code: 'UPGRADE_REQUIRED',
         feature: proFeature,
-        error: `Activa Nutricion Pro para asignar ${NUTRITION_PRO_FEATURE_LABEL[proFeature]}.`,
+        error: `Asignar ${NUTRITION_PRO_FEATURE_LABEL[proFeature]} viene incluido en cualquier plan pago de EVA.`,
       }
     }
   }

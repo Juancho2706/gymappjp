@@ -20,6 +20,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   deletePlanTemplate,
   listPlanTemplates,
+  loadPlanTemplate,
   renamePlanTemplate,
   savePlanTemplate,
   setPlanTemplateFavorite,
@@ -128,6 +129,39 @@ export async function updatePlanTemplateDraftAction(input: unknown): Promise<Sav
 }
 
 const IdSchema = z.object({ id: z.string().uuid() })
+
+export type LoadPlanTemplateActionResult =
+  | { ok: true; name: string; description: string | null; draft: unknown; builder: unknown }
+  | { ok: false; error: string }
+
+/**
+ * Contenido COMPLETO de una plantilla (el mismo que el builder carga al editarla).
+ *
+ * Existe para el "Deshacer" de la baja: la biblioteca solo tiene metadatos
+ * (`PlanTemplateListItem`), asi que sin esto restaurar significaria re-crear una plantilla
+ * VACIA — justo lo que el coach cree estar recuperando. Se lee ANTES de borrar y se cachea en
+ * memoria; el DELETE entonces puede salir de inmediato (ver `PlanTemplatesLibrary`).
+ *
+ * `ok:false` cuando la plantilla no existe, es de otro coach (RLS) o su draft ya no valida
+ * contra el contrato: en ese caso NO hay nada que cachear y la UI cae a una confirmacion
+ * inline sin deshacer, en vez de prometer un undo que borraria el contenido.
+ */
+export async function loadPlanTemplateContentAction(input: unknown): Promise<LoadPlanTemplateActionResult> {
+  const parsed = IdSchema.safeParse(input)
+  if (!parsed.success) return { ok: false, error: 'Solicitud inválida.' }
+  const actor = await resolveActor()
+  if (!actor) return { ok: false, error: 'No autorizado.' }
+
+  const template = await loadPlanTemplate(actor.db, parsed.data.id)
+  if (!template) return { ok: false, error: 'Esa plantilla ya no se puede abrir.' }
+  return {
+    ok: true,
+    name: template.name,
+    description: template.description,
+    draft: template.draft,
+    builder: template.builder,
+  }
+}
 
 export type PlanTemplateMutationResult = { ok: true } | { ok: false; error: string }
 

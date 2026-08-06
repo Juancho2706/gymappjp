@@ -20,6 +20,7 @@ import type {
   NutritionMacroTargets,
   NutritionPlanDraft,
   NutritionPlanReadModel,
+  NutritionStrategy,
 } from '@eva/nutrition-v2'
 import {
   NUTRITION_WEEK_ORDER,
@@ -1485,13 +1486,56 @@ export interface QuickEditValidation {
   errors: Record<string, string>
 }
 
+/**
+ * Contexto que la validacion local no puede deducir del arbol editable. Hoy solo la
+ * ESTRATEGIA, que decide si un dia sin franjas es un error o su estado normal.
+ */
+export interface QuickEditValidationOptions {
+  /**
+   * Estrategia del plan vigente. Ausente = no se evalua la regla de dia vacio (misma
+   * validacion que antes, para los callers puros que no la conocen).
+   */
+  strategy?: NutritionStrategy | null
+}
+
+/**
+ * Espejo LOCAL del guard `EMPTY_DAY_VARIANT` del servidor (`plan-persistence.ts`): en un plan
+ * con franjas, un dia sin ninguna comida NO se puede publicar — el alumno no ve "un dia sin
+ * porciones", ve el dia entero vacio.
+ *
+ * Existe porque ese guard vive server-side y su mensaje se perdia: el quick-edit publicaba,
+ * el servidor rechazaba y la barra decia "No se pudo publicar" sin señalar QUE dia. Un plan
+ * que YA tenia dias vacios publicados (los hay en LIVE) quedaba imposible de republicar y el
+ * coach no tenia forma de saber por que. Aca se corta ANTES, marcando el dia culpable.
+ *
+ * La UI no autoriza: el servidor sigue siendo la barrera real (este chequeo solo evita el
+ * viaje y da el mensaje). `flexible` queda fuera por definicion: esa estrategia no tiene
+ * franjas y un dia sin ellas es su estado correcto.
+ */
+export function qeEmptyDayVariants(
+  state: QuickEditState,
+  strategy: NutritionStrategy | null | undefined,
+): QeVariant[] {
+  if (strategy == null || strategy === 'flexible') return []
+  return state.variants.filter((variant) => variant.slots.length === 0)
+}
+
 const MAX_KCAL = 12000
 const MAX_MACRO_G = 2000
 /** Tope del contrato (`NutritionDayVariantSchema.label`: max 120 tras trim). */
 export const VARIANT_LABEL_MAX = 120
 
-export function validateQuickEdit(state: QuickEditState): QuickEditValidation {
+export function validateQuickEdit(
+  state: QuickEditState,
+  options: QuickEditValidationOptions = {},
+): QuickEditValidation {
   const errors: Record<string, string> = {}
+  // Dia sin comidas (espejo del guard server-side): se marca por dia para que el coach sepa
+  // cual arreglar o eliminar, en vez de recibir un "No se pudo publicar" opaco.
+  for (const variant of qeEmptyDayVariants(state, options.strategy)) {
+    errors[`variant.${variant.key}.slots`] =
+      'Este día no tiene ninguna comida. Agrégale una franja o elimina el día.'
+  }
   // Espejo del contrato (max 8000 tras trim): corta ANTES de que el server responda un
   // VALIDATION generico sin señalar el campo.
   if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
@@ -1699,4 +1743,48 @@ export function applyQuickEditToDraft(base: NutritionPlanDraft, state: QuickEdit
     visibleNotes: normalizeVisibleNotes(state.visibleNotes),
     dayVariants: state.variants.map(projectVariant),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Guard de identificadores vacios (diagnostico, no barrera)
+// ---------------------------------------------------------------------------
+
+/** Claves del draft que la base almacena como `uuid`: un '' aca es 22P02 garantizado. */
+const DRAFT_UUID_KEYS = new Set([
+  'id',
+  'planId',
+  'versionId',
+  'clientId',
+  'foodId',
+  'recipeId',
+  'substitutionGroupId',
+  'exchangeGroupId',
+])
+
+/**
+ * Rutas del draft donde un campo de identidad llego como STRING VACIO.
+ *
+ * `NutritionPlanDraftSchema` ya rechaza esos valores (`z.string().uuid()` / `z.guid()`), pero
+ * su fallo llega al coach como un "datos inválidos" generico y al log como un issue de Zod sin
+ * contexto de negocio. Este barrido corre ANTES y nombra el campo exacto, de modo que un ''
+ * futuro —de un adaptador del picker, de un respaldo local viejo o de RN— se diagnostique en un
+ * vistazo en vez de terminar en `invalid input syntax for type uuid: ""` (22P02) opaco.
+ *
+ * Puro y sin dependencias: se usa desde la server action y desde los tests de regresion.
+ */
+export function collectBlankUuidPaths(value: unknown, path = 'draft'): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => collectBlankUuidPaths(entry, `${path}[${index}]`))
+  }
+  if (value === null || typeof value !== 'object') return []
+  const out: string[] = []
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const childPath = `${path}.${key}`
+    if (DRAFT_UUID_KEYS.has(key) && typeof child === 'string' && child.trim() === '') {
+      out.push(childPath)
+      continue
+    }
+    out.push(...collectBlankUuidPaths(child, childPath))
+  }
+  return out
 }

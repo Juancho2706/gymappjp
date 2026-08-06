@@ -338,10 +338,16 @@ export function HubRoster({
             className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-4 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
           />
         </div>
+        {/* Chips en UNA sola linea con scroll horizontal (QA owner 08-05): en 390px envolvian a
+            2-3 filas y empujaban el roster fuera de la pantalla. `-mx-1 px-1` da aire lateral
+            para que el primero y el ultimo no queden pegados al borde del scroller. La barra se
+            oculta inline: el repo no tiene una utility real para eso (las clases
+            `hide-scrollbar` / `scrollbar-none` que se ven por ahi no estan declaradas). */}
         <div
           aria-label="Filtrar por estado"
-          className="flex flex-wrap items-center gap-1.5"
+          className="-mx-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 py-0.5"
           role="group"
+          style={{ scrollbarWidth: 'none' }}
         >
           {chipOptions.map((option) => {
             const active = attention === option.value
@@ -349,7 +355,7 @@ export function HubRoster({
               <button
                 aria-pressed={active}
                 className={cn(
-                  'inline-flex min-h-9 items-center rounded-pill border px-3 text-xs font-semibold transition-colors',
+                  'inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-pill border px-3 text-xs font-semibold transition-colors',
                   active
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-border-default bg-surface-card text-muted hover:text-strong',

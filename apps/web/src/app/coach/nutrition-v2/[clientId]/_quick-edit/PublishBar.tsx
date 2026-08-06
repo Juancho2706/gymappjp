@@ -41,7 +41,7 @@ export function PublishBar() {
             <p>
               {QE_COPY.upgradeRequired}{' '}
               <Link href={NUTRITION_PRO_UPGRADE_HREF} className="font-semibold text-primary underline underline-offset-2">
-                Mejorar mi plan
+                Ver planes
               </Link>
             </p>
           </div>

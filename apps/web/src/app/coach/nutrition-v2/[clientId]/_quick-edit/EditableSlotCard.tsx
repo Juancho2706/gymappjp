@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { Check, Copy, CopyCheck, MoreVertical, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Copy, CopyCheck, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatNutritionDayOfWeek } from '@eva/nutrition-v2'
 import { NutritionCard } from '@/components/nutrition-v2'
@@ -49,6 +49,12 @@ export function EditableSlotCard({
   const [copyOpen, setCopyOpen] = useState(false)
   const [copySelection, setCopySelection] = useState<readonly string[]>([])
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  /**
+   * Franja contraida (chevron). Estado LOCAL y sin persistencia a proposito: un plan de 6
+   * comidas obliga a scrollear a ciegas para llegar a la de abajo, pero cual dejo abierta el
+   * coach no es una preferencia que valga la pena recordar entre sesiones. Arranca expandida.
+   */
+  const [collapsed, setCollapsed] = useState(false)
   // Dias destino de la copia (P0-4): todos menos el propio, en orden de lectura, con el aviso
   // por fila de si la franja homonima se va a REEMPLAZAR. Plan de un solo dia ⇒ [] (sin CTA).
   const copyTargets = useMemo(() => qeSlotCopyTargets(state, variantKey, slot.key), [state, variantKey, slot.key])
@@ -71,6 +77,8 @@ export function EditableSlotCard({
     summaryVariant.targets.calories.trim() !== '' &&
     Number.isFinite(summaryTargetCalories) &&
     Number.isFinite(summaryTargetProtein)
+  const slotLabel = slot.name.trim() || 'la franja'
+  const slotBodyId = `qe-slot-body-${slot.key}`
   const pickerSummary: FoodPickerSummary = {
     slotLabel: slot.name.trim() || 'Franja',
     slot: { calories: subtotal.calories, proteinG: subtotal.proteinG },
@@ -168,6 +176,22 @@ export function EditableSlotCard({
             className="h-11 w-[6.5rem] rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold tabular-nums text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
         </div>
+        {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
+            Contraída, la card sigue diciendo lo único que importa de un vistazo: nombre, hora
+            y su subtotal con las macros completas. */}
+        <button
+          type="button"
+          aria-label={collapsed ? QE_COPY.expandSlot(slotLabel) : QE_COPY.collapseSlot(slotLabel)}
+          aria-expanded={!collapsed}
+          aria-controls={slotBodyId}
+          onClick={() => setCollapsed((previous) => !previous)}
+          className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={'mx-auto h-4 w-4 transition-transform ' + (collapsed ? '-rotate-90' : '')}
+          />
+        </button>
         <button
           type="button"
           aria-label={`Opciones de la franja ${slot.name || 'sin nombre'}`}
@@ -306,31 +330,33 @@ export function EditableSlotCard({
         </div>
       ) : null}
 
-      <div className="mt-3 space-y-2">
-        {slot.items.length === 0 ? (
-          <p className="rounded-control border border-dashed border-border-subtle bg-surface-sunken px-3 py-3 text-center text-sm text-muted">
-            {QE_COPY.emptySlot}
-          </p>
-        ) : (
-          slot.items.map((item, itemIndex) => (
-            <EditableItemRow key={item.key} variantKey={variantKey} slotKey={slot.key} item={item} index={itemIndex} />
-          ))
-        )}
+      <div id={slotBodyId} hidden={collapsed}>
+        <div className="mt-3 space-y-2">
+          {slot.items.length === 0 ? (
+            <p className="rounded-control border border-dashed border-border-subtle bg-surface-sunken px-3 py-3 text-center text-sm text-muted">
+              {QE_COPY.emptySlot}
+            </p>
+          ) : (
+            slot.items.map((item, itemIndex) => (
+              <EditableItemRow key={item.key} variantKey={variantKey} slotKey={slot.key} item={item} index={itemIndex} />
+            ))
+          )}
+        </div>
+
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => setAddOpen(true)}
+          className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Plus className="h-4 w-4" />
+          {QE_COPY.addFood}
+        </button>
+
+        {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo "+ Alimento".
+            Se pinta sola solo si el plan usa porciones (capa invisible si no). */}
+        <EditablePortionsCard variantKey={variantKey} slot={slot} />
       </div>
-
-      <button
-        type="button"
-        disabled={isPending}
-        onClick={() => setAddOpen(true)}
-        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Plus className="h-4 w-4" />
-        {QE_COPY.addFood}
-      </button>
-
-      {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo "+ Alimento".
-          Se pinta sola solo si el plan usa porciones (capa invisible si no). */}
-      <EditablePortionsCard variantKey={variantKey} slot={slot} />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subtotal franja</span>

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createPortal } from 'react-dom'
-import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -82,7 +81,7 @@ function mealGroupUnitToMealUnit(raw: string | null | undefined, isLiquid: boole
   return isLiquid ? 'ml' : 'g'
 }
 
-/** ~kcal y P del grupo — mismo cálculo que la biblioteca /coach/meal-groups (label aprox). */
+/** ~kcal y P del grupo (label aproximado, mismo cálculo que el resto del creador). */
 function mealGroupTotals(items: MealGroupItemRow[]) {
   return items.reduce(
     (acc, item) => {
@@ -749,14 +748,13 @@ export function FoodSearchDrawer({
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--sport-100)] text-[var(--sport-600)]">
                       <Layers className="h-6 w-6" />
                     </div>
+                    {/* La biblioteca /coach/meal-groups se retiró (P15): el grupo se crea desde
+                        el propio plan con "Guardar como grupo", así que el vacío enseña el
+                        gesto en vez de mandar a una ruta que ya no existe. */}
                     <p className="text-sm text-muted">Aún no tienes grupos de comidas.</p>
-                    <Link
-                      href="/coach/meal-groups"
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-default px-4 py-2 text-xs font-bold text-sport-600 transition-colors hover:bg-surface-sunken"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Crea tu primer grupo
-                    </Link>
+                    <p className="mx-auto max-w-xs text-xs text-subtle">
+                      Arma una comida en el plan y usa &quot;Guardar como grupo&quot; para reutilizarla acá.
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2.5">

@@ -287,7 +287,7 @@ async function handlePublish(
     return failure(
       startedAt,
       'UPGRADE_REQUIRED',
-      `Activa Nutrición Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]}.`,
+      `Publicar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]} viene incluido en cualquier plan pago de EVA.`,
       { feature: pro.feature },
     )
   }
@@ -394,7 +394,7 @@ async function handleQuickEditPublish(
     return failure(
       startedAt,
       'UPGRADE_REQUIRED',
-      `Activa Nutrición Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]}.`,
+      `Publicar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]} viene incluido en cualquier plan pago de EVA.`,
       { feature: pro.feature },
     )
   }
@@ -485,7 +485,7 @@ async function handleAssign(
     return failure(
       startedAt,
       'UPGRADE_REQUIRED',
-      `Activa Nutrición Pro para asignar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]}.`,
+      `Asignar ${NUTRITION_PRO_FEATURE_LABEL[pro.feature]} viene incluido en cualquier plan pago de EVA.`,
       { feature: pro.feature },
     )
   }

@@ -6,9 +6,13 @@
  * día) para expresar algo que tiene nombre propio.
  *
  * Los presets NO reemplazan el flujo: MARCAN la selección existente (franja) o resuelven la
- * lista de días libres (día). Por eso todo aquí devuelve una selección, nunca ejecuta la copia:
- * el coach sigue confirmando con la CTA de siempre y los destinos deshabilitados siguen
- * deshabilitados (se filtran, jamás se fuerzan).
+ * lista de días destino (día). Por eso todo aquí devuelve una selección, nunca ejecuta la copia:
+ * el coach sigue confirmando con la CTA de siempre.
+ *
+ * QA owner 08-05: los días que YA tienen contenido propio dejaron de estar deshabilitados. El
+ * coach que armó el lunes y quiere replicarlo al resto de la semana chocaba contra un menú
+ * apagado y tenía que borrar cada día a mano. Ahora se pueden elegir y la copia los SOBRESCRIBE;
+ * este módulo solo los marca (`replaces`) para que la UI pida confirmación y ofrezca deshacer.
  */
 
 /** Días de semana de cada preset, en orden de lectura. `null` = "todos" (no filtra por día). */
@@ -48,12 +52,35 @@ export function targetsForCopyPreset(
   return targets.filter((target) => target.dayOfWeek != null && days.has(target.dayOfWeek)).map((t) => t.key)
 }
 
+/** Semana completa en orden de lectura, para el preset "Todos" (que no filtra por día). */
+const FULL_WEEK: readonly number[] = [1, 2, 3, 4, 5, 6, 0]
+
+/** Un día destino del submenú del día: si ya tiene contenido propio, copiar lo sobrescribe. */
+export interface CopyPresetDay {
+  dayOfWeek: number
+  /** Ese día YA tiene su propio contenido: la copia lo REEMPLAZA. */
+  replaces: boolean
+}
+
 /**
- * Días de la semana del preset que TODAVÍA están libres (para el submenú del día, donde cada día
- * ocupado ya viene deshabilitado). Orden de lectura del preset; "Todos" cubre la semana completa.
+ * Días destino del preset para el submenú del día, cada uno marcado con si se reemplaza.
+ *
+ * El día de ORIGEN nunca es destino (copiar un día sobre sí mismo no significa nada), así que se
+ * excluye aunque el preset lo abarque. Orden de lectura del preset; "Todos" cubre la semana
+ * completa Lu→Do.
  */
-export function freeDaysForCopyPreset(preset: CopyPreset, takenDays: Iterable<number>): number[] {
-  const taken = new Set(takenDays)
-  const days = preset.days ?? [1, 2, 3, 4, 5, 6, 0]
-  return days.filter((day) => !taken.has(day))
+export function daysForCopyPreset(
+  preset: CopyPreset,
+  params: { takenDays: Iterable<number>; sourceDayOfWeek: number | null },
+): CopyPresetDay[] {
+  const taken = new Set(params.takenDays)
+  const days = preset.days ?? FULL_WEEK
+  return days
+    .filter((day) => day !== params.sourceDayOfWeek)
+    .map((day) => ({ dayOfWeek: day, replaces: taken.has(day) }))
+}
+
+/** Los días de una selección que se van a sobrescribir (vacío = la copia no pisa nada). */
+export function replacedDaysOf(days: readonly CopyPresetDay[]): number[] {
+  return days.filter((day) => day.replaces).map((day) => day.dayOfWeek)
 }

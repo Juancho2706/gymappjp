@@ -263,7 +263,11 @@ export function QuickEditProvider({
     () => countDraftChanges(baselineDraft, currentDraft) + countVariantHeaderChanges(baselineDraft, currentDraft),
     [baselineDraft, currentDraft],
   )
-  const validation = useMemo(() => validateQuickEdit(state), [state])
+  // La validacion local necesita la ESTRATEGIA para evaluar el dia vacio (en `flexible` un dia
+  // sin franjas es su estado correcto). Sin esto, el guard server-side rechazaba la publicacion
+  // y la barra decia "No se pudo publicar" sin señalar el dia culpable.
+  const strategy: NutritionStrategy = planModel.plan?.strategy ?? 'flexible'
+  const validation = useMemo(() => validateQuickEdit(state, { strategy }), [state, strategy])
 
   const dispatch = useCallback(
     (action: QuickEditAction) => {
@@ -439,12 +443,21 @@ export function QuickEditProvider({
         setUpgradeRequired(true)
         return
       }
-      if (res.code === 'VALIDATION') {
+      // Dia sin comidas: el servidor manda el nombre del dia en su mensaje. Se muestran ademas
+      // los errores locales para que la card del dia culpable quede marcada.
+      if (res.code === 'EMPTY_DAY') {
         setShowErrors(true)
-        setPublishError(QE_COPY.invalidDraft)
+        setPublishError(res.message ?? QE_COPY.emptyDayPublish)
         return
       }
-      setPublishError(QE_COPY.publishFailed)
+      if (res.code === 'VALIDATION') {
+        setShowErrors(true)
+        setPublishError(res.message ?? QE_COPY.invalidDraft)
+        return
+      }
+      // Resto de fallos: si el servidor sabe algo accionable lo dice; si no, el copy generico
+      // con reintento (el draft nunca se pierde y la clave de idempotencia se conserva).
+      setPublishError(res.message ?? QE_COPY.publishFailed)
     })
   }, [clientId, clientName, currentDraft, draftKey, onExit, planModel.plan, router, substitutionsLoadFailed])
 
@@ -537,7 +550,7 @@ export function QuickEditProvider({
     clientId,
     clientName,
     today,
-    strategy: planModel.plan?.strategy ?? 'flexible',
+    strategy,
     protocolNotes: planModel.protocolNotes,
     permissions: planModel.permissions,
     hasNutritionPro,

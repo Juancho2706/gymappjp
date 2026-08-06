@@ -53,6 +53,7 @@ import {
 import { usePortionsBuilder } from './PortionsSection'
 import {
   attachPortionsAndValidate,
+  dropVariantPortions,
   portionsKey,
   variantPortionKeys,
   type PortionsBySlot,
@@ -513,36 +514,104 @@ export function PlanBuilderClient({
 
   /**
    * Presets de copia del menu del dia (BD3): "Lu a Vi" / "Fin de semana" / "Todos". Es el MISMO
-   * gesto de `handleCopyDayTo` repetido sobre los dias libres, con dos cuidados:
-   *  - los destinos se filtran UNA vez contra el estado previo (dias ocupados + tope de dias),
+   * gesto de `handleCopyDayTo` repetido sobre varios dias, con tres cuidados:
+   *  - los destinos se resuelven UNA vez contra el estado previo (ocupantes + tope de dias),
    *    porque `state` es el del render y no se refresca dentro del bucle;
    *  - el `selectedDow` se mueve al PRIMER dia creado (no al ultimo), que es donde el coach
-   *    espera aterrizar leyendo Lu→Do.
-   * El reducer vuelve a filtrar lo mismo sobre el estado vivo: esto es aceleracion, no permiso.
+   *    espera aterrizar leyendo Lu→Do;
+   *  - el reducer vuelve a filtrar lo mismo sobre el estado vivo: esto es aceleracion, no permiso.
+   *
+   * QA owner 08-05 — SEMANTICA DE REEMPLAZO. Un destino que YA tiene dia propio deja de ser un
+   * "no": se sobrescribe. Se implementa con las primitivas de siempre (REMOVE_VARIANT del
+   * ocupante + DUPLICATE_VARIANT_AS del origen sobre ese dia, en el mismo gesto: useReducer
+   * aplica la cola en orden, asi que el segundo dispatch ve el dia ya libre y ni el tope de 7
+   * ni el invariante `day_of_week` unico se rompen). Las variantes pisadas y SUS porciones se
+   * capturan ANTES de despachar: son lo que repone "Deshacer".
    */
   function handleCopyDayToMany(sourceVariantKey: string, days: readonly number[]) {
     const source = state.variants.find((variant) => variant.key === sourceVariantKey)
     if (!source) return
-    const taken = new Set(takenDayOfWeeks(state))
-    let room = MAX_DAY_VARIANTS - taken.size
+
+    const occupantByDay = new Map<number, { variant: BuilderVariant; index: number }>()
+    state.variants.forEach((variant, index) => {
+      if (!variant.isDefault && variant.dayOfWeek != null) {
+        occupantByDay.set(variant.dayOfWeek, { variant, index })
+      }
+    })
+
+    // Solo los dias LIBRES consumen cupo: reemplazar deja el conteo igual.
+    let room = MAX_DAY_VARIANTS - occupantByDay.size
     const created: number[] = []
+    const createdKeys: string[] = []
+    const replaced: Array<{ index: number; variant: BuilderVariant; portions: PortionsBySlot }> = []
+    const seen = new Set<number>()
+
     for (const dayOfWeek of days) {
-      if (room <= 0) break
-      if (taken.has(dayOfWeek)) continue
-      taken.add(dayOfWeek)
-      room -= 1
+      if (seen.has(dayOfWeek)) continue
+      seen.add(dayOfWeek)
+      const occupant = occupantByDay.get(dayOfWeek)
+      // Copiar un dia sobre si mismo no significa nada.
+      if (occupant != null && occupant.variant.key === sourceVariantKey) continue
+      if (occupant != null) {
+        const removedPortions: PortionsBySlot = {}
+        for (const slot of occupant.variant.slots) {
+          const key = portionsKey(occupant.variant.key, slot.key)
+          const targets = portions.bySlot[key]
+          if (targets != null && targets.length > 0) removedPortions[key] = targets
+        }
+        replaced.push({ index: occupant.index, variant: occupant.variant, portions: removedPortions })
+        dispatch({ type: 'REMOVE_VARIANT', variantKey: occupant.variant.key })
+        portions.dropVariant(occupant.variant.key)
+      } else {
+        if (room <= 0) break
+        room -= 1
+      }
       const key = genId()
       dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek })
       cloneVariantPortions(source, key)
       created.push(dayOfWeek)
+      createdKeys.push(key)
     }
     if (created.length === 0) return
     setSelectedDow(created[0])
-    announce(
-      created.length === 1
-        ? `${autoVariantLabel(created[0])} quedó con una copia de ${source.label}`
-        : `${source.label} se copió a ${created.length} días — ahora estás editando ${autoVariantLabel(created[0])}`,
-    )
+
+    const landing = autoVariantLabel(created[0])
+    const summary =
+      (created.length === 1
+        ? `${landing} quedó con una copia de ${source.label}`
+        : `${source.label} se copió a ${created.length} días — ahora estás editando ${landing}`) +
+      (replaced.length === 0
+        ? ''
+        : ` (se reemplazó ${replaced.length === 1 ? '1 día' : replaced.length + ' días'})`)
+
+    // Deshacer reconstruye sobre el estado VIGENTE (no revierte lo editado entremedio, igual que
+    // "Eliminar día"): saca lo que creo esta copia y repone los dias pisados en su posicion.
+    const createdKeySet = new Set(createdKeys)
+    setLiveMessage(summary)
+    toast(summary + '.', {
+      duration: 6000,
+      action: {
+        label: 'Deshacer',
+        onClick: () => {
+          const current = stateRef.current
+          const variants = current.variants.filter((variant) => !createdKeySet.has(variant.key))
+          for (const entry of [...replaced].sort((a, b) => a.index - b.index)) {
+            if (variants.some((variant) => variant.key === entry.variant.key)) continue
+            variants.splice(Math.min(entry.index, variants.length), 0, entry.variant)
+          }
+          const activeVariantKey = variants.some((variant) => variant.key === current.activeVariantKey)
+            ? current.activeVariantKey
+            : baseVariantOf({ ...current, variants }).key
+          dispatch({ type: 'RESTORE', state: { ...current, variants, activeVariantKey } })
+          let map = portionsRef.current
+          for (const key of createdKeys) map = dropVariantPortions(map, key)
+          for (const entry of replaced) map = { ...map, ...entry.portions }
+          portions.restoreBySlot(map)
+          setSelectedDow(source.dayOfWeek)
+          setLiveMessage('Se deshizo la copia del día')
+        },
+      },
+    })
   }
 
   /** "Cambiar día": la variante se muda de dia y el strip sigue al dia nuevo. */

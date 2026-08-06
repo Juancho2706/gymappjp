@@ -145,8 +145,20 @@ export const QE_COPY = {
   baseDayShort: 'Base',
   dayAppliesToday: 'Aplica hoy',
   freeFood: 'Alimento libre',
-  upgradeRequired: 'Este cambio requiere Nutrición Pro, incluido en los planes pagos.',
+  upgradeRequired: 'Este cambio viene incluido en cualquier plan pago de EVA.',
   invalidDraft: 'Hay campos con valores inválidos. Revisa las cantidades y nombres marcados.',
+  /**
+   * Día sin ninguna comida: el servidor lo rechaza (el alumno vería el día entero vacío) y
+   * antes eso llegaba como "No se pudo publicar" a secas. Se usa como respaldo cuando el
+   * servidor no manda su propio mensaje con el nombre del día.
+   */
+  emptyDayPublish:
+    'Hay un día del plan sin ninguna comida. Tu alumno lo vería vacío: agrégale una franja o elimina el día.',
+  /** Aviso en la card del día vacío (marcado tras un intento de publicar). */
+  emptyDayVariant: 'Este día no tiene ninguna comida. Agrégale una franja o elimina el día.',
+  /** Franja colapsada: acciones del chevron (una sola card, dos estados). */
+  collapseSlot: (slotName: string) => `Contraer ${slotName}`,
+  expandSlot: (slotName: string) => `Expandir ${slotName}`,
   flexibleTargetsOnly:
     'Plan flexible: sin franjas prescritas. Ajusta las metas diarias; el alumno registra libremente contra ellas.',
 } as const

@@ -358,14 +358,14 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                   sin banner ni urgencia; el link lleva a planes (los modulos vienen incluidos). */}
               {!nutritionProEnabled ? (
                 <p className="text-xs text-subtle">
-                  Mostrando {NUTRITION_PRO_HISTORY_DAYS_BASE} días de historial · con{' '}
+                  Mostrando {NUTRITION_PRO_HISTORY_DAYS_BASE} días de historial · con un{' '}
                   <Link
                     className="font-medium text-primary transition-colors hover:text-primary/80"
                     href={NUTRITION_PRO_UPGRADE_HREF}
                   >
-                    Nutrición Pro
+                    plan pago
                   </Link>{' '}
-                  ves todo
+                  ves todo el historial
                 </p>
               ) : null}
             </section>

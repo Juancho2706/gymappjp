@@ -14,7 +14,7 @@
  *    día elegido, así que un item incompleto de otro día bloqueaba "Publicar" sin señal);
  *  - debajo, la barra de contexto dice SIEMPRE qué se está editando:
  *      · día heredado → "Estás editando el día base · Se aplica a Lu · Mi · Ju · Vi" + CTA
- *        "Personalizar el martes" (crea el día propio copiando el base; candado Pro si aplica);
+ *        "Personalizar el martes" (crea el día propio copiando el base; candado si el coach es free);
  *      · día propio → nombre + "kcal / meta" del día + menú ⋮ (Renombrar · Cambiar día ·
  *        Objetivos propios · Copiar a otros días · Eliminar día).
  *
@@ -54,7 +54,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
-  MAX_DAY_VARIANTS,
   autoVariantLabel,
   builderVariantForDayOfWeek,
   takenDayOfWeeks,
@@ -64,13 +63,13 @@ import {
   type BuilderTargetsMode,
   type BuilderVariant,
 } from '../_lib/draft-builder'
-import { COPY_PRESETS, freeDaysForCopyPreset } from '../_lib/copy-presets'
-// El candado Pro y el detector de desktop se reusan del módulo de "Agregar día" (que sigue vivo
-// en la edición rápida): mismo límite comercial, mismas palabras, mismo popover/sheet.
+import { COPY_PRESETS, daysForCopyPreset, replacedDaysOf, type CopyPresetDay } from '../_lib/copy-presets'
+// El candado y el detector de desktop se reusan del módulo de "Agregar día" (que sigue vivo en
+// la edición rápida): mismo límite comercial, mismas palabras, mismo popover/sheet.
 import { UpsellPanel, useIsDesktopMd } from './AddDayPopover'
 
-// Ruta canónica de upgrade: se inlinea (igual que en PlanBuilderClient/AddDayPopover) porque
-// `_lib/nutrition-pro.ts` es server-only y no puede importarse en un client component.
+// Ruta canónica de cambio de plan: se inlinea (igual que en PlanBuilderClient/AddDayPopover)
+// porque `_lib/nutrition-pro.ts` es server-only y no puede importarse en un client component.
 const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
 
 const MACRO_FIELDS: Array<{ field: keyof BuilderTargets; label: string }> = [
@@ -105,8 +104,9 @@ export interface DayPlanStripHandlers {
   /** Copia el día completo a OTRO día (crea su variante con este contenido). */
   onCopyToDay: (variantKey: string, dayOfWeek: number) => void
   /**
-   * Copia el día a VARIOS días de una (presets "Lu a Vi" / "Fin de semana" / "Todos", BD3). El
-   * wizard filtra los ocupados y respeta el tope de días; acá solo se le pasan los candidatos.
+   * Copia el día a VARIOS días de una (presets "Lu a Vi" / "Fin de semana" / "Todos", BD3).
+   * Los destinos OCUPADOS entran: el wizard los sobrescribe (con deshacer). El strip ya pidió
+   * confirmación nombrándolos; acá solo se le pasan los días elegidos.
    */
   onCopyToDays: (variantKey: string, days: readonly number[]) => void
   onSetTargetsMode: (variantKey: string, mode: BuilderTargetsMode) => void
@@ -133,23 +133,63 @@ function joinShortDays(days: readonly number[]): string {
   return days.map((dayOfWeek) => NUTRITION_DAY_SHORT_LABELS[dayOfWeek]).join(' · ')
 }
 
+/** "Lu, Mi, Vi" — enumeración en prosa para el aviso de reemplazo. */
+function listShortDays(days: readonly number[]): string {
+  return days.map((dayOfWeek) => NUTRITION_DAY_SHORT_LABELS[dayOfWeek]).join(', ')
+}
+
+/** Copia pedida que todavía espera confirmación porque pisa días con contenido propio. */
+interface PendingDayCopy {
+  /** Todos los destinos (libres + ocupados), en orden de lectura. */
+  days: number[]
+  /** Solo los que se sobrescriben: son los que el aviso nombra. */
+  replacedDays: number[]
+}
+
 /** Menú ⋮ del día propio: concentra lo que antes vivía repartido por pastilla. */
 function DayMenu({
   variant,
   takenDays,
-  canCopyToAnotherDay,
   onRenameRequest,
   handlers,
 }: {
   variant: BuilderVariant
   takenDays: readonly number[]
-  canCopyToAnotherDay: boolean
   onRenameRequest: () => void
   handlers: DayPlanStripHandlers
 }) {
   const taken = new Set(takenDays)
+  const [open, setOpen] = useState(false)
+  // QA owner 08-05: copiar a un día OCUPADO ya no está prohibido, se confirma. El paso previo
+  // vive dentro del propio submenú (no en un diálogo aparte): el coach elige y confirma sin
+  // perder de vista lo que acaba de tocar.
+  const [pendingCopy, setPendingCopy] = useState<PendingDayCopy | null>(null)
+
+  /** Días destino de un preset, con el día de origen fuera y los ocupados marcados. */
+  function presetDays(preset: (typeof COPY_PRESETS)[number]): CopyPresetDay[] {
+    return daysForCopyPreset(preset, { takenDays, sourceDayOfWeek: variant.dayOfWeek })
+  }
+
+  /** Ejecuta la copia, o abre la confirmación cuando algún destino se va a sobrescribir. */
+  function requestCopy(days: readonly CopyPresetDay[]) {
+    if (days.length === 0) return
+    const replacedDays = replacedDaysOf(days)
+    const targets = days.map((day) => day.dayOfWeek)
+    if (replacedDays.length === 0) {
+      handlers.onCopyToDays(variant.key, targets)
+      return
+    }
+    setPendingCopy({ days: targets, replacedDays })
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next)
+    // Cerrar el menú descarta la confirmación pendiente: al reabrir se empieza de cero.
+    if (!next) setPendingCopy(null)
+  }
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger
         aria-label={`Opciones de ${ownDayTitle(variant)}`}
         className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border-0 bg-transparent p-0 normal-case tracking-normal text-muted hover:bg-surface-sunken hover:text-strong dark:bg-transparent"
@@ -188,30 +228,81 @@ function DayMenu({
         </DropdownMenuItem>
 
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={!canCopyToAnotherDay}>Copiar a otros días</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-52">
-            {/* Presets (BD3): el recorte que el coach hace siempre, en un toque. Solo cubren los
-                días LIBRES — los ocupados siguen deshabilitados abajo, no se pisan. */}
-            {COPY_PRESETS.map((preset) => {
-              const days = freeDaysForCopyPreset(preset, taken)
-              return (
+          <DropdownMenuSubTrigger>Copiar a otros días</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-64">
+            {pendingCopy ? (
+              // Confirmación inline: nombra EXACTAMENTE los días que se pisan (los libres no se
+              // enumeran, no hay nada que perder ahí). Cancelar vuelve a la lista sin cerrar.
+              <>
+                <p className="px-1.5 py-1 text-xs leading-relaxed text-muted">
+                  Se reemplazará lo que tienen:{' '}
+                  <span className="font-semibold text-strong">{listShortDays(pendingCopy.replacedDays)}</span>
+                </p>
                 <DropdownMenuItem
-                  key={preset.id}
-                  disabled={days.length === 0}
-                  onClick={() => handlers.onCopyToDays(variant.key, days)}
+                  onClick={() => {
+                    handlers.onCopyToDays(variant.key, pendingCopy.days)
+                    setPendingCopy(null)
+                  }}
                 >
                   <CopyCheck aria-hidden="true" className="h-4 w-4" />
-                  {preset.label}
+                  Confirmar
                 </DropdownMenuItem>
-              )
-            })}
-            <DropdownMenuSeparator />
-            {NUTRITION_WEEK_ORDER.map((day) => (
-              <DropdownMenuItem key={day} disabled={taken.has(day)} onClick={() => handlers.onCopyToDay(variant.key, day)}>
-                <Copy aria-hidden="true" className="h-4 w-4" />
-                {NUTRITION_DAY_LABELS[day]}
-              </DropdownMenuItem>
-            ))}
+                <DropdownMenuItem closeOnClick={false} onClick={() => setPendingCopy(null)}>
+                  <X aria-hidden="true" className="h-4 w-4" />
+                  Cancelar
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                {/* Presets (BD3): el recorte que el coach hace siempre, en un toque. Ya cubren
+                    también los días OCUPADOS — se dice cuántos se pisan y se confirma antes. */}
+                {COPY_PRESETS.map((preset) => {
+                  const days = presetDays(preset)
+                  const replaced = replacedDaysOf(days)
+                  return (
+                    <DropdownMenuItem
+                      key={preset.id}
+                      disabled={days.length === 0}
+                      // Con reemplazos el clic abre la confirmación, así que el menú NO se cierra.
+                      closeOnClick={replaced.length === 0}
+                      onClick={() => requestCopy(days)}
+                    >
+                      <CopyCheck aria-hidden="true" className="h-4 w-4" />
+                      {preset.label}
+                      {replaced.length > 0 ? (
+                        <span className="ml-auto text-[11px] font-medium text-muted">
+                          reemplaza {replaced.length}
+                        </span>
+                      ) : null}
+                    </DropdownMenuItem>
+                  )
+                })}
+                <DropdownMenuSeparator />
+                {NUTRITION_WEEK_ORDER.map((day) => {
+                  // El día de origen sigue fuera: copiarlo sobre sí mismo no significa nada.
+                  const isSource = day === variant.dayOfWeek
+                  const replaces = taken.has(day) && !isSource
+                  return (
+                    <DropdownMenuItem
+                      key={day}
+                      disabled={isSource}
+                      closeOnClick={!replaces}
+                      onClick={() =>
+                        replaces
+                          ? requestCopy([{ dayOfWeek: day, replaces: true }])
+                          : handlers.onCopyToDay(variant.key, day)
+                      }
+                    >
+                      <Copy aria-hidden="true" className="h-4 w-4" />
+                      {NUTRITION_DAY_LABELS[day]}
+                      {replaces ? (
+                        <span className="ml-auto text-[11px] font-medium text-muted">(reemplaza)</span>
+                      ) : null}
+                    </DropdownMenuItem>
+                  )
+                })}
+              </>
+            )}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
@@ -226,8 +317,8 @@ function DayMenu({
 }
 
 /**
- * CTA "Personalizar el {día}" con el candado Pro del coach BASE: el panel es el MISMO upsell que
- * usaba "Agregar día" (popover en desktop / bottom sheet en móvil).
+ * CTA "Personalizar el {día}" con el candado del coach FREE: el panel es el MISMO que usaba
+ * "Agregar día" (popover en desktop / bottom sheet en móvil).
  */
 function PersonalizeCta({
   dayOfWeek,
@@ -251,24 +342,24 @@ function PersonalizeCta({
     )
   }
 
-  // Gate Pro LEGIBLE antes de abrir: candado + pastilla "Pro" en el propio botón.
+  // Límite LEGIBLE antes de abrir: candado + pastilla "Plan pago" en el propio botón.
   const trigger = (
     <>
       <Lock aria-hidden="true" className="h-3.5 w-3.5" />
       Personalizar el {dayLabel}
       <span className="rounded-pill border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15">
-        Pro
+        Plan pago
       </span>
     </>
   )
-  const triggerLabel = `Personalizar el ${dayLabel}: incluido en Nutricion Pro`
+  const triggerLabel = `Personalizar el ${dayLabel}: incluido en cualquier plan pago`
 
   if (isDesktop) {
     return (
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           aria-label={triggerLabel}
-          title="Días distintos: disponible con Nutrición Pro"
+          title="Días distintos: incluido en cualquier plan pago"
           className={personalizeCtaClass}
         >
           {trigger}
@@ -288,7 +379,7 @@ function PersonalizeCta({
       <button
         type="button"
         aria-label={triggerLabel}
-        title="Días distintos: disponible con Nutrición Pro"
+        title="Días distintos: incluido en cualquier plan pago"
         onClick={() => setOpen(true)}
         className={personalizeCtaClass}
       >
@@ -329,7 +420,7 @@ export function DayPlanStrip({
   inheritedDays: readonly number[]
   /** kcal del día en pantalla (items + porciones, el mismo criterio del total del día). */
   selectedKcal: number
-  /** Coach sin Nutrición Pro: "Personalizar" con candado + upsell. */
+  /** Coach free (sin plan pago): "Personalizar" con candado + panel explicativo. */
   personalizeLocked: boolean
   /** Días con algún error de validación, por `variant.key`: su celda se marca. */
   errorByVariantKey?: Record<string, string>
@@ -348,7 +439,6 @@ export function DayPlanStrip({
   const inherited = selectedVariant.isDefault
   const takenDays = useMemo(() => takenDayOfWeeks(state), [state])
   const ownDayCount = takenDays.length
-  const canCopyToAnotherDay = ownDayCount < MAX_DAY_VARIANTS
   const selectedCell = selectedDow == null ? null : cells.find((cell) => cell.dayOfWeek === selectedDow) ?? null
   const selectedTargetCalories = selectedCell?.targetCalories ?? null
   // El día base dejó de regir cualquier día (los 7 son propios): sigue viajando en el draft, así
@@ -488,7 +578,6 @@ export function DayPlanStrip({
           <DayMenu
             variant={selectedVariant}
             takenDays={takenDays}
-            canCopyToAnotherDay={canCopyToAnotherDay}
             onRenameRequest={() => {
               setRenameDraft(selectedVariant.label)
               setRenamingKey(selectedVariant.key)
@@ -519,23 +608,23 @@ export function DayPlanStrip({
         </button>
       ) : null}
 
-      {/* Coach BASE con un plan que YA tiene días propios (típicamente convertido de V1): el
+      {/* Coach FREE con un plan que YA tiene días propios (típicamente convertido de V1): el
           servidor rechazará el publish con UPGRADE_REQUIRED. Se avisa acá, no al final. La salida
-          primaria es MEJORAR el plan; eliminar los días extra queda en texto plano. */}
+          primaria es pasar a un plan pago; eliminar los días extra queda en texto plano. */}
       {personalizeLocked && ownDayCount > 0 ? (
         <div
           role="alert"
           className="rounded-control border border-amber-300/70 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10"
         >
           <p className="text-xs font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
-            Publicar este plan con {ownDayCount} {ownDayCount === 1 ? 'día propio' : 'días propios'} requiere Nutrición
-            Pro.
+            Publicar este plan con {ownDayCount} {ownDayCount === 1 ? 'día propio' : 'días propios'} necesita un plan
+            pago de EVA.
           </p>
           <Link
             href={NUTRITION_PRO_UPGRADE_HREF}
             className="mt-2 inline-flex min-h-9 items-center rounded-control bg-primary/100 px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Mejorar tu plan
+            Ver planes
           </Link>
           <p className="mt-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300/90">
             Si prefieres seguir con tu plan actual, usa &quot;Eliminar día&quot; en el menú de cada día propio y publica

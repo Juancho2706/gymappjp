@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useMemo, useActionState, useEffect, useTransition, useCallback, useRef } from 'react'
-import Link from 'next/link'
 import { Input } from '@/components/ui/input'
-import { Search, Plus, Loader2, Save, SlidersHorizontal, Layers, ChevronRight, X } from 'lucide-react'
+import { Search, Plus, Loader2, Save, SlidersHorizontal, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import {
   Sheet,
@@ -218,20 +217,9 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Entry-card — Grupos de comidas (kit FoodLibraryTab) */}
-      <Link
-        href="/coach/meal-groups"
-        className="eva-press flex w-full items-center gap-3 rounded-control border-[1.5px] border-default bg-surface-card px-3.5 py-3 transition-colors hover:bg-surface-sunken"
-      >
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-[var(--sport-100)] text-[var(--sport-600)]">
-          <Layers className="h-[17px] w-[17px]" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-bold text-strong">Grupos de comidas</span>
-          <span className="block text-[11.5px] text-subtle">Combos de alimentos reutilizables</span>
-        </span>
-        <ChevronRight className="h-[18px] w-[18px] shrink-0 text-subtle" />
-      </Link>
+      {/* La entry-card a /coach/meal-groups se retiró con la ruta (P15): los grupos se crean y se
+          insertan DENTRO del creador de planes ("Guardar como grupo" / pestaña "Grupos"), que es
+          donde el coach los usa. */}
 
       {/* Buscador + botón Filtros y orden (patrón CD, espejo del board Alumnos) */}
       <div className="flex gap-2">

@@ -27,14 +27,15 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useIsTemplateMode } from './TemplateModeContext'
 
-// Ruta canonica de upgrade de plan. Se inlinea aca porque el modulo _lib/nutrition-pro.ts
+// Ruta canonica de cambio de plan. Se inlinea aca porque el modulo _lib/nutrition-pro.ts
 // es server-only (import 'server-only') y no puede importarse en un client component.
-// Nutricion Pro viene incluido en los planes pagos — el CTA apunta al cambio de plan.
+// Los modulos NO se compran sueltos: vienen con cualquier plan pago, asi que el CTA apunta al
+// cambio de plan y solo lo ve el coach free.
 const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
-function ProBadge() {
+function PaidPlanBadge() {
   return (
     <span className="shrink-0 rounded-pill border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary">
-      Pro
+      Plan pago
     </span>
   )
 }
@@ -236,14 +237,14 @@ export function PlanStep({
                 <span className="min-w-0">
                   <span className="flex items-center gap-1.5 font-medium text-strong">
                     {label}
-                    {locked ? <ProBadge /> : null}
+                    {locked ? <PaidPlanBadge /> : null}
                   </span>
                   <span className="block text-xs text-muted">{hint}</span>
                 </span>
               </label>
               {locked ? (
                 <p className="flex items-start gap-1.5 pb-1 pl-6 text-xs leading-relaxed text-muted">
-                  {/* Ícono del módulo Nutrición Pro (asset del CEO, estático @2x). */}
+                  {/* Ícono del módulo de nutrición avanzada (asset del CEO, estático @2x). */}
                   <Image
                     src="/module-icons/nutrition-pro@2x.webp"
                     alt=""
@@ -254,13 +255,12 @@ export function PlanStep({
                     className="mt-0.5 h-5 w-5 shrink-0 object-contain"
                   />
                   <span>
-                    Combinar comidas prescritas con registro libre es parte de Nutricion Pro, incluido en los planes
-                    pagos.{' '}
+                    Combinar comidas prescritas con registro libre viene incluido en cualquier plan pago de EVA.{' '}
                     <Link
                       href={NUTRITION_PRO_UPGRADE_HREF}
                       className="font-semibold text-primary underline underline-offset-2 dark:text-primary"
                     >
-                      Mejorar mi plan
+                      Ver planes
                     </Link>
                   </span>
                 </p>

@@ -72,7 +72,7 @@ export async function publishPlanAction(input: unknown): Promise<PublishSuccess 
         ok: false,
         code: 'UPGRADE_REQUIRED',
         feature: proFeature,
-        error: `Activa Nutricion Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[proFeature]}.`,
+        error: `Publicar ${NUTRITION_PRO_FEATURE_LABEL[proFeature]} viene incluido en cualquier plan pago de EVA.`,
       }
     }
   }

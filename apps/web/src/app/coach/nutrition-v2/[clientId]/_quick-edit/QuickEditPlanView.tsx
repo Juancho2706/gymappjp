@@ -159,6 +159,16 @@ export function QuickEditPlanView() {
                 {variant.slots.map((slot, index) => (
                   <EditableSlotCard key={slot.key} variantKey={variant.key} slot={slot} index={index} />
                 ))}
+                {/* Día sin ninguna comida: el servidor lo rechaza y hasta ahora eso llegaba como
+                    "No se pudo publicar" a secas. Se marca el día culpable tras el intento. */}
+                {showErrors && errors[`variant.${variant.key}.slots`] ? (
+                  <p
+                    role="alert"
+                    className="rounded-control border border-rose-300 bg-rose-50 px-3 py-2.5 text-sm font-semibold leading-6 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                  >
+                    {errors[`variant.${variant.key}.slots`]}
+                  </p>
+                ) : null}
                 <AddSlotButton variantKey={variant.key} />
               </>
             ) : (

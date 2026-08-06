@@ -12,7 +12,7 @@
  * diverjan.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Copy, Loader2, Pencil, Plus, Search, SlidersHorizontal, Star, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,7 +27,9 @@ import { searchCoachRosterAction, type RosterSearchEntry } from '../_actions/ros
 import {
   deletePlanTemplateAction,
   listPlanTemplatesAction,
+  loadPlanTemplateContentAction,
   renamePlanTemplateAction,
+  savePlanTemplateAction,
   setPlanTemplateFavoriteAction,
 } from '../_actions/plan-templates.actions'
 import type { PlanTemplateListItem } from '@/services/nutrition-v2/plan-templates.service'
@@ -44,8 +46,8 @@ function editTemplateHref(templateId: string): string {
 }
 
 /**
- * Ventana de gracia del "Deshacer" al eliminar. Es tambien lo que tarda el borrado real en
- * salir hacia el servidor (ver `remove`), asi que subirla alarga la baja diferida.
+ * Ventana del "Deshacer" al eliminar. Solo gobierna cuánto dura el toast: la baja YA salió al
+ * servidor cuando aparece, así que alargarla o acortarla no cambia lo que quedó en la base.
  */
 const DELETE_UNDO_MS = 8000
 
@@ -84,12 +86,10 @@ export function PlanTemplatesLibrary() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState<PlanTemplateListItem | null>(null)
-
-  /**
-   * Bajas en vuelo (`id` → fila + posicion original), a la espera de que expire su toast.
-   * En un ref y no en estado: no pinta nada y cambiarlo no debe re-renderizar la lista.
-   */
-  const pendingDeletesRef = useRef(new Map<string, { template: PlanTemplateListItem; index: number }>())
+  /** Fila en la que el coach tocó eliminar y espera el segundo tap ("¿Eliminar? · Sí / No"). */
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
+  /** Bajas en curso: apagan los botones de esa fila mientras el servidor responde. */
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -100,53 +100,46 @@ export function PlanTemplatesLibrary() {
       return
     }
     setError(null)
-    // Las bajas en vuelo todavia existen en la DB (el DELETE viaja al expirar el toast), asi
-    // que una recarga por otra causa —renombrar, marcar favorita, crear— las resucitaria.
-    setTemplates(result.templates.filter((item) => !pendingDeletesRef.current.has(item.id)))
+    setTemplates(result.templates)
   }, [])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  // Si el coach se va (cambia de pestaña del hub, navega, cierra la biblioteca) con bajas en
-  // vuelo, se confirman ahora: el toast se va con el componente y nadie quedaria para dispararlas.
-  useEffect(() => {
-    const pending = pendingDeletesRef.current
-    return () => {
-      for (const id of Array.from(pending.keys())) {
-        pending.delete(id)
-        void deletePlanTemplateAction({ id })
+  /**
+   * Re-crea una plantilla recién eliminada con el draft que se cacheó ANTES de borrarla. Es una
+   * plantilla NUEVA (id nuevo): la fila anterior quedó soft-borrada y su `deleted_at` no se
+   * limpia desde la app (la migración no da grant para revivirla). Se re-aplica "favorita" si
+   * lo era, porque es lo único visible que el coach perdería sin darse cuenta.
+   */
+  const restoreTemplate = useCallback(
+    async (snapshot: {
+      template: PlanTemplateListItem
+      name: string
+      description: string | null
+      draft: unknown
+      builder: unknown
+    }) => {
+      const created = await savePlanTemplateAction({
+        name: snapshot.name,
+        description: snapshot.description,
+        draft: snapshot.draft,
+        builder: snapshot.builder,
+        source: 'builder',
+      })
+      if (!created.ok) {
+        toast.error(created.error)
+        return
       }
-    }
-  }, [])
-
-  /** Confirma la baja contra el servidor. No-op si el coach alcanzo a deshacerla. */
-  const commitDelete = useCallback(
-    async (id: string) => {
-      if (!pendingDeletesRef.current.delete(id)) return
-      const result = await deletePlanTemplateAction({ id })
-      if (result.ok) return
-      // No se borro: el servidor manda, asi que la fila vuelve recargando la biblioteca.
-      toast.error(result.error)
+      if (snapshot.template.isFavorite) {
+        await setPlanTemplateFavoriteAction({ id: created.template.id, isFavorite: true })
+      }
+      toast.success('Plantilla restaurada')
       void load()
     },
     [load],
   )
-
-  /** Cancela la baja y devuelve la fila a su posicion original. */
-  const undoDelete = useCallback((id: string) => {
-    const pending = pendingDeletesRef.current.get(id)
-    if (!pending) return
-    pendingDeletesRef.current.delete(id)
-    setTemplates((prev) => {
-      if (prev.some((item) => item.id === id)) return prev
-      const next = [...prev]
-      next.splice(Math.min(pending.index, next.length), 0, pending.template)
-      return next
-    })
-    toast.success('Plantilla restaurada')
-  }, [])
 
   async function toggleFavorite(template: PlanTemplateListItem) {
     const result = await setPlanTemplateFavoriteAction({
@@ -161,29 +154,67 @@ export function PlanTemplatesLibrary() {
   }
 
   /**
-   * Baja DIFERIDA con deshacer (QW3). La lista no trae el draft de la plantilla
-   * (`PlanTemplateListItem` es puro metadato: nombre, resumen, favorita…), asi que "Deshacer"
-   * no puede re-crearla llamando a `savePlanTemplateAction` — perderia el contenido, que es
-   * justo lo que el coach cree estar recuperando. Por eso la fila se saca optimista de la
-   * lista y el DELETE viaja recien cuando el toast expira (`onAutoClose`) o el coach lo cierra
-   * a mano (`onDismiss`); deshacer solo cancela y reinserta. Click en la accion del toast NO
-   * dispara ninguno de esos dos callbacks en sonner, asi que no hay carrera.
+   * Baja INMEDIATA con deshacer por re-creación (owner, 2026-08-05).
+   *
+   * La estrategia anterior era diferida: la fila salía de la lista y el DELETE viajaba recién
+   * al expirar el toast (8 s). Si el coach refrescaba, navegaba o cerraba antes, ese DELETE
+   * NUNCA salía — la plantilla "eliminada" reaparecía al volver. Verificado en LIVE: el coach
+   * del QA tenía 17 plantillas y CERO soft-borradas después de eliminar varias.
+   *
+   * Ahora: se cachea el contenido completo (`loadPlanTemplateContentAction`), se borra YA, y
+   * "Deshacer" re-crea desde ese caché. El servidor manda desde el primer segundo.
+   *
+   * Plantilla ILEGIBLE (las rescatadas cuyo draft ya no valida): no hay contenido que cachear,
+   * así que no se promete un undo imposible — se exige un segundo tap en la misma fila
+   * ("¿Eliminar? · Sí / No") y se borra sin deshacer (`force`).
    */
-  function remove(template: PlanTemplateListItem) {
-    if (pendingDeletesRef.current.has(template.id)) return
-    const index = templates.findIndex((item) => item.id === template.id)
-    pendingDeletesRef.current.set(template.id, {
-      template,
-      index: index < 0 ? templates.length : index,
-    })
+  async function remove(template: PlanTemplateListItem, force = false) {
+    if (deleting) return
+    setDeleting(template.id)
+
+    // Sin `readable` no hay contenido que cachear; con `force` el coach ya dio el segundo tap.
+    const snapshot = template.readable && !force ? await loadPlanTemplateContentAction({ id: template.id }) : null
+
+    // No pudimos leer lo que íbamos a borrar: NO se borra a ciegas algo que después no
+    // podríamos devolver. Se degrada a la confirmación explícita de dos taps.
+    if (template.readable && !force && !snapshot?.ok) {
+      setDeleting(null)
+      setConfirmingDelete(template.id)
+      toast.error('No pudimos leer esta plantilla para poder deshacer. Confirma si quieres eliminarla igual.')
+      return
+    }
+
+    const result = await deletePlanTemplateAction({ id: template.id })
+    setDeleting(null)
+    setConfirmingDelete(null)
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
     setTemplates((prev) => prev.filter((item) => item.id !== template.id))
+
+    if (!snapshot?.ok) {
+      toast.success('Plantilla eliminada', { description: template.name, duration: DELETE_UNDO_MS })
+      return
+    }
+    const cached = {
+      template,
+      name: snapshot.name,
+      description: snapshot.description,
+      draft: snapshot.draft,
+      builder: snapshot.builder,
+    }
     toast.success('Plantilla eliminada', {
       description: template.name,
       duration: DELETE_UNDO_MS,
-      action: { label: 'Deshacer', onClick: () => undoDelete(template.id) },
-      onAutoClose: () => void commitDelete(template.id),
-      onDismiss: () => void commitDelete(template.id),
+      action: { label: 'Deshacer', onClick: () => void restoreTemplate(cached) },
     })
+  }
+
+  /** Primer tap arma la confirmación inline; el segundo (Sí) borra. */
+  function askRemove(template: PlanTemplateListItem) {
+    if (deleting) return
+    setConfirmingDelete((prev) => (prev === template.id ? null : template.id))
   }
 
   // Favoritas arriba: es el unico gesto de curacion que tiene el coach sobre su biblioteca y
@@ -281,14 +312,43 @@ export function PlanTemplatesLibrary() {
               >
                 <Pencil className="size-4 text-subtle" />
               </button>
-              <button
-                type="button"
-                onClick={() => remove(template)}
-                aria-label={`Eliminar ${template.name}`}
-                className="shrink-0 rounded-control p-2 hover:bg-surface-sunken"
-              >
-                <Trash2 className="size-4 text-subtle" />
-              </button>
+              {/* Legible ⇒ borrado directo con "Deshacer" (el contenido se cachea antes).
+                  Ilegible ⇒ no hay undo posible: se pide un segundo tap en la misma fila. */}
+              {confirmingDelete === template.id ? (
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="text-xs font-semibold text-rose-700 dark:text-rose-300">¿Eliminar?</span>
+                  <button
+                    type="button"
+                    disabled={deleting === template.id}
+                    onClick={() => void remove(template, true)}
+                    className="inline-flex min-h-9 items-center rounded-control bg-rose-600 px-2.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                  >
+                    {deleting === template.id ? <Loader2 className="size-3.5 animate-spin" /> : 'Sí'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting === template.id}
+                    onClick={() => setConfirmingDelete(null)}
+                    className="inline-flex min-h-9 items-center rounded-control border border-border-default bg-surface-card px-2.5 text-xs font-semibold text-strong hover:bg-surface-sunken disabled:opacity-60"
+                  >
+                    No
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={deleting === template.id}
+                  onClick={() => (template.readable ? void remove(template) : askRemove(template))}
+                  aria-label={`Eliminar ${template.name}`}
+                  className="shrink-0 rounded-control p-2 hover:bg-surface-sunken disabled:opacity-60"
+                >
+                  {deleting === template.id ? (
+                    <Loader2 className="size-4 animate-spin text-subtle" />
+                  ) : (
+                    <Trash2 className="size-4 text-subtle" />
+                  )}
+                </button>
+              )}
             </li>
           ))}
         </ul>
