@@ -190,6 +190,21 @@ describe('groupHistoryDaysByWeek', () => {
     const [week] = groupHistoryDaysByWeek(rows, HOY)
     expect(week.cells.every((cell) => cell.variant === null)).toBe(true)
   })
+
+  it('excluye la semana en curso (paridad RN T1.3): esa vive en el tab Hoy, no en el historial', () => {
+    const rowsWithCurrentWeek: NutritionHistoryDay[] = [
+      historyDay({ localDate: HOY }), // miercoles de la semana en curso (2026-07-27..2026-08-02)
+      ...rows,
+    ]
+    const weeks = groupHistoryDaysByWeek(rowsWithCurrentWeek, HOY)
+    expect(weeks).toHaveLength(2)
+    expect(weeks.some((week) => week.weekStartIso === '2026-07-27')).toBe(false)
+    expect(weeks[0].weekStartIso).toBe('2026-07-20')
+  })
+
+  it('semana en curso sola, sin semanas cerradas, no fabrica ningun bucket', () => {
+    expect(groupHistoryDaysByWeek([historyDay({ localDate: HOY })], HOY)).toEqual([])
+  })
 })
 
 describe('formatHistoryWeekRangeLabel', () => {

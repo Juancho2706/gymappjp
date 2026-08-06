@@ -21,11 +21,12 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - Gates: typecheck verde · lint 0 errores (2 warnings preexistentes verificados vs HEAD) · vitest full 5356 verde · boundaries 303 verde · tokens 86 verde · docs verde
   - PENDIENTE al push de ola: curl al cron con CRON_SECRET en preview (las tablas V2 van por cast `V2ReadClient` — `database.types.ts` desactualizado, deuda conocida; retirar cast al regenerar)
 - [x] T1.2 Correccion sin interrogatorio (2026-08-06, Fable). Web (EditQuantityDialog/VoidEntryDialog) y RN (EntryCorrectionSheet) con paridad exacta: chips de razon con la primera preseleccionada ("Me equivoque de cantidad" / "Lo registre por error") + "Otro motivo" con campo libre (min 3), y stepper hibrido de cantidad (g/ml ±10, contadas ±0.5). El server NO cambia: el texto del chip ya cumple el minimo de 3 del RPC — razon opcional en UX, validacion intacta, append-only intacto. A11y: radiogroup/radio + accessibilityState. Muere el copy "Minimo 3 caracteres". Gates: eslint verde, typecheck web verde, tsc mobile verde. QA device: pendiente al cierre de ola.
-- [ ] T1.3 Paridad decisiones tomadas
-  - [ ] Live search web (debounce 300ms, AbortController; muere boton "Buscar")
-  - [ ] Nota coach RN: expandida por defecto (paridad web)
-  - [ ] Poda RN: chips permisos falsos, fila fibra, parrafo estrategia, empty-state eco
-  - [ ] Web: semana actual fuera del historial (paridad RN) + caption
+- [x] T1.3 Paridad decisiones tomadas (2026-08-06, Sonnet barrido + Fable live search)
+  - [x] Live search web: debounce 300ms + guard de secuencia (server actions sin AbortController), muere el boton "Buscar", indicador "Buscando…" aria-live
+  - [x] Nota coach RN expandida por defecto (useState(true), sin numberOfLines — espejo exacto de web)
+  - [x] Poda RN verificada contra los comentarios de auditoria web: chips a los 2 permisos reales (P1), parrafo estrategia fuera (P2), fila fibra fuera (P4), "Fuera del plan" vacio no renderiza (H4)
+  - [x] Web: semana en curso excluida de groupHistoryDaysByWeek + caption con el copy real de RN; tests 19/19 (2 nuevos)
+  - Gates: tsc mobile verde · typecheck web verde · vitest week-nav 19/19 · eslint verde. QA device: pendiente al cierre de ola.
 - [ ] T1.4 Banda ±10% web+RN (zona semantica fija, fill theme.primary, copy "faltan ~X"; nunca rojo) + dashboard web 1 sola llamada RPC hoy (patron cache/props, NO segunda llamada)
 - [ ] T1.5 Plantillas "Aplicar": boton en fila → selector alumno (reusa picker de NewPlanPickerButton) → builder `?from=template:` precargado
 - [ ] T1.6 Sustituciones puente: tap pill → prefill registro libre con alimento+cantidad sugerida (solo si canRegisterFreely; explainer si no)

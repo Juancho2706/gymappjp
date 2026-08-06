@@ -57,6 +57,9 @@ export function HistoryWeeksList({
       {weeks.map((week) => (
         <HistoryWeekCard base={base} key={week.weekStartIso} week={week} />
       ))}
+      {/* Paridad RN T1.3 (mismo copy que `nutrition-v2/index.tsx`): la semana en curso queda
+          fuera de `groupHistoryDaysByWeek`, así que el alumno necesita saber dónde verla. */}
+      <p className="text-xs text-subtle">Semanas anteriores — la semana en curso vive en el tab Hoy</p>
       {error ? (
         <p className="flex items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
           <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />

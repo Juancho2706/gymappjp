@@ -66,7 +66,6 @@ import {
   NUTRITION_MOTION,
   type BulkMarkSlotState,
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
-  NUTRITION_STRATEGIES,
   type NutritionSlotExchangeTargetRead,
   NutritionHistoryPageReadModelSchema,
   NutritionPlanReadModelSchema,
@@ -1619,19 +1618,14 @@ function TodayTab({
 
         {/* SPEC nutrition-ui-poda #1: "Fuera del plan" reemplaza a "Consumido hoy" — solo lo que
             NO es prescrito (los registros del plan ya se ven arriba, bajo su franja, con su chip
-            "Registrado"). */}
-        <View accessibilityLabel="Fuera del plan" className="gap-3">
-          <View className="flex-row items-center gap-2">
-            <Utensils color={theme.primary} size={16} />
-            <Text className="font-display text-lg font-semibold text-strong">Fuera del plan</Text>
-          </View>
-          {outOfPlanRows.length === 0 ? (
-            <NutritionStatePanel
-              icon="empty"
-              title="Nada fuera del plan todavía"
-              description="Lo que marques del plan vive arriba, bajo su franja. Acá solo aparece lo libre que agregues."
-            />
-          ) : (
+            "Registrado"). Sin registros, no se pinta nada (paridad web T1.3, TodayExperience.tsx
+            "auditoría H4"): el estado vacío ya lo cubren las franjas de arriba, repetirlo era el eco. */}
+        {outOfPlanRows.length === 0 ? null : (
+          <View accessibilityLabel="Fuera del plan" className="gap-3">
+            <View className="flex-row items-center gap-2">
+              <Utensils color={theme.primary} size={16} />
+              <Text className="font-display text-lg font-semibold text-strong">Fuera del plan</Text>
+            </View>
             <NutritionCard>
               {outOfPlanRows.map(({ row, entry, queuedKey }, index) => (
                 <View key={row.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
@@ -1692,8 +1686,8 @@ function TodayTab({
                 </View>
               ))}
             </NutritionCard>
-          )}
-        </View>
+          </View>
+        )}
       </ScrollView>
 
       <EntryCorrectionSheet
@@ -1728,14 +1722,15 @@ function TodayTab({
 }
 
 /**
- * Nota visible del coach, ahora en el tab Hoy (SPEC nutrition-ui-poda #3): antes vivía enterrada
- * en el tab Plan, que el alumno abre menos. Colapsada por defecto (mismo patrón que el acordeón
- * de micros V1); `livePlan.visibleNotes` ya viaja en memoria, sin fetch extra.
+ * Nota visible del coach, en el tab Hoy (SPEC nutrition-ui-poda #3). Expandida por defecto
+ * (paridad web T1.3, ver TodayExperience.tsx): es la unica voz humana del modulo y debe leerse
+ * sin abrir el tab Plan. Colapsable para que el alumno la repliegue una vez leida, no para
+ * esconderla — cerrada no deja preview, mismo patron que web.
  */
 function CoachNoteCard({ note }: { note: string }) {
   const { theme } = useTheme()
   const { reduced, duration } = useEvaMotion()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   return (
     <Pressable
       accessibilityRole="button"
@@ -1754,9 +1749,7 @@ function CoachNoteCard({ note }: { note: string }) {
           <ChevronDown color={theme.textSecondary} size={16} />
         </MotiView>
       </View>
-      <Text numberOfLines={open ? undefined : 1} className="mt-1 text-sm leading-6 text-body">
-        {note}
-      </Text>
+      {open ? <Text className="mt-1 text-sm leading-6 text-body">{note}</Text> : null}
     </Pressable>
   )
 }
@@ -2736,7 +2729,9 @@ function PlanTab({ chrome }: { chrome: ReactNode }) {
             Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
             {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
           </Text>
-          <Text className="mt-2 text-sm leading-6 text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+          {/* SPEC nutrition-ui-poda #2 (paridad web T1.3, "Auditoría P2"): fuera el parrafo de
+              descripcion de la estrategia — texto de folleto, constante, se lee una vez en la
+              vida y no cambia ninguna decision del alumno. */}
           {plan.visibleNotes ? (
             <View className="mt-4 rounded-control border border-subtle bg-surface-sunken p-3">
               <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Notas de tu coach</Text>
@@ -2801,7 +2796,8 @@ function PlanObjectives({
   if (targets.proteinG != null) rows.push({ label: 'Proteína', value: formatNutritionAmount(targets.proteinG, 'g') })
   if (targets.carbsG != null) rows.push({ label: 'Carbohidratos', value: formatNutritionAmount(targets.carbsG, 'g') })
   if (targets.fatsG != null) rows.push({ label: 'Grasas', value: formatNutritionAmount(targets.fatsG, 'g') })
-  if (targets.fiberG != null) rows.push({ label: 'Fibra', value: formatNutritionAmount(targets.fiberG, 'g') })
+  // SPEC nutrition-ui-poda (paridad web T1.3, "Auditoría P4"): fuera "Fibra" — ningun builder
+  // actual escribe `targets.fiberG` (siempre null), era una fila de codigo inalcanzable.
   if (rows.length === 0) return null
   return (
     <NutritionCard>
@@ -2822,6 +2818,11 @@ function PlanObjectives({
   )
 }
 
+// SPEC nutrition-ui-poda (paridad web T1.3, "Auditoría P1"): podado a los 2 permisos que de
+// verdad cambian la pantalla del alumno (`canRegisterFreely`, `canAdjustPrescribedQuantity`). Se
+// retiraron "Intercambios permitidos" / "Puedes mover comidas de franja" / "Puedes omitir
+// opcionales": chips de texto sin setter en ningun builder ni consumidor real en esta pantalla —
+// la card prometía reglas que la pantalla no cumplía.
 function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['permissions'] }) {
   const chips: string[] = []
   chips.push(permissions.canRegisterFreely ? 'Registro libre habilitado' : 'Solo alimentos prescritos')
@@ -2832,9 +2833,6 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
         : 'Ajuste de cantidad permitido',
     )
   }
-  if (permissions.canSubstitute) chips.push('Intercambios permitidos')
-  if (permissions.canMoveMealSlot) chips.push('Puedes mover comidas de franja')
-  if (permissions.canSkipOptionalItems) chips.push('Puedes omitir opcionales')
   return (
     <NutritionCard>
       <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Reglas del plan</Text>

@@ -1106,24 +1106,35 @@ function RegisterFoodDialog({
   }, [query])
   const showFavoritesShortcut = query.trim().length < 2 && results.length === 0 && favoriteFoods.length > 0
 
-  const runSearch = () => {
+  // Live search (T1.3, paridad con RN — decision ya tomada alla): debounce de 300ms sobre el
+  // input, sin boton "Buscar". Las server actions no exponen AbortController; el guard de
+  // secuencia cumple el mismo rol — una respuesta vieja jamas pisa a la busqueda vigente.
+  const searchSeqRef = useRef(0)
+  useEffect(() => {
     const trimmed = query.trim()
     if (trimmed.length < 2) {
-      setSearchError('Escribe al menos 2 caracteres.')
+      searchSeqRef.current += 1
+      setSearching(false)
+      setSearchError(null)
       return
     }
-    setSearchError(null)
+    const seq = ++searchSeqRef.current
     setSearching(true)
-    void searchFoodCatalogAction({ clientId, query: trimmed }).then((res) => {
-      setSearching(false)
-      if (!res.ok) {
-        setSearchError(res.error)
-        return
-      }
-      setResults(res.result.items)
-      if (res.result.items.length === 0) setSearchError('Sin resultados en el catálogo local.')
-    })
-  }
+    setSearchError(null)
+    const timer = setTimeout(() => {
+      void searchFoodCatalogAction({ clientId, query: trimmed }).then((res) => {
+        if (searchSeqRef.current !== seq) return
+        setSearching(false)
+        if (!res.ok) {
+          setSearchError(res.error)
+          return
+        }
+        setResults(res.result.items)
+        if (res.result.items.length === 0) setSearchError('Sin resultados en el catálogo local.')
+      })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query, clientId])
 
   const selectFood = (food: FoodCatalogItem) => {
     setSelected(food)
@@ -1295,13 +1306,7 @@ function RegisterFoodDialog({
         </div>
       ) : (
         <div className="space-y-3">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              runSearch()
-            }}
-            className="flex gap-2"
-          >
+          <form onSubmit={(event) => event.preventDefault()}>
             <input
               ref={searchInputRef}
               aria-label="Buscar alimento"
@@ -1310,13 +1315,14 @@ function RegisterFoodDialog({
               placeholder="Ej: pechuga de pollo"
               className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
             />
-            <NutritionMotionButton pending={searching} onClick={runSearch} type="button">
-              Buscar
-            </NutritionMotionButton>
           </form>
-          {searchError ? (
-            <p className="text-sm text-amber-700 dark:text-amber-300">{searchError}</p>
-          ) : null}
+          <div aria-live="polite" className="min-h-5">
+            {searching ? (
+              <p className="text-xs text-muted">Buscando…</p>
+            ) : searchError ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">{searchError}</p>
+            ) : null}
+          </div>
 
           {showFavoritesShortcut ? (
             <div className="space-y-1.5">

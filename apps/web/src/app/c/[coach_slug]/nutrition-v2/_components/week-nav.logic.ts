@@ -196,16 +196,23 @@ export interface HistoryWeekBucket {
  * `variants: []` a propósito: el mini-strip solo pinta el punto de estado (con/sin registro), no
  * la estructura del plan de ese día — pasar variantes reales aquí serializaría el árbol del plan
  * sin que ninguna UI lo use (mismo criterio que `toWeekNavCells`).
+ *
+ * La semana que contiene `todayIso` queda EXCLUIDA (paridad RN T1.3): esa semana en curso vive en
+ * el tab Hoy, no en el historial de semanas cerradas.
  */
 export function groupHistoryDaysByWeek(
   days: readonly NutritionHistoryDay[],
   todayIso: string,
 ): HistoryWeekBucket[] {
+  // Paridad RN (T1.3, `nutrition-v2/index.tsx` — "La semana EN CURSO se excluye a propósito"):
+  // esa semana la ve el alumno en el tab Hoy, no en el historial de semanas cerradas.
+  const currentWeekStartIso = nutritionWeekStartIso(todayIso)
   const rowsByWeek = new Map<string, NutritionHistoryDay[]>()
   const order: string[] = []
   for (const day of days) {
     const weekStartIso = nutritionWeekStartIso(day.localDate)
     if (weekStartIso == null) continue
+    if (weekStartIso === currentWeekStartIso) continue
     if (!rowsByWeek.has(weekStartIso)) {
       rowsByWeek.set(weekStartIso, [])
       order.push(weekStartIso)
