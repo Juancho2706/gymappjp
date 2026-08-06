@@ -4,10 +4,10 @@ import * as Clipboard from 'expo-clipboard'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { BlurView } from 'expo-blur'
 import { useReducedMotion } from 'react-native-reanimated'
 import { ArchiveRestore, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { EvaBlur } from '../../../components/EvaBlur'
 import { hexToRgba } from '../../../lib/theme'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -665,10 +665,9 @@ export default function ClientDetailScreen() {
       <View style={styles.headerWrap}>
         {tabNear || tabStuck ? (
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: headerGlass }]}>
-            <BlurView
+            <EvaBlur
               intensity={resolvedScheme === 'dark' ? 20 : 30}
               tint={resolvedScheme === 'dark' ? 'dark' : 'light'}
-              experimentalBlurMethod="dimezisBlurView"
               pointerEvents="none"
               style={StyleSheet.absoluteFill}
             />

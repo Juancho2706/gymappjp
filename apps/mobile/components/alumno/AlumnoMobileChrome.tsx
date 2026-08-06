@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { TextStyle, ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { BlurView } from 'expo-blur'
 import { cssInterop } from 'nativewind'
 import Animated, {
   Easing,
@@ -32,6 +31,8 @@ import { resetChromeScroll, useChromeMinimized } from '../../lib/alumno-chrome-s
 import { FONT } from '../../lib/typography'
 import { SPRING, useEvaMotion } from '../../lib/motion'
 import { shadow } from '../../lib/shadows'
+import { hexToRgba } from '../../lib/theme'
+import { EvaBlur } from '../EvaBlur'
 import { Sheet } from '../Sheet'
 import { NavIconRN, type NavConceptRN } from '../NavIconRN'
 
@@ -246,21 +247,31 @@ export function AlumnoMobileChrome({
             opaco) ENCIMA del blur que, sumado al borde, se leia como slab claro; se
             elimino para dejar el BlurView como superficie translucida unica (== la
             capa unica del web). Borde = hairline `border-subtle` (dark = blanco@7%
-            ~= el text-strong@9% del web `:482`, translucido, no un canto opaco). */}
+            ~= el text-strong@9% del web `:482`, translucido, no un canto opaco).
+
+            EXCEPCION Android (EVA-MOBILE-7): ese "una sola capa" asumia que abajo
+            habia blur REAL. Al desactivar `dimezisBlurView` (crasheaba Android 15,
+            ver `components/EvaBlur.tsx`) el fallback deja apenas un velo plano
+            (`TintStyle.kt`: dark = rgba(25,25,25) a intensity x 0,69 = 27,6% con
+            nuestro intensity 40) y la capsula se leia FANTASMA — el contenido
+            scrolleando se veia atravesandola. Por eso Android recupera un backing
+            propio con el MISMO patron que ya usa el coach
+            (`CoachMobileChrome.tsx:183`: `theme.card` @
+            0,74), no con el `/70` opaco del P0-1: alfa mas bajo y aplicado al shell
+            (bajo el borde), no como capa apilada ENCIMA del blur, que era justo lo
+            que producia el slab claro. En iOS NO va: alli el blur nativo sigue vivo
+            y el backing reintroduciria el P0-1 tal cual. */}
         <View
           className="overflow-hidden rounded-[30px] border border-subtle"
-          style={[styles.capsuleShell, shadow('md', resolvedScheme)]}
+          style={[
+            styles.capsuleShell,
+            Platform.OS === 'android' ? { backgroundColor: hexToRgba(theme.card, 0.74) } : null,
+            shadow('md', resolvedScheme),
+          ]}
         >
-          {/* QA-8: en Android, expo-blur SIN `experimentalBlurMethod` NO difumina —
-              pinta un velo de color plano (tint@intensity), por eso la capsula se
-              leia como pastilla opaca oscura en vez de vidrio esmerilado. Con
-              `dimezisBlurView` Android hace blur REAL del contenido que scrollea por
-              debajo, == el `backdropFilter: blur(26px)` del web (ClientNav.tsx:480).
-              iOS lo ignora (usa su blur nativo). */}
-          <BlurView
+          <EvaBlur
             intensity={isDark ? 40 : 60}
             tint={isDark ? 'dark' : 'light'}
-            experimentalBlurMethod="dimezisBlurView"
             style={StyleSheet.absoluteFill}
           />
 

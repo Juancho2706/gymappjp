@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { BlurView } from 'expo-blur'
 import { MotiView } from 'moti'
 import { ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
+import { EvaBlur } from '../../EvaBlur'
 import { useTheme } from '../../../context/ThemeContext'
 import { useReducedMotion } from 'react-native-reanimated'
 import { hexToRgba } from '../../../lib/theme'
@@ -31,8 +31,10 @@ export interface TabItem {
 // tapando el gradiente de la app (imagen 10 del QA). Ahora ambos viven en una capa cuya
 // opacidad la maneja `backdropProgress` (Animated.Value que la pantalla alimenta desde el
 // onScroll que ya tenía): transparente lejos → superficie al anclarse. La capa se MONTA solo
-// cerca del anclaje (`near`): en Android `dimezisBlurView` es caro y tenerlo vivo durante
-// todo el scroll agregaba jank.
+// cerca del anclaje (`near`): montar/medir una BlurView cuesta caro y tenerla viva durante todo
+// el scroll agregaba jank. Legibilidad NO depende del blur: el tinte `surface-app` al 80% que va
+// encima es el que tapa, así que Android sin difuminado (EVA-MOBILE-7, ver `EvaBlur`) se ve igual
+// de sólido — solo pierde el frosteado del contenido que pasa por debajo.
 export function ClientTabBar({
   items,
   value,
@@ -82,10 +84,9 @@ export function ClientTabBar({
       {showBackdrop ? (
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: progress }]}>
           {/* Glass: surface-app 80% + blur (1:1 con el contenedor sticky web). */}
-          <BlurView
+          <EvaBlur
             intensity={isDark ? 20 : 30}
             tint={isDark ? 'dark' : 'light'}
-            experimentalBlurMethod="dimezisBlurView"
             pointerEvents="none"
             style={StyleSheet.absoluteFill}
           />

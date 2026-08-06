@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { BlurView } from 'expo-blur'
 import { useRouter } from 'expo-router'
 import { Dumbbell, Home, LayoutDashboard, Settings, Shield, Users, Utensils, type LucideIcon } from 'lucide-react-native'
 import Animated, {
@@ -13,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { SPRING, deriveSportTokens } from '@eva/brand-kit'
 import { coachWorkspaceTypeFromKind, getVisibleNavItems, type NavModule } from '@eva/coach-nav'
+import { EvaBlur } from '../EvaBlur'
 import { useTheme } from '../../context/ThemeContext'
 import { useWorkspace } from '../../lib/workspace'
 import { useEntitlements } from '../../lib/entitlements'
@@ -186,10 +186,12 @@ export function CoachMobileTabBar({
           capsuleInsetStyle,
         ]}
       >
-        <BlurView
+        {/* El backing sólido de la cápsula vive en el contenedor (`theme.card` @ 0,74, arriba):
+            el blur solo AGREGA frosteado. Por eso Android, que desde EVA-MOBILE-7 ya no
+            difumina (ver `EvaBlur`), sigue leyéndose como pastilla y no como fantasma. */}
+        <EvaBlur
           intensity={isDark ? 30 : 50}
           tint={isDark ? 'dark' : 'light'}
-          experimentalBlurMethod="dimezisBlurView"
           style={StyleSheet.absoluteFill}
         />
 
@@ -318,7 +320,7 @@ function ReactivateTabBar({ minimized, bottom, isDark, theme, onPress }: {
           insetStyle,
         ]}
       >
-        <BlurView intensity={isDark ? 30 : 50} tint={isDark ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+        <EvaBlur intensity={isDark ? 30 : 50} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
         <View style={[styles.indicator, { left: 8, right: 8, backgroundColor: hexToRgba(theme.primary, 0.15), borderColor: hexToRgba(theme.primary, 0.24) }]} />
         <TouchableOpacity
           activeOpacity={0.82}

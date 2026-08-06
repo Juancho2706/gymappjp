@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
-import { BlurView } from 'expo-blur'
 import { Flag, Pause, Play, RotateCcw, X } from 'lucide-react-native'
+import { EvaBlur } from '../../../EvaBlur'
 import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
 import { textStyle, FONT } from '../../../../lib/typography'
@@ -109,11 +109,10 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
       >
         {/* backdrop-blur-xl de la web: BlurView difumina el contenido detrás; el velo
             ink-900 @ 95% (mismo alfa que la web `/95`) va encima. Chrome siempre oscuro. */}
-        <BlurView
+        <EvaBlur
           pointerEvents="none"
           intensity={20}
           tint="dark"
-          experimentalBlurMethod="dimezisBlurView"
           style={StyleSheet.absoluteFill}
         />
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil]} />

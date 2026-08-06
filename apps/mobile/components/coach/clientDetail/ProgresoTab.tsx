@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Alert, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
-import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Path } from 'react-native-svg'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -23,7 +22,8 @@ import {
 import { updateCoachClient, type CoachClientDetailData, type CheckInEntry } from '../../../lib/coach-client-detail'
 import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, isoDateAddDays, parseDbDate } from '../../../lib/date-utils'
 import { FONT } from '../../../lib/typography'
-import { resolveSportRamp } from '../../../lib/theme'
+import { hexToRgba, resolveSportRamp } from '../../../lib/theme'
+import { EvaBlur } from '../../../components/EvaBlur'
 import {
   deleteScopedMeasurement,
   listScopedMeasurements,
@@ -812,7 +812,21 @@ function CompositionSection({ clientId, hasModule, entitlementsReady, inlineAllo
               curveType="linear"
             />
           </View>
-          <BlurView pointerEvents="none" intensity={14} tint={theme.scheme === 'dark' ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+          {/* Esta capa NO es decoración: es el PAYWALL. Tapa el preview de %grasa / masa
+              muscular de un módulo que el coach no tiene contratado, así que si se ve a
+              través, el teaser regala el módulo. El teaser nunca puede depender de un velo
+              translúcido en Android: desde EVA-MOBILE-7 (ver `components/EvaBlur.tsx`) ahí
+              no hay difuminado, y con `intensity={14}` el fallback plano queda en ~10% de
+              alfa (`TintStyle.kt`: intensity x 0,69) — los números y el trazo se leían
+              perfectamente. Android va con superficie SÓLIDA
+              (`theme.card` @ 0,92 — opaca de verdad, pero deja asomar la silueta lo justo
+              para que se lea como preview y no como un bloque muerto). iOS conserva el blur
+              nativo, que sí difumina de verdad. */}
+          {Platform.OS === 'android' ? (
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.card, 0.92) }]} />
+          ) : (
+            <EvaBlur pointerEvents="none" intensity={14} tint={theme.scheme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          )}
           <View style={styles.teaserBody}>
             <View style={[styles.teaserIcon, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.pill }]}>
               <Ruler size={20} color={theme.mutedForeground} />

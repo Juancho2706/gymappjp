@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
-import { Stack, useRouter, useSegments } from 'expo-router'
+import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Linking from 'expo-linking'
 import * as Notifications from 'expo-notifications'
@@ -60,12 +60,22 @@ void SplashScreen.preventAutoHideAsync().catch(() => {})
 // (cero llamadas de red, cero riesgo de crash). El DSN se inyecta vía EAS build
 // (EXPO_PUBLIC_SENTRY_DSN); sin él la app corre exactamente igual que hoy.
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
+
+// Instrumentación de navegación de Expo Router. Se CONSTRUYE siempre —es solo un objeto con
+// closures, sin efectos hasta que un client la instala— y se registra únicamente si hay DSN,
+// para no romper el no-op total de arriba. Con `tracesSampleRate: 0` no se envía ni una
+// transacción: lo que interesa acá es su OTRO efecto, el breadcrumb `navigation`
+// ("Navigation to <ruta>") que deja en el scope en cada cambio de pantalla. Sin él un crash
+// llega sin decir DÓNDE estaba el usuario, que es justo lo que costó caro en EVA-MOBILE-7.
+const navigationIntegration = Sentry.reactNavigationIntegration()
+
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
     debug: false,
     enabled: !__DEV__,
     tracesSampleRate: 0,
+    integrations: [navigationIntegration],
   })
 }
 
@@ -236,7 +246,19 @@ function RootLayoutNav() {
   )
 }
 
-export default function RootLayout() {
+function RootLayout() {
+  // Enganche del rastro de navegación (ver `navigationIntegration` arriba). El ref que
+  // devuelve `useNavigationContainerRef` es el del store de expo-router: estable entre
+  // renders y válido fuera del navegador, así que el efecto corre una sola vez. Para cuando
+  // corre —efecto pasivo— el `<NavigationContainer>` que expo-router monta POR ENCIMA de este
+  // layout ya adjuntó su ref (los layout effects del ancestro se ejecutan antes que cualquier
+  // efecto pasivo del árbol), de modo que `current` está poblado y la integración alcanza a
+  // suscribirse antes de la primera navegación del usuario.
+  const navigationRef = useNavigationContainerRef()
+  useEffect(() => {
+    if (SENTRY_DSN && navigationRef?.current) navigationIntegration.registerNavigationContainer(navigationRef)
+  }, [navigationRef])
+
   // 2R-3 tipografía white-label: el branding almacenado decide QUÉ asset se registra bajo
   // los nombres de slot display ANTES de cargar fuentes (espejo del layout /c web, que fija
   // --brand-font server-side por request: c/[coach_slug]/layout.tsx:194-195,309). El splash
@@ -252,6 +274,12 @@ export default function RootLayout() {
   if (storedBranding === undefined) return null
   return <RootLayoutWithFonts branding={storedBranding} />
 }
+
+// `Sentry.wrap` envuelve el árbol en el TouchEventBoundary (breadcrumbs de toque: qué control
+// tocó el usuario justo antes del crash) y el Profiler raíz. Va sobre el export por defecto
+// —no adentro— porque el boundary tiene que quedar POR ENCIMA de todo, incluido el
+// GestureHandlerRootView. Sin DSN el árbol extra existe pero no reporta nada.
+export default Sentry.wrap(RootLayout)
 
 function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
   const [fontsLoaded] = useFonts({

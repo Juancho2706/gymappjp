@@ -52,12 +52,12 @@ import {
 } from 'lucide-react-native'
 import Svg, { Circle as SvgCircle, Defs, LinearGradient as SvgLinearGradient, Path, Rect, Stop } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
 import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-native'
 import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { deriveSportTokens } from '@eva/brand-kit'
+import { EvaBlur } from '../EvaBlur'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
@@ -122,10 +122,9 @@ function CardGlass({ tone }: { tone?: string }) {
   const isDark = mode !== 'light'
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <BlurView
+      <EvaBlur
         intensity={isDark ? 22 : 40}
         tint={isDark ? 'dark' : 'light'}
-        experimentalBlurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
       {/* Velo: web dark = bg-black/40, light = bg-white/70 */}
