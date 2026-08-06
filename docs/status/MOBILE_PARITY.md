@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-03"
+last_verified: "2026-08-06"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -13,6 +13,13 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
 ## Resumen ejecutivo
+
+> **2026-08-06 (F0 Sentry+RN, `7ccf7a07`/`8a7eaecf` en master)**: resuelto el crash-loop P0 de
+> arranque en Android — `expo-blur` (dimezisBlurView) reemplazado por velo JS plano (`EvaBlur`) —
+> y Sentry quedó vivo en web (replay) y RN. Pusheado; **queda build Android `eas build --local`
+> (los builds locales no aparecen en `eas build:list`) + QA en dispositivo**. GOTCHA operativo:
+> Play y TestFlight comparten canal `production` y runtime `1.1.0` — un OTA sin
+> `--platform android` toca la build iOS que está en App Review.
 
 > **2026-07-31 (cierre de archivado + V2 canónica, en integración)**: RN/Web usan Nutrition V2 como
 > entrada canónica para Standalone/Team; se retiró el filtro de ausencia de plan V2 y los aliases
