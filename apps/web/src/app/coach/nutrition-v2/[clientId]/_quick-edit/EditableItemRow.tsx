@@ -17,8 +17,12 @@ import { useState } from 'react'
 import { ArrowLeftRight, BookmarkPlus, Loader2, MoreVertical, MoveRight, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
+import type { FoodCatalogItem } from '@eva/nutrition-v2'
+import { foodCategoryIconUrl } from '@/lib/food-image'
 import { BUILDER_UNITS } from '../builder/_lib/draft-builder'
 import { stepCountedQuantity } from '../builder/_lib/quantity-format'
+import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from '../builder/_components/food-card-presentation'
+import { FoodThumb } from '../builder/_components/FoodImage'
 import { ItemQuantityField } from '../builder/_components/ItemQuantityField'
 import { createCoachFoodAction } from '../builder/_actions/builder.actions'
 import { qeCoachFoodCandidate, qeItemMacros, type QeItem, type QeSlot } from './quick-edit-state'
@@ -29,6 +33,8 @@ import { QE_COPY } from './microcopy'
 
 /** Ventana del Deshacer de las acciones optimistas de la fila (quitar, mover). */
 const UNDO_TOAST_MS = 8000
+
+const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
 const menuItemClass =
   'inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-left text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
@@ -73,6 +79,12 @@ export function EditableItemRow({
       : saveCandidate.reason === 'bad-unit'
         ? QE_COPY.saveFoodBadUnit
         : QE_COPY.saveFoodNoMacros
+  // Miniatura SIEMPRE (regla transversal del owner): foto del producto si el read model o el
+  // swap la traen; icono por categoria si no, derivada del nombre como ultimo recurso.
+  const media = item.food?.media ?? item.media
+  const imageUrl = resolveFoodImageUrl(media as FoodCatalogItem['media'], SUPABASE_BASE)
+  const category = item.food?.category ?? item.category
+  const iconUrl = category ? foodCategoryIconUrl(category) : foodCategoryIconUrlFromName(item.displayName)
 
   function handleRemove() {
     const removed = item
@@ -133,6 +145,7 @@ export function EditableItemRow({
   return (
     <div className="rounded-control border border-border-subtle bg-surface-card p-2.5">
       <div className="flex items-start gap-2.5">
+        <FoodThumb imageUrl={imageUrl} iconUrl={iconUrl} alt={item.displayName || 'Alimento'} />
         <div className="min-w-0 flex-1">
           {item.isCustom ? (
             <>

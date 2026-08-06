@@ -100,6 +100,13 @@ export interface QeItem {
   /** Alimento libre (sin foodId/recipeId): el nombre es editable y las macros no aplican. */
   isCustom: boolean
   /**
+   * Foto del producto e icono de categoria, SOLO para display (no viajan en la proyeccion
+   * del draft: el server los re-resuelve en lectura por foodId). Hidratados del read model;
+   * un swap los reemplaza por los del alimento elegido.
+   */
+  media: { bucket: string; objectPath: string; version: number } | null
+  category: string | null
+  /**
    * Reemplazos autorizados del coach (F-02) heredados de la version base. CARRY-OVER
    * read-only: quick-edit no los edita, pero deben viajar en la proyeccion del draft o
    * republicar los borraria. Vacio = item sin capa de reemplazos.
@@ -277,6 +284,8 @@ function hydrateItem(item: ReadItem, subsByItemId: SubstitutionsByItemId): QeIte
           }
         : null,
     isCustom,
+    media: item.media ?? null,
+    category: item.category ?? null,
     // Carry-over F-02: los reemplazos de la version base viajan en el estado editable para que
     // republicar NO los borre. Si no hay fetch (mapa vacio) el item queda como antes.
     substitutions: subsByItemId[item.id] ?? [],
@@ -639,6 +648,8 @@ export function createCatalogItem(key: string, food: BuilderFood): QeItem {
     food,
     macroBase: null,
     isCustom: false,
+    media: food.media ?? null,
+    category: food.category ?? null,
     // Item nuevo del quick-edit: sin reemplazos (F1 no los edita aca).
     substitutions: [],
   }
@@ -662,6 +673,8 @@ export function createCustomItem(key: string): QeItem {
     food: null,
     macroBase: null,
     isCustom: true,
+    media: null,
+    category: null,
     substitutions: [],
   }
 }
@@ -1098,6 +1111,8 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         food: action.food,
         macroBase: null,
         isCustom: false,
+        media: action.food.media ?? null,
+        category: action.food.category ?? null,
       }))
     case 'REMOVE_ITEM':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({

@@ -82,6 +82,8 @@ function hydratedItem(): QeItem {
     food: null,
     macroBase: { quantity: 120, macros: { calories: 130, proteinG: 3, carbsG: 28, fatsG: 0.3, fiberG: 0.4 } },
     isCustom: false,
+    media: null,
+    category: null,
     substitutions: [],
   }
 }
