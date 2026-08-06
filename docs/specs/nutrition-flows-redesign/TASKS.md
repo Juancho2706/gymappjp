@@ -27,7 +27,9 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [x] Poda RN verificada contra los comentarios de auditoria web: chips a los 2 permisos reales (P1), parrafo estrategia fuera (P2), fila fibra fuera (P4), "Fuera del plan" vacio no renderiza (H4)
   - [x] Web: semana en curso excluida de groupHistoryDaysByWeek + caption con el copy real de RN; tests 19/19 (2 nuevos)
   - Gates: tsc mobile verde · typecheck web verde · vitest week-nav 19/19 · eslint verde. QA device: pendiente al cierre de ola.
-- [ ] T1.4 Banda ±10% web+RN (zona semantica fija, fill theme.primary, copy "faltan ~X"; nunca rojo) + dashboard web 1 sola llamada RPC hoy (patron cache/props, NO segunda llamada)
+- [~] T1.4 Banda ±10% + dashboard sin RPC volatil
+  - [x] Dashboard web (2026-08-06, Fable): la card ya NO llama `get_nutrition_today_v2` — lee la cabeza del historial (`get_nutrition_history_page_v2` pageSize 1, read-only; verificado en SQL que p_before null incluye hoy). Dia mas reciente = hoy → numeros con banda ±10% (zona success fija, fill theme.primary, barra escalada a 120% del target, copy "✓ en tu rango" / "faltan ~X" / "+X sobre tu rango" en ambar — nunca rojo); si no → card generica con CTA (paridad RN cache-first). Trade-off aceptado: el titulo pasa de nombre-del-plan a "Nutricion" (el history head no trae planName; el nombre vive en la pagina de nutricion). Gates: eslint verde, typecheck web verde.
+  - [ ] Banda ±10% en AuraHero (anillo) web + RN — semantica de rango en la linea de estado + zona en el arco; pendiente
 - [ ] T1.5 Plantillas "Aplicar": boton en fila → selector alumno (reusa picker de NewPlanPickerButton) → builder `?from=template:` precargado
 - [ ] T1.6 Sustituciones puente: tap pill → prefill registro libre con alimento+cantidad sugerida (solo si canRegisterFreely; explainer si no)
 - [ ] Cierre O1: checklist preservacion + QA emulador eva_pixel + device fisico + Sentry limpio → proponer push (D1)
