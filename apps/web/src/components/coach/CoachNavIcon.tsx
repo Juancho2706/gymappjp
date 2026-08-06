@@ -31,6 +31,7 @@ const NAV_ICON_SRC = {
     suscripcion: '/nav-icons/suscripcion.png',
     buscar: '/nav-icons/buscar.png',
     novedades: '/nav-icons/novedades.png',
+    movimiento: '/nav-icons/movimiento.png',
 } as const
 
 export type CoachNavConcept = keyof typeof NAV_ICON_SRC

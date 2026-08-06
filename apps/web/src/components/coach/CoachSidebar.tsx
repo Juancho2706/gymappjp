@@ -113,11 +113,12 @@ const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? ICON
 const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
 
 /**
- * Glifo propio (silueta del CEO) por clave de nav — SOLO para la cápsula móvil. Reemplaza al
+ * Glifo propio (silueta del CEO) por clave de nav — cápsula móvil Y sidebar desktop (el
+ * desktop quedó en lucide por descuido y el owner lo señaló en QA 06-08). Reemplaza al
  * icono lucide conservando tamaño/color por estado del call site. Las claves sin entrada
- * (p.ej. `reactivate`) caen al icono lucide (`navIcon`). El sidebar desktop NO usa este mapa.
+ * (p.ej. `reactivate`, `support`, `cardio`) caen al icono lucide (`navIcon`).
  */
-const MOBILE_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
+const NAV_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
     dashboard: 'home',
     clients: 'alumnos',
     programs: 'programas',
@@ -125,6 +126,7 @@ const MOBILE_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
     options: 'ajustes',
     settings_team: 'ajustes',
     team: 'equipo',
+    movement: 'movimiento',
 }
 
 export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl, logoUrlDark }: CoachSidebarProps) {
@@ -226,6 +228,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     const renderNavLink = (item: NavModule, secondary = false) => {
         const isActive = isNavItemActive(item)
         const Icon = navIcon(item)
+        const glyph = NAV_GLYPH_BY_KEY[item.key]
         const label = displayLabel(item)
         return (
             <Link
@@ -263,7 +266,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     )}
                 />
                 <span className="inline-flex h-[23px] w-[23px] flex-shrink-0 items-center justify-center">
-                    <Icon size={22} />
+                    {glyph ? <CoachNavIcon concept={glyph} className="h-[22px] w-[22px]" /> : <Icon size={22} />}
                 </span>
                 <span className={cn('overflow-hidden whitespace-nowrap', isCollapsed && 'hidden')}>
                     {label}
@@ -426,7 +429,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     {mobileTabs.map((item) => {
                         const active = isNavItemActive(item)
                         const Icon = navIcon(item)
-                        const glyph = MOBILE_GLYPH_BY_KEY[item.key]
+                        const glyph = NAV_GLYPH_BY_KEY[item.key]
                         const label = displayLabel(item)
                         return (
                             <Link
