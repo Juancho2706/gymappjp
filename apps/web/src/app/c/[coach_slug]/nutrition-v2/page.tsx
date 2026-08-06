@@ -10,6 +10,7 @@ import {
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import { NutritionDomainOff } from '@/components/nutrition-v2/NutritionDomainOff'
+import { PushNotificationBanner } from '@/components/PushNotificationBanner'
 import {
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
   addNutritionDays,
@@ -118,6 +119,14 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
       }
     >
       <div className="mx-auto w-full max-w-2xl">
+        {/* Permiso de push (recordatorio de comidas). Vive bajo la toolbar y sobre la vista:
+            es la unica pieza de la pantalla que no depende del dia elegido. El wrapper usa
+            `empty:hidden` para no reservar caja cuando el banner no aplica (permiso ya dado /
+            denegado / descartado / navegador sin push): sin hueco fantasma ni salto de layout
+            para la inmensa mayoria, que es el caso normal. */}
+        <div className="mb-4 empty:hidden">
+          <PushNotificationBanner />
+        </div>
         {/* Streaming: el shell + toolbar pintan de inmediato y cada vista (fan-out de
             queries en su componente async) baja por Suspense — el tap del menú no queda
             esperando el payload completo (QA CEO 2026-07-18). Cero cambio de datos. */}

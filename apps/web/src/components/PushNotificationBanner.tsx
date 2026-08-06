@@ -3,6 +3,19 @@
 import { useEffect, useState } from 'react'
 import { Bell } from 'lucide-react'
 
+/**
+ * Pedido de permiso de push del alumno (PWA).
+ *
+ * Vivia dentro de la ruta V1 (`c/[coach_slug]/nutrition/_components/`), asi que la superficie
+ * V2 —hoy el estandar del producto— jamas pedia permiso: el alumno tenia el recordatorio de
+ * comidas apagado sin saberlo. Se movio aca (componente neutro, sin datos de dominio) para
+ * montarlo en AMBAS rutas sin romper el gate de fronteras V2, que prohibe importar
+ * `nutrition/_components/` desde V2 (`scripts/check-nutrition-v2-boundaries.mjs`).
+ *
+ * La persistencia se conserva tal cual: misma clave de descarte, asi que quien ya lo descarto
+ * o ya dio permiso no lo vuelve a ver al cambiar de superficie.
+ */
+
 const DISMISSED_KEY = 'eva:push-dismissed'
 
 function isPushSupported() {
@@ -97,18 +110,18 @@ export function PushNotificationBanner() {
   }
 
   return (
-    <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 flex items-center gap-3">
-      <div className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-amber-500/20">
-        <Bell className="w-4 h-4 text-amber-500" />
+    <div className="flex items-center gap-3 rounded-control border border-warning-500/25 bg-warning-100 p-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning-500/20">
+        <Bell className="h-4 w-4 text-warning-600" />
       </div>
-      <p className="flex-1 text-xs text-amber-700 dark:text-amber-400 font-medium leading-snug">
+      <p className="flex-1 text-xs font-medium leading-snug text-warning-700">
         Activa recordatorios de comidas
       </p>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={handleDismiss}
-          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          className="text-[11px] text-muted transition-colors hover:text-strong"
           aria-label="Descartar"
         >
           No, gracias
@@ -117,7 +130,7 @@ export function PushNotificationBanner() {
           type="button"
           onClick={handleActivate}
           disabled={loading}
-          className="text-[11px] font-semibold bg-amber-500 text-white rounded-lg px-3 py-1.5 hover:bg-amber-600 transition-colors disabled:opacity-50"
+          className="rounded-lg bg-warning-500 px-3 py-1.5 text-[11px] font-semibold text-[var(--text-on-warning)] transition-colors hover:bg-warning-600 disabled:opacity-50"
         >
           {loading ? 'Activando…' : 'Activar'}
         </button>

@@ -13,11 +13,13 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
 ## Ola 1
 
 - [x] T1.0 Instrumentacion PostHog + baseline (2026-08-06). Eventos web: student_nutrition_intake (item_tap/bulk_slot/portion_chip/free_search), student_nutrition_correction (opened/saved/voided), coach_nutrition_builder_opened, coach_nutrition_plan_published (wizard/quick_edit + duration_ms), coach_nutrition_template_applied (definido, dispara en T1.5). Baseline pre-instrumentacion en BASELINE.md (solo pageviews existian). RN sin PostHog — instrumentacion RN queda fuera de O1 (decision pendiente aparte). Gates: eslint archivos tocados verde, typecheck web verde; tests no corridos (cambio analytics-only, hooks no-op sin consentimiento).
-- [ ] T1.1 Notificaciones V2
-  - [ ] Cron `nutrition-reminder`: filtro por plan activo V2 + intake V2 (sin tablas V1); mismo schedule; probar dedupe
-  - [ ] Banner permiso push montado en ruta V2 web; equivalente RN vivo (el actual esta en dead code)
-  - [ ] Deep-links del push a rutas V2 (web `{base}/nutrition-v2`, RN `alumno/(tabs)/nutrition-v2`)
-  - [ ] Gates + commit
+- [x] T1.1 Notificaciones V2 (2026-08-06, worker Opus + juicio Fable)
+  - [x] Cron: candidatos = UNION V1 ∪ V2 dedupe por alumno (V2 gana); version vigente con el MISMO desempate del snapshot (helpers puros `v2-candidates.ts` + 11 tests); skip por superficie (`daily_nutrition_logs` vs `nutrition_intake_entries` sin voided); franjas V2 batcheadas para el copy meal-aware (no-bloqueante, fallback generico); UN cron, cero RPC, cero query por alumno
+  - [x] Banner push movido a `components/PushNotificationBanner.tsx` (boundaries obligaba) + montado en V2 con `empty:hidden` (sin CLS); V1 sigue igual
+  - [x] Deep-link web ramificado V2/V1; RN se QUEDA en `/alumno/(tabs)/nutricion` a proposito (el alias YA es V2 y los binarios viejos no tienen la ruta nueva — cambiarlo = Unmatched Route)
+  - [x] RN ya pide permiso de push en `_layout.tsx:212` — cero UI nueva; `PushBanner.tsx` muerto queda para la poda T1.3
+  - Gates: typecheck verde · lint 0 errores (2 warnings preexistentes verificados vs HEAD) · vitest full 5356 verde · boundaries 303 verde · tokens 86 verde · docs verde
+  - PENDIENTE al push de ola: curl al cron con CRON_SECRET en preview (las tablas V2 van por cast `V2ReadClient` — `database.types.ts` desactualizado, deuda conocida; retirar cast al regenerar)
 - [ ] T1.2 Correccion sin interrogatorio (web + RN): sheet stepper + chips razon opcional; server acepta razon vacia; copy append-only intacto
 - [ ] T1.3 Paridad decisiones tomadas
   - [ ] Live search web (debounce 300ms, AbortController; muere boton "Buscar")

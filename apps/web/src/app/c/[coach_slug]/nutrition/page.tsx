@@ -13,7 +13,7 @@ import { getHeroComplianceBundle } from '../dashboard/_data/heroComplianceBundle
 import { headers } from 'next/headers'
 import { NutritionShell } from './_components/NutritionShell'
 import { NutritionNoPlanFromServer } from './_components/NutritionNoPlanFromServer'
-import { PushNotificationBanner } from './_components/PushNotificationBanner'
+import { PushNotificationBanner } from '@/components/PushNotificationBanner'
 import { getClientNutritionUser } from './_data/nutrition-auth.queries'
 import { getStudentExchangeData } from './_data/nutrition-exchanges.queries'
 import { getAssignedRecipesForClient } from './_data/recipes.queries'
