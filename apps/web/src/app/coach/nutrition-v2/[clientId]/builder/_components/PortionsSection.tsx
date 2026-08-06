@@ -159,6 +159,15 @@ export function usePortionsBuilder(
     if (groups == null && !loadingRef.current) void load()
   }, [groups, load])
 
+  // Si el plan REHIDRATADO ya trae porciones, los grupos se cargan de inmediato: el nombre,
+  // codigo y color de cada fila salen de esta lista, y hasta hoy solo se cargaba al abrir el
+  // picker o al montar la card del dia base — un plan de puros dias propios (el dia base ya no
+  // rige) mostraba todas sus filas como "Grupo" gris (QA owner 05-08). Tras cargar, el efecto
+  // re-corre y `ensureGroupsLoaded` es no-op.
+  useEffect(() => {
+    if (Object.keys(bySlot).length > 0) ensureGroupsLoaded()
+  }, [bySlot, ensureGroupsLoaded])
+
   return {
     bySlot,
     groups,

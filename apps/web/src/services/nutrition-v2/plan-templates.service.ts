@@ -271,8 +271,24 @@ export async function setPlanTemplateFavorite(
   return error ? { success: false, error } : { success: true }
 }
 
-/** Soft-delete: la fila queda para trazabilidad y el unico parcial libera el `legacy_template_id`. */
+/**
+ * Soft-delete: la fila queda para trazabilidad y el unico parcial libera el `legacy_template_id`.
+ *
+ * Va por RPC definer y NO por UPDATE PostgREST: marcar `deleted_at` vuelve la fila invisible
+ * para las policies de SELECT (todas filtran `deleted_at IS NULL`), y PostgREST envuelve el
+ * UPDATE en un CTE con RETURNING incluso con `return=minimal`/`count` — Postgres lo rechaza
+ * con "new row violates row-level security policy". Verificado dos veces en LIVE (QA 05-08).
+ */
 export async function deletePlanTemplate(db: DB, id: string): Promise<{ success: boolean; error?: string }> {
-  const { error } = await updatePlanTemplate(db, id, { deletedAt: new Date().toISOString() })
-  return error ? { success: false, error } : { success: true }
+  // Cast puntual: el RPC (migracion 20260806022947) aun no esta en database.types.ts — la
+  // regeneracion quedo pendiente en la otra corriente (panel CEO) y regenerar aqui arrastraria
+  // su schema a este commit.
+  const rpc = db.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>
+  const { data, error } = await rpc('soft_delete_nutrition_plan_template_v2', { p_id: id })
+  if (error) return { success: false, error: error.message }
+  if (data !== true) return { success: false, error: 'Esa plantilla ya no esta disponible.' }
+  return { success: true }
 }

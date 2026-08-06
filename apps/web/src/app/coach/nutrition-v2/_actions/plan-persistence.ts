@@ -98,6 +98,16 @@ export function mapWriteError(error: DbError, phase: string): ActionFailure {
   if (code === '42501') {
     return fail('SCOPE_DENIED', 'No tienes permiso para editar el plan de este alumno.')
   }
+  // Un solo plan activo por alumno (indice parcial). Se llega aca cuando el builder quedo
+  // abierto en modo "plan nuevo" y OTRA sesion/pestaña publico o restauro un plan entremedio:
+  // el INSERT del plan nuevo choca con el vigente. Sin este mapeo era un "No se pudo guardar
+  // el plan (publicacion)" opaco (QA owner 05-08, ronda 2).
+  if (message.includes('nutrition_plans_v2_active_root_per_client_uniq')) {
+    return fail(
+      'PLAN_ALREADY_ACTIVE',
+      'Este alumno ya tiene un plan vigente (se publico o restauro desde otra pestaña o sesion). Recarga la pagina: veras el plan actual y podras publicarle una nueva version o reemplazarlo.',
+    )
+  }
   if (message.includes('publish_stale_base')) {
     return fail(
       'STALE_BASE',
