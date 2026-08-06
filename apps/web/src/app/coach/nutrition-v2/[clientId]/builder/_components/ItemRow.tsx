@@ -83,7 +83,13 @@ export function ItemRow({
   const unitOptions = item.food ? BUILDER_UNITS : (['g', 'ml'] as const)
   const displayName = item.food ? item.food.name : item.customName
   const imageUrl = item.food ? resolveFoodImageUrl(item.food.media as FoodCatalogItem['media'], SUPABASE_BASE) : null
-  const iconUrl = item.food ? foodCategoryIconUrl(item.food.category) : foodCategoryIconUrlFromName(item.customName)
+  // Sin `category` (alimento custom del coach, snapshot viejo) se deriva del NOMBRE antes de
+  // caer al icono generico de cubiertos: "Pechuga de pollo" merece el icono de proteina igual.
+  const iconUrl = item.food
+    ? item.food.category
+      ? foodCategoryIconUrl(item.food.category)
+      : foodCategoryIconUrlFromName(item.food.name)
+    : foodCategoryIconUrlFromName(item.customName)
   const itemLabel = displayName || 'alimento'
   const moveTargets = daySlots.filter((slot) => slot.key !== slotKey)
 

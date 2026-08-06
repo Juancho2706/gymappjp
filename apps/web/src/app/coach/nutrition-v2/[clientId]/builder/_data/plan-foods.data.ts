@@ -27,9 +27,10 @@ interface FoodRow {
   fiber_g: number | null
   serving_size: number
   serving_unit: string | null
+  category: string | null
 }
 
-const FOOD_SELECT = 'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit'
+const FOOD_SELECT = 'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, category'
 
 type FoodQueryResult = { data: FoodRow[] | null; error: { message: string } | null }
 
@@ -56,8 +57,12 @@ function toBuilderFood(row: FoodRow): BuilderFood {
     fiberG: row.fiber_g,
     servingSize: row.serving_size,
     servingUnit: row.serving_unit ?? 'g',
-    // El icono/categoria del item los aporta el read-model (resueltos en lectura).
-    category: null,
+    // La categoria viaja desde el catalogo: la rehidratacion de PLANTILLAS no pasa por el
+    // read-model del plan (que la resuelve en lectura), asi que sin esta columna todos los
+    // items de una plantilla caian al icono generico de cubiertos ("otro").
+    category: row.category ?? null,
+    // La foto del producto si la aporta solo el read-model (join a food_media): aca queda
+    // null y la card muestra el icono de categoria.
     media: null,
   }
 }
