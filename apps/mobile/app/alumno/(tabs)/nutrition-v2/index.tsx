@@ -2097,6 +2097,88 @@ function BulkMarkControl({
   )
 }
 
+/**
+ * T1.2 (nutrition-flows-redesign), paridad exacta con la web: chips de razon con la primera
+ * preseleccionada — el texto del chip ya cumple el minimo de 3 caracteres del server, asi que
+ * la validacion del RPC no cambia. "Otro motivo" abre el campo libre (ahi si, minimo 3).
+ */
+const EDIT_REASON_CHIPS = ['Me equivoqué de cantidad', 'Comí menos', 'Comí más'] as const
+const VOID_REASON_CHIPS = ['Lo registré por error', 'No lo comí', 'Registro duplicado'] as const
+const OTHER_REASON = '__otro__'
+
+/** Chip elegido o texto libre; null si "Otro motivo" quedo bajo el minimo del server. */
+function resolveCorrectionReason(value: string, customText: string): string | null {
+  if (value !== OTHER_REASON) return value
+  const trimmed = customText.trim()
+  return trimmed.length >= 3 && trimmed.length <= 1000 ? trimmed : null
+}
+
+function ReasonChips({
+  label,
+  options,
+  value,
+  customText,
+  pending,
+  onSelect,
+  onCustomChange,
+}: {
+  label: string
+  options: readonly string[]
+  value: string
+  customText: string
+  pending: boolean
+  onSelect: (next: string) => void
+  onCustomChange: (text: string) => void
+}) {
+  const { theme } = useTheme()
+  return (
+    <View>
+      <Text className="mb-1.5 text-xs font-semibold text-muted">{label}</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel={label} className="flex-row flex-wrap gap-2">
+        {[...options, OTHER_REASON].map((option) => {
+          const selected = value === option
+          const text = option === OTHER_REASON ? 'Otro motivo' : option
+          return (
+            <Pressable
+              key={option}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected, disabled: pending }}
+              disabled={pending}
+              onPress={() => onSelect(option)}
+              className={`min-h-9 items-center justify-center rounded-full border px-3 ${
+                selected ? '' : 'border-default bg-surface-app'
+              }`}
+              style={selected ? { borderColor: theme.primary, backgroundColor: `${theme.primary}1A` } : undefined}
+            >
+              <Text
+                className={`text-xs font-semibold ${selected ? '' : 'text-body'}`}
+                style={selected ? { color: theme.primary } : undefined}
+              >
+                {text}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      {value === OTHER_REASON ? (
+        <TextInput
+          accessibilityLabel="Otro motivo"
+          accessibilityHint="Escribe al menos tres caracteres"
+          className="mt-2 min-h-12 w-full rounded-control border border-default bg-surface-app px-3 text-base text-strong"
+          editable={!pending}
+          maxLength={1000}
+          onChangeText={onCustomChange}
+          placeholder="Cuéntale a tu coach (mínimo 3 caracteres)"
+          placeholderTextColor={theme.mutedForeground}
+          returnKeyType="done"
+          value={customText}
+          autoFocus
+        />
+      ) : null}
+    </View>
+  )
+}
+
 function EntryCorrectionSheet({
   action,
   error,
@@ -2114,18 +2196,27 @@ function EntryCorrectionSheet({
 }) {
   const { theme } = useTheme()
   const [quantity, setQuantity] = useState('')
-  const [reason, setReason] = useState('')
+  const [reasonChoice, setReasonChoice] = useState<string>(EDIT_REASON_CHIPS[0])
+  const [customReason, setCustomReason] = useState('')
   const entry = action?.entry ?? null
 
   useEffect(() => {
     setQuantity(entry ? String(entry.quantity) : '')
-    setReason('')
+    setReasonChoice(action?.kind === 'void' ? VOID_REASON_CHIPS[0] : EDIT_REASON_CHIPS[0])
+    setCustomReason('')
   }, [action, entry])
 
   const parsed = Number(quantity.replace(',', '.'))
   const validQuantity = Number.isFinite(parsed) && parsed > 0
-  const validReason = reason.trim().length >= 3 && reason.trim().length <= 1000
-  const canSubmit = validReason && (action?.kind === 'void' || validQuantity)
+  // Paso hibrido, misma regla que la web: gramos/ml en saltos de 10, unidades contadas de a 0.5.
+  const step = entry?.unit === 'g' || entry?.unit === 'ml' ? 10 : 0.5
+  const adjustQuantity = (delta: number) => {
+    const base = validQuantity ? parsed : entry?.quantity ?? 0
+    const next = Math.max(step, Math.round((base + delta) * 10) / 10)
+    setQuantity(String(next))
+  }
+  const reason = resolveCorrectionReason(reasonChoice, customReason)
+  const canSubmit = reason !== null && (action?.kind === 'void' || validQuantity)
   const title = action?.kind === 'edit' ? 'Editar cantidad' : 'Retirar registro'
   const description = entry
     ? action?.kind === 'edit'
@@ -2151,9 +2242,9 @@ function EntryCorrectionSheet({
           pending={pending}
           tone={action.kind === 'void' ? 'danger' : 'nutrition'}
           onPress={() => {
-            if (!canSubmit) return
-            if (action.kind === 'edit') onEdit(entry, parsed, reason.trim())
-            else onVoid(entry, reason.trim())
+            if (!canSubmit || reason === null) return
+            if (action.kind === 'edit') onEdit(entry, parsed, reason)
+            else onVoid(entry, reason)
           }}
         >
           {action.kind === 'edit' ? 'Guardar corrección' : 'Retirar registro'}
@@ -2191,17 +2282,37 @@ function EntryCorrectionSheet({
           {action.kind === 'edit' ? (
             <View>
               <Text className="mb-1 text-xs font-semibold text-muted">Nueva cantidad ({entry.unit})</Text>
-              <TextInput
-                accessibilityLabel={`Nueva cantidad en ${entry.unit}`}
-                accessibilityHint="Ingresa un número mayor que cero"
-                className="min-h-12 w-full rounded-control border border-default bg-surface-app px-3 text-base text-strong"
-                editable={!pending}
-                inputMode="decimal"
-                keyboardType="decimal-pad"
-                onChangeText={(value) => setQuantity(value.replace(/[^0-9.,]/g, ''))}
-                selectTextOnFocus
-                value={quantity}
-              />
+              <View className="flex-row items-stretch gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Restar ${step} ${entry.unit}`}
+                  disabled={pending}
+                  onPress={() => adjustQuantity(-step)}
+                  className="min-h-12 w-12 items-center justify-center rounded-control border border-default bg-surface-app"
+                >
+                  <Text className="text-lg font-bold text-strong">−</Text>
+                </Pressable>
+                <TextInput
+                  accessibilityLabel={`Nueva cantidad en ${entry.unit}`}
+                  accessibilityHint="Ingresa un número mayor que cero"
+                  className="min-h-12 flex-1 rounded-control border border-default bg-surface-app px-3 text-center text-base font-semibold text-strong"
+                  editable={!pending}
+                  inputMode="decimal"
+                  keyboardType="decimal-pad"
+                  onChangeText={(value) => setQuantity(value.replace(/[^0-9.,]/g, ''))}
+                  selectTextOnFocus
+                  value={quantity}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sumar ${step} ${entry.unit}`}
+                  disabled={pending}
+                  onPress={() => adjustQuantity(step)}
+                  className="min-h-12 w-12 items-center justify-center rounded-control border border-default bg-surface-app"
+                >
+                  <Text className="text-lg font-bold text-strong">＋</Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <Text className="text-sm leading-5 text-body">
@@ -2209,28 +2320,20 @@ function EntryCorrectionSheet({
             </Text>
           )}
 
-          <View>
-            <Text className="mb-1 text-xs font-semibold text-muted">
-              {action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo'}
+          <ReasonChips
+            label="¿Por qué? (opcional)"
+            options={action.kind === 'edit' ? EDIT_REASON_CHIPS : VOID_REASON_CHIPS}
+            value={reasonChoice}
+            customText={customReason}
+            pending={pending}
+            onSelect={setReasonChoice}
+            onCustomChange={setCustomReason}
+          />
+          {action.kind === 'edit' ? (
+            <Text className="text-[11px] leading-4 text-subtle">
+              Se conserva el registro original para tu coach.
             </Text>
-            <TextInput
-              accessibilityLabel={action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo del retiro'}
-              accessibilityHint="Escribe al menos tres caracteres"
-              className="min-h-12 w-full rounded-control border border-default bg-surface-app px-3 text-base text-strong"
-              editable={!pending}
-              maxLength={1000}
-              onChangeText={setReason}
-              placeholder={action.kind === 'edit' ? 'Ej: comí un poco menos' : 'Ej: lo registré por error'}
-              placeholderTextColor={theme.mutedForeground}
-              returnKeyType="done"
-              value={reason}
-            />
-            <Text className="mt-1 text-[11px] leading-4 text-subtle">
-              {action.kind === 'edit'
-                ? 'Mínimo 3 caracteres. Se conserva el registro original.'
-                : 'Mínimo 3 caracteres.'}
-            </Text>
-          </View>
+          ) : null}
         </View>
       ) : null}
     </ActionSheet>

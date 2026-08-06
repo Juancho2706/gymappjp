@@ -1359,6 +1359,76 @@ function RegisterFoodDialog({
   )
 }
 
+/**
+ * T1.2 (nutrition-flows-redesign): la razon deja de ser un interrogatorio. Chips de 1 tap con la
+ * primera preseleccionada — el server sigue exigiendo >=3 caracteres y el texto del chip los cumple,
+ * asi que la validacion del RPC no se toca. "Otro motivo" abre el campo libre (ahi si, minimo 3).
+ * La correccion es camino principal (evidencia: ~1 de cada 5 registros se corrige), no excepcion.
+ */
+const EDIT_REASON_CHIPS = ['Me equivoqué de cantidad', 'Comí menos', 'Comí más'] as const
+const VOID_REASON_CHIPS = ['Lo registré por error', 'No lo comí', 'Registro duplicado'] as const
+const OTHER_REASON = '__otro__'
+
+function ReasonChips({
+  label,
+  options,
+  value,
+  customText,
+  onSelect,
+  onCustomChange,
+}: {
+  label: string
+  options: readonly string[]
+  value: string
+  customText: string
+  onSelect: (next: string) => void
+  onCustomChange: (text: string) => void
+}) {
+  return (
+    <div>
+      <span className="mb-1.5 block text-xs font-semibold text-muted">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+        {[...options, OTHER_REASON].map((option) => {
+          const selected = value === option
+          const text = option === OTHER_REASON ? 'Otro motivo' : option
+          return (
+            <button
+              key={option}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onSelect(option)}
+              className={`min-h-9 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                selected
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border-default bg-surface-app text-body hover:bg-surface-sunken'
+              }`}
+            >
+              {text}
+            </button>
+          )
+        })}
+      </div>
+      {value === OTHER_REASON ? (
+        <input
+          value={customText}
+          onChange={(event) => onCustomChange(event.target.value)}
+          placeholder="Cuéntale a tu coach (mínimo 3 caracteres)"
+          autoFocus
+          className="mt-2 min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/** Chip elegido o texto libre; null si "Otro motivo" quedo bajo el minimo del server. */
+function resolveReason(value: string, customText: string): string | null {
+  if (value !== OTHER_REASON) return value
+  const trimmed = customText.trim()
+  return trimmed.length >= 3 ? trimmed : null
+}
+
 function EditQuantityDialog({
   entry,
   error,
@@ -1373,10 +1443,18 @@ function EditQuantityDialog({
   submitting: boolean
 }) {
   const [quantity, setQuantity] = useState(String(entry.quantity))
-  const [reason, setReason] = useState('')
+  const [reasonChoice, setReasonChoice] = useState<string>(EDIT_REASON_CHIPS[0])
+  const [customReason, setCustomReason] = useState('')
   const quantityNumber = Number(quantity)
-  const canSubmit =
-    Number.isFinite(quantityNumber) && quantityNumber > 0 && reason.trim().length >= 3
+  // Paso hibrido, misma regla del builder: gramos/ml en saltos de 10, unidades contadas de a 0.5.
+  const step = entry.unit === 'g' || entry.unit === 'ml' ? 10 : 0.5
+  const adjustQuantity = (delta: number) => {
+    const base = Number.isFinite(quantityNumber) && quantityNumber > 0 ? quantityNumber : entry.quantity
+    const next = Math.max(step, Math.round((base + delta) * 10) / 10)
+    setQuantity(String(next))
+  }
+  const reason = resolveReason(reasonChoice, customReason)
+  const canSubmit = Number.isFinite(quantityNumber) && quantityNumber > 0 && reason !== null
 
   return (
     <TodayModal
@@ -1392,7 +1470,7 @@ function EditQuantityDialog({
           <NutritionMotionButton
             disabled={!canSubmit}
             pending={submitting}
-            onClick={() => canSubmit && onSubmit(quantityNumber, reason.trim())}
+            onClick={() => canSubmit && reason !== null && onSubmit(quantityNumber, reason)}
           >
             Guardar corrección
           </NutritionMotionButton>
@@ -1401,25 +1479,43 @@ function EditQuantityDialog({
     >
       <div className="space-y-4">
         <DialogError message={error} />
-        <label className="block">
+        <div>
           <span className="mb-1 block text-xs font-semibold text-muted">Nueva cantidad ({entry.unit})</span>
-          <input
-            inputMode="decimal"
-            value={quantity}
-            onChange={(event) => setQuantity(event.target.value.replace(/[^0-9.]/g, ''))}
-            className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-muted">Motivo del cambio</span>
-          <input
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder="Ej: comí un poco menos"
-            className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
-          />
-          <span className="mt-1 block text-[11px] text-subtle">Mínimo 3 caracteres. Se conserva el registro original.</span>
-        </label>
+          <div className="flex items-stretch gap-2">
+            <button
+              type="button"
+              aria-label={`Restar ${step} ${entry.unit}`}
+              onClick={() => adjustQuantity(-step)}
+              className="min-h-12 w-12 shrink-0 rounded-control border border-border-default bg-surface-app text-lg font-bold text-strong transition-colors hover:bg-surface-sunken"
+            >
+              −
+            </button>
+            <input
+              inputMode="decimal"
+              aria-label={`Nueva cantidad en ${entry.unit}`}
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value.replace(/[^0-9.]/g, ''))}
+              className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-center text-base font-semibold tabular-nums text-strong outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              type="button"
+              aria-label={`Sumar ${step} ${entry.unit}`}
+              onClick={() => adjustQuantity(step)}
+              className="min-h-12 w-12 shrink-0 rounded-control border border-border-default bg-surface-app text-lg font-bold text-strong transition-colors hover:bg-surface-sunken"
+            >
+              ＋
+            </button>
+          </div>
+        </div>
+        <ReasonChips
+          label="¿Por qué? (opcional)"
+          options={EDIT_REASON_CHIPS}
+          value={reasonChoice}
+          customText={customReason}
+          onSelect={setReasonChoice}
+          onCustomChange={setCustomReason}
+        />
+        <p className="text-[11px] text-subtle">Se conserva el registro original para tu coach.</p>
       </div>
     </TodayModal>
   )
@@ -1438,8 +1534,10 @@ function VoidEntryDialog({
   onSubmit: (reason: string) => void
   submitting: boolean
 }) {
-  const [reason, setReason] = useState('')
-  const canSubmit = reason.trim().length >= 3
+  const [reasonChoice, setReasonChoice] = useState<string>(VOID_REASON_CHIPS[0])
+  const [customReason, setCustomReason] = useState('')
+  const reason = resolveReason(reasonChoice, customReason)
+  const canSubmit = reason !== null
 
   return (
     <TodayModal
@@ -1456,7 +1554,7 @@ function VoidEntryDialog({
             tone="danger"
             disabled={!canSubmit}
             pending={submitting}
-            onClick={() => canSubmit && onSubmit(reason.trim())}
+            onClick={() => canSubmit && reason !== null && onSubmit(reason)}
           >
             Retirar registro
           </NutritionMotionButton>
@@ -1468,16 +1566,14 @@ function VoidEntryDialog({
         <p className="text-sm text-body">
           El registro dejará de contar en tu día, pero se conserva en el historial para tu coach.
         </p>
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-muted">Motivo</span>
-          <input
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder="Ej: lo registré por error"
-            className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
-          />
-          <span className="mt-1 block text-[11px] text-subtle">Mínimo 3 caracteres.</span>
-        </label>
+        <ReasonChips
+          label="¿Por qué? (opcional)"
+          options={VOID_REASON_CHIPS}
+          value={reasonChoice}
+          customText={customReason}
+          onSelect={setReasonChoice}
+          onCustomChange={setCustomReason}
+        />
       </div>
     </TodayModal>
   )

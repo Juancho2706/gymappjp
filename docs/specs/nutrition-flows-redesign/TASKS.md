@@ -20,7 +20,7 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [x] RN ya pide permiso de push en `_layout.tsx:212` — cero UI nueva; `PushBanner.tsx` muerto queda para la poda T1.3
   - Gates: typecheck verde · lint 0 errores (2 warnings preexistentes verificados vs HEAD) · vitest full 5356 verde · boundaries 303 verde · tokens 86 verde · docs verde
   - PENDIENTE al push de ola: curl al cron con CRON_SECRET en preview (las tablas V2 van por cast `V2ReadClient` — `database.types.ts` desactualizado, deuda conocida; retirar cast al regenerar)
-- [ ] T1.2 Correccion sin interrogatorio (web + RN): sheet stepper + chips razon opcional; server acepta razon vacia; copy append-only intacto
+- [x] T1.2 Correccion sin interrogatorio (2026-08-06, Fable). Web (EditQuantityDialog/VoidEntryDialog) y RN (EntryCorrectionSheet) con paridad exacta: chips de razon con la primera preseleccionada ("Me equivoque de cantidad" / "Lo registre por error") + "Otro motivo" con campo libre (min 3), y stepper hibrido de cantidad (g/ml ±10, contadas ±0.5). El server NO cambia: el texto del chip ya cumple el minimo de 3 del RPC — razon opcional en UX, validacion intacta, append-only intacto. A11y: radiogroup/radio + accessibilityState. Muere el copy "Minimo 3 caracteres". Gates: eslint verde, typecheck web verde, tsc mobile verde. QA device: pendiente al cierre de ola.
 - [ ] T1.3 Paridad decisiones tomadas
   - [ ] Live search web (debounce 300ms, AbortController; muere boton "Buscar")
   - [ ] Nota coach RN: expandida por defecto (paridad web)
