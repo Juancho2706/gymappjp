@@ -19,6 +19,9 @@ export interface SistemaData {
     overdueCoaches: number
     recentAuditCount: number
     lastAuditAt: string | null
+    /** Ultima accion de auditoria < 48h respecto de `checkedAt`. Se computa aca (capa de datos)
+     *  y no en el render: `Date.now()` en un componente viola la regla de pureza del lint. */
+    auditActive: boolean
     orphanCoaches: number
     migrationsCount: number
     cronStatuses: CronStatus[]
@@ -140,6 +143,11 @@ export async function getSistemaData(): Promise<SistemaData> {
             overdueCoaches: derived.overdue,
             recentAuditCount: auditRecentRes.count ?? 0,
             lastAuditAt: (auditLastRes.data as any[])?.[0]?.created_at ?? null,
+            auditActive: (() => {
+                const last = (auditLastRes.data as any[])?.[0]?.created_at
+                if (!last) return false
+                return checkedAt.getTime() - new Date(last).getTime() < 48 * 60 * 60 * 1000
+            })(),
             orphanCoaches: derived.orphan,
             migrationsCount: 0,
             cronStatuses,
@@ -156,6 +164,7 @@ export async function getSistemaData(): Promise<SistemaData> {
             overdueCoaches: 0,
             recentAuditCount: 0,
             lastAuditAt: null,
+            auditActive: false,
             orphanCoaches: 0,
             migrationsCount: 0,
             cronStatuses: [],

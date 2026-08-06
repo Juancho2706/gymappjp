@@ -110,8 +110,9 @@ export default async function AdminSistemaPage() {
                     <StatusRow
                         label="Auditoría activa (última acción < 48h)"
                         // `recentAuditCount >= 0` era una tautologia (un count nunca es negativo):
-                        // el check no podia fallar jamas (ROTO-7b, F0 08-05).
-                        ok={!!d.lastAuditAt && Date.now() - new Date(d.lastAuditAt).getTime() < 48 * 60 * 60 * 1000}
+                        // el check no podia fallar jamas (ROTO-7b, F0 08-05). La frescura se
+                        // computa en el loader contra `checkedAt` (Date.now en render = lint error).
+                        ok={d.auditActive}
                         detail={d.lastAuditAt
                             ? `Última: ${formatDistanceToNow(new Date(d.lastAuditAt), { addSuffix: true, locale: es })}`
                             : 'Sin actividad'
