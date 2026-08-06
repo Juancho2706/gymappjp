@@ -282,12 +282,15 @@ export async function setPlanTemplateFavorite(
 export async function deletePlanTemplate(db: DB, id: string): Promise<{ success: boolean; error?: string }> {
   // Cast puntual: el RPC (migracion 20260806022947) aun no esta en database.types.ts — la
   // regeneracion quedo pendiente en la otra corriente (panel CEO) y regenerar aqui arrastraria
-  // su schema a este commit.
-  const rpc = db.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>
-  const { data, error } = await rpc('soft_delete_nutrition_plan_template_v2', { p_id: id })
+  // su schema a este commit. El cast va INLINE sobre la llamada (como en proxy.ts y
+  // coupon-redemptions): asignar `db.rpc` a una variable desengancha `this` y supabase-js
+  // revienta con "Cannot read properties of undefined (reading 'rest')".
+  const { data, error } = await (
+    db.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => PromiseLike<{ data: unknown; error: { message: string } | null }>
+  )('soft_delete_nutrition_plan_template_v2', { p_id: id })
   if (error) return { success: false, error: error.message }
   if (data !== true) return { success: false, error: 'Esa plantilla ya no esta disponible.' }
   return { success: true }

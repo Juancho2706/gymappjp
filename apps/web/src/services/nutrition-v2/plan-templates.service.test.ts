@@ -27,7 +27,7 @@ vi.mock('@/infrastructure/db/plan-templates.repository', () => ({
   updatePlanTemplateDraft: updatePlanTemplateDraftRow,
 }))
 
-const { updatePlanTemplateDraft } = await import('./plan-templates.service')
+const { deletePlanTemplate, updatePlanTemplateDraft } = await import('./plan-templates.service')
 
 const TEMPLATE_ID = '11111111-2222-4333-8444-555555555555'
 const CLIENT_ID = '99999999-8888-4777-8666-555555555555'
@@ -230,5 +230,56 @@ describe('updatePlanTemplateDraft', () => {
     const result = await updatePlanTemplateDraft(db, { id: TEMPLATE_ID, draft: builderDraft() })
 
     expect(result).toEqual({ success: false, error: 'Esa plantilla ya no esta disponible.' })
+  })
+})
+
+/**
+ * El cliente falso replica la forma REAL de supabase-js: `rpc` es un metodo de prototipo que
+ * lee `this.rest`. Un mock plano (vi.fn) jamas cazaria la regresion que rompio el borrado en
+ * prod: asignar `db.rpc` a una variable y llamarla suelta pierde `this` y revienta con
+ * "Cannot read properties of undefined (reading 'rest')" (logs Vercel 06-08).
+ */
+function fakeRpcClient(result: { data: unknown; error: { message: string } | null }) {
+  const calls: Array<{ fn: string; args: Record<string, unknown> }> = []
+  class FakeClient {
+    rest = {
+      rpc: (fn: string, args: Record<string, unknown>) => {
+        calls.push({ fn, args })
+        return Promise.resolve(result)
+      },
+    }
+    rpc(fn: string, args: Record<string, unknown>) {
+      return this.rest.rpc(fn, args)
+    }
+  }
+  return { db: new FakeClient() as never, calls }
+}
+
+describe('deletePlanTemplate', () => {
+  it('llama el RPC definer CON el this del cliente (regresion: rpc suelto pierde this.rest)', async () => {
+    const { db: rpcDb, calls } = fakeRpcClient({ data: true, error: null })
+
+    const result = await deletePlanTemplate(rpcDb, TEMPLATE_ID)
+
+    expect(result).toEqual({ success: true })
+    expect(calls).toEqual([
+      { fn: 'soft_delete_nutrition_plan_template_v2', args: { p_id: TEMPLATE_ID } },
+    ])
+  })
+
+  it('data distinto de true = la fila no existe, ya estaba borrada o no es del coach', async () => {
+    const { db: rpcDb } = fakeRpcClient({ data: null, error: null })
+
+    const result = await deletePlanTemplate(rpcDb, TEMPLATE_ID)
+
+    expect(result).toEqual({ success: false, error: 'Esa plantilla ya no esta disponible.' })
+  })
+
+  it('propaga el mensaje de error del RPC', async () => {
+    const { db: rpcDb } = fakeRpcClient({ data: null, error: { message: 'permiso denegado' } })
+
+    const result = await deletePlanTemplate(rpcDb, TEMPLATE_ID)
+
+    expect(result).toEqual({ success: false, error: 'permiso denegado' })
   })
 })
