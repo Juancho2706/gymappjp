@@ -66,7 +66,11 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
   const { consumed, target } = calories
   const ratio = energyProgressRatio(consumed, target)
   const alpha = auraGlowAlpha(consumed, target)
-  const remaining = target != null && target > 0 ? Math.max(target - consumed, 0) : null
+  // Banda ±10% (T1.4, nutrition-flows-redesign): la meta es un RANGO, no un numero que se
+  // falla. Copy por tramo: bajo el rango (marca), en rango (success fijo), sobre el rango
+  // (ambar — nunca rojo: comer no es un error). La celebracion de meta no cambia.
+  const rangeLow = target != null && target > 0 ? Math.round(target * 0.9) : null
+  const rangeHigh = target != null && target > 0 ? Math.round(target * 1.1) : null
 
   // Celebración de meta de energía: una sola vez por fecha (sessionStorage).
   const [celebrating, setCelebrating] = useState(false)
@@ -160,6 +164,22 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
                 strokeWidth={MAIN_STROKE}
                 style={{ stroke: 'rgba(var(--theme-primary-rgb), 0.13)' }}
               />
+              {/* Zona objetivo de la banda: el tramo final del riel [90%→100%] en success fijo
+                  (semantica, no white-label). El sobre-rango no se dibuja: el anillo tope en
+                  100% y el exceso lo dice la linea de estado. */}
+              {rangeLow != null ? (
+                <circle
+                  aria-hidden="true"
+                  cx={MAIN_SIZE / 2}
+                  cy={MAIN_SIZE / 2}
+                  r={MAIN_R}
+                  fill="none"
+                  strokeWidth={MAIN_STROKE}
+                  strokeDasharray={`${MAIN_C * 0.1} ${MAIN_C}`}
+                  strokeDashoffset={-MAIN_C * 0.9}
+                  style={{ stroke: 'color-mix(in srgb, var(--color-success) 35%, transparent)' }}
+                />
+              ) : null}
               <motion.circle
                 cx={MAIN_SIZE / 2}
                 cy={MAIN_SIZE / 2}
@@ -190,9 +210,17 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
           </div>
         </div>
 
-        {remaining != null ? (
-          <p className="mt-3 text-center text-sm font-semibold tabular-nums text-primary">
-            {remaining > 0 ? `${formatNutritionCalories(remaining)} restantes` : 'Meta de energía cumplida'}
+        {rangeLow != null && rangeHigh != null ? (
+          <p
+            className={`mt-3 text-center text-sm font-semibold tabular-nums ${
+              consumed > rangeHigh ? 'text-warning' : consumed >= rangeLow ? 'text-success' : 'text-primary'
+            }`}
+          >
+            {consumed < rangeLow
+              ? `faltan ~${formatNutritionCalories(rangeLow - consumed)} para tu rango`
+              : consumed <= rangeHigh
+                ? '✓ en tu rango de hoy'
+                : `+${formatNutritionCalories(consumed - rangeHigh)} sobre tu rango`}
           </p>
         ) : null}
 

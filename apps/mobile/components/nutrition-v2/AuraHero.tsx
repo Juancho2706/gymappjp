@@ -83,6 +83,7 @@ function AuraRing({
   ratio,
   color,
   trackColor,
+  zoneColor,
   accessibilityLabel,
   children,
 }: {
@@ -91,6 +92,8 @@ function AuraRing({
   ratio: number
   color: string
   trackColor: string
+  /** Banda ±10% (T1.4): pinta el tramo final del riel [90%→100%] como zona objetivo. */
+  zoneColor?: string
   accessibilityLabel: string
   children?: ReactNode
 }) {
@@ -118,6 +121,19 @@ function AuraRing({
     >
       <Svg width={size} height={size}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
+        {zoneColor ? (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={zoneColor}
+            strokeWidth={stroke}
+            fill="none"
+            strokeDasharray={`${c * 0.1} ${c}`}
+            strokeDashoffset={-c * 0.9}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        ) : null}
         <AnimatedCircle
           cx={size / 2}
           cy={size / 2}
@@ -226,7 +242,10 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
   const ratio = energyProgressRatio(consumed, target)
   const alpha = auraGlowAlpha(consumed, target)
   const hasTarget = target != null && target > 0
-  const remaining = hasTarget ? Math.max((target as number) - consumed, 0) : null
+  // Banda ±10% (T1.4, paridad exacta con web AuraHero): la meta es un RANGO, no un numero que
+  // se falla. Bajo el rango (marca) / en rango (success fijo) / sobre el rango (ambar, nunca rojo).
+  const rangeLow = hasTarget ? Math.round((target as number) * 0.9) : null
+  const rangeHigh = hasTarget ? Math.round((target as number) * 1.1) : null
   const energyAccessibilityLabel = hasTarget
     ? `${Math.round(consumed)} de ${Math.round(target as number)} kcal`
     : `${Math.round(consumed)} kcal consumidas`
@@ -289,6 +308,9 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
             ratio={ratio}
             color={theme.primary}
             trackColor={hexToRgba(theme.primary, ringTrackAlpha(theme.scheme))}
+            // Zona objetivo de la banda ±10%: success SEMANTICO fijo (= --color-success de
+            // global.css), nunca white-label — espejo del arco de la web.
+            zoneColor={hasTarget ? 'rgba(31, 184, 119, 0.35)' : undefined}
           >
             <Text
               className="text-strong"
@@ -320,9 +342,18 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
           </AuraRing>
         </View>
 
-        {remaining != null ? (
-          <Text className="text-primary" style={styles.remaining}>
-            {remaining > 0 ? `${formatNutritionCalories(remaining)} restantes` : 'Meta de energía cumplida'}
+        {rangeLow != null && rangeHigh != null ? (
+          <Text
+            className={
+              consumed > rangeHigh ? 'text-warning' : consumed >= rangeLow ? 'text-success' : 'text-primary'
+            }
+            style={styles.remaining}
+          >
+            {consumed < rangeLow
+              ? `faltan ~${formatNutritionCalories(rangeLow - consumed)} para tu rango`
+              : consumed <= rangeHigh
+                ? '✓ en tu rango de hoy'
+                : `+${formatNutritionCalories(consumed - rangeHigh)} sobre tu rango`}
           </Text>
         ) : null}
 
