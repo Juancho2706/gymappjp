@@ -12,6 +12,7 @@ import {
 } from '@eva/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { humanizeStudentWriteError } from '@/lib/student-access'
+import { useCaptureStudentNutritionIntake } from '@/lib/posthog/events'
 import {
   markPortionIntakeAction,
   undoPortionIntakeAction,
@@ -124,6 +125,7 @@ export function usePortionMarks({
   clientId: string
 }): PortionMarksApi {
   const router = useRouter()
+  const captureIntake = useCaptureStudentNutritionIntake()
   const localDate = today.localDate
 
   const storage = typeof window !== 'undefined' ? window.localStorage : null
@@ -347,6 +349,7 @@ export function usePortionMarks({
             void doUndo(key)
             return
           }
+          captureIntake('portion_chip')
           // Snackbar AGRUPADO: una sola pastilla que se ACTUALIZA con el total de la ráfaga
           // ("3 porciones marcadas · Deshacer") en vez de apilar una por marca tapando la franja
           // siguiente. Su "Deshacer" revierte el lote completo, que es lo que el contador promete.
@@ -369,6 +372,7 @@ export function usePortionMarks({
       runMark(input)
     },
     [
+      captureIntake,
       clearBurst,
       clientId,
       commitPending,

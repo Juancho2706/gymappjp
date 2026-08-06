@@ -154,3 +154,65 @@ export function useCaptureStudentWorkoutCompleted() {
         [ph]
     )
 }
+
+/**
+ * Eventos de nutricion (programa nutrition-flows-redesign, T1.0). Los KPI que responde cada
+ * evento estan en docs/specs/nutrition-flows-redesign/BASELINE.md. Como el resto: gated por
+ * consentimiento (no-op sin `ph`), sin montos ni datos personales.
+ *
+ *   student_nutrition_intake      → un registro exitoso, por metodo (taps/dia y mix de metodos)
+ *   student_nutrition_correction  → embudo abrir→guardar/retirar (abandono de correcciones)
+ *   coach_nutrition_builder_opened / coach_nutrition_plan_published → tiempo-crear-plan por editor
+ *   coach_nutrition_template_applied → uso real de plantillas (se dispara desde T1.5)
+ */
+export type StudentNutritionIntakeMethod = 'item_tap' | 'bulk_slot' | 'portion_chip' | 'free_search'
+
+export function useCaptureStudentNutritionIntake() {
+    const ph = usePostHog()
+    return useCallback(
+        (method: StudentNutritionIntakeMethod) => {
+            ph?.capture('student_nutrition_intake', { method })
+        },
+        [ph]
+    )
+}
+
+export function useCaptureStudentNutritionCorrection() {
+    const ph = usePostHog()
+    return useCallback(
+        (action: 'opened' | 'saved' | 'voided') => {
+            ph?.capture('student_nutrition_correction', { action })
+        },
+        [ph]
+    )
+}
+
+export function useCaptureCoachNutritionBuilderOpened() {
+    const ph = usePostHog()
+    return useCallback(
+        (mode: 'create' | 'edit' | 'template') => {
+            ph?.capture('coach_nutrition_builder_opened', { mode })
+        },
+        [ph]
+    )
+}
+
+export function useCaptureCoachNutritionPlanPublished() {
+    const ph = usePostHog()
+    return useCallback(
+        (editor: 'wizard' | 'quick_edit', durationMs: number) => {
+            ph?.capture('coach_nutrition_plan_published', { editor, duration_ms: durationMs })
+        },
+        [ph]
+    )
+}
+
+export function useCaptureCoachNutritionTemplateApplied() {
+    const ph = usePostHog()
+    return useCallback(
+        (source: 'library' | 'picker') => {
+            ph?.capture('coach_nutrition_template_applied', { source })
+        },
+        [ph]
+    )
+}

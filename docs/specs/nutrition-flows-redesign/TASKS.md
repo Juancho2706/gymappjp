@@ -7,12 +7,12 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
 - [x] F0.1 Ruido apartado: `app.json` raiz (basura `{"expo":{}}`) borrado; `.gitignore`/`skills-lock.json`/`.github/*` fuera de los commits del programa
 - [x] F0.2 `rnmobiledenuevo` ff a master b2a0e341 + checkout (2026-08-06)
 - [x] F0.3 SPEC/PLAN/TASKS creados
-- [ ] F0.4 Baseline PostHog → se ejecuta como T1.0
+- [x] F0.4 Baseline PostHog → capturada en BASELINE.md (2026-08-06, via T1.0)
 - [x] F0.5 Runbook Android en SPEC.md
 
 ## Ola 1
 
-- [ ] T1.0 Instrumentacion PostHog minima (eventos: intake_tap, plan_publish_duration, template_apply, correction_flow) + captura baseline ANTES de tocar UI
+- [x] T1.0 Instrumentacion PostHog + baseline (2026-08-06). Eventos web: student_nutrition_intake (item_tap/bulk_slot/portion_chip/free_search), student_nutrition_correction (opened/saved/voided), coach_nutrition_builder_opened, coach_nutrition_plan_published (wizard/quick_edit + duration_ms), coach_nutrition_template_applied (definido, dispara en T1.5). Baseline pre-instrumentacion en BASELINE.md (solo pageviews existian). RN sin PostHog — instrumentacion RN queda fuera de O1 (decision pendiente aparte). Gates: eslint archivos tocados verde, typecheck web verde; tests no corridos (cambio analytics-only, hooks no-op sin consentimiento).
 - [ ] T1.1 Notificaciones V2
   - [ ] Cron `nutrition-reminder`: filtro por plan activo V2 + intake V2 (sin tablas V1); mismo schedule; probar dedupe
   - [ ] Banner permiso push montado en ruta V2 web; equivalente RN vivo (el actual esta en dead code)

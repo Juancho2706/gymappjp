@@ -81,6 +81,10 @@ import {
   listFavoriteFoodsAction,
   toggleFavoriteFoodAction,
 } from '../_actions/favorites.actions'
+import {
+  useCaptureStudentNutritionCorrection,
+  useCaptureStudentNutritionIntake,
+} from '@/lib/posthog/events'
 
 // NOTA: `closeDayAction` (cierre manual del día) se retiró de la UI por decisión del CEO — los
 // registros ya se guardan solos, la card "Cerrar mi día" confundía. El action y su RPC siguen
@@ -127,6 +131,8 @@ export function TodayExperience({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>({ kind: 'none' })
+  const captureIntake = useCaptureStudentNutritionIntake()
+  const captureCorrection = useCaptureStudentNutritionCorrection()
 
   const ctx = useMemo(() => contextFromToday(today, clientId), [today, clientId])
   const entries = useMemo(() => consumedEntries(today), [today])
@@ -197,6 +203,7 @@ export function TodayExperience({
           setError(humanizeStudentWriteError(res.error, 'No se pudo registrar la comida.'))
           return
         }
+        captureIntake('bulk_slot')
         router.refresh()
         if (res.failed > 0) {
           toast.warning(
@@ -240,6 +247,7 @@ export function TodayExperience({
 
   // Abrir/cerrar limpia el error para que no arrastre un mensaje viejo dentro del nuevo dialogo.
   const openDialog = (next: DialogState) => {
+    if (next.kind === 'edit' || next.kind === 'void') captureCorrection('opened')
     setError(null)
     setDialog(next)
   }
@@ -367,15 +375,18 @@ export function TodayExperience({
         onBulkEat={handleBulkEat}
         onEat={(slot, item) => {
           const id = `eat:${item.id}`
-          runMutation(id, () =>
-            recordIntakeAction({
-              payload: buildPrescribedIntakePayload({
-                context: ctx,
-                slot,
-                item,
-                idempotencyKey: newIdempotencyKey('intake'),
+          runMutation(
+            id,
+            () =>
+              recordIntakeAction({
+                payload: buildPrescribedIntakePayload({
+                  context: ctx,
+                  slot,
+                  item,
+                  idempotencyKey: newIdempotencyKey('intake'),
+                }),
               }),
-            }),
+            () => captureIntake('item_tap'),
           )
         }}
         onEdit={(entry) => openDialog({ kind: 'edit', entry })}
@@ -462,7 +473,10 @@ export function TodayExperience({
                     idempotencyKey: newIdempotencyKey('intake'),
                   }),
                 }),
-              closeDialog,
+              () => {
+                captureIntake('free_search')
+                closeDialog()
+              },
             )
           }}
           submitting={isPending && busyId === 'register'}
@@ -488,7 +502,10 @@ export function TodayExperience({
                     idempotencyKey: newIdempotencyKey('correction'),
                   }),
                 }),
-              closeDialog,
+              () => {
+                captureCorrection('saved')
+                closeDialog()
+              },
             )
           }}
         />
@@ -512,7 +529,10 @@ export function TodayExperience({
                     idempotencyKey: newIdempotencyKey('void'),
                   }),
                 }),
-              closeDialog,
+              () => {
+                captureCorrection('voided')
+                closeDialog()
+              },
             )
           }}
         />

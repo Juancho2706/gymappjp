@@ -31,6 +31,7 @@ import {
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
+import { useCaptureCoachNutritionPlanPublished } from '@/lib/posthog/events'
 import {
   loadExchangeGroupsForBuilderAction,
   type ExchangeGroupFoodCounts,
@@ -235,6 +236,12 @@ export function QuickEditProvider({
   // no llego o la lectura fallo: el picker vuelve a ofrecer solo los grupos del plan.
   const [portionGroupCatalog, setPortionGroupCatalog] = useState<QePortionGroup[] | null>(null)
   const [isPending, startTransition] = useTransition()
+  // Instrumentacion T1.0 (nutrition-flows-redesign): duracion editar -> publicar del quick-edit.
+  const capturePublished = useCaptureCoachNutritionPlanPublished()
+  const openedAtRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (openedAtRef.current === null) openedAtRef.current = Date.now()
+  }, [])
   // Grupos ofrecidos por el picker: plan primero, catalogo despues (ver `mergePortionGroupChoices`).
   const portionGroupChoices = useMemo(
     () => mergePortionGroupChoices(portionGroups, portionGroupCatalog),
@@ -426,6 +433,7 @@ export function QuickEditProvider({
         return
       }
       if (res.ok) {
+        if (openedAtRef.current !== null) capturePublished('quick_edit', Date.now() - openedAtRef.current)
         idempotencyKeyRef.current = null
         clearNutritionDraft(draftKey)
         setConfirmOpen(false)
@@ -459,7 +467,7 @@ export function QuickEditProvider({
       // con reintento (el draft nunca se pierde y la clave de idempotencia se conserva).
       setPublishError(res.message ?? QE_COPY.publishFailed)
     })
-  }, [clientId, clientName, currentDraft, draftKey, onExit, planModel.plan, router, substitutionsLoadFailed])
+  }, [capturePublished, clientId, clientName, currentDraft, draftKey, onExit, planModel.plan, router, substitutionsLoadFailed])
 
   // Reintento de la lectura de reemplazos: refresca el RSC (vuelve a correr el data-loader)
   // sin desmontar el modo edicion, asi que las ediciones sin publicar se conservan.

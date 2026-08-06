@@ -52,6 +52,10 @@ import {
 // al draft canónico justo antes de publicar (attachPortionsAndValidate).
 import { usePortionsBuilder } from './PortionsSection'
 import {
+  useCaptureCoachNutritionBuilderOpened,
+  useCaptureCoachNutritionPlanPublished,
+} from '@/lib/posthog/events'
+import {
   attachPortionsAndValidate,
   dropVariantPortions,
   portionsKey,
@@ -217,6 +221,15 @@ export function PlanBuilderClient({
 }) {
   const router = useRouter()
   const isTemplateMode = templateMode != null
+  // Instrumentacion T1.0 (nutrition-flows-redesign): tiempo-crear-plan = opened -> published.
+  const captureBuilderOpened = useCaptureCoachNutritionBuilderOpened()
+  const capturePublished = useCaptureCoachNutritionPlanPublished()
+  const openedAtRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (openedAtRef.current !== null) return
+    openedAtRef.current = Date.now()
+    captureBuilderOpened(isTemplateMode ? 'template' : existingPlan ? 'edit' : 'create')
+  }, [captureBuilderOpened, isTemplateMode, existingPlan])
   // Estado inicial: el plan vigente rehidratado si lo hay; si no, el wizard vacío de siempre.
   const [state, dispatch] = useReducer(builderReducer, initialDraft, (draft) =>
     draft ? draft.state : createEmptyBuilderState(today),
@@ -408,6 +421,7 @@ export function PlanBuilderClient({
   // Punto común de éxito de las DOS ramas de publicación (normal / "Archivar y reemplazar"):
   // limpia el respaldo local antes de navegar — el plan ya está en el servidor.
   const goToPublished = () => {
+    if (openedAtRef.current !== null) capturePublished('wizard', Date.now() - openedAtRef.current)
     clearNutritionDraft(draftKey)
     clearNutritionDraft(legacyDraftKey)
     router.push('/coach/nutrition-v2/' + clientId + '?published=1')
