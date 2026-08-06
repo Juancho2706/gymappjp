@@ -899,8 +899,13 @@ export function PlanBuilderClient({
         goToPublished()
         return
       }
+      // El MOTIVO del servidor va al frente: sin el, el coach reintenta a ciegas contra un error
+      // determinista (validacion/permisos) y el alumno sigue sin plan vigente (QA owner 05-08).
+      setShowErrors(true)
       setConflictError(
-        'Archivamos el plan anterior, pero no pudimos publicar el nuevo, así que el alumno quedó sin plan vigente. Vuelve a tocar "Archivar el actual y reemplazar" para reintentar solo la publicación (no se archivará de nuevo).',
+        'No pudimos publicar el plan nuevo: ' +
+          res.error +
+          ' — El plan anterior ya quedó archivado; corrige lo señalado y vuelve a tocar "Archivar el actual y reemplazar" (no se archivará de nuevo).',
       )
     })
   }

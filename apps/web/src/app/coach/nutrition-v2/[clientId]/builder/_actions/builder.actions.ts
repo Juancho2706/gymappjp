@@ -114,7 +114,19 @@ export async function publishPlanAction(input: unknown): Promise<PublishSuccess 
     // Solo cuando el wizard edita un plan existente (el CAS exige una version base real).
     ...(expectedCurrentVersionId ? { expectedCurrentVersionId } : {}),
   })
-  if (!result.ok) return result
+  if (!result.ok) {
+    // Rastro server-side (Vercel logs): en el QA 05-08 un publish del flujo archivar-y-reemplazar
+    // fallo y la causa no quedo registrada en NINGUNA parte (la UI de entonces la descartaba y
+    // el error no llego a Postgres). El coach nunca ve este log; ve result.error en pantalla.
+    console.error('[nutrition-v2] publishPlanAction fallo', {
+      code: result.code,
+      clientId: draft.clientId,
+      planId: draft.planId,
+      strategy: draft.strategy,
+      variants: draft.dayVariants.length,
+    })
+    return result
+  }
 
   revalidatePath('/coach/nutrition-v2')
   revalidatePath('/coach/nutrition-v2/' + draft.clientId)

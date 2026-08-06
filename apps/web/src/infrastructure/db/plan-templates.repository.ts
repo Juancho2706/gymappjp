@@ -169,14 +169,16 @@ export async function updatePlanTemplate(
   if (patch.deletedAt !== undefined) payload.deleted_at = patch.deletedAt
   if (Object.keys(payload).length === 0) return {}
 
-  const { data, error } = await db
+  // SIN `.select()` a proposito: el RETURNING exige que la fila NUEVA pase las policies de
+  // SELECT, y todas filtran `deleted_at IS NULL` — el soft-delete se auto-invisibiliza y
+  // Postgres lo rechazaba con "new row violates row-level security policy" (borrar plantillas
+  // nunca habia funcionado por esto). `count` detecta el caso "0 filas" sin releer la fila.
+  const { error, count } = await db
     .from('nutrition_plan_templates_v2')
-    .update(payload)
+    .update(payload, { count: 'exact' })
     .eq('id', id)
-    .select('id')
-    .maybeSingle()
   if (error) return { error: error.message }
-  if (!data) return { error: 'Esa plantilla ya no esta disponible.' }
+  if (!count) return { error: 'Esa plantilla ya no esta disponible.' }
   return {}
 }
 
