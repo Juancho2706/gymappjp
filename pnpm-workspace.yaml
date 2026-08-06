@@ -9,25 +9,30 @@ overrides:
   # Security: Dependabot transitive bumps, in-major only (verified build+test+CI+preview green).
   # Multi-major deps use pkg@major selectors so each consumer stays within its own major.
   shell-quote: '>=1.8.4 <2'
-  dompurify: '>=3.4.11 <4'
-  protobufjs: '>=7.6.3 <8'
+  dompurify: '>=3.4.12 <4'
+  protobufjs: '>=7.6.5 <8'
   '@babel/core': '>=7.29.6 <8'
-  postcss: '>=8.5.15 <9'
+  postcss: '>=8.5.23 <9'
   '@opentelemetry/core': '>=2.8.0 <3'
-  tar: '>=7.5.16 <8'
+  tar: '>=7.5.18 <8'
+  fast-uri: '>=3.1.5 <4'
+  ip-address: '>=10.3.1 <11'
   vite: 7.3.5
   vitest: 4.1.10
   'js-yaml@3': 3.15.0
   'uuid@11': '>=11.1.1 <12'
-  'js-yaml@4': '>=4.2.0 <5'
-  'undici@6': '>=6.27.0 <7'
-  'undici@7': '>=7.28.0 <8'
+  'js-yaml@4': '>=4.3.0 <5'
+  'undici@6': '>=6.28.0 <7'
+  'undici@7': '>=7.29.0 <8'
+  'brace-expansion@1': '>=1.1.16 <2'
+  'brace-expansion@2': '>=2.1.4 <3'
+  'brace-expansion@5': '>=5.0.7 <6'
   'ws@6': '>=6.2.4 <7'
   'ws@7': '>=7.5.11 <8'
   'ws@8': '>=8.21.0 <9'
 
 # Allowlist for packages that need legitimate postinstall scripts (native binaries, CLIs).
-# New packages are blocked by default — supply chain defense (pnpm v10+ behavior).
+# New packages are blocked by default â€” supply chain defense (pnpm v10+ behavior).
 allowBuilds:
   '@sentry/cli': true      # downloads sentry CLI binary
   core-js: true            # polyfill postinstall message only
