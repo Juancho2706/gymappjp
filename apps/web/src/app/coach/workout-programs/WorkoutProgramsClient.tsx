@@ -358,7 +358,11 @@ export function WorkoutProgramsClient({
                 }
                 setIsAssignOpen(false)
                 setSelectedClients([])
-                router.refresh()
+                // Sin router.refresh(): la action ya revalida /coach/workout-programs en todo
+                // exito (builder.actions assignProgram — failedClients siempre presente al
+                // completar), asi que el payload RSC fresco viaja en la MISMA respuesta. El
+                // refresh extra duplicaba el fetch y apilaba commits justo mientras se
+                // desmontaba el portal del sheet (sospechoso #1 del error 185 en Sentry).
             }
             setActionProgramId(null)
         })
@@ -411,10 +415,10 @@ export function WorkoutProgramsClient({
                 toast.error(result.error)
             } else {
                 toast.success('Programa duplicado correctamente')
+                // Sin fallback de router.refresh(): la action revalida en todo exito, el
+                // espejo initialPrograms→programs recoge la copia aunque el payload no la traiga.
                 if (result.program) {
                     setPrograms((prev) => [result.program!, ...prev])
-                } else {
-                    router.refresh()
                 }
                 setProgramToDuplicate(null)
                 setDuplicateNameInput('')
@@ -438,7 +442,6 @@ export function WorkoutProgramsClient({
                 toast.success('Programa eliminado')
                 setPrograms((prev) => prev.filter((p) => p.id !== program.id))
                 setProgramToPreview((prev) => (prev?.id === program.id ? null : prev))
-                router.refresh()
             }
             setProgramToDelete(null)
             setActionProgramId(null)
