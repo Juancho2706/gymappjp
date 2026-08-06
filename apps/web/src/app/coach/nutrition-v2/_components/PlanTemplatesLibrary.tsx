@@ -172,20 +172,23 @@ export function PlanTemplatesLibrary() {
     if (deleting) return
     setDeleting(template.id)
 
+    // try/catch/finally: una server action puede LANZAR (no solo devolver error) — el caso real
+    // es una pestaña servida por un deploy viejo llamando actions del deploy nuevo tras un swap
+    // de Vercel ("Failed to find Server Action"). Sin esto el spinner de la fila quedaba pegado
+    // para siempre (QA owner 06-08).
+    try {
     // Sin `readable` no hay contenido que cachear; con `force` el coach ya dio el segundo tap.
     const snapshot = template.readable && !force ? await loadPlanTemplateContentAction({ id: template.id }) : null
 
     // No pudimos leer lo que íbamos a borrar: NO se borra a ciegas algo que después no
     // podríamos devolver. Se degrada a la confirmación explícita de dos taps.
     if (template.readable && !force && !snapshot?.ok) {
-      setDeleting(null)
       setConfirmingDelete(template.id)
       toast.error('No pudimos leer esta plantilla para poder deshacer. Confirma si quieres eliminarla igual.')
       return
     }
 
     const result = await deletePlanTemplateAction({ id: template.id })
-    setDeleting(null)
     setConfirmingDelete(null)
     if (!result.ok) {
       toast.error(result.error)
@@ -209,6 +212,11 @@ export function PlanTemplatesLibrary() {
       duration: DELETE_UNDO_MS,
       action: { label: 'Deshacer', onClick: () => void restoreTemplate(cached) },
     })
+    } catch {
+      toast.error('No se pudo eliminar la plantilla. Recarga la página e inténtalo de nuevo.')
+    } finally {
+      setDeleting(null)
+    }
   }
 
   /** Primer tap arma la confirmación inline; el segundo (Sí) borra. */
