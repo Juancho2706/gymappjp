@@ -7,13 +7,16 @@
  * pantalla donde el coach administra su material reutilizable: renombrar, marcar favorita,
  * eliminar (soft-delete) y crear una plantilla nueva a partir del plan de un alumno.
  *
- * Aplicar una plantilla NO se hace desde aca sino desde el `+` del hub: hay UNA sola puerta al
- * builder (`?from=template:<id>`), y duplicarla seria el primer paso para que los dos caminos
- * diverjan.
+ * "Aplicar" (T1.5, nutrition-flows-redesign) usa LA MISMA puerta al builder
+ * (`?from=template:<id>`) que el `+` del hub — es un atajo a la URL canonica con el alumno
+ * elegido aca, no un segundo camino de creacion. Antes el verbo primario de una plantilla no
+ * existia en su propia pantalla: salir → Nuevo plan → Reutilizar → encontrarla de nuevo →
+ * alumno (5 pasos). Ahora: Aplicar → alumno (2).
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Copy, Loader2, Pencil, Plus, Search, SlidersHorizontal, Star, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -33,6 +36,7 @@ import {
   setPlanTemplateFavoriteAction,
 } from '../_actions/plan-templates.actions'
 import type { PlanTemplateListItem } from '@/services/nutrition-v2/plan-templates.service'
+import { useCaptureCoachNutritionTemplateApplied } from '@/lib/posthog/events'
 
 /**
  * Builder de plantillas SIN alumno (CEO 2026-08-04). Es la puerta que faltaba: hasta ahora la
@@ -86,6 +90,7 @@ export function PlanTemplatesLibrary() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState<PlanTemplateListItem | null>(null)
+  const [applying, setApplying] = useState<PlanTemplateListItem | null>(null)
   /** Fila en la que el coach tocó eliminar y espera el segundo tap ("¿Eliminar? · Sí / No"). */
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
   /** Bajas en curso: apagan los botones de esa fila mientras el servidor responde. */
@@ -290,6 +295,18 @@ export function PlanTemplatesLibrary() {
                 <p className="truncate text-sm font-semibold text-strong">{template.name}</p>
                 <p className="truncate text-xs text-muted">{summaryLine(template)}</p>
               </div>
+              {/* El verbo primario de la fila (T1.5): abre el picker de alumno y entra al
+                  builder por la puerta canonica `?from=template:`. Solo si es legible —
+                  una plantilla ilegible abriria un wizard en blanco. */}
+              {template.readable ? (
+                <button
+                  type="button"
+                  onClick={() => setApplying(template)}
+                  className="inline-flex min-h-9 shrink-0 items-center rounded-control bg-primary/10 px-3 text-xs font-bold text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/15"
+                >
+                  Aplicar
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void toggleFavorite(template)}
@@ -378,7 +395,120 @@ export function PlanTemplatesLibrary() {
           void load()
         }}
       />
+      <ApplyTemplateDialog template={applying} onClose={() => setApplying(null)} />
     </section>
+  )
+}
+
+/**
+ * Aplicar una plantilla (T1.5): elegir el alumno destino y entrar al builder por la puerta
+ * canonica `?from=template:<id>` — el mismo camino del `+` del hub, precargado. Cualquier
+ * alumno es destino valido; si ya tiene plan se avisa en la fila (el conflicto real lo
+ * resuelve el flujo de publicacion existente: vigente-desde / archivar-y-reemplazar).
+ */
+function ApplyTemplateDialog({
+  template,
+  onClose,
+}: {
+  template: PlanTemplateListItem | null
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const captureApplied = useCaptureCoachNutritionTemplateApplied()
+  const [search, setSearch] = useState('')
+  const [entries, setEntries] = useState<RosterSearchEntry[]>([])
+  const [searching, setSearching] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const open = template != null
+
+  useEffect(() => {
+    if (!open) return
+    setSearch('')
+    setError(null)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    setSearching(true)
+    const timer = setTimeout(() => {
+      void searchCoachRosterAction({ search: search.trim() || undefined, pageSize: 40 })
+        .then((res) => {
+          if (res.ok) setEntries(res.items)
+          else setError(res.error)
+        })
+        .finally(() => setSearching(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [open, search])
+
+  function apply(entry: RosterSearchEntry) {
+    if (!template) return
+    captureApplied('library')
+    onClose()
+    router.push(`/coach/nutrition-v2/${entry.clientId}/builder?from=template:${template.id}`)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="normal-case tracking-tight">
+            Aplicar “{template?.name ?? ''}”
+          </DialogTitle>
+          <DialogDescription>
+            Elige el alumno. Vas a poder revisar y ajustar el plan antes de publicarlo.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-1 space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-subtle" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value.slice(0, 120))}
+              placeholder="Buscar alumno…"
+              aria-label="Buscar alumno"
+              className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-10 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
+            />
+            {searching ? (
+              <Loader2 className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-subtle" />
+            ) : null}
+          </div>
+          <ul className="max-h-[46vh] space-y-1.5 overflow-y-auto pr-1">
+            {entries.map((entry) => (
+              <li key={entry.clientId}>
+                <button
+                  type="button"
+                  onClick={() => apply(entry)}
+                  className="flex w-full items-center gap-3 rounded-control border border-border-default bg-surface-card px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-surface-sunken"
+                >
+                  <span className="min-w-0 flex-1 truncate font-semibold text-strong">
+                    {entry.clientName}
+                  </span>
+                  {entry.planStatus != null ? (
+                    <span className="shrink-0 rounded-pill bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
+                      ya tiene plan
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+            {entries.length === 0 && !searching ? (
+              <li className="px-1 py-6 text-center text-sm text-muted">
+                Ningún alumno coincide con la búsqueda.
+              </li>
+            ) : null}
+          </ul>
+        </div>
+
+        {error ? (
+          <p className="rounded-control border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </p>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   )
 }
 
