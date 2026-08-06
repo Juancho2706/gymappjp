@@ -73,6 +73,28 @@ seriales a gate→ola unica→totals, layout de 6 saltos a 3); PR-B guards uuid 
 
 Criterio de exito PR-C: TTFB p75 < 1,5 s por ruta en Sentry a las 48 h del deploy web.
 
+## Incidentes de cuentas de coach (2026-08-05 noche, en produccion, QA owner OK)
+
+- **`/c/<slug>` con 500 por emoji en headers** (roto desde el 24-jul para un coach Pro real): el
+  middleware metia `loader_text` user-editable en headers HTTP (ByteString ISO-8859-1) y
+  "⚔️🐺🔱" tumbaba TODO el portal del coach. Hotfix de datos inmediato + `brand-header-codec`
+  (encode en el proxy, decode en los lectores RSC) en `792c40d3`: los emojis en branding vuelven
+  a estar soportados sin riesgo. Regresion cubierta por test.
+- **Eliminar alumno verificado limpio** (caso real de un coach): la eliminacion borra el auth
+  user y cascada total — cero rastro en DB. El bloqueo del re-alta no era residuo: la alumna
+  habia creado una cuenta coach free fantasma al intentar "recuperar acceso" desde la raiz
+  (que es 100% mundo coach). La cuenta, 100% vacia, se borro de LIVE con autorizacion del owner.
+- **Gaps del ciclo de vida del alumno — F1+F2a desplegados** (`42d17c86`): salida para alumnos
+  en la raiz (card "¿Eres alumno?" con codigo → `/c/<codigo>` en login y forgot-password raiz,
+  hint para cuentas eliminadas, banner de cuenta-de-entrenador en register) y el alta con correo
+  ocupado ahora devuelve `email_taken` accionable — sin revelar el tipo de cuenta
+  (anti-enumeracion; la razon granular vive server-side en `lib/auth/platform-email.ts` y la
+  consumen el alta web y la ruta mobile). **F2b (invitar-aceptar una cuenta existente como
+  alumno) queda en backlog con plan aprobado por el owner**: exige SPEC/PLAN/TASKS — tabla
+  `client_invites` con token hash de un solo uso, accept con consentimiento del dueño de la
+  cuenta, re-chequeo de cupo y rechazo si ya es alumno activo de otro coach (1 alumno = 1 coach
+  se mantiene).
+
 ## Prioridad actual
 
 0. **Desplegar el programa de nutrición completo** (commits en `master` local sin push: F2, F3,
