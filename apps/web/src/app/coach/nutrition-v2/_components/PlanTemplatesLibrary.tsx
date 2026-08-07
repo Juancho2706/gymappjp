@@ -239,8 +239,8 @@ export function PlanTemplatesLibrary() {
     <section className="space-y-4 py-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted">
-          Arma un plan reutilizable y aplícalo a cualquier alumno desde «Nuevo plan →
-          Reutilizar».
+          Arma un plan reutilizable y aplícalo a cualquier alumno con el botón «Aplicar» de su
+          fila.
         </p>
         {/* Dos altas, la de cero como primaria: crear desde el plan de un alumno exige tener
             alumnos CON plan, así que no puede ser la única puerta. `flex-1` en ambos para que
