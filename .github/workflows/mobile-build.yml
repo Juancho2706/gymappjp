@@ -38,7 +38,7 @@ on:
         default: false
         type: boolean
       submit_android:
-        description: 'Auto-submit Android AAB to Google Play internal testing after build (profile production only)'
+        description: 'Auto-submit Android AAB to Google Play closed testing / Alpha after build (profile production only)'
         required: false
         default: false
         type: boolean
@@ -125,8 +125,12 @@ jobs:
 
       # Requiere que la app exista en Play Console y que la PRIMERA subida se haya
       # hecho manual por la UI (limitación de la Google Play Developer API).
-      # El track destino (internal) vive en eas.json → submit.production.android.
-      - name: Submit AAB to Google Play (internal testing)
+      # El track destino (alpha = Prueba cerrada) vive en eas.json → submit.production.android.
+      # 2026-08-07: era `internal`; se movió a `alpha` porque solo el closed testing cuenta
+      # para el requisito de 12 testers × 14 días que exige Play para acceder a producción.
+      # OJO: subir al track alpha mientras hay una versión EN REVISIÓN la reemplaza y reinicia
+      # la revisión. Si hay una pendiente, correr con submit_android=false y subir después.
+      - name: Submit AAB to Google Play (closed testing / Alpha)
         if: ${{ inputs.submit_android == true && inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
