@@ -60,7 +60,7 @@
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
-        "track": "internal"
+        "track": "alpha"
       }
     },
     "previewv2": {
