@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
+import { Alert, AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { FlashList } from '@shopify/flash-list'
@@ -1039,13 +1039,33 @@ function TodayTab({
   )
 
   const onRegister = useCallback(
-    (slot?: NutritionMealSlotRead) => {
+    (slot?: NutritionMealSlotRead, query?: string) => {
       router.push({
         pathname: '/alumno/nutrition-v2/add-food-v2',
-        params: slot ? { slot: slot.code, slotName: slot.name } : {},
+        params: {
+          ...(slot ? { slot: slot.code, slotName: slot.name } : {}),
+          // T1.6: busqueda precargada al llegar desde una pill de reemplazo autorizado.
+          ...(query ? { q: query } : {}),
+        },
       })
     },
     [router],
+  )
+
+  // Puente T1.6 (paridad web): con permiso, la pill abre el registro libre precargado; sin
+  // permiso explica que pedir. El camino server-validado sin permiso llega en T2.4.
+  const onPickSubstitution = useCallback(
+    (slot: NutritionMealSlotRead, sub: NutritionItemSubstitutionRead) => {
+      if (model?.permissions.canRegisterFreely) {
+        onRegister(slot, sub.name)
+      } else {
+        Alert.alert(
+          'Registro libre desactivado',
+          'Pídele a tu coach habilitarlo para registrar este reemplazo.',
+        )
+      }
+    },
+    [model?.permissions.canRegisterFreely, onRegister],
   )
 
   // Compartir usa la MISMA vista efectiva que el render: verdad del servidor menos
@@ -1610,6 +1630,7 @@ function TodayTab({
                 portionVoids={portions.voidsBySlot[slot.code] ?? EMPTY_PORTION_VOIDS}
                 onMarkPortion={portions.mark}
                 onOpenEquivalences={onOpenEquivalences}
+                onPickSubstitution={onPickSubstitution}
                 highlighted={slot.code === focusSlotCode}
               />
             ))}
@@ -1879,6 +1900,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   portionVoids,
   onMarkPortion,
   onOpenEquivalences,
+  onPickSubstitution,
   highlighted = false,
 }: {
   slot: NutritionMealSlotRead
@@ -1900,6 +1922,8 @@ const TodaySlotCard = memo(function TodaySlotCard({
     completes: boolean,
   ) => void
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
+  /** Tap en un reemplazo autorizado (T1.6, puente): abre el registro con la busqueda precargada. */
+  onPickSubstitution: (slot: NutritionMealSlotRead, sub: NutritionItemSubstitutionRead) => void
   /** Franja apuntada por el deep-link de la card de Nutrición del Home (SPEC #8). */
   highlighted?: boolean
 }) {
@@ -1970,7 +1994,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     )
                   }
                 />
-                <ItemSubstitutionsHint substitutions={subs} />
+                <ItemSubstitutionsHint substitutions={subs} onPick={(sub) => onPickSubstitution(slot, sub)} />
               </View>
             )
           })}
@@ -2030,25 +2054,35 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
 }
 
 /**
- * Reemplazos autorizados por el coach (F-02), alineados con la fila web: título + pills
- * individuales con kcal congelada. Solo lectura; el registro interactivo es un fast-follow.
+ * Reemplazos autorizados por el coach (F-02), alineados con la fila web. T1.6 (puente): las
+ * pills dejan de ser decorativas — tap abre el registro libre precargado (o explica el permiso).
+ * El camino server-validado sin permiso es T2.4 y reemplaza este puente.
  */
-function ItemSubstitutionsHint({ substitutions }: { substitutions: NutritionItemSubstitutionRead[] }) {
+function ItemSubstitutionsHint({
+  substitutions,
+  onPick,
+}: {
+  substitutions: NutritionItemSubstitutionRead[]
+  onPick: (sub: NutritionItemSubstitutionRead) => void
+}) {
   if (substitutions.length === 0) return null
   return (
     <View className="pb-3 pl-14">
       <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</Text>
       <View accessibilityLabel="Reemplazos autorizados por tu coach" className="mt-1 flex-row flex-wrap gap-1.5">
         {substitutions.map((sub) => (
-          <View
+          <Pressable
             key={sub.id}
-            className="flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
+            accessibilityRole="button"
+            accessibilityLabel={`Registrar reemplazo: ${sub.name}`}
+            onPress={() => onPick(sub)}
+            className="min-h-8 flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
           >
             <Text className="text-xs font-medium text-body">{sub.name}</Text>
             {sub.macros.calories != null ? (
               <Text className="font-mono text-xs text-muted">· {formatNutritionCalories(sub.macros.calories)}</Text>
             ) : null}
-          </View>
+          </Pressable>
         ))}
       </View>
     </View>

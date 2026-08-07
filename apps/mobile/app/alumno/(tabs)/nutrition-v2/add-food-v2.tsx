@@ -97,13 +97,16 @@ export default function NutritionV2AddFoodScreen() {
   const onScrollChrome = useAlumnoScrollHandler()
   const { theme } = useTheme()
   const entitlements = useEntitlements()
-  const params = useLocalSearchParams<{ slot?: string; slotName?: string }>()
+  const params = useLocalSearchParams<{ slot?: string; slotName?: string; q?: string }>()
   const slotCode = typeof params.slot === 'string' && params.slot ? params.slot : null
   const slotName = typeof params.slotName === 'string' && params.slotName ? params.slotName : null
+  // T1.6 (puente): busqueda precargada al llegar desde una pill de reemplazo autorizado —
+  // el live search dispara solo y los resultados aparecen sin tipear.
+  const initialQuery = typeof params.q === 'string' ? params.q : ''
 
   const [userId, setUserId] = useState<string | null>(null)
   const [deviceId, setDeviceId] = useState<string | null>(null)
-  const [term, setTerm] = useState('')
+  const [term, setTerm] = useState(initialQuery)
   const [results, setResults] = useState<FoodCatalogItem[]>([])
   const [searching, setSearching] = useState(false)
   // NUT-020: el fallo del live-search tiene estado PROPIO. Antes el `.catch` solo vaciaba los

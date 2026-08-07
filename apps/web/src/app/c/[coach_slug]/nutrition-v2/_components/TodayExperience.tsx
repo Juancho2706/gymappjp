@@ -98,7 +98,8 @@ import {
 type DialogState =
   | { kind: 'none' }
   // `initialMealSlot`: preselección de franja al llegar desde el sheet de equivalencias.
-  | { kind: 'register'; initialMealSlot?: string | null }
+  // `initialQuery`: busqueda precargada al llegar desde una pill de reemplazo autorizado (T1.6).
+  | { kind: 'register'; initialMealSlot?: string | null; initialQuery?: string }
   | { kind: 'edit'; entry: NutritionIntakeReadItem }
   | { kind: 'void'; entry: NutritionIntakeReadItem }
 
@@ -391,6 +392,17 @@ export function TodayExperience({
         }}
         onEdit={(entry) => openDialog({ kind: 'edit', entry })}
         onVoid={(entry) => openDialog({ kind: 'void', entry })}
+        onPickSubstitution={(slot, sub) => {
+          // Puente T1.6: registrar el reemplazo pasa por el registro libre precargado. El camino
+          // server-validado SIN permiso (estado "sustituido") es T2.4 y reemplaza este puente.
+          if (today.permissions.canRegisterFreely) {
+            openDialog({ kind: 'register', initialMealSlot: slot.code, initialQuery: sub.name })
+          } else {
+            toast.info(
+              'Tu plan no permite registro libre. Pídele a tu coach habilitarlo para registrar este reemplazo.',
+            )
+          }
+        }}
       />
 
       {/* "Fuera del plan" (auditoría H4): reemplaza a "Consumido hoy". Lo prescrito ya se ve arriba
@@ -457,6 +469,7 @@ export function TodayExperience({
           slotOptions={slotOptions}
           error={error}
           initialMealSlot={dialog.initialMealSlot ?? null}
+          initialQuery={dialog.initialQuery}
           portionDupWarning={portionsApi.dupWarningFor}
           onClose={closeDialog}
           onSubmit={(food, quantity, unit, mealSlotCode) => {
@@ -735,6 +748,7 @@ function PrescribedSection({
   onEat,
   onEdit,
   onVoid,
+  onPickSubstitution,
 }: {
   today: NutritionTodayReadModel
   busyId: string | null
@@ -742,6 +756,11 @@ function PrescribedSection({
   portionsApi: PortionMarksApi
   substitutionsByItem: Record<string, NutritionItemSubstitutionRead[]>
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
+  /** Tap en un reemplazo autorizado (T1.6, puente): abre el registro con la busqueda precargada. */
+  onPickSubstitution: (
+    slot: NutritionTodayReadModel['mealSlots'][number],
+    sub: NutritionItemSubstitutionRead,
+  ) => void
   onBulkEat: (slot: NutritionTodayReadModel['mealSlots'][number], state: BulkMarkSlotState) => void
   onEat: (
     slot: NutritionTodayReadModel['mealSlots'][number],
@@ -853,7 +872,7 @@ function PrescribedSection({
                         )
                       }
                     />
-                    <ItemSubstitutions items={substitutions} />
+                    <ItemSubstitutions items={substitutions} onPick={(sub) => onPickSubstitution(slot, sub)} />
                   </div>
                 )
               })}
@@ -920,7 +939,14 @@ function PrescribedSection({
  * (light/dark). Sin reemplazos ⇒ no renderiza nada. Alineado bajo el texto del item (la miniatura
  * ocupa h-11 + gap-3 ≈ pl-14) para colgar de forma natural de su fila.
  */
-function ItemSubstitutions({ items }: { items: NutritionItemSubstitutionRead[] }) {
+function ItemSubstitutions({
+  items,
+  onPick,
+}: {
+  items: NutritionItemSubstitutionRead[]
+  /** T1.6 (puente): las pills dejan de ser decorativas — tap abre el registro precargado. */
+  onPick: (sub: NutritionItemSubstitutionRead) => void
+}) {
   if (items.length === 0) return null
   return (
     <div className="pb-3 pl-14">
@@ -928,12 +954,16 @@ function ItemSubstitutions({ items }: { items: NutritionItemSubstitutionRead[] }
       <ul aria-label="Reemplazos autorizados por tu coach" className="mt-1 flex flex-wrap gap-1.5">
         {items.map((sub) => (
           <li key={sub.id}>
-            <span className="inline-flex items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body">
+            <button
+              type="button"
+              onClick={() => onPick(sub)}
+              className="inline-flex min-h-8 items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body transition-colors hover:border-primary/40 hover:text-strong"
+            >
               <span>{sub.name}</span>
               {sub.macros.calories != null ? (
                 <span className="tabular-nums text-muted">· {formatNutritionCalories(sub.macros.calories)}</span>
               ) : null}
-            </span>
+            </button>
           </li>
         ))}
       </ul>
@@ -1021,6 +1051,7 @@ function RegisterFoodDialog({
   slotOptions,
   error,
   initialMealSlot = null,
+  initialQuery,
   portionDupWarning,
   onClose,
   onSubmit,
@@ -1031,13 +1062,17 @@ function RegisterFoodDialog({
   error: string | null
   /** Franja preseleccionada (llegada desde el sheet de equivalencias de porciones). */
   initialMealSlot?: string | null
+  /** Busqueda precargada (llegada desde una pill de reemplazo autorizado, T1.6). */
+  initialQuery?: string
   /** Aviso anti-duplicado de porciones (SPEC R5.b): null si no aplica. */
   portionDupWarning?: (foodId: string, mealSlotCode: string | null) => string | null
   onClose: () => void
   onSubmit: (food: FoodCatalogItem, quantity: number, unit: string, mealSlotCode: string | null) => void
   submitting: boolean
 }) {
-  const [query, setQuery] = useState('')
+  // El dialogo se monta al abrir (render condicional), asi que el estado inicial aplica siempre;
+  // con initialQuery el live search dispara solo y los resultados aparecen sin tipear.
+  const [query, setQuery] = useState(initialQuery ?? '')
   const [results, setResults] = useState<FoodCatalogItem[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
