@@ -4,7 +4,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -338,15 +337,17 @@ export function Sheet({
           {/* Keyboard: this path renders in its OWN OS window, so the screen's KeyboardAvoidingView
               (builder `[clientId].tsx`, `QuickEditMode`) does NOT reach it — every sheet with inputs
               had its fields and its pinned footer ("Guardar") buried under the keyboard on iOS.
-              `padding` on iOS only: on Android RN's Modal already asks its Dialog for ADJUST_RESIZE
-              (and Expo leaves `softwareKeyboardLayoutMode` at "resize"), so compensating again would
-              shift twice — same convention as the rest of the app.
+              `padding` on BOTH platforms: this Modal sets `statusBarTranslucent`, and on Android a
+              modal window with translucent status bar never gets ADJUST_RESIZE (known RN issue) —
+              the keyboard overlays the sheet instead of resizing its window (QA device 06-08:
+              "Otro motivo" buried under the keyboard on MIUI). Padding compensation cannot double
+              -shift here because the resize this Modal would otherwise rely on simply never fires.
               The flexShrink chain (avoider → MotiView → panel) is what lets the inner ScrollView give
               up height when the keyboard eats the space: the panel's cap is a fraction of the FULL
               screen, so without it a tall sheet would overflow past the top and lose its handle,
               title and close button. Inert when there is no keyboard (nothing to shrink). */}
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
             style={{ flexShrink: 1 }}
           >
             {/* Panel: slide-up spring (== KeypadHost). Content-hugs with maxHeight cap = largest snap
