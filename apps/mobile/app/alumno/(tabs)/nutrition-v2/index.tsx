@@ -1052,6 +1052,13 @@ function TodayTab({
     [router],
   )
 
+  // QA device T1.2 (paridad web NUT-009): lo prescrito consumido tambien se corrige/retira
+  // desde SU fila — antes RN solo ofrecia correccion en "Fuera del plan".
+  const onCorrectPrescribed = useCallback((kind: 'edit' | 'void', entry: NutritionIntakeReadItem) => {
+    setEntryActionError(null)
+    setEntryAction({ kind, entry })
+  }, [])
+
   // Puente T1.6 (paridad web): con permiso, la pill abre el registro libre precargado; sin
   // permiso explica que pedir. El camino server-validado sin permiso llega en T2.4.
   const onPickSubstitution = useCallback(
@@ -1631,6 +1638,7 @@ function TodayTab({
                 onMarkPortion={portions.mark}
                 onOpenEquivalences={onOpenEquivalences}
                 onPickSubstitution={onPickSubstitution}
+                onCorrect={onCorrectPrescribed}
                 highlighted={slot.code === focusSlotCode}
               />
             ))}
@@ -1901,6 +1909,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   onMarkPortion,
   onOpenEquivalences,
   onPickSubstitution,
+  onCorrect,
   highlighted = false,
 }: {
   slot: NutritionMealSlotRead
@@ -1924,6 +1933,8 @@ const TodaySlotCard = memo(function TodaySlotCard({
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
   /** Tap en un reemplazo autorizado (T1.6, puente): abre el registro con la busqueda precargada. */
   onPickSubstitution: (slot: NutritionMealSlotRead, sub: NutritionItemSubstitutionRead) => void
+  /** Corregir/retirar el registro de un item prescrito consumido (paridad web NUT-009). */
+  onCorrect: (kind: 'edit' | 'void', entry: NutritionIntakeReadItem) => void
   /** Franja apuntada por el deep-link de la card de Nutrición del Home (SPEC #8). */
   highlighted?: boolean
 }) {
@@ -1975,12 +1986,41 @@ const TodaySlotCard = memo(function TodaySlotCard({
                           <Text className="text-xs font-semibold text-muted">En cola</Text>
                         </View>
                       ) : (
-                        // Estado "Registrado" (web TodayExperience.tsx:608-611): check esmeralda
-                        // del canvas web → tono success del kit RN (contrato white-label).
-                        <View className="flex-row items-center gap-1">
-                          <CheckCircle2 color={theme.success} size={16} />
-                          <Text className="text-xs font-semibold text-success-700">Registrado</Text>
-                        </View>
+                        // Estado "Registrado" (web TodayExperience.tsx:608-611) + correccion en la
+                        // fila (QA device T1.2, regla web NUT-009): lapiz solo con permiso de
+                        // ajustar cantidades; "Retirar" NUNCA se esconde.
+                        (() => {
+                          const entry =
+                            slot.intakeItems.find(
+                              (e) => e.prescriptionItemId === item.id && e.status === 'active',
+                            ) ?? null
+                          return (
+                            <View className="flex-row items-center gap-1">
+                              <CheckCircle2 color={theme.success} size={16} />
+                              <Text className="text-xs font-semibold text-success-700">Registrado</Text>
+                              {entry && today.permissions.canAdjustPrescribedQuantity ? (
+                                <Pressable
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Editar cantidad de ${item.name ?? 'alimento prescrito'}`}
+                                  onPress={() => onCorrect('edit', entry)}
+                                  className="h-10 w-10 items-center justify-center rounded-control"
+                                >
+                                  <Pencil color={theme.textSecondary} size={16} />
+                                </Pressable>
+                              ) : null}
+                              {entry ? (
+                                <Pressable
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Retirar registro de ${item.name ?? 'alimento prescrito'}`}
+                                  onPress={() => onCorrect('void', entry)}
+                                  className="h-10 w-10 items-center justify-center rounded-control"
+                                >
+                                  <Trash2 color={theme.destructive} size={16} />
+                                </Pressable>
+                              ) : null}
+                            </View>
+                          )
+                        })()
                       )
                     ) : (
                       <NutritionMotionButton
@@ -2289,7 +2329,9 @@ function EntryCorrectionSheet({
       description={description}
       footer={footer}
       showCloseButton={!pending}
-      snapPoints={[action?.kind === 'edit' ? '72%' : '62%']}
+      // 85/78: con "Otro motivo" abierto el input caia DETRAS del teclado (QA device 06-08) —
+      // el sheet mas alto deja el campo visible sobre el teclado con el KAV existente.
+      snapPoints={[action?.kind === 'edit' ? '85%' : '78%']}
       accessibilityLabel={action?.kind === 'edit' ? 'Editar cantidad consumida' : 'Retirar registro consumido'}
     >
       {action && entry ? (
