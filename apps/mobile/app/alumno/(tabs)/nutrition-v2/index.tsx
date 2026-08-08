@@ -1590,31 +1590,47 @@ function TodayTab({
           </View>
         ) : null}
 
-        {/* Fila de CTAs (web TodayExperience.tsx): Registrar + Escanear + Compartir.
+        {/* Fila de CTAs en tercios iguales, una sola línea (orden owner 2026-08-07):
+            Escanear · Registrar (primario, al centro) · Compartir. El texto visible del primario
+            se acorta a "Registrar" para que los tres entren sin envolver; `a11yLabel` conserva
+            "Registrar alimento" para lectores de pantalla.
             NUT-009: con "Solo alimentos prescritos" (canRegisterFreely = false) desaparecen
             Registrar y Escanear — antes se ofrecían igual y el alumno rompía la regla del coach sin
             enterarse. La UI no autoriza: el guard real está en la API móvil y en el RPC. */}
-        <View className="flex-row flex-wrap gap-2">
-          {model.permissions.canRegisterFreely ? (
-            <>
-              <TodayCta Icon={Plus} label="Registrar alimento" tone="nutrition" onPress={() => onRegister()} />
-              <TodayCta
-                Icon={ScanBarcode}
-                label="Escanear"
-                tone="neutral"
-                onPress={() => router.push('/alumno/nutrition-v2/scanner')}
-              />
-            </>
-          ) : (
-            <View className="flex-row items-start gap-2 rounded-card border border-subtle bg-surface-sunken px-3 py-2">
+        {model.permissions.canRegisterFreely ? (
+          // Sin `flex-wrap` (con wrap Yoga reparte distinto y la fila se descuadra). Escanear y
+          // Compartir van a su ancho natural para que se lean enteros; el primario es el unico
+          // `fill` y absorbe el resto, asi que adelgaza en vez de comerse la fila.
+          <View className="flex-row items-center gap-2">
+            <TodayCta
+              Icon={ScanBarcode}
+              label="Escanear"
+              tone="neutral"
+              onPress={() => router.push('/alumno/nutrition-v2/scanner')}
+            />
+            <TodayCta
+              fill
+              Icon={Plus}
+              label="Registrar"
+              a11yLabel="Registrar alimento"
+              tone="nutrition"
+              onPress={() => onRegister()}
+            />
+            <TodayCta Icon={Share2} label="Compartir" tone="neutral" onPress={() => void onShareDay()} />
+          </View>
+        ) : (
+          // Sin registro libre la fila pierde sus dos primeros tercios: queda el aviso del
+          // candado a ancho completo y Compartir debajo, con su ancho propio.
+          <View className="flex-row flex-wrap items-center gap-2">
+            <View className="w-full flex-row items-start gap-2 rounded-card border border-subtle bg-surface-sunken px-3 py-2">
               <Lock color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
               <Text className="min-w-0 flex-1 text-sm leading-5 text-muted">
                 Tu coach dejó el plan en solo alimentos prescritos: marca lo que comiste del plan.
               </Text>
             </View>
-          )}
-          <TodayCta Icon={Share2} label="Compartir" tone="neutral" onPress={() => void onShareDay()} />
-        </View>
+            <TodayCta Icon={Share2} label="Compartir" tone="neutral" onPress={() => void onShareDay()} />
+          </View>
+        )}
 
         {slotsWithPrescription.length > 0 ? (
           // "Tu plan de hoy" (web TodayExperience.tsx:561-640): sin sección si no hay franjas
@@ -1808,19 +1824,26 @@ function TodayCta({
   label,
   tone,
   onPress,
+  fill = false,
+  a11yLabel,
 }: {
   Icon: typeof Plus
   label: string
   tone: 'nutrition' | 'neutral'
   onPress: () => void
+  /** Absorbe el ancho sobrante de la fila (el primario) en vez de fijar su ancho al contenido. */
+  fill?: boolean
+  /** Etiqueta accesible cuando el texto visible se acorta para que la fila entre. */
+  a11yLabel?: string
 }) {
   const { theme } = useTheme()
   const { reduced, duration } = useEvaMotion()
   const [pressed, setPressed] = useState(false)
   return (
     <Pressable
-      accessibilityLabel={label}
+      accessibilityLabel={a11yLabel ?? label}
       accessibilityRole="button"
+      className={fill ? 'min-w-0 flex-1' : undefined}
       onPress={() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress()
@@ -1833,9 +1856,9 @@ function TodayCta({
         transition={{ type: 'timing', duration: duration('fast') }}
       >
         <View
-          className={`min-h-11 flex-row items-center justify-center gap-2 rounded-control border px-4 ${
-            tone === 'nutrition' ? 'border-primary bg-primary' : 'border-default bg-surface-card'
-          }`}
+          className={`min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border ${
+            fill ? 'px-2' : 'px-4'
+          } ${tone === 'nutrition' ? 'border-primary bg-primary' : 'border-default bg-surface-card'}`}
           style={shadow('sm', theme.scheme)}
         >
           <Icon
@@ -1843,7 +1866,12 @@ function TodayCta({
             color={tone === 'nutrition' ? undefined : theme.foreground}
             size={16}
           />
-          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-white' : 'text-strong'}`}>
+          <Text
+            className={`text-sm font-semibold ${fill ? 'min-w-0 shrink' : ''} ${
+              tone === 'nutrition' ? 'text-white' : 'text-strong'
+            }`}
+            numberOfLines={1}
+          >
             {label}
           </Text>
         </View>
@@ -2212,13 +2240,19 @@ function ReasonChips({
               accessibilityState={{ checked: selected, disabled: pending }}
               disabled={pending}
               onPress={() => onSelect(option)}
-              className={`min-h-9 items-center justify-center rounded-full border px-3 ${
+              // `shrink-0`: sin esto Yoga encoge el chip que no entra en la linea y le CORTA el
+              // texto ("No lo comi" quedaba en "No lo") en vez de envolverlo a la fila siguiente.
+              className={`min-h-9 shrink-0 items-center justify-center rounded-full border px-3 ${
                 selected ? '' : 'border-default bg-surface-app'
               }`}
               style={selected ? { borderColor: theme.primary, backgroundColor: `${theme.primary}1A` } : undefined}
             >
               <Text
                 className={`text-xs font-semibold ${selected ? '' : 'text-body'}`}
+                // Sin `numberOfLines` Yoga envuelve el chip a dos lineas mientras mide y la caja
+                // se queda con la altura de UNA: la segunda linea desaparecia ("No lo comi" =>
+                // "No lo"). Mismo patron que el denominador del AuraHero.
+                numberOfLines={1}
                 style={selected ? { color: theme.primary } : undefined}
               >
                 {text}
