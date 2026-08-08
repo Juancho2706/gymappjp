@@ -53,12 +53,15 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
 
 ## Ola 2
 
-- [ ] T2.1 Overrides datos (SPEC `nutrition-food-overrides/` primero)
-  - [ ] SPEC/PLAN/TASKS sub-feature
-  - [ ] Migracion `coach_food_overrides` (unique coach+food, macros_basis, grants por columna, RLS clon egf_*, indice food_id) — tx-rollback + EXPLAIN en LIVE antes, advisors despues
-  - [ ] Merge choke point `food_catalog_v2_item_json` (+ `search_food_catalog_v2`, `lookup_food_by_gtin_v2`, `get_coach_food_suggestions_v2` pasan coach 1 vez) — drop+create misma tx
-  - [ ] Merge freeze publicacion (`plan-persistence.ts`) + rehidratacion (`plan-foods.data.ts`) + fix N+1 (`.in()` batch)
-  - [ ] Regen database.types + boundaries + service/repository capa limpia
+- [x] T2.1 Overrides datos — CERRADA 2026-08-07 (detalle y evidencia en [`nutrition-food-overrides/TASKS.md`](../nutrition-food-overrides/TASKS.md))
+  - [x] SPEC/PLAN/TASKS sub-feature + OK del owner
+  - [x] F1 contrato puro + `computeItemMacros` respeta `macrosBasis` (golden tests web y RN) — `c0062c83`
+  - [x] F2 migracion `coach_food_overrides` en LIVE, tx-rollback con JWT reales antes, advisors sin hallazgos despues — `7af82c28`
+  - [x] F3 merge en `food_catalog_v2_item_json` (drop+create) + las 3 RPC pasan el coach 1 vez. **Eran 3, no 4: `get_food_by_id_v2` no existe** — `6edecffd`
+  - [x] F5 repository → service → actions, sin service-role — `0502ef07`
+  - [x] F4 merge en freeze y rehidratacion (4 superficies, un helper) + N+1 muerto + **auditoria de `foods.macros_basis`**: 50 filas mal etiquetadas volvieron a `per_100`, 10 son `per_serving` de verdad — `660e1ef4`
+  - [ ] Regen COMPLETO de `database.types.ts` (deja 13 errores en 7 archivos V1) + retirar el cast `V2ReadClient` de T1.1 — tanda propia
+  - [ ] QA manual en preview (requiere push de la rama)
 - [ ] T2.2 Overrides UI: sheet editar (kcal/P/C/G + medida casera + validacion suave), badge ✎ + original tachado, filtro "Editados por mi", aviso republicar con lista alumnos, restaurar original
 - [ ] T2.3 Hub Alimentos casa unica
   - [ ] Crear alimento + clasificar porciones + grupos dentro del tab (formulario UNICO de grupo)
