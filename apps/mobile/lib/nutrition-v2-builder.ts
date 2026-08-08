@@ -1606,8 +1606,10 @@ export function mapFoodCatalogItemToBuilderFood(item: FoodCatalogItem): BuilderF
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
     category: item.category,
-    // Base declarada (NUT-001), espejo de la web: ausente ⇒ formula historica por 100 g/ml.
-    macrosBasis: item.macrosBasis ?? null,
+    // PARQUEADO, espejo de la web (T2.1 F3): `foods.macros_basis` esta mixto — 60 filas del
+    // seed de intercambios dicen `per_serving` con macros que son por 100 g. Hasta auditarlas,
+    // el builder mantiene la formula historica. Ver builder-view-model.ts y TASKS F4.2.
+    macrosBasis: null,
     media: item.media,
   }
 }

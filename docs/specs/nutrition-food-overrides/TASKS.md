@@ -25,14 +25,44 @@ Checklist de la [SPEC](./SPEC.md) segun el [PLAN](./PLAN.md). Convenciones del p
 
 ## F3 — Merge en discovery
 
-- [ ] F3.1 `private.food_catalog_v2_item_json`: **drop firma vieja + create `(p_food_id, p_coach_id)` en la MISMA tx** (precedente `20260728120000`; `create or replace` no admite parametros nuevos y el overload deja resolucion ambigua)
-- [ ] F3.2 Merge por `left join` sobre la pagina final (probe por unique, ≤25 filas — NUNCA en el scoring)
-- [ ] F3.3 JSON: macros mergeados (override gana) · `macrosBasis` emitido SIEMPRE · `householdLabel`/`householdGrams` · `hasOverride` + `original` solo cuando hay override
-- [ ] F3.4 Las 4 RPC consumidoras pasan el coach resuelto **1 vez por llamada** (coach → `auth.uid()`; alumno → su coach via `clients`; otro → NULL): `search_food_catalog_v2`, `lookup_food_by_gtin_v2`, `get_coach_food_suggestions_v2`, `get_food_by_id_v2`. Jamas del payload (leccion B1: definer pasa por encima de RLS)
-- [ ] F3.5 Verificar que las firmas publicas de las 4 RPC NO cambian (cero cambio de clientes web/RN; scanner PostgREST hereda gratis)
-- [ ] F3.6 EXPLAIN antes/despues con evidencia (riesgo Micro)
+- [x] F3.1 `private.food_catalog_v2_item_json`: drop de `(uuid)` + create `(uuid, uuid)` en la misma migracion, con `revoke all ... from public, anon, authenticated` **detras del create** (el DROP se lleva la ACL; verificado post-aplicacion: `{postgres=X/postgres}`, una sola version de la funcion)
+- [x] F3.2 Merge por `left join` dentro del choke point ⇒ corre una vez por fila EMITIDA (pagina final ≤25), nunca en el scoring
+- [x] F3.3 JSON: los 5 macros por `case ... else o.x end` (reemplazo total explicito, no `coalesce` campo a campo) · `macrosBasis` SIEMPRE · par casero indivisible · `hasOverride` + `original`
+- [x] F3.4 **Son 3 RPC, no 4.** `get_food_by_id_v2` **NO EXISTE**: no esta en `pg_proc` (ningun schema) ni en el repo — solo aparecia en la SPEC/PLAN/TASKS de esta feature, heredado de un informe Explore erroneo. Las reales — `search_food_catalog_v2`, `lookup_food_by_gtin_v2`, `get_coach_food_suggestions_v2` — resuelven el coach con `private.food_catalog_v2_actor_coach_id()` (coach propio → alumno via `clients` → NULL), una vez por llamada, nunca del payload
+- [x] F3.5 Firmas publicas intactas: las 3 se recrearon con `create or replace` sobre la misma firma (ACL preservada). Cero cambio en clientes web/RN
+- [x] F3.6 Medicion antes/despues con JWT real en LIVE: `search_food_catalog_v2('pollo')` 139,3 / 139,6 ms → 153,4 / 135,4 ms; `get_coach_food_suggestions_v2` 40,3 / 44,2 ms → 45,5 ms. Dentro del ruido (25 items ⇒ 25 probes por unique)
+- [x] F3 verificado en LIVE con override de prueba (tx abortada, `overrides_residuo = 0`): coach dueño ve `kcal=999 basis=per_serving casera=1 pocillo/90 hasOverride=true original.calories=254`; **otro coach ve 254 y `hasOverride=false`**; **el alumno del coach ve 999** (hereda la correccion de SU coach); sugerencias siguen respondiendo 12 items
 
-## F4 — Merge en freeze y rehidratacion
+## 🔴 BLOQUEO DE DATOS descubierto en F3 (decision del owner antes de F4)
+
+`public.foods.macros_basis` **no es confiable**. El backfill de `20260728120000` marco
+`per_serving` toda fila con `exchange_group_id`; hoy son 2.525 filas, de las cuales **60 tienen
+`serving_size <> 100`** y ahi el dato esta MIXTO:
+
+| Alimento | serving_size | calories | Que es en realidad |
+|---|---|---|---|
+| Aceite vegetal | 5 g | 884 (100 g de grasa) | por 100 g — la etiqueta miente |
+| Almendras | 10 g | 579 | por 100 g — la etiqueta miente |
+| Avena instantanea Quaker | 40 g | 367 | por 100 g — la etiqueta miente |
+| Arepa | 1 un | 240 | por porcion — la etiqueta acierta |
+| Clara huevo | 50 g | 26 (5 g proteina) | por porcion — la etiqueta acierta |
+
+Consecuencias medidas en LIVE: **306 items prescritos** apuntan a esas 60 filas (de 1.711 items
+con alimento, en 6 coaches). Para las mal etiquetadas, la formula por-100 de hoy da el numero
+CORRECTO; para las bien etiquetadas ("Arepa": 1 unidad) hoy congela **2,4 kcal en vez de 240**.
+No hay una sola regla que arregle las dos: es un problema de DATO, no de codigo.
+
+**Medida tomada (2026-08-07):** el contrato viaja pero el interruptor queda apagado — los mappers
+catalogo→builder (web y RN) fuerzan `macrosBasis: null`, asi que `computeItemMacros` mantiene la
+formula historica y el preview del coach no cambia. `computeItemMacros` YA sabe respetar la base
+(F1.2, con golden tests): cuando el dato este sano, encender es borrar dos lineas.
+
+**Lo que necesita el owner decidir antes de F4:** auditar y corregir esas 60 filas (por fila: es
+por-100 o por-porcion) o retirarles la etiqueta `per_serving`. Nada de esto bloquea los overrides
+en si — el `macros_basis` del override SI es confiable (lo declara el coach y es NOT NULL) — pero
+F4 congela con la base del alimento cuando no hay override, y ahi entra el dato malo.
+
+## F4 — Merge en freeze y rehidratacion (BLOQUEADA por lo de arriba)
 
 - [ ] F4.1 `plan-persistence.ts`: matar el N+1 (loop 1 round-trip por alimento) → un `.in('id', foodIds)` + un fetch de overrides del coach + merge con el helper de F1
 - [ ] F4.2 `macros_basis` al select en `plan-persistence.ts` y `plan-foods.data.ts` (hoy ninguno lo trae)

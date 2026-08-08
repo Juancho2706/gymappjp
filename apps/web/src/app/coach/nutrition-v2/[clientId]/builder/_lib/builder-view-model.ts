@@ -27,9 +27,18 @@ export function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
     category: item.category,
-    // Base declarada (NUT-001): la emite el catálogo desde T2.1. Ausente en una respuesta
-    // vieja ⇒ `null` y `computeItemMacros` mantiene la fórmula histórica por 100 g/ml.
-    macrosBasis: item.macrosBasis ?? null,
+    /**
+     * PARQUEADO a propósito (T2.1 F3, hallazgo 2026-08-07). El catálogo YA emite
+     * `macrosBasis`, pero `public.foods.macros_basis` NO es confiable: el backfill marcó
+     * `per_serving` toda fila con `exchange_group_id`, y 60 de ellas llevan macros que en
+     * realidad son por 100 g ("Aceite vegetal": 884 kcal / 100 g de grasa con
+     * `serving_size = 5`). Propagar la base aquí cambiaría el preview del coach a números
+     * PEORES para esas filas — y mejores para las que sí son por porción ("Arepa": 1 un =
+     * 240 kcal, que hoy se calcula como 2,4). Mientras el dato esté mixto, el builder
+     * mantiene la fórmula histórica por 100 g/ml. Se enciende cuando esas 60 filas estén
+     * auditadas (TASKS F4.2).
+     */
+    macrosBasis: null,
     media: item.media,
   }
 }
