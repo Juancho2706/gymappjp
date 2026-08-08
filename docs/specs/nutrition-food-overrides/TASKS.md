@@ -71,10 +71,11 @@ F4 congela con la base del alimento cuando no hay override, y ahi entra el dato 
 
 ## F5 — Capa web
 
-- [ ] F5.1 `infrastructure/db/coach-food-overrides.repository.ts` (molde `exchange-group-foods.repository`): sin service-role, upsert manual select→update/insert, delete con 0 filas ≠ error
-- [ ] F5.2 `services/nutrition-v2/coach-food-overrides.service.ts` — dueño derivado del actor, techo de autorizacion en el caller
-- [ ] F5.3 `app/coach/nutrition-v2/_actions/food-overrides.actions.ts` — zod + auth + service
-- [ ] F5.4 `check:nutrition-v2-boundaries` + `check:tokens` verdes
+- [x] F5.1 `infrastructure/db/coach-food-overrides.repository.ts`: sin service-role, upsert manual select→update/insert, delete con 0 filas ≠ error, y lectura por LOTE (`findCoachFoodOverridesByFoodIds`, un round-trip, tope 500) para que el freeze de F4 no reproduzca el N+1. 8 tests con cliente falso con forma supabase-js (leccion `db.rpc`/`this`), incluido que el UPDATE no lleva `coach_id` ni `food_id`
+- [x] F5.2 `services/nutrition-v2/coach-food-overrides.service.ts` — dueño derivado del actor, techo de autorizacion en el caller
+- [x] F5.3 `app/coach/nutrition-v2/_actions/food-overrides.actions.ts` — zod + `authorizeCoach` + service; `clientId` es pista de revalidacion, no autorizacion. Sin gate Pro: corregir un alimento mal cargado es higiene de catalogo
+- [x] F5.4 `check:nutrition-v2-boundaries` (307 archivos) + `check:tokens` verdes · typecheck web verde · eslint 0 errores
+- Nota: sin UI (T2.2) estas actions no tienen quien las llame todavia — a proposito. El dato queda correcto y observable antes de arrastrar el riesgo de la interfaz
 
 ## Cierre de la tanda
 
