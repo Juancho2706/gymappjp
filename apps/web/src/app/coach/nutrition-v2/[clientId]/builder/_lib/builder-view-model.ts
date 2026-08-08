@@ -27,6 +27,9 @@ export function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
     category: item.category,
+    // Base declarada (NUT-001): la emite el catálogo desde T2.1. Ausente en una respuesta
+    // vieja ⇒ `null` y `computeItemMacros` mantiene la fórmula histórica por 100 g/ml.
+    macrosBasis: item.macrosBasis ?? null,
     media: item.media,
   }
 }

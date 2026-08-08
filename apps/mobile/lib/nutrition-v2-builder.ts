@@ -23,9 +23,11 @@ import {
   NutritionPlanDraftSchema,
   buildNutritionIdempotencyKey,
   formatNutritionDayOfWeek,
+  intakeEntryFactor,
   nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDow,
   type FoodCatalogItem,
+  type NutritionMacrosBasis,
   type NutritionItemSubstitution,
   type NutritionPlanDowCell,
   type NutritionPlanDraft,
@@ -59,6 +61,11 @@ export interface BuilderFood {
   servingUnit: string
   category: string | null
   media: { bucket: string; objectPath: string; version: number } | null
+  /**
+   * Base declarada de los macros (NUT-001). Ausente = "no declarada" y rige la formula
+   * historica por 100 g/ml. Espejo 1:1 de la web draft-builder.ts.
+   */
+  macrosBasis?: NutritionMacrosBasis | null
 }
 
 /**
@@ -1011,8 +1018,35 @@ export interface ItemMacros {
 
 const ZERO_MACROS: ItemMacros = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 }
 
+function round1(value: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.round(n * 10) / 10 : 0
+}
+
+/**
+ * Espejo 1:1 de la web. Rama `per_serving`: un alimento con macros POR PORCION (seed de
+ * intercambios, override de coach) escalado con la formula por-100 congela numeros
+ * equivocados en el snapshot, que ya es inmutable cuando el alumno lo ve. El factor sale de
+ * `intakeEntryFactor`, espejo byte a byte de `private.nutrition_v2_entry_factor`. Sin base
+ * declarada el camino queda BYTE-IDENTICO al anterior.
+ */
 export function computeItemMacros(food: BuilderFood, quantity: number, unit: string): ItemMacros {
   if (!Number.isFinite(quantity) || quantity <= 0) return ZERO_MACROS
+  if (food.macrosBasis === 'per_serving') {
+    const factor = intakeEntryFactor({
+      quantity,
+      unit,
+      servingSize: food.servingSize,
+      basis: 'per_serving',
+    })
+    return {
+      calories: round1(food.calories * factor),
+      proteinG: round1(food.proteinG * factor),
+      carbsG: round1(food.carbsG * factor),
+      fatsG: round1(food.fatsG * factor),
+      fiberG: food.fiberG == null ? 0 : round1(food.fiberG * factor),
+    }
+  }
   const foodsRow: FoodMacrosRow = {
     name: food.name,
     calories: food.calories,
@@ -1572,6 +1606,8 @@ export function mapFoodCatalogItemToBuilderFood(item: FoodCatalogItem): BuilderF
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
     category: item.category,
+    // Base declarada (NUT-001), espejo de la web: ausente ⇒ formula historica por 100 g/ml.
+    macrosBasis: item.macrosBasis ?? null,
     media: item.media,
   }
 }

@@ -1,4 +1,14 @@
 import { z } from 'zod'
+import { NutritionMacrosBasisSchema } from './contracts'
+
+/** Macros del catálogo ANTES del override del coach (badge ✎ con el valor tachado, T2.2). */
+export const FoodOriginalMacrosSchema = z.object({
+  calories: z.number().nonnegative(),
+  proteinG: z.number().nonnegative(),
+  carbsG: z.number().nonnegative(),
+  fatsG: z.number().nonnegative(),
+  fiberG: z.number().nonnegative().nullable(),
+})
 
 export const FoodVerificationStatusSchema = z.enum([
   'unverified',
@@ -73,6 +83,30 @@ export const FoodCatalogItemSchema = z.object({
    */
   coachId: z.string().uuid().nullable().optional(),
   orgId: z.string().uuid().nullable().optional(),
+  /**
+   * Base declarada de los macros de arriba (NUT-001). Hasta T2.1 el JSON no la emitía y todo
+   * consumidor asumía `per_100` (`CATALOG_MACROS_BASIS`) — mentira latente para las filas
+   * `per_serving` del seed de intercambios. Ahora viaja siempre desde
+   * `private.food_catalog_v2_item_json`.
+   *
+   * `.nullable().optional()` por la MISMA razón que `coachId`: una build RN vieja puede tener
+   * cacheado un item emitido antes de la migración. Ausente = no declarada ⇒ el consumidor
+   * aplica su regla histórica; nunca se inventa la base.
+   */
+  macrosBasis: NutritionMacrosBasisSchema.nullable().optional(),
+  /**
+   * Medida casera del alimento (override del coach o la del catálogo). Viajan como PAR:
+   * una etiqueta sin gramos no convierte nada y unos gramos sin etiqueta no se muestran.
+   */
+  householdLabel: z.string().nullable().optional(),
+  householdGrams: z.number().positive().nullable().optional(),
+  /**
+   * Overrides de macros del coach (specs/nutrition-food-overrides). `hasOverride` marca la
+   * fila para el badge ✎ y `original` conserva los macros del catálogo para mostrarlos
+   * tachados. Ausentes = el catálogo no aplicó merge (RPC vieja o actor sin coach).
+   */
+  hasOverride: z.boolean().nullable().optional(),
+  original: FoodOriginalMacrosSchema.nullable().optional(),
   media: FoodMediaReadSchema.nullable(),
 })
 
@@ -164,6 +198,7 @@ export const FoodCatalogImportRowSchema = z.object({
   rejectionReason: z.string().nullable(),
 })
 
+export type FoodOriginalMacros = z.infer<typeof FoodOriginalMacrosSchema>
 export type FoodVerificationStatus = z.infer<typeof FoodVerificationStatusSchema>
 export type FoodMediaRead = z.infer<typeof FoodMediaReadSchema>
 export type FoodCatalogItem = z.infer<typeof FoodCatalogItemSchema>

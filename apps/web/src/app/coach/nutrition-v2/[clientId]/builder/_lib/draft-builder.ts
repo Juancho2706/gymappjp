@@ -13,8 +13,10 @@ import {
   NUTRITION_WEEK_ORDER,
   NutritionPlanDraftSchema,
   formatNutritionDayOfWeek,
+  intakeEntryFactor,
   nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDow,
+  type NutritionMacrosBasis,
   type NutritionPlanDowCell,
   type NutritionPlanDraft,
   type NutritionStrategy,
@@ -52,6 +54,13 @@ export interface BuilderFood {
   servingUnit: string
   category: string | null
   media: { bucket: string; objectPath: string; version: number } | null
+  /**
+   * Base declarada de los macros de arriba (NUT-001). OPCIONAL a proposito: ausente =
+   * "no declarada" y rige la formula historica por 100 g/ml, que es lo que asume todo el
+   * catalogo importado. Solo el seed de intercambios y los overrides de coach
+   * (specs/nutrition-food-overrides) traen `per_serving`.
+   */
+  macrosBasis?: NutritionMacrosBasis | null
 }
 
 /**
@@ -1029,12 +1038,42 @@ export interface ItemMacros {
 
 const ZERO_MACROS: ItemMacros = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 }
 
+function round1(value: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.round(n * 10) / 10 : 0
+}
+
 /**
  * Macros de un item prescrito para una cantidad/unidad. Reutiliza EXACTAMENTE el
  * motor compartido (calculateFoodItemMacros): el mismo calculo que vera el alumno.
+ *
+ * Rama `per_serving`: el catalogo tiene DOS convenciones vivas y el motor canonico solo
+ * conoce la de por-100. Un alimento con macros POR PORCION (seed de intercambios, override
+ * de coach) escalado con la formula por-100 se congela con numeros equivocados, y el error
+ * solo aparece cuando el alumno mira su plan — el snapshot ya es inmutable para entonces.
+ * El factor sale de `intakeEntryFactor`, espejo byte a byte de
+ * `private.nutrition_v2_entry_factor`: misma matematica en el freeze y en el registro.
+ *
+ * Sin base declarada (el 100% del catalogo importado) el camino queda BYTE-IDENTICO al
+ * anterior: esta funcion congela planes y no puede cambiar de resultado por un refactor.
  */
 export function computeItemMacros(food: BuilderFood, quantity: number, unit: string): ItemMacros {
   if (!Number.isFinite(quantity) || quantity <= 0) return ZERO_MACROS
+  if (food.macrosBasis === 'per_serving') {
+    const factor = intakeEntryFactor({
+      quantity,
+      unit,
+      servingSize: food.servingSize,
+      basis: 'per_serving',
+    })
+    return {
+      calories: round1(food.calories * factor),
+      proteinG: round1(food.proteinG * factor),
+      carbsG: round1(food.carbsG * factor),
+      fatsG: round1(food.fatsG * factor),
+      fiberG: food.fiberG == null ? 0 : round1(food.fiberG * factor),
+    }
+  }
   const foodsRow: FoodMacrosRow = {
     name: food.name,
     calories: food.calories,
