@@ -91,6 +91,8 @@ function toBuilderFood(row: FoodRow, override: CoachFoodOverrideValues | null): 
     fatsG: macros.fatsG,
     fiberG: macros.fiberG,
     macrosBasis: macros.macrosBasis,
+    hasOverride: macros.hasOverride,
+    originalMacros: macros.original,
     servingSize: row.serving_size,
     servingUnit: row.serving_unit ?? 'g',
     // La categoria viaja desde el catalogo: la rehidratacion de PLANTILLAS no pasa por el

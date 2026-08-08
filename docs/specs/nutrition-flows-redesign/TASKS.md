@@ -62,7 +62,7 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [x] F4 merge en freeze y rehidratacion (4 superficies, un helper) + N+1 muerto + **auditoria de `foods.macros_basis`**: 50 filas mal etiquetadas volvieron a `per_100`, 10 son `per_serving` de verdad — `660e1ef4`
   - [ ] Regen COMPLETO de `database.types.ts` (deja 13 errores en 7 archivos V1) + retirar el cast `V2ReadClient` de T1.1 — tanda propia
   - [ ] QA manual en preview (requiere push de la rama)
-- [ ] T2.2 Overrides UI: sheet editar (kcal/P/C/G + medida casera + validacion suave), badge ✎ + original tachado, filtro "Editados por mi", aviso republicar con lista alumnos, restaurar original
+- [x] T2.2 Overrides UI — hecha 2026-08-07 en **web y RN**: sheet de edicion (5 macros + medida casera + aviso suave de Atwater), badge ✎ con el catalogo tachado, restaurar original, aviso de republicar. La base declarada NO se pregunta: se hereda del alimento y se enuncia. Pendiente: filtro "Editados por mi" (va con el hub de alimentos, T2.3) y la lista de alumnos afectados en el aviso
 - [ ] T2.3 Hub Alimentos casa unica
   - [ ] Crear alimento + clasificar porciones + grupos dentro del tab (formulario UNICO de grupo)
   - [ ] Retirar `/coach/foods` (redirect al tab) — verificar 0 importadores

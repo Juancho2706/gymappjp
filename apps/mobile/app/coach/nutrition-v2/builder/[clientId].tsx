@@ -46,6 +46,7 @@ import {
 import { exchangeGroupColor, hasUnconfirmedMacros, type ExchangeGroup } from '@eva/nutrition-engine'
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
+import { FoodMacrosOverrideSheet } from '../../../../components/nutrition-v2/FoodMacrosOverrideSheet'
 import { toast } from '../../../../components/Toast'
 import { useTheme } from '../../../../context/ThemeContext'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
@@ -2407,6 +2408,7 @@ function ItemEditor({
   onSearch,
   onSaveCustomFood,
   portions,
+  scope,
 }: {
   variantKey: string
   slotKey: string
@@ -2421,10 +2423,15 @@ function ItemEditor({
     equivalence: FoodEquivalenceDraft | null,
   ) => Promise<{ ok: boolean; error?: string }>
   portions: PortionsController
+  /** Workspace del coach: lo necesita la correccion de macros (T2.2). */
+  scope: NutritionV2CoachScope | null
 }) {
   const { theme } = useTheme()
   const macros = itemMacros(item)
   const isCustom = item.food === null
+  // Sheet de correccion de macros (T2.2). Solo existe para alimentos del catalogo: un alimento
+  // libre ya tiene sus macros editables en la propia fila.
+  const [macrosSheetOpen, setMacrosSheetOpen] = useState(false)
   const patch = (p: Partial<Omit<BuilderItem, 'key'>>) =>
     dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: p })
   // "Guardar en mi catálogo" (sub-delta b): estado local del alta + aviso de mismatch de energia
@@ -2467,21 +2474,54 @@ function ItemEditor({
                 className="min-h-10 rounded-control border border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-strong"
               />
             ) : (
-              <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
-                {item.food?.name}
-              </Text>
+              <View className="flex-row items-center gap-1.5">
+                <Text className="flex-1 text-sm font-semibold text-strong" numberOfLines={2}>
+                  {item.food?.name}
+                </Text>
+                {/* Badge ✎: este alimento lleva TUS macros, no los del catalogo. */}
+                {item.food?.hasOverride ? (
+                  <Pencil color={theme.primary} size={12} accessibilityLabel="Macros corregidos por ti" />
+                ) : null}
+              </View>
             )}
           </View>
         </View>
-        <Pressable
-          accessibilityLabel="Quitar alimento"
-          accessibilityRole="button"
-          className="min-h-10 min-w-10 items-center justify-center rounded-control"
-          onPress={() => dispatch({ type: 'REMOVE_ITEM', variantKey, slotKey, itemKey: item.key })}
-        >
-          <Trash2 color={theme.destructive} size={17} />
-        </Pressable>
+        <View className="flex-row items-center">
+          {/* Corregir macros: solo alimentos del catalogo y solo con workspace resuelto. */}
+          {item.food && scope ? (
+            <Pressable
+              accessibilityLabel={`Corregir macros de ${item.food.name}`}
+              accessibilityRole="button"
+              className="min-h-10 min-w-10 items-center justify-center rounded-control"
+              onPress={() => setMacrosSheetOpen(true)}
+            >
+              <Pencil color={theme.mutedForeground} size={16} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityLabel="Quitar alimento"
+            accessibilityRole="button"
+            className="min-h-10 min-w-10 items-center justify-center rounded-control"
+            onPress={() => dispatch({ type: 'REMOVE_ITEM', variantKey, slotKey, itemKey: item.key })}
+          >
+            <Trash2 color={theme.destructive} size={17} />
+          </Pressable>
+        </View>
       </View>
+
+      {item.food && scope && macrosSheetOpen ? (
+        <FoodMacrosOverrideSheet
+          food={item.food}
+          scope={scope}
+          open={macrosSheetOpen}
+          onClose={() => setMacrosSheetOpen(false)}
+          onApplied={(macros, message) => {
+            // La correccion es del ALIMENTO: alcanza todas sus apariciones del borrador.
+            dispatch({ type: 'APPLY_FOOD_OVERRIDE', foodId: item.food!.id, macros })
+            toast.success(message)
+          }}
+        />
+      ) : null}
 
       {/* H-07 — el mismo coach editaba "200 g de arroz" con teclado en el builder y con steppers
           en el quick-edit: dos modelos de interacción para lo mismo. Se adopta el `QuantityStepper`
@@ -3063,6 +3103,7 @@ function SlotEditor({
             onSearch={onSearch}
             onSaveCustomFood={onSaveCustomFood}
             portions={portions}
+            scope={portions.scope}
           />
         ))}
       </View>

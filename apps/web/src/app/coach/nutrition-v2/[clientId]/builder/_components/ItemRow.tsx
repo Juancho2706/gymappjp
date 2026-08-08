@@ -1,6 +1,7 @@
 'use client'
 
-import { MoreVertical, MoveRight, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { MoreVertical, MoveRight, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
@@ -23,6 +24,7 @@ import { inputClass } from '../_lib/builder-ui-classes'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
+import { FoodMacrosOverrideDialog } from './FoodMacrosOverrideDialog'
 import { FreeFoodFields } from './FreeFoodFields'
 import { ItemQuantityField } from './ItemQuantityField'
 import { SubstitutionsField } from './SubstitutionsField'
@@ -92,6 +94,7 @@ export function ItemRow({
     : foodCategoryIconUrlFromName(item.customName)
   const itemLabel = displayName || 'alimento'
   const moveTargets = daySlots.filter((slot) => slot.key !== slotKey)
+  const [macrosOpen, setMacrosOpen] = useState(false)
 
   /**
    * Quitar = optimista + Deshacer (BD4). Cero confirms: preguntar por cada alimento en una
@@ -141,7 +144,20 @@ export function ItemRow({
         <div className="min-w-0 flex-1">
           {item.food ? (
             <>
-              <p className="line-clamp-2 text-sm font-semibold leading-snug text-strong">{item.food.name}</p>
+              <p className="line-clamp-2 text-sm font-semibold leading-snug text-strong">
+                {item.food.name}
+                {/* Badge ✎: este alimento lleva TUS macros, no los del catálogo. Va pegado al
+                    nombre porque es una propiedad del alimento, no de esta fila del plan. */}
+                {item.food.hasOverride ? (
+                  <span
+                    className="ml-1.5 inline-flex items-center align-middle text-primary"
+                    title="Corregiste los macros de este alimento"
+                  >
+                    <Pencil aria-hidden="true" className="h-3 w-3" />
+                    <span className="sr-only">Macros corregidos por ti</span>
+                  </span>
+                ) : null}
+              </p>
               {item.food.brand ? <p className="mt-0.5 truncate text-xs text-muted">{item.food.brand}</p> : null}
             </>
           ) : (
@@ -165,6 +181,17 @@ export function ItemRow({
             <MoreVertical aria-hidden="true" className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            {/* Solo para alimentos del catálogo: un alimento libre ya tiene sus macros
+                editables en la propia fila, no hay nada que corregir "del catálogo". */}
+            {item.food ? (
+              <>
+                <DropdownMenuItem onClick={() => setMacrosOpen(true)}>
+                  <Pencil aria-hidden="true" className="h-4 w-4" />
+                  Corregir macros…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger disabled={moveTargets.length === 0}>Mover a…</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-56">
@@ -236,6 +263,22 @@ export function ItemRow({
       ) : null}
 
       <SubstitutionsField item={item} variantKey={variantKey} slotKey={slotKey} clientId={clientId} dispatch={dispatch} />
+
+      {item.food && macrosOpen ? (
+        <FoodMacrosOverrideDialog
+          food={item.food}
+          // El builder de PLANTILLAS trabaja sin alumno: ahí no hay ficha que revalidar y el
+          // contrato de la action pide uuid o null, nunca una cadena vacía.
+          clientId={clientId || null}
+          open={macrosOpen}
+          onOpenChange={setMacrosOpen}
+          onApplied={(macros) =>
+            // La corrección es del ALIMENTO: se aplica a todas sus apariciones del borrador,
+            // no solo a esta fila. Ver `APPLY_FOOD_OVERRIDE` en el reducer.
+            dispatch({ type: 'APPLY_FOOD_OVERRIDE', foodId: item.food!.id, macros })
+          }
+        />
+      ) : null}
 
       {error?.food ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{error.food}</p> : null}
       {error?.quantity ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{error.quantity}</p> : null}

@@ -96,6 +96,19 @@ inflado (deberia rondar 25 g). La base quedo bien etiquetada; los gramos siguen 
 - [ ] Acta con evidencia + actualizar TASKS del programa padre
 - [ ] **Deuda declarada**: regen completo de `database.types.ts` (13 errores en 7 archivos V1) y con el, retirar el cast `V2ReadClient` de T1.1
 
+## T2.2 — UI del coach (hecha 2026-08-07, web + RN)
+
+- [x] Sheet de edicion en **web** (`FoodMacrosOverrideDialog`) y **RN** (`FoodMacrosOverrideSheet`): los 5 macros + medida casera (par indivisible) + aviso suave de Atwater que NUNCA bloquea (hay alimentos reales que no cierran y el coach manda)
+- [x] **La base NO se pregunta**: el sheet hereda `macrosBasis` del alimento y la enuncia en la cabecera ("Valores por 100 g" / "por porcion de 50 g"). Pedirle al coach que elija entre las dos convenciones era el camino directo a un plan congelado con la mitad de las calorias
+- [x] Badge ✎ junto al nombre + macros del catalogo tachadas dentro del sheet
+- [x] Restaurar catalogo (= DELETE), solo visible cuando hay correccion
+- [x] Aviso de republicar al guardar ("los planes ya publicados conservan los numeros anteriores")
+- [x] `APPLY_FOOD_OVERRIDE` en los DOS reducers: la correccion es del ALIMENTO, asi que alcanza todas sus apariciones del borrador — otros dias y tambien los reemplazos autorizados. Tocar solo la fila abierta mostraria dos verdades para el mismo alimento en la misma pantalla. 4 tests
+- [x] Camino de escritura RN: `/api/mobile/nutrition-v2/food-overrides` (POST/DELETE) + cliente `nutrition-v2-food-overrides.api.ts`. Mismo servicio que la web; RN no tiene server actions
+- [x] Gates: suite **5405 verde** · typecheck web · tsc mobile · `expo export --platform android` OK (bundle 18,4 MB) · eslint 0 errores · boundaries (310 archivos) · tokens
+- [ ] QA en device (Metro + USB) y en preview web
+- Fuera: filtro "Editados por mi" (vive en el hub de alimentos, T2.3) · lista de alumnos afectados en el aviso de republicar
+
 ## Fuera de esta tanda
 
-T2.2 (UI: sheet de edicion, badge ✎ con original tachado, filtro "Editados por mi", aviso de republicar con lista de alumnos, restaurar original) · overrides a nivel org · lapida `is_excluded` · override de nombre/marca/foto/porciones.
+Overrides a nivel org · lapida `is_excluded` · override de nombre/marca/foto/porciones.

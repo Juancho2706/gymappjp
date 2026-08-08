@@ -35,6 +35,10 @@ export function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
      * `per_100`. Ausente en una respuesta vieja ⇒ `null` y rige la fórmula histórica.
      */
     macrosBasis: item.macrosBasis ?? null,
+    // Corrección del coach ya aplicada por el catálogo (T2.1): los macros de arriba son los
+    // corregidos; esto solo alimenta el badge ✎ y el valor tachado.
+    hasOverride: item.hasOverride ?? false,
+    originalMacros: item.original ?? null,
     media: item.media,
   }
 }

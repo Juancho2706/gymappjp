@@ -16,6 +16,7 @@ import {
   intakeEntryFactor,
   nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDow,
+  type FoodMacroSet,
   type NutritionMacrosBasis,
   type NutritionPlanDowCell,
   type NutritionPlanDraft,
@@ -61,7 +62,24 @@ export interface BuilderFood {
    * (specs/nutrition-food-overrides) traen `per_serving`.
    */
   macrosBasis?: NutritionMacrosBasis | null
+  /**
+   * El coach corrigió los macros de este alimento (T2.2). Los macros de arriba YA son los
+   * corregidos: esto solo marca la fila con ✎ y guarda el valor del catálogo para mostrarlo
+   * tachado. Ausente = sin corrección (o respuesta anterior a T2.1).
+   */
+  hasOverride?: boolean
+  originalMacros?: FoodMacroSet | null
 }
+
+/**
+ * Lo que cambia de un alimento cuando el coach guarda (o restaura) su corrección. Es un
+ * subconjunto de `BuilderFood` a propósito: nombre, marca, foto y porción NO se tocan — la
+ * corrección es de los macros, no del alimento.
+ */
+export type BuilderFoodMacrosPatch = Pick<
+  BuilderFood,
+  'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'macrosBasis' | 'hasOverride' | 'originalMacros'
+>
 
 /**
  * Reemplazo autorizado por el coach dentro del builder (F-02). La afordancia agrega SOLO
@@ -598,6 +616,13 @@ export type BuilderAction =
   | { type: 'MOVE_ITEM'; variantKey: string; fromSlotKey: string; toSlotKey: string; itemKey: string; toIndex?: number }
   | { type: 'UPDATE_ITEM'; variantKey: string; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
   | { type: 'ADD_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; key: string; food: BuilderFood }
+  /**
+   * El coach corrigió (o restauró) los macros de un alimento del catálogo (T2.2). Toca TODAS
+   * sus apariciones del borrador —items y reemplazos, en cualquier día y franja— porque la
+   * corrección es del alimento, no de la fila: dejar una sola actualizada sería mostrarle al
+   * coach dos verdades para el mismo alimento en la misma pantalla.
+   */
+  | { type: 'APPLY_FOOD_OVERRIDE'; foodId: string; macros: BuilderFoodMacrosPatch }
   | { type: 'REMOVE_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; subKey: string }
   | { type: 'RESTORE'; state: unknown }
 
@@ -861,6 +886,25 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
           return { ...slot, items: insertItemAt(slot.items, index, moved) }
         }),
       }))
+    }
+    case 'APPLY_FOOD_OVERRIDE': {
+      const { foodId, macros } = action
+      const patch = (food: BuilderFood): BuilderFood =>
+        food.id === foodId ? { ...food, ...macros } : food
+      return {
+        ...state,
+        variants: state.variants.map((variant) => ({
+          ...variant,
+          slots: variant.slots.map((slot) => ({
+            ...slot,
+            items: slot.items.map((item) => ({
+              ...item,
+              food: item.food ? patch(item.food) : item.food,
+              substitutions: (item.substitutions ?? []).map((sub) => ({ ...sub, food: patch(sub.food) })),
+            })),
+          })),
+        })),
+      }
     }
     case 'UPDATE_ITEM':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({

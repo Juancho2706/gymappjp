@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   buildItemInsertRow,
   buildItemSubstitutionInsertRow,
+  builderReducer,
   computeItemMacros,
+  createBaseVariant,
+  createEmptyBuilderState,
+  createEmptyItem,
   type BuilderFood,
+  type BuilderState,
   type DraftItemSubstitution,
   type DraftPrescriptionItem,
 } from './draft-builder'
@@ -140,5 +145,119 @@ describe('freeze de publicacion — golden per_serving', () => {
     })
     expect(row.snapshot_calories).toBe(190)
     expect(row.snapshot_carbs_g).toBe(30)
+  })
+})
+
+describe('APPLY_FOOD_OVERRIDE — la correccion es del alimento, no de la fila', () => {
+  const OTRO_ID = '55555555-5555-4555-8555-555555555555'
+  const OTRO: BuilderFood = { ...PER_SERVING, id: OTRO_ID, name: 'Otro alimento' }
+
+  /**
+   * El MISMO alimento en dos dias distintos, mas una vez como reemplazo autorizado. Si el
+   * reducer tocara solo la fila abierta, el coach veria dos numeros para el mismo alimento en
+   * la misma pantalla.
+   */
+  function stateConElMismoAlimentoDosVeces(): BuilderState {
+    const base = createEmptyBuilderState('2026-07-20')
+    const variante = { ...createBaseVariant(), key: 'v1', slots: [
+      {
+        key: 'slot-a',
+        name: 'Desayuno',
+        startTime: '08:00',
+        items: [
+          { ...createEmptyItem('i1'), food: SIN_BASE, quantity: '100', unit: 'g' as const },
+        ],
+      },
+    ] }
+    const variante2 = { ...createBaseVariant(), key: 'v2', isDefault: false, slots: [
+      {
+        key: 'slot-b',
+        name: 'Cena',
+        startTime: '20:00',
+        items: [
+          {
+            ...createEmptyItem('i2'),
+            food: OTRO,
+            quantity: '50',
+            unit: 'g' as const,
+            substitutions: [{ key: 's1', food: SIN_BASE }],
+          },
+        ],
+      },
+    ] }
+    return { ...base, variants: [variante, variante2], activeVariantKey: 'v1' }
+  }
+
+  const PATCH = {
+    calories: 111,
+    proteinG: 1,
+    carbsG: 2,
+    fatsG: 3,
+    fiberG: 4,
+    macrosBasis: 'per_100' as const,
+    hasOverride: true,
+    originalMacros: { calories: 190, proteinG: 3, carbsG: 30, fatsG: 5, fiberG: 1 },
+  }
+
+  it('alcanza TODAS las apariciones: otro dia y tambien los reemplazos', () => {
+    const next = builderReducer(stateConElMismoAlimentoDosVeces(), {
+      type: 'APPLY_FOOD_OVERRIDE',
+      foodId: FOOD_ID,
+      macros: PATCH,
+    })
+    expect(next.variants[0].slots[0].items[0].food?.calories).toBe(111)
+    expect(next.variants[0].slots[0].items[0].food?.hasOverride).toBe(true)
+    const sub = next.variants[1].slots[0].items[0].substitutions?.[0]
+    expect(sub?.food.calories).toBe(111)
+    expect(sub?.food.originalMacros?.calories).toBe(190)
+  })
+
+  it('no toca los demas alimentos', () => {
+    const next = builderReducer(stateConElMismoAlimentoDosVeces(), {
+      type: 'APPLY_FOOD_OVERRIDE',
+      foodId: FOOD_ID,
+      macros: PATCH,
+    })
+    const otro = next.variants[1].slots[0].items[0].food
+    expect(otro?.id).toBe(OTRO_ID)
+    expect(otro?.calories).toBe(190)
+    expect(otro?.hasOverride).toBeUndefined()
+  })
+
+  it('restaurar deja el alimento sin marca y con los macros del catalogo', () => {
+    const conOverride = builderReducer(stateConElMismoAlimentoDosVeces(), {
+      type: 'APPLY_FOOD_OVERRIDE',
+      foodId: FOOD_ID,
+      macros: PATCH,
+    })
+    const restaurado = builderReducer(conOverride, {
+      type: 'APPLY_FOOD_OVERRIDE',
+      foodId: FOOD_ID,
+      macros: {
+        calories: 190,
+        proteinG: 3,
+        carbsG: 30,
+        fatsG: 5,
+        fiberG: 1,
+        macrosBasis: null,
+        hasOverride: false,
+        originalMacros: null,
+      },
+    })
+    const food = restaurado.variants[0].slots[0].items[0].food
+    expect(food?.calories).toBe(190)
+    expect(food?.hasOverride).toBe(false)
+    expect(food?.originalMacros).toBeNull()
+  })
+
+  it('el preview del item usa los macros corregidos al instante', () => {
+    const next = builderReducer(stateConElMismoAlimentoDosVeces(), {
+      type: 'APPLY_FOOD_OVERRIDE',
+      foodId: FOOD_ID,
+      macros: PATCH,
+    })
+    const item = next.variants[0].slots[0].items[0]
+    // 100 g de una fila per_100 corregida a 111 kcal => 111.
+    expect(computeItemMacros(item.food as BuilderFood, 100, 'g').calories).toBe(111)
   })
 })

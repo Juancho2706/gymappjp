@@ -27,6 +27,7 @@ import {
   nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDow,
   type FoodCatalogItem,
+  type FoodMacroSet,
   type NutritionMacrosBasis,
   type NutritionItemSubstitution,
   type NutritionPlanDowCell,
@@ -66,7 +67,19 @@ export interface BuilderFood {
    * historica por 100 g/ml. Espejo 1:1 de la web draft-builder.ts.
    */
   macrosBasis?: NutritionMacrosBasis | null
+  /**
+   * El coach corrigio los macros de este alimento (T2.2). Los de arriba YA son los corregidos;
+   * esto solo marca la fila con ✎ y guarda el valor del catalogo para el tachado.
+   */
+  hasOverride?: boolean
+  originalMacros?: FoodMacroSet | null
 }
+
+/** Lo que cambia de un alimento al guardar o restaurar su correccion. Espejo de la web. */
+export type BuilderFoodMacrosPatch = Pick<
+  BuilderFood,
+  'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'macrosBasis' | 'hasOverride' | 'originalMacros'
+>
 
 /**
  * Reemplazo autorizado por el coach dentro del builder (F-02). La afordancia agrega SOLO
@@ -604,6 +617,8 @@ export type BuilderAction =
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
   | { type: 'UPDATE_ITEM'; variantKey: string; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
   | { type: 'ADD_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; key: string; food: BuilderFood }
+  /** Correccion de macros de un alimento: alcanza TODAS sus apariciones. Espejo de la web. */
+  | { type: 'APPLY_FOOD_OVERRIDE'; foodId: string; macros: BuilderFoodMacrosPatch }
   | { type: 'REMOVE_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; subKey: string }
   | { type: 'RESTORE'; state: unknown }
 
@@ -834,6 +849,24 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...slot,
         items: slot.items.filter((item) => item.key !== action.itemKey),
       }))
+    case 'APPLY_FOOD_OVERRIDE': {
+      const { foodId, macros } = action
+      const patch = (food: BuilderFood): BuilderFood => (food.id === foodId ? { ...food, ...macros } : food)
+      return {
+        ...state,
+        variants: state.variants.map((variant) => ({
+          ...variant,
+          slots: variant.slots.map((slot) => ({
+            ...slot,
+            items: slot.items.map((item) => ({
+              ...item,
+              food: item.food ? patch(item.food) : item.food,
+              substitutions: (item.substitutions ?? []).map((sub) => ({ ...sub, food: patch(sub.food) })),
+            })),
+          })),
+        })),
+      }
+    }
     case 'UPDATE_ITEM':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
@@ -1609,6 +1642,9 @@ export function mapFoodCatalogItemToBuilderFood(item: FoodCatalogItem): BuilderF
     // Base declarada (NUT-001), espejo de la web: el catalogo la emite desde T2.1 y el dato
     // quedo auditado en 20260807230000. Ausente ⇒ formula historica por 100 g/ml.
     macrosBasis: item.macrosBasis ?? null,
+    // Correccion del coach ya aplicada por el catalogo: alimenta el badge ✎ y el tachado.
+    hasOverride: item.hasOverride ?? false,
+    originalMacros: item.original ?? null,
     media: item.media,
   }
 }
