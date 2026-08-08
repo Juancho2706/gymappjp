@@ -42,9 +42,15 @@ export default function CoachLayout() {
     void refreshCoachAccess()
   }, [segmentKey])
 
+  // Expulsar SOLO con un veredicto resuelto. `blocked` incluye "todavia no resolvi" (ver
+  // `useCoachAccess`), asi que sin este `ready` una revalidacion en vuelo mandaba a
+  // /coach/reactivate a un coach al dia; al resolver, el efecto de abajo lo devolvia a /coach/home
+  // y perdia la pantalla a la que iba (QA device 2026-08-08: la ficha de nutricion era inalcanzable).
+  // Mientras no este resuelto no se navega, pero tampoco se renderiza el arbol coach: el fail-closed
+  // vive en el `return` de abajo, que es donde corresponde.
   useEffect(() => {
-    if (blocked && !onReactivate) router.replace(REACTIVATE_PATH)
-  }, [blocked, onReactivate, router])
+    if (ready && blocked && !onReactivate) router.replace(REACTIVATE_PATH)
+  }, [ready, blocked, onReactivate, router])
 
   useEffect(() => {
     if (ready && !blocked && onReactivate) router.replace('/coach/home')

@@ -130,7 +130,12 @@ export function refreshCoachAccess(force = false): Promise<void> {
     if (!force && lastResolvedAt > 0 && Date.now() - lastResolvedAt < REVALIDATE_MS) {
         return Promise.resolve()
     }
-    setState({ ready: false })
+    // Cerrar el gate SOLO si nunca se resolvio contra servidor. Una revalidacion de fondo sobre un
+    // estado ya resuelto no puede degradar a `ready:false`: `blocked` incluye "sin resolver", asi
+    // que eso marcaba bloqueado a un coach al dia en CADA salto dentro de /coach y el layout lo
+    // expulsaba a /coach/reactivate (QA device 2026-08-08). El cambio de cuenta sigue cerrando el
+    // gate: `resetCoachAccess` vuelve `lastResolvedAt` a 0 antes de revalidar.
+    if (lastResolvedAt === 0) setState({ ready: false })
     inFlight = (async () => {
         try {
             const [profile, workspace] = await Promise.all([getCoachProfile(), getActiveCoachWorkspace()])
@@ -215,11 +220,15 @@ function wireGlobalListeners(): void {
         // El plan pudo vencer (o reactivarse) mientras la app estaba en background.
         if (s === 'active' && listeners.size > 0) void refreshCoachAccess(true)
     })
-    supabase.auth.onAuthStateChange((event) => {
+    supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_OUT') {
             resetCoachAccess()
             return
         }
+        // Otra cuenta => el estado resuelto de la anterior no puede sobrevivir ni un frame ahora que
+        // una revalidacion de fondo conserva el ultimo veredicto: se cierra el gate antes de pedir.
+        const nextUserId = session?.user.id ?? null
+        if (nextUserId && state.coachId && nextUserId !== state.coachId) resetCoachAccess()
         void refreshCoachAccess(true)
     })
 }
