@@ -1,10 +1,17 @@
+import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import { ArrowLeftRight, Trash2 } from 'lucide-react-native'
-import { foodCategoryFromName } from '@eva/nutrition-v2'
+import { ArrowLeftRight, Pencil, Trash2 } from 'lucide-react-native'
+import { foodCategoryFromName, type NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { MacroChipRow } from '../MacroChipRow'
 import { FoodThumbnail } from '../NutritionV2Kit'
+import { FoodMacrosOverrideSheet } from '../FoodMacrosOverrideSheet'
 import { useTheme } from '../../../context/ThemeContext'
-import { BUILDER_UNITS, type ItemMacros } from '../../../lib/nutrition-v2-builder'
+import {
+  BUILDER_UNITS,
+  type BuilderFood,
+  type BuilderFoodMacrosPatch,
+  type ItemMacros,
+} from '../../../lib/nutrition-v2-builder'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
 import { stepForUnit, type QuickEditItem } from '../../../lib/nutrition-v2-quick-edit'
 import { QuantityStepper } from './QuantityStepper'
@@ -52,24 +59,40 @@ export function EditableItemRow({
   macros,
   errors,
   disabled = false,
+  food = null,
+  scope = null,
   onQuantityChange,
   onUnitChange,
   onNameChange,
   onSwap,
   onRemove,
+  onOverrideApplied,
 }: {
   item: QuickEditItem
   macros: ItemMacros
   errors: Record<string, string>
   disabled?: boolean
+  /**
+   * Alimento del catalogo YA resuelto (hidratado en la fila o via `foodsById`): lo necesita la
+   * correccion de macros (T2.2). Ausente => sin lapiz, igual que en un item libre.
+   */
+  food?: BuilderFood | null
+  /** Workspace del coach; sin el no hay a donde escribir la correccion. */
+  scope?: NutritionV2CoachScope | null
   onQuantityChange: (value: string) => void
   onUnitChange: (unit: string) => void
   onNameChange: (value: string) => void
   onSwap: () => void
   onRemove: () => void
+  /** La correccion es del ALIMENTO: la pantalla la propaga a todas sus apariciones. */
+  onOverrideApplied?: (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => void
 }) {
   const { theme } = useTheme()
   const isCustom = !item.foodId && !item.recipeId
+  // Sheet de correccion de macros (T2.2), mismo componente que el wizard: un alimento libre ya
+  // tiene sus macros en la propia fila, asi que el lapiz es solo para los del catalogo.
+  const [macrosSheetOpen, setMacrosSheetOpen] = useState(false)
+  const canCorrectMacros = !isCustom && !!food && !!scope && !!onOverrideApplied
   const quantityError = errors['item.' + item.key + '.quantity']
   const nameError = errors['item.' + item.key + '.name']
   // QA2-B3a: icono del producto a la izquierda del nombre — espejo del builder web
@@ -98,9 +121,15 @@ export function EditableItemRow({
                 className="min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-strong"
               />
             ) : (
-              <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
-                {item.displayName}
-              </Text>
+              <View className="flex-row items-center gap-1.5">
+                <Text className="flex-1 text-sm font-semibold text-strong" numberOfLines={2}>
+                  {item.displayName}
+                </Text>
+                {/* Badge ✎: este alimento lleva TUS macros, no los del catalogo. */}
+                {food?.hasOverride ? (
+                  <Pencil color={theme.primary} size={12} accessibilityLabel="Macros corregidos por ti" />
+                ) : null}
+              </View>
             )}
             {!isCustom && item.brand ? (
               <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
@@ -110,6 +139,17 @@ export function EditableItemRow({
           </View>
         </View>
         <View className="flex-row items-center">
+          {canCorrectMacros ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Corregir macros de ${item.displayName || 'alimento'}`}
+              disabled={disabled}
+              onPress={() => setMacrosSheetOpen(true)}
+              className="h-11 w-11 items-center justify-center rounded-control"
+            >
+              <Pencil color={theme.mutedForeground} size={17} />
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Reemplazar ${item.displayName || 'alimento'}`}
@@ -155,6 +195,16 @@ export function EditableItemRow({
           fatsG={macros.fatsG}
         />
       </View>
+
+      {canCorrectMacros && macrosSheetOpen && food && scope ? (
+        <FoodMacrosOverrideSheet
+          food={food}
+          scope={scope}
+          open={macrosSheetOpen}
+          onClose={() => setMacrosSheetOpen(false)}
+          onApplied={(patch, message) => onOverrideApplied?.(food.id, patch, message)}
+        />
+      ) : null}
     </View>
   )
 }

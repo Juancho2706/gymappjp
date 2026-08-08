@@ -1,9 +1,14 @@
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { MoreVertical, Plus, Search, Trash2 } from 'lucide-react-native'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { MacroChipRow } from '../MacroChipRow'
 import { useTheme } from '../../../context/ThemeContext'
-import type { BuilderFood, ItemMacros } from '../../../lib/nutrition-v2-builder'
+import type {
+  BuilderFood,
+  BuilderFoodMacrosPatch,
+  ItemMacros,
+} from '../../../lib/nutrition-v2-builder'
 import {
   quickEditItemMacros,
   quickEditSlotSubtotal,
@@ -31,6 +36,8 @@ export function EditableSlotCard({
   disabled = false,
   portionTargets,
   portionGroups,
+  scope = null,
+  onFoodOverrideApplied,
   onSlotPatch,
   onRemoveSlot,
   onOpenMenu,
@@ -75,6 +82,10 @@ export function EditableSlotCard({
   onPortionAdd: (group: QuickEditPortionGroup) => void
   /** Porciones propias (FD6a): altas/edición de grupos desde el picker. Ausente = sin esa UI. */
   portionGroupAdmin?: QuickEditGroupAdmin
+  /** Workspace del coach: habilita el lápiz de corrección de macros (T2.2). */
+  scope?: NutritionV2CoachScope | null
+  /** La corrección es del ALIMENTO: la pantalla la propaga a todas sus apariciones. */
+  onFoodOverrideApplied?: (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => void
 }) {
   const { theme } = useTheme()
   const subtotal: ItemMacros = quickEditSlotSubtotal(slot, foodsById)
@@ -150,6 +161,11 @@ export function EditableSlotCard({
               macros={quickEditItemMacros(item, foodsById)}
               errors={errors}
               disabled={disabled}
+              // Misma resolucion que `quickEditItemMacros`: la fila hidratada manda, y el item
+              // base cae al mapa del catalogo. Sin alimento resuelto no hay lapiz.
+              food={item.food ?? (item.foodId ? (foodsById.get(item.foodId) ?? null) : null)}
+              scope={scope}
+              onOverrideApplied={onFoodOverrideApplied}
               onQuantityChange={(value) => onItemQuantity(item.key, value)}
               onUnitChange={(unit) => onItemUnit(item.key, unit)}
               onNameChange={(value) => onItemName(item.key, value)}

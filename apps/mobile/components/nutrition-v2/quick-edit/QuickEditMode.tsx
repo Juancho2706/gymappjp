@@ -42,12 +42,14 @@ import { NutritionCard } from '../NutritionCard'
 import { DayVariantWeekStrip } from '../DayVariantWeekStrip'
 import { NutritionMotionButton, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
 import { Sheet } from '../../Sheet'
+import { toast } from '../../Toast'
 import { useTheme } from '../../../context/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import {
   mapFoodCatalogItemToBuilderFood,
   strategyUsesSlots,
   type BuilderFood,
+  type BuilderFoodMacrosPatch,
   type NutritionV2WriteClient,
 } from '../../../lib/nutrition-v2-builder'
 import {
@@ -309,6 +311,27 @@ export function QuickEditMode({
       active = false
     }
   }, [initialState])
+
+  /**
+   * Correccion de macros de un alimento (T2.2). Alcanza TODAS sus apariciones, y hay DOS lugares
+   * que la sostienen: el `food` hidratado de cada fila (lo parchea el reducer) y el mapa del
+   * catalogo, del que leen los items base. Parchear uno solo dejaba la mitad del plan con los
+   * numeros viejos hasta recargar.
+   */
+  const handleFoodOverrideApplied = useCallback(
+    (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => {
+      setFoodsById((prev) => {
+        const current = prev.get(foodId)
+        if (!current) return prev
+        const next = new Map(prev)
+        next.set(foodId, { ...current, ...macros })
+        return next
+      })
+      dispatch({ type: 'APPLY_FOOD_OVERRIDE', foodId, macros })
+      toast.success(message)
+    },
+    [dispatch],
+  )
 
   // Carry-over de reemplazos autorizados (F-02): fetch de la version base congelada. El
   // estado del fetch gobierna el publish (ver `doPublish`): mientras no este 'loaded' no se
@@ -1092,6 +1115,8 @@ export function QuickEditMode({
                       portionTargets={portionsState.bySlot[slot.key] ?? []}
                       portionGroups={portionGroups}
                       portionGroupAdmin={portionGroupAdmin}
+                      scope={scope}
+                      onFoodOverrideApplied={handleFoodOverrideApplied}
                       onPortionStep={(targetKey, direction) =>
                         dispatchPortions({ type: 'STEP_PORTIONS', slotKey: slot.key, targetKey, direction })
                       }

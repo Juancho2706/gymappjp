@@ -86,6 +86,14 @@ export function FoodMacrosOverrideSheet({
   const warning = useMemo(() => atwaterWarning(values), [values])
   const original = food.originalMacros ?? null
 
+  // El error de validacion es del INTENTO anterior: al tocar cualquier campo deja de describir lo
+  // que hay en pantalla. Sin esto, completar los gramos que faltaban dejaba el reclamo en rojo
+  // hasta volver a apretar Guardar, y parecia que el sheet seguia bloqueado.
+  function edit(fn: () => void) {
+    setError(null)
+    fn()
+  }
+
   async function handleSave() {
     const label = householdLabel.trim()
     const grams = toNumber(householdGrams)
@@ -179,7 +187,7 @@ export function FoodMacrosOverrideSheet({
             <TextInput
               accessibilityLabel={field.label}
               value={values[field.key]}
-              onChangeText={(value) => setValues((prev) => ({ ...prev, [field.key]: value }))}
+              onChangeText={(value) => edit(() => setValues((prev) => ({ ...prev, [field.key]: value })))}
               keyboardType="decimal-pad"
               placeholderTextColor={theme.mutedForeground}
               className="min-h-11 flex-1 rounded-control border border-default bg-surface-card px-3 text-sm font-semibold text-strong"
@@ -196,7 +204,7 @@ export function FoodMacrosOverrideSheet({
             <TextInput
               accessibilityLabel="Nombre de la medida casera"
               value={householdLabel}
-              onChangeText={setHouseholdLabel}
+              onChangeText={(value) => edit(() => setHouseholdLabel(value))}
               placeholder="1 pocillo"
               maxLength={40}
               placeholderTextColor={theme.mutedForeground}
@@ -205,7 +213,7 @@ export function FoodMacrosOverrideSheet({
             <TextInput
               accessibilityLabel="Gramos de la medida casera"
               value={householdGrams}
-              onChangeText={setHouseholdGrams}
+              onChangeText={(value) => edit(() => setHouseholdGrams(value))}
               placeholder="90"
               keyboardType="decimal-pad"
               placeholderTextColor={theme.mutedForeground}
