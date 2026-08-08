@@ -52,22 +52,34 @@ con alimento, en 6 coaches). Para las mal etiquetadas, la formula por-100 de hoy
 CORRECTO; para las bien etiquetadas ("Arepa": 1 unidad) hoy congela **2,4 kcal en vez de 240**.
 No hay una sola regla que arregle las dos: es un problema de DATO, no de codigo.
 
-**Medida tomada (2026-08-07):** el contrato viaja pero el interruptor queda apagado — los mappers
-catalogo→builder (web y RN) fuerzan `macrosBasis: null`, asi que `computeItemMacros` mantiene la
-formula historica y el preview del coach no cambia. `computeItemMacros` YA sabe respetar la base
-(F1.2, con golden tests): cuando el dato este sano, encender es borrar dos lineas.
+**RESUELTO el 2026-08-07** (migracion `20260807230000_foods_macros_basis_audit.sql`). Criterio, no
+olfato:
 
-**Lo que necesita el owner decidir antes de F4:** auditar y corregir esas 60 filas (por fila: es
-por-100 o por-porcion) o retirarles la etiqueta `per_serving`. Nada de esto bloquea los overrides
-en si — el `macros_basis` del override SI es confiable (lo declara el coach y es NOT NULL) — pero
-F4 congela con la base del alimento cuando no hay override, y ahi entra el dato malo.
+1. **Cota fisica dura**: ningun alimento supera 9 kcal/g (grasa pura). Si `calories > 9 * serving_size`
+   con unidad g/ml, los macros NO PUEDEN ser de esa porcion ⇒ son por 100 g. Descarta 11 filas sin
+   discusion posible ("Aceite vegetal", "Almendras", "Whey Protein"…).
+2. **Contraste con el valor real por 100 g** para el resto (leche descremada 34 kcal, avena cocida
+   71, atun al agua 116, salmon enlatado 138, yogur griego 97…): coinciden con la fila ⇒ es por 100.
+3. Quedan **10 filas** cuyos macros SI describen la porcion: clara de huevo 50 g = 26 kcal, huevo
+   duro 1 un = 77, arepa 1 un = 240, vienesa 1 un = 91, queso chanco 25 g = 80, granola vivo 50 g =
+   215, posta 30 g = 55, hallulla y marraqueta (1 porcion de intercambio = 70 kcal).
 
-## F4 — Merge en freeze y rehidratacion (BLOQUEADA por lo de arriba)
+**50 filas volvieron a `per_100`** (2.525 → 2.475 `per_serving` en total). Efecto observable con el
+codigo de antes: CERO — todo el mundo ya las trataba como per_100. Con F4 encendido, las unicas que
+cambian de numero son las 10 legitimas: **8 items prescritos** en 6 alimentos.
 
-- [ ] F4.1 `plan-persistence.ts`: matar el N+1 (loop 1 round-trip por alimento) → un `.in('id', foodIds)` + un fetch de overrides del coach + merge con el helper de F1
-- [ ] F4.2 `macros_basis` al select en `plan-persistence.ts` y `plan-foods.data.ts` (hoy ninguno lo trae)
-- [ ] F4.3 Rehidratacion con el mismo merge: `plan-foods.data.ts` (builder + plantillas) y la 4ta copia `api/mobile/nutrition-v2/plan-templates/route.ts`
-- [ ] F4.4 Verificar CERO cambio en `snapshot_*`, day snapshot, intake y `get_nutrition_today_v2` (el merge entra antes del freeze)
+Pendiente de criterio NUTRICIONAL para el owner (no de ingenieria): "Pan hallulla" y "Pan
+marraqueta" declaran 70 kcal y 15 g de carbohidrato — una porcion de intercambio de manual — pero
+con `serving_size = 50 g`. Cincuenta gramos de marraqueta son ~145 kcal, no 70: el gramaje esta
+inflado (deberia rondar 25 g). La base quedo bien etiquetada; los gramos siguen sospechosos.
+
+## F4 — Merge en freeze y rehidratacion
+
+- [x] F4.1 `plan-persistence.ts`: N+1 muerto — el loop de un round-trip POR ALIMENTO pasa a un `.in('id', foodIds)` + una lectura de overrides `eq(coach_id).in(food_id)` + merge en memoria. Un plan de 30 items pagaba 30 viajes solo para congelar
+- [x] F4.2 `macros_basis` en los selects de `plan-persistence.ts`, `plan-foods.data.ts` y la copia movil. **Interruptor ENCENDIDO**: los mappers catalogo→builder vuelven a propagar la base (el dato quedo auditado, ver arriba)
+- [x] F4.3 Rehidratacion con el MISMO `resolveFoodMacros`: `plan-foods.data.ts` (builder + plantillas) y la 4ta copia `api/mobile/nutrition-v2/plan-templates/route.ts`, que ademas ahora emite `macrosBasis` en el payload RN. Un fallo al leer overrides NO tumba la rehidratacion: degrada al catalogo sin corregir
+- [x] F4.4 CERO cambio en `snapshot_*`, day snapshot, intake y `get_nutrition_today_v2`: el merge entra ANTES del freeze y el payload de la RPC conserva las mismas claves (verificado por los tests de `plan-persistence.version-insert`, que afirman el arbol que viaja al RPC)
+- [x] Dos tests nuevos de freeze con override: la correccion se congela en vez de los macros del catalogo (224 kcal en vez de 260) y la base del override llega al calculo
 
 ## F5 — Capa web
 
@@ -79,9 +91,10 @@ F4 congela con la base del alimento cuando no hay override, y ahi entra el dato 
 
 ## Cierre de la tanda
 
-- [ ] Suite completa + typecheck web + tsc mobile + eslint + boundaries
-- [ ] QA manual coach josefit en preview: crear override por SQL, verificar que aparece en busqueda, scanner, sugerencias y detalle; publicar plan y verificar que congela el numero corregido; alumno ve el plan sin cambios de contrato
-- [ ] Acta con evidencia (EXPLAIN, advisors, capturas) + actualizar TASKS del programa padre
+- [x] Suite completa (**5401 tests verdes**) + typecheck web + tsc mobile + eslint 0 errores + boundaries + tokens + docs:check
+- [ ] QA manual coach josefit en preview: crear override por SQL, verificar que aparece en busqueda, scanner y sugerencias; publicar plan y verificar que congela el numero corregido; alumno ve el plan sin cambios de contrato. **Requiere push a la rama** (decision del owner)
+- [ ] Acta con evidencia + actualizar TASKS del programa padre
+- [ ] **Deuda declarada**: regen completo de `database.types.ts` (13 errores en 7 archivos V1) y con el, retirar el cast `V2ReadClient` de T1.1
 
 ## Fuera de esta tanda
 

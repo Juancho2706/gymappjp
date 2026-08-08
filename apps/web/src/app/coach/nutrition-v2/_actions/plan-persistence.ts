@@ -1,7 +1,14 @@
 import 'server-only'
 
 import { z } from 'zod'
-import type { NutritionPlanDraft } from '@eva/nutrition-v2'
+import {
+  coachFoodOverrideValuesFromRow,
+  resolveFoodMacros,
+  type CoachFoodOverrideRow,
+  type CoachFoodOverrideValues,
+  type NutritionMacrosBasis,
+  type NutritionPlanDraft,
+} from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch, rateLimitNutritionCoachWrite } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -62,6 +69,7 @@ interface InsertResult extends PromiseLike<DbResult<null>> {
 }
 interface ReadChain<T> extends PromiseLike<DbResult<T[]>> {
   eq(column: string, value: unknown): ReadChain<T>
+  in(column: string, values: readonly unknown[]): ReadChain<T>
   order(column: string, options: { ascending: boolean }): ReadChain<T>
   limit(count: number): ReadChain<T>
   maybeSingle(): Promise<DbResult<T>>
@@ -199,18 +207,46 @@ interface FoodRow {
   fiber_g: number | null
   serving_size: number
   serving_unit: string | null
+  macros_basis: string | null
 }
 
-function toBuilderFood(row: FoodRow): BuilderFood {
+const FREEZE_FOOD_SELECT =
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, macros_basis'
+
+/** Override del coach (T2.1): mismas columnas que lee la rehidratacion del builder. */
+const FREEZE_OVERRIDE_SELECT =
+  'food_id, calories, protein_g, carbs_g, fats_g, fiber_g, macros_basis, household_label, household_grams'
+
+function toFreezeMacrosBasis(value: string | null | undefined): NutritionMacrosBasis | null {
+  return value === 'per_100' || value === 'per_serving' ? value : null
+}
+
+/**
+ * Fila del catalogo + correccion del coach = el alimento que se CONGELA. El merge es el helper
+ * puro compartido con la rehidratacion y con el SQL del catalogo: tres superficies, una formula.
+ */
+function toBuilderFood(row: FoodRow, override: CoachFoodOverrideValues | null): BuilderFood {
+  const macros = resolveFoodMacros(
+    {
+      calories: row.calories,
+      proteinG: row.protein_g,
+      carbsG: row.carbs_g,
+      fatsG: row.fats_g,
+      fiberG: row.fiber_g,
+      macrosBasis: toFreezeMacrosBasis(row.macros_basis),
+    },
+    override,
+  )
   return {
     id: row.id,
     name: row.name,
     brand: row.brand,
-    calories: row.calories,
-    proteinG: row.protein_g,
-    carbsG: row.carbs_g,
-    fatsG: row.fats_g,
-    fiberG: row.fiber_g,
+    calories: macros.calories,
+    proteinG: macros.proteinG,
+    carbsG: macros.carbsG,
+    fatsG: macros.fatsG,
+    fiberG: macros.fiberG,
+    macrosBasis: macros.macrosBasis,
     servingSize: row.serving_size,
     servingUnit: row.serving_unit ?? 'g',
     category: null,
@@ -550,9 +586,9 @@ const PersistRpcResultSchema = z.object({
 export async function persistAndPublishDraft(input: {
   db: NutritionV2Db
   /**
-   * Coach autenticado. Ya NO viaja a la base: la RPC deriva `created_by`/`updated_by` de
-   * `auth.uid()` server-side (NUT-034). Se conserva en la firma porque los cuatro callers lo
-   * pasan y sirve de documentacion del actor esperado.
+   * Coach autenticado. No viaja en el payload de la RPC (esa deriva `created_by`/`updated_by`
+   * de `auth.uid()` server-side, NUT-034), pero SI acota la lectura de sus correcciones de
+   * alimentos (T2.1): el override que se congela es el del coach que publica, nunca el de otro.
    */
   userId: string
   draft: NutritionPlanDraft
@@ -566,20 +602,34 @@ export async function persistAndPublishDraft(input: {
    */
   expectedCurrentVersionId?: string
 }): Promise<PublishSuccess | ActionFailure> {
-  const { db, draft, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = input
+  const { db, userId, draft, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = input
 
   // Foods de los items MÁS los referenciados por los reemplazos autorizados (F-02): un solo
   // set para resolver/congelar todo en una pasada. RLS-scoped a proposito (ver cabecera).
   const foodIds = [...new Set([...collectFoodIds(draft), ...collectSubstitutionFoodIds(draft)])]
   const foods = new Map<string, BuilderFood>()
-  for (const id of foodIds) {
-    const foodRes = await db
-      .from('foods')
-      .select<FoodRow>('id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit')
-      .eq('id', id)
-      .maybeSingle()
-    if (foodRes.error) return mapWriteError(foodRes.error, 'alimentos')
-    if (foodRes.data) foods.set(id, toBuilderFood(foodRes.data))
+  if (foodIds.length > 0) {
+    // UNA lectura para todo el plan. Antes habia un round-trip POR ALIMENTO: un plan de 30
+    // items pagaba 30 viajes a la base solo para congelar.
+    const foodsRes = await db.from('foods').select<FoodRow>(FREEZE_FOOD_SELECT).in('id', foodIds)
+    if (foodsRes.error) return mapWriteError(foodsRes.error, 'alimentos')
+
+    // Correcciones del coach sobre esos alimentos (T2.1), tambien en una sola lectura. La RLS
+    // `cfo_*` acota las filas al actor; el `coach_id` explicito es la segunda cerradura.
+    const overridesRes = await db
+      .from('coach_food_overrides')
+      .select<CoachFoodOverrideRow>(FREEZE_OVERRIDE_SELECT)
+      .eq('coach_id', userId)
+      .in('food_id', foodIds)
+    if (overridesRes.error) return mapWriteError(overridesRes.error, 'correcciones-de-alimentos')
+
+    const overrides = new Map<string, CoachFoodOverrideValues>()
+    for (const row of overridesRes.data ?? []) {
+      overrides.set(row.food_id, coachFoodOverrideValuesFromRow(row))
+    }
+    for (const row of foodsRes.data ?? []) {
+      foods.set(row.id, toBuilderFood(row, overrides.get(row.id) ?? null))
+    }
   }
 
   // Resolucion server-side de los grupos de porciones para el freeze (SPEC R2/A2). Se

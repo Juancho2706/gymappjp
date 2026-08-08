@@ -94,18 +94,28 @@ interface Captured {
 
 /**
  * DB fake minima: captura CUALQUIER insert directo (no debe haber ninguno: NUT-011 movio todo
- * el arbol a la RPC transaccional) y responde las lecturas del freeze (foods).
+ * el arbol a la RPC transaccional) y responde las lecturas del freeze.
+ *
+ * Las dos lecturas del freeze son por LOTE (`.in`) y se resuelven al await, no con
+ * `maybeSingle`: el camino viejo hacia un round-trip por alimento.
  */
-function makeDb(captured: Captured[]): NutritionV2Db {
+function makeDb(captured: Captured[], overrideRows: Record<string, unknown>[] = []): NutritionV2Db {
   return {
     from(table: string) {
       const chain: Record<string, unknown> = {}
       const self = () => chain
+      const listResult = () => {
+        if (table === 'foods') return { data: [FOOD_ROW], error: null }
+        if (table === 'coach_food_overrides') return { data: overrideRows, error: null }
+        return { data: [], error: null }
+      }
       Object.assign(chain, {
         select: self,
         eq: self,
+        in: self,
         order: self,
         limit: self,
+        then: (resolve: (v: unknown) => void) => resolve(listResult()),
         maybeSingle: async () => {
           if (table === 'foods') return { data: FOOD_ROW, error: null }
           return { data: null, error: null }
@@ -212,6 +222,75 @@ describe('persistAndPublishDraft — payload de la RPC transaccional', () => {
     const sub = item.substitutions[0]
     expect(sub.snapshot_name).toBe('Arroz')
     expect(sub).not.toHaveProperty('prescription_item_id')
+  })
+
+  it('T2.1: congela la CORRECCION del coach, no los macros del catalogo', async () => {
+    const captured: Captured[] = []
+    // El coach corrigio el arroz: 112 kcal por 100 g en vez de 130.
+    const db = makeDb(captured, [
+      {
+        food_id: FOOD,
+        calories: 112,
+        protein_g: 2.1,
+        carbs_g: 25,
+        fats_g: 0.2,
+        fiber_g: 0.3,
+        macros_basis: 'per_100',
+        household_label: null,
+        household_grams: null,
+      },
+    ])
+
+    await persistAndPublishDraft({
+      db,
+      userId: COACH,
+      draft: structuredDraft(),
+      idempotencyKey: 'idem-key-0005',
+      effectiveFrom: '2026-07-28',
+    })
+
+    const draftArg = rpcArgs(db).p_draft as {
+      variants: Array<{ mealSlots: Array<{ items: Array<Record<string, unknown>> }> }>
+    }
+    const item = draftArg.variants[0].mealSlots[0].items[0]
+    // 200 g con la correccion (112 por 100 g) => 224, no 260.
+    expect(item.snapshot_calories).toBe(224)
+    expect(item.snapshot_protein_g).toBe(4.2)
+  })
+
+  it('T2.1: una correccion por PORCION se congela con la base declarada', async () => {
+    const captured: Captured[] = []
+    // Misma fila del catalogo (serving_size 100), pero el coach declara que sus numeros son
+    // por porcion de 100 g: el factor sigue siendo 2 para 200 g. La prueba dura de la base
+    // vive en draft-builder.macros-basis.test.ts; aca se verifica que el basis LLEGA al freeze.
+    const db = makeDb(captured, [
+      {
+        food_id: FOOD,
+        calories: 100,
+        protein_g: 10,
+        carbs_g: 20,
+        fats_g: 1,
+        fiber_g: 0,
+        macros_basis: 'per_serving',
+        household_label: '1 pocillo',
+        household_grams: 90,
+      },
+    ])
+
+    await persistAndPublishDraft({
+      db,
+      userId: COACH,
+      draft: structuredDraft(),
+      idempotencyKey: 'idem-key-0006',
+      effectiveFrom: '2026-07-28',
+    })
+
+    const draftArg = rpcArgs(db).p_draft as {
+      variants: Array<{ mealSlots: Array<{ items: Array<Record<string, unknown>> }> }>
+    }
+    const item = draftArg.variants[0].mealSlots[0].items[0]
+    expect(item.snapshot_calories).toBe(200)
+    expect(item.snapshot_protein_g).toBe(20)
   })
 
   it('propaga el compare-and-swap al RPC cuando el caller manda expectedCurrentVersionId', async () => {
