@@ -1,6 +1,6 @@
 # SPEC — Overrides de macros por coach (`nutrition-food-overrides`)
 
-Sub-feature de [nutrition-flows-redesign](../nutrition-flows-redesign/SPEC.md) (T2.1 datos / T2.2 UI). Estado: **borrador para aprobacion del owner — cero codigo hasta el OK**.
+Sub-feature de [nutrition-flows-redesign](../nutrition-flows-redesign/SPEC.md) (T2.1 datos / T2.2 UI). Estado: **aprobada por el owner el 2026-08-07, sin cambios al alcance** — en ejecucion segun el [PLAN](./PLAN.md).
 
 ## Problema
 

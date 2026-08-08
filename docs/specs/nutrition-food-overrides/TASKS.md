@@ -4,15 +4,15 @@ Checklist de la [SPEC](./SPEC.md) segun el [PLAN](./PLAN.md). Convenciones del p
 
 ## Puerta
 
-- [!] **OK del owner a la SPEC** — bloquea TODO lo de abajo. Sin ese OK no se toca codigo ni DB (regla del programa: feature nueva = SPEC + PLAN + TASKS antes de codigo).
+- [x] **OK del owner a la SPEC** — dado el 2026-08-07 (sin cambios al alcance). Desbloquea F1-F5.
 
 ## F1 — Contrato puro (sin DB)
 
-- [ ] F1.1 `packages/nutrition-v2/food-overrides.ts`: tipo `CoachFoodOverride`, zod y merge puro (reemplazo TOTAL de los 5 macros, sin coalesce por campo). Molde `resolveExchangeListRows`
-- [ ] F1.2 `computeItemMacros` (`draft-builder.ts`) respeta `macrosBasis` en vez de asumir `per_100` — espejo de `intakeEntryFactor`
-- [ ] F1.3 Golden test `per_serving` del freeze (**obligatorio antes de que exista un solo override real**) + tests del merge puro
-- [ ] F1.4 `FoodCatalogItemSchema` (`packages/nutrition-v2/catalog.ts`): `macrosBasis`, `householdLabel`, `householdGrams`, `hasOverride`, `original` — todos `.nullable().optional()` (compat con builds RN cacheadas)
-- Gates F1: `pnpm test` verde · typecheck web · tsc mobile · eslint
+- [x] F1.1 `packages/nutrition-v2/food-overrides.ts`: tipo `CoachFoodOverride`, zod y merge puro (reemplazo TOTAL de los 5 macros, sin coalesce por campo). Molde `resolveExchangeListRows`. **Desvio anotado**: la medida casera SI coalesce, pero como PAR (label+gramos juntos) — un coach que solo corrige macros no debe borrar la medida del catalogo, y mezclar la etiqueta de una fuente con los gramos de la otra daria una conversion falsa
+- [x] F1.2 `computeItemMacros` respeta `macrosBasis` en vez de asumir `per_100` — espejo de `intakeEntryFactor`. **En LAS DOS copias** del builder (`draft-builder.ts` web + `apps/mobile/lib/nutrition-v2-builder.ts`): congelan los mismos `snapshot_*` y tocar una sola habria abierto drift web/RN (NUT-039). Sin base declarada el camino queda byte-identico
+- [x] F1.3 Golden test `per_serving` del freeze (**obligatorio antes de que exista un solo override real**) + tests del merge puro: `packages/nutrition-v2/food-overrides.test.ts`, `draft-builder.macros-basis.test.ts` (web), `tests/mobile-nutrition-v2-builder-macros-basis.test.ts` (espejo RN, mismos numeros a proposito)
+- [x] F1.4 `FoodCatalogItemSchema` (`packages/nutrition-v2/catalog.ts`): `macrosBasis`, `householdLabel`, `householdGrams`, `hasOverride`, `original` — todos `.nullable().optional()` (compat con builds RN cacheadas). Los mappers catalogo→builder (web y RN) ya arrastran la base; inerte hasta que F3 la emita
+- [x] Gates F1: `pnpm test` (5391, verde salvo 2 timeouts de 5 s bajo carga —`redeem-coupon-signup` e `i18n-orphans`, ambos pasan aislados y no importan nutricion) · typecheck web ✓ · tsc mobile ✓ · eslint 0 errores · boundaries ✓ · tokens ✓ — commit **c0062c83**
 
 ## F2 — Migracion en LIVE
 

@@ -2,7 +2,7 @@
 
 Plan de ejecucion de la [SPEC](./SPEC.md). Sub-feature de [nutrition-flows-redesign](../nutrition-flows-redesign/PLAN.md) (T2.1 datos / T2.2 UI).
 
-**Estado: borrador. Cero codigo hasta el OK del owner a la SPEC.**
+**Estado: SPEC aprobada por el owner el 2026-08-07. F1 cerrada; sigue F2 (migracion en LIVE).**
 
 ## Principio de orden
 
