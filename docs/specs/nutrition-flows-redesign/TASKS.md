@@ -63,10 +63,11 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [ ] Regen COMPLETO de `database.types.ts` (deja 13 errores en 7 archivos V1) + retirar el cast `V2ReadClient` de T1.1 — tanda propia
   - [ ] QA manual en preview (requiere push de la rama)
 - [x] T2.2 Overrides UI — hecha 2026-08-07 en **web y RN**: sheet de edicion (5 macros + medida casera + aviso suave de Atwater), badge ✎ con el catalogo tachado, restaurar original, aviso de republicar. La base declarada NO se pregunta: se hereda del alimento y se enuncia. Pendiente: filtro "Editados por mi" (va con el hub de alimentos, T2.3) y la lista de alumnos afectados en el aviso
-- [ ] T2.3 Hub Alimentos casa unica
+- [ ] T2.3 Hub Alimentos casa unica (SPEC [`nutrition-food-hub/`](../nutrition-food-hub/SPEC.md) primero)
   - [ ] Crear alimento + clasificar porciones + grupos dentro del tab (formulario UNICO de grupo)
+  - [ ] Rescate del filtro "Editados por mi" que T2.2 dejo huerfano (no existe en el codigo; ver SPEC H2)
   - [ ] Retirar `/coach/foods` (redirect al tab) — verificar 0 importadores
-  - [ ] Retirar `/coach/meal-groups` y `/coach/recipes` (orden owner; DB intacta) — verificar 0 importadores
+  - [ ] ~~Retirar `/coach/meal-groups` y `/coach/recipes`~~ → **RE-ALCANCE 2026-08-09**: esas rutas ya NO existen como paginas; lo que queda (`meal-groups/_actions`, `_data`, recetas) lo consume SOLO V1, y V1 no se borra. El bullet pasa a verificar + documentar (ver SPEC H1)
 - [ ] T2.4 Sustituciones FULL (SPEC `nutrition-substitution-intake/` primero): RPC/action server-validado contra substitutions del item o membership de grupo; sin requerir canRegisterFreely; estado "sustituido" en read models + adherencia; idempotencia por intencion; review adversarial pre-aplicacion
 - [ ] T2.5 Swipe ⇄ + sheet 2 bloques (autorizados / grupo) + candado items fijos; undo 6s; PWA + RN Android; cero deps nativas
 - [ ] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard
