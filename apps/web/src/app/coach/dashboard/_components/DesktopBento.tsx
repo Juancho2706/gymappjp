@@ -20,6 +20,12 @@ import { Badge } from '@/components/ui/badge'
 import { CreateClientModal } from '../../clients/CreateClientModal'
 import { EvaCountUp } from './EvaCountUp'
 import { todayLabel, flagLabel } from '../_lib/dashboard-design'
+import {
+    daysSinceSantiagoInstant,
+    getSantiagoIsoYmdForUtcInstant,
+    getTodayInSantiago,
+    timeGreetingSantiago,
+} from '@/lib/date-utils'
 import type { DashboardV2Data, ExpiringProgramItem, ActivityItemClient } from '../_data/types'
 
 interface Props {
@@ -37,20 +43,25 @@ const TONE_ICON: Record<KpiTone, string> = {
     ember: 'bg-[var(--ember-100)] text-[var(--ember-600)]',
 }
 
-/** Saludo según la hora (verbatim de desktop-coach.jsx greeting). */
+/**
+ * Saludo según la hora (verbatim de desktop-coach.jsx greeting), anclado a Santiago.
+ *
+ * EVA-NEXTJS-18: `new Date().getHours()` daba la hora del RUNTIME — UTC en el servidor,
+ * Chile en el navegador. De noche el HTML servido decía "Buenos días" y el cliente
+ * "Buenas noches" → hydration error en /coach/dashboard. Mismo origen para el día
+ * calendario (`dayLabel`, `todayKey`): cerca de medianoche chilena el UTC ya saltó.
+ */
 function greeting(): string {
-    const h = new Date().getHours()
-    return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'
+    return timeGreetingSantiago()
 }
 
 /** Etiqueta de día relativa (Hoy / Ayer / "5 jun") para la actividad reciente. */
 function dayLabel(iso: string): string {
-    const startOf = (d: Date) =>
-        new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-    const diff = Math.round((startOf(new Date()) - startOf(new Date(iso))) / 86400000)
+    const diff = daysSinceSantiagoInstant(iso)
     if (diff <= 0) return 'Hoy'
     if (diff === 1) return 'Ayer'
-    return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+    const [y, m, d] = getSantiagoIsoYmdForUtcInstant(iso).split('-').map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
 }
 
 /**
@@ -66,8 +77,8 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
     const firstName = coachName?.split(' ')[0] || 'Coach'
 
     const todayKey = (() => {
-        const d = new Date()
-        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+        const [, month, day] = getTodayInSantiago().iso.split('-')
+        return `${day}/${month}`
     })()
     const sessionsToday = data.areaData.find((p) => p.name === todayKey)?.sesiones ?? 0
 

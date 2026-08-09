@@ -1,4 +1,5 @@
 import type { AttentionFlag } from '../_data/types'
+import { formatLongDateSantiago } from '@/lib/date-utils'
 
 /**
  * Short flag labels matching the EVA design source (coach-dashboard.jsx FLAG_LABEL).
@@ -33,12 +34,14 @@ export function riskBand(score: number): RiskBand {
     return { label: 'Seguimiento', color: 'var(--text-on-dark-muted)' }
 }
 
-/** Capitalized, localized "weekday, day month" — matches the design header date. */
+/**
+ * Capitalized, localized "weekday, day month" — matches the design header date.
+ *
+ * EVA-NEXTJS-18: anclado a Santiago. Con el reloj del runtime, el servidor (UTC) y el
+ * navegador del coach (Chile) caían en días distintos cerca de medianoche y el texto no
+ * coincidía entre SSR e hidratación.
+ */
 export function todayLabel(): string {
-    const s = new Date().toLocaleDateString('es-ES', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-    })
+    const s = formatLongDateSantiago()
     return s.charAt(0).toUpperCase() + s.slice(1)
 }

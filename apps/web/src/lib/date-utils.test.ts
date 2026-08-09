@@ -6,8 +6,11 @@ import {
   getSantiagoIsoYmdForUtcInstant,
   getSantiagoUtcBoundsForDay,
   getSantiagoMonthPrefix,
+  formatLongDateSantiago,
   formatSantiagoMonthLabel,
+  getTodayInSantiago,
   nutritionMealAppliesOnIsoYmdInSantiago,
+  timeGreetingSantiago,
 } from './date-utils'
 
 describe('date-utils — nutrition day_of_week (Santiago)', () => {
@@ -148,5 +151,32 @@ describe('date-utils — formatSantiagoMonthLabel', () => {
 
   it('respeta el borde de mes en Santiago (ago-01 02:00Z → Julio 2026)', () => {
     expect(formatSantiagoMonthLabel(new Date('2026-08-01T02:00:00.000Z'))).toBe('Julio 2026')
+  })
+})
+
+/**
+ * EVA-NEXTJS-18 — Hydration Error en /coach/dashboard.
+ *
+ * El header del dashboard derivaba fecha y saludo del reloj del RUNTIME. Vercel corre en UTC
+ * y el coach está en Chile, así que el instante observado en vivo (2026-08-09T02:59Z = sábado
+ * 22:59 en Santiago) producía "Domingo, 9 de agosto · Buenos días" en el HTML del servidor y
+ * "Sábado, 8 de agosto · Buenas noches" en el navegador. Estos casos fijan el borde nocturno:
+ * mientras el resultado dependa SOLO del instante, servidor y cliente coinciden siempre.
+ */
+describe('date-utils — borde nocturno UTC vs Santiago (regresión EVA-NEXTJS-18)', () => {
+  const nocheDelSabado = new Date('2026-08-09T02:59:00.000Z')
+
+  it('22:59 en Santiago sigue siendo el día anterior, no el UTC', () => {
+    expect(formatLongDateSantiago(nocheDelSabado)).toBe('sábado, 8 de agosto')
+    expect(getTodayInSantiago(nocheDelSabado).iso).toBe('2026-08-08')
+  })
+
+  it('22:59 en Santiago saluda de noche aunque en UTC sean las 02:59', () => {
+    expect(timeGreetingSantiago(nocheDelSabado)).toBe('Buenas noches')
+  })
+
+  it('el mediodía chileno no se corre al saludo de la tarde por el offset UTC', () => {
+    // 15:30Z = 11:30 en Santiago: en UTC ya es tarde, en Chile todavía es mañana.
+    expect(timeGreetingSantiago(new Date('2026-08-08T15:30:00.000Z'))).toBe('Buenos días')
   })
 })
