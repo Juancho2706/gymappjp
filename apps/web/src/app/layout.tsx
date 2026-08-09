@@ -5,7 +5,6 @@ import {
   Space_Grotesk, Outfit, Figtree, DM_Sans, Lexend,
 } from 'next/font/google'
 import './globals.css'
-import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from 'next-themes'
@@ -146,7 +145,11 @@ export default function RootLayout({
               {children}
               <CookieConsent />
               <Toaster richColors position="bottom-center" />
-              <Analytics debug={false} />
+              {/* <Analytics /> retirado 2026-08-09: Vercel Web Analytics nunca estuvo
+                  habilitado en el proyecto, asi que el componente pedia
+                  /_vercel/insights/script.js y se comia un 404 en CADA pageview. Los
+                  eventos de producto viven en PostHog. Si algun dia se habilita en el
+                  dashboard, volver a montarlo. SpeedInsights SI responde, queda. */}
               <SpeedInsights debug={false} />
             </LanguageProvider>
           </ThemeProvider>
