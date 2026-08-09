@@ -24,10 +24,39 @@ type DB = SupabaseClient<Database>
 const ROW_COLUMNS =
   'food_id, calories, protein_g, carbs_g, fats_g, fiber_g, macros_basis, household_label, household_grams'
 
+/**
+ * Columnas de UNA PAGINA del listado "Editados por mi" (T2.3 F1): las de `ROW_COLUMNS` mas
+ * `updated_at`, que es la clave de orden. Se escribe entera en vez de concatenar: `ROW_COLUMNS`
+ * la consumen el freeze y la rehidratacion, y ninguna de las dos debe heredar una columna extra
+ * por un cambio hecho para el listado.
+ */
+const PAGE_ROW_COLUMNS =
+  'food_id, calories, protein_g, carbs_g, fats_g, fiber_g, macros_basis, household_label, household_grams, updated_at'
+
 /** Tope de una lectura por lote. El freeze de un plan nunca resuelve mas alimentos que esto. */
 const MAX_BATCH = 500
 
+/** Tope de una pagina del listado. El techo realista es decenas de overrides por coach. */
+const MAX_PAGE = 100
+
 export type CoachFoodOverrideWriteResult = { ok: true } | { ok: false; error: string }
+
+/** Fila del listado paginado: el alimento corregido + los valores del override. */
+export interface CoachFoodOverridePageRow {
+  foodId: string
+  values: CoachFoodOverrideValues
+  /** Cuando el coach toco esa correccion por ultima vez. Es la clave de orden del listado. */
+  updatedAt: string | null
+}
+
+/**
+ * Resultado DISCRIMINADO a proposito (a diferencia de las lecturas de arriba, que degradan a
+ * vacio): el listado necesita distinguir "no corregiste nada" de "la lectura fallo". Degradar
+ * un error a lista vacia le diria al coach que perdio sus correcciones.
+ */
+export type CoachFoodOverridePageResult =
+  | { ok: true; rows: CoachFoodOverridePageRow[] }
+  | { ok: false; error: string; code: string | null }
 
 function toRow(raw: unknown): CoachFoodOverrideRow {
   const row = raw as Record<string, unknown>
@@ -86,6 +115,48 @@ export async function findCoachFoodOverridesByFoodIds(
     byFoodId.set(row.food_id, coachFoodOverrideValuesFromRow(row))
   }
   return byFoodId
+}
+
+/**
+ * UNA PAGINA de los overrides del coach, mas reciente primero (T2.3 F1 — filtro "Editados por
+ * mi"). Pagina por OFFSET, no por keyset: el universo son decenas de filas por coach y el
+ * ordenamiento por `updated_at` no es unico, asi que un cursor keyset costaria mas de lo que
+ * ahorra. `food_id` desempata para que el orden sea total y la pagina 2 no repita filas.
+ *
+ * `.eq('coach_id')` explicito aunque `cfo_select_own` ya acote: la RLS es el TECHO, no el
+ * filtro. Con el cliente de un alumno esa policy tambien deja ver los overrides de SU coach, y
+ * este listado es "lo que corregi YO".
+ */
+export async function findCoachFoodOverridePage(
+  db: DB,
+  input: { coachId: string; offset: number; limit: number },
+): Promise<CoachFoodOverridePageResult> {
+  const limit = Math.min(Math.max(Math.trunc(input.limit), 1), MAX_PAGE)
+  const offset = Math.max(Math.trunc(input.offset), 0)
+
+  const { data, error } = await db
+    .from('coach_food_overrides')
+    .select(PAGE_ROW_COLUMNS)
+    .eq('coach_id', input.coachId)
+    .order('updated_at', { ascending: false })
+    .order('food_id', { ascending: true })
+    .range(offset, offset + limit - 1)
+
+  if (error) return { ok: false, error: error.message, code: error.code ?? null }
+  if (data == null) return { ok: true, rows: [] }
+
+  return {
+    ok: true,
+    rows: data.map((raw) => {
+      const row = toRow(raw)
+      const updatedAt = (raw as { updated_at?: unknown }).updated_at
+      return {
+        foodId: row.food_id,
+        values: coachFoodOverrideValuesFromRow(row),
+        updatedAt: typeof updatedAt === 'string' ? updatedAt : null,
+      }
+    }),
+  }
 }
 
 /**

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Loader2, Search, X } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { Loader2, Pencil, Search, X } from 'lucide-react'
 import { MacroChipRow, NutritionStatePanel } from '@/components/nutrition-v2'
 import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
 import {
@@ -17,10 +18,23 @@ import {
   foodCatalogItemToDetail,
   type FoodCatalogCardModel,
 } from '../_lib/food-catalog-card'
-import { searchFoodCatalogHubAction } from '../_actions/food-catalog.actions'
+import { matchesFoodQuery } from '../_lib/edited-foods'
+import {
+  listCoachEditedFoodsHubAction,
+  searchFoodCatalogHubAction,
+} from '../_actions/food-catalog.actions'
 
 const MIN_QUERY = 2
 const DEBOUNCE_MS = 400
+
+/**
+ * El filtro "Editados por mi" vive en la URL igual que el tab (`?tab=`), y por la MISMA razon:
+ * `history.replaceState` sobre `window.location.search` en vivo, nunca `router.replace` — este
+ * refetchearia el RSC de la pagina (roster + picker) por tocar un chip. El param se omite en su
+ * default (sin filtro), como hacen el tab y los filtros del roster.
+ */
+const FILTER_PARAM = 'foods'
+const FILTER_VALUE = 'editados'
 
 const VERIFICATION_TONE_CLASSES: Record<FoodVerificationTone, string> = {
   verified:
@@ -34,11 +48,31 @@ const VERIFICATION_TONE_CLASSES: Record<FoodVerificationTone, string> = {
 
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
+/**
+ * Buscador del catalogo del tab Alimentos, con dos modos de lectura EXCLUYENTES:
+ *
+ *  - normal: `search_food_catalog_v2` por nombre/marca, minimo 2 caracteres, paginado por
+ *    keyset cursor;
+ *  - "Editados por mi": la pagina de `coach_food_overrides` del coach, paginada por OFFSET, y
+ *    la busqueda por nombre se resuelve EN CLIENTE sobre el universo ya cargado (decenas de
+ *    filas) — sin minimo de caracteres, porque no hay consulta que gastar.
+ *
+ * Los dos cursores son incompatibles, asi que cambiar de modo aborta lo que este en vuelo y
+ * vacia items/cursor/offset. El guard de respuestas viejas es el propio `AbortController`
+ * compartido: una respuesta cuyo controller ya fue abortado se descarta, venga del modo que
+ * venga (comparar solo el texto de la busqueda dejaba pasar la respuesta del otro modo).
+ */
 export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: string }) {
+  const searchParams = useSearchParams()
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
+  // Solo el valor INICIAL viene de la URL (deep-link); despues manda el estado local.
+  const [editedOnly, setEditedOnly] = useState<boolean>(
+    () => searchParams.get(FILTER_PARAM) === FILTER_VALUE,
+  )
   const [items, setItems] = useState<FoodCatalogItem[]>([])
   const [cursor, setCursor] = useState<FoodCatalogCursor | null>(null)
+  const [nextOffset, setNextOffset] = useState<number | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -47,19 +81,73 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
   const [detailOpen, setDetailOpen] = useState(false)
 
   const activeController = useRef<AbortController | null>(null)
-  const latestQuery = useRef('')
+
+  /**
+   * Corta lo que este en vuelo y abre una nueva "generacion" de resultados. Baja `loadingMore`
+   * porque una respuesta descartada nunca vuelve a bajarlo, y el boton quedaba deshabilitado
+   * para siempre. Quien pagina lo vuelve a subir en la misma tanda de estado.
+   */
+  const beginRequest = useCallback(() => {
+    activeController.current?.abort()
+    const controller = new AbortController()
+    activeController.current = controller
+    setLoadingMore(false)
+    return controller
+  }, [])
+
+  const clearResults = useCallback(() => {
+    setItems([])
+    setCursor(null)
+    setNextOffset(null)
+    setHasMore(false)
+    setError(null)
+    setLoading(false)
+    setLoadingMore(false)
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [query])
 
+  /** Espeja el filtro en la URL sin navegar ni tocar el historial (patron de `?tab=`). */
+  const applyEditedOnly = useCallback((next: boolean) => {
+    setEditedOnly(next)
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (next) params.set(FILTER_PARAM, FILTER_VALUE)
+    else params.delete(FILTER_PARAM)
+    const qs = params.toString()
+    const path = window.location.pathname
+    window.history.replaceState(window.history.state, '', qs ? `${path}?${qs}` : path)
+  }, [])
+
+  // Modo filtro: primera pagina de mis correcciones. Cambiar de modo (en cualquier direccion)
+  // aborta y vacia antes de nada: los cursores keyset y offset no se pueden mezclar.
+  useEffect(() => {
+    const controller = beginRequest()
+    clearResults()
+    if (!editedOnly) return () => controller.abort()
+
+    setLoading(true)
+    void listCoachEditedFoodsHubAction({ offset: 0 }).then((res) => {
+      if (controller.signal.aborted) return
+      if (!res.ok) {
+        setError(res.error)
+        setLoading(false)
+        return
+      }
+      setItems(res.items)
+      setNextOffset(res.nextOffset)
+      setHasMore(res.hasMore)
+      setLoading(false)
+    })
+    return () => controller.abort()
+  }, [editedOnly, beginRequest, clearResults])
+
   const runSearch = useCallback(
     async (q: string) => {
-      activeController.current?.abort()
-      const controller = new AbortController()
-      activeController.current = controller
-      latestQuery.current = q
+      const controller = beginRequest()
       setLoading(true)
       setError(null)
       const res = await searchFoodCatalogHubAction({ query: q, countryCode })
@@ -77,13 +165,15 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
       setHasMore(res.hasMore)
       setLoading(false)
     },
-    [countryCode],
+    [countryCode, beginRequest],
   )
 
   useEffect(() => {
+    // En modo filtro la busqueda es local: ni consulta ni abort (abortar aca mataria la carga
+    // de la pagina de correcciones, que corre en el efecto de arriba).
+    if (editedOnly) return
     if (debounced.length < MIN_QUERY) {
       activeController.current?.abort()
-      latestQuery.current = debounced
       setItems([])
       setCursor(null)
       setHasMore(false)
@@ -92,14 +182,37 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
       return
     }
     void runSearch(debounced)
-  }, [debounced, runSearch])
+  }, [debounced, editedOnly, runSearch])
 
   const loadMore = useCallback(async () => {
-    if (!cursor || loadingMore || debounced.length < MIN_QUERY) return
-    const q = debounced
+    if (loadingMore) return
+    const controller = beginRequest()
     setLoadingMore(true)
-    const res = await searchFoodCatalogHubAction({ query: q, countryCode, cursor })
-    if (q !== latestQuery.current) return
+
+    if (editedOnly) {
+      if (nextOffset == null) {
+        setLoadingMore(false)
+        return
+      }
+      const res = await listCoachEditedFoodsHubAction({ offset: nextOffset })
+      if (controller.signal.aborted) return
+      if (!res.ok) {
+        setLoadingMore(false)
+        return
+      }
+      setItems((prev) => [...prev, ...res.items])
+      setNextOffset(res.nextOffset)
+      setHasMore(res.hasMore)
+      setLoadingMore(false)
+      return
+    }
+
+    if (!cursor || debounced.length < MIN_QUERY) {
+      setLoadingMore(false)
+      return
+    }
+    const res = await searchFoodCatalogHubAction({ query: debounced, countryCode, cursor })
+    if (controller.signal.aborted) return
     if (!res.ok) {
       setLoadingMore(false)
       return
@@ -108,11 +221,19 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
     setCursor(res.nextCursor)
     setHasMore(res.hasMore)
     setLoadingMore(false)
-  }, [cursor, loadingMore, debounced, countryCode])
+  }, [cursor, loadingMore, debounced, countryCode, editedOnly, nextOffset, beginRequest])
+
+  // En modo filtro el texto acota lo YA cargado, sin debounce ni minimo de caracteres.
+  const visibleItems = useMemo(() => {
+    if (!editedOnly) return items
+    const q = query.trim()
+    if (q === '') return items
+    return items.filter((item) => matchesFoodQuery(item, q))
+  }, [editedOnly, items, query])
 
   const cards = useMemo<Array<{ model: FoodCatalogCardModel; item: FoodCatalogItem }>>(
-    () => items.map((item) => ({ model: foodCatalogItemToCardModel(item, SUPABASE_BASE), item })),
-    [items],
+    () => visibleItems.map((item) => ({ model: foodCatalogItemToCardModel(item, SUPABASE_BASE), item })),
+    [visibleItems],
   )
 
   const openDetail = useCallback((item: FoodCatalogItem) => {
@@ -120,8 +241,11 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
     setDetailOpen(true)
   }, [])
 
-  const showInvite = debounced.length < MIN_QUERY
+  const showInvite = !editedOnly && debounced.length < MIN_QUERY
   const showEmpty = !showInvite && !loading && cards.length === 0 && !error
+  // Sin correcciones todavia vs. correcciones que el texto local dejo fuera: son dos vacios
+  // distintos y el coach necesita saber cual de los dos esta mirando.
+  const showNoEdited = editedOnly && showEmpty && items.length === 0
 
   return (
     <div className="space-y-3">
@@ -132,8 +256,14 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
           inputMode="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar alimento por nombre o marca…"
-          aria-label="Buscar alimento en el catalogo"
+          placeholder={
+            editedOnly ? 'Filtrar entre tus editados…' : 'Buscar alimento por nombre o marca…'
+          }
+          aria-label={
+            editedOnly
+              ? 'Filtrar entre los alimentos que editaste'
+              : 'Buscar alimento en el catalogo'
+          }
           className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-10 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
         />
         {loading ? (
@@ -150,6 +280,23 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
         ) : null}
       </div>
 
+      <div role="group" aria-label="Filtrar el catalogo" className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          aria-pressed={editedOnly}
+          onClick={() => applyEditedOnly(!editedOnly)}
+          className={
+            'inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border px-3 text-xs font-semibold transition-colors ' +
+            (editedOnly
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border-default bg-surface-card text-muted hover:text-strong')
+          }
+        >
+          <Pencil aria-hidden="true" className="size-3.5" />
+          Editados por mí
+        </button>
+      </div>
+
       {error ? (
         <NutritionStatePanel icon="error" tone="danger" illustration="error-amable" title="No se pudo buscar" description={error} />
       ) : showInvite ? (
@@ -159,12 +306,23 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
           title="Busca en el catalogo"
           description="Escribe al menos 2 caracteres para encontrar alimentos por nombre o marca."
         />
+      ) : showNoEdited ? (
+        <NutritionStatePanel
+          icon="empty"
+          illustration="catalogo-vacio"
+          title="Todavía no corregiste ningún alimento"
+          description="Cuando corrijas los macros de un alimento del catálogo, aparecerá acá con el ícono ✎. Tus correcciones solo te afectan a ti y a tus planes nuevos."
+        />
       ) : showEmpty ? (
         <NutritionStatePanel
           icon="empty"
           illustration="sin-resultados"
           title="Sin resultados"
-          description="No encontramos alimentos para esa busqueda. Prueba con otro nombre o marca."
+          description={
+            editedOnly
+              ? 'Ninguno de tus alimentos editados coincide con ese nombre o marca.'
+              : 'No encontramos alimentos para esa busqueda. Prueba con otro nombre o marca.'
+          }
         />
       ) : (
         <ul className="space-y-2">
@@ -200,7 +358,20 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
 
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <p className="truncate text-sm font-semibold text-strong">{model.name}</p>
+                    <p className="truncate text-sm font-semibold text-strong">
+                      {model.name}
+                      {/* Badge ✎: este alimento lleva TUS macros, no los del catálogo (mismo
+                          patron que ItemRow del builder). */}
+                      {model.hasOverride ? (
+                        <span
+                          className="ml-1.5 inline-flex items-center align-middle text-primary"
+                          title="Corregiste los macros de este alimento"
+                        >
+                          <Pencil aria-hidden="true" className="h-3 w-3" />
+                          <span className="sr-only">Macros corregidos por ti</span>
+                        </span>
+                      ) : null}
+                    </p>
                     <span
                       className={
                         'inline-flex h-5 shrink-0 items-center rounded-pill border px-1.5 text-[10px] font-bold ' +

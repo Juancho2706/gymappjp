@@ -11,13 +11,14 @@ Estado: **Revision de Fable hecha el 2026-08-09: plan APROBADO con correcciones 
 
 ## F1 — Filtro "Editados por mi"
 
-- [ ] Funcion de repo `findCoachFoodOverridePage` (offset, constante de columnas propia — no mutar `ROW_COLUMNS`)
-- [ ] Action de lectura nueva en `_actions/food-catalog.actions.ts` con `authorizeHubCoach` + hidratacion batch `.from('foods').in('id', ids)` + `resolveFoodMacros`
-- [ ] Logica pura de filtrado/mapeo + test unitario (catalogo mezclado → solo overrides del coach activo; sin mock de Supabase)
-- [ ] Control de filtro en `FoodCatalogBrowser`, estado en URL via `history.replaceState` (mecanismo del `?tab=`); toggle resetea items/cursor/hasMore y aborta requests en vuelo
-- [ ] `hasOverride` agregado a `FoodCatalogCardModel` + badge ✎ (patron `ItemRow.tsx:151`); predicado estricto `=== true`
-- [ ] Verificar que NO dispara republicacion ni toca planes publicados
-- [ ] Gate: typecheck + test + `check:nutrition-v2-boundaries`
+- [x] Funcion de repo `findCoachFoodOverridePage` (offset, `PAGE_ROW_COLUMNS` propia, resultado discriminado ok/error para no degradar fallo a "no corregiste nada")
+- [x] Action `listCoachEditedFoodsHubAction` con `authorizeHubCoach` (que ahora devuelve `coachId` del actor) + hidratacion batch `.in('id', ids)` + `resolveFoodMacros`; salida validada con Zod
+- [x] Modulo puro `_lib/edited-foods.ts` (mapper + predicado `=== true` + `matchesFoodQuery` sin acentos) + 15 tests sin mock de Supabase
+- [x] Chip "Editados por mí" en `FoodCatalogBrowser` (`?foods=editados` via `history.replaceState`); toggle aborta y vacia; busqueda local en modo filtro; 2 estados vacios distintos
+- [x] `hasOverride` en `FoodCatalogCardModel` + badge ✎ (patron ItemRow); de paso `basisLabel` ya no miente en filas `per_serving`
+- [x] Lectura pura verificada: sin `revalidatePath`, no toca planes publicados
+- [x] Gate: boundaries verde (312 archivos/8 raices), tsc web verde, vitest 1028 tests verdes (76 archivos), eslint verde. Pendiente: QA visual navegador (desktop/360px) — owner
+- [x] Bonus: fix de bug preexistente (`loadingMore` quedaba pegado si una busqueda nueva superaba al "Cargar mas")
 
 ## F2 — Crear alimento en el tab
 
@@ -45,7 +46,7 @@ Estado: **Revision de Fable hecha el 2026-08-09: plan APROBADO con correcciones 
 
 Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se rompe.
 
-- [ ] **Puerta previa (revision 2026-08-09):** QA owner de F2/F3 + conteo LIVE de foods invisibles para el RPC (`rejected` o pais no CL/null) + decision owner de paridad de navegacion (ver PLAN)
+- [ ] **Puerta previa (revision 2026-08-09):** QA owner de F2/F3 + decision owner de paridad de navegacion (ver PLAN). El conteo LIVE ya se hizo (2026-08-09): **0 alimentos invisibles para el RPC** — 4.649 foods, 24 de coach, cero `rejected` y cero con pais distinto de CL en toda la tabla. Ese bloqueante queda limpio; re-verificar con el mismo SELECT si F5 se ejecuta semanas despues
 - [ ] Mudar `_actions/food-equivalence.actions.ts` y `_actions/exchange-lists.actions.ts` al hub (`ClassifyFoodSheet.tsx:23` depende del primero); `FoodEquivalenceFields.tsx` viaja con los sheets
 - [ ] Correr `pnpm check:nutrition-v2-boundaries` tras la mudanza (verificado 2026-08-09 que no salta; correr igual)
 - [ ] La comparacion `FoodBrowser` vs `FoodCatalogBrowser` YA ESTA HECHA (revision 2026-08-09, ver PLAN puerta previa); cubrir en el tab lo que el owner decida ANTES de borrar
@@ -68,3 +69,4 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 |-------|------|--------|-------|-------|
 | 2026-08-09 | F0 | (este commit) | docs:check | SPEC/PLAN/TASKS. Dos hallazgos que cambian el alcance escrito: las rutas a retirar ya no existen (H1) y T2.2 dejo huerfano el filtro "Editados por mi" (H2). |
 | 2026-08-09 | F0 revision | (este commit) | docs:check | Revision de Fable: plan aprobado con correcciones. `FoodSearch.tsx` sobrevive a F5; boundaries no salta con la mudanza (verificado); mecanismo F1 = segundo data path offset sobre `coach_food_overrides`; puerta previa a F5 (conteo LIVE + paridad navegacion). Rama confirmada `rnmobiledenuevo` (specs cherry-picked desde master). |
+| 2026-08-09 | F1 | (este commit) | boundaries + tsc web + vitest 1028/1028 + eslint | Filtro "Editados por mí" completo: repo paginado + action + modulo puro con 15 tests + chip con URL state + badge ✎ + fix basisLabel per_serving. Conteo LIVE puerta F5: 0 alimentos invisibles para el RPC. Pendiente owner: QA visual desktop/360px. |

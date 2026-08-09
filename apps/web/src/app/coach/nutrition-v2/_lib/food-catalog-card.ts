@@ -35,8 +35,14 @@ export interface FoodCatalogCardModel {
   thumbnailUrl: string | null
   /** Icono estatico de categoria (fallback garantizado cuando no hay thumbnail). */
   categoryIconUrl: string
-  /** Base de las macros mostradas ("por 100 g" / "por 100 ml"). */
+  /** Base de las macros mostradas ("por 100 g" / "por 30 g" para filas `per_serving`). */
   basisLabel: string
+  /**
+   * El coach corrigio los macros de este alimento (badge ✎). Estricto contra `true`: en el
+   * contrato el campo es nullable y ausente significa "el catalogo no aplico merge", NO
+   * "sin override".
+   */
+  hasOverride: boolean
   /** Macros compactas ya formateadas para la card. */
   calories: string
   proteinG: string
@@ -80,7 +86,15 @@ export function foodCatalogItemToCardModel(
 ): FoodCatalogCardModel {
   const source = getFoodSourceAttribution(item.source)
   const verification = getFoodVerificationLabel(item.verificationStatus)
-  const basisLabel = isLiquidUnit(item.servingUnit) ? 'por 100 ml' : 'por 100 g'
+  // NUT-001: el catalogo tiene DOS convenciones vivas. Las filas `per_serving` (seed de
+  // intercambios) traen macros de la porcion, no de 100 g — imprimir "por 100 g" ahi es una
+  // mentira visual. Sin base declarada se mantiene la regla historica (per_100), nunca se
+  // inventa la otra.
+  const unitLabel = isLiquidUnit(item.servingUnit) ? 'ml' : 'g'
+  const basisLabel =
+    item.macrosBasis === 'per_serving'
+      ? `por ${fmt(item.servingSize)} ${unitLabel}`
+      : `por 100 ${unitLabel}`
   const packageLabel =
     item.packageQuantity != null && item.packageUnit
       ? `${fmt(item.packageQuantity, 0)} ${item.packageUnit}`
@@ -97,6 +111,7 @@ export function foodCatalogItemToCardModel(
     thumbnailUrl: resolveFoodMediaUrl(item.media, supabaseBaseUrl),
     categoryIconUrl: foodCategoryIconUrl(item.category),
     basisLabel,
+    hasOverride: item.hasOverride === true,
     calories: fmt(item.calories, 0),
     proteinG: fmt(item.proteinG),
     carbsG: fmt(item.carbsG),

@@ -4,8 +4,10 @@ import type { CoachFoodOverrideValues } from '@eva/nutrition-v2'
 import {
   deleteCoachFoodOverride,
   findCoachFoodOverride,
+  findCoachFoodOverridePage,
   findCoachFoodOverridesByFoodIds,
   upsertCoachFoodOverride,
+  type CoachFoodOverridePageResult,
   type CoachFoodOverrideWriteResult,
 } from '@/infrastructure/db/coach-food-overrides.repository'
 
@@ -42,6 +44,22 @@ export async function getCoachFoodOverridesFor(
   foodIds: readonly string[],
 ): Promise<Map<string, CoachFoodOverrideValues>> {
   return findCoachFoodOverridesByFoodIds(db, { coachId: actor.coachId, foodIds })
+}
+
+/**
+ * Una pagina de MIS overrides, mas reciente primero (filtro "Editados por mi" del hub).
+ * Lectura pura: no propaga a planes publicados ni republica nada.
+ */
+export async function getCoachFoodOverridePage(
+  db: DB,
+  actor: CoachFoodOverrideActor,
+  page: { offset: number; limit: number },
+): Promise<CoachFoodOverridePageResult> {
+  return findCoachFoodOverridePage(db, {
+    coachId: actor.coachId,
+    offset: page.offset,
+    limit: page.limit,
+  })
 }
 
 /**
