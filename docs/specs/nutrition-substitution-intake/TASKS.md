@@ -47,15 +47,33 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F2 — Guard de autorizacion + fix del tope de cantidad (riesgo ALTO, commit propio)
 
-- [ ] `private.nutrition_v2_assert_substitution_authorized` (nueva, `stable security definer`, `revoke all`)
-- [ ] `create or replace record_nutrition_intake_v2` (17 args, base verbatim, unico delta el guard)
-- [ ] `create or replace correct_nutrition_intake_v2` (18 args, base verbatim, unico delta `p_check_quantity`)
-- [ ] Guard corre tambien en la delegacion desde `correct_` (fuera del `if not v_delegated`) y **sin excepcion por rol** (aplica al coach)
-- [ ] `source = 'substitution'` sin `prescription_item_id` ⇒ 42501
-- [ ] tx-rollback de los **7** casos del PLAN antes de aplicar (incluye: correccion-sustitucion con `canAdjust=false` **pasa**, correccion normal con `canAdjust=false` **sigue fallando**)
-- [ ] Advisors despues
-- [ ] `pg_get_functiondef('get_nutrition_today_v2')` identico antes/despues (criterio 9)
-- [ ] Rollback documentado en la migracion (re-aplicar `20260728130000`)
+- [x] Aplicada en LIVE 2026-08-09, version **`20260809230833`**
+- [x] `private.nutrition_v2_assert_substitution_authorized` (nueva, `stable security definer`, `revoke all`; verificado post-apply: `authenticated` **sin** EXECUTE)
+- [x] `create or replace record_nutrition_intake_v2` (17 args, base verbatim de `20260728130000:274-509`, unico delta el guard)
+- [x] `create or replace correct_nutrition_intake_v2` (18 args, base verbatim de `20260728130000:528-674`, unico delta `p_check_quantity`)
+- [x] Guard corre tambien en la delegacion desde `correct_` (fuera del `if not v_delegated`) y **sin excepcion por rol** (aplica al coach) — casos 7 y 8
+- [x] `source = 'substitution'` sin `prescription_item_id` ⇒ 42501 — caso 4
+- [x] **Snapshot previo** registrado antes de tocar nada: `md5(record_) = 2ef5dc2be2de20c0dd77dc116ae30f4b` (6.963 chars), `md5(correct_) = e84fadb6632ac5cd11d79ef99c8f85af` (3.749 chars), `md5(get_nutrition_today_v2) = 732f641a7a137b34b395343e82ecff55`. Confirmado que las definiciones vivas eran las de `20260728130000` (llevan la marca de delegacion y el guard NUT-009) ⇒ base verbatim correcta
+- [x] **tx-rollback de 9 casos ANTES de aplicar** (JWT reales; alumna `cea1b430` con `canRegisterFreely = false` **y** `canAdjustPrescribedQuantity = false`, que es la combinacion real en LIVE):
+
+  | # | Caso | Resultado |
+  |---|---|---|
+  | 1 | sustitucion autorizada (con `canRegisterFreely = false`) | **OK** — el objetivo de T2.4 |
+  | 2 | mismo item, alimento NO autorizado | 42501 `nutrition_v2_substitution_not_authorized` |
+  | 3 | item de otro alumno | 42501 (lo ataja el guard de franja, antes que el nuevo) |
+  | 4 | `substitution` sin `prescription_item_id` | 42501 `…_not_authorized:missing_item` |
+  | 5 | correccion-sustitucion con `canAdjust = false` | **OK** — el bloqueo de B1, resuelto |
+  | 6 | correccion NORMAL con `canAdjust = false` | 42501 `quantity_adjustment` — no se aflojo de mas |
+  | 7 | delegacion desde `correct_` con alimento no autorizado | 42501 `…_not_authorized` |
+  | 8 | coach del pool con sustitucion no autorizada | 42501 `…_not_authorized` |
+  | 9 | intake prescrito normal | **OK** — sin regresion |
+
+- [x] Verificado tras el rollback: el helper **no existia** y los md5 de `record_`/`correct_` seguian intactos; **0** filas `f2test-%` en `nutrition_intake_entries`
+- [x] Matriz **repetida contra las funciones ya aplicadas** (A-E, tambien en transaccion con rollback): sustitucion autorizada OK · alimento no autorizado 42501 · correccion-sustitucion con `canAdjust=false` OK · intake prescrito normal OK · **registro libre con `canRegisterFreely=false` sigue devolviendo 42501 `free_registration`**
+- [x] `pg_get_functiondef('get_nutrition_today_v2')` **byte-identica** antes y despues (criterio 9): `732f641a7a137b34b395343e82ecff55` en ambos lados
+- [x] Advisors de seguridad: **87 hallazgos antes, 87 despues, cero nuevos y cero desaparecidos** (diff por `cache_key`). El helper privado no aparece: esta revocado
+- [x] Rollback documentado en la migracion (re-aplicar `20260728130000` + `drop function` del helper)
+- [x] Una sola version de cada firma en `pg_proc` (sin duplicacion por sobrecarga)
 
 ## F3 — Boundary compartido
 
