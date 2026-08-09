@@ -27,6 +27,18 @@ export function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
     category: item.category,
+    /**
+     * Base declarada (NUT-001). El catálogo la emite desde T2.1 y el builder la respeta: sin
+     * ella, un alimento con macros POR PORCIÓN ("Arepa": 1 unidad = 240 kcal) se previsualiza
+     * y se congela como 2,4. El dato quedó auditado en `20260807230000` — solo 10 filas del
+     * catálogo son realmente `per_serving`; las otras 50 estaban mal etiquetadas y volvieron a
+     * `per_100`. Ausente en una respuesta vieja ⇒ `null` y rige la fórmula histórica.
+     */
+    macrosBasis: item.macrosBasis ?? null,
+    // Corrección del coach ya aplicada por el catálogo (T2.1): los macros de arriba son los
+    // corregidos; esto solo alimenta el badge ✎ y el valor tachado.
+    hasOverride: item.hasOverride ?? false,
+    originalMacros: item.original ?? null,
     media: item.media,
   }
 }

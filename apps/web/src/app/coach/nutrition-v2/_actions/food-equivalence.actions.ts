@@ -97,7 +97,8 @@ export async function setFoodExchangeEquivalenceAction(input: unknown): Promise<
     portionLabel: equivalence.exchangePortionLabel,
   })
 
-  revalidatePath('/coach/foods')
+  // T2.3 F5: `/coach/foods` dejó de existir (hoy solo redirige); la superficie propia es el hub.
+  revalidatePath('/coach/nutrition-v2')
   revalidatePath('/coach/nutrition-plans')
   return { success: true }
 }

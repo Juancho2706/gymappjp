@@ -3,9 +3,10 @@
 /**
  * Server actions de las LISTAS de equivalencia por grupo (F2 — specs/nutrition-exchange-lists).
  *
- * Superficie: la sección "Porciones" de `/coach/foods`. Hasta F1 la única entrada a esta
- * gestión estaba enterrada en el builder de un alumno concreto, así que un coach sin alumnos
- * no podía llegar nunca.
+ * Superficie: el tab "Alimentos" del hub (`/coach/nutrition-v2?tab=alimentos`), vía
+ * `ClassifyFoodFlow`. Nació en la sección "Porciones" de `/coach/foods`, ruta retirada en
+ * T2.3 F5; el archivo se mudó con ella. Hasta F1 la única entrada a esta gestión estaba
+ * enterrada en el builder de un alumno concreto, así que un coach sin alumnos no llegaba nunca.
  *
  * Autorización en capas, ninguna en la UI:
  *  1. sesión propia (`auth.getUser()`); el `coachId` sale del token, jamás del payload;
@@ -67,8 +68,10 @@ async function resolveActor(): Promise<Actor | null> {
   }
 }
 
+// T2.3 F5: `/coach/foods` dejó de existir (hoy solo redirige), así que la superficie propia
+// pasa a ser el hub. `/coach/nutrition-plans` sigue porque V1 lee las mismas listas.
 function revalidateSurfaces() {
-  revalidatePath('/coach/foods')
+  revalidatePath('/coach/nutrition-v2')
   revalidatePath('/coach/nutrition-plans')
 }
 

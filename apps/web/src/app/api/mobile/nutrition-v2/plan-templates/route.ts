@@ -1,6 +1,13 @@
 import { NextRequest } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { NutritionV2CoachScopeSchema } from '@eva/nutrition-v2'
+import {
+  NutritionV2CoachScopeSchema,
+  coachFoodOverrideValuesFromRow,
+  resolveFoodMacros,
+  type CoachFoodOverrideRow,
+  type CoachFoodOverrideValues,
+  type NutritionMacrosBasis,
+} from '@eva/nutrition-v2'
 import type { Database } from '@/lib/database.types'
 // Import server-side puro (el modulo NO es 'use client' y solo depende de `draft-builder`, que a su
 // vez es zod + motor compartido): asi el criterio de "que alimentos referencia una plantilla" tiene
@@ -72,7 +79,12 @@ async function gateCoach(request: NextRequest, scope: unknown) {
 // a "no hay alimentos" convertiria cada item de catalogo en un item libre SIN macros, y publicar
 // escribiria ese plan mutilado.
 
-const FOOD_SELECT = 'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit'
+const FOOD_SELECT =
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, macros_basis'
+
+/** Override del coach (T2.1). Mismas columnas que la rehidratacion web: una sola definicion. */
+const OVERRIDE_SELECT =
+  'food_id, calories, protein_g, carbs_g, fats_g, fiber_g, macros_basis, household_label, household_grams'
 
 interface FoodRow {
   id: string
@@ -85,17 +97,23 @@ interface FoodRow {
   fiber_g: number | null
   serving_size: number
   serving_unit: string | null
+  macros_basis: string | null
 }
 
 type FoodQueryResult = { data: FoodRow[] | null; error: { message: string } | null }
+type OverrideQueryResult = { data: CoachFoodOverrideRow[] | null; error: { message: string } | null }
 
 // El cliente tipado no conoce todas las columnas nuevas del catalogo: misma tactica minima que
 // `plan-foods.data.ts` / `item-substitutions.data.ts`.
 interface FoodReadChain extends PromiseLike<FoodQueryResult> {
   in(column: string, values: readonly string[]): FoodReadChain
 }
+interface OverrideReadChain extends PromiseLike<OverrideQueryResult> {
+  in(column: string, values: readonly string[]): OverrideReadChain
+}
 interface FoodReadDb {
-  from(table: string): { select(columns: string): FoodReadChain }
+  from(table: 'foods'): { select(columns: string): FoodReadChain }
+  from(table: 'coach_food_overrides'): { select(columns: string): OverrideReadChain }
 }
 
 /** Alimento en el cable: lo minimo que necesita el port RN de `builderStateFromTemplateDraft`. */
@@ -110,6 +128,8 @@ interface TemplateFoodPayload {
   fiberG: number | null
   servingSize: number
   servingUnit: string
+  /** Base declarada de los macros de arriba (T2.1). El port RN la respeta al recalcular. */
+  macrosBasis: NutritionMacrosBasis | null
 }
 
 async function templateFoods(
@@ -119,7 +139,8 @@ async function templateFoods(
   const ids = [...new Set(foodIds.filter((id) => typeof id === 'string' && id !== ''))]
   if (ids.length === 0) return { complete: true, foods: {} }
   try {
-    const { data, error } = await (db as unknown as FoodReadDb).from('foods').select(FOOD_SELECT).in('id', ids)
+    const reader = db as unknown as FoodReadDb
+    const { data, error } = await reader.from('foods').select(FOOD_SELECT).in('id', ids)
     if (error || !data) {
       console.error('nutrition_v2_api_read', {
         source: 'mobile_template_foods',
@@ -128,19 +149,51 @@ async function templateFoods(
       })
       return { complete: false, foods: {} }
     }
+
+    // Correcciones del coach en UNA lectura, acotadas por la RLS `cfo_*` a la sesion. Un fallo
+    // aca no tumba la plantilla: se degrada al catalogo sin corregir.
+    const overridesRes = await reader.from('coach_food_overrides').select(OVERRIDE_SELECT).in('food_id', ids)
+    const overrides = new Map<string, CoachFoodOverrideValues>()
+    if (overridesRes.error) {
+      console.error('nutrition_v2_api_read', {
+        source: 'mobile_template_food_overrides',
+        count: ids.length,
+        message: overridesRes.error.message,
+      })
+    } else {
+      for (const row of overridesRes.data ?? []) {
+        overrides.set(row.food_id, coachFoodOverrideValuesFromRow(row))
+      }
+    }
+
     const foods: Record<string, TemplateFoodPayload> = {}
     for (const row of data) {
+      // El MISMO merge puro que el freeze y la rehidratacion web: esta es la cuarta copia del
+      // camino, y lo unico que impide que las cuatro se separen es compartir la formula.
+      const macros = resolveFoodMacros(
+        {
+          calories: row.calories,
+          proteinG: row.protein_g,
+          carbsG: row.carbs_g,
+          fatsG: row.fats_g,
+          fiberG: row.fiber_g,
+          macrosBasis:
+            row.macros_basis === 'per_100' || row.macros_basis === 'per_serving' ? row.macros_basis : null,
+        },
+        overrides.get(row.id) ?? null,
+      )
       foods[row.id] = {
         id: row.id,
         name: row.name,
         brand: row.brand,
-        calories: row.calories,
-        proteinG: row.protein_g,
-        carbsG: row.carbs_g,
-        fatsG: row.fats_g,
-        fiberG: row.fiber_g,
+        calories: macros.calories,
+        proteinG: macros.proteinG,
+        carbsG: macros.carbsG,
+        fatsG: macros.fatsG,
+        fiberG: macros.fiberG,
         servingSize: row.serving_size,
         servingUnit: row.serving_unit ?? 'g',
+        macrosBasis: macros.macrosBasis,
       }
     }
     // Un alimento que ya no se puede leer (borrado / fuera de scope) NO es un fallo: el adaptador

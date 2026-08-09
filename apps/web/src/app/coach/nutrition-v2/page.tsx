@@ -83,6 +83,7 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
       actions={<NewPlanPickerButton roster={pickerRoster} hasMore={initialRoster.hasMore} />}
     >
       <NutritionHubTabs
+        coachId={user.id}
         roster={
           <HubRoster
             items={hub.items}

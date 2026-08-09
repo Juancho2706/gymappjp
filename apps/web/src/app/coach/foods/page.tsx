@@ -1,74 +1,27 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, Apple } from 'lucide-react'
-import { getFoodLibrary } from '@/app/coach/nutrition-plans/_data/nutrition-coach.queries'
-import { FoodBrowser } from './_components/FoodBrowser'
-import { AddFoodSheet } from './_components/AddFoodSheet'
-import { ClassifyFoodSheet } from './_components/ClassifyFoodSheet'
-import { ExchangePortionsSection } from './_components/ExchangePortionsSection'
-import { getCoachFoodsUser } from './_data/foods.queries'
-import { createClient } from '@/lib/supabase/server'
-import { resolveCoachScope } from '@/services/auth/coach-scope.service'
-import { getExchangeGroups } from '@/app/coach/nutrition-plans/_data/exchange.queries'
 
-export default async function CoachFoodsPage() {
-  const user = await getCoachFoodsUser()
-  if (!user) redirect('/login')
+/**
+ * T2.3 F5 — `/coach/foods` dejó de ser una pantalla propia.
+ *
+ * Todo lo que hacía (navegar el catálogo, crear un alimento, clasificarlo en un grupo y
+ * definir sus porciones) vive ahora en el tab "Alimentos" del hub de nutrición, con un solo
+ * navegador en vez de dos. La ruta queda como puerta de compatibilidad: enlaces viejos,
+ * favoritos y correos siguen aterrizando donde corresponde.
+ *
+ * Es `redirect` (307 temporal) y NO `permanentRedirect`: el rollback de esta fase es un revert
+ * del commit entero, y un 308 quedaría cacheado en el navegador del coach sobreviviendo al
+ * revert. El destino no depende de la sesión — el gate de acceso del coach ya vive en el
+ * layout de `/coach` — así que acá no se consulta ni sesión ni base de datos. La única entrada
+ * interna que quedaba (`nutrition-onboarding-shared.ts`) apunta directo al tab, sin pasar por
+ * este salto.
+ *
+ * `FoodSearch.tsx` sigue en esta carpeta: lo importan dos componentes de V1
+ * (`FoodCatalogCurationQueue` y `StructuredRecipeDialog`) y no tiene relación con la ruta.
+ */
 
-  const coachId = user.id
-  // Fase 2C: scope foods to the active workspace (standalone vs org).
-  const scope = await resolveCoachScope(await createClient(), coachId)
-  const orgId = scope.ok ? scope.orgId : null
-  const activeTeamId = scope.ok ? scope.activeTeamId : null
-  const { foods, total } = await getFoodLibrary(coachId, { page: 0, pageSize: 120, orgId })
-
-  // Grupos de porciones VISIBLES (system + propios + team activo) para el bloque opcional
-  // "Equivalencia de porciones" del alta (P-B). Se resuelve server-side: los services de
-  // intercambios jamás entran al bundle cliente.
-  const exchangeGroups = (await getExchangeGroups(coachId, { orgId, activeTeamId })).map((group) => ({
-    id: group.id,
-    code: group.code,
-    name: group.name,
-    isSystem: group.isSystem,
-  }))
-
-  return (
-    <div className="max-w-6xl mx-auto animate-fade-in mb-24 md:mb-0 px-4 md:px-6 space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link
-            href="/coach/dashboard"
-            className="p-2 rounded-xl border border-border hover:bg-muted transition-colors shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-black uppercase tracking-tight flex items-center gap-2">
-              <Apple className="w-6 h-6 text-primary shrink-0" />
-              <span className="truncate">Alimentos</span>
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Catálogo global y tus customs. También disponible en{' '}
-              <Link href="/coach/nutrition-plans" className="text-primary font-semibold hover:underline">
-                Nutrición → Alimentos
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-          <ClassifyFoodSheet coachId={coachId} exchangeGroups={exchangeGroups} />
-          <AddFoodSheet coachId={coachId} exchangeGroups={exchangeGroups} />
-        </div>
-      </div>
-
-      <FoodBrowser coachId={coachId} initialFoods={foods} totalFoods={total} />
-
-      {/*
-        Gestión de listas de equivalencia (F2). Vive acá, y no solo en el builder de un alumno,
-        porque el catálogo de porciones es del COACH: un coach sin alumnos no tenía cómo llegar.
-      */}
-      <ExchangePortionsSection />
-    </div>
-  )
+// El destino NO se exporta: un `page.tsx` de App Router solo admite el default y los exports
+// de configuración conocidos, así que una constante pública acá arriesga el validador de tipos
+// del build. El slug del tab lo define `NutritionHubTabs` (`TAB_SLUG.foods`).
+export default function CoachFoodsPage(): never {
+  redirect('/coach/nutrition-v2?tab=alimentos')
 }

@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Barcode, ExternalLink, Loader2, Maximize2 } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
@@ -26,6 +27,17 @@ type Props = {
   onOpenChange: (open: boolean) => void
   detail: FoodDetailData | null
   loading?: boolean
+  /**
+   * CTA opcional al pie de la ficha (T2.3 F3: "Clasificar en porciones" del tab Alimentos).
+   *
+   * OPCIONAL a proposito: esta misma ficha la monta el FoodPicker del builder, donde el coach
+   * esta armando un plan y un boton de mantenimiento del catalogo seria ruido. Solo la monta
+   * quien tiene a donde llevarlo.
+   *
+   * Va en un `SheetFooter` FUERA del area con scroll: en ancho de telefono la ficha es larga
+   * (foto + macros + micros + fuente) y un CTA al final del scroll no se ve nunca.
+   */
+  footerAction?: ReactNode
 }
 
 const VERIFICATION_TONE_CLASSES: Record<FoodVerificationTone, string> = {
@@ -55,7 +67,13 @@ function MicroRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function FoodDetailSheet({ open, onOpenChange, detail, loading = false }: Props) {
+export function FoodDetailSheet({
+  open,
+  onOpenChange,
+  detail,
+  loading = false,
+  footerAction,
+}: Props) {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [headerFailed, setHeaderFailed] = useState(false)
 
@@ -271,6 +289,10 @@ export function FoodDetailSheet({ open, onOpenChange, detail, loading = false }:
             </>
           )}
         </div>
+
+        {footerAction && detail ? (
+          <SheetFooter className="border-subtle bg-surface-card px-6 py-4">{footerAction}</SheetFooter>
+        ) : null}
       </SheetContent>
 
       <ImageLightbox

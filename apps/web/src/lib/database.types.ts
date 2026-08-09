@@ -1009,6 +1009,72 @@ export type Database = {
           },
         ]
       }
+      coach_food_overrides: {
+        Row: {
+          calories: number
+          carbs_g: number
+          coach_id: string
+          created_at: string
+          created_by: string | null
+          fats_g: number
+          fiber_g: number
+          food_id: string
+          household_grams: number | null
+          household_label: string | null
+          id: string
+          macros_basis: string
+          protein_g: number
+          updated_at: string
+        }
+        Insert: {
+          calories: number
+          carbs_g: number
+          coach_id: string
+          created_at?: string
+          created_by?: string | null
+          fats_g: number
+          fiber_g: number
+          food_id: string
+          household_grams?: number | null
+          household_label?: string | null
+          id?: string
+          macros_basis: string
+          protein_g: number
+          updated_at?: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          coach_id?: string
+          created_at?: string
+          created_by?: string | null
+          fats_g?: number
+          fiber_g?: number
+          food_id?: string
+          household_grams?: number | null
+          household_label?: string | null
+          id?: string
+          macros_basis?: string
+          protein_g?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_food_overrides_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_food_overrides_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_onboarding_events: {
         Row: {
           coach_id: string

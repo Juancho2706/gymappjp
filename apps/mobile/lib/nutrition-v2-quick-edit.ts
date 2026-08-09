@@ -50,6 +50,7 @@ import {
   slotMergeName,
   strategyUsesSlots,
   type BuilderFood,
+  type BuilderFoodMacrosPatch,
   type DraftDayVariant,
   type DraftMealSlot,
   type DraftPrescriptionItem,
@@ -291,6 +292,13 @@ export type QuickEditAction =
   | { type: 'ADD_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood | null }
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
   | { type: 'RESTORE_ITEM'; variantKey: string; slotKey: string; index: number; item: QuickEditItem }
+  /**
+   * Correccion de macros de un alimento (T2.2): alcanza TODAS sus apariciones del borrador,
+   * espejo de `APPLY_FOOD_OVERRIDE` del wizard. Solo toca el `food` HIDRATADO de la fila; los
+   * items base leen del mapa `foodsById`, que la pantalla parchea en paralelo. No cuenta como
+   * cambio sin publicar: el diff mira foodId/customName/quantity/unit, no los macros del catalogo.
+   */
+  | { type: 'APPLY_FOOD_OVERRIDE'; foodId: string; macros: BuilderFoodMacrosPatch }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: { name?: string; startTime?: string } }
   /**
    * Copia de una franja a otros dias (CE-5), espejo exacto de `COPY_SLOT_TO_VARIANTS` del
@@ -721,6 +729,21 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         ...slot,
         items: insertAt(slot.items, action.index, action.item),
       }))
+    case 'APPLY_FOOD_OVERRIDE': {
+      const { foodId, macros } = action
+      return {
+        ...state,
+        variants: state.variants.map((variant) => ({
+          ...variant,
+          slots: variant.slots.map((slot) => ({
+            ...slot,
+            items: slot.items.map((item) =>
+              item.food && item.food.id === foodId ? { ...item, food: { ...item.food, ...macros } } : item,
+            ),
+          })),
+        })),
+      }
+    }
     case 'UPDATE_SLOT':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
     case 'COPY_SLOT_TO_VARIANTS':

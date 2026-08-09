@@ -185,7 +185,7 @@ function MacroMiniRing({
           {Math.round(value.consumed)}
         </Text>
         {/* Sin meta el denominador se mantiene ("/ —") para no romper la simetría de los 3 anillos. */}
-        <Text className="text-subtle" style={styles.miniTarget}>
+        <Text className="text-subtle" style={styles.miniTarget} numberOfLines={1}>
           {hasTarget ? `/ ${Math.round(value.target as number)}` : '/ —'}
         </Text>
       </AuraRing>
@@ -399,6 +399,9 @@ const styles = StyleSheet.create({
   },
   miniWrap: { flex: 1, alignItems: 'center', gap: 6 },
   miniValue: { fontFamily: FONT.uiBold, fontSize: TYPE_SCALE.sm, fontVariant: ['tabular-nums'], lineHeight: TYPE_SCALE.sm },
-  miniTarget: { fontFamily: FONT.ui, fontSize: 10, fontVariant: ['tabular-nums'], lineHeight: 10 },
+  // `lineHeight` NO puede ser menor que el fontSize: con la fuente custom Android calcula una caja
+  // de una sola linea y recorta el wrap ("/ 290" quedaba en "/"). Alto natural + numberOfLines={1}
+  // en el Text: el denominador nunca envuelve.
+  miniTarget: { fontFamily: FONT.ui, fontSize: 10, fontVariant: ['tabular-nums'], lineHeight: 13 },
   miniLabel: { fontFamily: FONT.uiSemibold, fontSize: TYPE_SCALE.xs, marginTop: 2 },
 })

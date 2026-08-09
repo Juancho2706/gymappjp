@@ -69,6 +69,14 @@ source_of_truth: apps/web responsive + apps/mobile
 > (`apps/mobile/lib/nutrition-v2-builder-template.ts`). `effectiveFrom` se fuerza a hoy en ambas
 > ramas. `?from=plan:` aún no está en RN. **Sin QA en dispositivo ni build EAS todavía.**
 
+> **2026-08-09 (T2.3 web — el hub es la única casa del catálogo)**: en web, `/coach/foods` pasó a
+> ser un redirect 307 al tab Alimentos del hub V2 (`1eaea68c`); crear, clasificar en grupos con
+> porciones (formulario único), filtro "Editados por mí", "Solo míos" y navegar sin buscar viven
+> ahora en `coach/nutrition-v2`. Las menciones anteriores de este documento a `/coach/foods` son
+> históricas. **Deuda de paridad nueva**: el tab Alimentos RN
+> (`apps/mobile/app/coach/nutrition-v2/foods.tsx`) no tiene crear/clasificar/filtros — seguimiento
+> propio, fuera de T2.3.
+
 La paridad global **no está certificada todavía**.
 
 | Bloque | Código y revisión estática | QA en dispositivo | Estado efectivo |

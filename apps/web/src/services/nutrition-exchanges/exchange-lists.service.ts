@@ -16,6 +16,7 @@ import {
   excludeExchangeListRow,
   findAllExchangeListRowsByGroup,
   findExchangeListRowsByGroup,
+  findOwnExchangeListRowsForFood,
   insertExchangeListRows,
   searchFoodsForExchangeList,
   upsertOwnExchangeListRow,
@@ -97,6 +98,80 @@ export async function getExchangeListForGroup(
     success: true,
     rows: resolved.map((row) => ({ ...row, winner: winners.has(row.id) })),
     total,
+  }
+}
+
+export type FoodExchangeClassificationRead = {
+  /** true ⇒ `foods.coach_id` es el actor: puede escribir el trío `foods.exchange_*`. */
+  ownedByActor: boolean
+  /** Trío `foods.exchange_*` del alimento (rama LEGACY del read-model, rank 3). */
+  columns: { groupId: string; portionGrams: number | null; portionLabel: string | null } | null
+  /** MIS filas VIVAS de `exchange_group_foods` para ese alimento (rank coach, 0). Sin lápidas. */
+  ownRows: { groupId: string; portionGrams: number | null; portionLabel: string | null }[]
+}
+
+export type FoodExchangeClassificationResult =
+  | { success: true; classification: FoodExchangeClassificationRead }
+  | { success: false; error: string }
+
+/**
+ * Dónde está clasificado HOY un alimento para este coach, leyendo las DOS fuentes que el
+ * read-model del alumno mezcla (`20260804091000_nutrition_v2_exchange_foods_from_lists.sql`):
+ * mi lista con dueño y las columnas `foods.exchange_*`.
+ *
+ * Existe porque el read model del catálogo (`FoodCatalogItem`) no emite nada de intercambios: el
+ * formulario único de clasificación del hub (T2.3 F3) tendría que abrir a ciegas y el coach
+ * reclasificaría sin saber que el alimento ya estaba en otro grupo.
+ *
+ * Dos round-trips fijos, sin RPC nueva y sin cambio de schema. RLS de `foods` es el techo: un
+ * alimento que el actor no puede ver vuelve como "no disponible".
+ */
+export async function getFoodExchangeClassification(
+  db: DB,
+  input: { actorCoachId: string; foodId: string }
+): Promise<FoodExchangeClassificationResult> {
+  const { data, error } = await db
+    .from('foods')
+    .select('id, coach_id, exchange_group_id, exchange_portion_grams, exchange_portion_label')
+    .eq('id', input.foodId)
+    .maybeSingle()
+  if (error) return { success: false, error: 'No pudimos leer la clasificación de este alimento.' }
+  if (!data) return { success: false, error: 'Ese alimento ya no está disponible.' }
+
+  const food = data as {
+    coach_id: string | null
+    exchange_group_id: string | null
+    exchange_portion_grams: number | string | null
+    exchange_portion_label: string | null
+  }
+
+  const rows = await findOwnExchangeListRowsForFood(db, {
+    foodId: input.foodId,
+    owner: exchangeListOwnerFor(input.actorCoachId),
+  })
+
+  return {
+    success: true,
+    classification: {
+      ownedByActor: food.coach_id === input.actorCoachId,
+      columns: food.exchange_group_id
+        ? {
+            groupId: food.exchange_group_id,
+            portionGrams:
+              food.exchange_portion_grams != null ? Number(food.exchange_portion_grams) : null,
+            portionLabel: food.exchange_portion_label,
+          }
+        : null,
+      // Una lápida NO es una clasificación: es justo lo contrario (el alimento se retiró de mi
+      // lista). Se filtra acá para que el resolvedor puro no tenga que conocer el concepto.
+      ownRows: rows
+        .filter((row) => !row.isExcluded)
+        .map((row) => ({
+          groupId: row.exchangeGroupId,
+          portionGrams: row.portionGrams,
+          portionLabel: row.portionLabel,
+        })),
+    },
   }
 }
 

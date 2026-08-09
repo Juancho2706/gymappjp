@@ -128,6 +128,57 @@ describe('foodCatalogItemToCardModel', () => {
     const card = foodCatalogItemToCardModel(makeItem({ category: 'no-existe' }), BASE)
     expect(card.categoryIconUrl).toBe('/food-icons/otro.webp')
   })
+
+  it('imprime la porcion como base cuando el item declara per_serving', () => {
+    // NUT-001: las filas del seed de intercambios traen macros de la porcion, no de 100 g.
+    const solido = foodCatalogItemToCardModel(
+      makeItem({ macrosBasis: 'per_serving', servingSize: 30 }),
+      BASE,
+    )
+    expect(solido.basisLabel).toBe('por 30 g')
+    const liquido = foodCatalogItemToCardModel(
+      makeItem({ macrosBasis: 'per_serving', servingSize: 62.5, servingUnit: 'ml' }),
+      BASE,
+    )
+    expect(liquido.basisLabel).toBe('por 62.5 ml')
+  })
+
+  it('mantiene la base historica per_100 cuando el item no la declara', () => {
+    expect(foodCatalogItemToCardModel(makeItem({ macrosBasis: null }), BASE).basisLabel).toBe(
+      'por 100 g',
+    )
+    expect(foodCatalogItemToCardModel(makeItem({ macrosBasis: 'per_100' }), BASE).basisLabel).toBe(
+      'por 100 g',
+    )
+  })
+
+  it('expone hasOverride solo cuando el catalogo lo afirma', () => {
+    // Nullable en el contrato: ausente significa "sin merge aplicado", no "sin override".
+    expect(foodCatalogItemToCardModel(makeItem(), BASE).hasOverride).toBe(false)
+    expect(foodCatalogItemToCardModel(makeItem({ hasOverride: null }), BASE).hasOverride).toBe(false)
+    expect(foodCatalogItemToCardModel(makeItem({ hasOverride: false }), BASE).hasOverride).toBe(false)
+    expect(foodCatalogItemToCardModel(makeItem({ hasOverride: true }), BASE).hasOverride).toBe(true)
+  })
+
+  it('marca "Propio" solo cuando el alimento tiene dueño coach', () => {
+    // T2.3 F4.5: el dato ya viajaba en el read model; la card recien ahora lo muestra.
+    expect(foodCatalogItemToCardModel(makeItem({ coachId: null }), BASE).isOwn).toBe(false)
+    expect(
+      foodCatalogItemToCardModel(makeItem({ coachId: '33333333-3333-4333-8333-333333333333' }), BASE)
+        .isOwn,
+    ).toBe(true)
+  })
+
+  it('un alimento de la organizacion no es "Propio"', () => {
+    // Visible no es lo mismo que mio: "Propio" tiene que significar "lo cree yo" para servir junto
+    // al filtro "Solo mios", que consulta por `coach_id`.
+    expect(
+      foodCatalogItemToCardModel(
+        makeItem({ coachId: null, orgId: '44444444-4444-4444-8444-444444444444' }),
+        BASE,
+      ).isOwn,
+    ).toBe(false)
+  })
 })
 
 describe('foodCatalogItemToDetail', () => {

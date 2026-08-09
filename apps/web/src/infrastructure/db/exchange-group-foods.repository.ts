@@ -170,6 +170,30 @@ export async function findOwnExchangeListRow(
   return data ? { id: data.id as string } : null
 }
 
+/**
+ * TODAS mis filas de UN alimento, en cualquier grupo. Es la lectura que necesita el formulario
+ * unico de clasificacion del hub (T2.3 F3): sin ella habria que recorrer grupo por grupo para
+ * saber dónde quedó clasificado un alimento, y son 10+ round-trips en el camino de apertura.
+ *
+ * Devuelve tambien las lapidas (`isExcluded`): quien resuelve el estado vigente es la logica
+ * pura del hub, no esta lectura.
+ */
+export async function findOwnExchangeListRowsForFood(
+  db: DB,
+  input: { foodId: string; owner: ExchangeListOwner }
+): Promise<ExchangeListRow[]> {
+  let query = db.from('exchange_group_foods').select(ROW_COLUMNS).eq('food_id', input.foodId)
+  query = input.owner.coachId
+    ? query.eq('coach_id', input.owner.coachId)
+    : input.owner.orgId
+      ? query.eq('org_id', input.owner.orgId)
+      : query.is('coach_id', null).is('org_id', null)
+
+  const { data, error } = await query.order('exchange_group_id', { ascending: true })
+  if (error || data == null) return []
+  return (data as unknown as RawRow[]).map(mapRow)
+}
+
 export type ExchangeListWriteResult = { ok: true } | { ok: false; error: string }
 
 /**

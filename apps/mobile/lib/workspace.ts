@@ -119,8 +119,12 @@ type TeamJoinRow = {
 /**
  * Lee las filas crudas del contexto del coach via PostgREST RLS. `null` si no hay sesion (el caller
  * cae al contexto por defecto). Fail-safe: cualquier query que falle degrada a vacio, nunca lanza.
+ *
+ * `strict` (solo GATES, via `getActiveCoachWorkspaceStrict`): LANZA si `coaches`/`team_members` no
+ * se pudieron leer. Sin eso, offline la fila de coach llega `null` y un coach parece alumno
+ * (auditoria 2026-08-09). El modo por defecto (todas las pantallas) conserva la degradacion suave.
  */
-async function fetchRawWorkspaceData(): Promise<RawWorkspaceData | null> {
+async function fetchRawWorkspaceData(strict = false): Promise<RawWorkspaceData | null> {
     const { data: sessionData } = await supabase.auth.getSession()
     const session = sessionData.session
     if (!session?.user) return null
@@ -145,6 +149,11 @@ async function fetchRawWorkspaceData(): Promise<RawWorkspaceData | null> {
             ? supabase.from('organizations').select('name').eq('id', orgIdMeta).maybeSingle()
             : Promise.resolve({ data: null }),
     ])
+
+    if (strict) {
+        if (coachRes.error) throw coachRes.error
+        if (membersRes.error) throw membersRes.error
+    }
 
     const coach = (coachRes.data ?? null) as RawCoachRow | null
     const orgId = orgIdMeta ?? coach?.active_org_id ?? null
@@ -211,20 +220,7 @@ export function refreshWorkspace(): Promise<void> {
     if (inFlight) return inFlight
     inFlight = (async () => {
         try {
-            const raw = await fetchRawWorkspaceData()
-            if (!raw) {
-                hasCoachIdentity = false
-                setState({ context: DEFAULT_WORKSPACE_CONTEXT, ready: true, loading: false })
-                return
-            }
-            hasCoachIdentity = raw.coach != null
-            const context = deriveWorkspaceContext(raw, preferredWorkspaceId)
-            setState({ context, ready: true, loading: false })
-            try {
-                await AsyncStorage.setItem(CACHE_KEY, serializeWorkspaceContext(context))
-            } catch {
-                /* persistencia best-effort */
-            }
+            await resolveWorkspace(false)
         } catch {
             setState({ loading: false })
         } finally {
@@ -232,6 +228,24 @@ export function refreshWorkspace(): Promise<void> {
         }
     })()
     return inFlight
+}
+
+/** Cuerpo compartido de la revalidacion. Propaga el fallo; cada caller decide como degradar. */
+async function resolveWorkspace(strict: boolean): Promise<void> {
+    const raw = await fetchRawWorkspaceData(strict)
+    if (!raw) {
+        hasCoachIdentity = false
+        setState({ context: DEFAULT_WORKSPACE_CONTEXT, ready: true, loading: false })
+        return
+    }
+    hasCoachIdentity = raw.coach != null
+    const context = deriveWorkspaceContext(raw, preferredWorkspaceId)
+    setState({ context, ready: true, loading: false })
+    try {
+        await AsyncStorage.setItem(CACHE_KEY, serializeWorkspaceContext(context))
+    } catch {
+        /* persistencia best-effort */
+    }
 }
 
 async function bootstrap(): Promise<void> {
@@ -290,6 +304,34 @@ function workspaceActionScope(ref: WorkspaceContext['workspaces'][number]): Clie
 export async function getActiveCoachWorkspace(): Promise<ClientActionWorkspace | null> {
     await hydrateFromCache()
     if (hasCoachIdentity == null || !state.ready) await refreshWorkspace()
+    if (hasCoachIdentity !== true) return null
+    const active = state.context.workspaces.find((workspace) => workspace.isActive)
+    return active ? workspaceActionScope(active) : null
+}
+
+/**
+ * Igual que `getActiveCoachWorkspace`, pero para GATES: LANZA cuando no se pudo preguntar
+ * (offline/5xx) en vez de devolver `null`, que es indistinguible de "este usuario no es coach".
+ *
+ * Mismo costo de red que la version normal: solo resuelve si la identidad todavia no esta resuelta;
+ * una vez resuelta lee del store (no re-consulta).
+ */
+export async function getActiveCoachWorkspaceStrict(): Promise<ClientActionWorkspace | null> {
+    await hydrateFromCache()
+    if (hasCoachIdentity == null || !state.ready) {
+        // Una revalidacion NO estricta en vuelo se traga el error; si al terminar seguimos sin
+        // identidad, se resuelve de nuevo en estricto para saber si es "alumno" o "no pude preguntar".
+        if (inFlight) await inFlight
+        if (hasCoachIdentity == null) {
+            // Se publica en `inFlight` (version que NO rechaza) para que un `refreshWorkspace`
+            // simultaneo se deduplique contra esta y no dispare un segundo round de queries.
+            const run = resolveWorkspace(true)
+            inFlight = run.catch(() => {}).finally(() => {
+                inFlight = null
+            })
+            await run
+        }
+    }
     if (hasCoachIdentity !== true) return null
     const active = state.context.workspaces.find((workspace) => workspace.isActive)
     return active ? workspaceActionScope(active) : null
