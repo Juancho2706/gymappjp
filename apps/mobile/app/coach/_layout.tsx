@@ -1,9 +1,12 @@
 import { useEffect } from 'react'
 import { Stack, usePathname, useRouter, useSegments } from 'expo-router'
-import { View } from 'react-native'
+import { Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { RotateCcw } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { AppBackground } from '../../components/AppBackground'
+import { Button } from '../../components/Button'
 import { refreshCoachAccess, useCoachAccess } from '../../lib/coach-access'
 
 /** Unica ruta del arbol coach que un coach SIN acceso efectivo puede ver (es su salida). */
@@ -31,7 +34,8 @@ export default function CoachLayout() {
   const router = useRouter()
   const pathname = usePathname()
   const segments = useSegments()
-  const { blocked, ready } = useCoachAccess()
+  const insets = useSafeAreaInsets()
+  const { blocked, ready, status, refresh } = useCoachAccess()
 
   const onReactivate = pathname === REACTIVATE_PATH
 
@@ -58,11 +62,42 @@ export default function CoachLayout() {
 
   // Bloqueado y todavia fuera del muro: no renderizar el arbol coach ni un frame (antes se veia el
   // dashboard real por un instante mientras resolvia el `replace`).
+  //
+  // `status === 'error'` (no se pudo PREGUNTAR: sin red / 5xx) mantiene el fail-closed, pero desde
+  // aca no hay navegacion posible: sin este reintento el loader quedaba sellado hasta reiniciar la
+  // app o volver de background (auditoria 2026-08-09).
   if (blocked && !onReactivate) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         <AppBackground />
-        <EvaLoaderScreen subtitle="Revisando tu plan…" />
+        <EvaLoaderScreen subtitle={status === 'error' ? 'No pudimos verificar tu plan' : 'Revisando tu plan…'} />
+        {status === 'error' ? (
+          <View
+            style={{
+              position: 'absolute',
+              left: 24,
+              right: 24,
+              bottom: insets.bottom + 40,
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <Text
+              className="font-sans text-[13px] text-muted"
+              style={{ textAlign: 'center', lineHeight: 19, maxWidth: 300 }}
+            >
+              Revisa tu conexion e intenta de nuevo.
+            </Text>
+            <Button
+              label="Reintentar"
+              variant="outline"
+              leftIcon={RotateCcw}
+              onPress={() => {
+                void refresh(true)
+              }}
+            />
+          </View>
+        ) : null}
       </View>
     )
   }
