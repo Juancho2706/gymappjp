@@ -9,6 +9,7 @@ import {
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
   NutritionIntakeVoidSchema,
+  SubstitutionIntakeRequestSchema,
   buildNutritionIdempotencyKey,
   buildNutritionPortionIntakeKey,
   isNutritionV2PermissionDenied,
@@ -20,6 +21,7 @@ import {
   resolveStudentIntakePermissions,
   type StudentIntakePermissionDenial,
 } from '@/services/nutrition-v2-student-permissions.service'
+import { planSubstitutionIntake } from '@/services/nutrition-v2/substitution-intake.service'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch, rateLimitNutritionIntake } from '@/lib/rate-limit'
 import { COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY } from '@/lib/student-access'
@@ -98,6 +100,12 @@ const CorrectActionInputSchema = z.object({
   payload: NutritionIntakeCorrectionSchema,
 })
 
+// T2.4: el cliente manda la INTENCION (que item, que reemplazo, que intento), nunca el alimento
+// ni los macros. El servidor resuelve el resto desde la fila autorizada.
+const SubstituteActionInputSchema = z.object({
+  payload: SubstitutionIntakeRequestSchema,
+})
+
 // "Retirar" TIENE RPC propio desde NUT-010 (opcion A): `void_nutrition_intake_v2` marca la fila
 // como `voided` sin insertar nada. El payload es MINIMO ({clientId, entryId, reason}) — ver el
 // comentario del schema en packages/nutrition-v2/contracts.ts.
@@ -136,6 +144,19 @@ const SearchActionInputSchema = z.object({
 
 type ActionFailure = { ok: false; code: string; error: string; fields?: Array<{ path: string; message: string }> }
 type MutationSuccess = { ok: true; id: string }
+/**
+ * Resultado de una sustitucion: ademas del id, lo que la UI necesita para el copy honesto —
+ * si termino siendo un registro nuevo o una correccion del vigente, la cantidad efectiva, y si
+ * la cantidad que pidio el alumno se descarto porque el plan no la permitia.
+ */
+type SubstitutionSuccess = {
+  ok: true
+  id: string
+  mode: 'record' | 'correct'
+  quantity: number
+  unit: string
+  quantityOverridden: boolean
+}
 /** Resultado del bulk: ids creados/anulados + cuántos fallaron (estado parcial permitido). */
 type BatchMutationResult = { ok: true; ids: string[]; failed: number } | ActionFailure
 
@@ -309,6 +330,45 @@ export async function recordIntakeAction(input: unknown): Promise<MutationSucces
   const result = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(payload))
   if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
+}
+
+/**
+ * Registrar un reemplazo AUTORIZADO por el coach (T2.4).
+ *
+ * Deliberadamente NO reusa `recordIntakeAction`: el contrato del cliente es distinto (manda la
+ * intencion, no el payload) y la decision registro-vs-correccion la toma el servidor. Tampoco
+ * evalua `canRegisterFreely`: sustituir por algo que el coach autorizo no es registro libre, y el
+ * guard de la RPC ya deja pasar ese camino (`prescription_item_id` presente ⇒ la regla no aplica).
+ *
+ * La autorizacion real la impone SQL (`nutrition_v2_assert_substitution_authorized`); esta capa
+ * resuelve el payload y devuelve un error con copy humano antes de intentar la escritura.
+ */
+export async function recordSubstitutionIntakeAction(
+  input: unknown,
+): Promise<SubstitutionSuccess | ActionFailure> {
+  const parsed = SubstituteActionInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return fail('INVALID_PAYLOAD', 'Datos de sustitución inválidos.', zodFields(parsed.error))
+  }
+  const payload = parsed.data.payload
+
+  const auth = await authorizeStudentWrite(payload.clientId)
+  if (!auth.ok) return auth
+
+  const plan = await planSubstitutionIntake(auth.supabase, payload)
+  if (!plan.ok) return fail(plan.code, plan.error)
+
+  const result = await runMutation(auth.supabase, plan.rpcName, plan.args)
+  if (!result.ok) return result
+  revalidateResolved(await resolveRevalidateTarget())
+  return {
+    ok: true,
+    id: result.id,
+    mode: plan.mode,
+    quantity: plan.quantity,
+    unit: plan.equivalence.unit,
+    quantityOverridden: plan.quantityOverridden,
+  }
 }
 
 /**

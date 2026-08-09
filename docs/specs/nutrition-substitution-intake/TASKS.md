@@ -77,12 +77,14 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F3 — Boundary compartido
 
-- [ ] Servicio server-side unico (resuelve fila autorizada → equivalencia → re-chequea record/correct → arma payload + clave determinista)
-- [ ] `recordSubstitutionIntakeAction` (web) sobre `authorizeStudentWrite` + rate limit existentes
-- [ ] `action: 'substitute'` en `api/mobile/nutrition-v2/intake/route.ts`, espejo exacto de la action
-- [ ] Tope de cantidad del cliente medido contra la **equivalencia**, no contra la prescrita
-- [ ] Tests: `substitutionId` inexistente · item de otro alumno · doble llamada con la misma clave · rama correccion · correccion con `canAdjust=false` · `quantity` fuera del tope · `attempt` desactualizado
-- [ ] Gates: `pnpm typecheck` · `pnpm check:nutrition-v2-boundaries` · `pnpm lint` de los tocados
+- [x] `apps/web/src/services/nutrition-v2/substitution-intake.service.ts` — servicio server-side unico: lee las opciones (F1) → calcula la equivalencia (F0) → re-chequea contra el servidor si hay entry activa → arma el payload completo + la clave determinista
+- [x] `recordSubstitutionIntakeAction` (web) sobre `authorizeStudentWrite` + rate limit existentes
+- [x] `action: 'substitute'` en `api/mobile/nutrition-v2/intake/route.ts`, llamando al **mismo** servicio (la asimetria entre superficies fue lo que dejo NUT-009 sin efecto)
+- [x] Contrato del cliente: `{ prescriptionItemId, substitutionId, attempt, quantity? }`. Un `foodId` o un `snapshot` colados se ignoran (test que lo pinea)
+- [x] Tope de cantidad del cliente medido contra la **equivalencia**, no contra la prescrita; si no se puede honrar, se usa la calculada y se devuelve `quantityOverridden` para que la UI lo diga
+- [x] La rama record-vs-correct se decide releyendo el dia del servidor, no con lo que el cliente tenia en pantalla
+- [x] Tests **12/12** (`intake.actions.substitution.test.ts`): registro con `canRegisterFreely=false` · clave determinista y su cambio por intento · `foodId` colado ignorado · `substitutionId` no autorizado sin escritura · item sin reemplazos sin escritura · correccion sobre item ya registrado · entry **retirada** no cuenta como vigente · cantidad descartada con `canAdjust=false` · cantidad honrada/rechazada por tope · cantidad explicita del coach gana · sin sesion · `clientId` ajeno
+- [x] Gates: `pnpm typecheck` ✓ · `pnpm check:nutrition-v2-boundaries` 327 archivos ✓ · `eslint` de los 4 archivos tocados ✓ · suite completa ✓
 
 ## F4 — UI alumno web
 

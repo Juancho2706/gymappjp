@@ -5,9 +5,11 @@ import {
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
   NutritionIntakeVoidSchema,
+  SubstitutionIntakeRequestSchema,
   isNutritionV2PermissionDenied,
   type NutritionIntakeMutation,
 } from '@eva/nutrition-v2'
+import { planSubstitutionIntake } from '@/services/nutrition-v2/substitution-intake.service'
 import {
   gateNutritionV2Api,
   jsonNoStore,
@@ -30,7 +32,7 @@ const ResponseIdSchema = z.string().uuid()
  * conserva INTACTO al menos un ciclo de release: la cola offline de RN puede tener retiros
  * encolados con el payload viejo (corrección de contribución cero) y esos tienen que drenar.
  */
-type SupportedAction = 'record' | 'correct' | 'void'
+type SupportedAction = 'record' | 'correct' | 'void' | 'substitute'
 
 function commonRpcArgs(payload: NutritionIntakeMutation): Record<string, unknown> {
   return {
@@ -182,6 +184,35 @@ export async function POST(request: NextRequest) {
         p_correction_reason: parsed.data.correctionReason,
         ...commonRpcArgs(parsed.data),
       },
+      startedAt,
+    })
+  }
+
+  // T2.4: sustituir por un reemplazo AUTORIZADO. Espejo EXACTO de `recordSubstitutionIntakeAction`
+  // — las dos superficies llaman al MISMO servicio, que es lo que evita repetir el desfase que
+  // dejó los permisos sin efecto en NUT-009. El cliente manda la intención; el alimento, la
+  // franja, la versión y los macros los resuelve el servidor desde la fila autorizada.
+  //
+  // No se evalúa `canRegisterFreely`: sustituir por algo que el coach autorizó no es registro
+  // libre. La autorización real la impone el guard SQL de `record_nutrition_intake_v2`.
+  if (action === 'substitute') {
+    const parsed = SubstitutionIntakeRequestSchema.safeParse(body?.payload)
+    if (!parsed.success) return invalidPayload(parsed.error, startedAt)
+    if (!gate.clientId || parsed.data.clientId !== gate.clientId) {
+      return scopeMismatch(startedAt)
+    }
+    const plan = await planSubstitutionIntake(gate.rpc, parsed.data)
+    if (!plan.ok) {
+      logNutritionV2Api({ route, startedAt, status: 409, errorCode: plan.code })
+      return jsonNoStore({ error: plan.error, code: plan.code }, 409)
+    }
+    return executeMutation({
+      gate,
+      // El status de la respuesta sigue la naturaleza real de la escritura: 201 si nació una
+      // entry, 200 si corrigió la vigente. La cola offline de RN distingue por `action`.
+      action: plan.mode === 'record' ? 'record' : 'correct',
+      rpcName: plan.rpcName,
+      args: plan.args,
       startedAt,
     })
   }

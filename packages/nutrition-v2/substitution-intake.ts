@@ -387,3 +387,88 @@ export const SubstitutionIntakeRequestSchema = z.object({
 })
 
 export type SubstitutionIntakeRequest = z.infer<typeof SubstitutionIntakeRequestSchema>
+
+/**
+ * Contrato de lo que devuelve `get_nutrition_substitution_options_v2` (migracion
+ * `20260809222811`). Vive aca y no en `read-models.ts` porque solo lo consume este flujo.
+ *
+ * Tolerante a propositos: `food` es `null` cuando el reemplazo es texto libre o receta (no hay
+ * catalogo que leer) y el flujo degrada a "confirma la cantidad" en vez de inventar una.
+ */
+export const SubstitutionOptionFoodSchema = z.object({
+  name: z.string(),
+  brand: z.string().nullable(),
+  calories: z.number().nullable(),
+  proteinG: z.number().nullable(),
+  carbsG: z.number().nullable(),
+  fatsG: z.number().nullable(),
+  fiberG: z.number().nullable(),
+  macrosBasis: z.enum(['per_100', 'per_serving']).nullable(),
+  servingSize: z.number().nullable(),
+  servingUnit: z.string().nullable(),
+  hasOverride: z.boolean(),
+})
+
+export const SubstitutionOptionSchema = z.object({
+  substitutionId: z.string().uuid(),
+  foodId: z.string().uuid().nullable(),
+  recipeId: z.string().uuid().nullable(),
+  customName: z.string().nullable(),
+  quantity: z.number().nullable(),
+  unit: z.string().nullable(),
+  food: SubstitutionOptionFoodSchema.nullable(),
+  frozen: z.object({
+    name: z.string().nullable(),
+    brand: z.string().nullable(),
+    calories: z.number().nullable(),
+  }),
+})
+
+export const SubstitutionOptionsItemSchema = z.object({
+  prescriptionItemId: z.string().uuid(),
+  mealSlotCode: z.string().nullable(),
+  item: z.object({
+    quantity: z.number(),
+    unit: z.string(),
+    name: z.string().nullable(),
+    calories: z.number().nullable(),
+  }),
+  options: z.array(SubstitutionOptionSchema),
+})
+
+export const SubstitutionOptionsReadModelSchema = z.object({
+  schemaVersion: z.literal(1),
+  localDate: z.string().date(),
+  versionId: z.string().uuid().nullable(),
+  items: z.array(SubstitutionOptionsItemSchema),
+})
+
+export type SubstitutionOptionFood = z.infer<typeof SubstitutionOptionFoodSchema>
+export type SubstitutionOption = z.infer<typeof SubstitutionOptionSchema>
+export type SubstitutionOptionsItem = z.infer<typeof SubstitutionOptionsItemSchema>
+export type SubstitutionOptionsReadModel = z.infer<typeof SubstitutionOptionsReadModelSchema>
+
+/**
+ * Adapta una opcion del read model a la forma que consume `computeSubstitutionEquivalence`.
+ * Un reemplazo sin `food` (texto libre / receta) queda sin macros ⇒ la equivalencia devuelve
+ * `unavailable` y la UI pide confirmar la cantidad.
+ */
+export function substituteFromOption(option: SubstitutionOption): SubstitutionSubstitute {
+  const food = option.food
+  return {
+    foodId: option.foodId,
+    customName: option.customName,
+    name: food?.name ?? option.customName ?? option.frozen.name ?? 'Reemplazo',
+    brand: food?.brand ?? option.frozen.brand ?? null,
+    calories: food?.calories ?? null,
+    proteinG: food?.proteinG ?? null,
+    carbsG: food?.carbsG ?? null,
+    fatsG: food?.fatsG ?? null,
+    fiberG: food?.fiberG ?? null,
+    macrosBasis: food?.macrosBasis ?? null,
+    servingSize: food?.servingSize ?? null,
+    servingUnit: food?.servingUnit ?? null,
+    quantity: option.quantity,
+    unit: option.unit,
+  }
+}
