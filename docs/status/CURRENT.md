@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-06"
+last_verified: "2026-08-09"
 canonical: true
 ---
 
@@ -16,21 +16,20 @@ viven en `specs/`, `docs/audits/` y el historial de git, no aquí.
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
 | Web/PWA | Productivo; confirmar deployment activo antes de incidentes o despliegues | [Runbook](../operations/RUNBOOK.md) |
-| App nativa (RN) | Paridad estática amplia; falta build Android (`eas build --local`) + QA físico. iOS 1.1.0 en App Review: no cancelar, no build nueva; OTA solo post-aprobación (mientras tanto, todo OTA con `--platform android`) | [Mobile parity](MOBILE_PARITY.md) |
+| App nativa (RN) | OTA android `3cc5db7e` (2026-08-09): gate coach fail-closed (verificado en device físico) + T2.2 quick-edit + mobile acumulado. iOS 1.1.0 sigue en App Review: no cancelar, no build nueva; al aprobar, replicar el OTA con `--platform ios`. Deuda nueva: paridad RN del tab Alimentos (T2.3 fue web-only) | [Mobile parity](MOBILE_PARITY.md) |
 | Archivado de alumnos | Migraciones y fixes del P0 de alta en producción (2026-08-03); falta QA físico y matriz Team | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
-| Nutrition V2 | Canónica para Standalone/Team; F0–F4 desplegadas en web (2026-08-05); preflight mantiene 7 enlaces V1→V2 por reconciliar | [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) · [Programa](../../specs/nutrition-exchange-lists/SPEC.md) |
+| Nutrition V2 | Canónica para Standalone/Team. En prod web desde 2026-08-09 (merge `27c314fe`): T2.1+T2.2 overrides de macros por coach y T2.3 hub de alimentos casa única (`/coach/foods` = redirect). Quedan T2.4 sustituciones FULL, T2.5 swipe, T3.x editor único; preflight mantiene 7 enlaces V1→V2 por reconciliar | [Programa](../../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
 | V1 nutrición | Congelada, **no se borra** (decisión owner 2026-08-03): solo migrar usuarios a V2 | [Delta del mapa](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
 | Enterprise | **Congelado (cuarentena 2026-08-06)**: sin desarrollo activo ni gates locales; `apps/enterprise` permanece en el repo hasta un plan de retiro propio. El e2e de aislamiento RLS sigue en CI manual | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
 
 ## Prioridades vigentes
 
-1. Build Android `eas build --local` del corte F0 (crash de arranque + Sentry RN) + QA en dispositivo.
-2. Matriz RLS con JWTs reales: alumno archivado, pausado, coach-que-es-alumno, Standalone y Team.
-   Toda policy `AS RESTRICTIVE FOR ALL` exige probar también el INSERT (`WITH CHECK`) y el `RETURNING`.
-3. Preflight V1→V2: reconciliar los 7 enlaces antes del corte definitivo.
-4. QA físico Android/iOS (claro/oscuro, online/offline, deep links) + Playwright responsive.
-5. Verificar TTFB p75 < 1,5 s por ruta en Sentry (criterio del deploy web del 05-08).
+1. Hydration del dashboard del ALUMNO (`/c/:slug/dashboard`): EVA-NEXTJS-18 sigue emitiendo post-fix del coach (triage 2026-08-09 en el issue); mismo árbol, patrón determinista server→props ya existe al lado.
+2. Programa nutrición: T2.4 sustituciones FULL (SPEC primero) → T2.5 swipe. Paridad RN del tab Alimentos como tanda propia.
+3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; los workarounds tipados de T2.3 y el cast `V2ReadClient` se retiran ahí).
+4. Matriz RLS con JWTs reales + preflight V1→V2 (7 enlaces) — sin cambios desde 08-06.
+5. Verificar TTFB p75 < 1,5 s por ruta en Sentry; y a 24-48 h del OTA `3cc5db7e`, `eas update:insights` (crashRate + installs).
 
 ## Reglas de actualización
 
