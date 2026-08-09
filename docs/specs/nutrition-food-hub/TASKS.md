@@ -40,11 +40,14 @@ Estado: **Revision de Fable hecha el 2026-08-09: plan APROBADO con correcciones 
 
 ## F4 — Verificacion de importadores
 
-- [ ] `grep -rn "app/coach/foods" apps/web/src` → cero importadores fuera de la carpeta; pegar salida en el acta
-- [ ] Confirmar por escrito que `meal-groups/_actions` y `_data` los consume SOLO V1 (`nutrition-plans`)
-- [ ] Confirmar que `recipes` vive entero en V1 + `api/recipes/search`
-- [ ] Corregir el bullet de T2.3 en `nutrition-flows-redesign/TASKS.md`: de "retirar" a "verificado, no se retira (V1 viva)"
-- [ ] Gate: `docs:check`
+- [x] Grep de importadores de `coach/foods` fuera de la carpeta (2026-08-09, post-F3). Salida completa — 6 imports en 2 categorias, todos con destino conocido:
+  - `FoodCatalogCurationQueue.tsx:10` y `recipes/StructuredRecipeDialog.tsx:16` (V1) importan `FoodSearch` → por eso `FoodSearch.tsx` SOBREVIVE a F5.
+  - `ClassifyFoodFlow.tsx:36,41` y `FoodCatalogBrowser.tsx:20,21` (V2, creados en F2/F3) importan sheets/actions → se REESCRIBEN en la mudanza de F5.
+  - Referencias por string de ruta: `nutrition-coach.actions.ts:649,673,997` (revalidatePath, se dejan) + `nutrition-onboarding-shared.ts:25` (link, se re-apunta en F5).
+- [x] `meal-groups/_actions` consumido SOLO por V1: `PlanBuilder/FoodSearchDrawer.tsx:18` (`listCoachMealGroups`) y `PlanBuilder/PlanBuilder.tsx:58` (`saveMealGroup`). `meal-groups/_data`: cero importadores externos (solo el propio actions). NO se retira: V1 viva.
+- [x] `recipes` vive entero en V1 (`nutrition-plans/_components/recipes/*` + `api/recipes/search`); grep fuera de V1 = vacio. NO se retira.
+- [x] Bullet de T2.3 en `nutrition-flows-redesign/TASKS.md` ya corregido en `cdacf6dd` (tachado + RE-ALCANCE 2026-08-09).
+- [x] Gate: `docs:check` verde.
 
 ## F5 — Redirect Y borrado (decision D2)
 
@@ -75,4 +78,5 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 | 2026-08-09 | F0 revision | (este commit) | docs:check | Revision de Fable: plan aprobado con correcciones. `FoodSearch.tsx` sobrevive a F5; boundaries no salta con la mudanza (verificado); mecanismo F1 = segundo data path offset sobre `coach_food_overrides`; puerta previa a F5 (conteo LIVE + paridad navegacion). Rama confirmada `rnmobiledenuevo` (specs cherry-picked desde master). |
 | 2026-08-09 | F1 | 8290287b | boundaries + tsc web + vitest 1028/1028 + eslint | Filtro "Editados por mí" completo: repo paginado + action + modulo puro con 15 tests + chip con URL state + badge ✎ + fix basisLabel per_serving. Conteo LIVE puerta F5: 0 alimentos invisibles para el RPC. Pendiente owner: QA visual desktop/360px. |
 | 2026-08-09 | F2 | 940e3875 | boundaries + tsc web + vitest 599/599 + eslint | Crear alimento desde el tab. exchangeGroups lazy (desvio del PLAN documentado), guard kcal/P/C/G puro con tests, re-apuntado de busqueda tras crear. 2 bugs preexistentes del sheet arreglados. Pendiente owner: QA desktop/360px y decision sobre bloqueo 0/0/0/0. |
-| 2026-08-09 | F3 | (este commit) | boundaries + tsc web + vitest 628/628 + eslint | Formulario unico de clasificacion en el tab (ClassifyFoodFlow + planFoodClassification puro con 29 tests). Dos caminos de escritura segun propiedad, lapida anti doble-grupo legacy, lectura nueva aditiva sin RPC. Pendiente owner: QA completa en dos anchos (puerta de F5). |
+| 2026-08-09 | F3 | 34f8e0ec | boundaries + tsc web + vitest 628/628 + eslint | Formulario unico de clasificacion en el tab (ClassifyFoodFlow + planFoodClassification puro con 29 tests). Dos caminos de escritura segun propiedad, lapida anti doble-grupo legacy, lectura nueva aditiva sin RPC. Pendiente owner: QA completa en dos anchos (puerta de F5). |
+| 2026-08-09 | F4 | (este commit) | docs:check | Verificacion de importadores con evidencia pegada arriba: 6 imports externos, todos con destino conocido (2 V1→FoodSearch sobrevive, 4 V2→se reescriben en F5). meal-groups y recipes confirmados solo-V1, no se retiran. F5 queda BLOQUEADA por: QA owner F2/F3 + decision paridad navegacion. |
