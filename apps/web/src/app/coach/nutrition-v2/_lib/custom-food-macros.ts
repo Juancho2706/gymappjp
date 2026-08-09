@@ -8,8 +8,8 @@
  * con los cuatro numeros en 0, que se guarda igual y entra al plan sin aportar nada.
  *
  * Modulo PURO a proposito (sin React, sin FormData, sin Supabase):
- *  - el mismo chequeo corre en el sheet del hub V2 y en el de `/coach/foods` mientras conviven
- *    (T2.3 F5 borra el segundo);
+ *  - el chequeo corre en el unico sheet de alta que queda, el del hub V2 (T2.3 F5 retiro
+ *    `/coach/foods` y mudo el sheet al hub);
  *  - el contrato server de crear (`saveCustomFood`, V1) NO se toca en esta tanda, asi que esta
  *    validacion es UX, no autorizacion: el techo real sigue siendo `CustomFoodSchema` en el
  *    servidor. Por eso los limites de abajo son EXACTAMENTE los suyos (kcal <= 9000, macros

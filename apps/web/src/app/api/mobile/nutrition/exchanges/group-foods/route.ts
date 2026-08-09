@@ -18,7 +18,8 @@ import { gateExchanges } from '../_shared'
  * Listas de equivalencia por grupo (F2) — UNICO camino de escritura para RN
  * (leccion NUT-005: cero escrituras Supabase directas nuevas desde mobile).
  *
- * Espejo exacto de las server actions web (`coach/foods/_actions/exchange-lists.actions.ts`):
+ * Espejo exacto de las server actions web (`coach/nutrition-v2/_actions/exchange-lists.actions.ts`,
+ * mudadas ahi en T2.3 F5 al retirarse `/coach/foods`):
  * mismos schemas de `@eva/schemas/nutrition-exchanges` y MISMO servicio, asi que la
  * verificacion de visibilidad de grupo y alimento, el dueno coach-scoped y la resolucion de
  * precedencia son identicos en las dos superficies. Si divergieran, el coach veria una lista

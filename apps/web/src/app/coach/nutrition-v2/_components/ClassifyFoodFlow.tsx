@@ -31,14 +31,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { formatPortionSentence, suggestPortionGrams, type FoodCatalogItem } from '@eva/nutrition-v2'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
-// Import permitido por `check:nutrition-v2-boundaries` (lista negra de shells V1, no de dominio).
-// En F5 estas dos actions se mudan al hub y este import se reescribe.
-import { setFoodExchangeEquivalenceAction } from '@/app/coach/foods/_actions/food-equivalence.actions'
+// T2.3 F5 — las dos actions se mudaron desde `/coach/foods/_actions` al hub con la carpeta vieja.
+import { setFoodExchangeEquivalenceAction } from '../_actions/food-equivalence.actions'
 import {
   excludeExchangeListEntryAction,
   restoreExchangeListEntryAction,
   saveExchangeListEntryAction,
-} from '@/app/coach/foods/_actions/exchange-lists.actions'
+} from '../_actions/exchange-lists.actions'
 import { loadFoodExchangeClassificationHubAction } from '../_actions/food-catalog.actions'
 import {
   EMPTY_FOOD_CLASSIFICATION,

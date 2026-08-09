@@ -22,7 +22,9 @@ export const COACH_NUTRITION_ONBOARDING_STEPS: readonly CoachNutritionOnboarding
     description:
       'Busca en el catálogo (~250 alimentos chilenos y globales) o crea los tuyos propios. Los alimentos son la base de todos tus planes.',
     cta: 'Ir al catálogo',
-    href: '/coach/foods',
+    // T2.3 F5: el catálogo se mudó al tab "Alimentos" del hub. Se apunta DIRECTO al destino y
+    // no a `/coach/foods`, que hoy es solo un redirect de compatibilidad (un salto de más).
+    href: '/coach/nutrition-v2?tab=alimentos',
   },
   {
     number: 2,

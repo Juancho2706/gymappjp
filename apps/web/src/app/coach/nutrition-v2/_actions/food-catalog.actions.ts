@@ -40,7 +40,7 @@ import {
 // paginas casi vacias con "Cargar mas" lleno.
 //
 // El browse (T2.3 F4.5) es el TERCER data path: navegar el catalogo SIN buscar y el filtro
-// "Solo mios", tambien por offset sobre `foods`. Existe porque `/coach/foods` se borra en F5 y su
+// "Solo mios", tambien por offset sobre `foods`. Existe porque `/coach/foods` se borro en F5 y su
 // `FoodBrowser` era la unica forma de ver el catalogo sin tipear.
 
 const PAGE_SIZE = 20

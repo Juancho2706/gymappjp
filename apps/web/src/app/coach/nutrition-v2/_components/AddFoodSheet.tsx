@@ -21,7 +21,7 @@ import {
   CUSTOM_FOOD_MACRO_MAX,
   readCustomFoodMacroDraft,
   validateCustomFoodMacros,
-} from '@/app/coach/nutrition-v2/_lib/custom-food-macros'
+} from '../_lib/custom-food-macros'
 import { toast } from 'sonner'
 import {
   EMPTY_FOOD_EQUIVALENCE,
@@ -50,9 +50,9 @@ export function AddFoodSheet({
   coachId,
   /**
    * Catálogo de grupos de porciones VISIBLES para el coach (system + propios + team activo).
-   * `/coach/foods` lo resuelve server-side en su page; el tab Alimentos del hub V2 lo carga
-   * perezoso al abrir el sheet (ver `onOpenChange`). Vacío = el bloque de equivalencia queda
-   * sin opciones, nunca roto.
+   * `/coach/foods` lo resolvía server-side en su page; desde T2.3 F5 el único montaje es el tab
+   * Alimentos del hub, que lo carga perezoso al abrir el sheet (ver `onOpenChange`). Vacío = el
+   * bloque de equivalencia queda sin opciones, nunca roto.
    */
   exchangeGroups = [],
   /**
@@ -68,7 +68,8 @@ export function AddFoodSheet({
    */
   onCreated,
   /**
-   * Disparador propio (tokens del hub). Sin él se usa el botón histórico de `/coach/foods`.
+   * Disparador propio (tokens del hub). Sin él se usa el botón histórico heredado de
+   * `/coach/foods` (fallback: hoy el hub siempre pasa el suyo).
    * Base UI compone por `render`, no por `asChild`: el elemento recibe los props y el ref del
    * trigger, así que tiene que ser un único elemento que los reenvíe (un `<button>` sirve).
    */

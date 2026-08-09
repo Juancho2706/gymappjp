@@ -54,16 +54,18 @@ Estado: **Revision de Fable hecha el 2026-08-09: plan APROBADO con correcciones 
 Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se rompe.
 
 - [x] **Puerta previa (cerrada 2026-08-09):** conteo LIVE = 0 alimentos invisibles (4.649 foods, 24 de coach); paridad de navegacion decidida ("minimo funcional") e implementada como F4.5; QA movido a DESPUES de F5 por decision del owner (sobre la rama, antes del merge)
-- [ ] Mudar `_actions/food-equivalence.actions.ts` y `_actions/exchange-lists.actions.ts` al hub (`ClassifyFoodSheet.tsx:23` depende del primero); `FoodEquivalenceFields.tsx` viaja con los sheets
-- [ ] Correr `pnpm check:nutrition-v2-boundaries` tras la mudanza (verificado 2026-08-09 que no salta; correr igual)
-- [ ] La comparacion `FoodBrowser` vs `FoodCatalogBrowser` YA ESTA HECHA (revision 2026-08-09, ver PLAN puerta previa); cubrir en el tab lo que el owner decida ANTES de borrar
-- [ ] `/coach/foods/page.tsx` → redirect al tab Alimentos del hub
-- [ ] `nutrition-onboarding-shared.ts:25` apunta directo al tab
-- [ ] Borrar `_components/`, el resto de `_actions/` y `_data/` — **`FoodSearch.tsx` NO se borra** (importado por `FoodCatalogCurationQueue.tsx:10` y `StructuredRecipeDialog.tsx:16`, ambos V1)
-- [ ] Actualizar comentario de `api/mobile/nutrition/exchanges/group-foods/route.ts:21` (apunta a la ruta vieja de las actions); anotar `FoodListCompact` como huerfano (no borrar en esta tanda)
-- [ ] Dejar los tres `revalidatePath('/coach/foods')` de V1 (no-op; sacarlos obliga a tocar V1)
+- [x] Mudadas al hub con `git mv` (historia preservada): `_actions/food-equivalence.actions.ts` y `_actions/exchange-lists.actions.ts` → `nutrition-v2/_actions/`; `_components/AddFoodSheet.tsx` + su test + `_components/FoodEquivalenceFields.tsx` → `nutrition-v2/_components/`. Cero import roto: las dos actions solo usaban alias `@/`, y `AddFoodSheet` importa `./FoodEquivalenceFields` (relativo, viajaron juntos)
+- [x] Reescritos los 4 imports V2: `ClassifyFoodFlow.tsx` y `FoodCatalogBrowser.tsx` pasan a relativos del hub. `FoodSearch.tsx` intacto y sus 2 importadores V1 tambien
+- [x] `pnpm check:nutrition-v2-boundaries` verde tras la mudanza (324 archivos / 8 raices) — no salto, como estaba previsto
+- [x] La comparacion `FoodBrowser` vs `FoodCatalogBrowser` estaba hecha y cubierta en F4.5 (paridad "minimo funcional" decidida por el owner)
+- [x] `/coach/foods/page.tsx` → `redirect('/coach/nutrition-v2?tab=alimentos')`. Slug verificado en `NutritionHubTabs.tsx` (`TAB_SLUG.foods`), no inventado. **Es `redirect` (307) y NO `permanentRedirect`**: el rollback de F5 es un revert entero y un 308 quedaria cacheado en el navegador del coach sobreviviendo al revert
+- [x] `nutrition-onboarding-shared.ts` apunta directo a `/coach/nutrition-v2?tab=alimentos`, sin pasar por el redirect
+- [x] Borrados: `_components/FoodBrowser.tsx`, `ClassifyFoodSheet.tsx`, `ExchangeListEntrySheet.tsx`, `ExchangePortionsSection.tsx`, `_data/foods.queries.ts` y `loading.tsx` (skeleton de una pagina que ya solo rebota; el PLAN declara que solo sobreviven `page.tsx` y `FoodSearch.tsx`). Grep previo por archivo: cero importadores fuera de la carpeta. **`FoodSearch.tsx` NO se borro** (importado por `FoodCatalogCurationQueue.tsx:10` y `StructuredRecipeDialog.tsx:16`, ambos V1)
+- [x] Comentario de `api/mobile/nutrition/exchanges/group-foods/route.ts` re-apuntado a la ruta nueva de las actions
+- [x] **Claim del PLAN REFUTADO:** `FoodListCompact` NO quedo huerfano — lo siguen importando `nutrition-plans/_components/FoodLibrary.tsx:21` (V1 viva) y el barrel `components/molecules/index.ts:6`. No se anoto como candidato a borrar porque seria falso. `FoodBrowser` era su segundo consumidor, no el unico
+- [x] Los tres `revalidatePath('/coach/foods')` de V1 (`nutrition-coach.actions.ts:649,673,997`) quedan. **Desviacion declarada:** los `revalidatePath('/coach/foods')` que vivian DENTRO de las dos actions mudadas si se re-apuntaron a `/coach/nutrition-v2` — ya no son V1, y dejarlos apuntando a una ruta que solo redirige era basura muerta en codigo V2
 - [ ] Commit propio, separado de F1-F4: el rollback de esta fase es revert entero
-- [ ] Gate: suite completa + boundaries + typecheck + lint + QA de las dos entradas + `docs:check`
+- [x] Gate: boundaries 324/8 verde, tsc web verde, vitest 2857/2857 (253 archivos) verde, `docs:check` verde, eslint verde (exit 0). **Pendiente: QA de las dos entradas (onboarding y URL directa) — owner**
 
 ## Cierre
 
@@ -80,4 +82,5 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 | 2026-08-09 | F2 | 940e3875 | boundaries + tsc web + vitest 599/599 + eslint | Crear alimento desde el tab. exchangeGroups lazy (desvio del PLAN documentado), guard kcal/P/C/G puro con tests, re-apuntado de busqueda tras crear. 2 bugs preexistentes del sheet arreglados. Pendiente owner: QA desktop/360px y decision sobre bloqueo 0/0/0/0. |
 | 2026-08-09 | F3 | 34f8e0ec | boundaries + tsc web + vitest 628/628 + eslint | Formulario unico de clasificacion en el tab (ClassifyFoodFlow + planFoodClassification puro con 29 tests). Dos caminos de escritura segun propiedad, lapida anti doble-grupo legacy, lectura nueva aditiva sin RPC. Pendiente owner: QA completa en dos anchos (puerta de F5). |
 | 2026-08-09 | F4 | 462869b1 | docs:check | Verificacion de importadores con evidencia pegada arriba: 6 imports externos, todos con destino conocido (2 V1→FoodSearch sobrevive, 4 V2→se reescriben en F5). meal-groups y recipes confirmados solo-V1, no se retiran. |
-| 2026-08-09 | F4.5 | (este commit) | boundaries 319/8 + tsc web + vitest 1099/1099 + eslint | Paridad minima decidida por el owner: browse sin buscar (offset, misma visibilidad que el RPC, pais con regex anti-inyeccion), chip "Solo míos" (pagina 50, busqueda local), badge "Propio", maquina pura de modos con 14 tests. Mapper de F1 generalizado. |
+| 2026-08-09 | F4.5 | b91458d7 | boundaries 319/8 + tsc web + vitest 1099/1099 + eslint | Paridad minima decidida por el owner: browse sin buscar (offset, misma visibilidad que el RPC, pais con regex anti-inyeccion), chip "Solo míos" (pagina 50, busqueda local), badge "Propio", maquina pura de modos con 14 tests. Mapper de F1 generalizado. |
+| 2026-08-09 | F5 | (este commit) | boundaries 324/8 + tsc web + vitest 2857/2857 + eslint + docs:check | Redirect Y borrado de `/coach/foods` (D2, corte directo). 5 archivos mudados al hub con `git mv`, 6 borrados, 4 imports V2 reescritos. Redirect 307 (no 308) a `/coach/nutrition-v2?tab=alimentos` para no cachear la mudanza en el navegador y no romper el rollback. `FoodSearch.tsx` sobrevive. Claim del PLAN refutado: `FoodListCompact` NO quedo huerfano (`FoodLibrary.tsx` V1 lo usa). Pendiente: QA owner de las dos entradas. |

@@ -13,12 +13,12 @@ import {
   type FoodVerificationTone,
 } from '@/lib/food-detail'
 import type { FoodCatalogItem, FoodCatalogCursor } from '@eva/nutrition-v2'
-// T2.3 F2 — el alta vive donde ya estaba: el contrato server (`saveCustomFood`) no cambia y
-// mudar el archivo es trabajo de F5, cuando `/coach/foods` se borre. El gate
-// `check:nutrition-v2-boundaries` es una lista negra de shells V1 (NutritionShell, NutritionHub,
-// PlanBuilder, `/nutrition/_components/`, flags), no una prohibición de importar dominio V1.
-import { AddFoodSheet } from '@/app/coach/foods/_components/AddFoodSheet'
-import type { FoodEquivalenceGroupOption } from '@/app/coach/foods/_components/FoodEquivalenceFields'
+// T2.3 F5 — el alta se mudó al hub junto con `/coach/foods`; el contrato server (`saveCustomFood`,
+// que sigue viviendo en V1) no cambió. El gate `check:nutrition-v2-boundaries` es una lista negra
+// de shells V1 (NutritionShell, NutritionHub, PlanBuilder, `/nutrition/_components/`, flags), no
+// una prohibición de importar dominio V1.
+import { AddFoodSheet } from './AddFoodSheet'
+import type { FoodEquivalenceGroupOption } from './FoodEquivalenceFields'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { loadExchangeGroupsForCoachAction } from '../[clientId]/builder/_components/PortionsGroupsAction'
 import { ClassifyFoodFlow, type ClassifiedFoodSummary } from './ClassifyFoodFlow'
@@ -66,7 +66,7 @@ const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
  *
  *  - `browse` (default, T2.3 F4.5): primera pagina del catalogo por nombre, OFFSET. Es lo que ve
  *    el coach al entrar al tab, SIN escribir nada — la funcion que traia `FoodBrowser` de
- *    `/coach/foods`, que F5 borra.
+ *    `/coach/foods`, borrado en F5.
  *  - `search`: `search_food_catalog_v2` por nombre/marca, minimo 2 caracteres, keyset cursor.
  *  - `mine` ("Solo mios", F4.5): mis alimentos (`coach_id = actor`), OFFSET con pagina grande, y
  *    el texto filtra EN CLIENTE.
