@@ -29,7 +29,10 @@ function submit() {
   fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
 }
 
-describe('AddFoodSheet — invariante 6 (kcal/P/C/G obligatorios)', () => {
+// Timeout holgado: bajo la suite completa el arranque en frio de jsdom + Base UI supera los
+// 5000 ms por defecto (visto en CI local: transform 75 s, environment 21 min agregados) y el
+// primer test del archivo muere por reloj, no por logica. Aislado corre en <4 s.
+describe('AddFoodSheet — invariante 6 (kcal/P/C/G obligatorios)', { timeout: 20000 }, () => {
   beforeEach(() => {
     saveCustomFood.mockReset()
     saveCustomFood.mockResolvedValue({ success: true })
