@@ -173,6 +173,21 @@ export function ItemRow({
           )}
           <PortionMacros item={item} />
         </div>
+        {/* Corregir macros: botón PROPIO, no una entrada del menú ⋮. Es la misma afordancia que
+            la fila de RN, y corregir un alimento mal cargado se hace mirando los macros que están
+            ahí al lado — enterrarlo bajo "⋮" obligaba a saber de antemano que existía.
+            Solo alimentos del catálogo: uno libre ya tiene sus macros editables en la propia fila. */}
+        {item.food ? (
+          <button
+            type="button"
+            aria-label={`Corregir macros de ${itemLabel}`}
+            title="Corregir macros"
+            className={menuTriggerClass}
+            onClick={() => setMacrosOpen(true)}
+          >
+            <Pencil aria-hidden="true" className="h-4 w-4" />
+          </button>
+        ) : null}
         {/* Menú ⋮ (BD7): agrupa lo que antes era un botón suelto de basurero y suma "Mover a…".
             Con una sola franja en el día la opción vive igual, deshabilitada: la capacidad se
             descubre antes de necesitarla. */}
@@ -181,17 +196,6 @@ export function ItemRow({
             <MoreVertical aria-hidden="true" className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            {/* Solo para alimentos del catálogo: un alimento libre ya tiene sus macros
-                editables en la propia fila, no hay nada que corregir "del catálogo". */}
-            {item.food ? (
-              <>
-                <DropdownMenuItem onClick={() => setMacrosOpen(true)}>
-                  <Pencil aria-hidden="true" className="h-4 w-4" />
-                  Corregir macros…
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            ) : null}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger disabled={moveTargets.length === 0}>Mover a…</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-56">
