@@ -10,7 +10,7 @@ Cinco fases. Cada una deja el sistema entero y desplegable: si la tanda se corta
 | F2 | Crear alimento dentro del tab | La escritura mas simple: un sheet, un action que ya existe. | Medio |
 | F3 | Clasificar + porciones, formulario unico | La parte con mas gramatica propia. Depende de F2 solo por convivencia visual. | Medio |
 | F4 | Verificacion de importadores + doc de `meal-groups`/`recipes` | Antes de tocar la puerta hay que probar que nadie mas entra por atras. | Bajo |
-| F5 | `/coach/foods` → redirect al tab | Solo cuando F2 y F3 estan en verde y con QA. | Medio |
+| F5 | `/coach/foods` → redirect **+ borrado** | Solo cuando F2 y F3 estan en verde y con QA. Decision D2 = corte directo, asi que es la fase MAS pesada: hay actions que se mudan y un gate de boundaries que puede saltar. | Alto |
 
 ## F1 — Filtro "Editados por mi"
 
@@ -51,21 +51,29 @@ Antes de tocar `/coach/foods`:
 
 **Gate F4:** el grep como evidencia en el acta; `docs:check`.
 
-## F5 — Redirect de `/coach/foods`
+## F5 — Redirect Y borrado de `/coach/foods`
 
-- `page.tsx` pasa a `redirect('/coach/nutrition-v2?tab=foods')` (o el parametro que use el hub).
-- La carpeta `_components`/`_actions`/`_data` **no se borra** en esta tanda (decision D2): revertir tiene que costar una linea.
-- El link de la guia de onboarding (`nutrition-onboarding-shared.ts:25`) apunta directo al tab, sin pasar por el redirect.
-- Los tres `revalidatePath('/coach/foods')` se dejan: son inofensivos sobre una ruta que redirige, y sacarlos es ruido en un archivo de V1.
+Decision D2 del owner: corte directo, sin dejar la carpeta dos semanas. Eso convierte a F5 en la fase mas pesada, no la mas liviana. Orden interno obligatorio:
 
-**Gate F5:** suite completa + QA de las dos entradas (onboarding y URL directa) + `docs:check`.
+1. **Mudar antes de borrar.** `_actions/food-equivalence.actions.ts` y `_actions/exchange-lists.actions.ts` pasan al hub. `ClassifyFoodSheet.tsx:23` depende del primero; si la carpeta muere antes, el sheet mudado queda sin action.
+2. **Correr `pnpm check:nutrition-v2-boundaries` ANTES de mover los sheets.** `AddFoodSheet.tsx:12` importa `saveCustomFood` de V1 (`nutrition-plans/_actions/nutrition-coach.actions`) y `ClassifyFoodSheet.tsx:21` importa `searchCoachFoodLibrary` de `nutrition-plans/_actions/food-library.actions`. Dentro del arbol V2 esos imports cruzan a V1 y pueden violar el gate. Si falla: hace falta una capa propia en el hub y eso es media fase extra — descubrirlo despues de mover cuesta el doble.
+3. **Comparar `FoodBrowser` contra `FoodCatalogBrowser` funcion por funcion.** El primero muere con la carpeta. Si lista, filtra o pagina algo que el tab no hace, se pierde funcion y el invariante 5 lo prohibe.
+4. `page.tsx` → `redirect` al tab Alimentos del hub.
+5. El link de onboarding (`nutrition-onboarding-shared.ts:25`) apunta directo al tab, sin pasar por el redirect.
+6. Borrar `_components/`, lo que quede de `_actions/` y `_data/`.
+7. Los tres `revalidatePath('/coach/foods')` de V1 se dejan: son no-op sobre una ruta inexistente y sacarlos obliga a tocar V1. Deuda menor anotada.
+
+**Gate F5:** suite completa + `check:nutrition-v2-boundaries` + typecheck + lint + QA de las dos entradas (onboarding y URL directa) + `docs:check`.
+
+**Rollback F5:** revert del commit entero (ya no es una linea — costo asumido en D2). Por eso F5 va en un commit propio y separado de F1-F4.
 
 ## Fuera de esta PLAN
 
-- Unificar `FoodBrowser` con `FoodCatalogBrowser` (dos navegadores conviviendo). Es deuda anotada, no bloquea; se hace cuando `/coach/foods` se borre de verdad.
 - Paridad RN del tab Alimentos (`apps/mobile/app/coach/nutrition-v2/foods.tsx`).
-- Borrado fisico de `/coach/foods`, dos semanas despues del redirect estable.
+- Sacar los tres `revalidatePath('/coach/foods')` de V1 (no-op inofensivo; sacarlos obliga a tocar V1).
+
+Nota: la deuda "unificar los dos navegadores" **deja de ser deuda y entra en F5** por la decision D2 — al borrar la carpeta, `FoodBrowser` muere y el tab tiene que cubrir todo lo suyo.
 
 ## Rollback
 
-Cada fase es un commit propio. F5 revierte con un revert de una linea. F1-F3 revierten sin tocar datos: no hay migracion en toda la tarea.
+Cada fase es un commit propio. F1-F4 revierten sin tocar datos: no hay migracion en toda la tarea. F5 revierte con un revert del commit entero (costo asumido en D2).
