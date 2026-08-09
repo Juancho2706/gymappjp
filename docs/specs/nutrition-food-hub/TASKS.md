@@ -1,12 +1,13 @@
 # TASKS — T2.3 Hub de Alimentos
 
-Estado: **SPEC escrita, esperando OK del owner sobre D1/D2/D3** (ver SPEC). Nada de codigo arranca antes de eso.
+Estado: **SPEC/PLAN/TASKS escritas. D1/D2/D3 decididas por el owner el 2026-08-09.** Pendiente: revision de Fable sobre el plan antes de escribir codigo (pedido del owner).
 
 ## F0 — Puerta
 
 - [x] Auditoria de estado real contra HEAD (2026-08-09)
 - [x] SPEC / PLAN / TASKS
-- [ ] OK del owner a D1 (recoger el filtro huerfano de T2.2), D2 (redirect sin borrar) y D3 (no retirar meal-groups/recipes)
+- [x] Decisiones del owner: D1 si (filtro entra), D2 redirect **Y borrado en la misma tanda**, D3 no retirar meal-groups/recipes
+- [ ] Revision de Fable sobre SPEC + PLAN
 
 ## F1 — Filtro "Editados por mi"
 
@@ -37,17 +38,24 @@ Estado: **SPEC escrita, esperando OK del owner sobre D1/D2/D3** (ver SPEC). Nada
 - [ ] Corregir el bullet de T2.3 en `nutrition-flows-redesign/TASKS.md`: de "retirar" a "verificado, no se retira (V1 viva)"
 - [ ] Gate: `docs:check`
 
-## F5 — Redirect
+## F5 — Redirect Y borrado (decision D2)
 
+Orden obligatorio: mudar → verificar → borrar. Al reves se rompe.
+
+- [ ] Correr `pnpm check:nutrition-v2-boundaries` **antes** de mover los sheets: `AddFoodSheet.tsx:12` y `ClassifyFoodSheet.tsx:21` importan actions de V1 y dentro del arbol V2 eso puede violar el gate
+- [ ] Mudar `_actions/food-equivalence.actions.ts` y `_actions/exchange-lists.actions.ts` al hub (`ClassifyFoodSheet.tsx:23` depende del primero)
+- [ ] Comparar `FoodBrowser` contra `FoodCatalogBrowser` funcion por funcion; cubrir en el tab lo que falte ANTES de borrar
 - [ ] `/coach/foods/page.tsx` → redirect al tab Alimentos del hub
 - [ ] `nutrition-onboarding-shared.ts:25` apunta directo al tab
-- [ ] NO borrar `_components`/`_actions`/`_data` de `/coach/foods` (decision D2)
-- [ ] Gate: suite completa + QA de las dos entradas + `docs:check`
+- [ ] Borrar `_components/`, el resto de `_actions/` y `_data/`
+- [ ] Dejar los tres `revalidatePath('/coach/foods')` de V1 (no-op; sacarlos obliga a tocar V1)
+- [ ] Commit propio, separado de F1-F4: el rollback de esta fase es revert entero
+- [ ] Gate: suite completa + boundaries + typecheck + lint + QA de las dos entradas + `docs:check`
 
 ## Cierre
 
 - [ ] Actualizar `nutrition-flows-redesign/TASKS.md` (T2.3 cerrada) y su registro de cierres
-- [ ] Anotar deuda: unificar `FoodBrowser` con `FoodCatalogBrowser`; paridad RN; borrado fisico de `/coach/foods` a las dos semanas
+- [ ] Anotar deuda: paridad RN del tab Alimentos; los tres `revalidatePath` muertos en V1
 
 ## Registro de cierres
 

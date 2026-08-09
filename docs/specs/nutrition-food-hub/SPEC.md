@@ -59,7 +59,7 @@ Regla vigente del owner: **V1 no se borra, solo se migra la gente**. Por lo tant
 2. **Clasificar desde el tab.** `ClassifyFoodSheet` idem, incluyendo porciones de listas de intercambio.
 3. **Formulario UNICO de grupo.** Hoy la clasificacion y las porciones de intercambio se editan por piezas separadas; el tab expone una sola gramatica de grupo.
 4. **Filtro "Editados por mi"** en el tab (rescate de T2.2): muestra solo alimentos con override del coach.
-5. **`/coach/foods` redirige al tab** y deja de renderizar UI propia.
+5. **`/coach/foods` redirige al tab y la carpeta se borra en la misma tanda** (decision D2). Lo que se mude (actions de equivalencias e intercambio) tiene que estar vivo en el hub antes del borrado.
 6. **Verificacion documentada** de `meal-groups` y `recipes`: quien los importa hoy, y por que NO se borran.
 
 ### No entra
@@ -91,13 +91,22 @@ Heredados del programa padre, mas los propios:
 7. Gates verdes: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm check:nutrition-v2-boundaries`, `pnpm docs:check`.
 8. QA responsive real: el tab con sheets de crear/clasificar se usa en ancho de telefono sin que el teclado tape los campos (mismo problema ya visto en RN, ver `nutrition-flows-redesign`).
 
-## Decisiones que necesita el owner
+## Decisiones del owner (2026-08-09) — TOMADAS
 
-| # | Pregunta | Recomendacion |
-|---|---|---|
-| D1 | El filtro "Editados por mi", huerfano de T2.2, se recoge en T2.3? | **Si.** Es su superficie natural y sin el los overrides quedan a medias. |
-| D2 | `/coach/foods` redirige o se borra? | **Redirect permanente**, sin borrar la carpeta en la misma tanda: si el tab falla en QA, revertir es cambiar una linea. Borrado real, dos semanas despues (mismo criterio que el par wizard/quick-edit en O3). |
-| D3 | `meal-groups` y `recipes` se retiran? | **No.** Solo viven dentro de V1 y V1 no se borra. Se documenta y se cierra el bullet como verificado. |
+| # | Pregunta | Decision |
+|---|----------|----------|
+| D1 | El filtro "Editados por mi", huerfano de T2.2, se recoge en T2.3? | **SI.** Entra en el alcance de esta tarea (F1). |
+| D2 | `/coach/foods` redirige o se borra? | **Redirect Y BORRADO en la misma tanda.** El owner eligio el corte directo por sobre la recomendacion de dejar la carpeta dos semanas. Consecuencia asumida: el rollback deja de ser una linea y pasa a ser un revert del commit entero, y **F5 crece** (ver mas abajo). |
+| D3 | `meal-groups` y `recipes` se retiran? | **NO.** Solo viven dentro de V1 y V1 no se borra. El bullet se cierra como verificado y documentado. |
+
+### Lo que D2 arrastra (verificado 2026-08-09, antes de cerrar la sesion)
+
+Borrar la carpeta en la misma tanda no es borrar: **hay piezas que se mudan**, y una que puede chocar con un gate.
+
+1. **`_actions/food-equivalence.actions.ts` y `_actions/exchange-lists.actions.ts` se MUDAN, no se borran.** `ClassifyFoodSheet.tsx:23` importa `setFoodExchangeEquivalenceAction` desde `../_actions/food-equivalence.actions`. Si la carpeta muere, esos actions tienen que vivir en el hub antes.
+2. **Los sheets importan actions de V1.** `AddFoodSheet.tsx:12` usa `saveCustomFood` de `nutrition-plans/_actions/nutrition-coach.actions`, y `ClassifyFoodSheet.tsx:21` usa `searchCoachFoodLibrary` de `nutrition-plans/_actions/food-library.actions`. Al mudar los sheets dentro del arbol V2, esos imports cruzan de V2 a V1 y **pueden violar `pnpm check:nutrition-v2-boundaries`**. Hay que correr el gate ANTES de mover, no despues: si falla, la mudanza necesita una capa propia y eso es media fase extra.
+3. **`FoodBrowser` muere con la carpeta.** Antes de borrarlo hay que comparar funcion por funcion contra `FoodCatalogBrowser` (el del tab): si `FoodBrowser` lista o pagina algo que el tab no hace, se pierde funcion — y el invariante 5 lo prohibe.
+4. **Los tres `revalidatePath('/coach/foods')`** (`nutrition-coach.actions.ts:649,673,997`) quedan apuntando a una ruta inexistente. Es inofensivo (no lanza, es no-op), y sacarlos obliga a tocar V1. Se dejan y se anota como deuda menor.
 
 ## Riesgos
 
