@@ -15,14 +15,17 @@ import { rateLimitNutritionCatalogSearch } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
 import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
-import { getCoachFoodOverridePage } from '@/services/nutrition-v2/coach-food-overrides.service'
+import {
+  getCoachFoodOverridePage,
+  getCoachFoodOverridesFor,
+} from '@/services/nutrition-v2/coach-food-overrides.service'
 import {
   getFoodExchangeClassification,
   type FoodExchangeClassificationRead,
 } from '@/services/nutrition-exchanges/exchange-lists.service'
 import {
-  coachEditedFoodToCatalogItem,
-  type CoachEditedFoodRow,
+  foodRowToCatalogItem,
+  type CatalogFoodRow,
 } from '@/app/coach/nutrition-v2/_lib/edited-foods'
 
 // Listado de alimentos del hub coach V2 (solo lectura).
@@ -35,6 +38,10 @@ import {
 // pagina `coach_food_overrides` por offset e hidrata identidad desde `foods`. No puede
 // resolverse filtrando la pagina del RPC — ese exige query de 2+ caracteres y devolveria
 // paginas casi vacias con "Cargar mas" lleno.
+//
+// El browse (T2.3 F4.5) es el TERCER data path: navegar el catalogo SIN buscar y el filtro
+// "Solo mios", tambien por offset sobre `foods`. Existe porque `/coach/foods` se borra en F5 y su
+// `FoodBrowser` era la unica forma de ver el catalogo sin tipear.
 
 const PAGE_SIZE = 20
 
@@ -52,7 +59,12 @@ type SearchSuccess = {
   nextCursor: FoodCatalogCursor | null
   hasMore: boolean
 }
-type EditedListSuccess = {
+/**
+ * Forma comun de los data paths paginados por OFFSET (editados y browse). El cliente no necesita
+ * saber cual de los dos respondio: pide `nextOffset` y lo devuelve tal cual en "Cargar mas", asi
+ * que el tamaño de pagina lo decide el servidor y puede diferir por modo.
+ */
+type OffsetListSuccess = {
   ok: true
   items: FoodCatalogItem[]
   hasMore: boolean
@@ -185,7 +197,9 @@ const EditedListInputSchema = z.object({
 
 /**
  * Columnas de identidad/presentacion que la card y la ficha necesitan. Es el mismo set que emite
- * `private.food_catalog_v2_item_json`, menos `media` (ver mas abajo).
+ * `private.food_catalog_v2_item_json`, menos `media` (ver mas abajo). Lo comparten los DOS data
+ * paths por offset (editados y browse): si divergieran, la misma card mostraria campos distintos
+ * segun por que modo llego el coach.
  */
 const EDITED_FOOD_SELECT =
   'id, catalog_key, barcode, name, brand, category, country_code, serving_size, serving_unit, ' +
@@ -197,12 +211,20 @@ const EDITED_FOOD_SELECT =
 // country_code, package_*, catalog_source, source_ref, verification_status): el cliente tipado
 // convertiria este select en un error de tipos. Misma tactica que `plan-foods.data.ts`:
 // interfaz minima tipada sobre el mismo objeto de runtime.
-interface EditedFoodsReadChain
-  extends PromiseLike<{ data: CoachEditedFoodRow[] | null; error: { message: string; code?: string } | null }> {
-  in(column: string, values: readonly string[]): EditedFoodsReadChain
+type FoodsReadResult = {
+  data: CatalogFoodRow[] | null
+  error: { message: string; code?: string } | null
 }
-interface EditedFoodsReadDb {
-  from(table: 'foods'): { select(columns: string): EditedFoodsReadChain }
+interface FoodsReadChain extends PromiseLike<FoodsReadResult> {
+  in(column: string, values: readonly string[]): FoodsReadChain
+  eq(column: string, value: string): FoodsReadChain
+  neq(column: string, value: string): FoodsReadChain
+  or(filter: string): FoodsReadChain
+  order(column: string, options: { ascending: boolean }): FoodsReadChain
+  range(from: number, to: number): FoodsReadChain
+}
+interface FoodsReadDb {
+  from(table: 'foods'): { select(columns: string): FoodsReadChain }
 }
 
 /**
@@ -220,7 +242,7 @@ interface EditedFoodsReadDb {
  */
 export async function listCoachEditedFoodsHubAction(
   input: unknown,
-): Promise<EditedListSuccess | ActionFailure> {
+): Promise<OffsetListSuccess | ActionFailure> {
   const parsed = EditedListInputSchema.safeParse(input)
   if (!parsed.success) return fail('INVALID_PAYLOAD', 'Parametros invalidos.')
 
@@ -246,7 +268,7 @@ export async function listCoachEditedFoodsHubAction(
   const nextOffset = hasMore ? from + PAGE_SIZE : null
   if (rows.length === 0) return { ok: true, items: [], hasMore: false, nextOffset: null }
 
-  const foods = await (auth.db as unknown as EditedFoodsReadDb)
+  const foods = await (auth.db as unknown as FoodsReadDb)
     .from('foods')
     .select(EDITED_FOOD_SELECT)
     .in(
@@ -268,8 +290,122 @@ export async function listCoachEditedFoodsHubAction(
   const items: FoodCatalogItem[] = []
   for (const row of rows) {
     const food = byId.get(row.foodId)
-    if (food) items.push(coachEditedFoodToCatalogItem(food, row.values))
+    if (food) items.push(foodRowToCatalogItem(food, row.values))
   }
+
+  const validated = z.array(FoodCatalogItemSchema).safeParse(items)
+  if (!validated.success) {
+    return fail('CATALOG_CONTRACT_MISMATCH', 'El catalogo devolvio un formato inesperado.')
+  }
+
+  return { ok: true, items: validated.data, hasMore, nextOffset }
+}
+
+const BrowseInputSchema = z.object({
+  offset: z.number().int().nonnegative().max(100000).default(0),
+  /**
+   * "Solo mios". Es un BOOLEAN, no un `coachId`: el dueño se deriva del actor y el payload no
+   * puede nombrar a otro coach ni por accidente.
+   */
+  mineOnly: z.boolean().default(false),
+  /**
+   * Solo letras, a diferencia del schema de busqueda: aca el valor se interpola en un filtro
+   * `or(...)` de PostgREST (texto, no parametro), asi que una coma o un parentesis reescribirian
+   * la condicion. La RPC no tiene ese problema porque recibe el pais como argumento.
+   */
+  countryCode: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2}$/)
+    .default('CL'),
+})
+
+/**
+ * Pagina del browse de "todos". 20 como la busqueda: el catalogo son decenas de miles de filas y
+ * el coach navega, no audita.
+ */
+const BROWSE_PAGE_SIZE = PAGE_SIZE
+/**
+ * Pagina de "Solo mios". Mas grande a proposito: el universo son decenas de filas (24 en prod al
+ * 2026-08-09) y dentro del modo la busqueda por texto es LOCAL sobre lo cargado, asi que una
+ * pagina que cubra el universo entero de una es lo que hace que esa busqueda no mienta. Sigue
+ * siendo UN round-trip.
+ */
+const MINE_PAGE_SIZE = 50
+
+/**
+ * Navega el catalogo SIN buscar (T2.3 F4.5), con o sin el filtro "Solo mios".
+ *
+ * Por que no la RPC: `search_food_catalog_v2` exige un termino — es una busqueda trigram, no un
+ * listado. Esto es un SELECT directo a `foods` con RLS como techo, ordenado por nombre y paginado
+ * por offset (el mismo patron del listado de editados; keyset no aporta nada sobre un orden
+ * alfabetico estable de paginas que el coach recorre hacia adelante).
+ *
+ * **La visibilidad se replica a mano, y eso es deliberado**: `verification_status <> 'rejected'` y
+ * `country_code` nulo o del pais pedido son los mismos dos predicados que aplica la RPC. Hoy en
+ * LIVE no hay ninguna fila que caiga afuera, asi que el filtro no cambia lo que se ve; existe para
+ * que el browse nunca pueda mostrar un alimento que la busqueda no encontraria — dos listados de
+ * la misma pantalla que difieren en su universo es un bug de confianza, no de datos. El resto de
+ * la visibilidad (dueño, org, coach del alumno) lo pone RLS sobre `foods`, que es lo mismo que
+ * evalua `private.food_catalog_v2_can_read_food`.
+ *
+ * Overrides: UN batch para toda la pagina (`getCoachFoodOverridesFor`), nunca N+1, y el merge lo
+ * hace `resolveFoodMacros` dentro del mapper — la misma formula que la RPC y que el freeze. Sin
+ * eso, el mismo alimento mostraria los macros del catalogo en el browse y los corregidos en la
+ * busqueda. (Si esa lectura falla, el repo degrada a mapa vacio como en el freeze: la pagina se
+ * ve con los macros del catalogo en vez de romperse. Es la unica degradacion tolerada aca.)
+ *
+ * Lectura pura: sin `revalidatePath`.
+ */
+export async function browseFoodCatalogHubAction(
+  input: unknown,
+): Promise<OffsetListSuccess | ActionFailure> {
+  const parsed = BrowseInputSchema.safeParse(input)
+  if (!parsed.success) return fail('INVALID_PAYLOAD', 'Parametros invalidos.')
+
+  const auth = await authorizeHubCoach()
+  if (!auth.ok) return auth
+
+  const pageSize = parsed.data.mineOnly ? MINE_PAGE_SIZE : BROWSE_PAGE_SIZE
+  const from = parsed.data.offset
+  const country = parsed.data.countryCode.toUpperCase()
+
+  let chain = (auth.db as unknown as FoodsReadDb)
+    .from('foods')
+    .select(EDITED_FOOD_SELECT)
+    .neq('verification_status', 'rejected')
+    .or(`country_code.is.null,country_code.eq.${country}`)
+
+  // El dueño sale del ACTOR. RLS ya acota lo visible, pero "mios" es mas estrecho que "puedo
+  // verlo": el catalogo publico (`coach_id is null`) tambien es visible y no es mio.
+  if (parsed.data.mineOnly) chain = chain.eq('coach_id', auth.coachId)
+
+  // `id` desempata: `name` no es unico y sin desempate la pagina 2 puede repetir u omitir filas.
+  const foods = await chain
+    .order('name', { ascending: true })
+    .order('id', { ascending: true })
+    // +1 para saber si hay mas sin pagar un COUNT (patron de la cola de curacion).
+    .range(from, from + pageSize)
+
+  if (foods.error || foods.data == null) {
+    if (foods.error?.code === '42501') {
+      return fail('SCOPE_DENIED', 'No tienes permiso para consultar el catalogo.')
+    }
+    return fail('CATALOG_READ_FAILED', 'No se pudo cargar el catalogo. Intenta nuevamente.')
+  }
+
+  const hasMore = foods.data.length > pageSize
+  const rows = hasMore ? foods.data.slice(0, pageSize) : foods.data
+  const nextOffset = hasMore ? from + pageSize : null
+  if (rows.length === 0) return { ok: true, items: [], hasMore: false, nextOffset: null }
+
+  const overrides = await getCoachFoodOverridesFor(
+    auth.db as unknown as SupabaseClient<Database>,
+    { coachId: auth.coachId },
+    rows.map((row) => row.id),
+  )
+
+  const items = rows.map((row) => foodRowToCatalogItem(row, overrides.get(row.id) ?? null))
 
   const validated = z.array(FoodCatalogItemSchema).safeParse(items)
   if (!validated.success) {

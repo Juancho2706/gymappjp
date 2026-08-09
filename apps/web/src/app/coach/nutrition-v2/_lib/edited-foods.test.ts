@@ -5,14 +5,14 @@ import {
   type FoodCatalogItem,
 } from '@eva/nutrition-v2'
 import {
-  coachEditedFoodToCatalogItem,
+  foodRowToCatalogItem,
   filterCoachEditedFoods,
   isCoachEditedFood,
   matchesFoodQuery,
-  type CoachEditedFoodRow,
+  type CatalogFoodRow,
 } from './edited-foods'
 
-function makeRow(overrides: Partial<CoachEditedFoodRow> = {}): CoachEditedFoodRow {
+function makeRow(overrides: Partial<CatalogFoodRow> = {}): CatalogFoodRow {
   return {
     id: '11111111-1111-4111-8111-111111111111',
     catalog_key: 'cl-yogurt',
@@ -61,17 +61,17 @@ function makeOverride(overrides: Partial<CoachFoodOverrideValues> = {}): CoachFo
 
 /** Item del catalogo tal como lo emite la RPC de busqueda (para el predicado del filtro). */
 function makeItem(overrides: Partial<FoodCatalogItem> = {}): FoodCatalogItem {
-  return { ...coachEditedFoodToCatalogItem(makeRow(), makeOverride()), ...overrides }
+  return { ...foodRowToCatalogItem(makeRow(), makeOverride()), ...overrides }
 }
 
-describe('coachEditedFoodToCatalogItem', () => {
+describe('foodRowToCatalogItem', () => {
   it('produce un item que cumple el contrato del catalogo', () => {
-    const item = coachEditedFoodToCatalogItem(makeRow(), makeOverride())
+    const item = foodRowToCatalogItem(makeRow(), makeOverride())
     expect(FoodCatalogItemSchema.safeParse(item).success).toBe(true)
   })
 
   it('traduce identidad y presentacion con los nombres del read model', () => {
-    const item = coachEditedFoodToCatalogItem(makeRow(), makeOverride())
+    const item = foodRowToCatalogItem(makeRow(), makeOverride())
     expect(item.id).toBe('11111111-1111-4111-8111-111111111111')
     expect(item.catalogKey).toBe('cl-yogurt')
     // `barcode` de la tabla viaja como `gtin` en el contrato, igual que en el JSON de la RPC.
@@ -87,7 +87,7 @@ describe('coachEditedFoodToCatalogItem', () => {
   })
 
   it('reemplaza los CINCO macros con los del override y conserva los originales', () => {
-    const item = coachEditedFoodToCatalogItem(makeRow(), makeOverride())
+    const item = foodRowToCatalogItem(makeRow(), makeOverride())
     expect(item.calories).toBe(80)
     expect(item.proteinG).toBe(9)
     expect(item.carbsG).toBe(5)
@@ -104,7 +104,7 @@ describe('coachEditedFoodToCatalogItem', () => {
   })
 
   it('toma la base de macros del override, no la del catalogo', () => {
-    const item = coachEditedFoodToCatalogItem(
+    const item = foodRowToCatalogItem(
       makeRow({ macros_basis: 'per_100' }),
       makeOverride({ macrosBasis: 'per_serving' }),
     )
@@ -113,9 +113,9 @@ describe('coachEditedFoodToCatalogItem', () => {
 
   it('reporta base nula cuando la fila trae un valor fuera del vocabulario', () => {
     // La base la manda el override; el punto es que el mapper no invente `per_100` desde la fila.
-    const item = coachEditedFoodToCatalogItem(makeRow({ macros_basis: 'basura' }), makeOverride())
+    const item = foodRowToCatalogItem(makeRow({ macros_basis: 'basura' }), makeOverride())
     expect(item.macrosBasis).toBe('per_100')
-    const sinOverrideBasis = coachEditedFoodToCatalogItem(
+    const sinOverrideBasis = foodRowToCatalogItem(
       makeRow({ macros_basis: null }),
       makeOverride({ macrosBasis: 'per_serving' }),
     )
@@ -123,7 +123,7 @@ describe('coachEditedFoodToCatalogItem', () => {
   })
 
   it('conserva la medida casera del catalogo cuando el override no trae una', () => {
-    const item = coachEditedFoodToCatalogItem(
+    const item = foodRowToCatalogItem(
       makeRow({ household_label: '1 taza', household_grams: 240 }),
       makeOverride(),
     )
@@ -132,7 +132,7 @@ describe('coachEditedFoodToCatalogItem', () => {
   })
 
   it('la medida casera del override gana como PAR, sin mezclar fuentes', () => {
-    const item = coachEditedFoodToCatalogItem(
+    const item = foodRowToCatalogItem(
       makeRow({ household_label: '1 taza', household_grams: 240 }),
       makeOverride({ householdLabel: '1 pote', householdGrams: 125 }),
     )
@@ -141,16 +141,57 @@ describe('coachEditedFoodToCatalogItem', () => {
   })
 
   it('cae a gramos cuando la fila no declara unidad y deja media en null', () => {
-    const item = coachEditedFoodToCatalogItem(makeRow({ serving_unit: null }), makeOverride())
+    const item = foodRowToCatalogItem(makeRow({ serving_unit: null }), makeOverride())
     expect(item.servingUnit).toBe('g')
     // La foto exigiria un tercer round-trip a food_media: la card usa el icono de categoria.
     expect(item.media).toBeNull()
   })
 
   it('preserva la fibra nula del catalogo como original (null no es cero)', () => {
-    const item = coachEditedFoodToCatalogItem(makeRow({ fiber_g: null }), makeOverride())
+    const item = foodRowToCatalogItem(makeRow({ fiber_g: null }), makeOverride())
     expect(item.original?.fiberG).toBeNull()
     expect(item.fiberG).toBe(1)
+  })
+
+  // T2.3 F4.5: el browse lista alimentos que el coach nunca corrigio. Sin override el item tiene
+  // que quedar identico al que emite la RPC para esa misma fila — si no, el mismo alimento
+  // mostraria numeros distintos segun si el coach llego navegando o buscando.
+  it('sin override devuelve los macros del catalogo, sin marcar correccion', () => {
+    const item = foodRowToCatalogItem(makeRow(), null)
+    expect(FoodCatalogItemSchema.safeParse(item).success).toBe(true)
+    expect(item.calories).toBe(61)
+    expect(item.proteinG).toBe(3.5)
+    expect(item.carbsG).toBe(4.7)
+    expect(item.fatsG).toBe(3.3)
+    expect(item.fiberG).toBe(0)
+    expect(item.macrosBasis).toBe('per_100')
+    expect(item.hasOverride).toBe(false)
+    expect(item.original).toBeNull()
+  })
+
+  it('sin override conserva la medida casera del catalogo', () => {
+    const item = foodRowToCatalogItem(
+      makeRow({ household_label: '1 taza', household_grams: 240 }),
+      null,
+    )
+    expect(item.householdLabel).toBe('1 taza')
+    expect(item.householdGrams).toBe(240)
+  })
+
+  it('sin override reporta base nula cuando la fila trae un valor fuera del vocabulario', () => {
+    // Aca si importa el guard del mapper: no hay override que aporte la base, y `per_100` no se
+    // inventa (la card imprimiria "por 100 g" sobre macros que podrian ser de la porcion).
+    const item = foodRowToCatalogItem(makeRow({ macros_basis: 'basura' }), null)
+    expect(item.macrosBasis).toBeNull()
+  })
+
+  it('marca la identidad del dueño tal cual viene de la fila', () => {
+    const propio = foodRowToCatalogItem(
+      makeRow({ coach_id: '22222222-2222-4222-8222-222222222222' }),
+      null,
+    )
+    expect(propio.coachId).toBe('22222222-2222-4222-8222-222222222222')
+    expect(foodRowToCatalogItem(makeRow(), null).coachId).toBeNull()
   })
 })
 

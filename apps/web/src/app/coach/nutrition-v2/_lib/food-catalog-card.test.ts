@@ -159,6 +159,26 @@ describe('foodCatalogItemToCardModel', () => {
     expect(foodCatalogItemToCardModel(makeItem({ hasOverride: false }), BASE).hasOverride).toBe(false)
     expect(foodCatalogItemToCardModel(makeItem({ hasOverride: true }), BASE).hasOverride).toBe(true)
   })
+
+  it('marca "Propio" solo cuando el alimento tiene dueño coach', () => {
+    // T2.3 F4.5: el dato ya viajaba en el read model; la card recien ahora lo muestra.
+    expect(foodCatalogItemToCardModel(makeItem({ coachId: null }), BASE).isOwn).toBe(false)
+    expect(
+      foodCatalogItemToCardModel(makeItem({ coachId: '33333333-3333-4333-8333-333333333333' }), BASE)
+        .isOwn,
+    ).toBe(true)
+  })
+
+  it('un alimento de la organizacion no es "Propio"', () => {
+    // Visible no es lo mismo que mio: "Propio" tiene que significar "lo cree yo" para servir junto
+    // al filtro "Solo mios", que consulta por `coach_id`.
+    expect(
+      foodCatalogItemToCardModel(
+        makeItem({ coachId: null, orgId: '44444444-4444-4444-8444-444444444444' }),
+        BASE,
+      ).isOwn,
+    ).toBe(false)
+  })
 })
 
 describe('foodCatalogItemToDetail', () => {

@@ -60,9 +60,9 @@ Decision D2 del owner: corte directo, sin dejar la carpeta dos semanas. Eso conv
 
 **Puerta previa a F5 (agregada en la revision 2026-08-09) — sin esto F5 no arranca:**
 
-- QA del owner sobre F2 y F3 (ya estaba en el PLAN).
-- Conteo en LIVE de alimentos de coach invisibles para el RPC del tab (`verification_status = 'rejected'` o `country_code` no CL/null). Si hay filas, decidir que se hace con ellas antes de borrar la unica UI que las muestra.
-- Decision del owner sobre paridad de navegacion: `FoodBrowser` tiene navegar-sin-buscar, filtro mine/all server-side, filtro por categoria, orden Nombre/Kcal/Prot, contador de total, tabla densa desktop y hint de unidad casera — nada de eso existe en el tab. Que absorbe el tab y que se degrada asumido. (El tab es superior en todo lo demas: paginacion real, busqueda trigram, detalle, imagenes, badges, errores tipados.)
+- QA sobre F2 y F3 — **decision owner 2026-08-09: F5 se ejecuta primero y el QA (owner + Claude en navegador) va despues, sobre la rama, antes del merge a master.**
+- Conteo en LIVE de alimentos invisibles para el RPC — **HECHO 2026-08-09: 0 filas** (4.649 foods, 24 de coach, 0 rejected, 0 pais≠CL).
+- Paridad de navegacion — **DECIDIDA 2026-08-09: "minimo funcional", e IMPLEMENTADA como F4.5**: navegar sin buscar (browse por offset con la misma semantica de visibilidad que el RPC) + chip "Solo míos" (universo propio, busqueda local) + badge "Propio" por fila. Se degrada asumido: filtro por categoria, orden Nombre/Kcal/Prot, contador de total, tabla densa desktop y hint de unidad casera. Los tres modos (`todos`/`mios`/`editados`) son un solo valor excluyente (`_lib/food-catalog-mode.ts`).
 
 Orden interno obligatorio:
 

@@ -43,6 +43,15 @@ export interface FoodCatalogCardModel {
    * "sin override".
    */
   hasOverride: boolean
+  /**
+   * El alimento es del coach, no del catalogo publico (badge "Propio"). Se deriva de `coachId`,
+   * que YA viaja en el read model: el catalogo abierto y las filas importadas lo traen en null.
+   *
+   * `orgId` NO cuenta: un alimento de la organizacion es visible para el coach pero no es suyo, y
+   * "Propio" tiene que significar "lo cree yo y lo puedo editar" para servir de algo junto al
+   * filtro "Solo mios".
+   */
+  isOwn: boolean
   /** Macros compactas ya formateadas para la card. */
   calories: string
   proteinG: string
@@ -112,6 +121,7 @@ export function foodCatalogItemToCardModel(
     categoryIconUrl: foodCategoryIconUrl(item.category),
     basisLabel,
     hasOverride: item.hasOverride === true,
+    isOwn: item.coachId != null,
     calories: fmt(item.calories, 0),
     proteinG: fmt(item.proteinG),
     carbsG: fmt(item.carbsG),

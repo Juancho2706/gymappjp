@@ -1,15 +1,20 @@
 /**
- * Helpers PUROS del filtro "Editados por mi" del tab Alimentos (T2.3 F1).
+ * Helpers PUROS de los data paths PROPIOS del tab Alimentos (T2.3 F1 + F4.5).
+ *
+ * "Propios" = los que NO pasan por `search_food_catalog_v2`: el listado "Editados por mi" (F1) y
+ * el browse del catalogo sin buscar / "Solo mios" (F4.5). Los dos leen `foods` con PostgREST y
+ * necesitan la misma traduccion a `FoodCatalogItem` que hace la RPC.
  *
  * Sin React y sin Supabase. Dos piezas:
- *  - `coachEditedFoodToCatalogItem`: fila de `foods` + override del coach -> `FoodCatalogItem`.
+ *  - `foodRowToCatalogItem`: fila de `foods` + override del coach (o `null`) -> `FoodCatalogItem`.
  *    Es el ESPEJO en TypeScript de `private.food_catalog_v2_item_json`, igual que el freeze:
  *    el merge de macros lo hace `resolveFoodMacros` (una sola formula para SQL y TS), y el
  *    resto de las claves se copian con el mismo nombre que emite el JSON de la RPC. Si las dos
- *    se separan, el coach ve un numero en la busqueda y otro en su lista de editados.
- *  - `isCoachEditedFood` / `filterCoachEditedFoods`: el predicado del filtro.
+ *    se separan, el coach ve un numero en la busqueda y otro en el browse.
+ *  - `isCoachEditedFood` / `filterCoachEditedFoods`: el predicado del filtro de editados.
+ *  - `matchesFoodQuery`: la busqueda LOCAL de los modos que ya tienen su universo en memoria.
  *
- * `media` queda en `null` a proposito: resolver la foto exigiria un tercer round-trip a
+ * `media` queda en `null` a proposito: resolver la foto exigiria un round-trip extra a
  * `food_media` y la card ya tiene el icono de categoria como fallback garantizado.
  */
 
@@ -21,10 +26,10 @@ import {
 } from '@eva/nutrition-v2'
 
 /**
- * Fila de `public.foods` tal como la devuelve PostgREST para este listado. Snake_case porque
+ * Fila de `public.foods` tal como la devuelve PostgREST para estos listados. Snake_case porque
  * es la fila cruda: la traduccion a camelCase es justamente lo que hace el mapper.
  */
-export interface CoachEditedFoodRow {
+export interface CatalogFoodRow {
   id: string
   catalog_key: string | null
   barcode: string | null
@@ -66,19 +71,20 @@ function toNullableNumber(value: number | null | undefined): number | null {
 }
 
 /**
- * Fila del catalogo + override del coach -> item del read model del catalogo.
+ * Fila del catalogo + override del coach (o `null` si no lo corrigio) -> item del read model.
  *
- * El override es OBLIGATORIO en la firma (no `| null`): esta funcion existe para el listado de
- * alimentos corregidos, y un item sin override no pertenece a el. `hasOverride`/`original` los
- * pone `resolveFoodMacros`, no este mapper.
+ * El override es NULLABLE desde F4.5: el browse del catalogo lista alimentos que el coach nunca
+ * toco, y pasar `null` es exactamente lo que `resolveFoodMacros` interpreta como "sin merge"
+ * (`hasOverride: false`, `original: null`). El listado de editados sigue pasando siempre un
+ * override — es su definicion — pero eso lo garantiza el caller, no la firma.
  *
  * `verificationStatus` y `source` viajan crudos igual que en la RPC: si la base tuviera un valor
  * fuera del vocabulario, la validacion Zod del action lo delata en vez de que el mapper lo
  * disfrace de `unverified`.
  */
-export function coachEditedFoodToCatalogItem(
-  row: CoachEditedFoodRow,
-  override: CoachFoodOverrideValues,
+export function foodRowToCatalogItem(
+  row: CatalogFoodRow,
+  override: CoachFoodOverrideValues | null,
 ): FoodCatalogItem {
   const macros = resolveFoodMacros(
     {

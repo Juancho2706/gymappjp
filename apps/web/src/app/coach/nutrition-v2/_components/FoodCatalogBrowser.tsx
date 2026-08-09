@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, Pencil, Plus, Scale, Search, X } from 'lucide-react'
+import { Loader2, Pencil, Plus, Scale, Search, User, X } from 'lucide-react'
 import { MacroChipRow, NutritionStatePanel } from '@/components/nutrition-v2'
 import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
 import {
@@ -29,21 +29,24 @@ import {
 } from '../_lib/food-catalog-card'
 import { matchesFoodQuery } from '../_lib/edited-foods'
 import {
+  FOOD_FILTER_PARAM,
+  FOOD_SEARCH_MIN_QUERY,
+  foodFilterModeFromParam,
+  foodFilterModeToParam,
+  isOffsetListMode,
+  nextFoodFilterMode,
+  resolveFoodCatalogMode,
+  usesLocalTextFilter,
+  type FoodFilterMode,
+} from '../_lib/food-catalog-mode'
+import {
+  browseFoodCatalogHubAction,
   listCoachEditedFoodsHubAction,
   searchFoodCatalogHubAction,
 } from '../_actions/food-catalog.actions'
 
-const MIN_QUERY = 2
+const MIN_QUERY = FOOD_SEARCH_MIN_QUERY
 const DEBOUNCE_MS = 400
-
-/**
- * El filtro "Editados por mi" vive en la URL igual que el tab (`?tab=`), y por la MISMA razon:
- * `history.replaceState` sobre `window.location.search` en vivo, nunca `router.replace` — este
- * refetchearia el RSC de la pagina (roster + picker) por tocar un chip. El param se omite en su
- * default (sin filtro), como hacen el tab y los filtros del roster.
- */
-const FILTER_PARAM = 'foods'
-const FILTER_VALUE = 'editados'
 
 const VERIFICATION_TONE_CLASSES: Record<FoodVerificationTone, string> = {
   verified:
@@ -58,18 +61,30 @@ const VERIFICATION_TONE_CLASSES: Record<FoodVerificationTone, string> = {
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
 /**
- * Buscador del catalogo del tab Alimentos, con dos modos de lectura EXCLUYENTES:
+ * Navegador del catalogo del tab Alimentos. Cuatro modos de lectura EXCLUYENTES, decididos por la
+ * maquina pura de `_lib/food-catalog-mode.ts` (`resolveFoodCatalogMode`):
  *
- *  - normal: `search_food_catalog_v2` por nombre/marca, minimo 2 caracteres, paginado por
- *    keyset cursor;
- *  - "Editados por mi": la pagina de `coach_food_overrides` del coach, paginada por OFFSET, y
- *    la busqueda por nombre se resuelve EN CLIENTE sobre el universo ya cargado (decenas de
- *    filas) — sin minimo de caracteres, porque no hay consulta que gastar.
+ *  - `browse` (default, T2.3 F4.5): primera pagina del catalogo por nombre, OFFSET. Es lo que ve
+ *    el coach al entrar al tab, SIN escribir nada — la funcion que traia `FoodBrowser` de
+ *    `/coach/foods`, que F5 borra.
+ *  - `search`: `search_food_catalog_v2` por nombre/marca, minimo 2 caracteres, keyset cursor.
+ *  - `mine` ("Solo mios", F4.5): mis alimentos (`coach_id = actor`), OFFSET con pagina grande, y
+ *    el texto filtra EN CLIENTE.
+ *  - `edited` ("Editados por mi", F1): la pagina de `coach_food_overrides`, OFFSET, texto local.
  *
- * Los dos cursores son incompatibles, asi que cambiar de modo aborta lo que este en vuelo y
- * vacia items/cursor/offset. El guard de respuestas viejas es el propio `AbortController`
+ * En los modos locales no hay minimo de caracteres porque no hay consulta que gastar; en `search`
+ * el minimo lo impone la RPC y por debajo se muestra el panel de invitacion (`invite`) en vez de
+ * volver al catalogo — un listado completo bajo un termino a medio escribir se lee como "esto es
+ * lo que encontre", que es falso.
+ *
+ * Los cursores keyset y offset son incompatibles, asi que cambiar de modo aborta lo que este en
+ * vuelo y vacia items/cursor/offset. El guard de respuestas viejas es el propio `AbortController`
  * compartido: una respuesta cuyo controller ya fue abortado se descarta, venga del modo que
  * venga (comparar solo el texto de la busqueda dejaba pasar la respuesta del otro modo).
+ *
+ * Los dos chips son EXCLUYENTES entre si (`nextFoodFilterMode`): tocar el inactivo apaga el otro,
+ * tocar el activo vuelve al catalogo. El texto escrito NO se limpia al cambiar de chip — pasa a
+ * filtrar el universo nuevo, que es lo que el coach espera cuando acota "pollo" a "solo mios".
  */
 export function FoodCatalogBrowser({
   coachId,
@@ -86,8 +101,8 @@ export function FoodCatalogBrowser({
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   // Solo el valor INICIAL viene de la URL (deep-link); despues manda el estado local.
-  const [editedOnly, setEditedOnly] = useState<boolean>(
-    () => searchParams.get(FILTER_PARAM) === FILTER_VALUE,
+  const [filterMode, setFilterMode] = useState<FoodFilterMode>(() =>
+    foodFilterModeFromParam(searchParams.get(FOOD_FILTER_PARAM)),
   )
   const [items, setItems] = useState<FoodCatalogItem[]>([])
   const [cursor, setCursor] = useState<FoodCatalogCursor | null>(null)
@@ -115,9 +130,10 @@ export function FoodCatalogBrowser({
    */
   const [classifiedNow, setClassifiedNow] = useState<Record<string, ClassifiedFoodSummary>>({})
   /**
-   * Fuerza la busqueda aunque el texto no cambie. Hace falta en el caso MAS comun del alta:
-   * el coach busca "pollo grillado", no lo encuentra, lo crea — y el termino ya era ese, asi
-   * que reescribirlo no dispararia ninguna consulta y el alimento nuevo no aparecería.
+   * Fuerza la relectura aunque ni el texto ni el modo cambien. Hace falta en el caso MAS comun
+   * del alta: el coach busca "pollo grillado", no lo encuentra, lo crea — y el termino ya era
+   * ese, asi que reescribirlo no dispararia ninguna consulta y el alimento nuevo no aparecería.
+   * Lo miran los DOS efectos de carga, porque el alta tambien puede terminar en "Solo mios".
    */
   const [searchNonce, setSearchNonce] = useState(0)
 
@@ -152,17 +168,33 @@ export function FoodCatalogBrowser({
     return () => clearTimeout(timer)
   }, [query])
 
-  /** Espeja el filtro en la URL sin navegar ni tocar el historial (patron de `?tab=`). */
-  const applyEditedOnly = useCallback((next: boolean) => {
-    setEditedOnly(next)
+  /**
+   * Espeja el filtro en la URL sin navegar ni tocar el historial (patron de `?tab=`), y por la
+   * MISMA razon: `router.replace` refetchearia el RSC de la pagina (roster + picker) por tocar un
+   * chip. El param se omite en su default (`all`), como hacen el tab y los filtros del roster.
+   */
+  const applyFilterMode = useCallback((next: FoodFilterMode) => {
+    setFilterMode(next)
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    if (next) params.set(FILTER_PARAM, FILTER_VALUE)
-    else params.delete(FILTER_PARAM)
+    const value = foodFilterModeToParam(next)
+    if (value) params.set(FOOD_FILTER_PARAM, value)
+    else params.delete(FOOD_FILTER_PARAM)
     const qs = params.toString()
     const path = window.location.pathname
     window.history.replaceState(window.history.state, '', qs ? `${path}?${qs}` : path)
   }, [])
+
+  /**
+   * QUE se esta mostrando. Derivado, nunca guardado: dos fuentes de verdad para el modo es
+   * exactamente como se mezclan un cursor keyset y un offset. Usa el texto DEBOUNCEADO a
+   * proposito — con el texto crudo, escribir "pollo" rapido haria parpadear el panel de
+   * invitacion en la primera letra.
+   */
+  const mode = useMemo(
+    () => resolveFoodCatalogMode({ filterMode, query: debounced }),
+    [filterMode, debounced],
+  )
 
   /**
    * Grupos de porciones del bloque opcional "Equivalencia" del alta, cargados la PRIMERA vez
@@ -208,29 +240,54 @@ export function FoodCatalogBrowser({
    * estado de cliente, el alimento recien creado casi nunca cae en la busqueda activa ni en la
    * primera pagina de 20 del RPC, y en modo "Editados por mi" directamente no existe (nace sin
    * override). Apuntar la busqueda a su nombre es lo unico que lo pone en pantalla sin F5.
+   *
+   * F4.5 no cambia eso: el browse ordena por nombre sobre decenas de miles de filas, asi que un
+   * alimento nuevo cae en una pagina cualquiera y "volver al catalogo" seria peor que buscarlo.
+   * La UNICA excepcion es un nombre demasiado corto para la RPC (1 caracter): ahi la busqueda no
+   * saldria nunca, y "Solo mios" si lo muestra — el alimento acaba de nacer con `coach_id` del
+   * actor.
    */
   const handleFoodCreated = useCallback(
     (name: string) => {
       const term = name.trim()
-      applyEditedOnly(false)
+      if (term.length < MIN_QUERY) {
+        applyFilterMode('mine')
+        setQuery('')
+        setDebounced('')
+        // Si el coach YA estaba en "Solo mios", el modo no cambia y sin esto la lista se quedaria
+        // sin el alimento que acaba de crear.
+        setSearchNonce((n) => n + 1)
+        return
+      }
+      applyFilterMode('all')
       setQuery(term)
       // Se adelanta el debounce: la busqueda tiene que salir ya, no 400 ms despues de cerrar
       // el sheet. El timer escribira el mismo valor y React descartara el re-render.
       setDebounced(term)
       setSearchNonce((n) => n + 1)
     },
-    [applyEditedOnly],
+    [applyFilterMode],
   )
 
-  // Modo filtro: primera pagina de mis correcciones. Cambiar de modo (en cualquier direccion)
-  // aborta y vacia antes de nada: los cursores keyset y offset no se pueden mezclar.
+  /**
+   * Modos paginados por OFFSET (browse / solo mios / editados): primera pagina al entrar al modo.
+   * Cambiar de modo (en cualquier direccion, incluida la entrada y salida de `search`) aborta y
+   * vacia antes de nada: los cursores keyset y offset no se pueden mezclar.
+   *
+   * La dependencia es el MODO, no el texto: dentro de `mine`/`edited` el texto filtra en cliente y
+   * re-disparar la primera pagina en cada tecla tiraria las paginas que el coach ya cargo.
+   */
   useEffect(() => {
     const controller = beginRequest()
     clearResults()
-    if (!editedOnly) return () => controller.abort()
+    if (!isOffsetListMode(mode)) return () => controller.abort()
 
     setLoading(true)
-    void listCoachEditedFoodsHubAction({ offset: 0 }).then((res) => {
+    const request =
+      mode === 'edited'
+        ? listCoachEditedFoodsHubAction({ offset: 0 })
+        : browseFoodCatalogHubAction({ offset: 0, mineOnly: mode === 'mine', countryCode })
+    void request.then((res) => {
       if (controller.signal.aborted) return
       if (!res.ok) {
         setError(res.error)
@@ -243,7 +300,9 @@ export function FoodCatalogBrowser({
       setLoading(false)
     })
     return () => controller.abort()
-  }, [editedOnly, beginRequest, clearResults])
+    // `searchNonce` no se usa en el cuerpo: es "recarga aunque nada haya cambiado" tras un alta.
+    // En el camino normal el modo ya cambia, asi que no agrega ninguna consulta.
+  }, [mode, countryCode, beginRequest, clearResults, searchNonce])
 
   const runSearch = useCallback(
     async (q: string) => {
@@ -269,34 +328,34 @@ export function FoodCatalogBrowser({
   )
 
   useEffect(() => {
-    // En modo filtro la busqueda es local: ni consulta ni abort (abortar aca mataria la carga
-    // de la pagina de correcciones, que corre en el efecto de arriba).
-    if (editedOnly) return
-    if (debounced.length < MIN_QUERY) {
-      activeController.current?.abort()
-      setItems([])
-      setCursor(null)
-      setHasMore(false)
-      setError(null)
-      setLoading(false)
-      return
-    }
+    // Cualquier otro modo lo atiende el efecto de arriba, que ya aborto y vacio. Sin consulta ni
+    // abort aca: abortar mataria la pagina que ese efecto acaba de pedir.
+    if (mode !== 'search') return
     void runSearch(debounced)
     // `searchNonce` no se usa en el cuerpo a proposito: es el disparador de "vuelve a buscar
     // lo mismo" tras un alta (ver `handleFoodCreated`).
-  }, [debounced, editedOnly, runSearch, searchNonce])
+  }, [debounced, mode, runSearch, searchNonce])
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return
     const controller = beginRequest()
     setLoadingMore(true)
 
-    if (editedOnly) {
+    // El servidor manda el `nextOffset`: el cliente no recalcula tamaños de pagina (browse y
+    // "solo mios" no usan el mismo).
+    if (isOffsetListMode(mode)) {
       if (nextOffset == null) {
         setLoadingMore(false)
         return
       }
-      const res = await listCoachEditedFoodsHubAction({ offset: nextOffset })
+      const res =
+        mode === 'edited'
+          ? await listCoachEditedFoodsHubAction({ offset: nextOffset })
+          : await browseFoodCatalogHubAction({
+              offset: nextOffset,
+              mineOnly: mode === 'mine',
+              countryCode,
+            })
       if (controller.signal.aborted) return
       if (!res.ok) {
         setLoadingMore(false)
@@ -323,15 +382,16 @@ export function FoodCatalogBrowser({
     setCursor(res.nextCursor)
     setHasMore(res.hasMore)
     setLoadingMore(false)
-  }, [cursor, loadingMore, debounced, countryCode, editedOnly, nextOffset, beginRequest])
+  }, [cursor, loadingMore, debounced, countryCode, mode, nextOffset, beginRequest])
 
-  // En modo filtro el texto acota lo YA cargado, sin debounce ni minimo de caracteres.
+  // En los modos con universo en memoria el texto acota lo YA cargado, sin debounce ni minimo de
+  // caracteres (por eso lee `query` y no `debounced`: no hay consulta que ahorrar).
   const visibleItems = useMemo(() => {
-    if (!editedOnly) return items
+    if (!usesLocalTextFilter(mode)) return items
     const q = query.trim()
     if (q === '') return items
     return items.filter((item) => matchesFoodQuery(item, q))
-  }, [editedOnly, items, query])
+  }, [mode, items, query])
 
   const cards = useMemo<Array<{ model: FoodCatalogCardModel; item: FoodCatalogItem }>>(
     () => visibleItems.map((item) => ({ model: foodCatalogItemToCardModel(item, SUPABASE_BASE), item })),
@@ -364,11 +424,14 @@ export function FoodCatalogBrowser({
     setClassifiedNow((prev) => ({ ...prev, [summary.foodId]: summary }))
   }, [])
 
-  const showInvite = !editedOnly && debounced.length < MIN_QUERY
+  const showInvite = mode === 'invite'
   const showEmpty = !showInvite && !loading && cards.length === 0 && !error
-  // Sin correcciones todavia vs. correcciones que el texto local dejo fuera: son dos vacios
-  // distintos y el coach necesita saber cual de los dos esta mirando.
-  const showNoEdited = editedOnly && showEmpty && items.length === 0
+  /**
+   * "Todavia no tengo nada de esto" vs. "el texto local no dejo pasar nada": son dos vacios
+   * distintos y el coach necesita saber cual esta mirando. Solo aplica a los modos con universo
+   * propio — en `browse` un universo vacio significaria catalogo vacio, que no pasa.
+   */
+  const showEmptyUniverse = usesLocalTextFilter(mode) && showEmpty && items.length === 0
 
   return (
     <div className="space-y-3">
@@ -380,12 +443,18 @@ export function FoodCatalogBrowser({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={
-            editedOnly ? 'Filtrar entre tus editados…' : 'Buscar alimento por nombre o marca…'
+            mode === 'edited'
+              ? 'Filtrar entre tus editados…'
+              : mode === 'mine'
+                ? 'Filtrar entre tus alimentos…'
+                : 'Buscar alimento por nombre o marca…'
           }
           aria-label={
-            editedOnly
+            mode === 'edited'
               ? 'Filtrar entre los alimentos que editaste'
-              : 'Buscar alimento en el catalogo'
+              : mode === 'mine'
+                ? 'Filtrar entre los alimentos que creaste'
+                : 'Buscar alimento en el catálogo'
           }
           className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-10 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
         />
@@ -404,14 +473,31 @@ export function FoodCatalogBrowser({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Los dos chips son EXCLUYENTES: `nextFoodFilterMode` apaga el otro. Se comportan como un
+            radio-group con deseleccion, no como dos checkboxes, y por eso `aria-pressed` (un
+            toggle real) en vez de `role="radio"`: el estado "ninguno" es legitimo. */}
         <div role="group" aria-label="Filtrar el catalogo" className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            aria-pressed={editedOnly}
-            onClick={() => applyEditedOnly(!editedOnly)}
+            aria-pressed={filterMode === 'mine'}
+            onClick={() => applyFilterMode(nextFoodFilterMode(filterMode, 'mine'))}
             className={
               'inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border px-3 text-xs font-semibold transition-colors ' +
-              (editedOnly
+              (filterMode === 'mine'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border-default bg-surface-card text-muted hover:text-strong')
+            }
+          >
+            <User aria-hidden="true" className="size-3.5" />
+            Solo míos
+          </button>
+          <button
+            type="button"
+            aria-pressed={filterMode === 'edited'}
+            onClick={() => applyFilterMode(nextFoodFilterMode(filterMode, 'edited'))}
+            className={
+              'inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border px-3 text-xs font-semibold transition-colors ' +
+              (filterMode === 'edited'
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border-default bg-surface-card text-muted hover:text-strong')
             }
@@ -441,30 +527,50 @@ export function FoodCatalogBrowser({
       </div>
 
       {error ? (
-        <NutritionStatePanel icon="error" tone="danger" illustration="error-amable" title="No se pudo buscar" description={error} />
+        <NutritionStatePanel
+          icon="error"
+          tone="danger"
+          illustration="error-amable"
+          title={mode === 'search' ? 'No se pudo buscar' : 'No se pudo cargar el catálogo'}
+          description={error}
+        />
       ) : showInvite ? (
+        // Solo con 1 caracter escrito: la RPC exige 2 y seguir mostrando el catalogo completo bajo
+        // un termino a medio escribir se leeria como "esto es lo que encontre". Sin texto, el
+        // default del tab ya NO es este panel sino el catalogo (F4.5).
         <NutritionStatePanel
           icon="empty"
           illustration="catalogo-vacio"
-          title="Busca en el catalogo"
-          description="Escribe al menos 2 caracteres para encontrar alimentos por nombre o marca."
+          title="Sigue escribiendo"
+          description="La búsqueda necesita al menos 2 caracteres. Borra el texto para volver a ver el catálogo completo."
         />
-      ) : showNoEdited ? (
-        <NutritionStatePanel
-          icon="empty"
-          illustration="catalogo-vacio"
-          title="Todavía no corregiste ningún alimento"
-          description="Cuando corrijas los macros de un alimento del catálogo, aparecerá acá con el ícono ✎. Tus correcciones solo te afectan a ti y a tus planes nuevos."
-        />
+      ) : showEmptyUniverse ? (
+        mode === 'edited' ? (
+          <NutritionStatePanel
+            icon="empty"
+            illustration="catalogo-vacio"
+            title="Todavía no corregiste ningún alimento"
+            description="Cuando corrijas los macros de un alimento del catálogo, aparecerá acá con el ícono ✎. Tus correcciones solo te afectan a ti y a tus planes nuevos."
+          />
+        ) : (
+          <NutritionStatePanel
+            icon="empty"
+            illustration="catalogo-vacio"
+            title="Todavía no creaste ningún alimento"
+            description="Con “Nuevo alimento” agregas los tuyos al catálogo: solo los ves tú, y quedan disponibles para todos tus planes."
+          />
+        )
       ) : showEmpty ? (
         <NutritionStatePanel
           icon="empty"
           illustration="sin-resultados"
           title="Sin resultados"
           description={
-            editedOnly
+            mode === 'edited'
               ? 'Ninguno de tus alimentos editados coincide con ese nombre o marca.'
-              : 'No encontramos alimentos para esa busqueda. Prueba con otro nombre o marca.'
+              : mode === 'mine'
+                ? 'Ninguno de tus alimentos coincide con ese nombre o marca.'
+                : 'No encontramos alimentos para esa busqueda. Prueba con otro nombre o marca.'
           }
         />
       ) : (
@@ -515,6 +621,14 @@ export function FoodCatalogBrowser({
                         </span>
                       ) : null}
                     </p>
+                    {/* "Propio" = lo creaste tu (`coach_id`), no viene del catalogo abierto. Sirve
+                        en el listado general (distinguir lo tuyo entre miles de filas de Open Food
+                        Facts) y confirma el universo dentro de "Solo mios". */}
+                    {model.isOwn ? (
+                      <span className="inline-flex h-5 shrink-0 items-center rounded-pill border border-border-subtle bg-surface-sunken px-1.5 text-[10px] font-bold text-muted">
+                        Propio
+                      </span>
+                    ) : null}
                     <span
                       className={
                         'inline-flex h-5 shrink-0 items-center rounded-pill border px-1.5 text-[10px] font-bold ' +
