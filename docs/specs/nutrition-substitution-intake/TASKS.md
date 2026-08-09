@@ -26,13 +26,24 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F1 — RPC de lectura de opciones (DB en LIVE)
 
-- [ ] Migracion aditiva `get_nutrition_substitution_options_v2(p_client_id, p_local_date)`
-- [ ] Version del dia = `nutrition_day_snapshots_v2.version_id` primero, selector determinista solo como fallback
-- [ ] Snapshot + `EXPLAIN` + tx-rollback con **JWT reales** ANTES de aplicar (alumno propio / alumno ajeno / coach del pool / coach ajeno / anon)
-- [ ] Caso re-publicacion intradia: devuelve los items de la version DEL SNAPSHOT
-- [ ] Aplicada en LIVE
-- [ ] `get_advisors` (security + performance) despues, sin hallazgos nuevos
-- [ ] Evidencia de la matriz pegada aca
+- [x] Migracion aditiva `get_nutrition_substitution_options_v2(p_client_id, p_local_date)` — aplicada en LIVE 2026-08-09, version **`20260809222811`**
+- [x] Version del dia = `nutrition_day_snapshots_v2.version_id` primero, selector determinista solo como fallback
+- [x] **La divergencia NO era teorica**: medida en LIVE antes de aplicar, **27 de 439** dias recientes tienen la version del snapshot distinta de la que elegiria el selector puro
+- [x] `EXPLAIN (analyze, buffers)` del cuerpo con datos reales: **0,35 ms**, 17 buffers, plan por indice sobre items y franjas (la tabla de reemplazos tiene 21 filas y se resuelve por seq scan trivial)
+- [x] Objeto previo: **no existia** (verificado en `pg_proc` antes de tocar nada) ⇒ el "snapshot previo" del protocolo es esa constatacion; el rollback es un `drop function`
+- [x] **tx-rollback con JWT reales ANTES de aplicar** (`set_config('request.jwt.claims')` + `set role`), abortada a proposito con `raise` para que la funcion de prueba no quedara creada — verificado despues en `pg_proc` que no quedo nada:
+
+  | # | Actor | Resultado |
+  |---|---|---|
+  | 1 | alumno propio | OK · `items=1` · `versionId = d4cafe53…` (la del snapshot del dia) |
+  | 2 | alumno pidiendo el dia de otro alumno | **42501** `nutrition_v2_substitutions_scope_denied` |
+  | 3 | coach del pool | OK · `items=1` |
+  | 4 | coach ajeno | **42501** `nutrition_v2_substitutions_scope_denied` |
+  | 5 | anon | **42501** `permission denied for function` (el revoke funciona) |
+  | 6 | alumno, dia sin plan vigente | OK · `items=0` · `versionId null` (degrada, no rompe) |
+
+- [x] Grants verificados post-apply: `security_definer = true`, `search_path = ''` pineado, `authenticated` con EXECUTE, **`anon` sin EXECUTE**
+- [x] `get_advisors` security despues: **un** hallazgo nuevo, `authenticated_security_definer_function_executable` (lint 0029) — la misma clase intencional que ya tienen las otras 62 RPC `SECURITY DEFINER` de V2; `anon_security_definer_function_executable` NO la lista. Cero clases nuevas de hallazgo
 
 ## F2 — Guard de autorizacion + fix del tope de cantidad (riesgo ALTO, commit propio)
 
