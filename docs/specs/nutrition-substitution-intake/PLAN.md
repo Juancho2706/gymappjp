@@ -10,11 +10,11 @@ Incorpora las correcciones B1-B5 de la revision adversarial del 2026-08-09.
 
 **Que:** `packages/nutrition-v2/substitution-intake.ts` — modulo hoja, sin IO:
 
-- `SubstitutionOptionSchema` / `SubstitutionIntakeRequestSchema`: lo unico que el cliente puede mandar es `{ prescriptionItemId, substitutionId, attempt, quantity? }`.
-- `computeSubstitutionEquivalence({ item, substitute })` → `{ quantity, unit, macros, basis, computed: 'explicit' | 'calorie-equivalent' | 'needs-confirmation' | 'unavailable' }`.
-- `substitutionIntentOperationId({ localDate, prescriptionItemId, substitutionId, attempt })` — **sin `deviceId`** (excepcion declarada al helper canonico).
+- `SubstitutionIntakeRequestSchema`: lo unico que el cliente puede mandar (`clientId`, `localDate`, `occurredAt`, `timezone`, `prescriptionItemId`, `substitutionId`, `attempt`, `quantity?`). Sin `foodId`, sin macros, sin snapshot. El schema de la OPCION la define la RPC de F1 y se contrata ahi.
+- `computeSubstitutionEquivalence({ item, substitute })` → `{ kind: 'explicit' | 'calorie-equivalent' | 'needs-confirmation' | 'unavailable', quantity, unit, totals, snapshot, targetCalories, requiresConfirmation }`.
+- `substitutionIntakeIdempotencyKey({ localDate, prescriptionItemId, substitutionId, attempt })` — **sin `deviceId`** (excepcion declarada al helper canonico).
 - `substitutionAttemptFromToday(today, prescriptionItemId)` → cantidad de entries de hoy de ese item **en cualquier estado**. Es la unica fuente de `attempt` en web y RN.
-- Redondeo (5 en `g`/`ml`, 0,5 en contadas, nunca 0), tope de plausibilidad `SUBSTITUTION_MAX_PORTION_FACTOR = 3` aislado en una constante.
+- Redondeo (5 en `g`/`ml`, 0,5 en contadas, nunca 0) y topes de plausibilidad **absolutos** en constantes con nombre: `SUBSTITUTION_MAX_MASS_QUANTITY = 600` (g/ml) y `SUBSTITUTION_MAX_COUNTED_QUANTITY = 6`. Absolutos y no un factor sobre la porcion del sustituto: "Posta de vacuno cocida" declara `serving_size = 30 g`, asi que un factor de 3× habria marcado como absurdos los 130 g que son la equivalencia correcta de "Lomo liso 120 g".
 
 **Golden tests** obligatorios, con los pares REALES de LIVE ademas de los sinteticos:
 
@@ -23,7 +23,7 @@ Incorpora las correcciones B1-B5 de la revision adversarial del 2026-08-09.
 | Lomo liso 120 g / 240 kcal → Posta cocida (`per_serving`, 30 g, 55 kcal) | ~130 g, **nunca** los 16,5 kcal congelados |
 | Palta 45 g / 72 kcal → Pechuga cocida (100 g, 165 kcal) | ~45 g |
 | Yogurt proteico 1 un / 77 kcal → Leche protein (100 g, 60 kcal) | ~130 g, unidad del sustituto (no "un") |
-| Pechuga 100 g / 165 kcal → Espinaca (23 kcal/100 g) | `needs-confirmation` (~715 g supera 3× la porcion) |
+| Pechuga 100 g / 165 kcal → Espinaca (23 kcal/100 g) | `needs-confirmation` (~715 g supera el tope de 600) |
 | Sustituto con kcal 0 / null (existe en LIVE) | `unavailable`, prellenado con la porcion del SUSTITUTO |
 | Fila con `quantity` explicita y `unit` NULL | gana la cantidad del coach + unidad natural del sustituto |
 | `macrosBasis` `per_100` vs `per_serving` | escalado correcto en ambas |

@@ -12,15 +12,17 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
   - B1: **3 de 6** versiones publicadas con reemplazos tienen `canAdjustPrescribedQuantity = false`; la unica con `canRegisterFreely = false` esta entre ellas ⇒ `correct_` habria devuelto 42501 en toda sustitucion-correccion
   - B3: existe la policy `cfo_select_client_coach` en `coach_food_overrides` ⇒ el alumno **si** puede leer los overrides de su coach (la premisa original era falsa)
   - B4: `nutrition_v2_ensure_day_snapshot` devuelve el snapshot existente sin recalcular y `nutrition_day_snapshots_v2` guarda `version_id` ⇒ la version del dia hay que leerla del snapshot, no del selector puro
-- [ ] Commit de la fase 0 (docs) con `pnpm docs:check` verde
+- [x] Commit de la fase 0 (docs) con `pnpm docs:check` verde — `f1da66fa`
 
 ## F0 — Contrato puro + equivalencia
 
-- [ ] `packages/nutrition-v2/substitution-intake.ts` (modulo hoja, sin IO)
-- [ ] `substitutionAttemptFromToday` (entries de hoy del item en cualquier estado)
-- [ ] `substitutionIntentOperationId` **sin `deviceId`** (excepcion declarada al helper canonico)
-- [ ] Golden tests: 3 pares reales de LIVE · espinaca ⇒ `needs-confirmation` · kcal 0 ⇒ `unavailable` · `quantity` explicita con `unit` NULL · `per_100` vs `per_serving` · redondeo y piso · `attempt` con 0/activa/retirada/corregidas
-- [ ] Gates: `pnpm test` · `pnpm typecheck`
+- [x] `packages/nutrition-v2/substitution-intake.ts` (modulo hoja: solo `zod` + `intake-normalize` + `intake-units`) y export en el barrel
+- [x] `substitutionAttemptFromToday` (entries de hoy del item en cualquier estado)
+- [x] `substitutionIntakeIdempotencyKey` **sin `deviceId`** (excepcion declarada al helper canonico)
+- [x] `SubstitutionIntakeRequestSchema`: el cliente no puede mandar `foodId`, macros ni snapshot (test que lo pinea)
+- [x] Golden tests **22/22**: 3 pares reales de LIVE · espinaca ⇒ `needs-confirmation` · kcal 0 ⇒ `unavailable` prellenado con la porcion del sustituto · `quantity` explicita con `unit` NULL · `per_100` vs `per_serving` · redondeo y piso · `attempt` con 0/activa/retirada/corregidas · clave estable y distinta por intento
+- [x] **Correccion de diseno encontrada al implementar:** el tope de plausibilidad NO puede ser un factor sobre la porcion del sustituto. "Posta de vacuno cocida" declara `serving_size = 30 g`, asi que 3× habria marcado como absurdos los 130 g que son la equivalencia correcta de "Lomo liso 120 g". Pasa a topes absolutos: 600 g/ml y 6 unidades contadas. SPEC y PLAN actualizados
+- [x] Gates: `pnpm test` del archivo 22/22 ✓ · `pnpm typecheck` (web) ✓ · `pnpm --filter @eva/mobile exec tsc --noEmit` ✓ · `eslint` de los dos archivos sin hallazgos ✓ · `pnpm check:nutrition-v2-boundaries` 326 archivos ✓ · `pnpm docs:check` ✓ · suite completa ✓
 
 ## F1 — RPC de lectura de opciones (DB en LIVE)
 

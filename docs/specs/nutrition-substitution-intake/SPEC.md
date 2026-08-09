@@ -101,7 +101,9 @@ Entrada: el item prescrito (`quantity`, `unit`, `snapshot_calories` congelados) 
 1. Si la fila de sustitucion trae `quantity` **no nula** ⇒ esa cantidad, con `unit` de la fila; si la fila trae `unit` NULL (la tabla lo permite, `20260721150000:38-39`) ⇒ la unidad natural del sustituto.
 2. Si `quantity` es NULL ⇒ `cantidad = kcal_prescritas / kcal_por_unidad_del_sustituto`, con la unidad natural del sustituto (`g`/`ml` si su base lo permite, si no su `serving_unit`).
 3. Redondeo: multiplos de **5** para `g`/`ml`, de **0,5** para unidades contadas. Piso: nunca 0 (si el redondeo da 0, queda el escalon minimo).
-4. **Tope de plausibilidad (hallazgo de la revision).** Con datos reales de LIVE, "Pechuga 100 g / 165 kcal → Espinaca (23 kcal/100 g)" da **~715 g de espinaca**. Si la cantidad equivalente supera **3×** la porcion de referencia del sustituto, el resultado es `computed: 'needs-confirmation'`: la opcion se ofrece igual, pero **no se registra de un tap** — abre el stepper con la cantidad calculada y el alumno confirma. El factor 3 es el unico numero magico de esta SPEC y esta aislado en una constante.
+4. **Tope de plausibilidad (hallazgo de la revision).** Con datos reales de LIVE, "Pechuga 100 g / 165 kcal → Espinaca (23 kcal/100 g)" da **~715 g de espinaca**. Si la cantidad equivalente supera el tope de su familia de unidad (**600 g/ml** o **6 unidades contadas**), el resultado es `needs-confirmation`: la opcion se ofrece igual, pero **no se registra de un tap** — abre el stepper con la cantidad calculada y el alumno confirma. Los dos topes son los unicos numeros magicos de la feature y viven aislados en constantes con nombre.
+
+   El tope es **absoluto**, no un factor sobre la porcion del sustituto: lo decidio el propio catalogo. "Posta de vacuno cocida" declara `serving_size = 30 g`, asi que un factor de 3× habria marcado como absurdos los **130 g** que son justamente la equivalencia correcta del item "Lomo liso 120 g". Lo que hace ruido no son las porciones nominales, es cuanto alimento se come de una sentada.
 5. Casos borde que **degradan sin inventar**: sustituto sin kcal vigentes (o kcal 0 — existe al menos un caso real en LIVE), item sin `snapshot_calories`, o unidad no convertible ⇒ `computed: 'unavailable'`. La opcion se ofrece, exige confirmar la cantidad, y el stepper se prellena con **la porcion del sustituto en su propia unidad** (nunca con la cantidad del item: "300 g de Nescafe" o "1 un de leche" son basura).
 6. Los macros del snapshot congelado de la entry se calculan **para esa cantidad**, respetando `macrosBasis` (NUT-001) con los mismos helpers de escala que ya usa el intake (`packages/nutrition-v2/catalog.ts` + `food-overrides.ts` para la base y el merge; `intake-units.ts` para el factor de unidad).
 
@@ -180,7 +182,7 @@ Carrera conocida y aceptada: dos dispositivos desincronizados pueden escribir do
 8. **Ciclo A → B → A** deja exactamente una entry activa (la ultima) y una cadena de correcciones sin ciclos.
 9. `get_nutrition_today_v2` queda byte-identica (`pg_get_functiondef` antes/despues).
 10. Un plan sin reemplazos se comporta exactamente igual que hoy (cero filas nuevas, cero llamadas nuevas).
-11. La opcion `needs-confirmation` (equivalencia > 3× la porcion del sustituto) **no** registra de un tap, y la `unavailable` prellena con la porcion del sustituto en su unidad.
+11. La opcion `needs-confirmation` (equivalencia por encima del tope absoluto de su unidad) **no** registra de un tap, y la `unavailable` prellena con la porcion del sustituto en su unidad.
 12. La fila consumida por sustitucion muestra el chip "Sustituido" y el prescrito tachado, en web y en RN; deshacer esta disponible en ambas.
 13. `student_nutrition_intake` con `method: 'substitution'` se emite en web **y** en RN.
 
@@ -211,7 +213,7 @@ Carrera conocida y aceptada: dos dispositivos desincronizados pueden escribir do
 | B2 | `attempt` sin definir | `attempt` = entries de hoy del item en cualquier estado; cubre undo y ciclo A→B→A; sin `deviceId`; viaja en el payload |
 | B3 | "el alumno no puede leer los overrides" (falso) | La RPC se justifica por round-trip, merge unico y resolucion de version |
 | B4 | Version por selector determinista | Version del **snapshot del dia** primero, selector como fallback |
-| B5 | Equivalencia sin cota; `unavailable` prellenado con la cantidad del item | Tope de 3× ⇒ `needs-confirmation`; `unavailable` prellena con la porcion del sustituto |
+| B5 | Equivalencia sin cota; `unavailable` prellenado con la cantidad del item | Tope absoluto (600 g/ml · 6 contadas) ⇒ `needs-confirmation`; `unavailable` prellena con la porcion del sustituto |
 | R1/R2 | Criterio 4 sonaba a seguridad total | Seccion "Que NO cubre el guard" |
 | R5 | "5 publicados + 2 superseded" | 5 alumnos en total (los 2 estan dentro) |
 | R6 | 2 consumidores de `computeNutritionAdherence` | 7 superficies, todas V1 |
