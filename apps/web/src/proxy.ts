@@ -18,6 +18,7 @@ import { canAccessWorkspacePath, defaultWorkspaceHome } from '@/services/auth/wo
 import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { isPrefetchRequest } from '@/lib/http/prefetch-request'
+import { isServerActionRequest, toServerActionRedirect } from '@/lib/http/server-action-redirect'
 import {
     clientIpFromRequest,
     jsonRateLimited,
@@ -85,7 +86,21 @@ async function isCoachActiveOrgMember(
     return data === true
 }
 
-export async function proxy(request: NextRequest) {
+/**
+ * EVA-NEXTJS-19 (prod 2026-08-07/09): un redirect del proxy sobre el POST de una Server
+ * Action llegaba al cliente de Next como HTML del login → `Error: An unexpected response
+ * was received from the server.` sin manejar, y la acción del alumno moría en silencio.
+ *
+ * Toda la lógica de auth/routing sigue igual (`proxyInner`): sólo se traduce el redirect al
+ * protocolo que el cliente de acciones entiende. Ver `@/lib/http/server-action-redirect`.
+ */
+export async function proxy(request: NextRequest): Promise<Response> {
+    const response = await proxyInner(request)
+    if (!isServerActionRequest(request.headers)) return response
+    return toServerActionRedirect(response) ?? response
+}
+
+async function proxyInner(request: NextRequest) {
     const { pathname } = request.nextUrl
     const host = request.headers.get('host') ?? ''
 
