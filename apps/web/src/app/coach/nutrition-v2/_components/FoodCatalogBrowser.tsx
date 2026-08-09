@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, Pencil, Plus, Search, X } from 'lucide-react'
+import { Loader2, Pencil, Plus, Scale, Search, X } from 'lucide-react'
 import { MacroChipRow, NutritionStatePanel } from '@/components/nutrition-v2'
 import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
 import {
@@ -19,7 +19,9 @@ import type { FoodCatalogItem, FoodCatalogCursor } from '@eva/nutrition-v2'
 // PlanBuilder, `/nutrition/_components/`, flags), no una prohibición de importar dominio V1.
 import { AddFoodSheet } from '@/app/coach/foods/_components/AddFoodSheet'
 import type { FoodEquivalenceGroupOption } from '@/app/coach/foods/_components/FoodEquivalenceFields'
+import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { loadExchangeGroupsForCoachAction } from '../[clientId]/builder/_components/PortionsGroupsAction'
+import { ClassifyFoodFlow, type ClassifiedFoodSummary } from './ClassifyFoodFlow'
 import {
   foodCatalogItemToCardModel,
   foodCatalogItemToDetail,
@@ -96,7 +98,22 @@ export function FoodCatalogBrowser({
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<FoodDetailData | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
-  const [exchangeGroups, setExchangeGroups] = useState<FoodEquivalenceGroupOption[]>([])
+  /** El item crudo del que salio la ficha: la clasificacion necesita macros, base y dueño. */
+  const [detailItem, setDetailItem] = useState<FoodCatalogItem | null>(null)
+  const [classifyOpen, setClassifyOpen] = useState(false)
+  /**
+   * Catalogo COMPLETO de grupos (no solo id/code/name): el formulario de clasificacion calcula
+   * la sugerencia de gramos con las macros de referencia del grupo, en cliente y sin round-trip.
+   */
+  const [exchangeGroups, setExchangeGroups] = useState<ExchangeGroup[]>([])
+  const [exchangeGroupsLoading, setExchangeGroupsLoading] = useState(false)
+  /**
+   * Lo clasificado EN ESTA SESION, por alimento. No es cache de lectura: es la unica forma de
+   * que la card refleje el cambio sin recarga dura, porque el read model del catalogo
+   * (`FoodCatalogItem`) no emite grupo ni gramos — re-disparar la busqueda traeria exactamente
+   * los mismos datos y ademas tiraria las paginas que el coach ya cargo con "Cargar mas".
+   */
+  const [classifiedNow, setClassifiedNow] = useState<Record<string, ClassifiedFoodSummary>>({})
   /**
    * Fuerza la busqueda aunque el texto no cambie. Hace falta en el caso MAS comun del alta:
    * el coach busca "pollo grillado", no lo encuentra, lo crea — y el termino ya era ese, asi
@@ -160,21 +177,28 @@ export function FoodCatalogBrowser({
   const ensureExchangeGroups = useCallback(() => {
     if (exchangeGroupsRequested.current) return
     exchangeGroupsRequested.current = true
+    setExchangeGroupsLoading(true)
     void loadExchangeGroupsForCoachAction().then((res) => {
+      setExchangeGroupsLoading(false)
       if (!res.ok) {
         exchangeGroupsRequested.current = false
         return
       }
-      setExchangeGroups(
-        res.groups.map((group) => ({
-          id: group.id,
-          code: group.code,
-          name: group.name,
-          isSystem: group.isSystem,
-        })),
-      )
+      setExchangeGroups(res.groups)
     })
   }, [])
+
+  /** El alta solo necesita el subconjunto identificatorio; los grupos se cargan UNA vez. */
+  const exchangeGroupOptions = useMemo<FoodEquivalenceGroupOption[]>(
+    () =>
+      exchangeGroups.map((group) => ({
+        id: group.id,
+        code: group.code,
+        name: group.name,
+        isSystem: group.isSystem,
+      })),
+    [exchangeGroups],
+  )
 
   /**
    * Tras crear, el listado se REAPUNTA al nombre del alimento nuevo en vez de refrescarse.
@@ -316,7 +340,28 @@ export function FoodCatalogBrowser({
 
   const openDetail = useCallback((item: FoodCatalogItem) => {
     setDetail(foodCatalogItemToDetail(item))
+    setDetailItem(item)
     setDetailOpen(true)
+  }, [])
+
+  /**
+   * La entrada a "clasificar" es la FICHA, no la card. En ancho de telefono la card entera es un
+   * unico objetivo tactil (`<button>`): meterle un segundo boton adentro seria HTML invalido
+   * (boton anidado) y obligaria a partirla en dos columnas de ~24 px cada una. La ficha, ademas,
+   * es donde el coach ya esta viendo las macros — que es justo lo que necesita para decidir los
+   * gramos de 1 porcion.
+   *
+   * Se cierra la ficha al abrir el formulario: dos bottom sheets apilados en un telefono dejan
+   * el de abajo asomando bajo el teclado.
+   */
+  const openClassify = useCallback(() => {
+    ensureExchangeGroups()
+    setDetailOpen(false)
+    setClassifyOpen(true)
+  }, [ensureExchangeGroups])
+
+  const handleClassified = useCallback((summary: ClassifiedFoodSummary) => {
+    setClassifiedNow((prev) => ({ ...prev, [summary.foodId]: summary }))
   }, [])
 
   const showInvite = !editedOnly && debounced.length < MIN_QUERY
@@ -378,7 +423,7 @@ export function FoodCatalogBrowser({
 
         <AddFoodSheet
           coachId={coachId}
-          exchangeGroups={exchangeGroups}
+          exchangeGroups={exchangeGroupOptions}
           onOpenChange={(open) => {
             if (open) ensureExchangeGroups()
           }}
@@ -482,6 +527,23 @@ export function FoodCatalogBrowser({
                   <p className="mt-0.5 truncate text-xs text-muted">
                     {[model.brand, model.packageLabel, model.sourceLabel].filter(Boolean).join(" · ")}
                   </p>
+                  {/* Resultado de lo que el coach acaba de clasificar en esta sesion. No se pinta
+                      para el resto: el catalogo no emite el grupo, y un chip ausente significaria
+                      "no lo se", nunca "sin clasificar". */}
+                  {classifiedNow[model.id] ? (
+                    <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-pill border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                      <Scale aria-hidden="true" className="size-3 shrink-0" />
+                      <span className="truncate">
+                        {classifiedNow[model.id].groupName
+                          ? `${classifiedNow[model.id].groupName}${
+                              classifiedNow[model.id].portionGrams != null
+                                ? ` · ${classifiedNow[model.id].portionGrams} g`
+                                : ''
+                            }`
+                          : 'Sin clasificar'}
+                      </span>
+                    </p>
+                  ) : null}
                   <div className="mt-1">
                     <MacroChipRow
                       calories={item.calories}
@@ -520,7 +582,31 @@ export function FoodCatalogBrowser({
         </p>
       ) : null}
 
-      <FoodDetailSheet open={detailOpen} onOpenChange={setDetailOpen} detail={detail} loading={false} />
+      <FoodDetailSheet
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        detail={detail}
+        loading={false}
+        footerAction={
+          <button
+            type="button"
+            onClick={openClassify}
+            className="eva-press inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken"
+          >
+            <Scale aria-hidden="true" className="size-4" />
+            Clasificar en porciones
+          </button>
+        }
+      />
+
+      <ClassifyFoodFlow
+        open={classifyOpen}
+        onOpenChange={setClassifyOpen}
+        food={detailItem}
+        groups={exchangeGroups}
+        groupsLoading={exchangeGroupsLoading}
+        onClassified={handleClassified}
+      />
     </div>
   )
 }

@@ -31,9 +31,12 @@ Estado: **Revision de Fable hecha el 2026-08-09: plan APROBADO con correcciones 
 
 ## F3 — Clasificar y porciones: formulario unico
 
-- [ ] Unificar `ClassifyFoodSheet` + `ExchangeListEntrySheet` + `ExchangePortionsSection` en una sola gramatica de grupo
-- [ ] Extraer a modulo puro con test la logica duplicada que aparezca (no copiar)
-- [ ] Gate: typecheck + lint + suite; QA de clasificacion completa en los dos anchos
+- [x] Formulario unico `ClassifyFoodFlow` en el hub: estado actual → grupo → gramos (sugerencia client-side con `suggestPortionGrams`) → medida casera → preview → guardar. Entrada por la ficha (`FoodDetailSheet` gano prop opcional `footerAction`; el picker del builder no la pasa). Los componentes viejos de `/coach/foods` quedaron intactos
+- [x] Hallazgo de fondo: hay DOS caminos de escritura segun propiedad — alimento propio ⇒ `setFoodExchangeEquivalenceAction`; ajeno/global ⇒ `saveExchangeListEntryAction`/`exclude`/`restore` sobre MI fila. Elegir camino es logica de negocio ⇒ vive en `planFoodClassification` (modulo puro `_lib/food-classification.ts`, 29 tests)
+- [x] Lectura nueva ADITIVA (unica desviacion, sin RPC ni schema): `loadFoodExchangeClassificationHubAction` + `getFoodExchangeClassification` + `findOwnExchangeListRowsForFood` — ninguna action existente respondia "en que grupo esta ESTE alimento" (todas parten del grupo; 10+ round-trips por apertura)
+- [x] Bug legacy destapado y cubierto: alimento ajeno con `foods.exchange_group_id` (rank 3) quedaria en DOS grupos al reclasificar; el plan emite lapida (`exclude`, rank 0) y la UI avisa. Verificado contra `20260804091000_...sql`
+- [x] Teclado movil: `max-h-[min(92dvh,760px)]` (los sheets viejos usan `90vh`, que el teclado tapa); la ficha se cierra antes de abrir el flujo
+- [x] Gate: boundaries 317/8 verde, tsc web verde, vitest 628/628 (42 archivos), eslint verde. QA de clasificacion completa (propio + global + reclasificar + quitar, dos anchos): pendiente owner — ES PUERTA DE F5
 
 ## F4 — Verificacion de importadores
 
@@ -71,4 +74,5 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 | 2026-08-09 | F0 | (este commit) | docs:check | SPEC/PLAN/TASKS. Dos hallazgos que cambian el alcance escrito: las rutas a retirar ya no existen (H1) y T2.2 dejo huerfano el filtro "Editados por mi" (H2). |
 | 2026-08-09 | F0 revision | (este commit) | docs:check | Revision de Fable: plan aprobado con correcciones. `FoodSearch.tsx` sobrevive a F5; boundaries no salta con la mudanza (verificado); mecanismo F1 = segundo data path offset sobre `coach_food_overrides`; puerta previa a F5 (conteo LIVE + paridad navegacion). Rama confirmada `rnmobiledenuevo` (specs cherry-picked desde master). |
 | 2026-08-09 | F1 | 8290287b | boundaries + tsc web + vitest 1028/1028 + eslint | Filtro "Editados por mí" completo: repo paginado + action + modulo puro con 15 tests + chip con URL state + badge ✎ + fix basisLabel per_serving. Conteo LIVE puerta F5: 0 alimentos invisibles para el RPC. Pendiente owner: QA visual desktop/360px. |
-| 2026-08-09 | F2 | (este commit) | boundaries + tsc web + vitest 599/599 + eslint | Crear alimento desde el tab. exchangeGroups lazy (desvio del PLAN documentado), guard kcal/P/C/G puro con tests, re-apuntado de busqueda tras crear. 2 bugs preexistentes del sheet arreglados. Pendiente owner: QA desktop/360px y decision sobre bloqueo 0/0/0/0. |
+| 2026-08-09 | F2 | 940e3875 | boundaries + tsc web + vitest 599/599 + eslint | Crear alimento desde el tab. exchangeGroups lazy (desvio del PLAN documentado), guard kcal/P/C/G puro con tests, re-apuntado de busqueda tras crear. 2 bugs preexistentes del sheet arreglados. Pendiente owner: QA desktop/360px y decision sobre bloqueo 0/0/0/0. |
+| 2026-08-09 | F3 | (este commit) | boundaries + tsc web + vitest 628/628 + eslint | Formulario unico de clasificacion en el tab (ClassifyFoodFlow + planFoodClassification puro con 29 tests). Dos caminos de escritura segun propiedad, lapida anti doble-grupo legacy, lectura nueva aditiva sin RPC. Pendiente owner: QA completa en dos anchos (puerta de F5). |

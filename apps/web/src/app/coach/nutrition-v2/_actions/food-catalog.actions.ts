@@ -17,6 +17,10 @@ import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read
 import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 import { getCoachFoodOverridePage } from '@/services/nutrition-v2/coach-food-overrides.service'
 import {
+  getFoodExchangeClassification,
+  type FoodExchangeClassificationRead,
+} from '@/services/nutrition-exchanges/exchange-lists.service'
+import {
   coachEditedFoodToCatalogItem,
   type CoachEditedFoodRow,
 } from '@/app/coach/nutrition-v2/_lib/edited-foods'
@@ -54,6 +58,7 @@ type EditedListSuccess = {
   hasMore: boolean
   nextOffset: number | null
 }
+type FoodClassificationSuccess = { ok: true; classification: FoodExchangeClassificationRead }
 
 function fail(code: string, error: string): ActionFailure {
   return { ok: false, code, error }
@@ -139,6 +144,39 @@ export async function searchFoodCatalogHubAction(
     nextCursor: result.data.nextCursor,
     hasMore: result.data.hasMore,
   }
+}
+
+const FoodClassificationInputSchema = z.object({ foodId: z.string().uuid() })
+
+/**
+ * Dónde está clasificado HOY un alimento (T2.3 F3), para que el formulario único del tab abra
+ * mostrando el estado real en vez de un formulario en blanco.
+ *
+ * Existe como lectura propia porque el read model del catálogo NO emite nada de intercambios
+ * (`packages/nutrition-v2/catalog.ts`: `FoodCatalogItem` no tiene grupo ni gramos) y ninguna
+ * action de `exchange-lists` responde "en qué grupo está ESTE alimento" — todas parten del
+ * grupo. Recorrer los ~10 grupos del coach para averiguarlo serían 10 round-trips al abrir un
+ * sheet. Sin RPC nueva y sin cambio de schema: dos SELECT sobre tablas existentes, RLS como
+ * techo.
+ *
+ * Lectura pura: sin `revalidatePath`.
+ */
+export async function loadFoodExchangeClassificationHubAction(
+  input: unknown,
+): Promise<FoodClassificationSuccess | ActionFailure> {
+  const parsed = FoodClassificationInputSchema.safeParse(input)
+  if (!parsed.success) return fail('INVALID_PAYLOAD', 'Alimento invalido.')
+
+  const auth = await authorizeHubCoach()
+  if (!auth.ok) return auth
+
+  const result = await getFoodExchangeClassification(auth.db as unknown as SupabaseClient<Database>, {
+    // El dueño de la lectura sale del ACTOR, jamas del payload.
+    actorCoachId: auth.coachId,
+    foodId: parsed.data.foodId,
+  })
+  if (!result.success) return fail('CLASSIFICATION_READ_FAILED', result.error)
+  return { ok: true, classification: result.classification }
 }
 
 const EditedListInputSchema = z.object({
