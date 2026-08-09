@@ -63,11 +63,11 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [ ] Regen COMPLETO de `database.types.ts` (deja 13 errores en 7 archivos V1) + retirar el cast `V2ReadClient` de T1.1 — tanda propia
   - [ ] QA manual en preview (requiere push de la rama)
 - [x] T2.2 Overrides UI — hecha 2026-08-07 en **web y RN**: sheet de edicion (5 macros + medida casera + aviso suave de Atwater), badge ✎ con el catalogo tachado, restaurar original, aviso de republicar. La base declarada NO se pregunta: se hereda del alimento y se enuncia. Pendiente: filtro "Editados por mi" (va con el hub de alimentos, T2.3) y la lista de alumnos afectados en el aviso
-- [ ] T2.3 Hub Alimentos casa unica (SPEC [`nutrition-food-hub/`](../nutrition-food-hub/SPEC.md) primero)
-  - [ ] Crear alimento + clasificar porciones + grupos dentro del tab (formulario UNICO de grupo)
-  - [ ] Rescate del filtro "Editados por mi" que T2.2 dejo huerfano (no existe en el codigo; ver SPEC H2)
-  - [ ] Retirar `/coach/foods` (redirect al tab) — verificar 0 importadores
-  - [ ] ~~Retirar `/coach/meal-groups` y `/coach/recipes`~~ → **RE-ALCANCE 2026-08-09**: esas rutas ya NO existen como paginas; lo que queda (`meal-groups/_actions`, `_data`, recetas) lo consume SOLO V1, y V1 no se borra. El bullet pasa a verificar + documentar (ver SPEC H1)
+- [x] T2.3 Hub Alimentos casa unica — CERRADA 2026-08-09 (detalle y evidencia en [`nutrition-food-hub/TASKS.md`](../nutrition-food-hub/TASKS.md); revision de Fable previa al codigo, aprobada con correcciones)
+  - [x] Crear alimento (`940e3875`) + clasificar porciones + grupos en formulario UNICO (`34f8e0ec`, `ClassifyFoodFlow` + `planFoodClassification` con 29 tests) dentro del tab
+  - [x] Rescate del filtro "Editados por mi" huerfano de T2.2 — `8290287b` (data path propio por offset + badge ✎)
+  - [x] `/coach/foods` retirada — `1eaea68c`: redirect 307 al tab + carpeta borrada salvo `page.tsx` y `FoodSearch.tsx` (2 importadores V1). Paridad minima previa en `b91458d7` (browse sin buscar + "Solo míos", decision owner). QA en preview con evidencia: redirect, 3 modos, alta con guard kcal/P/C/G, clasificacion end-to-end verificada en DB, 390px
+  - [x] ~~Retirar `/coach/meal-groups` y `/coach/recipes`~~ → **RE-ALCANCE 2026-08-09**: esas rutas ya NO existen como paginas; lo que queda (`meal-groups/_actions`, `_data`, recetas) lo consume SOLO V1, y V1 no se borra. Verificado y documentado en F4 (`462869b1`): importadores reales = 2 archivos de PlanBuilder
 - [ ] T2.4 Sustituciones FULL (SPEC `nutrition-substitution-intake/` primero): RPC/action server-validado contra substitutions del item o membership de grupo; sin requerir canRegisterFreely; estado "sustituido" en read models + adherencia; idempotencia por intencion; review adversarial pre-aplicacion
 - [ ] T2.5 Swipe ⇄ + sheet 2 bloques (autorizados / grupo) + candado items fijos; undo 6s; PWA + RN Android; cero deps nativas
 - [ ] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard
@@ -91,4 +91,5 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
 | Fecha | Tanda | Commit | Gates | Notas |
 |-------|-------|--------|-------|-------|
 | 2026-08-06 | F0.1-F0.3, F0.5 | (este commit) | docs:check pendiente en gates de primera tanda | Fase 0 abierta y cerrada salvo F0.4→T1.0 |
+| 2026-08-09 | T2.3 completa (F1-F5 + F4.5) | 8290287b..1eaea68c | boundaries 324/8 ✓ · tsc web ✓ · vitest web full 2857 ✓ · suite completa 5488 ✓ · docs:check ✓ · QA preview navegador ✓ (redirect, 3 modos, alta, clasificacion verificada en DB, 390px) | Hub = unica casa del catalogo. /coach/foods → redirect 307; FoodSearch.tsx sobrevive (V1). Deudas anotadas: paridad RN del tab, 3 revalidatePath muertos en V1, FoodListCompact con 1 solo consumidor V1. QA owner en device: pendiente. |
 | 2026-08-07 | Cierre O1 (T1.0-T1.6 + QA) | 139fe69b | suite full 5358 ✓ · typecheck web ✓ · tsc mobile ✓ · eslint ✓ (3 refs preexistentes anotados) · tokens 86/86 ✓ · QA Playwright preview ✓ · QA device fisico ✓ · curl cron ✓ | O1 CERRADA. Fix extra 139fe69b (teclado sheets Android). Pendientes reales: decision merge web→master, checklist preservacion formal (→O2), triage hallazgos menores a/b/c/d, OTA android = cierre O2 |
