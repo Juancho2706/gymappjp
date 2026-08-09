@@ -168,9 +168,32 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
                 // Si el fallback gana la carrera con la señal REAL aún sin llegar, es una degradación
                 // (red lenta / ruta que no commiteó): la reportamos con el tiempo transcurrido.
                 if (!execReadyRef.current || !routeReadyRef.current) {
-                    Sentry.captureMessage('exec-v3: fallback 4.6s gano la carrera', {
+                    // EVA-NEXTJS-Z: el mensaje anterior era uno solo para las DOS degradaciones, y
+                    // sin saber cual señal falto no habia nada que arreglar (96 avisos anonimos).
+                    // Ahora cada causa tiene su propio grupo en Sentry:
+                    //   - ruta sin commitear  → el push de Next no llego (TTFB / red del servidor)
+                    //   - ejecutor sin señal  → la ruta commiteo pero la pantalla no dijo "listo"
+                    //   - ambas               → tap perdido o navegacion muerta
+                    const faltaRuta = !routeReadyRef.current
+                    const faltaExec = !execReadyRef.current
+                    const causa = faltaRuta && faltaExec ? 'ambas señales' : faltaRuta ? 'ruta sin commitear' : 'ejecutor sin señal'
+                    Sentry.captureMessage(`exec-v3: fallback 4.6s gano la carrera — ${causa}`, {
                         level: 'warning',
-                        extra: { sinceLaunchMs: Math.round(perfNow() - launchedAtPerf) },
+                        extra: {
+                            sinceLaunchMs: Math.round(perfNow() - launchedAtPerf),
+                            routeReady: !faltaRuta,
+                            execReady: !faltaExec,
+                            // Sin UUIDs: el patron de origen alcanza para separar dashboard de otras entradas.
+                            startPath: pathname,
+                            online: typeof navigator !== 'undefined' ? navigator.onLine : null,
+                            // `effectiveType` ('4g' | '3g' | '2g' | 'slow-2g') separa "red del alumno"
+                            // de "servidor lento"; no existe en Safari, de ahi el null.
+                            effectiveType:
+                                typeof navigator !== 'undefined'
+                                    ? ((navigator as Navigator & { connection?: { effectiveType?: string } }).connection
+                                          ?.effectiveType ?? null)
+                                    : null,
+                        },
                     })
                 }
                 setForceReady(true)
