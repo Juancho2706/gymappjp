@@ -55,10 +55,11 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [ ] Merge freeze publicacion (`plan-persistence.ts`) + rehidratacion (`plan-foods.data.ts`) + fix N+1 (`.in()` batch)
   - [ ] Regen database.types + boundaries + service/repository capa limpia
 - [ ] T2.2 Overrides UI: sheet editar (kcal/P/C/G + medida casera + validacion suave), badge ✎ + original tachado, filtro "Editados por mi", aviso republicar con lista alumnos, restaurar original
-- [ ] T2.3 Hub Alimentos casa unica
+- [ ] T2.3 Hub Alimentos casa unica (SPEC [`nutrition-food-hub/`](../nutrition-food-hub/SPEC.md) primero)
   - [ ] Crear alimento + clasificar porciones + grupos dentro del tab (formulario UNICO de grupo)
+  - [ ] Rescate del filtro "Editados por mi" que T2.2 dejo huerfano (no existe en el codigo; ver SPEC H2)
   - [ ] Retirar `/coach/foods` (redirect al tab) — verificar 0 importadores
-  - [ ] Retirar `/coach/meal-groups` y `/coach/recipes` (orden owner; DB intacta) — verificar 0 importadores
+  - [ ] ~~Retirar `/coach/meal-groups` y `/coach/recipes`~~ → **RE-ALCANCE 2026-08-09**: esas rutas ya NO existen como paginas; lo que queda (`meal-groups/_actions`, `_data`, recetas) lo consume SOLO V1, y V1 no se borra. El bullet pasa a verificar + documentar (ver SPEC H1)
 - [ ] T2.4 Sustituciones FULL (SPEC `nutrition-substitution-intake/` primero): RPC/action server-validado contra substitutions del item o membership de grupo; sin requerir canRegisterFreely; estado "sustituido" en read models + adherencia; idempotencia por intencion; review adversarial pre-aplicacion
 - [ ] T2.5 Swipe ⇄ + sheet 2 bloques (autorizados / grupo) + candado items fijos; undo 6s; PWA + RN Android; cero deps nativas
 - [ ] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard
