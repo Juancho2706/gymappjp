@@ -16,7 +16,7 @@ vi.mock('./PlanTemplatesLibrary', () => ({
 import { NutritionHubTabs } from './NutritionHubTabs'
 
 function renderTabs() {
-  return render(<NutritionHubTabs roster={<div>roster</div>} />)
+  return render(<NutritionHubTabs coachId="11111111-1111-4111-8111-111111111111" roster={<div>roster</div>} />)
 }
 
 describe('NutritionHubTabs (NUT-040 — patrón ARIA APG)', () => {

@@ -22,11 +22,12 @@ Estado: **Revision de Fable hecha el 2026-08-09: plan APROBADO con correcciones 
 
 ## F2 — Crear alimento en el tab
 
-- [ ] Montar `AddFoodSheet` desde el tab Alimentos
-- [ ] Cargar `exchangeGroups` en el server component del hub SOLO para este tab (sin sumar queries a las otras 3)
-- [ ] Bloquear guardado de alimento individual sin kcal/P/C/G (regla owner 2026-08-05)
-- [ ] El listado del tab refleja el alimento nuevo sin recarga dura
-- [ ] Gate: typecheck + lint + suite; QA desktop y ancho de telefono
+- [x] `AddFoodSheet` montado desde el tab (boton "Nuevo alimento"); el sheet sigue viviendo en `coach/foods/_components` hasta F5, con props nuevas `trigger`/`onOpenChange`/`onCreated`
+- [x] `exchangeGroups`: DESVIO del PLAN documentado — carga lazy client-side en la primera apertura del sheet via `loadExchangeGroupsForCoachAction` (el server component no sirve: el tab cambia con `history.replaceState` sin refetch del RSC). Cero queries extra para las otras 3 tabs
+- [x] Guard kcal/P/C/G en el sheet (modulo puro `_lib/custom-food-macros.ts` + 18 tests): los 4 ya eran `required`; lo nuevo = bloquear 0/0/0/0 y rangos con mensaje en español sin round-trip. ⚠️ Decision reversible para el owner: 0/0/0/0 bloqueado impide crear "Agua" custom (el catalogo global ya la tiene)
+- [x] Listado refleja el alimento nuevo: re-apunta la busqueda al nombre creado + `searchNonce` (cubre "busque pollo, no estaba, lo cree"); verificado en migraciones que el RPC SI ve el alimento recien creado (`unverified`, `country_code` null)
+- [x] Bonus: 2 bugs preexistentes del sheet arreglados (2do alimento en la misma sesion no cerraba ni tosteaba; `requestFormReset` de React 19 borraba lo tipeado al rebotar validacion — resuelto en `onSubmit`, pineado con tests)
+- [x] Gate: boundaries 314/8 verde, tsc web verde, vitest 599/599 (41 archivos), eslint verde. QA desktop/telefono: pendiente owner
 
 ## F3 — Clasificar y porciones: formulario unico
 
@@ -69,4 +70,5 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 |-------|------|--------|-------|-------|
 | 2026-08-09 | F0 | (este commit) | docs:check | SPEC/PLAN/TASKS. Dos hallazgos que cambian el alcance escrito: las rutas a retirar ya no existen (H1) y T2.2 dejo huerfano el filtro "Editados por mi" (H2). |
 | 2026-08-09 | F0 revision | (este commit) | docs:check | Revision de Fable: plan aprobado con correcciones. `FoodSearch.tsx` sobrevive a F5; boundaries no salta con la mudanza (verificado); mecanismo F1 = segundo data path offset sobre `coach_food_overrides`; puerta previa a F5 (conteo LIVE + paridad navegacion). Rama confirmada `rnmobiledenuevo` (specs cherry-picked desde master). |
-| 2026-08-09 | F1 | (este commit) | boundaries + tsc web + vitest 1028/1028 + eslint | Filtro "Editados por mí" completo: repo paginado + action + modulo puro con 15 tests + chip con URL state + badge ✎ + fix basisLabel per_serving. Conteo LIVE puerta F5: 0 alimentos invisibles para el RPC. Pendiente owner: QA visual desktop/360px. |
+| 2026-08-09 | F1 | 8290287b | boundaries + tsc web + vitest 1028/1028 + eslint | Filtro "Editados por mí" completo: repo paginado + action + modulo puro con 15 tests + chip con URL state + badge ✎ + fix basisLabel per_serving. Conteo LIVE puerta F5: 0 alimentos invisibles para el RPC. Pendiente owner: QA visual desktop/360px. |
+| 2026-08-09 | F2 | (este commit) | boundaries + tsc web + vitest 599/599 + eslint | Crear alimento desde el tab. exchangeGroups lazy (desvio del PLAN documentado), guard kcal/P/C/G puro con tests, re-apuntado de busqueda tras crear. 2 bugs preexistentes del sheet arreglados. Pendiente owner: QA desktop/360px y decision sobre bloqueo 0/0/0/0. |

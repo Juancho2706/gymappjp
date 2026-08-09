@@ -1,6 +1,14 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactElement,
+} from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Loader2, Save } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -8,8 +16,12 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useFormStatus } from 'react-dom'
 import { saveCustomFood } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
+import {
+  CUSTOM_FOOD_MACRO_MAX,
+  readCustomFoodMacroDraft,
+  validateCustomFoodMacros,
+} from '@/app/coach/nutrition-v2/_lib/custom-food-macros'
 import { toast } from 'sonner'
 import {
   EMPTY_FOOD_EQUIVALENCE,
@@ -29,46 +41,131 @@ function macroPreviewPct(calories: number, p: number, c: number, f: number) {
   }
 }
 
+function readField(formData: FormData, name: string): string {
+  const value = formData.get(name)
+  return typeof value === 'string' ? value : ''
+}
+
 export function AddFoodSheet({
   coachId,
   /**
-   * Catálogo de grupos de porciones VISIBLES para el coach (system + propios + team activo),
-   * resuelto server-side en la page. Vacío = el bloque de equivalencia queda sin opciones.
+   * Catálogo de grupos de porciones VISIBLES para el coach (system + propios + team activo).
+   * `/coach/foods` lo resuelve server-side en su page; el tab Alimentos del hub V2 lo carga
+   * perezoso al abrir el sheet (ver `onOpenChange`). Vacío = el bloque de equivalencia queda
+   * sin opciones, nunca roto.
    */
   exchangeGroups = [],
+  /**
+   * Se avisa en cada apertura. Lo usa el hub V2 para pedir `exchangeGroups` la PRIMERA vez que
+   * el coach abre el sheet: cambiar de tab es `history.replaceState`, así que un dato cargado
+   * en el server component solo serviría para deep-links, no para el switch en cliente.
+   */
+  onOpenChange,
+  /**
+   * Reemplaza al `router.refresh()` cuando quien monta el sheet sabe refrescar su propio
+   * listado en cliente. En el hub V2 un refresh del RSC volvería a pedir roster + picker por
+   * haber creado un alimento; recibe el NOMBRE guardado para poder apuntar el listado hacia él.
+   */
+  onCreated,
+  /**
+   * Disparador propio (tokens del hub). Sin él se usa el botón histórico de `/coach/foods`.
+   * Base UI compone por `render`, no por `asChild`: el elemento recibe los props y el ref del
+   * trigger, así que tiene que ser un único elemento que los reenvíe (un `<button>` sirve).
+   */
+  trigger,
 }: {
   coachId: string
   exchangeGroups?: FoodEquivalenceGroupOption[]
+  onOpenChange?: (open: boolean) => void
+  onCreated?: (name: string) => void
+  trigger?: ReactElement<Record<string, unknown>>
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveCustomFood.bind(null, coachId), { error: undefined, success: false })
+  const [state, formAction, pending] = useActionState(saveCustomFood.bind(null, coachId), {
+    error: undefined,
+    success: false,
+  })
+  // Invariante 6 (kcal/P/C/G): el veredicto del módulo puro, mostrado sin round-trip. No es
+  // autorización — el techo sigue siendo `CustomFoodSchema` dentro de `saveCustomFood`.
+  const [macroError, setMacroError] = useState<string | null>(null)
+  const submittedName = useRef('')
+  // `state.success` se queda en `true` entre altas, así que un efecto que dependa del BOOLEANO
+  // no vuelve a correr en la segunda creación de la misma sesión (el sheet quedaba abierto y
+  // sin toast). La identidad del objeto sí cambia por dispatch: es lo que se observa.
+  const handledState = useRef<unknown>(null)
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next)
+      if (!next) setMacroError(null)
+      onOpenChange?.(next)
+    },
+    [onOpenChange],
+  )
+
+  /**
+   * Guard de invariante 6 + captura del nombre guardado, en `onSubmit` y NO envolviendo el
+   * action. Los dos detalles que obligan a hacerlo así (verificados en react-dom 19.1.0):
+   *
+   *  - React despacha los `onSubmit` ANTES del plugin que ejecuta el action, y si el submit
+   *    quedó cancelado no llama al action;
+   *  - ese mismo camino se salta el `requestFormReset` que React encola junto al action, así
+   *    que al rebotar la validación el coach conserva lo que ya había escrito (nombre,
+   *    categoría, porción). Envolver el action en una función propia habría reseteado el
+   *    formulario en cada rebote y además habría dejado ciego a `useFormStatus`.
+   */
+  const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    const form = event.currentTarget
+    const formData = new FormData(form)
+    const issue = validateCustomFoodMacros(readCustomFoodMacroDraft(formData))
+    if (issue) {
+      event.preventDefault()
+      setMacroError(issue.message)
+      form.querySelector<HTMLInputElement>(`[name="${issue.field}"]`)?.focus()
+      return
+    }
+    setMacroError(null)
+    submittedName.current = readField(formData, 'name').trim()
+  }, [])
 
   useEffect(() => {
-    if (state.success) {
-      setOpen(false)
-      toast.success('Alimento creado')
-      router.refresh()
-    }
-  }, [state.success, router])
+    if (!state.success || handledState.current === state) return
+    handledState.current = state
+    setOpen(false)
+    setMacroError(null)
+    toast.success('Alimento creado')
+    if (onCreated) onCreated(submittedName.current)
+    else router.refresh()
+  }, [state, router, onCreated])
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        className={buttonVariants({
-          className:
-            'gap-2 font-black uppercase tracking-widest text-[10px] h-11 rounded-2xl w-full sm:w-auto',
-        })}
-      >
-        <Plus className="w-4 h-4" />
-        Nuevo alimento
-      </SheetTrigger>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      {trigger ? (
+        <SheetTrigger render={trigger} />
+      ) : (
+        <SheetTrigger
+          className={buttonVariants({
+            className:
+              'gap-2 font-black uppercase tracking-widest text-[10px] h-11 rounded-2xl w-full sm:w-auto',
+          })}
+        >
+          <Plus className="w-4 h-4" />
+          Nuevo alimento
+        </SheetTrigger>
+      )}
       <SheetContent side="bottom" className="max-h-[90vh]">
         <SheetHeader>
           <SheetTitle>Nuevo alimento custom</SheetTitle>
         </SheetHeader>
         <div className="px-6 pb-6 overflow-y-auto">
-          <AddFoodFormBody formAction={formAction} state={state} exchangeGroups={exchangeGroups} />
+          <AddFoodFormBody
+            formAction={formAction}
+            onSubmit={handleSubmit}
+            pending={pending}
+            error={macroError ?? state.error ?? null}
+            exchangeGroups={exchangeGroups}
+          />
         </div>
       </SheetContent>
     </Sheet>
@@ -77,11 +174,15 @@ export function AddFoodSheet({
 
 function AddFoodFormBody({
   formAction,
-  state,
+  onSubmit,
+  pending,
+  error,
   exchangeGroups,
 }: {
   formAction: (payload: FormData) => void
-  state: { error?: string; success?: boolean }
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  pending: boolean
+  error: string | null
   exchangeGroups: FoodEquivalenceGroupOption[]
 }) {
   const [unit, setUnit] = useState<'g' | 'un'>('g')
@@ -97,7 +198,7 @@ function AddFoodFormBody({
   const pct = macroPreviewPct(c, p, cb, f)
 
   return (
-    <form action={formAction} className="space-y-4 pt-2">
+    <form action={formAction} onSubmit={onSubmit} className="space-y-4 pt-2">
       <div className="space-y-2">
         <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Nombre</Label>
         <Input name="name" required placeholder="Ej: Huevo cocido" className="h-11 rounded-xl" />
@@ -106,6 +207,11 @@ function AddFoodFormBody({
         Las calorías y macros de abajo son <span className="font-semibold text-foreground">por cada 100 gramos</span> (como en una tabla nutricional). En el plan del alumno el coach puede poner cantidad en{' '}
         <span className="font-semibold text-foreground">gramos</span> (ej. 200) o en <span className="font-semibold text-foreground">unidades</span> (ej. 1 huevo): para unidades, indica cuántos gramos pesa una unidad.
       </p>
+      {/*
+        Los cuatro son obligatorios (regla owner 2026-08-05): `required` + `min`/`max` con los
+        MISMOS topes que `CustomFoodSchema`, y `validateCustomFoodMacros` cerrando lo que el
+        navegador no ve (los cuatro en 0).
+      */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Kcal (100g)</Label>
@@ -113,6 +219,8 @@ function AddFoodFormBody({
             name="calories"
             type="number"
             step="0.1"
+            min={0}
+            max={CUSTOM_FOOD_MACRO_MAX.calories}
             required
             className="h-11 rounded-xl"
             value={calories}
@@ -125,6 +233,8 @@ function AddFoodFormBody({
             name="protein"
             type="number"
             step="0.1"
+            min={0}
+            max={CUSTOM_FOOD_MACRO_MAX.protein}
             required
             className="h-11 rounded-xl"
             value={protein}
@@ -137,6 +247,8 @@ function AddFoodFormBody({
             name="carbs"
             type="number"
             step="0.1"
+            min={0}
+            max={CUSTOM_FOOD_MACRO_MAX.carbs}
             required
             className="h-11 rounded-xl"
             value={carbs}
@@ -149,6 +261,8 @@ function AddFoodFormBody({
             name="fats"
             type="number"
             step="0.1"
+            min={0}
+            max={CUSTOM_FOOD_MACRO_MAX.fats}
             required
             className="h-11 rounded-xl"
             value={fats}
@@ -236,18 +350,15 @@ function AddFoodFormBody({
         )}
       </div>
       <FoodEquivalenceFields value={equivalence} onChange={setEquivalence} groups={exchangeGroups} />
-      <SubmitRow />
-      {state.error && <p className="text-xs text-[var(--cta-danger)] font-bold text-center">{state.error}</p>}
+      <Button type="submit" disabled={pending} className="w-full h-12 font-black uppercase tracking-widest">
+        {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+        {pending ? 'Guardando…' : 'Guardar'}
+      </Button>
+      {error && (
+        <p role="alert" className="text-xs text-[var(--cta-danger)] font-bold text-center">
+          {error}
+        </p>
+      )}
     </form>
-  )
-}
-
-function SubmitRow() {
-  const { pending } = useFormStatus()
-  return (
-    <Button type="submit" disabled={pending} className="w-full h-12 font-black uppercase tracking-widest">
-      {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-      {pending ? 'Guardando…' : 'Guardar'}
-    </Button>
   )
 }

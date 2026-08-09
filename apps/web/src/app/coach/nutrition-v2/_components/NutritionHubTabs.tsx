@@ -61,7 +61,7 @@ function parseTabParam(raw: string | null): TabKey {
  * el RSC de la pagina (roster + picker, dos round-trips) por cambiar de pestaña, y `push`
  * ademas llenaria el historial de entradas por cada click.
  */
-export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
+export function NutritionHubTabs({ roster, coachId }: { roster: ReactNode; coachId: string }) {
   const searchParams = useSearchParams()
   // Solo el valor INICIAL viene de la URL; despues manda el estado local. La URL es un espejo,
   // no la fuente de verdad: el roster reescribe sus propios params al montarse y no debe poder
@@ -193,7 +193,7 @@ export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
         tabIndex={0}
         hidden={active !== 'foods'}
       >
-        {active === 'foods' ? <FoodCatalogBrowser countryCode="CL" /> : null}
+        {active === 'foods' ? <FoodCatalogBrowser coachId={coachId} countryCode="CL" /> : null}
       </div>
       <div
         role="tabpanel"

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, Pencil, Search, X } from 'lucide-react'
+import { Loader2, Pencil, Plus, Search, X } from 'lucide-react'
 import { MacroChipRow, NutritionStatePanel } from '@/components/nutrition-v2'
 import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
 import {
@@ -13,6 +13,13 @@ import {
   type FoodVerificationTone,
 } from '@/lib/food-detail'
 import type { FoodCatalogItem, FoodCatalogCursor } from '@eva/nutrition-v2'
+// T2.3 F2 — el alta vive donde ya estaba: el contrato server (`saveCustomFood`) no cambia y
+// mudar el archivo es trabajo de F5, cuando `/coach/foods` se borre. El gate
+// `check:nutrition-v2-boundaries` es una lista negra de shells V1 (NutritionShell, NutritionHub,
+// PlanBuilder, `/nutrition/_components/`, flags), no una prohibición de importar dominio V1.
+import { AddFoodSheet } from '@/app/coach/foods/_components/AddFoodSheet'
+import type { FoodEquivalenceGroupOption } from '@/app/coach/foods/_components/FoodEquivalenceFields'
+import { loadExchangeGroupsForCoachAction } from '../[clientId]/builder/_components/PortionsGroupsAction'
 import {
   foodCatalogItemToCardModel,
   foodCatalogItemToDetail,
@@ -62,7 +69,17 @@ const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
  * compartido: una respuesta cuyo controller ya fue abortado se descarta, venga del modo que
  * venga (comparar solo el texto de la busqueda dejaba pasar la respuesta del otro modo).
  */
-export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: string }) {
+export function FoodCatalogBrowser({
+  coachId,
+  countryCode = 'CL',
+}: {
+  /**
+   * Actor. Viaja como prop porque el alta lo necesita para `saveCustomFood.bind(...)`; no
+   * autoriza nada: la action re-verifica `user.id === coachId` contra la sesión.
+   */
+  coachId: string
+  countryCode?: string
+}) {
   const searchParams = useSearchParams()
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -79,8 +96,16 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<FoodDetailData | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [exchangeGroups, setExchangeGroups] = useState<FoodEquivalenceGroupOption[]>([])
+  /**
+   * Fuerza la busqueda aunque el texto no cambie. Hace falta en el caso MAS comun del alta:
+   * el coach busca "pollo grillado", no lo encuentra, lo crea — y el termino ya era ese, asi
+   * que reescribirlo no dispararia ninguna consulta y el alimento nuevo no aparecería.
+   */
+  const [searchNonce, setSearchNonce] = useState(0)
 
   const activeController = useRef<AbortController | null>(null)
+  const exchangeGroupsRequested = useRef(false)
 
   /**
    * Corta lo que este en vuelo y abre una nueva "generacion" de resultados. Baja `loadingMore`
@@ -121,6 +146,57 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
     const path = window.location.pathname
     window.history.replaceState(window.history.state, '', qs ? `${path}?${qs}` : path)
   }, [])
+
+  /**
+   * Grupos de porciones del bloque opcional "Equivalencia" del alta, cargados la PRIMERA vez
+   * que se abre el sheet y cacheados en estado.
+   *
+   * No se resuelven en el server component del hub a proposito: el tab se cambia con
+   * `history.replaceState`, sin refetch del RSC, asi que ese dato solo llegaria en deep-links
+   * y ademas se pagaria en las otras tres pestañas, que no lo usan (el hub ya sufrio flood de
+   * queries en O1). Si la carga falla se libera el candado: el bloque de equivalencia es
+   * opcional y el alta nunca se bloquea por el, pero la proxima apertura reintenta.
+   */
+  const ensureExchangeGroups = useCallback(() => {
+    if (exchangeGroupsRequested.current) return
+    exchangeGroupsRequested.current = true
+    void loadExchangeGroupsForCoachAction().then((res) => {
+      if (!res.ok) {
+        exchangeGroupsRequested.current = false
+        return
+      }
+      setExchangeGroups(
+        res.groups.map((group) => ({
+          id: group.id,
+          code: group.code,
+          name: group.name,
+          isSystem: group.isSystem,
+        })),
+      )
+    })
+  }, [])
+
+  /**
+   * Tras crear, el listado se REAPUNTA al nombre del alimento nuevo en vez de refrescarse.
+   *
+   * Un `router.refresh()` aca tiraria el RSC del hub entero (roster + picker, dos round-trips)
+   * por haber creado un alimento; y aunque no lo hiciera, no serviria: el buscador del tab es
+   * estado de cliente, el alimento recien creado casi nunca cae en la busqueda activa ni en la
+   * primera pagina de 20 del RPC, y en modo "Editados por mi" directamente no existe (nace sin
+   * override). Apuntar la busqueda a su nombre es lo unico que lo pone en pantalla sin F5.
+   */
+  const handleFoodCreated = useCallback(
+    (name: string) => {
+      const term = name.trim()
+      applyEditedOnly(false)
+      setQuery(term)
+      // Se adelanta el debounce: la busqueda tiene que salir ya, no 400 ms despues de cerrar
+      // el sheet. El timer escribira el mismo valor y React descartara el re-render.
+      setDebounced(term)
+      setSearchNonce((n) => n + 1)
+    },
+    [applyEditedOnly],
+  )
 
   // Modo filtro: primera pagina de mis correcciones. Cambiar de modo (en cualquier direccion)
   // aborta y vacia antes de nada: los cursores keyset y offset no se pueden mezclar.
@@ -182,7 +258,9 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
       return
     }
     void runSearch(debounced)
-  }, [debounced, editedOnly, runSearch])
+    // `searchNonce` no se usa en el cuerpo a proposito: es el disparador de "vuelve a buscar
+    // lo mismo" tras un alta (ver `handleFoodCreated`).
+  }, [debounced, editedOnly, runSearch, searchNonce])
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return
@@ -280,21 +358,41 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
         ) : null}
       </div>
 
-      <div role="group" aria-label="Filtrar el catalogo" className="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          aria-pressed={editedOnly}
-          onClick={() => applyEditedOnly(!editedOnly)}
-          className={
-            'inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border px-3 text-xs font-semibold transition-colors ' +
-            (editedOnly
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border-default bg-surface-card text-muted hover:text-strong')
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="group" aria-label="Filtrar el catalogo" className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            aria-pressed={editedOnly}
+            onClick={() => applyEditedOnly(!editedOnly)}
+            className={
+              'inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border px-3 text-xs font-semibold transition-colors ' +
+              (editedOnly
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border-default bg-surface-card text-muted hover:text-strong')
+            }
+          >
+            <Pencil aria-hidden="true" className="size-3.5" />
+            Editados por mí
+          </button>
+        </div>
+
+        <AddFoodSheet
+          coachId={coachId}
+          exchangeGroups={exchangeGroups}
+          onOpenChange={(open) => {
+            if (open) ensureExchangeGroups()
+          }}
+          onCreated={handleFoodCreated}
+          trigger={
+            <button
+              type="button"
+              className="eva-press inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill bg-primary px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
+            >
+              <Plus aria-hidden="true" className="size-3.5" />
+              Nuevo alimento
+            </button>
           }
-        >
-          <Pencil aria-hidden="true" className="size-3.5" />
-          Editados por mí
-        </button>
+        />
       </div>
 
       {error ? (
