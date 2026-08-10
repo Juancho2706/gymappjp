@@ -10,10 +10,12 @@ import {
   NutritionIntakeMutationSchema,
   NutritionIntakeVoidSchema,
   SubstitutionIntakeRequestSchema,
+  SubstitutionOptionsReadModelSchema,
   buildNutritionIdempotencyKey,
   buildNutritionPortionIntakeKey,
   isNutritionV2PermissionDenied,
   type NutritionIntakeMutation,
+  type SubstitutionOptionsItem,
 } from '@eva/nutrition-v2'
 import {
   evaluateCorrectPermission,
@@ -107,6 +109,19 @@ const CorrectActionInputSchema = z.object({
 // ni los macros. El servidor resuelve el resto desde la fila autorizada.
 const SubstituteActionInputSchema = z.object({
   payload: SubstitutionIntakeRequestSchema,
+})
+
+/**
+ * T2.5: lectura del bloque GRUPO de un item. Va aparte del fetch de la pagina a proposito — la
+ * pagina del grupo solo viaja para el item que el sheet abrio, porque calcularla para los ~21
+ * items del dia costaria una llamada cara en el arranque de Hoy.
+ */
+const SubstitutionGroupPageInputSchema = z.object({
+  clientId: z.string().uuid(),
+  localDate: z.string().date(),
+  prescriptionItemId: z.string().uuid(),
+  query: z.string().trim().max(80).nullable().default(null),
+  limit: z.number().int().min(1).max(50).default(20),
 })
 
 // "Retirar" TIENE RPC propio desde NUT-010 (opcion A): `void_nutrition_intake_v2` marca la fila
@@ -377,6 +392,47 @@ export async function recordSubstitutionIntakeAction(
     quantity: plan.quantity,
     unit: plan.equivalence.unit,
     quantityOverridden: plan.quantityOverridden,
+  }
+}
+
+/**
+ * Pagina del bloque GRUPO para UN item (T2.5). La usa el sheet al abrirse, al buscar y al pedir
+ * "ver mas". Es solo lectura y reusa el mismo scope que el resto: `authorizeStudentWrite` verifica
+ * que el alumno sea quien dice ser, y la RPC vuelve a chequear con `nutrition_v2_can_read_client`.
+ */
+export async function loadSubstitutionGroupPageAction(
+  input: unknown,
+): Promise<
+  | { ok: true; item: SubstitutionOptionsItem | null }
+  | ActionFailure
+> {
+  const parsed = SubstitutionGroupPageInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return fail('INVALID_PAYLOAD', 'Datos inválidos.', zodFields(parsed.error))
+  }
+  const { clientId, localDate, prescriptionItemId, query, limit } = parsed.data
+
+  const auth = await authorizeStudentWrite(clientId)
+  if (!auth.ok) return auth
+
+  const result = await auth.supabase.rpc('get_nutrition_substitution_options_v2', {
+    p_client_id: clientId,
+    p_local_date: localDate,
+    p_prescription_item_id: prescriptionItemId,
+    p_group_query: query,
+    p_group_limit: limit,
+  })
+  if (result.error) {
+    return fail('SUBSTITUTION_OPTIONS_UNAVAILABLE', 'No pudimos leer tus equivalentes.')
+  }
+  const options = SubstitutionOptionsReadModelSchema.safeParse(result.data)
+  if (!options.success) {
+    return fail('SUBSTITUTION_OPTIONS_INVALID', 'No pudimos leer tus equivalentes.')
+  }
+  return {
+    ok: true,
+    item:
+      options.data.items.find((entry) => entry.prescriptionItemId === prescriptionItemId) ?? null,
   }
 }
 
