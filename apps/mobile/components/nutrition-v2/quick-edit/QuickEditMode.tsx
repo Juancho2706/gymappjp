@@ -1233,9 +1233,11 @@ export function QuickEditMode({
             <View className="mt-3 flex-row flex-wrap gap-1.5">
               {(
                 [
+                  // "Puede sustituir" no se pinta: espejo de la decision D4 del web
+                  // (`docs/specs/nutrition-exchange-swap/SPEC.md`). El permiso no lo lee ningun
+                  // camino de autorizacion desde T2.4.
                   [planModel.permissions.canRegisterFreely, QUICK_EDIT_COPY.permRegisterFreely],
                   [planModel.permissions.canAdjustPrescribedQuantity, QUICK_EDIT_COPY.permAdjustQuantity],
-                  [planModel.permissions.canSubstitute, QUICK_EDIT_COPY.permSubstitute],
                 ] as const
               ).map(([enabled, label]) => (
                 <View

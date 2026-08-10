@@ -15,7 +15,7 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 - [x] **Revision adversarial del plan ANTES de codigo** (protocolo T2.4) — 8 bloqueantes
 - [x] Los 8 bloqueantes re-verificados a mano contra LIVE (B1 con probe + rollback: `42725 function is not unique`)
 - [x] Correcciones incorporadas a SPEC y PLAN
-- [ ] **D4 del owner**: destino del checkbox "Puede sustituir" del builder (bloquea F4, no F0-F3)
+- [x] **D4 del owner: ocultar.** Retirada la pill "Puede sustituir" de quick-edit web y RN. El checkbox del builder **ya no existia** (poda de la ola 3, web y RN): la revision lo daba por vivo
 - [ ] Commit de la fase 0 con `pnpm docs:check` verde
 
 ## F0 — Equivalencia del grupo + contrato
@@ -35,9 +35,11 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 - [x] El item debe ser de una version `published`/`superseded` de un plan activo
 - [x] **tx-rollback con los 10 casos: 10/10 correctos** (`1:OK 2:42501 3:42501 4:42501 5:OK 6:42501 7:OK 8:42501 9:42501 10:42501`)
 - [x] Rollback del probe verificado: el helper no quedo, el guard conserva su `md5` `ead3e493…`, 0 exclusiones
-- [ ] **APLICAR a LIVE** — pendiente a proposito: no se toca produccion con el owner ausente
-- [ ] Advisors despues, sin clases nuevas
-- [ ] `pg_get_functiondef` de `get_nutrition_today_v2` y de `record_nutrition_intake_v2` identicos antes/despues
+- [x] **APLICADA a LIVE** con el OK del owner, registrada como `20260810161604` (el archivo local se renombro para igualarla)
+- [x] Matriz re-corrida contra las funciones YA aplicadas: **10/10**
+- [x] Advisors: ninguna de las dos funciones nuevas aparece (el helper no es ejecutable por `authenticated`; el guard vive en `private`)
+- [x] `pg_get_functiondef` identico antes/despues: `get_nutrition_today_v2` `732f641a…`, `record_nutrition_intake_v2` `1171f2fd…`, `correct_nutrition_intake_v2` `82b14064…`, `get_nutrition_substitution_options_v2` `00f1c119…`
+- [x] Sin residuos del probe: 0 exclusiones, 38 filas de sustitucion
 - [x] Rollback documentado (re-aplicar `20260809230833` + `drop` del helper)
 
 ## F2 — La RPC de opciones aprende el grupo (DB en LIVE)
@@ -96,4 +98,5 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-10 | Fase 0 (SPEC/PLAN/TASKS) | `f710e0ee` | `pnpm docs:check` | Auditoria LIVE incluida; D1-D3 del owner; el orden del mockup se invierte con evidencia |
 | 2026-08-10 | Fase 0 (correcciones de la revision) | `d82057b2` | `pnpm docs:check` | 8 bloqueantes incorporados, todos re-verificados contra LIVE. B1 habria roto T2.4 en produccion al aplicar F2. H2 recalculado sobre la poblacion entera. Queda D4 del owner |
 | 2026-08-10 | F0 (contrato + delta + claves) | `a6c1634e` | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
-| 2026-08-10 | F1 (guard del grupo, **escrita y validada, NO aplicada**) | (este commit) | matriz 10/10 en tx revertida | Se frena antes de tocar LIVE: es la fase que amplia autorizacion de escritura para 36 alumnos reales y no hay UI que la consuma todavia |
+| 2026-08-10 | F1 (guard del grupo, escrita y validada) | `0f7e8433` | matriz 10/10 en tx revertida | Commiteada sin aplicar, a la espera del owner |
+| 2026-08-10 | F1 **aplicada a LIVE** + D4 | (este commit) | matriz 10/10 sobre lo aplicado · advisors sin clases nuevas · typecheck web y mobile exit 0 · 28/28 de quick-edit | `20260810161604` en LIVE; hot-path byte-identico. D4: se retira la pill de quick-edit en las dos superficies |

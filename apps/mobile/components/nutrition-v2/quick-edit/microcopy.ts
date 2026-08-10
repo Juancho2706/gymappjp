@@ -31,7 +31,9 @@ export const QUICK_EDIT_COPY = {
   notesPlaceholder: 'Escribe indicaciones visibles para tu alumno (bienvenida, comida libre, recordatorios…).',
   permRegisterFreely: 'Registro libre',
   permAdjustQuantity: 'Ajusta cantidades',
-  permSubstitute: 'Puede sustituir',
+  // `permSubstitute` se retiro con la decision D4 (T2.5): el permiso no lo lee ningun camino de
+  // autorizacion desde T2.4, asi que la pastilla le decia al coach que habia bloqueado algo que
+  // nunca estuvo bloqueado. El builder ya lo habia sacado en la poda de la ola 3.
   publishError: 'No se pudo publicar.',
   retry: 'Reintentar',
   /**
