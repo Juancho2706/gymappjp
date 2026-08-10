@@ -120,8 +120,11 @@ const MAX_ATTEMPT_PROBE = 12
  * mira `entry_status`, el servidor devolvia el id de la entry RETIRADA sin escribir nada y el item
  * quedaba inconsumible el resto del dia (QA 2026-08-10).
  *
- * Regla: partir del hint y saltar SOLO las claves cuya entry esta `voided`. Una clave cuya entry
- * sigue activa o corregida se conserva — ahi el short-circuit es lo correcto, es un reintento.
+ * Regla: partir del hint y saltar las claves cuya entry ya NO esta viva — `voided` **y
+ * `corrected`**. Lo segundo se sumo en T2.5: una entry corregida tampoco es un destino valido, y
+ * en un ciclo A→B→A la tercera intencion caia sobre la clave de la primera, con lo que
+ * `correct_` encadenaba la correccion sobre una entry ya superada. Una clave cuya entry sigue
+ * ACTIVA si se conserva: ahi el short-circuit es lo correcto, es un reintento del mismo gesto.
  */
 async function resolveAttempt(
   supabase: SubstitutionRpcClient,
@@ -134,24 +137,29 @@ async function resolveAttempt(
     .eq('log_date', request.localDate)
     .eq('prescription_item_id', request.prescriptionItemId)
 
-  if (error || !data) return request.attempt
+  if (error || !data) return request.attempt + (request.queuedAhead ?? 0)
 
-  const voidedKeys = new Set(
+  const burnedKeys = new Set(
     data
-      .filter((row) => row.entry_status === 'voided' && row.idempotency_key !== null)
+      .filter(
+        (row) =>
+          (row.entry_status === 'voided' || row.entry_status === 'corrected') &&
+          row.idempotency_key !== null,
+      )
       .map((row) => row.idempotency_key as string),
   )
-  if (voidedKeys.size === 0) return request.attempt
+  let attempt = request.attempt + (request.queuedAhead ?? 0)
+  if (burnedKeys.size === 0) return attempt
 
-  let attempt = request.attempt
   for (let probe = 0; probe < MAX_ATTEMPT_PROBE; probe += 1) {
     const key = substitutionIntakeIdempotencyKey({
       localDate: request.localDate,
       prescriptionItemId: request.prescriptionItemId,
       substitutionId: request.substitutionId,
+      groupFoodId: request.groupFoodId,
       attempt,
     })
-    if (!voidedKeys.has(key)) return attempt
+    if (!burnedKeys.has(key)) return attempt
     attempt += 1
   }
   return attempt
@@ -164,9 +172,19 @@ export async function planSubstitutionIntake(
   // 1) Opciones autorizadas del dia, con los macros VIGENTES del sustituto (override del coach
   //    incluido). La version que devuelve es la del snapshot del dia, o sea la que el alumno esta
   //    viendo — no la ultima publicada.
+  //    Para una opcion del GRUPO se pide el lookup dedicado (`p_group_food_id`) en vez de buscarla
+  //    en la respuesta paginada: el alumno pudo encontrarla con el buscador o en "ver mas", y un
+  //    grupo tiene hasta 716 alimentos contra los 20 que trae la pagina. Buscarla en la pagina
+  //    daria un SUBSTITUTION_NOT_AUTHORIZED falso para la enorme mayoria del grupo.
   const optionsResult = await supabase.rpc('get_nutrition_substitution_options_v2', {
     p_client_id: request.clientId,
     p_local_date: request.localDate,
+    ...(request.groupFoodId
+      ? {
+          p_prescription_item_id: request.prescriptionItemId,
+          p_group_food_id: request.groupFoodId,
+        }
+      : {}),
   })
   if (optionsResult.error) {
     return fail('SUBSTITUTION_OPTIONS_UNAVAILABLE', 'No pudimos leer tus reemplazos autorizados.')
@@ -179,10 +197,15 @@ export async function planSubstitutionIntake(
   const itemEntry = options.data.items.find(
     (entry) => entry.prescriptionItemId === request.prescriptionItemId,
   )
-  const option = itemEntry?.options.find((row) => row.substitutionId === request.substitutionId)
+  // El servidor decide cual es la opcion: el cliente solo la nombra. Los macros, la unidad y la
+  // cantidad salen siempre de lo que devolvio la RPC.
+  const option = request.groupFoodId
+    ? itemEntry?.groupOptions.find((row) => row.foodId === request.groupFoodId)
+    : itemEntry?.options.find((row) => row.substitutionId === request.substitutionId)
   if (!itemEntry || !option) {
-    // Cubre las dos formas del mismo problema: el item no tiene reemplazos hoy, o el reemplazo
-    // que el cliente cacheo ya no esta autorizado (el coach republico el plan).
+    // Cubre las tres formas del mismo problema: el item no tiene reemplazos hoy, el reemplazo que
+    // el cliente cacheo ya no esta autorizado (el coach republico el plan), o el alimento pedido
+    // no pertenece al grupo del item / no es visible para este alumno.
     return fail(
       'SUBSTITUTION_NOT_AUTHORIZED',
       'Ese reemplazo ya no esta disponible. Actualiza la pantalla e intenta de nuevo.',
@@ -233,6 +256,7 @@ export async function planSubstitutionIntake(
     localDate: request.localDate,
     prescriptionItemId: request.prescriptionItemId,
     substitutionId: request.substitutionId,
+    groupFoodId: request.groupFoodId,
     attempt: await resolveAttempt(supabase, request),
   })
 

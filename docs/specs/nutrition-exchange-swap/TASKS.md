@@ -61,10 +61,12 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F3 — Boundary: aceptar opciones del grupo
 
-- [ ] `groupFoodId?` como alternativa a `substitutionId`, **exactamente uno** (validado en el schema)
-- [ ] La opcion del grupo se valida con **`p_group_food_id`**, no contra la respuesta paginada (falsos 42501 en buscador y "ver mas")
-- [ ] `resolveAttempt` sondea con `gf-` y **salta tambien las entries `corrected`**, no solo `voided`
-- [ ] Tests: food del grupo OK · food ajeno ⇒ error tipado · **privado ajeno** ⇒ error tipado · **excluido por el coach** ⇒ error tipado · **hallado por buscador fuera del top-20** ⇒ OK · los dos ids ⇒ invalido · ninguno ⇒ invalido · **deshacer + re-elegir la misma opcion** ⇒ clave nueva · rama correccion intacta
+- [x] `groupFoodId?` como alternativa a `substitutionId`, **exactamente uno** (`superRefine`)
+- [x] `queuedAhead?` en el contrato. **`.optional()` y no `.default(0)`**: con default el tipo de salida lo vuelve obligatorio y forzaria a las dos superficies a mandarlo sin tener cola
+- [x] La opcion del grupo se valida con **`p_group_food_id`**, no contra la respuesta paginada
+- [x] `resolveAttempt` sondea con `gf-` y **salta tambien las entries `corrected`**, no solo `voided`
+- [x] **14 tests nuevos** en `substitution-intake.service.test.ts` (no existia archivo de tests del servicio): opcion del grupo OK · alimento que el servidor no reconoce ⇒ `SUBSTITUTION_NOT_AUTHORIZED` (cubre fuera-del-grupo, privado ajeno y excluido: el servidor simplemente no lo devuelve) · **hallado por buscador fuera de la pagina** ⇒ OK · los dos ids ⇒ invalido · ninguno ⇒ invalido · deshacer ⇒ clave nueva · **entry `corrected` tambien quema la clave** · entry `active` NO la quema (es reintento) · `queuedAhead` corre el attempt · rama coach intacta y sin pedir lookup
+- [x] El fake sirve `groupOptions` **solo** ante `p_group_food_id`: si el boundary buscara en la pagina, los tests fallarian
 
 ## F4 — Sheet web
 
@@ -105,4 +107,5 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-10 | F0 (contrato + delta + claves) | `a6c1634e` | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
 | 2026-08-10 | F1 (guard del grupo, escrita y validada) | `0f7e8433` | matriz 10/10 en tx revertida | Commiteada sin aplicar, a la espera del owner |
 | 2026-08-10 | F1 **aplicada a LIVE** + D4 | `86f665e5` | matriz 10/10 sobre lo aplicado · advisors sin clases nuevas · typecheck web y mobile exit 0 · 28/28 de quick-edit | `20260810161604` en LIVE; hot-path byte-identico. D4: se retira la pill de quick-edit en las dos superficies |
-| 2026-08-10 | F2 **aplicada a LIVE** | (este commit) | matriz con JWT real · regresion T2.4 verde · 37/37 del paquete · typecheck web y mobile exit 0 | `20260810171529`. `drop`+`create` porque `create or replace` habria roto T2.4. Costo 8 ms → 58 ms (la primera version daba 106 y se corrigio) |
+| 2026-08-10 | F3 (boundary) | (este commit) | 51/51 de los dos archivos · typecheck web y mobile exit 0 · `pnpm lint` exit 0 | El lookup dedicado evita el falso 42501 del buscador; `corrected` pasa a quemar clave |
+| 2026-08-10 | F2 **aplicada a LIVE** | `f0d83b1d` | matriz con JWT real · regresion T2.4 verde · 37/37 del paquete · typecheck web y mobile exit 0 | `20260810171529`. `drop`+`create` porque `create or replace` habria roto T2.4. Costo 8 ms → 58 ms (la primera version daba 106 y se corrigio) |

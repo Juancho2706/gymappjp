@@ -483,17 +483,40 @@ export function substitutionIntentToken(input: {
  * `quantityAdjustmentPercent`, medido contra la cantidad EQUIVALENTE (no contra la prescrita del
  * otro alimento, que puede estar en otra unidad).
  */
-export const SubstitutionIntakeRequestSchema = z.object({
-  clientId: z.string().uuid(),
-  localDate: z.string().date(),
-  occurredAt: z.string().datetime({ offset: true }),
-  timezone: z.string().trim().min(1).max(80),
-  prescriptionItemId: z.string().uuid(),
-  substitutionId: z.string().uuid(),
-  /** Ver `substitutionAttemptFromToday`: se deriva del read-model, no de un contador local. */
-  attempt: z.number().int().min(0).max(999),
-  quantity: z.number().positive().nullable().default(null),
-})
+export const SubstitutionIntakeRequestSchema = z
+  .object({
+    clientId: z.string().uuid(),
+    localDate: z.string().date(),
+    occurredAt: z.string().datetime({ offset: true }),
+    timezone: z.string().trim().min(1).max(80),
+    prescriptionItemId: z.string().uuid(),
+    /** Fila autorizada por el coach. Excluyente con `groupFoodId`. */
+    substitutionId: z.string().uuid().optional(),
+    /**
+     * Equivalente del grupo de intercambio (T2.5). Es un id de ALIMENTO, no un permiso: el
+     * servidor lo vuelve a resolver contra la RPC y el guard SQL lo verifica de nuevo. Que el
+     * cliente lo nombre no lo autoriza.
+     */
+    groupFoodId: z.string().uuid().optional(),
+    /** Ver `substitutionAttemptFromToday`: se deriva del read-model, no de un contador local. */
+    attempt: z.number().int().min(0).max(999),
+    /**
+     * Gestos del mismo item ya encolados sin red (ver `substitutionIntakeIdempotencyKey`).
+     * `.optional()` y no `.default(0)` a proposito: con default, el tipo de SALIDA lo vuelve
+     * obligatorio y obligaria a las dos superficies a mandarlo aunque no tengan cola.
+     */
+    queuedAhead: z.number().int().min(0).max(999).optional(),
+    quantity: z.number().positive().nullable().default(null),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.substitutionId == null) === (value.groupFoodId == null)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['substitutionId'],
+        message: 'Se requiere exactamente uno de substitutionId | groupFoodId',
+      })
+    }
+  })
 
 export type SubstitutionIntakeRequest = z.infer<typeof SubstitutionIntakeRequestSchema>
 
