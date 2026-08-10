@@ -27,6 +27,32 @@ export type SubstitutionRpcClient = {
     name: string,
     args?: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>
+  /**
+   * Lectura acotada de las entries del dia (RLS del propio alumno). Hace falta porque el read
+   * model del Today NO devuelve las retiradas, y sin verlas la clave de idempotencia se repite
+   * despues de un "deshacer" (ver `resolveAttempt`).
+   */
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{
+            data: Array<{ idempotency_key: string | null; entry_status: string }> | null
+            error: { message: string; code?: string } | null
+          }>
+        }
+      }
+    }
+  }
 }
 
 export type SubstitutionIntakeFailure = { ok: false; code: string; error: string }
@@ -79,6 +105,56 @@ function resolveQuantity(
     if (delta > percent / 100 + 1e-9) return { quantity: computed, overridden: true }
   }
   return { quantity: requested, overridden: false }
+}
+
+/** Tope de reintentos al esquivar claves quemadas. Un item con 12 retiros en un dia no existe. */
+const MAX_ATTEMPT_PROBE = 12
+
+/**
+ * Resuelve el `attempt` REAL de la clave de idempotencia.
+ *
+ * El cliente manda un hint derivado del read model del Today, y eso es lo que hace idempotente al
+ * reintento de la cola offline: el mismo gesto reenviado produce la misma clave. Pero el Today
+ * **no devuelve las entries retiradas** (verificado en LIVE), asi que despues de un "deshacer" el
+ * hint vuelve a 0 y la clave se repite. Como el short-circuit de `record_nutrition_intake_v2` no
+ * mira `entry_status`, el servidor devolvia el id de la entry RETIRADA sin escribir nada y el item
+ * quedaba inconsumible el resto del dia (QA 2026-08-10).
+ *
+ * Regla: partir del hint y saltar SOLO las claves cuya entry esta `voided`. Una clave cuya entry
+ * sigue activa o corregida se conserva — ahi el short-circuit es lo correcto, es un reintento.
+ */
+async function resolveAttempt(
+  supabase: SubstitutionRpcClient,
+  request: SubstitutionIntakeRequest,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('nutrition_intake_entries')
+    .select('idempotency_key, entry_status')
+    .eq('client_id', request.clientId)
+    .eq('log_date', request.localDate)
+    .eq('prescription_item_id', request.prescriptionItemId)
+
+  if (error || !data) return request.attempt
+
+  const voidedKeys = new Set(
+    data
+      .filter((row) => row.entry_status === 'voided' && row.idempotency_key !== null)
+      .map((row) => row.idempotency_key as string),
+  )
+  if (voidedKeys.size === 0) return request.attempt
+
+  let attempt = request.attempt
+  for (let probe = 0; probe < MAX_ATTEMPT_PROBE; probe += 1) {
+    const key = substitutionIntakeIdempotencyKey({
+      localDate: request.localDate,
+      prescriptionItemId: request.prescriptionItemId,
+      substitutionId: request.substitutionId,
+      attempt,
+    })
+    if (!voidedKeys.has(key)) return attempt
+    attempt += 1
+  }
+  return attempt
 }
 
 export async function planSubstitutionIntake(
@@ -157,7 +233,7 @@ export async function planSubstitutionIntake(
     localDate: request.localDate,
     prescriptionItemId: request.prescriptionItemId,
     substitutionId: request.substitutionId,
-    attempt: request.attempt,
+    attempt: await resolveAttempt(supabase, request),
   })
 
   const common: Record<string, unknown> = {

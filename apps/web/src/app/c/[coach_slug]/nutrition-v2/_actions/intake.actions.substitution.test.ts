@@ -16,7 +16,18 @@ vi.mock('next/cache', () => ({ revalidatePath: revalidate }))
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: (key: string) => requestHeaders.get(key) ?? null }),
 }))
-vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }))
+// `from` encadenable: el servicio lee las entries del dia (incluidas las RETIRADAS, que el read
+// model del Today no devuelve) para no reusar una clave de idempotencia ya quemada.
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn(async () => ({
+    rpc,
+    from: () => ({
+      select: () => ({
+        eq: () => ({ eq: () => ({ eq: async () => ({ data: fixture.entries ?? [], error: null }) }) }),
+      }),
+    }),
+  })),
+}))
 vi.mock('@/services/auth/current-student-nutrition.service', () => ({
   getCurrentStudentNutritionSession: getUser,
   getCurrentStudentNutritionScope: getScope,
@@ -152,6 +163,8 @@ type Fixture = {
   options?: unknown
   today?: unknown
   permissions?: Record<string, unknown>
+  /** Filas crudas de `nutrition_intake_entries` del dia para ese item (incluye las retiradas). */
+  entries?: Array<{ idempotency_key: string | null; entry_status: string }>
 }
 let fixture: Fixture = {}
 
@@ -370,5 +383,40 @@ describe('recordSubstitutionIntakeAction — confirmar no es ajustar', () => {
     const result = await recordSubstitutionIntakeAction(request({ quantity: 50 }))
 
     expect(result).toMatchObject({ ok: true, quantity: 45, quantityOverridden: true })
+  })
+})
+
+// QA 2026-08-10: el read model del Today NO devuelve las entries retiradas, asi que el `attempt`
+// que deriva el cliente vuelve a 0 despues de un "deshacer" y la clave se repite. Como el
+// short-circuit del RPC no mira `entry_status`, el servidor devolvia el id de la entry RETIRADA sin
+// escribir nada y el item quedaba inconsumible el resto del dia.
+describe('recordSubstitutionIntakeAction — deshacer y volver a registrar', () => {
+  const keyFor = (attempt: number) => `subst-${LOCAL_DATE}-${ITEM_ID}-${SUB_ID}-a${attempt}`
+
+  it('salta la clave de una entry RETIRADA en vez de reusarla', async () => {
+    fixture.entries = [{ idempotency_key: keyFor(0), entry_status: 'voided' }]
+
+    await recordSubstitutionIntakeAction(request({ attempt: 0 }))
+
+    expect(writeCalls()[0][1].p_idempotency_key).toBe(keyFor(1))
+  })
+
+  it('con dos retiros encadenados salta las dos claves quemadas', async () => {
+    fixture.entries = [
+      { idempotency_key: keyFor(0), entry_status: 'voided' },
+      { idempotency_key: keyFor(1), entry_status: 'voided' },
+    ]
+
+    await recordSubstitutionIntakeAction(request({ attempt: 0 }))
+
+    expect(writeCalls()[0][1].p_idempotency_key).toBe(keyFor(2))
+  })
+
+  it('NO salta la clave de una entry viva: ahi el short-circuit es lo correcto (reintento)', async () => {
+    fixture.entries = [{ idempotency_key: keyFor(0), entry_status: 'active' }]
+
+    await recordSubstitutionIntakeAction(request({ attempt: 0 }))
+
+    expect(writeCalls()[0][1].p_idempotency_key).toBe(keyFor(0))
   })
 })

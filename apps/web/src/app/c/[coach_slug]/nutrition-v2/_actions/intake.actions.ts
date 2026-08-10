@@ -21,7 +21,10 @@ import {
   resolveStudentIntakePermissions,
   type StudentIntakePermissionDenial,
 } from '@/services/nutrition-v2-student-permissions.service'
-import { planSubstitutionIntake } from '@/services/nutrition-v2/substitution-intake.service'
+import {
+  planSubstitutionIntake,
+  type SubstitutionRpcClient,
+} from '@/services/nutrition-v2/substitution-intake.service'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch, rateLimitNutritionIntake } from '@/lib/rate-limit'
 import { COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY } from '@/lib/student-access'
@@ -355,7 +358,13 @@ export async function recordSubstitutionIntakeAction(
   const auth = await authorizeStudentWrite(payload.clientId)
   if (!auth.ok) return auth
 
-  const plan = await planSubstitutionIntake(auth.supabase, payload)
+  // Cast acotado: `RpcClient` es la forma MINIMA que usa el resto de este archivo, pero el cliente
+  // real de `createClient()` es un supabase-js completo. El servicio necesita `.from` para ver las
+  // entries RETIRADAS, que el read model del Today no devuelve.
+  const plan = await planSubstitutionIntake(
+    auth.supabase as unknown as SubstitutionRpcClient,
+    payload,
+  )
   if (!plan.ok) return fail(plan.code, plan.error)
 
   const result = await runMutation(auth.supabase, plan.rpcName, plan.args)

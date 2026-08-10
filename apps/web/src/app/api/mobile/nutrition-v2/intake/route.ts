@@ -9,7 +9,6 @@ import {
   isNutritionV2PermissionDenied,
   type NutritionIntakeMutation,
 } from '@eva/nutrition-v2'
-import { planSubstitutionIntake } from '@/services/nutrition-v2/substitution-intake.service'
 import {
   gateNutritionV2Api,
   jsonNoStore,
@@ -23,6 +22,10 @@ import {
   resolveStudentIntakePermissions,
   type StudentIntakePermissionDenial,
 } from '@/services/nutrition-v2-student-permissions.service'
+import {
+  planSubstitutionIntake,
+  type SubstitutionRpcClient,
+} from '@/services/nutrition-v2/substitution-intake.service'
 import { jsonRateLimited, rateLimitNutritionIntake } from '@/lib/rate-limit'
 
 const ResponseIdSchema = z.string().uuid()
@@ -201,7 +204,13 @@ export async function POST(request: NextRequest) {
     if (!gate.clientId || parsed.data.clientId !== gate.clientId) {
       return scopeMismatch(startedAt)
     }
-    const plan = await planSubstitutionIntake(gate.rpc, parsed.data)
+    // Cast acotado, mismo motivo que en la server action: `gate.rpc` declara solo `.rpc`, pero en
+    // runtime es el cliente supabase del alumno y el servicio necesita `.from` para ver las entries
+    // RETIRADAS (el read model del Today no las devuelve).
+    const plan = await planSubstitutionIntake(
+      gate.rpc as unknown as SubstitutionRpcClient,
+      parsed.data,
+    )
     if (!plan.ok) {
       logNutritionV2Api({ route, startedAt, status: 409, errorCode: plan.code })
       return jsonNoStore({ error: plan.error, code: plan.code }, 409)
