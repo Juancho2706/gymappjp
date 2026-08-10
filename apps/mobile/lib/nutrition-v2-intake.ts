@@ -26,6 +26,7 @@ import {
   type NutritionIntakeMutation,
   type NutritionIntakeReadItem,
   type NutritionIntakeVoid,
+  type SubstitutionIntakeRequest,
   type NutritionMealSlotRead,
 } from '@eva/nutrition-v2'
 
@@ -531,6 +532,10 @@ export type QueuedIntakeLike =
   // NUT-010: retiro terminal encolado. Su payload es MINIMO — no trae `localDate` ni snapshot,
   // asi que no puede filtrarse por dia ni pintarse como fila; solo OCULTA la entry objetivo.
   | { action: 'void'; idempotencyKey: string; payload: NutritionIntakeVoid }
+  // T2.4: sustitucion encolada. Su payload es la INTENCION (item + reemplazo + intento): no trae
+  // nombre, cantidad ni macros — el servidor los resuelve al drenar. Por eso NO puede pintarse
+  // como fila optimista; el overlay la ignora igual que hoy ignora lo que no sabe representar.
+  | { action: 'substitute'; idempotencyKey: string; payload: SubstitutionIntakeRequest }
 
 export interface QueuedIntakeOverlay {
   addedBySlot: Record<string, OptimisticNutritionFoodRowModel[]>
@@ -575,6 +580,10 @@ export function buildQueuedIntakeOverlay(
       voided.push(item.payload.entryId)
       continue
     }
+    // T2.4: una sustitucion encolada NO se puede pintar como fila optimista — su payload es la
+    // intencion (item + reemplazo), sin nombre ni macros; esos los resuelve el servidor al
+    // drenar. Se ignora aca a proposito: mejor no mostrar nada que inventar un nombre.
+    if (item.action === 'substitute') continue
     if (item.payload.localDate !== localDate) continue
     if (item.action === 'correct') corrections.set(item.payload.correctsEntryId, item)
     else if (!item.payload.snapshot.exchangeGroupCode) records.push(item)

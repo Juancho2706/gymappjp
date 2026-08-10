@@ -9,6 +9,7 @@ import {
   NutritionPlanDraftSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
+  SubstitutionIntakeRequestSchema,
   type NutritionClientDetailReadModel,
   type NutritionCoachHubPageReadModel,
   type NutritionHistoryPageReadModel,
@@ -19,6 +20,7 @@ import {
   type NutritionItemSubstitution,
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
+  type SubstitutionIntakeRequest,
   type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
 import { z } from 'zod'
@@ -319,6 +321,31 @@ export async function recordNutritionIntakeV2(
   })
   const result = parseMutationResponse(raw)
   if (result.action !== 'record') throw new Error('Unexpected Nutrition V2 action')
+  return result
+}
+
+/**
+ * T2.4: registrar un reemplazo AUTORIZADO por el coach. Manda solo la INTENCION — el alimento,
+ * la cantidad, la franja y los macros los resuelve el servidor desde la fila autorizada, con el
+ * mismo servicio que usa la web.
+ *
+ * La respuesta puede venir como `record` (registro nuevo) o `correct` (el item ya estaba
+ * registrado y se cambio por el reemplazo): las dos son exitos, y la distincion sirve para el
+ * copy y para el status HTTP.
+ */
+export async function substituteNutritionIntakeV2(
+  payload: SubstitutionIntakeRequest,
+  signal?: AbortSignal,
+): Promise<{ ok: true; id: string; action: 'record' | 'correct' }> {
+  const validated = SubstitutionIntakeRequestSchema.parse(payload)
+  const raw = await apiFetch<unknown>('/api/mobile/nutrition-v2/intake', {
+    method: 'POST',
+    authenticated: true,
+    signal,
+    body: { action: 'substitute', payload: validated },
+  })
+  const result = parseMutationResponse(raw)
+  if (result.action === 'void') throw new Error('Unexpected Nutrition V2 action')
   return result
 }
 

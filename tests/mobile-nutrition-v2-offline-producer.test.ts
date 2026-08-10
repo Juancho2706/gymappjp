@@ -194,3 +194,59 @@ describe('nutrition v2 - cancelar un intake encolado', () => {
     expect((await getNutritionV2QueueStatus(CLIENT)).pending).toBe(1)
   })
 })
+
+// T2.4: la SUSTITUCION encola la intencion (item + reemplazo + intento), no un intake armado. La
+// clave la deriva la cola con el MISMO helper que usa el servidor, asi que dos taps del mismo gesto
+// colapsan y, en cambio, deshacer + volver a registrar (attempt distinto) encola una fila propia.
+const SUB_ITEM = '55555555-5555-4555-8555-555555555555'
+const SUB_ID = '66666666-6666-4666-8666-666666666666'
+
+function substitutionIntent(attempt: number, substitutionId = SUB_ID) {
+  return {
+    clientId: CLIENT,
+    localDate: '2026-07-15',
+    occurredAt: '2026-07-15T12:00:00.000Z',
+    timezone: 'America/Santiago',
+    prescriptionItemId: SUB_ITEM,
+    substitutionId,
+    attempt,
+    quantity: null,
+  }
+}
+
+describe('nutrition v2 - sustitucion -> cola offline', () => {
+  it('dos taps del mismo reemplazo colapsan en una fila', async () => {
+    const first = await enqueueNutritionV2Mutation({
+      action: 'substitute',
+      userId: CLIENT,
+      payload: substitutionIntent(0),
+    })
+    const second = await enqueueNutritionV2Mutation({
+      action: 'substitute',
+      userId: CLIENT,
+      payload: substitutionIntent(0),
+    })
+
+    expect(first).toEqual({ queued: true, deduplicated: false })
+    expect(second).toEqual({ queued: true, deduplicated: true })
+    expect((await getNutritionV2QueueStatus(CLIENT)).pending).toBe(1)
+  })
+
+  it('deshacer y volver a registrar (attempt distinto) encola una fila propia', async () => {
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(0) })
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(1) })
+
+    expect((await getNutritionV2QueueStatus(CLIENT)).pending).toBe(2)
+  })
+
+  it('cambiar de reemplazo sobre el mismo item encola una fila propia', async () => {
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(0) })
+    await enqueueNutritionV2Mutation({
+      action: 'substitute',
+      userId: CLIENT,
+      payload: substitutionIntent(1, '77777777-7777-4777-8777-777777777777'),
+    })
+
+    expect((await getNutritionV2QueueStatus(CLIENT)).pending).toBe(2)
+  })
+})

@@ -165,7 +165,14 @@ export function useCaptureStudentWorkoutCompleted() {
  *   coach_nutrition_builder_opened / coach_nutrition_plan_published → tiempo-crear-plan por editor
  *   coach_nutrition_template_applied → uso real de plantillas (se dispara desde T1.5)
  */
-export type StudentNutritionIntakeMethod = 'item_tap' | 'bulk_slot' | 'portion_chip' | 'free_search'
+// `substitution` (T2.4): el alumno registro un reemplazo AUTORIZADO por su coach. Se separa de
+// `item_tap` a proposito — es la senal de si los reemplazos que el coach define se usan de verdad.
+export type StudentNutritionIntakeMethod =
+  | 'item_tap'
+  | 'bulk_slot'
+  | 'portion_chip'
+  | 'free_search'
+  | 'substitution'
 
 export function useCaptureStudentNutritionIntake() {
     const ph = usePostHog()

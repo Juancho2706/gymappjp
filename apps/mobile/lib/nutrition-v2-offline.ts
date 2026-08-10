@@ -1,14 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
-import type {
-  NutritionIntakeCorrection,
-  NutritionIntakeMutation,
-  NutritionIntakeVoid,
+import {
+  substitutionIntakeIdempotencyKey,
+  type NutritionIntakeCorrection,
+  type NutritionIntakeMutation,
+  type NutritionIntakeVoid,
+  type SubstitutionIntakeRequest,
 } from '@eva/nutrition-v2'
 import { ApiError } from './api'
 import {
   correctNutritionIntakeV2,
   recordNutritionIntakeV2,
+  substituteNutritionIntakeV2,
   voidNutritionIntakeV2,
 } from './nutrition-v2.api'
 
@@ -66,7 +69,34 @@ type QueuedVoid = {
   lastErrorCode: string | null
 }
 
-export type NutritionV2QueuedMutation = QueuedRecord | QueuedCorrection | QueuedVoid
+/**
+ * T2.4: sustituir por un reemplazo AUTORIZADO. Es su propia acción porque el payload NO es un
+ * intake: es la intención (`prescriptionItemId` + `substitutionId` + `attempt`). El servidor
+ * decide si termina en `record_` o en `correct_`, así que la cola no puede pre-resolverlo — y
+ * tampoco debe: offline no tiene el read model del día para saber si el item ya está registrado.
+ *
+ * La clave de deduplicación es la MISMA que el servidor va a recibir, así que un reintento del
+ * mismo gesto colapsa en la cola y, si llegó a escribirse, vuelve a devolver el id previo en vez
+ * de duplicar.
+ */
+type QueuedSubstitution = {
+  queueVersion: 1
+  action: 'substitute'
+  userId: string
+  clientId: string
+  idempotencyKey: string
+  payload: SubstitutionIntakeRequest
+  queuedAt: number
+  attempts: number
+  nextAttemptAt: number
+  lastErrorCode: string | null
+}
+
+export type NutritionV2QueuedMutation =
+  | QueuedRecord
+  | QueuedCorrection
+  | QueuedVoid
+  | QueuedSubstitution
 
 type DeadLetter = NutritionV2QueuedMutation & {
   failedAt: number
@@ -98,7 +128,10 @@ function parseQueue(raw: string | null): NutritionV2QueuedMutation[] {
       if (!item || typeof item !== 'object') return false
       return (
         item.queueVersion === 1 &&
-        (item.action === 'record' || item.action === 'correct' || item.action === 'void') &&
+        (item.action === 'record' ||
+          item.action === 'correct' ||
+          item.action === 'void' ||
+          item.action === 'substitute') &&
         typeof item.userId === 'string' &&
         typeof item.clientId === 'string' &&
         typeof item.idempotencyKey === 'string' &&
@@ -156,15 +189,25 @@ export async function enqueueNutritionV2Mutation(input:
   | { action: 'record'; userId: string; payload: NutritionIntakeMutation }
   | { action: 'correct'; userId: string; payload: NutritionIntakeCorrection }
   | { action: 'void'; userId: string; payload: NutritionIntakeVoid }
+  | { action: 'substitute'; userId: string; payload: SubstitutionIntakeRequest }
 ): Promise<{ queued: true; deduplicated: boolean }> {
   return withStorageMutation(async () => {
     const queue = await readQueue()
     // El retiro trae la key opcional (el RPC es idempotente por ESTADO, no por key). Se sintetiza
     // una estable por entry para que dos taps de "Retirar" sobre la misma fila deduppen en la cola.
+    // La sustitución no lleva key en el payload (manda la intención): se deriva con el MISMO
+    // helper que usa el servidor, así la cola y la base deduplican por el mismo valor.
     const idempotencyKey =
       input.action === 'void'
         ? input.payload.idempotencyKey ?? `void-${input.payload.entryId}`
-        : input.payload.idempotencyKey
+        : input.action === 'substitute'
+          ? substitutionIntakeIdempotencyKey({
+              localDate: input.payload.localDate,
+              prescriptionItemId: input.payload.prescriptionItemId,
+              substitutionId: input.payload.substitutionId,
+              attempt: input.payload.attempt,
+            })
+          : input.payload.idempotencyKey
     const existing = queue.some(
       (item) => item.userId === input.userId && item.idempotencyKey === idempotencyKey,
     )
@@ -234,6 +277,8 @@ async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
         await recordNutritionIntakeV2(item.payload)
       } else if (item.action === 'void') {
         await voidNutritionIntakeV2(item.payload)
+      } else if (item.action === 'substitute') {
+        await substituteNutritionIntakeV2(item.payload)
       } else {
         // Compatibilidad hacia atrás: retiros encolados con el payload VIEJO (corrección de
         // contribución cero) siguen drenando por `correct_`. No convertirlos aquí: la conversión

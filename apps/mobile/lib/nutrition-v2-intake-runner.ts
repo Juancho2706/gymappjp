@@ -14,11 +14,13 @@ import type {
   NutritionIntakeCorrection,
   NutritionIntakeMutation,
   NutritionIntakeVoid,
+  SubstitutionIntakeRequest,
 } from '@eva/nutrition-v2'
 import { ApiError } from './api'
 import {
   correctNutritionIntakeV2,
   recordNutritionIntakeV2,
+  substituteNutritionIntakeV2,
   voidNutritionIntakeV2,
 } from './nutrition-v2.api'
 import { enqueueNutritionV2Mutation } from './nutrition-v2-offline'
@@ -96,6 +98,34 @@ export async function submitVoidIntake(
   } catch (error) {
     if (shouldQueueNutritionV2Error(error)) {
       await enqueueNutritionV2Mutation({ action: 'void', userId, payload })
+      return { status: 'queued', reason: 'error' }
+    }
+    return { status: 'failed', error: error as ApiError }
+  }
+}
+
+/**
+ * T2.4: sustituir por un reemplazo AUTORIZADO. Mismo contrato de salida que el resto (recorded /
+ * queued / failed) para que la pantalla no tenga un camino especial.
+ *
+ * Offline encola la INTENCION, no un intake armado: la decision registro-vs-correccion la toma el
+ * servidor con el dia real, y offline no hay read model con el que decidirla. `mode` viene en el
+ * exito online y sirve solo para el copy.
+ */
+export async function submitSubstituteIntake(
+  userId: string,
+  payload: SubstitutionIntakeRequest,
+): Promise<NutritionIntakeSubmitOutcome & { mode?: 'record' | 'correct' }> {
+  if (await isOffline()) {
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId, payload })
+    return { status: 'queued', reason: 'offline' }
+  }
+  try {
+    const result = await substituteNutritionIntakeV2(payload)
+    return { status: 'recorded', id: result.id, mode: result.action }
+  } catch (error) {
+    if (shouldQueueNutritionV2Error(error)) {
+      await enqueueNutritionV2Mutation({ action: 'substitute', userId, payload })
       return { status: 'queued', reason: 'error' }
     }
     return { status: 'failed', error: error as ApiError }

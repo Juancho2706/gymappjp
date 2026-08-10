@@ -12,19 +12,18 @@ import {
 import { NutritionDomainOff } from '@/components/nutrition-v2/NutritionDomainOff'
 import { PushNotificationBanner } from '@/components/PushNotificationBanner'
 import {
-  NUTRITION_ITEM_SUBSTITUTION_SELECT,
+  SubstitutionOptionsReadModelSchema,
   addNutritionDays,
   buildNutritionWeek,
   buildNutritionWeekDates,
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
-  mapNutritionItemSubstitutionRow,
   nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDate,
   type NutritionHistoryDay,
-  type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
+  type SubstitutionOptionsItem,
 } from '@eva/nutrition-v2'
 import { formatNutritionShortDate, getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
@@ -48,7 +47,6 @@ import { LegacyHistoryDetail } from './_components/LegacyHistoryDetail'
 import { PlanVariantCard, type PlanVariant } from './_components/PlanVariantCard'
 import { WeekDayNavigator } from './_components/WeekDayNavigator'
 import { HistoryWeeksList } from './_components/HistoryWeeksList'
-import { groupSubstitutionsByPrescriptionItem } from './_components/nutrition-today.logic'
 import {
   NUTRITION_WEEK_HISTORY_PAGE_SIZE,
   formatSelectedDayCaption,
@@ -195,55 +193,60 @@ function ViewLink({
 }
 
 /**
- * Cliente acotado (cast, cero `any` fuera de esta forma) para leer la tabla nueva
- * `nutrition_item_substitutions_v2` por lectura directa RLS-scoped. La tabla aun no esta en
- * `database.types.ts` — la crea la migracion aditiva `20260721150000_nutrition_item_substitutions_v2.sql`
- * (protocolo aditivo-en-LIVE). Regenerar `database.types.ts` y retirar este cast cuando este LIVE.
- * Mismo patron acotado que `getNutritionConversionLinkForWeb` en el read service.
+ * Cliente acotado (cast, cero `any` fuera de esta forma) para la RPC nueva
+ * `get_nutrition_substitution_options_v2` (migracion `20260809222811`), que todavia no esta en
+ * `database.types.ts`. Regenerar los tipos y retirar el cast cuando se haga esa tanda.
  */
-type SubstitutionReadClient = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => Promise<{
-        data: Array<Parameters<typeof mapNutritionItemSubstitutionRow>[0]> | null
-        error: { message: string; code?: string } | null
-      }>
-    }
-  }
+type SubstitutionOptionsRpcClient = {
+  rpc: (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>
 }
 
 /**
- * Reemplazos autorizados por el coach (F-02) de la version vigente, agrupados por item prescrito.
- * Lectura directa RLS-scoped: `nutrition_item_substitutions_v2_select` (can_read_version) cubre al
- * propio alumno sobre versiones published/superseded. Sin plan/version ⇒ mapa vacio. No-bloqueante
- * por diseno: cualquier fallo de lectura degrada a mapa vacio — la fila de reemplazos es
+ * Reemplazos autorizados del dia, por item prescrito, con los macros VIGENTES del sustituto
+ * (catalogo + override del coach).
+ *
+ * Antes esto era una lectura directa de `nutrition_item_substitutions_v2`, y por eso la pill
+ * mostraba los `snapshot_*` congelados: con `quantity` NULL — el 100% de las filas vivas — esos
+ * macros son los de UNA PORCION DEL SUSTITUTO, sin relacion con lo prescrito, asi que el item
+ * "Lomo liso 120 g / 240 kcal" ofrecia "Posta de vacuno cocida / 17 kcal" (T2.4).
+ *
+ * La RPC ademas resuelve la version del dia desde el snapshot congelado, no desde el ultimo
+ * publicado: con una re-publicacion intradia los `prescriptionItemId` seguirian empatando con los
+ * items que el alumno tiene en pantalla.
+ *
+ * No-bloqueante por diseno: cualquier fallo degrada a mapa vacio — la fila de reemplazos es
  * informativa y jamas debe tumbar el Today.
  */
-async function fetchSubstitutionsByItem(
-  versionId: string | null,
-): Promise<Record<string, NutritionItemSubstitutionRead[]>> {
-  if (!versionId) return {}
+async function fetchSubstitutionOptionsByItem(
+  clientId: string,
+  localDate: string,
+): Promise<Record<string, SubstitutionOptionsItem>> {
   const client = await createClient()
-  const { data, error } = await (client as unknown as SubstitutionReadClient)
-    .from('nutrition_item_substitutions_v2')
-    .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
-    .eq('version_id', versionId)
+  const { data, error } = await (client as unknown as SubstitutionOptionsRpcClient).rpc(
+    'get_nutrition_substitution_options_v2',
+    { p_client_id: clientId, p_local_date: localDate },
+  )
 
-  if (error || !data) {
-    if (error) {
-      console.error('nutrition_v2_web_read', {
-        rpc: 'nutrition_item_substitutions_v2.select',
-        ok: false,
-        errorCode: error.code ?? 'READ_ERROR',
-      })
-    }
+  if (error) {
+    console.error('nutrition_v2_web_read', {
+      rpc: 'get_nutrition_substitution_options_v2',
+      ok: false,
+      errorCode: error.code ?? 'READ_ERROR',
+    })
     return {}
   }
 
-  return groupSubstitutionsByPrescriptionItem(data.map(mapNutritionItemSubstitutionRow))
+  const parsed = SubstitutionOptionsReadModelSchema.safeParse(data)
+  if (!parsed.success) return {}
+
+  return Object.fromEntries(
+    parsed.data.items
+      .filter((item) => item.options.length > 0)
+      .map((item) => [item.prescriptionItemId, item]),
+  )
 }
 
 /**
@@ -284,9 +287,10 @@ async function TodayView({
     isToday ? getCurrentStudentNutritionDisplayName(clientId) : null,
   ])
 
-  // Reemplazos estructurados de la version que el alumno VE hoy (`today.plan`, no `plan.plan`): los
-  // items mostrados son de esa version, asi los reemplazos empatan durante el lag de publicacion.
-  const substitutionsByItem = today != null ? await fetchSubstitutionsByItem(today.plan?.versionId ?? null) : {}
+  // Reemplazos autorizados del dia que el alumno VE. La RPC resuelve la version desde el snapshot
+  // del dia, asi que empatan con los items en pantalla incluso si el coach republico intradia.
+  const substitutionOptionsByItem =
+    today != null ? await fetchSubstitutionOptionsByItem(clientId, today.localDate) : {}
 
   if (!plan.plan) {
     return (
@@ -343,7 +347,7 @@ async function TodayView({
           today={today}
           clientId={clientId}
           clientName={clientName}
-          substitutionsByItem={substitutionsByItem}
+          substitutionOptionsByItem={substitutionOptionsByItem}
           scanHref={`${base}/nutrition-v2/scanner`}
           visibleNotes={plan.visibleNotes}
         />

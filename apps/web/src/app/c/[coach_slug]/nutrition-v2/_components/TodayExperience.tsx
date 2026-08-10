@@ -24,6 +24,7 @@ import {
   bulkMarkCtaLabel,
   bulkMarkSlotState,
   catalogUnitOptions,
+  computeSubstitutionEquivalence,
   consumedPrescriptionItemIds,
   convertIntakeQuantity,
   defaultCatalogUnit,
@@ -32,11 +33,15 @@ import {
   intakeUnitLabel,
   normalizeIntakeUnit,
   sortFoodsByFavoriteFirst,
+  substituteFromOption,
+  substitutionAttemptFromToday,
   type BulkMarkSlotState,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
-  type NutritionItemSubstitutionRead,
   type NutritionTodayReadModel,
+  type SubstitutionEquivalence,
+  type SubstitutionOption,
+  type SubstitutionOptionsItem,
 } from '@eva/nutrition-v2'
 import { MacroChipRow, NutritionCard, NutritionMotionButton } from '@/components/nutrition-v2'
 import { humanizeStudentWriteError } from '@/lib/student-access'
@@ -72,6 +77,7 @@ import {
   correctIntakeAction,
   recordIntakeAction,
   recordSlotIntakeBatchAction,
+  recordSubstitutionIntakeAction,
   searchFoodCatalogAction,
   voidIntakeAction,
   voidSlotIntakeBatchAction,
@@ -98,17 +104,25 @@ import {
 type DialogState =
   | { kind: 'none' }
   // `initialMealSlot`: preselección de franja al llegar desde el sheet de equivalencias.
-  // `initialQuery`: busqueda precargada al llegar desde una pill de reemplazo autorizado (T1.6).
   | { kind: 'register'; initialMealSlot?: string | null; initialQuery?: string }
   | { kind: 'edit'; entry: NutritionIntakeReadItem }
   | { kind: 'void'; entry: NutritionIntakeReadItem }
+  // T2.4: confirmación de cantidad para los dos casos degradados de la equivalencia
+  // (`needs-confirmation` por cantidad implausible, `unavailable` por falta de datos). El camino
+  // normal NO abre diálogo: registra de un tap.
+  | {
+      kind: 'substitute'
+      itemEntry: SubstitutionOptionsItem
+      option: SubstitutionOption
+      equivalence: SubstitutionEquivalence
+    }
 
 export function TodayExperience({
   today,
   clientId,
   scanHref,
   clientName,
-  substitutionsByItem = {},
+  substitutionOptionsByItem = {},
   visibleNotes = null,
 }: {
   today: NutritionTodayReadModel
@@ -120,7 +134,7 @@ export function TodayExperience({
    * Reemplazos autorizados por el coach (F-02), agrupados por `prescriptionItemId`. El server los
    * lee RLS-scoped de la versión vigente; aquí solo se muestran bajo el item. Vacío ⇒ sin reemplazos.
    */
-  substitutionsByItem?: Record<string, NutritionItemSubstitutionRead[]>
+  substitutionOptionsByItem?: Record<string, SubstitutionOptionsItem>
   /**
    * Nota visible del coach (SPEC ola 3 punto 2): antes solo vivía en el tab "Plan", que el alumno
    * abre menos — sube al Hoy en una card colapsable bajo el héroe. `null`/vacío ⇒ no se pinta nada.
@@ -239,6 +253,92 @@ export function TodayExperience({
           toast.success(`Deshice el registro de ${slotName}.`)
         } else {
           toast.error('No se pudo deshacer. Retira los registros uno por uno en "Consumido hoy".')
+        }
+      } catch {
+        toast.error('No se pudo deshacer. Intenta de nuevo.')
+      }
+    })
+  }
+
+  /**
+   * Registrar un reemplazo AUTORIZADO (T2.4). Un tap = un gesto: el cliente manda la intención
+   * (qué item, qué reemplazo, qué intento) y el servidor resuelve alimento, cantidad, franja y
+   * versión desde la fila autorizada. Ya no pasa por el registro libre ni pide `canRegisterFreely`.
+   *
+   * `attempt` sale del read-model que la pantalla ya tiene: cuenta los registros de HOY de ese ítem
+   * en cualquier estado. Así dos taps seguidos comparten clave (una sola entry) y, en cambio,
+   * deshacer y volver a registrar produce una clave nueva — si contara solo los activos, el
+   * short-circuit del servidor devolvería el id de la entry retirada y el ítem quedaría
+   * inconsumible el resto del día.
+   */
+  function handleSubstitute(
+    itemEntry: SubstitutionOptionsItem,
+    option: SubstitutionOption,
+    quantity: number | null,
+  ) {
+    const id = `subst:${option.substitutionId}`
+    setError(null)
+    setBusyId(id)
+    startTransition(async () => {
+      try {
+        const res = await recordSubstitutionIntakeAction({
+          payload: {
+            clientId,
+            localDate: today.localDate,
+            occurredAt: new Date().toISOString(),
+            timezone: today.timezone,
+            prescriptionItemId: itemEntry.prescriptionItemId,
+            substitutionId: option.substitutionId,
+            attempt: substitutionAttemptFromToday(today, itemEntry.prescriptionItemId),
+            quantity,
+          },
+        })
+        if (!res.ok) {
+          setError(humanizeStudentWriteError(res.error, 'No se pudo registrar el reemplazo.'))
+          return
+        }
+        closeDialog()
+        captureIntake('substitution')
+        router.refresh()
+        const label = `${res.quantity} ${res.unit}`
+        toast.success(
+          res.mode === 'correct'
+            ? `Cambiamos tu registro por el reemplazo · ${label}`
+            : `Registraste el reemplazo · ${label}`,
+          {
+            duration: 6000,
+            action: { label: 'Deshacer', onClick: () => handleSubstitutionUndo(res.id) },
+          },
+        )
+        // Copy honesto: el alumno pidió una cantidad y el plan de su coach no la permitía.
+        if (res.quantityOverridden) {
+          toast.info(`Tu coach fijó la cantidad de este reemplazo: ${label}.`)
+        }
+      } catch {
+        setError('No pudimos registrar el reemplazo. Revisa tu conexión e inténtalo de nuevo.')
+      } finally {
+        setBusyId(null)
+      }
+    })
+  }
+
+  /** Deshacer del toast: mismo camino de retiro que el resto (append-only, nada se borra). */
+  function handleSubstitutionUndo(entryId: string) {
+    startTransition(async () => {
+      try {
+        const res = await voidIntakeAction({
+          payload: {
+            clientId,
+            entryId,
+            reason: 'Deshice la sustitución',
+            idempotencyKey: newIdempotencyKey('void'),
+          },
+        })
+        if (res.ok) {
+          router.refresh()
+          toast.success('Deshice el reemplazo.')
+        } else {
+          toast.error('No se pudo deshacer. Retíralo desde la fila del alimento.')
         }
       } catch {
         toast.error('No se pudo deshacer. Intenta de nuevo.')
@@ -371,7 +471,7 @@ export function TodayExperience({
         busyId={busyId}
         isPending={isPending}
         portionsApi={portionsApi}
-        substitutionsByItem={substitutionsByItem}
+        substitutionOptionsByItem={substitutionOptionsByItem}
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
         onBulkEat={handleBulkEat}
         onEat={(slot, item) => {
@@ -392,16 +492,15 @@ export function TodayExperience({
         }}
         onEdit={(entry) => openDialog({ kind: 'edit', entry })}
         onVoid={(entry) => openDialog({ kind: 'void', entry })}
-        onPickSubstitution={(slot, sub) => {
-          // Puente T1.6: registrar el reemplazo pasa por el registro libre precargado. El camino
-          // server-validado SIN permiso (estado "sustituido") es T2.4 y reemplaza este puente.
-          if (today.permissions.canRegisterFreely) {
-            openDialog({ kind: 'register', initialMealSlot: slot.code, initialQuery: sub.name })
-          } else {
-            toast.info(
-              'Tu plan no permite registro libre. Pídele a tu coach habilitarlo para registrar este reemplazo.',
-            )
+        onPickSubstitution={(itemEntry, option, equivalence) => {
+          // Camino normal: un tap registra. Los dos casos degradados de la equivalencia
+          // (cantidad implausible o sin datos para calcularla) piden confirmar la cantidad
+          // antes de escribir — nunca se inventa un número a espaldas del alumno.
+          if (equivalence.requiresConfirmation) {
+            openDialog({ kind: 'substitute', itemEntry, option, equivalence })
+            return
           }
+          handleSubstitute(itemEntry, option, null)
         }}
       />
 
@@ -493,6 +592,18 @@ export function TodayExperience({
             )
           }}
           submitting={isPending && busyId === 'register'}
+        />
+      ) : null}
+
+      {dialog.kind === 'substitute' ? (
+        <SubstitutionConfirmDialog
+          itemEntry={dialog.itemEntry}
+          option={dialog.option}
+          equivalence={dialog.equivalence}
+          error={error}
+          onClose={closeDialog}
+          submitting={isPending && busyId === `subst:${dialog.option.substitutionId}`}
+          onSubmit={(quantity) => handleSubstitute(dialog.itemEntry, dialog.option, quantity)}
         />
       ) : null}
 
@@ -742,7 +853,7 @@ function PrescribedSection({
   busyId,
   isPending,
   portionsApi,
-  substitutionsByItem,
+  substitutionOptionsByItem,
   onOpenPortionSheet,
   onBulkEat,
   onEat,
@@ -754,12 +865,13 @@ function PrescribedSection({
   busyId: string | null
   isPending: boolean
   portionsApi: PortionMarksApi
-  substitutionsByItem: Record<string, NutritionItemSubstitutionRead[]>
+  substitutionOptionsByItem: Record<string, SubstitutionOptionsItem>
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
-  /** Tap en un reemplazo autorizado (T1.6, puente): abre el registro con la busqueda precargada. */
+  /** Tap en un reemplazo autorizado (T2.4): registra de un tap, o pide confirmar la cantidad. */
   onPickSubstitution: (
-    slot: NutritionTodayReadModel['mealSlots'][number],
-    sub: NutritionItemSubstitutionRead,
+    itemEntry: SubstitutionOptionsItem,
+    option: SubstitutionOption,
+    equivalence: SubstitutionEquivalence,
   ) => void
   onBulkEat: (slot: NutritionTodayReadModel['mealSlots'][number], state: BulkMarkSlotState) => void
   onEat: (
@@ -802,9 +914,14 @@ function PrescribedSection({
                 // El registro consumido se pinta EN la fila del item (check + hora): auditoría
                 // H4 — muere la fila duplicada que antes vivía en "Consumido hoy".
                 const consumedEntry = consumedEntryForItem(slot, item.id)
-                // Reemplazos estructurados (F-02) del item: cuando existen, la fila estructurada
-                // reemplaza al texto legado "Alternativas: …" congelado en `notes` (resolveItemDisplayNote).
-                const substitutions = substitutionsByItem[item.id] ?? []
+                // Reemplazos autorizados del item (T2.4): traen los macros VIGENTES del sustituto,
+                // no los `snapshot_*` congelados. Cuando existen, la fila estructurada reemplaza al
+                // texto legado "Alternativas: …" congelado en `notes` (resolveItemDisplayNote).
+                const substitutionEntry = substitutionOptionsByItem[item.id]
+                const substitutionCount = substitutionEntry?.options.length ?? 0
+                // Estado "sustituido": lo dice el propio read-model (`source`), que la RPC emite
+                // desde `intake_source_v2`. Cero heurísticas por nombre.
+                const isSubstituted = consumedEntry?.source === 'substitution'
                 const row = consumedEntry
                   ? {
                       name: consumedEntry.snapshot.name,
@@ -840,7 +957,11 @@ function PrescribedSection({
                       fatsG={row.fatsG}
                       imageUrl={row.imageUrl}
                       category={row.category}
-                      note={resolveItemDisplayNote(item.notes, substitutions.length > 0)}
+                      statusLabel={isSubstituted ? '⇄ Sustituido' : null}
+                      replacedLabel={
+                        isSubstituted ? `${item.name ?? 'Alimento prescrito'} · ${item.quantity} ${item.unit}` : null
+                      }
+                      note={resolveItemDisplayNote(item.notes, substitutionCount > 0)}
                       actions={
                         consumedEntry ? (
                           <div className="flex items-center gap-1">
@@ -872,7 +993,16 @@ function PrescribedSection({
                         )
                       }
                     />
-                    <ItemSubstitutions items={substitutions} onPick={(sub) => onPickSubstitution(slot, sub)} />
+                    {/* Los reemplazos se ofrecen mientras el item NO esté consumido; una vez
+                        registrado, cambiarlo es corregir (y para eso está el lápiz de la fila). */}
+                    {consumedEntry ? null : (
+                      <ItemSubstitutions
+                        entry={substitutionEntry}
+                        busyId={busyId}
+                        isPending={isPending}
+                        onPick={onPickSubstitution}
+                      />
+                    )}
                   </div>
                 )
               })}
@@ -940,34 +1070,171 @@ function PrescribedSection({
  * ocupa h-11 + gap-3 ≈ pl-14) para colgar de forma natural de su fila.
  */
 function ItemSubstitutions({
-  items,
+  entry,
+  busyId,
+  isPending,
   onPick,
 }: {
-  items: NutritionItemSubstitutionRead[]
-  /** T1.6 (puente): las pills dejan de ser decorativas — tap abre el registro precargado. */
-  onPick: (sub: NutritionItemSubstitutionRead) => void
+  entry: SubstitutionOptionsItem | undefined
+  busyId: string | null
+  isPending: boolean
+  /** T2.4: el tap REGISTRA (o pide confirmar la cantidad); ya no abre el registro libre. */
+  onPick: (
+    itemEntry: SubstitutionOptionsItem,
+    option: SubstitutionOption,
+    equivalence: SubstitutionEquivalence,
+  ) => void
 }) {
-  if (items.length === 0) return null
+  if (!entry || entry.options.length === 0) return null
   return (
     <div className="pb-3 pl-14">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</p>
       <ul aria-label="Reemplazos autorizados por tu coach" className="mt-1 flex flex-wrap gap-1.5">
-        {items.map((sub) => (
-          <li key={sub.id}>
-            <button
-              type="button"
-              onClick={() => onPick(sub)}
-              className="inline-flex min-h-8 items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body transition-colors hover:border-primary/40 hover:text-strong"
-            >
-              <span>{sub.name}</span>
-              {sub.macros.calories != null ? (
-                <span className="tabular-nums text-muted">· {formatNutritionCalories(sub.macros.calories)}</span>
-              ) : null}
-            </button>
-          </li>
-        ))}
+        {entry.options.map((option) => {
+          // La MISMA función que usa el servidor al escribir: el número que el alumno ve antes de
+          // tocar y el que se persiste son el mismo por construcción, no por disciplina.
+          const equivalence = computeSubstitutionEquivalence({
+            item: {
+              quantity: entry.item.quantity,
+              unit: entry.item.unit,
+              calories: entry.item.calories,
+            },
+            substitute: substituteFromOption(option),
+          })
+          const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'Reemplazo'
+          const pending = isPending && busyId === `subst:${option.substitutionId}`
+          const amount = `${equivalence.quantity} ${equivalence.unit}`
+          return (
+            <li key={option.substitutionId}>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => onPick(entry, option, equivalence)}
+                aria-label={
+                  equivalence.requiresConfirmation
+                    ? `Reemplazar por ${name}: confirma la cantidad`
+                    : `Reemplazar por ${name}, ${amount}`
+                }
+                className="inline-flex min-h-9 items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body transition-colors hover:border-primary/40 hover:text-strong disabled:opacity-60"
+              >
+                <span>{name}</span>
+                {/* Antes acá vivía la kcal del snapshot congelado, que con `quantity` NULL es la de
+                    UNA porción del sustituto: el ítem de 240 kcal ofrecía "17 kcal". Ahora va la
+                    cantidad equivalente calculada con los macros vigentes. */}
+                <span className="tabular-nums text-muted">· {amount}</span>
+                {equivalence.requiresConfirmation ? (
+                  <span className="text-muted">· confirma</span>
+                ) : (
+                  <span className="tabular-nums text-muted">
+                    · {formatNutritionCalories(equivalence.totals.calories)}
+                  </span>
+                )}
+                {pending ? <span className="text-muted">…</span> : null}
+              </button>
+            </li>
+          )
+        })}
       </ul>
     </div>
+  )
+}
+
+/**
+ * Confirmación de cantidad para los dos casos degradados de la equivalencia (T2.4):
+ *
+ *  - `needs-confirmation`: el cálculo dio una cantidad por encima del tope de plausibilidad
+ *    (p. ej. reemplazar 100 g de pechuga por espinaca da ~715 g). El número es correcto, pero
+ *    registrarlo de un tap sería registrar un absurdo sin que nadie lo mire.
+ *  - `unavailable`: no hay con qué calcular (el sustituto no tiene calorías vigentes, o el ítem no
+ *    tiene las suyas congeladas). Se prellena con la porción DEL SUSTITUTO, nunca con la cantidad
+ *    del ítem: "300 g de café" o "1 un de leche" no significan nada.
+ */
+function SubstitutionConfirmDialog({
+  itemEntry,
+  option,
+  equivalence,
+  error,
+  submitting,
+  onClose,
+  onSubmit,
+}: {
+  itemEntry: SubstitutionOptionsItem
+  option: SubstitutionOption
+  equivalence: SubstitutionEquivalence
+  error: string | null
+  submitting: boolean
+  onClose: () => void
+  onSubmit: (quantity: number) => void
+}) {
+  const [quantity, setQuantity] = useState(String(equivalence.quantity))
+  const quantityNumber = Number(quantity)
+  const step = equivalence.unit === 'g' || equivalence.unit === 'ml' ? 10 : 0.5
+  const adjustQuantity = (delta: number) => {
+    const base =
+      Number.isFinite(quantityNumber) && quantityNumber > 0 ? quantityNumber : equivalence.quantity
+    setQuantity(String(Math.max(step, Math.round((base + delta) * 10) / 10)))
+  }
+  const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'Reemplazo'
+  const canSubmit = Number.isFinite(quantityNumber) && quantityNumber > 0
+
+  return (
+    <TodayModal
+      title="Confirma la cantidad"
+      description={`${name} en lugar de ${itemEntry.item.name ?? 'tu alimento'} (${itemEntry.item.quantity} ${itemEntry.item.unit})`}
+      open
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <NutritionMotionButton tone="neutral" onClick={onClose}>
+            Cancelar
+          </NutritionMotionButton>
+          <NutritionMotionButton
+            disabled={!canSubmit}
+            pending={submitting}
+            onClick={() => canSubmit && onSubmit(quantityNumber)}
+          >
+            Registrar
+          </NutritionMotionButton>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <DialogError message={error} />
+        <p className="rounded-card border border-border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
+          {equivalence.kind === 'unavailable'
+            ? 'No pudimos calcular la equivalencia con los datos de este alimento. Revisa la cantidad antes de registrar.'
+            : 'La equivalencia en calorías da una cantidad alta. Revísala antes de registrar.'}
+        </p>
+        <div>
+          <span className="mb-1 block text-xs font-semibold text-muted">Cantidad ({equivalence.unit})</span>
+          <div className="flex items-stretch gap-2">
+            <button
+              type="button"
+              aria-label={`Restar ${step} ${equivalence.unit}`}
+              onClick={() => adjustQuantity(-step)}
+              className="min-h-12 w-12 shrink-0 rounded-control border border-border-default bg-surface-app text-lg font-bold text-strong transition-colors hover:bg-surface-sunken"
+            >
+              −
+            </button>
+            <input
+              inputMode="decimal"
+              aria-label={`Cantidad en ${equivalence.unit}`}
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value.replace(/[^0-9.]/g, ''))}
+              className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-center text-base font-semibold tabular-nums text-strong outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              type="button"
+              aria-label={`Sumar ${step} ${equivalence.unit}`}
+              onClick={() => adjustQuantity(step)}
+              className="min-h-12 w-12 shrink-0 rounded-control border border-border-default bg-surface-app text-lg font-bold text-strong transition-colors hover:bg-surface-sunken"
+            >
+              ＋
+            </button>
+          </div>
+        </div>
+      </div>
+    </TodayModal>
   )
 }
 

@@ -37,8 +37,13 @@ export interface NutritionFoodRowProps {
   category?: string | null
   /** Nota corta bajo los macros (guía del plan: indicaciones del item). */
   note?: string | null
-  /** Etiqueta de estado (ej. "Corregido"). */
+  /** Etiqueta de estado (ej. "Corregido", "Sustituido"). */
   statusLabel?: string | null
+  /**
+   * Alimento del plan que esta fila reemplaza, tachado bajo el nombre (T2.4). `null` en toda fila
+   * que no sea una sustitución — que es el 100% de las filas hasta que el alumno use una.
+   */
+  replacedLabel?: string | null
   /** Nodo al final de la fila (acciones o badge). */
   actions?: ReactNode
 }
@@ -95,6 +100,7 @@ export function NutritionFoodRow({
   category,
   note,
   statusLabel,
+  replacedLabel,
   actions,
 }: NutritionFoodRowProps) {
   const iconUrl = category ? foodCategoryIconUrl(category) : foodCategoryIconUrlFromName(name)
@@ -112,6 +118,15 @@ export function NutritionFoodRow({
           {quantityLabel}
           {detail ? ` · ${detail}` : ''}
         </p>
+        {/* T2.4: qué alimento del plan reemplaza esta fila. Tachado = "esto era lo prescrito",
+            sin rojo (regla del programa: el rojo no se usa en comida). El vocabulario ("sustituyó
+            a X") es el del catálogo de pantallas del rediseño, para que T2.5 no tenga que
+            reescribir el copy cuando reemplace las pills por el swipe + sheet. */}
+        {replacedLabel ? (
+          <p className="mt-0.5 truncate text-[11px] text-subtle">
+            sustituyó a <span className="line-through">{replacedLabel}</span>
+          </p>
+        ) : null}
         <span className="mt-1 block">
           <MacroChipRow
             calories={calories}

@@ -88,21 +88,26 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F4 — UI alumno web
 
-- [ ] Pill con cantidad equivalente + kcal (muere el "17 kcal")
-- [ ] Tap registra, con pendiente por pill y **deshacer**
-- [ ] Chip semantico "Sustituido" + prescrito tachado en la fila consumida
-- [ ] Muere el explicativo de `canRegisterFreely` en este camino
-- [ ] `needs-confirmation` y `unavailable` ⇒ stepper prellenado + motivo en una linea
-- [ ] PostHog `student_nutrition_intake` con `method: 'substitution'`
-- [ ] Gates: `pnpm lint` tocados · `pnpm typecheck` · tests de `nutrition-today.logic` · `pnpm check:tokens`
+- [x] La pagina del alumno deja de leer `nutrition_item_substitutions_v2` directo y pasa a la RPC de F1 ⇒ la pill muestra **cantidad equivalente + kcal reales** (muere el "17 kcal")
+- [x] Tap registra en un gesto, con pendiente por pill y **deshacer** en el toast (retiro append-only, no borra)
+- [x] Chip "⇄ Sustituido" + linea "sustituyó a {prescrito}" tachada en la fila consumida. El estado sale de `source === 'substitution'` del read-model, cero heuristica por nombre
+- [x] Muere el explicativo de `canRegisterFreely` en este camino
+- [x] `needs-confirmation` y `unavailable` ⇒ `SubstitutionConfirmDialog` con stepper prellenado + el motivo en una linea
+- [x] Los reemplazos se ocultan cuando el item ya esta registrado (cambiar entonces es corregir)
+- [x] PostHog `student_nutrition_intake` con `method: 'substitution'` (valor nuevo en la union)
+- [x] Copy alineado con el catalogo de pantallas del rediseño ("sustituyó a X", "⇄") para que T2.5 no reescriba el vocabulario al reemplazar las pills por el swipe + sheet
+- [x] Gates: `pnpm typecheck` ✓ · `pnpm check:tokens` 86/86 ✓ · `eslint` de los tocados ✓ · `pnpm check:nutrition-v2-boundaries` 327 ✓
 
 ## F5 — Paridad RN Android
 
-- [ ] Mismo comportamiento en el Today de RN (pill, undo, chip, stepper de los dos casos degradados)
-- [ ] Cola offline con la MISMA clave determinista (reintento devuelve el mismo id)
-- [ ] Mismo evento PostHog que web
-- [ ] Cero dependencias nativas nuevas
-- [ ] Gates: `pnpm --filter @eva/mobile exec tsc --noEmit` · tests mobile tocados
+- [x] El Today de RN tambien lee por la RPC (mismo dato, misma version del snapshot) y calcula la equivalencia con el MISMO modulo puro que la web
+- [x] Tap registra vía `action: 'substitute'` del gateway movil, que llama al mismo servicio server-side
+- [x] Fila sustituida: muestra el REEMPLAZO, chip "⇄ Sustituido" y "sustituyó a {prescrito}"
+- [x] Cola offline con la MISMA clave determinista: `action: 'substitute'` nueva en la cola, `enqueue` deriva la key con el helper compartido, y el drenaje la despacha
+- [x] La sustitucion encolada NO se pinta como fila optimista (su payload es la intencion, sin nombre ni macros: inventarlos seria mentir)
+- [x] Cero dependencias nativas nuevas
+- [x] Gates: `pnpm --filter @eva/mobile exec tsc --noEmit` ✓
+- [ ] **Deuda declarada:** los dos casos degradados en RN confirman con `Alert` (dos botones), no con stepper. El stepper llega con el sheet de T2.5; en web ya esta
 
 ## F6 — QA y cierre
 

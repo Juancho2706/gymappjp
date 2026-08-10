@@ -65,7 +65,6 @@ import type {
 import {
   NUTRITION_MOTION,
   type BulkMarkSlotState,
-  NUTRITION_ITEM_SUBSTITUTION_SELECT,
   type NutritionSlotExchangeTargetRead,
   NutritionHistoryPageReadModelSchema,
   NutritionPlanReadModelSchema,
@@ -80,11 +79,16 @@ import {
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
-  mapNutritionItemSubstitutionRow,
+  computeSubstitutionEquivalence,
   nutritionWeekStartIso,
   resolveNutritionDayVariantForDate,
+  substituteFromOption,
+  substitutionAttemptFromToday,
+  SubstitutionOptionsReadModelSchema,
   type NutritionFoodRowModel,
-  type NutritionItemSubstitutionRead,
+  type SubstitutionEquivalence,
+  type SubstitutionOption,
+  type SubstitutionOptionsItem,
   type NutritionHistoryDay,
   type NutritionHistoryPageReadModel,
   type NutritionIntakeReadItem,
@@ -134,6 +138,7 @@ import {
   newNutritionV2OperationId,
   submitCorrectIntake,
   submitRecordIntake,
+  submitSubstituteIntake,
   submitVoidIntake,
 } from '../../../../lib/nutrition-v2-intake-runner'
 import { useEvaMotion } from '../../../../lib/motion'
@@ -174,8 +179,6 @@ const EMPTY_OVERLAY: OptimisticOverlay = EMPTY_QUEUED_INTAKE_OVERLAY
 // `?? []` inline crearía un array nuevo por render y rompería React.memo.
 const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
-// Referencia estable para el lookup de reemplazos por item (F-02): `?? []` inline rompería memo.
-const EMPTY_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = []
 // Idem para la semana: sin plan cargado, `?? []` inline recompondría las 7 celdas en cada render.
 const EMPTY_DAY_VARIANTS: PlanVariant[] = []
 
@@ -236,8 +239,10 @@ function TodayTab({
   // select RLS-scoped a la version publicada del Today (fuera del hot-path del read-model) y se
   // muestran bajo cada item prescrito. Sin plan/version o sin reemplazos => mapa vacío.
   const [substitutionsByItemId, setSubstitutionsByItemId] = useState<
-    ReadonlyMap<string, NutritionItemSubstitutionRead[]>
+    ReadonlyMap<string, SubstitutionOptionsItem>
   >(() => new Map())
+  /** Pill en vuelo (T2.4): apaga solo esa opción mientras la escritura viaja. */
+  const [substitutingId, setSubstitutingId] = useState<string | null>(null)
   const [entryAction, setEntryAction] = useState<EntryCorrectionAction | null>(null)
   const [entryActionPending, setEntryActionPending] = useState(false)
   const [entryActionError, setEntryActionError] = useState<string | null>(null)
@@ -453,41 +458,44 @@ function TodayTab({
     }
   }, [date, enabled, model, pending, userId])
 
-  // Reemplazos autorizados (F-02): UN select directo RLS-scoped por versión publicada del plan del
-  // Today, agrupado por item. Best-effort: cualquier error o falta de versión deja el mapa vacío
-  // (la UI simplemente no muestra la línea de reemplazos). No toca el hot-path del read-model.
-  const planVersionId = model?.plan?.versionId ?? null
+  /**
+   * Reemplazos autorizados del día (T2.4). Antes era un select directo a
+   * `nutrition_item_substitutions_v2`, y por eso la pill mostraba los `snapshot_*` congelados: con
+   * `quantity` NULL — el 100% de las filas vivas — esos macros son los de UNA PORCIÓN DEL
+   * SUSTITUTO, sin relación con lo prescrito ("Lomo liso 120 g / 240 kcal" ofrecía "Posta / 17 kcal").
+   *
+   * Ahora va por `get_nutrition_substitution_options_v2`, que trae los macros VIGENTES (catálogo +
+   * override del coach) y resuelve la versión desde el snapshot del día, no desde la última
+   * publicada. Best-effort igual que antes: cualquier fallo deja el mapa vacío y la línea no se
+   * pinta — jamás debe tumbar el Today.
+   */
   useEffect(() => {
-    if (!planVersionId || !enabled) {
+    if (!userId || !enabled) {
       setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
       return
     }
-    setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
     let active = true
     void (async () => {
-      const { data, error } = await supabase
-        .from('nutrition_item_substitutions_v2')
-        .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
-        .eq('version_id', planVersionId)
-        .order('order_index', { ascending: true })
+      const { data, error } = await supabase.rpc('get_nutrition_substitution_options_v2', {
+        p_client_id: userId,
+        p_local_date: date,
+      })
       if (!active || !mountedRef.current) return
-      if (error || !data) {
+      const parsed = error ? null : SubstitutionOptionsReadModelSchema.safeParse(data)
+      if (!parsed?.success) {
         setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
         return
       }
-      const grouped = new Map<string, NutritionItemSubstitutionRead[]>()
-      for (const row of data as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]) {
-        const mapped = mapNutritionItemSubstitutionRow(row)
-        const bucket = grouped.get(mapped.prescriptionItemId) ?? []
-        bucket.push(mapped)
-        grouped.set(mapped.prescriptionItemId, bucket)
+      const grouped = new Map<string, SubstitutionOptionsItem>()
+      for (const entry of parsed.data.items) {
+        if (entry.options.length > 0) grouped.set(entry.prescriptionItemId, entry)
       }
       setSubstitutionsByItemId(grouped)
     })()
     return () => {
       active = false
     }
-  }, [planVersionId, enabled])
+  }, [date, enabled, userId])
 
   const refreshPending = useCallback(async () => {
     if (!userId) return
@@ -1059,20 +1067,79 @@ function TodayTab({
     setEntryAction({ kind, entry })
   }, [])
 
-  // Puente T1.6 (paridad web): con permiso, la pill abre el registro libre precargado; sin
-  // permiso explica que pedir. El camino server-validado sin permiso llega en T2.4.
-  const onPickSubstitution = useCallback(
-    (slot: NutritionMealSlotRead, sub: NutritionItemSubstitutionRead) => {
-      if (model?.permissions.canRegisterFreely) {
-        onRegister(slot, sub.name)
+  /**
+   * T2.4 (paridad web): un tap registra el reemplazo AUTORIZADO. Ya no pasa por el registro libre
+   * ni pide `canRegisterFreely` — sustituir por algo que el coach autorizó no es registro libre.
+   *
+   * El cliente manda solo la intención; el alimento, la cantidad, la franja y los macros los
+   * resuelve el servidor desde la fila autorizada (mismo servicio que la web). `attempt` sale del
+   * read-model en pantalla: cuenta los registros de HOY de ese ítem en CUALQUIER estado, así
+   * deshacer y volver a registrar genera una clave nueva en vez de chocar con el short-circuit.
+   *
+   * Los dos casos degradados de la equivalencia (cantidad implausible o sin datos) piden
+   * confirmación explícita antes de escribir. El stepper completo llega con el sheet de T2.5.
+   */
+  const submitSubstitution = useCallback(
+    async (itemEntry: SubstitutionOptionsItem, option: SubstitutionOption) => {
+      if (!userId || !model) return
+      setMutationError(null)
+      setSubstitutingId(option.substitutionId)
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      const outcome = await submitSubstituteIntake(userId, {
+        clientId: userId,
+        localDate: date,
+        occurredAt: new Date().toISOString(),
+        timezone: TZ,
+        prescriptionItemId: itemEntry.prescriptionItemId,
+        substitutionId: option.substitutionId,
+        attempt: substitutionAttemptFromToday(model, itemEntry.prescriptionItemId),
+        quantity: null,
+      })
+      if (!mountedRef.current) return
+      if (outcome.status === 'recorded') {
+        await load(true)
+        if (!mountedRef.current) return
+        setSubstitutingId(null)
+      } else if (outcome.status === 'queued') {
+        setSubstitutingId(null)
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+        await refreshPending()
       } else {
-        Alert.alert(
-          'Registro libre desactivado',
-          'Pídele a tu coach habilitarlo para registrar este reemplazo.',
+        setSubstitutingId(null)
+        setMutationError(
+          humanizeStudentWriteError(outcome.error.message, 'No se pudo registrar el reemplazo.'),
         )
       }
     },
-    [model?.permissions.canRegisterFreely, onRegister],
+    [date, load, model, refreshPending, userId],
+  )
+
+  const onPickSubstitution = useCallback(
+    (
+      itemEntry: SubstitutionOptionsItem,
+      option: SubstitutionOption,
+      equivalence: SubstitutionEquivalence,
+    ) => {
+      const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'el reemplazo'
+      if (!equivalence.requiresConfirmation) {
+        void submitSubstitution(itemEntry, option)
+        return
+      }
+      Alert.alert(
+        'Confirma la cantidad',
+        equivalence.kind === 'unavailable'
+          ? `No pudimos calcular la equivalencia de ${name}. ¿Registrar ${equivalence.quantity} ${equivalence.unit}?`
+          : `La equivalencia da ${equivalence.quantity} ${equivalence.unit} de ${name}. ¿La registramos?`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: `Registrar ${equivalence.quantity} ${equivalence.unit}`,
+            onPress: () => void submitSubstitution(itemEntry, option),
+          },
+        ],
+      )
+    },
+    [submitSubstitution],
   )
 
   // Compartir usa la MISMA vista efectiva que el render: verdad del servidor menos
@@ -1645,6 +1712,7 @@ function TodayTab({
                 consumedIds={consumedIds}
                 queuedItemIds={queuedItemIds}
                 substitutionsByItemId={substitutionsByItemId}
+                substitutingId={substitutingId}
                 eatingId={eatingId}
                 onAte={onAtePrescribed}
                 onBulkAte={onBulkAte}
@@ -1928,6 +1996,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   consumedIds,
   queuedItemIds,
   substitutionsByItemId,
+  substitutingId,
   eatingId,
   onAte,
   onBulkAte,
@@ -1945,7 +2014,9 @@ const TodaySlotCard = memo(function TodaySlotCard({
   consumedIds: Set<string>
   /** Subconjunto de `consumedIds` que aún NO llegó al servidor (mutación en cola). */
   queuedItemIds: Set<string>
-  substitutionsByItemId: ReadonlyMap<string, NutritionItemSubstitutionRead[]>
+  substitutionsByItemId: ReadonlyMap<string, SubstitutionOptionsItem>
+  /** Opción de reemplazo en vuelo (T2.4): apaga solo esa pill. */
+  substitutingId: string | null
   eatingId: string | null
   onAte: (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => void
   onBulkAte: (slot: NutritionMealSlotRead, eligible: NutritionMealSlotRead['prescriptionItems'][number][]) => void
@@ -1959,8 +2030,12 @@ const TodaySlotCard = memo(function TodaySlotCard({
     completes: boolean,
   ) => void
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
-  /** Tap en un reemplazo autorizado (T1.6, puente): abre el registro con la busqueda precargada. */
-  onPickSubstitution: (slot: NutritionMealSlotRead, sub: NutritionItemSubstitutionRead) => void
+  /** Tap en un reemplazo autorizado (T2.4): registra de un tap, o pide confirmar la cantidad. */
+  onPickSubstitution: (
+    itemEntry: SubstitutionOptionsItem,
+    option: SubstitutionOption,
+    equivalence: SubstitutionEquivalence,
+  ) => void
   /** Corregir/retirar el registro de un item prescrito consumido (paridad web NUT-009). */
   onCorrect: (kind: 'edit' | 'void', entry: NutritionIntakeReadItem) => void
   /** Franja apuntada por el deep-link de la card de Nutrición del Home (SPEC #8). */
@@ -1984,26 +2059,42 @@ const TodaySlotCard = memo(function TodaySlotCard({
       {slot.prescriptionItems.length > 0 ? (
         <View className="mt-3">
           {slot.prescriptionItems.map((item, index) => {
-            const subs = substitutionsByItemId.get(item.id) ?? EMPTY_SUBSTITUTIONS
+            const substitutionEntry = substitutionsByItemId.get(item.id)
+            const substitutionCount = substitutionEntry?.options.length ?? 0
             const consumed = consumedIds.has(item.id)
+            const activeEntry =
+              slot.intakeItems.find((e) => e.prescriptionItemId === item.id && e.status === 'active') ?? null
+            // T2.4: el estado "sustituido" lo dice el read-model (`source`), que sale de
+            // `intake_source_v2`. Cuando pasa, la fila muestra el REEMPLAZO y aclara a quién
+            // sustituyó — mismo vocabulario que la web y que el catálogo de pantallas.
+            const isSubstituted = activeEntry?.source === 'substitution'
             const rawNote = item.notes?.trim() || null
-            const displayNote = subs.length > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
+            const displayNote = substitutionCount > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
             return (
               <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
                 <FoodRow
                   food={{
                     id: item.id,
-                    name: item.name ?? 'Alimento prescrito',
-                    detail: item.brand,
-                    thumbnailUrl: foodMediaThumbnailUrl(item.media),
-                    quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
-                    calories: item.macros.calories,
-                    proteinG: item.macros.proteinG,
-                    carbsG: item.macros.carbsG,
-                    fatsG: item.macros.fatsG,
+                    name: isSubstituted && activeEntry
+                      ? activeEntry.snapshot.name
+                      : item.name ?? 'Alimento prescrito',
+                    detail: isSubstituted && activeEntry ? activeEntry.snapshot.brand : item.brand,
+                    thumbnailUrl: foodMediaThumbnailUrl(isSubstituted && activeEntry ? activeEntry.media ?? item.media : item.media),
+                    quantityLabel:
+                      isSubstituted && activeEntry
+                        ? `${activeEntry.quantity} ${activeEntry.unit}`
+                        : `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                    calories: isSubstituted && activeEntry ? activeEntry.totals.calories : item.macros.calories,
+                    proteinG: isSubstituted && activeEntry ? activeEntry.totals.proteinG : item.macros.proteinG,
+                    carbsG: isSubstituted && activeEntry ? activeEntry.totals.carbsG : item.macros.carbsG,
+                    fatsG: isSubstituted && activeEntry ? activeEntry.totals.fatsG : item.macros.fatsG,
                   }}
                   fallbackCategory={item.category}
-                  note={displayNote}
+                  note={
+                    isSubstituted
+                      ? `sustituyó a ${item.name ?? 'tu alimento'} · ${item.quantity} ${item.unit}`
+                      : displayNote
+                  }
                   actions={
                     consumed ? (
                       queuedItemIds.has(item.id) ? (
@@ -2018,14 +2109,13 @@ const TodaySlotCard = memo(function TodaySlotCard({
                         // fila (QA device T1.2, regla web NUT-009): lapiz solo con permiso de
                         // ajustar cantidades; "Retirar" NUNCA se esconde.
                         (() => {
-                          const entry =
-                            slot.intakeItems.find(
-                              (e) => e.prescriptionItemId === item.id && e.status === 'active',
-                            ) ?? null
+                          const entry = activeEntry
                           return (
                             <View className="flex-row items-center gap-1">
                               <CheckCircle2 color={theme.success} size={16} />
-                              <Text className="text-xs font-semibold text-success-700">Registrado</Text>
+                              <Text className="text-xs font-semibold text-success-700">
+                                {isSubstituted ? '⇄ Sustituido' : 'Registrado'}
+                              </Text>
                               {entry && today.permissions.canAdjustPrescribedQuantity ? (
                                 <Pressable
                                   accessibilityRole="button"
@@ -2062,7 +2152,15 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     )
                   }
                 />
-                <ItemSubstitutionsHint substitutions={subs} onPick={(sub) => onPickSubstitution(slot, sub)} />
+                {/* Los reemplazos se ofrecen mientras el item NO esté registrado; después,
+                    cambiarlo es corregir (y para eso está el lápiz de la fila). */}
+                {consumed ? null : (
+                  <ItemSubstitutionsHint
+                    entry={substitutionEntry}
+                    pendingId={substitutingId}
+                    onPick={onPickSubstitution}
+                  />
+                )}
               </View>
             )
           })}
@@ -2127,31 +2225,67 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
  * El camino server-validado sin permiso es T2.4 y reemplaza este puente.
  */
 function ItemSubstitutionsHint({
-  substitutions,
+  entry,
+  pendingId,
   onPick,
 }: {
-  substitutions: NutritionItemSubstitutionRead[]
-  onPick: (sub: NutritionItemSubstitutionRead) => void
+  entry: SubstitutionOptionsItem | undefined
+  pendingId: string | null
+  onPick: (
+    itemEntry: SubstitutionOptionsItem,
+    option: SubstitutionOption,
+    equivalence: SubstitutionEquivalence,
+  ) => void
 }) {
-  if (substitutions.length === 0) return null
+  if (!entry || entry.options.length === 0) return null
   return (
     <View className="pb-3 pl-14">
       <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</Text>
       <View accessibilityLabel="Reemplazos autorizados por tu coach" className="mt-1 flex-row flex-wrap gap-1.5">
-        {substitutions.map((sub) => (
-          <Pressable
-            key={sub.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Registrar reemplazo: ${sub.name}`}
-            onPress={() => onPick(sub)}
-            className="min-h-8 flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
-          >
-            <Text className="text-xs font-medium text-body">{sub.name}</Text>
-            {sub.macros.calories != null ? (
-              <Text className="font-mono text-xs text-muted">· {formatNutritionCalories(sub.macros.calories)}</Text>
-            ) : null}
-          </Pressable>
-        ))}
+        {entry.options.map((option) => {
+          // MISMA función que usa el servidor al escribir: el número que el alumno ve y el que se
+          // persiste son el mismo por construcción (y el mismo que muestra la web).
+          const equivalence = computeSubstitutionEquivalence({
+            item: {
+              quantity: entry.item.quantity,
+              unit: entry.item.unit,
+              calories: entry.item.calories,
+            },
+            substitute: substituteFromOption(option),
+          })
+          const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'Reemplazo'
+          const amount = `${equivalence.quantity} ${equivalence.unit}`
+          const pending = pendingId === option.substitutionId
+          return (
+            <Pressable
+              key={option.substitutionId}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: pending }}
+              disabled={pending}
+              accessibilityLabel={
+                equivalence.requiresConfirmation
+                  ? `Reemplazar por ${name}: confirma la cantidad`
+                  : `Reemplazar por ${name}, ${amount}`
+              }
+              onPress={() => onPick(entry, option, equivalence)}
+              className="min-h-9 flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
+            >
+              <Text className="text-xs font-medium text-body" numberOfLines={1}>
+                {name}
+              </Text>
+              {/* Antes acá iba la kcal del snapshot congelado, que con `quantity` NULL es la de UNA
+                  porción del sustituto: el item de 240 kcal ofrecía "17 kcal". */}
+              <Text className="font-mono text-xs text-muted" numberOfLines={1}>
+                · {amount}
+              </Text>
+              <Text className="font-mono text-xs text-muted" numberOfLines={1}>
+                {equivalence.requiresConfirmation
+                  ? '· confirma'
+                  : `· ${formatNutritionCalories(equivalence.totals.calories)}`}
+              </Text>
+            </Pressable>
+          )
+        })}
       </View>
     </View>
   )
