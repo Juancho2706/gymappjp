@@ -47,10 +47,14 @@ export function SwipeToExchange({
         drag="x"
         dragDirectionLock
         dragConstraints={{ left: -TRIGGER_PX - 24, right: 0 }}
-        dragElastic={0.15}
-        // Sin `prefers-reduced-motion` vuelve con un resorte; con él, seco. El gesto NO se
-        // desactiva: es una forma de operar la app, no un adorno.
-        dragTransition={reduceMotion ? { bounceStiffness: 0, bounceDamping: 0 } : undefined}
+        // Con `prefers-reduced-motion` la fila no rebota: vuelve pegada al límite. El gesto NO se
+        // desactiva — es una forma de operar la app, no un adorno.
+        //
+        // NO usar `dragTransition={{ bounceStiffness: 0, bounceDamping: 0 }}` para eso: un resorte
+        // sin fuerza ni amortiguación nunca converge, framer-motion sigue animando indefinidamente
+        // y deja el hilo principal ocupado. Con tres filas así, la página no vuelve a estar idle.
+        // Lo cazó el QA del preview: el navegador quedaba sin responder.
+        dragElastic={reduceMotion ? 0 : 0.15}
         onDragEnd={(_event, info) => {
           if (info.offset.x <= -TRIGGER_PX) onSwipe()
         }}
