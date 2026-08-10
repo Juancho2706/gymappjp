@@ -30,14 +30,15 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F1 — Guard del grupo (riesgo ALTO, commit propio, DB en LIVE)
 
-- [ ] `create or replace private.nutrition_v2_assert_substitution_authorized`, misma firma, delta unico (**`record_nutrition_intake_v2` NO se toca**)
-- [ ] Membresia por **overlay + legacy con `is_excluded`** (no la columna cruda) y **predicado de visibilidad**
-- [ ] El item debe ser de una version `published`/`superseded` de un plan activo
-- [ ] Snapshot previo por `md5` de las tres funciones
-- [ ] tx-rollback con JWT reales de los **10** casos del PLAN antes de aplicar
+- [x] Migracion escrita: `supabase/migrations/20260810121500_nutrition_v2_substitution_group_guard.sql` (**`record_nutrition_intake_v2` NO se toca**)
+- [x] Membresia por **overlay + legacy con `is_excluded`** en un helper propio `private.nutrition_v2_exchange_group_ids`, reusable por F2; y **predicado de visibilidad**
+- [x] El item debe ser de una version `published`/`superseded` de un plan activo
+- [x] **tx-rollback con los 10 casos: 10/10 correctos** (`1:OK 2:42501 3:42501 4:42501 5:OK 6:42501 7:OK 8:42501 9:42501 10:42501`)
+- [x] Rollback del probe verificado: el helper no quedo, el guard conserva su `md5` `ead3e493…`, 0 exclusiones
+- [ ] **APLICAR a LIVE** — pendiente a proposito: no se toca produccion con el owner ausente
 - [ ] Advisors despues, sin clases nuevas
 - [ ] `pg_get_functiondef` de `get_nutrition_today_v2` y de `record_nutrition_intake_v2` identicos antes/despues
-- [ ] Rollback documentado (re-aplicar `20260809230833`)
+- [x] Rollback documentado (re-aplicar `20260809230833` + `drop` del helper)
 
 ## F2 — La RPC de opciones aprende el grupo (DB en LIVE)
 
@@ -94,4 +95,5 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 |---|---|---|---|---|
 | 2026-08-10 | Fase 0 (SPEC/PLAN/TASKS) | `f710e0ee` | `pnpm docs:check` | Auditoria LIVE incluida; D1-D3 del owner; el orden del mockup se invierte con evidencia |
 | 2026-08-10 | Fase 0 (correcciones de la revision) | `d82057b2` | `pnpm docs:check` | 8 bloqueantes incorporados, todos re-verificados contra LIVE. B1 habria roto T2.4 en produccion al aplicar F2. H2 recalculado sobre la poblacion entera. Queda D4 del owner |
-| 2026-08-10 | F0 (contrato + delta + claves) | (este commit) | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
+| 2026-08-10 | F0 (contrato + delta + claves) | `a6c1634e` | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
+| 2026-08-10 | F1 (guard del grupo, **escrita y validada, NO aplicada**) | (este commit) | matriz 10/10 en tx revertida | Se frena antes de tocar LIVE: es la fase que amplia autorizacion de escritura para 36 alumnos reales y no hay UI que la consuma todavia |
