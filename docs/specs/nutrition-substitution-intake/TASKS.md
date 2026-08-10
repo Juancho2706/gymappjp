@@ -130,7 +130,34 @@ Codigo listo y commiteado (F0-F5). Lo de abajo es lo que falta, en el orden en q
 - [ ] **Sesion de alumna**: el QA del lado alumno necesita que el owner inicie sesion como `qa-cat-rojas@josefit-designqa.cl` (no se tipean contraseñas desde el agente). El tab del preview quedo abierto en `/c/josefit/login`.
 - [ ] **Apuntar la app al preview**: `EXPO_PUBLIC_API_URL` en `apps/mobile/.env` (hoy no esta seteada ⇒ usa el default de produccion, donde la accion `substitute` **no existe** ⇒ `INVALID_ACTION`). Volver a dejarla como estaba al terminar.
 
-### Guion (cada caso verificado en DB, no por pantalla)
+### Acta del QA WEB — 2026-08-09/10, preview, cuenta de Catalina · **TODO VERDE**
+
+Con `canRegisterFreely = false` **y** `canAdjustPrescribedQuantity = false` (el caso insignia). Cada caso verificado leyendo `nutrition_intake_entries`, no por pantalla.
+
+| Caso | Resultado |
+|---|---|
+| Pill con cantidad equivalente real | "Posta negra · 125 g · 163 kcal" (antes habria dicho la kcal congelada) |
+| Un tap registra, sin permiso de registro libre | entry `substitution`, item correcto, 125 g, franja `slot-1`, clave `…-a0` |
+| Fila sustituida | "⇄ Sustituido" + "sustituyó a ~~Pechuga · 100 g~~", contador de franja 1/3 → 2/3 |
+| Totales y porciones | el anillo suma 163 kcal y la espinaca aporta cobertura al grupo Verduras (7,5/7,5 +1,4) |
+| `needs-confirmation` (Espinaca) | dialogo con 715 g y el motivo; no registra de un tap |
+| `unavailable` (Agua 0 kcal) | dialogo prellenado con **200 ml = la porcion del SUSTITUTO**, no con los 100 ml del item |
+| Doble tap (2 clicks seguidos en Registrar) | **UNA** sola entry |
+| Sustituir sobre item YA registrado | correccion: original a `corrected` + razon automatica, nueva `active` con `corrects_entry_id` — **con `canAdjust = false`**, o sea el bloqueo B1 que desbloqueo F2 |
+| Ciclo A→B→A | 3 eslabones, cadena lineal, una sola activa, claves `a0` / `a1` / `a1` distintas |
+| Deshacer y volver a registrar | la retirada queda `voided` con `…-a0` y el registro nuevo nace con `…-a1` |
+
+**Tres bugs que encontro este QA, los tres arreglados y verificados en el preview:**
+
+1. **Aviso falso "tu coach fijo la cantidad"** — el dialogo de los casos degradados siempre manda cantidad; pedir exactamente la calculada es confirmar, no ajustar (`fc538c7e`).
+2. **La rama de correccion era inalcanzable** — las pills se escondian en items ya registrados, asi que D3 y el ciclo A→B→A no se podian disparar desde la UI. Ahora se ofrecen siempre y solo se esconde la ya registrada (`fc538c7e`).
+3. 🔴 **Deshacer + volver a registrar no escribia nada** y dejaba el item inconsumible el resto del dia (`bf273fe4`). Causa: **`get_nutrition_today_v2` NO devuelve las entries retiradas** — verificado en LIVE —, asi que el `attempt` derivado del read model volvia a 0, la clave se repetia y el short-circuit del RPC (que no mira `entry_status`) devolvia el id de la retirada. Era el escenario B2 de la revision adversarial: la mitigacion existia pero se apoyaba en un supuesto falso. Ahora el boundary lee las entries del dia **de la tabla** y salta solo las claves cuya entry esta `voided`.
+
+Gate del fix: `intake.actions.substitution.test.ts` **17/17** + verificacion a mano en el preview.
+
+Pendiente menor: el evento de PostHog no se verifico (exige aceptar el banner de cookies).
+
+### Guion del device (cada caso verificado en DB, no por pantalla)
 
 - [ ] La pill dice **cantidad + kcal reales**, no la kcal congelada
 - [ ] Un tap registra · el item queda consumido · la franja avanza su contador
