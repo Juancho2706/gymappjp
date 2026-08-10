@@ -539,6 +539,24 @@ export const SubstitutionOptionSchema = z.object({
   }),
 })
 
+/**
+ * Opcion del bloque grupo (T2.5). Misma forma que la del coach salvo por `substitutionId`, que
+ * es `null` porque no hay fila que la respalde: la autoriza la pertenencia al grupo, validada en
+ * el servidor. Se mantiene estructuralmente compatible a proposito, para que
+ * `substituteFromOption` y la equivalencia funcionen sobre las dos sin ramas.
+ */
+export const SubstitutionGroupOptionSchema = SubstitutionOptionSchema.extend({
+  origin: z.literal('group').default('group'),
+  substitutionId: z.string().uuid().nullable(),
+  foodId: z.string().uuid(),
+})
+
+export const SubstitutionGroupSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+})
+
 export const SubstitutionOptionsItemSchema = z.object({
   prescriptionItemId: z.string().uuid(),
   mealSlotCode: z.string().nullable(),
@@ -553,6 +571,16 @@ export const SubstitutionOptionsItemSchema = z.object({
     fatsG: z.number().nullable().optional(),
   }),
   options: z.array(SubstitutionOptionSchema),
+  /**
+   * Grupo de intercambio del alimento prescrito. `null` ⇒ el item no tiene equivalentes y la UI
+   * no ofrece ⇄ (D2). Los tres campos llevan default para que los fixtures y las respuestas de
+   * T2.4 sigan parseando.
+   */
+  group: SubstitutionGroupSchema.nullable().default(null),
+  /** Cuantos equivalentes hay en total, para el "de N" del sheet. */
+  groupTotal: z.number().int().nonnegative().default(0),
+  /** Pagina del bloque grupo. Solo viaja para el item que el sheet abrio. */
+  groupOptions: z.array(SubstitutionGroupOptionSchema).default([]),
 })
 
 export const SubstitutionOptionsReadModelSchema = z.object({
@@ -564,6 +592,10 @@ export const SubstitutionOptionsReadModelSchema = z.object({
 
 export type SubstitutionOptionFood = z.infer<typeof SubstitutionOptionFoodSchema>
 export type SubstitutionOption = z.infer<typeof SubstitutionOptionSchema>
+export type SubstitutionGroupOption = z.infer<typeof SubstitutionGroupOptionSchema>
+export type SubstitutionGroup = z.infer<typeof SubstitutionGroupSchema>
+/** Lo que el sheet puede ofrecer: una fila del coach o un equivalente del grupo. */
+export type SubstitutionAnyOption = SubstitutionOption | SubstitutionGroupOption
 export type SubstitutionOptionsItem = z.infer<typeof SubstitutionOptionsItemSchema>
 export type SubstitutionOptionsReadModel = z.infer<typeof SubstitutionOptionsReadModelSchema>
 
@@ -572,7 +604,7 @@ export type SubstitutionOptionsReadModel = z.infer<typeof SubstitutionOptionsRea
  * Un reemplazo sin `food` (texto libre / receta) queda sin macros ⇒ la equivalencia devuelve
  * `unavailable` y la UI pide confirmar la cantidad.
  */
-export function substituteFromOption(option: SubstitutionOption): SubstitutionSubstitute {
+export function substituteFromOption(option: SubstitutionAnyOption): SubstitutionSubstitute {
   const food = option.food
   return {
     foodId: option.foodId,

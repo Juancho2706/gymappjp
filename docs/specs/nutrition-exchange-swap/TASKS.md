@@ -44,15 +44,20 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F2 — La RPC de opciones aprende el grupo (DB en LIVE)
 
-- [ ] **`drop function ... (uuid, date)` + `create` de la firma nueva + re-emitir grants**, en una transaccion. NO `create or replace`: crea sobrecarga y deja la llamada de 2 args ambigua (`42725`, reproducido)
-- [ ] Verificar despues que **solo existe una** firma y que la llamada de 2 args sigue andando
-- [ ] Argumentos nuevos con default: `p_group_query`, `p_group_limit` (**clampeado server-side**), `p_group_food_id`, `p_prescription_item_id`
-- [ ] `group`, `groupOptions` (membresia H6, visibilidad H7, excluye el propio food y los autorizados, orden por cercania de porcion) y `groupTotal`
-- [ ] Busqueda server-side con el normalizador del catalogo, **escapando `%` y `_`**
-- [ ] `item_json` solo para la pagina devuelta; ordenar/paginar con join directo a `foods` + overrides
-- [ ] **EXPLAIN con el grupo mas grande (C, 716)**; el indice `foods_exchange_group_id_idx` ya existe, verificar que se use
-- [ ] Protocolo completo: snapshot → EXPLAIN → tx-rollback con JWT reales → aplicar → advisors
-- [ ] Rollback documentado (drop de la firma nueva + re-aplicar `20260809222811`)
+- [x] **`drop function ... (uuid, date)` + `create` de la firma nueva + re-emitir grants**, en una transaccion. NO `create or replace`: crea sobrecarga y deja la llamada de 2 args ambigua (`42725`, reproducido)
+- [x] Verificado despues: **una sola firma**, `authenticated` ejecuta, `anon` no
+- [x] Argumentos nuevos con default: `p_prescription_item_id`, `p_group_query`, `p_group_limit` (**clampeado**: pedir 9999 devuelve 50), `p_group_food_id`
+- [x] `group`, `groupOptions` (membresia H6, visibilidad H7, excluye el propio food y los autorizados, orden por cercania de porcion) y `groupTotal`
+- [x] Busqueda server-side con el normalizador del catalogo. **No hace falta escapar `%`/`_`**: el normalizador reduce todo lo que no sea `[a-z0-9]` a espacios, asi que los comodines no sobreviven (documentado en la migracion por si eso cambia)
+- [x] `item_json` solo para la pagina devuelta
+- [x] Los dos helpers de membresia (por-alimento y set-based) **verificados equivalentes sobre el catalogo entero**: 2.526 = 2.526, cero divergencias en ambas direcciones
+- [x] Costo medido y corregido: la primera version costaba **106 ms** (conteo por item); la aplicada, **58 ms**, con el mismo `groupTotal` exacto (601). T2.4 costaba 8 ms y devolvia 8 items sin datos de grupo
+- [x] Indices verificados presentes: `egf_group_food_owner_uq`, `egf_food_id_idx`, `foods_name_search_trgm_idx`
+- [x] Matriz con JWT real: 2 args OK · item abierto pagina 20 · buscador filtra total y pagina · clamp · lookup de una opcion = 1 · opcion de otro grupo = 0 · alumno ajeno 42501
+- [x] **Regresion T2.4 verificada**: la llamada de 2 argumentos devuelve los reemplazos del coach con `origin: 'coach'`
+- [x] `get_nutrition_today_v2` y `record_nutrition_intake_v2` byte-identicos
+- [x] Aplicada como `20260810171529`. Rollback: drop de la firma nueva + `drop` del helper + re-aplicar `20260809222811`
+- [x] Contrato ampliado en `packages/nutrition-v2`: `group`, `groupTotal`, `groupOptions` con defaults, y `SubstitutionGroupOptionSchema` estructuralmente compatible
 
 ## F3 — Boundary: aceptar opciones del grupo
 
@@ -99,4 +104,5 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-10 | Fase 0 (correcciones de la revision) | `d82057b2` | `pnpm docs:check` | 8 bloqueantes incorporados, todos re-verificados contra LIVE. B1 habria roto T2.4 en produccion al aplicar F2. H2 recalculado sobre la poblacion entera. Queda D4 del owner |
 | 2026-08-10 | F0 (contrato + delta + claves) | `a6c1634e` | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
 | 2026-08-10 | F1 (guard del grupo, escrita y validada) | `0f7e8433` | matriz 10/10 en tx revertida | Commiteada sin aplicar, a la espera del owner |
-| 2026-08-10 | F1 **aplicada a LIVE** + D4 | (este commit) | matriz 10/10 sobre lo aplicado · advisors sin clases nuevas · typecheck web y mobile exit 0 · 28/28 de quick-edit | `20260810161604` en LIVE; hot-path byte-identico. D4: se retira la pill de quick-edit en las dos superficies |
+| 2026-08-10 | F1 **aplicada a LIVE** + D4 | `86f665e5` | matriz 10/10 sobre lo aplicado · advisors sin clases nuevas · typecheck web y mobile exit 0 · 28/28 de quick-edit | `20260810161604` en LIVE; hot-path byte-identico. D4: se retira la pill de quick-edit en las dos superficies |
+| 2026-08-10 | F2 **aplicada a LIVE** | (este commit) | matriz con JWT real · regresion T2.4 verde · 37/37 del paquete · typecheck web y mobile exit 0 | `20260810171529`. `drop`+`create` porque `create or replace` habria roto T2.4. Costo 8 ms → 58 ms (la primera version daba 106 y se corrigio) |
