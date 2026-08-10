@@ -103,7 +103,8 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 **Escenario ya montado** (no hace falta sembrar nada). Catalina (`ba265b0b`), dia de hoy: **21 items**, todos con grupo. Sopa PREMIUM y Avena en **grupo C con 705 equivalentes**, Pechuga de Pollo en **grupo P con 601-602**. Coach options: la mayoria en 0, una Avena con 1, y las Pechugas con 1 o 2 — o sea que conviven en la misma pantalla el item que **solo** tiene grupo (el 98% del caso real) y el que tiene los dos bloques.
 
-- [x] Preview desplegado: `gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app` (commit `30fdc89c`)
+- [x] Preview desplegado: `gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app`
+- [x] 🐞 **Bug cazado a los dos minutos de abrir el preview**: las filas de Sopa PREMIUM y Avena no mostraban el control ⇄ pese a tener 705 equivalentes. El filtro del servidor web (`page.tsx`) seguia siendo el de T2.4 (`options.length > 0`); el mismo filtro lo corregi en RN durante F5 y me lo salte en web, asi que **la feature era invisible para el 98% de los items**. Arreglado en `6888599f`. Verificado por grep que no queda ningun otro filtro viejo (los demas son de sustitucion de EJERCICIOS, otro dominio)
 - [ ] **Web** — guion: el ⇄ cuenta bien · sheet con los dos bloques · buscador filtra y cambia el total · "ver mas" hasta 50 y despues manda a buscar · elegir del grupo registra con la cantidad que mostro · deshacer · **volver a elegir la MISMA opcion** (el bug de T2.4) · A→B→A corrige sin duplicar · swipe sobre un item con reemplazo del coach aplica y cicla · swipe sobre un item **solo con grupo** ABRE el sheet · candado sin ⇄
 - [ ] **Regresion T2.4 en el preview**: una sustitucion autorizada normal sigue funcionando
 - [ ] **Device** (cuando vuelva el owner) — lo mismo + **modo avion**: la fila aparece con "En cola" y al volver la red drena sin duplicar

@@ -575,7 +575,14 @@ export const SubstitutionGroupOptionSchema = SubstitutionOptionSchema.extend({
 })
 
 export const SubstitutionGroupSchema = z.object({
-  id: z.string().uuid(),
+  /**
+   * `guid()` y NO `uuid()`: los ids de `exchange_groups` estan SEMBRADOS a mano
+   * (`0000e8c0-0000-0000-0000-000000000001`) y no cumplen el RFC — el nibble de version es 0.
+   * `z.uuid()` los rechaza, y como el read model entero se parsea de una sola vez, un solo id
+   * invalido tumbaba TODO el mapa de opciones y la feature quedaba invisible. Lo encontro el QA
+   * del preview; es el mismo gotcha que ya habia mordido con otros seeds del repo.
+   */
+  id: z.guid(),
   code: z.string(),
   name: z.string(),
 })
