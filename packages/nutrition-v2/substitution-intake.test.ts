@@ -11,6 +11,8 @@ import {
   substitutionAttemptFromToday,
   substitutionIntakeIdempotencyKey,
   substitutionIntentToken,
+  swipeApplicableOptions,
+  swipeOptionAt,
   type SubstitutionPrescribedItem,
   type SubstitutionSubstitute,
 } from './substitution-intake'
@@ -449,6 +451,94 @@ describe('describeSubstitutionDelta', () => {
       substitute: substitute(),
     })
     expect(describeSubstitutionDelta({ item: prescribed, equivalence })).toBeNull()
+  })
+})
+
+describe('swipeApplicableOptions — que puede aplicar el gesto', () => {
+  const ITEM = { quantity: 100, unit: 'g', calories: 200 }
+
+  function option(over: Record<string, unknown> = {}) {
+    return SubstitutionOptionSchema.parse({
+      substitutionId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      foodId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      recipeId: null,
+      customName: null,
+      quantity: null,
+      unit: null,
+      food: {
+        name: 'Sustituto',
+        brand: null,
+        calories: 100,
+        proteinG: 10,
+        carbsG: 5,
+        fatsG: 2,
+        fiberG: 1,
+        macrosBasis: 'per_100',
+        servingSize: 100,
+        servingUnit: 'g',
+        hasOverride: false,
+      },
+      frozen: { name: null, brand: null, calories: null },
+      ...over,
+    })
+  }
+
+  it('deja pasar una opcion normal', () => {
+    const options = swipeApplicableOptions({
+      entry: { item: ITEM, options: [option()] },
+      consumedFoodId: null,
+    })
+    expect(options).toHaveLength(1)
+  })
+
+  it('salta la que exige confirmar la cantidad', () => {
+    // Sustituto de 5 kcal/100 g ⇒ 4.000 g para igualar 200 kcal: pasa el tope y exige stepper.
+    const options = swipeApplicableOptions({
+      entry: {
+        item: ITEM,
+        options: [option({ food: { ...option().food, calories: 5 } })],
+      },
+      consumedFoodId: null,
+    })
+    expect(options).toHaveLength(0)
+  })
+
+  it('salta la opcion sin macros (no hay con que calcular)', () => {
+    const options = swipeApplicableOptions({
+      entry: { item: ITEM, options: [option({ foodId: null, food: null, customName: 'Libre' })] },
+      consumedFoodId: null,
+    })
+    expect(options).toHaveLength(0)
+  })
+
+  it('no ofrece "cambiar a lo mismo"', () => {
+    const options = swipeApplicableOptions({
+      entry: { item: ITEM, options: [option()] },
+      consumedFoodId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    })
+    expect(options).toHaveLength(0)
+  })
+
+  it('un item sin reemplazos del coach no tiene nada que aplicar de un gesto', () => {
+    // El bloque grupo NO entra: su "primer resultado" lo elige el algoritmo entre cientos, y
+    // aplicarlo a ciegas registraria algo que el alumno nunca vio. Ahi el swipe abre el sheet.
+    expect(swipeApplicableOptions({ entry: { item: ITEM, options: [] }, consumedFoodId: null }))
+      .toHaveLength(0)
+  })
+})
+
+describe('swipeOptionAt — ciclado', () => {
+  const a = { substitutionId: 'a' } as never
+  const b = { substitutionId: 'b' } as never
+
+  it('cicla en redondo', () => {
+    expect(swipeOptionAt([a, b], 0)).toBe(a)
+    expect(swipeOptionAt([a, b], 1)).toBe(b)
+    expect(swipeOptionAt([a, b], 2)).toBe(a)
+  })
+
+  it('sin opciones devuelve null', () => {
+    expect(swipeOptionAt([], 3)).toBeNull()
   })
 })
 

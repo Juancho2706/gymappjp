@@ -45,6 +45,7 @@ import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMob
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import { NutritionDomainOff } from '../../../../components/nutrition-v2'
 import { SubstitutionSheet } from '../../../../components/nutrition-v2/SubstitutionSheet'
+import { SwipeToExchange } from '../../../../components/nutrition-v2/SwipeToExchange'
 import {
   PastDaySummary,
   LegacyHistoryDetail,
@@ -80,9 +81,13 @@ import {
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
+  computeSubstitutionEquivalence,
   nutritionWeekStartIso,
   resolveNutritionDayVariantForDate,
+  substituteFromOption,
   substitutionAttemptFromToday,
+  swipeApplicableOptions,
+  swipeOptionAt,
   SubstitutionOptionsReadModelSchema,
   type NutritionFoodRowModel,
   type SubstitutionAnyOption,
@@ -247,6 +252,11 @@ function TodayTab({
     itemEntry: SubstitutionOptionsItem
     consumedFoodId: string | null
   } | null>(null)
+  /**
+   * Cuántos swipes lleva cada item, para que el siguiente ofrezca la siguiente opción. Ref y no
+   * estado: cambiarlo no tiene que repintar la lista, y el ciclo es efímero por definición.
+   */
+  const swipeCycleRef = useRef<Record<string, number>>({})
   const [entryAction, setEntryAction] = useState<EntryCorrectionAction | null>(null)
   const [entryActionPending, setEntryActionPending] = useState(false)
   const [entryActionError, setEntryActionError] = useState<string | null>(null)
@@ -1155,6 +1165,31 @@ function TodayTab({
     [],
   )
 
+  /**
+   * T2.5 F6: deslizar la fila. Aplica de un gesto el reemplazo del coach que toque en el ciclo; si
+   * el item no tiene ninguno aplicable a ciegas, ABRE el sheet en vez de escribir — elegir entre
+   * los cientos del grupo es una decisión que se toma mirando, no deslizando.
+   */
+  const onSwipeExchange = useCallback(
+    (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => {
+      const options = swipeApplicableOptions({ entry: itemEntry, consumedFoodId })
+      const cycle = swipeCycleRef.current[itemEntry.prescriptionItemId] ?? 0
+      const option = swipeOptionAt(options, cycle)
+      if (!option) {
+        setExchange({ itemEntry, consumedFoodId })
+        return
+      }
+      // El swipe siguiente ofrece la opción siguiente: deslizar de nuevo es cambiar de opinión.
+      swipeCycleRef.current[itemEntry.prescriptionItemId] = cycle + 1
+      const equivalence = computeSubstitutionEquivalence({
+        item: itemEntry.item,
+        substitute: substituteFromOption(option),
+      })
+      void submitSubstitution(itemEntry, option, equivalence)
+    },
+    [submitSubstitution],
+  )
+
   const onPickSubstitution = useCallback(
     (
       itemEntry: SubstitutionOptionsItem,
@@ -1763,6 +1798,7 @@ function TodayTab({
                 onMarkPortion={portions.mark}
                 onOpenEquivalences={onOpenEquivalences}
                 onOpenExchange={onOpenExchange}
+                onSwipeExchange={onSwipeExchange}
                 onCorrect={onCorrectPrescribed}
                 highlighted={slot.code === focusSlotCode}
               />
@@ -2059,6 +2095,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   onMarkPortion,
   onOpenEquivalences,
   onOpenExchange,
+  onSwipeExchange,
   onCorrect,
   highlighted = false,
 }: {
@@ -2085,6 +2122,8 @@ const TodaySlotCard = memo(function TodaySlotCard({
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
   /** T2.5: abre el sheet de intercambio de ese item (dos bloques: coach y grupo). */
   onOpenExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
+  /** T2.5 F6: deslizar la fila. Aplica el primer reemplazo del coach, o abre el sheet. */
+  onSwipeExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
   /** Corregir/retirar el registro de un item prescrito consumido (paridad web NUT-009). */
   onCorrect: (kind: 'edit' | 'void', entry: NutritionIntakeReadItem) => void
   /** Franja apuntada por el deep-link de la card de Nutrición del Home (SPEC #8). */
@@ -2121,6 +2160,12 @@ const TodaySlotCard = memo(function TodaySlotCard({
             const displayNote = substitutionCount > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
             return (
               <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
+                <SwipeToExchange
+                  enabled={substitutionEntry !== undefined && substitutingId === null}
+                  onSwipe={() => {
+                    if (substitutionEntry) onSwipeExchange(substitutionEntry, activeEntry?.foodId ?? null)
+                  }}
+                >
                 <FoodRow
                   food={{
                     id: item.id,
@@ -2201,6 +2246,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     )
                   }
                 />
+                </SwipeToExchange>
                 {/* Los reemplazos se ofrecen SIEMPRE, también sobre un item ya registrado: ahí el
                     servidor corrige en vez de duplicar (D3), que es lo que permite cambiar de
                     opinión. Solo se esconde la opción ya registrada. */}

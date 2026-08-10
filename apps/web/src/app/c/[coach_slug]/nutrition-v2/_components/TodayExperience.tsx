@@ -32,6 +32,8 @@ import {
   normalizeIntakeUnit,
   sortFoodsByFavoriteFirst,
   substitutionAttemptFromToday,
+  swipeApplicableOptions,
+  swipeOptionAt,
   type BulkMarkSlotState,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
@@ -44,6 +46,7 @@ import { MacroChipRow, NutritionCard, NutritionMotionButton } from '@/components
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { AuraHero } from './AuraHero'
 import { SubstitutionSheet } from './SubstitutionSheet'
+import { SwipeToExchange } from './SwipeToExchange'
 import { TodayModal } from './TodayModal'
 import { NutritionFoodRow } from './NutritionFoodRow'
 import { foodResultImage, resolveFoodImageUrl } from './food-result-image'
@@ -153,6 +156,12 @@ export function TodayExperience({
     itemEntry: SubstitutionOptionsItem
     consumedFoodId: string | null
   } | null>(null)
+  /**
+   * Cuántos swipes lleva cada item, para que el siguiente ofrezca la siguiente opción. Es un ref
+   * y no estado: cambiarlo no tiene que repintar la lista entera, y el ciclo es efímero por
+   * definición — se reinicia con la pantalla, igual que la intención del alumno.
+   */
+  const swipeCycleRef = useRef<Record<string, number>>({})
   const captureIntake = useCaptureStudentNutritionIntake()
   const captureCorrection = useCaptureStudentNutritionCorrection()
 
@@ -337,6 +346,28 @@ export function TodayExperience({
     })
   }
 
+  /**
+   * Deslizar la fila (T2.5 F6). Aplica de un gesto el reemplazo del coach que toque en el ciclo;
+   * si el item no tiene ninguno aplicable a ciegas, **abre el sheet** en vez de escribir — elegir
+   * entre los cientos del grupo es una decisión que se toma mirando, no deslizando.
+   */
+  function handleSwipeExchange(
+    itemEntry: SubstitutionOptionsItem,
+    consumedFoodId: string | null,
+  ) {
+    const options = swipeApplicableOptions({ entry: itemEntry, consumedFoodId })
+    const cycle = swipeCycleRef.current[itemEntry.prescriptionItemId] ?? 0
+    const option = swipeOptionAt(options, cycle)
+    if (!option) {
+      setExchange({ itemEntry, consumedFoodId })
+      return
+    }
+    // El swipe siguiente ofrece la opción siguiente: deslizar de nuevo es cambiar de opinión,
+    // no repetir el mismo registro.
+    swipeCycleRef.current[itemEntry.prescriptionItemId] = cycle + 1
+    handleSubstitute(itemEntry, option, null)
+  }
+
   /** Deshacer del toast: mismo camino de retiro que el resto (append-only, nada se borra). */
   function handleSubstitutionUndo(entryId: string) {
     startTransition(async () => {
@@ -510,6 +541,7 @@ export function TodayExperience({
         onOpenExchange={(itemEntry, consumedFoodId) =>
           setExchange({ itemEntry, consumedFoodId })
         }
+        onSwipeExchange={handleSwipeExchange}
       />
 
       {/* "Fuera del plan" (auditoría H4): reemplaza a "Consumido hoy". Lo prescrito ya se ve arriba
@@ -895,6 +927,7 @@ function PrescribedSection({
   onEdit,
   onVoid,
   onOpenExchange,
+  onSwipeExchange,
 }: {
   today: NutritionTodayReadModel
   busyId: string | null
@@ -904,6 +937,8 @@ function PrescribedSection({
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
   /** T2.5: abre el sheet de intercambio de ese item (dos bloques: coach y grupo). */
   onOpenExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
+  /** T2.5 F6: deslizar la fila. Aplica el primer reemplazo del coach, o abre el sheet. */
+  onSwipeExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
   onBulkEat: (slot: NutritionTodayReadModel['mealSlots'][number], state: BulkMarkSlotState) => void
   onEat: (
     slot: NutritionTodayReadModel['mealSlots'][number],
@@ -976,8 +1011,16 @@ function PrescribedSection({
                       imageUrl: resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE),
                       category: item.category ?? undefined,
                     }
+                const consumedFoodId = consumedEntry?.foodId ?? null
                 return (
                   <div key={item.id}>
+                    <SwipeToExchange
+                      enabled={substitutionEntry !== undefined && !isPending}
+                      label={`Cambiar ${row.name}`}
+                      onSwipe={() => {
+                        if (substitutionEntry) onSwipeExchange(substitutionEntry, consumedFoodId)
+                      }}
+                    >
                     <NutritionFoodRow
                       name={row.name}
                       detail={row.detail}
@@ -1024,6 +1067,7 @@ function PrescribedSection({
                         )
                       }
                     />
+                    </SwipeToExchange>
                     {/* Los reemplazos se ofrecen SIEMPRE, también sobre un item ya registrado:
                         ahí el servidor corrige en vez de duplicar (D3), que es lo que permite
                         cambiar de opinión. Solo se esconde la que ya está registrada — ofrecer
@@ -1031,7 +1075,7 @@ function PrescribedSection({
                     <ItemExchangeTrigger
                       entry={substitutionEntry}
                       isPending={isPending}
-                      consumedFoodId={consumedEntry?.foodId ?? null}
+                      consumedFoodId={consumedFoodId}
                       onOpen={onOpenExchange}
                     />
                   </div>

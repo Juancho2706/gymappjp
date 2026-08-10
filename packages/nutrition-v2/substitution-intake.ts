@@ -623,6 +623,52 @@ export type SubstitutionOptionsItem = z.infer<typeof SubstitutionOptionsItemSche
 export type SubstitutionOptionsReadModel = z.infer<typeof SubstitutionOptionsReadModelSchema>
 
 /**
+ * Opciones que el SWIPE puede aplicar de un gesto, en orden de ciclado (T2.5 F6).
+ *
+ * Dos reglas, y las dos son restricciones deliberadas:
+ *
+ * 1. **Solo el bloque del coach.** El bloque grupo tiene hasta 716 alimentos y su "primer
+ *    resultado" es una eleccion del algoritmo, no del alumno: aplicarlo a ciegas registraria algo
+ *    que nunca vio. Un item sin reemplazos del coach NO se sustituye por swipe — el gesto abre el
+ *    sheet, que es donde esa eleccion se toma mirando.
+ * 2. **Nada que exija confirmar.** Las opciones `needs-confirmation` (cantidad implausible) y
+ *    `unavailable` (sin datos para calcular) necesitan el stepper por el criterio 11 de T2.4;
+ *    aplicarlas de un tap seria registrar un absurdo sin que nadie lo mire.
+ *
+ * Ademas se excluye el alimento con el que el item YA esta registrado: "cambiar a lo mismo" no es
+ * una decision.
+ *
+ * Lista vacia ⇒ la superficie abre el sheet en vez de escribir.
+ */
+export function swipeApplicableOptions(input: {
+  entry: Pick<SubstitutionOptionsItem, 'item' | 'options'>
+  consumedFoodId: string | null
+}): SubstitutionOption[] {
+  const { entry, consumedFoodId } = input
+  return entry.options.filter((option) => {
+    if (consumedFoodId !== null && option.foodId === consumedFoodId) return false
+    const equivalence = computeSubstitutionEquivalence({
+      item: entry.item,
+      substitute: substituteFromOption(option),
+    })
+    return !equivalence.requiresConfirmation
+  })
+}
+
+/**
+ * Opcion que aplica el swipe numero `cycle` (0 = el primero). Cicla en redondo, que es lo que hace
+ * que deslizar de nuevo cambie de opinion en vez de repetir el mismo registro.
+ */
+export function swipeOptionAt(
+  options: readonly SubstitutionOption[],
+  cycle: number,
+): SubstitutionOption | null {
+  if (options.length === 0) return null
+  const index = ((cycle % options.length) + options.length) % options.length
+  return options[index] ?? null
+}
+
+/**
  * Adapta una opcion del read model a la forma que consume `computeSubstitutionEquivalence`.
  * Un reemplazo sin `food` (texto libre / receta) queda sin macros ⇒ la equivalencia devuelve
  * `unavailable` y la UI pide confirmar la cantidad.
