@@ -347,3 +347,28 @@ describe('recordSubstitutionIntakeAction', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 })
+
+// QA 2026-08-09: el diálogo de los casos degradados SIEMPRE manda una cantidad, aunque el alumno
+// no la toque. Con `canAdjustPrescribedQuantity=false` eso marcaba `quantityOverridden` y la UI
+// avisaba "tu coach fijó la cantidad" cuando el alumno solo había apretado Registrar.
+describe('recordSubstitutionIntakeAction — confirmar no es ajustar', () => {
+  beforeEach(() => {
+    fixture.permissions = {
+      canRegisterFreely: false,
+      canAdjustPrescribedQuantity: false,
+      quantityAdjustmentPercent: null,
+    }
+  })
+
+  it('mandar exactamente la cantidad calculada no cuenta como override', async () => {
+    const result = await recordSubstitutionIntakeAction(request({ quantity: 45 }))
+
+    expect(result).toMatchObject({ ok: true, quantity: 45, quantityOverridden: false })
+  })
+
+  it('mandar una cantidad distinta sí cuenta como override', async () => {
+    const result = await recordSubstitutionIntakeAction(request({ quantity: 50 }))
+
+    expect(result).toMatchObject({ ok: true, quantity: 45, quantityOverridden: true })
+  })
+})

@@ -993,16 +993,17 @@ function PrescribedSection({
                         )
                       }
                     />
-                    {/* Los reemplazos se ofrecen mientras el item NO esté consumido; una vez
-                        registrado, cambiarlo es corregir (y para eso está el lápiz de la fila). */}
-                    {consumedEntry ? null : (
-                      <ItemSubstitutions
-                        entry={substitutionEntry}
-                        busyId={busyId}
-                        isPending={isPending}
-                        onPick={onPickSubstitution}
-                      />
-                    )}
+                    {/* Los reemplazos se ofrecen SIEMPRE, también sobre un item ya registrado:
+                        ahí el servidor corrige en vez de duplicar (D3), que es lo que permite
+                        cambiar de opinión. Solo se esconde la que ya está registrada — ofrecer
+                        "cambiar a lo mismo" no es una decisión. */}
+                    <ItemSubstitutions
+                      entry={substitutionEntry}
+                      busyId={busyId}
+                      isPending={isPending}
+                      consumedFoodId={consumedEntry?.foodId ?? null}
+                      onPick={onPickSubstitution}
+                    />
                   </div>
                 )
               })}
@@ -1073,11 +1074,14 @@ function ItemSubstitutions({
   entry,
   busyId,
   isPending,
+  consumedFoodId,
   onPick,
 }: {
   entry: SubstitutionOptionsItem | undefined
   busyId: string | null
   isPending: boolean
+  /** Alimento con el que el item ya está registrado, para no ofrecer "cambiar a lo mismo". */
+  consumedFoodId: string | null
   /** T2.4: el tap REGISTRA (o pide confirmar la cantidad); ya no abre el registro libre. */
   onPick: (
     itemEntry: SubstitutionOptionsItem,
@@ -1085,12 +1089,17 @@ function ItemSubstitutions({
     equivalence: SubstitutionEquivalence,
   ) => void
 }) {
-  if (!entry || entry.options.length === 0) return null
+  const options = (entry?.options ?? []).filter(
+    (option) => consumedFoodId === null || option.foodId !== consumedFoodId,
+  )
+  if (!entry || options.length === 0) return null
   return (
     <div className="pb-3 pl-14">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
+        {consumedFoodId ? 'Puedes cambiarlo por' : 'Puedes reemplazar por'}
+      </p>
       <ul aria-label="Reemplazos autorizados por tu coach" className="mt-1 flex flex-wrap gap-1.5">
-        {entry.options.map((option) => {
+        {options.map((option) => {
           // La MISMA función que usa el servidor al escribir: el número que el alumno ve antes de
           // tocar y el que se persiste son el mismo por construcción, no por disciplina.
           const equivalence = computeSubstitutionEquivalence({

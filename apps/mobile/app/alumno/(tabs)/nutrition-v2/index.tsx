@@ -2152,15 +2152,15 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     )
                   }
                 />
-                {/* Los reemplazos se ofrecen mientras el item NO esté registrado; después,
-                    cambiarlo es corregir (y para eso está el lápiz de la fila). */}
-                {consumed ? null : (
-                  <ItemSubstitutionsHint
-                    entry={substitutionEntry}
-                    pendingId={substitutingId}
-                    onPick={onPickSubstitution}
-                  />
-                )}
+                {/* Los reemplazos se ofrecen SIEMPRE, también sobre un item ya registrado: ahí el
+                    servidor corrige en vez de duplicar (D3), que es lo que permite cambiar de
+                    opinión. Solo se esconde la opción ya registrada. */}
+                <ItemSubstitutionsHint
+                  entry={substitutionEntry}
+                  pendingId={substitutingId}
+                  consumedFoodId={activeEntry?.foodId ?? null}
+                  onPick={onPickSubstitution}
+                />
               </View>
             )
           })}
@@ -2227,22 +2227,30 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
 function ItemSubstitutionsHint({
   entry,
   pendingId,
+  consumedFoodId,
   onPick,
 }: {
   entry: SubstitutionOptionsItem | undefined
   pendingId: string | null
+  /** Alimento con el que el item ya está registrado, para no ofrecer "cambiar a lo mismo". */
+  consumedFoodId: string | null
   onPick: (
     itemEntry: SubstitutionOptionsItem,
     option: SubstitutionOption,
     equivalence: SubstitutionEquivalence,
   ) => void
 }) {
-  if (!entry || entry.options.length === 0) return null
+  const options = (entry?.options ?? []).filter(
+    (option) => consumedFoodId === null || option.foodId !== consumedFoodId,
+  )
+  if (!entry || options.length === 0) return null
   return (
     <View className="pb-3 pl-14">
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
+        {consumedFoodId ? 'Puedes cambiarlo por' : 'Puedes reemplazar por'}
+      </Text>
       <View accessibilityLabel="Reemplazos autorizados por tu coach" className="mt-1 flex-row flex-wrap gap-1.5">
-        {entry.options.map((option) => {
+        {options.map((option) => {
           // MISMA función que usa el servidor al escribir: el número que el alumno ve y el que se
           // persiste son el mismo por construcción (y el mismo que muestra la web).
           const equivalence = computeSubstitutionEquivalence({

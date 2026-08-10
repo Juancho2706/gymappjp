@@ -64,6 +64,12 @@ function resolveQuantity(
   if (requested === null || !Number.isFinite(requested) || requested <= 0) {
     return { quantity: computed, overridden: false }
   }
+  // Pedir EXACTAMENTE la cantidad calculada no es "ajustar": es confirmar. Sin esto, el diálogo de
+  // los casos degradados —que siempre manda un número, aunque el alumno no lo toque— avisaba "tu
+  // coach fijó la cantidad" cuando el alumno se limitó a apretar Registrar (QA 2026-08-09).
+  if (requested === computed) {
+    return { quantity: computed, overridden: false }
+  }
   if (!permissions.canAdjustPrescribedQuantity) {
     return { quantity: computed, overridden: true }
   }
