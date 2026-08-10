@@ -111,12 +111,56 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F6 — QA y cierre
 
-- [ ] Preview web con alumna de QA (`canRegisterFreely = false` **y** `canAdjustPrescribedQuantity = false`): registrar · doble tap · sustituir sobre registrado · **deshacer y re-registrar** · **ciclo A→B→A** · `needs-confirmation` — cada caso verificado en DB
-- [ ] Device fisico Android: mismo guion + modo avion (cola offline)
-- [ ] Datos de QA borrados de LIVE
+Codigo listo y commiteado (F0-F5). Lo de abajo es lo que falta, en el orden en que hay que hacerlo.
+
+### Bloqueantes antes de tocar el telefono
+
+- [ ] **Push de la rama** (decision del owner). Sin deploy no hay QA de ninguna de las dos superficies: la web necesita el preview, y la app movil pega contra `/api/mobile/nutrition-v2/intake` del **web desplegado** — la accion `substitute` no existe en produccion todavia, asi que el device contra prod devolveria `INVALID_ACTION`.
+- [ ] **Apuntar la app al preview**: `EXPO_PUBLIC_API_URL` en `apps/mobile/.env` (hoy no esta seteada ⇒ usa el default de produccion). Volver a dejarla como estaba al terminar.
+- [ ] **Agregarle a Catalina un reemplazo "normal"** desde el coach `josefit`. Sus dos reemplazos actuales caen en los caminos DEGRADADOS y ninguno prueba el de un tap:
+
+  | Item prescrito | Reemplazo | Equivalencia | Camino |
+  |---|---|---|---|
+  | Barra Proteína sabor café · 300 g · 1.140 kcal | Nescafé tradición (0 kcal) | imposible | `unavailable` ⇒ pide confirmar |
+  | Pechuga de Pollo cocida · 100 g · 165 kcal | Espinaca (23 kcal/100 g) | ~715 g | `needs-confirmation` ⇒ pide confirmar |
+
+  Sirve cualquier alimento de densidad parecida (p. ej. Pechuga → Posta de vacuno cocida) para tener el camino de un tap.
+- [ ] **Opcional, para el caso insignia:** dejar el plan de Catalina con `canRegisterFreely = false` **y** `canAdjustPrescribedQuantity = false` (es la combinacion real de 3 de los 6 alumnos con reemplazos). Es lo unico que prueba de verdad el criterio 1. Se revierte republicando.
+
+### Guion (cada caso verificado en DB, no por pantalla)
+
+- [ ] La pill dice **cantidad + kcal reales**, no la kcal congelada
+- [ ] Un tap registra · el item queda consumido · la franja avanza su contador
+- [ ] La fila muestra el reemplazo, chip **⇄ Sustituido** y "sustituyó a {prescrito}"
+- [ ] **Doble tap** ⇒ UNA sola entry (el segundo devuelve el mismo id)
+- [ ] Sustituir sobre un item **ya registrado** ⇒ una activa + la original en `corrected`
+- [ ] **Deshacer y volver a registrar** ⇒ entry NUEVA (no revive la retirada)
+- [ ] **Ciclo A→B→A** ⇒ una sola activa y cadena de correcciones sin ciclos
+- [ ] `needs-confirmation` (Espinaca) y `unavailable` (Nescafé) **no** registran de un tap
+- [ ] Con `canRegisterFreely = false`: la sustitucion **funciona** y el registro libre **sigue bloqueado**
+- [ ] Android en **modo avion**: encola, y al volver la señal drena sin duplicar
+
+Query de verificacion (read-only), corriendo cada caso:
+
+```sql
+select id, intake_source_v2, entry_status, food_id, quantity, unit,
+       prescription_item_id, corrects_entry_id, idempotency_key, created_at
+from public.nutrition_intake_entries
+where client_id = 'ba265b0b-7ee2-4de1-a1c8-2a22418061e9'  -- Catalina Rojas (QA)
+  and log_date = current_date
+order by created_at;
+```
+
+### Cierre
+
+- [ ] Datos de QA borrados de LIVE + `EXPO_PUBLIC_API_URL` revertida
 - [ ] Acta con evidencia en este archivo
 - [ ] `docs/specs/nutrition-flows-redesign/TASKS.md`: T2.4 cerrada con commits y gates
 - [ ] `docs/status/MOBILE_PARITY.md` si cambia la paridad declarada
+
+### Gotchas del QA por cable (ya conocidos)
+
+El dev client apunta a PROD si no se cambia la variable · leer el repo con Metro corriendo recarga la app · el toast de LogBox tapa los tabs · Metro puede fallar el primer arranque en Node 24 (segundo intento pasa) · verificar que la app este en foreground antes de tapear.
 
 ## Registro de cierres
 
