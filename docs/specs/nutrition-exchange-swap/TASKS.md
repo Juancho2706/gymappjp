@@ -81,10 +81,12 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F5 — Sheet RN + señal offline
 
-- [ ] Paridad exacta con el sheet web
-- [ ] **Fila optimista con chip "En cola"** al encolar sin red (reparo heredado de T2.4)
-- [ ] **Bump del `attempt` por gesto encolado** + test del ciclo A→B→A offline
-- [ ] Gates: `tsc` mobile · tests mobile tocados
+- [x] Paridad con el sheet web: dos bloques, buscador, paginado, mismo copy y mismo candado
+- [x] **Fila optimista con chip "En cola"** al encolar sin red — el reparo heredado de T2.4
+- [x] `preview` en el ITEM de la cola, **no en el payload**: datos locales que nunca se envian; sin el, el overlay sigue sin pintar nada (colas viejas)
+- [x] **Bump del `attempt` por gesto encolado** (`queuedAhead`) + test del ciclo A→B→A offline
+- [x] 🔴 El test de T2.4 pillo una regresion: deduplicar por opcion sola perdia en silencio el "deshacer + volver a registrar" con `attempt` refrescado. Ahora dedupe exige **misma opcion Y mismo intento**
+- [x] Gates: `tsc` mobile exit 0 · `pnpm lint` exit 0 · **151/151** de los 5 archivos tocados
 
 ## F6 — Swipe (web + RN)
 
@@ -109,6 +111,7 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-10 | F0 (contrato + delta + claves) | `a6c1634e` | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
 | 2026-08-10 | F1 (guard del grupo, escrita y validada) | `0f7e8433` | matriz 10/10 en tx revertida | Commiteada sin aplicar, a la espera del owner |
 | 2026-08-10 | F1 **aplicada a LIVE** + D4 | `86f665e5` | matriz 10/10 sobre lo aplicado · advisors sin clases nuevas · typecheck web y mobile exit 0 · 28/28 de quick-edit | `20260810161604` en LIVE; hot-path byte-identico. D4: se retira la pill de quick-edit en las dos superficies |
-| 2026-08-10 | F4 (sheet web) | (este commit) | lint 0 · typecheck 0 · tokens 86/86 · boundaries 328 · 65/65 | Las pills mueren; la pagina del grupo se pide al abrir el sheet |
+| 2026-08-10 | F5 (sheet RN + señal offline) | (este commit) | tsc mobile 0 · lint 0 · 151/151 | Cierra el reparo abierto de T2.4: encolar sin red ya pinta la fila con "En cola" |
+| 2026-08-10 | F4 (sheet web) | `5747d7ce` | lint 0 · typecheck 0 · tokens 86/86 · boundaries 328 · 65/65 | Las pills mueren; la pagina del grupo se pide al abrir el sheet |
 | 2026-08-10 | F3 (boundary) | `7fb6ccbc` | 51/51 de los dos archivos · typecheck web y mobile exit 0 · `pnpm lint` exit 0 | El lookup dedicado evita el falso 42501 del buscador; `corrected` pasa a quemar clave |
 | 2026-08-10 | F2 **aplicada a LIVE** | `f0d83b1d` | matriz con JWT real · regresion T2.4 verde · 37/37 del paquete · typecheck web y mobile exit 0 | `20260810171529`. `drop`+`create` porque `create or replace` habria roto T2.4. Costo 8 ms → 58 ms (la primera version daba 106 y se corrigio) |

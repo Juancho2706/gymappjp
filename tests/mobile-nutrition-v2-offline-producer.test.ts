@@ -10,6 +10,7 @@ import type { NutritionPrescriptionItemRead } from '../apps/mobile/lib/nutrition
 import {
   buildAteAsPrescribedMutation,
   buildRecordIntakeMutation,
+  buildQueuedIntakeOverlay,
   prescribedIntentOperationId,
 } from '../apps/mobile/lib/nutrition-v2-intake'
 
@@ -55,6 +56,7 @@ vi.mock('../apps/mobile/lib/nutrition-v2.api', () => ({
 const {
   enqueueNutritionV2Mutation,
   getNutritionV2QueueStatus,
+  getNutritionV2QueuedMutations,
   removeNutritionV2QueuedMutation,
 } = await import('../apps/mobile/lib/nutrition-v2-offline')
 
@@ -248,5 +250,64 @@ describe('nutrition v2 - sustitucion -> cola offline', () => {
     })
 
     expect((await getNutritionV2QueueStatus(CLIENT)).pending).toBe(2)
+  })
+
+  // T2.5: sin red no hay refetch, asi que el `attempt` se queda congelado en 0 y la clave la tiene
+  // que separar la cola. Sin esto, el tercer gesto reusaba la clave del primero y al drenar la
+  // cadena de correcciones terminaba apuntandose a si misma.
+  it('el ciclo A -> B -> A sin red encola TRES filas con claves distintas', async () => {
+    const A = '66666666-6666-4666-8666-666666666666'
+    const B = '77777777-7777-4777-8777-777777777777'
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(0, A) })
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(0, B) })
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(0, A) })
+
+    const subs = (await getNutritionV2QueuedMutations(CLIENT)).filter(
+      (item) => item.action === 'substitute',
+    )
+    expect(subs).toHaveLength(3)
+    expect(new Set(subs.map((item) => item.idempotencyKey)).size).toBe(3)
+  })
+
+  it('dos taps seguidos de la MISMA opcion sin red siguen colapsando', async () => {
+    const A = '66666666-6666-4666-8666-666666666666'
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(0, A) })
+    const second = await enqueueNutritionV2Mutation({
+      action: 'substitute',
+      userId: CLIENT,
+      payload: substitutionIntent(0, A),
+    })
+
+    expect(second).toEqual({ queued: true, deduplicated: true })
+    expect((await getNutritionV2QueueStatus(CLIENT)).pending).toBe(1)
+  })
+
+  // El reparo heredado de T2.4: encolar sin red no daba NINGUNA señal en pantalla.
+  it('la fila optimista se pinta cuando el gesto trae `preview`', async () => {
+    await enqueueNutritionV2Mutation({
+      action: 'substitute',
+      userId: CLIENT,
+      payload: substitutionIntent(0),
+      preview: {
+        name: 'Pechuga de pollo',
+        brand: null,
+        quantity: 120,
+        unit: 'g',
+        mealSlot: 'lunch',
+        totals: { calories: 198, proteinG: 37, carbsG: 0, fatsG: 4, fiberG: 0 },
+      },
+    })
+    const overlay = buildQueuedIntakeOverlay(await getNutritionV2QueuedMutations(CLIENT), '2026-07-15')
+
+    expect(overlay.addedBySlot.lunch?.[0]?.name).toBe('Pechuga de pollo')
+    expect(overlay.queuedPrescriptionItemIds).toContain(SUB_ITEM)
+  })
+
+  it('sin `preview` (cola de una version anterior) no se inventa ninguna fila', async () => {
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId: CLIENT, payload: substitutionIntent(0) })
+    const overlay = buildQueuedIntakeOverlay(await getNutritionV2QueuedMutations(CLIENT), '2026-07-15')
+
+    expect(overlay.addedBySlot).toEqual({})
+    expect(overlay.addedUnassigned).toEqual([])
   })
 })

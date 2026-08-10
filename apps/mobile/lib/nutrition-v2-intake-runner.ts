@@ -115,9 +115,15 @@ export async function submitVoidIntake(
 export async function submitSubstituteIntake(
   userId: string,
   payload: SubstitutionIntakeRequest,
+  /**
+   * T2.5: cómo pintar la fila mientras el gesto espera en la cola. Va SEPARADO del payload a
+   * propósito — el payload es la intención y el servidor no acepta macros del cliente; esto es
+   * solo para la pantalla y nunca viaja al servidor.
+   */
+  preview?: import('./nutrition-v2-offline').QueuedSubstitutionPreview,
 ): Promise<NutritionIntakeSubmitOutcome & { mode?: 'record' | 'correct' }> {
   if (await isOffline()) {
-    await enqueueNutritionV2Mutation({ action: 'substitute', userId, payload })
+    await enqueueNutritionV2Mutation({ action: 'substitute', userId, payload, preview })
     return { status: 'queued', reason: 'offline' }
   }
   try {
@@ -125,7 +131,7 @@ export async function submitSubstituteIntake(
     return { status: 'recorded', id: result.id, mode: result.action }
   } catch (error) {
     if (shouldQueueNutritionV2Error(error)) {
-      await enqueueNutritionV2Mutation({ action: 'substitute', userId, payload })
+      await enqueueNutritionV2Mutation({ action: 'substitute', userId, payload, preview })
       return { status: 'queued', reason: 'error' }
     }
     return { status: 'failed', error: error as ApiError }

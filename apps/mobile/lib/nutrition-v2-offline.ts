@@ -86,10 +86,27 @@ type QueuedSubstitution = {
   clientId: string
   idempotencyKey: string
   payload: SubstitutionIntakeRequest
+  /**
+   * T2.5: cómo pintar la fila mientras espera. NO forma parte del payload y NUNCA se envía: el
+   * servidor sigue resolviendo alimento, cantidad y macros por su cuenta. Existe porque el sheet
+   * ya sabe qué eligió el alumno, que es justo lo que faltaba en T2.4 para no inventar un nombre.
+   * Opcional: una cola escrita por una versión anterior no lo trae y la fila simplemente no se
+   * pinta, como hasta ahora.
+   */
+  preview?: QueuedSubstitutionPreview
   queuedAt: number
   attempts: number
   nextAttemptAt: number
   lastErrorCode: string | null
+}
+
+export type QueuedSubstitutionPreview = {
+  name: string
+  brand: string | null
+  quantity: number
+  unit: string
+  mealSlot: string | null
+  totals: { calories: number; proteinG: number; carbsG: number; fatsG: number; fiberG: number }
 }
 
 export type NutritionV2QueuedMutation =
@@ -189,7 +206,12 @@ export async function enqueueNutritionV2Mutation(input:
   | { action: 'record'; userId: string; payload: NutritionIntakeMutation }
   | { action: 'correct'; userId: string; payload: NutritionIntakeCorrection }
   | { action: 'void'; userId: string; payload: NutritionIntakeVoid }
-  | { action: 'substitute'; userId: string; payload: SubstitutionIntakeRequest }
+  | {
+      action: 'substitute'
+      userId: string
+      payload: SubstitutionIntakeRequest
+      preview?: QueuedSubstitutionPreview
+    }
 ): Promise<{ queued: true; deduplicated: boolean }> {
   return withStorageMutation(async () => {
     const queue = await readQueue()
@@ -197,15 +219,49 @@ export async function enqueueNutritionV2Mutation(input:
     // una estable por entry para que dos taps de "Retirar" sobre la misma fila deduppen en la cola.
     // La sustitución no lleva key en el payload (manda la intención): se deriva con el MISMO
     // helper que usa el servidor, así la cola y la base deduplican por el mismo valor.
+    let payload = input.payload
+
+    // T2.5: sin red no hay refetch del read model, así que el `attempt` que trae el payload se
+    // queda congelado y un ciclo A→B→A reusaría la clave del primer gesto. Se cuenta cuántas
+    // sustituciones de ESE ítem ya están en la cola y se suman al intento.
+    //
+    // El doble tap sobre la MISMA opción sigue deduplicando: solo cuenta como gesto nuevo si la
+    // última sustitución encolada para el ítem apunta a otra opción. Sin esa condición, tocar dos
+    // veces el mismo botón escribiría dos veces.
+    if (input.action === 'substitute') {
+      const substitutionRequest = input.payload
+      const mine = queue.filter(
+        (item): item is QueuedSubstitution =>
+          item.action === 'substitute' &&
+          item.userId === input.userId &&
+          item.payload.clientId === substitutionRequest.clientId &&
+          item.payload.localDate === substitutionRequest.localDate &&
+          item.payload.prescriptionItemId === substitutionRequest.prescriptionItemId,
+      )
+      // Solo es el MISMO gesto si repite opción **y** intento. Si el `attempt` cambió, el read
+      // model se refrescó entre medio (deshacer + volver a registrar) y es una intención nueva:
+      // deduplicar ahí perdería el registro en silencio, que es peor que duplicarlo.
+      const last = mine[mine.length - 1]
+      const sameGesture =
+        last !== undefined &&
+        last.payload.substitutionId === substitutionRequest.substitutionId &&
+        last.payload.groupFoodId === substitutionRequest.groupFoodId &&
+        last.payload.attempt === substitutionRequest.attempt
+      if (sameGesture) return { queued: true, deduplicated: true }
+      payload = { ...substitutionRequest, queuedAhead: mine.length }
+    }
+
     const idempotencyKey =
       input.action === 'void'
         ? input.payload.idempotencyKey ?? `void-${input.payload.entryId}`
         : input.action === 'substitute'
           ? substitutionIntakeIdempotencyKey({
-              localDate: input.payload.localDate,
-              prescriptionItemId: input.payload.prescriptionItemId,
-              substitutionId: input.payload.substitutionId,
-              attempt: input.payload.attempt,
+              localDate: (payload as SubstitutionIntakeRequest).localDate,
+              prescriptionItemId: (payload as SubstitutionIntakeRequest).prescriptionItemId,
+              substitutionId: (payload as SubstitutionIntakeRequest).substitutionId,
+              groupFoodId: (payload as SubstitutionIntakeRequest).groupFoodId,
+              attempt: (payload as SubstitutionIntakeRequest).attempt,
+              queuedAhead: (payload as SubstitutionIntakeRequest).queuedAhead,
             })
           : input.payload.idempotencyKey
     const existing = queue.some(
@@ -220,7 +276,8 @@ export async function enqueueNutritionV2Mutation(input:
       userId: input.userId,
       clientId: input.payload.clientId,
       idempotencyKey,
-      payload: input.payload,
+      payload,
+      ...(input.action === 'substitute' && input.preview ? { preview: input.preview } : {}),
       queuedAt: now,
       attempts: 0,
       nextAttemptAt: now,
