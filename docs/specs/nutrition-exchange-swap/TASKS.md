@@ -20,12 +20,13 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F0 — Equivalencia del grupo + contrato
 
-- [ ] `origin: 'coach' | 'group'` en el schema de opcion, con **`schemaVersion` intacto en 1**
-- [ ] `describeSubstitutionDelta` (pin 3): "mismas kcal" (<5%) / "+2 g proteina" / "−15 kcal"
-- [ ] Clave de idempotencia del grupo con namespace **`gf-{foodId}`** + test de no-colision entre namespaces
-- [ ] La equivalencia NO cambia: el grupo usa `computeSubstitutionEquivalence` con los mismos topes
-- [ ] Golden tests del delta, con pares reales del grupo C
-- [ ] Gates: tests del archivo · `pnpm typecheck`
+- [x] `origin: 'coach' | 'group'` en el schema de opcion, con **`schemaVersion` intacto en 1** y `.default('coach')` para la ventana F0→F2
+- [x] `describeSubstitutionDelta` (pin 3): "mismas kcal" (<5%) / "+2 g proteina" / "−15 kcal"
+- [x] Clave de idempotencia del grupo con namespace **`gf-{foodId}`** + test de no-colision entre namespaces
+- [x] `queuedAhead` en la clave, para el ciclo A→B→A sin red (bloqueante B5)
+- [x] La equivalencia NO cambia: el grupo usa `computeSubstitutionEquivalence` con los mismos topes
+- [x] Golden tests del delta y de las claves
+- [x] Gates: **37/37** del archivo · `pnpm typecheck` **exit 0** · `tsc` mobile **exit 0**
 
 ## F1 — Guard del grupo (riesgo ALTO, commit propio, DB en LIVE)
 
@@ -92,4 +93,5 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | Fecha | Fase | Commit | Gates | Notas |
 |---|---|---|---|---|
 | 2026-08-10 | Fase 0 (SPEC/PLAN/TASKS) | `f710e0ee` | `pnpm docs:check` | Auditoria LIVE incluida; D1-D3 del owner; el orden del mockup se invierte con evidencia |
-| 2026-08-10 | Fase 0 (correcciones de la revision) | (este commit) | `pnpm docs:check` | 8 bloqueantes incorporados, todos re-verificados contra LIVE. B1 habria roto T2.4 en produccion al aplicar F2. H2 recalculado sobre la poblacion entera. Queda D4 del owner |
+| 2026-08-10 | Fase 0 (correcciones de la revision) | `d82057b2` | `pnpm docs:check` | 8 bloqueantes incorporados, todos re-verificados contra LIVE. B1 habria roto T2.4 en produccion al aplicar F2. H2 recalculado sobre la poblacion entera. Queda D4 del owner |
+| 2026-08-10 | F0 (contrato + delta + claves) | (este commit) | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |

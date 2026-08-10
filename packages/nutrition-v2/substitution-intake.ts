@@ -54,6 +54,14 @@ export interface SubstitutionPrescribedItem {
    * `intake-normalize`). Es el objetivo que la equivalencia intenta igualar.
    */
   calories: number | null
+  /**
+   * Macros TOTALES de la cantidad prescrita. Opcionales: la RPC de opciones de T2.4 solo expone
+   * `calories`, asi que hasta que F2 los agregue el delta degrada a comparar kcal (ver
+   * `describeSubstitutionDelta`).
+   */
+  proteinG?: number | null
+  carbsG?: number | null
+  fatsG?: number | null
 }
 
 /**
@@ -301,6 +309,70 @@ export function computeSubstitutionEquivalence(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Delta legible de la opcion (T2.5, SPEC `nutrition-exchange-swap` — pin 3 del sheet)
+// ---------------------------------------------------------------------------
+
+/**
+ * Umbral bajo el cual dos opciones se consideran caloricamente iguales. Por construccion la
+ * equivalencia IGUALA las kcal, asi que la diferencia que queda es puro redondeo al escalon; se
+ * separa del 4% del microcopy a proposito: el texto dice "mismas kcal" sin numero.
+ */
+const DELTA_CALORIE_TOLERANCE = 0.05
+/** Gramos por debajo de los cuales un macro no merece renglon (ruido de redondeo). */
+const DELTA_MACRO_MIN_GRAMS = 2
+
+const DELTA_MACRO_LABELS = [
+  ['proteinG', 'proteina'],
+  ['carbsG', 'carbohidratos'],
+  ['fatsG', 'grasas'],
+] as const
+
+function signed(value: number, suffix: string): string {
+  const rounded = Math.round(value)
+  return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)} ${suffix}`
+}
+
+/**
+ * Texto de una linea que explica en que se diferencia la opcion del item prescrito.
+ *
+ * El orden de las reglas sigue lo que el alumno necesita saber, no lo que es facil de calcular:
+ * si las kcal NO cuadran (cantidad explicita del coach, o redondeo grande en cantidades chicas),
+ * eso es lo primero; si cuadran, lo informativo es el macro que se mueve; y si no se mueve nada,
+ * "mismas kcal".
+ *
+ * Devuelve `null` cuando no hay con que comparar (item sin kcal congeladas): la UI no pinta pin.
+ */
+export function describeSubstitutionDelta(input: {
+  item: SubstitutionPrescribedItem
+  equivalence: SubstitutionEquivalence
+}): string | null {
+  const { item, equivalence } = input
+  const target = equivalence.targetCalories
+  if (target === null || !Number.isFinite(target) || target <= 0) return null
+
+  const calories = equivalence.totals.calories
+  if (calories === null || !Number.isFinite(calories)) return null
+
+  const deltaCalories = calories - target
+  if (Math.abs(deltaCalories) / target >= DELTA_CALORIE_TOLERANCE) {
+    return signed(deltaCalories, 'kcal')
+  }
+
+  let worst: { delta: number; label: string } | null = null
+  for (const [key, label] of DELTA_MACRO_LABELS) {
+    const itemValue = item[key]
+    const optionValue = equivalence.totals[key]
+    if (typeof itemValue !== 'number' || !Number.isFinite(itemValue)) continue
+    if (typeof optionValue !== 'number' || !Number.isFinite(optionValue)) continue
+    const delta = optionValue - itemValue
+    if (Math.abs(delta) < DELTA_MACRO_MIN_GRAMS) continue
+    if (worst === null || Math.abs(delta) > Math.abs(worst.delta)) worst = { delta, label }
+  }
+
+  return worst === null ? 'mismas kcal' : signed(worst.delta, `g ${worst.label}`)
+}
+
+// ---------------------------------------------------------------------------
 // Idempotencia por intencion (SPEC "Idempotencia por intencion")
 // ---------------------------------------------------------------------------
 
@@ -351,14 +423,51 @@ export function substitutionAttemptFromToday(
 export function substitutionIntakeIdempotencyKey(input: {
   localDate: string
   prescriptionItemId: string
-  substitutionId: string
+  /** Fila autorizada por el coach. Excluyente con `groupFoodId`. */
+  substitutionId?: string
+  /** Alimento elegido del grupo de intercambio (T2.5). Excluyente con `substitutionId`. */
+  groupFoodId?: string
   attempt: number
+  /**
+   * Gestos del MISMO item ya encolados sin red y todavia sin drenar. Se suma al `attempt`
+   * porque offline no hay refetch del read-model: sin esto, el tercer gesto de un ciclo A→B→A
+   * reusa la clave del primero y la cadena de correcciones termina apuntandose a si misma.
+   */
+  queuedAhead?: number
 }): string {
-  const { attempt } = input
+  const { attempt, substitutionId, groupFoodId, queuedAhead = 0 } = input
   if (!Number.isInteger(attempt) || attempt < 0) {
     throw new Error('substitutionIntakeIdempotencyKey: attempt debe ser entero >= 0')
   }
-  return `subst-${input.localDate}-${input.prescriptionItemId}-${input.substitutionId}-a${attempt}`
+  if (!Number.isInteger(queuedAhead) || queuedAhead < 0) {
+    throw new Error('substitutionIntakeIdempotencyKey: queuedAhead debe ser entero >= 0')
+  }
+  const token = substitutionIntentToken({ substitutionId, groupFoodId })
+  return `subst-${input.localDate}-${input.prescriptionItemId}-${token}-a${attempt + queuedAhead}`
+}
+
+/**
+ * Prefijo del alimento de grupo dentro de la clave. Existe para que los dos bloques del sheet
+ * vivan en NAMESPACES DISJUNTOS: el mismo alimento elegido como reemplazo autorizado o como
+ * equivalente del grupo son intenciones distintas y no deben compartir historial de intentos.
+ */
+export const SUBSTITUTION_GROUP_KEY_PREFIX = 'gf-'
+
+/** Token que ocupa el slot de la intencion en la clave. Exactamente uno de los dos ids. */
+export function substitutionIntentToken(input: {
+  substitutionId?: string
+  groupFoodId?: string
+}): string {
+  const hasSubstitution = typeof input.substitutionId === 'string' && input.substitutionId.length > 0
+  const hasGroupFood = typeof input.groupFoodId === 'string' && input.groupFoodId.length > 0
+  if (hasSubstitution === hasGroupFood) {
+    throw new Error(
+      'substitutionIntentToken: se requiere exactamente uno de substitutionId | groupFoodId',
+    )
+  }
+  return hasSubstitution
+    ? (input.substitutionId as string)
+    : `${SUBSTITUTION_GROUP_KEY_PREFIX}${input.groupFoodId as string}`
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +519,12 @@ export const SubstitutionOptionFoodSchema = z.object({
 })
 
 export const SubstitutionOptionSchema = z.object({
+  /**
+   * En que bloque del sheet va la opcion (T2.5). `.default('coach')` NO es decoracion: F0 viaja
+   * antes que F2, asi que durante esa ventana la RPC desplegada no emite el campo y el contrato
+   * tiene que seguir parseando. Por la misma razon `schemaVersion` sigue en 1.
+   */
+  origin: z.enum(['coach', 'group']).default('coach'),
   substitutionId: z.string().uuid(),
   foodId: z.string().uuid().nullable(),
   recipeId: z.string().uuid().nullable(),
@@ -432,6 +547,10 @@ export const SubstitutionOptionsItemSchema = z.object({
     unit: z.string(),
     name: z.string().nullable(),
     calories: z.number().nullable(),
+    // Opcionales por la misma ventana F0→F2 que `origin`: sin ellos el delta compara solo kcal.
+    proteinG: z.number().nullable().optional(),
+    carbsG: z.number().nullable().optional(),
+    fatsG: z.number().nullable().optional(),
   }),
   options: z.array(SubstitutionOptionSchema),
 })
