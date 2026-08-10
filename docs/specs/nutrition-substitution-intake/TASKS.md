@@ -157,7 +157,25 @@ Gate del fix: `intake.actions.substitution.test.ts` **17/17** + verificacion a m
 
 Pendiente menor: el evento de PostHog no se verifico (exige aceptar el banner de cookies).
 
-### Guion del device (cada caso verificado en DB, no por pantalla)
+### Acta del QA en DEVICE — 2026-08-10, Xiaomi 2406APNFAG, app de produccion + OTA · **VERDE**
+
+Via OTA `52a37d18` (branch `production`, runtime 1.1.0, android-only). Manejado por `adb` desde `D:\Android\Sdk`; cada caso verificado leyendo la base.
+
+| Caso | Resultado |
+|---|---|
+| El OTA se aplica y T2.4 aparece | la fila muestra "Espinaca · 715 g", chip **⇄ Sustituido** y "sustituyó a Pechuga · 100 g" — paridad exacta con la web |
+| La app lee lo que escribio la web | los 165 kcal y la cobertura de Verduras (7,5/7,5 +1,4) coinciden con lo registrado desde el navegador |
+| Retirar desde el celular | sheet correcto, la fila vuelve a "Pechuga · Lo comi", contador 1/3 → 0/3, y la pill reaparece con la cantidad equivalente |
+| La pill muestra la equivalencia, no la kcal congelada | "Espinaca · 715 g · confirma" |
+| `needs-confirmation` en RN | Alert "La equivalencia da 715 g de Espinaca. ¿La registramos?" con boton "REGISTRAR 715 G" |
+| **Modo avion: encolar** | con avion activo el gesto se acepta y queda en la cola |
+| **Modo avion: drenar sin duplicar** | al volver la red la cola escribio **una** entry, y el servidor **esquivo las dos claves quemadas** (`a0` y `a1`, ambas de registros retirados) y uso **`a2`** — el fix del boundary funcionando en el camino offline, en produccion |
+
+**Reparo (no bloqueante, anotado):** al encolar sin red **no hay señal visible**. La pantalla queda igual que antes hasta que la cola drena, asi que el alumno no sabe si quedo guardado. Es consecuencia de la decision de F5 de no pintar fila optimista para sustituciones (el payload es la intencion, sin nombre ni macros). El registro NO se pierde y un segundo tap no duplica —la clave es la misma—, pero falta el chip "En cola" que si tiene el camino de "Lo comi". Va con el sheet de T2.5, que es donde el gesto se rediseña.
+
+**Estado de la cuenta de QA:** Catalina quedo con un plan nuevo (`e432ade7`) publicado hoy con `canRegisterFreely` y `canAdjustPrescribedQuantity` en **false**, y con 3 reemplazos en el dia Domingo. Sus registros de prueba (7 entries entre el 09 y el 10) se dejan a proposito: son de la cuenta de QA y sirven de evidencia del acta.
+
+### Guion original del device (referencia)
 
 - [ ] La pill dice **cantidad + kcal reales**, no la kcal congelada
 - [ ] Un tap registra · el item queda consumido · la franja avanza su contador
