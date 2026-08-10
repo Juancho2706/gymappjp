@@ -115,17 +115,20 @@ Codigo listo y commiteado (F0-F5). Lo de abajo es lo que falta, en el orden en q
 
 ### Bloqueantes antes de tocar el telefono
 
-- [ ] **Push de la rama** (decision del owner). Sin deploy no hay QA de ninguna de las dos superficies: la web necesita el preview, y la app movil pega contra `/api/mobile/nutrition-v2/intake` del **web desplegado** — la accion `substitute` no existe en produccion todavia, asi que el device contra prod devolveria `INVALID_ACTION`.
-- [ ] **Apuntar la app al preview**: `EXPO_PUBLIC_API_URL` en `apps/mobile/.env` (hoy no esta seteada ⇒ usa el default de produccion). Volver a dejarla como estaba al terminar.
-- [ ] **Agregarle a Catalina un reemplazo "normal"** desde el coach `josefit`. Sus dos reemplazos actuales caen en los caminos DEGRADADOS y ninguno prueba el de un tap:
+- [x] **Push de la rama** — `1aeefdc0` en `origin/rnmobiledenuevo`; deploy `dpl_JCQRP6J3…` **READY** en `gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app`
+- [x] **Escenario de Catalina montado** (2026-08-09, desde el coach `josefit` en el builder, no por SQL): plan nuevo `e432ade7`, version 1, vigente desde hoy, con **`canRegisterFreely = false` y `canAdjustPrescribedQuantity = false`** (el caso insignia, la combinacion real de 3 de los 6 alumnos con reemplazos). El plan anterior quedo archivado — fue la unica forma de que el nuevo rigiera HOY.
 
-  | Item prescrito | Reemplazo | Equivalencia | Camino |
+  Dia **Domingo** (= hoy), franja **POLLO**, los tres caminos en una pantalla:
+
+  | Item prescrito | Reemplazo | Equivalencia | Camino que prueba |
   |---|---|---|---|
-  | Barra Proteína sabor café · 300 g · 1.140 kcal | Nescafé tradición (0 kcal) | imposible | `unavailable` ⇒ pide confirmar |
-  | Pechuga de Pollo cocida · 100 g · 165 kcal | Espinaca (23 kcal/100 g) | ~715 g | `needs-confirmation` ⇒ pide confirmar |
+  | Pechuga de Pollo cocida · 100 g · 165 kcal | **Posta negra (Vacuno magro)** · 130 kcal/100 g | ~125 g | **un tap** |
+  | Pechuga de Pollo cocida · 100 g · 165 kcal | **Espinaca** · 23 kcal/100 g | ~715 g | **needs-confirmation** (supera el tope de 600) |
+  | Avena · 100 ml · 395 kcal | **Agua (vaso)** · 0 kcal | imposible | **unavailable** (prellena con la porcion del sustituto: 200 ml, NO con los 100 ml del item) |
 
-  Sirve cualquier alimento de densidad parecida (p. ej. Pechuga → Posta de vacuno cocida) para tener el camino de un tap.
-- [ ] **Opcional, para el caso insignia:** dejar el plan de Catalina con `canRegisterFreely = false` **y** `canAdjustPrescribedQuantity = false` (es la combinacion real de 3 de los 6 alumnos con reemplazos). Es lo unico que prueba de verdad el criterio 1. Se revierte republicando.
+  Verificado ademas: **no hay snapshot del dia** para Catalina, asi que el primer "Hoy" congela el plan nuevo y las tres opciones aparecen.
+- [ ] **Sesion de alumna**: el QA del lado alumno necesita que el owner inicie sesion como `qa-cat-rojas@josefit-designqa.cl` (no se tipean contraseñas desde el agente). El tab del preview quedo abierto en `/c/josefit/login`.
+- [ ] **Apuntar la app al preview**: `EXPO_PUBLIC_API_URL` en `apps/mobile/.env` (hoy no esta seteada ⇒ usa el default de produccion, donde la accion `substitute` **no existe** ⇒ `INVALID_ACTION`). Volver a dejarla como estaba al terminar.
 
 ### Guion (cada caso verificado en DB, no por pantalla)
 
