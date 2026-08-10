@@ -3,7 +3,9 @@ import {
   SUBSTITUTION_GROUP_KEY_PREFIX,
   SUBSTITUTION_MAX_MASS_QUANTITY,
   SubstitutionIntakeRequestSchema,
+  SubstitutionGroupSchema,
   SubstitutionOptionSchema,
+  SubstitutionOptionsItemSchema,
   computeSubstitutionEquivalence,
   describeSubstitutionDelta,
   roundSubstitutionQuantity,
@@ -539,6 +541,45 @@ describe('swipeOptionAt — ciclado', () => {
 
   it('sin opciones devuelve null', () => {
     expect(swipeOptionAt([], 3)).toBeNull()
+  })
+})
+
+describe('SubstitutionOptionsItemSchema — el payload REAL de la RPC', () => {
+  /**
+   * Copiado tal cual de LIVE el 2026-08-10. El valor de este test es el id del grupo: los
+   * `exchange_groups` estan sembrados a mano y NO cumplen el RFC de UUID. Con `z.uuid()` este
+   * parseo fallaba, y como el dia entero se parsea de una vez, la feature quedaba invisible sin
+   * un solo error en logs. Si alguien vuelve a poner `uuid()` ahi, este test lo caza.
+   */
+  const real = {
+    item: { name: 'Sopa PREMIUM', unit: 'ml', fatsG: 2, carbsG: 3, calories: 23, proteinG: 1, quantity: 100 },
+    group: { id: '0000e8c0-0000-0000-0000-000000000001', code: 'C', name: 'Carbohidratos/Cereales' },
+    options: [],
+    groupTotal: 705,
+    groupOptions: [],
+    mealSlotCode: 'slot-1',
+    prescriptionItemId: 'c7201a21-4c80-4428-be11-5943a5dbf02a',
+  }
+
+  it('parsea un item con el id de grupo sembrado (no-RFC)', () => {
+    const parsed = SubstitutionOptionsItemSchema.safeParse(real)
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.group?.code).toBe('C')
+    expect(parsed.data.groupTotal).toBe(705)
+  })
+
+  it('los 9 grupos sembrados pasan el schema', () => {
+    for (let n = 1; n <= 9; n += 1) {
+      const id = `0000e8c0-0000-0000-0000-00000000000${n}`
+      expect(SubstitutionGroupSchema.safeParse({ id, code: 'X', name: 'Grupo' }).success).toBe(true)
+    }
+  })
+
+  it('y un id que NO es un GUID sigue siendo rechazado', () => {
+    expect(SubstitutionGroupSchema.safeParse({ id: 'no-soy-un-id', code: 'X', name: 'G' }).success).toBe(
+      false,
+    )
   })
 })
 

@@ -240,7 +240,21 @@ async function fetchSubstitutionOptionsByItem(
   }
 
   const parsed = SubstitutionOptionsReadModelSchema.safeParse(data)
-  if (!parsed.success) return {}
+  if (!parsed.success) {
+    // Esta rama degradaba en SILENCIO y por eso costo caro: un solo id invalido tumbaba el parseo
+    // del dia entero, la feature quedaba invisible y no habia rastro ni en el servidor ni en la
+    // consola del navegador. Si vuelve a pasar, que al menos diga donde.
+    console.error('nutrition_v2_web_read', {
+      rpc: 'get_nutrition_substitution_options_v2',
+      ok: false,
+      errorCode: 'PARSE_ERROR',
+      issues: parsed.error.issues.slice(0, 5).map((issue) => ({
+        path: issue.path.join('.'),
+        code: issue.code,
+      })),
+    })
+    return {}
+  }
 
   return Object.fromEntries(
     parsed.data.items
