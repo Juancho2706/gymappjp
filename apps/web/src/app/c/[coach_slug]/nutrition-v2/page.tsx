@@ -244,7 +244,10 @@ async function fetchSubstitutionOptionsByItem(
 
   return Object.fromEntries(
     parsed.data.items
-      .filter((item) => item.options.length > 0)
+      // T2.5: ya no alcanza con tener reemplazos del coach (15 items en toda la base). Un item con
+      // grupo de intercambio también ofrece equivalentes, y son 832. Este filtro se quedó en la
+      // versión de T2.4 y dejaba la fila sin el control ⇄ para el 98% de los casos.
+      .filter((item) => item.options.length > 0 || item.groupTotal > 0)
       .map((item) => [item.prescriptionItemId, item]),
   )
 }
