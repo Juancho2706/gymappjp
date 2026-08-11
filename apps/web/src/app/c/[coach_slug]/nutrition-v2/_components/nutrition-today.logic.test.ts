@@ -12,9 +12,12 @@ import {
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import {
+  applyTodayOptimistic,
   buildBulkUndoPayloads,
   buildCatalogIntakePayload,
   buildCorrectionPayload,
+  buildOptimisticIntakeEntry,
+  buildOptimisticSubstitutionEntry,
   buildPrescribedIntakePayload,
   buildVoidPayload,
   consumedEntryForItem,
@@ -570,5 +573,194 @@ describe('formatIntakeClock', () => {
 
   it('fecha invalida ⇒ cadena vacia (nunca revienta el render)', () => {
     expect(formatIntakeClock('no-es-fecha', 'UTC')).toBe('')
+  })
+})
+
+// ── Capa optimista del Hoy (F7 · H2) ─────────────────────────────────────────────
+
+describe('applyTodayOptimistic', () => {
+  function optimisticToday(overrides: Partial<NutritionTodayReadModel> = {}): NutritionTodayReadModel {
+    return {
+      schemaVersion: 1,
+      generatedAt: '2026-08-10T00:00:00.000Z',
+      localDate: '2026-08-10',
+      timezone: 'America/Santiago',
+      snapshotId: null,
+      plan: null,
+      targets: { calories: 2000, proteinG: 150, carbsG: null, fatsG: null, fiberG: null, sodiumMg: null, waterMl: null },
+      consumed: { calories: 500, proteinG: 40, carbsG: 50, fatsG: 10, fiberG: 5, entryCount: 2 },
+      remaining: { calories: 1500, proteinG: 110, carbsG: null, fatsG: null, fiberG: null, sodiumMg: 1000, waterMl: null },
+      permissions: {
+        canRegisterFreely: true,
+        canAdjustPrescribedQuantity: true,
+        quantityAdjustmentPercent: null,
+        canSubstitute: false,
+        canMoveMealSlot: false,
+        canSkipOptionalItems: true,
+      },
+      mealSlots: [{ ...SLOT, intakeItems: [] }],
+      unassignedIntake: [],
+      syncToken: 'token',
+      ...overrides,
+    }
+  }
+
+  const added = intakeEntry({
+    id: 'nuevo',
+    totals: { calories: 100, proteinG: 5, carbsG: 10, fatsG: 2, fiberG: 0 },
+  })
+
+  it('add: la entry aparece en su franja y consumido/restante se mueven al tiro', () => {
+    const next = applyTodayOptimistic(optimisticToday(), { kind: 'add', slotCode: 'lunch', entry: added })
+    expect(next.mealSlots[0].intakeItems.map((entry) => entry.id)).toEqual(['nuevo'])
+    expect(next.consumed).toEqual({ calories: 600, proteinG: 45, carbsG: 60, fatsG: 12, fiberG: 5, entryCount: 3 })
+    // remaining se recalcula SOLO donde hay target; sodio/agua (no viven en consumed) se conservan.
+    expect(next.remaining.calories).toBe(1400)
+    expect(next.remaining.proteinG).toBe(105)
+    expect(next.remaining.carbsG).toBeNull()
+    expect(next.remaining.sodiumMg).toBe(1000)
+  })
+
+  it('add sin franja (o con una que no existe) ⇒ cae a unassignedIntake, nunca desaparece', () => {
+    const next = applyTodayOptimistic(optimisticToday(), { kind: 'add', slotCode: 'no-existe', entry: added })
+    expect(next.unassignedIntake.map((entry) => entry.id)).toEqual(['nuevo'])
+  })
+
+  it('void: la entry se va y sus totales se restan; un id desconocido no toca nada', () => {
+    const base = applyTodayOptimistic(optimisticToday(), { kind: 'add', slotCode: 'lunch', entry: added })
+    const next = applyTodayOptimistic(base, { kind: 'void', entryId: 'nuevo' })
+    expect(next.mealSlots[0].intakeItems).toHaveLength(0)
+    expect(next.consumed).toEqual(optimisticToday().consumed)
+    expect(applyTodayOptimistic(base, { kind: 'void', entryId: 'fantasma' })).toBe(base)
+  })
+
+  it('edit: escala cantidad y totales linealmente y ajusta el consumido por el neto', () => {
+    const base = applyTodayOptimistic(optimisticToday(), { kind: 'add', slotCode: 'lunch', entry: added })
+    const next = applyTodayOptimistic(base, { kind: 'edit', entryId: 'nuevo', quantity: 2 })
+    const edited = next.mealSlots[0].intakeItems[0]
+    expect(edited.quantity).toBe(2)
+    expect(edited.totals.calories).toBe(200)
+    expect(next.consumed.calories).toBe(700)
+    expect(next.consumed.entryCount).toBe(3)
+  })
+
+  it('sustituir: remueve la entry activa del item y pone la nueva — nunca conviven dos', () => {
+    const prescriptionItemId = ITEM.id
+    const previous = intakeEntry({
+      id: 'vieja',
+      prescriptionItemId,
+      totals: { calories: 300, proteinG: 30, carbsG: 0, fatsG: 5, fiberG: 0 },
+    })
+    const replacement = intakeEntry({
+      id: 'reemplazo',
+      prescriptionItemId,
+      totals: { calories: 280, proteinG: 25, carbsG: 5, fatsG: 4, fiberG: 0 },
+    })
+    const base = optimisticToday({ mealSlots: [{ ...SLOT, intakeItems: [previous] }] })
+    const next = applyTodayOptimistic(base, {
+      kind: 'substitute',
+      prescriptionItemId,
+      slotCode: 'lunch',
+      entry: replacement,
+    })
+    expect(next.mealSlots[0].intakeItems.map((entry) => entry.id)).toEqual(['reemplazo'])
+    expect(next.consumed.calories).toBe(500 - 300 + 280)
+    expect(next.consumed.entryCount).toBe(2)
+  })
+
+  it('sustituir un item AUN no registrado solo agrega (el conteo sube)', () => {
+    const next = applyTodayOptimistic(optimisticToday(), {
+      kind: 'substitute',
+      prescriptionItemId: ITEM.id,
+      slotCode: 'lunch',
+      entry: intakeEntry({ id: 'reemplazo', prescriptionItemId: ITEM.id }),
+    })
+    expect(next.mealSlots[0].intakeItems).toHaveLength(1)
+    expect(next.consumed.entryCount).toBe(3)
+  })
+})
+
+describe('buildOptimisticIntakeEntry / buildOptimisticSubstitutionEntry', () => {
+  it('la entry optimista de "Lo comi" congela el MISMO snapshot del payload y los macros prescritos', () => {
+    const payload = buildPrescribedIntakePayload({
+      context: CTX,
+      slot: SLOT,
+      item: ITEM,
+      idempotencyKey: 'intake-test-0001',
+    })
+    const entry = buildOptimisticIntakeEntry({
+      payload,
+      totals: { calories: 330, proteinG: 62, carbsG: 0, fatsG: 7.2, fiberG: 0 },
+    })
+    expect(entry.prescriptionItemId).toBe(ITEM.id)
+    expect(entry.mealSlot).toBe(SLOT.code)
+    expect(entry.status).toBe('active')
+    expect(entry.snapshot.name).toBe(payload.snapshot.name)
+    expect(entry.totals).toEqual({ calories: 330, proteinG: 62, carbsG: 0, fatsG: 7.2, fiberG: 0 })
+  })
+
+  it('la entry optimista de sustitucion escala los totales si el alumno confirmo otra cantidad', () => {
+    const equivalence = {
+      kind: 'calorie-equivalent' as const,
+      quantity: 100,
+      unit: 'g' as const,
+      totals: { calories: 200, proteinG: 10, carbsG: 20, fatsG: 4, fiberG: 2 },
+      snapshot: {
+        name: 'Arroz',
+        brand: null,
+        calories: 200,
+        proteinG: 10,
+        carbsG: 20,
+        fatsG: 4,
+        fiberG: 2,
+        servingSize: 100,
+        servingUnit: 'g',
+      },
+      targetCalories: 200,
+      requiresConfirmation: false,
+    }
+    const entry = buildOptimisticSubstitutionEntry({
+      prescriptionItemId: ITEM.id,
+      mealSlot: 'lunch',
+      foodId: null,
+      equivalence,
+      quantity: 50,
+      occurredAt: '2026-08-10T20:00:00.000Z',
+    })
+    expect(entry.source).toBe('substitution')
+    expect(entry.quantity).toBe(50)
+    expect(entry.totals).toEqual({ calories: 100, proteinG: 5, carbsG: 10, fatsG: 2, fiberG: 1 })
+  })
+
+  it('sin cantidad confirmada usa la de la equivalencia tal cual', () => {
+    const entry = buildOptimisticSubstitutionEntry({
+      prescriptionItemId: ITEM.id,
+      mealSlot: null,
+      foodId: null,
+      equivalence: {
+        kind: 'explicit',
+        quantity: 715,
+        unit: 'g',
+        totals: { calories: 165, proteinG: 21.5, carbsG: 28.6, fatsG: 0, fiberG: 0 },
+        snapshot: {
+          name: 'Espinaca',
+          brand: null,
+          calories: 23,
+          proteinG: 3,
+          carbsG: 4,
+          fatsG: 0,
+          fiberG: 2,
+          servingSize: 100,
+          servingUnit: 'g',
+        },
+        targetCalories: 165,
+        requiresConfirmation: false,
+      },
+      quantity: null,
+      occurredAt: '2026-08-10T20:00:00.000Z',
+    })
+    expect(entry.quantity).toBe(715)
+    expect(entry.mealSlot).toBeNull()
+    expect(entry.totals.calories).toBe(165)
   })
 })

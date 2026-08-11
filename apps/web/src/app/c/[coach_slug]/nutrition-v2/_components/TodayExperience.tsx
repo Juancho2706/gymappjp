@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -24,6 +24,7 @@ import {
   bulkMarkCtaLabel,
   bulkMarkSlotState,
   catalogUnitOptions,
+  computeSubstitutionEquivalence,
   consumedPrescriptionItemIds,
   convertIntakeQuantity,
   defaultCatalogUnit,
@@ -31,6 +32,7 @@ import {
   intakeUnitLabel,
   normalizeIntakeUnit,
   sortFoodsByFavoriteFirst,
+  substituteFromOption,
   substitutionAttemptFromToday,
   swipeApplicableOptions,
   swipeOptionAt,
@@ -51,10 +53,13 @@ import { TodayModal } from './TodayModal'
 import { NutritionFoodRow } from './NutritionFoodRow'
 import { foodResultImage, resolveFoodImageUrl } from './food-result-image'
 import {
+  applyTodayOptimistic,
   buildBulkPrescribedPayloads,
   buildBulkUndoPayloads,
   buildCatalogIntakePayload,
   buildCorrectionPayload,
+  buildOptimisticIntakeEntry,
+  buildOptimisticSubstitutionEntry,
   buildPrescribedIntakePayload,
   buildVoidPayload,
   consumedEntries,
@@ -68,6 +73,7 @@ import {
   resolveItemDisplayNote,
   slotFreeEntries,
   slotPortionMarksTotal,
+  type TodayOptimisticAction,
 } from './nutrition-today.logic'
 import { usePortionMarks, type PortionMarksApi } from './PortionMarks'
 import { PortionCoverageRow } from './PortionCoverageRow'
@@ -119,7 +125,7 @@ type DialogState =
     }
 
 export function TodayExperience({
-  today,
+  today: serverToday,
   clientId,
   scanHref,
   clientName,
@@ -144,6 +150,13 @@ export function TodayExperience({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  /**
+   * Capa optimista (F7 · H2): `today` es el read model del servidor CON los gestos de esta
+   * transición ya pintados. Cada mutación aplica su delta antes de esperar la server action;
+   * el `router.refresh()` trae la verdad y React descarta el delta — y si la acción falla,
+   * la transición termina sin refresh y la pantalla REVIERTE sola al estado del servidor.
+   */
+  const [today, applyTodayDelta] = useOptimistic(serverToday, applyTodayOptimistic)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>({ kind: 'none' })
@@ -189,10 +202,14 @@ export function TodayExperience({
     id: string,
     action: () => Promise<{ ok: boolean; error?: string }>,
     onSuccess?: () => void,
+    optimistic?: TodayOptimisticAction,
   ) {
     setError(null)
     setBusyId(id)
     startTransition(async () => {
+      // El delta se pinta ANTES de esperar al servidor; si la acción falla, la transición
+      // termina sin refresh y `useOptimistic` revierte sola al último estado del servidor.
+      if (optimistic) applyTodayDelta(optimistic)
       try {
         const res = await action()
         if (!res.ok) {
@@ -225,9 +242,27 @@ export function TodayExperience({
     if (state.eligible.length === 0) return
     const id = `bulk:${slot.id}`
     const payloads = buildBulkPrescribedPayloads({ context: ctx, slot, items: state.eligible })
+    // Delta optimista (H2): una entry por item elegible, alineada 1:1 con `payloads`.
+    const optimisticEntries = state.eligible.map((item, index) =>
+      buildOptimisticIntakeEntry({
+        payload: payloads[index],
+        totals: {
+          calories: item.macros.calories ?? 0,
+          proteinG: item.macros.proteinG ?? 0,
+          carbsG: item.macros.carbsG ?? 0,
+          fatsG: item.macros.fatsG ?? 0,
+          fiberG: item.macros.fiberG ?? 0,
+        },
+        media: item.media ?? null,
+        category: item.category ?? null,
+      }),
+    )
     setError(null)
     setBusyId(id)
     startTransition(async () => {
+      for (const entry of optimisticEntries) {
+        applyTodayDelta({ kind: 'add', slotCode: slot.code, entry })
+      }
       try {
         const res = await recordSlotIntakeBatchAction({ payloads })
         if (!res.ok) {
@@ -262,6 +297,9 @@ export function TodayExperience({
     const undo = buildBulkUndoPayloads(payloads, createdIds)
     if (undo.length === 0) return
     startTransition(async () => {
+      for (const payload of undo) {
+        applyTodayDelta({ kind: 'void', entryId: payload.entryId })
+      }
       try {
         const res = await voidSlotIntakeBatchAction({ payloads: undo })
         if (res.ok) {
@@ -296,15 +334,35 @@ export function TodayExperience({
     // son excluyentes en el contrato y el servidor los valida por separado.
     const isGroupOption = option.substitutionId === null
     const id = `subst:${option.substitutionId ?? `gf-${option.foodId}`}`
+    const occurredAt = new Date().toISOString()
+    // Delta optimista (H2): la MISMA equivalencia que la UI mostró al elegir. El servidor puede
+    // corregir la cantidad (fijada por el coach) y el refresh trae la verdad — y el toast avisa.
+    const optimisticEntry = buildOptimisticSubstitutionEntry({
+      prescriptionItemId: itemEntry.prescriptionItemId,
+      mealSlot: itemEntry.mealSlotCode ?? null,
+      foodId: option.foodId,
+      equivalence: computeSubstitutionEquivalence({
+        item: itemEntry.item,
+        substitute: substituteFromOption(option),
+      }),
+      quantity,
+      occurredAt,
+    })
     setError(null)
     setBusyId(id)
     startTransition(async () => {
+      applyTodayDelta({
+        kind: 'substitute',
+        prescriptionItemId: itemEntry.prescriptionItemId,
+        slotCode: itemEntry.mealSlotCode ?? null,
+        entry: optimisticEntry,
+      })
       try {
         const res = await recordSubstitutionIntakeAction({
           payload: {
             clientId,
             localDate: today.localDate,
-            occurredAt: new Date().toISOString(),
+            occurredAt,
             timezone: today.timezone,
             prescriptionItemId: itemEntry.prescriptionItemId,
             ...(isGroupOption
@@ -371,6 +429,7 @@ export function TodayExperience({
   /** Deshacer del toast: mismo camino de retiro que el resto (append-only, nada se borra). */
   function handleSubstitutionUndo(entryId: string) {
     startTransition(async () => {
+      applyTodayDelta({ kind: 'void', entryId })
       try {
         const res = await voidIntakeAction({
           payload: {
@@ -521,19 +580,34 @@ export function TodayExperience({
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
         onBulkEat={handleBulkEat}
         onEat={(slot, item) => {
-          const id = `eat:${item.id}`
+          const payload = buildPrescribedIntakePayload({
+            context: ctx,
+            slot,
+            item,
+            idempotencyKey: newIdempotencyKey('intake'),
+          })
           runMutation(
-            id,
-            () =>
-              recordIntakeAction({
-                payload: buildPrescribedIntakePayload({
-                  context: ctx,
-                  slot,
-                  item,
-                  idempotencyKey: newIdempotencyKey('intake'),
-                }),
-              }),
+            `eat:${item.id}`,
+            () => recordIntakeAction({ payload }),
             () => captureIntake('item_tap'),
+            {
+              kind: 'add',
+              slotCode: slot.code,
+              entry: buildOptimisticIntakeEntry({
+                payload,
+                // Totales = los macros prescritos que la fila ya muestra (el snapshot va
+                // normalizado per-unidad justamente para que el RPC reconstruya este número).
+                totals: {
+                  calories: item.macros.calories ?? 0,
+                  proteinG: item.macros.proteinG ?? 0,
+                  carbsG: item.macros.carbsG ?? 0,
+                  fatsG: item.macros.fatsG ?? 0,
+                  fiberG: item.macros.fiberG ?? 0,
+                },
+                media: item.media ?? null,
+                category: item.category ?? null,
+              }),
+            },
           )
         }}
         onEdit={(entry) => openDialog({ kind: 'edit', entry })}
@@ -612,22 +686,30 @@ export function TodayExperience({
           portionDupWarning={portionsApi.dupWarningFor}
           onClose={closeDialog}
           onSubmit={(food, quantity, unit, mealSlotCode) => {
+            const payload = buildCatalogIntakePayload({
+              context: ctx,
+              food,
+              quantity,
+              unit,
+              mealSlotCode,
+              idempotencyKey: newIdempotencyKey('intake'),
+            })
             runMutation(
               'register',
-              () =>
-                recordIntakeAction({
-                  payload: buildCatalogIntakePayload({
-                    context: ctx,
-                    food,
-                    quantity,
-                    unit,
-                    mealSlotCode,
-                    idempotencyKey: newIdempotencyKey('intake'),
-                  }),
-                }),
+              () => recordIntakeAction({ payload }),
               () => {
                 captureIntake('free_search')
                 closeDialog()
+              },
+              {
+                kind: 'add',
+                slotCode: mealSlotCode,
+                entry: buildOptimisticIntakeEntry({
+                  payload,
+                  // La MISMA estimación que el formulario ya muestra (NUT-017): el número
+                  // optimista y el que persiste el RPC salen de la misma función pura.
+                  totals: estimateCatalogIntakeTotals({ food, quantity, unit }),
+                }),
               },
             )
           }}
@@ -697,6 +779,7 @@ export function TodayExperience({
                 captureCorrection('saved')
                 closeDialog()
               },
+              { kind: 'edit', entryId: dialog.entry.id, quantity: newQuantity },
             )
           }}
         />
@@ -724,6 +807,7 @@ export function TodayExperience({
                 captureCorrection('voided')
                 closeDialog()
               },
+              { kind: 'void', entryId: dialog.entry.id },
             )
           }}
         />
