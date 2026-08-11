@@ -160,20 +160,27 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
   // vigente: es lo que pidio explicitamente. Un origen que no se puede leer degrada al camino
   // normal (wizard con el plan vigente, o en blanco) en vez de dejar la pantalla rota.
   let originName: string | null = null
+  // El origen pedido no se pudo abrir (plantilla borrada, fuera de alcance, lectura caida). La
+  // degradacion al plan vigente sigue siendo lo correcto —mejor que una pantalla rota— pero
+  // TIENE que decirse: en silencio, el coach cree que esta editando su plantilla y publica el
+  // plan del alumno encima. Cazado el 2026-08-11 investigando el reporte de JP, con una
+  // plantilla soft-deleted que abria el plan vigente sin una palabra.
+  let originUnavailable = false
   if (origin?.kind === 'template') {
     const template = await loadPlanTemplate(supabase as never, origin.id)
-    if (template) {
-      const fromBuilder = isUsableBuilderPayload(template.builder) ? template.builder : null
-      if (fromBuilder) {
-        // La plantilla nacio del wizard web: se abre EXACTA, con las macros de los items libres
-        // que el contrato del draft no lleva.
-        initialDraft = fromBuilder
-      } else {
+    if (!template) {
+      originUnavailable = true
+    } else {
+      // OJO: el borrador de la plantilla se arma en su PROPIA variable. Escribir directo sobre
+      // `initialDraft` hacia que un fallo de este bloque dejara el plan vigente del alumno
+      // cargado y, peor, rotulado con el nombre de la plantilla.
+      let fromTemplate = isUsableBuilderPayload(template.builder) ? template.builder : null
+      if (!fromTemplate) {
         // Plantilla importada de V1 (o guardada por otra superficie): se reconstruye desde el
         // draft del contrato, resolviendo sus alimentos contra el catalogo visible del coach.
         const foodsLoad = await fetchBuilderFoodsByIds(collectTemplateFoodIds(template.draft as never))
         if (foodsLoad.ok) {
-          initialDraft = builderStateFromTemplateDraft({
+          fromTemplate = builderStateFromTemplateDraft({
             draft: template.draft as never,
             foods: foodsLoad.foods,
             clientTimezoneToday: today,
@@ -181,9 +188,14 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
           })
         }
       }
-      if (initialDraft) {
+      if (fromTemplate) {
+        // La plantilla nacida del wizard web se abre EXACTA, con las macros de los items libres
+        // que el contrato del draft no lleva.
+        initialDraft = fromTemplate
         originName = template.name
         await markPlanTemplateUsed(supabase as never, template)
+      } else {
+        originUnavailable = true
       }
     }
   } else if (origin?.kind === 'plan' && origin.id !== clientId) {
@@ -191,6 +203,8 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
     if (copied) {
       initialDraft = copied.draft
       originName = copied.name
+    } else {
+      originUnavailable = true
     }
   }
 
@@ -226,6 +240,20 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
           : 'El plan y sus días, en dos pasos'
       }
     >
+      {originUnavailable ? (
+        <div
+          role="status"
+          className="mb-4 rounded-card border border-amber-300/70 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10"
+        >
+          <p className="text-xs font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
+            No pudimos abrir {origin?.kind === 'template' ? 'la plantilla' : 'el plan'} que elegiste.
+          </p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300/90">
+            Puede estar borrada o fuera de tu alcance. Estás editando{' '}
+            {existingPlan ? 'el plan vigente del alumno' : 'un plan en blanco'}: revisa antes de publicar.
+          </p>
+        </div>
+      ) : null}
       <PlanBuilderClient
         clientId={clientId}
         existingPlan={existingPlan}

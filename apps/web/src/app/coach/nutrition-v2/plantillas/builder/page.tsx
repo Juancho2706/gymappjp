@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getTodayInSantiago } from '@/lib/date-utils'
@@ -74,9 +75,15 @@ export default async function CoachNutritionV2TemplateBuilderPage({ searchParams
   let initialDraft: RehydratedBuilderDraft | null = null
   let templateName: string | null = null
   let templateDescription: string | null = null
+  // Se pidio editar una plantilla concreta y no se pudo abrir: el builder en blanco es el
+  // fallback correcto, pero callarlo hace creer que la plantilla quedo vacia y guardar la
+  // pisaria. Mismo criterio que en el builder de alumno.
+  let templateUnavailable = false
   if (templateId) {
     const template = await loadPlanTemplate(supabase as never, templateId)
-    if (template) {
+    if (!template) {
+      templateUnavailable = true
+    } else {
       const fromBuilder = isUsableBuilderPayload(template.builder) ? template.builder : null
       if (fromBuilder) {
         initialDraft = fromBuilder
@@ -94,6 +101,8 @@ export default async function CoachNutritionV2TemplateBuilderPage({ searchParams
       if (initialDraft) {
         templateName = template.name
         templateDescription = template.description
+      } else {
+        templateUnavailable = true
       }
     }
   }
@@ -119,6 +128,36 @@ export default async function CoachNutritionV2TemplateBuilderPage({ searchParams
           : 'Arma un plan reutilizable, sin elegir alumno. Lo aplicas cuando quieras.'
       }
     >
+      {templateUnavailable ? (
+        <div
+          role="status"
+          className="mb-4 rounded-card border border-amber-300/70 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10"
+        >
+          <p className="text-xs font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
+            No pudimos abrir la plantilla que elegiste.
+          </p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300/90">
+            Puede estar borrada o fuera de tu alcance. Estás en un builder en blanco: si guardas
+            acá, no estarás actualizando esa plantilla.
+          </p>
+        </div>
+      ) : null}
+      {/* Lo que confundió al coach JP (2026-08-11): esta pantalla es casi idéntica al builder de
+          un alumno, así que edito la plantilla y di por hecho que su alumno ya tenía la dieta.
+          Una plantilla no le llega a nadie hasta que se aplica, y eso hay que decirlo acá. */}
+      <div className="mb-4 flex flex-col gap-2 rounded-card border border-primary/25 bg-primary/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs font-semibold leading-relaxed text-primary">
+          Esto es una plantilla: no le llega a ningún alumno hasta que la apliques.
+        </p>
+        {templateId ? (
+          <Link
+            href="/coach/nutrition-v2?tab=plantillas"
+            className="shrink-0 text-xs font-semibold text-primary underline underline-offset-2"
+          >
+            Aplicar a un alumno
+          </Link>
+        ) : null}
+      </div>
       <PlanBuilderClient
         clientId={TEMPLATE_MODE_CLIENT_ID}
         existingPlan={null}

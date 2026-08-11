@@ -1014,6 +1014,11 @@ export function PlanBuilderClient({
       window.history.replaceState(null, '', `${window.location.pathname}?template=${res.template.id}`)
     }
     toast.success(created ? 'Plantilla creada' : 'Plantilla actualizada')
+    // Guardar TERMINA el trabajo, igual que publicar un plan: se vuelve a la biblioteca, que es
+    // de donde se vino y donde vive el botón "Aplicar". Antes la pantalla se quedaba clavada y
+    // el coach no sabía si había pasado algo (reporte de JP, 2026-08-11) — o peor, creía que
+    // guardar la plantilla ya le había cambiado la dieta a su alumno.
+    router.push('/coach/nutrition-v2?tab=plantillas')
   }
 
   return (
