@@ -80,8 +80,18 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
-          eas update \
-            --branch "${{ inputs.branch }}" \
-            --platform "${{ inputs.platform }}" \
-            --message "${{ inputs.message }}" \
-            --non-interactive
+          # Reintento x3: el primer export en un arbol frio a veces muere con
+          # "Cannot find module 'babel-preset-expo'" (race de inicializacion del transform
+          # worker de Metro en monorepo pnpm; reproducido local: 1er intento falla, 2do pasa).
+          for attempt in 1 2 3; do
+            if eas update \
+              --branch "${{ inputs.branch }}" \
+              --platform "${{ inputs.platform }}" \
+              --message "${{ inputs.message }}" \
+              --non-interactive; then
+              exit 0
+            fi
+            echo "intento $attempt fallo; reintentando..."
+            sleep 5
+          done
+          exit 1
