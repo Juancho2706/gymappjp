@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState, useTransition } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Search, X, Plus, Info, Loader2, History } from 'lucide-react'
 import { toast } from 'sonner'
+import { normalizeFoodSearchText } from '@eva/nutrition-engine'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import {
@@ -95,7 +96,10 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
   // Búsqueda debounced sobre el catálogo (RLS scope: global + coach del alumno).
   useEffect(() => {
     if (!open) return
-    const trimmed = term.trim()
+    // `normalizeFoodSearchText` es el espejo TS de la expresión de `foods.name_search`
+    // (`20260811020826`). Antes iba el término crudo: con tildes o paréntesis no encontraba
+    // su propio alimento. Colapsa `%` y `_` a espacios, así que no hay comodines que escapar.
+    const trimmed = normalizeFoodSearchText(term)
     if (trimmed.length < SEARCH_MIN_CHARS) {
       setResults([])
       setSearching(false)

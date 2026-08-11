@@ -160,7 +160,34 @@ Metodo: la extension de navegador NO logra `document_idle` en esta pantalla (flo
 1. 🐞 **H1 — El buscador no encuentra nombres con parentesis**: `food_catalog_v2_normalize_text` le quita los parentesis al QUERY pero `foods.name_search` los conserva. "arroz blanco (cocido)" (el nombre EXACTO del alimento) normaliza a `arroz blanco cocido` y da **0 resultados**; "arroz blanco cocido" tambien 0. Reproducido en SQL: `name_search like '%arroz blanco cocido%'` → 0 filas. Fix natural: normalizar `name_search` con la misma funcion (backfill de catalogo, no es de esta feature; el mismo sintoma existe en cualquier buscador que use ese par).
 2. 🐞→✅ **H2 — La UI espera al server: cada gesto tarda segundos en verse (CONFIRMADO por el owner con la pantalla a la vista, y ARREGLADO)**. El QA automatizado lo vio primero con la tab en background (ahi el throttling de Chrome lo empeora hasta "un paso atras permanente"); el owner despues lo confirmo usandolo a mano: "Lo comi", retirar y sustituir registran bien en el server (verificado por DB: sus tres gestos de las 20:07-20:08 quedaron todos) pero la fila no cambia hasta que vuelve el `router.refresh()` — medido: ~1,4-1,7 s solo el re-render del RSC + la server action antes. **Fix: capa optimista con `useOptimistic` sobre el read model** (patron que las porciones ya usaban): el gesto se pinta al instante, el refresh trae la verdad y una accion fallida revierte sola. Cubre "Lo comi" (item y franja completa), registro libre, retirar, editar cantidad, sustituir (sheet y swipe) y los deshacer. Reducer + builders **puros y testeados** en `nutrition-today.logic.ts`. Gates: 60/60 del archivo · typecheck exit 0 · lint 0 errores · tokens 86/86 · boundaries 331. RN no lo necesita: su cola offline ya pinta optimista desde F5.
 
-3. ❓ **D5 (decision del owner, pregunta suya del QA): como se entera el alumno de que puede deslizar.** La SPEC lo deja EXPLICITAMENTE como atajo: el camino descubrible es el control visible "⇄ N equivalentes" y el swipe "es mas rapido que apuntarle al control chico" — ninguna pista de descubrimiento esta estipulada. Opciones si se quiere enseñar: (a) micro-animacion one-shot la primera vez que el dia tiene filas intercambiables (la fila se asoma ~24 px mostrando el fondo "Cambiar" y vuelve, respetando reduced-motion), (b) una linea de copy en el sheet ("tip: tambien puedes deslizar la fila"), (c) nada — el ⇄ ya cubre el 100% de la funcionalidad. Sin decidir, no se implementa nada.
+3. ❓→✅ **D5 (decision del owner, pregunta suya del QA): como se entera el alumno de que puede deslizar.** La SPEC lo deja EXPLICITAMENTE como atajo: el camino descubrible es el control visible "⇄ N equivalentes" y el swipe "es mas rapido que apuntarle al control chico" — ninguna pista de descubrimiento esta estipulada. Opciones si se quiere enseñar: (a) micro-animacion one-shot la primera vez que el dia tiene filas intercambiables (la fila se asoma ~24 px mostrando el fondo "Cambiar" y vuelve, respetando reduced-motion), (b) una linea de copy en el sheet ("tip: tambien puedes deslizar la fila"), (c) nada — el ⇄ ya cubre el 100% de la funcionalidad. Sin decidir, no se implementa nada.
+
+## F8 — Cierre de las decisiones abiertas del QA (2026-08-11)
+
+- [x] **H1 — buscador vs parentesis, ARREGLADO por el lado del catalogo.** La causa era una asimetria
+  entre los dos lados de la MISMA comparacion: el query pasaba por
+  `private.food_catalog_v2_normalize_text` (colapsa todo lo que no sea `[a-z0-9]` a espacios) y
+  `foods.name_search` se generaba solo con `immutable_unaccent(lower(name))`, conservando parentesis.
+  Migracion `20260811020826` (aplicada en LIVE): la columna generada pasa a la misma expresion via
+  `alter column … set expression` de PG 17 — sin dropear la columna, con grants, politicas y los dos
+  indices (`btree` + `gin_trgm`) preservados. Medido antes en tx-rollback y confirmado despues:
+  **620 de 4.649** filas cambian de valor y la asimetria `name_search <> normalize(name)` queda en
+  **0/4.649**; "arroz blanco (cocido)" ahora encuentra su propio alimento. Advisors post-cambio sin
+  ERROR y sin hallazgos nuevos sobre `foods`. Del lado cliente, los 4 `ilike('name_search', …)` de la
+  web que normalizaban a mano (solo tildes) pasan a `normalizeFoodSearchText` de
+  `@eva/nutrition-engine`, el espejo TS exacto de la expresion — el movil ya lo usaba.
+  Limite anotado: 1 alimento global de 4.649 con nombre CJK queda con `name_search` vacio (ya era
+  inbuscable por la via V2, porque el normalizador del query tambien lo vaciaba).
+- [x] **D5 — decision del owner: micro-animacion one-shot.** La PRIMERA fila intercambiable que se
+  monta se asoma 24 px mostrando el fondo "Cambiar" y vuelve sola (240 ms ida · 180 ms sostenido ·
+  280 ms vuelta, tras 700 ms de espera para que la lista termine de pintar). Una sola vez por
+  dispositivo. La decision es pura y compartida (`packages/nutrition-v2/swipe-hint.ts`, 7 tests): el
+  movimiento y el almacenamiento son de cada plataforma — `framer-motion` + `localStorage` en web,
+  `reanimated` + `AsyncStorage` en RN. Con "reducir movimiento" **no se anima y no se marca como
+  vista**: si la persona desactiva la preferencia despues, todavia merece la pista. El asomo (24 px)
+  es deliberadamente menor que el umbral del gesto (56 px): muestra el fondo, no simula un
+  intercambio a punto de aplicarse. El dedo siempre gana — el web hace `controls.stop()` en
+  `onDragStart` y RN `cancelAnimation` en `onBegin`.
 
 **Estado de los datos**: al cierre del QA automatizado el dia de Catalina quedo IGUAL al baseline (Espinaca activa sobre Pechuga · Avena activa · Sopa sin registro activo). Todo el rastro del QA quedo como entries `voided`/`corrected`, que es el diseño (nunca delete). El owner despues siguio probando a mano (Sopa "Lo comi" · Gohan Teriyaki · porcion de Verduras, 20:07-20:08) — todos llegaron bien a la tabla.
 

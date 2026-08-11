@@ -73,6 +73,52 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 - [x] Deudas anotadas: paridad RN del tab Alimentos (seguimiento propio, registrado en MOBILE_PARITY); los tres `revalidatePath('/coach/foods')` muertos en V1; `FoodListCompact` quedo con un solo consumidor V1 (`FoodLibrary`)
 - [x] QA en preview por Claude (2026-08-09, deploy `1eaea68c`, sesion coach josefit): `/coach/foods` → redirect al tab ✓ · browse sin buscar con miniaturas ✓ · "Solo míos" (4 propios, badge Propio, placeholder contextual) ✓ · "Editados por mí" (vacio honesto) ✓ · alta: guard 0/0/0/0 en español sin round-trip y CONSERVANDO lo tipeado ✓, creacion real con toast + re-apuntado de busqueda + visible en RPC al instante ✓ · clasificacion propia end-to-end: sugerencia client-side 23 g, guardado, chip en card sin recarga, y verificado en DB (`foods.exchange_*` + 1 fila `exchange_group_foods`) ✓ · 390px: tab, chips y sheet sin desbordes ✓ · consola sin errores ✓ · datos de QA borrados de LIVE. Pendiente owner: QA en device fisico (teclado real) y clasificar un alimento GLOBAL (el QA cubrio el camino propio)
 
+## F6 — Paridad RN del tab Alimentos (deuda de T2.3, abierta 2026-08-11)
+
+T2.3 fue web-only por decision de alcance. Esta fase la cierra en el binario. **No es una feature
+nueva** (mismo contrato, mismas reglas, misma superficie de datos), por eso vive como fase de esta
+spec y no como spec propia.
+
+**Auditoria del punto de partida (2026-08-11, contra HEAD).** El tab RN
+(`apps/mobile/app/coach/nutrition-v2/foods.tsx`, 381 lineas) es un buscador PURO: keyset sobre
+`search_food_catalog_v2` via `/api/mobile/nutrition-v2/catalog`, con ficha al tocar la fila. De los
+cinco modos de la maquina web (`_lib/food-catalog-mode.ts`) implementa **dos**: `search` e `invite`.
+
+Falta, en orden de valor:
+
+| Gap | Que existe ya | Que hay que construir |
+|---|---|---|
+| Modo `browse` (primera pagina sin buscar) | data path web por offset | operacion nueva en el endpoint movil |
+| Chip "Solo mios" (`mine`) | idem | idem + chips en RN |
+| Chip "Editados por mi" (`edited`) + badge ✎ | `coach_food_overrides` + `/api/mobile/nutrition-v2/food-overrides` | listado por offset para movil |
+| "Nuevo alimento" | **la escritura YA existe**: accion `createFood` del endpoint `coach/mutate` + `createCoachFoodRN`, que el builder RN ya usa | solo UI del sheet + guard de macros |
+| Clasificar desde la ficha | `nutrition-v2-exchange-lists.api.ts` + pantalla Porciones RN (entra por GRUPO) | lectura "en que grupo esta ESTE alimento" para movil + flujo en la ficha |
+
+**Modulos puros a compartir antes de tocar UI.** RN no puede importar de `apps/web`, y duplicar
+estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
+
+- `_lib/food-catalog-mode.ts` (+14 tests) — **sin imports, puro**: se mueve tal cual.
+- `_lib/custom-food-macros.ts` (+18 tests) — **sin imports, puro**: se mueve tal cual.
+- `_lib/edited-foods.ts` (+15 tests) — solo importa de `@eva/nutrition-v2`: se mueve.
+- `_lib/food-classification.ts` (+29 tests) — importa `@/lib/nutrition-portions-copy`, que HOY esta
+  duplicado en web y en `apps/mobile/lib/nutrition-portions-copy.ts`. Mover el modulo exige mover
+  antes el copy; es la deuda que destapa esta fase.
+- `_lib/food-catalog-card.ts` — importa `@/lib/food-image` (web-only). Se comparte el mapper y se
+  deja fuera la resolucion de imagen: RN ya tiene `foodMediaThumbnailUrl` + `FoodThumbnail`.
+
+**Sub-fases propuestas** (cada una con su gate, en este orden):
+
+- [ ] F6.0 Mover a `packages/nutrition-v2` los modulos puros de arriba con sus tests, reescribir los
+      imports de la web y dejar el gate verde SIN tocar UI (rollback = revert de un commit)
+- [ ] F6.1 Operaciones de listado para movil (`browse` / `mine` / `edited`) en el endpoint del
+      catalogo, con la MISMA visibilidad que el RPC y paginado por offset
+- [ ] F6.2 RN: chips excluyentes + filtro de texto local en los modos con universo cargado + badge ✎
+      + paginado por offset (la maquina de modos decide, el componente obedece)
+- [ ] F6.3 RN: "Nuevo alimento" en el tab, reusando `createCoachFoodRN` y el guard kcal/P/C/G
+- [ ] F6.4 RN: clasificar desde la ficha (lectura aditiva para movil + flujo grupo → gramos → medida
+      casera, espejo de `ClassifyFoodFlow`)
+- [ ] F6.5 QA en device fisico + `MOBILE_PARITY.md` + OTA android
+
 ## Registro de cierres
 
 | Fecha | Fase | Commit | Gates | Notas |

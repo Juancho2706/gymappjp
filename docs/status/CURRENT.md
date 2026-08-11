@@ -26,10 +26,11 @@ viven en `specs/`, `docs/audits/` y el historial de git, no aquí.
 ## Prioridades vigentes
 
 1. Hydration del dashboard del ALUMNO (`/c/:slug/dashboard`): EVA-NEXTJS-18 sigue emitiendo post-fix del coach (triage 2026-08-09 en el issue); mismo árbol, patrón determinista server→props ya existe al lado.
-2. Programa nutrición: **T2.5 desplegada** (web `654efd33` + OTA `7a9b3877`). Triar las decisiones abiertas del QA: H1 (el buscador no encuentra nombres con paréntesis — asimetría de normalización con `name_search`, fix por el lado del catálogo) y D5 (pista de descubrimiento del swipe). Después T2.6. Paridad RN del tab Alimentos como tanda propia. A 24-48 h: `eas update:insights` del OTA `7a9b3877`.
-3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; los workarounds tipados de T2.3 y el cast `V2ReadClient` se retiran ahí).
-4. Matriz RLS con JWTs reales + preflight V1→V2 (7 enlaces) — sin cambios desde 08-06.
-5. Verificar TTFB p75 < 1,5 s por ruta en Sentry; y a 24-48 h de los OTA `3cc5db7e` y `52a37d18`, `eas update:insights` (crashRate + installs).
+2. Programa nutrición: **T2.5 desplegada** (web `654efd33` + OTA `7a9b3877`) y sus dos decisiones abiertas **cerradas el 2026-08-11** (F8): H1 arreglado por el lado del catálogo — migración `20260811020826` en LIVE, `foods.name_search` pasa a la misma normalización que el query, asimetría 0/4.649 — y D5 implementada como micro-animación one-shot del swipe en web y RN. **Falta desplegar** (web + OTA android). Sigue: paridad RN del tab Alimentos y después T2.6. A 24-48 h: `eas update:insights` del OTA `7a9b3877`.
+3. **Catálogo: 250 alimentos sólidos marcados como líquidos** (hallazgo 2026-08-11, reporte de un coach). `is_liquid = true` + `category = 'bebida'` en cereales, granolas y harinas ⇒ el registro libre del alumno ofrece **ml/unidad y nunca gramos**. Medido en LIVE: 677 filas con `is_liquid`, 302 con ≥200 kcal/100, de las cuales **250 no son líquidos calóricos legítimos** (212 con ≥300 kcal); 7 ya están en planes publicados y 8 tienen registros. Arreglado a mano solo el caso reportado (`Avena · Quajer`, `8a8102e6…` → sólido/g/carbohidrato). **La corrección masiva es decisión del owner**: es un cambio de datos en LIVE que altera las unidades ofrecidas sobre alimentos ya prescritos.
+4. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; los workarounds tipados de T2.3 y el cast `V2ReadClient` se retiran ahí).
+5. Matriz RLS con JWTs reales + preflight V1→V2 (7 enlaces) — sin cambios desde 08-06.
+6. Verificar TTFB p75 < 1,5 s por ruta en Sentry; y a 24-48 h de los OTA `3cc5db7e` y `52a37d18`, `eas update:insights` (crashRate + installs).
 
 ## Reglas de actualización
 

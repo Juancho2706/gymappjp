@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { EXCHANGE_LIST_OWNER_RANK, type ExchangeListOwnerRank } from '@eva/nutrition-v2'
 import type { NutritionMacrosBasis } from '@eva/nutrition-v2'
+import { normalizeFoodSearchText } from '@eva/nutrition-engine'
 
 /**
  * Repository de `exchange_group_foods` — la LISTA de equivalencias de un grupo de porciones
@@ -99,8 +100,11 @@ function mapRow(raw: RawRow): ExchangeListRow {
  * quien decide cuál gana es `resolveExchangeListRows` (el espejo TS del `distinct on` del
  * read-model), para que la gestión del coach muestre exactamente lo que verá el alumno.
  *
- * `search` filtra por el `name_search` del alimento (columna ya normalizada sin tildes que usa
- * todo el buscador del catálogo), no por `name`: buscar "platano" tiene que encontrar "Plátano".
+ * `search` filtra por el `name_search` del alimento (columna ya normalizada que usa todo el
+ * buscador del catálogo), no por `name`: buscar "platano" tiene que encontrar "Plátano". El
+ * término se normaliza con `normalizeFoodSearchText`, el espejo TS exacto de la expresión de
+ * la columna (`20260811020826`): sin él, "arroz blanco (cocido)" no encontraba su propio
+ * alimento. Ese normalizador colapsa `%` y `_` a espacios, así que no hay que escaparlos.
  */
 export async function findExchangeListRowsByGroup(
   db: DB,
@@ -111,13 +115,8 @@ export async function findExchangeListRowsByGroup(
     .select(ROW_COLUMNS, { count: 'exact' })
     .eq('exchange_group_id', input.groupId)
 
-  const term = (input.search ?? '').trim()
-  if (term) {
-    const normalized = term
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/%/g, '\\%')
+  const normalized = normalizeFoodSearchText(input.search)
+  if (normalized) {
     query = query.ilike('foods.name_search', `%${normalized}%`)
   }
 
@@ -385,13 +384,8 @@ export async function searchFoodsForExchangeList(
     .from('foods')
     .select('id, name, brand, calories, protein_g, carbs_g, fats_g, serving_size, macros_basis, coach_id, org_id')
 
-  const term = (input.search ?? '').trim()
-  if (term) {
-    const normalized = term
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/%/g, '\\%')
+  const normalized = normalizeFoodSearchText(input.search)
+  if (normalized) {
     query = query.ilike('name_search', `%${normalized}%`)
   }
 

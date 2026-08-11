@@ -1,8 +1,19 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, useAnimationControls, useReducedMotion } from 'framer-motion'
 import { ArrowLeftRight } from 'lucide-react'
+import {
+  NUTRITION_SWIPE_HINT_BACK_MS,
+  NUTRITION_SWIPE_HINT_DELAY_MS,
+  NUTRITION_SWIPE_HINT_HOLD_MS,
+  NUTRITION_SWIPE_HINT_OUT_MS,
+  NUTRITION_SWIPE_HINT_PEEK_PX,
+  NUTRITION_SWIPE_HINT_SEEN_VALUE,
+  NUTRITION_SWIPE_HINT_STORAGE_KEY,
+  shouldPlaySwipeHint,
+} from '@eva/nutrition-v2'
 
 /**
  * Deslizar la fila hacia la izquierda para cambiar el alimento (T2.5 F6).
@@ -17,6 +28,31 @@ import { ArrowLeftRight } from 'lucide-react'
 /** Desplazamiento en px a partir del cual el gesto cuenta como intencion, no como roce. */
 const TRIGGER_PX = 56
 
+/**
+ * D5 del QA: nadie descubre el gesto. La PRIMERA fila intercambiable que se monta se asoma una
+ * vez y vuelve. Este flag de modulo es el que hace que sea UNA fila y no todas: vive lo que vive
+ * la pestaña, y la persistencia de "ya la vio" va a `localStorage`.
+ */
+let hintClaimedThisSession = false
+
+function readHintSeen(): boolean {
+  try {
+    return window.localStorage.getItem(NUTRITION_SWIPE_HINT_STORAGE_KEY) === NUTRITION_SWIPE_HINT_SEEN_VALUE
+  } catch {
+    // Safari en modo privado y navegadores con storage bloqueado tiran acá. Sin memoria, la
+    // pista se comporta como si nunca se hubiera visto: molesta menos que reventar la pantalla.
+    return false
+  }
+}
+
+function persistHintSeen(): void {
+  try {
+    window.localStorage.setItem(NUTRITION_SWIPE_HINT_STORAGE_KEY, NUTRITION_SWIPE_HINT_SEEN_VALUE)
+  } catch {
+    /* mismo caso que arriba: la pista se repetirá, no es un error que reportar */
+  }
+}
+
 export function SwipeToExchange({
   enabled,
   label,
@@ -30,6 +66,54 @@ export function SwipeToExchange({
   children: ReactNode
 }) {
   const reduceMotion = useReducedMotion()
+  const controls = useAnimationControls()
+  // `mounted` retrasa la decisión al cliente: `localStorage` no existe en el render del servidor
+  // y leerlo durante el render rompería la hidratación con un árbol distinto.
+  const [mounted, setMounted] = useState(false)
+  const claimedByThisRow = useRef(false)
+
+  useEffect(() => setMounted(true), [])
+
+  useEffect(() => {
+    if (!mounted) return
+    const play = shouldPlaySwipeHint({
+      enabled,
+      reduceMotion: reduceMotion === true,
+      alreadySeen: readHintSeen(),
+      claimedBySibling: hintClaimedThisSession && !claimedByThisRow.current,
+    })
+    if (!play) return
+
+    hintClaimedThisSession = true
+    claimedByThisRow.current = true
+    persistHintSeen()
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (cancelled) return
+      void controls.start({
+        x: [0, -NUTRITION_SWIPE_HINT_PEEK_PX, -NUTRITION_SWIPE_HINT_PEEK_PX, 0],
+        transition: {
+          duration:
+            (NUTRITION_SWIPE_HINT_OUT_MS + NUTRITION_SWIPE_HINT_HOLD_MS + NUTRITION_SWIPE_HINT_BACK_MS) / 1000,
+          times: [
+            0,
+            NUTRITION_SWIPE_HINT_OUT_MS /
+              (NUTRITION_SWIPE_HINT_OUT_MS + NUTRITION_SWIPE_HINT_HOLD_MS + NUTRITION_SWIPE_HINT_BACK_MS),
+            (NUTRITION_SWIPE_HINT_OUT_MS + NUTRITION_SWIPE_HINT_HOLD_MS) /
+              (NUTRITION_SWIPE_HINT_OUT_MS + NUTRITION_SWIPE_HINT_HOLD_MS + NUTRITION_SWIPE_HINT_BACK_MS),
+            1,
+          ],
+          ease: 'easeOut',
+        },
+      })
+    }, NUTRITION_SWIPE_HINT_DELAY_MS)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [controls, enabled, mounted, reduceMotion])
 
   if (!enabled) return <>{children}</>
 
@@ -55,6 +139,8 @@ export function SwipeToExchange({
         // y deja el hilo principal ocupado. Con tres filas así, la página no vuelve a estar idle.
         // Lo cazó el QA del preview: el navegador quedaba sin responder.
         dragElastic={reduceMotion ? 0 : 0.15}
+        animate={controls}
+        onDragStart={() => controls.stop()}
         onDragEnd={(_event, info) => {
           if (info.offset.x <= -TRIGGER_PX) onSwipe()
         }}

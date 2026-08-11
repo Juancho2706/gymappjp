@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns'
+import { normalizeFoodSearchText } from '@eva/nutrition-engine'
 import { createClient } from '@/lib/supabase/server'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import {
@@ -373,13 +374,11 @@ export const getFoodLibrary = cache(async (coachId: string, options: FoodLibrary
     .order('name')
     .range(page * pageSize, (page + 1) * pageSize - 1)
 
-  if (search?.trim()) {
-    const term = search
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/%/g, '\\%')
+  // El t\u00e9rmino se normaliza con el mismo espejo TS de la expresi\u00f3n de `foods.name_search`
+  // (`20260811020826`): sin \u00e9l, un nombre con par\u00e9ntesis no encontraba su propio alimento.
+  // El normalizador colapsa `%` y `_` a espacios, as\u00ed que no hay comodines que escapar.
+  const term = normalizeFoodSearchText(search)
+  if (term) {
     query = query.ilike('name_search', `%${term}%`)
   }
   if (category && category !== 'todos') {
