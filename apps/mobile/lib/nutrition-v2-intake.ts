@@ -532,10 +532,23 @@ export type QueuedIntakeLike =
   // NUT-010: retiro terminal encolado. Su payload es MINIMO — no trae `localDate` ni snapshot,
   // asi que no puede filtrarse por dia ni pintarse como fila; solo OCULTA la entry objetivo.
   | { action: 'void'; idempotencyKey: string; payload: NutritionIntakeVoid }
-  // T2.4: sustitucion encolada. Su payload es la INTENCION (item + reemplazo + intento): no trae
-  // nombre, cantidad ni macros — el servidor los resuelve al drenar. Por eso NO puede pintarse
-  // como fila optimista; el overlay la ignora igual que hoy ignora lo que no sabe representar.
-  | { action: 'substitute'; idempotencyKey: string; payload: SubstitutionIntakeRequest }
+  // Sustitucion encolada. Su PAYLOAD es la INTENCION (item + reemplazo + intento) y no trae
+  // nombre ni macros — el servidor los resuelve al drenar, que es justamente lo que impide que el
+  // cliente mienta. T2.5 suma `preview`, un dato LOCAL que nunca se envia, para poder pintar la
+  // fila mientras espera. Sin `preview` el overlay la ignora, como en T2.4.
+  | {
+      action: 'substitute'
+      idempotencyKey: string
+      payload: SubstitutionIntakeRequest
+      preview?: {
+        name: string
+        brand: string | null
+        quantity: number
+        unit: string
+        mealSlot: string | null
+        totals: NutritionIntakeTotals
+      }
+    }
 
 export interface QueuedIntakeOverlay {
   addedBySlot: Record<string, OptimisticNutritionFoodRowModel[]>
@@ -568,7 +581,10 @@ export function buildQueuedIntakeOverlay(
   type QueuedRecordLike = Extract<QueuedIntakeLike, { action: 'record' }>
   type QueuedCorrectionLike = Extract<QueuedIntakeLike, { action: 'correct' }>
 
+  type QueuedSubstitutionLike = Extract<QueuedIntakeLike, { action: 'substitute' }>
+
   const records: QueuedRecordLike[] = []
+  const substitutions: QueuedSubstitutionLike[] = []
   const corrections = new Map<string, QueuedCorrectionLike>()
   // Entries con un RETIRO encolado: se ocultan aunque el servidor todavia las devuelva activas.
   // No se filtran por dia: el payload minimo del void no lleva fecha, y ocultar de mas en otro dia
@@ -580,10 +596,18 @@ export function buildQueuedIntakeOverlay(
       voided.push(item.payload.entryId)
       continue
     }
-    // T2.4: una sustitucion encolada NO se puede pintar como fila optimista — su payload es la
-    // intencion (item + reemplazo), sin nombre ni macros; esos los resuelve el servidor al
-    // drenar. Se ignora aca a proposito: mejor no mostrar nada que inventar un nombre.
-    if (item.action === 'substitute') continue
+    // T2.4 la ignoraba: el payload es la intencion (item + reemplazo), sin nombre ni macros, y
+    // era mejor no mostrar nada que inventar un nombre. El precio fue que encolar sin red no daba
+    // NINGUNA senal, que es el reparo que quedo abierto.
+    //
+    // T2.5 lo resuelve sin inventar: el sheet ya sabe que eligio el alumno, y esos datos viajan en
+    // `preview` — que es local, no forma parte del payload y nunca se envia. Sin `preview` (cola
+    // escrita por una version anterior) se sigue ignorando.
+    if (item.action === 'substitute') {
+      if (item.payload.localDate !== localDate || !item.preview) continue
+      substitutions.push(item)
+      continue
+    }
     if (item.payload.localDate !== localDate) continue
     if (item.action === 'correct') corrections.set(item.payload.correctsEntryId, item)
     else if (!item.payload.snapshot.exchangeGroupCode) records.push(item)
@@ -620,6 +644,36 @@ export function buildQueuedIntakeOverlay(
     append(item)
     const prescriptionItemId = item.payload.prescriptionItemId
     if (prescriptionItemId && !overlay.queuedKeyByPrescriptionItemId[prescriptionItemId]) {
+      overlay.queuedPrescriptionItemIds.push(prescriptionItemId)
+      overlay.queuedKeyByPrescriptionItemId[prescriptionItemId] = item.idempotencyKey
+    }
+  }
+  // Sustituciones encoladas: la fila optimista sale de `preview`, y el item prescrito queda
+  // marcado como "en cola" igual que el camino de "Lo comí" — que era exactamente la señal que
+  // faltaba.
+  for (const item of substitutions) {
+    const preview = item.preview
+    if (!preview) continue
+    const row = optimisticIntakeRow({
+      id: `queued-${item.idempotencyKey}`,
+      name: preview.name,
+      brand: preview.brand,
+      quantity: preview.quantity,
+      unit: preview.unit,
+      status: 'offline',
+      totals: preview.totals,
+      queuedKey: item.idempotencyKey,
+    })
+    if (preview.mealSlot) {
+      overlay.addedBySlot[preview.mealSlot] = [
+        ...(overlay.addedBySlot[preview.mealSlot] ?? []),
+        row,
+      ]
+    } else {
+      overlay.addedUnassigned.push(row)
+    }
+    const prescriptionItemId = item.payload.prescriptionItemId
+    if (!overlay.queuedKeyByPrescriptionItemId[prescriptionItemId]) {
       overlay.queuedPrescriptionItemIds.push(prescriptionItemId)
       overlay.queuedKeyByPrescriptionItemId[prescriptionItemId] = item.idempotencyKey
     }

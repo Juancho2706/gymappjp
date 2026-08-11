@@ -15,6 +15,7 @@ import type {
   NutritionItemSubstitutionRead,
   NutritionMealSlotRead,
   NutritionTodayReadModel,
+  SubstitutionEquivalence,
 } from '@eva/nutrition-v2'
 
 /** El item prescrito no se exporta como tipo nominal; lo derivamos del slot. */
@@ -431,5 +432,297 @@ export function formatIntakeClock(occurredAt: string, timezone: string): string 
     return new Intl.DateTimeFormat('es-CL', { ...options, timeZone: timezone }).format(date)
   } catch {
     return new Intl.DateTimeFormat('es-CL', options).format(date)
+  }
+}
+
+// ── Capa optimista del Hoy (F7 · hallazgo H2) ────────────────────────────────────
+// Un tap paga la server action + `router.refresh()` (segundos): sin esto la pantalla queda con
+// el estado viejo hasta que llega el re-render y el alumno cree que no pasó nada. El reducer
+// aplica el gesto sobre el read model EN MEMORIA vía `useOptimistic`: React lo pinta al instante,
+// lo reemplaza cuando el refresh trae la verdad del servidor, y lo REVIERTE solo si la acción
+// falló (la transición termina sin refresh). Nada de esto persiste: es puro dibujo, la escritura
+// sigue siendo exclusivamente del RPC.
+
+export type TodayOptimisticAction =
+  | { kind: 'add'; slotCode: string | null; entry: NutritionIntakeReadItem }
+  | { kind: 'void'; entryId: string }
+  | { kind: 'edit'; entryId: string; quantity: number }
+  | {
+      kind: 'substitute'
+      prescriptionItemId: string
+      slotCode: string | null
+      entry: NutritionIntakeReadItem
+    }
+
+type ConsumedTotals = NutritionTodayReadModel['consumed']
+type EntryTotals = NutritionIntakeReadItem['totals']
+
+const roundMacro = (value: number): number => Math.round(value * 10) / 10
+
+/** Totales de entry a partir de macros sueltas: redondeados y sin negativos (contrato del schema). */
+function entryTotalsFrom(totals: NutritionMacroTotalsLike): EntryTotals {
+  const clean = (value: number) => (Number.isFinite(value) && value > 0 ? roundMacro(value) : 0)
+  return {
+    calories: clean(totals.calories),
+    proteinG: clean(totals.proteinG),
+    carbsG: clean(totals.carbsG),
+    fatsG: clean(totals.fatsG),
+    fiberG: clean(totals.fiberG),
+  }
+}
+
+function shiftConsumed(
+  consumed: ConsumedTotals,
+  delta: EntryTotals,
+  sign: 1 | -1,
+  entryDelta: number,
+): ConsumedTotals {
+  const clamp = (value: number) => (value < 0 ? 0 : roundMacro(value))
+  return {
+    calories: clamp(consumed.calories + sign * delta.calories),
+    proteinG: clamp(consumed.proteinG + sign * delta.proteinG),
+    carbsG: clamp(consumed.carbsG + sign * delta.carbsG),
+    fatsG: clamp(consumed.fatsG + sign * delta.fatsG),
+    fiberG: clamp(consumed.fiberG + sign * delta.fiberG),
+    entryCount: Math.max(0, consumed.entryCount + sign * entryDelta),
+  }
+}
+
+/** `remaining` coherente con el nuevo consumido; sodio/agua no viven en `consumed` y se conservan. */
+function remainingFrom(
+  targets: NutritionTodayReadModel['targets'],
+  consumed: ConsumedTotals,
+  previous: NutritionTodayReadModel['remaining'],
+): NutritionTodayReadModel['remaining'] {
+  const left = (target: number | null, eaten: number) =>
+    target === null ? null : Math.max(0, roundMacro(target - eaten))
+  return {
+    ...previous,
+    calories: left(targets.calories, consumed.calories),
+    proteinG: left(targets.proteinG, consumed.proteinG),
+    carbsG: left(targets.carbsG, consumed.carbsG),
+    fatsG: left(targets.fatsG, consumed.fatsG),
+    fiberG: left(targets.fiberG, consumed.fiberG),
+  }
+}
+
+/** Quita una entry de donde esté (franja o sin franja); devuelve el modelo nuevo y lo removido. */
+function withoutEntries(
+  today: NutritionTodayReadModel,
+  matches: (entry: NutritionIntakeReadItem) => boolean,
+): { today: NutritionTodayReadModel; removed: NutritionIntakeReadItem[] } {
+  const removed: NutritionIntakeReadItem[] = []
+  const keep = (entry: NutritionIntakeReadItem) => {
+    if (matches(entry)) {
+      removed.push(entry)
+      return false
+    }
+    return true
+  }
+  const mealSlots = today.mealSlots.map((slot) => {
+    const intakeItems = slot.intakeItems.filter(keep)
+    return intakeItems.length === slot.intakeItems.length ? slot : { ...slot, intakeItems }
+  })
+  const unassignedIntake = today.unassignedIntake.filter(keep)
+  if (removed.length === 0) return { today, removed }
+  return { today: { ...today, mealSlots, unassignedIntake }, removed }
+}
+
+function withEntry(
+  today: NutritionTodayReadModel,
+  slotCode: string | null,
+  entry: NutritionIntakeReadItem,
+): NutritionTodayReadModel {
+  const slotExists = slotCode !== null && today.mealSlots.some((slot) => slot.code === slotCode)
+  if (!slotExists) {
+    return { ...today, unassignedIntake: [...today.unassignedIntake, entry] }
+  }
+  return {
+    ...today,
+    mealSlots: today.mealSlots.map((slot) =>
+      slot.code === slotCode ? { ...slot, intakeItems: [...slot.intakeItems, entry] } : slot,
+    ),
+  }
+}
+
+function reflowTotals(
+  today: NutritionTodayReadModel,
+  base: NutritionTodayReadModel,
+  delta: EntryTotals,
+  sign: 1 | -1,
+  entryDelta: number,
+): NutritionTodayReadModel {
+  const consumed = shiftConsumed(base.consumed, delta, sign, entryDelta)
+  return { ...today, consumed, remaining: remainingFrom(base.targets, consumed, base.remaining) }
+}
+
+/**
+ * Reducer de `useOptimistic`. Refleja el modelo que el servidor va a devolver: el Today solo trae
+ * entries ACTIVAS, así que retirar/corregir/sustituir REMUEVE la entry vieja en vez de re-etiquetarla.
+ */
+export function applyTodayOptimistic(
+  today: NutritionTodayReadModel,
+  action: TodayOptimisticAction,
+): NutritionTodayReadModel {
+  switch (action.kind) {
+    case 'add': {
+      const next = withEntry(today, action.slotCode, action.entry)
+      return reflowTotals(next, today, action.entry.totals, 1, 1)
+    }
+    case 'void': {
+      const { today: next, removed } = withoutEntries(today, (entry) => entry.id === action.entryId)
+      const gone = removed[0]
+      if (!gone) return today
+      return reflowTotals(next, today, gone.totals, -1, 1)
+    }
+    case 'edit': {
+      const { today: stripped, removed } = withoutEntries(
+        today,
+        (entry) => entry.id === action.entryId,
+      )
+      const previous = removed[0]
+      if (!previous || previous.quantity <= 0) return today
+      const factor = action.quantity / previous.quantity
+      const edited: NutritionIntakeReadItem = {
+        ...previous,
+        quantity: action.quantity,
+        totals: entryTotalsFrom({
+          calories: previous.totals.calories * factor,
+          proteinG: previous.totals.proteinG * factor,
+          carbsG: previous.totals.carbsG * factor,
+          fatsG: previous.totals.fatsG * factor,
+          fiberG: previous.totals.fiberG * factor,
+        }),
+      }
+      const next = withEntry(stripped, previous.mealSlot, edited)
+      // El neto puede ser negativo y `shiftConsumed` recorta a cero por campo: restar lo viejo y
+      // sumar lo nuevo en dos pasos evita inventar un "delta" con signo mixto.
+      const minus = reflowTotals(next, today, previous.totals, -1, 0)
+      return reflowTotals(minus, minus, edited.totals, 1, 0)
+    }
+    case 'substitute': {
+      const { today: stripped, removed } = withoutEntries(
+        today,
+        (entry) => entry.prescriptionItemId === action.prescriptionItemId,
+      )
+      const next = withEntry(stripped, action.slotCode, action.entry)
+      const removedTotals = removed.reduce(
+        (sum, entry) => ({
+          calories: sum.calories + entry.totals.calories,
+          proteinG: sum.proteinG + entry.totals.proteinG,
+          carbsG: sum.carbsG + entry.totals.carbsG,
+          fatsG: sum.fatsG + entry.totals.fatsG,
+          fiberG: sum.fiberG + entry.totals.fiberG,
+        }),
+        { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
+      )
+      const minus = reflowTotals(next, today, entryTotalsFrom(removedTotals), -1, removed.length)
+      return reflowTotals(minus, minus, action.entry.totals, 1, 1)
+    }
+  }
+}
+
+/** Id efímero de una entry optimista; el refresh la reemplaza por la fila real del servidor. */
+function optimisticEntryId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+/**
+ * Entry optimista desde el MISMO payload que viaja al RPC (snapshot idéntico byte a byte).
+ * `totals` viene del llamador porque cada camino ya los conoce: los macros prescritos en
+ * "Lo comí", `estimateCatalogIntakeTotals` en el registro libre.
+ */
+export function buildOptimisticIntakeEntry(input: {
+  payload: NutritionIntakeMutation
+  totals: NutritionMacroTotalsLike
+  media?: NutritionIntakeReadItem['media']
+  category?: string | null
+}): NutritionIntakeReadItem {
+  const { payload } = input
+  return {
+    id: optimisticEntryId(),
+    foodId: payload.foodId ?? null,
+    customName: payload.customName ?? null,
+    quantity: payload.quantity,
+    unit: payload.unit,
+    mealSlot: payload.mealSlot ?? null,
+    source: payload.source,
+    captureMethod: payload.captureMethod,
+    occurredAt: payload.occurredAt,
+    status: 'active',
+    revision: 1,
+    correctsEntryId: null,
+    prescriptionItemId: payload.prescriptionItemId ?? null,
+    snapshot: {
+      name: payload.snapshot.name,
+      brand: payload.snapshot.brand ?? null,
+      calories: payload.snapshot.calories ?? null,
+      proteinG: payload.snapshot.proteinG ?? null,
+      carbsG: payload.snapshot.carbsG ?? null,
+      fatsG: payload.snapshot.fatsG ?? null,
+      fiberG: payload.snapshot.fiberG ?? null,
+      servingSize: payload.snapshot.servingSize ?? null,
+      servingUnit: payload.snapshot.servingUnit ?? null,
+      macrosBasis: payload.snapshot.macrosBasis ?? null,
+    },
+    totals: entryTotalsFrom(input.totals),
+    media: input.media ?? null,
+    category: input.category ?? null,
+  }
+}
+
+/**
+ * Entry optimista de una sustitución, desde la MISMA equivalencia que la UI mostró (T2.4).
+ * Si el alumno confirmó otra cantidad, los totales se escalan linealmente — el servidor
+ * puede corregirla (cantidad fijada por el coach) y el refresh trae la verdad.
+ */
+export function buildOptimisticSubstitutionEntry(input: {
+  prescriptionItemId: string
+  mealSlot: string | null
+  foodId: string | null
+  equivalence: SubstitutionEquivalence
+  quantity: number | null
+  occurredAt: string
+}): NutritionIntakeReadItem {
+  const { equivalence } = input
+  const quantity = input.quantity ?? equivalence.quantity
+  const factor = equivalence.quantity > 0 ? quantity / equivalence.quantity : 1
+  return {
+    id: optimisticEntryId(),
+    foodId: input.foodId,
+    customName: null,
+    quantity,
+    unit: equivalence.unit,
+    mealSlot: input.mealSlot,
+    source: 'substitution',
+    captureMethod: 'prescription',
+    occurredAt: input.occurredAt,
+    status: 'active',
+    revision: 1,
+    correctsEntryId: null,
+    prescriptionItemId: input.prescriptionItemId,
+    snapshot: {
+      name: equivalence.snapshot.name,
+      brand: equivalence.snapshot.brand,
+      calories: equivalence.snapshot.calories,
+      proteinG: equivalence.snapshot.proteinG,
+      carbsG: equivalence.snapshot.carbsG,
+      fatsG: equivalence.snapshot.fatsG,
+      fiberG: equivalence.snapshot.fiberG,
+      servingSize: equivalence.snapshot.servingSize,
+      servingUnit: equivalence.snapshot.servingUnit,
+      macrosBasis: equivalence.snapshot.macrosBasis ?? null,
+    },
+    totals: entryTotalsFrom({
+      calories: equivalence.totals.calories * factor,
+      proteinG: equivalence.totals.proteinG * factor,
+      carbsG: equivalence.totals.carbsG * factor,
+      fatsG: equivalence.totals.fatsG * factor,
+      fiberG: equivalence.totals.fiberG * factor,
+    }),
+    media: null,
+    category: null,
   }
 }

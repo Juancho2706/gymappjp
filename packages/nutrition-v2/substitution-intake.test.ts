@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SUBSTITUTION_GROUP_KEY_PREFIX,
   SUBSTITUTION_MAX_MASS_QUANTITY,
   SubstitutionIntakeRequestSchema,
+  SubstitutionGroupSchema,
+  SubstitutionOptionSchema,
+  SubstitutionOptionsItemSchema,
   computeSubstitutionEquivalence,
+  describeSubstitutionDelta,
   roundSubstitutionQuantity,
   substituteNaturalUnit,
   substitutionAttemptFromToday,
   substitutionIntakeIdempotencyKey,
+  substitutionIntentToken,
+  swipeApplicableOptions,
+  swipeOptionAt,
   type SubstitutionPrescribedItem,
   type SubstitutionSubstitute,
 } from './substitution-intake'
@@ -304,5 +312,294 @@ describe('SubstitutionIntakeRequestSchema', () => {
     })
     expect(parsed).not.toHaveProperty('foodId')
     expect(parsed).not.toHaveProperty('snapshot')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// T2.5 — bloque grupo (SPEC `docs/specs/nutrition-exchange-swap/`)
+// ---------------------------------------------------------------------------
+
+describe('substitutionIntentToken — namespaces disjuntos', () => {
+  const SUB_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  const FOOD_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+
+  it('la fila del coach usa su id crudo y el grupo lo prefija', () => {
+    expect(substitutionIntentToken({ substitutionId: SUB_ID })).toBe(SUB_ID)
+    expect(substitutionIntentToken({ groupFoodId: FOOD_ID })).toBe(
+      `${SUBSTITUTION_GROUP_KEY_PREFIX}${FOOD_ID}`,
+    )
+  })
+
+  it('el MISMO uuid por los dos caminos nunca colisiona', () => {
+    expect(substitutionIntentToken({ substitutionId: FOOD_ID })).not.toBe(
+      substitutionIntentToken({ groupFoodId: FOOD_ID }),
+    )
+  })
+
+  it('exige exactamente uno de los dos ids', () => {
+    expect(() => substitutionIntentToken({})).toThrow()
+    expect(() =>
+      substitutionIntentToken({ substitutionId: SUB_ID, groupFoodId: FOOD_ID }),
+    ).toThrow()
+    expect(() => substitutionIntentToken({ groupFoodId: '' })).toThrow()
+  })
+})
+
+describe('substitutionIntakeIdempotencyKey — opciones del grupo y cola offline', () => {
+  const base = {
+    localDate: '2026-08-10',
+    prescriptionItemId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    attempt: 0,
+  }
+  const FOOD_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+
+  it('arma la clave del grupo con el prefijo gf-', () => {
+    expect(substitutionIntakeIdempotencyKey({ ...base, groupFoodId: FOOD_ID })).toBe(
+      `subst-2026-08-10-${base.prescriptionItemId}-gf-${FOOD_ID}-a0`,
+    )
+  })
+
+  it('el ciclo A -> B -> A encolado sin red produce TRES claves distintas', () => {
+    // Sin red no hay refetch: `attempt` se queda en 0 y solo `queuedAhead` avanza. Es exactamente
+    // el escenario donde el tercer gesto reusaba la clave del primero.
+    const A = 'aaaa1111-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const B = 'bbbb2222-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const keys = [
+      substitutionIntakeIdempotencyKey({ ...base, groupFoodId: A, queuedAhead: 0 }),
+      substitutionIntakeIdempotencyKey({ ...base, groupFoodId: B, queuedAhead: 1 }),
+      substitutionIntakeIdempotencyKey({ ...base, groupFoodId: A, queuedAhead: 2 }),
+    ]
+    expect(new Set(keys).size).toBe(3)
+    expect(keys[2]).not.toBe(keys[0])
+  })
+
+  it('un reintento del MISMO gesto (misma cola) repite la clave', () => {
+    const once = substitutionIntakeIdempotencyKey({
+      ...base,
+      groupFoodId: FOOD_ID,
+      queuedAhead: 2,
+    })
+    const twice = substitutionIntakeIdempotencyKey({
+      ...base,
+      groupFoodId: FOOD_ID,
+      queuedAhead: 2,
+    })
+    expect(once).toBe(twice)
+  })
+
+  it('queuedAhead se suma al attempt del read-model', () => {
+    expect(
+      substitutionIntakeIdempotencyKey({
+        ...base,
+        attempt: 3,
+        groupFoodId: FOOD_ID,
+        queuedAhead: 2,
+      }),
+    ).toContain('-a5')
+  })
+
+  it('rechaza queuedAhead invalido', () => {
+    expect(() =>
+      substitutionIntakeIdempotencyKey({ ...base, groupFoodId: FOOD_ID, queuedAhead: -1 }),
+    ).toThrow()
+  })
+})
+
+describe('describeSubstitutionDelta', () => {
+  it('dice "mismas kcal" cuando la equivalencia cuadra y los macros no se mueven', () => {
+    const prescribed = item({ quantity: 100, unit: 'g', calories: 200, proteinG: 20 })
+    const equivalence = computeSubstitutionEquivalence({
+      item: prescribed,
+      substitute: substitute({ calories: 100, proteinG: 10, macrosBasis: 'per_100' }),
+    })
+    // 200 kcal / 1 kcal por g = 200 g; 200 g a 10 g/100 g = 20 g de proteina.
+    expect(equivalence.quantity).toBe(200)
+    expect(describeSubstitutionDelta({ item: prescribed, equivalence })).toBe('mismas kcal')
+  })
+
+  it('reporta el macro que mas se mueve cuando las kcal cuadran', () => {
+    const prescribed = item({ quantity: 100, unit: 'g', calories: 200, proteinG: 10, carbsG: 5 })
+    const equivalence = computeSubstitutionEquivalence({
+      item: prescribed,
+      substitute: substitute({ calories: 100, proteinG: 15, carbsG: 6, macrosBasis: 'per_100' }),
+    })
+    // 200 g del sustituto ⇒ 30 g de proteina (+20) y 12 g de carbos (+7): gana proteina.
+    expect(describeSubstitutionDelta({ item: prescribed, equivalence })).toBe('+20 g proteina')
+  })
+
+  it('cuando el coach fijo la cantidad y las kcal NO cuadran, manda el delta calorico', () => {
+    const prescribed = item({ quantity: 100, unit: 'g', calories: 200, proteinG: 10 })
+    const equivalence = computeSubstitutionEquivalence({
+      item: prescribed,
+      substitute: substitute({ calories: 100, macrosBasis: 'per_100', quantity: 100, unit: 'g' }),
+    })
+    expect(equivalence.kind).toBe('explicit')
+    expect(describeSubstitutionDelta({ item: prescribed, equivalence })).toBe('−100 kcal')
+  })
+
+  it('sin macros del item degrada a "mismas kcal", no rompe', () => {
+    const prescribed = item({ quantity: 100, unit: 'g', calories: 200 })
+    const equivalence = computeSubstitutionEquivalence({
+      item: prescribed,
+      substitute: substitute({ calories: 100, macrosBasis: 'per_100' }),
+    })
+    expect(describeSubstitutionDelta({ item: prescribed, equivalence })).toBe('mismas kcal')
+  })
+
+  it('sin kcal congeladas en el item no hay pin', () => {
+    const prescribed = item({ calories: null })
+    const equivalence = computeSubstitutionEquivalence({
+      item: prescribed,
+      substitute: substitute(),
+    })
+    expect(describeSubstitutionDelta({ item: prescribed, equivalence })).toBeNull()
+  })
+})
+
+describe('swipeApplicableOptions — que puede aplicar el gesto', () => {
+  const ITEM = { quantity: 100, unit: 'g', calories: 200 }
+
+  function option(over: Record<string, unknown> = {}) {
+    return SubstitutionOptionSchema.parse({
+      substitutionId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      foodId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      recipeId: null,
+      customName: null,
+      quantity: null,
+      unit: null,
+      food: {
+        name: 'Sustituto',
+        brand: null,
+        calories: 100,
+        proteinG: 10,
+        carbsG: 5,
+        fatsG: 2,
+        fiberG: 1,
+        macrosBasis: 'per_100',
+        servingSize: 100,
+        servingUnit: 'g',
+        hasOverride: false,
+      },
+      frozen: { name: null, brand: null, calories: null },
+      ...over,
+    })
+  }
+
+  it('deja pasar una opcion normal', () => {
+    const options = swipeApplicableOptions({
+      entry: { item: ITEM, options: [option()] },
+      consumedFoodId: null,
+    })
+    expect(options).toHaveLength(1)
+  })
+
+  it('salta la que exige confirmar la cantidad', () => {
+    // Sustituto de 5 kcal/100 g ⇒ 4.000 g para igualar 200 kcal: pasa el tope y exige stepper.
+    const options = swipeApplicableOptions({
+      entry: {
+        item: ITEM,
+        options: [option({ food: { ...option().food, calories: 5 } })],
+      },
+      consumedFoodId: null,
+    })
+    expect(options).toHaveLength(0)
+  })
+
+  it('salta la opcion sin macros (no hay con que calcular)', () => {
+    const options = swipeApplicableOptions({
+      entry: { item: ITEM, options: [option({ foodId: null, food: null, customName: 'Libre' })] },
+      consumedFoodId: null,
+    })
+    expect(options).toHaveLength(0)
+  })
+
+  it('no ofrece "cambiar a lo mismo"', () => {
+    const options = swipeApplicableOptions({
+      entry: { item: ITEM, options: [option()] },
+      consumedFoodId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    })
+    expect(options).toHaveLength(0)
+  })
+
+  it('un item sin reemplazos del coach no tiene nada que aplicar de un gesto', () => {
+    // El bloque grupo NO entra: su "primer resultado" lo elige el algoritmo entre cientos, y
+    // aplicarlo a ciegas registraria algo que el alumno nunca vio. Ahi el swipe abre el sheet.
+    expect(swipeApplicableOptions({ entry: { item: ITEM, options: [] }, consumedFoodId: null }))
+      .toHaveLength(0)
+  })
+})
+
+describe('swipeOptionAt — ciclado', () => {
+  const a = { substitutionId: 'a' } as never
+  const b = { substitutionId: 'b' } as never
+
+  it('cicla en redondo', () => {
+    expect(swipeOptionAt([a, b], 0)).toBe(a)
+    expect(swipeOptionAt([a, b], 1)).toBe(b)
+    expect(swipeOptionAt([a, b], 2)).toBe(a)
+  })
+
+  it('sin opciones devuelve null', () => {
+    expect(swipeOptionAt([], 3)).toBeNull()
+  })
+})
+
+describe('SubstitutionOptionsItemSchema — el payload REAL de la RPC', () => {
+  /**
+   * Copiado tal cual de LIVE el 2026-08-10. El valor de este test es el id del grupo: los
+   * `exchange_groups` estan sembrados a mano y NO cumplen el RFC de UUID. Con `z.uuid()` este
+   * parseo fallaba, y como el dia entero se parsea de una vez, la feature quedaba invisible sin
+   * un solo error en logs. Si alguien vuelve a poner `uuid()` ahi, este test lo caza.
+   */
+  const real = {
+    item: { name: 'Sopa PREMIUM', unit: 'ml', fatsG: 2, carbsG: 3, calories: 23, proteinG: 1, quantity: 100 },
+    group: { id: '0000e8c0-0000-0000-0000-000000000001', code: 'C', name: 'Carbohidratos/Cereales' },
+    options: [],
+    groupTotal: 705,
+    groupOptions: [],
+    mealSlotCode: 'slot-1',
+    prescriptionItemId: 'c7201a21-4c80-4428-be11-5943a5dbf02a',
+  }
+
+  it('parsea un item con el id de grupo sembrado (no-RFC)', () => {
+    const parsed = SubstitutionOptionsItemSchema.safeParse(real)
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.group?.code).toBe('C')
+    expect(parsed.data.groupTotal).toBe(705)
+  })
+
+  it('los 9 grupos sembrados pasan el schema', () => {
+    for (let n = 1; n <= 9; n += 1) {
+      const id = `0000e8c0-0000-0000-0000-00000000000${n}`
+      expect(SubstitutionGroupSchema.safeParse({ id, code: 'X', name: 'Grupo' }).success).toBe(true)
+    }
+  })
+
+  it('y un id que NO es un GUID sigue siendo rechazado', () => {
+    expect(SubstitutionGroupSchema.safeParse({ id: 'no-soy-un-id', code: 'X', name: 'G' }).success).toBe(
+      false,
+    )
+  })
+})
+
+describe('SubstitutionOptionSchema — origin', () => {
+  const option = {
+    substitutionId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    foodId: null,
+    recipeId: null,
+    customName: 'Reemplazo libre',
+    quantity: null,
+    unit: null,
+    food: null,
+    frozen: { name: null, brand: null, calories: null },
+  }
+
+  it('la RPC de T2.4, que no emite origin, sigue parseando como "coach"', () => {
+    expect(SubstitutionOptionSchema.parse(option).origin).toBe('coach')
+  })
+
+  it('acepta el bloque grupo', () => {
+    expect(SubstitutionOptionSchema.parse({ ...option, origin: 'group' }).origin).toBe('group')
   })
 })

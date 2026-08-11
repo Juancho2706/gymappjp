@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -29,31 +29,37 @@ import {
   convertIntakeQuantity,
   defaultCatalogUnit,
   firstNameFromFullName,
-  formatNutritionCalories,
   intakeUnitLabel,
   normalizeIntakeUnit,
   sortFoodsByFavoriteFirst,
   substituteFromOption,
   substitutionAttemptFromToday,
+  swipeApplicableOptions,
+  swipeOptionAt,
   type BulkMarkSlotState,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
   type NutritionTodayReadModel,
+  type SubstitutionAnyOption,
   type SubstitutionEquivalence,
-  type SubstitutionOption,
   type SubstitutionOptionsItem,
 } from '@eva/nutrition-v2'
 import { MacroChipRow, NutritionCard, NutritionMotionButton } from '@/components/nutrition-v2'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { AuraHero } from './AuraHero'
+import { SubstitutionSheet } from './SubstitutionSheet'
+import { SwipeToExchange } from './SwipeToExchange'
 import { TodayModal } from './TodayModal'
 import { NutritionFoodRow } from './NutritionFoodRow'
 import { foodResultImage, resolveFoodImageUrl } from './food-result-image'
 import {
+  applyTodayOptimistic,
   buildBulkPrescribedPayloads,
   buildBulkUndoPayloads,
   buildCatalogIntakePayload,
   buildCorrectionPayload,
+  buildOptimisticIntakeEntry,
+  buildOptimisticSubstitutionEntry,
   buildPrescribedIntakePayload,
   buildVoidPayload,
   consumedEntries,
@@ -67,6 +73,7 @@ import {
   resolveItemDisplayNote,
   slotFreeEntries,
   slotPortionMarksTotal,
+  type TodayOptimisticAction,
 } from './nutrition-today.logic'
 import { usePortionMarks, type PortionMarksApi } from './PortionMarks'
 import { PortionCoverageRow } from './PortionCoverageRow'
@@ -113,12 +120,12 @@ type DialogState =
   | {
       kind: 'substitute'
       itemEntry: SubstitutionOptionsItem
-      option: SubstitutionOption
+      option: SubstitutionAnyOption
       equivalence: SubstitutionEquivalence
     }
 
 export function TodayExperience({
-  today,
+  today: serverToday,
   clientId,
   scanHref,
   clientName,
@@ -143,9 +150,31 @@ export function TodayExperience({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  /**
+   * Capa optimista (F7 · H2): `today` es el read model del servidor CON los gestos de esta
+   * transición ya pintados. Cada mutación aplica su delta antes de esperar la server action;
+   * el `router.refresh()` trae la verdad y React descarta el delta — y si la acción falla,
+   * la transición termina sin refresh y la pantalla REVIERTE sola al estado del servidor.
+   */
+  const [today, applyTodayDelta] = useOptimistic(serverToday, applyTodayOptimistic)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>({ kind: 'none' })
+  /**
+   * T2.5: item cuyo sheet de intercambio está abierto. Estado propio y no parte de `DialogState`
+   * porque los dos pueden convivir: elegir dentro del sheet una opción que exige confirmar abre el
+   * diálogo ENCIMA, y cancelar tiene que devolver a la lista, no a la pantalla.
+   */
+  const [exchange, setExchange] = useState<{
+    itemEntry: SubstitutionOptionsItem
+    consumedFoodId: string | null
+  } | null>(null)
+  /**
+   * Cuántos swipes lleva cada item, para que el siguiente ofrezca la siguiente opción. Es un ref
+   * y no estado: cambiarlo no tiene que repintar la lista entera, y el ciclo es efímero por
+   * definición — se reinicia con la pantalla, igual que la intención del alumno.
+   */
+  const swipeCycleRef = useRef<Record<string, number>>({})
   const captureIntake = useCaptureStudentNutritionIntake()
   const captureCorrection = useCaptureStudentNutritionCorrection()
 
@@ -173,10 +202,14 @@ export function TodayExperience({
     id: string,
     action: () => Promise<{ ok: boolean; error?: string }>,
     onSuccess?: () => void,
+    optimistic?: TodayOptimisticAction,
   ) {
     setError(null)
     setBusyId(id)
     startTransition(async () => {
+      // El delta se pinta ANTES de esperar al servidor; si la acción falla, la transición
+      // termina sin refresh y `useOptimistic` revierte sola al último estado del servidor.
+      if (optimistic) applyTodayDelta(optimistic)
       try {
         const res = await action()
         if (!res.ok) {
@@ -209,9 +242,27 @@ export function TodayExperience({
     if (state.eligible.length === 0) return
     const id = `bulk:${slot.id}`
     const payloads = buildBulkPrescribedPayloads({ context: ctx, slot, items: state.eligible })
+    // Delta optimista (H2): una entry por item elegible, alineada 1:1 con `payloads`.
+    const optimisticEntries = state.eligible.map((item, index) =>
+      buildOptimisticIntakeEntry({
+        payload: payloads[index],
+        totals: {
+          calories: item.macros.calories ?? 0,
+          proteinG: item.macros.proteinG ?? 0,
+          carbsG: item.macros.carbsG ?? 0,
+          fatsG: item.macros.fatsG ?? 0,
+          fiberG: item.macros.fiberG ?? 0,
+        },
+        media: item.media ?? null,
+        category: item.category ?? null,
+      }),
+    )
     setError(null)
     setBusyId(id)
     startTransition(async () => {
+      for (const entry of optimisticEntries) {
+        applyTodayDelta({ kind: 'add', slotCode: slot.code, entry })
+      }
       try {
         const res = await recordSlotIntakeBatchAction({ payloads })
         if (!res.ok) {
@@ -246,6 +297,9 @@ export function TodayExperience({
     const undo = buildBulkUndoPayloads(payloads, createdIds)
     if (undo.length === 0) return
     startTransition(async () => {
+      for (const payload of undo) {
+        applyTodayDelta({ kind: 'void', entryId: payload.entryId })
+      }
       try {
         const res = await voidSlotIntakeBatchAction({ payloads: undo })
         if (res.ok) {
@@ -273,22 +327,47 @@ export function TodayExperience({
    */
   function handleSubstitute(
     itemEntry: SubstitutionOptionsItem,
-    option: SubstitutionOption,
+    option: SubstitutionAnyOption,
     quantity: number | null,
   ) {
-    const id = `subst:${option.substitutionId}`
+    // T2.5: la opción del grupo no tiene fila, así que viaja como `groupFoodId`. Los dos caminos
+    // son excluyentes en el contrato y el servidor los valida por separado.
+    const isGroupOption = option.substitutionId === null
+    const id = `subst:${option.substitutionId ?? `gf-${option.foodId}`}`
+    const occurredAt = new Date().toISOString()
+    // Delta optimista (H2): la MISMA equivalencia que la UI mostró al elegir. El servidor puede
+    // corregir la cantidad (fijada por el coach) y el refresh trae la verdad — y el toast avisa.
+    const optimisticEntry = buildOptimisticSubstitutionEntry({
+      prescriptionItemId: itemEntry.prescriptionItemId,
+      mealSlot: itemEntry.mealSlotCode ?? null,
+      foodId: option.foodId,
+      equivalence: computeSubstitutionEquivalence({
+        item: itemEntry.item,
+        substitute: substituteFromOption(option),
+      }),
+      quantity,
+      occurredAt,
+    })
     setError(null)
     setBusyId(id)
     startTransition(async () => {
+      applyTodayDelta({
+        kind: 'substitute',
+        prescriptionItemId: itemEntry.prescriptionItemId,
+        slotCode: itemEntry.mealSlotCode ?? null,
+        entry: optimisticEntry,
+      })
       try {
         const res = await recordSubstitutionIntakeAction({
           payload: {
             clientId,
             localDate: today.localDate,
-            occurredAt: new Date().toISOString(),
+            occurredAt,
             timezone: today.timezone,
             prescriptionItemId: itemEntry.prescriptionItemId,
-            substitutionId: option.substitutionId,
+            ...(isGroupOption
+              ? { groupFoodId: option.foodId }
+              : { substitutionId: option.substitutionId }),
             attempt: substitutionAttemptFromToday(today, itemEntry.prescriptionItemId),
             quantity,
           },
@@ -298,6 +377,9 @@ export function TodayExperience({
           return
         }
         closeDialog()
+        // El sheet también se cierra: quedarse en la lista después de registrar invitaría a
+        // registrar dos veces sin ver el resultado.
+        setExchange(null)
         captureIntake('substitution')
         router.refresh()
         const label = `${res.quantity} ${res.unit}`
@@ -322,9 +404,32 @@ export function TodayExperience({
     })
   }
 
+  /**
+   * Deslizar la fila (T2.5 F6). Aplica de un gesto el reemplazo del coach que toque en el ciclo;
+   * si el item no tiene ninguno aplicable a ciegas, **abre el sheet** en vez de escribir — elegir
+   * entre los cientos del grupo es una decisión que se toma mirando, no deslizando.
+   */
+  function handleSwipeExchange(
+    itemEntry: SubstitutionOptionsItem,
+    consumedFoodId: string | null,
+  ) {
+    const options = swipeApplicableOptions({ entry: itemEntry, consumedFoodId })
+    const cycle = swipeCycleRef.current[itemEntry.prescriptionItemId] ?? 0
+    const option = swipeOptionAt(options, cycle)
+    if (!option) {
+      setExchange({ itemEntry, consumedFoodId })
+      return
+    }
+    // El swipe siguiente ofrece la opción siguiente: deslizar de nuevo es cambiar de opinión,
+    // no repetir el mismo registro.
+    swipeCycleRef.current[itemEntry.prescriptionItemId] = cycle + 1
+    handleSubstitute(itemEntry, option, null)
+  }
+
   /** Deshacer del toast: mismo camino de retiro que el resto (append-only, nada se borra). */
   function handleSubstitutionUndo(entryId: string) {
     startTransition(async () => {
+      applyTodayDelta({ kind: 'void', entryId })
       try {
         const res = await voidIntakeAction({
           payload: {
@@ -475,33 +580,42 @@ export function TodayExperience({
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
         onBulkEat={handleBulkEat}
         onEat={(slot, item) => {
-          const id = `eat:${item.id}`
+          const payload = buildPrescribedIntakePayload({
+            context: ctx,
+            slot,
+            item,
+            idempotencyKey: newIdempotencyKey('intake'),
+          })
           runMutation(
-            id,
-            () =>
-              recordIntakeAction({
-                payload: buildPrescribedIntakePayload({
-                  context: ctx,
-                  slot,
-                  item,
-                  idempotencyKey: newIdempotencyKey('intake'),
-                }),
-              }),
+            `eat:${item.id}`,
+            () => recordIntakeAction({ payload }),
             () => captureIntake('item_tap'),
+            {
+              kind: 'add',
+              slotCode: slot.code,
+              entry: buildOptimisticIntakeEntry({
+                payload,
+                // Totales = los macros prescritos que la fila ya muestra (el snapshot va
+                // normalizado per-unidad justamente para que el RPC reconstruya este número).
+                totals: {
+                  calories: item.macros.calories ?? 0,
+                  proteinG: item.macros.proteinG ?? 0,
+                  carbsG: item.macros.carbsG ?? 0,
+                  fatsG: item.macros.fatsG ?? 0,
+                  fiberG: item.macros.fiberG ?? 0,
+                },
+                media: item.media ?? null,
+                category: item.category ?? null,
+              }),
+            },
           )
         }}
         onEdit={(entry) => openDialog({ kind: 'edit', entry })}
         onVoid={(entry) => openDialog({ kind: 'void', entry })}
-        onPickSubstitution={(itemEntry, option, equivalence) => {
-          // Camino normal: un tap registra. Los dos casos degradados de la equivalencia
-          // (cantidad implausible o sin datos para calcularla) piden confirmar la cantidad
-          // antes de escribir — nunca se inventa un número a espaldas del alumno.
-          if (equivalence.requiresConfirmation) {
-            openDialog({ kind: 'substitute', itemEntry, option, equivalence })
-            return
-          }
-          handleSubstitute(itemEntry, option, null)
-        }}
+        onOpenExchange={(itemEntry, consumedFoodId) =>
+          setExchange({ itemEntry, consumedFoodId })
+        }
+        onSwipeExchange={handleSwipeExchange}
       />
 
       {/* "Fuera del plan" (auditoría H4): reemplaza a "Consumido hoy". Lo prescrito ya se ve arriba
@@ -572,28 +686,60 @@ export function TodayExperience({
           portionDupWarning={portionsApi.dupWarningFor}
           onClose={closeDialog}
           onSubmit={(food, quantity, unit, mealSlotCode) => {
+            const payload = buildCatalogIntakePayload({
+              context: ctx,
+              food,
+              quantity,
+              unit,
+              mealSlotCode,
+              idempotencyKey: newIdempotencyKey('intake'),
+            })
             runMutation(
               'register',
-              () =>
-                recordIntakeAction({
-                  payload: buildCatalogIntakePayload({
-                    context: ctx,
-                    food,
-                    quantity,
-                    unit,
-                    mealSlotCode,
-                    idempotencyKey: newIdempotencyKey('intake'),
-                  }),
-                }),
+              () => recordIntakeAction({ payload }),
               () => {
                 captureIntake('free_search')
                 closeDialog()
+              },
+              {
+                kind: 'add',
+                slotCode: mealSlotCode,
+                entry: buildOptimisticIntakeEntry({
+                  payload,
+                  // La MISMA estimación que el formulario ya muestra (NUT-017): el número
+                  // optimista y el que persiste el RPC salen de la misma función pura.
+                  totals: estimateCatalogIntakeTotals({ food, quantity, unit }),
+                }),
               },
             )
           }}
           submitting={isPending && busyId === 'register'}
         />
       ) : null}
+
+      {/* T2.5: el sheet de intercambio. Vive fuera de `DialogState` a propósito — al elegir una
+          opción que exige confirmar la cantidad, el diálogo se abre ENCIMA y el sheet queda
+          detrás, así cancelar vuelve a la lista y no a la pantalla. */}
+      <SubstitutionSheet
+        open={exchange !== null}
+        onClose={() => setExchange(null)}
+        entry={exchange?.itemEntry ?? null}
+        clientId={clientId}
+        localDate={today.localDate}
+        consumedFoodId={exchange?.consumedFoodId ?? null}
+        busyId={busyId}
+        isPending={isPending}
+        onPick={(itemEntry, option, equivalence) => {
+          // Camino normal: un tap registra. Los dos casos degradados de la equivalencia
+          // (cantidad implausible o sin datos para calcularla) piden confirmar la cantidad
+          // antes de escribir — nunca se inventa un número a espaldas del alumno.
+          if (equivalence.requiresConfirmation) {
+            openDialog({ kind: 'substitute', itemEntry, option, equivalence })
+            return
+          }
+          handleSubstitute(itemEntry, option, null)
+        }}
+      />
 
       {dialog.kind === 'substitute' ? (
         <SubstitutionConfirmDialog
@@ -602,7 +748,10 @@ export function TodayExperience({
           equivalence={dialog.equivalence}
           error={error}
           onClose={closeDialog}
-          submitting={isPending && busyId === `subst:${dialog.option.substitutionId}`}
+          submitting={
+            isPending &&
+            busyId === `subst:${dialog.option.substitutionId ?? `gf-${dialog.option.foodId}`}`
+          }
           onSubmit={(quantity) => handleSubstitute(dialog.itemEntry, dialog.option, quantity)}
         />
       ) : null}
@@ -630,6 +779,7 @@ export function TodayExperience({
                 captureCorrection('saved')
                 closeDialog()
               },
+              { kind: 'edit', entryId: dialog.entry.id, quantity: newQuantity },
             )
           }}
         />
@@ -657,6 +807,7 @@ export function TodayExperience({
                 captureCorrection('voided')
                 closeDialog()
               },
+              { kind: 'void', entryId: dialog.entry.id },
             )
           }}
         />
@@ -859,7 +1010,8 @@ function PrescribedSection({
   onEat,
   onEdit,
   onVoid,
-  onPickSubstitution,
+  onOpenExchange,
+  onSwipeExchange,
 }: {
   today: NutritionTodayReadModel
   busyId: string | null
@@ -867,12 +1019,10 @@ function PrescribedSection({
   portionsApi: PortionMarksApi
   substitutionOptionsByItem: Record<string, SubstitutionOptionsItem>
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
-  /** Tap en un reemplazo autorizado (T2.4): registra de un tap, o pide confirmar la cantidad. */
-  onPickSubstitution: (
-    itemEntry: SubstitutionOptionsItem,
-    option: SubstitutionOption,
-    equivalence: SubstitutionEquivalence,
-  ) => void
+  /** T2.5: abre el sheet de intercambio de ese item (dos bloques: coach y grupo). */
+  onOpenExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
+  /** T2.5 F6: deslizar la fila. Aplica el primer reemplazo del coach, o abre el sheet. */
+  onSwipeExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
   onBulkEat: (slot: NutritionTodayReadModel['mealSlots'][number], state: BulkMarkSlotState) => void
   onEat: (
     slot: NutritionTodayReadModel['mealSlots'][number],
@@ -945,8 +1095,16 @@ function PrescribedSection({
                       imageUrl: resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE),
                       category: item.category ?? undefined,
                     }
+                const consumedFoodId = consumedEntry?.foodId ?? null
                 return (
                   <div key={item.id}>
+                    <SwipeToExchange
+                      enabled={substitutionEntry !== undefined && !isPending}
+                      label={`Cambiar ${row.name}`}
+                      onSwipe={() => {
+                        if (substitutionEntry) onSwipeExchange(substitutionEntry, consumedFoodId)
+                      }}
+                    >
                     <NutritionFoodRow
                       name={row.name}
                       detail={row.detail}
@@ -993,16 +1151,16 @@ function PrescribedSection({
                         )
                       }
                     />
+                    </SwipeToExchange>
                     {/* Los reemplazos se ofrecen SIEMPRE, también sobre un item ya registrado:
                         ahí el servidor corrige en vez de duplicar (D3), que es lo que permite
                         cambiar de opinión. Solo se esconde la que ya está registrada — ofrecer
                         "cambiar a lo mismo" no es una decisión. */}
-                    <ItemSubstitutions
+                    <ItemExchangeTrigger
                       entry={substitutionEntry}
-                      busyId={busyId}
                       isPending={isPending}
-                      consumedFoodId={consumedEntry?.foodId ?? null}
-                      onPick={onPickSubstitution}
+                      consumedFoodId={consumedFoodId}
+                      onOpen={onOpenExchange}
                     />
                   </div>
                 )
@@ -1065,85 +1223,47 @@ function PrescribedSection({
 }
 
 /**
- * Reemplazos autorizados por el coach (F-02) bajo un item prescrito. Diseño sobrio del DS: etiqueta
- * muted + chips inline con la kcal de referencia cuando el snapshot la trae. Lista accesible
- * (light/dark). Sin reemplazos ⇒ no renderiza nada. Alineado bajo el texto del item (la miniatura
- * ocupa h-11 + gap-3 ≈ pl-14) para colgar de forma natural de su fila.
+ * Afordancia de intercambio bajo un item prescrito (T2.5). Antes acá vivían las pills, una por
+ * reemplazo del coach: servían a 15 items en toda la base y no tenían dónde poner los 832 que solo
+ * tienen grupo. Ahora es UN control que abre el sheet.
+ *
+ * Sin equivalentes ⇒ no renderiza nada (D2: el ítem queda fijo, y el copy honesto de por qué vive
+ * dentro del sheet, no acá). Alineado bajo el texto del item (la miniatura ocupa h-11 + gap-3 ≈
+ * pl-14) para colgar de forma natural de su fila.
  */
-function ItemSubstitutions({
+function ItemExchangeTrigger({
   entry,
-  busyId,
   isPending,
   consumedFoodId,
-  onPick,
+  onOpen,
 }: {
   entry: SubstitutionOptionsItem | undefined
-  busyId: string | null
   isPending: boolean
-  /** Alimento con el que el item ya está registrado, para no ofrecer "cambiar a lo mismo". */
+  /** Alimento con el que el item ya está registrado, para no contar "cambiar a lo mismo". */
   consumedFoodId: string | null
-  /** T2.4: el tap REGISTRA (o pide confirmar la cantidad); ya no abre el registro libre. */
-  onPick: (
-    itemEntry: SubstitutionOptionsItem,
-    option: SubstitutionOption,
-    equivalence: SubstitutionEquivalence,
-  ) => void
+  onOpen: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
 }) {
-  const options = (entry?.options ?? []).filter(
+  if (!entry) return null
+  const coachCount = entry.options.filter(
     (option) => consumedFoodId === null || option.foodId !== consumedFoodId,
-  )
-  if (!entry || options.length === 0) return null
+  ).length
+  const total = coachCount + entry.groupTotal
+  if (total === 0) return null
+
   return (
     <div className="pb-3 pl-14">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
-        {consumedFoodId ? 'Puedes cambiarlo por' : 'Puedes reemplazar por'}
-      </p>
-      <ul aria-label="Reemplazos autorizados por tu coach" className="mt-1 flex flex-wrap gap-1.5">
-        {options.map((option) => {
-          // La MISMA función que usa el servidor al escribir: el número que el alumno ve antes de
-          // tocar y el que se persiste son el mismo por construcción, no por disciplina.
-          const equivalence = computeSubstitutionEquivalence({
-            item: {
-              quantity: entry.item.quantity,
-              unit: entry.item.unit,
-              calories: entry.item.calories,
-            },
-            substitute: substituteFromOption(option),
-          })
-          const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'Reemplazo'
-          const pending = isPending && busyId === `subst:${option.substitutionId}`
-          const amount = `${equivalence.quantity} ${equivalence.unit}`
-          return (
-            <li key={option.substitutionId}>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => onPick(entry, option, equivalence)}
-                aria-label={
-                  equivalence.requiresConfirmation
-                    ? `Reemplazar por ${name}: confirma la cantidad`
-                    : `Reemplazar por ${name}, ${amount}`
-                }
-                className="inline-flex min-h-9 items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body transition-colors hover:border-primary/40 hover:text-strong disabled:opacity-60"
-              >
-                <span>{name}</span>
-                {/* Antes acá vivía la kcal del snapshot congelado, que con `quantity` NULL es la de
-                    UNA porción del sustituto: el ítem de 240 kcal ofrecía "17 kcal". Ahora va la
-                    cantidad equivalente calculada con los macros vigentes. */}
-                <span className="tabular-nums text-muted">· {amount}</span>
-                {equivalence.requiresConfirmation ? (
-                  <span className="text-muted">· confirma</span>
-                ) : (
-                  <span className="tabular-nums text-muted">
-                    · {formatNutritionCalories(equivalence.totals.calories)}
-                  </span>
-                )}
-                {pending ? <span className="text-muted">…</span> : null}
-              </button>
-            </li>
-          )
-        })}
-      </ul>
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => onOpen(entry, consumedFoodId)}
+        aria-label={`Cambiar ${entry.item.name ?? 'este alimento'}: ${total} equivalentes`}
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body transition-colors hover:border-primary/40 hover:text-strong disabled:opacity-60"
+      >
+        <span aria-hidden="true">⇄</span>
+        <span>
+          {total} {total === 1 ? 'equivalente' : 'equivalentes'}
+        </span>
+      </button>
     </div>
   )
 }
@@ -1168,7 +1288,7 @@ function SubstitutionConfirmDialog({
   onSubmit,
 }: {
   itemEntry: SubstitutionOptionsItem
-  option: SubstitutionOption
+  option: SubstitutionAnyOption
   equivalence: SubstitutionEquivalence
   error: string | null
   submitting: boolean

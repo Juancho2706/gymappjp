@@ -240,11 +240,28 @@ async function fetchSubstitutionOptionsByItem(
   }
 
   const parsed = SubstitutionOptionsReadModelSchema.safeParse(data)
-  if (!parsed.success) return {}
+  if (!parsed.success) {
+    // Esta rama degradaba en SILENCIO y por eso costo caro: un solo id invalido tumbaba el parseo
+    // del dia entero, la feature quedaba invisible y no habia rastro ni en el servidor ni en la
+    // consola del navegador. Si vuelve a pasar, que al menos diga donde.
+    console.error('nutrition_v2_web_read', {
+      rpc: 'get_nutrition_substitution_options_v2',
+      ok: false,
+      errorCode: 'PARSE_ERROR',
+      issues: parsed.error.issues.slice(0, 5).map((issue) => ({
+        path: issue.path.join('.'),
+        code: issue.code,
+      })),
+    })
+    return {}
+  }
 
   return Object.fromEntries(
     parsed.data.items
-      .filter((item) => item.options.length > 0)
+      // T2.5: ya no alcanza con tener reemplazos del coach (15 items en toda la base). Un item con
+      // grupo de intercambio también ofrece equivalentes, y son 832. Este filtro se quedó en la
+      // versión de T2.4 y dejaba la fila sin el control ⇄ para el 98% de los casos.
+      .filter((item) => item.options.length > 0 || item.groupTotal > 0)
       .map((item) => [item.prescriptionItemId, item]),
   )
 }

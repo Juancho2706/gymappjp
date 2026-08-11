@@ -44,6 +44,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import { NutritionDomainOff } from '../../../../components/nutrition-v2'
+import { SubstitutionSheet } from '../../../../components/nutrition-v2/SubstitutionSheet'
+import { SwipeToExchange } from '../../../../components/nutrition-v2/SwipeToExchange'
 import {
   PastDaySummary,
   LegacyHistoryDetail,
@@ -84,10 +86,12 @@ import {
   resolveNutritionDayVariantForDate,
   substituteFromOption,
   substitutionAttemptFromToday,
+  swipeApplicableOptions,
+  swipeOptionAt,
   SubstitutionOptionsReadModelSchema,
   type NutritionFoodRowModel,
+  type SubstitutionAnyOption,
   type SubstitutionEquivalence,
-  type SubstitutionOption,
   type SubstitutionOptionsItem,
   type NutritionHistoryDay,
   type NutritionHistoryPageReadModel,
@@ -241,8 +245,18 @@ function TodayTab({
   const [substitutionsByItemId, setSubstitutionsByItemId] = useState<
     ReadonlyMap<string, SubstitutionOptionsItem>
   >(() => new Map())
-  /** Pill en vuelo (T2.4): apaga solo esa opción mientras la escritura viaja. */
+  /** Opción en vuelo (T2.4): apaga solo esa mientras la escritura viaja. */
   const [substitutingId, setSubstitutingId] = useState<string | null>(null)
+  /** T2.5: item cuyo sheet de intercambio está abierto. */
+  const [exchange, setExchange] = useState<{
+    itemEntry: SubstitutionOptionsItem
+    consumedFoodId: string | null
+  } | null>(null)
+  /**
+   * Cuántos swipes lleva cada item, para que el siguiente ofrezca la siguiente opción. Ref y no
+   * estado: cambiarlo no tiene que repintar la lista, y el ciclo es efímero por definición.
+   */
+  const swipeCycleRef = useRef<Record<string, number>>({})
   const [entryAction, setEntryAction] = useState<EntryCorrectionAction | null>(null)
   const [entryActionPending, setEntryActionPending] = useState(false)
   const [entryActionError, setEntryActionError] = useState<string | null>(null)
@@ -488,7 +502,11 @@ function TodayTab({
       }
       const grouped = new Map<string, SubstitutionOptionsItem>()
       for (const entry of parsed.data.items) {
-        if (entry.options.length > 0) grouped.set(entry.prescriptionItemId, entry)
+        // T2.5: ya no alcanza con tener reemplazos del coach (15 items en toda la base). Un item
+        // con grupo de intercambio tambien ofrece equivalentes, y son 832.
+        if (entry.options.length > 0 || entry.groupTotal > 0) {
+          grouped.set(entry.prescriptionItemId, entry)
+        }
       }
       setSubstitutionsByItemId(grouped)
     })()
@@ -1080,30 +1098,56 @@ function TodayTab({
    * confirmación explícita antes de escribir. El stepper completo llega con el sheet de T2.5.
    */
   const submitSubstitution = useCallback(
-    async (itemEntry: SubstitutionOptionsItem, option: SubstitutionOption) => {
+    async (
+      itemEntry: SubstitutionOptionsItem,
+      option: SubstitutionAnyOption,
+      equivalence: SubstitutionEquivalence,
+    ) => {
       if (!userId || !model) return
+      // T2.5: la opción del grupo no tiene fila, así que viaja como `groupFoodId`. Los dos caminos
+      // son excluyentes en el contrato y el servidor los valida por separado.
+      const isGroupOption = option.substitutionId === null
+      const key = option.substitutionId ?? `gf-${option.foodId}`
       setMutationError(null)
-      setSubstitutingId(option.substitutionId)
+      setSubstitutingId(key)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      const outcome = await submitSubstituteIntake(userId, {
-        clientId: userId,
-        localDate: date,
-        occurredAt: new Date().toISOString(),
-        timezone: TZ,
-        prescriptionItemId: itemEntry.prescriptionItemId,
-        substitutionId: option.substitutionId,
-        attempt: substitutionAttemptFromToday(model, itemEntry.prescriptionItemId),
-        quantity: null,
-      })
+      const outcome = await submitSubstituteIntake(
+        userId,
+        {
+          clientId: userId,
+          localDate: date,
+          occurredAt: new Date().toISOString(),
+          timezone: TZ,
+          prescriptionItemId: itemEntry.prescriptionItemId,
+          ...(isGroupOption
+            ? { groupFoodId: option.foodId as string }
+            : { substitutionId: option.substitutionId as string }),
+          attempt: substitutionAttemptFromToday(model, itemEntry.prescriptionItemId),
+          quantity: null,
+        },
+        // Reparo heredado de T2.4: con esto la fila se pinta con "En cola" al encolar sin red.
+        // Son datos LOCALES para la pantalla; el payload sigue siendo solo la intención.
+        {
+          name: option.food?.name ?? option.customName ?? equivalence.snapshot.name,
+          brand: option.food?.brand ?? null,
+          quantity: equivalence.quantity,
+          unit: equivalence.unit,
+          mealSlot: itemEntry.mealSlotCode,
+          totals: equivalence.totals,
+        },
+      )
       if (!mountedRef.current) return
       if (outcome.status === 'recorded') {
+        setExchange(null)
         await load(true)
         if (!mountedRef.current) return
         setSubstitutingId(null)
       } else if (outcome.status === 'queued') {
         setSubstitutingId(null)
+        setExchange(null)
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
         await refreshPending()
+        await syncOverlayFromQueue()
       } else {
         setSubstitutingId(null)
         setMutationError(
@@ -1111,18 +1155,50 @@ function TodayTab({
         )
       }
     },
-    [date, load, model, refreshPending, userId],
+    [date, load, model, refreshPending, syncOverlayFromQueue, userId],
+  )
+
+  const onOpenExchange = useCallback(
+    (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => {
+      setExchange({ itemEntry, consumedFoodId })
+    },
+    [],
+  )
+
+  /**
+   * T2.5 F6: deslizar la fila. Aplica de un gesto el reemplazo del coach que toque en el ciclo; si
+   * el item no tiene ninguno aplicable a ciegas, ABRE el sheet en vez de escribir — elegir entre
+   * los cientos del grupo es una decisión que se toma mirando, no deslizando.
+   */
+  const onSwipeExchange = useCallback(
+    (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => {
+      const options = swipeApplicableOptions({ entry: itemEntry, consumedFoodId })
+      const cycle = swipeCycleRef.current[itemEntry.prescriptionItemId] ?? 0
+      const option = swipeOptionAt(options, cycle)
+      if (!option) {
+        setExchange({ itemEntry, consumedFoodId })
+        return
+      }
+      // El swipe siguiente ofrece la opción siguiente: deslizar de nuevo es cambiar de opinión.
+      swipeCycleRef.current[itemEntry.prescriptionItemId] = cycle + 1
+      const equivalence = computeSubstitutionEquivalence({
+        item: itemEntry.item,
+        substitute: substituteFromOption(option),
+      })
+      void submitSubstitution(itemEntry, option, equivalence)
+    },
+    [submitSubstitution],
   )
 
   const onPickSubstitution = useCallback(
     (
       itemEntry: SubstitutionOptionsItem,
-      option: SubstitutionOption,
+      option: SubstitutionAnyOption,
       equivalence: SubstitutionEquivalence,
     ) => {
       const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'el reemplazo'
       if (!equivalence.requiresConfirmation) {
-        void submitSubstitution(itemEntry, option)
+        void submitSubstitution(itemEntry, option, equivalence)
         return
       }
       Alert.alert(
@@ -1134,7 +1210,7 @@ function TodayTab({
           { text: 'Cancelar', style: 'cancel' },
           {
             text: `Registrar ${equivalence.quantity} ${equivalence.unit}`,
-            onPress: () => void submitSubstitution(itemEntry, option),
+            onPress: () => void submitSubstitution(itemEntry, option, equivalence),
           },
         ],
       )
@@ -1721,7 +1797,8 @@ function TodayTab({
                 portionVoids={portions.voidsBySlot[slot.code] ?? EMPTY_PORTION_VOIDS}
                 onMarkPortion={portions.mark}
                 onOpenEquivalences={onOpenEquivalences}
-                onPickSubstitution={onPickSubstitution}
+                onOpenExchange={onOpenExchange}
+                onSwipeExchange={onSwipeExchange}
                 onCorrect={onCorrectPrescribed}
                 highlighted={slot.code === focusSlotCode}
               />
@@ -1814,6 +1891,18 @@ function TodayTab({
         }}
         onEdit={onEditEntry}
         onVoid={onVoidEntry}
+      />
+      {/* T2.5: sheet de intercambio. Se cierra solo al registrar; si la opción exige confirmar la
+          cantidad, el Alert se abre encima y cancelar devuelve a la lista. */}
+      <SubstitutionSheet
+        open={exchange !== null}
+        onClose={() => setExchange(null)}
+        entry={exchange?.itemEntry ?? null}
+        clientId={userId ?? ''}
+        localDate={date}
+        consumedFoodId={exchange?.consumedFoodId ?? null}
+        pendingId={substitutingId}
+        onPick={onPickSubstitution}
       />
       <PortionEquivalencesSheet
         open={equivOpen}
@@ -2005,7 +2094,8 @@ const TodaySlotCard = memo(function TodaySlotCard({
   portionVoids,
   onMarkPortion,
   onOpenEquivalences,
-  onPickSubstitution,
+  onOpenExchange,
+  onSwipeExchange,
   onCorrect,
   highlighted = false,
 }: {
@@ -2030,12 +2120,10 @@ const TodaySlotCard = memo(function TodaySlotCard({
     completes: boolean,
   ) => void
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
-  /** Tap en un reemplazo autorizado (T2.4): registra de un tap, o pide confirmar la cantidad. */
-  onPickSubstitution: (
-    itemEntry: SubstitutionOptionsItem,
-    option: SubstitutionOption,
-    equivalence: SubstitutionEquivalence,
-  ) => void
+  /** T2.5: abre el sheet de intercambio de ese item (dos bloques: coach y grupo). */
+  onOpenExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
+  /** T2.5 F6: deslizar la fila. Aplica el primer reemplazo del coach, o abre el sheet. */
+  onSwipeExchange: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
   /** Corregir/retirar el registro de un item prescrito consumido (paridad web NUT-009). */
   onCorrect: (kind: 'edit' | 'void', entry: NutritionIntakeReadItem) => void
   /** Franja apuntada por el deep-link de la card de Nutrición del Home (SPEC #8). */
@@ -2072,6 +2160,12 @@ const TodaySlotCard = memo(function TodaySlotCard({
             const displayNote = substitutionCount > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
             return (
               <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
+                <SwipeToExchange
+                  enabled={substitutionEntry !== undefined && substitutingId === null}
+                  onSwipe={() => {
+                    if (substitutionEntry) onSwipeExchange(substitutionEntry, activeEntry?.foodId ?? null)
+                  }}
+                >
                 <FoodRow
                   food={{
                     id: item.id,
@@ -2152,14 +2246,15 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     )
                   }
                 />
+                </SwipeToExchange>
                 {/* Los reemplazos se ofrecen SIEMPRE, también sobre un item ya registrado: ahí el
                     servidor corrige en vez de duplicar (D3), que es lo que permite cambiar de
                     opinión. Solo se esconde la opción ya registrada. */}
-                <ItemSubstitutionsHint
+                <ItemExchangeTrigger
                   entry={substitutionEntry}
-                  pendingId={substitutingId}
+                  disabled={substitutingId !== null}
                   consumedFoodId={activeEntry?.foodId ?? null}
-                  onPick={onPickSubstitution}
+                  onOpen={onOpenExchange}
                 />
               </View>
             )
@@ -2220,81 +2315,46 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
 }
 
 /**
- * Reemplazos autorizados por el coach (F-02), alineados con la fila web. T1.6 (puente): las
- * pills dejan de ser decorativas — tap abre el registro libre precargado (o explica el permiso).
- * El camino server-validado sin permiso es T2.4 y reemplaza este puente.
+ * Afordancia de intercambio bajo un item prescrito (T2.5). Espejo del web: antes acá vivían las
+ * pills, una por reemplazo del coach — servían a 15 items en toda la base y no tenían dónde poner
+ * los 832 que solo tienen grupo. Ahora es UN control que abre el sheet.
+ *
+ * Sin equivalentes ⇒ no renderiza nada (D2); el copy honesto de por qué vive dentro del sheet.
  */
-function ItemSubstitutionsHint({
+function ItemExchangeTrigger({
   entry,
-  pendingId,
+  disabled,
   consumedFoodId,
-  onPick,
+  onOpen,
 }: {
   entry: SubstitutionOptionsItem | undefined
-  pendingId: string | null
-  /** Alimento con el que el item ya está registrado, para no ofrecer "cambiar a lo mismo". */
+  disabled: boolean
+  /** Alimento con el que el item ya está registrado, para no contar "cambiar a lo mismo". */
   consumedFoodId: string | null
-  onPick: (
-    itemEntry: SubstitutionOptionsItem,
-    option: SubstitutionOption,
-    equivalence: SubstitutionEquivalence,
-  ) => void
+  onOpen: (itemEntry: SubstitutionOptionsItem, consumedFoodId: string | null) => void
 }) {
-  const options = (entry?.options ?? []).filter(
+  if (!entry) return null
+  const coachCount = entry.options.filter(
     (option) => consumedFoodId === null || option.foodId !== consumedFoodId,
-  )
-  if (!entry || options.length === 0) return null
+  ).length
+  const total = coachCount + entry.groupTotal
+  if (total === 0) return null
+
   return (
     <View className="pb-3 pl-14">
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-subtle">
-        {consumedFoodId ? 'Puedes cambiarlo por' : 'Puedes reemplazar por'}
-      </Text>
-      <View accessibilityLabel="Reemplazos autorizados por tu coach" className="mt-1 flex-row flex-wrap gap-1.5">
-        {options.map((option) => {
-          // MISMA función que usa el servidor al escribir: el número que el alumno ve y el que se
-          // persiste son el mismo por construcción (y el mismo que muestra la web).
-          const equivalence = computeSubstitutionEquivalence({
-            item: {
-              quantity: entry.item.quantity,
-              unit: entry.item.unit,
-              calories: entry.item.calories,
-            },
-            substitute: substituteFromOption(option),
-          })
-          const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'Reemplazo'
-          const amount = `${equivalence.quantity} ${equivalence.unit}`
-          const pending = pendingId === option.substitutionId
-          return (
-            <Pressable
-              key={option.substitutionId}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: pending }}
-              disabled={pending}
-              accessibilityLabel={
-                equivalence.requiresConfirmation
-                  ? `Reemplazar por ${name}: confirma la cantidad`
-                  : `Reemplazar por ${name}, ${amount}`
-              }
-              onPress={() => onPick(entry, option, equivalence)}
-              className="min-h-9 flex-row items-center gap-1 rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
-            >
-              <Text className="text-xs font-medium text-body" numberOfLines={1}>
-                {name}
-              </Text>
-              {/* Antes acá iba la kcal del snapshot congelado, que con `quantity` NULL es la de UNA
-                  porción del sustituto: el item de 240 kcal ofrecía "17 kcal". */}
-              <Text className="font-mono text-xs text-muted" numberOfLines={1}>
-                · {amount}
-              </Text>
-              <Text className="font-mono text-xs text-muted" numberOfLines={1}>
-                {equivalence.requiresConfirmation
-                  ? '· confirma'
-                  : `· ${formatNutritionCalories(equivalence.totals.calories)}`}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        accessibilityLabel={`Cambiar ${entry.item.name ?? 'este alimento'}: ${total} equivalentes`}
+        onPress={() => onOpen(entry, consumedFoodId)}
+        className="min-h-9 flex-row items-center gap-1.5 self-start rounded-pill border border-subtle bg-surface-sunken px-2.5 py-1"
+      >
+        <Text className="text-xs text-body">⇄</Text>
+        <Text className="text-xs font-medium text-body">
+          {total} {total === 1 ? 'equivalente' : 'equivalentes'}
+        </Text>
+      </Pressable>
     </View>
   )
 }

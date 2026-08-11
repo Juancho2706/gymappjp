@@ -213,11 +213,17 @@ export function QuickEditPlanView() {
             <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted">{protocolNotes}</p>
           ) : null}
           <ul className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+            {/*
+              "Puede sustituir" (`canSubstitute`) NO se pinta: desde T2.4 no lo lee ningun camino
+              de autorizacion, y desde T2.5 el intercambio dentro del grupo es equivalencia
+              nutricional, no un permiso. Mostrarlo le decia al coach que habia bloqueado algo que
+              nunca estuvo bloqueado. El veto real por alimento es `exchange_group_foods.is_excluded`.
+              Decision D4, `docs/specs/nutrition-exchange-swap/SPEC.md`.
+            */}
             {(
               [
                 [permissions.canRegisterFreely, 'Registro libre'],
                 [permissions.canAdjustPrescribedQuantity, 'Ajusta cantidades'],
-                [permissions.canSubstitute, 'Puede sustituir'],
               ] as const
             ).map(([enabled, label]) => (
               <li

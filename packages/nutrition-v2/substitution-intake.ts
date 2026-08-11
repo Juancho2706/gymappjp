@@ -54,6 +54,14 @@ export interface SubstitutionPrescribedItem {
    * `intake-normalize`). Es el objetivo que la equivalencia intenta igualar.
    */
   calories: number | null
+  /**
+   * Macros TOTALES de la cantidad prescrita. Opcionales: la RPC de opciones de T2.4 solo expone
+   * `calories`, asi que hasta que F2 los agregue el delta degrada a comparar kcal (ver
+   * `describeSubstitutionDelta`).
+   */
+  proteinG?: number | null
+  carbsG?: number | null
+  fatsG?: number | null
 }
 
 /**
@@ -301,6 +309,70 @@ export function computeSubstitutionEquivalence(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Delta legible de la opcion (T2.5, SPEC `nutrition-exchange-swap` — pin 3 del sheet)
+// ---------------------------------------------------------------------------
+
+/**
+ * Umbral bajo el cual dos opciones se consideran caloricamente iguales. Por construccion la
+ * equivalencia IGUALA las kcal, asi que la diferencia que queda es puro redondeo al escalon; se
+ * separa del 4% del microcopy a proposito: el texto dice "mismas kcal" sin numero.
+ */
+const DELTA_CALORIE_TOLERANCE = 0.05
+/** Gramos por debajo de los cuales un macro no merece renglon (ruido de redondeo). */
+const DELTA_MACRO_MIN_GRAMS = 2
+
+const DELTA_MACRO_LABELS = [
+  ['proteinG', 'proteina'],
+  ['carbsG', 'carbohidratos'],
+  ['fatsG', 'grasas'],
+] as const
+
+function signed(value: number, suffix: string): string {
+  const rounded = Math.round(value)
+  return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)} ${suffix}`
+}
+
+/**
+ * Texto de una linea que explica en que se diferencia la opcion del item prescrito.
+ *
+ * El orden de las reglas sigue lo que el alumno necesita saber, no lo que es facil de calcular:
+ * si las kcal NO cuadran (cantidad explicita del coach, o redondeo grande en cantidades chicas),
+ * eso es lo primero; si cuadran, lo informativo es el macro que se mueve; y si no se mueve nada,
+ * "mismas kcal".
+ *
+ * Devuelve `null` cuando no hay con que comparar (item sin kcal congeladas): la UI no pinta pin.
+ */
+export function describeSubstitutionDelta(input: {
+  item: SubstitutionPrescribedItem
+  equivalence: SubstitutionEquivalence
+}): string | null {
+  const { item, equivalence } = input
+  const target = equivalence.targetCalories
+  if (target === null || !Number.isFinite(target) || target <= 0) return null
+
+  const calories = equivalence.totals.calories
+  if (calories === null || !Number.isFinite(calories)) return null
+
+  const deltaCalories = calories - target
+  if (Math.abs(deltaCalories) / target >= DELTA_CALORIE_TOLERANCE) {
+    return signed(deltaCalories, 'kcal')
+  }
+
+  let worst: { delta: number; label: string } | null = null
+  for (const [key, label] of DELTA_MACRO_LABELS) {
+    const itemValue = item[key]
+    const optionValue = equivalence.totals[key]
+    if (typeof itemValue !== 'number' || !Number.isFinite(itemValue)) continue
+    if (typeof optionValue !== 'number' || !Number.isFinite(optionValue)) continue
+    const delta = optionValue - itemValue
+    if (Math.abs(delta) < DELTA_MACRO_MIN_GRAMS) continue
+    if (worst === null || Math.abs(delta) > Math.abs(worst.delta)) worst = { delta, label }
+  }
+
+  return worst === null ? 'mismas kcal' : signed(worst.delta, `g ${worst.label}`)
+}
+
+// ---------------------------------------------------------------------------
 // Idempotencia por intencion (SPEC "Idempotencia por intencion")
 // ---------------------------------------------------------------------------
 
@@ -351,14 +423,51 @@ export function substitutionAttemptFromToday(
 export function substitutionIntakeIdempotencyKey(input: {
   localDate: string
   prescriptionItemId: string
-  substitutionId: string
+  /** Fila autorizada por el coach. Excluyente con `groupFoodId`. */
+  substitutionId?: string
+  /** Alimento elegido del grupo de intercambio (T2.5). Excluyente con `substitutionId`. */
+  groupFoodId?: string
   attempt: number
+  /**
+   * Gestos del MISMO item ya encolados sin red y todavia sin drenar. Se suma al `attempt`
+   * porque offline no hay refetch del read-model: sin esto, el tercer gesto de un ciclo A→B→A
+   * reusa la clave del primero y la cadena de correcciones termina apuntandose a si misma.
+   */
+  queuedAhead?: number
 }): string {
-  const { attempt } = input
+  const { attempt, substitutionId, groupFoodId, queuedAhead = 0 } = input
   if (!Number.isInteger(attempt) || attempt < 0) {
     throw new Error('substitutionIntakeIdempotencyKey: attempt debe ser entero >= 0')
   }
-  return `subst-${input.localDate}-${input.prescriptionItemId}-${input.substitutionId}-a${attempt}`
+  if (!Number.isInteger(queuedAhead) || queuedAhead < 0) {
+    throw new Error('substitutionIntakeIdempotencyKey: queuedAhead debe ser entero >= 0')
+  }
+  const token = substitutionIntentToken({ substitutionId, groupFoodId })
+  return `subst-${input.localDate}-${input.prescriptionItemId}-${token}-a${attempt + queuedAhead}`
+}
+
+/**
+ * Prefijo del alimento de grupo dentro de la clave. Existe para que los dos bloques del sheet
+ * vivan en NAMESPACES DISJUNTOS: el mismo alimento elegido como reemplazo autorizado o como
+ * equivalente del grupo son intenciones distintas y no deben compartir historial de intentos.
+ */
+export const SUBSTITUTION_GROUP_KEY_PREFIX = 'gf-'
+
+/** Token que ocupa el slot de la intencion en la clave. Exactamente uno de los dos ids. */
+export function substitutionIntentToken(input: {
+  substitutionId?: string
+  groupFoodId?: string
+}): string {
+  const hasSubstitution = typeof input.substitutionId === 'string' && input.substitutionId.length > 0
+  const hasGroupFood = typeof input.groupFoodId === 'string' && input.groupFoodId.length > 0
+  if (hasSubstitution === hasGroupFood) {
+    throw new Error(
+      'substitutionIntentToken: se requiere exactamente uno de substitutionId | groupFoodId',
+    )
+  }
+  return hasSubstitution
+    ? (input.substitutionId as string)
+    : `${SUBSTITUTION_GROUP_KEY_PREFIX}${input.groupFoodId as string}`
 }
 
 // ---------------------------------------------------------------------------
@@ -374,17 +483,40 @@ export function substitutionIntakeIdempotencyKey(input: {
  * `quantityAdjustmentPercent`, medido contra la cantidad EQUIVALENTE (no contra la prescrita del
  * otro alimento, que puede estar en otra unidad).
  */
-export const SubstitutionIntakeRequestSchema = z.object({
-  clientId: z.string().uuid(),
-  localDate: z.string().date(),
-  occurredAt: z.string().datetime({ offset: true }),
-  timezone: z.string().trim().min(1).max(80),
-  prescriptionItemId: z.string().uuid(),
-  substitutionId: z.string().uuid(),
-  /** Ver `substitutionAttemptFromToday`: se deriva del read-model, no de un contador local. */
-  attempt: z.number().int().min(0).max(999),
-  quantity: z.number().positive().nullable().default(null),
-})
+export const SubstitutionIntakeRequestSchema = z
+  .object({
+    clientId: z.string().uuid(),
+    localDate: z.string().date(),
+    occurredAt: z.string().datetime({ offset: true }),
+    timezone: z.string().trim().min(1).max(80),
+    prescriptionItemId: z.string().uuid(),
+    /** Fila autorizada por el coach. Excluyente con `groupFoodId`. */
+    substitutionId: z.string().uuid().optional(),
+    /**
+     * Equivalente del grupo de intercambio (T2.5). Es un id de ALIMENTO, no un permiso: el
+     * servidor lo vuelve a resolver contra la RPC y el guard SQL lo verifica de nuevo. Que el
+     * cliente lo nombre no lo autoriza.
+     */
+    groupFoodId: z.string().uuid().optional(),
+    /** Ver `substitutionAttemptFromToday`: se deriva del read-model, no de un contador local. */
+    attempt: z.number().int().min(0).max(999),
+    /**
+     * Gestos del mismo item ya encolados sin red (ver `substitutionIntakeIdempotencyKey`).
+     * `.optional()` y no `.default(0)` a proposito: con default, el tipo de SALIDA lo vuelve
+     * obligatorio y obligaria a las dos superficies a mandarlo aunque no tengan cola.
+     */
+    queuedAhead: z.number().int().min(0).max(999).optional(),
+    quantity: z.number().positive().nullable().default(null),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.substitutionId == null) === (value.groupFoodId == null)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['substitutionId'],
+        message: 'Se requiere exactamente uno de substitutionId | groupFoodId',
+      })
+    }
+  })
 
 export type SubstitutionIntakeRequest = z.infer<typeof SubstitutionIntakeRequestSchema>
 
@@ -410,6 +542,12 @@ export const SubstitutionOptionFoodSchema = z.object({
 })
 
 export const SubstitutionOptionSchema = z.object({
+  /**
+   * En que bloque del sheet va la opcion (T2.5). `.default('coach')` NO es decoracion: F0 viaja
+   * antes que F2, asi que durante esa ventana la RPC desplegada no emite el campo y el contrato
+   * tiene que seguir parseando. Por la misma razon `schemaVersion` sigue en 1.
+   */
+  origin: z.enum(['coach', 'group']).default('coach'),
   substitutionId: z.string().uuid(),
   foodId: z.string().uuid().nullable(),
   recipeId: z.string().uuid().nullable(),
@@ -424,6 +562,31 @@ export const SubstitutionOptionSchema = z.object({
   }),
 })
 
+/**
+ * Opcion del bloque grupo (T2.5). Misma forma que la del coach salvo por `substitutionId`, que
+ * es `null` porque no hay fila que la respalde: la autoriza la pertenencia al grupo, validada en
+ * el servidor. Se mantiene estructuralmente compatible a proposito, para que
+ * `substituteFromOption` y la equivalencia funcionen sobre las dos sin ramas.
+ */
+export const SubstitutionGroupOptionSchema = SubstitutionOptionSchema.extend({
+  origin: z.literal('group').default('group'),
+  substitutionId: z.string().uuid().nullable(),
+  foodId: z.string().uuid(),
+})
+
+export const SubstitutionGroupSchema = z.object({
+  /**
+   * `guid()` y NO `uuid()`: los ids de `exchange_groups` estan SEMBRADOS a mano
+   * (`0000e8c0-0000-0000-0000-000000000001`) y no cumplen el RFC — el nibble de version es 0.
+   * `z.uuid()` los rechaza, y como el read model entero se parsea de una sola vez, un solo id
+   * invalido tumbaba TODO el mapa de opciones y la feature quedaba invisible. Lo encontro el QA
+   * del preview; es el mismo gotcha que ya habia mordido con otros seeds del repo.
+   */
+  id: z.guid(),
+  code: z.string(),
+  name: z.string(),
+})
+
 export const SubstitutionOptionsItemSchema = z.object({
   prescriptionItemId: z.string().uuid(),
   mealSlotCode: z.string().nullable(),
@@ -432,8 +595,22 @@ export const SubstitutionOptionsItemSchema = z.object({
     unit: z.string(),
     name: z.string().nullable(),
     calories: z.number().nullable(),
+    // Opcionales por la misma ventana F0→F2 que `origin`: sin ellos el delta compara solo kcal.
+    proteinG: z.number().nullable().optional(),
+    carbsG: z.number().nullable().optional(),
+    fatsG: z.number().nullable().optional(),
   }),
   options: z.array(SubstitutionOptionSchema),
+  /**
+   * Grupo de intercambio del alimento prescrito. `null` ⇒ el item no tiene equivalentes y la UI
+   * no ofrece ⇄ (D2). Los tres campos llevan default para que los fixtures y las respuestas de
+   * T2.4 sigan parseando.
+   */
+  group: SubstitutionGroupSchema.nullable().default(null),
+  /** Cuantos equivalentes hay en total, para el "de N" del sheet. */
+  groupTotal: z.number().int().nonnegative().default(0),
+  /** Pagina del bloque grupo. Solo viaja para el item que el sheet abrio. */
+  groupOptions: z.array(SubstitutionGroupOptionSchema).default([]),
 })
 
 export const SubstitutionOptionsReadModelSchema = z.object({
@@ -445,15 +622,65 @@ export const SubstitutionOptionsReadModelSchema = z.object({
 
 export type SubstitutionOptionFood = z.infer<typeof SubstitutionOptionFoodSchema>
 export type SubstitutionOption = z.infer<typeof SubstitutionOptionSchema>
+export type SubstitutionGroupOption = z.infer<typeof SubstitutionGroupOptionSchema>
+export type SubstitutionGroup = z.infer<typeof SubstitutionGroupSchema>
+/** Lo que el sheet puede ofrecer: una fila del coach o un equivalente del grupo. */
+export type SubstitutionAnyOption = SubstitutionOption | SubstitutionGroupOption
 export type SubstitutionOptionsItem = z.infer<typeof SubstitutionOptionsItemSchema>
 export type SubstitutionOptionsReadModel = z.infer<typeof SubstitutionOptionsReadModelSchema>
+
+/**
+ * Opciones que el SWIPE puede aplicar de un gesto, en orden de ciclado (T2.5 F6).
+ *
+ * Dos reglas, y las dos son restricciones deliberadas:
+ *
+ * 1. **Solo el bloque del coach.** El bloque grupo tiene hasta 716 alimentos y su "primer
+ *    resultado" es una eleccion del algoritmo, no del alumno: aplicarlo a ciegas registraria algo
+ *    que nunca vio. Un item sin reemplazos del coach NO se sustituye por swipe — el gesto abre el
+ *    sheet, que es donde esa eleccion se toma mirando.
+ * 2. **Nada que exija confirmar.** Las opciones `needs-confirmation` (cantidad implausible) y
+ *    `unavailable` (sin datos para calcular) necesitan el stepper por el criterio 11 de T2.4;
+ *    aplicarlas de un tap seria registrar un absurdo sin que nadie lo mire.
+ *
+ * Ademas se excluye el alimento con el que el item YA esta registrado: "cambiar a lo mismo" no es
+ * una decision.
+ *
+ * Lista vacia ⇒ la superficie abre el sheet en vez de escribir.
+ */
+export function swipeApplicableOptions(input: {
+  entry: Pick<SubstitutionOptionsItem, 'item' | 'options'>
+  consumedFoodId: string | null
+}): SubstitutionOption[] {
+  const { entry, consumedFoodId } = input
+  return entry.options.filter((option) => {
+    if (consumedFoodId !== null && option.foodId === consumedFoodId) return false
+    const equivalence = computeSubstitutionEquivalence({
+      item: entry.item,
+      substitute: substituteFromOption(option),
+    })
+    return !equivalence.requiresConfirmation
+  })
+}
+
+/**
+ * Opcion que aplica el swipe numero `cycle` (0 = el primero). Cicla en redondo, que es lo que hace
+ * que deslizar de nuevo cambie de opinion en vez de repetir el mismo registro.
+ */
+export function swipeOptionAt(
+  options: readonly SubstitutionOption[],
+  cycle: number,
+): SubstitutionOption | null {
+  if (options.length === 0) return null
+  const index = ((cycle % options.length) + options.length) % options.length
+  return options[index] ?? null
+}
 
 /**
  * Adapta una opcion del read model a la forma que consume `computeSubstitutionEquivalence`.
  * Un reemplazo sin `food` (texto libre / receta) queda sin macros ⇒ la equivalencia devuelve
  * `unavailable` y la UI pide confirmar la cantidad.
  */
-export function substituteFromOption(option: SubstitutionOption): SubstitutionSubstitute {
+export function substituteFromOption(option: SubstitutionAnyOption): SubstitutionSubstitute {
   const food = option.food
   return {
     foodId: option.foodId,
