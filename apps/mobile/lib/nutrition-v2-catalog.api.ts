@@ -1,9 +1,11 @@
 import {
   FoodBarcodeLookupReadModelSchema,
+  FoodCatalogOffsetPageSchema,
   FoodCatalogSearchReadModelSchema,
   MissingFoodBarcodeReportSchema,
   type FoodBarcodeLookupReadModel,
   type FoodCatalogCursor,
+  type FoodCatalogOffsetPage,
   type FoodCatalogSearchReadModel,
   type MissingFoodBarcodeReport,
 } from '@eva/nutrition-v2'
@@ -40,6 +42,33 @@ export async function searchFoodCatalogV2(input: {
     { authenticated: true, signal: input.signal },
   )
   return FoodCatalogSearchReadModelSchema.parse(raw)
+}
+
+/**
+ * Los tres modos del tab Alimentos que NO son busqueda (T2.3 F6.1): navegar el catalogo sin
+ * escribir, "Solo mios" y "Editados por mi". Paginan por OFFSET, no por cursor: no salen de
+ * `search_food_catalog_v2` (que exige un termino de 2+ caracteres) sino de listados sobre `foods`
+ * y `coach_food_overrides`, con la MISMA funcion de servidor que usa la web.
+ *
+ * Siempre superficie coach: el alumno no tiene tab Alimentos. El endpoint lo rechaza igual.
+ */
+export async function listCoachFoodCatalogPage(input: {
+  mode: 'browse' | 'mine' | 'edited'
+  offset?: number
+  countryCode?: string
+  signal?: AbortSignal
+}): Promise<FoodCatalogOffsetPage> {
+  const raw = await apiFetch<unknown>(
+    `/api/mobile/nutrition-v2/catalog${params({
+      operation: input.mode,
+      surface: 'coach',
+      offset: input.offset ?? 0,
+      // "Editados por mi" no filtra por pais: son MIS correcciones, vengan del catalogo que vengan.
+      countryCode: input.mode === 'edited' ? null : input.countryCode ?? 'CL',
+    })}`,
+    { authenticated: true, signal: input.signal },
+  )
+  return FoodCatalogOffsetPageSchema.parse(raw)
 }
 
 export async function lookupFoodByGtinV2(input: {

@@ -122,8 +122,21 @@ estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
         propio `lib/food-detail.ts` — segunda duplicacion que destapa esta fase).
       - Gates: typecheck web y mobile exit 0 · vitest 977/977 (63 archivos) de `packages/nutrition-v2`
         + el hub coach
-- [ ] F6.1 Operaciones de listado para movil (`browse` / `mine` / `edited`) en el endpoint del
-      catalogo, con la MISMA visibilidad que el RPC y paginado por offset
+- [x] **F6.1 (2026-08-11)** — las tres operaciones por offset servidas al movil, **sin duplicar la
+      regla**: la consulta se extrajo de las server actions del hub a
+      `services/nutrition-v2/coach-food-catalog.service.ts` (`browseCoachFoodCatalog` +
+      `listCoachEditedFoods`), y ahora la llaman las DOS superficies. El servicio no autoriza:
+      recibe el cliente ya scoped y el `coachId` derivado del ACTOR; cada superficie pone su puerta
+      (web `authorizeHubCoach`, movil `gateNutritionV2Api`) y RLS sigue siendo el techo.
+      - `GET /api/mobile/nutrition-v2/catalog?operation=browse|mine|edited&offset=…` — coach-only
+        explicito (403 `COACH_ONLY` si no viene `surface=coach`), `offset` validado, `SCOPE_DENIED`
+        mapeado a 403 y el resto a 500
+      - Contrato compartido `FoodCatalogOffsetPageSchema` en `@eva/nutrition-v2` (items + hasMore +
+        nextOffset), que el cliente RN parsea: `listCoachFoodCatalogPage({ mode, offset })` en
+        `nutrition-v2-catalog.api.ts`. "Editados por mi" no manda pais — son MIS correcciones,
+        vengan del catalogo que vengan
+      - `mineOnly` viaja como BOOLEAN y no como `coachId`: el payload no puede nombrar a otro coach
+      - Gates: typecheck web y mobile exit 0 · vitest 977/977 (63 archivos) · boundaries 333/8
 - [ ] F6.2 RN: chips excluyentes + filtro de texto local en los modos con universo cargado + badge ✎
       + paginado por offset (la maquina de modos decide, el componente obedece)
 - [ ] F6.3 RN: "Nuevo alimento" en el tab, reusando `createCoachFoodRN` y el guard kcal/P/C/G

@@ -16,17 +16,13 @@ import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
 import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 import {
-  getCoachFoodOverridePage,
-  getCoachFoodOverridesFor,
-} from '@/services/nutrition-v2/coach-food-overrides.service'
-import {
   getFoodExchangeClassification,
   type FoodExchangeClassificationRead,
 } from '@/services/nutrition-exchanges/exchange-lists.service'
 import {
-  foodRowToCatalogItem,
-  type CatalogFoodRow,
-} from '@eva/nutrition-v2'
+  browseCoachFoodCatalog,
+  listCoachEditedFoods,
+} from '@/services/nutrition-v2/coach-food-catalog.service'
 
 // Listado de alimentos del hub coach V2 (solo lectura).
 // Fail-closed: re-verifica el scope V2 del workspace activo en CADA búsqueda, igual que el builder.
@@ -201,32 +197,6 @@ const EditedListInputSchema = z.object({
  * paths por offset (editados y browse): si divergieran, la misma card mostraria campos distintos
  * segun por que modo llego el coach.
  */
-const EDITED_FOOD_SELECT =
-  'id, catalog_key, barcode, name, brand, category, country_code, serving_size, serving_unit, ' +
-  'calories, protein_g, carbs_g, fats_g, fiber_g, macros_basis, household_label, household_grams, ' +
-  'sodium_mg, sugar_g, saturated_fat_g, package_quantity, package_unit, catalog_source, source_ref, ' +
-  'verification_status, coach_id, org_id'
-
-// `database.types.ts` esta desactualizada para `foods` (le faltan catalog_key, barcode,
-// country_code, package_*, catalog_source, source_ref, verification_status): el cliente tipado
-// convertiria este select en un error de tipos. Misma tactica que `plan-foods.data.ts`:
-// interfaz minima tipada sobre el mismo objeto de runtime.
-type FoodsReadResult = {
-  data: CatalogFoodRow[] | null
-  error: { message: string; code?: string } | null
-}
-interface FoodsReadChain extends PromiseLike<FoodsReadResult> {
-  in(column: string, values: readonly string[]): FoodsReadChain
-  eq(column: string, value: string): FoodsReadChain
-  neq(column: string, value: string): FoodsReadChain
-  or(filter: string): FoodsReadChain
-  order(column: string, options: { ascending: boolean }): FoodsReadChain
-  range(from: number, to: number): FoodsReadChain
-}
-interface FoodsReadDb {
-  from(table: 'foods'): { select(columns: string): FoodsReadChain }
-}
-
 /**
  * Lista los alimentos que ESTE coach corrigio (filtro "Editados por mi" del tab Alimentos).
  *
@@ -249,56 +219,12 @@ export async function listCoachEditedFoodsHubAction(
   const auth = await authorizeHubCoach()
   if (!auth.ok) return auth
 
-  const from = parsed.data.offset
-  // PAGE_SIZE + 1 para saber si hay mas sin un COUNT extra (patron de la cola de curacion).
-  const page = await getCoachFoodOverridePage(
-    auth.db as unknown as SupabaseClient<Database>,
-    { coachId: auth.coachId },
-    { offset: from, limit: PAGE_SIZE + 1 },
-  )
-  if (!page.ok) {
-    if (page.code === '42501') {
-      return fail('SCOPE_DENIED', 'No tienes permiso para ver tus correcciones.')
-    }
-    return fail('CATALOG_READ_FAILED', 'No se pudieron cargar tus alimentos editados.')
-  }
-
-  const hasMore = page.rows.length > PAGE_SIZE
-  const rows = hasMore ? page.rows.slice(0, PAGE_SIZE) : page.rows
-  const nextOffset = hasMore ? from + PAGE_SIZE : null
-  if (rows.length === 0) return { ok: true, items: [], hasMore: false, nextOffset: null }
-
-  const foods = await (auth.db as unknown as FoodsReadDb)
-    .from('foods')
-    .select(EDITED_FOOD_SELECT)
-    .in(
-      'id',
-      rows.map((row) => row.foodId),
-    )
-  if (foods.error || foods.data == null) {
-    if (foods.error?.code === '42501') {
-      return fail('SCOPE_DENIED', 'No tienes permiso para consultar el catalogo.')
-    }
-    return fail('CATALOG_READ_FAILED', 'No se pudieron cargar tus alimentos editados.')
-  }
-
-  const byId = new Map(foods.data.map((row) => [row.id, row]))
-  // El orden lo manda la pagina de overrides (updated_at desc), no el orden de `foods`.
-  // Un alimento que ya no se puede leer (borrado o fuera de scope) desaparece de la lista sin
-  // romperla: el override huerfano no tiene identidad que mostrar. `hasMore`/`nextOffset` NO se
-  // recalculan por eso — la paginacion es sobre los overrides, no sobre los alimentos.
-  const items: FoodCatalogItem[] = []
-  for (const row of rows) {
-    const food = byId.get(row.foodId)
-    if (food) items.push(foodRowToCatalogItem(food, row.values))
-  }
-
-  const validated = z.array(FoodCatalogItemSchema).safeParse(items)
-  if (!validated.success) {
-    return fail('CATALOG_CONTRACT_MISMATCH', 'El catalogo devolvio un formato inesperado.')
-  }
-
-  return { ok: true, items: validated.data, hasMore, nextOffset }
+  // La consulta vive en el servicio (T2.3 F6.1): la app movil la necesita IDENTICA y no puede
+  // llamar a una server action. Aca solo queda la PUERTA.
+  return listCoachEditedFoods(auth.db as unknown as SupabaseClient<Database>, {
+    coachId: auth.coachId,
+    offset: parsed.data.offset,
+  })
 }
 
 const BrowseInputSchema = z.object({
@@ -366,51 +292,10 @@ export async function browseFoodCatalogHubAction(
   const auth = await authorizeHubCoach()
   if (!auth.ok) return auth
 
-  const pageSize = parsed.data.mineOnly ? MINE_PAGE_SIZE : BROWSE_PAGE_SIZE
-  const from = parsed.data.offset
-  const country = parsed.data.countryCode.toUpperCase()
-
-  let chain = (auth.db as unknown as FoodsReadDb)
-    .from('foods')
-    .select(EDITED_FOOD_SELECT)
-    .neq('verification_status', 'rejected')
-    .or(`country_code.is.null,country_code.eq.${country}`)
-
-  // El dueño sale del ACTOR. RLS ya acota lo visible, pero "mios" es mas estrecho que "puedo
-  // verlo": el catalogo publico (`coach_id is null`) tambien es visible y no es mio.
-  if (parsed.data.mineOnly) chain = chain.eq('coach_id', auth.coachId)
-
-  // `id` desempata: `name` no es unico y sin desempate la pagina 2 puede repetir u omitir filas.
-  const foods = await chain
-    .order('name', { ascending: true })
-    .order('id', { ascending: true })
-    // +1 para saber si hay mas sin pagar un COUNT (patron de la cola de curacion).
-    .range(from, from + pageSize)
-
-  if (foods.error || foods.data == null) {
-    if (foods.error?.code === '42501') {
-      return fail('SCOPE_DENIED', 'No tienes permiso para consultar el catalogo.')
-    }
-    return fail('CATALOG_READ_FAILED', 'No se pudo cargar el catalogo. Intenta nuevamente.')
-  }
-
-  const hasMore = foods.data.length > pageSize
-  const rows = hasMore ? foods.data.slice(0, pageSize) : foods.data
-  const nextOffset = hasMore ? from + pageSize : null
-  if (rows.length === 0) return { ok: true, items: [], hasMore: false, nextOffset: null }
-
-  const overrides = await getCoachFoodOverridesFor(
-    auth.db as unknown as SupabaseClient<Database>,
-    { coachId: auth.coachId },
-    rows.map((row) => row.id),
-  )
-
-  const items = rows.map((row) => foodRowToCatalogItem(row, overrides.get(row.id) ?? null))
-
-  const validated = z.array(FoodCatalogItemSchema).safeParse(items)
-  if (!validated.success) {
-    return fail('CATALOG_CONTRACT_MISMATCH', 'El catalogo devolvio un formato inesperado.')
-  }
-
-  return { ok: true, items: validated.data, hasMore, nextOffset }
+  return browseCoachFoodCatalog(auth.db as unknown as SupabaseClient<Database>, {
+    coachId: auth.coachId,
+    offset: parsed.data.offset,
+    countryCode: parsed.data.countryCode,
+    mineOnly: parsed.data.mineOnly,
+  })
 }

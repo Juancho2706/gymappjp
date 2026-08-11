@@ -16,6 +16,11 @@ import {
   rateLimitNutritionCatalogReport,
   rateLimitNutritionCatalogSearch,
 } from '@/lib/rate-limit'
+import {
+  browseCoachFoodCatalog,
+  listCoachEditedFoods,
+  type CoachFoodCatalogDb,
+} from '@/services/nutrition-v2/coach-food-catalog.service'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -81,6 +86,44 @@ export async function GET(request: NextRequest) {
     rpcName = 'lookup_food_by_gtin_v2'
     args = { p_gtin: gtin, p_country_code: countryCode }
     parse = (value) => FoodBarcodeLookupReadModelSchema.parse(value)
+  } else if (operation === 'browse' || operation === 'mine' || operation === 'edited') {
+    // Los tres data paths por OFFSET del tab Alimentos (T2.3 F6.1). No pasan por una RPC: son
+    // listados sobre `foods` / `coach_food_overrides` con RLS como techo, y la consulta es la
+    // MISMA funcion de servicio que usa la web — el movil no reimplementa la regla.
+    //
+    // Solo coach: el alumno no tiene tab Alimentos ni overrides propios. `requestedSurface` ya
+    // gateo por JWT; esto rechaza el caso de pedir estas operaciones sin `?surface=coach`.
+    if (requestedSurface !== 'mobileCoach' || !gate.coachId) {
+      logNutritionV2Api({ route, startedAt, status: 403, errorCode: 'COACH_ONLY' })
+      return jsonNoStore({ error: 'Solo para coaches.', code: 'COACH_ONLY' }, 403)
+    }
+
+    const offsetRaw = Number(request.nextUrl.searchParams.get('offset') ?? 0)
+    if (!Number.isFinite(offsetRaw) || offsetRaw < 0 || offsetRaw > 100000) {
+      return jsonNoStore({ error: 'Offset inválido.', code: 'INVALID_OFFSET' }, 400)
+    }
+    const offset = Math.trunc(offsetRaw)
+    const db = gate.rpc as unknown as CoachFoodCatalogDb
+
+    const page =
+      operation === 'edited'
+        ? await listCoachEditedFoods(db, { coachId: gate.coachId, offset })
+        : await browseCoachFoodCatalog(db, {
+            coachId: gate.coachId,
+            offset,
+            countryCode: (request.nextUrl.searchParams.get('countryCode') ?? 'CL').toUpperCase(),
+            mineOnly: operation === 'mine',
+          })
+
+    if (!page.ok) {
+      const status = page.code === 'SCOPE_DENIED' ? 403 : 500
+      logNutritionV2Api({ route, startedAt, status, errorCode: page.code })
+      return jsonNoStore({ error: page.error, code: page.code }, status)
+    }
+
+    const payload = { items: page.items, hasMore: page.hasMore, nextOffset: page.nextOffset }
+    logNutritionV2Api({ route, startedAt, status: 200, payload })
+    return jsonNoStore(payload)
   } else {
     return jsonNoStore({ error: 'Operación inválida.', code: 'INVALID_OPERATION' }, 400)
   }

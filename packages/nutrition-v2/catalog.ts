@@ -147,6 +147,21 @@ export const FoodCatalogSearchReadModelSchema = z.object({
   hasMore: z.boolean(),
 })
 
+/**
+ * Pagina por OFFSET del tab Alimentos del coach: el browse del catalogo, "Solo mios" y "Editados
+ * por mi" (T2.3 F4.5/F1, y F6.1 para el movil). Es la forma COMUN de los tres: el cliente no
+ * necesita saber cual respondio — pide `nextOffset` y lo devuelve tal cual en "Cargar mas", asi
+ * que el tamaño de pagina lo decide el servidor y puede diferir por modo.
+ *
+ * Sin `schemaVersion` a proposito: no lo emite una RPC versionada sino la propia API movil, que
+ * versiona por ruta. `nextOffset` es null exactamente cuando `hasMore` es false.
+ */
+export const FoodCatalogOffsetPageSchema = z.object({
+  items: z.array(FoodCatalogItemSchema),
+  hasMore: z.boolean(),
+  nextOffset: z.number().int().nonnegative().nullable(),
+})
+
 export const FoodBarcodeLookupReadModelSchema = z.discriminatedUnion('status', [
   z.object({
     schemaVersion: z.literal(1),
@@ -206,5 +221,6 @@ export type FoodSuggestionItem = z.infer<typeof FoodSuggestionItemSchema>
 export type CoachFoodSuggestionsReadModel = z.infer<typeof CoachFoodSuggestionsReadModelSchema>
 export type FoodCatalogCursor = z.infer<typeof FoodCatalogCursorSchema>
 export type FoodCatalogSearchReadModel = z.infer<typeof FoodCatalogSearchReadModelSchema>
+export type FoodCatalogOffsetPage = z.infer<typeof FoodCatalogOffsetPageSchema>
 export type FoodBarcodeLookupReadModel = z.infer<typeof FoodBarcodeLookupReadModelSchema>
 export type MissingFoodBarcodeReport = z.infer<typeof MissingFoodBarcodeReportSchema>
