@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { BackHandler, Keyboard, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { BackHandler, Keyboard, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { MotiView } from 'moti'
@@ -195,7 +195,13 @@ function EntryScreen() {
   // §3.2.6 — densidad: en 667 pt colapsa el TERCER fragmento (su copy se anexa al
   // segundo) y con fontScale > 1.15 los captions bajan a 1 linea. Los titulares, el
   // separador y las dos cards NUNCA se sacrifican: el CTA de rol jamas queda bajo el fold.
-  const compact = height <= 667
+  //
+  // App Review guideline 4 (build 51, iOS 1.1.0): en la ventana de compatibilidad de iPad
+  // el alto util NO cae bajo 667, asi que el colapso no entraba y el bloque de marketing
+  // desbordaba sobre "Elige cómo entrar". El colapso ahora tambien entra con fontScale
+  // extremo (misma prioridad de sacrificio de §3.2.6: caption 3 → frag 3), y el desborde
+  // residual lo absorbe el scroll del contenedor — jamas una superposicion.
+  const compact = height <= 667 || fontScale > 1.3
   const bigText = fontScale > 1.15
 
   // Al volver del login el overlay de TRANSICION debe estar limpio (la pantalla 02 nunca
@@ -314,11 +320,21 @@ function EntryScreen() {
       {/* Capa 4 — el sello: UNA sola, encima de las atmosferas, debajo del contenido. */}
       <EntryGrain />
 
-      <View
-        style={[
+      {/* El contenido vive EN FLUJO dentro de un scroll: cuando el alto util no alcanza
+          (ventana de compatibilidad de iPad, iPhone SE, fontScale grande) sobra recorrido
+          vertical en vez de superponerse. Con espacio de sobra el `flexGrow: 1` estira el
+          contenedor a la pantalla completa y el `marginTop: 'auto'` de las cards las sigue
+          clavando abajo: en telefonos normales el frame 02 es pixel por pixel el de hoy. */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
           styles.body,
           { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 34) },
         ]}
+        showsVerticalScrollIndicator={false}
+        // Solo rebota si de verdad hay algo que scrollear: sin esto la pantalla que cabe
+        // entera "cede" al arrastre y parece rota.
+        alwaysBounceVertical={false}
       >
         <Reveal step={0} reduced={reduced}>
           <View style={styles.topbar}>
@@ -387,7 +403,7 @@ function EntryScreen() {
         <Reveal step={6} reduced={reduced}>
           <Text style={styles.foot}>Solo define por dónde entras. Después inicias sesión.</Text>
         </Reveal>
-      </View>
+      </ScrollView>
 
       {/* Frame 05 — coach: el morph es transicion, el destino es el login. */}
       {coachMorph ? <RoleMorph role="coach" origin={coachMorph} onCommit={commitCoach} /> : null}
@@ -411,8 +427,12 @@ function EntryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: ENTRY_TOKENS.canvasEntry },
+  scroll: { flex: 1 },
   // Contenedor comun de todos los frames (§3): 24 de aire lateral, 34 abajo.
-  body: { flex: 1, paddingHorizontal: 24 },
+  // `flexGrow` (no `flex: 1`): como contentContainer del scroll tiene que poder crecer MAS
+  // que la pantalla cuando el contenido no cabe; con `flex: 1` quedaria clavado al alto del
+  // viewport y volveria a empujar el desborde encima de las cards.
+  body: { flexGrow: 1, paddingHorizontal: 24 },
 
   topbar: {
     paddingTop: 8,
@@ -472,9 +492,15 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
-  // `flexShrink` es el seguro del CTA: si el contenido no cabe (fontScale extremo), lo
-  // que cede es el bloque de fragmentos, nunca las cards de rol.
-  fragsWrap: { flexShrink: 1, marginBottom: 16 },
+  // CAUSA REAL del rechazo de App Review (guideline 4, ventana de compatibilidad de iPad):
+  // aca habia un `flexShrink: 1`. Yoga encogia ESTA caja para absorber todo el desborde del
+  // frame, pero sus hijas (las filas de fragmento) tienen `flexShrink: 0` y no se encogen
+  // con ella: seguian midiendo lo mismo y, como en RN el overflow por defecto es `visible`,
+  // se pintaban FUERA de su contenedor. El separador "Elige cómo entrar" y las cards de rol
+  // —hermanos posteriores, o sea dibujados encima— caian sobre la fila "Macros que ya
+  // cuadran". No era un absolute ni un margen negativo: era un shrink que nunca fue real.
+  // Ahora el bloque mide lo que ocupa y el sobrante lo resuelve el scroll del contenedor.
+  fragsWrap: { marginBottom: 16 },
 
   sep: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   sepLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.07)' },
