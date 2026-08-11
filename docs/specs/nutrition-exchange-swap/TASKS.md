@@ -168,7 +168,8 @@ Metodo: la extension de navegador NO logra `document_idle` en esta pantalla (flo
 
 | Fecha | Fase | Commit | Gates | Notas |
 |---|---|---|---|---|
-| 2026-08-10 | **F7 QA web + device — T2.5 CERRADA en QA** | (este commit) | Cada caso verificado en DB · docs:check | Queda SOLO la decision del owner: merge a master + OTA android. Fix H2 (`5139b29e`, UI optimista web) incluido y pusheado al preview. H1 (buscador vs parentesis) y D5 (pista del swipe) quedan como decisiones abiertas |
+| 2026-08-10 | **DESPLIEGUE — T2.5 EN PRODUCCION** | merge `654efd33` · OTA `7a9b3877` | Deploy prod READY verificado antes del OTA · OTA solo `--platform android` (iOS en App Review intacto) | Con OK del owner. Runtime 1.1.0, canal production, env de prod explicito en el update. A 24-48 h: `eas update:insights` |
+| 2026-08-10 | **F7 QA web + device — T2.5 CERRADA en QA** | `72d52762` | Cada caso verificado en DB · docs:check | Fix H2 (`5139b29e`, UI optimista web) incluido. H1 (buscador vs parentesis) y D5 (pista del swipe) quedan como decisiones abiertas |
 | 2026-08-10 | Fase 0 (SPEC/PLAN/TASKS) | `f710e0ee` | `pnpm docs:check` | Auditoria LIVE incluida; D1-D3 del owner; el orden del mockup se invierte con evidencia |
 | 2026-08-10 | Fase 0 (correcciones de la revision) | `d82057b2` | `pnpm docs:check` | 8 bloqueantes incorporados, todos re-verificados contra LIVE. B1 habria roto T2.4 en produccion al aplicar F2. H2 recalculado sobre la poblacion entera. Queda D4 del owner |
 | 2026-08-10 | F0 (contrato + delta + claves) | `a6c1634e` | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
