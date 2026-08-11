@@ -137,8 +137,25 @@ estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
         vengan del catalogo que vengan
       - `mineOnly` viaja como BOOLEAN y no como `coachId`: el payload no puede nombrar a otro coach
       - Gates: typecheck web y mobile exit 0 · vitest 977/977 (63 archivos) · boundaries 333/8
-- [ ] F6.2 RN: chips excluyentes + filtro de texto local en los modos con universo cargado + badge ✎
-      + paginado por offset (la maquina de modos decide, el componente obedece)
+- [x] **F6.2 (2026-08-11)** — el tab RN pasa de 2 modos a los 5. La maquina decide y el componente
+      OBEDECE: `mode` es derivado de `resolveFoodCatalogMode`, nunca estado.
+      - Chips excluyentes "Solo mios" / "Editados por mi" con `nextFoodFilterMode` (radio-group con
+        deseleccion: el estado "ninguno" es legitimo, por eso `accessibilityState.selected` sobre un
+        boton y no `role="radio"`)
+      - **Dos paginaciones conviviendo**: keyset en `search`, offset en los otros tres. Viven en
+        estados SEPARADOS (`cursor` vs `nextOffset`) y cada rama de "Cargar mas" exige SU token, asi
+        que un modo no puede continuar la pagina del otro — el bug de cursores mezclados que la web
+        ya pago en F1. Cambiar de chip aborta lo en vuelo y vacia los dos tokens
+      - Filtro de texto LOCAL en `mine`/`edited` con `matchesFoodQuery`; el placeholder y el label
+        de accesibilidad cambian con el modo ("Filtrar entre tus editados…")
+      - Badge ✎ **Editado** (estricto contra `true`: ausente = el catalogo no aplico merge, no
+        "sin correccion") y badge **Propio** por `coachId`
+      - Estados vacios separados: "todavia no corregiste/creaste ninguno" (universo vacio) vs
+        "ninguno coincide con ese nombre" (el filtro local no encontro), con los copys de la web
+      - `isOffsetListMode` pasa a ser predicado de tipo: los tres modos por offset son exactamente
+        los que la API acepta como `operation`, asi el llamador no vuelve a enumerarlos
+      - Gates: typecheck web y mobile exit 0 · vitest 381/381 del paquete · boundaries 333/8 ·
+        tokens 86/86 · `expo export --platform android` verde
 - [ ] F6.3 RN: "Nuevo alimento" en el tab, reusando `createCoachFoodRN` y el guard kcal/P/C/G
 - [ ] F6.4 RN: clasificar desde la ficha (lectura aditiva para movil + flujo grupo → gramos → medida
       casera, espejo de `ClassifyFoodFlow`)

@@ -93,6 +93,11 @@ export function usesLocalTextFilter(mode: FoodCatalogMode): boolean {
  * ¿Este modo lee la primera pagina por OFFSET al entrar? Es el disparador del efecto de listado;
  * `search` lo maneja el efecto de busqueda e `invite` no consulta nada.
  */
-export function isOffsetListMode(mode: FoodCatalogMode): boolean {
+export function isOffsetListMode(
+  mode: FoodCatalogMode,
+): mode is 'browse' | 'mine' | 'edited' {
+  // Predicado de tipo, no solo booleano: los tres modos por offset son EXACTAMENTE los que la
+  // API acepta como `operation`, asi que quien pregunta se lleva el tipo estrecho y no necesita
+  // volver a enumerarlos (ni equivocarse al hacerlo).
   return mode === 'browse' || mode === 'mine' || mode === 'edited'
 }
