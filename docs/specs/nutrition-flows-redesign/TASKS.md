@@ -75,6 +75,42 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [ ] F0 contrato puro · F1 RPC de opciones · F2 guard SQL + fix del tope de cantidad en `correct_` · F3 boundary web+movil · F4 UI web · F5 paridad RN · F6 QA
 - [x] T2.5 Swipe ⇄ + sheet 2 bloques (autorizados / grupo) — **CERRADA 2026-08-10, en produccion** (detalle y actas en [`nutrition-exchange-swap/`](../nutrition-exchange-swap/TASKS.md)). Web en master `654efd33` + **OTA android `7a9b3877`** (runtime 1.1.0, solo android); 2 migraciones en LIVE (`20260810161604`, `20260810171529`); cierra el reparo offline de T2.4 (chip "En cola" verificado con modo avion en device fisico). Extra: fix de UI optimista del Hoy web (`5139b29e`)
   - [x] **F8 — decisiones abiertas del QA cerradas (2026-08-11)**: H1 arreglado por el lado del catalogo (migracion `20260811020826` en LIVE: `foods.name_search` pasa a la MISMA normalizacion que el query; asimetria 0/4.649; 4 `ilike` de la web alineados a `normalizeFoodSearchText`) y D5 implementada (micro-animacion one-shot del swipe, decision pura en `packages/nutrition-v2/swipe-hint.ts`, web + RN). Falta despliegue (web + OTA android)
+### Hallazgo del coach JP (2026-08-11) — investigado a fondo: **NO es bug de carga de plantillas**
+
+Reporte: "me asigne un plan estructurado pero no se me ve la dieta" + "al guardar la plantilla no me
+devuelve a ningun lado" + "solo se me ven 2 alimentos de todos los que me hice".
+
+Reconstruccion desde LIVE (cuenta de alumno propia `da857bc2`, hora Chile del 10-08): **22:52**
+publica la v4 desde `web-builder` con `strategy = flexible`, **0 items y 0 franjas**, targets
+1806/185/165/41; **23:01**, nueve minutos DESPUES, guarda la plantilla "Dieta Jp" (structured, 4
+franjas, 12 items, los MISMOS targets). O sea: lo estructurado que el ve es la **plantilla**, y lo
+que le llego a su alumno es un plan **flexible vacio**. Las plantillas no llegan a ningun alumno;
+hace falta publicar una version. Los 2 alimentos que ve son sus registros libres.
+
+Verificado que el camino plantilla→builder **funciona**, incluida la clase exacta de sus plantillas
+(las 15 suyas son `source = import_v1` sin payload de builder, 0 borradas):
+- Repro determinista con el JSON real de LIVE sobre `builderStateFromTemplateDraft`, en el peor caso
+  (ningun alimento resuelto): conserva `structured`, 2 franjas y los 6 items.
+- End-to-end en el preview con la cuenta de josefit y la plantilla viva "Stuff" (`import_v1`, sin
+  builder): "Partiendo de «Stuff»", **Plan estructurado**, metas 370/49/28/6 exactas, y el paso 2
+  trae los alimentos resueltos con sus macros y subtotales.
+- El diálogo "Cambiar a flexible elimina las N franjas de tus días" **existe y funciona**, asi que
+  llegar a flexible con contenido exige aceptarlo.
+
+**Falso positivo propio, anotado para que nadie lo repita:** el primer intento uso "Comida Fit", que
+esta **soft-deleted**; el builder cayo al plan vigente del alumno y parecia el bug. Que una plantilla
+borrada no cargue es correcto — lo que NO es correcto es que caiga en silencio al plan del alumno sin
+decir una palabra.
+
+Tres arreglos reales que salen de esto, todos de T2.6:
+- [ ] El editor de plantilla es visualmente identico al builder de plan (solo cambia el titulo
+      "EDITAR PLANTILLA"): tiene que decir en pantalla que eso NO llega a ningun alumno, y ofrecer
+      "aplicar a un alumno" ahi mismo
+- [ ] Guardar plantilla no navega a ningun lado (publicar un plan si): despues de "Plantilla
+      actualizada" hay que volver a la biblioteca
+- [ ] Un origen `?from=template:` que no se puede leer (borrada, sin permiso) degrada MUDO al plan
+      vigente del alumno: debe avisar
+
 - [ ] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard
 - [ ] T2.7 Re-skin del alumno (catalogo de pantallas, decision owner 06-08: va AL CIERRE de O2, antes del OTA unico) + **paleta de macros al trio fijo** (decision owner 07-08, opcion 2): `@eva/nutrition-v2/design.ts` pasa a P #5E9FD6 / C #FFB74D / G #81C784 en web Y RN, los carbos dejan de seguir la rampa sport white-label (`resolveNutritionMacroColors` deja de recibir brandColor), y las superficies V1 quedan alineadas con los mismos `--color-macro-*`. Toca anillos, chips y barras ya QA-eadas en O1 ⇒ exige re-QA visual completa en el mismo corte.
 - [ ] Cierre O2: overrides W2 (ficha detalle web, RN builder/quick-edit) + regresion + push + **OTA android O1+O2** (runbook SPEC; proponer al owner)
