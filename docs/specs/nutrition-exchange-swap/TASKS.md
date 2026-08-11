@@ -195,6 +195,7 @@ Metodo: la extension de navegador NO logra `document_idle` en esta pantalla (flo
 
 | Fecha | Fase | Commit | Gates | Notas |
 |---|---|---|---|---|
+| 2026-08-11 | **F8 EN PRODUCCION — H1 + D5** | web `31fa0631` · OTA android `723c92d6` | vitest 5627/0 · typecheck web y mobile exit 0 · eslint 0 errores · boundaries 333/8 · tokens 86/86 · docs:check · prod READY verificado antes del OTA | Runtime 1.1.0, canal production, **solo `--platform android`** (iOS 1.1.0 sigue en App Review, intacto). H1 ya vivia en LIVE desde la migracion; este corte lleva la simetria del lado cliente y la pista del swipe. Viajan tambien los 3 arreglos del reporte del coach JP. A 24-48 h: `eas update:insights` |
 | 2026-08-10 | **DESPLIEGUE — T2.5 EN PRODUCCION** | merge `654efd33` · OTA `7a9b3877` | Deploy prod READY verificado antes del OTA · OTA solo `--platform android` (iOS en App Review intacto) | Con OK del owner. Runtime 1.1.0, canal production, env de prod explicito en el update. A 24-48 h: `eas update:insights` |
 | 2026-08-10 | **F7 QA web + device — T2.5 CERRADA en QA** | `72d52762` | Cada caso verificado en DB · docs:check | Fix H2 (`5139b29e`, UI optimista web) incluido. H1 (buscador vs parentesis) y D5 (pista del swipe) quedan como decisiones abiertas |
 | 2026-08-10 | Fase 0 (SPEC/PLAN/TASKS) | `f710e0ee` | `pnpm docs:check` | Auditoria LIVE incluida; D1-D3 del owner; el orden del mockup se invierte con evidencia |

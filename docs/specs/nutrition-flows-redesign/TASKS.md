@@ -102,14 +102,17 @@ esta **soft-deleted**; el builder cayo al plan vigente del alumno y parecia el b
 borrada no cargue es correcto — lo que NO es correcto es que caiga en silencio al plan del alumno sin
 decir una palabra.
 
-Tres arreglos reales que salen de esto, todos de T2.6:
-- [ ] El editor de plantilla es visualmente identico al builder de plan (solo cambia el titulo
-      "EDITAR PLANTILLA"): tiene que decir en pantalla que eso NO llega a ningun alumno, y ofrecer
-      "aplicar a un alumno" ahi mismo
-- [ ] Guardar plantilla no navega a ningun lado (publicar un plan si): despues de "Plantilla
-      actualizada" hay que volver a la biblioteca
-- [ ] Un origen `?from=template:` que no se puede leer (borrada, sin permiso) degrada MUDO al plan
-      vigente del alumno: debe avisar
+Tres arreglos reales que salen de esto — **HECHOS y EN PRODUCCION 2026-08-11** (`31fa0631`),
+verificados en preview con la sesion de josefit:
+- [x] El builder de plantillas avisa en pantalla que eso NO le llega a ningun alumno hasta
+      aplicarla, con enlace directo a la biblioteca (donde vive "Aplicar") — verificado
+- [x] Guardar plantilla vuelve a la biblioteca, igual que publicar un plan navega. Verificado
+      end-to-end: toast "Plantilla actualizada", URL en `?tab=plantillas`, fila "Stuff · 2 franjas ·
+      usada 1x" con su boton Aplicar, y en DB `updated_at` nuevo + payload de builder escrito
+- [x] Un origen `?from=…` ilegible ya no degrada MUDO: avisa en ambar. Se corrigio ademas el bug
+      que lo hacia peor — el borrador de la plantilla se escribia DIRECTO sobre `initialDraft`, asi
+      que un fallo dejaba cargado el plan VIGENTE del alumno rotulado con el nombre de la plantilla.
+      Verificado con la plantilla soft-deleted: sale el aviso y ya no dice "Partiendo de…"
 
 - [ ] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard
 - [ ] T2.7 Re-skin del alumno (catalogo de pantallas, decision owner 06-08: va AL CIERRE de O2, antes del OTA unico) + **paleta de macros al trio fijo** (decision owner 07-08, opcion 2): `@eva/nutrition-v2/design.ts` pasa a P #5E9FD6 / C #FFB74D / G #81C784 en web Y RN, los carbos dejan de seguir la rampa sport white-label (`resolveNutritionMacroColors` deja de recibir brandColor), y las superficies V1 quedan alineadas con los mismos `--color-macro-*`. Toca anillos, chips y barras ya QA-eadas en O1 ⇒ exige re-QA visual completa en el mismo corte.
