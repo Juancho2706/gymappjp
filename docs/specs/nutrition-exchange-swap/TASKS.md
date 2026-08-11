@@ -111,10 +111,30 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 - [x] ⚠️→✅ **El sheet ABRE y funciona** — confirmado por el owner mirando la pantalla (2026-08-10). El bloqueo era **de la herramienta, no del producto**: la extension del navegador no consigue `document_idle` en esa pagina por el flood de prefetch a todas las rutas del alumno que se dispara al hidratar. 🔴 **Consecuencia para quien siga: el QA web por navegacion automatizada NO es viable en esta pantalla**; hay que pilotearlo con el owner o verificar por base de datos
 - [x] **Web** — guion completo el 2026-08-10 (noche), cada caso verificado en `nutrition_intake_entries` y contra la formula del RPC replicada en SQL (detalle en el acta de abajo). Dos casos NO reproducibles con el escenario de hoy, anotados abajo
 - [x] **Regresion T2.4 en el preview**: sustitucion autorizada (Espinaca 715 g, exige confirmar cantidad) registrada desde el bloque "Autorizados por tu coach" con clave `…-a3` — el bump de `attempt` tras 3 intentos previos anulados, sin colision de idempotencia
-- [!] **Device** — BLOQUEADO: el celular esta conectado por adb pero con candado seguro (PIN/huella); es el telefono personal del owner y no se bypassea. Queda listo el resto (adb en `D:\Android\Sdk\platform-tools`, screencap funcionando). Falta: desbloqueo del owner + Metro con `EXPO_PUBLIC_API_URL` al preview + guion device + modo avion con chip "En cola"
-- [x] Cada caso web verificado leyendo `nutrition_intake_entries`, no por pantalla
+- [x] **Device** — guion completo el 2026-08-10 (noche), device fisico (Xiaomi 2406APNFAG) via adb + build debug + Metro con `EXPO_PUBLIC_API_URL` al preview, sesion de Catalina logueada por el owner. Acta abajo
+- [x] Cada caso (web y device) verificado leyendo `nutrition_intake_entries`, no por pantalla
 - [x] Acta con evidencia (abajo)
-- [ ] Programa padre y `docs/status/CURRENT.md` actualizados (al cerrar el device QA)
+- [x] Programa padre y `docs/status/CURRENT.md` actualizados
+
+### Acta del QA device — 2026-08-10 (noche), Xiaomi fisico, debug build + Metro→preview
+
+Setup: la release instalada (vc81, apunta a PROD) se respaldo y se reemplazo por la build debug cargando el bundle T2.5 de Metro con `EXPO_PUBLIC_API_URL` al preview; gestos por `adb input`, evidencia por screenshot + DB. Al final se desinstalo la debug; la release era **split APK de Play** y el backup base-only no reinstala (`INSTALL_FAILED_MISSING_SPLIT`) ⇒ el owner reinstala desde Play.
+
+| Caso | Resultado | Evidencia |
+|---|---|---|
+| Paridad del read model | ✅ | Hoy identico a web/DB: Sopa/Avena registradas, sustitucion vigente, conteos 705/705/603 y el hero recalculado |
+| Sheet dos bloques | ✅ | "Cambiar Pechuga…": Autorizados (Espinaca 715 g "confirma la cantidad") + Grupo con "Buscar en 602". El alimento CONSUMIDO queda excluido de la lista y el conteo se ajusta solo (603 con Pechuga libre → 602 con Espinaca puesta) |
+| Buscador | ✅ | "arroz blanco" en el grupo PROTEINAS → **"Sin resultados para 'arroz blanco'"** (empty state honesto); "atun" → lista filtrada con deltas |
+| Elegir del grupo | ✅ | Lata De Atun 100 g → entry activa `substitution`, **`corrects_entry_id`→Gohan** (revision 3): corrige sin duplicar por `/api/mobile`. La fila cambio AL INSTANTE (RN ya era optimista) |
+| Retirar registro | ✅ | Modal con chips de motivo (paridad web) → entry `voided` + reason; la fila volvio a "Pechuga · Lo comi" |
+| **Modo avion (F5, el reparo de T2.4)** | ✅ | Avion ON: el sheet degrada honesto (coach visible sin red, grupo "No pudimos cargar los equivalentes"); confirmar Espinaca 715 g → **fila con chip "En cola"**, entry preview "Espinaca · Sin sincronizar · 715 g" visible, y chip global "1 pendiente" |
+| Drenado sin duplicar | ✅ | Avion OFF + pull-to-refresh → la cola drena en el proximo `load()`: **UNA** entry activa `-a4`, cero duplicados; chips desaparecen; Verduras salto a 7,5/7,5 (+2,4) porque la Espinaca cuenta al grupo V — coherencia server |
+| **Attempt cross-superficie** | ✅ | La misma sub del coach quedo `-a3` en el QA web y `-a4` en el device: el bump sobrevive el cruce de superficies sin colision |
+| Swipe fisico | ✅ | Drag real hacia la izquierda sobre la fila (gesture-handler) → abre el sheet; el scroll vertical no se lo come |
+
+**Observaciones (no bloquean, anotadas):**
+- El drenado de la cola corre en el proximo `load()` (focus/refresh/registro), NO hay listener de reconexion: con red de vuelta, el "En cola" persiste hasta que el alumno vuelve a la pantalla o refresca. Es el diseño de T2.4; si molesta, un `NetInfo.addEventListener` que dispare `flushNutritionV2MutationQueue` es una tanda chica.
+- La entry preview encolada se pinta bajo "Fuera del plan" (no tiene franja asignada en el preview local); la fila del item ya lleva el chip "En cola", asi que la señal principal esta — cosmetico.
 
 ### Acta del QA web — 2026-08-10 (noche), preview `gymappjp-git-rnmobiledenuevo`, sesion de Catalina
 
@@ -148,6 +168,7 @@ Metodo: la extension de navegador NO logra `document_idle` en esta pantalla (flo
 
 | Fecha | Fase | Commit | Gates | Notas |
 |---|---|---|---|---|
+| 2026-08-10 | **F7 QA web + device — T2.5 CERRADA en QA** | (este commit) | Cada caso verificado en DB · docs:check | Queda SOLO la decision del owner: merge a master + OTA android. Fix H2 (`5139b29e`, UI optimista web) incluido y pusheado al preview. H1 (buscador vs parentesis) y D5 (pista del swipe) quedan como decisiones abiertas |
 | 2026-08-10 | Fase 0 (SPEC/PLAN/TASKS) | `f710e0ee` | `pnpm docs:check` | Auditoria LIVE incluida; D1-D3 del owner; el orden del mockup se invierte con evidencia |
 | 2026-08-10 | Fase 0 (correcciones de la revision) | `d82057b2` | `pnpm docs:check` | 8 bloqueantes incorporados, todos re-verificados contra LIVE. B1 habria roto T2.4 en produccion al aplicar F2. H2 recalculado sobre la poblacion entera. Queda D4 del owner |
 | 2026-08-10 | F0 (contrato + delta + claves) | `a6c1634e` | 37/37 del archivo · typecheck web y mobile exit 0 | Sin tocar la equivalencia de T2.4. `origin` con default y `schemaVersion` en 1 para no romper las apps sin OTA |
