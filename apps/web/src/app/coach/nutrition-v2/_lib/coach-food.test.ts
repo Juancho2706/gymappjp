@@ -58,6 +58,17 @@ describe('CoachFoodInputSchema · equivalencia de porciones', () => {
     expect(CoachFoodInputSchema.safeParse(VALID).success).toBe(true)
   })
 
+  // El tab Alimentos de RN (F6.3) crea alimentos sin alumno en contexto: el insert nunca usa
+  // `clientId` y el endpoint mobile autoriza por workspace, así que el schema no puede exigirlo.
+  it('acepta el alta SIN clientId (el tab Alimentos del móvil no tiene alumno)', () => {
+    const sinCliente: Record<string, unknown> = { ...VALID }
+    delete sinCliente.clientId
+    expect(CoachFoodInputSchema.safeParse(sinCliente).success).toBe(true)
+    expect(CoachFoodInputSchema.safeParse({ ...VALID, clientId: undefined }).success).toBe(true)
+    // Sigue siendo un uuid cuando viaja (el builder web/RN lo manda).
+    expect(CoachFoodInputSchema.safeParse({ ...VALID, clientId: 'no-uuid' }).success).toBe(false)
+  })
+
   it('acepta el trío completo y el par grupo+gramos', () => {
     expect(
       CoachFoodInputSchema.safeParse({ ...VALID, exchangeGroupId: GROUP_ID, exchangePortionGrams: 120 }).success

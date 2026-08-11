@@ -405,6 +405,28 @@ describe('POST coach/mutate · createFood', () => {
     expect(row.workspace).toBeUndefined()
   })
 
+  // F6.3 — el tab Alimentos de RN crea sin alumno en contexto. Este gate autoriza por workspace +
+  // bearer y `insertCoachFood` nunca lee `clientId`, asi que el alta debe pasar igual.
+  it('crea sin clientId (el tab Alimentos del movil no tiene alumno)', async () => {
+    const single = vi.fn(async () => ({ data: { id: 'food-2' }, error: null }))
+    const rows: Record<string, unknown>[] = []
+    const insert = vi.fn((row: Record<string, unknown>) => {
+      rows.push(row)
+      return { select: () => ({ single }) }
+    })
+    userFrom.mockImplementation(() => ({ insert }))
+
+    const sinCliente: Record<string, unknown> = { ...FOOD }
+    delete sinCliente.clientId
+    const res = await POST(req(sinCliente))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.food).toMatchObject({ id: 'food-2', name: 'Salsa casera' })
+    expect(userFrom).toHaveBeenCalledWith('foods')
+    expect(rows[0]).toMatchObject({ coach_id: COACH, catalog_source: 'coach' })
+    expect(rows[0].client_id).toBeUndefined()
+  })
+
   it('campos invalidos (nombre vacio, macros negativas) => 400 INVALID_PAYLOAD sin tocar la BD', async () => {
     const vacio = await POST(req({ ...FOOD, name: '   ' }))
     expect(vacio.status).toBe(400)

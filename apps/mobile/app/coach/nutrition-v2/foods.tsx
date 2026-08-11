@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Linking,
@@ -12,7 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Pencil, Search, User, X } from 'lucide-react-native'
+import { Pencil, Plus, Search, User, X } from 'lucide-react-native'
 import { NutritionHeader, NutritionStatePanel, FoodThumbnail } from '../../../components/nutrition-v2'
 // Import por ruta directa (no via el barrel): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../components/nutrition-v2/MacroChipRow'
@@ -38,7 +38,10 @@ import {
   type FoodVerificationTone,
 } from '../../../lib/food-detail'
 import { FoodDetailSheet } from '../../../components/coach/FoodDetailSheet'
+import { AddFoodSheet } from '../../../components/coach/AddFoodSheet'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
+import { useWorkspace } from '../../../lib/workspace'
+import { nutritionV2CoachScope } from '../../../lib/nutrition-v2.api'
 
 /**
  * Catálogo V2 del coach (RN, read-only) — port de
@@ -46,6 +49,9 @@ import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChr
  *
  * Ficha al tocar una fila (sin segundo fetch). El gate lo aplica el servidor en cada lectura
  * (`/api/mobile/nutrition-v2/catalog` re-verifica flag + scope); la UI nunca autoriza.
+ *
+ * Read-only con UNA excepción (T2.3 F6.3): el alta de alimento custom, en su propio sheet
+ * (`components/coach/AddFoodSheet`). Escribe por el endpoint coach/mutate, no contra Supabase.
  *
  * CINCO MODOS (T2.3 F6.2, paridad con el hub web). Cuál está activo lo decide
  * `resolveFoodCatalogMode` de `@eva/nutrition-v2` — la MISMA función pura que obedece la web, no
@@ -106,6 +112,15 @@ export default function CoachNutritionCatalogScreen({
   const router = useRouter()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
+  const { ready: workspaceReady, kind, teamId, orgId } = useWorkspace()
+
+  // El alta necesita scope (las LECTURAS de este tab no: el endpoint del catálogo lo resuelve
+  // server-side). `null` = workspace sin resolver o irreconocible ⇒ el botón queda deshabilitado
+  // en vez de escribir contra un pool ajeno.
+  const scope = useMemo(
+    () => (workspaceReady ? nutritionV2CoachScope({ kind, teamId, orgId }) : null),
+    [workspaceReady, kind, teamId, orgId]
+  )
 
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -119,6 +134,9 @@ export default function CoachNutritionCatalogScreen({
   const [error, setError] = useState<string | null>(null)
   const [detailItem, setDetailItem] = useState<FoodCatalogItem | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  /** Disparador de "vuelve a consultar lo mismo" tras un alta (ver `handleFoodCreated`). */
+  const [searchNonce, setSearchNonce] = useState(0)
 
   const activeController = useRef<AbortController | null>(null)
   const latestQuery = useRef('')
@@ -215,7 +233,10 @@ export default function CoachNutritionCatalogScreen({
       return
     }
     if (isOffsetListMode(mode)) void runOffsetList(mode)
-  }, [mode, debounced, runSearch, runOffsetList])
+    // `searchNonce` no se usa en el cuerpo A PROPÓSITO: es el disparador de "vuelve a buscar lo
+    // mismo" tras un alta (ver `handleFoodCreated`). En el camino normal el modo o el término ya
+    // cambian, así que no agrega ninguna consulta.
+  }, [mode, debounced, runSearch, runOffsetList, searchNonce])
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return
@@ -290,6 +311,39 @@ export default function CoachNutritionCatalogScreen({
     setNextOffset(null)
     setHasMore(false)
     setError(null)
+  }
+
+  /**
+   * Tras crear, el listado se REAPUNTA al nombre del alimento nuevo en vez de refrescarse
+   * (espejo de `FoodCatalogBrowser.handleFoodCreated`, web:236-271).
+   *
+   * El listado ordena y pagina SERVER-side sobre decenas de miles de filas: el alimento recién
+   * creado casi nunca cae en la búsqueda activa ni en la primera página de 20, y en "Editados por
+   * mí" directamente no existe (nace sin override). Apuntar la búsqueda a su nombre es lo único
+   * que lo pone en pantalla sin recargar la app.
+   *
+   * La ÚNICA excepción es un nombre demasiado corto para la RPC (1 carácter): esa búsqueda no
+   * saldría nunca, y "Solo míos" sí lo muestra — el alimento acaba de nacer con el `coach_id` del
+   * actor.
+   */
+  function handleFoodCreated(name: string) {
+    setCreateOpen(false)
+    const term = name.trim()
+    if (term.length < MIN_QUERY) {
+      applyFilterMode('mine')
+      setQuery('')
+      setDebounced('')
+      // Si el coach YA estaba en "Solo mios", el modo no cambia y sin esto la lista se quedaría
+      // sin el alimento que acaba de crear.
+      setSearchNonce((n) => n + 1)
+      return
+    }
+    applyFilterMode('all')
+    setQuery(term)
+    // Se adelanta el debounce: la búsqueda tiene que salir ya, no 400 ms después de cerrar el
+    // sheet. El timer escribirá el mismo valor y React descartará el re-render.
+    setDebounced(term)
+    setSearchNonce((n) => n + 1)
   }
 
   const renderEmpty = () => {
@@ -442,38 +496,62 @@ export default function CoachNutritionCatalogScreen({
           </Pressable>
         ) : null}
       </View>
-      {/* Los dos chips son EXCLUYENTES: `nextFoodFilterMode` apaga el otro. Se comportan como un
-          radio-group con deselección, no como dos checkboxes, y por eso `accessibilityState.selected`
-          sobre un botón — el estado "ninguno" es legítimo. */}
-      <View accessibilityRole="tablist" className="flex-row flex-wrap items-center gap-1.5">
-        {(
-          [
-            { key: 'mine', label: 'Solo mios', Icon: User },
-            { key: 'edited', label: 'Editados por mi', Icon: Pencil },
-          ] as const
-        ).map(({ key, label, Icon }) => {
-          const active = filterMode === key
-          return (
-            <Pressable
-              key={key}
-              accessibilityRole="button"
-              accessibilityLabel={label}
-              accessibilityState={{ selected: active }}
-              onPress={() => applyFilterMode(nextFoodFilterMode(filterMode, key))}
-              className={`min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-pill border px-3 ${
-                active ? 'border-primary bg-primary/10' : 'border-default bg-surface-card'
-              }`}
-            >
-              <Icon color={active ? theme.primary : theme.mutedForeground} size={14} />
-              <Text
-                numberOfLines={1}
-                className={`text-xs font-semibold ${active ? 'text-primary' : 'text-muted'}`}
+      {/* Filtros a la izquierda, alta a la derecha (misma fila que la web, FoodCatalogBrowser:
+          473-528). `flex-wrap` en la fila contenedora: con marca de nombre largo o fuente grande
+          el botón baja en vez de comprimir los chips. */}
+      <View className="flex-row flex-wrap items-center justify-between gap-2">
+        {/* Los dos chips son EXCLUYENTES: `nextFoodFilterMode` apaga el otro. Se comportan como un
+            radio-group con deselección, no como dos checkboxes, y por eso `accessibilityState.selected`
+            sobre un botón — el estado "ninguno" es legítimo. */}
+        <View accessibilityRole="tablist" className="flex-row flex-wrap items-center gap-1.5">
+          {(
+            [
+              { key: 'mine', label: 'Solo mios', Icon: User },
+              { key: 'edited', label: 'Editados por mi', Icon: Pencil },
+            ] as const
+          ).map(({ key, label, Icon }) => {
+            const active = filterMode === key
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                accessibilityState={{ selected: active }}
+                onPress={() => applyFilterMode(nextFoodFilterMode(filterMode, key))}
+                className={`min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-pill border px-3 ${
+                  active ? 'border-primary bg-primary/10' : 'border-default bg-surface-card'
+                }`}
               >
-                {label}
-              </Text>
-            </Pressable>
-          )
-        })}
+                <Icon color={active ? theme.primary : theme.mutedForeground} size={14} />
+                <Text
+                  numberOfLines={1}
+                  className={`text-xs font-semibold ${active ? 'text-primary' : 'text-muted'}`}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+
+        {/* Sin scope resuelto no hay a dónde escribir: se deshabilita en vez de abrir un sheet que
+            fallaría al guardar. El relleno es `bg-primary` (token de marca, white-label safe) y el
+            texto/icono su foreground legible — el mismo par que el CTA del sheet de macros. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Crear un alimento nuevo"
+          accessibilityState={{ disabled: scope === null }}
+          disabled={scope === null}
+          onPress={() => setCreateOpen(true)}
+          className={`min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-pill bg-primary px-3 ${
+            scope === null ? 'opacity-50' : ''
+          }`}
+        >
+          <Plus color={theme.primaryForeground} size={14} />
+          <Text numberOfLines={1} className="text-xs font-semibold text-primary-foreground">
+            Nuevo alimento
+          </Text>
+        </Pressable>
       </View>
     </View>
   )
@@ -572,6 +650,16 @@ export default function CoachNutritionCatalogScreen({
       </View>
 
       <FoodDetailSheet open={detailOpen} onClose={() => setDetailOpen(false)} item={detailItem} />
+      {/* Montado solo con scope: así el sheet lo recibe no-nulo sin `!` y el botón que lo abre ya
+          estaba deshabilitado en ese caso. */}
+      {scope ? (
+        <AddFoodSheet
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          scope={scope}
+          onCreated={handleFoodCreated}
+        />
+      ) : null}
     </>
   )
 

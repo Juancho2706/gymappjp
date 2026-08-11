@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CUSTOM_FOOD_ALL_ZERO_MESSAGE,
+  macroPreviewPct,
   parseCustomFoodMacro,
   readCustomFoodMacroDraft,
   validateCustomFoodMacros,
@@ -109,6 +110,40 @@ describe('readCustomFoodMacroDraft', () => {
     const draft = readCustomFoodMacroDraft(formData)
     expect(draft.carbs).toBe('')
     expect(validateCustomFoodMacros(draft)?.field).toBe('carbs')
+  })
+})
+
+describe('macroPreviewPct (preview del alta, web + RN)', () => {
+  it('usa las kcal escritas como denominador aunque no cuadren con Atwater', () => {
+    // 200 kcal declaradas contra 170 de Atwater: manda la etiqueta que copia el coach, asi que
+    // los tres NO suman 100 y eso es correcto (es preview, no validacion).
+    expect(macroPreviewPct(200, 10, 10, 10)).toEqual({ p: 20, c: 20, f: 45 })
+  })
+
+  it('cae a Atwater 4/4/9 cuando todavia no hay kcal', () => {
+    // denom = 40 + 40 + 90 = 170
+    expect(macroPreviewPct(0, 10, 10, 10)).toEqual({ p: 24, c: 24, f: 53 })
+  })
+
+  it('trata kcal no numericas como ausentes y estima con los macros', () => {
+    expect(macroPreviewPct(Number.NaN, 10, 0, 0)).toEqual({ p: 100, c: 0, f: 0 })
+  })
+
+  it('devuelve 0/0/0 con el formulario vacio en vez de NaN en pantalla', () => {
+    expect(macroPreviewPct(0, 0, 0, 0)).toEqual({ p: 0, c: 0, f: 0 })
+  })
+
+  it('kcal negativas tampoco sirven de denominador (no hay macros ⇒ 0/0/0)', () => {
+    expect(macroPreviewPct(-100, 0, 0, 0)).toEqual({ p: 0, c: 0, f: 0 })
+  })
+
+  it('redondea con Math.round (0,5 sube a 1)', () => {
+    expect(macroPreviewPct(800, 1, 0, 0)).toEqual({ p: 1, c: 0, f: 0 })
+  })
+
+  it('acepta decimales y redondea cada macro por separado', () => {
+    // 155 kcal, 13 P (52), 1 C (4), 11 G (99): 33,5 / 2,6 / 63,9
+    expect(macroPreviewPct(155, 13, 1, 11)).toEqual({ p: 34, c: 3, f: 64 })
   })
 })
 

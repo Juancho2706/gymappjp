@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { saveCustomFood } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
 import {
   CUSTOM_FOOD_MACRO_MAX,
+  macroPreviewPct,
   readCustomFoodMacroDraft,
   validateCustomFoodMacros,
 } from '@eva/nutrition-v2'
@@ -29,17 +30,6 @@ import {
   type FoodEquivalenceGroupOption,
   type FoodEquivalenceValue,
 } from './FoodEquivalenceFields'
-
-function macroPreviewPct(calories: number, p: number, c: number, f: number) {
-  const cals = Number(calories) || 0
-  const denom = cals > 0 ? cals : p * 4 + c * 4 + f * 9
-  if (denom <= 0) return { p: 0, c: 0, f: 0 }
-  return {
-    p: Math.round(((p * 4) / denom) * 100),
-    c: Math.round(((c * 4) / denom) * 100),
-    f: Math.round(((f * 9) / denom) * 100),
-  }
-}
 
 function readField(formData: FormData, name: string): string {
   const value = formData.get(name)

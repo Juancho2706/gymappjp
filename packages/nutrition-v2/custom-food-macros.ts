@@ -113,6 +113,35 @@ export function validateCustomFoodMacros(draft: CustomFoodMacroDraft): CustomFoo
 }
 
 /**
+ * Reparto aproximado de las calorías entre P/C/G, en porcentajes redondeados, para el preview
+ * del alta ("% calorías aprox.").
+ *
+ * El denominador es lo único con criterio acá: si el coach ya escribió las kcal, mandan ELLAS
+ * (así el preview refleja la etiqueta que está copiando, aunque no cuadre con Atwater); recién
+ * si todavía no hay kcal se estima con Atwater 4/4/9 sobre los macros, para que el preview no
+ * quede en blanco mientras se llena el formulario. Denominador <= 0 (todo vacío o en 0) ⇒
+ * 0/0/0: no hay nada que repartir y una división daría NaN/Infinity en pantalla.
+ *
+ * Es preview, NO validación: los tres pueden no sumar 100 y eso está bien.
+ * Lo consumen el sheet de alta web (hub V2) y el sheet equivalente del tab Alimentos en RN.
+ */
+export function macroPreviewPct(
+  calories: number,
+  proteinG: number,
+  carbsG: number,
+  fatsG: number,
+): { p: number; c: number; f: number } {
+  const cals = Number(calories) || 0
+  const denom = cals > 0 ? cals : proteinG * 4 + carbsG * 4 + fatsG * 9
+  if (denom <= 0) return { p: 0, c: 0, f: 0 }
+  return {
+    p: Math.round(((proteinG * 4) / denom) * 100),
+    c: Math.round(((carbsG * 4) / denom) * 100),
+    f: Math.round(((fatsG * 9) / denom) * 100),
+  }
+}
+
+/**
  * Lee el cuarteto del `FormData` del alta. Los nombres son los `<input name=...>` del sheet y
  * los que `saveCustomFood` vuelve a leer server-side: tenerlos en un solo lugar evita que un
  * rename deje la validacion mirando campos que ya no existen (siempre vacios ⇒ siempre error).

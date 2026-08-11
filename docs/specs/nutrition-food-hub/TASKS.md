@@ -156,7 +156,33 @@ estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
         los que la API acepta como `operation`, asi el llamador no vuelve a enumerarlos
       - Gates: typecheck web y mobile exit 0 · vitest 381/381 del paquete · boundaries 333/8 ·
         tokens 86/86 · `expo export --platform android` verde
-- [ ] F6.3 RN: "Nuevo alimento" en el tab, reusando `createCoachFoodRN` y el guard kcal/P/C/G
+- [x] **F6.3 (2026-08-11)** — "Nuevo alimento" en el tab RN, reusando la escritura que ya existia
+      (`createCoachFoodRN` → accion `createFood` de `coach/mutate`, el MISMO insert de la web).
+      Tres piezas:
+      - Contrato: `clientId` pasa a OPCIONAL en `CoachFoodInputSchema` (web `_lib/coach-food.ts` +
+        espejo RN): el insert nunca lo leyo — solo la server action web autoriza por la relacion
+        coach-alumno, y ahora lo exige aparte fail-closed (`createCoachFoodAction` corta sin el).
+        El endpoint movil autoriza por workspace + bearer, y el tab crea sin alumno en contexto.
+        Tests: parse sin `clientId` OK, `'no-uuid'` SIGUE fallando, `createFood` sin `clientId` 200.
+      - `macroPreviewPct` mudado del sheet web al modulo puro `custom-food-macros.ts` del paquete
+        (+7 tests): web y RN muestran el mismo "% calorias aprox." sin una segunda copia de la
+        regla del denominador (kcal declaradas mandan; Atwater 4/4/9 solo como fallback).
+      - `components/coach/AddFoodSheet.tsx` (RN, nuevo): nombre + cuarteto kcal/P/C/G con el guard
+        puro `validateCustomFoodMacros` (invariante 6, foco al campo del issue) + cinturon del
+        techo movil (2000 kcal de `CoachFoodInputSchema`; el guard puro espeja el 9000 de V1) +
+        pills g/ml con la consecuencia escrita (`is_liquid` deriva de la unidad y decide que
+        unidades registra el alumno — el bug de los 250 liquidos del catalogo) + preview %.
+        Sin categoria/porcion/medida-casera (no existen en el contrato movil: el server fija
+        `serving_size=100` y `category='otro'`) y sin bloque de equivalencia a proposito:
+        clasificar es F6.4, desde la ficha.
+      - El tab reapunta el listado al nombre creado (espejo de `handleFoodCreated` web), con
+        `searchNonce` para el caso "ya estaba en Solo mios"; el boton queda deshabilitado hasta
+        que el workspace resuelve scope.
+      - Deuda anotada, no tocada: `FoodLibrary.tsx` (V1) conserva una copia inline de
+        `macroPreviewPct`, y `draft-builder.ts` una tercera copia del schema con `clientId`
+        requerido (esa superficie siempre tiene alumno).
+      - Gates: typecheck web y mobile exit 0 · vitest FULL 5636 pass / 0 fail (426 archivos) ·
+        eslint 0 errores · boundaries 333/8 · tokens 86/86 · `expo export --platform android` verde
 - [ ] F6.4 RN: clasificar desde la ficha (lectura aditiva para movil + flujo grupo → gramos → medida
       casera, espejo de `ClassifyFoodFlow`)
 - [ ] F6.5 QA en device fisico + `MOBILE_PARITY.md` + OTA android

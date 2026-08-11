@@ -156,6 +156,11 @@ export async function createCoachFoodAction(
     return fail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.', zodFields(parsed.error))
   }
   const { clientId } = parsed.data
+  // Esta superficie autoriza POR el alumno: sin `clientId` (opcional en el schema compartido con
+  // el tab Alimentos de RN) no hay autorizacion posible, asi que se corta fail-closed.
+  if (!clientId) {
+    return fail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.')
+  }
 
   const auth = await authorizeCoach(clientId)
   if (!auth.ok) return auth

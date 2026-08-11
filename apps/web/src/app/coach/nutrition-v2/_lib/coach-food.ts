@@ -41,7 +41,10 @@ import {
  */
 export const CoachFoodInputSchema = z
   .object({
-    clientId: z.string().uuid(),
+    // El insert NUNCA usa `clientId`: solo la server action web autoriza POR el alumno
+    // (`authorizeCoach(clientId)`) y ahi se exige aparte. El endpoint movil autoriza por
+    // workspace + bearer, y el tab Alimentos de RN (F6.3) crea sin alumno en contexto.
+    clientId: z.string().uuid().optional(),
     name: z.string().trim().min(1).max(180),
     brand: z.string().trim().max(180).nullable().default(null),
     unit: z.enum(['g', 'ml']).default('g'),

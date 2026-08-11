@@ -1148,10 +1148,13 @@ export function variantTotals(variant: BuilderVariant): ItemMacros {
  * "Equivalencia de porciones" (P-B): `exchangeGroupId` + `exchangePortionGrams` (+ medida
  * casera) viajan en el MISMO payload del alta. El servidor ademas verifica que el grupo sea
  * visible para el coach antes de escribir — esto es solo validacion de forma.
+ *
+ * `clientId` es OPCIONAL: solo lo usa la server action web para autorizar por la relacion
+ * coach-alumno. El builder lo manda porque siempre tiene alumno; el tab Alimentos (F6.3) no.
  */
 export const CoachFoodInputSchema = z
   .object({
-    clientId: z.string().uuid(),
+    clientId: z.string().uuid().optional(),
     name: z.string().trim().min(1).max(180),
     brand: z.string().trim().max(180).nullable().default(null),
     unit: z.enum(['g', 'ml']).default('g'),
