@@ -18,12 +18,11 @@
  * `food_media` y la card ya tiene el icono de categoria como fallback garantizado.
  */
 
-import {
-  resolveFoodMacros,
-  type CoachFoodOverrideValues,
-  type FoodCatalogItem,
-  type NutritionMacrosBasis,
-} from '@eva/nutrition-v2'
+// Imports por modulo concreto y NO por el barrel `@eva/nutrition-v2`: este archivo ES parte del
+// barrel desde F6.0, y apuntarle crearia un ciclo.
+import { resolveFoodMacros, type CoachFoodOverrideValues } from './food-overrides'
+import type { FoodCatalogItem } from './catalog'
+import type { NutritionMacrosBasis } from './intake-normalize'
 
 /**
  * Fila de `public.foods` tal como la devuelve PostgREST para estos listados. Snake_case porque

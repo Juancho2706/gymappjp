@@ -27,18 +27,18 @@ import {
   foodCatalogItemToDetail,
   type FoodCatalogCardModel,
 } from '../_lib/food-catalog-card'
-import { matchesFoodQuery } from '../_lib/edited-foods'
 import {
   FOOD_FILTER_PARAM,
   FOOD_SEARCH_MIN_QUERY,
   foodFilterModeFromParam,
   foodFilterModeToParam,
   isOffsetListMode,
+  matchesFoodQuery,
   nextFoodFilterMode,
   resolveFoodCatalogMode,
   usesLocalTextFilter,
   type FoodFilterMode,
-} from '../_lib/food-catalog-mode'
+} from '@eva/nutrition-v2'
 import {
   browseFoodCatalogHubAction,
   listCoachEditedFoodsHubAction,
@@ -62,7 +62,8 @@ const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
 /**
  * Navegador del catalogo del tab Alimentos. Cuatro modos de lectura EXCLUYENTES, decididos por la
- * maquina pura de `_lib/food-catalog-mode.ts` (`resolveFoodCatalogMode`):
+ * maquina pura de `@eva/nutrition-v2` (`resolveFoodCatalogMode`; vivio en `_lib` hasta F6.0, se
+ * mudo al paquete para que el tab RN obedezca la MISMA maquina):
  *
  *  - `browse` (default, T2.3 F4.5): primera pagina del catalogo por nombre, OFFSET. Es lo que ve
  *    el coach al entrar al tab, SIN escribir nada — la funcion que traia `FoodBrowser` de

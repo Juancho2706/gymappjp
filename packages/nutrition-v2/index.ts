@@ -13,6 +13,11 @@ export * from './intake-normalize'
 export * from './intake-units'
 export * from './substitution-intake'
 export * from './swipe-hint'
+// Tab Alimentos del hub coach. Vivian en `apps/web/.../nutrition-v2/_lib` hasta T2.3 F6.0: son
+// puros y RN los necesita para la paridad del tab, y `apps/mobile` no puede importar de `apps/web`.
+export * from './food-catalog-mode'
+export * from './custom-food-macros'
+export * from './edited-foods'
 export * from './exchange-lists'
 export * from './plan-templates'
 export * from './bulk-mark'

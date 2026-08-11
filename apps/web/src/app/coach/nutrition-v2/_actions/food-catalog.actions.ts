@@ -26,7 +26,7 @@ import {
 import {
   foodRowToCatalogItem,
   type CatalogFoodRow,
-} from '@/app/coach/nutrition-v2/_lib/edited-foods'
+} from '@eva/nutrition-v2'
 
 // Listado de alimentos del hub coach V2 (solo lectura).
 // Fail-closed: re-verifica el scope V2 del workspace activo en CADA búsqueda, igual que el builder.

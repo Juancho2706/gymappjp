@@ -108,8 +108,20 @@ estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
 
 **Sub-fases propuestas** (cada una con su gate, en este orden):
 
-- [ ] F6.0 Mover a `packages/nutrition-v2` los modulos puros de arriba con sus tests, reescribir los
-      imports de la web y dejar el gate verde SIN tocar UI (rollback = revert de un commit)
+- [x] **F6.0 (2026-08-11)** — mudados con `git mv` (historia preservada) `food-catalog-mode.ts`,
+      `custom-food-macros.ts` y `edited-foods.ts` con sus 3 tests a `packages/nutrition-v2`, exportados
+      por el barrel y reescritos los 4 imports de la web (`FoodCatalogBrowser`, `AddFoodSheet` + su
+      test, `food-catalog.actions`). `edited-foods.ts` pasa a importar por **modulo concreto** y no
+      por el barrel: ahora ES parte del barrel y apuntarle seria un ciclo. Cero cambio de UI.
+      - Verificado que `matchesFoodQuery` usa `String.prototype.normalize('NFD')`, la API que el
+        propio barrel evita para RN: **no es riesgo nuevo**, el buscador del alumno RN ya la ejecuta
+        en produccion via `normalizeFoodSearchText` de `@eva/nutrition-engine`.
+      - Los otros dos quedan fuera a proposito, con su bloqueo anotado: `food-classification.ts`
+        depende de `nutrition-portions-copy` (duplicado web/mobile, hay que unificarlo antes) y
+        `food-catalog-card.ts` depende de `@/lib/food-detail` + `@/lib/food-image` (RN tiene su
+        propio `lib/food-detail.ts` — segunda duplicacion que destapa esta fase).
+      - Gates: typecheck web y mobile exit 0 · vitest 977/977 (63 archivos) de `packages/nutrition-v2`
+        + el hub coach
 - [ ] F6.1 Operaciones de listado para movil (`browse` / `mine` / `edited`) en el endpoint del
       catalogo, con la MISMA visibilidad que el RPC y paginado por offset
 - [ ] F6.2 RN: chips excluyentes + filtro de texto local en los modos con universo cargado + badge ✎

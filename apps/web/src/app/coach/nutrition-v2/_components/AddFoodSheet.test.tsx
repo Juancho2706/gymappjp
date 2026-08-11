@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { CUSTOM_FOOD_ALL_ZERO_MESSAGE } from '../_lib/custom-food-macros'
+import { CUSTOM_FOOD_ALL_ZERO_MESSAGE } from '@eva/nutrition-v2'
 
 const saveCustomFood = vi.fn()
 

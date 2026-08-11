@@ -21,7 +21,7 @@ import {
   CUSTOM_FOOD_MACRO_MAX,
   readCustomFoodMacroDraft,
   validateCustomFoodMacros,
-} from '../_lib/custom-food-macros'
+} from '@eva/nutrition-v2'
 import { toast } from 'sonner'
 import {
   EMPTY_FOOD_EQUIVALENCE,
