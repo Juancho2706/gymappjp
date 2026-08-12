@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import Constants from 'expo-constants'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { cssInterop } from 'nativewind'
 import {
@@ -649,7 +650,7 @@ export default function AlumnoPerfilScreen() {
             )}
 
             <Text className="font-sans text-muted" style={{ fontSize: 10, textAlign: 'center', marginTop: 4 }}>
-              v1.2.0 · Hecho con ❤️ para tu progreso
+              v{Constants.expoConfig?.version ?? '—'} · Hecho con ❤️ para tu progreso
             </Text>
           </ScrollView>
         )}
