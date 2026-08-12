@@ -316,14 +316,29 @@ export default function AlumnoPerfilScreen() {
     }
   }
 
+  /**
+   * Cerrar sesion habla con la red antes de navegar (revoca el push de ESTE device y cierra la
+   * sesion en Supabase): medido en un Android fisico tarda ~1-3 s, y en ese tramo la pantalla
+   * se quedaba EXACTAMENTE igual —el alumno seguia viendo su dashboard— asi que el tap parecia
+   * no haber hecho nada. El estado da la senal y ademas bloquea el segundo tap.
+   */
   async function handleLogout() {
-    await signOutAndCleanup()
-    await AsyncStorage.removeItem('eva_user_role')
-    await clearBranding()
-    setBranding(null)
-    router.replace('/')
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await signOutAndCleanup()
+      await AsyncStorage.removeItem('eva_user_role')
+      await clearBranding()
+      setBranding(null)
+      router.replace('/')
+    } catch {
+      // Si el cierre falla el alumno se queda donde estaba: devolverle el boton, no dejarlo
+      // con una fila muerta que ya no responde.
+      setLoggingOut(false)
+    }
   }
 
+  const [loggingOut, setLoggingOut] = useState(false)
   const [bioAvailable, setBioAvailable] = useState(false)
   const [bioEnabled, setBioEnabled] = useState(false)
   useEffect(() => {
@@ -606,8 +621,9 @@ export default function AlumnoPerfilScreen() {
                 <ListRow
                   testID="perfil-logout-row"
                   leading={<IconTile Icon={LogOut} />}
-                  title="Cerrar sesión"
-                  showChevron
+                  title={loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
+                  showChevron={!loggingOut}
+                  disabled={loggingOut}
                   onPress={handleLogout}
                 />
               </Card>
