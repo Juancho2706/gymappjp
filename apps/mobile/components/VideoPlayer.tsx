@@ -702,7 +702,16 @@ const styles = StyleSheet.create({
   // dentro del marco de 150px del ejecutor V3): solo ancho full, sin `aspectRatio` que compita. El
   // `alignSelf:'stretch'` gana el ancho aunque el padre centre sus hijos, y el centrado interno espeja el
   // `.exec-v3-media { display:flex; align-items:center; justify-content:center }` de la web.
-  frameFluid: { width: '100%', alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  //
+  // 🔴 SIN `alignItems:'center'`. Estaba puesto para espejar el centrado de la web, pero en Yoga
+  // centrar en el eje cruzado hace que el hijo se dimensione por su CONTENIDO intrinseco, y un
+  // WebView no tiene ninguno: colapsaba a ANCHO 0. El video seguia vivo y sonando —el usuario lo
+  // ESCUCHABA— sin ocupar un pixel. Medido en un Xiaomi con `dumpsys activity top`:
+  //   ReactViewGroup{...  7,7-1110,481}   ← el marco, 1103 de ancho
+  //     ReactViewGroup{... 552,0-552,474} ← el player, ancho 0, centrado
+  //       RNCWebView{...     0,0-0,474}   ← el video, ancho 0
+  // Los hijos ya traen `flex:1 + width:'100%' + alignSelf:'stretch'`, asi que llenan el marco solos.
+  frameFluid: { width: '100%', alignSelf: 'stretch' },
   fill: { flex: 1, width: '100%', alignSelf: 'stretch', backgroundColor: '#000' },
   playBtn: {
     width: 60,
