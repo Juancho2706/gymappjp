@@ -108,7 +108,8 @@ function mapCoachRowToBranding(data: any): CoachBranding {
   const branding: CoachBranding = {
     coachId: data.id,
     coachSlug: data.slug,
-    primaryColor: data.primary_color ?? '#007AFF',
+    // Azul EVA (= token `--color-sport-600`), el mismo que `DEFAULT_BRAND` en `lib/theme.ts`.
+    primaryColor: data.primary_color ?? '#1462DC',
     displayName: data.brand_name ?? data.slug,
     inviteCode: data.invite_code,
     logoUrl: data.logo_url ?? null,
@@ -241,6 +242,54 @@ export async function bootstrapOwnCoachBranding(): Promise<OwnBrandingBootstrapR
   }
 }
 
+// Memo del refresco de marca del ALUMNO: una resolucion por usuario y por arranque, igual que el
+// del coach. `clearBranding()` lo resetea.
+let clientBrandingRefreshedFor: string | null = null
+
+/**
+ * El ALUMNO vuelve a resolver la marca de SU coach al entrar a la app.
+ *
+ * Sin esto la cache la escribia UNICAMENTE la pantalla del codigo del coach (`CoachIdentifierForm`),
+ * asi que un coach que cambiaba su color NUNCA lo veia reflejado en los alumnos que ya habian
+ * entrado alguna vez: seguian con la marca vieja hasta reinstalar o volver a tipear el codigo. El
+ * coach si veia la suya al dia (`bootstrapOwnCoachBranding`), lo que hacia el sintoma mas confuso
+ * todavia — "yo lo veo bien y mis alumnos no".
+ *
+ * Best-effort y memoizado: una sola consulta por arranque, y ante error NO memoiza, asi que se
+ * reintenta en el proximo montaje en vez de dejar la marca vieja pegada para siempre.
+ */
+export async function refreshClientCoachBranding(): Promise<CoachBranding | null> {
+  try {
+    // Sesion LOCAL, sin round-trip: esto corre en el montaje del arbol del alumno.
+    const { data } = await supabase.auth.getSession()
+    const userId = data.session?.user?.id
+    if (!userId) return null
+    if (clientBrandingRefreshedFor === userId) return null
+
+    const { data: row, error } = await supabase
+      .from('clients')
+      .select('coach_id')
+      .eq('id', userId)
+      .maybeSingle()
+    if (error) return null
+    const coachId = (row as { coach_id?: string | null } | null)?.coach_id
+    // Sin fila de cliente (p. ej. un COACH entrando) no hay nada que refrescar y tampoco se
+    // memoiza: esta funcion solo la llama el arbol del alumno.
+    if (!coachId) return null
+
+    // Misma lectura por id que usa el coach para su propia marca (RLS: `coaches_select_authenticated`
+    // deja al alumno leer la fila de SU coach).
+    const fresh = await fetchOwnCoachBranding(coachId)
+    if (!fresh) return null
+
+    await saveStoredBranding(fresh)
+    clientBrandingRefreshedFor = userId
+    return fresh
+  } catch {
+    return null
+  }
+}
+
 export async function loadStoredBranding(): Promise<CoachBranding | null> {
   const raw = await AsyncStorage.getItem(BRANDING_KEY)
   if (!raw) return null
@@ -258,6 +307,7 @@ export async function loadStoredBranding(): Promise<CoachBranding | null> {
 export async function clearBranding(): Promise<void> {
   // Cierre de sesion / cambio de marca: el proximo coach del device debe re-resolver la suya.
   ownBrandingBootstrappedFor = null
+  clientBrandingRefreshedFor = null
   await AsyncStorage.removeItem(BRANDING_KEY)
 }
 

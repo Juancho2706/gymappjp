@@ -7,6 +7,8 @@ import { useEntitlements } from '../../lib/entitlements'
 import { StudentAccessBlocked } from '../../components/alumno/StudentAccessBlocked'
 import { getStudentAccountStatus } from '../../lib/student-account-status'
 import { signOutAndCleanup } from '../../lib/auth-actions'
+import { refreshClientCoachBranding } from '../../lib/branding'
+import { useTheme } from '../../context/ThemeContext'
 
 /**
  * Rutas del arbol alumno que siguen siendo alcanzables con el acceso bloqueado:
@@ -37,6 +39,20 @@ export default function AlumnoLayout() {
   const router = useRouter()
   const pathname = usePathname()
   const { studentAccess } = useEntitlements()
+  const { setBranding } = useTheme()
+
+  // La marca del coach se resolvia UNA sola vez, cuando el alumno tipeaba el codigo, y despues
+  // quedaba congelada en el device: si el coach cambiaba su color, sus alumnos seguian viendo el
+  // anterior para siempre. Se refresca al entrar, una vez por arranque y sin bloquear el render.
+  useEffect(() => {
+    let alive = true
+    void refreshClientCoachBranding().then((fresh) => {
+      if (alive && fresh) setBranding(fresh)
+    })
+    return () => {
+      alive = false
+    }
+  }, [setBranding])
   // Guarda anti-carrera: una sola navegacion al gate de suspension (espejo de la de `(tabs)`).
   const redirecting = useRef(false)
 
