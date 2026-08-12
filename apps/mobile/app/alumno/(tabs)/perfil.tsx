@@ -29,6 +29,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../../lib/supabase'
 import { passwordRejectionMessage } from '@eva/schemas'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
+import { requestAccountDeletion } from '../../../lib/account-deletion'
 import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
 import { getClientProfile } from '../../../lib/client'
 import { getPoolConsentStatus, revokePoolConsent, type PoolConsentStatus } from '../../../lib/pool-consent'
@@ -127,6 +128,18 @@ function IconTile({ Icon, tone = 'neutral' }: { Icon: LucideIcon; tone?: Tone })
 // Hairline divider between stacked rows inside a padding-none Card.
 function RowDivider() {
   return <View className="mx-[14px] border-t border-subtle" />
+}
+
+/** Viñeta del diálogo de baja — punto danger + texto, para que el alcance se lea de un vistazo. */
+function DeletionBullet({ children }: { children: string }) {
+  return (
+    <View className="flex-row" style={{ gap: 10 }}>
+      <View className="bg-danger-500" style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 7 }} />
+      <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 13.5, lineHeight: 19 }}>
+        {children}
+      </Text>
+    </View>
+  )
 }
 
 // label/value line for the "Información" card.
@@ -342,6 +355,43 @@ export default function AlumnoPerfilScreen() {
   }
 
   const [loggingOut, setLoggingOut] = useState(false)
+  /**
+   * Eliminación de cuenta EN-APP (guideline 5.1.1(v) — rechazo de la build iOS 1.1.0).
+   *
+   * POR QUÉ cambió: esta zona abría un `mailto` y Apple lo rechaza — solo industrias altamente
+   * reguladas pueden exigir un canal de atención para darse de baja. Ahora el pedido se confirma
+   * acá y el server deshabilita la cuenta al instante (purga definitiva a 30 días).
+   *
+   * Al `ok` reusamos `handleLogout()`: es el MISMO camino del botón "Cerrar sesión" de esta
+   * pantalla (limpia push, la caché de nutrición y el rol cacheado). La marca del coach ya NO se
+   * borra ahí —decisión del owner del 12-08, para que volver a entrar sea de un tap—, así que
+   * tras darse de baja el device conserva el login branded de ese coach. Sin `ok` NO se cierra
+   * sesión: sacar al alumno con la cuenta intacta le escondería el fallo.
+   */
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  function closeDeleteDialog() {
+    if (deleting) return // una baja en vuelo no se abandona a medias
+    setDeleteOpen(false)
+    setDeleteError(null)
+  }
+
+  async function confirmDeleteAccount() {
+    if (deleting) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await requestAccountDeletion()
+      // La pantalla se desmonta en la redirección: no hace falta apagar el spinner.
+      await handleLogout()
+    } catch (e: unknown) {
+      setDeleteError(e instanceof Error ? e.message : 'No se pudo eliminar la cuenta. Intenta de nuevo.')
+      setDeleting(false)
+    }
+  }
+
   const [bioAvailable, setBioAvailable] = useState(false)
   const [bioEnabled, setBioEnabled] = useState(false)
   useEffect(() => {
@@ -632,7 +682,8 @@ export default function AlumnoPerfilScreen() {
               </Card>
             </View>
 
-            {/* Zona de peligro — baja de cuenta (derechos ARCO), 1:1 con web */}
+            {/* Zona de peligro — eliminación de cuenta EN-APP (guideline 5.1.1(v)). Ya NO es un
+                `mailto`: abre la confirmación y la baja se ejecuta dentro de la app. */}
             <View style={{ marginTop: 20 }}>
               <Text
                 className="font-sans-extra text-danger-600"
@@ -643,7 +694,9 @@ export default function AlumnoPerfilScreen() {
               <Pressable
                 testID="perfil-baja-cuenta"
                 accessibilityRole="button"
-                onPress={() => Linking.openURL('mailto:privacidad@eva-app.cl?subject=Solicitud%20de%20baja%20de%20cuenta')}
+                accessibilityLabel="Eliminar mi cuenta"
+                accessibilityHint="Abre la confirmación para eliminar tu cuenta de forma definitiva"
+                onPress={() => { setDeleteError(null); setDeleteOpen(true) }}
                 className="flex-row items-center rounded-card border-danger-100 bg-surface-card"
                 style={{ gap: 14, padding: 16, borderWidth: 1.5 }}
               >
@@ -652,10 +705,10 @@ export default function AlumnoPerfilScreen() {
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text className="font-sans-bold text-strong" style={{ fontSize: 14.5 }}>
-                    Solicitar baja de cuenta
+                    Eliminar mi cuenta
                   </Text>
                   <Text className="font-sans text-muted" style={{ fontSize: 12.5, marginTop: 1 }}>
-                    Pide la eliminación de tus datos (derechos ARCO)
+                    Cierra tu cuenta y elimina tus datos. Es definitivo.
                   </Text>
                 </View>
                 <ChevronRight size={18} className="text-ink-300" />
@@ -788,6 +841,55 @@ export default function AlumnoPerfilScreen() {
           secureTextEntry
           autoFocus
         />
+      </Dialog>
+
+      {/* Eliminar cuenta — confirmación EN-APP (guideline 5.1.1(v)). Botones APILADOS: dos `full`
+          en una fila se desbordan (gotcha shrink-0 del DS). */}
+      <Dialog
+        open={deleteOpen}
+        onClose={closeDeleteDialog}
+        title="Eliminar mi cuenta"
+        description="Esta acción es definitiva y no se puede deshacer."
+        showCloseButton={!deleting}
+        footer={
+          <View style={{ gap: 10 }}>
+            <Button
+              label="Eliminar definitivamente"
+              variant="danger"
+              full
+              loading={deleting}
+              disabled={deleting}
+              testID="perfil-baja-confirmar"
+              accessibilityRole="button"
+              accessibilityLabel="Eliminar definitivamente mi cuenta"
+              onPress={() => { void confirmDeleteAccount() }}
+            />
+            <Button
+              label="Cancelar"
+              variant="secondary"
+              full
+              disabled={deleting}
+              testID="perfil-baja-cancelar"
+              accessibilityRole="button"
+              accessibilityLabel="Cancelar y conservar mi cuenta"
+              onPress={closeDeleteDialog}
+            />
+          </View>
+        }
+      >
+        <View style={{ gap: 10 }}>
+          <DeletionBullet>Tu cuenta se cierra de inmediato: no podrás volver a entrar.</DeletionBullet>
+          <DeletionBullet>Pierdes el acceso a tus rutinas, tu nutrición y todo tu historial.</DeletionBullet>
+          <DeletionBullet>Tu coach deja de ver tu progreso.</DeletionBullet>
+          <DeletionBullet>Tus datos se eliminan por completo dentro de 30 días (Ley 21.719).</DeletionBullet>
+        </View>
+        {deleteError ? (
+          <View className="rounded-control border border-danger-100 bg-danger-100" style={{ padding: 12 }}>
+            <Text className="font-sans text-danger-600" accessibilityLiveRegion="polite" style={{ fontSize: 13, lineHeight: 18 }}>
+              {deleteError}
+            </Text>
+          </View>
+        ) : null}
       </Dialog>
     </View>
   )

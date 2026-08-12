@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import {
@@ -20,7 +20,7 @@ import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { MODULE_CATALOG_KEYS } from '@eva/module-catalog'
-import { Avatar, Badge, Button, Card } from '../../../components'
+import { Avatar, Badge, Button, Card, Dialog } from '../../../components'
 import { ListRow } from '../../../components/ListRow'
 import { AppBackground } from '../../../components/AppBackground'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -31,6 +31,7 @@ import { getCoachProfile, type CoachProfile } from '../../../lib/coach'
 import { canUseBranding } from '../../../lib/coach-tiers'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { signOutAndRedirectHome } from '../../../lib/auth-actions'
+import { requestAccountDeletion } from '../../../lib/account-deletion'
 
 /**
  * E7-02 · Hub de Opciones (coach) — espejo RN del hub móvil web (`apps/web/.../coach/settings/page.tsx`,
@@ -114,9 +115,57 @@ function AppearanceToggle() {
   )
 }
 
-/** Zona de peligro — la baja de cuenta se gestiona por correo (money/data-safety, Ley 21.719).
- *  Vive en el hub (1:1 con el DangerZone web), no dentro de Mi Marca. */
+/** Viñeta del diálogo de baja — punto danger + texto, para que el alcance se lea de un vistazo. */
+function DeletionBullet({ children }: { children: string }) {
+  return (
+    <View className="flex-row" style={{ gap: 10 }}>
+      <View className="bg-danger-500" style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 7 }} />
+      <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 13.5, lineHeight: 19 }}>
+        {children}
+      </Text>
+    </View>
+  )
+}
+
+/**
+ * Zona de peligro — eliminación de cuenta EN-APP.
+ *
+ * POR QUÉ cambió: hasta la build 51 esto abría un `mailto` y App Review lo rechazó (guideline
+ * 5.1.1(v)): solo industrias altamente reguladas pueden exigir un canal de atención para dar de
+ * baja; el correo puede acompañar a la baja en-app, nunca reemplazarla.
+ *
+ * Flujo: confirmación explícita en un Dialog del DS → POST autenticado → cuenta deshabilitada al
+ * instante en el server → cerramos sesión por el MISMO camino que el botón "Cerrar sesión" de esta
+ * pantalla (`signOutAndRedirectHome`). Si el server falla, el error se muestra inline y se puede
+ * reintentar: NUNCA cerramos sesión sin un `ok`, porque dejaría al coach fuera de la app con la
+ * cuenta intacta y sin saberlo.
+ */
 function DangerZone() {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function closeDialog() {
+    if (saving) return // una baja en vuelo no se puede abandonar a medias
+    setOpen(false)
+    setError(null)
+  }
+
+  async function confirmDelete() {
+    if (saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      await requestAccountDeletion()
+      // Solo tras el ok del server: la cuenta ya quedó deshabilitada ⇒ salir a la entrada.
+      // No hay setSaving(false) porque la pantalla se desmonta en la redirección.
+      await signOutAndRedirectHome()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo eliminar la cuenta. Intenta de nuevo.')
+      setSaving(false)
+    }
+  }
+
   return (
     <View>
       <View className="mx-0.5 mb-2.5 mt-5 flex-row items-center gap-2">
@@ -133,19 +182,70 @@ function DangerZone() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text className="font-sans-bold text-strong" style={{ fontSize: 15 }}>Eliminar mi cuenta</Text>
             <Text className="font-sans text-muted" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 17 }}>
-              La baja se gestiona por correo (Ley 21.719): datos, pagos y la app de tus alumnos.
+              Cierra tu cuenta, cancela tu suscripción y elimina tus datos. Es definitivo.
             </Text>
           </View>
         </View>
         <Button
-          label="Solicitar baja por correo"
+          label="Eliminar mi cuenta"
           variant="danger"
           full
           style={{ marginTop: 14 }}
           testID="hub-danger-baja"
-          onPress={() => Linking.openURL('mailto:contacto@eva-app.cl?subject=' + encodeURIComponent('Solicitud de baja de cuenta EVA')).catch(() => {})}
+          accessibilityRole="button"
+          accessibilityLabel="Eliminar mi cuenta"
+          accessibilityHint="Abre la confirmación para eliminar tu cuenta de forma definitiva"
+          onPress={() => { setError(null); setOpen(true) }}
         />
       </View>
+
+      <Dialog
+        open={open}
+        onClose={closeDialog}
+        title="Eliminar mi cuenta"
+        description="Esta acción es definitiva y no se puede deshacer."
+        showCloseButton={!saving}
+        footer={
+          // Botones APILADOS: dos `full` en una fila se desbordan (gotcha shrink-0 del DS).
+          <View style={{ gap: 10 }}>
+            <Button
+              label="Eliminar definitivamente"
+              variant="danger"
+              full
+              loading={saving}
+              disabled={saving}
+              testID="hub-danger-confirmar"
+              accessibilityRole="button"
+              accessibilityLabel="Eliminar definitivamente mi cuenta"
+              onPress={() => { void confirmDelete() }}
+            />
+            <Button
+              label="Cancelar"
+              variant="secondary"
+              full
+              disabled={saving}
+              testID="hub-danger-cancelar"
+              accessibilityRole="button"
+              accessibilityLabel="Cancelar y conservar mi cuenta"
+              onPress={closeDialog}
+            />
+          </View>
+        }
+      >
+        <View style={{ gap: 10 }}>
+          <DeletionBullet>Tu cuenta se cierra de inmediato: no podrás volver a entrar.</DeletionBullet>
+          <DeletionBullet>Tus alumnos pierden el acceso a tu app, a sus rutinas y a sus planes.</DeletionBullet>
+          <DeletionBullet>Tu suscripción se cancela y no se te vuelve a cobrar.</DeletionBullet>
+          <DeletionBullet>Tus datos y los de tu marca se eliminan por completo dentro de 30 días (Ley 21.719).</DeletionBullet>
+        </View>
+        {error ? (
+          <View className="rounded-control border border-danger-100 bg-danger-100" style={{ padding: 12 }}>
+            <Text className="font-sans text-danger-600" accessibilityLiveRegion="polite" style={{ fontSize: 13, lineHeight: 18 }}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
+      </Dialog>
     </View>
   )
 }
