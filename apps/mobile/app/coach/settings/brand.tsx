@@ -296,10 +296,19 @@ export default function MiMarcaScreen() {
     // P4: el código es el identificador principal (permanente). El slug solo si es legacy.
     const publicId = settings.inviteCode || settings.slug
     const url = `https://eva-app.cl/c/${publicId}`
-    const codeLine = settings.inviteCode ? ` Tu código: ${settings.inviteCode}.` : ''
+    // El codigo va en su propia linea: pegado al final de la URL, el punto que cerraba la frase
+    // se colaba DENTRO del enlace en varios clientes y al alumno le llegaba un link roto.
+    const codeLine = settings.inviteCode ? `\nTu código: ${settings.inviteCode}` : ''
     try {
-      await Share.share({ message: `Entrena conmigo en ${brandName || 'mi app'}: ${url}.${codeLine}` })
-    } catch {}
+      // `url` ademas del texto, como los otros dos "Compartir link" de la app
+      // (`CoachDashboardSections`): iOS arma la actividad de enlace con ese campo y Android lo
+      // ignora, por eso la URL viaja TAMBIEN dentro del mensaje.
+      await Share.share({ message: `Entrena conmigo en ${brandName || 'mi app'}: ${url}${codeLine}`, url })
+    } catch {
+      // Este catch estaba MUDO: si el menu de compartir no abria, el coach veia un boton que no
+      // hacia nada y no habia forma de saber por que (reporte de un coach, 2026-08-12).
+      toast.error('No pudimos abrir el menú para compartir. Copia el link de arriba.')
+    }
   }
 
   async function save() {
