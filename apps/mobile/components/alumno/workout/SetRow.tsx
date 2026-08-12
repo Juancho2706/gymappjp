@@ -18,7 +18,8 @@ import {
 } from '@eva/workout-engine'
 import type { HrMetadataV1 } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
-import { hexToRgba } from '../../../lib/theme'
+import { hexToRgba, resolveSportRamp } from '../../../lib/theme'
+import { useTheme } from '../../../context/ThemeContext'
 import { haptics } from '../../../lib/haptics'
 import { fmtTypedLoggedLine } from './workout-ui'
 import { JuicyButton } from './v3/JuicyButton'
@@ -31,7 +32,10 @@ import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } fr
 import { useEnsureVisibleInStep } from './StepperExecution'
 import { useEvaMotion } from '../../../lib/motion'
 
-const SPORT_400 = '#5C9DFF'
+// --sport-400 NO es un literal fijo: es un escalón de la rampa derivada de la MARCA del coach
+// (`deriveSportTokens(primaryColor).ramp['400']`, la misma fuente que alimenta `--color-sport-400` de
+// NativeWind vía `brandVars`). Se resuelve por-marca dentro del componente con `resolveSportRamp`
+// (lucide toma `color` literal, no className) en vez de hardcodear el azul EVA #5C9DFF.
 const WARNING_500 = '#F5A524' // --color-warning-500 (serie sin sincronizar)
 const ON_DARK_MUTED = '#939DAB'
 
@@ -258,6 +262,10 @@ export function SetRow({
   const pending = log?._pending === true
   const [rpeHelpOpen, setRpeHelpOpen] = useState(false)
   const motion = useEvaMotion()
+  // sport-400 de la marca del coach (mismo helper que alimenta las vars --color-sport-* de NativeWind,
+  // desde el primaryColor CRUDO ya gateado por tier que expone el ThemeContext) para los iconos lucide.
+  const { branding } = useTheme()
+  const sport400 = useMemo(() => resolveSportRamp(branding?.primaryColor).sport400, [branding?.primaryColor])
   // La serie de FUERZA ya cerrada trae su panel de esfuerzo EDITABLE debajo del chip (ver
   // `strengthEffortEditor`): con el esfuerzo fuera del teclado custom, éste es el único camino para
   // corregir un RPE/RIR. Cuando el panel está, el chip NO repite las pills (las del panel ya muestran los
@@ -292,7 +300,7 @@ export function SetRow({
           }
         >
           <View className="h-7 w-7 items-center justify-center rounded-full bg-sport-500/20">
-            <Check size={15} color={SPORT_400} strokeWidth={2.6} />
+            <Check size={15} color={sport400} strokeWidth={2.6} />
           </View>
           <View className="min-w-0 flex-1">
             {/* Eyebrow con KEYPAD_EYEBROW_STYLE (11px / 0.04em) — mismo rol que el resto de la card (Kg/Reps,
@@ -456,7 +464,7 @@ export function SetRow({
         )}
       </View>
       {!logged ? (
-        <ChevronRight size={18} color={SPORT_400} />
+        <ChevronRight size={18} color={sport400} />
       ) : syncError ? (
         // Estado de error: el mensaje + Reintentar viven en su fila dedicada DEBAJO del chip (mirror web
         // A.4.e, `LogSetForm.tsx:738-749`). Aquí no pintamos check verde ni "Sin sincronizar" ámbar para
@@ -480,7 +488,7 @@ export function SetRow({
           animate={{ scale: 1, rotate: '0deg' }}
           transition={settle ? { type: 'spring', stiffness: 500, damping: 25 } : { type: 'timing', duration: 0 }}
         >
-          <Check size={16} color={SPORT_400} strokeWidth={2.6} />
+          <Check size={16} color={sport400} strokeWidth={2.6} />
         </MotiView>
       )}
     </Pressable>

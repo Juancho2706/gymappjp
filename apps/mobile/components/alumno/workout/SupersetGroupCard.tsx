@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { AnimatePresence, MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
@@ -15,6 +15,7 @@ import {
 import type { HrZoneRange } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveSportRamp } from '../../../lib/theme'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
 import { resolveExercise, type PrevSet, type SessionBlock, type SessionDraft } from '../../../lib/workout-session'
@@ -23,8 +24,11 @@ import { SetRow, ActiveSetRow } from './SetRow'
 import { TypedBlockTimerButton, TypedTargetGrid } from './TypedTargetGrid'
 import { bestPrevOf, overloadChipLabel } from './workout-ui'
 
-const SPORT_400 = '#5C9DFF' // --color-sport-400 — CheckCircle2 (text-sport-400)
-const SPORT_300 = '#93BEFF' // --color-sport-300 — TrendingUp junto a text-sport-300 (hereda currentColor en web)
+// --sport-400 (CheckCircle2) y --sport-300 (TrendingUp, junto a texto text-sport-300 que hereda currentColor
+// en web) NO son literales fijos: son escalones de la rampa derivada de la MARCA del coach
+// (deriveSportTokens(primaryColor).ramp['300'|'400'], la misma fuente que alimenta --color-sport-* de
+// NativeWind via brandVars). Se resuelven por-marca dentro del componente con resolveSportRamp (lucide
+// toma color literal, no className) en vez de hardcodear el azul EVA #5C9DFF/#93BEFF.
 const ON_DARK_MUTED = '#939DAB'
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 // NativeWind v4: `style={TYPE.mono}` pisa la fontFamily de `font-mono-bold` → el bold no aplica. Se fija
@@ -96,7 +100,10 @@ export function SupersetGroupCard({
    *  (paridad web `setRowRefs`, WEC:992): destino del scroll 'center' a la siguiente serie. */
   registerSetRowRef?: (key: string, node: View | null) => void
 }) {
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
+  // Escalones sport-300/400 de la marca del coach (mismo helper que alimenta las vars --color-sport-* de
+  // NativeWind, desde el primaryColor CRUDO ya gateado por tier) para los color de los iconos lucide.
+  const { sport300, sport400 } = useMemo(() => resolveSportRamp(branding?.primaryColor), [branding?.primaryColor])
   const [howToOpen, setHowToOpen] = useState(false)
   const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
   const firstLabel = `${LETTERS[0]}1`
@@ -262,7 +269,7 @@ export function SupersetGroupCard({
                   </View>
                 </View>
               </View>
-              {m.complete && <CheckCircle2 size={24} color={SPORT_400} />}
+              {m.complete && <CheckCircle2 size={24} color={sport400} />}
             </View>
 
             {/* Prescripción: strength → pills sets×reps·kg·Descanso; tipado → grilla de objetivos +
@@ -293,7 +300,7 @@ export function SupersetGroupCard({
             {/* Chip de sobrecarga (strength) */}
             {m.effType === 'strength' && m.overload && (
               <View className="flex-row items-center gap-1 self-start rounded-full border border-sport-500/30 bg-sport-500/[0.10] px-2 py-0.5">
-                <TrendingUp size={12} color={SPORT_300} />
+                <TrendingUp size={12} color={sport300} />
                 <Text style={{ fontFamily: FONT.uiBold, fontSize: 10.5 }} className="text-sport-300">{m.overload}</Text>
               </View>
             )}
@@ -326,7 +333,7 @@ export function SupersetGroupCard({
                 </Text>
                 {m.beatIt && (
                   <View className="flex-row items-center gap-1">
-                    <TrendingUp size={12} color={SPORT_300} />
+                    <TrendingUp size={12} color={sport300} />
                     <Text style={{ fontFamily: FONT.uiBold, fontSize: 10 }} className="text-sport-300">Supera tu marca</Text>
                   </View>
                 )}

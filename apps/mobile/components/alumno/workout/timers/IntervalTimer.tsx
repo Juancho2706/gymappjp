@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
@@ -18,7 +18,7 @@ import {
   INK_900,
   ON_DARK,
   ON_DARK_MUTED,
-  SPORT_300,
+  sport300,
   SUCCESS_500,
   TRACK_ON_DARK,
   WARNING_500,
@@ -49,11 +49,15 @@ interface IntervalTimerProps {
 // Color de la ETIQUETA de fase (espeja web `PHASE_COLOR`): warmup/cooldown sport-300,
 // work ember-300, recovery aqua-500. Ojo: la BARRA usa otro color (work ember-500,
 // resto theme-primary) — no confundir con estos.
-const PHASE_LABEL_COLOR: Record<IntervalPhaseKind, string> = {
-  warmup: SPORT_300,
-  work: EMBER_300,
-  recovery: AQUA_500,
-  cooldown: SPORT_300,
+// El sport-300 es WHITE-LABEL (rampa de la marca del coach), así que el mapa se construye
+// con el color ya resuelto por el componente en vez de ser una constante de módulo.
+function phaseLabelColors(sport300Hex: string): Record<IntervalPhaseKind, string> {
+  return {
+    warmup: sport300Hex,
+    work: EMBER_300,
+    recovery: AQUA_500,
+    cooldown: sport300Hex,
+  }
 }
 
 function formatTime(s: number): string {
@@ -63,7 +67,13 @@ function formatTime(s: number): string {
 export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
+  // sport-300 de la marca del coach para las etiquetas warmup/cooldown (el módulo de colores no
+  // puede usar hooks, así que recibe el color de marca por parámetro y se resuelve acá).
+  const phaseLabelColor = useMemo(
+    () => phaseLabelColors(sport300(branding?.primaryColor)),
+    [branding?.primaryColor],
+  )
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [timeLeft, setTimeLeft] = useState(phases[0]?.durationSec ?? 0)
   const [isActive, setIsActive] = useState(true)
@@ -206,7 +216,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               <Text style={styles.finished}>¡Intervalos completados!</Text>
             ) : (
               <>
-                <Text style={[styles.eyebrow, { color: phase ? PHASE_LABEL_COLOR[phase.kind] : ON_DARK_MUTED }]}>
+                <Text style={[styles.eyebrow, { color: phase ? phaseLabelColor[phase.kind] : ON_DARK_MUTED }]}>
                   {phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''}
                   {phase?.repeat != null && phase.totalRepeats != null ? (
                     <Text style={styles.repeat}> · intervalo {phase.repeat} de {phase.totalRepeats}</Text>

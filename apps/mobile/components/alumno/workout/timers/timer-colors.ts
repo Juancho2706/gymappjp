@@ -9,10 +9,17 @@
  * theming" documentada en `lib/theme.ts` y usada tal cual por `Button.tsx`.
  *
  * Valores verbatim de `apps/mobile/global.css`. `ink-900/950`, `on-dark`,
- * `on-dark-muted`, y las rampas `ember/aqua/success/sport/warning` son
+ * `on-dark-muted`, y las rampas `ember/aqua/success/warning` son
  * CONSTANTES entre light y dark (no se redefinen en `.dark`), así que el chrome
  * oscuro se ve igual en ambos temas — paridad exacta con la web.
+ *
+ * EXCEPCIÓN white-label: la rampa `sport` NO es un literal fijo — se recolorea con la
+ * MARCA del coach (`--color-sport-*` sale de `deriveSportTokens(primaryColor)`). Por eso
+ * `sport300()` es una FUNCIÓN que recibe el color de marca: este módulo no es un
+ * componente y no puede usar hooks, así que el color lo resuelve el consumidor con
+ * acceso al tema (`IntervalTimer.tsx` vía `useTheme().branding`).
  */
+import { resolveSportRamp } from '../../../../lib/theme'
 
 export const INK_900 = '#12161D' // --color-ink-900 (superficie del timer, /95)
 export const ON_DARK = '#F4F6F8' // --color-text-on-dark (ink-50) — iconos activos
@@ -22,11 +29,26 @@ export const EMBER_300 = '#FFB199' // --color-ember-300 — eyebrow "Descanso"
 export const EMBER_200 = '#FFD6C7' // --color-ember-200 — icono mute activo (Volume2)
 export const AQUA_500 = '#18ABD4' // --color-aqua-500 — fase recovery del intervalo
 export const SUCCESS_500 = '#1FB877' // --color-success-500 — "¡A entrenar!" / completado
-export const SPORT_300 = '#93BEFF' // --color-sport-300 — fases warmup/cooldown
 export const WARNING_500 = '#F5A524' // --color-warning-500
+
+/**
+ * --color-sport-300 del coach — fases warmup/cooldown del intervalo. Deriva del MISMO
+ * `deriveSportTokens(primaryColor).ramp['300']` que alimenta las vars `--color-sport-*` de
+ * NativeWind, así que el anillo sigue la marca en lockstep con las clases `text-sport-300`.
+ * Sin marca (o tier sin white-label) cae al azul EVA por defecto, igual que antes.
+ */
+export function sport300(brandColor?: string | null): string {
+  return resolveSportRamp(brandColor).sport300
+}
 
 /** Track del anillo/barra sobre chrome oscuro (equivalente RN de `bg-white/10`). */
 export const TRACK_ON_DARK = 'rgba(255,255,255,0.10)'
 
-/** Paleta de confetti (celebración fin de descanso) — tokens DS, no hex mágicos. */
-export const CONFETTI_COLORS = [EMBER_500, SUCCESS_500, AQUA_500, SPORT_300] as const
+/**
+ * Paleta de confetti (celebración fin de descanso) — tokens DS, no hex mágicos. Recibe el color
+ * de marca porque su cuarto tono es el `sport-300` white-label (ver `sport300`); los otros tres
+ * son semánticos y no se recolorean.
+ */
+export function confettiColors(brandColor?: string | null): readonly string[] {
+  return [EMBER_500, SUCCESS_500, AQUA_500, sport300(brandColor)] as const
+}

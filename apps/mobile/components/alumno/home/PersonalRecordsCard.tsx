@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { Share2, Trophy } from 'lucide-react-native'
 import { cssInterop } from 'nativewind'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveSportRamp } from '../../../lib/theme'
 import { FONT } from '../../../lib/typography'
 import { getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
 import { getPersonalRecords } from '../../../lib/history.queries'
@@ -32,7 +33,11 @@ function fmtShort(iso: string): string {
  * si no hay records.
  */
 export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string; onTecnica: (name: string) => void }) {
-  const { theme } = useTheme()
+  const { branding } = useTheme()
+  // El texto de al lado ya es `text-sport-400` (dinámico por marca); el glyph lucide toma `color`
+  // literal, así que se resuelve el MISMO escalón de la rampa del coach con `resolveSportRamp`
+  // (misma fuente que las vars --color-sport-* de NativeWind) en vez del azul EVA fijo.
+  const sport400 = useMemo(() => resolveSportRamp(branding?.primaryColor).sport400, [branding?.primaryColor])
   const [prs, setPrs] = useState<PR[] | null>(null)
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<PR | null>(null)
@@ -51,8 +56,8 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
   return (
     <Card variant="inverse" padding="md">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-        {/* Trophy hereda text-sport-400 (#5C9DFF) del web con strokeWidth default 2. */}
-        <Trophy size={13} color="#5C9DFF" />
+        {/* Trophy hereda text-sport-400 del web (currentColor) con strokeWidth default 2. */}
+        <Trophy size={13} color={sport400} />
         <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 }}>Records personales</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>

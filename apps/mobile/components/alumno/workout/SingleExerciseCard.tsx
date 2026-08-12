@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { AnimatePresence, MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
@@ -17,6 +17,7 @@ import { formatTypedObjective, formatWeightEsCl, typedKeypadFields, type Exercis
 import type { HrZoneRange } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveSportRamp } from '../../../lib/theme'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
 import type { PrevSet, SessionBlock, SessionDraft, SessionExercise } from '../../../lib/workout-session'
@@ -27,10 +28,13 @@ import { bestPrevOf, overloadChipLabel, overloadDetailText } from './workout-ui'
 
 // Fixed DS hues for lucide icon `color` props (mirrors Button/VideoPlayer literal-color pattern).
 // Los iconos web heredan `currentColor` del texto adyacente → acá igualamos el TIER del texto:
-// TrendingUp junto a `text-sport-300` usa SPORT_300; ArrowRightLeft del badge `text-ember-200` usa
+// TrendingUp junto a `text-sport-300` usa el escalón sport-300; ArrowRightLeft del badge `text-ember-200` usa
 // EMBER_200 (antes iban a sport-400/ember-300, un tier más brillante/oscuro que el texto).
-const SPORT_400 = '#5C9DFF' // --color-sport-400 (92 157 255) — CheckCircle2 (text-sport-400)
-const SPORT_300 = '#93BEFF' // --color-sport-300 (147 190 255) — TrendingUp (text-sport-300)
+// --sport-400 (CheckCircle2) y --sport-300 (TrendingUp) NO son literales fijos: son escalones de la rampa
+// derivada de la MARCA del coach (`deriveSportTokens(primaryColor).ramp['300'|'400']`, la misma fuente que
+// alimenta `--color-sport-*` de NativeWind vía `brandVars`). Como el texto vecino SÍ es dinámico
+// (`text-sport-400`/`text-sport-300`), se resuelven por-marca dentro del componente con `resolveSportRamp`
+// en vez de hardcodear el azul EVA #5C9DFF/#93BEFF.
 const ON_DARK = '#F4F6F8'
 const ON_DARK_MUTED = '#939DAB'
 const EMBER_200 = '#FFD6C7' // --color-ember-200 (255 214 199) — ArrowRightLeft (text-ember-200)
@@ -139,7 +143,10 @@ export function SingleExerciseCard({
   /** Reintenta el guardado de una serie fallida (re-dispara el commit con el payload guardado). */
   onRetrySet?: (blockId: string, setNumber: number) => void
 }) {
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
+  // Escalones sport-300/400 de la marca del coach (mismo helper que alimenta las vars --color-sport-* de
+  // NativeWind, desde el primaryColor CRUDO ya gateado por tier) para los `color` de los iconos lucide.
+  const { sport300, sport400 } = useMemo(() => resolveSportRamp(branding?.primaryColor), [branding?.primaryColor])
   // Autollenado "= usar ultima vez": siembra las cajas KG/REPS de la fila activa (nonce dispara).
   const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
   // Press de la fila "Ultima vez": css-interop descarta `style` cuando es funcion (auditoria a1 §2.1),
@@ -378,7 +385,7 @@ export function SingleExerciseCard({
               animate={{ scale: 1 }}
               transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 500, damping: 25 }}
             >
-              <CheckCircle2 size={28} color={SPORT_400} />
+              <CheckCircle2 size={28} color={sport400} />
             </MotiView>
           </Pressable>
         ) : (
@@ -434,7 +441,7 @@ export function SingleExerciseCard({
           </View>
           {overloadLabel && (
             <View className="flex-row items-center gap-1 rounded-full border border-sport-500/30 bg-sport-500/[0.10] px-2 py-0.5">
-              <TrendingUp size={12} color={SPORT_300} />
+              <TrendingUp size={12} color={sport300} />
               <Text style={[TYPE.caption, SANS_BOLD]} className="text-[11px] text-sport-300">{overloadLabel}</Text>
             </View>
           )}
@@ -464,7 +471,7 @@ export function SingleExerciseCard({
           </Text>
           {beatIt && (
             <View className="flex-row items-center gap-1">
-              <TrendingUp size={12} color={SPORT_300} />
+              <TrendingUp size={12} color={sport300} />
               <Text style={[TYPE.caption, SANS_BOLD]} className="text-[11px] text-sport-300">Supera tu marca</Text>
             </View>
           )}
