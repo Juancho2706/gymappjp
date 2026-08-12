@@ -34,7 +34,6 @@ import { getClientProfile } from '../../../lib/client'
 import { getPoolConsentStatus, revokePoolConsent, type PoolConsentStatus } from '../../../lib/pool-consent'
 import { getWorkoutDaySummaries } from '../../../lib/history.queries'
 import { getMonthlyRecap, type MonthlyRecap } from '../../../lib/monthly-summary'
-import { clearBranding } from '../../../lib/branding'
 import { useTheme } from '../../../context/ThemeContext'
 import { SHADOWS } from '../../../lib/shadows'
 import { Avatar, Button, Card, Dialog, Input, Sheet } from '../../../components'
@@ -231,7 +230,7 @@ function ShareOption({
 }
 
 export default function AlumnoPerfilScreen() {
-  const { branding, setBranding, resolvedScheme } = useTheme()
+  const { branding, resolvedScheme } = useTheme()
   const insets = useSafeAreaInsets()
   const { hasModule } = useEntitlements()
   const router = useRouter()
@@ -328,8 +327,12 @@ export default function AlumnoPerfilScreen() {
     try {
       await signOutAndCleanup()
       await AsyncStorage.removeItem('eva_user_role')
-      await clearBranding()
-      setBranding(null)
+      // La marca del coach SOBREVIVE al cierre de sesion a proposito: es lo que deja que el
+      // alumno vuelva a entrar de un tap, en el login de su coach y con el email recordado,
+      // en vez de recorrer bienvenida → codigo → credenciales otra vez. Aca vivian un
+      // `clearBranding()` y un `setBranding(null)` que pedian lo contrario y que el device
+      // desmentia (QA 12-08: la marca seguia ahi igual); se van para que el codigo diga lo
+      // que el producto hace. Para cambiar de coach esta "Elegir otro rol" en ese mismo login.
       router.replace('/')
     } catch {
       // Si el cierre falla el alumno se queda donde estaba: devolverle el boton, no dejarlo
