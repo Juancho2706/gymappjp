@@ -51,10 +51,10 @@ export default function ForgotPasswordScreen() {
             <View className="bg-success-100" style={[styles.successIcon, { borderRadius: theme.radius['2xl'] }]}>
               <Mail size={28} color={theme.success} strokeWidth={1.75} />
             </View>
-            <Text className="text-strong font-display-black" style={styles.title}>
+            <Text className="font-display-black" style={[styles.title, { color: theme.foreground }]}>
               Revisa tu correo
             </Text>
-            <Text className="text-muted font-sans" style={styles.subtitle}>
+            <Text className="font-sans" style={[styles.subtitle, { color: theme.mutedForeground }]}>
               Si existe una cuenta con ese email, recibirás un enlace para restablecer tu contraseña.
             </Text>
             <Button
@@ -78,10 +78,10 @@ export default function ForgotPasswordScreen() {
             <View className="bg-sport-100" style={[styles.heroIcon, { borderRadius: theme.radius['2xl'] }]}>
               <KeyRound size={26} color={theme.primary} strokeWidth={1.75} />
             </View>
-            <Text className="text-strong font-display-black" style={styles.title}>
+            <Text className="font-display-black" style={[styles.title, { color: theme.foreground }]}>
               Restablecer contraseña
             </Text>
-            <Text className="text-muted font-sans" style={styles.subtitle}>
+            <Text className="font-sans" style={[styles.subtitle, { color: theme.mutedForeground }]}>
               Ingresa tu email y te enviaremos un enlace para crear una nueva contraseña.
             </Text>
 
