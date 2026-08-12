@@ -79,8 +79,12 @@ const COMPOSER_ICONS: Record<Exclude<LoaderSymbol, 'logo' | 'initial'>, LucideIc
 // alimentaban se removieron con ella.
 
 const HEX6 = /^#[0-9a-fA-F]{6}$/
+/** Azul EVA (= token `--color-sport-600`), el color con el que se previsualiza sin marca valida. */
+const EVA_BLUE = '#1462DC'
 // EVA defaults: si el color guardado es uno de estos NO es un custom legacy (mirror web EVA_DEFAULT_COLORS).
-const EVA_DEFAULT_COLORS = new Set(['#007aff', '#10b981', '#2680ff'])
+// `#1462dc` es el azul EVA de hoy; los otros tres son defaults HISTORICOS que siguen guardados en
+// cuentas viejas y tampoco son un color elegido por el coach, por eso no se borran de la lista.
+const EVA_DEFAULT_COLORS = new Set(['#1462dc', '#007aff', '#10b981', '#2680ff'])
 
 // ── Metadata white-label v2 (espejo de las tablas web brand-presets/brand-fonts/brand-loaders/brand-composer) ──
 // Nombres de `feel` (mirror FEEL_META de la web) para el filtro/badge de la galería de temas.
@@ -206,7 +210,7 @@ export default function MiMarcaScreen() {
   // Tema derivado en vivo (mismo motor que el render real del alumno) → previews del avanzado.
   const advTheme = useMemo(() => {
     const opt = (v: string) => (HEX6.test(v) ? v : null)
-    const base = HEX6.test(effectivePrimary) ? effectivePrimary : '#10B981'
+    const base = HEX6.test(effectivePrimary) ? effectivePrimary : EVA_BLUE
     return resolveBrandTheme({
       brandColor: base,
       accentLight: opt(accentLight),
@@ -217,7 +221,7 @@ export default function MiMarcaScreen() {
     })
   }, [effectivePrimary, accentLight, accentDark, secondaryColor, neutralTint])
   const tintThemes = useMemo(() => {
-    const base = HEX6.test(effectivePrimary) ? effectivePrimary : '#10B981'
+    const base = HEX6.test(effectivePrimary) ? effectivePrimary : EVA_BLUE
     return { off: resolveBrandTheme({ brandColor: base, neutralTint: false }), on: resolveBrandTheme({ brandColor: base, neutralTint: true }) }
   }, [effectivePrimary])
 

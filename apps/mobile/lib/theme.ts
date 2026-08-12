@@ -255,7 +255,13 @@ export const ZONE_COLORS = {
 
 export type ZoneKey = keyof typeof ZONE_COLORS
 
-const DEFAULT_BRAND = '#007AFF'
+/**
+ * Azul EVA — el color con el que se deriva la rampa `sport-*` cuando el coach no puso el suyo.
+ * Es el MISMO valor que el token estatico `--color-sport-600` de `global.css` (rgb 20 98 220).
+ * Estuvo en el azul de iOS `#007AFF`, que no es de EVA: la rampa derivada quedaba corrida
+ * respecto de los tokens que pinta NativeWind, asi que una cuenta sin marca mezclaba dos azules.
+ */
+const DEFAULT_BRAND = '#1462DC'
 
 /**
  * Subconjunto estructural del branding persistido que afecta al tema. Mantenerlo

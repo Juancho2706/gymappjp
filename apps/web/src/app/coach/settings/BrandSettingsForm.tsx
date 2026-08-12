@@ -33,7 +33,10 @@ const MAX_LOGO_RAW = 15 * 1024 * 1024 // tope del archivo ORIGINAL; tras comprim
 
 /** Colores "por defecto" de EVA: si el color guardado del coach es uno de estos, NO se considera
  *  una marca custom legacy (no mostramos el chip "Tema personalizado"). */
-const EVA_DEFAULT_COLORS = new Set([SYSTEM_PRIMARY_COLOR.toLowerCase(), '#10b981', '#2680ff'])
+// `#007aff` y `#10b981` son defaults HISTORICOS de EVA: siguen guardados en cuentas viejas y no son
+// un color elegido por el coach, asi que se listan a mano. Sin esto, mover `SYSTEM_PRIMARY_COLOR` al
+// azul actual haria que esas cuentas pasaran a contar como "custom legacy".
+const EVA_DEFAULT_COLORS = new Set([SYSTEM_PRIMARY_COLOR.toLowerCase(), '#007aff', '#10b981', '#2680ff'])
 
 /** Slot de logo (claro u oscuro) — elige archivo a STAGE (no auto-guarda; entra al FAB unificado). */
 function LogoSlot({

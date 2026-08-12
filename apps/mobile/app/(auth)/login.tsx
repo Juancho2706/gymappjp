@@ -46,8 +46,11 @@ import { CircularBrandLogo } from '../../components/CircularBrandLogo'
 const REMEMBER_KEY = 'eva_remember_email'
 
 // Fallback de marca EVA para el login (espejo de `BRAND_PRIMARY_COLOR` en
-// apps/web/src/lib/brand-assets.ts): tier < Pro cae a este verde EVA.
-const EVA_BRAND_COLOR = '#10B981'
+// apps/web/src/lib/brand-assets.ts): tier < Pro cae a este azul EVA, el MISMO valor que el token
+// `--color-sport-600` de `global.css` (rgb 20 98 220) que ya pinta tabs y botones adentro de la
+// app. Estuvo en verde `#10B981`, y por eso una cuenta sin marca propia abria en verde para
+// despues verse azul por dentro.
+const EVA_BRAND_COLOR = '#1462DC'
 
 // ── Layouts de login white-label (espejo de brand-composer.ts en web) ──
 const LOGIN_LAYOUT_KEYS = ['clasico', 'hero', 'energia', 'minimal'] as const

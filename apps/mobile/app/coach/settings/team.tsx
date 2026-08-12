@@ -65,7 +65,8 @@ for (const Icon of [
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
-const DEFAULT_ACCENT = '#10B981'
+/** Azul EVA (= token `--color-sport-600`), el acento con el que nace un equipo sin color propio. */
+const DEFAULT_ACCENT = '#1462DC'
 
 /** Texto legible sobre el color de marca (claro → tinta, oscuro → blanco). Espejo del web `onAccent`. */
 function onAccentColor(hex: string | null): string {

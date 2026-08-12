@@ -12,9 +12,17 @@ export const BRAND_APP_ICON = '/LOGOS/eva-icon.png'
 export const BRAND_APP_ICON_512 = '/LOGOS/icon-512.png'
 /** Ícono PWA EVA maskable 512×512 con safe-zone 80% (purpose:maskable) — no se recorta en Android. */
 export const BRAND_APP_ICON_MASKABLE = '/LOGOS/icon-512-maskable.png'
-export const BRAND_PRIMARY_COLOR = '#10B981'
+/**
+ * Azul EVA — el MISMO valor que el token `--color-sport-600` (rgb 20 98 220), que es el que ya
+ * pinta tabs, botones y links dentro del producto. Antes eran dos colores distintos y ninguno era
+ * este: `BRAND_PRIMARY_COLOR` estaba en un verde `#10B981` y `SYSTEM_PRIMARY_COLOR` en el azul de
+ * iOS `#007AFF`, asi que una cuenta sin marca propia abria en verde y por dentro se veia azul.
+ * Los dos nombres significan lo mismo —el color de EVA cuando el coach no puso el suyo— y por eso
+ * ahora valen lo mismo.
+ */
+export const BRAND_PRIMARY_COLOR = '#1462DC'
 /** Color primario del sistema EVA cuando el coach no usa colores personalizados */
-export const SYSTEM_PRIMARY_COLOR = '#007AFF'
+export const SYSTEM_PRIMARY_COLOR = BRAND_PRIMARY_COLOR
 
 /**
  * Correo de ventas/contacto comercial. Fuente unica para el mailto del embudo
