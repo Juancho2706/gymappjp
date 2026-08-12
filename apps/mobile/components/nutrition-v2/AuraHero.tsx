@@ -13,9 +13,9 @@
  * La celebración de la meta de energía la dispara el contenedor (TodayTab) sobre
  * el CelebrationOverlay ya existente — este componente es solo el hero visual.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg'
+import Svg, { Circle, Defs, LinearGradient, RadialGradient, Stop } from 'react-native-svg'
 import { MotiView } from 'moti'
 import Animated, {
   runOnJS,
@@ -104,6 +104,10 @@ function AuraRing({
   children?: ReactNode
 }) {
   const motion = useEvaMotion()
+  // Id propio por anillo: el héroe monta CUATRO (energía + 3 macros) y un id repetido haría que
+  // todos pintaran con el degradado del primero que se montó.
+  // `useId` devuelve algo tipo `:r3:` y los dos puntos rompen la referencia `url(#id)` del SVG.
+  const gradientId = `ring${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const clamped = Math.max(0, Math.min(ratio, 1))
@@ -126,6 +130,19 @@ function AuraRing({
       style={{ width: size, height: size }}
     >
       <Svg width={size} height={size}>
+        <Defs>
+          {/*
+            El trazo va con un degradado suave del propio color en vez de plano: el arco recibe algo
+            de luz de un lado y se apaga del otro, que es lo que hace que se lea como un anillo y no
+            como una cinta recortada. Dos paradas del MISMO color (una aclarada) — no entra ningun
+            color ajeno, asi que el anillo sigue siendo el color que le corresponde.
+          */}
+          <LinearGradient id={`${gradientId}-stroke`} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={color} stopOpacity={0.72} />
+            <Stop offset="0.5" stopColor={color} stopOpacity={1} />
+            <Stop offset="1" stopColor={color} stopOpacity={0.88} />
+          </LinearGradient>
+        </Defs>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
         {zoneColor ? (
           <Circle
@@ -133,7 +150,11 @@ function AuraRing({
             cy={size / 2}
             r={r}
             stroke={zoneColor}
-            strokeWidth={stroke}
+            // Mas fina que el trazo y con las puntas redondeadas: sin esto el arco de la zona salia
+            // del mismo grosor que el anillo y con los dos extremos cortados EN ESCUADRA, justo al
+            // lado de un trazo de progreso que si es redondeado. Ese corte era la "linea tosca".
+            strokeWidth={Math.max(stroke - 5, 3)}
+            strokeLinecap="round"
             fill="none"
             strokeDasharray={`${c * 0.1} ${c}`}
             strokeDashoffset={-c * 0.9}
@@ -144,7 +165,7 @@ function AuraRing({
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke={color}
+          stroke={`url(#${gradientId}-stroke)`}
           strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"
