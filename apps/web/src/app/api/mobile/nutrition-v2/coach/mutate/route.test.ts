@@ -453,3 +453,137 @@ describe('POST coach/mutate · createFood', () => {
     expect(body.code).toBe('SCOPE_DENIED')
   })
 })
+
+// T2.3 F6.4 — clasificar un alimento PROPIO ya existente desde el tab Alimentos de RN. El alta ya
+// podia traer la equivalencia (`createFood`); esto es el camino de UPDATE, y usa la MISMA funcion
+// de servicio que la server action web (`setOwnFoodExchangeEquivalence`).
+describe('POST coach/mutate · setFoodEquivalence', () => {
+  const FOOD_ID = '55555555-5555-4555-8555-555555555555'
+  const GROUP_ID = '88888888-8888-4888-8888-888888888888'
+  const EQUIV = {
+    action: 'setFoodEquivalence',
+    workspace: SCOPE,
+    foodId: FOOD_ID,
+    exchangeGroupId: GROUP_ID,
+    exchangePortionGrams: 120,
+    exchangePortionLabel: '1 taza',
+  }
+
+  /**
+   * Espeja las TRES tablas que toca el servicio con el cliente RLS del coach: `exchange_groups`
+   * (el grupo debe ser visible antes de escribir un id client-controlled), `foods` (UPDATE del
+   * trio `exchange_*`) y `exchange_group_foods` (doble escritura de la fila de MI lista).
+   */
+  function mockEquivalenceDb(options: {
+    groupVisible?: boolean
+    food?: { data?: unknown; error?: { message: string; code?: string } }
+  } = {}) {
+    const calls = {
+      foodUpdates: [] as Record<string, unknown>[],
+      listInserts: [] as Record<string, unknown>[],
+      listDeletes: 0,
+    }
+    const groups = options.groupVisible === false ? [] : [{ id: GROUP_ID }]
+    const food = options.food ?? { data: { id: FOOD_ID }, error: null }
+
+    userFrom.mockImplementation((table: string) => {
+      if (table === 'exchange_groups') {
+        // `.is('deleted_at', null)` cierra la consulta de visibilidad.
+        const chain: Record<string, unknown> = {
+          select: () => chain,
+          in: () => chain,
+          is: async () => ({ data: groups, error: null }),
+        }
+        return chain
+      }
+      if (table === 'foods') {
+        const chain: Record<string, unknown> = {
+          update: (row: Record<string, unknown>) => {
+            calls.foodUpdates.push(row)
+            return chain
+          },
+          eq: () => chain,
+          select: () => chain,
+          maybeSingle: async () => ({ data: food.data ?? null, error: food.error ?? null }),
+        }
+        return chain
+      }
+      if (table === 'exchange_group_foods') {
+        // El delete se cierra con `await query` (sin `maybeSingle`), de ahi el thenable.
+        const chain: Record<string, unknown> = {
+          delete: () => {
+            calls.listDeletes += 1
+            return chain
+          },
+          insert: (row: Record<string, unknown>) => {
+            calls.listInserts.push(row)
+            return chain
+          },
+          select: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          // Antes del insert no hay fila propia (alta); despues devuelve la recien escrita.
+          maybeSingle: async () => ({
+            data: calls.listInserts.length > 0 ? { id: 'list-row-1' } : null,
+            error: null,
+          }),
+          then: (resolve: (value: unknown) => unknown) => resolve({ data: null, error: null }),
+        }
+        return chain
+      }
+      throw new Error(`tabla inesperada en setFoodEquivalence: ${table}`)
+    })
+    return calls
+  }
+
+  beforeEach(() => {
+    userFrom.mockReset()
+  })
+
+  it('escribe el trio en el alimento propio y sincroniza la fila de MI lista', async () => {
+    const calls = mockEquivalenceDb()
+    const res = await POST(req(EQUIV))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+    expect(calls.foodUpdates[0]).toEqual({
+      exchange_group_id: GROUP_ID,
+      exchange_portion_grams: 120,
+      exchange_portion_label: '1 taza',
+    })
+    // Reclasificar borra mis filas viejas de ESE alimento antes de escribir la nueva.
+    expect(calls.listDeletes).toBe(1)
+    expect(calls.listInserts[0]).toMatchObject({
+      exchange_group_id: GROUP_ID,
+      food_id: FOOD_ID,
+      coach_id: COACH,
+      org_id: null,
+      portion_grams: 120,
+      portion_label: '1 taza',
+      is_excluded: false,
+    })
+  })
+
+  it('grupo sin gramos => 400 INVALID_PAYLOAD sin tocar la BD (regla junto-o-nada)', async () => {
+    const res = await POST(req({ ...EQUIV, exchangePortionGrams: null }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('INVALID_PAYLOAD')
+    expect(userFrom).not.toHaveBeenCalled()
+  })
+
+  it('limpiar la clasificacion (sin grupo) escribe los 3 NULL y no deja fila en la lista', async () => {
+    const calls = mockEquivalenceDb()
+    const res = await POST(
+      req({ ...EQUIV, exchangeGroupId: null, exchangePortionGrams: null, exchangePortionLabel: null }),
+    )
+    expect(res.status).toBe(200)
+    expect(calls.foodUpdates[0]).toEqual({
+      exchange_group_id: null,
+      exchange_portion_grams: null,
+      exchange_portion_label: null,
+    })
+    // Sin grupo no hay nada que verificar ni que insertar: solo se retira mi fila vieja.
+    expect(userFrom).not.toHaveBeenCalledWith('exchange_groups')
+    expect(calls.listDeletes).toBe(1)
+    expect(calls.listInserts).toHaveLength(0)
+  })
+})

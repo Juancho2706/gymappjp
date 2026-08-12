@@ -8,15 +8,16 @@
  *
  * Autorización en tres capas, ninguna en la UI:
  *  1. `requireCoachSession`-equivalente: sesión propia (el `coachId` del cliente se compara
- *     contra el usuario autenticado, nunca se confía).
+ *     contra el usuario autenticado, nunca se confía). ESTA capa vive acá.
  *  2. `.eq('coach_id', userId)` en el UPDATE: solo alimentos propios. Los globales del
  *     catálogo (coach_id NULL) NO se pueden clasificar desde acá.
  *  3. RLS `foods_update_own` + el grant column-level de las 3 columnas `exchange_*` para
  *     `authenticated` (verificado en LIVE — P-B no necesita migración).
  *
- * El grupo se verifica VISIBLE para el coach antes de escribir: el FK de
- * `foods.exchange_group_id` acepta cualquier grupo existente, incluido el custom de otro
- * coach.
+ * La ESCRITURA en sí (capas 2 y 3, verificación del grupo visible y doble escritura de la lista)
+ * se mudó a `setOwnFoodExchangeEquivalence` (T2.3 F6.4) para que el tab Alimentos de RN clasifique
+ * por el MISMO camino vía `POST /api/mobile/nutrition-v2/coach/mutate`. Acá queda solo lo que es
+ * de esta superficie: sesión, normalización del payload y `revalidatePath`.
  *
  * Efecto: CERO cambios de read models. `exchangeFoods` y la cobertura derivada leen `foods`
  * vivo. Ojo con el cap del read model — la vista corta en `rn <= 40` equivalencias por grupo
@@ -27,15 +28,16 @@
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import type { Database } from '@/lib/database.types'
 import {
   foodExchangeEquivalenceIssue,
   foodExchangeEquivalenceShape,
   normalizeFoodExchangeEquivalence,
   refineFoodExchangeEquivalence,
 } from '@eva/schemas/nutrition-exchanges'
-import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
-import { syncFoodExchangeListRow } from '@/services/nutrition-exchanges/exchange-lists.service'
+import { setOwnFoodExchangeEquivalence } from '@/services/nutrition-exchanges/exchange-lists.service'
 
 const InputSchema = z
   .object({
@@ -61,41 +63,16 @@ export async function setFoodExchangeEquivalenceAction(input: unknown): Promise<
   } = await supabase.auth.getUser()
   if (!user) return { success: false, error: 'No autorizado.' }
 
-  const equivalence = normalizeFoodExchangeEquivalence(parsed.data)
-  if (equivalence.exchangeGroupId) {
-    const visible = await isExchangeGroupVisibleToActor(supabase, equivalence.exchangeGroupId)
-    if (!visible) return { success: false, error: 'Ese grupo de porciones ya no está disponible.' }
-  }
-
-  const { data, error } = await supabase
-    .from('foods')
-    .update({
-      exchange_group_id: equivalence.exchangeGroupId,
-      exchange_portion_grams: equivalence.exchangePortionGrams,
-      exchange_portion_label: equivalence.exchangePortionLabel,
-    })
-    .eq('id', parsed.data.foodId)
-    .eq('coach_id', user.id)
-    .select('id')
-    .maybeSingle()
-
-  if (error) {
-    if (error.code === '42501') {
-      return { success: false, error: 'No tienes permiso para editar este alimento.' }
-    }
-    return { success: false, error: 'No pudimos guardar la equivalencia. Intenta nuevamente.' }
-  }
-  if (!data) return { success: false, error: 'Ese alimento no es tuyo o ya no existe.' }
-
-  // Doble escritura (F2): la misma clasificación como fila propia de `exchange_group_foods`.
-  // Reclasificar de grupo borra la fila vieja, así el alumno no ve el alimento en dos grupos.
-  await syncFoodExchangeListRow(supabase, {
+  // El dueño de la escritura sale del ACTOR (`user.id`), jamás del payload, y el cliente que
+  // recibe el servicio es el RLS de esta sesión — nunca service_role.
+  // El cast es el mismo que usan las demás actions de intercambios: el cliente SSR y el tipo
+  // `SupabaseClient<Database>` del servicio difieren solo en genéricos de schema.
+  const result = await setOwnFoodExchangeEquivalence(supabase as unknown as SupabaseClient<Database>, {
     actorCoachId: user.id,
     foodId: parsed.data.foodId,
-    exchangeGroupId: equivalence.exchangeGroupId,
-    portionGrams: equivalence.exchangePortionGrams,
-    portionLabel: equivalence.exchangePortionLabel,
+    ...normalizeFoodExchangeEquivalence(parsed.data),
   })
+  if (!result.ok) return { success: false, error: result.error }
 
   // T2.3 F5: `/coach/foods` dejó de existir (hoy solo redirige); la superficie propia es el hub.
   revalidatePath('/coach/nutrition-v2')

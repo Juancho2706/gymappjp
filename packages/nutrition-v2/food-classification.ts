@@ -1,5 +1,7 @@
 /**
- * Gramatica UNICA de "clasificar un alimento en un grupo de porciones" (T2.3 F3).
+ * Gramatica UNICA de "clasificar un alimento en un grupo de porciones" (T2.3 F3; mudada a
+ * `packages/nutrition-v2` en F6.3 porque es pura y el tab Alimentos de RN necesita la MISMA
+ * decision de camino de escritura, y `apps/mobile` no puede importar de `apps/web`).
  *
  * Hasta esta fase la misma pregunta se contestaba en tres piezas distintas de `/coach/foods`,
  * cada una con su propio parseo de gramos y su propia regla de junto-o-nada:
@@ -24,12 +26,17 @@
  * propios: adelantar el veredicto sin round-trip, nunca uno distinto. La UI no autoriza nada.
  */
 
+// Por el BARREL `@eva/schemas` y no por el submodulo: `packages/schemas/package.json` solo
+// exporta `"."`, y Metro (package exports activo en SDK 54) no resuelve el subpath — este
+// archivo lo bundlea el movil via `@eva/nutrition-v2`.
 import {
   EXCHANGE_PORTION_GRAMS_MAX,
   EXCHANGE_PORTION_LABEL_MAX,
   foodExchangeEquivalenceIssue,
-} from '@eva/schemas/nutrition-exchanges'
-import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
+} from '@eva/schemas'
+// Import por modulo CONCRETO y NO por el barrel `@eva/nutrition-v2`: este archivo ES parte del
+// barrel desde T2.3 F6.3, y apuntarle crearia un ciclo (mismo criterio que `edited-foods`).
+import { PORTIONS_COPY } from './nutrition-portions-copy'
 
 const COPY = PORTIONS_COPY.foodEquivalence
 

@@ -12,7 +12,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Pencil, Plus, Search, User, X } from 'lucide-react-native'
+import { Pencil, Plus, Scale, Search, User, X } from 'lucide-react-native'
+import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { NutritionHeader, NutritionStatePanel, FoodThumbnail } from '../../../components/nutrition-v2'
 // Import por ruta directa (no via el barrel): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../components/nutrition-v2/MacroChipRow'
@@ -39,6 +40,11 @@ import {
 } from '../../../lib/food-detail'
 import { FoodDetailSheet } from '../../../components/coach/FoodDetailSheet'
 import { AddFoodSheet } from '../../../components/coach/AddFoodSheet'
+import {
+  ClassifyFoodSheet,
+  type ClassifiedFoodSummary,
+} from '../../../components/coach/ClassifyFoodSheet'
+import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import { useWorkspace } from '../../../lib/workspace'
 import { nutritionV2CoachScope } from '../../../lib/nutrition-v2.api'
@@ -50,8 +56,11 @@ import { nutritionV2CoachScope } from '../../../lib/nutrition-v2.api'
  * Ficha al tocar una fila (sin segundo fetch). El gate lo aplica el servidor en cada lectura
  * (`/api/mobile/nutrition-v2/catalog` re-verifica flag + scope); la UI nunca autoriza.
  *
- * Read-only con UNA excepción (T2.3 F6.3): el alta de alimento custom, en su propio sheet
- * (`components/coach/AddFoodSheet`). Escribe por el endpoint coach/mutate, no contra Supabase.
+ * Read-only con DOS excepciones, cada una en su propio sheet y ambas escribiendo por endpoint (
+ * nunca contra Supabase directo):
+ *  - F6.3 el alta de alimento custom (`components/coach/AddFoodSheet`);
+ *  - F6.4 clasificar un alimento en un grupo de porciones desde su ficha
+ *    (`components/coach/ClassifyFoodSheet`), espejo del `ClassifyFoodFlow` web.
  *
  * CINCO MODOS (T2.3 F6.2, paridad con el hub web). Cuál está activo lo decide
  * `resolveFoodCatalogMode` de `@eva/nutrition-v2` — la MISMA función pura que obedece la web, no
@@ -135,11 +144,33 @@ export default function CoachNutritionCatalogScreen({
   const [detailItem, setDetailItem] = useState<FoodCatalogItem | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [classifyOpen, setClassifyOpen] = useState(false)
+  /**
+   * El alimento que se está clasificando, en su PROPIO estado y no reusando `detailItem`: abrir el
+   * flujo cierra la ficha, y si compartieran estado bastaría con que la ficha se limpiara para que
+   * el formulario se quedara sin alimento a mitad de camino.
+   */
+  const [classifyItem, setClassifyItem] = useState<FoodCatalogItem | null>(null)
+  /**
+   * Catálogo COMPLETO de grupos (no solo id/code/name): el formulario calcula la sugerencia de
+   * gramos con las macros de referencia del grupo, en el teléfono y sin round-trip. `null` = aún
+   * no llegó (el sheet muestra "Cargando grupos…").
+   */
+  const [exchangeGroups, setExchangeGroups] = useState<ExchangeGroup[] | null>(null)
+  const [exchangeGroupsError, setExchangeGroupsError] = useState(false)
+  /**
+   * Lo clasificado EN ESTA SESIÓN, por alimento (espejo de `handleClassified` web). No es caché de
+   * lectura: es la única forma de que la fila refleje el cambio sin recargar, porque el read model
+   * del catálogo (`FoodCatalogItem`) no emite grupo ni gramos — repetir la consulta traería
+   * exactamente los mismos datos y encima tiraría las páginas ya cargadas con "Cargar mas".
+   */
+  const [classifiedNow, setClassifiedNow] = useState<Record<string, ClassifiedFoodSummary>>({})
   /** Disparador de "vuelve a consultar lo mismo" tras un alta (ver `handleFoodCreated`). */
   const [searchNonce, setSearchNonce] = useState(0)
 
   const activeController = useRef<AbortController | null>(null)
   const latestQuery = useRef('')
+  const exchangeGroupsRequested = useRef(false)
 
   // El modo es DERIVADO: nunca se guarda en estado. Dentro de un filtro el texto no dispara
   // consulta, así que el término debounceado solo importa cuando no hay filtro.
@@ -286,6 +317,41 @@ export default function CoachNutritionCatalogScreen({
   const openDetail = useCallback((item: FoodCatalogItem) => {
     setDetailItem(item)
     setDetailOpen(true)
+  }, [])
+
+  /**
+   * Grupos de porciones cargados la PRIMERA vez que se abre el flujo de clasificación, no al
+   * montar el tab: los cinco modos del catálogo no los usan, y pagarlos en cada visita sería una
+   * consulta de más en la pantalla que más se abre del hub. Si falla se libera el candado para que
+   * la próxima apertura reintente (la clasificación es opcional: el tab nunca se bloquea por esto).
+   */
+  const ensureExchangeGroups = useCallback(() => {
+    if (!scope || exchangeGroupsRequested.current) return
+    exchangeGroupsRequested.current = true
+    setExchangeGroupsError(false)
+    void fetchNutritionV2ExchangeGroups(scope)
+      .then((res) => setExchangeGroups(res.groups))
+      .catch(() => {
+        exchangeGroupsRequested.current = false
+        setExchangeGroupsError(true)
+      })
+  }, [scope])
+
+  /**
+   * La ficha se CIERRA antes de abrir el formulario (mismo criterio que la web,
+   * `FoodCatalogBrowser`:408-422): dos bottom sheets apilados en un teléfono dejan el de abajo
+   * asomando bajo el teclado, y este formulario vive de dos inputs.
+   */
+  const openClassify = useCallback(() => {
+    if (!detailItem) return
+    ensureExchangeGroups()
+    setClassifyItem(detailItem)
+    setDetailOpen(false)
+    setClassifyOpen(true)
+  }, [detailItem, ensureExchangeGroups])
+
+  const handleClassified = useCallback((summary: ClassifiedFoodSummary) => {
+    setClassifiedNow((prev) => ({ ...prev, [summary.foodId]: summary }))
   }, [])
 
   // Dentro de un filtro el texto NO consulta: recorta en cliente lo ya cargado (son decenas de
@@ -562,6 +628,10 @@ export default function CoachNutritionCatalogScreen({
         <FlashList
           data={showList ? visible : []}
           keyExtractor={(item) => item.id}
+          // El chip de "recién clasificado" vive FUERA de `data` (los ítems del catálogo no
+          // cambian al clasificar): sin `extraData` las filas ya montadas no se volverían a
+          // pintar y el coach no vería el resultado de lo que acaba de guardar.
+          extraData={classifiedNow}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           onScroll={onScroll}
@@ -585,6 +655,7 @@ export default function CoachNutritionCatalogScreen({
                 : null
             const metaLine = [item.brand, packageLabel, source.label].filter(Boolean).join(' · ')
             const tone = VERIFICATION_TONE_CLASSES[verification.tone]
+            const classified = classifiedNow[item.id]
             return (
               <Pressable
                 accessibilityRole="button"
@@ -632,6 +703,23 @@ export default function CoachNutritionCatalogScreen({
                       {metaLine}
                     </Text>
                   ) : null}
+                  {/* Resultado de lo que el coach acaba de clasificar en esta sesión. No se pinta
+                      para el resto: el catálogo no emite el grupo, y un chip ausente significaría
+                      "no lo sé", nunca "sin clasificar". */}
+                  {classified ? (
+                    <View className="mt-1 max-w-full flex-row items-center gap-1 self-start rounded-pill border border-primary/40 bg-primary/10 px-2 py-0.5">
+                      <Scale color={theme.primary} size={11} />
+                      <Text numberOfLines={1} className="shrink text-[10px] font-bold text-primary">
+                        {classified.groupName
+                          ? `${classified.groupName}${
+                              classified.portionGrams != null
+                                ? ` · ${classified.portionGrams} g`
+                                : ''
+                            }`
+                          : 'Sin clasificar'}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View className="mt-1">
                     <MacroChipRow
                       calories={item.calories}
@@ -649,7 +737,14 @@ export default function CoachNutritionCatalogScreen({
         />
       </View>
 
-      <FoodDetailSheet open={detailOpen} onClose={() => setDetailOpen(false)} item={detailItem} />
+      <FoodDetailSheet
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        item={detailItem}
+        // Sin scope resuelto no hay a dónde escribir la clasificación: la ficha se queda read-only
+        // en vez de ofrecer un botón que abriría un formulario condenado a fallar al guardar.
+        onClassify={scope ? openClassify : undefined}
+      />
       {/* Montado solo con scope: así el sheet lo recibe no-nulo sin `!` y el botón que lo abre ya
           estaba deshabilitado en ese caso. */}
       {scope ? (
@@ -658,6 +753,18 @@ export default function CoachNutritionCatalogScreen({
           onClose={() => setCreateOpen(false)}
           scope={scope}
           onCreated={handleFoodCreated}
+        />
+      ) : null}
+      {/* Ídem con el alimento: el formulario lo necesita no-nulo (macros, base y dueño). */}
+      {scope && classifyItem ? (
+        <ClassifyFoodSheet
+          open={classifyOpen}
+          onClose={() => setClassifyOpen(false)}
+          scope={scope}
+          item={classifyItem}
+          groups={exchangeGroups}
+          groupsError={exchangeGroupsError}
+          onClassified={handleClassified}
         />
       ) : null}
     </>

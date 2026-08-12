@@ -28,7 +28,21 @@ import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Loader2, RotateCcw, Save, Scale } from 'lucide-react'
 import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { formatPortionSentence, suggestPortionGrams, type FoodCatalogItem } from '@eva/nutrition-v2'
+import {
+  EMPTY_FOOD_CLASSIFICATION,
+  classificationPreview,
+  draftFromClassification,
+  formatPortionSentence,
+  hasClassificationChanges,
+  parsePortionGrams,
+  planFoodClassification,
+  resolveCurrentClassification,
+  suggestPortionGrams,
+  type ClassificationStep,
+  type FoodCatalogItem,
+  type FoodClassification,
+  type FoodClassificationDraft,
+} from '@eva/nutrition-v2'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 // T2.3 F5 — las dos actions se mudaron desde `/coach/foods/_actions` al hub con la carpeta vieja.
@@ -39,18 +53,6 @@ import {
   saveExchangeListEntryAction,
 } from '../_actions/exchange-lists.actions'
 import { loadFoodExchangeClassificationHubAction } from '../_actions/food-catalog.actions'
-import {
-  EMPTY_FOOD_CLASSIFICATION,
-  classificationPreview,
-  draftFromClassification,
-  hasClassificationChanges,
-  parsePortionGrams,
-  planFoodClassification,
-  resolveCurrentClassification,
-  type ClassificationStep,
-  type FoodClassification,
-  type FoodClassificationDraft,
-} from '../_lib/food-classification'
 
 const COPY = PORTIONS_COPY.foodEquivalence
 const LIST_COPY = PORTIONS_COPY.exchangeList

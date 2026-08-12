@@ -27,6 +27,11 @@ export * from './food-overrides'
 export * from './food-category'
 export * from './favorites'
 export * from './share'
+// Microcopy canonico de porciones + la gramatica de clasificar un alimento en un grupo. Vivian
+// duplicado (web/RN) y en `apps/web/.../nutrition-v2/_lib` respectivamente: son puros y las dos
+// superficies necesitan LA MISMA tabla, no dos copias que driftan sin que nadie lo note.
+export * from './nutrition-portions-copy'
+export * from './food-classification'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,

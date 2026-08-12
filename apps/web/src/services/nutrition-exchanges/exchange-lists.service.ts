@@ -112,7 +112,12 @@ export type FoodExchangeClassificationRead = {
 
 export type FoodExchangeClassificationResult =
   | { success: true; classification: FoodExchangeClassificationRead }
-  | { success: false; error: string }
+  /**
+   * `code` existe para que un transporte HTTP pueda ser honesto sin adivinar por el mensaje: la
+   * API móvil mapea `SCOPE_DENIED` a 403 y el resto a 500, igual que `browseCoachFoodCatalog`.
+   * La web lo ignora (su action colapsa todo a `CLASSIFICATION_READ_FAILED`).
+   */
+  | { success: false; code: 'SCOPE_DENIED' | 'FOOD_NOT_VISIBLE' | 'CLASSIFICATION_READ_FAILED'; error: string }
 
 /**
  * Dónde está clasificado HOY un alimento para este coach, leyendo las DOS fuentes que el
@@ -135,8 +140,18 @@ export async function getFoodExchangeClassification(
     .select('id, coach_id, exchange_group_id, exchange_portion_grams, exchange_portion_label')
     .eq('id', input.foodId)
     .maybeSingle()
-  if (error) return { success: false, error: 'No pudimos leer la clasificación de este alimento.' }
-  if (!data) return { success: false, error: 'Ese alimento ya no está disponible.' }
+  if (error) {
+    return {
+      success: false,
+      // 42501 = la RLS negó la lectura, no un fallo de infraestructura: mismo criterio que
+      // `mapWriteError` y `rpcErrorResponse` en el resto de Nutrición V2.
+      code: error.code === '42501' ? 'SCOPE_DENIED' : 'CLASSIFICATION_READ_FAILED',
+      error: 'No pudimos leer la clasificación de este alimento.',
+    }
+  }
+  if (!data) {
+    return { success: false, code: 'FOOD_NOT_VISIBLE', error: 'Ese alimento ya no está disponible.' }
+  }
 
   const food = data as {
     coach_id: string | null
@@ -277,6 +292,94 @@ export async function syncFoodExchangeListRow(
   } catch (error) {
     console.error('[nutrition_exchanges] syncFoodExchangeListRow', error)
   }
+}
+
+export type SetOwnFoodExchangeEquivalenceOutcome =
+  | { ok: true }
+  | {
+      ok: false
+      code: 'EXCHANGE_GROUP_NOT_FOUND' | 'SCOPE_DENIED' | 'FOOD_NOT_FOUND' | 'FOOD_WRITE_FAILED'
+      error: string
+    }
+
+/**
+ * Clasificar un alimento PROPIO ya existente: escribe el trío `foods.exchange_*` y deja la misma
+ * clasificación como fila de MI lista. Es el camino de UPDATE de P-B
+ * (`specs/nutrition-custom-portions`), hermano del alta (`insertCoachFood`).
+ *
+ * UNA sola implementación para las dos superficies (T2.3 F6.4): vivía inline en la server action
+ * web y RN no tenía manera de clasificar; ahora la action web y `POST
+ * /api/mobile/nutrition-v2/coach/mutate` (acción `setFoodEquivalence`) llaman acá.
+ *
+ * Este servicio NO autoriza la sesión — igual que `browseCoachFoodCatalog`: recibe el cliente RLS
+ * YA scoped al usuario y un `actorCoachId` derivado del ACTOR (sesión o gate móvil), jamás del
+ * payload. Lo que sí pone acá es la autorización de DATOS que la RLS no expresa:
+ *  - el grupo debe ser VISIBLE para el actor (el FK de `foods.exchange_group_id` acepta cualquier
+ *    grupo existente, incluido el custom de otro coach);
+ *  - `.eq('coach_id', actorCoachId)` en el UPDATE: solo alimentos propios. Los globales
+ *    (`coach_id NULL`) NO se clasifican por acá — para eso está la lista con dueño.
+ *
+ * El trío llega YA normalizado (`normalizeFoodExchangeEquivalence` en cada llamador): sin grupo,
+ * los tres van a NULL y limpiar la clasificación es un caso legítimo, no un error.
+ */
+export async function setOwnFoodExchangeEquivalence(
+  db: DB,
+  input: {
+    actorCoachId: string
+    foodId: string
+    exchangeGroupId: string | null
+    exchangePortionGrams: number | null
+    exchangePortionLabel: string | null
+  }
+): Promise<SetOwnFoodExchangeEquivalenceOutcome> {
+  if (input.exchangeGroupId) {
+    const visible = await isExchangeGroupVisibleToActor(db, input.exchangeGroupId)
+    if (!visible) {
+      return {
+        ok: false,
+        code: 'EXCHANGE_GROUP_NOT_FOUND',
+        error: 'Ese grupo de porciones ya no está disponible.',
+      }
+    }
+  }
+
+  const { data, error } = await db
+    .from('foods')
+    .update({
+      exchange_group_id: input.exchangeGroupId,
+      exchange_portion_grams: input.exchangePortionGrams,
+      exchange_portion_label: input.exchangePortionLabel,
+    })
+    .eq('id', input.foodId)
+    .eq('coach_id', input.actorCoachId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    if (error.code === '42501') {
+      return { ok: false, code: 'SCOPE_DENIED', error: 'No tienes permiso para editar este alimento.' }
+    }
+    return {
+      ok: false,
+      code: 'FOOD_WRITE_FAILED',
+      error: 'No pudimos guardar la equivalencia. Intenta nuevamente.',
+    }
+  }
+  // 0 filas con el UPDATE ya filtrado por dueño: o no es suyo, o ya no existe. No se distingue a
+  // propósito (decirlo sería confirmarle al coach la existencia de un alimento ajeno).
+  if (!data) return { ok: false, code: 'FOOD_NOT_FOUND', error: 'Ese alimento no es tuyo o ya no existe.' }
+
+  // Doble escritura (F2): la misma clasificación como fila propia de `exchange_group_foods`.
+  // Reclasificar de grupo borra la fila vieja, así el alumno no ve el alimento en dos grupos.
+  await syncFoodExchangeListRow(db, {
+    actorCoachId: input.actorCoachId,
+    foodId: input.foodId,
+    exchangeGroupId: input.exchangeGroupId,
+    portionGrams: input.exchangePortionGrams,
+    portionLabel: input.exchangePortionLabel,
+  })
+
+  return { ok: true }
 }
 
 export type ExchangeListCandidate = ExchangeListFoodMacros & {

@@ -35,6 +35,13 @@ import {
 } from '@/app/coach/nutrition-v2/_lib/assign-plan'
 import { ArchivePlanInputSchema, classifyArchiveWrite } from '@/app/coach/nutrition-v2/_lib/archive-plan'
 import { CoachFoodInputSchema, insertCoachFood } from '@/app/coach/nutrition-v2/_lib/coach-food'
+import {
+  foodExchangeEquivalenceShape,
+  normalizeFoodExchangeEquivalence,
+  refineFoodExchangeEquivalence,
+} from '@eva/schemas/nutrition-exchanges'
+import { setOwnFoodExchangeEquivalence } from '@/services/nutrition-exchanges/exchange-lists.service'
+import type { Database } from '@/lib/database.types'
 
 /**
  * Escrituras del COACH en mobile (NUT-005). Antes RN escribia DIRECTO contra PostgREST/RPC con el
@@ -106,6 +113,21 @@ const CreateFoodSchema = CoachFoodInputSchema.extend({
   action: z.literal('createFood'),
   workspace: WorkspaceSchema,
 })
+
+/**
+ * Clasificar un alimento PROPIO ya existente desde el tab Alimentos de RN (T2.3 F6.4). Es el
+ * camino de UPDATE del trío `foods.exchange_*`: el alta ya podía traer la equivalencia en el
+ * mismo payload (`createFood`), pero un alimento del catálogo hecho no tenía cómo clasificarse.
+ * Mismo trío de schema compartido que el alta, así que las dos superficies validan igual.
+ */
+const SetFoodEquivalenceSchema = z
+  .object({
+    action: z.literal('setFoodEquivalence'),
+    workspace: WorkspaceSchema,
+    foodId: z.string().uuid(),
+    ...foodExchangeEquivalenceShape,
+  })
+  .superRefine(refineFoodExchangeEquivalence)
 
 const ROUTE = 'mobile.nutrition-v2.coach.mutate'
 
@@ -260,6 +282,8 @@ export async function POST(request: NextRequest) {
       return handleArchive(gate, db, raw, startedAt)
     case 'createFood':
       return handleCreateFood(gate, db, raw, startedAt)
+    case 'setFoodEquivalence':
+      return handleSetFoodEquivalence(gate, db, raw, startedAt)
     default:
       return failure(startedAt, 'INVALID_ACTION', 'Acción inválida.', {})
   }
@@ -612,6 +636,44 @@ async function handleCreateFood(
   }
 
   const payload = { ok: true as const, food: created.food }
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
+  return jsonNoStore(payload)
+}
+
+/**
+ * "Clasificar en porciones" del tab Alimentos de RN. Sin gate Pro (paridad con la web: clasificar
+ * un alimento propio es BASE) y sin alumno en contexto: el gate ya autorizó por workspace +
+ * bearer. La escritura es la MISMA funcion de servicio que usa la server action web
+ * (`setOwnFoodExchangeEquivalence`), con el cliente RLS del propio coach y el dueño derivado del
+ * ACTOR (`gate.userId`), nunca del body.
+ */
+async function handleSetFoodEquivalence(
+  gate: NutritionV2ApiGate,
+  db: NutritionV2Db,
+  raw: Record<string, unknown>,
+  startedAt: number,
+) {
+  const parsed = SetFoodEquivalenceSchema.safeParse(raw)
+  if (!parsed.success) {
+    return failure(
+      startedAt,
+      'INVALID_PAYLOAD',
+      'La equivalencia tiene datos inválidos.',
+      { fields: zodFields(parsed.error) },
+    )
+  }
+
+  // Sin grupo, el trío entero va a NULL: limpiar la clasificación es un caso legítimo del update.
+  const result = await setOwnFoodExchangeEquivalence(db as unknown as SupabaseClient<Database>, {
+    actorCoachId: gate.userId,
+    foodId: parsed.data.foodId,
+    ...normalizeFoodExchangeEquivalence(parsed.data),
+  })
+  if (!result.ok) {
+    return failure(startedAt, result.code, result.error, {})
+  }
+
+  const payload = { ok: true as const }
   logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
   return jsonNoStore(payload)
 }

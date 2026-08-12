@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Linking, Pressable, Text, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Barcode, ExternalLink, Maximize2 } from 'lucide-react-native'
+import { Barcode, ExternalLink, Maximize2, Scale } from 'lucide-react-native'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { Sheet } from '../Sheet'
 import { PhotoLightbox } from '../PhotoLightbox'
@@ -27,6 +27,9 @@ import { foodMediaThumbnailUrl } from '../../lib/nutrition-v2-food-media'
  * de barras · fuente. `householdLabel`/`householdGrams` no viajan en el read model del
  * catálogo → la porción casera se oculta (paridad exacta con web).
  *
+ * Sigue siendo read-only: la ÚNICA acción es el pie opcional "Clasificar en porciones"
+ * (`onClassify`, F6.4), que no escribe acá — abre el formulario de clasificación del tab.
+ *
  * Montada sobre el `Sheet` DS con `nativeModal`: bajo este stack (@gorhom 5.2.14 +
  * reanimated 4 + Fabric) el path gorhom es frágil en cold-start (ver docs de la prop
  * `nativeModal` en components/Sheet.tsx); esta ficha se abre desde una pantalla recién
@@ -37,6 +40,16 @@ type Props = {
   open: boolean
   onClose: () => void
   item: FoodCatalogItem | null
+  /**
+   * Entrada a "clasificar en porciones" (T2.3 F6.4). OPCIONAL: la ficha se monta también donde no
+   * hay a dónde escribir (sin workspace resuelto) y desde pantallas que solo consultan; sin esta
+   * prop no aparece el pie y la ficha sigue siendo estrictamente read-only, como nació.
+   *
+   * La entrada es la FICHA y no la fila del listado, igual que en la web (`FoodCatalogBrowser`:
+   * 408-422): la fila entera ya es un único objetivo táctil y acá el coach está viendo las macros,
+   * que es justo lo que necesita para decidir los gramos de 1 porción.
+   */
+  onClassify?: () => void
 }
 
 // Tonos del badge de verificación mapeados a tokens del DS RN (mismo criterio que el kit
@@ -73,7 +86,7 @@ function MicroRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function FoodDetailSheet({ open, onClose, item }: Props) {
+export function FoodDetailSheet({ open, onClose, item, onClassify }: Props) {
   const { theme } = useTheme()
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [headerFailed, setHeaderFailed] = useState(false)
@@ -120,6 +133,22 @@ export function FoodDetailSheet({ open, onClose, item }: Props) {
       snapPoints={['90%']}
       nativeModal
       accessibilityLabel={item ? `Ficha de ${item.name}` : 'Ficha del alimento'}
+      // Pie fijo (no al final del scroll): es la única acción de la ficha y el coach no debería
+      // tener que bajar hasta la atribución de la fuente para encontrarla. Sin alimento no hay
+      // nada que clasificar, así que tampoco se pinta.
+      footer={
+        onClassify && item ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Clasificar ${item.name} en porciones`}
+            onPress={onClassify}
+            className="min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-4"
+          >
+            <Scale color={theme.textSecondary} size={16} />
+            <Text className="text-sm font-semibold text-strong">Clasificar en porciones</Text>
+          </Pressable>
+        ) : undefined
+      }
     >
       {!item ? (
         <Text className="py-12 text-center text-sm text-muted">
