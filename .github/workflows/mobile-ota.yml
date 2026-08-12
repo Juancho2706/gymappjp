@@ -1,0 +1,97 @@
+name: Mobile OTA Update
+
+# Publica un OTA de EAS Update desde CI, con las MISMAS secrets que las builds.
+#
+# POR QUE existe (incidente 2026-08-11): tres OTAs android publicados desde una maquina local
+# salieron con el bundle SIN `EXPO_PUBLIC_SUPABASE_URL` (el entorno local no inyectaba las
+# variables de forma confiable) y crasheaban al boot con "supabaseUrl is required" — el mismo
+# modo de falla que mobile-build.yml ya documenta para builds. Publicar desde CI elimina la
+# clase entera de error: el entorno es reproducible y las secrets son las mismas que ya
+# producen builds sanas. Los OTA locales quedan prohibidos por runbook.
+#
+# El guard de abajo falla el job ANTES de publicar si una secret esta vacia: un OTA roto en el
+# canal production crashea a TODOS los usuarios del canal hasta el rollback.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform'
+        required: true
+        default: 'android'
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+      message:
+        description: 'Mensaje del update (que lleva y de que commit)'
+        required: true
+        type: string
+      branch:
+        description: 'Branch/canal de EAS Update'
+        required: true
+        default: 'production'
+        type: choice
+        # production es el unico canal vivo (Play + TestFlight lo comparten). Se deja como
+        # choice para sumar canales sin editar el workflow.
+        options:
+          - production
+
+jobs:
+  publish-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Guard de secrets (fail-fast, mismo criterio que mobile-build.yml)
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          missing=""
+          [ -z "${SUPABASE_URL// /}" ] && missing="$missing NEXT_PUBLIC_SUPABASE_URL"
+          [ -z "${SUPABASE_KEY// /}" ] && missing="$missing NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          if [ -n "$missing" ]; then
+            echo "ERROR: secret(s) vacio(s):$missing — sin ellas el bundle sale sin Supabase y crashea al boot ('supabaseUrl is required')."
+            exit 1
+          fi
+
+      - name: Publish OTA update
+        working-directory: apps/mobile
+        env:
+          # `eas update` inlinea process.env.EXPO_PUBLIC_* al bundlear: con exportarlas en el
+          # step alcanza (no hace falta tocar eas.json, eso es de perfiles de BUILD).
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          # Reintento x3: el primer export en un arbol frio a veces muere con
+          # "Cannot find module 'babel-preset-expo'" (race de inicializacion del transform
+          # worker de Metro en monorepo pnpm; reproducido local: 1er intento falla, 2do pasa).
+          for attempt in 1 2 3; do
+            if eas update \
+              --branch "${{ inputs.branch }}" \
+              --platform "${{ inputs.platform }}" \
+              --message "${{ inputs.message }}" \
+              --non-interactive; then
+              exit 0
+            fi
+            echo "intento $attempt fallo; reintentando..."
+            sleep 5
+          done
+          exit 1
