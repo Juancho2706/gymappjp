@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
-import Svg, { Circle } from 'react-native-svg'
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg'
 import { MotiView } from 'moti'
 import Animated, {
   runOnJS,
@@ -46,6 +46,12 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 const MAIN_SIZE = 216
 const MAIN_STROKE = 16
+/**
+ * El aura desborda apenas el anillo: con el gradiente cayendo a opacidad 0 en el borde, el halo
+ * muere ANTES del recorte y se lee como luz alrededor del número, no como un disco de color.
+ * `ringStage` no recorta, así que sobresalir es seguro.
+ */
+const GLOW_SIZE = Math.round(MAIN_SIZE * 1.04)
 const MINI_SIZE = 74
 const MINI_STROKE = 8
 
@@ -288,19 +294,28 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
             from={motion.reduced ? undefined : { opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'timing', duration: motion.duration('slower') }}
-            style={[
-              styles.glow,
-              {
-                width: MAIN_SIZE * 0.9,
-                height: MAIN_SIZE * 0.9,
-                backgroundColor: hexToRgba(theme.primary, alpha),
-                shadowColor: theme.primary,
-                shadowOpacity: 0.15 + ratio * 0.35,
-                shadowRadius: 26,
-                elevation: 10,
-              },
-            ]}
-          />
+            style={[styles.glow, { width: GLOW_SIZE, height: GLOW_SIZE }]}
+          >
+            {/*
+              Gradiente radial de verdad, no un disco con sombra. Antes eran dos capas que en
+              Android salían mal: un `backgroundColor` con alpha —un disco PLANO, sin difuminado,
+              con borde duro— y un `elevation: 10` que ignora `shadowColor`/`shadowOpacity`/
+              `shadowRadius` (props de iOS) y dibuja su propia sombra aproximando la silueta con un
+              POLÍGONO. De ahí el octágono gris que se veía dentro del anillo. El gradiente resuelve
+              las dos cosas y se ve idéntico en las dos plataformas.
+            */}
+            <Svg width={GLOW_SIZE} height={GLOW_SIZE}>
+              <Defs>
+                <RadialGradient id="aura-glow" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0" stopColor={theme.primary} stopOpacity={alpha} />
+                  <Stop offset="0.45" stopColor={theme.primary} stopOpacity={alpha * 0.72} />
+                  <Stop offset="0.78" stopColor={theme.primary} stopOpacity={alpha * 0.28} />
+                  <Stop offset="1" stopColor={theme.primary} stopOpacity={0} />
+                </RadialGradient>
+              </Defs>
+              <Circle cx={GLOW_SIZE / 2} cy={GLOW_SIZE / 2} r={GLOW_SIZE / 2} fill="url(#aura-glow)" />
+            </Svg>
+          </MotiView>
           <AuraRing
             accessibilityLabel={energyAccessibilityLabel}
             size={MAIN_SIZE}
@@ -376,7 +391,8 @@ const styles = StyleSheet.create({
   greeting: { fontFamily: FONT.display, letterSpacing: TYPE_SCALE.xl * -0.015 },
   subtitle: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.sm, marginTop: 2 },
   ringStage: { alignItems: 'center', justifyContent: 'center', marginTop: 20 },
-  glow: { position: 'absolute', borderRadius: 999, shadowOffset: { width: 0, height: 0 } },
+  // Sin `shadowOffset`/`elevation`: el halo lo pinta el gradiente radial del SVG, no una sombra.
+  glow: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   center: { alignItems: 'center', justifyContent: 'center' },
   kcal: { fontFamily: FONT.display, fontVariant: ['tabular-nums'] },
   kcalUnit: { fontFamily: FONT.uiMedium, fontSize: TYPE_SCALE.xs, marginTop: 4 },
