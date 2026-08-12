@@ -427,7 +427,13 @@ function TodayTab({
       const queue = await getNutritionV2QueueStatus(userId)
       if (mountedRef.current) setPending(queue.pending)
     } finally {
-      if (mountedRef.current) {
+      // Solo el load VIGENTE manda sobre el estado de carga. Entrar al tab dispara dos: el del
+      // montaje y el del foco, y el segundo ABORTA al primero — pero el `finally` del abortado
+      // corria igual y apagaba `loading` con el fetch ganador todavia en vuelo. Ese render
+      // intermedio (`loading` false + `model` null) es exactamente la condicion del panel
+      // "No pudimos cargar Nutricion", que aparecia en la primera entrada en frio (sin cache
+      // que rellene `model`) y se arreglaba solo al responder el fetch bueno.
+      if (mountedRef.current && controllerRef.current === controller) {
         setLoading(false)
         setRefreshing(false)
       }
