@@ -66,7 +66,7 @@ export function useHealthConnection(callbacks?: {
     const proceed = await new Promise<boolean>((resolve) => {
       Alert.alert(
         `Conectar con ${HEALTH_APP_NAME}`,
-        `Te vamos a llevar a ${Platform.OS === 'ios' ? 'Salud' : 'Health Connect'} para autorizar el acceso a tus pasos y horas de sueño. Volvés a EVA al terminar.`,
+        `Te vamos a llevar a ${Platform.OS === 'ios' ? 'Salud' : 'Health Connect'} para autorizar el acceso a tus pasos y horas de sueño. Vuelves a EVA al terminar.`,
         [
           { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
           { text: 'Continuar', onPress: () => resolve(true) },
