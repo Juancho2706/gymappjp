@@ -8,12 +8,13 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ArrowRight, KeyRound, Mail } from 'lucide-react-native'
+import { ArrowRight, Mail } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { ForgotPasswordSchema } from '@eva/schemas'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, TopBar } from '../../components'
+import { EvaFigure } from '../../components/entry/EvaFigure'
 
 export default function ForgotPasswordScreen() {
   const router = useRouter()
@@ -48,9 +49,7 @@ export default function ForgotPasswordScreen() {
             transition={{ type: 'spring', damping: 14 }}
             style={styles.inner}
           >
-            <View className="bg-success-100" style={[styles.successIcon, { borderRadius: theme.radius['2xl'] }]}>
-              <Mail size={28} color={theme.success} strokeWidth={1.75} />
-            </View>
+            <EvaFigure size={64} style={styles.mark} />
             <Text className="font-display-black" style={[styles.title, { color: theme.foreground }]}>
               Revisa tu correo
             </Text>
@@ -75,9 +74,7 @@ export default function ForgotPasswordScreen() {
             transition={{ type: 'timing', duration: 500 }}
             style={styles.inner}
           >
-            <View className="bg-sport-100" style={[styles.heroIcon, { borderRadius: theme.radius['2xl'] }]}>
-              <KeyRound size={26} color={theme.primary} strokeWidth={1.75} />
-            </View>
+            <EvaFigure size={64} style={styles.mark} />
             <Text className="font-display-black" style={[styles.title, { color: theme.foreground }]}>
               Restablecer contraseña
             </Text>
@@ -121,22 +118,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   kav: { flex: 1, paddingHorizontal: 24, paddingBottom: 24 },
   inner: { flex: 1, justifyContent: 'center', gap: 12 },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  successIcon: {
-    width: 64,
-    height: 64,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-  },
-  title: { fontSize: 26, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, lineHeight: 20 },
+  mark: { alignSelf: 'center', marginBottom: 8 },
+  title: { fontSize: 26, letterSpacing: -0.5, textAlign: 'center' },
+  subtitle: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
   form: { gap: 16, marginTop: 16 },
 })

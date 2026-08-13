@@ -425,6 +425,7 @@ export function VideoPlayer({
         // sobre una caja negra. Queda la miniatura + "Toca para reintentar" (remonta con otra key).
         mediaFallback_
       ) : ytId ? (
+        <>
         <WebViewWithRef
           // La key es el intento: al reintentar, el WebView se remonta y vuelve a pedir el embed.
           key={mediaAttempt}
@@ -434,6 +435,11 @@ export function VideoPlayer({
           accessibilityLabel={title ? `Video de ${title}` : 'Video del ejercicio'}
           source={{ html: ytHtml, baseUrl: 'https://www.youtube-nocookie.com' }}
           style={fillStyle}
+          // 🔴 UN SOLO juego de controles (pedido del dueño 12-08): el tap NUNCA llega al iframe, así
+          // que YouTube no despliega su chrome (título, canal, avatar, botones grandes) encima de los
+          // controles glass de EVA. No se pierde nada: pausa / reinicio / audio viajan por
+          // `injectJavaScript` (IFrame API), no por gesto, y el tap sobre el marco queda para el caller.
+          pointerEvents="none"
           // iOS: sin estas dos props el gesto del usuario NO llega al iframe y el
           // video queda congelado en el primer frame (bug reportado en TestFlight).
           allowsInlineMediaPlayback
@@ -452,6 +458,22 @@ export function VideoPlayer({
           onLoadEnd={handleWebViewLoadEnd}
           onMessage={handleMediaMessage}
         />
+        {/* Velo de PAUSA. Pausar por IFrame API hace que YouTube pinte SIEMPRE su overlay de fin
+            (título + videos relacionados) sobre el frame congelado: no hay parámetro que lo apague
+            (`rel=0` sólo restringe los relacionados al mismo canal). Desde un iframe la única vía
+            limpia es taparlo con la miniatura que ya calculamos. `cover` para que no asome nada por
+            los bordes, y sin captura de toques: los controles del ejecutor siguen mandando. */}
+        {paused && posterUri ? (
+          <Image
+            testID="video-player-paused-poster"
+            pointerEvents="none"
+            source={{ uri: posterUri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={120}
+          />
+        ) : null}
+        </>
       ) : isDirect && ExpoVideo ? (
         <DirectVideo
           url={url}
