@@ -6,6 +6,7 @@ import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
 import {
   AlertTriangle,
+  BookOpen,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -1718,6 +1719,21 @@ function TodayTab({
             fats: { consumed: consumed.fatsG, target: model.targets.fatsG },
           }}
         />
+
+        {/* Citas de la información de salud (App Review 1.4.1): las calorías y macros del anillo son
+            ESTIMACIONES calculadas con ecuaciones publicadas. El link a "Fuentes y método" tiene que
+            estar acá, pegado a los números, no enterrado en un ajuste. */}
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Ver las fuentes y el método de cálculo de calorías y macronutrientes"
+          onPress={() => router.push('/fuentes')}
+          className="flex-row items-center gap-2 self-center px-3 py-2"
+        >
+          <BookOpen color={theme.textSecondary} size={13} />
+          <Text className="text-xs font-semibold text-muted underline">
+            Cómo se calculan estos números · Fuentes
+          </Text>
+        </Pressable>
 
         {portions.active && (model.dayCoverage?.length ?? 0) > 0 ? (
           <PortionDayCoverageRow

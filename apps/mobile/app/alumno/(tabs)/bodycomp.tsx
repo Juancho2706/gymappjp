@@ -631,12 +631,30 @@ function Trend({ rows, method }: { rows: BcmRow[]; method: Method }) {
 
 function Disclaimer({ style }: { style?: object }) {
   const { theme } = useTheme()
+  const router = useRouter()
   return (
     <View className="bg-surface-sunken" style={[styles.disclaimer, style]} testID="bodycomp-disclaimer">
       <Info size={14} color={theme.mutedForeground} strokeWidth={2} style={{ marginTop: 1 }} />
-      <Text className="text-muted" style={[styles.disclaimerTxt, { fontFamily: FONT.ui }]}>
-        {DISCLAIMER}
-      </Text>
+      <View style={{ flex: 1, gap: 6 }}>
+        <Text className="text-muted" style={[styles.disclaimerTxt, { fontFamily: FONT.ui }]}>
+          {DISCLAIMER}
+        </Text>
+        {/* Citas de la información de salud (App Review 1.4.1): el "Metabolismo basal" que muestra
+            esta pantalla sale de ecuaciones publicadas y hay que poder llegar a ellas desde acá. */}
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Ver las fuentes y el método de cálculo"
+          onPress={() => router.push('/fuentes')}
+          hitSlop={6}
+        >
+          <Text
+            className="text-primary underline"
+            style={[styles.disclaimerTxt, { fontFamily: FONT.uiSemibold, flex: 0 }]}
+          >
+            Ver fuentes y método de cálculo
+          </Text>
+        </Pressable>
+      </View>
     </View>
   )
 }

@@ -5,12 +5,14 @@ import Constants from 'expo-constants'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { cssInterop } from 'nativewind'
 import {
+  BookOpen,
   CalendarDays,
   ChevronRight,
   CircleHelp,
   Dumbbell,
   Fingerprint,
   Flame,
+  HeartPulse,
   History,
   KeyRound,
   LogOut,
@@ -58,6 +60,7 @@ import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPrefere
 import { MonthlySummaryShareCard } from '../../../components/alumno/MonthlySummaryShareCard'
 import { useEntitlements } from '../../../lib/entitlements'
 import { runningBundleLabel } from '../../../lib/ota'
+import { HEALTH_APP_NAME } from '../../../lib/use-health-connection'
 
 // Correo de contacto — una sola fuente, espejo de `SALES_EMAIL` (web `lib/brand-assets`).
 const SALES_EMAIL = 'contacto@eva-app.cl'
@@ -663,6 +666,30 @@ export default function AlumnoPerfilScreen() {
                     />
                   </>
                 ) : null}
+                <RowDivider />
+                {/* Integración con el agregador de salud del sistema (App Review 2.5.1). El único
+                    punto de entrada era el card de Hábitos del inicio, y solo con la fecha en HOY:
+                    el revisor no podía encontrarlo. Esta fila es la entrada PERMANENTE. */}
+                <ListRow
+                  testID="perfil-salud-row"
+                  leading={<IconTile Icon={HeartPulse} />}
+                  title={HEALTH_APP_NAME}
+                  subtitle="Conecta tu reloj para autocompletar pasos, sueño y entrenamientos"
+                  showChevron
+                  onPress={() => router.push('/alumno/salud')}
+                />
+                <RowDivider />
+                {/* Citas de la información de salud (App Review 1.4.1). Además del link pegado al
+                    anillo de kcal en Nutrición, esta fila da una entrada PERMANENTE y encontrable
+                    sin tener plan de nutrición activo. */}
+                <ListRow
+                  testID="perfil-fuentes-row"
+                  leading={<IconTile Icon={BookOpen} />}
+                  title="Fuentes y método"
+                  subtitle="De dónde salen los cálculos de nutrición y salud"
+                  showChevron
+                  onPress={() => router.push('/fuentes')}
+                />
                 <RowDivider />
                 <ListRow
                   testID="perfil-ayuda-row"

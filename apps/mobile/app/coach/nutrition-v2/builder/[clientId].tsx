@@ -14,7 +14,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { AlertTriangle, CalendarClock, Check, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, BookOpen, CalendarClock, Check, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
   BuilderDayStrip,
   BuilderStepList,
@@ -1734,6 +1734,7 @@ function PlanStep({
 }) {
   // El candado usaba un hex (`#8A94A6`): en dark/white-label el gris quedaba fuera del sistema.
   const { theme } = useTheme()
+  const router = useRouter()
   return (
     <View className="gap-4">
       <View className="gap-3">
@@ -1825,6 +1826,21 @@ function PlanStep({
             </View>
           </View>
         </View>
+        {/* Citas de la información de salud (App Review 1.4.1): las metas que el coach escribe acá
+            son las que el alumno ve como recomendación. El método y sus referencias tienen que ser
+            alcanzables desde donde se definen. */}
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Ver las fuentes y el método de cálculo de calorías y macronutrientes"
+          onPress={() => router.push('/fuentes')}
+          className="mt-3 flex-row items-center gap-2 self-start"
+          hitSlop={6}
+        >
+          <BookOpen color={theme.textSecondary} size={13} />
+          <Text className="text-xs font-semibold text-muted underline">
+            Fuentes y método de cálculo
+          </Text>
+        </Pressable>
       </NutritionCard>
 
       <NutritionCard>

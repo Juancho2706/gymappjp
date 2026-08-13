@@ -155,7 +155,6 @@
         {
           "isBackgroundEnabled": false,
           "neverForLocation": true,
-          "modes": ["central"],
           "bluetoothAlwaysPermission": "EVA usa Bluetooth para conectar tu sensor de frecuencia cardiaca (cinta o reloj) durante el cardio."
         }
       ],
