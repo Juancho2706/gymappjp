@@ -12,15 +12,18 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       sin pisar, con aviso previo
 - [x] SPEC / PLAN / TASKS (este commit)
 
-## F1 — Gramatica destructiva unificada (sin DB)
+## F1 — Gramatica destructiva unificada (sin DB) — **CERRADA 2026-08-12 (`cfb5a8f5`)**
 
-- [ ] `RESTORE_SLOT` en el reducer, espejo de `RESTORE_ITEM`: idempotente + indice de reinsercion
-- [ ] Tests puros del reducer: borrar y restaurar deja la franja en su posicion original; restaurar
-      dos veces no duplica
-- [ ] Wizard (`SlotEditor.tsx:135-139`): borrar pasa a optimista + Deshacer 5-8 s
-- [ ] Quick-edit (`EditableSlotCard.tsx:237-243`): muere `confirmingDelete`, mismo Deshacer
-- [ ] Inventario de gestos destructivos del modulo V2 (dia, franja, item, sustitucion, plantilla) y
-      su estado, pegado aca como tabla
+- [x] `RESTORE_SLOT` en el reducer, espejo de `RESTORE_ITEM`: idempotente + indice de reinsercion
+      (helper `insertSlotAt`, gemelo de `insertItemAt`)
+- [x] Tests puros del reducer: vuelve a su indice original y COMPLETA; doble Deshacer no duplica;
+      indice fuera de rango se acota
+- [x] Wizard (`SlotEditor.tsx`): borrar pasa a optimista + Deshacer 8 s, con la franja y su indice
+      capturados ANTES del dispatch
+- [x] Quick-edit (`EditableSlotCard.tsx`): muere `confirmingDelete` y su aviso rojo inline; ya tenia
+      undo, le sobraba el confirm encima. Ventana unificada en `UNDO_TOAST_MS` (era 5 s)
+- [ ] Inventario de gestos destructivos del modulo V2 (dia, plantilla, sustitucion) y su estado —
+      franja e item ya verificados en esta fase
 
 ## F2 — Copy semana (sin DB)
 
@@ -68,3 +71,4 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | Fecha | Fase | Commit | Gates | Notas |
 |-------|------|--------|-------|-------|
 | 2026-08-12 | F0 | (este commit) | docs:check | Auditoria + D1/D2 + los tres documentos. El enunciado del programa padre quedo corregido en la SPEC: la pieza destructiva es agregar undo de franja, no borrar un confirm. |
+| 2026-08-12 | F1 | cfb5a8f5 | tsc web ✓ · eslint 3 archivos limpio ✓ · vitest builder 87/87 (2 nuevos) ✓ · vitest quick-edit 77/77 ✓ · boundaries 335 ✓ | El wizard borraba la franja entera sin confirm NI undo; quick-edit tenia undo pero ademas confirmaba. Los dos convergen: la accion ocurre y hay Deshacer de 8 s que restituye en el indice original. QA en navegador: pendiente. |
