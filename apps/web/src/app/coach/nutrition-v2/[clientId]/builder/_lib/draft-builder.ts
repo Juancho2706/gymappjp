@@ -601,7 +601,15 @@ export type BuilderAction =
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<BuilderSlot, 'name' | 'startTime'>> }
   | { type: 'COPY_SLOT_TO_VARIANTS'; sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] }
   | { type: 'APPEND_VARIANT_SLOTS_TO'; sourceVariantKey: string; targetVariantKey: string; keySeed: string }
-  | { type: 'ADD_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood | null }
+  | {
+      type: 'ADD_ITEM'
+      variantKey: string
+      slotKey: string
+      key: string
+      food: BuilderFood | null
+      /** Porcion pegajosa ya resuelta por precedencia (alumno → coach). Sin ella manda el catalogo. */
+      prefill?: { quantity: string; unit: BuilderUnit }
+    }
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
   /**
    * Reinserta un item en su POSICION original (Deshacer del toast al quitarlo). La UI captura
@@ -896,12 +904,17 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     }
 
     case 'ADD_ITEM': {
+      // Porcion pegajosa (T2.6 F4): si el coach ya fijo una cantidad para ESTE alimento —para este
+      // alumno, o en general— se precarga esa. Sin memoria se cae al `servingSize` del catalogo,
+      // que es el comportamiento de siempre. El reducer no decide la precedencia: le llega ya
+      // resuelta, porque quien la sabe es la lectura SQL.
+      const remembered = action.food ? action.prefill : undefined
       const item: BuilderItem = {
         ...createEmptyItem(action.key),
         food: action.food,
         customName: action.food ? null : '',
-        quantity: action.food ? String(action.food.servingSize || '') : '',
-        unit: action.food ? toBuilderUnit(action.food.servingUnit) : 'g',
+        quantity: remembered?.quantity ?? (action.food ? String(action.food.servingSize || '') : ''),
+        unit: remembered?.unit ?? (action.food ? toBuilderUnit(action.food.servingUnit) : 'g'),
       }
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, items: [...slot.items, item] }))
     }

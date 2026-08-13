@@ -26,6 +26,7 @@ import { parsePlanBuilderOrigin } from '@eva/nutrition-v2'
 import { loadPlanTemplate, markPlanTemplateUsed } from '@/services/nutrition-v2/plan-templates.service'
 import { portionsKey } from './_components/portions-state'
 import { PlanBuilderClient } from './_components/PlanBuilderClient'
+import { fetchRememberedQuantities } from './_data/last-quantity.data'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -220,6 +221,9 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
   // intolerancia/disgusto en ámbar, favoritos con estrellita). Server-side: el picker no las
   // vuelve a pedir desde el cliente. Fail-soft en el data-loader — son ayudas visuales.
   const foodPrefs = await fetchClientFoodPrefsForPicker(clientId)
+  // Porcion pegajosa (T2.6 F4): se resuelve aca, del lado servidor, para que agregar un alimento
+  // no pague un viaje de red. Fail-soft: sin memoria manda el catalogo, como siempre.
+  const rememberedQuantities = await fetchRememberedQuantities(clientId)
 
   // Datos duros del alumno para "Sugerir metas" del paso 1 (BD1). Fail-soft en el data-loader:
   // sin ficha de ingreso (o si la lectura cae) el panel se abre igual con los campos a mano.
@@ -256,6 +260,7 @@ export default async function CoachNutritionV2BuilderPage({ params, searchParams
       ) : null}
       <PlanBuilderClient
         clientId={clientId}
+        rememberedQuantities={rememberedQuantities}
         existingPlan={existingPlan}
         initialDraft={initialDraft}
         today={today}

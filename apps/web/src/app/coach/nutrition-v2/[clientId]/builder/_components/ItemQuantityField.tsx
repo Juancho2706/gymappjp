@@ -35,6 +35,7 @@ export function ItemQuantityField({
   disabled = false,
   onChange,
   onStep,
+  onCommit,
   className,
 }: {
   /** Etiqueta accesible ("Cantidad de Avena"): el control no siempre tiene label visible. */
@@ -47,6 +48,11 @@ export function ItemQuantityField({
   onChange: (value: string) => void
   /** Solo se invoca en unidades contadas (porción/unidad). */
   onStep: (direction: 1 | -1) => void
+  /**
+   * La cantidad quedó FIJADA (blur del campo). Es el momento —y no cada tecla— en que la
+   * porción pegajosa se guarda: una fila por alimento, no un log de pulsaciones (T2.6 F4).
+   */
+  onCommit?: () => void
   className?: string
 }) {
   const [editing, setEditing] = useState(false)
@@ -79,6 +85,7 @@ export function ItemQuantityField({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={() => onCommit?.()}
         className={fieldClass + ' ' + (className ?? '')}
       />
     )
@@ -103,7 +110,10 @@ export function ItemQuantityField({
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          onBlur={() => setEditing(false)}
+          onBlur={() => {
+            setEditing(false)
+            onCommit?.()
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === 'Escape') {
               event.preventDefault()

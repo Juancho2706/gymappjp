@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useContext, useId, useState } from 'react'
 import { toast } from 'sonner'
 import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { NutritionCard } from '@/components/nutrition-v2'
@@ -22,6 +22,7 @@ import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { CopySlotMenu } from './CopySlotMenu'
 import { ItemRow } from './ItemRow'
 import { useIsTemplateMode } from './TemplateModeContext'
+import { RememberedQuantitiesContext } from './RememberedQuantitiesContext'
 
 /** Ventana del Deshacer, igual que en `ItemRow` y en quick-edit: una sola gramática destructiva. */
 const UNDO_TOAST_MS = 8000
@@ -65,6 +66,8 @@ export function SlotEditor({
   const bodyId = useId()
   // Modo plantilla: no hay alumno que autorizar ni historial que sugerir.
   const templateMode = useIsTemplateMode()
+  // Mapa de porciones pegajosas (T2.6 F4), resuelto en el servidor y bajado por contexto.
+  const remembered = useContext(RememberedQuantitiesContext)
   // Fix QA F1-2: el subtotal de franja combina items fijos + derivado de porciones
   // (Σ porciones × ref del grupo, catálogo VIVO del picker). Catálogo sin cargar o
   // franja sin porciones ⇒ solo items, idéntico a antes (sin NaN jamás).
@@ -204,15 +207,20 @@ export function SlotEditor({
                     slot: { calories: subtotal.calories, proteinG: subtotal.proteinG },
                     remainingDay: dayRemaining,
                   }}
-                  onPick={(item) =>
+                  onPick={(item) => {
+                    const food = mapCatalogItemToFood(item)
                     dispatch({
                       type: 'ADD_ITEM',
                       variantKey,
                       slotKey: slot.key,
                       key: genId(),
-                      food: mapCatalogItemToFood(item),
+                      food,
+                      // Porción pegajosa (T2.6 F4): la última cantidad que el coach fijó para
+                      // este alimento —de este alumno, o suya en general— gana sobre la porción
+                      // del catálogo. Sin memoria, `prefill` es undefined y todo sigue igual.
+                      prefill: remembered[food.id],
                     })
-                  }
+                  }}
                   onCreateCustom={(query) => {
                     // Alimento libre con el texto buscado ya escrito: el coach no vuelve a tipearlo.
                     const key = genId()

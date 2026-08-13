@@ -27,6 +27,7 @@ import { FoodThumb } from './FoodImage'
 import { FoodMacrosOverrideDialog } from './FoodMacrosOverrideDialog'
 import { FreeFoodFields } from './FreeFoodFields'
 import { ItemQuantityField } from './ItemQuantityField'
+import { rememberFoodQuantityAction } from '../_actions/last-quantity.actions'
 import { SubstitutionsField } from './SubstitutionsField'
 
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
@@ -227,6 +228,18 @@ export function ItemRow({
             onChange={(value) =>
               dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: { quantity: value } })
             }
+            onCommit={() => {
+              // Porción pegajosa (T2.6 F4): al fijar la cantidad se recuerda para la próxima vez,
+              // en este alumno y en general. Fire-and-forget: es una comodidad, y si el servidor
+              // dice que no, el coach no tiene por qué enterarse ni esperar nada.
+              if (item.food == null) return
+              void rememberFoodQuantityAction({
+                clientId,
+                foodId: item.food.id,
+                quantity: item.quantity,
+                unit: item.unit,
+              })
+            }}
             onStep={(direction) =>
               dispatch({
                 type: 'UPDATE_ITEM',

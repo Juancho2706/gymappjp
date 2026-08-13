@@ -64,6 +64,7 @@ import {
 } from './portions-state'
 import type { DayPlanStripHandlers } from './DayPlanStrip'
 import type { CopyMode } from '../_lib/copy-plan'
+import { RememberedQuantitiesContext, type RememberedQuantity } from './RememberedQuantitiesContext'
 // Respaldo LOCAL del wizard (W3b): store puro versionado en localStorage. El coach retoma un
 // plan a medio construir si cerró la PWA / mató la pestaña. La key incluye clientId + planId.
 import {
@@ -185,12 +186,18 @@ export function PlanBuilderClient({
   templateMode,
   foodPickerPrefs,
   clientMetrics = null,
+  rememberedQuantities = {},
 }: {
   /**
    * Alumno dueño del plan. En modo plantilla llega `TEMPLATE_MODE_CLIENT_ID` (uuid NIL): el
    * wizard lo necesita para armar el draft, pero no viaja a la base ni autoriza nada.
    */
   clientId: string
+  /**
+   * Porcion pegajosa (T2.6 F4): ultima cantidad por alimento, ya resuelta por precedencia
+   * (alumno → coach) en la page. Vacio = todo se precarga desde el catalogo, como siempre.
+   */
+  rememberedQuantities?: Record<string, RememberedQuantity>
   existingPlan: {
     id: string
     /** Version vigente al abrir el wizard: viaja como CAS al publicar (NUT-011). */
@@ -1081,6 +1088,8 @@ export function PlanBuilderClient({
       favoriteIds={foodPickerPrefs?.favoriteIds}
     >
     <TemplateModeContext.Provider value={isTemplateMode}>
+    {/* Porciones pegajosas (T2.6 F4): mapa resuelto en la page, consumido por SlotEditor al agregar. */}
+    <RememberedQuantitiesContext.Provider value={rememberedQuantities}>
     {/* Anuncio de los cambios de día/franja para lectores de pantalla (P1-4): el toast es el
         canal visual; esto es el auditivo. `sr-only` para no ocupar layout. */}
     <p aria-live="polite" role="status" className="sr-only">
@@ -1344,6 +1353,7 @@ export function PlanBuilderClient({
         ) : null}
       </DialogContent>
     </Dialog>
+    </RememberedQuantitiesContext.Provider>
     </TemplateModeContext.Provider>
     </FoodPickerPrefsProvider>
   )
