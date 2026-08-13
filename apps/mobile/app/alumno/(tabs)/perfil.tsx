@@ -734,9 +734,13 @@ export default function AlumnoPerfilScreen() {
       </SafeAreaView>
 
       {/* Selector de plantilla — Sheet EVA DS (no un dropdown pelado) */}
+      {/* `nativeModal`: gorhom 5.2.14 bajo reanimated 4 monta el sheet fuera de pantalla si el
+          hosting container todavia no midio (ver SheetProps.nativeModal). Mismo arreglo que el tab
+          Aprender, donde el sintoma era "tapeo y no pasa nada". */}
       <Sheet
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
+        nativeModal
         title="Comparte tu logro"
         description="Cada tarjeta lleva la marca de tu coach. Elige cuál compartir:"
         snapPoints={['56%']}

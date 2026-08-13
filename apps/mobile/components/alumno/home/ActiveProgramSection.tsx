@@ -283,13 +283,17 @@ export function DoubleIntentSheet({
   // Día a medias → otro título/subtítulo, mismas acciones (ver nota del componente).
   const incomplete = view?.status === 'in_progress'
 
+  // `nativeModal`: gorhom 5.2.14 bajo reanimated 4 puede montar el sheet fuera de pantalla si el
+  // hosting container todavía no midió (ver SheetProps.nativeModal). `dynamicSizing` se retira
+  // porque en esta ruta el content-hug es nativo y `snapPoints` pasa a ser el tope de max-height
+  // — mismo alto resultante, una prop menos que engañe al próximo que lea esto.
   return (
     <Sheet
       open={!!view}
       onClose={onClose}
+      nativeModal
       title={incomplete ? 'Entrenamiento incompleto' : 'Ya hiciste este entrenamiento'}
       snapPoints={['42%']}
-      dynamicSizing
     >
       <View style={{ gap: 16 }}>
         {view ? (

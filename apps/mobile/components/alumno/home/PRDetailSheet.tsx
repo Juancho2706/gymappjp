@@ -117,9 +117,12 @@ export function PRDetailSheet({
 
   return (
     <>
+    {/* `nativeModal`: gorhom 5.2.14 bajo reanimated 4 puede montar el sheet fuera de pantalla si el
+        hosting container todavia no midio (ver SheetProps.nativeModal) — invisible y sin error. */}
     <Sheet
       open={open}
       onClose={onClose}
+      nativeModal
       title={exerciseName}
       // Trophy 18 sport-500 inline con el titulo (web PRDetailSheet.tsx:130-133).
       titleIcon={<Trophy size={18} className="text-sport-500" strokeWidth={2} />}
