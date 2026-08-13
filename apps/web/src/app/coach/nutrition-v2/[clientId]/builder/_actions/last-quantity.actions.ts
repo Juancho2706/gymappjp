@@ -34,7 +34,14 @@ export async function rememberFoodQuantityAction(input: {
   const parsed = RememberInputSchema.safeParse(input)
   if (!parsed.success) return
 
-  const auth = await authorizeCoach(parsed.data.clientId)
+  /**
+   * 🔴 Limiter LAXO a proposito, no el de escritura. Con `coach-write` —el cupo de publicar,
+   * asignar y archivar— esta accion se comia la cuota del coach a fuerza de blurs: el QA en
+   * preview lo mostro crudo, las primeras llamadas llegaban a la base y las siguientes se
+   * frenaban en silencio. Recordar una cantidad no es una escritura de negocio: es una comodidad
+   * de alta frecuencia, y jamas puede dejar al coach sin poder publicar su plan.
+   */
+  const auth = await authorizeCoach(parsed.data.clientId, 'catalog-search')
   if (!('ok' in auth) || !auth.ok) return
 
   const { db } = auth

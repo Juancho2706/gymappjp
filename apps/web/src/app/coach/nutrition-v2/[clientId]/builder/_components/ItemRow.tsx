@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { MoreVertical, MoveRight, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
@@ -96,6 +96,8 @@ export function ItemRow({
   const itemLabel = displayName || 'alimento'
   const moveTargets = daySlots.filter((slot) => slot.key !== slotKey)
   const [macrosOpen, setMacrosOpen] = useState(false)
+  /** Ultima combinacion (alimento, cantidad, unidad) ya recordada: evita repetir la llamada. */
+  const lastRememberedRef = useRef<string | null>(null)
 
   /**
    * Quitar = optimista + Deshacer (BD4). Cero confirms: preguntar por cada alimento en una
@@ -233,6 +235,12 @@ export function ItemRow({
               // en este alumno y en general. Fire-and-forget: es una comodidad, y si el servidor
               // dice que no, el coach no tiene por qué enterarse ni esperar nada.
               if (item.food == null) return
+              // Solo si CAMBIÓ. Un blur sin edición —entrar y salir del campo, tabular de paso—
+              // no tiene nada nuevo que recordar, y sin este guard cada paseo por el formulario
+              // era una llamada al servidor.
+              const signature = `${item.food.id}:${item.quantity}:${item.unit}`
+              if (lastRememberedRef.current === signature) return
+              lastRememberedRef.current = signature
               void rememberFoodQuantityAction({
                 clientId,
                 foodId: item.food.id,
