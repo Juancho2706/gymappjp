@@ -37,28 +37,28 @@ export async function rememberFoodQuantityAction(input: {
   const auth = await authorizeCoach(parsed.data.clientId)
   if (!('ok' in auth) || !auth.ok) return
 
-  const { db, userId } = auth
-  const row = { quantity: parsed.data.quantity, unit: parsed.data.unit, updated_at: new Date().toISOString() }
+  const { db } = auth
 
   try {
-    // El `coach_id` sale del actor autenticado, nunca del payload. La RLS lo vuelve a exigir, y
-    // el guard del insert ademas comprueba que el alumno sea propio y el alimento legible.
-    await (db as unknown as {
-      from: (table: string) => {
-        upsert: (
-          values: Record<string, unknown>[],
-          options: { onConflict: string },
-        ) => Promise<{ error: unknown }>
+    /**
+     * 🔴 La escritura va por RPC guardada, NO por el upsert de PostgREST. Con upsert daba 403 en
+     * LIVE (visto en `edge_logs` durante el QA en preview): PostgREST arma el `ON CONFLICT DO
+     * UPDATE SET` con TODAS las columnas del payload —coach_id, food_id, client_id incluidas— y
+     * esas no tienen grant de UPDATE a proposito, porque la identidad de la fila es inmutable
+     * desde la app. El grant column-level que protege la tabla era justo lo que rechazaba la
+     * escritura. La funcion resuelve el coach desde `auth.uid()` y comprueba adentro que el
+     * alumno sea propio y el alimento legible.
+     */
+    await (
+      db as unknown as {
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: unknown }>
       }
+    ).rpc('coach_food_last_qty_remember', {
+      p_client_id: parsed.data.clientId,
+      p_food_id: parsed.data.foodId,
+      p_quantity: parsed.data.quantity,
+      p_unit: parsed.data.unit,
     })
-      .from('coach_food_last_qty')
-      .upsert(
-        [
-          { coach_id: userId, food_id: parsed.data.foodId, client_id: parsed.data.clientId, ...row },
-          { coach_id: userId, food_id: parsed.data.foodId, client_id: null, ...row },
-        ],
-        { onConflict: 'coach_id,food_id,client_id' },
-      )
   } catch {
     // Silencio intencional: ver el docblock de arriba.
   }
