@@ -571,6 +571,74 @@ describe('builderReducer', () => {
     expect(next.variants[0].slots).toHaveLength(0)
   })
 
+  // T2.6 F2 — anexar un dia sobre otro (D2: suma franjas, no pisa).
+  it('APPEND_VARIANT_SLOTS_TO suma las franjas del origen sin tocar las del destino', () => {
+    const targetSlot: BuilderSlot = { key: 'slot-t', name: 'Cena', startTime: '21:00', items: [] }
+    const state: BuilderState = {
+      ...structuredState(),
+      variants: [
+        { ...createBaseVariant(), slots: [baseSlot()] },
+        { ...createBaseVariant(), key: 'v-mar', isDefault: false, dayOfWeek: 2, slots: [targetSlot] },
+      ],
+    }
+
+    const next = builderReducer(state, {
+      type: 'APPEND_VARIANT_SLOTS_TO',
+      sourceVariantKey: BASE_VARIANT_KEY,
+      targetVariantKey: 'v-mar',
+      keySeed: 'seed-1',
+    })
+
+    const slots = next.variants[1].slots
+    expect(slots.map((slot) => slot.name)).toEqual(['Cena', 'Desayuno'])
+    // La franja del destino sobrevive intacta y la anexada llega con key propia (no la del origen).
+    expect(slots[0]).toEqual(targetSlot)
+    expect(slots[1].key).not.toBe('slot-a')
+    // El origen no se toca.
+    expect(next.variants[0].slots.map((slot) => slot.key)).toEqual(['slot-a'])
+  })
+
+  it('APPEND_VARIANT_SLOTS_TO dos veces DUPLICA la franja, con keys distintas', () => {
+    const state: BuilderState = {
+      ...structuredState(),
+      variants: [
+        { ...createBaseVariant(), slots: [baseSlot()] },
+        { ...createBaseVariant(), key: 'v-mar', isDefault: false, dayOfWeek: 2, slots: [] },
+      ],
+    }
+    const append = (previous: BuilderState, keySeed: string) =>
+      builderReducer(previous, { type: 'APPEND_VARIANT_SLOTS_TO', sourceVariantKey: BASE_VARIANT_KEY, targetVariantKey: 'v-mar', keySeed })
+
+    const twice = append(append(state, 'seed-1'), 'seed-2')
+    const slots = twice.variants[1].slots
+    // Es lo pedido (D2): anexar no empareja por nombre. La UI lo avisa antes de ejecutar.
+    expect(slots.map((slot) => slot.name)).toEqual(['Desayuno', 'Desayuno'])
+    expect(new Set(slots.map((slot) => slot.key)).size).toBe(2)
+  })
+
+  it('APPEND_VARIANT_SLOTS_TO no hace nada sobre si mismo, sin destino o sin franjas', () => {
+    const state: BuilderState = {
+      ...structuredState(),
+      variants: [
+        { ...createBaseVariant(), slots: [baseSlot()] },
+        { ...createBaseVariant(), key: 'v-vacio', isDefault: false, dayOfWeek: 2, slots: [] },
+      ],
+    }
+    const noop = (patch: Partial<{ sourceVariantKey: string; targetVariantKey: string }>) =>
+      builderReducer(state, {
+        type: 'APPEND_VARIANT_SLOTS_TO',
+        sourceVariantKey: BASE_VARIANT_KEY,
+        targetVariantKey: 'v-vacio',
+        keySeed: 'seed-1',
+        ...patch,
+      })
+
+    expect(noop({ targetVariantKey: BASE_VARIANT_KEY })).toBe(state)
+    expect(noop({ targetVariantKey: 'no-existe' })).toBe(state)
+    // Origen sin franjas: nada que sumar.
+    expect(noop({ sourceVariantKey: 'v-vacio', targetVariantKey: BASE_VARIANT_KEY })).toBe(state)
+  })
+
   // T2.6 F1 — Deshacer el borrado de una franja. Antes el tacho del wizard borraba la franja entera
   // en el acto y sin vuelta atras; el contrato del undo es "vuelve DONDE estaba", no "vuelve".
   it('RESTORE_SLOT devuelve la franja a su indice original', () => {

@@ -600,6 +600,7 @@ export type BuilderAction =
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<BuilderSlot, 'name' | 'startTime'>> }
   | { type: 'COPY_SLOT_TO_VARIANTS'; sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] }
+  | { type: 'APPEND_VARIANT_SLOTS_TO'; sourceVariantKey: string; targetVariantKey: string; keySeed: string }
   | { type: 'ADD_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood | null }
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
   /**
@@ -769,6 +770,35 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     case 'SET_VARIANT_LABEL': {
       const value = action.value.slice(0, 120)
       return mapVariant(state, action.variantKey, (variant) => ({ ...variant, label: value }))
+    }
+
+    /**
+     * ANEXAR un dia sobre otro (T2.6 F2, decision del dueño D2): las franjas del origen se SUMAN a
+     * las que el destino ya tiene, sin pisar ninguna. Es el modo hermano de la copia historica, que
+     * reemplaza el dia entero (`REMOVE_VARIANT` + `DUPLICATE_VARIANT_AS` en el mismo gesto).
+     *
+     * A diferencia de `COPY_SLOT_TO_VARIANTS`, que empareja por NOMBRE y reemplaza la franja
+     * homonima, aca no se empareja nada: si el destino ya tiene "Desayuno", queda con dos. Eso es
+     * lo pedido, y la UI lo avisa ANTES nombrando los duplicados (`copyPlanWarning`).
+     *
+     * `keySeed` lo genera el llamador (el reducer es puro y no inventa ids). Es lo que hace que
+     * anexar dos veces produzca claves distintas —con el `variantKey` como semilla las dos rondas
+     * colisionarian— y ademas permite al llamador recalcular las claves de porciones sin adivinar.
+     */
+    case 'APPEND_VARIANT_SLOTS_TO': {
+      if (action.sourceVariantKey === action.targetVariantKey) return state
+      const source = state.variants.find((variant) => variant.key === action.sourceVariantKey)
+      const target = state.variants.find((variant) => variant.key === action.targetVariantKey)
+      if (!source || !target || source.slots.length === 0) return state
+      const appended = cloneSlotsForVariant(action.keySeed, source.slots)
+      // Cinturon: una key repetida en el destino romperia el render y las porciones. No deberia
+      // pasar (el seed es nuevo por ronda), pero si pasara, no anexar es mejor que corromper.
+      const taken = new Set(target.slots.map((slot) => slot.key))
+      if (appended.some((slot) => taken.has(slot.key))) return state
+      return mapVariant(state, action.targetVariantKey, (variant) => ({
+        ...variant,
+        slots: [...variant.slots, ...appended],
+      }))
     }
 
     case 'DUPLICATE_VARIANT_AS': {

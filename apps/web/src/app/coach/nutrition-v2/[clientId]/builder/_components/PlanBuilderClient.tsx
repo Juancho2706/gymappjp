@@ -63,6 +63,7 @@ import {
   type PortionsBySlot,
 } from './portions-state'
 import type { DayPlanStripHandlers } from './DayPlanStrip'
+import type { CopyMode } from '../_lib/copy-plan'
 // Respaldo LOCAL del wizard (W3b): store puro versionado en localStorage. El coach retoma un
 // plan a medio construir si cerró la PWA / mató la pestaña. La key incluye clientId + planId.
 import {
@@ -542,7 +543,7 @@ export function PlanBuilderClient({
    * ni el invariante `day_of_week` unico se rompen). Las variantes pisadas y SUS porciones se
    * capturan ANTES de despachar: son lo que repone "Deshacer".
    */
-  function handleCopyDayToMany(sourceVariantKey: string, days: readonly number[]) {
+  function handleCopyDayToMany(sourceVariantKey: string, days: readonly number[], mode: CopyMode = 'replace') {
     const source = state.variants.find((variant) => variant.key === sourceVariantKey)
     if (!source) return
 
@@ -558,6 +559,8 @@ export function PlanBuilderClient({
     const created: number[] = []
     const createdKeys: string[] = []
     const replaced: Array<{ index: number; variant: BuilderVariant; portions: PortionsBySlot }> = []
+    /** Modo `append` (D2): franjas sumadas a un dia que ya existia — lo que tiene que sacar el Deshacer. */
+    const appended: Array<{ dayOfWeek: number; variantKey: string; slotKeys: string[] }> = []
     const seen = new Set<number>()
 
     for (const dayOfWeek of days) {
@@ -566,6 +569,32 @@ export function PlanBuilderClient({
       const occupant = occupantByDay.get(dayOfWeek)
       // Copiar un dia sobre si mismo no significa nada.
       if (occupant != null && occupant.variant.key === sourceVariantKey) continue
+
+      /**
+       * ANEXAR sobre un dia que YA existe (D2): sus franjas se quedan y las del origen se suman.
+       * El `seed` es nuevo por destino y por ronda — con el key del dia destino como semilla,
+       * anexar dos veces generaria las MISMAS claves y el reducer rechazaria la segunda. Las
+       * porciones viajan con las mismas claves derivadas, que es justo para lo que `clonedKey` es
+       * determinista.
+       */
+      if (mode === 'append' && occupant != null) {
+        if (source.slots.length === 0) continue
+        const seed = genId()
+        dispatch({ type: 'APPEND_VARIANT_SLOTS_TO', sourceVariantKey, targetVariantKey: occupant.variant.key, keySeed: seed })
+        portions.cloneVariant({
+          sourceVariantKey: source.key,
+          targetVariantKey: occupant.variant.key,
+          slotKeyPairs: source.slots.map((slot) => ({ from: slot.key, to: clonedKey(seed, slot.key) })),
+        })
+        appended.push({
+          dayOfWeek,
+          variantKey: occupant.variant.key,
+          slotKeys: source.slots.map((slot) => clonedKey(seed, slot.key)),
+        })
+        created.push(dayOfWeek)
+        continue
+      }
+
       if (occupant != null) {
         const removedPortions: PortionsBySlot = {}
         for (const slot of occupant.variant.slots) {
@@ -591,9 +620,13 @@ export function PlanBuilderClient({
 
     const landing = autoVariantLabel(created[0])
     const summary =
-      (created.length === 1
-        ? `${landing} quedó con una copia de ${source.label}`
-        : `${source.label} se copió a ${created.length} días — ahora estás editando ${landing}`) +
+      (mode === 'append'
+        ? created.length === 1
+          ? `${landing} sumó las franjas de ${source.label}`
+          : `${source.label} se sumó a ${created.length} días — ahora estás editando ${landing}`
+        : created.length === 1
+          ? `${landing} quedó con una copia de ${source.label}`
+          : `${source.label} se copió a ${created.length} días — ahora estás editando ${landing}`) +
       (replaced.length === 0
         ? ''
         : ` (se reemplazó ${replaced.length === 1 ? '1 día' : replaced.length + ' días'})`)
@@ -608,7 +641,20 @@ export function PlanBuilderClient({
         label: 'Deshacer',
         onClick: () => {
           const current = stateRef.current
-          const variants = current.variants.filter((variant) => !createdKeySet.has(variant.key))
+          // Modo `append`: los dias destino ya existian, asi que deshacer NO es sacar variantes sino
+          // sacar exactamente las franjas que esta copia sumo (sus claves se derivaron del seed).
+          const appendedByVariant = new Map<string, Set<string>>()
+          for (const entry of appended) {
+            const set = appendedByVariant.get(entry.variantKey) ?? new Set<string>()
+            for (const slotKey of entry.slotKeys) set.add(slotKey)
+            appendedByVariant.set(entry.variantKey, set)
+          }
+          const variants = current.variants
+            .filter((variant) => !createdKeySet.has(variant.key))
+            .map((variant) => {
+              const drop = appendedByVariant.get(variant.key)
+              return drop == null ? variant : { ...variant, slots: variant.slots.filter((slot) => !drop.has(slot.key)) }
+            })
           for (const entry of [...replaced].sort((a, b) => a.index - b.index)) {
             if (variants.some((variant) => variant.key === entry.variant.key)) continue
             variants.splice(Math.min(entry.index, variants.length), 0, entry.variant)
@@ -619,6 +665,12 @@ export function PlanBuilderClient({
           dispatch({ type: 'RESTORE', state: { ...current, variants, activeVariantKey } })
           let map = portionsRef.current
           for (const key of createdKeys) map = dropVariantPortions(map, key)
+          // Las porciones de las franjas anexadas se van con ellas (viven bajo `variantKey::slotKey`).
+          for (const entry of appended) {
+            const next = { ...map }
+            for (const slotKey of entry.slotKeys) delete next[portionsKey(entry.variantKey, slotKey)]
+            map = next
+          }
           for (const entry of replaced) map = { ...map, ...entry.portions }
           portions.restoreBySlot(map)
           setSelectedDow(source.dayOfWeek)

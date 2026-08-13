@@ -54,6 +54,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
+  MAX_DAY_VARIANTS,
   autoVariantLabel,
   builderVariantForDayOfWeek,
   takenDayOfWeeks,
@@ -64,6 +65,7 @@ import {
   type BuilderVariant,
 } from '../_lib/draft-builder'
 import { COPY_PRESETS, daysForCopyPreset, replacedDaysOf, type CopyPresetDay } from '../_lib/copy-presets'
+import { NEXT_DAYS_QUICK_PICKS, copyPlanWarning, nextDaysFrom, planCopy, type CopyMode } from '../_lib/copy-plan'
 // El candado y el detector de desktop se reusan del módulo de "Agregar día" (que sigue vivo en
 // la edición rápida): mismo límite comercial, mismas palabras, mismo popover/sheet.
 import { UpsellPanel, useIsDesktopMd } from './AddDayPopover'
@@ -108,7 +110,7 @@ export interface DayPlanStripHandlers {
    * Los destinos OCUPADOS entran: el wizard los sobrescribe (con deshacer). El strip ya pidió
    * confirmación nombrándolos; acá solo se le pasan los días elegidos.
    */
-  onCopyToDays: (variantKey: string, days: readonly number[]) => void
+  onCopyToDays: (variantKey: string, days: readonly number[], mode: CopyMode) => void
   onSetTargetsMode: (variantKey: string, mode: BuilderTargetsMode) => void
   onSetVariantTarget: (variantKey: string, field: keyof BuilderTargets, value: string) => void
   onRemove: (variantKey: string) => void
@@ -138,21 +140,26 @@ function listShortDays(days: readonly number[]): string {
   return days.map((dayOfWeek) => NUTRITION_DAY_SHORT_LABELS[dayOfWeek]).join(', ')
 }
 
-/** Copia pedida que todavía espera confirmación porque pisa días con contenido propio. */
+/** Copia pedida que todavía espera confirmación porque toca días con contenido propio. */
 interface PendingDayCopy {
   /** Todos los destinos (libres + ocupados), en orden de lectura. */
   days: number[]
-  /** Solo los que se sobrescriben: son los que el aviso nombra. */
-  replacedDays: number[]
+  /** Modo con el que se pidió: el aviso y la ejecución tienen que hablar de lo MISMO. */
+  mode: CopyMode
+  /** Texto ya resuelto por `copyPlanWarning`: dice qué se pisa, qué se suma y qué queda afuera. */
+  warning: string
 }
 
 /** Menú ⋮ del día propio: concentra lo que antes vivía repartido por pastilla. */
 function DayMenu({
+  state,
   variant,
   takenDays,
   onRenameRequest,
   handlers,
 }: {
+  /** Estado del plan: la previa de la copia necesita QUE tiene cada día destino, no solo cuáles. */
+  state: BuilderState
   variant: BuilderVariant
   takenDays: readonly number[]
   onRenameRequest: () => void
@@ -160,6 +167,13 @@ function DayMenu({
 }) {
   const taken = new Set(takenDays)
   const [open, setOpen] = useState(false)
+  /**
+   * Modo de copia (T2.6 F2, D2). Arranca en `replace` porque es lo que el módulo hizo siempre:
+   * cambiar el default silenciosamente le cambiaría el resultado al coach que ya tiene el gesto
+   * aprendido. El estado es LOCAL al menú y se reinicia al cerrarlo — es una decisión por copia,
+   * no una preferencia.
+   */
+  const [mode, setMode] = useState<CopyMode>('replace')
   // QA owner 08-05: copiar a un día OCUPADO ya no está prohibido, se confirma. El paso previo
   // vive dentro del propio submenú (no en un diálogo aparte): el coach elige y confirma sin
   // perder de vista lo que acaba de tocar.
@@ -170,22 +184,49 @@ function DayMenu({
     return daysForCopyPreset(preset, { takenDays, sourceDayOfWeek: variant.dayOfWeek })
   }
 
-  /** Ejecuta la copia, o abre la confirmación cuando algún destino se va a sobrescribir. */
+  /**
+   * Ejecuta la copia, o abre la confirmación cuando hay algo que advertir.
+   *
+   * El aviso ya no lo arma la UI a ojo: sale de `planCopy` + `copyPlanWarning`, que saben del modo
+   * elegido, del tope de días propios y —al anexar— de qué nombres de franja van a quedar
+   * repetidos. Sin nada que advertir (solo días libres), se copia derecho.
+   */
   function requestCopy(days: readonly CopyPresetDay[]) {
     if (days.length === 0) return
-    const replacedDays = replacedDaysOf(days)
     const targets = days.map((day) => day.dayOfWeek)
-    if (replacedDays.length === 0) {
-      handlers.onCopyToDays(variant.key, targets)
+    const plan = planCopy({
+      mode,
+      sourceSlotNames: variant.slots.map((slot) => slot.name),
+      destinations: targets.map((dayOfWeek) => {
+        const occupant = builderVariantForDayOfWeek(state, dayOfWeek)
+        const own = occupant != null && !occupant.isDefault
+        return { dayOfWeek, occupied: own, slotNames: own ? occupant.slots.map((slot) => slot.name) : [] }
+      }),
+      room: MAX_DAY_VARIANTS - takenDays.length,
+    })
+    const warning = copyPlanWarning(plan)
+    if (warning == null) {
+      handlers.onCopyToDays(variant.key, targets, mode)
       return
     }
-    setPendingCopy({ days: targets, replacedDays })
+    setPendingCopy({ days: targets, mode, warning })
+  }
+
+  /** Destinos de "próximos N" con el ocupado marcado, para reusar el mismo camino que los presets. */
+  function nextDaysTargets(count: number): CopyPresetDay[] {
+    return nextDaysFrom(variant.dayOfWeek, count).map((dayOfWeek) => ({
+      dayOfWeek,
+      replaces: taken.has(dayOfWeek),
+    }))
   }
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
-    // Cerrar el menú descarta la confirmación pendiente: al reabrir se empieza de cero.
-    if (!next) setPendingCopy(null)
+    // Cerrar el menú descarta la confirmación pendiente y el modo: al reabrir se empieza de cero.
+    if (!next) {
+      setPendingCopy(null)
+      setMode('replace')
+    }
   }
 
   return (
@@ -235,12 +276,13 @@ function DayMenu({
               // enumeran, no hay nada que perder ahí). Cancelar vuelve a la lista sin cerrar.
               <>
                 <p className="px-1.5 py-1 text-xs leading-relaxed text-muted">
-                  Se reemplazará lo que tienen:{' '}
-                  <span className="font-semibold text-strong">{listShortDays(pendingCopy.replacedDays)}</span>
+                  <span className="font-semibold text-strong">{listShortDays(pendingCopy.days)}</span>
+                  {' — '}
+                  {pendingCopy.warning}
                 </p>
                 <DropdownMenuItem
                   onClick={() => {
-                    handlers.onCopyToDays(variant.key, pendingCopy.days)
+                    handlers.onCopyToDays(variant.key, pendingCopy.days, pendingCopy.mode)
                     setPendingCopy(null)
                   }}
                 >
@@ -254,6 +296,58 @@ function DayMenu({
               </>
             ) : (
               <>
+                {/* Modo (T2.6 F2 · D2). "Reemplazar" deja el destino igual a este día; "Sumar"
+                    agrega estas franjas a las que el destino ya tiene, sin pisar nada. El aviso
+                    previo cambia con el modo, así que el coach ve la consecuencia antes. */}
+                <div className="flex items-center gap-1 px-1.5 py-1">
+                  {(
+                    [
+                      { id: 'replace' as const, label: 'Reemplazar' },
+                      { id: 'append' as const, label: 'Sumar' },
+                    ]
+                  ).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={mode === option.id}
+                      onClick={() => setMode(option.id)}
+                      className={
+                        'inline-flex min-h-8 flex-1 items-center justify-center rounded-control border px-2 text-[11px] font-semibold transition-colors ' +
+                        (mode === option.id
+                          ? 'border-primary bg-primary/10 text-strong'
+                          : 'border-border-default bg-surface-card text-muted hover:bg-surface-sunken')
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Quick-select relativo: "esto va los próximos N días", que es como lo piensa el
+                    coach. El día base no tiene lugar en la semana, así que no se ofrece. */}
+                {variant.dayOfWeek != null
+                  ? NEXT_DAYS_QUICK_PICKS.map((count) => {
+                      const days = nextDaysTargets(count)
+                      const replaced = replacedDaysOf(days)
+                      return (
+                        <DropdownMenuItem
+                          key={`next-${count}`}
+                          disabled={days.length === 0}
+                          closeOnClick={replaced.length === 0 && mode === 'replace'}
+                          onClick={() => requestCopy(days)}
+                        >
+                          <CopyCheck aria-hidden="true" className="h-4 w-4" />
+                          {count === 1 ? 'Próximo día' : `Próximos ${count} días`}
+                          <span className="ml-auto text-[11px] font-medium text-muted">
+                            {listShortDays(days.map((day) => day.dayOfWeek))}
+                          </span>
+                        </DropdownMenuItem>
+                      )
+                    })
+                  : null}
+
+                <DropdownMenuSeparator />
+
                 {/* Presets (BD3): el recorte que el coach hace siempre, en un toque. Ya cubren
                     también los días OCUPADOS — se dice cuántos se pisan y se confirma antes. */}
                 {COPY_PRESETS.map((preset) => {
@@ -263,7 +357,8 @@ function DayMenu({
                     <DropdownMenuItem
                       key={preset.id}
                       disabled={days.length === 0}
-                      // Con reemplazos el clic abre la confirmación, así que el menú NO se cierra.
+                      // Con destinos ocupados el clic abre la confirmación, así que el menú NO se
+                      // cierra. Al sumar, un ocupado tampoco es transparente: puede duplicar.
                       closeOnClick={replaced.length === 0}
                       onClick={() => requestCopy(days)}
                     >
@@ -271,7 +366,7 @@ function DayMenu({
                       {preset.label}
                       {replaced.length > 0 ? (
                         <span className="ml-auto text-[11px] font-medium text-muted">
-                          reemplaza {replaced.length}
+                          {mode === 'replace' ? `reemplaza ${replaced.length}` : `suma a ${replaced.length}`}
                         </span>
                       ) : null}
                     </DropdownMenuItem>
@@ -296,7 +391,9 @@ function DayMenu({
                       <Copy aria-hidden="true" className="h-4 w-4" />
                       {NUTRITION_DAY_LABELS[day]}
                       {replaces ? (
-                        <span className="ml-auto text-[11px] font-medium text-muted">(reemplaza)</span>
+                        <span className="ml-auto text-[11px] font-medium text-muted">
+                          {mode === 'replace' ? '(reemplaza)' : '(suma)'}
+                        </span>
                       ) : null}
                     </DropdownMenuItem>
                   )
@@ -576,6 +673,7 @@ export function DayPlanStrip({
             </p>
           </div>
           <DayMenu
+            state={state}
             variant={selectedVariant}
             takenDays={takenDays}
             onRenameRequest={() => {
