@@ -1075,6 +1075,61 @@ export type Database = {
           },
         ]
       }
+      coach_food_last_qty: {
+        Row: {
+          client_id: string | null
+          coach_id: string
+          created_at: string
+          food_id: string
+          id: string
+          quantity: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          coach_id: string
+          created_at?: string
+          food_id: string
+          id?: string
+          quantity: number
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          coach_id?: string
+          created_at?: string
+          food_id?: string
+          id?: string
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_food_last_qty_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_food_last_qty_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_food_last_qty_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_onboarding_events: {
         Row: {
           coach_id: string
