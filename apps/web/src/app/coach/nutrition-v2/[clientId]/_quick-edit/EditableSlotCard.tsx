@@ -34,6 +34,9 @@ import { FoodPickerSheet } from './FoodPickerSheet'
 import { QE_COPY } from './microcopy'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 
+/** Ventana del Deshacer, la misma de `EditableItemRow` y del wizard: una sola gramática. */
+const UNDO_TOAST_MS = 8000
+
 export function EditableSlotCard({
   variantKey,
   slot,
@@ -48,7 +51,6 @@ export function EditableSlotCard({
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
   const [copySelection, setCopySelection] = useState<readonly string[]>([])
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   /**
    * Franja contraida (chevron). Estado LOCAL y sin persistencia a proposito: un plan de 6
    * comidas obliga a scrollear a ciegas para llegar a la de abajo, pero cual dejo abierta el
@@ -91,12 +93,19 @@ export function EditableSlotCard({
         : null,
   }
 
+  /**
+   * T2.6 F1 — una sola gramatica destructiva en todo el modulo: la accion OCURRE y hay Deshacer.
+   * Antes esto pedia ademas una confirmacion inline ("¿Eliminar la franja X?"), que es la unica del
+   * modulo: el item de al lado ya se quitaba con undo y sin preguntar. Dos gestos distintos para dos
+   * cosas igual de reversibles ensenan al coach a leer el aviso rojo y a apretar "Eliminar" sin
+   * mirar. La ventana pasa a `UNDO_TOAST_MS`, la misma del item.
+   */
   function handleRemoveSlot() {
     const removed = slot
-    setConfirmingDelete(false)
+    setMenuOpen(false)
     dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })
     toast(QE_COPY.slotDeletedUndo, {
-      duration: 5000,
+      duration: UNDO_TOAST_MS,
       action: {
         label: QE_COPY.undo,
         onClick: () => dispatch({ type: 'RESTORE_SLOT', variantKey, index, slot: removed }),
@@ -232,11 +241,7 @@ export function EditableSlotCard({
           ) : null}
           <button
             type="button"
-            onClick={() => {
-              // El confirm inline vive en la card (bajo el sheet): primero se cierra el menu.
-              setMenuOpen(false)
-              setConfirmingDelete(true)
-            }}
+            onClick={handleRemoveSlot}
             className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-rose-300 bg-surface-card px-3 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
           >
             <Trash2 aria-hidden="true" className="h-4 w-4" />
@@ -306,29 +311,6 @@ export function EditableSlotCard({
         </QeBottomSheet>
       </div>
 
-      {confirmingDelete ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control border border-rose-300 bg-rose-50 px-3 py-2 dark:border-rose-800 dark:bg-rose-950/40">
-          <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">
-            ¿Eliminar la franja {slot.name.trim() || 'sin nombre'}?
-          </p>
-          <span className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(false)}
-              className="inline-flex min-h-9 items-center rounded-control border border-border-default bg-surface-card px-3 text-xs font-semibold text-strong hover:bg-surface-sunken"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleRemoveSlot}
-              className="inline-flex min-h-9 items-center rounded-control bg-rose-600 px-3 text-xs font-semibold text-white hover:bg-rose-700"
-            >
-              Eliminar
-            </button>
-          </span>
-        </div>
-      ) : null}
 
       <div id={slotBodyId} hidden={collapsed}>
         <div className="mt-3 space-y-2">

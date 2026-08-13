@@ -571,6 +571,44 @@ describe('builderReducer', () => {
     expect(next.variants[0].slots).toHaveLength(0)
   })
 
+  // T2.6 F1 — Deshacer el borrado de una franja. Antes el tacho del wizard borraba la franja entera
+  // en el acto y sin vuelta atras; el contrato del undo es "vuelve DONDE estaba", no "vuelve".
+  it('RESTORE_SLOT devuelve la franja a su indice original', () => {
+    const middle: BuilderSlot = { key: 'slot-b', name: 'Almuerzo', startTime: '13:00', items: [] }
+    const last: BuilderSlot = { key: 'slot-c', name: 'Cena', startTime: '21:00', items: [] }
+    const state: BuilderState = {
+      ...structuredState(),
+      variants: [{ ...createBaseVariant(), slots: [baseSlot(), middle, last] }],
+    }
+
+    const removed = builderReducer(state, { type: 'REMOVE_SLOT', variantKey: BASE_VARIANT_KEY, slotKey: 'slot-b' })
+    expect(removed.variants[0].slots.map((slot) => slot.key)).toEqual(['slot-a', 'slot-c'])
+
+    const restored = builderReducer(removed, { type: 'RESTORE_SLOT', variantKey: BASE_VARIANT_KEY, index: 1, slot: middle })
+    expect(restored.variants[0].slots.map((slot) => slot.key)).toEqual(['slot-a', 'slot-b', 'slot-c'])
+    // La franja vuelve COMPLETA, no un cascaron con el mismo nombre.
+    expect(restored.variants[0].slots[1]).toEqual(middle)
+  })
+
+  it('RESTORE_SLOT es idempotente y acota el indice fuera de rango', () => {
+    const state = structuredState()
+    const slot = state.variants[0].slots[0]
+
+    // Doble clic en "Deshacer": la franja no se duplica.
+    const twice = builderReducer(builderReducer(state, { type: 'RESTORE_SLOT', variantKey: BASE_VARIANT_KEY, index: 0, slot }), {
+      type: 'RESTORE_SLOT',
+      variantKey: BASE_VARIANT_KEY,
+      index: 0,
+      slot,
+    })
+    expect(twice.variants[0].slots).toHaveLength(1)
+
+    // Indice pasado de largo (la franja se borro y ademas se borraron otras): al final, sin romper.
+    const emptied = builderReducer(state, { type: 'REMOVE_SLOT', variantKey: BASE_VARIANT_KEY, slotKey: slot.key })
+    const restored = builderReducer(emptied, { type: 'RESTORE_SLOT', variantKey: BASE_VARIANT_KEY, index: 99, slot })
+    expect(restored.variants[0].slots.map((s) => s.key)).toEqual([slot.key])
+  })
+
   it('ADD_ITEM con alimento precarga cantidad y unidad', () => {
     let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
       type: 'SET_STRATEGY',

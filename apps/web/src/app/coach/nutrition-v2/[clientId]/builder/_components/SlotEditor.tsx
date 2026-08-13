@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useState } from 'react'
+import { toast } from 'sonner'
 import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { NutritionCard } from '@/components/nutrition-v2'
 import { FoodPicker } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
@@ -21,6 +22,9 @@ import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { CopySlotMenu } from './CopySlotMenu'
 import { ItemRow } from './ItemRow'
 import { useIsTemplateMode } from './TemplateModeContext'
+
+/** Ventana del Deshacer, igual que en `ItemRow` y en quick-edit: una sola gramática destructiva. */
+const UNDO_TOAST_MS = 8000
 
 export function SlotEditor({
   slot,
@@ -73,6 +77,27 @@ export function SlotEditor({
   // El menú de copia solo tiene sentido con más de un día en el plan.
   const canCopyToOtherDays = variants.length > 1
   const slotTitle = slot.name.trim() || 'Franja sin nombre'
+
+  /**
+   * Quitar la franja: optimista + Deshacer, la MISMA gramática destructiva que el item (T2.6 F1,
+   * espejo de `ItemRow.handleRemove`). Hasta acá el tacho borraba la franja ENTERA —con todos sus
+   * alimentos y sus porciones— en el acto, sin confirmación y sin vuelta atrás: el trabajo de varios
+   * minutos se perdía con un clic errado. La franja y su índice se capturan ANTES del dispatch y
+   * viajan cerrados en el callback, así que el Deshacer la devuelve a su posición exacta en el día
+   * aunque se toque segundos después.
+   */
+  function handleRemoveSlot() {
+    const removed = slot
+    const removedIndex = daySlots.findIndex((candidate) => candidate.key === slot.key)
+    dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })
+    toast(`${slotTitle} se quitó`, {
+      duration: UNDO_TOAST_MS,
+      action: {
+        label: 'Deshacer',
+        onClick: () => dispatch({ type: 'RESTORE_SLOT', variantKey, index: removedIndex, slot: removed }),
+      },
+    })
+  }
 
   return (
     <NutritionCard>
@@ -133,7 +158,7 @@ export function SlotEditor({
             <button
               type="button"
               aria-label={`Quitar franja ${slot.name || 'sin nombre'}`}
-              onClick={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
+              onClick={handleRemoveSlot}
               className={iconButtonClass + ' inline-flex h-11 w-11 items-center justify-center self-center'}
             >
               <Trash2 className="h-4 w-4" />

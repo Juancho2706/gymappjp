@@ -608,6 +608,7 @@ export type BuilderAction =
    * estaba. Idempotencia barata: si la key ya volviera a existir en la franja, no se duplica.
    */
   | { type: 'RESTORE_ITEM'; variantKey: string; slotKey: string; index: number; item: BuilderItem }
+  | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: BuilderSlot }
   /**
    * Mueve un item de una franja a OTRA del mismo dia ("Mover a…" del menu del item). `toIndex`
    * fija la posicion de aterrizaje: la UI lo usa para el Deshacer (mover de vuelta al indice
@@ -661,6 +662,12 @@ function isValidDow(day: unknown): day is number {
 function insertItemAt(items: BuilderItem[], index: number, item: BuilderItem): BuilderItem[] {
   const safe = Number.isFinite(index) ? Math.max(0, Math.min(items.length, Math.trunc(index))) : items.length
   return [...items.slice(0, safe), item, ...items.slice(safe)]
+}
+
+/** Igual que `insertItemAt`, para franjas (`RESTORE_SLOT`). Misma acotacion del indice. */
+function insertSlotAt(slots: BuilderSlot[], index: number, slot: BuilderSlot): BuilderSlot[] {
+  const safe = Number.isFinite(index) ? Math.max(0, Math.min(slots.length, Math.trunc(index))) : slots.length
+  return [...slots.slice(0, safe), slot, ...slots.slice(safe)]
 }
 
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
@@ -814,6 +821,18 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...variant,
         slots: variant.slots.filter((slot) => slot.key !== action.slotKey),
       }))
+    /**
+     * Deshacer el borrado de una franja (T2.6 F1). Espejo EXACTO de `RESTORE_ITEM`: idempotente
+     * —si la franja ya volvio, no-op, para que un doble clic en Deshacer no la duplique— y con
+     * indice, porque una franja que vuelve al final de la lista se lee como otro bug: el orden de
+     * las franjas es la secuencia del dia (desayuno antes que cena) y el coach lo nota al instante.
+     */
+    case 'RESTORE_SLOT':
+      return mapVariant(state, action.variantKey, (variant) =>
+        variant.slots.some((slot) => slot.key === action.slot.key)
+          ? variant
+          : { ...variant, slots: insertSlotAt(variant.slots, action.index, action.slot) },
+      )
     case 'UPDATE_SLOT':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
 
