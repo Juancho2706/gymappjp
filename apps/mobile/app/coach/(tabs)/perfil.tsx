@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import Constants from 'expo-constants'
 import { Apple, Bell, ChevronRight, CreditCard, ExternalLink, LogOut } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
@@ -16,6 +17,7 @@ import * as Notifications from 'expo-notifications'
 import { syncPushToken } from '../../../lib/push'
 import { EvaFigure } from '../../../components/entry/EvaFigure'
 import { CircularBrandLogo } from '../../../components/CircularBrandLogo'
+import { runningBundleLabel } from '../../../lib/ota'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
@@ -257,6 +259,13 @@ export default function CoachPerfilScreen() {
           full
           style={{ marginTop: 8 }}
         />
+
+        {/* Versión del binario + bundle en ejecución. La segunda línea es la que dice si un OTA
+            recién publicado YA está corriendo en este teléfono ("OTA <id> · dd-MM HH:mm") o si
+            todavía manda el bundle del APK ("embebido") — QA de OTA sin cable ni logcat. */}
+        <Text style={[styles.buildLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          v{Constants.expoConfig?.version ?? '—'} · {runningBundleLabel()}
+        </Text>
       </ScrollView>
     </SafeAreaView>
   )
@@ -266,6 +275,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 40, gap: 16 },
   pageTitle: { fontSize: 28, letterSpacing: -0.5, paddingHorizontal: 4, marginBottom: 4 },
+  buildLine: { fontSize: 10, textAlign: 'center', marginTop: 12, opacity: 0.7 },
   heroCard: { padding: 24, borderWidth: 1, alignItems: 'center', gap: 6 },
   avatar: {
     width: 72,

@@ -57,6 +57,7 @@ import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobile
 import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPreference'
 import { MonthlySummaryShareCard } from '../../../components/alumno/MonthlySummaryShareCard'
 import { useEntitlements } from '../../../lib/entitlements'
+import { runningBundleLabel } from '../../../lib/ota'
 
 // Correo de contacto — una sola fuente, espejo de `SALES_EMAIL` (web `lib/brand-assets`).
 const SALES_EMAIL = 'contacto@eva-app.cl'
@@ -723,6 +724,10 @@ export default function AlumnoPerfilScreen() {
 
             <Text className="font-sans text-muted" style={{ fontSize: 10, textAlign: 'center', marginTop: 4 }}>
               v{Constants.expoConfig?.version ?? '—'} · Hecho con ❤️ para tu progreso
+            </Text>
+            {/* Bundle en ejecución (QA de OTA sin cable): "OTA <id> · dd-MM HH:mm" o "embebido". */}
+            <Text className="font-sans text-muted" style={{ fontSize: 9, textAlign: 'center', marginTop: 2, opacity: 0.7 }}>
+              {runningBundleLabel()}
             </Text>
           </ScrollView>
         )}

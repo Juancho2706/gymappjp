@@ -46,7 +46,8 @@ import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
 import { SessionMorphProvider } from '../components/alumno/workout/v3/session-morph'
 import { isBiometricLockEnabled } from '../lib/biometric'
-import { checkForOtaUpdate } from '../lib/ota'
+import { useUpdates } from 'expo-updates'
+import { checkForOtaUpdate, promptReloadOnce } from '../lib/ota'
 import { registerRestNotificationEvents } from '../components/alumno/workout/timers/rest-remote-commands'
 import { registerCardioNotificationEvents } from '../components/alumno/workout/timers/cardio-remote-commands'
 import { registerLiveActivityCommandDrain } from '../components/alumno/workout/timers/live-activity-commands'
@@ -176,6 +177,17 @@ function RootLayoutNav() {
     })
     return () => sub.remove()
   }, [])
+
+  // 🔴 12-08: el aviso de update NO salía cuando el que bajaba el bundle era el chequeo AUTOMÁTICO
+  // de expo-updates (ON_LOAD por defecto): para cuando corría nuestro `checkForUpdateAsync` ya no
+  // quedaba nada "disponible" que anunciar, y el update se quedaba esperando un segundo arranque en
+  // frío — desde afuera, "el OTA no llega". `isUpdatePending` es el estado real: hay bundle nuevo
+  // descargado listo para aplicar, sin importar quién lo bajó. El guard de `promptReloadOnce` evita
+  // el Alert duplicado si ambos caminos se cruzan.
+  const { isUpdatePending } = useUpdates()
+  useEffect(() => {
+    if (isUpdatePending) promptReloadOnce()
+  }, [isUpdatePending])
 
   useEffect(() => {
     if (session === undefined) return

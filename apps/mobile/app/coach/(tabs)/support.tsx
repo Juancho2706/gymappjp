@@ -8,6 +8,7 @@ import { Button, ScreenHeader } from '../../../components'
 import { Accordion } from '../../../components/Accordion'
 import { AppBackground } from '../../../components/AppBackground'
 import { SUPPORT_FAQ, type FaqEntry } from '../../../lib/support-faq'
+import { runningBundleLabel } from '../../../lib/ota'
 
 const SUPPORT_EMAIL = 'soporte@eva-app.cl'
 
@@ -22,7 +23,9 @@ function buildSupportMailto(): string {
     '',
     '',
     '---',
-    `App: EVA Coach v${version} · ${Platform.OS} ${String(Platform.Version)}`,
+    // El bundle en ejecución va en el mail de soporte: sin él no se sabe si el usuario ya tiene el
+    // OTA con el arreglo del que habla o sigue en el anterior.
+    `App: EVA Coach v${version} · ${runningBundleLabel()} · ${Platform.OS} ${String(Platform.Version)}`,
   ].join('\n')
   return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
