@@ -327,9 +327,16 @@ export default function ExercisesScreen() {
         />
       )}
 
+      {/* 🔴 `nativeModal` NO es decorativo: sin él, tapear una tarjeta no abría NADA (reporte del dueño
+          12-08). Es el gotcha documentado en `SheetProps.nativeModal` — @gorhom/bottom-sheet 5.2.14
+          está escrito para reanimated 3, y bajo reanimated 4 + Fabric el hosting container siembra su
+          altura en `INITIAL_LAYOUT_VALUE = -999`: los snap points resuelven contra ese valor y el sheet
+          monta fuera de pantalla, invisible. Mismo síntoma que tuvo el menú "Más" del alumno. La ruta
+          `<Modal>` nativa no depende de esa medición. `snapPoints` pasa a ser el tope de max-height. */}
       <Sheet
         open={!!selected}
         onClose={() => setSelected(null)}
+        nativeModal
         snapPoints={['72%', '92%']}
         footer={
           <Button label="Cerrar" variant="sport" size="lg" onPress={() => setSelected(null)} full testID="exercise-detail-close" />
