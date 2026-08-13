@@ -25,15 +25,24 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 - [ ] Inventario de gestos destructivos del modulo V2 (dia, plantilla, sustitucion) y su estado —
       franja e item ya verificados en esta fase
 
-## F2 — Copy semana (sin DB)
+## F2 — Copy semana (sin DB) — **menu del DIA cerrado 2026-08-12 (`e03043a3`)**
 
-- [ ] Modulo puro: quick-select relativo "proximos 1 / 2 / 4" desde el dia origen + modo
-      `replace | append` + conteo previo por destino
-- [ ] Tests: bordes de fin de semana, dia base fuera de los relativos, destinos ocupados en los dos
-      modos, conteo de franjas sumadas
-- [ ] UI en `DayPlanStrip` (menu del dia) y `CopySlotMenu` (menu de la franja), consumiendo el mismo
-      modulo — cero logica duplicada
-- [ ] El aviso previo dice la verdad exacta en ambos modos, con el conteo real
+- [x] Modulo puro `_lib/copy-plan.ts`: quick-select relativo "proximos 1 / 2 / 4" (da la vuelta a la
+      semana; el dia base devuelve vacio porque no tiene lugar en ella) + modo `replace | append` +
+      plan por destino (creado / reemplazado / anexado / afuera por tope) + `copyPlanWarning`
+- [x] Tests (16): vuelta de semana, tope de 6 dias, dia base, cupo agotado, dias repetidos,
+      duplicados por nombre normalizado, y que el aviso nombre distinto pisar y sumar
+- [x] `APPEND_VARIANT_SLOTS_TO` en el reducer + 3 tests: suma sin tocar lo del destino, anexar dos
+      veces duplica con claves distintas (`keySeed` del llamador), no-ops defensivos
+- [x] UI del menu del DIA (`DayPlanStrip`): toggle Reemplazar/Sumar, chips "proximos N", y el aviso
+      previo servido por el modulo (antes lo armaba la UI a ojo y solo sabia contar reemplazos)
+- [x] Deshacer del modo `append`: saca exactamente las franjas sumadas y sus porciones, sin tocar lo
+      que el dia ya tenia
+- [ ] **Menu de la FRANJA (`CopySlotMenu`): pendiente.** Ojo, no es el mismo gesto:
+      `COPY_SLOT_TO_VARIANTS` ya empareja por NOMBRE (reemplaza la franja homonima del destino o la
+      agrega al final), asi que "reemplazar vs sumar" ahi significa otra cosa que en el dia y
+      necesita decision del dueño antes de tocarlo
+- [ ] QA en navegador de los dos modos (el conteo previo contra lo que queda de verdad)
 
 ## F3 — DDL `coach_food_last_qty` (LIVE)
 
@@ -72,3 +81,4 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 |-------|------|--------|-------|-------|
 | 2026-08-12 | F0 | (este commit) | docs:check | Auditoria + D1/D2 + los tres documentos. El enunciado del programa padre quedo corregido en la SPEC: la pieza destructiva es agregar undo de franja, no borrar un confirm. |
 | 2026-08-12 | F1 | cfb5a8f5 | tsc web ✓ · eslint 3 archivos limpio ✓ · vitest builder 87/87 (2 nuevos) ✓ · vitest quick-edit 77/77 ✓ · boundaries 335 ✓ | El wizard borraba la franja entera sin confirm NI undo; quick-edit tenia undo pero ademas confirmaba. Los dos convergen: la accion ocurre y hay Deshacer de 8 s que restituye en el indice original. QA en navegador: pendiente. |
+| 2026-08-12 | F2 (dia) | e03043a3 | tsc web ✓ · eslint 5 archivos limpio ✓ · vitest 119/119 (16 nuevos de copy-plan + 3 de APPEND) ✓ · boundaries 337 ✓ | Quick-select "proximos 1/2/4" + modo Sumar en el menu del dia, con el aviso previo servido por el modulo puro. Queda el menu de la FRANJA, que no es el mismo gesto: ahi la copia ya empareja por nombre. QA en navegador: pendiente. |
