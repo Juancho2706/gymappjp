@@ -50,7 +50,9 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       `copy-plan.ts` (+3 tests: solo marca dias que existen como variante, vuelta de semana, base
       sin "proximos"). El reducer no se toco.
 - [x] QA en preview de los dos modos (2026-08-13): quick-select desde Lunes resuelve Ma / Ma,Mi / Ma,Mi,Ju,Vi; el aviso de Sumar dice "Se suman franjas a 2 dias que ya tenian contenido. Quedan franjas repetidas: POLLO"; tras confirmar, Ma y Mi pasan de 2.037 a 4.073 kcal y el origen queda intacto; el Deshacer del modo Sumar devuelve Mi de 8.146 a 4.073 sin tocar otros dias
-- [~] Responsive/PWA (390 px): PARCIAL (2026-08-13, preview `8821f17c`). En un popup con viewport
+- [x] Responsive/PWA (390 px): CERRADO — el owner lo reviso en su celu (2026-08-13 noche) y no
+      reporto hallazgos. Historia del parcial automatizado (2026-08-13, preview `8821f17c`,
+      valido como evidencia de layout): en un popup con viewport
       REAL de 390 px el paso "El plan" no desborda (scrollWidth 386) y nombre/notas van full-width.
       El QA funcional/visual completo a 390 NO se pudo: TODAS las ventanas de Chrome estaban
       ocultas (el owner usaba otra app) y Next deja el contenido en un wrapper `hidden` sin
@@ -111,8 +113,12 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       (F2 copy semana y F4 porcion pegajosa) quedo DECLARADO con su inventario en
       `docs/status/MOBILE_PARITY.md` (entrada 2026-08-13).
 - [ ] QA en device fisico Android (el dueño la corre)
-- [ ] OTA android `--platform android` propuesto al dueño — 🔴 BLOQUEADO mientras iOS 1.1.0(53)
-      este en App Review (canal compartido); proponerlo al salir el veredicto
+- [ ] OTA android `--platform android` propuesto al dueño. CORRECCION 2026-08-13 (lo señalo el
+      owner): un OTA `--platform android` NO toca a la build iOS en App Review — publica solo el
+      bundle android del grupo y los clientes iOS nunca lo ven. Es la practica de siempre
+      (`7a9b3877`, `723c92d6`, `12a32906`… todos android-only con iOS en revision). Lo PROHIBIDO
+      sigue siendo el OTA SIN `--platform` (canal `production` compartido Play+TestFlight) o
+      `--platform ios` mientras revisan. Por GH Actions `mobile-ota.yml`, cuando el owner lo pida.
 
 ## Registro de cierres
 
