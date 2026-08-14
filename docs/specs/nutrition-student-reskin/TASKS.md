@@ -163,6 +163,29 @@ no del plan.
   `busyId` (mutacion realmente en vuelo; se limpia en el `finally` apenas el server confirma) y
   NO `isPending`. Protege igual contra doble-registro; la UI se libera sin esperar el refresh.
 
+### 🔴 H9 (2026-08-14, reportado por el owner sobre `5ca38679`) — tabs muertos tras cualquier mutacion
+- Sintoma: "si interactuo con el check de los alimentos antes de pulsar un tab, los tabs no
+  funcionan" (5 clicks a Historial/Plan sin efecto; recargar lo arregla). H8 habia arreglado los
+  CHECKBOXES pero la NAVEGACION seguia muriendo.
+- Repro determinista conseguido (programatico): "Retirar registro" → click al `<a>` del tab →
+  URL intacta para siempre. Descartado overlay (body `pointer-events:auto`, sin `inert`, el
+  propio `<a>` es el elemento en el punto). Control: mismo click SIN mutacion previa navega bien.
+- Causa (leida en `next/dist/client/components/app-router-instance.js`): un ACTION_NAVIGATE
+  DESCARTA la accion pendiente del ActionQueue (`pending.discarded = true`) — y una accion
+  descartada JAMAS llama `action.resolve()`, dejando huerfana la promesa que ya se entrego a
+  React (`setState(deferredPromise)` + `use()`): el router queda suspendido y no vuelve a
+  navegar. Con `router.refresh()` dentro de cada mutacion, la ventana era "toda mutacion
+  reciente". Familia de bugs ABIERTOS de Next: vercel/next.js#86055 · #86151 · #45830 (no se
+  sube Next incidentalmente por esto).
+- Fix (`c767a5ea`): CERO `router.refresh()` en las mutaciones del Hoy del alumno. Nueva
+  `fetchNutritionTodayAction` (lectura pura, auth espejo de history.actions) reconcilia un
+  estado base cliente (`baseToday`) bajo `useOptimistic`; si la lectura falla, los deltas
+  confirmados se commitean a la base (no se revierte lo que el server ya escribio); guard de
+  secuencia contra syncs cruzados. `usePortionMarks` recibe `refreshToday` del caller y pierde
+  `useRouter`. Costo asumido: el strip semanal RSC no refresca en caliente (H5 se acepta como
+  limitacion documentada mientras el bug upstream siga abierto).
+- Gates: tsc web 0 · vitest area `/c` completa 1067/1067 · boundaries 343 · eslint ok.
+
 ## F4 — Correccion (verificacion visual contra el mock)
 
 - [x] H1-H6 + H8 corregidos (arriba). Gates: tsc web+mobile 0 · vitest 30/30 (week-nav 3 tests
