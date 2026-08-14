@@ -92,6 +92,22 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       Plan, ficha del coach e historial RN) + `HistoryWeekCard` web, todos con fallback a la regla
       vieja para payloads cacheados sin `rangeDot`.
 
+## QA en preview de F1-F3 — [!] BLOQUEADO en el login del alumno (2026-08-14 ~01:00)
+
+- Preview de `477bc476` READY en el alias de la rama; pestaña dejada abierta en
+  `/c/josefit/login` (el area del alumno redirige ahi; la sesion de coach no sirve, correcto).
+- El agente tiene PROHIBIDO tipear credenciales: para destrabar, (a) el owner se loguea como la
+  alumna en esa pestaña y el agente sigue, o (b) OK explicito del owner para correr
+  `tests/nutrition-v2/alumno-hoy.spec.ts` (se loguea solo con el alumno canario; muta datos en
+  prod auto-revertidos).
+- Datos listos para el QA (verificado en DB): Catalina `ba265b0b` tiene registros en 3 semanas
+  cerradas (23/07 · 29-31/07 · 05-10/08) ⇒ deben verse la trend card, pills "N/7 en rango",
+  puntos ambar (dias de 52-679 kcal) y el chip de racha en el Hoy (lu 10/08 con 2.241 kcal y
+  mi 12/08 con 56 = dias evaluables de la semana en curso).
+- Checklist del QA pendiente: Hoy (banda con zona sombreada, chip racha, checkbox registra/abre
+  retirar, paleta trio en mini-anillos y chips) · Historial (trend card, pills, puntos por rango)
+  · Plan (strip con puntos) · claro Y oscuro · sin errores de consola.
+
 ## F4 — Correccion (verificacion visual contra el mock)
 
 - [ ] Stepper hibrido + chips de razon + "Otra…" — deltas menores si los hay
@@ -109,4 +125,5 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-13 | F0 | (este commit) | docs:check | Auditoria + los tres documentos. Tres decisiones del owner quedan abiertas (D-A/D-B/D-C); F1 no depende de ninguna. |
 | 2026-08-13 | F1 | (este commit) | tsc web+mobile 0 · vitest 10/10 · eslint ✓ · boundaries 340 ✓ | Trio fijo en design.ts + tokens RN + 6 grupos de hardcodes + V1 RN (MACRO_COLORS). Sin QA visual todavia: la re-QA completa es F5. |
 | 2026-08-13 | F2 (parcial) | (este commit) | tsc web+mobile 0 · vitest banda 4/4 + aura ✓ · eslint tocados sin errores nuevos | Banda de energia (D-A) y checkbox de registro (D-C) en web y RN; nota RN, "⇄ N equivalentes" y celebracion web verificados como YA cumplidos. Queda SOLO la racha semanal. Sin QA visual (F5). NO corridos: expo export ni suite completa. |
+| 2026-08-14 | Deuda de puntos por rango | 477bc476 | tsc web+mobile 0 · vitest 49/49 · eslint ✓ · boundaries 342 ✓ | `rangeDot` materializado en `buildNutritionWeek` + renderers web/RN con fallback. QA en preview quedo BLOQUEADO en el login del alumno (ver seccion arriba). |
 | 2026-08-13 | F2 (cierre) + F3 | (este commit) | tsc web+mobile 0 · vitest 26/26 (energy-range 4 nuevos + week-nav + banda) · eslint tocados sin errores nuevos · boundaries 342 ✓ | Racha "N de 7 en rango" en el Hoy + trend card y pills "en rango" en el historial, web y RN con los mismos helpers del paquete. F3 items 2/3/4 verificados como YA cumplidos. Sin QA visual (F5). NO corridos: expo export ni suite completa. |
