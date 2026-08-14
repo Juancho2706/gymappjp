@@ -248,6 +248,26 @@ no del plan.
   Plan/Historial → debe navegar. La verificacion programatica quedo no-concluyente por el
   throttling; el owner valida a mano.
 
+### 🔴 H12 (2026-08-14 noche, owner: "marcar → tabs muertos" PERSISTIA con H9+H10+H11) — cirugia de transporte
+- Con H11 deployado el owner seguia reproduciendolo (retirar navega, marcar mata). Internet: 16.3.1
+  existe pero su changelog no lista un fix del area (solo "optimistic routing prefetch loops");
+  bump = apuesta, descartado. La conclusion de las tres capas: mientras el navegador invoque
+  server actions, cada request entra al ActionQueue del router y el apply de la accion de MARCAR
+  encuentra siempre un camino para dejar el router muerto (descarte con promesa huerfana H9,
+  cache sin evictar H10, revalidacion/seed H11, y lo que quede — revalidacion implicita por
+  cookies de Supabase incluida como sospechosa sin confirmar).
+- Fix estructural (`bd48cd7d`): el area del alumno DEJA de usar server actions como transporte.
+  - `app/api/student/nutrition-v2/route.ts`: puente POST `{op, input}` → despacha a las MISMAS
+    funciones de `_actions/*` (auth cookies + rate limit + Zod adentro). CSRF: `sec-fetch-site`
+    + `origin`. 15 ops (7 intake, 2 porciones, 3 favoritos, search, group page, today, history).
+  - `_components/nutrition-api.ts`: mismos nombres/firmas via `typeof import` — los 4 call sites
+    (TodayExperience, PortionMarks, SubstitutionSheet, HistoryWeeksList) solo cambian el import.
+  - `fetch()` no despacha NADA al router ⇒ navegar con la request en vuelo es seguro por
+    construccion; la compuerta H9 queda montada como cinturon (inFlight siempre 0 hoy).
+- Gates: tsc web 0 · vitest 1067/1067 · boundaries 346 · eslint ok.
+- [ ] Prueba de fuego del owner con pestaña visible: marcar → tab (el QA programatico siguio
+  bloqueado por la pestaña en background que congela el renderer).
+
 ## F4 — Correccion (verificacion visual contra el mock)
 
 - [x] H1-H6 + H8 corregidos (arriba). Gates: tsc web+mobile 0 · vitest 30/30 (week-nav 3 tests
