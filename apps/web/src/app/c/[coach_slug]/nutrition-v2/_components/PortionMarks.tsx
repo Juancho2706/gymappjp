@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   buildNutritionPortionIntakeKey,
@@ -120,11 +119,17 @@ function markedBurstMessage(totalPortions: number): string {
 export function usePortionMarks({
   today,
   clientId,
+  refreshToday,
 }: {
   today: NutritionTodayReadModel
   clientId: string
+  /**
+   * Reconciliación con el server SIN `router.refresh()` (QA T2.7 F4, H9): un refresh del router
+   * descartado por una navegación deja los tabs muertos hasta recargar. El caller lee el today
+   * fresco por server action y lo vuelca en su estado base; este hook solo decide CUÁNDO.
+   */
+  refreshToday: () => Promise<void> | void
 }): PortionMarksApi {
-  const router = useRouter()
   const captureIntake = useCaptureStudentNutritionIntake()
   const localDate = today.localDate
 
@@ -173,9 +178,9 @@ export function usePortionMarks({
     cancelScheduledRefresh()
     refreshTimerRef.current = setTimeout(() => {
       refreshTimerRef.current = null
-      router.refresh()
+      void refreshToday()
     }, PORTION_REFRESH_DEBOUNCE_MS)
-  }, [cancelScheduledRefresh, router])
+  }, [cancelScheduledRefresh, refreshToday])
 
   // Al desmontar se CANCELA el refresh pendiente: dispararlo después refrescaría la pantalla a la
   // que navegó el alumno, no ésta. Nada queda a medias — las marcas ya están guardadas en el

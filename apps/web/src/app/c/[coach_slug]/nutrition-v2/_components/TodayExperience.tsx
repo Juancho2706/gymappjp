@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { toast } from 'sonner'
@@ -95,6 +94,7 @@ import {
   listFavoriteFoodsAction,
   toggleFavoriteFoodAction,
 } from '../_actions/favorites.actions'
+import { fetchNutritionTodayAction } from '../_actions/today.actions'
 import {
   useCaptureStudentNutritionCorrection,
   useCaptureStudentNutritionIntake,
@@ -152,15 +152,48 @@ export function TodayExperience({
   /** Racha honesta semanal (T2.7 F2): días de la semana en curso dentro del rango; `null` = sin chip. */
   weekInRangeCount?: number | null
 }) {
-  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   /**
-   * Capa optimista (F7 · H2): `today` es el read model del servidor CON los gestos de esta
-   * transición ya pintados. Cada mutación aplica su delta antes de esperar la server action;
-   * el `router.refresh()` trae la verdad y React descarta el delta — y si la acción falla,
-   * la transición termina sin refresh y la pantalla REVIERTE sola al estado del servidor.
+   * Base del read model en estado CLIENTE + capa optimista (F7 · H2) encima: cada mutación
+   * aplica su delta antes de esperar la server action; al confirmar, `syncTodayFromServer`
+   * trae la verdad por una server action de LECTURA y la vuelca en `baseToday` — y si la
+   * acción falla, la transición termina sin sync y la pantalla REVIERTE sola a la base.
+   *
+   * Por qué NO `router.refresh()` (QA T2.7 F4, hallazgo H9): un refresh del router en vuelo
+   * que un click de navegación descarta deja al App Router suspendido en una promesa huérfana
+   * y los tabs dejan de navegar hasta recargar la página (bugs abiertos de Next:
+   * vercel/next.js#86055/#86151/#45830 — reproducido determinísticamente con "Retirar
+   * registro" → click a Historial). Ninguna mutación de esta pantalla encola acciones del
+   * router; el costo asumido es que el strip semanal RSC no refresca en caliente (H5).
    */
-  const [today, applyTodayDelta] = useOptimistic(serverToday, applyTodayOptimistic)
+  const [baseToday, setBaseToday] = useState(serverToday)
+  useEffect(() => {
+    setBaseToday(serverToday)
+  }, [serverToday])
+  const [today, applyTodayDelta] = useOptimistic(baseToday, applyTodayOptimistic)
+  /** Solo la lectura MÁS RECIENTE puede escribir la base (dos syncs en vuelo no conmutan). */
+  const todaySyncSeqRef = useRef(0)
+
+  /**
+   * Reconcilia `baseToday` con el servidor tras una mutación CONFIRMADA. Si la lectura falla
+   * (red), los deltas confirmados se aplican a la base directamente: el servidor ya escribió,
+   * revertir la pantalla sería mentir.
+   */
+  async function syncTodayFromServer(confirmedDeltas: TodayOptimisticAction[]) {
+    const seq = ++todaySyncSeqRef.current
+    try {
+      const res = await fetchNutritionTodayAction({ clientId, date: serverToday.localDate })
+      if (res.ok) {
+        if (seq === todaySyncSeqRef.current) setBaseToday(res.today)
+        return
+      }
+    } catch {
+      // Lectura caída: cae al commit local de abajo.
+    }
+    if (seq === todaySyncSeqRef.current && confirmedDeltas.length > 0) {
+      setBaseToday((prev) => confirmedDeltas.reduce(applyTodayOptimistic, prev))
+    }
+  }
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>({ kind: 'none' })
@@ -196,7 +229,13 @@ export function TodayExperience({
 
   // Capa de porciones (SPEC UX-b): invisible si el plan no tiene targets (Q1) — el
   // hook no agrega UI ni estado visible sin `dayCoverage`/`exchangeTargets`.
-  const portionsApi = usePortionMarks({ today, clientId })
+  const portionsApi = usePortionMarks({
+    today,
+    clientId,
+    // Mismo motivo que arriba (H9): la reconciliación de la ráfaga de porciones tampoco puede
+    // encolar `router.refresh()`; lee el today fresco y lo vuelca en la base.
+    refreshToday: () => syncTodayFromServer([]),
+  })
   const [portionSheet, setPortionSheet] = useState<{ slotCode: string; groupCode: string } | null>(null)
   const portionSheetSlot = portionSheet
     ? today.mealSlots.find((slot) => slot.code === portionSheet.slotCode) ?? null
@@ -225,7 +264,7 @@ export function TodayExperience({
           return
         }
         onSuccess?.()
-        router.refresh()
+        await syncTodayFromServer(optimistic ? [optimistic] : [])
       } catch {
         // La server action lanzo (red caida, timeout de rate-limit, excepcion del server):
         // sin este catch el error se tragaba en silencio y el registro se perdia sin aviso.
@@ -261,11 +300,16 @@ export function TodayExperience({
         category: item.category ?? null,
       }),
     )
+    const bulkDeltas: TodayOptimisticAction[] = optimisticEntries.map((entry) => ({
+      kind: 'add',
+      slotCode: slot.code,
+      entry,
+    }))
     setError(null)
     setBusyId(id)
     startTransition(async () => {
-      for (const entry of optimisticEntries) {
-        applyTodayDelta({ kind: 'add', slotCode: slot.code, entry })
+      for (const delta of bulkDeltas) {
+        applyTodayDelta(delta)
       }
       try {
         const res = await recordSlotIntakeBatchAction({ payloads })
@@ -274,7 +318,7 @@ export function TodayExperience({
           return
         }
         captureIntake('bulk_slot')
-        router.refresh()
+        await syncTodayFromServer(bulkDeltas)
         if (res.failed > 0) {
           toast.warning(
             `Registré ${res.ids.length} de ${payloads.length} en ${slot.name}. Quedaron ${res.failed} sin registrar.`,
@@ -300,14 +344,18 @@ export function TodayExperience({
   ) {
     const undo = buildBulkUndoPayloads(payloads, createdIds)
     if (undo.length === 0) return
+    const undoDeltas: TodayOptimisticAction[] = undo.map((payload) => ({
+      kind: 'void',
+      entryId: payload.entryId,
+    }))
     startTransition(async () => {
-      for (const payload of undo) {
-        applyTodayDelta({ kind: 'void', entryId: payload.entryId })
+      for (const delta of undoDeltas) {
+        applyTodayDelta(delta)
       }
       try {
         const res = await voidSlotIntakeBatchAction({ payloads: undo })
         if (res.ok) {
-          router.refresh()
+          await syncTodayFromServer(undoDeltas)
           toast.success(`Deshice el registro de ${slotName}.`)
         } else {
           toast.error('No se pudo deshacer. Retira los registros uno por uno en "Consumido hoy".')
@@ -352,15 +400,16 @@ export function TodayExperience({
       quantity,
       occurredAt,
     })
+    const substituteDelta: TodayOptimisticAction = {
+      kind: 'substitute',
+      prescriptionItemId: itemEntry.prescriptionItemId,
+      slotCode: itemEntry.mealSlotCode ?? null,
+      entry: optimisticEntry,
+    }
     setError(null)
     setBusyId(id)
     startTransition(async () => {
-      applyTodayDelta({
-        kind: 'substitute',
-        prescriptionItemId: itemEntry.prescriptionItemId,
-        slotCode: itemEntry.mealSlotCode ?? null,
-        entry: optimisticEntry,
-      })
+      applyTodayDelta(substituteDelta)
       try {
         const res = await recordSubstitutionIntakeAction({
           payload: {
@@ -385,7 +434,7 @@ export function TodayExperience({
         // registrar dos veces sin ver el resultado.
         setExchange(null)
         captureIntake('substitution')
-        router.refresh()
+        await syncTodayFromServer([substituteDelta])
         const label = `${res.quantity} ${res.unit}`
         toast.success(
           res.mode === 'correct'
@@ -432,8 +481,9 @@ export function TodayExperience({
 
   /** Deshacer del toast: mismo camino de retiro que el resto (append-only, nada se borra). */
   function handleSubstitutionUndo(entryId: string) {
+    const undoDelta: TodayOptimisticAction = { kind: 'void', entryId }
     startTransition(async () => {
-      applyTodayDelta({ kind: 'void', entryId })
+      applyTodayDelta(undoDelta)
       try {
         const res = await voidIntakeAction({
           payload: {
@@ -444,7 +494,7 @@ export function TodayExperience({
           },
         })
         if (res.ok) {
-          router.refresh()
+          await syncTodayFromServer([undoDelta])
           toast.success('Deshice el reemplazo.')
         } else {
           toast.error('No se pudo deshacer. Retíralo desde la fila del alimento.')
