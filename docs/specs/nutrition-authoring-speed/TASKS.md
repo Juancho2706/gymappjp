@@ -22,8 +22,13 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       capturados ANTES del dispatch
 - [x] Quick-edit (`EditableSlotCard.tsx`): muere `confirmingDelete` y su aviso rojo inline; ya tenia
       undo, le sobraba el confirm encima. Ventana unificada en `UNDO_TOAST_MS` (era 5 s)
-- [ ] Inventario de gestos destructivos del modulo V2 (dia, plantilla, sustitucion) y su estado —
-      franja e item ya verificados en esta fase
+- [x] Inventario de gestos destructivos del modulo V2 (2026-08-13), franja e item ya verificados:
+      **dia (wizard)** = optimista + Deshacer 5 s en toast que reinserta variante y porciones
+      (`PlanBuilderClient.handleRemoveVariant`) ✓ · **dia (quick-edit)** = optimista + Deshacer
+      5 s (`RESTORE_VARIANT`) ✓ · **plantilla** = borrado real optimista + Deshacer que re-crea
+      con el draft cacheado ANTES de borrar (`PlanTemplatesLibrary`) ✓ · **sustitucion** = chip
+      removible sin undo ACEPTADO: perdida maxima un chip, recuperar = re-agregar del picker (dos
+      taps); meterle snackbar seria mas ruido que riesgo
 
 ## F2 — Copy semana (sin DB) — **menu del DIA cerrado 2026-08-12 (`e03043a3`)**
 
@@ -38,10 +43,12 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       previo servido por el modulo (antes lo armaba la UI a ojo y solo sabia contar reemplazos)
 - [x] Deshacer del modo `append`: saca exactamente las franjas sumadas y sus porciones, sin tocar lo
       que el dia ya tenia
-- [ ] **Menu de la FRANJA (`CopySlotMenu`): pendiente.** Ojo, no es el mismo gesto:
-      `COPY_SLOT_TO_VARIANTS` ya empareja por NOMBRE (reemplaza la franja homonima del destino o la
-      agrega al final), asi que "reemplazar vs sumar" ahi significa otra cosa que en el dia y
-      necesita decision del dueño antes de tocarlo
+- [x] **Menu de la FRANJA (`CopySlotMenu`) — decision del dueño: opcion A** (2026-08-13, del
+      artifact con las 3 salidas): la franja gana los chips "proximos 1/2/4" en la fila de
+      Atajos, que MARCAN el multi-select igual que los presets (no copian directo); la fusion por
+      nombre queda intacta y NO hay toggle Reemplazar/Sumar. Helper puro `targetsForNextDays` en
+      `copy-plan.ts` (+3 tests: solo marca dias que existen como variante, vuelta de semana, base
+      sin "proximos"). El reducer no se toco.
 - [x] QA en preview de los dos modos (2026-08-13): quick-select desde Lunes resuelve Ma / Ma,Mi / Ma,Mi,Ju,Vi; el aviso de Sumar dice "Se suman franjas a 2 dias que ya tenian contenido. Quedan franjas repetidas: POLLO"; tras confirmar, Ma y Mi pasan de 2.037 a 4.073 kcal y el origen queda intacto; el Deshacer del modo Sumar devuelve Mi de 8.146 a 4.073 sin tocar otros dias
 - [ ] Responsive/PWA (390 px): PENDIENTE — el resize del navegador no llego a aplicar al viewport en esta sesion, asi que NO esta verificado
 
@@ -63,19 +70,34 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 - [ ] `ADD_ITEM` precarga la cantidad y la unidad recordadas; sin memoria, cae al `servingSize` del
       catalogo (comportamiento actual intacto)
 - [x] Verificacion en DB (2026-08-13): al fijar 137 g se escriben las DOS memorias (de la alumna y general del coach); al volver a agregar el alimento precarga 137 en vez del 100 del catalogo
-- [ ] Falta verificar el tercer camino: memoria del coach cayendo sobre un alumno DISTINTO
+- [x] Tercer camino verificado (2026-08-13, tx-rollback en LIVE con claims del coach real): con la
+      fila de la alumna en 150 y la general en 137, la RPC devuelve 150 para la alumna (su fila
+      gana) y **137 para un alumno DISTINTO** (cae a la memoria general). Rollback verificado:
+      las dos filas quedaron en 137.
 
 ## F5 — Notas visibles en el wizard
 
-- [ ] Campo en el paso del plan, espejo del de quick-edit (mismo limite y copy)
-- [ ] "Rehacer" deja de resetear `visible_notes` (deuda PR #174), con test de regresion
+- [x] Campo "Notas para tu alumno" en el paso del plan (`PlanStep`), espejo del quick-edit: mismo
+      copy, mismo tope 8000 (`VISIBLE_NOTES_MAX` local al builder — no importa de `_quick-edit`
+      por el boundary) y validacion en `validateStep` con el mismo mensaje. Accion nueva
+      `SET_VISIBLE_NOTES` en el reducer (editar deja la clave PRESENTE: un RESTORE posterior
+      respeta lo escrito, incluso el vaciado).
+- [x] "Rehacer" y las notas (deuda PR #174): el carry-over ya estaba resuelto por
+      `rehydrateBuilderState` + `assembleDraft` (auditoria F0) y tiene tests; lo nuevo es la
+      REGRESION del camino editado: rehidratar → editar → publicar emite lo editado, y vaciar
+      publica `null` sin revivir las notas del plan (2 tests nuevos en `draft-builder.test.ts`).
 
 ## F6 — Paridad RN y cierre
 
-- [ ] Paridad RN de lo que aplique al builder movil; lo que no cruce, declarado en
-      `docs/status/MOBILE_PARITY.md`
+- [x] Paridad RN aplicada (2026-08-13): **F1** `RESTORE_SLOT` + "Quitar franja" optimista con
+      Deshacer 8 s en el builder RN (`UndoSnackbar` reusado) y quick-edit RN sin el confirm que
+      tenia ENCIMA del undo (ventana unificada 5 s → 8 s) · **F5** `SET_VISIBLE_NOTES` +
+      validacion + campo en el paso "El plan" del builder RN. Lo que NO cruza en esta tanda
+      (F2 copy semana y F4 porcion pegajosa) quedo DECLARADO con su inventario en
+      `docs/status/MOBILE_PARITY.md` (entrada 2026-08-13).
 - [ ] QA en device fisico Android (el dueño la corre)
-- [ ] OTA android `--platform android` propuesto al dueño
+- [ ] OTA android `--platform android` propuesto al dueño — 🔴 BLOQUEADO mientras iOS 1.1.0(53)
+      este en App Review (canal compartido); proponerlo al salir el veredicto
 
 ## Registro de cierres
 

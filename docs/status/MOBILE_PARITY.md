@@ -77,6 +77,27 @@ source_of_truth: apps/web responsive + apps/mobile
 > (`apps/mobile/app/coach/nutrition-v2/foods.tsx`) no tiene crear/clasificar/filtros — seguimiento
 > propio, fuera de T2.3.
 
+> **2026-08-13 (T2.6 F6 — velocidad de autoría: qué cruzó a RN y qué queda declarado)**: del
+> programa T2.6 (`docs/specs/nutrition-authoring-speed/`) cruzaron a RN las piezas de gramática y
+> notas: (a) **F1** — el builder RN gana `RESTORE_SLOT` (espejo exacto del web, idempotente y con
+> índice) y "Quitar franja" pasa de borrado seco a optimista + snackbar Deshacer
+> (`UndoSnackbar` reusado del quick-edit); el quick-edit RN pierde el `Alert` de confirmación que
+> tenía ENCIMA del undo y la ventana se unifica en 8 s (`UNDO_TIMEOUT_MS`, era 5 s) — una sola
+> gramática destructiva en las dos plataformas. (b) **F5** — `SET_VISIBLE_NOTES` + validación de
+> tope (8000, espejo del contrato) en `lib/nutrition-v2-builder.ts` y campo "Notas para tu alumno"
+> en el paso "El plan" del builder RN (el quick-edit RN ya las editaba desde 4B-03).
+> **Declarado SIN portar** (no cruza en esta tanda): (c) **F2 copy semana** — quick-select
+> "próximos 1/2/4", modo Sumar (`APPEND_VARIANT_SLOTS_TO`) y el aviso previo con duplicados; el
+> copy de día RN hoy solo duplica a días LIBRES (`DUPLICATE_VARIANT_AS` filtra ocupados), así que
+> portarlo implica también la semántica reemplazar-ocupado con confirmación — pieza propia. En el
+> menú de la franja RN falta el quick-select (decisión A: los chips solo MARCAN la selección; la
+> fusión por nombre ya es idéntica en las dos plataformas). (d) **F4 porción pegajosa** — las RPC
+> ya están en LIVE (`coach_food_last_qty_for_client` invoker+RLS, `coach_food_last_qty_remember`
+> definer con guards) y el `ADD_ITEM` web acepta `prefill`; a RN le falta el camino de datos
+> (llamada con JWT del coach — directa o vía `/api/mobile`) y el prefill en su `ADD_ITEM`.
+> **Sin QA en dispositivo** (la corre el dueño) y **sin OTA**: iOS 1.1.0(53) está en App Review y
+> el canal es compartido — el OTA android se propone recién al salir el veredicto.
+
 La paridad global **no está certificada todavía**.
 
 | Bloque | Código y revisión estática | QA en dispositivo | Estado efectivo |
