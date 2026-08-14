@@ -1,0 +1,71 @@
+# TASKS — T2.7 Re-skin del alumno + paleta fija
+
+Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes (se anota commit) ·
+`[!]` bloqueado (se anota por que).
+
+## F0 — Auditoria y documentos
+
+- [x] Auditoria contra HEAD (2026-08-13): inventario completo de la paleta (design.ts + 6 grupos
+      de hardcodes + tokens web ya en `@theme` + RN sin tokens) y estado por decision del catalogo
+      (tabla en SPEC). Hallazgos clave: "Lo comi" sigue vivo web+RN; racha semanal no existe;
+      el rango ya es semantica del AuraHero pero el visual es anillo (conflicto D-A); comida libre
+      es feature nueva, no re-skin (D-B).
+- [x] SPEC / PLAN / TASKS (este commit)
+- [ ] Decisiones del owner: **D-A** banda vs anillo · **D-B** diferir cupo libre a T3.6 ·
+      **D-C** checkbox mata "Lo comi"
+
+## F1 — Paleta trio fijo (sin dependencias) — **CERRADA 2026-08-13**
+
+- [x] `NUTRITION_MACROS` a tokens canonicos (web + native classes)
+- [x] Tokens RN: canales en `global.css` + `macro.*` en `tailwind.config.js`
+- [x] `resolveNutritionMacroColors()` fija y sin `brandColor` (+ caller AuraHero RN, que ademas
+      suelta `branding` — el hero ya no depende de la marca para los macros)
+- [x] Hardcodes → tokens: `NutritionV2Overrides` · AuraHero web · `DayTotalsBar` ·
+      `AddFoodSheet` web · AuraHero RN · `NutritionV2Kit`
+- [x] Bonus V1 RN (la spec pide V1 alineada): `MACRO_COLORS` de `MacroRingSummary.tsx` (fuente
+      unica de FoodItemRow / NutritionDailySummaryWidget / MealCardExpandable) pasa P/C/G al trio;
+      `kcal` se queda (no es un macro)
+- [x] Tests: `mobile-aura-theme.test.ts` invertido (ningun macro sigue la marca);
+      `white-label-tokens.test.ts` verde sin tocar
+- [x] Gates: tsc web 0 · tsc mobile 0 · eslint tocados limpio · vitest 10/10 · boundaries 340 ·
+      docs:check OK. NO corridos: `expo export` ni suite completa (CPU del owner en uso)
+- Gotcha de extraccion: `design.ts` vive en `packages/` (fuera del scan de Tailwind/NativeWind);
+  las clases `bg-macro-*`/`text-macro-*` DEBEN aparecer literales en algun archivo escaneado —
+  hoy las anclan los mapas locales de `NutritionV2Kit` (RN) y `NutritionV2Overrides` (web). Si
+  esos mapas se refactorizan, agregar safelist.
+- Deuda declarada: los PDF de exportacion (web y `nutrition-day-export.ts` RN) usan una paleta
+  propia espejada entre si (blue/emerald/purple 600) — alinearlos es un cambio a DOS lados y
+  queda para F5 con decision explicita.
+
+## F2 — Jerarquia del Hoy — [!] espera D-A y D-C
+
+- [ ] Banda de energia con rango sombreado (web + RN) — si D-A = banda
+- [ ] Checkbox primario; muere "Lo comi" (web + RN) — si D-C = si
+- [ ] Nota del coach expandida en RN
+- [ ] "⇄ N equivalentes" literal en la fila
+- [ ] Racha semanal "N de 7 en rango" en el Hoy
+- [ ] Celebracion dia completo: paridad web
+
+## F3 — Plan + Historial
+
+- [ ] Tendencia 4 barras semanales arriba del historial
+- [ ] Dias con nombre del coach
+- [ ] Semana actual solo en Hoy (web mata duplicado)
+- [ ] Poda de chips de permisos en RN
+
+## F4 — Correccion (verificacion visual contra el mock)
+
+- [ ] Stepper hibrido + chips de razon + "Otra…" — deltas menores si los hay
+
+## F5 — Cierre
+
+- [ ] Re-QA visual completa: preview web (claro/oscuro/marca custom) + device Android
+- [ ] Paridad declarada en `docs/status/MOBILE_PARITY.md`
+- [ ] OTA android propuesto al owner (cierre O2)
+
+## Registro de cierres
+
+| Fecha | Fase | Commit | Gates | Notas |
+|-------|------|--------|-------|-------|
+| 2026-08-13 | F0 | (este commit) | docs:check | Auditoria + los tres documentos. Tres decisiones del owner quedan abiertas (D-A/D-B/D-C); F1 no depende de ninguna. |
+| 2026-08-13 | F1 | (este commit) | tsc web+mobile 0 · vitest 10/10 · eslint ✓ · boundaries 340 ✓ | Trio fijo en design.ts + tokens RN + 6 grupos de hardcodes + V1 RN (MACRO_COLORS). Sin QA visual todavia: la re-QA completa es F5. |
