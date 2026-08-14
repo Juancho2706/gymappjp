@@ -135,7 +135,7 @@ export function formatFutureDayHeadline(cell: {
 export function toWeekNavCells(
   cells: readonly Pick<
     NutritionWeekCell,
-    'isoDate' | 'dayOfWeek' | 'shortLabel' | 'longLabel' | 'state' | 'consumed' | 'isLegacy'
+    'isoDate' | 'dayOfWeek' | 'shortLabel' | 'longLabel' | 'state' | 'consumed' | 'isLegacy' | 'rangeDot'
   >[],
 ): NutritionWeekCell[] {
   return cells.map((cell) => ({
@@ -150,6 +150,9 @@ export function toWeekNavCells(
     consumed: cell.consumed,
     isLegacy: cell.isLegacy,
     legacy: null,
+    // T2.7: el punto por rango viene MATERIALIZADO por buildNutritionWeek — la poda tira las
+    // metas, asi que derivarlo del lado cliente ya no seria posible.
+    rangeDot: cell.rangeDot,
   }))
 }
 

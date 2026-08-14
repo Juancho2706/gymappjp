@@ -162,7 +162,11 @@ function HistoryWeekCard({ week, base }: { week: HistoryWeekBucket; base: string
       </div>
       <div className="mt-3 grid grid-cols-7 gap-1.5">
         {week.cells.map((cell) => {
-          const logged = cell.state === 'past-logged' || cell.isLegacy === true
+          // T2.7: punto por RANGO (catálogo Alumno 05) — verde adentro del ±10%, ámbar afuera,
+          // verde también para un registro sin meta que juzgar; apagado = sin datos. Celdas de
+          // payloads viejos sin `rangeDot` caen a la regla anterior (con/sin registro).
+          const dot =
+            cell.rangeDot ?? (cell.state === 'past-logged' || cell.isLegacy === true ? 'logged' : 'none')
           return (
             <Link
               aria-label={`${cell.longLabel}: ver ese día`}
@@ -174,9 +178,11 @@ function HistoryWeekCard({ week, base }: { week: HistoryWeekBucket; base: string
               <span
                 aria-hidden="true"
                 className={
-                  logged
+                  dot === 'in-range' || dot === 'logged'
                     ? 'h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 dark:bg-emerald-400'
-                    : 'h-1.5 w-1.5 shrink-0 rounded-full bg-border-default'
+                    : dot === 'out-of-range'
+                      ? 'h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400'
+                      : 'h-1.5 w-1.5 shrink-0 rounded-full bg-border-default'
                 }
               />
             </Link>

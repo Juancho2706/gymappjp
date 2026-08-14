@@ -83,9 +83,14 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       "la semana en curso vive en el tab Hoy" en ambos.
 - [x] Poda de chips de permisos en RN — YA CUMPLIDO antes de esta fase: `PlanRulesCard` RN solo
       pinta registro libre y ajuste de cantidad (con %); `canSubstitute` no se pinta.
-- Deuda declarada (polish para F5 si el owner lo quiere): los puntos del mini-strip semanal siguen
-  siendo "con registro / sin registro"; el catalogo los pinta por RANGO (verde/ambar/apagado), lo
-  que exigiria bajar kcal+meta a cada celda de `buildNutritionWeek`.
+- [x] Deuda saldada (2026-08-14, pedido owner): los puntos del strip semanal se pintan por RANGO.
+      `buildNutritionWeek` materializa `rangeDot` en cada celda (`nutritionWeekCellRangeDot`, +2
+      tests) para sobrevivir a la poda del borde RSC → cliente (`toWeekNavCells` lo conserva).
+      Semantica: verde = dia dentro del ±10% (o registro injuzgable — sin meta, o HOY: juzgar a
+      medio dia seria mentir, misma regla que la racha) · ambar = con datos fuera del rango (nunca
+      rojo) · apagado = sin datos · hueco = futuro. Renderers: `WeekDayNav` web y RN (cubre Hoy,
+      Plan, ficha del coach e historial RN) + `HistoryWeekCard` web, todos con fallback a la regla
+      vieja para payloads cacheados sin `rangeDot`.
 
 ## F4 — Correccion (verificacion visual contra el mock)
 

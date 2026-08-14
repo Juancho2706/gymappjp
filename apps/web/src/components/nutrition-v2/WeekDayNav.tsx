@@ -105,7 +105,9 @@ export function WeekDayNav({
       {cells.map((cell, index) => {
         const isSelected = cell.isoDate === selectedIso
         const isToday = cell.state === 'today'
-        const logged = hasLoggedIntake(cell)
+        // T2.7: el punto se pinta por RANGO de energia (verde adentro, ambar afuera) cuando la
+        // celda trae el estado materializado; payloads viejos cacheados caen a la regla anterior.
+        const dot = cell.rangeDot ?? (hasLoggedIntake(cell) ? 'logged' : 'none')
 
         return (
           <button
@@ -161,11 +163,13 @@ export function WeekDayNav({
               aria-hidden="true"
               className={cn(
                 'mt-0.5 h-2 w-2 shrink-0 rounded-full',
-                logged
+                dot === 'in-range' || dot === 'logged'
                   ? 'bg-emerald-500 dark:bg-emerald-400'
-                  : cell.state === 'future'
-                    ? 'border border-border-default'
-                    : 'bg-border-default',
+                  : dot === 'out-of-range'
+                    ? 'bg-amber-500 dark:bg-amber-400'
+                    : cell.state === 'future'
+                      ? 'border border-border-default'
+                      : 'bg-border-default',
               )}
             />
           </button>

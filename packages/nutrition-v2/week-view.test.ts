@@ -457,3 +457,41 @@ describe('buildNutritionWeek — días del sistema anterior (V1)', () => {
     expect(week[0].legacy).toBeNull()
   })
 })
+
+// T2.7 (catalogo Alumno 05): el punto del strip se pinta por RANGO de energia. Materializado en
+// la celda por buildNutritionWeek para sobrevivir a las podas del borde RSC → cliente.
+describe('buildNutritionWeek — rangeDot por rango de energia', () => {
+  it('pasado: verde dentro del ±10%, ambar afuera, logged sin meta, none sin registro', () => {
+    const week = buildNutritionWeek({
+      variants,
+      history: [
+        historyDay(LUNES, { consumed: consumed(2000, 3) }), // en la meta exacta
+        historyDay(MARTES, { consumed: consumed(1500, 2) }), // bajo el 90%
+        historyDay(MIERCOLES, { targets: null, consumed: consumed(1500, 2) }), // registro sin meta
+      ],
+      weekStartIso: LUNES,
+      todayIso: JUEVES,
+    })
+    expect(week[0].rangeDot).toBe('in-range')
+    expect(week[1].rangeDot).toBe('out-of-range')
+    expect(week[2].rangeDot).toBe('logged')
+    // Jueves es hoy ⇒ viernes y domingo son futuro: nada que contar.
+    expect(week[4].rangeDot).toBe('none')
+    expect(week[6].rangeDot).toBe('none')
+  })
+
+  it('HOY jamas se juzga por rango: logged con registro, none sin el (misma regla que la racha)', () => {
+    const week = buildNutritionWeek({
+      variants,
+      history: [
+        historyDay(MIERCOLES, { consumed: consumed(600, 1) }), // hoy, lejos del rango todavia
+      ],
+      weekStartIso: LUNES,
+      todayIso: MIERCOLES,
+    })
+    expect(week[2].state).toBe('today')
+    expect(week[2].rangeDot).toBe('logged')
+    // El martes sin fila de historial: pasado sin registro.
+    expect(week[1].rangeDot).toBe('none')
+  })
+})

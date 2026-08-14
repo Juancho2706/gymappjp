@@ -36,6 +36,7 @@ import {
   resolveNutritionDayVariantForDow,
   type NutritionDayVariantLike,
 } from './day-variants'
+import { energyDayInRange } from './design'
 import { describeLegacyHistoryDay } from './read-models'
 
 const MS_PER_DAY = 86_400_000
@@ -104,6 +105,35 @@ export type NutritionWeekDayState = 'past-logged' | 'past-empty' | 'today' | 'fu
 /** De dónde salieron las `targets` de la celda (para no rotular una proyección como real). */
 export type NutritionWeekTargetsSource = 'snapshot' | 'projected' | 'none'
 
+/** Estado del punto por rango de energía (ver `NutritionWeekCell.rangeDot`). */
+export type EnergyRangeDotState = 'in-range' | 'out-of-range' | 'logged' | 'none'
+
+/**
+ * Punto por rango de una celda ya compuesta. Reglas de honestidad:
+ * - futuro ⇒ `none` (no pasó nada que contar);
+ * - HOY ⇒ `logged`/`none` según tenga registro, JAMÁS se juzga el rango (a media mañana
+ *   "fuera de rango" sería mentira — misma regla que la racha semanal);
+ * - pasado con datos ⇒ `in-range`/`out-of-range` contra las metas de la celda (snapshot primero);
+ * - pasado con registro injuzgable (sin meta; días solo-legacy con macros usan las del V1) ⇒ `logged`.
+ */
+export function nutritionWeekCellRangeDot(
+  cell: Pick<NutritionWeekCell, 'state' | 'consumed' | 'targets' | 'legacy' | 'isLegacy'>,
+): EnergyRangeDotState {
+  if (cell.state === 'future') return 'none'
+  const hasV2Intake = cell.consumed != null && (cell.consumed.entryCount > 0 || cell.consumed.calories > 0)
+  const logged = cell.state === 'past-logged' || cell.isLegacy === true || hasV2Intake
+  if (cell.state === 'today') return logged ? 'logged' : 'none'
+  const consumedCalories = hasV2Intake
+    ? (cell.consumed as NutritionWeekConsumedLike).calories
+    : cell.legacy?.hasMacros
+      ? (cell.legacy.consumed?.calories ?? null)
+      : null
+  const judged = consumedCalories == null ? null : energyDayInRange(consumedCalories, cell.targets?.calories ?? null)
+  if (judged === true) return 'in-range'
+  if (judged === false) return 'out-of-range'
+  return logged ? 'logged' : 'none'
+}
+
 /**
  * Resumen del sistema anterior (V1) del día. Es exactamente lo que devuelve
  * `describeLegacyHistoryDay` menos su bandera `isLegacy` (que la celda expone aparte), así no
@@ -136,6 +166,14 @@ export interface NutritionWeekCell<
   isLegacy?: boolean
   /** Frases y macros del sistema anterior; `null` cuando el día no es legacy. */
   legacy: NutritionWeekLegacySummary | null
+  /**
+   * Punto de estado del día por RANGO de energía (T2.7, catálogo Alumno 05): verde = dentro del
+   * ±10%, ámbar = con datos pero fuera, `logged` = con registro que no se puede juzgar (sin meta,
+   * o es HOY — juzgar un día a medio comer sería mentir), `none` = nada que contar. Lo materializa
+   * `buildNutritionWeek` para que sobreviva a las podas del borde RSC → cliente. Opcional: celdas
+   * de payloads viejos cacheados no lo traen y los renderers caen a su regla anterior.
+   */
+  rangeDot?: EnergyRangeDotState
   /** Fila cruda del historial, si existe (para detalle sin recomponer nada). */
   historyDay?: THistory
 }
@@ -325,6 +363,9 @@ export function buildNutritionWeek<
       }
     }
     if (historyDay != null) cell.historyDay = historyDay
+    // Materializado ACA (no derivado en cada renderer): las podas del borde RSC → cliente tiran
+    // `targets`/`legacy` y el punto tiene que sobrevivirlas.
+    cell.rangeDot = nutritionWeekCellRangeDot(cell)
 
     return cell
   })

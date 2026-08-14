@@ -17,8 +17,10 @@ import {
  * Lectura de cada chip (idéntica a la web):
  *  - inicial del día ("LU" … "DO", diccionario compartido del paquete),
  *  - número del día del mes con `tabular-nums` (columnas que no bailan al cambiar de semana),
- *  - punto de estado abajo: verde = con registro, neutro tenue = día pasado sin registro (sin rojo
- *    ni culpa), círculo hueco = día futuro (todavía no pasó nada que contar).
+ *  - punto de estado abajo (T2.7, por RANGO de energía): verde = día dentro del ±10% de su meta
+ *    (o con registro que no se puede juzgar — HOY incluido), ámbar = con datos pero fuera del
+ *    rango (nunca rojo), neutro tenue = día pasado sin registro (sin culpa), círculo hueco =
+ *    día futuro (todavía no pasó nada que contar).
  *
  * HOY siempre queda marcado aunque no esté seleccionado: es el único día con superficie de
  * registro y tiene que ubicarse aunque el alumno esté mirando el sábado. En la web eso es un
@@ -65,6 +67,8 @@ const DOT_BASE = 'mt-0.5 h-2 w-2 rounded-full'
 const DOT_TONE = {
   /** Verde del DS (`success-500`); la web usa `emerald-*`, el token es el equivalente correcto. */
   logged: 'bg-success-500',
+  /** T2.7: con datos pero FUERA del rango ±10% de energía — ámbar, nunca rojo. */
+  outOfRange: 'bg-warning-500',
   /** Neutro tenue: `bg-border-default` no existe en RN (los borders son namespace aparte). */
   empty: 'bg-ink-300',
   future: 'border border-strong',
@@ -121,11 +125,17 @@ export function WeekDayNav({
         const isToday = cell.state === 'today'
         const dayNumber = dayOfMonthLabel(cell.isoDate)
         const chipTone = isSelected ? CHIP_TONE.selected : isToday ? CHIP_TONE.today : CHIP_TONE.idle
-        const dotTone = hasLoggedIntake(cell)
-          ? DOT_TONE.logged
-          : cell.state === 'future'
-            ? DOT_TONE.future
-            : DOT_TONE.empty
+        // T2.7: punto por RANGO de energía (verde adentro, ámbar afuera) cuando la celda trae el
+        // estado materializado; payloads viejos cacheados sin `rangeDot` caen a la regla anterior.
+        const dot = cell.rangeDot ?? (hasLoggedIntake(cell) ? 'logged' : 'none')
+        const dotTone =
+          dot === 'in-range' || dot === 'logged'
+            ? DOT_TONE.logged
+            : dot === 'out-of-range'
+              ? DOT_TONE.outOfRange
+              : cell.state === 'future'
+                ? DOT_TONE.future
+                : DOT_TONE.empty
         const numberTone = isSelected
           ? 'text-primary'
           : isToday
