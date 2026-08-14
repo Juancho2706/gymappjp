@@ -50,7 +50,22 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       `copy-plan.ts` (+3 tests: solo marca dias que existen como variante, vuelta de semana, base
       sin "proximos"). El reducer no se toco.
 - [x] QA en preview de los dos modos (2026-08-13): quick-select desde Lunes resuelve Ma / Ma,Mi / Ma,Mi,Ju,Vi; el aviso de Sumar dice "Se suman franjas a 2 dias que ya tenian contenido. Quedan franjas repetidas: POLLO"; tras confirmar, Ma y Mi pasan de 2.037 a 4.073 kcal y el origen queda intacto; el Deshacer del modo Sumar devuelve Mi de 8.146 a 4.073 sin tocar otros dias
-- [ ] Responsive/PWA (390 px): PENDIENTE — el resize del navegador no llego a aplicar al viewport en esta sesion, asi que NO esta verificado
+- [~] Responsive/PWA (390 px): PARCIAL (2026-08-13, preview `8821f17c`). En un popup con viewport
+      REAL de 390 px el paso "El plan" no desborda (scrollWidth 386) y nombre/notas van full-width.
+      El QA funcional/visual completo a 390 NO se pudo: TODAS las ventanas de Chrome estaban
+      ocultas (el owner usaba otra app) y Next deja el contenido en un wrapper `hidden` sin
+      activar hasta poder pintar — variante del gotcha "tab background = QA envenenado". Ademas la
+      causa raiz del "resize no aplica" de ayer: la ventana esta MAXIMIZADA y `resize_window` es
+      no-op sobre maximizadas. Queda la pasada de ojo a 390 (owner en su celu, o ventana visible).
+- [x] QA en preview de las piezas nuevas (2026-08-13, deploy `8821f17c`, sesion josefit sobre
+      Catalina Rojas, todo LOCAL sin publicar): **F2-franja** — el menu desde el DIA BASE no
+      ofrece "proximos" (correcto, no tiene lugar en la semana); desde Lunes/franja POLLO los 3
+      chips aparecen y "Proximos 2 dias" MARCA exactamente Martes y Miercoles (aria-pressed) sin
+      copiar, con la CTA en "Copiar a 2 dias". **F1 wizard** — quitar POLLO es optimista (Lunes
+      2.037 → 0 kcal, toast con Deshacer) y el Deshacer la devuelve COMPLETA (2.037 kcal y las
+      porciones Proteinapro/Verduras intactas). **F5** — campo entre Permisos y Vigencia, editable,
+      y el carry-over vacio es CORRECTO (visible_notes de la version vigente = null en DB). El
+      borrador local generado por el QA se purgo (`eva:nutrition-builder-draft:…`).
 
 ## F3 — DDL `coach_food_last_qty` (LIVE)
 
@@ -106,4 +121,5 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-12 | F0 | (este commit) | docs:check | Auditoria + D1/D2 + los tres documentos. El enunciado del programa padre quedo corregido en la SPEC: la pieza destructiva es agregar undo de franja, no borrar un confirm. |
 | 2026-08-12 | F1 | cfb5a8f5 | tsc web ✓ · eslint 3 archivos limpio ✓ · vitest builder 87/87 (2 nuevos) ✓ · vitest quick-edit 77/77 ✓ · boundaries 335 ✓ | El wizard borraba la franja entera sin confirm NI undo; quick-edit tenia undo pero ademas confirmaba. Los dos convergen: la accion ocurre y hay Deshacer de 8 s que restituye en el indice original. QA en navegador: pendiente. |
 | 2026-08-12 | F2 (dia) | e03043a3 | tsc web ✓ · eslint 5 archivos limpio ✓ · vitest 119/119 (16 nuevos de copy-plan + 3 de APPEND) ✓ · boundaries 337 ✓ | Quick-select "proximos 1/2/4" + modo Sumar en el menu del dia, con el aviso previo servido por el modulo puro. Queda el menu de la FRANJA, que no es el mismo gesto: ahi la copia ya empareja por nombre. QA en navegador: pendiente. |
+| 2026-08-13 | F1-resto + F2-franja + F4-cierre + F5 + F6 + QA preview | ed4ec365 · b4e07f79 · 8821f17c | eslint tocados ✓ · vitest web 140/140 ✓ · vitest RN 90/90 + paridad ✓ · tsc web 0 ✓ · tsc mobile 0 ✓ · boundaries 340 ✓ · docs:check ✓ · QA preview funcional ✓ · **NO corridos: `expo export` ni suite completa (CPU del owner en uso)** | Decision A ejecutada (chips que marcan, sin toggle) · tercer camino de precedencia verificado con tx-rollback en LIVE · notas visibles editables en el wizard web y RN · paridad RN F1+F5 aplicada, F2/F4 RN declaradas en MOBILE_PARITY · QA responsive 390 PARCIAL (metricas sin overflow; ojo humano pendiente). |
 | 2026-08-13 | F3 + F4 + QA preview | c7f4e3e1 · faeb8b01 · 81fcd6b5 · 55380334 | tx-rollback ✓ · advisors sin hallazgos propios ✓ · EXPLAIN Index Scan 0,079 ms ✓ · tsc web ✓ · eslint ✓ · vitest 106/106 ✓ · boundaries 340 ✓ · QA en preview con evidencia en DB ✓ | El QA en preview cazo DOS bugs que los gates verdes no veian, los dos escondidos por el `catch` mudo del best-effort: (1) el upsert de PostgREST daba 403 porque arma el DO UPDATE SET con TODAS las columnas del payload, incluidas las que a proposito no tienen grant de UPDATE ⇒ la escritura paso a RPC guardada; (2) la accion usaba el limitador `coach-write`, el mismo de publicar, y se disparaba en cada blur ⇒ paso al laxo y solo viaja si la cantidad CAMBIO. Pendiente: responsive 390 px y el tercer camino de precedencia. |
