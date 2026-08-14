@@ -218,6 +218,11 @@ no del plan.
      reconcilian enseguida con `fetchNutritionTodayAction` — el check persiste entre tabs sin
      depender de los caches de Next.
 - Gates: tsc web 0 · vitest 1067/1067 · boundaries 345 · eslint sin errores.
+- ✅ Verificado programatico en el preview de `8c1a063e` (2026-08-14): (1) retirar registro →
+  click al tab a los 300 ms (accion en pleno vuelo) → NAVEGO a Historial (el gate difirio y
+  despacho); (2) volver a Hoy → la UI pinta EXACTAMENTE la verdad de DB (3 checks marcados =
+  3 entries activas, 2 filas pendientes = las retiradas) — nada de payload stale. Falta el
+  visto bueno manual del owner (su flujo: chequear → Plan → volver → el check persiste).
 
 ## F4 — Correccion (verificacion visual contra el mock)
 
