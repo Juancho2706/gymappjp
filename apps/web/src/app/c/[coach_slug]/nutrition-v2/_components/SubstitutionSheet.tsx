@@ -11,7 +11,7 @@ import {
   type SubstitutionOptionsItem,
 } from '@eva/nutrition-v2'
 import { formatNutritionCalories } from '@eva/nutrition-v2'
-import { loadSubstitutionGroupPageAction } from '../_actions/intake.actions'
+import { loadSubstitutionGroupPageAction } from './nutrition-api'
 import { TodayModal } from './TodayModal'
 
 /**

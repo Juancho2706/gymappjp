@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 import { energyTrendDirection } from '@eva/nutrition-v2'
 import { NutritionCard } from '@/components/nutrition-v2'
-import { fetchNutritionHistoryWeeksAction } from '../_actions/history.actions'
+import { fetchNutritionHistoryWeeksAction } from './nutrition-api'
 import { formatHistoryWeekRangeLabel, type HistoryWeekBucket } from './week-nav.logic'
 
 /**

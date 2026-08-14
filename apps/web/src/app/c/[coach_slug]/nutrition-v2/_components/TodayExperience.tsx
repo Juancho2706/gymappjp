@@ -81,39 +81,25 @@ import { PortionCoverageRow } from './PortionCoverageRow'
 import { PortionSlotSection } from './PortionSlotSection'
 import { PortionEquivalencesSheet } from './PortionEquivalencesSheet'
 import { formatPortionsEs, slotsWithPrescribedContent } from './portion-marks.logic'
+// H12: TODO lo que esta pantalla habla con el servidor viaja por `nutrition-api.ts` (fetch al
+// puente HTTP), nunca como server action directa — una server action en vuelo podía dejar el
+// App Router sin navegación hasta recargar (H9/H11), y el flujo de "marcar" lo disparaba
+// siempre. `fetch()` no toca el router: se puede navegar con la request aún en vuelo.
 import {
-  correctIntakeAction as correctIntakeActionRaw,
-  recordIntakeAction as recordIntakeActionRaw,
-  recordSlotIntakeBatchAction as recordSlotIntakeBatchActionRaw,
-  recordSubstitutionIntakeAction as recordSubstitutionIntakeActionRaw,
-  searchFoodCatalogAction as searchFoodCatalogActionRaw,
-  voidIntakeAction as voidIntakeActionRaw,
-  voidSlotIntakeBatchAction as voidSlotIntakeBatchActionRaw,
-} from '../_actions/intake.actions'
-import {
-  getFavoriteFoodIdsAction as getFavoriteFoodIdsActionRaw,
-  listFavoriteFoodsAction as listFavoriteFoodsActionRaw,
-  toggleFavoriteFoodAction as toggleFavoriteFoodActionRaw,
-} from '../_actions/favorites.actions'
-import { fetchNutritionTodayAction as fetchNutritionTodayActionRaw } from '../_actions/today.actions'
-import { trackedAction, useNavigationGate } from './navigation-gate'
+  correctIntakeAction,
+  fetchNutritionTodayAction,
+  getFavoriteFoodIdsAction,
+  listFavoriteFoodsAction,
+  recordIntakeAction,
+  recordSlotIntakeBatchAction,
+  recordSubstitutionIntakeAction,
+  searchFoodCatalogAction,
+  toggleFavoriteFoodAction,
+  voidIntakeAction,
+  voidSlotIntakeBatchAction,
+} from './nutrition-api'
+import { useNavigationGate } from './navigation-gate'
 import { readTodayCache, writeTodayCache } from './today-cache'
-
-// TODAS las server actions de esta pantalla pasan por la compuerta de navegación (H9): mientras
-// una esté en vuelo, los clicks de navegación se difieren en vez de dejar que el App Router
-// descarte la acción y quede suspendido (ver navigation-gate.ts). Alias 1:1 para que los call
-// sites de abajo no cambien.
-const correctIntakeAction = trackedAction(correctIntakeActionRaw)
-const recordIntakeAction = trackedAction(recordIntakeActionRaw)
-const recordSlotIntakeBatchAction = trackedAction(recordSlotIntakeBatchActionRaw)
-const recordSubstitutionIntakeAction = trackedAction(recordSubstitutionIntakeActionRaw)
-const searchFoodCatalogAction = trackedAction(searchFoodCatalogActionRaw)
-const voidIntakeAction = trackedAction(voidIntakeActionRaw)
-const voidSlotIntakeBatchAction = trackedAction(voidSlotIntakeBatchActionRaw)
-const getFavoriteFoodIdsAction = trackedAction(getFavoriteFoodIdsActionRaw)
-const listFavoriteFoodsAction = trackedAction(listFavoriteFoodsActionRaw)
-const toggleFavoriteFoodAction = trackedAction(toggleFavoriteFoodActionRaw)
-const fetchNutritionTodayAction = trackedAction(fetchNutritionTodayActionRaw)
 import {
   useCaptureStudentNutritionCorrection,
   useCaptureStudentNutritionIntake,
