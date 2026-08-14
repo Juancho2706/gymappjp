@@ -1,7 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-import { headers } from 'next/headers'
 import { z } from 'zod'
 import {
   FoodCatalogSearchReadModelSchema,
@@ -57,45 +55,25 @@ type RpcClient = {
 }
 
 /**
- * Ruta a revalidar: se DERIVA EN EL SERVIDOR, ya no se acepta del cliente (NUT-006).
+ * Estas mutaciones NO llaman `revalidatePath` — decision QA T2.7 F4, hallazgo H11 (2026-08-14).
  *
- * El contrato anterior (`z.string().startsWith('/c/')`) era un campo OBLIGATORIO de los seis
- * schemas y se parseaba ANTES de cualquier RPC, asi que un alumno de Team —que el proxy sirve
- * bajo `/t/<slug>` (proxy.ts:630 setea `x-client-base-path`)— recibia `INVALID_PAYLOAD` y la
- * mutacion entera se abortaba: "Lo comí", registro libre, bulk-mark, deshacer, editar, retirar y
- * scanner, TODOS rotos en web para ese segmento. Ademas confiar la ruta al cliente permitia
- * revalidar la ruta de otro coach/team.
+ * Una server action que revalida obliga al App Router a una NAVEGACION interna al aplicar la
+ * respuesta (`server-action-reducer.js`: seed del flight + `navigateToKnownRoute` con
+ * `FreshnessPolicy.RefreshAll`). En Next 16.3.0 ese apply quedaba colgado de forma reproducible
+ * tras "marcar un alimento" en el Hoy del alumno (el estado del router jamas commiteaba: sin
+ * re-render del RSC, y toda navegacion posterior muerta hasta recargar — el bug "marco un check
+ * y los tabs no responden"). Ademas re-renderiza la pagina entera del alumno EN CADA check, un
+ * costo que nadie consume: la UI reconcilia con `fetchNutritionTodayAction` + un cache por
+ * pestaña (`today-cache.ts`) desde que las mutaciones tampoco llaman `router.refresh()` (H9).
  *
- * Ahora la ruta sale del header que inyecta el proxy (`x-client-base-path` para /t y /e) o del
- * `x-coach-slug` del branch standalone /c, y se valida contra un allowlist estricto. Si ningun
- * header sirve (render directo sin proxy, tests), no se revalida: la UI ya hace `router.refresh()`
- * tras cada mutacion, asi que el peor caso es una revalidacion de menos, nunca una escritura de
- * menos.
+ * Sin revalidacion, el reducer del action sale por la via corta (sin navegacion interna, sin
+ * seed que aplicar) y la accion abandona la cola del router en milisegundos. El costo es un
+ * router cache del cliente stale tras mutar, que ya cubre `today-cache.ts`; una recarga o una
+ * sesion nueva siempre leen la verdad del servidor.
+ *
+ * (La derivacion de ruta por headers `x-client-base-path`/`x-coach-slug` que vivia aca murio
+ * con la revalidacion; ver historia NUT-006 en git si un dia vuelve.)
  */
-const CLIENT_BASE_PATH_RE = /^\/(c|t|e)\/[a-z0-9-]{1,64}$/
-const COACH_SLUG_RE = /^[a-z0-9-]{1,64}$/
-
-async function resolveRevalidateTarget(): Promise<string | null> {
-  try {
-    const h = await headers()
-    const raw = (h.get('x-client-base-path') ?? '').trim()
-    const base = raw.endsWith('/') ? raw.slice(0, -1) : raw
-    if (base.length > 0 && CLIENT_BASE_PATH_RE.test(base)) return `${base}/nutrition-v2`
-
-    const coachSlug = (h.get('x-coach-slug') ?? '').trim().toLowerCase()
-    if (COACH_SLUG_RE.test(coachSlug)) return `/c/${coachSlug}/nutrition-v2`
-    return null
-  } catch {
-    // `headers()` fuera de un request scope. Se resuelve DESPUES de que la escritura ya entro:
-    // jamas puede convertir un registro guardado en un error para el alumno.
-    return null
-  }
-}
-
-/** Revalida la ruta derivada del request (no-op si no hay header confiable). */
-function revalidateResolved(target: string | null): void {
-  if (target) revalidatePath(target)
-}
 
 const RecordActionInputSchema = z.object({
   payload: NutritionIntakeMutationSchema,
@@ -346,7 +324,6 @@ export async function recordIntakeAction(input: unknown): Promise<MutationSucces
   if (denial) return denied(denial)
 
   const result = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(payload))
-  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
@@ -384,7 +361,6 @@ export async function recordSubstitutionIntakeAction(
 
   const result = await runMutation(auth.supabase, plan.rpcName, plan.args)
   if (!result.ok) return result
-  revalidateResolved(await resolveRevalidateTarget())
   return {
     ok: true,
     id: result.id,
@@ -466,7 +442,6 @@ export async function correctIntakeAction(input: unknown): Promise<MutationSucce
     p_correction_reason: payload.correctionReason,
     ...commonRpcArgs(payload),
   })
-  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
@@ -498,7 +473,6 @@ export async function voidIntakeAction(input: unknown): Promise<MutationSuccess 
     p_reason: payload.reason,
     p_idempotency_key: payload.idempotencyKey,
   })
-  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
@@ -548,7 +522,6 @@ export async function recordSlotIntakeBatchAction(input: unknown): Promise<Batch
   if (ids.length === 0) {
     return firstError ?? fail('BATCH_FAILED', 'No se pudo registrar la comida. Intenta nuevamente.')
   }
-  revalidateResolved(await resolveRevalidateTarget())
   return { ok: true, ids, failed }
 }
 
@@ -589,7 +562,6 @@ export async function voidSlotIntakeBatchAction(input: unknown): Promise<BatchMu
   if (ids.length === 0) {
     return firstError ?? fail('BATCH_FAILED', 'No se pudo deshacer. Intenta nuevamente.')
   }
-  revalidateResolved(await resolveRevalidateTarget())
   return { ok: true, ids, failed }
 }
 
@@ -611,7 +583,6 @@ export async function closeDayAction(input: unknown): Promise<MutationSuccess | 
     p_local_date: parsed.data.localDate,
     p_timezone: parsed.data.timezone,
   })
-  if (result.ok) revalidateResolved(await resolveRevalidateTarget())
   return result
 }
 
