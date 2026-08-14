@@ -162,7 +162,10 @@ export function formatSelectedDayCaption(cell: {
   variant: { label: string } | null
 }): string | null {
   const label = cell.variant?.label?.trim()
-  return label ? `${cell.longLabel} · ${label}` : cell.longLabel
+  if (!label) return cell.longLabel
+  // Variante nombrada igual que el día ("Viernes") ⇒ no repetir: "Viernes · Viernes" (QA H6).
+  if (label.localeCompare(cell.longLabel, 'es', { sensitivity: 'base' }) === 0) return cell.longLabel
+  return `${cell.longLabel} · ${label}`
 }
 
 // ── Historial por semanas (auditoría SPEC ola 3 punto 7) ──────────────────────────
@@ -248,6 +251,29 @@ export function groupHistoryDaysByWeek(
       inRangeCount: countEnergyDaysInRange(rowsByWeek.get(weekStartIso) ?? []),
     }
   })
+}
+
+/**
+ * Recorta una tanda de semanas al borde seguro de paginación (QA F1-F3, hallazgo H3).
+ *
+ * El RPC pagina por CANTIDAD de fechas, así que la semana más vieja de una tanda puede llegar
+ * CORTADA (solo sus días más recientes). Emitirla igual pintaba días con datos como "sin datos",
+ * una pill "N/7" mentirosa, y al pedir la tanda siguiente la MISMA semana aparecía otra vez con
+ * el resto de sus días. Regla: con `hasMore`, la última semana se DESCARTA y el cursor pasa a ser
+ * el lunes de la última emitida (`p_before` es exclusivo ⇒ la próxima tanda re-trae la semana
+ * descartada COMPLETA, hasta su domingo). Sin `hasMore` no hay corte posible y no se descarta.
+ * Con una sola semana en la tanda no se descarta (guard anti-loop; con tandas ≥8 fechas no pasa).
+ */
+export function trimHistoryWeeksPage(input: {
+  weeks: HistoryWeekBucket[]
+  hasMore: boolean
+  rpcCursor: string | null
+}): { weeks: HistoryWeekBucket[]; hasMore: boolean; nextCursor: string | null } {
+  if (!input.hasMore || input.weeks.length < 2) {
+    return { weeks: input.weeks, hasMore: input.hasMore, nextCursor: input.rpcCursor }
+  }
+  const emitted = input.weeks.slice(0, -1)
+  return { weeks: emitted, hasMore: true, nextCursor: emitted[emitted.length - 1]!.weekStartIso }
 }
 
 /** "21-27 jul" (mismo mes) o "28 jul-3 ago" (cruza de mes), para el encabezado de la card. */

@@ -579,7 +579,6 @@ export function TodayExperience({
       <PrescribedSection
         today={today}
         busyId={busyId}
-        isPending={isPending}
         portionsApi={portionsApi}
         substitutionOptionsByItem={substitutionOptionsByItem}
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
@@ -659,7 +658,7 @@ export function TodayExperience({
                         <IconButton
                           label="Editar cantidad"
                           onClick={() => openDialog({ kind: 'edit', entry })}
-                          disabled={isPending}
+                          disabled={busyId !== null}
                         >
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </IconButton>
@@ -668,7 +667,7 @@ export function TodayExperience({
                         label="Retirar registro"
                         tone="danger"
                         onClick={() => openDialog({ kind: 'void', entry })}
-                        disabled={isPending}
+                        disabled={busyId !== null}
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </IconButton>
@@ -1052,7 +1051,6 @@ function IconButton({
 function PrescribedSection({
   today,
   busyId,
-  isPending,
   portionsApi,
   substitutionOptionsByItem,
   onOpenPortionSheet,
@@ -1064,8 +1062,13 @@ function PrescribedSection({
   onSwipeExchange,
 }: {
   today: NutritionTodayReadModel
+  /**
+   * Id de la MUTACIÓN en vuelo (null = ninguna). Los `disabled` de esta sección miran esto y NO
+   * `isPending` del transition: la transición sigue pendiente durante el `router.refresh()`
+   * posterior, y un refresh lento (o colgado, visto en previews) dejaba TODOS los checkboxes y
+   * acciones muertos sin feedback — el "no puedo marcar la 2ª comida" reportado por QA.
+   */
   busyId: string | null
-  isPending: boolean
   portionsApi: PortionMarksApi
   substitutionOptionsByItem: Record<string, SubstitutionOptionsItem>
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
@@ -1149,7 +1152,7 @@ function PrescribedSection({
                 return (
                   <div key={item.id}>
                     <SwipeToExchange
-                      enabled={substitutionEntry !== undefined && !isPending}
+                      enabled={substitutionEntry !== undefined && busyId === null}
                       label={`Cambiar ${row.name}`}
                       onSwipe={() => {
                         if (substitutionEntry) onSwipeExchange(substitutionEntry, consumedFoodId)
@@ -1177,8 +1180,8 @@ function PrescribedSection({
                         <EatCheckbox
                           checked={consumedEntry != null}
                           name={row.name}
-                          disabled={isPending}
-                          pending={isPending && busyId === `eat:${item.id}`}
+                          disabled={busyId !== null}
+                          pending={busyId === `eat:${item.id}`}
                           onToggle={() => {
                             if (consumedEntry) onVoid(consumedEntry)
                             else onEat(slot, item)
@@ -1193,11 +1196,11 @@ function PrescribedSection({
                             </span>
                             {/* NUT-009: el lápiz solo si el plan permite ajustar la cantidad prescrita. */}
                             {today.permissions.canAdjustPrescribedQuantity ? (
-                              <IconButton label="Editar cantidad" onClick={() => onEdit(consumedEntry)} disabled={isPending}>
+                              <IconButton label="Editar cantidad" onClick={() => onEdit(consumedEntry)} disabled={busyId !== null}>
                                 <Pencil className="h-4 w-4" aria-hidden="true" />
                               </IconButton>
                             ) : null}
-                            <IconButton label="Retirar registro" tone="danger" onClick={() => onVoid(consumedEntry)} disabled={isPending}>
+                            <IconButton label="Retirar registro" tone="danger" onClick={() => onVoid(consumedEntry)} disabled={busyId !== null}>
                               <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </IconButton>
                           </div>
@@ -1211,7 +1214,7 @@ function PrescribedSection({
                         "cambiar a lo mismo" no es una decisión. */}
                     <ItemExchangeTrigger
                       entry={substitutionEntry}
-                      isPending={isPending}
+                      isPending={busyId !== null}
                       consumedFoodId={consumedFoodId}
                       onOpen={onOpenExchange}
                     />
@@ -1236,11 +1239,11 @@ function PrescribedSection({
                   actions={
                     <div className="flex items-center gap-1">
                       {entry.prescriptionItemId === null || today.permissions.canAdjustPrescribedQuantity ? (
-                        <IconButton label="Editar cantidad" onClick={() => onEdit(entry)} disabled={isPending}>
+                        <IconButton label="Editar cantidad" onClick={() => onEdit(entry)} disabled={busyId !== null}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </IconButton>
                       ) : null}
-                      <IconButton label="Retirar registro" tone="danger" onClick={() => onVoid(entry)} disabled={isPending}>
+                      <IconButton label="Retirar registro" tone="danger" onClick={() => onVoid(entry)} disabled={busyId !== null}>
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </IconButton>
                     </div>
@@ -1258,7 +1261,7 @@ function PrescribedSection({
             {/* Registro en bloque de la franja ("Comí toda esta comida") — thumb-zone bajo los items. */}
             <BulkMarkControl
               state={bulk}
-              pending={isPending && busyId === `bulk:${slot.id}`}
+              pending={busyId === `bulk:${slot.id}`}
               onEat={() => onBulkEat(slot, bulk)}
             />
             {/* Porciones de la franja (SPEC UX-b): sección hermana de los items. */}

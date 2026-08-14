@@ -10,6 +10,8 @@ import {
   resolveWeekIsoFromDateParam,
   resolveWeekIsoFromDowParam,
   toWeekNavCells,
+  trimHistoryWeeksPage,
+  type HistoryWeekBucket,
 } from './week-nav.logic'
 
 // Semana de referencia: lunes 2026-07-27 … domingo 2026-08-02. Hoy = miércoles 2026-07-29.
@@ -110,6 +112,15 @@ describe('titulares de día', () => {
 
   it('la caption de metas nombra el día y la variante', () => {
     expect(formatSelectedDayCaption(cellFor(SABADO))).toBe('Sábado · Día alto')
+  })
+
+  it('variante nombrada igual que el día no se repite (QA H6: "Viernes · Viernes")', () => {
+    expect(
+      formatSelectedDayCaption({ longLabel: 'Viernes', variant: { label: 'Viernes' } }),
+    ).toBe('Viernes')
+    expect(
+      formatSelectedDayCaption({ longLabel: 'Viernes', variant: { label: '  viernes ' } }),
+    ).toBe('Viernes')
   })
 })
 
@@ -214,5 +225,37 @@ describe('formatHistoryWeekRangeLabel', () => {
 
   it('cruza de mes: incluye el mes de inicio', () => {
     expect(formatHistoryWeekRangeLabel('2026-07-28', '2026-08-03')).toBe('28 jul-3 ago')
+  })
+})
+
+describe('trimHistoryWeeksPage', () => {
+  // El helper solo lee `weekStartIso`; el resto del bucket no participa del recorte.
+  const bucket = (weekStartIso: string) => ({ weekStartIso }) as HistoryWeekBucket
+
+  it('sin hasMore no recorta nada: la ultima semana esta completa por definicion', () => {
+    const weeks = [bucket('2026-08-03'), bucket('2026-07-27')]
+    expect(trimHistoryWeeksPage({ weeks, hasMore: false, rpcCursor: null })).toEqual({
+      weeks,
+      hasMore: false,
+      nextCursor: null,
+    })
+  })
+
+  it('con hasMore descarta la semana mas vieja (posible corte) y el cursor pasa al lunes de la ultima emitida', () => {
+    const weeks = [bucket('2026-08-03'), bucket('2026-07-27'), bucket('2026-07-20')]
+    expect(trimHistoryWeeksPage({ weeks, hasMore: true, rpcCursor: '2026-07-22' })).toEqual({
+      weeks: [bucket('2026-08-03'), bucket('2026-07-27')],
+      hasMore: true,
+      nextCursor: '2026-07-27',
+    })
+  })
+
+  it('con una sola semana no descarta (guard anti-loop) y conserva el cursor del RPC', () => {
+    const weeks = [bucket('2026-08-03')]
+    expect(trimHistoryWeeksPage({ weeks, hasMore: true, rpcCursor: '2026-08-01' })).toEqual({
+      weeks,
+      hasMore: true,
+      nextCursor: '2026-08-01',
+    })
   })
 })

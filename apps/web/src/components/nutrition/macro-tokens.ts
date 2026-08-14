@@ -1,13 +1,12 @@
 /**
  * Canonical macro color tokens — EVA redesign DS ramps (TOKENS.md).
  * Shared by coach + alumno nutrition surfaces so color never collides with the
- * success/adherence green (`--color-macro-goal`). The design's macro palette is
- * the data-viz triad: protein → ember (nutrition accent), carbs → sport (brand
- * blue, viz-1), fats → aqua (recovery cyan). All three are FIXED ramps (stable
- * across coaches/white-label) and constant light/dark, matching the design refs.
+ * success/adherence green (`--color-macro-goal`). The macro palette is the FIXED
+ * trio of T2.7 F1 (same as `NUTRITION_MACROS` in `packages/nutrition-v2/design.ts`):
+ * protein → blue, carbs → amber, fats → green — stable across coaches/white-label
+ * and constant light/dark.
  *
- * Source of truth: DS ramps in `apps/web/src/app/globals.css`
- * (`--ember-500` / `--sport-500` / `--aqua-500`).
+ * Source of truth: `--color-macro-*` tokens in `apps/web/src/app/globals.css`.
  */
 export type MacroKey = 'protein' | 'carbs' | 'fats'
 
@@ -21,9 +20,9 @@ export interface MacroMeta {
 }
 
 export const MACRO_META: Record<MacroKey, MacroMeta> = {
-  protein: { label: 'Proteína', color: 'var(--ember-500)', short: 'P' },
-  carbs: { label: 'Carbos', color: 'var(--sport-500)', short: 'C' },
-  fats: { label: 'Grasas', color: 'var(--aqua-500)', short: 'G' },
+  protein: { label: 'Proteína', color: 'var(--color-macro-protein)', short: 'P' },
+  carbs: { label: 'Carbos', color: 'var(--color-macro-carbs)', short: 'C' },
+  fats: { label: 'Grasas', color: 'var(--color-macro-fats)', short: 'G' },
 }
 
 /** Over-target (exceeded) hue — distinct from any macro hue. Pair with a word + icon. */

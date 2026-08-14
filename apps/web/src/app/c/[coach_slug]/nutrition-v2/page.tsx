@@ -55,6 +55,7 @@ import {
   formatSelectedDayCaption,
   groupHistoryDaysByWeek,
   nutritionWeekHistoryCursor,
+  trimHistoryWeeksPage,
   resolveWeekIsoFromDateParam,
   resolveWeekIsoFromDowParam,
   toWeekNavCells,
@@ -631,7 +632,14 @@ async function HistoryView({
   }
 
   const history = await getNutritionHistoryV2ForWeb({ clientId, before, pageSize: NUTRITION_HISTORY_PAGE_ROWS })
-  const weeks = groupHistoryDaysByWeek(history.items, today)
+  // Borde de paginación (QA H3): la semana más vieja de la tanda puede llegar cortada — se
+  // descarta y la tanda siguiente la re-trae completa (mismo recorte que la server action).
+  const page = trimHistoryWeeksPage({
+    weeks: groupHistoryDaysByWeek(history.items, today),
+    hasMore: history.hasMore,
+    rpcCursor: history.nextCursor,
+  })
+  const weeks = page.weeks
   if (weeks.length === 0) {
     return (
       <NutritionStatePanel
@@ -646,8 +654,8 @@ async function HistoryView({
     <HistoryWeeksList
       base={base}
       clientId={clientId}
-      initialCursor={history.nextCursor}
-      initialHasMore={history.hasMore}
+      initialCursor={page.nextCursor}
+      initialHasMore={page.hasMore}
       initialWeeks={weeks}
       pageSize={NUTRITION_HISTORY_PAGE_ROWS}
       todayIso={today}

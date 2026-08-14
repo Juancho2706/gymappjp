@@ -3511,7 +3511,13 @@ function HistoryTab({
       }
       byWeek.get(weekStartIso)!.push(item)
     }
-    return order.map((weekStartIso) => {
+    // Borde de paginacion (QA H3, paridad web `trimHistoryWeeksPage`): la semana mas VIEJA de lo
+    // acumulado puede estar CORTADA por el limite de fechas de la ultima pagina — pintarla haria
+    // mentir la pill "N/7". Mientras el servidor tenga mas paginas, esa cola se esconde; el
+    // reagrupado de arriba la completa (y la muestra) apenas llegan sus filas por scroll o por el
+    // backfill de abajo.
+    const emitted = canLoadMoreHistory(page) && order.length > 0 ? order.slice(0, -1) : order
+    return emitted.map((weekStartIso) => {
       const cells = buildNutritionWeek<NutritionWeekVariantLike, NutritionHistoryDay>({
         variants: [],
         history: byWeek.get(weekStartIso) ?? [],
@@ -3524,7 +3530,7 @@ function HistoryTab({
       const inRangeCount = countEnergyDaysInRange(byWeek.get(weekStartIso) ?? [])
       return { weekStartIso, cells, loggedCount, inRangeCount }
     })
-  }, [items, currentWeekStartIso, todayIso])
+  }, [items, currentWeekStartIso, todayIso, page])
 
   // Backfill acotado: si la PRIMERA página (14 días) cae entera dentro de la semana en curso
   // (p.ej. hoy es martes), la lista de semanas cerradas queda vacía y no hay overflow para que
@@ -3641,25 +3647,33 @@ function HistoryTrendCard({ weeks }: { weeks: NutritionHistoryWeek[] }) {
           </Text>
         </View>
       </View>
+      {/* Cada columna lleva su cifra y un track de fondo: sin ellos las barras eran rectangulos
+          casi invisibles que no comunicaban la magnitud (QA F1-F3, hallazgo H4 — espejo web). */}
       <View
         accessible
         accessibilityRole="image"
         accessibilityLabel={`Días en rango por semana: ${oldestToNewest.map((week) => `${week.inRangeCount} de 7`).join(', ')}`}
-        className="mt-3 h-11 flex-row items-end gap-1"
+        className="mt-3 flex-row items-end gap-1.5"
       >
         {oldestToNewest.map((week) => {
           const ratio = week.inRangeCount / 7
           return (
-            <View
-              key={week.weekStartIso}
-              className="flex-1 rounded-t-md"
-              style={{
-                height: `${Math.max(ratio * 100, 8)}%`,
-                // Hex de 8 digitos (#RRGGBBAA): success al 60% / 30% sin importar helpers.
-                backgroundColor:
-                  ratio >= 5 / 7 ? `${theme.success}99` : ratio >= 3 / 7 ? `${theme.success}4D` : theme.muted,
-              }}
-            />
+            <View key={week.weekStartIso} className="flex-1 items-center gap-1">
+              <Text className="text-[10px] font-semibold text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                {week.inRangeCount}
+              </Text>
+              <View className="h-11 w-full overflow-hidden rounded-md bg-surface-sunken/60">
+                <View
+                  className="absolute inset-x-0 bottom-0 rounded-t-md"
+                  style={{
+                    height: `${Math.max(ratio * 100, 6)}%`,
+                    // Hex de 8 digitos (#RRGGBBAA): success al 70% / 40% sin importar helpers.
+                    backgroundColor:
+                      week.inRangeCount >= 5 ? `${theme.success}B3` : week.inRangeCount >= 3 ? `${theme.success}66` : theme.muted,
+                  }}
+                />
+              </View>
+            </View>
           )
         })}
       </View>

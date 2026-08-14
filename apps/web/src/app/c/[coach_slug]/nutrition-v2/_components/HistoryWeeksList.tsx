@@ -46,8 +46,13 @@ export function HistoryWeeksList({
         setError('No se pudo cargar más historial. Intenta de nuevo.')
         return
       }
-      // ACUMULATIVO: se agrega al final, jamás se reemplaza lo ya pintado.
-      setWeeks((prev) => [...prev, ...res.weeks])
+      // ACUMULATIVO: se agrega al final, jamás se reemplaza lo ya pintado. El filtro por
+      // `weekStartIso` es el cinturón del recorte de borde (QA H3): una semana ya pintada
+      // nunca vuelve a entrar aunque el servidor la re-traiga.
+      setWeeks((prev) => {
+        const seen = new Set(prev.map((week) => week.weekStartIso))
+        return [...prev, ...res.weeks.filter((week) => !seen.has(week.weekStartIso))]
+      })
       setHasMore(res.hasMore)
       setCursor(res.nextCursor)
     })
@@ -112,20 +117,27 @@ function HistoryTrendCard({ weeks }: { weeks: HistoryWeekBucket[] }) {
           {TREND_LABEL[trend]}
         </span>
       </div>
+      {/* Cada columna lleva su cifra y un track de fondo: sin ellos las barras eran rectángulos
+          casi invisibles que no comunicaban la magnitud (QA F1-F3, hallazgo H4). */}
       <div
         aria-label={`Días en rango por semana: ${oldestToNewest.map((week) => `${week.inRangeCount} de 7`).join(', ')}`}
-        className="mt-3 flex h-11 items-end gap-1"
+        className="mt-3 flex items-end gap-1.5"
         role="img"
       >
         {oldestToNewest.map((week) => {
           const ratio = week.inRangeCount / 7
           return (
-            <div
-              aria-hidden="true"
-              className={`flex-1 rounded-t-md ${ratio >= 5 / 7 ? 'bg-success/60' : ratio >= 3 / 7 ? 'bg-success/30' : 'bg-surface-sunken'}`}
-              key={week.weekStartIso}
-              style={{ height: `${Math.max(ratio * 100, 8)}%` }}
-            />
+            <div aria-hidden="true" className="flex flex-1 flex-col items-center gap-1" key={week.weekStartIso}>
+              <span className="text-[10px] font-semibold tabular-nums text-muted">{week.inRangeCount}</span>
+              <div className="relative h-11 w-full overflow-hidden rounded-md bg-surface-sunken/60">
+                <div
+                  className={`absolute inset-x-0 bottom-0 rounded-t-md ${
+                    week.inRangeCount >= 5 ? 'bg-success/70' : week.inRangeCount >= 3 ? 'bg-success/40' : 'bg-border-default'
+                  }`}
+                  style={{ height: `${Math.max(ratio * 100, 6)}%` }}
+                />
+              </div>
+            </div>
           )
         })}
       </div>

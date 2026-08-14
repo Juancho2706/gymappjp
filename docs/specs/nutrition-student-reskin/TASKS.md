@@ -92,25 +92,85 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       Plan, ficha del coach e historial RN) + `HistoryWeekCard` web, todos con fallback a la regla
       vieja para payloads cacheados sin `rangeDot`.
 
-## QA en preview de F1-F3 — [!] BLOQUEADO en el login del alumno (2026-08-14 ~01:00)
+## QA en preview de F1-F3 — [x] EJECUTADO 2026-08-14 (desbloqueado: la sesion de Catalina seguia viva)
 
-- Preview de `477bc476` READY en el alias de la rama; pestaña dejada abierta en
-  `/c/josefit/login` (el area del alumno redirige ahi; la sesion de coach no sirve, correcto).
-- El agente tiene PROHIBIDO tipear credenciales: para destrabar, (a) el owner se loguea como la
-  alumna en esa pestaña y el agente sigue, o (b) OK explicito del owner para correr
-  `tests/nutrition-v2/alumno-hoy.spec.ts` (se loguea solo con el alumno canario; muta datos en
-  prod auto-revertidos).
-- Datos listos para el QA (verificado en DB): Catalina `ba265b0b` tiene registros en 3 semanas
-  cerradas (23/07 · 29-31/07 · 05-10/08) ⇒ deben verse la trend card, pills "N/7 en rango",
-  puntos ambar (dias de 52-679 kcal) y el chip de racha en el Hoy (lu 10/08 con 2.241 kcal y
-  mi 12/08 con 56 = dias evaluables de la semana en curso).
-- Checklist del QA pendiente: Hoy (banda con zona sombreada, chip racha, checkbox registra/abre
-  retirar, paleta trio en mini-anillos y chips) · Historial (trend card, pills, puntos por rango)
-  · Plan (strip con puntos) · claro Y oscuro · sin errores de consola.
+Preview de `c6328192` en el alias de la rama, sesion de la alumna Catalina. Cobertura: Hoy /
+Plan / Historial · claro Y oscuro · desktop 1400 y responsive 390 (bottom nav) · consola sin
+errores en todo el recorrido.
+
+**Seed de QA aplicado en LIVE (pedido del owner, reversible):** todo el historial previo de
+Catalina 20/07-14/08 paso a `entry_status='voided'` con `correction_reason='qa-reset-t27-20260814'`;
+se insertaron 16 dias sinteticos "QA dia completo" (`note='seed qa-reset-t27-20260814'`,
+`idempotency_key='qa-seed-t27-<fecha>'`) con kcal exactas para cubrir verde/ambar/apagado y las
+pills (semana 3-9 ago = 5/7; 27jul-2ago = 2/7 + un verde injuzgable; 20-26jul = 1/7); snapshots
+`nutrition_day_snapshots_v2` creados donde faltaban. Ademas el plan "Plancito 2" (variante
+Viernes) gano una 2da franja **"Cena" 21:00** (Pechuga 150 g + Sopa 200 ml) para probar
+multi-comida. 🔴 Gotchas de seed aprendidos: el read model V2 EXIGE `idempotency_key IS NOT NULL`
+(sin el, la entry cae al carril legacy) y los targets del historial salen del SNAPSHOT del dia,
+no del plan.
+
+### Verificado OK
+- Hoy: banda de energia (encabezado "ENERGIA · RANGO 2.655-3.245", kcal grande, "faltan ~N"),
+  chip de racha "2 de 7 en rango" (aparece solo con evaluables; conteo correcto), mini-anillos
+  con trio, strip por rango EXACTO contra los datos (LU ambar 2.000 · MA verde 2.900 · MI ambar
+  700 · JU verde 3.000 · VI hoy verde-con-registro · SA/DO hueco), porciones, celebracion no
+  aplica.
+- Checkbox: vacio→registra (via "Comi toda esta comida"); marcado→abre "Retirar registro" con
+  motivos (Lo registre por error / No lo comi / Registro duplicado / Otro) — cancelado sin mutar.
+- **Bug reportado por el owner ("check de 1 comida tarda años y la 2da no se puede") NO
+  reproduce en web**: ambos checks fueron INSTANTANEOS (UI optimista + toast "Registraste tu
+  POLLO/Cena 🎉" con Deshacer), la 2da comida se marco sin bloqueo, DB consistente (5 entries,
+  877 kcal). Triar en RN/device.
+- Historial: pills "5/7"/"2/7"/"1/7" correctas (cuentan SOLO dias juzgables; verde
+  injuzgable-con-registro no suma — coincide con diseño), tap en celda abre el detalle del dia
+  correcto (06/08: 2.660/2.950, macros trio, "1 registro"), "tendencia ↑" correcta.
+- Plan: metas del dia, franjas con kcal (583/294), "PORCIONES A ELECCION", "REGLAS DEL PLAN".
+
+### Hallazgos → F4 (corregidos 2026-08-14 en la misma jornada; ver registro de cierres)
+- [x] 🔴 H1 — Chips P/C/G de las filas (Hoy y Plan, web) con paleta INVERTIDA/vieja (P naranja,
+      C azul, G celeste). Causa: `apps/web/src/components/nutrition/macro-tokens.ts` quedo fuera
+      de la migracion F1 con la triada vieja ember/sport/aqua. Fix: `MACRO_META` apunta a los
+      tokens canonicos `var(--color-macro-*)` (arregla TODAS las superficies que lo consumen:
+      MacroChipRow, MacroRings, MacroBars). RN ya cumplia (`NUTRITION_MACROS.nativeClass`).
+- [x] 🔴 H3 — Historial: semana de borde de paginacion PARCIAL (pill "0/7" mentirosa) y DUPLICADA
+      tras "Ver semanas anteriores". Fix web: `trimHistoryWeeksPage` (helper puro + 3 tests) —
+      con `hasMore` la ultima semana de la tanda se descarta y el cursor pasa al lunes de la
+      ultima emitida (la tanda siguiente re-trae la descartada COMPLETA); aplicado en `page.tsx`
+      y en la server action, + dedupe por `weekStartIso` al appendear en `HistoryWeeksList`.
+      Fix RN: el agrupador esconde la semana mas vieja mientras `canLoadMoreHistory` (el merge
+      acumulativo de RN ya la completaba sola; solo pintaba la version cortada mientras tanto).
+- [x] 🟡 H2 — Zona ±10% de la banda imperceptible en ambos temas. Fix web+RN: relleno success al
+      34% + bordes laterales solidos (ticks de inicio/fin del rango).
+- [x] 🟡 H4 — Trend card ilegible. Fix web+RN: cada columna lleva su CIFRA (N en rango) y un
+      track de fondo como escala; barra success 70%/40%/gris segun tramo.
+- [~] 🔵 H5 — Punto de HOY del strip no refrescaba al registrar: era SINTOMA de H8 (el
+      `router.refresh()` colgado nunca traia la verdad del server). Sin cambio propio;
+      re-verificar en preview tras H8.
+- [x] 🔵 H6 — "Viernes · Viernes": `formatSelectedDayCaption` ya no repite la variante cuando su
+      nombre es el del dia (+2 tests). RN no duplicaba.
+- [ ] ⚪ H7 — Tabs Hoy/Plan/Historial no navegaron con clicks de la extension (URL directa si);
+      probable artefacto de la extension — verificar con un click humano antes de tratarlo bug.
+
+### 🔴 H8 (2026-08-14, reproducido EN VIVO por el owner) — checkboxes muertos tras "Retirar registro"
+- Sintoma: tras retirar un item, NINGUN checkbox ni lapiz/tacho respondia (el owner: "no me deja
+  volver a marcar Avena ni quitar el check de las otras"); el boton "Comer lo que falta" seguia
+  vivo. Confirmado en DOM: 5 checkboxes y 10 tachos `disabled=true` con `isPending` colgado +30
+  min. **Es el mismo bug que el owner reporto AYER** ("el check tardaba años y no podia marcar la
+  2da comida"): un solo `useTransition` envuelve `await action()` **y el `router.refresh()`**; si
+  el refresh RSC tarda o se cuelga (visto en el preview), `isPending` queda true y TODA la
+  seccion quedaba deshabilitada sin feedback. RN no lo sufre (pending por item, `eatingId`).
+- Fix (web `TodayExperience.tsx`): los `disabled` de checkbox/lapiz/tacho/swipe/trigger miran
+  `busyId` (mutacion realmente en vuelo; se limpia en el `finally` apenas el server confirma) y
+  NO `isPending`. Protege igual contra doble-registro; la UI se libera sin esperar el refresh.
 
 ## F4 — Correccion (verificacion visual contra el mock)
 
-- [ ] Stepper hibrido + chips de razon + "Otra…" — deltas menores si los hay
+- [x] H1-H6 + H8 corregidos (arriba). Gates: tsc web+mobile 0 · vitest 30/30 (week-nav 3 tests
+      nuevos + caption 2) · boundaries 342 · eslint tocados sin errores nuevos.
+- [ ] Stepper hibrido + chips de razon + "Otra…" — deltas menores si los hay (chips de razon del
+      sheet Retirar verificados OK en el QA: Lo registre por error / No lo comi / duplicado /
+      Otro motivo)
+- [ ] Re-QA en preview de H1-H6+H8 tras el deploy de la rama (pendiente de build de Vercel)
 
 ## F5 — Cierre
 
@@ -126,4 +186,6 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-13 | F1 | (este commit) | tsc web+mobile 0 · vitest 10/10 · eslint ✓ · boundaries 340 ✓ | Trio fijo en design.ts + tokens RN + 6 grupos de hardcodes + V1 RN (MACRO_COLORS). Sin QA visual todavia: la re-QA completa es F5. |
 | 2026-08-13 | F2 (parcial) | (este commit) | tsc web+mobile 0 · vitest banda 4/4 + aura ✓ · eslint tocados sin errores nuevos | Banda de energia (D-A) y checkbox de registro (D-C) en web y RN; nota RN, "⇄ N equivalentes" y celebracion web verificados como YA cumplidos. Queda SOLO la racha semanal. Sin QA visual (F5). NO corridos: expo export ni suite completa. |
 | 2026-08-14 | Deuda de puntos por rango | 477bc476 | tsc web+mobile 0 · vitest 49/49 · eslint ✓ · boundaries 342 ✓ | `rangeDot` materializado en `buildNutritionWeek` + renderers web/RN con fallback. QA en preview quedo BLOQUEADO en el login del alumno (ver seccion arriba). |
+| 2026-08-14 | QA preview F1-F3 | c6328192 (sin cambios de codigo) | QA visual web: Hoy/Plan/Historial · dark+claro · 1400+390 · consola limpia | Desbloqueado solo (sesion de Catalina viva). Seed QA en LIVE (reset + 16 dias + franja Cena). 7 hallazgos H1-H7 documentados arriba para F4. Bug del owner (checks lentos/2da comida) NO reproduce en web. |
+| 2026-08-14 | F4 — H1-H6 + H8 | (este commit) | tsc web+mobile 0 · vitest 30/30 · boundaries 342 · eslint ✓ | H1 paleta chips (macro-tokens.ts al trio) · H2 zona banda visible (web+RN) · H3 borde de paginacion sin parciales ni duplicados (web+RN) · H4 trend card con cifras+track (web+RN) · H6 caption sin duplicar · H8 checkboxes muertos post-retiro (disabled por busyId, no isPending) — H8 reproducido en vivo por el owner y ES el bug de "no podia marcar la 2da comida". Queda re-QA en preview tras deploy. |
 | 2026-08-13 | F2 (cierre) + F3 | (este commit) | tsc web+mobile 0 · vitest 26/26 (energy-range 4 nuevos + week-nav + banda) · eslint tocados sin errores nuevos · boundaries 342 ✓ | Racha "N de 7 en rango" en el Hoy + trend card y pills "en rango" en el historial, web y RN con los mismos helpers del paquete. F3 items 2/3/4 verificados como YA cumplidos. Sin QA visual (F5). NO corridos: expo export ni suite completa. |

@@ -187,14 +187,18 @@ export function AuraHero({ greetingName, calories, macros, dateKey, weekInRangeC
                 className="relative mt-2.5 h-3 overflow-hidden rounded-pill"
                 style={{ background: 'rgba(var(--theme-primary-rgb), 0.13)' }}
               >
-                {/* Zona objetivo ±10%: success SEMÁNTICO fijo (no white-label). */}
+                {/* Zona objetivo ±10%: success SEMÁNTICO fijo (no white-label). Los bordes
+                    laterales sólidos existen porque el relleno translúcido solo era
+                    imperceptible sobre el riel en ambos temas (QA F1-F3, hallazgo H2). */}
                 <div
                   aria-hidden="true"
                   className="absolute inset-y-0"
                   style={{
                     left: `${band.zoneStartPercent}%`,
                     width: `${band.zoneEndPercent - band.zoneStartPercent}%`,
-                    background: 'color-mix(in srgb, var(--color-success) 30%, transparent)',
+                    background: 'color-mix(in srgb, var(--color-success) 34%, transparent)',
+                    boxShadow:
+                      'inset 1.5px 0 var(--color-success), inset -1.5px 0 var(--color-success)',
                   }}
                 />
                 <motion.div

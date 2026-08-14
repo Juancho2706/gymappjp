@@ -6,7 +6,11 @@ import {
   getCurrentStudentNutritionScope,
   getCurrentStudentNutritionSession,
 } from '@/services/auth/current-student-nutrition.service'
-import { groupHistoryDaysByWeek, type HistoryWeekBucket } from '../_components/week-nav.logic'
+import {
+  groupHistoryDaysByWeek,
+  trimHistoryWeeksPage,
+  type HistoryWeekBucket,
+} from '../_components/week-nav.logic'
 
 /**
  * Siguiente tanda de semanas del historial del propio alumno — paginación ACUMULATIVA (SPEC ola 3
@@ -43,10 +47,12 @@ export async function fetchNutritionHistoryWeeksAction(
   if (scope.orgId) return { ok: false, error: 'Esta experiencia aún no está disponible para Enterprise.' }
 
   const page = await getNutritionHistoryV2ForWeb({ clientId, before, pageSize })
-  return {
-    ok: true,
+  // Borde de paginación (QA H3): mismo recorte que la carga inicial en `page.tsx` — la semana
+  // más vieja de la tanda se descarta si puede venir cortada y la tanda siguiente la re-trae.
+  const trimmed = trimHistoryWeeksPage({
     weeks: groupHistoryDaysByWeek(page.items, todayIso),
     hasMore: page.hasMore,
-    nextCursor: page.nextCursor,
-  }
+    rpcCursor: page.nextCursor,
+  })
+  return { ok: true, weeks: trimmed.weeks, hasMore: trimmed.hasMore, nextCursor: trimmed.nextCursor }
 }

@@ -477,8 +477,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    // Success semantico fijo (--color-success-500 de global.css) al 30%, mismo velo que la web.
-    backgroundColor: 'rgba(31, 184, 119, 0.3)',
+    // Success semantico fijo (--color-success-500 de global.css), mismo velo que la web. Los
+    // bordes laterales solidos existen porque el velo solo era imperceptible sobre el riel en
+    // ambos temas (QA F1-F3, hallazgo H2).
+    backgroundColor: 'rgba(31, 184, 119, 0.34)',
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: '#1FB877',
   },
   bandFill: {
     position: 'absolute',
