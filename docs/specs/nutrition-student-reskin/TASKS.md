@@ -224,6 +224,30 @@ no del plan.
   3 entries activas, 2 filas pendientes = las retiradas) — nada de payload stale. Falta el
   visto bueno manual del owner (su flujo: chequear → Plan → volver → el check persiste).
 
+### 🔴 H11 (2026-08-14 noche, owner: "marcar un check → tabs muertos; retirar ya funciona")
+- Matriz empirica en preview (programatica): void+click temprano/tardio NAVEGA · eat+click
+  temprano/tardio MUERE SIEMPRE (incluso con la compuerta H9 difiriendo). Fetch-log comparado:
+  en VOID el apply del action llega a commitear (hay un 3er POST = re-render RSC aplicado y el
+  effect re-sincroniza); en EAT el apply JAMAS commitea (sin 3er POST, cero errores JS, y toda
+  navegacion posterior muerta — el fetch de la navegacion responde en 6 ms y el estado nunca se
+  aplica).
+- Causa: `revalidatePath` dentro de las server actions de mutacion obliga al router a una
+  NAVEGACION INTERNA al aplicar la respuesta (`server-action-reducer.js:297-325`: seed del
+  flight + `navigateToKnownRoute` con `FreshnessPolicy.RefreshAll`) y en Next 16.3.0 ese apply
+  queda colgado de forma reproducible en el flujo de marcar. Sin revalidacion el reducer sale
+  por la via corta (`return state`, lineas 265-272) sin navegacion interna.
+- Fix (`b29e7c00` + tests `f4917c11`): fuera `revalidatePath` de las 7 mutaciones del alumno
+  (helper y derivacion de headers NUT-006 eliminados; la historia queda en git). El costo —
+  router cache stale tras mutar — ya lo cubre `today-cache.ts` (H10); bonus: cada check deja de
+  re-renderizar la pagina entera en el server. Tests: los 6 asserts de revalidacion pasan al
+  contrato nuevo ("nada revalida"; Team sigue escribiendo sin INValid_PAYLOAD). ⚠️ El commit
+  `b29e7c00` salio con 6 tests en rojo y un mensaje que decia 1067/1067 — corregido y declarado
+  en `f4917c11`; con el, vitest 1067/1067 de nuevo.
+- [ ] Prueba de fuego en preview PENDIENTE de pestaña VISIBLE (Chrome en background congela el
+  commit de render y envenena el resultado): flujo owner = marcar un check → click a
+  Plan/Historial → debe navegar. La verificacion programatica quedo no-concluyente por el
+  throttling; el owner valida a mano.
+
 ## F4 — Correccion (verificacion visual contra el mock)
 
 - [x] H1-H6 + H8 corregidos (arriba). Gates: tsc web+mobile 0 · vitest 30/30 (week-nav 3 tests
