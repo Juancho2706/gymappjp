@@ -526,6 +526,7 @@ export function FoodThumbnail({
 export function FoodRow({
   food,
   actions,
+  leading,
   fallbackEmoji,
   fallbackCategory,
   note,
@@ -533,6 +534,12 @@ export function FoodRow({
 }: {
   food: NutritionFoodRowModel
   actions?: ReactNode
+  /**
+   * Nodo al INICIO de la fila, antes de la miniatura (T2.7 F2, decisión D-C): el checkbox de
+   * registro del Hoy vive acá. Opcional: las filas de solo lectura no lo usan. Espejo del
+   * `leading` de la web (`NutritionFoodRow.tsx`).
+   */
+  leading?: ReactNode
   /**
    * @deprecated Legado: la fila ya NUNCA cae a emoji — el fallback 1:1 con web es el
    * icono estático de categoría (explícita vía `fallbackCategory` o derivada del nombre).
@@ -559,6 +566,7 @@ export function FoodRow({
 
   return (
     <View className="min-h-16 flex-row items-center gap-3 py-3">
+      {leading ? <View className="shrink-0">{leading}</View> : null}
       <FoodThumbnail alt={food.name} src={food.thumbnailUrl} fallbackCategory={category} />
       <View className="min-w-0 flex-1">
         <View className="flex-row flex-wrap items-center gap-2">

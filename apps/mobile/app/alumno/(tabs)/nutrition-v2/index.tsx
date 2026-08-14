@@ -2101,6 +2101,52 @@ function synthPrescribedIntakeEntry(
 // 4A-02: card de franja de "Tu plan de hoy" 1:1 con la web. Conserva la jerarquía compacta
 // del rediseño y suma progreso, bulk-mark y reemplazos estructurados. Memoizada: marcar una
 // porción solo cambia `portionPending`/`portionVoids` de SU franja.
+/**
+ * Checkbox de registro del item prescrito (T2.7 F2, decisión D-C, espejo del `EatCheckbox` web):
+ * el check ES el registro — tap en vacío registra; tap en marcado abre "Retirar registro" (el
+ * sheet con motivo de siempre: des-registrar nunca es un tap accidental). Caja visible de 22px
+ * (el tamaño del catálogo) con área táctil de 44px. Con el registro EN COLA el check queda
+ * marcado pero inerte: no hay entry del servidor que retirar todavía.
+ */
+function EatCheckbox({
+  checked,
+  name,
+  disabled,
+  pending,
+  onToggle,
+}: {
+  checked: boolean
+  name: string
+  disabled?: boolean
+  pending?: boolean
+  onToggle?: () => void
+}) {
+  const { theme } = useTheme()
+  const inert = disabled || onToggle == null
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked, disabled: inert }}
+      accessibilityLabel={checked ? `Retirar registro de ${name}` : `Registrar ${name}`}
+      disabled={inert}
+      onPress={onToggle}
+      className="h-11 w-8 items-center justify-center"
+      style={pending ? { opacity: 0.55 } : undefined}
+    >
+      <View
+        className={`h-[22px] w-[22px] items-center justify-center rounded-md ${
+          checked ? '' : 'border-2 border-default bg-surface-card'
+        }`}
+        style={checked ? { backgroundColor: theme.success } : undefined}
+      >
+        {/* Blanco literal a propósito: success es semántico fijo (no white-label) y el tick
+            va sobre ese verde en claro y oscuro. */}
+        {checked ? <Check color="#FFFFFF" size={14} strokeWidth={3.5} /> : null}
+      </View>
+    </Pressable>
+  )
+}
+
 const TodaySlotCard = memo(function TodaySlotCard({
   slot,
   today,
@@ -2211,27 +2257,44 @@ const TodaySlotCard = memo(function TodaySlotCard({
                       ? `sustituyó a ${item.name ?? 'tu alimento'} · ${item.quantity} ${item.unit}`
                       : displayNote
                   }
+                  // T2.7 F2 (D-C): el CHECK es el registro — muere el botón "Lo comí". Tap en
+                  // vacío registra; tap en marcado abre el sheet "Retirar registro". Con el
+                  // registro en cola el check queda marcado pero inerte (aún no hay entry).
+                  leading={
+                    <EatCheckbox
+                      checked={consumed}
+                      name={item.name ?? 'alimento prescrito'}
+                      disabled={eatingId === item.id}
+                      pending={eatingId === item.id}
+                      onToggle={
+                        consumed
+                          ? activeEntry && !queuedItemIds.has(item.id)
+                            ? () => onCorrect('void', activeEntry)
+                            : undefined
+                          : () => onAte(slot, item)
+                      }
+                    />
+                  }
                   actions={
                     consumed ? (
                       queuedItemIds.has(item.id) ? (
-                        // Encolado: el botón queda apagado igual (no se puede volver a marcar) pero
-                        // el chip NO miente — todavía no llegó al servidor.
+                        // Encolado: el check queda marcado pero el chip NO miente — todavía no
+                        // llegó al servidor.
                         <View className="flex-row items-center gap-1">
                           <History color={theme.textSecondary} size={16} />
                           <Text className="text-xs font-semibold text-muted">En cola</Text>
                         </View>
                       ) : (
-                        // Estado "Registrado" (web TodayExperience.tsx:608-611) + correccion en la
-                        // fila (QA device T1.2, regla web NUT-009): lapiz solo con permiso de
-                        // ajustar cantidades; "Retirar" NUNCA se esconde.
+                        // Correccion en la fila (regla web NUT-009): lapiz solo con permiso de
+                        // ajustar cantidades; "Retirar" NUNCA se esconde. El estado registrado ya
+                        // lo dice el check de la izquierda; solo "Sustituido" conserva su chip.
                         (() => {
                           const entry = activeEntry
                           return (
                             <View className="flex-row items-center gap-1">
-                              <CheckCircle2 color={theme.success} size={16} />
-                              <Text className="text-xs font-semibold text-success-700">
-                                {isSubstituted ? '⇄ Sustituido' : 'Registrado'}
-                              </Text>
+                              {isSubstituted ? (
+                                <Text className="text-xs font-semibold text-success-700">⇄ Sustituido</Text>
+                              ) : null}
                               {entry && today.permissions.canAdjustPrescribedQuantity ? (
                                 <Pressable
                                   accessibilityRole="button"
@@ -2256,16 +2319,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
                           )
                         })()
                       )
-                    ) : (
-                      <NutritionMotionButton
-                        accessibilityLabel={`Lo comí: ${item.name ?? 'alimento prescrito'}`}
-                        tone="success"
-                        pending={eatingId === item.id}
-                        onPress={() => onAte(slot, item)}
-                      >
-                        Lo comí
-                      </NutritionMotionButton>
-                    )
+                    ) : null
                   }
                 />
                 </SwipeToExchange>

@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   NUTRITION_MACROS,
   auraGlowAlpha,
+  energyBandGeometry,
   energyGoalReached,
   energyProgressRatio,
   formatNutritionCalories,
@@ -34,18 +35,13 @@ export interface AuraHeroProps {
   dateKey: string
 }
 
-// Geometría del anillo principal.
-const MAIN_SIZE = 216
-const MAIN_STROKE = 16
-const MAIN_R = (MAIN_SIZE - MAIN_STROKE) / 2
-const MAIN_C = 2 * Math.PI * MAIN_R
-
 /**
- * Héroe "AURA" del Hoy del alumno: saludo por hora + anillo de energía con aura
- * white-label (glow derivado de `--theme-primary-rgb`, intensidad ↑ con el %) +
- * 3 mini-anillos de macro con su paleta categórica. Al cruzar la meta de energía:
- * confeti tintado al primario + ilustración de día completado (1×/día).
- * Respeta prefers-reduced-motion (estado final directo, sin confeti).
+ * Héroe "AURA" del Hoy del alumno: saludo por hora + BANDA de energía con el rango ±10%
+ * sombreado (T2.7 F2, decisión D-A del owner: la banda del catálogo reemplaza al anillo
+ * grande — la meta es un rango, no un número que se falla) + aura white-label (glow derivado
+ * de `--theme-primary-rgb`, intensidad ↑ con el %) + 3 mini-anillos de macro con su paleta
+ * categórica fija. Al cruzar la meta de energía: confeti tintado al primario + ilustración
+ * de día completado (1×/día). Respeta prefers-reduced-motion (estado final directo, sin confeti).
  */
 export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroProps) {
   const reduce = useReducedMotion()
@@ -64,8 +60,9 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
       : greetingForHour(hour, greetingName)
 
   const { consumed, target } = calories
-  const ratio = energyProgressRatio(consumed, target)
   const alpha = auraGlowAlpha(consumed, target)
+  // Riel de la banda (0..115% de la meta) con la zona objetivo ±10% adentro; null sin meta.
+  const band = energyBandGeometry(consumed, target)
   // Banda ±10% (T1.4, nutrition-flows-redesign): la meta es un RANGO, no un numero que se
   // falla. Copy por tramo: bajo el rango (marca), en rango (success fijo), sobre el rango
   // (ambar — nunca rojo: comer no es un error). La celebracion de meta no cambia.
@@ -117,12 +114,13 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: reduce ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Aura/glow detrás del anillo — deriva del primario, intensidad ↑ con el %. */}
+      {/* Aura/glow detrás del bloque de energía — deriva del primario, intensidad ↑ con el %.
+          Con la banda el bloque es más bajo que el anillo viejo: el halo se achica con él. */}
       <motion.div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-8 mx-auto h-[280px] max-w-[340px]"
+        className="pointer-events-none absolute inset-x-0 top-0 mx-auto h-[170px] max-w-[420px]"
         style={{
-          background: `radial-gradient(circle at 50% 42%, rgba(var(--theme-primary-rgb), ${alpha}) 0%, rgba(var(--theme-primary-rgb), 0) 70%)`,
+          background: `radial-gradient(ellipse at 50% 55%, rgba(var(--theme-primary-rgb), ${alpha}) 0%, rgba(var(--theme-primary-rgb), 0) 70%)`,
         }}
         initial={reduce ? false : { opacity: 0, scale: 0.92 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -141,88 +139,78 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
           </p>
         </motion.div>
 
-        {/* Anillo principal de energía */}
-        <div className="mt-5 flex justify-center">
-          <div className="relative" style={{ width: MAIN_SIZE, height: MAIN_SIZE }}>
-            <svg
-              width={MAIN_SIZE}
-              height={MAIN_SIZE}
-              viewBox={`0 0 ${MAIN_SIZE} ${MAIN_SIZE}`}
-              className="-rotate-90"
-              role="img"
-              aria-label={
-                target != null && target > 0
-                  ? `${Math.round(consumed)} de ${Math.round(target)} kcal`
-                  : `${Math.round(consumed)} kcal consumidas`
-              }
-            >
-              <circle
-                cx={MAIN_SIZE / 2}
-                cy={MAIN_SIZE / 2}
-                r={MAIN_R}
-                fill="none"
-                strokeWidth={MAIN_STROKE}
-                style={{ stroke: 'rgba(var(--theme-primary-rgb), 0.13)' }}
-              />
-              {/* Zona objetivo de la banda: el tramo final del riel [90%→100%] en success fijo
-                  (semantica, no white-label). El sobre-rango no se dibuja: el anillo tope en
-                  100% y el exceso lo dice la linea de estado. */}
-              {rangeLow != null ? (
-                <circle
-                  aria-hidden="true"
-                  cx={MAIN_SIZE / 2}
-                  cy={MAIN_SIZE / 2}
-                  r={MAIN_R}
-                  fill="none"
-                  strokeWidth={MAIN_STROKE}
-                  strokeDasharray={`${MAIN_C * 0.1} ${MAIN_C}`}
-                  strokeDashoffset={-MAIN_C * 0.9}
-                  style={{ stroke: 'color-mix(in srgb, var(--color-success) 35%, transparent)' }}
-                />
-              ) : null}
-              <motion.circle
-                cx={MAIN_SIZE / 2}
-                cy={MAIN_SIZE / 2}
-                r={MAIN_R}
-                fill="none"
-                strokeWidth={MAIN_STROKE}
-                strokeLinecap="round"
-                strokeDasharray={MAIN_C}
-                style={{ stroke: 'var(--theme-primary)' }}
-                initial={{ strokeDashoffset: MAIN_C }}
-                animate={{ strokeDashoffset: MAIN_C * (1 - ratio) }}
-                transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 90, damping: 18, mass: 0.9 }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-              <span className="font-display text-4xl font-bold tabular-nums leading-none text-strong sm:text-5xl">
+        {/* Banda de energía (T2.7 F2, D-A): riel 0→115% de la meta con la zona ±10% sombreada.
+            Verde dentro, ámbar al pasarse — nunca rojo: comer no es un error. */}
+        <div className="mt-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              {rangeLow != null && rangeHigh != null ? (
+                <>
+                  Energía · rango{' '}
+                  <span className="tabular-nums">
+                    {KCAL_FORMATTER.format(rangeLow)}–{KCAL_FORMATTER.format(rangeHigh)}
+                  </span>
+                </>
+              ) : (
+                'Energía'
+              )}
+            </span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="font-display text-3xl font-bold tabular-nums leading-none text-strong sm:text-4xl">
                 <AnimatedKcal value={consumed} />
               </span>
-              <span className="mt-1 text-xs font-medium text-subtle">kcal</span>
-              {target != null && target > 0 ? (
-                <span className="mt-2 text-xs text-muted">
-                  de <span className="tabular-nums font-semibold text-body">{formatNutritionCalories(target)}</span>
-                </span>
-              ) : (
-                <span className="mt-2 max-w-[10rem] text-xs text-muted">Registra lo que comas para ver tu avance</span>
-              )}
-            </div>
+              <span className="text-xs font-medium text-subtle">kcal</span>
+            </span>
           </div>
-        </div>
 
-        {rangeLow != null && rangeHigh != null ? (
-          <p
-            className={`mt-3 text-center text-sm font-semibold tabular-nums ${
-              consumed > rangeHigh ? 'text-warning' : consumed >= rangeLow ? 'text-success' : 'text-primary'
-            }`}
-          >
-            {consumed < rangeLow
-              ? `faltan ~${formatNutritionCalories(rangeLow - consumed)} para tu rango`
-              : consumed <= rangeHigh
-                ? '✓ en tu rango de hoy'
-                : `+${formatNutritionCalories(consumed - rangeHigh)} sobre tu rango`}
-          </p>
-        ) : null}
+          {band != null ? (
+            <>
+              <div
+                role="img"
+                aria-label={`${Math.round(consumed)} de ${Math.round(target as number)} kcal`}
+                className="relative mt-2.5 h-3 overflow-hidden rounded-pill"
+                style={{ background: 'rgba(var(--theme-primary-rgb), 0.13)' }}
+              >
+                {/* Zona objetivo ±10%: success SEMÁNTICO fijo (no white-label). */}
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-y-0"
+                  style={{
+                    left: `${band.zoneStartPercent}%`,
+                    width: `${band.zoneEndPercent - band.zoneStartPercent}%`,
+                    background: 'color-mix(in srgb, var(--color-success) 30%, transparent)',
+                  }}
+                />
+                <motion.div
+                  aria-hidden="true"
+                  className="absolute inset-y-0 left-0 rounded-pill"
+                  style={{ background: 'var(--theme-primary)' }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${band.fillPercent}%` }}
+                  transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 90, damping: 18, mass: 0.9 }}
+                />
+              </div>
+              {rangeLow != null && rangeHigh != null ? (
+                <div className="mt-2 flex items-baseline justify-between gap-3 text-xs">
+                  <span className="text-subtle">consumido</span>
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      consumed > rangeHigh ? 'text-warning' : consumed >= rangeLow ? 'text-success' : 'text-primary'
+                    }`}
+                  >
+                    {consumed < rangeLow
+                      ? `faltan ~${formatNutritionCalories(rangeLow - consumed)} para tu rango`
+                      : consumed <= rangeHigh
+                        ? '✓ en tu rango de hoy'
+                        : `+${formatNutritionCalories(consumed - rangeHigh)} sobre tu rango`}
+                  </span>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-muted">Registra lo que comas para ver tu avance</p>
+          )}
+        </div>
 
         {/* Mini-anillos de macro (paleta categórica) */}
         <motion.div

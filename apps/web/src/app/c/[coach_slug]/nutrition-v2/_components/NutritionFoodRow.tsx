@@ -46,6 +46,11 @@ export interface NutritionFoodRowProps {
   replacedLabel?: string | null
   /** Nodo al final de la fila (acciones o badge). */
   actions?: ReactNode
+  /**
+   * Nodo al INICIO de la fila, antes de la miniatura (T2.7 F2, decisión D-C): el checkbox de
+   * registro del Hoy vive acá. Opcional: las filas de solo lectura (tab Plan, historial) no lo usan.
+   */
+  leading?: ReactNode
 }
 
 function FoodListThumb({
@@ -102,10 +107,12 @@ export function NutritionFoodRow({
   statusLabel,
   replacedLabel,
   actions,
+  leading,
 }: NutritionFoodRowProps) {
   const iconUrl = category ? foodCategoryIconUrl(category) : foodCategoryIconUrlFromName(name)
   return (
     <div className="flex min-w-0 items-center gap-3 py-3">
+      {leading ? <div className="shrink-0">{leading}</div> : null}
       <FoodListThumb imageUrl={imageUrl} iconUrl={iconUrl} alt={name} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">

@@ -135,6 +135,32 @@ export function nutritionProgressPercent(consumed: number, target: number): numb
   return Math.round(clampNutritionProgress(consumed, target, 1) * 100)
 }
 
+/**
+ * Geometria de la BANDA de energia (T2.7 F2, decision D-A): la meta es un RANGO, no un numero.
+ * El riel representa 0 → 115% de la meta (el mismo cap 1.15 de `clampNutritionProgress`, para que
+ * el sobre-rango se VEA sin estirar el riel al infinito) y la zona objetivo ±10% queda sombreada
+ * dentro. Puro y compartido: web (CSS %) y RN (px sobre el ancho medido) pintan con esto mismo.
+ */
+export interface EnergyBandGeometry {
+  /** Avance del consumo sobre el riel, 0..100 (tope en 100 = 115% de la meta). */
+  fillPercent: number
+  /** Inicio de la zona objetivo (90% de la meta) sobre el riel, en %. */
+  zoneStartPercent: number
+  /** Fin de la zona objetivo (110% de la meta) sobre el riel, en %. */
+  zoneEndPercent: number
+}
+
+const ENERGY_BAND_CAP = 1.15
+
+export function energyBandGeometry(consumed: number, target: number | null): EnergyBandGeometry | null {
+  if (target == null || !Number.isFinite(target) || target <= 0) return null
+  return {
+    fillPercent: (clampNutritionProgress(consumed, target, ENERGY_BAND_CAP) / ENERGY_BAND_CAP) * 100,
+    zoneStartPercent: (0.9 / ENERGY_BAND_CAP) * 100,
+    zoneEndPercent: (1.1 / ENERGY_BAND_CAP) * 100,
+  }
+}
+
 export function resolveMacroProgressState(
   consumed: number,
   target: number,

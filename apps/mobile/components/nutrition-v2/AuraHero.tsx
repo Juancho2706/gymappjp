@@ -2,12 +2,12 @@
  * AuraHero (RN) — héroe del Hoy del alumno, espejo del web `AuraHero.tsx`.
  *
  * - Saludo contextual por hora.
- * - Anillo principal de energía (react-native-svg) animado con un resorte de
- *   reanimated al montar/cambiar; trazo = `theme.primary` (white-label).
- * - "Aura"/glow detrás del anillo: halo translúcido del primario cuya opacidad
- *   crece con el % (auraGlowAlpha) + shadowColor del primario (iOS) / elevation
- *   con halo (Android).
- * - 3 mini-anillos de macro: ember/aqua fijos y sport desde la marca efectiva.
+ * - BANDA de energía con el rango ±10% sombreado (T2.7 F2, decisión D-A del owner: la banda
+ *   del catálogo reemplaza al anillo grande; la meta es un rango, no un número que se falla).
+ *   Relleno = `theme.primary` (white-label); la zona objetivo = success semántico fijo.
+ * - "Aura"/glow detrás del bloque de energía: halo translúcido del primario cuya opacidad
+ *   crece con el % (auraGlowAlpha).
+ * - 3 mini-anillos de macro con la paleta categórica FIJA (T2.7 F1).
  * - Respeta reduce-motion (estado final directo, sin resorte) vía useEvaMotion.
  *
  * La celebración de la meta de energía la dispara el contenedor (TodayTab) sobre
@@ -21,11 +21,13 @@ import Animated, {
   runOnJS,
   useAnimatedProps,
   useAnimatedReaction,
+  useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated'
 import {
   auraGlowAlpha,
+  energyBandGeometry,
   energyProgressRatio,
   formatNutritionCalories,
   greetingForHour,
@@ -43,14 +45,11 @@ import { FONT, TYPE_SCALE } from '../../lib/typography'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
-const MAIN_SIZE = 216
-const MAIN_STROKE = 16
 /**
- * El aura desborda apenas el anillo: con el gradiente cayendo a opacidad 0 en el borde, el halo
- * muere ANTES del recorte y se lee como luz alrededor del número, no como un disco de color.
- * `ringStage` no recorta, así que sobresalir es seguro.
+ * El aura ahora vive detrás del BLOQUE de la banda (T2.7 F2): halo elíptico bajo, con el
+ * gradiente cayendo a opacidad 0 en el borde para que se lea como luz y no como un disco.
  */
-const GLOW_SIZE = Math.round(MAIN_SIZE * 1.04)
+const GLOW_SIZE = 220
 const MINI_SIZE = 74
 const MINI_STROKE = 8
 
@@ -88,7 +87,6 @@ function AuraRing({
   ratio,
   color,
   trackColor,
-  zoneColor,
   accessibilityLabel,
   children,
 }: {
@@ -97,8 +95,6 @@ function AuraRing({
   ratio: number
   color: string
   trackColor: string
-  /** Banda ±10% (T1.4): pinta el tramo final del riel [90%→100%] como zona objetivo. */
-  zoneColor?: string
   accessibilityLabel: string
   children?: ReactNode
 }) {
@@ -143,23 +139,6 @@ function AuraRing({
           </LinearGradient>
         </Defs>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
-        {zoneColor ? (
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            stroke={zoneColor}
-            // Mas fina que el trazo y con las puntas redondeadas: sin esto el arco de la zona salia
-            // del mismo grosor que el anillo y con los dos extremos cortados EN ESCUADRA, justo al
-            // lado de un trazo de progreso que si es redondeado. Ese corte era la "linea tosca".
-            strokeWidth={Math.max(stroke - 5, 3)}
-            strokeLinecap="round"
-            fill="none"
-            strokeDasharray={`${c * 0.1} ${c}`}
-            strokeDashoffset={-c * 0.9}
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          />
-        ) : null}
         <AnimatedCircle
           cx={size / 2}
           cy={size / 2}
@@ -222,6 +201,25 @@ function MacroMiniRing({
   )
 }
 
+/**
+ * Relleno animado de la banda de energía. El ancho anima en PIXELES (reanimated no interpola
+ * porcentajes): el track mide su ancho con onLayout y de ahí sale el destino del resorte.
+ */
+function BandFill({ trackWidth, fillPercent, color }: { trackWidth: number; fillPercent: number; color: string }) {
+  const motion = useEvaMotion()
+  const targetPx = (trackWidth * fillPercent) / 100
+  const width = useSharedValue(0)
+  useEffect(() => {
+    width.value = motion.reduced
+      ? targetPx
+      : withSpring(targetPx, motion.spring('ui') as Parameters<typeof withSpring>[1])
+    // `width` es estable; `motion.spring` cambia de identidad en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetPx, motion.reduced])
+  const animatedStyle = useAnimatedStyle(() => ({ width: width.value }))
+  return <Animated.View style={[styles.bandFill, { backgroundColor: color }, animatedStyle]} />
+}
+
 /** Número de kcal con resorte, estático cuando el sistema reduce movimiento. */
 function AnimatedKcal({ value }: { value: number }) {
   const motion = useEvaMotion()
@@ -262,9 +260,11 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
   const macroColors = useMemo(() => resolveNutritionMacroColors(), [])
 
   const { consumed, target } = calories
-  const ratio = energyProgressRatio(consumed, target)
   const alpha = auraGlowAlpha(consumed, target)
   const hasTarget = target != null && target > 0
+  // Riel de la banda (0..115% de la meta) con la zona objetivo ±10% adentro; null sin meta.
+  const band = energyBandGeometry(consumed, target)
+  const [bandWidth, setBandWidth] = useState(0)
   // Banda ±10% (T1.4, paridad exacta con web AuraHero): la meta es un RANGO, no un numero que
   // se falla. Bajo el rango (marca) / en rango (success fijo) / sobre el rango (ambar, nunca rojo).
   const rangeLow = hasTarget ? Math.round((target as number) * 0.9) : null
@@ -304,8 +304,9 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
           </Text>
         </MotiView>
 
-        <View style={styles.ringStage}>
-          {/* Aura/glow detrás del anillo — deriva del primario, intensidad ↑ con el %. */}
+        {/* Banda de energía (T2.7 F2, D-A): riel 0→115% de la meta, zona ±10% sombreada. */}
+        <View style={styles.bandStage}>
+          {/* Aura/glow detrás del bloque — deriva del primario, intensidad ↑ con el %. */}
           <MotiView
             pointerEvents="none"
             from={motion.reduced ? undefined : { opacity: 0, scale: 0.92 }}
@@ -314,14 +315,10 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
             style={[styles.glow, { width: GLOW_SIZE, height: GLOW_SIZE }]}
           >
             {/*
-              Gradiente radial de verdad, no un disco con sombra. Antes eran dos capas que en
-              Android salían mal: un `backgroundColor` con alpha —un disco PLANO, sin difuminado,
-              con borde duro— y un `elevation: 10` que ignora `shadowColor`/`shadowOpacity`/
-              `shadowRadius` (props de iOS) y dibuja su propia sombra aproximando la silueta con un
-              POLÍGONO. De ahí el octágono gris que se veía dentro del anillo. El gradiente resuelve
-              las dos cosas y se ve idéntico en las dos plataformas.
+              Gradiente radial de verdad, no un disco con sombra (en Android `elevation` dibuja un
+              POLÍGONO gris). El halo va achatado con scaleY: luz ambiental detrás de la banda.
             */}
-            <Svg width={GLOW_SIZE} height={GLOW_SIZE}>
+            <Svg width={GLOW_SIZE} height={GLOW_SIZE} style={styles.glowSquash}>
               <Defs>
                 <RadialGradient id="aura-glow" cx="50%" cy="50%" r="50%">
                   <Stop offset="0" stopColor={theme.primary} stopOpacity={alpha} />
@@ -333,61 +330,80 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
               <Circle cx={GLOW_SIZE / 2} cy={GLOW_SIZE / 2} r={GLOW_SIZE / 2} fill="url(#aura-glow)" />
             </Svg>
           </MotiView>
-          <AuraRing
-            accessibilityLabel={energyAccessibilityLabel}
-            size={MAIN_SIZE}
-            stroke={MAIN_STROKE}
-            ratio={ratio}
-            color={theme.primary}
-            trackColor={hexToRgba(theme.primary, ringTrackAlpha(theme.scheme))}
-            // Zona objetivo de la banda ±10%: success SEMANTICO fijo (= --color-success de
-            // global.css), nunca white-label — espejo del arco de la web.
-            zoneColor={hasTarget ? 'rgba(31, 184, 119, 0.35)' : undefined}
-          >
-            <Text
-              className="text-strong"
-              style={[
-                styles.kcal,
-                {
-                  fontSize: expanded ? TYPE_SCALE['5xl'] : TYPE_SCALE['4xl'],
-                  lineHeight: expanded ? TYPE_SCALE['5xl'] : TYPE_SCALE['4xl'],
-                },
-              ]}
-            >
-              <AnimatedKcal value={consumed} />
-            </Text>
-            <Text className="text-subtle" style={styles.kcalUnit}>
-              kcal
-            </Text>
-            {hasTarget ? (
-              <Text className="text-muted" style={styles.kcalTarget}>
-                de{' '}
-                <Text className="text-body" style={styles.kcalTargetValue}>
-                  {formatNutritionCalories(target as number)}
-                </Text>
-              </Text>
-            ) : (
-              <Text className="text-muted" style={styles.kcalHint}>
-                Registra lo que comas para ver tu avance
-              </Text>
-            )}
-          </AuraRing>
-        </View>
 
-        {rangeLow != null && rangeHigh != null ? (
-          <Text
-            className={
-              consumed > rangeHigh ? 'text-warning' : consumed >= rangeLow ? 'text-success' : 'text-primary'
-            }
-            style={styles.remaining}
-          >
-            {consumed < rangeLow
-              ? `faltan ~${formatNutritionCalories(rangeLow - consumed)} para tu rango`
-              : consumed <= rangeHigh
-                ? '✓ en tu rango de hoy'
-                : `+${formatNutritionCalories(consumed - rangeHigh)} sobre tu rango`}
-          </Text>
-        ) : null}
+          <View style={styles.bandHead}>
+            <Text className="text-muted" style={styles.bandLabel} numberOfLines={1}>
+              {rangeLow != null && rangeHigh != null
+                ? `ENERGÍA · RANGO ${new Intl.NumberFormat('es-CL').format(rangeLow)}–${new Intl.NumberFormat('es-CL').format(rangeHigh)}`
+                : 'ENERGÍA'}
+            </Text>
+            <View style={styles.kcalRow}>
+              <Text
+                className="text-strong"
+                style={[
+                  styles.kcal,
+                  {
+                    fontSize: expanded ? TYPE_SCALE['4xl'] : TYPE_SCALE['3xl'],
+                    lineHeight: expanded ? TYPE_SCALE['4xl'] : TYPE_SCALE['3xl'],
+                  },
+                ]}
+              >
+                <AnimatedKcal value={consumed} />
+              </Text>
+              <Text className="text-subtle" style={styles.kcalUnit}>
+                kcal
+              </Text>
+            </View>
+          </View>
+
+          {band != null ? (
+            <>
+              <View
+                accessible
+                accessibilityRole="image"
+                accessibilityLabel={energyAccessibilityLabel}
+                onLayout={(event) => setBandWidth(event.nativeEvent.layout.width)}
+                style={[styles.bandTrack, { backgroundColor: hexToRgba(theme.primary, ringTrackAlpha(theme.scheme)) }]}
+              >
+                {/* Zona objetivo ±10%: success SEMANTICO fijo (= --color-success), no white-label. */}
+                <View
+                  style={[
+                    styles.bandZone,
+                    {
+                      left: `${band.zoneStartPercent}%`,
+                      width: `${band.zoneEndPercent - band.zoneStartPercent}%`,
+                    },
+                  ]}
+                />
+                <BandFill trackWidth={bandWidth} fillPercent={band.fillPercent} color={theme.primary} />
+              </View>
+              {rangeLow != null && rangeHigh != null ? (
+                <View style={styles.bandStatusRow}>
+                  <Text className="text-subtle" style={styles.bandStatusHint}>
+                    consumido
+                  </Text>
+                  <Text
+                    className={
+                      consumed > rangeHigh ? 'text-warning' : consumed >= rangeLow ? 'text-success' : 'text-primary'
+                    }
+                    style={styles.remaining}
+                    numberOfLines={1}
+                  >
+                    {consumed < rangeLow
+                      ? `faltan ~${formatNutritionCalories(rangeLow - consumed)} para tu rango`
+                      : consumed <= rangeHigh
+                        ? '✓ en tu rango de hoy'
+                        : `+${formatNutritionCalories(consumed - rangeHigh)} sobre tu rango`}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <Text className="text-muted" style={styles.kcalHint}>
+              Registra lo que comas para ver tu avance
+            </Text>
+          )}
+        </View>
 
         <MotiView
           from={motion.reduced ? undefined : { opacity: 0, translateY: 6 }}
@@ -407,21 +423,64 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
 const styles = StyleSheet.create({
   greeting: { fontFamily: FONT.display, letterSpacing: TYPE_SCALE.xl * -0.015 },
   subtitle: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.sm, marginTop: 2 },
-  ringStage: { alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  bandStage: { marginTop: 18 },
   // Sin `shadowOffset`/`elevation`: el halo lo pinta el gradiente radial del SVG, no una sombra.
-  glow: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  glow: { position: 'absolute', alignSelf: 'center', top: -70, alignItems: 'center', justifyContent: 'center' },
+  // Halo achatado: luz ambiental detras de la banda, no un disco que domina el bloque.
+  glowSquash: { transform: [{ scaleY: 0.55 }] },
   center: { alignItems: 'center', justifyContent: 'center' },
+  bandHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  bandLabel: {
+    fontFamily: FONT.uiSemibold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+    marginBottom: 4,
+  },
+  kcalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5, flexShrink: 0 },
   kcal: { fontFamily: FONT.display, fontVariant: ['tabular-nums'] },
-  kcalUnit: { fontFamily: FONT.uiMedium, fontSize: TYPE_SCALE.xs, marginTop: 4 },
-  kcalTarget: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.xs, marginTop: 8 },
-  kcalTargetValue: { fontFamily: FONT.uiSemibold, fontVariant: ['tabular-nums'] },
-  kcalHint: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.xs, marginTop: 8, textAlign: 'center', maxWidth: 160 },
+  kcalUnit: { fontFamily: FONT.uiMedium, fontSize: TYPE_SCALE.xs },
+  bandTrack: {
+    marginTop: 10,
+    height: 12,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  bandZone: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    // Success semantico fijo (--color-success-500 de global.css) al 30%, mismo velo que la web.
+    backgroundColor: 'rgba(31, 184, 119, 0.3)',
+  },
+  bandFill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 999,
+  },
+  bandStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 8,
+  },
+  bandStatusHint: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.xs },
+  kcalHint: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.xs, marginTop: 8 },
   remaining: {
     fontFamily: FONT.uiSemibold,
     fontSize: TYPE_SCALE.sm,
-    textAlign: 'center',
-    marginTop: 12,
     fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+    textAlign: 'right',
   },
   miniRow: {
     flexDirection: 'row',

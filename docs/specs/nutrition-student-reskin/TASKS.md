@@ -11,8 +11,10 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       el rango ya es semantica del AuraHero pero el visual es anillo (conflicto D-A); comida libre
       es feature nueva, no re-skin (D-B).
 - [x] SPEC / PLAN / TASKS (este commit)
-- [ ] Decisiones del owner: **D-A** banda vs anillo · **D-B** diferir cupo libre a T3.6 ·
-      **D-C** checkbox mata "Lo comi"
+- [x] Decisiones del owner (2026-08-13 noche, por chat): **D-A = BANDA con rango sombreado**
+      (reemplaza al anillo grande del Hoy; los mini-anillos de macros se conservan) ·
+      **D-B = DIFERIR el cupo de comida libre a T3.6** · **D-C = SI, checkbox primario**
+      (muere el boton "Lo comi" en web y RN)
 
 ## F1 — Paleta trio fijo (sin dependencias) — **CERRADA 2026-08-13**
 
@@ -37,14 +39,29 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
   propia espejada entre si (blue/emerald/purple 600) — alinearlos es un cambio a DOS lados y
   queda para F5 con decision explicita.
 
-## F2 — Jerarquia del Hoy — [!] espera D-A y D-C
+## F2 — Jerarquia del Hoy — desbloqueada (D-A banda · D-C checkbox)
 
-- [ ] Banda de energia con rango sombreado (web + RN) — si D-A = banda
-- [ ] Checkbox primario; muere "Lo comi" (web + RN) — si D-C = si
-- [ ] Nota del coach expandida en RN
-- [ ] "⇄ N equivalentes" literal en la fila
-- [ ] Racha semanal "N de 7 en rango" en el Hoy
-- [ ] Celebracion dia completo: paridad web
+- [x] Banda de energia con rango sombreado (web + RN, 2026-08-13): `energyBandGeometry` puro en
+      el paquete (riel 0→115% de la meta, zona ±10% adentro; 3 tests nuevos) + AuraHero web y RN
+      reemplazan el anillo grande por la banda. Encabezado "ENERGIA · RANGO A–B" + kcal grande a
+      la derecha + linea de estado (verde en rango / ambar sobre — nunca rojo). El aura glow se
+      conserva (achatado detras del bloque); los mini-anillos de macros se conservan. RN anima el
+      fill en pixeles (onLayout: reanimated no interpola porcentajes).
+- [x] Checkbox primario; muere "Lo comi" (web + RN, 2026-08-13): `leading` nuevo en
+      `NutritionFoodRow` (web) y `FoodRow` (RN Kit); `EatCheckbox` 22px con area tactil de 44px.
+      Tap en vacio = registra (mismo camino `onEat`/`onAte`, idempotencia intacta); tap en marcado
+      = abre "Retirar registro" (el dialogo/sheet con motivo — des-registrar nunca es accidental);
+      en cola (RN) = marcado pero inerte. El lapiz y el tacho de la fila se conservan (NUT-009).
+      El testid web `nutrition-v2-lo-comi` vive SOLO en el estado pendiente: el spec E2E
+      `alumno-hoy.spec.ts` sigue valido sin tocarse.
+- [x] Nota del coach expandida en RN — YA CUMPLIDO antes de esta fase: `CoachNoteCard` arranca
+      con `open = true` (el colapso es opt-in del alumno). El catalogo auditaba un estado viejo.
+- [x] "⇄ N equivalentes" literal en la fila — YA CUMPLIDO por T2.5: `ItemExchangeTrigger`
+      (web y RN) pinta la pill "⇄ N equivalentes" bajo el item.
+- [ ] Racha semanal "N de 7 en rango" en el Hoy — pendiente (necesita el agregado semanal en la
+      pantalla; cablear sobre `useNutritionWeekHistory` RN y su equivalente web)
+- [x] Celebracion dia completo: paridad web — YA CUMPLIDO antes de esta fase: el AuraHero web
+      tiene confetti tintado al primario + ilustracion "dia-completado" 1x/dia (sessionStorage).
 
 ## F3 — Plan + Historial
 
@@ -69,3 +86,4 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 |-------|------|--------|-------|-------|
 | 2026-08-13 | F0 | (este commit) | docs:check | Auditoria + los tres documentos. Tres decisiones del owner quedan abiertas (D-A/D-B/D-C); F1 no depende de ninguna. |
 | 2026-08-13 | F1 | (este commit) | tsc web+mobile 0 · vitest 10/10 · eslint ✓ · boundaries 340 ✓ | Trio fijo en design.ts + tokens RN + 6 grupos de hardcodes + V1 RN (MACRO_COLORS). Sin QA visual todavia: la re-QA completa es F5. |
+| 2026-08-13 | F2 (parcial) | (este commit) | tsc web+mobile 0 · vitest banda 4/4 + aura ✓ · eslint tocados sin errores nuevos | Banda de energia (D-A) y checkbox de registro (D-C) en web y RN; nota RN, "⇄ N equivalentes" y celebracion web verificados como YA cumplidos. Queda SOLO la racha semanal. Sin QA visual (F5). NO corridos: expo export ni suite completa. |

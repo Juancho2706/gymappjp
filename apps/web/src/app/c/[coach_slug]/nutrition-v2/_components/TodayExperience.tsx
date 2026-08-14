@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -969,6 +970,51 @@ function CatalogPickRow({
   )
 }
 
+/**
+ * Checkbox de registro del item prescrito (T2.7 F2, decisión D-C): el check ES el registro —
+ * tap en vacío registra el consumo, tap en marcado abre "Retirar registro" (el diálogo con
+ * motivo de siempre; des-registrar nunca es un tap accidental). El área táctil es de 44px
+ * aunque la caja visible mida 22 (el tamaño del catálogo).
+ * El testid `nutrition-v2-lo-comi` vive SOLO en el estado pendiente: el spec E2E lo usa como
+ * señal de "hay prescripción sin registrar", igual que con el botón viejo.
+ */
+function EatCheckbox({
+  checked,
+  name,
+  disabled,
+  pending,
+  onToggle,
+}: {
+  checked: boolean
+  name: string
+  disabled?: boolean
+  pending?: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={checked ? `Retirar registro de ${name}` : `Registrar ${name}`}
+      data-testid={checked ? 'nutrition-v2-registrado' : 'nutrition-v2-lo-comi'}
+      disabled={disabled}
+      onClick={onToggle}
+      className="group inline-flex h-11 w-8 items-center justify-center focus-visible:outline-none disabled:opacity-60"
+    >
+      <span
+        className={`grid h-[22px] w-[22px] place-items-center rounded-md border-2 transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-1 ${
+          checked
+            ? 'border-transparent bg-success text-white'
+            : 'border-border-default bg-surface-card group-hover:border-primary/60'
+        } ${pending ? 'animate-pulse' : ''}`}
+      >
+        {checked ? <Check className="h-3.5 w-3.5" aria-hidden="true" strokeWidth={3} /> : null}
+      </span>
+    </button>
+  )
+}
+
 function IconButton({
   label,
   onClick,
@@ -1120,11 +1166,25 @@ function PrescribedSection({
                         isSubstituted ? `${item.name ?? 'Alimento prescrito'} · ${item.quantity} ${item.unit}` : null
                       }
                       note={resolveItemDisplayNote(item.notes, substitutionCount > 0)}
+                      // T2.7 F2 (D-C): el CHECK es el registro — muere el botón "Lo comí". Tap en
+                      // vacío = registra; tap en marcado = abre "Retirar registro" (mismo diálogo
+                      // con motivo de siempre: des-registrar no es silencioso ni accidental).
+                      leading={
+                        <EatCheckbox
+                          checked={consumedEntry != null}
+                          name={row.name}
+                          disabled={isPending}
+                          pending={isPending && busyId === `eat:${item.id}`}
+                          onToggle={() => {
+                            if (consumedEntry) onVoid(consumedEntry)
+                            else onEat(slot, item)
+                          }}
+                        />
+                      }
                       actions={
                         consumedEntry ? (
                           <div className="flex items-center gap-1">
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
-                              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                            <span className="text-xs font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
                               {formatIntakeClock(consumedEntry.occurredAt, today.timezone)}
                             </span>
                             {/* NUT-009: el lápiz solo si el plan permite ajustar la cantidad prescrita. */}
@@ -1137,18 +1197,7 @@ function PrescribedSection({
                               <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </IconButton>
                           </div>
-                        ) : (
-                          <NutritionMotionButton
-                            type="button"
-                            data-testid="nutrition-v2-lo-comi"
-                            tone="success"
-                            className="min-h-10 px-3 text-xs"
-                            pending={isPending && busyId === `eat:${item.id}`}
-                            onClick={() => onEat(slot, item)}
-                          >
-                            Lo comí
-                          </NutritionMotionButton>
-                        )
+                        ) : null
                       }
                     />
                     </SwipeToExchange>
