@@ -43,7 +43,6 @@ const FOOD_ID = '44444444-4444-4444-8444-444444444444'
 const NEW_ID = '55555555-5555-4555-8555-555555555555'
 const ENTRY_ID = '66666666-6666-4666-8666-666666666666'
 const ITEM_ID = '77777777-7777-4777-8777-777777777777'
-const REVALIDATE = '/c/josefit/nutrition-v2'
 
 const PERMISSIONS_RPC = 'get_nutrition_student_permissions_v2'
 
@@ -135,7 +134,7 @@ beforeEach(() => {
 })
 
 describe('recordIntakeAction', () => {
-  it('construye los args del RPC record y revalida al exito', async () => {
+  it('construye los args del RPC record al exito y NO revalida (H11)', async () => {
     const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res).toEqual({ ok: true, id: NEW_ID })
@@ -155,7 +154,9 @@ describe('recordIntakeAction', () => {
         p_snapshot: expect.objectContaining({ name: 'Pollo', calories: 165 }),
       }),
     )
-    expect(revalidate).toHaveBeenCalledWith(REVALIDATE)
+    // H11: las mutaciones del alumno NO revalidan — el apply de un action revalidado colgaba el
+    // router en Next 16.3.0 (tabs muertos tras marcar); la UI reconcilia con la action de lectura.
+    expect(revalidate).not.toHaveBeenCalled()
   })
 
   it('rechaza payload invalido (cantidad no positiva) sin tocar el RPC', async () => {
@@ -168,13 +169,12 @@ describe('recordIntakeAction', () => {
     expect(revalidate).not.toHaveBeenCalled()
   })
 
-  it('ignora un revalidatePath inyectado por el cliente y usa el derivado del header', async () => {
-    // NUT-006: la ruta ya NO viene del cliente. Un `revalidatePath` inyectado en el input se
-    // IGNORA (Zod lo strippea) y la escritura procede con la ruta derivada del header.
+  it('ignora un revalidatePath inyectado por el cliente (Zod lo strippea) y jamas revalida', async () => {
+    // NUT-006 + H11: la ruta nunca vino del cliente y desde H11 estas mutaciones no revalidan
+    // NADA — un input hostil no puede convertirse en una revalidacion arbitraria.
     const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: '/coach/dashboard' })
     expect(res).toEqual({ ok: true, id: NEW_ID })
-    expect(revalidate).toHaveBeenCalledWith('/c/josefit/nutrition-v2')
-    expect(revalidate).not.toHaveBeenCalledWith('/coach/dashboard')
+    expect(revalidate).not.toHaveBeenCalled()
   })
 
   it('falla cerrado si el clientId no es el usuario autenticado', async () => {
@@ -288,7 +288,7 @@ describe('voidIntakeAction', () => {
     }
   }
 
-  it('retira via void_nutrition_intake_v2 con el payload minimo y revalida', async () => {
+  it('retira via void_nutrition_intake_v2 con el payload minimo, sin revalidar (H11)', async () => {
     const res = await voidIntakeAction({ payload: voidPayload() })
 
     expect(res).toEqual({ ok: true, id: NEW_ID })
@@ -301,7 +301,7 @@ describe('voidIntakeAction', () => {
     })
     // Nunca mas por el camino de correccion: era el que dejaba el fantasma activo.
     expect(rpc).not.toHaveBeenCalledWith('correct_nutrition_intake_v2', expect.anything())
-    expect(revalidate).toHaveBeenCalledWith(REVALIDATE)
+    expect(revalidate).not.toHaveBeenCalled()
   })
 
   it('el retiro NO se gatea por permisos del plan (registro erroneo imborrable seria peor)', async () => {
@@ -498,17 +498,18 @@ describe('closeDayAction', () => {
 /**
  * NUT-006 — Team (`/t/<slug>`) escribia CERO: el schema exigia `revalidatePath` que empezara con
  * `/c/`, se parseaba ANTES del RPC y abortaba los 7 gestos de escritura del alumno de Team en web.
- * La ruta ahora se DERIVA del header del proxy y se valida con un allowlist, no se acepta del
- * cliente. Estos casos fijan el invariante en ambas direcciones.
+ * Desde H11 estas mutaciones ya no revalidan NADA (el apply de un action revalidado colgaba el
+ * router), pero el invariante que este bloque protege sigue vivo: un alumno de Team ESCRIBE sin
+ * `INVALID_PAYLOAD`, y ningun header/inyeccion produce una revalidacion.
  */
-describe('NUT-006 — ruta de revalidacion derivada del servidor', () => {
-  it('un alumno de Team (/t/...) registra y revalida la ruta de su team', async () => {
+describe('NUT-006 — Team escribe; nada revalida (H11)', () => {
+  it('un alumno de Team (/t/...) registra sin INVALID_PAYLOAD y sin revalidar', async () => {
     setTeamRequest()
     const res = await recordIntakeAction({ payload: basePayload() })
 
     expect(res).toEqual({ ok: true, id: NEW_ID })
     expect(mutationCalls()).toHaveLength(1)
-    expect(revalidate).toHaveBeenCalledWith('/t/eva-team/nutrition-v2')
+    expect(revalidate).not.toHaveBeenCalled()
   })
 
   it('un alumno de Team corrige y retira (correct_ y void_) sin INVALID_PAYLOAD', async () => {
@@ -526,10 +527,10 @@ describe('NUT-006 — ruta de revalidacion derivada del servidor', () => {
       payload: { clientId: CLIENT_ID, entryId: ENTRY_ID, reason: 'lo registre por error' },
     })
     expect(removed).toEqual({ ok: true, id: NEW_ID })
-    expect(revalidate).toHaveBeenCalledWith('/t/eva-team/nutrition-v2')
+    expect(revalidate).not.toHaveBeenCalled()
   })
 
-  it('los batch de Team (bulk-mark y deshacer) tambien revalidan la ruta /t/', async () => {
+  it('los batch de Team (bulk-mark y deshacer) escriben y tampoco revalidan', async () => {
     setTeamRequest()
     const recorded = await recordSlotIntakeBatchAction({ payloads: [basePayload()] })
     expect(recorded).toEqual({ ok: true, ids: [NEW_ID], failed: 0 })
@@ -538,7 +539,7 @@ describe('NUT-006 — ruta de revalidacion derivada del servidor', () => {
       payloads: [{ clientId: CLIENT_ID, entryId: ENTRY_ID, reason: 'Deshacer registro de la comida' }],
     })
     expect(undone).toEqual({ ok: true, ids: [NEW_ID], failed: 0 })
-    expect(revalidate).toHaveBeenCalledWith('/t/eva-team/nutrition-v2')
+    expect(revalidate).not.toHaveBeenCalled()
   })
 
   it('un header con path traversal NO se usa como ruta de revalidacion', async () => {
