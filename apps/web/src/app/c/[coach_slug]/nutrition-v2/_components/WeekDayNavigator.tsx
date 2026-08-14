@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { NutritionWeekCell } from '@eva/nutrition-v2'
 import { WeekDayNav } from '@/components/nutrition-v2'
 import { cn } from '@/lib/utils'
+import { gateNavigate } from './navigation-gate'
 
 /**
  * Puente mínimo entre el selector semanal (`WeekDayNav`, presentacional puro) y la URL.
@@ -60,8 +61,12 @@ export function WeekDayNavigator({
           onSelect={(isoDate) => {
             const href = hrefByIso[isoDate]
             if (!href) return
-            startTransition(() => {
-              router.replace(href, { scroll: false })
+            // Compuerta H9: con una server action en vuelo, navegar ahora la descartaría y el
+            // router quedaría suspendido (ver navigation-gate.ts) — se difiere hasta drenar.
+            gateNavigate(href, (target) => {
+              startTransition(() => {
+                router.replace(target, { scroll: false })
+              })
             })
           }}
           selectedIso={selectedIso}

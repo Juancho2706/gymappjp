@@ -13,9 +13,15 @@ import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { useCaptureStudentNutritionIntake } from '@/lib/posthog/events'
 import {
-  markPortionIntakeAction,
-  undoPortionIntakeAction,
+  markPortionIntakeAction as markPortionIntakeActionRaw,
+  undoPortionIntakeAction as undoPortionIntakeActionRaw,
 } from '../_actions/intake.actions'
+import { trackedAction } from './navigation-gate'
+
+// Compuerta de navegación (H9): las ráfagas de porciones también son server actions en vuelo
+// que una navegación podría descartar — pasan por el mismo contador que las del Hoy.
+const markPortionIntakeAction = trackedAction(markPortionIntakeActionRaw)
+const undoPortionIntakeAction = trackedAction(undoPortionIntakeActionRaw)
 import {
   activeSyntheticMarks,
   attemptFor,

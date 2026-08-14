@@ -185,6 +185,39 @@ no del plan.
   `useRouter`. Costo asumido: el strip semanal RSC no refresca en caliente (H5 se acepta como
   limitacion documentada mientras el bug upstream siga abierto).
 - Gates: tsc web 0 · vitest area `/c` completa 1067/1067 · boundaries 343 · eslint ok.
+- ⚠️ `c767a5ea` resulto INSUFICIENTE (feedback owner + auditoria 2026-08-14 tarde): ver H9-bis/H10.
+
+### 🔴 H9-bis + H10 (2026-08-14, auditoria a fondo pedida por el owner) — la raiz COMPLETA
+- Owner sobre `c767a5ea`: (1) retirar → ir a Plan sigue muerto; (2) NUEVO: chequear → ir a Plan →
+  volver a Hoy y el check "desaparece" (la DB lo tiene; recargar lo muestra).
+- **H9-bis (tabs)**: la auditoria encontro que TODA server action invocada desde el cliente se
+  despacha al ActionQueue del router — `callServer` emite `ACTION_SERVER_ACTION`
+  (`next/dist/client/app-call-server.js:14-26`). Quitar `router.refresh()` NO saco la pantalla
+  del queue: la accion de escritura Y la nueva accion de lectura siguen siendo acciones
+  descartables; un click a un tab dentro de esa ventana (~2 s) descarta la pendiente y su
+  `deferredPromise` jamas resuelve (`app-router-instance.js:82-92` retorna sin `action.resolve`)
+  → `use()` suspendido → router muerto. El `await` del caller SI resuelve
+  (`server-action-reducer.js:252-263` usa resolve/reject del payload, independiente del discard)
+  — por eso los checkboxes siguen vivos y solo mueren las navegaciones. Presente en Next 16.3.0
+  instalado. "Retirar" lo dispara mas porque el dialogo deja la mano lista sobre el tab.
+- **H10 (check no persiste)**: regresion de `c767a5ea` — sin `router.refresh()` y con actions
+  sin `revalidatePath`, NADA evicta el router/prefetch cache del cliente
+  (`server-action-reducer.js:218-231` evicta SOLO con `didRevalidate`). La vuelta a Hoy remonta
+  `TodayExperience` con un `serverToday` stale (pre-mutacion) y la base pisaba la verdad.
+- **Fix (este commit), dos patas**:
+  1. `navigation-gate.ts`: contador module-level de server actions en vuelo (`trackedAction`
+     envuelve las 13 actions del area: intake x7, favoritos x3, porciones x2, lectura today) +
+     listener de click en CAPTURA mientras la vista Hoy esta montada: con accion en vuelo, el
+     click a un `<a>` interno se difiere (preventDefault + destino recordado) y se despacha al
+     drenar la cola — el click SIEMPRE termina navegando y jamas se descarta una accion.
+     `WeekDayNavigator` pasa su `router.replace` por `gateNavigate`. Ventana residual conocida:
+     back/forward del navegador (popstate no interceptable) — aceptada mientras el bug upstream
+     viva. La compuerta se RETIRA cuando Next arregle el descarte sin promesa huerfana.
+  2. `today-cache.ts`: ultima verdad del read model por pestaña (module-level). El mount y el
+     effect de `serverToday` prefieren el cache si existe (payload RSC puede ser stale) y
+     reconcilian enseguida con `fetchNutritionTodayAction` — el check persiste entre tabs sin
+     depender de los caches de Next.
+- Gates: tsc web 0 · vitest 1067/1067 · boundaries 345 · eslint sin errores.
 
 ## F4 — Correccion (verificacion visual contra el mock)
 

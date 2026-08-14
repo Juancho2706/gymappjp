@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { toast } from 'sonner'
@@ -81,20 +82,38 @@ import { PortionSlotSection } from './PortionSlotSection'
 import { PortionEquivalencesSheet } from './PortionEquivalencesSheet'
 import { formatPortionsEs, slotsWithPrescribedContent } from './portion-marks.logic'
 import {
-  correctIntakeAction,
-  recordIntakeAction,
-  recordSlotIntakeBatchAction,
-  recordSubstitutionIntakeAction,
-  searchFoodCatalogAction,
-  voidIntakeAction,
-  voidSlotIntakeBatchAction,
+  correctIntakeAction as correctIntakeActionRaw,
+  recordIntakeAction as recordIntakeActionRaw,
+  recordSlotIntakeBatchAction as recordSlotIntakeBatchActionRaw,
+  recordSubstitutionIntakeAction as recordSubstitutionIntakeActionRaw,
+  searchFoodCatalogAction as searchFoodCatalogActionRaw,
+  voidIntakeAction as voidIntakeActionRaw,
+  voidSlotIntakeBatchAction as voidSlotIntakeBatchActionRaw,
 } from '../_actions/intake.actions'
 import {
-  getFavoriteFoodIdsAction,
-  listFavoriteFoodsAction,
-  toggleFavoriteFoodAction,
+  getFavoriteFoodIdsAction as getFavoriteFoodIdsActionRaw,
+  listFavoriteFoodsAction as listFavoriteFoodsActionRaw,
+  toggleFavoriteFoodAction as toggleFavoriteFoodActionRaw,
 } from '../_actions/favorites.actions'
-import { fetchNutritionTodayAction } from '../_actions/today.actions'
+import { fetchNutritionTodayAction as fetchNutritionTodayActionRaw } from '../_actions/today.actions'
+import { trackedAction, useNavigationGate } from './navigation-gate'
+import { readTodayCache, writeTodayCache } from './today-cache'
+
+// TODAS las server actions de esta pantalla pasan por la compuerta de navegación (H9): mientras
+// una esté en vuelo, los clicks de navegación se difieren en vez de dejar que el App Router
+// descarte la acción y quede suspendido (ver navigation-gate.ts). Alias 1:1 para que los call
+// sites de abajo no cambien.
+const correctIntakeAction = trackedAction(correctIntakeActionRaw)
+const recordIntakeAction = trackedAction(recordIntakeActionRaw)
+const recordSlotIntakeBatchAction = trackedAction(recordSlotIntakeBatchActionRaw)
+const recordSubstitutionIntakeAction = trackedAction(recordSubstitutionIntakeActionRaw)
+const searchFoodCatalogAction = trackedAction(searchFoodCatalogActionRaw)
+const voidIntakeAction = trackedAction(voidIntakeActionRaw)
+const voidSlotIntakeBatchAction = trackedAction(voidSlotIntakeBatchActionRaw)
+const getFavoriteFoodIdsAction = trackedAction(getFavoriteFoodIdsActionRaw)
+const listFavoriteFoodsAction = trackedAction(listFavoriteFoodsActionRaw)
+const toggleFavoriteFoodAction = trackedAction(toggleFavoriteFoodActionRaw)
+const fetchNutritionTodayAction = trackedAction(fetchNutritionTodayActionRaw)
 import {
   useCaptureStudentNutritionCorrection,
   useCaptureStudentNutritionIntake,
@@ -166,10 +185,12 @@ export function TodayExperience({
    * registro" → click a Historial). Ninguna mutación de esta pantalla encola acciones del
    * router; el costo asumido es que el strip semanal RSC no refresca en caliente (H5).
    */
-  const [baseToday, setBaseToday] = useState(serverToday)
-  useEffect(() => {
-    setBaseToday(serverToday)
-  }, [serverToday])
+  // Base inicial: la última verdad conocida POR PESTAÑA si existe (H10 — al volver de Plan/
+  // Historial el `serverToday` puede llegar del cache stale del router, sin la mutación recién
+  // hecha); si no hay, el payload del servidor.
+  const [baseToday, setBaseToday] = useState(
+    () => readTodayCache(clientId, serverToday.localDate) ?? serverToday,
+  )
   const [today, applyTodayDelta] = useOptimistic(baseToday, applyTodayOptimistic)
   /** Solo la lectura MÁS RECIENTE puede escribir la base (dos syncs en vuelo no conmutan). */
   const todaySyncSeqRef = useRef(0)
@@ -177,23 +198,53 @@ export function TodayExperience({
   /**
    * Reconcilia `baseToday` con el servidor tras una mutación CONFIRMADA. Si la lectura falla
    * (red), los deltas confirmados se aplican a la base directamente: el servidor ya escribió,
-   * revertir la pantalla sería mentir.
+   * revertir la pantalla sería mentir. Todo lo que adopta la base pasa también al cache por
+   * pestaña (H10) para sobrevivir el próximo cambio de tab.
    */
   async function syncTodayFromServer(confirmedDeltas: TodayOptimisticAction[]) {
     const seq = ++todaySyncSeqRef.current
     try {
       const res = await fetchNutritionTodayAction({ clientId, date: serverToday.localDate })
       if (res.ok) {
-        if (seq === todaySyncSeqRef.current) setBaseToday(res.today)
+        if (seq === todaySyncSeqRef.current) {
+          writeTodayCache(clientId, res.today)
+          setBaseToday(res.today)
+        }
         return
       }
     } catch {
       // Lectura caída: cae al commit local de abajo.
     }
     if (seq === todaySyncSeqRef.current && confirmedDeltas.length > 0) {
-      setBaseToday((prev) => confirmedDeltas.reduce(applyTodayOptimistic, prev))
+      setBaseToday((prev) => {
+        const next = confirmedDeltas.reduce(applyTodayOptimistic, prev)
+        // Efecto colateral idempotente (StrictMode puede repetirlo sin daño): la base y el
+        // cache por pestaña no pueden divergir o el próximo cambio de tab pierde el commit.
+        writeTodayCache(clientId, next)
+        return next
+      })
     }
   }
+
+  // Cambio de payload RSC (navegación de vuelta, refresh externo): si hay verdad por pestaña se
+  // prefiere ésa y se reconcilia con la action de lectura — el payload puede ser MÁS viejo que
+  // la última mutación (cache del router) o más nuevo (otro dispositivo); la lectura decide.
+  useEffect(() => {
+    const cached = readTodayCache(clientId, serverToday.localDate)
+    if (cached) {
+      setBaseToday(cached)
+      void syncTodayFromServer([])
+    } else {
+      setBaseToday(serverToday)
+    }
+    // syncTodayFromServer es estable de facto (deps: clientId + serverToday.localDate, ya acá).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, serverToday])
+
+  // Compuerta de navegación (H9): mientras una server action esté en vuelo, los clicks a links
+  // internos se difieren y se despachan al drenar la cola — jamás se descarta una acción.
+  const router = useRouter()
+  useNavigationGate(useCallback((href: string) => router.push(href), [router]))
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>({ kind: 'none' })
