@@ -15,16 +15,18 @@ function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
 }
 
+// T2.7 F1: trio fijo de macros (tokens canonicos --color-macro-*), identico claro/oscuro;
+// antes carbos era la rampa sport white-label.
 const macroBarClasses = {
-  protein: 'bg-ember-500',
-  carbs: 'bg-sport-500',
-  fats: 'bg-aqua-500',
+  protein: 'bg-macro-protein',
+  carbs: 'bg-macro-carbs',
+  fats: 'bg-macro-fats',
 } as const
 
 const macroTextClasses = {
-  protein: 'text-ember-700 dark:text-ember-300',
-  carbs: 'text-sport-700 dark:text-sport-300',
-  fats: 'text-aqua-700 dark:text-aqua-300',
+  protein: 'text-macro-protein',
+  carbs: 'text-macro-carbs',
+  fats: 'text-macro-fats',
 } as const
 
 const toneClasses: Record<NutritionTone, string> = {

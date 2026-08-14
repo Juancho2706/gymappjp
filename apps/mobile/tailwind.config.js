@@ -53,6 +53,10 @@ module.exports = {
           100: ch('aqua-100'), 200: ch('aqua-200'), 400: ch('aqua-400'),
           500: ch('aqua-500'), 600: ch('aqua-600'), 700: ch('aqua-700'),
         },
+        // Macros de nutricion (T2.7 F1): trio fijo, espejo de los canonicos web --color-macro-*.
+        macro: {
+          protein: ch('macro-protein'), carbs: ch('macro-carbs'), fats: ch('macro-fats'),
+        },
         warning: {
           100: ch('warning-100'), 500: ch('warning-500'), 600: ch('warning-600'), 700: ch('warning-700'),
         },

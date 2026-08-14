@@ -64,6 +64,13 @@
     --color-aqua-200: 190 232 244;
     --color-aqua-100: 227 245 251;
 
+    /* ---- Macros de nutricion (T2.7 F1): trio FIJO, espejo de --color-macro-* de la web.
+       Data-viz categorical: jamas white-label, identico en claro y oscuro (no se redefine
+       en .dark a proposito). P #5E9FD6 · C #FFB74D · G #81C784. ---- */
+    --color-macro-protein: 94 159 214;
+    --color-macro-carbs: 255 183 77;
+    --color-macro-fats: 129 199 132;
+
     /* ---- Semantic status ---- */
     --color-success-700: 14 122 80;
     --color-success-600: 15 125 80;

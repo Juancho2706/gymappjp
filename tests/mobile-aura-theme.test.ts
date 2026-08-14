@@ -122,13 +122,12 @@ describe('branding efectivo del tema mobile', () => {
 })
 
 describe('paleta imperativa de AuraHero', () => {
-  it('solo carbohidratos sigue la rampa sport white-label', () => {
-    const base = resolveNutritionMacroColors(emberPreset.brandColor)
-    const custom = resolveNutritionMacroColors(violetPreset.brandColor)
-
-    expect(custom.protein).toBe(base.protein)
-    expect(custom.fats).toBe(base.fats)
-    expect(custom.carbs).not.toBe(base.carbs)
-    expect(custom.carbs).toBe(resolveSportRamp(violetPreset.brandColor).sport500)
+  // T2.7 F1: trio FIJO — ningun macro sigue la marca (antes carbos montaba la rampa sport).
+  it('los macros son el trio fijo canonico y no dependen de ninguna marca', () => {
+    const colors = resolveNutritionMacroColors()
+    expect(colors).toEqual({ protein: '#5E9FD6', carbs: '#FFB74D', fats: '#81C784' })
+    // Tres hues distintos (data-viz categorical) y ninguno igual al sport de una marca custom.
+    expect(new Set(Object.values(colors)).size).toBe(3)
+    expect(Object.values(colors)).not.toContain(resolveSportRamp(violetPreset.brandColor).sport500)
   })
 })

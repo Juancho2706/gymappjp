@@ -36,9 +36,10 @@ const MACRO_ROWS: Array<{
   barClass: string
 }> = [
   { field: 'calories', total: 'calories', label: 'kcal', unit: '', decimals: 0, barClass: 'bg-primary' },
-  { field: 'proteinG', total: 'proteinG', label: 'P', unit: ' g', decimals: 1, barClass: 'bg-ember-500' },
-  { field: 'carbsG', total: 'carbsG', label: 'C', unit: ' g', decimals: 1, barClass: 'bg-sport-500' },
-  { field: 'fatsG', total: 'fatsG', label: 'G', unit: ' g', decimals: 1, barClass: 'bg-aqua-500' },
+  // T2.7 F1: barras de macros al trio fijo (tokens --color-macro-*).
+  { field: 'proteinG', total: 'proteinG', label: 'P', unit: ' g', decimals: 1, barClass: 'bg-macro-protein' },
+  { field: 'carbsG', total: 'carbsG', label: 'C', unit: ' g', decimals: 1, barClass: 'bg-macro-carbs' },
+  { field: 'fatsG', total: 'fatsG', label: 'G', unit: ' g', decimals: 1, barClass: 'bg-macro-fats' },
 ]
 
 /** Número es-CL sin ceros de relleno ("1850", "12,5"). */

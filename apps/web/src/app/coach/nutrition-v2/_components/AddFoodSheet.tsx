@@ -265,9 +265,10 @@ function AddFoodFormBody({
         <div className="rounded-xl border border-border/60 p-3 space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">% calorías aprox.</p>
           <div className="flex h-2 rounded-full overflow-hidden bg-surface-sunken">
-            <div className="h-full bg-[var(--ember-500)]" style={{ width: `${pct.p}%` }} />
-            <div className="h-full bg-[var(--sport-600)]" style={{ width: `${pct.c}%` }} />
-            <div className="h-full bg-[var(--aqua-500)]" style={{ width: `${pct.f}%` }} />
+            {/* T2.7 F1: barra de composicion al trio fijo de macros. */}
+            <div className="h-full bg-macro-protein" style={{ width: `${pct.p}%` }} />
+            <div className="h-full bg-macro-carbs" style={{ width: `${pct.c}%` }} />
+            <div className="h-full bg-macro-fats" style={{ width: `${pct.f}%` }} />
           </div>
           <p className="text-xs text-muted-foreground">
             P {pct.p}% · C {pct.c}% · G {pct.f}%

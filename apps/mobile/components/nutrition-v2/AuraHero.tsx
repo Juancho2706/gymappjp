@@ -36,7 +36,6 @@ import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
 import {
   hexToRgba,
-  resolveEffectiveCoachBrandTheme,
   resolveNutritionMacroColors,
 } from '../../lib/theme'
 import { shadow } from '../../lib/shadows'
@@ -55,11 +54,11 @@ const GLOW_SIZE = Math.round(MAIN_SIZE * 1.04)
 const MINI_SIZE = 74
 const MINI_STROKE = 8
 
+// T2.7 F1: trio fijo de macros, identico en claro y oscuro (espejo de --color-macro-* web).
 const MACRO_LABEL_CLASSES: Record<NutritionMacroKey, string> = {
-  protein: 'text-ember-700 dark:text-ember-300',
-  carbs: 'text-sport-700 dark:text-sport-300',
-  // El DS no define aqua-300; aqua-700 ya cambia al foreground legible bajo `.dark`.
-  fats: 'text-aqua-700',
+  protein: 'text-macro-protein',
+  carbs: 'text-macro-carbs',
+  fats: 'text-macro-fats',
 }
 
 /**
@@ -253,17 +252,14 @@ function AnimatedKcal({ value }: { value: number }) {
 }
 
 export function AuraHero({ greetingName, calories, macros }: Props) {
-  const { theme, branding } = useTheme()
+  const { theme } = useTheme()
   const motion = useEvaMotion()
   const { width } = useWindowDimensions()
   const expanded = width >= 640
   const [hour] = useState(() => new Date().getHours())
   const greeting = greetingForHour(hour, greetingName)
-  const effectiveBrand = useMemo(() => resolveEffectiveCoachBrandTheme(branding), [branding])
-  const macroColors = useMemo(
-    () => resolveNutritionMacroColors(effectiveBrand.brandColor),
-    [effectiveBrand.brandColor],
-  )
+  // T2.7 F1: los macros ya no siguen la marca — trio fijo, sin dependencia del branding.
+  const macroColors = useMemo(() => resolveNutritionMacroColors(), [])
 
   const { consumed, target } = calories
   const ratio = energyProgressRatio(consumed, target)

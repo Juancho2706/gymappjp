@@ -296,10 +296,11 @@ const MINI_STROKE = 8
 const MINI_R = (MINI_SIZE - MINI_STROKE) / 2
 const MINI_C = 2 * Math.PI * MINI_R
 
+// T2.7 F1: trio fijo de macros (tokens canonicos --color-macro-*), identico claro/oscuro.
 const MACRO_TEXT_CLASS: Record<NutritionMacroKey, string> = {
-  protein: 'text-ember-700 dark:text-ember-300',
-  carbs: 'text-sport-700 dark:text-sport-300',
-  fats: 'text-aqua-700 dark:text-aqua-300',
+  protein: 'text-macro-protein',
+  carbs: 'text-macro-carbs',
+  fats: 'text-macro-fats',
 }
 
 function MacroMiniRing({

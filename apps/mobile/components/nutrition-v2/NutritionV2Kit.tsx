@@ -121,16 +121,18 @@ function foodCategoryIconSource(category: string | null | undefined): ReturnType
     : FOOD_CATEGORY_ICONS.otro
 }
 
+// T2.7 F1: trio fijo de macros (espejo de --color-macro-* web); antes carbos era la rampa
+// sport white-label y cada marca pintaba los carbohidratos distinto.
 const macroBarClasses: Record<NutritionMacroKey, string> = {
-  protein: 'bg-ember-500',
-  carbs: 'bg-sport-500',
-  fats: 'bg-aqua-500',
+  protein: 'bg-macro-protein',
+  carbs: 'bg-macro-carbs',
+  fats: 'bg-macro-fats',
 }
 
 const macroTextClasses: Record<NutritionMacroKey, string> = {
-  protein: 'text-ember-700',
-  carbs: 'text-sport-700',
-  fats: 'text-aqua-700',
+  protein: 'text-macro-protein',
+  carbs: 'text-macro-carbs',
+  fats: 'text-macro-fats',
 }
 
 export function NutritionPageShell({

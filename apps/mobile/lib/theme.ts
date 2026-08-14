@@ -479,15 +479,21 @@ export function resolveSportRamp(primaryColor?: string | null): {
  * Pensado para `stroke` de react-native-svg, donde una utility no puede resolver
  * el color en runtime.
  */
-export function resolveNutritionMacroColors(brandColor?: string | null): {
+/**
+ * Colores de macros para pintura imperativa (SVG del AuraHero). TRIO FIJO (T2.7 F1, decision
+ * owner 07-08): espejo literal de los tokens canonicos `--color-macro-*` (web y global.css RN).
+ * Es data-viz categorical: dejo de recibir `brandColor` a proposito — antes carbos seguia la
+ * rampa sport white-label y cada marca pintaba los carbohidratos de otro color.
+ */
+export function resolveNutritionMacroColors(): {
   protein: string
   carbs: string
   fats: string
 } {
   return {
-    protein: DS.ember500,
-    carbs: resolveSportRamp(brandColor).sport500,
-    fats: DS.aqua500,
+    protein: '#5E9FD6',
+    carbs: '#FFB74D',
+    fats: '#81C784',
   }
 }
 

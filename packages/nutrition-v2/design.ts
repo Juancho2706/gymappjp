@@ -6,30 +6,39 @@ export type NutritionSyncState = 'synced' | 'pending' | 'syncing' | 'error' | 'o
 export type NutritionSaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 export type NutritionTone = 'neutral' | 'brand' | 'nutrition' | 'success' | 'warning' | 'danger' | 'info'
 
+/**
+ * Paleta de macros: TRIO FIJO (decision owner 2026-08-07, opcion 2; ejecutada en T2.7 F1).
+ * P #5E9FD6 · C #FFB74D · G #81C784 — los tokens canonicos `--color-macro-*` que las superficies
+ * V1 usan desde el overhaul, ahora tambien en V2 y RN. Es data-viz categorical: JAMAS sigue la
+ * marca del coach (antes carbos montaba la rampa sport white-label) y es identica en claro y
+ * oscuro (practica de prod de V1; las variantes `-dark` de globals.css siguen sin usarse).
+ * Web: tokens dentro de `@theme` ⇒ `text-macro-*` / `bg-macro-*` se generan solos.
+ * RN: mismos nombres, canales en `apps/mobile/global.css` + `macro.*` en tailwind.config.js.
+ */
 export const NUTRITION_MACROS = {
   protein: {
     label: 'Proteína',
     shortLabel: 'P',
-    webColor: 'var(--ember-500)',
-    webTextClass: 'text-ember-700 dark:text-ember-300',
-    webBarClass: 'bg-ember-500',
-    nativeClass: 'bg-ember-500',
+    webColor: 'var(--color-macro-protein)',
+    webTextClass: 'text-macro-protein',
+    webBarClass: 'bg-macro-protein',
+    nativeClass: 'bg-macro-protein',
   },
   carbs: {
     label: 'Carbohidratos',
     shortLabel: 'C',
-    webColor: 'var(--sport-500)',
-    webTextClass: 'text-sport-700 dark:text-sport-300',
-    webBarClass: 'bg-sport-500',
-    nativeClass: 'bg-sport-500',
+    webColor: 'var(--color-macro-carbs)',
+    webTextClass: 'text-macro-carbs',
+    webBarClass: 'bg-macro-carbs',
+    nativeClass: 'bg-macro-carbs',
   },
   fats: {
     label: 'Grasas',
     shortLabel: 'G',
-    webColor: 'var(--aqua-500)',
-    webTextClass: 'text-aqua-700 dark:text-aqua-300',
-    webBarClass: 'bg-aqua-500',
-    nativeClass: 'bg-aqua-500',
+    webColor: 'var(--color-macro-fats)',
+    webTextClass: 'text-macro-fats',
+    webBarClass: 'bg-macro-fats',
+    nativeClass: 'bg-macro-fats',
   },
 } as const satisfies Record<
   NutritionMacroKey,
