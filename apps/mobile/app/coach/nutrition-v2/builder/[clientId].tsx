@@ -47,6 +47,7 @@ import { exchangeGroupColor, hasUnconfirmedMacros, type ExchangeGroup } from '@e
 import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
 import { FoodMacrosOverrideSheet } from '../../../../components/nutrition-v2/FoodMacrosOverrideSheet'
+import { UndoSnackbar } from '../../../../components/nutrition-v2/quick-edit/PublishBar'
 import { toast } from '../../../../components/Toast'
 import { useTheme } from '../../../../context/ThemeContext'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
@@ -108,6 +109,7 @@ import {
   CoachFoodInputSchema,
   MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
+  VISIBLE_NOTES_MAX,
   NUTRITION_PRO_MODULE_KEY,
   assembleAndValidateDraft,
   baseVariantOf,
@@ -148,6 +150,10 @@ import { stepForUnit } from '../../../../lib/nutrition-v2-quick-edit'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 
 const STRATEGY_ORDER: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
+
+// T2.6 F1: ventana unica del Deshacer destructivo, la misma del web (UNDO_TOAST_MS) y del
+// quick-edit RN — una sola gramatica en todo el modulo.
+const UNDO_TOAST_MS = 8000
 
 // Wizard de DOS pasos (SPEC nutrition-ui-poda punto 11). "Estrategia" y "Objetivos" caben en una
 // pantalla —el primero tenía un solo control— y "Revisión" era eco de lo que "Los días" ya muestra
@@ -1048,6 +1054,40 @@ export default function CoachNutritionV2BuilderScreen() {
     portions.dropVariant(variantKey)
   }
 
+  // T2.6 F1 — gramatica destructiva unificada: quitar una franja OCURRE en el acto y hay
+  // Deshacer de 8 s (espejo del SlotEditor web y del quick-edit RN). Hasta aca el tacho borraba
+  // la franja entera —alimentos y porciones— sin confirmacion ni vuelta atras. Las porciones NO
+  // se tocan al borrar (viven keyed por `variantKey::slot.key` fuera del reducer), asi que el
+  // RESTORE_SLOT las recupera solo.
+  const [slotUndo, setSlotUndo] = useState<{ message: string; restore: () => void } | null>(null)
+  const slotUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (slotUndoTimerRef.current) clearTimeout(slotUndoTimerRef.current)
+    },
+    [],
+  )
+
+  function handleRemoveSlot(variantKey: string, slotKey: string) {
+    const variant = state.variants.find((candidate) => candidate.key === variantKey)
+    const index = variant?.slots.findIndex((candidate) => candidate.key === slotKey) ?? -1
+    const removed = index >= 0 ? variant?.slots[index] : undefined
+    if (!variant || !removed) return
+    dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey })
+    if (slotUndoTimerRef.current) clearTimeout(slotUndoTimerRef.current)
+    setSlotUndo({
+      message: `${removed.name.trim() || 'La franja'} se quitó`,
+      restore: () => dispatch({ type: 'RESTORE_SLOT', variantKey, index, slot: removed }),
+    })
+    slotUndoTimerRef.current = setTimeout(() => setSlotUndo(null), UNDO_TOAST_MS)
+  }
+
+  function handleSlotUndo() {
+    if (slotUndoTimerRef.current) clearTimeout(slotUndoTimerRef.current)
+    slotUndo?.restore()
+    setSlotUndo(null)
+  }
+
   // CE-5 (H-12) — copiar UNA franja a otros días ya existentes. Antes solo se podía DUPLICAR el
   // día entero al crearlo: cambiar el desayuno de 5 días era repetir el cambio 5 veces a mano.
   //
@@ -1599,6 +1639,7 @@ export default function CoachNutritionV2BuilderScreen() {
               onSearch={(target) => setSearchTarget(target)}
               onSaveCustomFood={handleSaveCustomFood}
               onCopySlotToVariants={handleCopySlotToVariants}
+              onRemoveSlot={handleRemoveSlot}
               portions={portions}
               publishError={publishError}
               dateConflict={dateConflict}
@@ -1612,6 +1653,8 @@ export default function CoachNutritionV2BuilderScreen() {
             />
           ) : null}
         </ScrollView>
+
+        {slotUndo ? <UndoSnackbar message={slotUndo.message} onUndo={handleSlotUndo} /> : null}
 
         <View className="border-t border-subtle bg-surface-app">
           {/* H-01 (P0): "Publicar" no avanza por un error que vive en un dia NO montado. Sin esta
@@ -1858,6 +1901,23 @@ function PlanStep({
           ))}
         </View>
       </NutritionCard>
+
+      {/* Notas visibles para el alumno (T2.6 F5, espejo web/quick-edit: mismo limite y copy).
+          Hasta ahora el builder RN solo las ARRASTRABA del plan vigente. */}
+      <View>
+        <Text className="mb-1.5 text-sm font-semibold text-strong">Notas para tu alumno</Text>
+        <TextInput
+          value={state.visibleNotes ?? ''}
+          onChangeText={(value) => dispatch({ type: 'SET_VISIBLE_NOTES', value })}
+          placeholder="Escribe indicaciones visibles para tu alumno (bienvenida, comida libre, recordatorios…)."
+          placeholderTextColor={theme.mutedForeground}
+          multiline
+          maxLength={VISIBLE_NOTES_MAX}
+          textAlignVertical="top"
+          className="min-h-24 rounded-control border border-default bg-surface-card px-3 py-2 text-base leading-6 text-strong"
+        />
+        <ErrorText message={errors.visibleNotes} />
+      </View>
 
       {/* Vigencia: en RN siempre vivió acá (en la web estaba en el paso "Revisar" que se elimina).
           QW-10: el hint lee la fecha en voz humana, no la ISO cruda que el coach acaba de escribir. */}
@@ -3010,6 +3070,7 @@ function SlotEditor({
   onSearch,
   onSaveCustomFood,
   onCopyToVariants,
+  onRemoveSlot,
   portions,
 }: {
   /** Día (variante) al que pertenece la franja: toda mutación viaja scoped a él. */
@@ -3029,6 +3090,8 @@ function SlotEditor({
   ) => Promise<{ ok: boolean; error?: string }>
   /** CE-5: despacha la copia de ESTA franja (árbol + porciones) a los días elegidos. */
   onCopyToVariants: (slotKey: string, targetVariantKeys: string[]) => void
+  /** T2.6 F1: quitar ESTA franja, optimista + Deshacer (lo orquesta la pantalla). */
+  onRemoveSlot: () => void
   portions: PortionsController
 }) {
   const { theme } = useTheme()
@@ -3065,7 +3128,7 @@ function SlotEditor({
             accessibilityLabel="Quitar franja"
             accessibilityRole="button"
             className="h-11 w-9 items-center justify-center rounded-control"
-            onPress={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
+            onPress={onRemoveSlot}
           >
             <Trash2 color={theme.destructive} size={16} />
           </Pressable>
@@ -3199,6 +3262,7 @@ function DaysStep({
   onSearch,
   onSaveCustomFood,
   onCopySlotToVariants,
+  onRemoveSlot,
   portions,
   publishError,
   dateConflict,
@@ -3235,6 +3299,8 @@ function DaysStep({
   ) => Promise<{ ok: boolean; error?: string }>
   /** CE-5: copia de una franja del día elegido hacia otros días (árbol + porciones). */
   onCopySlotToVariants: (sourceVariantKey: string, slotKey: string, targetVariantKeys: string[]) => void
+  /** T2.6 F1: quitar franja optimista + Deshacer (el snackbar vive en la pantalla). */
+  onRemoveSlot: (variantKey: string, slotKey: string) => void
   portions: PortionsController
   publishError: string | null
   dateConflict: boolean
@@ -3267,7 +3333,7 @@ function DaysStep({
           <Text className="font-display text-base font-semibold text-strong">Plan flexible</Text>
           <Text className="mt-2 text-sm leading-5 text-muted">
             Este plan no usa franjas prescritas: el alumno registra sus comidas libremente contra las metas
-            diarias de "El plan", iguales los siete días. Ya puedes publicarlo.
+            diarias de “El plan”, iguales los siete días. Ya puedes publicarlo.
           </Text>
         </NutritionCard>
         {publishPanel}
@@ -3334,6 +3400,7 @@ function DaysStep({
           onCopyToVariants={(slotKey, targetVariantKeys) =>
             onCopySlotToVariants(variant.key, slotKey, targetVariantKeys)
           }
+          onRemoveSlot={() => onRemoveSlot(variant.key, slot.key)}
           portions={portions}
         />
       ))}

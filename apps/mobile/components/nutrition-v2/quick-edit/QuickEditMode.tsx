@@ -114,7 +114,8 @@ function genKey(prefix: string): string {
   return prefix + '-' + Date.now().toString(36) + '-' + keySeq
 }
 
-const UNDO_TIMEOUT_MS = 5000
+// T2.6 F1: ventana unica del Deshacer destructivo en todo el modulo (web y RN), era 5 s.
+const UNDO_TIMEOUT_MS = 8000
 
 interface SearchTarget {
   mode: FoodSearchMode
@@ -581,26 +582,16 @@ export function QuickEditMode({
       const index = variant.slots.findIndex((s) => s.key === slotKey)
       const slot = index >= 0 ? variant.slots[index] : undefined
       if (!slot) return
-      Alert.alert(
-        '¿Eliminar la franja?',
-        slot.name.trim() ? `Se quitará "${slot.name.trim()}" con sus alimentos.` : 'Se quitará la franja con sus alimentos.',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Eliminar',
-            style: 'destructive',
-            onPress: () => {
-              dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey })
-              // Las porciones de la franja quedan intactas en su estado paralelo
-              // (keyed por slot.key): el RESTORE_SLOT las recupera solo.
-              pushUndo({
-                message: QUICK_EDIT_COPY.slotDeletedUndo,
-                restore: () => dispatch({ type: 'RESTORE_SLOT', variantKey, index, slot }),
-              })
-            },
-          },
-        ],
-      )
+      // T2.6 F1 — una sola gramatica destructiva en todo el modulo: la accion OCURRE y hay
+      // Deshacer (espejo del web, que tambien perdio este confirm). Tenia undo Y ADEMAS un
+      // Alert de confirmacion encima; el confirm sobraba.
+      dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey })
+      // Las porciones de la franja quedan intactas en su estado paralelo
+      // (keyed por slot.key): el RESTORE_SLOT las recupera solo.
+      pushUndo({
+        message: QUICK_EDIT_COPY.slotDeletedUndo,
+        restore: () => dispatch({ type: 'RESTORE_SLOT', variantKey, index, slot }),
+      })
     },
     [state, baseline, pushUndo],
   )

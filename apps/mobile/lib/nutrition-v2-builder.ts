@@ -113,6 +113,9 @@ export interface BuilderItem {
  *  NutritionItemSubstitutionSchema array `.max(8)`. No hardcodear el 8 en reducer/UI. */
 export const MAX_ITEM_SUBSTITUTIONS = 8
 
+/** Tope del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim). Espejo web. */
+export const VISIBLE_NOTES_MAX = 8000
+
 export interface BuilderSlot {
   key: string
   name: string
@@ -596,6 +599,7 @@ export type BuilderAction =
   | { type: 'PREV_STEP' }
   | { type: 'SET_STRATEGY'; strategy: NutritionStrategy; firstSlotKey: string }
   | { type: 'SET_PLAN_NAME'; value: string }
+  | { type: 'SET_VISIBLE_NOTES'; value: string }
   | { type: 'SET_EFFECTIVE_FROM'; value: string }
   | { type: 'SET_TARGET'; field: keyof BuilderTargets; value: string }
   | { type: 'SET_PERMISSION'; field: keyof BuilderPermissions; value: boolean }
@@ -611,6 +615,12 @@ export type BuilderAction =
   // — Franjas / items (siempre dentro de UNA variante) —
   | { type: 'ADD_SLOT'; variantKey: string; key: string }
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
+  /**
+   * Deshacer el borrado de una franja (T2.6 F1, espejo web). La UI captura la franja y su indice
+   * ANTES de despachar `REMOVE_SLOT`; aca solo se vuelve a meter donde estaba. Idempotente: si la
+   * key ya volvio, no-op (un doble tap en Deshacer no duplica).
+   */
+  | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: BuilderSlot }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<BuilderSlot, 'name' | 'startTime'>> }
   | { type: 'COPY_SLOT_TO_VARIANTS'; sourceVariantKey: string; slotKey: string; targetVariantKeys: readonly string[] }
   | { type: 'ADD_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood | null }
@@ -653,6 +663,12 @@ function isValidDow(day: unknown): day is number {
   return typeof day === 'number' && Number.isInteger(day) && day >= 0 && day <= 6
 }
 
+/** Inserta en una posicion acotada al arreglo (indice negativo => al inicio; pasado => al final). */
+function insertSlotAt(slots: BuilderSlot[], index: number, slot: BuilderSlot): BuilderSlot[] {
+  const safe = Number.isFinite(index) ? Math.max(0, Math.min(slots.length, Math.trunc(index))) : slots.length
+  return [...slots.slice(0, safe), slot, ...slots.slice(safe)]
+}
+
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
     case 'SET_STEP':
@@ -685,6 +701,10 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     }
     case 'SET_PLAN_NAME':
       return { ...state, planName: action.value }
+    case 'SET_VISIBLE_NOTES':
+      // Editar (aunque sea a '') deja la clave PRESENTE: a partir de aca el borrador "sabe" de
+      // notas y un RESTORE posterior respeta lo que el coach escribio, incluso el vaciado.
+      return { ...state, visibleNotes: action.value }
     case 'SET_EFFECTIVE_FROM':
       return { ...state, effectiveFrom: action.value }
     case 'SET_TARGET':
@@ -804,6 +824,17 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...variant,
         slots: variant.slots.filter((slot) => slot.key !== action.slotKey),
       }))
+    /**
+     * Deshacer el borrado de una franja (T2.6 F1). Espejo EXACTO del web: idempotente —si la
+     * franja ya volvio, no-op— y con indice, porque el orden de las franjas es la secuencia del
+     * dia (desayuno antes que cena) y una que vuelve al final se lee como otro bug.
+     */
+    case 'RESTORE_SLOT':
+      return mapVariant(state, action.variantKey, (variant) =>
+        variant.slots.some((slot) => slot.key === action.slot.key)
+          ? variant
+          : { ...variant, slots: insertSlotAt(variant.slots, action.index, action.slot) },
+      )
     case 'UPDATE_SLOT':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
     case 'COPY_SLOT_TO_VARIANTS': {
@@ -1224,6 +1255,12 @@ export function validateStep(state: BuilderState, step: number): StepValidation 
 
     if (state.planName.trim().length === 0) errors.planName = 'Ponle un nombre al plan.'
     else if (state.planName.trim().length > 180) errors.planName = 'El nombre es demasiado largo.'
+
+    // Espejo del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim), mismo
+    // corte y copy que el quick-edit: corta ANTES del VALIDATION generico del server.
+    if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
+      errors.visibleNotes = `Las notas superan los ${VISIBLE_NOTES_MAX} caracteres.`
+    }
 
     const kcal = parseTarget(state.targets.calories)
     if (Number.isNaN(kcal)) errors.calories = 'Ingresa un numero valido de kcal.'

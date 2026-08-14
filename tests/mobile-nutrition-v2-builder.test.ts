@@ -112,6 +112,28 @@ describe('reducer / paridad con web', () => {
     expect(next.permissions.canRegisterFreely).toBe(false)
   })
 
+  // T2.6 F1 (paridad): Deshacer del borrado de franja — vuelve COMPLETA, a su indice, y el
+  // doble Deshacer no duplica (mismo contrato que el reducer web).
+  it('RESTORE_SLOT reinserta la franja en su indice y es idempotente', () => {
+    const state = structuredState()
+    const removedSlot = baseSlots(state)[0]
+    const removed = builderReducer(state, { type: 'REMOVE_SLOT', variantKey: BASE_VARIANT_KEY, slotKey: removedSlot.key })
+    expect(baseSlots(removed)).toHaveLength(0)
+    const restored = builderReducer(removed, { type: 'RESTORE_SLOT', variantKey: BASE_VARIANT_KEY, index: 0, slot: removedSlot })
+    expect(baseSlots(restored)).toHaveLength(1)
+    expect(baseSlots(restored)[0]).toEqual(removedSlot)
+    const twice = builderReducer(restored, { type: 'RESTORE_SLOT', variantKey: BASE_VARIANT_KEY, index: 0, slot: removedSlot })
+    expect(baseSlots(twice)).toHaveLength(1)
+  })
+
+  // T2.6 F5 (paridad): el builder RN edita las notas visibles; editar (aun a '') deja la clave
+  // presente para que un RESTORE posterior respete lo escrito.
+  it('SET_VISIBLE_NOTES edita las notas y el vaciado queda como cadena vacia presente', () => {
+    const edited = builderReducer(structuredState(), { type: 'SET_VISIBLE_NOTES', value: 'Hidratate' })
+    expect(edited.visibleNotes).toBe('Hidratate')
+    expect(builderReducer(edited, { type: 'SET_VISIBLE_NOTES', value: '' }).visibleNotes).toBe('')
+  })
+
   it('ADD_ITEM con alimento precarga cantidad y unidad', () => {
     let state = builderReducer(createEmptyBuilderState('2026-07-20'), { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'slotK' })
     const slotKey = baseSlots(state)[0].key
