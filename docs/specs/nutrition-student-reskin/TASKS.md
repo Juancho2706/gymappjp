@@ -170,7 +170,14 @@ no del plan.
 - [ ] Stepper hibrido + chips de razon + "Otra…" — deltas menores si los hay (chips de razon del
       sheet Retirar verificados OK en el QA: Lo registre por error / No lo comi / duplicado /
       Otro motivo)
-- [ ] Re-QA en preview de H1-H6+H8 tras el deploy de la rama (pendiente de build de Vercel)
+- [~] Re-QA en preview de `5ca38679` (deploy READY): verificado por DOM con javascript_tool —
+      H1 ✅ (dots de chips = rgb(94,159,214)/rgb(255,183,77)/rgb(129,199,132), trio exacto),
+      H2 ✅ (zona en 78.3%→95.7% del riel con bordes success), H8 parcial ✅ (5 checkboxes con
+      `disabled=false` tras recargar; el flujo completo retirar→re-marcar quedo a medias porque
+      el renderer del navegador se congelaba con la ventana en background — gotcha conocido).
+      QUEDA a ojo del owner: H3 (historial sin semana duplicada/parcial + "Ver semanas
+      anteriores"), H4 (trend card con cifras), H6 (caption), H8 con la mano (su propio repro:
+      retirar Avena y volver a marcarla) y H7 (clicks en los tabs).
 
 ## F5 — Cierre
 
