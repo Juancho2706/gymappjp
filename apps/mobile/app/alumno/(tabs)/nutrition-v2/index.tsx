@@ -9,7 +9,6 @@ import {
   BookOpen,
   CalendarDays,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   History,
@@ -77,7 +76,10 @@ import {
   bulkMarkCtaLabel,
   bulkMarkSlotState,
   consumedPrescriptionItemIds,
+  countEnergyDaysEvaluable,
+  countEnergyDaysInRange,
   energyGoalReached,
+  energyTrendDirection,
   firstNameFromFullName,
   formatNutritionAmount,
   formatNutritionCalories,
@@ -304,6 +306,17 @@ function TodayTab({
       }),
     [date, weekHistory.days, weekStartIso, weekVariants],
   )
+  // Racha honesta semanal (T2.7 F2, espejo web page.tsx): dias CERRADOS de la semana en curso
+  // dentro del rango de energia. Hoy no cuenta (a media mañana "fuera de rango" seria mentira);
+  // sin dias evaluables no hay chip. Solo aplica mirando HOY (el hero no se pinta en otros dias).
+  const weekInRangeCount = useMemo(() => {
+    if (!isViewingToday || !weekHistory.ready) return null
+    const closed = weekHistory.days.filter(
+      (day) => nutritionWeekStartIso(day.localDate) === weekStartIso && day.localDate < date,
+    )
+    if (countEnergyDaysEvaluable(closed) === 0) return null
+    return countEnergyDaysInRange(closed)
+  }, [date, isViewingToday, weekHistory.days, weekHistory.ready, weekStartIso])
   const selectedCell = useMemo(
     () => weekCells.find((cell) => cell.isoDate === viewDate) ?? null,
     [viewDate, weekCells],
@@ -1712,6 +1725,7 @@ function TodayTab({
 
         <AuraHero
           greetingName={firstNameFromFullName(clientName)}
+          weekInRangeCount={weekInRangeCount}
           calories={{ consumed: consumed.calories, target: model.targets.calories }}
           macros={{
             protein: { consumed: consumed.proteinG, target: model.targets.proteinG },
@@ -3505,7 +3519,10 @@ function HistoryTab({
         todayIso,
       })
       const loggedCount = cells.filter((cell) => cell.state === 'past-logged').length
-      return { weekStartIso, cells, loggedCount }
+      // T2.7 F3: dias de la semana DENTRO del rango de energia ±10% — alimenta la pill de la
+      // card y las barras de la tendencia (mismas cuentas que la web, helper compartido).
+      const inRangeCount = countEnergyDaysInRange(byWeek.get(weekStartIso) ?? [])
+      return { weekStartIso, cells, loggedCount, inRangeCount }
     })
   }, [items, currentWeekStartIso, todayIso])
 
@@ -3552,6 +3569,8 @@ function HistoryTab({
           <Text className="text-xs text-subtle">
             Semanas anteriores — la semana en curso vive en el tab Hoy
           </Text>
+          {/* T2.7 F3 (catálogo Alumno 05 #3): el zoom-out ANTES del detalle. */}
+          <HistoryTrendCard weeks={weeks} />
         </View>
       }
       ListEmptyComponent={
@@ -3585,6 +3604,71 @@ type NutritionHistoryWeek = {
   weekStartIso: string
   cells: NutritionWeekCell<NutritionWeekVariantLike, NutritionHistoryDay>[]
   loggedCount: number
+  /** Dias de la semana dentro del rango de energia ±10% (T2.7 F3). */
+  inRangeCount: number
+}
+
+/** Copy del chip de tendencia — la flecha sola es ambigua para un lector de pantalla. */
+const TREND_LABEL = { up: 'tendencia ↑', down: 'tendencia ↓', flat: 'tendencia →' } as const
+
+/**
+ * Card "Últimas 4 semanas" (T2.7 F3, espejo del `HistoryTrendCard` web): barras = días en rango
+ * de energía por semana, de la más vieja a la más reciente; el chip resume la dirección. Con
+ * menos de 2 semanas cerradas no hay tendencia que afirmar y la card no se pinta.
+ */
+function HistoryTrendCard({ weeks }: { weeks: NutritionHistoryWeek[] }) {
+  const { theme } = useTheme()
+  // `weeks` llega de la más reciente a la más vieja; la lectura temporal va al revés.
+  const oldestToNewest = [...weeks.slice(0, 4)].reverse()
+  const trend = energyTrendDirection(oldestToNewest.map((week) => week.inRangeCount))
+  if (trend == null) return null
+
+  const rangeOf = (week: NutritionHistoryWeek) => {
+    const first = week.cells[0]
+    const last = week.cells[week.cells.length - 1]
+    return first && last ? `${formatNutritionShortDate(first.isoDate)}–${formatNutritionShortDate(last.isoDate)}` : ''
+  }
+
+  return (
+    <NutritionCard>
+      <View className="flex-row flex-wrap items-baseline justify-between gap-2">
+        <Text className="font-display text-base font-semibold text-strong">
+          Últimas {oldestToNewest.length} semanas
+        </Text>
+        <View className={trend === 'up' ? 'rounded-pill bg-success-500/15 px-2.5 py-0.5' : 'rounded-pill bg-surface-sunken px-2.5 py-0.5'}>
+          <Text className={trend === 'up' ? 'text-xs font-semibold text-success-700' : 'text-xs font-semibold text-muted'}>
+            {TREND_LABEL[trend]}
+          </Text>
+        </View>
+      </View>
+      <View
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={`Días en rango por semana: ${oldestToNewest.map((week) => `${week.inRangeCount} de 7`).join(', ')}`}
+        className="mt-3 h-11 flex-row items-end gap-1"
+      >
+        {oldestToNewest.map((week) => {
+          const ratio = week.inRangeCount / 7
+          return (
+            <View
+              key={week.weekStartIso}
+              className="flex-1 rounded-t-md"
+              style={{
+                height: `${Math.max(ratio * 100, 8)}%`,
+                // Hex de 8 digitos (#RRGGBBAA): success al 60% / 30% sin importar helpers.
+                backgroundColor:
+                  ratio >= 5 / 7 ? `${theme.success}99` : ratio >= 3 / 7 ? `${theme.success}4D` : theme.muted,
+              }}
+            />
+          )
+        })}
+      </View>
+      <View className="mt-1 flex-row items-baseline justify-between">
+        <Text className="text-[10px] text-subtle">{rangeOf(oldestToNewest[0])}</Text>
+        <Text className="text-[10px] text-subtle">{rangeOf(oldestToNewest[oldestToNewest.length - 1])}</Text>
+      </View>
+    </NutritionCard>
+  )
 }
 
 function WeeklyHistoryCard({
@@ -3598,7 +3682,6 @@ function WeeklyHistoryCard({
   const total = week.cells.length
   const first = week.cells[0]
   const last = week.cells[total - 1]
-  const pct = total > 0 ? Math.round((week.loggedCount / total) * 100) : 0
   const rangeLabel =
     first && last ? `${formatNutritionShortDate(first.isoDate)} – ${formatNutritionShortDate(last.isoDate)}` : ''
   return (
@@ -3607,9 +3690,16 @@ function WeeklyHistoryCard({
         <Text className="font-display text-base font-semibold text-strong" numberOfLines={1}>
           {`Semana ${rangeLabel}`}
         </Text>
-        <Text className="font-mono text-xs text-muted" style={{ fontVariant: ['tabular-nums'] }}>
-          {`${week.loggedCount}/${total} días · ${pct}%`}
-        </Text>
+        {/* T2.7 F3 (catálogo Alumno 05): la métrica de la card es el RANGO, no el conteo de
+            registros — los puntos del strip ya dicen qué días tienen registro. */}
+        <View className={week.inRangeCount >= 5 ? 'rounded-pill bg-success-500/15 px-2.5 py-0.5' : 'rounded-pill bg-surface-sunken px-2.5 py-0.5'}>
+          <Text
+            className={week.inRangeCount >= 5 ? 'text-xs font-semibold text-success-700' : 'text-xs font-semibold text-muted'}
+            style={{ fontVariant: ['tabular-nums'] }}
+          >
+            {`${week.inRangeCount}/7 en rango`}
+          </Text>
+        </View>
       </View>
       {/* Mini-strip: MISMO `WeekDayNav` de Hoy/Plan — "la navegación al día ya existe", no se
           reinventa el punto de estado ni el toque. `selectedIso=""` porque acá nada está

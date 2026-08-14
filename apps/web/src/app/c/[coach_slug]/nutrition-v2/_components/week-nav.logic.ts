@@ -20,6 +20,7 @@
 import {
   addNutritionDays,
   buildNutritionWeek,
+  countEnergyDaysInRange,
   formatNutritionCalories,
   nutritionDayOfWeekFromIso,
   nutritionWeekStartIso,
@@ -182,6 +183,11 @@ export interface HistoryWeekBucket {
   loggedCount: number
   /** `loggedCount / 7` redondeado, para el "% " de la card. */
   percent: number
+  /**
+   * Días de la semana DENTRO del rango de energía ±10% (T2.7 F3): alimenta la pill "N/7 en
+   * rango" de la card y las barras de la tendencia. Un día sin datos no cuenta ni en contra.
+   */
+  inRangeCount: number
 }
 
 /**
@@ -236,6 +242,7 @@ export function groupHistoryDaysByWeek(
       cells,
       loggedCount,
       percent: Math.round((loggedCount / 7) * 100),
+      inRangeCount: countEnergyDaysInRange(rowsByWeek.get(weekStartIso) ?? []),
     }
   })
 }

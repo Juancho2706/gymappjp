@@ -78,6 +78,11 @@ interface Props {
   greetingName?: string | null
   calories: { consumed: number; target: number | null }
   macros: { protein: MacroValue; carbs: MacroValue; fats: MacroValue }
+  /**
+   * Racha honesta semanal (T2.7 F2, catálogo Hoy #7): días CERRADOS de esta semana dentro del
+   * rango de energía. `null` = sin días evaluables — el chip no se pinta (espejo web).
+   */
+  weekInRangeCount?: number | null
 }
 
 /** Anillo SVG genérico con relleno animado (resorte) y contenido centrado. */
@@ -249,7 +254,7 @@ function AnimatedKcal({ value }: { value: number }) {
   return <>{new Intl.NumberFormat('es-CL').format(display)}</>
 }
 
-export function AuraHero({ greetingName, calories, macros }: Props) {
+export function AuraHero({ greetingName, calories, macros, weekInRangeCount = null }: Props) {
   const { theme } = useTheme()
   const motion = useEvaMotion()
   const { width } = useWindowDimensions()
@@ -289,19 +294,32 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
           from={motion.reduced ? undefined : { opacity: 0, translateY: 6 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'timing', duration: motion.duration('slow'), delay: motion.reduced ? 0 : 50 }}
+          style={styles.greetingRow}
         >
-          <Text
-            className="text-strong"
-            style={[
-              styles.greeting,
-              { fontSize: expanded ? TYPE_SCALE['2xl'] : TYPE_SCALE.xl },
-            ]}
-          >
-            {greeting}
-          </Text>
-          <Text className="text-muted" style={styles.subtitle}>
-            {hasTarget ? 'Tu energía de hoy' : 'Vas sumando tu día'}
-          </Text>
+          <View style={styles.greetingBlock}>
+            <Text
+              className="text-strong"
+              style={[
+                styles.greeting,
+                { fontSize: expanded ? TYPE_SCALE['2xl'] : TYPE_SCALE.xl },
+              ]}
+              numberOfLines={1}
+            >
+              {greeting}
+            </Text>
+            <Text className="text-muted" style={styles.subtitle}>
+              {hasTarget ? 'Tu energía de hoy' : 'Vas sumando tu día'}
+            </Text>
+          </View>
+          {/* Racha honesta semanal (catálogo Hoy #7): "N de 7 en rango" — nunca un streak frágil
+              que se rompe un martes. Solo se pinta con días evaluables. */}
+          {weekInRangeCount != null ? (
+            <View className="rounded-pill bg-success-500/15 px-2.5 py-1">
+              <Text className="text-xs font-semibold text-success-700" style={styles.rangePill}>
+                {weekInRangeCount} de 7 en rango
+              </Text>
+            </View>
+          ) : null}
         </MotiView>
 
         {/* Banda de energía (T2.7 F2, D-A): riel 0→115% de la meta, zona ±10% sombreada. */}
@@ -423,6 +441,9 @@ export function AuraHero({ greetingName, calories, macros }: Props) {
 const styles = StyleSheet.create({
   greeting: { fontFamily: FONT.display, letterSpacing: TYPE_SCALE.xl * -0.015 },
   subtitle: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.sm, marginTop: 2 },
+  greetingRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  greetingBlock: { flexShrink: 1, minWidth: 0 },
+  rangePill: { fontFamily: FONT.uiSemibold, fontVariant: ['tabular-nums'] },
   bandStage: { marginTop: 18 },
   // Sin `shadowOffset`/`elevation`: el halo lo pinta el gradiente radial del SVG, no una sombra.
   glow: { position: 'absolute', alignSelf: 'center', top: -70, alignItems: 'center', justifyContent: 'center' },

@@ -33,6 +33,12 @@ export interface AuraHeroProps {
   macros: MacroTriplet
   /** Fecha local (YYYY-MM-DD): clave de la celebración 1×/día en sessionStorage. */
   dateKey: string
+  /**
+   * Racha honesta semanal (T2.7 F2, catálogo Hoy #7): días de ESTA semana dentro del rango de
+   * energía. `null`/ausente = sin días evaluables todavía — el chip no se pinta (afirmar
+   * "0 de 7" un lunes a las 9am sería desánimo gratis, no honestidad).
+   */
+  weekInRangeCount?: number | null
 }
 
 /**
@@ -43,7 +49,7 @@ export interface AuraHeroProps {
  * categórica fija. Al cruzar la meta de energía: confeti tintado al primario + ilustración
  * de día completado (1×/día). Respeta prefers-reduced-motion (estado final directo, sin confeti).
  */
-export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroProps) {
+export function AuraHero({ greetingName, calories, macros, dateKey, weekInRangeCount = null }: AuraHeroProps) {
   const reduce = useReducedMotion()
   const heroRef = useRef<HTMLDivElement>(null)
 
@@ -129,14 +135,24 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
 
       <div className="relative">
         <motion.div
+          className="flex items-start justify-between gap-3"
           initial={reduce ? false : { opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduce ? 0 : 0.4, delay: reduce ? 0 : 0.05 }}
         >
-          <p className="font-display text-xl font-bold tracking-tight text-strong sm:text-2xl">{greeting}</p>
-          <p className="mt-0.5 text-sm text-muted">
-            {target != null && target > 0 ? 'Tu energía de hoy' : 'Vas sumando tu día'}
-          </p>
+          <div className="min-w-0">
+            <p className="font-display text-xl font-bold tracking-tight text-strong sm:text-2xl">{greeting}</p>
+            <p className="mt-0.5 text-sm text-muted">
+              {target != null && target > 0 ? 'Tu energía de hoy' : 'Vas sumando tu día'}
+            </p>
+          </div>
+          {/* Racha honesta semanal (catálogo Hoy #7): "N de 7 en rango" — nunca un streak frágil
+              que se rompe un martes. Solo se pinta con días evaluables. */}
+          {weekInRangeCount != null ? (
+            <span className="mt-0.5 inline-flex shrink-0 items-center rounded-pill bg-success/12 px-2.5 py-1 text-xs font-semibold tabular-nums text-success">
+              {weekInRangeCount} de 7 en rango
+            </span>
+          ) : null}
         </motion.div>
 
         {/* Banda de energía (T2.7 F2, D-A): riel 0→115% de la meta con la zona ±10% sombreada.

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
+import { energyTrendDirection } from '@eva/nutrition-v2'
 import { NutritionCard } from '@/components/nutrition-v2'
 import { fetchNutritionHistoryWeeksAction } from '../_actions/history.actions'
 import { formatHistoryWeekRangeLabel, type HistoryWeekBucket } from './week-nav.logic'
@@ -54,6 +55,7 @@ export function HistoryWeeksList({
 
   return (
     <div className="space-y-3">
+      <HistoryTrendCard weeks={weeks} />
       {weeks.map((week) => (
         <HistoryWeekCard base={base} key={week.weekStartIso} week={week} />
       ))}
@@ -80,6 +82,66 @@ export function HistoryWeeksList({
   )
 }
 
+/** Copy del chip de tendencia — la flecha sola es ambigua para un lector de pantalla. */
+const TREND_LABEL = { up: 'tendencia ↑', down: 'tendencia ↓', flat: 'tendencia →' } as const
+
+/**
+ * Card "Últimas 4 semanas" (T2.7 F3, catálogo Alumno 05 #3): el zoom-out ANTES del detalle.
+ * Barras = días en rango de energía por semana (mismas cuentas que las pills de abajo), de la
+ * más vieja a la más reciente; el chip resume la dirección. Con menos de 2 semanas cerradas no
+ * hay tendencia que afirmar y la card no se pinta.
+ */
+function HistoryTrendCard({ weeks }: { weeks: HistoryWeekBucket[] }) {
+  // `weeks` llega de la más reciente a la más vieja; la lectura temporal va al revés.
+  const window = weeks.slice(0, 4)
+  const oldestToNewest = [...window].reverse()
+  const trend = energyTrendDirection(oldestToNewest.map((week) => week.inRangeCount))
+  if (trend == null) return null
+
+  return (
+    <NutritionCard>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="font-display text-base font-semibold text-strong">
+          Últimas {oldestToNewest.length} semanas
+        </h2>
+        <span
+          className={`rounded-pill px-2.5 py-0.5 text-xs font-semibold ${
+            trend === 'up' ? 'bg-success/12 text-success' : 'bg-surface-sunken text-muted'
+          }`}
+        >
+          {TREND_LABEL[trend]}
+        </span>
+      </div>
+      <div
+        aria-label={`Días en rango por semana: ${oldestToNewest.map((week) => `${week.inRangeCount} de 7`).join(', ')}`}
+        className="mt-3 flex h-11 items-end gap-1"
+        role="img"
+      >
+        {oldestToNewest.map((week) => {
+          const ratio = week.inRangeCount / 7
+          return (
+            <div
+              aria-hidden="true"
+              className={`flex-1 rounded-t-md ${ratio >= 5 / 7 ? 'bg-success/60' : ratio >= 3 / 7 ? 'bg-success/30' : 'bg-surface-sunken'}`}
+              key={week.weekStartIso}
+              style={{ height: `${Math.max(ratio * 100, 8)}%` }}
+            />
+          )
+        })}
+      </div>
+      <div className="mt-1 flex items-baseline justify-between text-[10px] text-subtle">
+        <span>{formatHistoryWeekRangeLabel(oldestToNewest[0].weekStartIso, oldestToNewest[0].weekEndIso)}</span>
+        <span>
+          {formatHistoryWeekRangeLabel(
+            oldestToNewest[oldestToNewest.length - 1].weekStartIso,
+            oldestToNewest[oldestToNewest.length - 1].weekEndIso,
+          )}
+        </span>
+      </div>
+    </NutritionCard>
+  )
+}
+
 /** Card de una semana: rango + n/7 días + % arriba, mini-strip de 7 días tappable abajo. */
 function HistoryWeekCard({ week, base }: { week: HistoryWeekBucket; base: string }) {
   return (
@@ -88,8 +150,14 @@ function HistoryWeekCard({ week, base }: { week: HistoryWeekBucket; base: string
         <h2 className="font-display text-base font-semibold text-strong">
           Semana {formatHistoryWeekRangeLabel(week.weekStartIso, week.weekEndIso)}
         </h2>
-        <span className="text-xs font-semibold tabular-nums text-muted">
-          {week.loggedCount}/7 días · {week.percent}%
+        {/* T2.7 F3 (catálogo Alumno 05): la métrica de la card es el RANGO, no el conteo de
+            registros — los puntos del strip ya dicen qué días tienen registro. */}
+        <span
+          className={`rounded-pill px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+            week.inRangeCount >= 5 ? 'bg-success/12 text-success' : 'bg-surface-sunken text-muted'
+          }`}
+        >
+          {week.inRangeCount}/7 en rango
         </span>
       </div>
       <div className="mt-3 grid grid-cols-7 gap-1.5">

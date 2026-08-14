@@ -16,10 +16,13 @@ import {
   addNutritionDays,
   buildNutritionWeek,
   buildNutritionWeekDates,
+  countEnergyDaysEvaluable,
+  countEnergyDaysInRange,
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
   nutritionDayOfWeekFromIso,
+  nutritionWeekStartIso,
   resolveNutritionDayVariantForDate,
   type NutritionHistoryDay,
   type NutritionPlanReadModel,
@@ -330,6 +333,15 @@ async function TodayView({
   const selectedCell = cells.find((cell) => cell.isoDate === selectedIso) ?? null
   const homeHref = `${base}/nutrition-v2`
 
+  // Racha honesta semanal (T2.7 F2): dias CERRADOS de esta semana dentro del rango de energia.
+  // Hoy no cuenta (a media mañana "fuera de rango" seria mentira); sin dias evaluables no hay chip.
+  const currentWeekStart = nutritionWeekStartIso(todayIso)
+  const closedWeekDays = history.items.filter(
+    (day) => nutritionWeekStartIso(day.localDate) === currentWeekStart && day.localDate < todayIso,
+  )
+  const weekInRangeCount =
+    countEnergyDaysEvaluable(closedWeekDays) > 0 ? countEnergyDaysInRange(closedWeekDays) : null
+
   let body: ReactNode = null
   if (today != null) {
     const showTodayPlanLag = today.plan === null || today.plan.id !== plan.plan.id
@@ -367,6 +379,7 @@ async function TodayView({
           substitutionOptionsByItem={substitutionOptionsByItem}
           scanHref={`${base}/nutrition-v2/scanner`}
           visibleNotes={plan.visibleNotes}
+          weekInRangeCount={weekInRangeCount}
         />
       </>
     )

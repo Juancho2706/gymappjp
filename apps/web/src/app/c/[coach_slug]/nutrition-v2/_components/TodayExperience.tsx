@@ -132,6 +132,7 @@ export function TodayExperience({
   clientName,
   substitutionOptionsByItem = {},
   visibleNotes = null,
+  weekInRangeCount = null,
 }: {
   today: NutritionTodayReadModel
   clientId: string
@@ -148,6 +149,8 @@ export function TodayExperience({
    * abre menos — sube al Hoy en una card colapsable bajo el héroe. `null`/vacío ⇒ no se pinta nada.
    */
   visibleNotes?: string | null
+  /** Racha honesta semanal (T2.7 F2): días de la semana en curso dentro del rango; `null` = sin chip. */
+  weekInRangeCount?: number | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -509,6 +512,7 @@ export function TodayExperience({
           solo en el tab Plan) — cero afirmaciones sin decisión asociada arriba del héroe. */}
       <AuraHero
         greetingName={firstNameFromFullName(clientName)}
+        weekInRangeCount={weekInRangeCount}
         dateKey={today.localDate}
         calories={{ consumed: today.consumed.calories, target: today.targets.calories }}
         macros={{

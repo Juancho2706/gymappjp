@@ -58,17 +58,34 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       con `open = true` (el colapso es opt-in del alumno). El catalogo auditaba un estado viejo.
 - [x] "⇄ N equivalentes" literal en la fila — YA CUMPLIDO por T2.5: `ItemExchangeTrigger`
       (web y RN) pinta la pill "⇄ N equivalentes" bajo el item.
-- [ ] Racha semanal "N de 7 en rango" en el Hoy — pendiente (necesita el agregado semanal en la
-      pantalla; cablear sobre `useNutritionWeekHistory` RN y su equivalente web)
+- [x] Racha semanal "N de 7 en rango" en el Hoy (2026-08-13, web + RN): chip junto al saludo del
+      AuraHero. Helpers compartidos en el paquete (`energyDayInRange` ±10% · `countEnergyDaysInRange`
+      · `countEnergyDaysEvaluable`, +4 tests). Reglas de honestidad: cuentan solo los dias CERRADOS
+      de la semana (hoy a media mañana "fuera de rango" seria mentira) y sin dias evaluables el chip
+      NO se pinta (nada de "0 de 7" un lunes). Cero fetch nuevo: web lo computa de la pagina de
+      historial que el Hoy ya carga; RN de `useNutritionWeekHistory` que el TodayTab ya usa.
 - [x] Celebracion dia completo: paridad web — YA CUMPLIDO antes de esta fase: el AuraHero web
       tiene confetti tintado al primario + ilustracion "dia-completado" 1x/dia (sessionStorage).
 
-## F3 — Plan + Historial
+## F3 — Plan + Historial — **CERRADA 2026-08-13**
 
-- [ ] Tendencia 4 barras semanales arriba del historial
-- [ ] Dias con nombre del coach
-- [ ] Semana actual solo en Hoy (web mata duplicado)
-- [ ] Poda de chips de permisos en RN
+- [x] Tendencia 4 barras semanales arriba del historial (web + RN): card "Ultimas N semanas" con
+      barras = dias en rango por semana (vieja→reciente), chip "tendencia ↑/→/↓"
+      (`energyTrendDirection`: compara la mas reciente contra la mas vieja; con <2 semanas
+      cerradas la card no se pinta) y fechas en los extremos. Las cards de semana cambian su
+      metrica: pill "N/7 en rango" (verde con ≥5) en vez de "n/7 dias · %" — los puntos del strip
+      ya dicen que dias tienen registro. `HistoryWeekBucket` (web) y `NutritionHistoryWeek` (RN)
+      ganan `inRangeCount` computado de las filas crudas con el helper compartido.
+- [x] Dias con nombre del coach — YA CUMPLIDO antes de esta fase: `variant.label` es el titulo de
+      la card del Plan en web (`PlanVariantCard`) y RN; el chip "Por defecto" web ya habia muerto.
+- [x] Semana actual solo en Hoy — YA CUMPLIDO antes de esta fase (paridad RN T1.3):
+      `groupHistoryDaysByWeek` web y el agrupador RN EXCLUYEN la semana en curso, con el caption
+      "la semana en curso vive en el tab Hoy" en ambos.
+- [x] Poda de chips de permisos en RN — YA CUMPLIDO antes de esta fase: `PlanRulesCard` RN solo
+      pinta registro libre y ajuste de cantidad (con %); `canSubstitute` no se pinta.
+- Deuda declarada (polish para F5 si el owner lo quiere): los puntos del mini-strip semanal siguen
+  siendo "con registro / sin registro"; el catalogo los pinta por RANGO (verde/ambar/apagado), lo
+  que exigiria bajar kcal+meta a cada celda de `buildNutritionWeek`.
 
 ## F4 — Correccion (verificacion visual contra el mock)
 
@@ -87,3 +104,4 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 | 2026-08-13 | F0 | (este commit) | docs:check | Auditoria + los tres documentos. Tres decisiones del owner quedan abiertas (D-A/D-B/D-C); F1 no depende de ninguna. |
 | 2026-08-13 | F1 | (este commit) | tsc web+mobile 0 · vitest 10/10 · eslint ✓ · boundaries 340 ✓ | Trio fijo en design.ts + tokens RN + 6 grupos de hardcodes + V1 RN (MACRO_COLORS). Sin QA visual todavia: la re-QA completa es F5. |
 | 2026-08-13 | F2 (parcial) | (este commit) | tsc web+mobile 0 · vitest banda 4/4 + aura ✓ · eslint tocados sin errores nuevos | Banda de energia (D-A) y checkbox de registro (D-C) en web y RN; nota RN, "⇄ N equivalentes" y celebracion web verificados como YA cumplidos. Queda SOLO la racha semanal. Sin QA visual (F5). NO corridos: expo export ni suite completa. |
+| 2026-08-13 | F2 (cierre) + F3 | (este commit) | tsc web+mobile 0 · vitest 26/26 (energy-range 4 nuevos + week-nav + banda) · eslint tocados sin errores nuevos · boundaries 342 ✓ | Racha "N de 7 en rango" en el Hoy + trend card y pills "en rango" en el historial, web y RN con los mismos helpers del paquete. F3 items 2/3/4 verificados como YA cumplidos. Sin QA visual (F5). NO corridos: expo export ni suite completa. |

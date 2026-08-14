@@ -152,6 +152,47 @@ export interface EnergyBandGeometry {
 
 const ENERGY_BAND_CAP = 1.15
 
+/**
+ * ¿El dia quedo DENTRO del rango de energia (±10% de la meta)? Regla de la racha honesta
+ * (T2.7 F2, catalogo Hoy #7) y de las pills del historial: `null` = dia sin datos para juzgar
+ * (sin meta, o sin un solo registro) — no cuenta ni a favor ni en contra.
+ */
+export function energyDayInRange(consumed: number, target: number | null | undefined): boolean | null {
+  if (target == null || !Number.isFinite(target) || target <= 0) return null
+  if (!Number.isFinite(consumed) || consumed <= 0) return null
+  return consumed >= target * 0.9 && consumed <= target * 1.1
+}
+
+/** Forma minima de un dia del historial para las cuentas de rango (la cumple NutritionHistoryDay). */
+export interface EnergyRangeDayLike {
+  consumed: { calories: number }
+  targets: { calories: number | null }
+}
+
+/** Dias EN RANGO de una lista (los `null` de `energyDayInRange` no cuentan). */
+export function countEnergyDaysInRange(days: ReadonlyArray<EnergyRangeDayLike>): number {
+  return days.filter((day) => energyDayInRange(day.consumed.calories, day.targets.calories) === true).length
+}
+
+/** Dias con datos suficientes para juzgar el rango (gate del chip: sin dias evaluables no se afirma "0 de 7"). */
+export function countEnergyDaysEvaluable(days: ReadonlyArray<EnergyRangeDayLike>): number {
+  return days.filter((day) => energyDayInRange(day.consumed.calories, day.targets.calories) !== null).length
+}
+
+/**
+ * Direccion de la tendencia del historial (card "Ultimas 4 semanas"): compara la semana mas
+ * RECIENTE contra la mas vieja de la ventana. `null` con menos de dos semanas — una barra sola
+ * no es una tendencia.
+ */
+export function energyTrendDirection(inRangeOldestToNewest: readonly number[]): 'up' | 'down' | 'flat' | null {
+  if (inRangeOldestToNewest.length < 2) return null
+  const first = inRangeOldestToNewest[0]
+  const last = inRangeOldestToNewest[inRangeOldestToNewest.length - 1]
+  if (last > first) return 'up'
+  if (last < first) return 'down'
+  return 'flat'
+}
+
 export function energyBandGeometry(consumed: number, target: number | null): EnergyBandGeometry | null {
   if (target == null || !Number.isFinite(target) || target <= 0) return null
   return {
