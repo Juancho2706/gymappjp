@@ -9,6 +9,7 @@ import {
   CoachFoodInputSchema,
   MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
+  VISIBLE_NOTES_MAX,
   assembleDraft,
   assembleAndValidateDraft,
   buildItemInsertRow,
@@ -340,6 +341,24 @@ describe('assembleDraft', () => {
     expect(assembleDraft(state, { clientId: CLIENT_ID }).protocolNotes).toBeNull()
     expect(assembleDraft(state, { clientId: CLIENT_ID }).privateNotes).toBeNull()
   })
+
+  // T2.6 F5: el wizard EDITA las notas (antes solo las arrastraba). Regresion de la deuda del
+  // PR #174: "Rehacer con el asistente" + editar + publicar tiene que emitir LO EDITADO, y el
+  // vaciado deliberado tiene que llegar como null (no revivir las notas del plan vigente).
+  it('SET_VISIBLE_NOTES edita las notas rehidratadas y assembleDraft emite lo editado', () => {
+    const rehydrated = { ...structuredState(), visibleNotes: 'Notas del plan vigente' }
+    const edited = builderReducer(rehydrated, { type: 'SET_VISIBLE_NOTES', value: '  Nuevas indicaciones  ' })
+    expect(edited.visibleNotes).toBe('  Nuevas indicaciones  ')
+    expect(assembleDraft(edited, { clientId: CLIENT_ID }).visibleNotes).toBe('Nuevas indicaciones')
+  })
+
+  it('vaciar las notas desde el wizard publica null (borrado deliberado, no carry-over)', () => {
+    const rehydrated = { ...structuredState(), visibleNotes: 'Notas del plan vigente' }
+    const cleared = builderReducer(rehydrated, { type: 'SET_VISIBLE_NOTES', value: '' })
+    // La clave queda PRESENTE (el borrador "sabe" de notas): un RESTORE posterior no las revive.
+    expect(cleared.visibleNotes).toBe('')
+    expect(assembleDraft(cleared, { clientId: CLIENT_ID }).visibleNotes).toBeNull()
+  })
 })
 
 // Wizard de DOS pasos (SPEC nutrition-ui-poda, punto 11): paso 0 "El plan" (estrategia + nombre +
@@ -372,6 +391,19 @@ describe('validateStep', () => {
       targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' },
     }
     expect(validateStep(complete, BUILDER_STEP_PLAN).ok).toBe(true)
+  })
+
+  it('paso "El plan" corta las notas visibles sobre el tope del contrato (espejo del quick-edit)', () => {
+    const base = {
+      ...createEmptyBuilderState('2026-07-20'),
+      strategy: 'flexible' as const,
+      planName: 'X',
+      targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' },
+    }
+    const over = { ...base, visibleNotes: 'a'.repeat(VISIBLE_NOTES_MAX + 1) }
+    expect(validateStep(over, BUILDER_STEP_PLAN).errors.visibleNotes).toBeTruthy()
+    const atLimit = { ...base, visibleNotes: 'a'.repeat(VISIBLE_NOTES_MAX) }
+    expect(validateStep(atLimit, BUILDER_STEP_PLAN).ok).toBe(true)
   })
 
   it('paso "El plan" rechaza kcal no numerico', () => {

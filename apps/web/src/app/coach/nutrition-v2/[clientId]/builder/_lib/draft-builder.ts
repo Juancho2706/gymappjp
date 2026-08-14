@@ -42,6 +42,13 @@ export type BuilderUnit = (typeof BUILDER_UNITS)[number]
 /** Tope de reemplazos autorizados por item prescrito (F-02, limite legado V1 = 8). */
 export const MAX_ITEM_SUBSTITUTIONS = 8
 
+/**
+ * Tope del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim). Mismo valor
+ * que `VISIBLE_NOTES_MAX` de la edicion rapida; se duplica aca porque el builder no importa de
+ * `_quick-edit` (boundary del modulo).
+ */
+export const VISIBLE_NOTES_MAX = 8000
+
 export interface BuilderFood {
   id: string
   name: string
@@ -162,8 +169,10 @@ export interface BuilderState {
   /**
    * Notas visibles para el alumno. El wizard NO las edita (se escriben en la edicion rapida):
    * viajan como CARRY-OVER del plan vigente (`rehydrateBuilderState`) para que "Rehacer con el
-   * asistente" no las borre al republicar. OPCIONAL a proposito: un borrador local guardado
-   * antes de este carry-over no trae la clave, y `RESTORE` conserva entonces las del plan.
+   * asistente" no las borre al republicar, y desde T2.6 F5 tambien se EDITAN en el paso del plan
+   * (`SET_VISIBLE_NOTES`, espejo del campo de la edicion rapida). OPCIONAL a proposito: un
+   * borrador local guardado antes de este carry-over no trae la clave, y `RESTORE` conserva
+   * entonces las del plan.
    */
   visibleNotes?: string | null
   /** Dias del plan. Invariantes: exactamente una `isDefault`; `dayOfWeek` unico entre las demas. */
@@ -583,6 +592,7 @@ export type BuilderAction =
   | { type: 'PREV_STEP' }
   | { type: 'SET_STRATEGY'; strategy: NutritionStrategy; firstSlotKey: string }
   | { type: 'SET_PLAN_NAME'; value: string }
+  | { type: 'SET_VISIBLE_NOTES'; value: string }
   | { type: 'SET_EFFECTIVE_FROM'; value: string }
   | { type: 'SET_TARGET'; field: keyof BuilderTargets; value: string }
   | { type: 'SET_PERMISSION'; field: keyof BuilderPermissions; value: boolean }
@@ -711,6 +721,10 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     }
     case 'SET_PLAN_NAME':
       return { ...state, planName: action.value }
+    case 'SET_VISIBLE_NOTES':
+      // Editar (aunque sea a '') deja la clave PRESENTE: a partir de aca el borrador "sabe" de
+      // notas y un RESTORE posterior respeta lo que el coach escribio, incluso el vaciado.
+      return { ...state, visibleNotes: action.value }
     case 'SET_EFFECTIVE_FROM':
       return { ...state, effectiveFrom: action.value }
     case 'SET_TARGET':
@@ -1333,6 +1347,12 @@ export function validateStep(state: BuilderState, step: number): StepValidation 
 
     if (state.planName.trim().length === 0) errors.planName = 'Ponle un nombre al plan.'
     else if (state.planName.trim().length > 180) errors.planName = 'El nombre es demasiado largo.'
+
+    // Espejo del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim), mismo
+    // corte y copy que la edicion rapida: corta ANTES del VALIDATION generico del server.
+    if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
+      errors.visibleNotes = `Las notas superan los ${VISIBLE_NOTES_MAX} caracteres.`
+    }
 
     const kcal = parseTarget(state.targets.calories)
     if (Number.isNaN(kcal)) errors.calories = 'Ingresa un numero valido de kcal.'

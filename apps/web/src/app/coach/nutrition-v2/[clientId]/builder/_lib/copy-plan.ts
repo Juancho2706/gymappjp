@@ -18,6 +18,8 @@
  * eso es testeable sin montar un builder entero.
  */
 
+import type { CopyPresetTarget } from './copy-presets'
+
 /** Modo de copia (D2). `replace` es el comportamiento historico. */
 export type CopyMode = 'replace' | 'append'
 
@@ -48,6 +50,24 @@ export function nextDaysFrom(sourceDayOfWeek: number | null, count: number): num
     days.push(WEEK_IN_READING_ORDER[(start + step) % total])
   }
   return days
+}
+
+/**
+ * Quick-select relativo para el menu de la FRANJA (decision del dueño A, 2026-08-13): los chips
+ * "proximos 1 / 2 / 4" MARCAN el multi-select existente, igual que los presets con nombre de
+ * `targetsForCopyPreset`. A diferencia del menu del dia, la franja solo puede copiarse a dias que
+ * YA existen como variante (la copia de franja no crea dias), asi que un "proximo" sin variante
+ * simplemente no entra en la seleccion. La fusion por nombre del reducer queda intacta: aca no hay
+ * modo ni toggle, solo seleccion.
+ */
+export function targetsForNextDays(
+  targets: readonly CopyPresetTarget[],
+  sourceDayOfWeek: number | null,
+  count: number,
+): string[] {
+  const wanted = new Set(nextDaysFrom(sourceDayOfWeek, count))
+  if (wanted.size === 0) return []
+  return targets.filter((target) => target.dayOfWeek != null && wanted.has(target.dayOfWeek)).map((t) => t.key)
 }
 
 /** Un destino tal como lo ve el builder: el dia y las franjas que YA tiene. */

@@ -6,6 +6,7 @@ import { sortNutritionDayVariantsForDisplay } from '@eva/nutrition-v2'
 import type { BuilderSlot, BuilderVariant } from '../_lib/draft-builder'
 import type { SlotCopyRequest } from '../_lib/builder-view-model'
 import { COPY_PRESETS, targetsForCopyPreset } from '../_lib/copy-presets'
+import { NEXT_DAYS_QUICK_PICKS, targetsForNextDays } from '../_lib/copy-plan'
 import { secondaryButtonClass } from '../_lib/builder-ui-classes'
 // El menu "Copiar a otros dias" de la franja usa el MISMO patron responsive que el resto de las
 // afordancias del paso (popover en desktop / bottom sheet en movil), asi que reusa el hook.
@@ -42,6 +43,8 @@ export function CopySlotMenu({
     () => sortNutritionDayVariantsForDisplay(variants).filter((variant) => variant.key !== variantKey),
     [variants, variantKey],
   )
+  // Día de origen de la franja, para el quick-select relativo. La base (null) no tiene "próximos".
+  const sourceDayOfWeek = variants.find((variant) => variant.key === variantKey)?.dayOfWeek ?? null
   const slotLabel = slot.name.trim() || 'esta franja'
 
   function handleOpenChange(next: boolean) {
@@ -74,6 +77,26 @@ export function CopySlotMenu({
             sigue viendo (y pudiendo corregir) exactamente a qué días va antes de confirmar. */}
         <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Atajos</p>
         <div className="mb-3 flex flex-wrap gap-1.5">
+          {/* Quick-select relativo (T2.6, decisión A): "esto va los próximos N días". Igual que
+              los presets, MARCA la selección — la fusión por nombre de la copia queda intacta y
+              no hay toggle. Solo puede marcar días que ya existen como variante; desde el día
+              base no hay "próximos" y los chips no se ofrecen. */}
+          {sourceDayOfWeek != null
+            ? NEXT_DAYS_QUICK_PICKS.map((count) => {
+                const keys = targetsForNextDays(targets, sourceDayOfWeek, count)
+                return (
+                  <button
+                    key={`next-${count}`}
+                    type="button"
+                    disabled={keys.length === 0}
+                    onClick={() => setSelected(keys)}
+                    className="inline-flex min-h-9 items-center rounded-pill border border-border-default bg-surface-card px-3 text-xs font-semibold text-strong transition-colors hover:border-primary/40 hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                  >
+                    {count === 1 ? 'Próximo día' : `Próximos ${count} días`}
+                  </button>
+                )
+              })
+            : null}
           {COPY_PRESETS.map((preset) => {
             const keys = targetsForCopyPreset(targets, preset)
             return (

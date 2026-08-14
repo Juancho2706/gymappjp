@@ -270,6 +270,26 @@ export function PlanStep({
         </fieldset>
       </div>
 
+      {/* Notas visibles para el alumno (T2.6 F5): espejo del campo de la edicion rapida (mismo
+          limite y copy). Hasta ahora el wizard solo las ARRASTRABA del plan vigente y habia que
+          salir a la edicion rapida para escribirlas. */}
+      <div>
+        <label className={labelClass} htmlFor="plan-visible-notes">Notas para tu alumno</label>
+        <textarea
+          id="plan-visible-notes"
+          value={state.visibleNotes ?? ''}
+          onChange={(e) => dispatch({ type: 'SET_VISIBLE_NOTES', value: e.target.value })}
+          placeholder="Escribe indicaciones visibles para tu alumno (bienvenida, comida libre, recordatorios…)."
+          rows={4}
+          maxLength={8000}
+          aria-invalid={Boolean(errors.visibleNotes)}
+          className="w-full resize-y rounded-control border border-border-default bg-surface-card px-3 py-2.5 text-sm leading-6 text-strong outline-none transition-colors placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/25"
+        />
+        {errors.visibleNotes ? (
+          <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors.visibleNotes}</p>
+        ) : null}
+      </div>
+
       {/* Vigencia: subio del paso "Revisar" (era su unico control editable) y queda a la vista
           junto al resto de lo que define el plan. Una plantilla no la lleva. */}
       {templateMode ? null : (

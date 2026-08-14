@@ -4,6 +4,7 @@ import {
   copyPlanWarning,
   nextDaysFrom,
   planCopy,
+  targetsForNextDays,
   type CopyDestination,
 } from './copy-plan'
 
@@ -52,6 +53,31 @@ describe('nextDaysFrom', () => {
     for (const count of NEXT_DAYS_QUICK_PICKS) {
       expect(nextDaysFrom(1, count)).toHaveLength(count)
     }
+  })
+})
+
+describe('targetsForNextDays (quick-select del menu de la franja, decision A)', () => {
+  const targets = [
+    { key: 'ma', dayOfWeek: 2 },
+    { key: 'ju', dayOfWeek: 4 },
+    { key: 'sa', dayOfWeek: 6 },
+    { key: 'base', dayOfWeek: null },
+  ]
+
+  it('marca solo los dias que existen como variante: los "proximos" sin variante no entran', () => {
+    // Lunes + 2 => martes y miercoles, pero miercoles no existe como dia propio.
+    expect(targetsForNextDays(targets, 1, 2)).toEqual(['ma'])
+    // Lunes + 4 => Ma-Vi; existen martes y jueves.
+    expect(targetsForNextDays(targets, 1, 4)).toEqual(['ma', 'ju'])
+  })
+
+  it('da la vuelta a la semana y nunca marca el dia base', () => {
+    // Viernes + 4 => Sa, Do, Lu, Ma; existen sabado y martes. La base (null) jamas entra.
+    expect(targetsForNextDays(targets, 5, 4)).toEqual(['ma', 'sa'])
+  })
+
+  it('desde el dia BASE devuelve vacio (no hay "proximos" respecto de el)', () => {
+    expect(targetsForNextDays(targets, null, 2)).toEqual([])
   })
 })
 
