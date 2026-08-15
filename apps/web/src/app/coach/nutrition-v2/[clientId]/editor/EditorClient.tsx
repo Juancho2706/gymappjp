@@ -15,6 +15,10 @@ import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/fo
 import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
 import { QuickEditProvider, type EditorCreationInput } from '../_quick-edit/QuickEditProvider'
 import { QuickEditPlanView } from '../_quick-edit/QuickEditPlanView'
+import {
+  RememberedQuantitiesContext,
+  type RememberedQuantity,
+} from '../builder/_components/RememberedQuantitiesContext'
 
 export function EditorClient({
   clientId,
@@ -29,6 +33,7 @@ export function EditorClient({
   favoriteFoodIds,
   creation,
   originUnavailable,
+  rememberedQuantities,
 }: {
   clientId: string
   clientName: string
@@ -44,6 +49,8 @@ export function EditorClient({
   creation: EditorCreationInput | null
   /** El `?from=` pedido no se pudo abrir: se degrado, y TIENE que decirse (jamas en silencio). */
   originUnavailable: boolean
+  /** Porcion pegajosa (T2.6 F4): mapa foodId → ultima cantidad, resuelto server-side. */
+  rememberedQuantities: Record<string, RememberedQuantity>
 }) {
   const router = useRouter()
 
@@ -89,7 +96,9 @@ export function EditorClient({
         creation={creation}
         onExit={() => router.push(`/coach/nutrition-v2/${clientId}`)}
       >
-        <QuickEditPlanView />
+        <RememberedQuantitiesContext.Provider value={rememberedQuantities}>
+          <QuickEditPlanView />
+        </RememberedQuantitiesContext.Provider>
       </QuickEditProvider>
     </FoodPickerPrefsProvider>
   )

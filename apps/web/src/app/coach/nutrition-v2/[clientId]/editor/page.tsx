@@ -27,6 +27,7 @@ import {
 } from '../../_data/client-food-prefs.data'
 import { collectTemplateFoodIds } from '../builder/_lib/rehydrate'
 import { fetchBuilderFoodsByIds } from '../builder/_data/plan-foods.data'
+import { fetchRememberedQuantities } from '../builder/_data/last-quantity.data'
 import { loadExchangeGroupsForBuilderAction } from '../builder/_components/PortionsGroupsAction'
 import {
   buildSubstitutionMap,
@@ -85,6 +86,9 @@ export default async function NutritionUnifiedEditorPage({
   )
   // Señales dietarias del alumno para el picker (fail-soft: ayudas visuales, no autorizacion).
   const foodPrefs = await fetchClientFoodPrefsForPicker(clientId).catch(() => EMPTY_CLIENT_FOOD_PREFS)
+  // Porcion pegajosa (T2.6 F4): precedencia alumno > coach resuelta en SQL. Fail-soft: sin
+  // memoria manda el catalogo, como siempre.
+  const rememberedQuantities = await fetchRememberedQuantities(clientId).catch(() => ({}))
 
   const sharedProps = {
     clientId,
@@ -95,6 +99,7 @@ export default async function NutritionUnifiedEditorPage({
     viewerCoachId: user.id,
     foodRestrictions: foodPrefs.restrictions,
     favoriteFoodIds: foodPrefs.favoriteIds,
+    rememberedQuantities,
   }
 
   // ── MODO EDICION (W1): sin origen y con plan vigente ────────────────────────────────────

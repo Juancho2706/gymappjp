@@ -13,7 +13,7 @@
  * Quitar y mover son optimistas con snackbar "Deshacer" (8s): cero confirms.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   ArrowLeftRight,
   BookmarkPlus,
@@ -36,6 +36,7 @@ import { FoodThumb } from '../builder/_components/FoodImage'
 import { ItemQuantityField } from '../builder/_components/ItemQuantityField'
 import { FoodMacrosOverrideDialog } from '../builder/_components/FoodMacrosOverrideDialog'
 import { createCoachFoodAction } from '../builder/_actions/builder.actions'
+import { rememberFoodQuantityAction } from '../builder/_actions/last-quantity.actions'
 import {
   qeCoachFoodCandidate,
   qeItemMacros,
@@ -84,6 +85,9 @@ export function EditableItemRow({
   const [macrosOpen, setMacrosOpen] = useState(false)
   const isEditor = state.meta !== undefined
   const substitutions = item.substitutions ?? []
+  // Porcion pegajosa (T2.6 F4, write-side; solo editor): firma del ultimo commit para no
+  // pegarle al server en cada blur sin edicion — mismo guard que el wizard (ItemRow).
+  const lastRememberedRef = useRef<string | null>(null)
   const macros = qeItemMacros(item)
   const quantityError = showErrors ? errors[`item.${item.key}.quantity`] : undefined
   const nameError = showErrors ? errors[`item.${item.key}.name`] : undefined
@@ -243,6 +247,21 @@ export function EditableItemRow({
             invalid={Boolean(quantityError)}
             disabled={isPending}
             onChange={(value) => dispatch({ type: 'SET_ITEM_QUANTITY', variantKey, slotKey, itemKey: item.key, value })}
+            onCommit={() => {
+              // Porcion pegajosa (T2.6 F4): al fijar la cantidad se recuerda para la proxima,
+              // en este alumno y en general. Solo en el EDITOR (el quick-edit clasico no
+              // escribe memoria) y solo con alimento de catalogo en mano. Fire-and-forget.
+              if (!isEditor || item.food == null) return
+              const signature = `${item.food.id}:${item.quantity}:${item.unit}`
+              if (lastRememberedRef.current === signature) return
+              lastRememberedRef.current = signature
+              void rememberFoodQuantityAction({
+                clientId,
+                foodId: item.food.id,
+                quantity: item.quantity,
+                unit: item.unit,
+              })
+            }}
             onStep={(direction) =>
               dispatch({
                 type: 'SET_ITEM_QUANTITY',

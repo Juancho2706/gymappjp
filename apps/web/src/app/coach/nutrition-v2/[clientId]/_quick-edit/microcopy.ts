@@ -153,6 +153,16 @@ export const QE_COPY = {
   substitutionDuplicate: 'Ese alimento ya está como reemplazo.',
   substitutionRemovedUndo: 'Reemplazo quitado',
   editMacros: 'Editar macros',
+  // ── W3a (editor unico): copiar dia a varios dias (T2.6 F2, quick-select + modo D2).
+  copyDayMenu: 'Copiar a otros días…',
+  copyDayTitle: (label: string) => `Copiar ${label} a`,
+  copyDayHint: 'Elige los días destino. Reemplazar los deja iguales a este día; Sumar agrega estas franjas a lo que ya tienen.',
+  copyDayModeReplace: 'Reemplazar',
+  copyDayModeAppend: 'Sumar',
+  copyDayNextDays: (n: number) => `Próximos ${n}`,
+  copyDayCta: (n: number) => (n === 1 ? 'Copiar a 1 día' : `Copiar a ${n} días`),
+  copyDayDone: (n: number) => (n === 1 ? 'Día copiado a 1 destino' : `Día copiado a ${n} destinos`),
+  copyDayNothing: 'Elige al menos un día destino.',
   // ── Índice de días (P1-1): anclas arriba de la pila para no scrollear a ciegas.
   dayIndexLabel: 'Ir a un día del plan',
   dayIndexJump: (label: string) => `Ir a ${label}`,

@@ -698,7 +698,19 @@ export type QuickEditAction =
    * persistencia lo ignora igual — cada publicacion inserta filas nuevas.
    */
   | { type: 'MOVE_ITEM'; variantKey: string; fromSlotKey: string; toSlotKey: string; itemKey: string; toIndex?: number }
-  | { type: 'ADD_CATALOG_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood }
+  /**
+   * `prefill` = porcion pegajosa (T2.6 F4): la ultima cantidad que el coach uso para este
+   * alimento, resuelta server-side con su precedencia (alumno > coach > catalogo). Ausente =
+   * `servingSize` del catalogo, comportamiento de siempre. Sugiere, nunca decide.
+   */
+  | {
+      type: 'ADD_CATALOG_ITEM'
+      variantKey: string
+      slotKey: string
+      key: string
+      food: BuilderFood
+      prefill?: { quantity: string; unit: string }
+    }
   | { type: 'ADD_CUSTOM_ITEM'; variantKey: string; slotKey: string; key: string }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<QeSlot, 'name' | 'startTime'>> }
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
@@ -753,6 +765,26 @@ export type QuickEditAction =
    * "duplicar el sabado como domingo". `variantKey` lo genera el llamador (reducer puro).
    */
   | { type: 'DUPLICATE_VARIANT_AS'; sourceVariantKey: string; dayOfWeek: number; variantKey: string }
+  /**
+   * Copia un dia a VARIOS dias en un gesto (T2.6 F2, decision D2) — port ATOMICO del combo del
+   * wizard (`REMOVE_VARIANT`+`DUPLICATE_VARIANT_AS` / `APPEND_VARIANT_SLOTS_TO` en cola): aca
+   * las porciones viven dentro del arbol, asi que una sola accion cubre todo.
+   *  - `replace`: el destino queda IGUAL al origen en contenido (franjas, items, porciones y
+   *    metas) pero CONSERVA su identidad (key/id/etiqueta/dia) — no rompe el diff ni pisa el
+   *    nombre que el coach le puso al dia.
+   *  - `append`: las franjas del origen se SUMAN a las del destino (puede duplicar nombres;
+   *    la UI avisa ANTES via `copyPlanWarning`).
+   *  - Dia libre: se CREA clonando el origen elegido (no el base).
+   * Copiar sobre si mismo o a un dow invalido/repetido se ignora. Deshacer = `RESTORE_DRAFT`
+   * del arbol previo (toca N dias; ningun RESTORE_* puntual lo cubre). `keySeed` del llamador.
+   */
+  | {
+      type: 'COPY_VARIANT_TO_DAYS'
+      sourceVariantKey: string
+      days: readonly number[]
+      mode: 'replace' | 'append'
+      keySeed: string
+    }
   // ── Metadatos del plan (solo con state.meta presente; no-op en el quick-edit clasico) ──
   | { type: 'SET_PLAN_NAME'; value: string }
   | { type: 'SET_STRATEGY'; value: NutritionStrategy }
@@ -1372,11 +1404,17 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         }),
       }))
     }
-    case 'ADD_CATALOG_ITEM':
+    case 'ADD_CATALOG_ITEM': {
+      const created = createCatalogItem(action.key, action.food)
+      // Porcion pegajosa (T2.6 F4): la memoria pisa la precarga del catalogo, nada mas.
+      const item = action.prefill
+        ? { ...created, quantity: action.prefill.quantity, unit: action.prefill.unit }
+        : created
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
-        items: [...slot.items, createCatalogItem(action.key, action.food)],
+        items: [...slot.items, item],
       }))
+    }
     case 'ADD_CUSTOM_ITEM':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
@@ -1557,6 +1595,53 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         ...state,
         variants: [...state.variants, cloneQeVariantForDay(source, action.dayOfWeek, action.variantKey)],
       }
+    }
+    case 'COPY_VARIANT_TO_DAYS': {
+      const source = state.variants.find((variant) => variant.key === action.sourceVariantKey)
+      if (!source || action.days.length === 0) return state
+      const occupantByDay = new Map<number, QeVariant>()
+      for (const variant of state.variants) {
+        if (!variant.isDefault && variant.dayOfWeek != null) occupantByDay.set(variant.dayOfWeek, variant)
+      }
+      const existingKeys = new Set(state.variants.map((variant) => variant.variantKey))
+      const seen = new Set<number>()
+      let variants = state.variants
+      let round = 0
+      for (const dayOfWeek of action.days) {
+        if (!isValidDow(dayOfWeek) || seen.has(dayOfWeek)) continue
+        seen.add(dayOfWeek)
+        const occupant = occupantByDay.get(dayOfWeek)
+        if (occupant?.key === action.sourceVariantKey) continue
+        // Seed nuevo por destino: anexar el mismo origen a dos dias no puede compartir claves.
+        round += 1
+        const seed = `${action.keySeed}-${round}`
+        if (occupant && action.mode === 'append') {
+          if (source.slots.length === 0) continue
+          const appendedSlots = source.slots.map((slot) => cloneQeSlot(slot, seed))
+          variants = variants.map((variant) =>
+            variant.key === occupant.key ? { ...variant, slots: [...variant.slots, ...appendedSlots] } : variant,
+          )
+          continue
+        }
+        if (occupant) {
+          variants = variants.map((variant) =>
+            variant.key === occupant.key
+              ? {
+                  ...variant,
+                  targets: { ...source.targets },
+                  passthroughTargets: { ...source.passthroughTargets },
+                  slots: source.slots.map((slot) => cloneQeSlot(slot, seed)),
+                }
+              : variant,
+          )
+          continue
+        }
+        const variantKey = buildDayVariantKey(existingKeys, dayOfWeek)
+        existingKeys.add(variantKey)
+        variants = [...variants, cloneQeVariantForDay(source, dayOfWeek, variantKey)]
+      }
+      if (variants === state.variants) return state
+      return { ...state, variants }
     }
     case 'SET_PLAN_NAME': {
       if (!state.meta) return state

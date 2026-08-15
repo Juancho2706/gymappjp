@@ -11,7 +11,7 @@
  * "Franja sin alimentos" en vez de romperse (QA #4).
  */
 
-import { useMemo, useState } from 'react'
+import { useContext, useMemo, useState } from 'react'
 import { Check, ChevronDown, Copy, CopyCheck, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatNutritionDayOfWeek } from '@eva/nutrition-v2'
@@ -27,6 +27,7 @@ import {
 } from './quick-edit-state'
 import type { FoodPickerSummary } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
+import { RememberedQuantitiesContext } from '../builder/_components/RememberedQuantitiesContext'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableItemRow } from './EditableItemRow'
 import { EditablePortionsCard } from './EditablePortionsCard'
@@ -47,6 +48,9 @@ export function EditableSlotCard({
   index: number
 }) {
   const { clientId, state, dispatch, errors, showErrors, isPending, exchangeGroups } = useQuickEdit()
+  // Porcion pegajosa (T2.6 F4): mapa foodId → ultima cantidad, resuelto server-side. Solo el
+  // editor unico monta el provider; en el quick-edit clasico esto es {} (sin cambios).
+  const rememberedQuantities = useContext(RememberedQuantitiesContext)
   const [addOpen, setAddOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
@@ -366,7 +370,18 @@ export function EditableSlotCard({
         slotName={slot.name.trim() || null}
         summary={pickerSummary}
         onOpenChange={setAddOpen}
-        onPick={(food) => dispatch({ type: 'ADD_CATALOG_ITEM', variantKey, slotKey: slot.key, key: genQuickEditKey(), food })}
+        onPick={(food) =>
+          dispatch({
+            type: 'ADD_CATALOG_ITEM',
+            variantKey,
+            slotKey: slot.key,
+            key: genQuickEditKey(),
+            food,
+            // Porcion pegajosa (T2.6 F4): solo el editor monta el provider con memoria; en el
+            // quick-edit clasico el contexto es {} y el prefill queda undefined (todo igual).
+            prefill: rememberedQuantities[food.id],
+          })
+        }
         onPickCustom={(query) => {
           // Alta de alimento libre CON el texto buscado precargado: el coach escribio
           // "pan amasado", no lo encontro y no tiene por que volver a tipearlo.

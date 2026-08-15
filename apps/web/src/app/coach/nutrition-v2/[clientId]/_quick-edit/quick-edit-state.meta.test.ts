@@ -475,6 +475,83 @@ describe('draftToEditState (creacion)', () => {
     expect(quickEditReducer(dup, { type: 'DUPLICATE_VARIANT_AS', sourceVariantKey: VARIANT_ID, dayOfWeek: 3, variantKey: 'dow-6' })).toBe(dup)
   })
 
+  it('COPY_VARIANT_TO_DAYS: replace conserva identidad del destino, append suma, dia libre se crea', () => {
+    const base = hydrateWithMeta()
+    // Dos dias propios: sabado (ocupado, con franja propia renombrada) y el origen sera el base.
+    const withSaturday = quickEditReducer(base, {
+      type: 'DUPLICATE_VARIANT_AS',
+      sourceVariantKey: VARIANT_ID,
+      dayOfWeek: 6,
+      variantKey: 'dow-6',
+    })
+    const renamed = quickEditReducer(withSaturday, {
+      type: 'SET_VARIANT_LABEL',
+      variantKey: 'dow-6',
+      value: 'Finde largo',
+    })
+
+    // REPLACE del base sobre sabado + creacion del domingo (0) en el mismo gesto.
+    const copied = quickEditReducer(renamed, {
+      type: 'COPY_VARIANT_TO_DAYS',
+      sourceVariantKey: VARIANT_ID,
+      days: [6, 0, 9], // 9 invalido: se ignora
+      mode: 'replace',
+      keySeed: 'seed-a',
+    })
+    expect(copied.variants).toHaveLength(3)
+    const saturday = copied.variants.find((variant) => variant.key === 'dow-6')!
+    // Identidad conservada (key + etiqueta del coach); contenido clonado del origen.
+    expect(saturday.label).toBe('Finde largo')
+    expect(saturday.slots).toHaveLength(1)
+    expect(saturday.slots[0]!.key).not.toBe(base.variants[0]!.slots[0]!.key)
+    const sunday = copied.variants.find((variant) => variant.dayOfWeek === 0)!
+    expect(sunday.slots).toHaveLength(1)
+    expect(sunday.isDefault).toBe(false)
+
+    // APPEND: las franjas del origen se SUMAN a las del sabado (queda con 2).
+    const appended = quickEditReducer(copied, {
+      type: 'COPY_VARIANT_TO_DAYS',
+      sourceVariantKey: VARIANT_ID,
+      days: [6],
+      mode: 'append',
+      keySeed: 'seed-b',
+    })
+    expect(appended.variants.find((variant) => variant.key === 'dow-6')!.slots).toHaveLength(2)
+
+    // Copiar sobre si mismo = no-op referencial.
+    const self = quickEditReducer(copied, {
+      type: 'COPY_VARIANT_TO_DAYS',
+      sourceVariantKey: 'dow-6',
+      days: [6],
+      mode: 'replace',
+      keySeed: 'seed-c',
+    })
+    expect(self).toBe(copied)
+
+    // El resultado proyecta un draft Zod-valido.
+    expect(NutritionPlanDraftSchema.safeParse(draftOf(appended)).success).toBe(true)
+  })
+
+  it('ADD_CATALOG_ITEM: prefill (porcion pegajosa) pisa el servingSize; sin prefill todo igual', () => {
+    const state = hydrateWithMeta()
+    const at = { variantKey: VARIANT_ID, slotKey: SLOT_ID }
+
+    const plain = quickEditReducer(state, { type: 'ADD_CATALOG_ITEM', ...at, key: 'k1', food: TEMPLATE_FOOD })
+    const plainItem = plain.variants[0]!.slots[0]!.items.at(-1)!
+    expect(plainItem.quantity).toBe('100') // servingSize del catalogo
+
+    const remembered = quickEditReducer(state, {
+      type: 'ADD_CATALOG_ITEM',
+      ...at,
+      key: 'k2',
+      food: TEMPLATE_FOOD,
+      prefill: { quantity: '75', unit: 'g' },
+    })
+    const rememberedItem = remembered.variants[0]!.slots[0]!.items.at(-1)!
+    expect(rememberedItem.quantity).toBe('75')
+    expect(rememberedItem.unit).toBe('g')
+  })
+
   it('qeAllowedStrategies: flexible solo sin franjas', () => {
     const withSlots = draftToEditState(makeTemplateDraft(), {}, {})
     expect(qeAllowedStrategies(withSlots)).toEqual(['structured', 'hybrid'])

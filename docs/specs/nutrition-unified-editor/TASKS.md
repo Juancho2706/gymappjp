@@ -115,11 +115,38 @@ las CTAs es W4); copy del confirm sheet especifico de creacion.
 - [x] Gates: vitest 5699 verdes (3 tests W2 nuevos), eslint 0 errores, tsc web verde, tokens y
   boundaries verdes; build local NO (Node 24)
 
-## W3 — Layout final
+## W3a — Copy semana + porcion pegajosa — CODIGO LISTO 2026-08-15, GATES PENDIENTES
 
-- [ ] Paleta lateral / sheet, drag reorden + fallback, totales+Publicar fijos, capsula unica
-- [ ] Copy semana quick-select + porcion pegajosa + notas visibles en el lienzo
-- [ ] Harness local verde ANTES de preview; QA responsive (390px) y dark mode
+⚠️ **Gates ACUMULADOS a pedido del owner (2026-08-15: sin PC para QA ni corridas pesadas).**
+Corridos solo los baratos: vitest TARGETED del reducer (17 tests del archivo meta verdes,
+incluye copy atomico y prefill) + eslint por archivo (hooks). PENDIENTES antes de declarar
+verde: vitest completo, `tsc --noEmit` web, check:tokens, check:nutrition-v2-boundaries,
+harness headless. Correr TODOS en una pasada al retomar.
+
+- [x] `COPY_VARIANT_TO_DAYS` (accion ATOMICA; el wizard necesitaba cola de dispatches + store
+  de porciones aparte — aca el arbol lleva porciones/reemplazos adentro): `replace` conserva
+  la IDENTIDAD del destino (key/id/etiqueta del coach) y clona el contenido del origen;
+  `append` suma franjas; dia libre se crea clonando el ORIGEN elegido. Self/dow invalido/
+  repetido se ignoran. Deshacer = `RESTORE_DRAFT` del arbol previo
+- [x] Sheet "Copiar a otros días…" en el menu del dia (solo editor, con franjas): modo
+  Reemplazar/Sumar (SegmentedControl), presets Lu-Vi/Finde/Todos + "Próximos 1/2/4" (modulos
+  PUROS del wizard `copy-presets`/`copy-plan` reusados tal cual), DayPicker multi con el
+  origen bloqueado, y AVISO previo exacto (`copyPlanWarning`: que se pisa, que se suma, que
+  nombres quedan duplicados)
+- [x] Porcion pegajosa T2.6/F4 en el editor: read (page resuelve `fetchRememberedQuantities`,
+  `RememberedQuantitiesContext` del builder montado por EditorClient, `ADD_CATALOG_ITEM`
+  gana `prefill` opcional) + write (commit de cantidad en EditableItemRow →
+  `rememberFoodQuantityAction`, con el guard de firma del wizard; SOLO editor — el quick-edit
+  clasico ni lee ni escribe memoria, contexto vacio = prefill undefined)
+- [ ] Gates completos de la tanda (ver ⚠️ arriba) + harness headless del copy
+
+## W3b — Layout final (exige QA del owner)
+
+- [ ] Paleta lateral desktop / sheet responsive
+- [ ] Drag reorden + fallback menu (MOVE_ITEM ya existe)
+- [ ] Totales del dia + Publicar fijos abajo (va con la capsula: exige nocion de dia ACTIVO)
+- [ ] Capsula unica dia/variante
+- [ ] Harness local verde ANTES de preview; QA responsive (390px) y dark mode con el owner
 - [ ] Gates + registro
 
 ## W4 — Corte 1
@@ -163,3 +190,4 @@ las CTAs es W4); copy del confirm sheet especifico de creacion.
 | 2026-08-15 | W1 esqueleto (edicion) | `5c61d283` | vitest 5691 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Ruta `/editor` sin CTA; meta opcional en el reducer; creacion `?from=` movida a W1.5 |
 | 2026-08-15 | W1.5 modo creacion | `8054e980` | vitest 5696 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (edit+create) · build NO (Node 24) | `?from=` template/plan/blank; vigencia elegible; estrategia segura; permisos finos; degradacion de origen CON aviso |
 | 2026-08-15 | W2 capacidades wizard-only | `d0aaa12d` | vitest 5699 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Sustituciones editables + override + duplicar dia, gateado a editor; SET_VARIANT_TARGETS/_MODE muere; APPEND → W3 |
+| 2026-08-15 | W3a copy semana + pegajosa | (commit de esta fila) | ⚠️ SOLO vitest targeted (17 ✓) + eslint por archivo; **resto ACUMULADO a pedido del owner** — correr suite completa, tsc, tokens, boundaries y harness antes de declarar verde | Split W3a/W3b; W3b (layout) espera QA del owner |

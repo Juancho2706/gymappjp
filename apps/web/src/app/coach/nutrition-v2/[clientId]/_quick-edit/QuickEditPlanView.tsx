@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CalendarDays,
+  CalendarRange,
   CopyPlus,
   History,
   Info,
@@ -31,9 +32,19 @@ import {
 } from '@eva/nutrition-v2'
 import { DayVariantWeekStrip, StrategyBadge } from '@/components/nutrition-v2'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditorMetaCard } from './EditorMetaCard'
 import { AddDayPopover } from '../builder/_components/AddDayPopover'
+import { COPY_PRESETS, daysForCopyPreset } from '../builder/_lib/copy-presets'
+import {
+  NEXT_DAYS_QUICK_PICKS,
+  copyPlanWarning,
+  nextDaysFrom,
+  planCopy,
+  type CopyMode,
+} from '../builder/_lib/copy-plan'
+import { MAX_DAY_VARIANTS } from '../builder/_lib/draft-builder'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableSlotCard } from './EditableSlotCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
@@ -391,6 +402,7 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
   const [dayOpen, setDayOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [duplicateOpen, setDuplicateOpen] = useState(false)
+  const [copyOpen, setCopyOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState(variant.label)
   const labelError = showErrors ? errors[`variant.${variant.key}.label`] : undefined
   const taken = takenDayVariantDows(state)
@@ -500,6 +512,19 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
             {QE_COPY.duplicateDay}
           </button>
         ) : null}
+        {canDuplicate && variant.slots.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false)
+              setCopyOpen(true)
+            }}
+            className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <CalendarRange aria-hidden="true" className="h-4 w-4 text-muted" />
+            {QE_COPY.copyDayMenu}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={openRename}
@@ -540,6 +565,10 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
           <p className="text-xs leading-5 text-muted">{QE_COPY.duplicateDayHint}</p>
           <DayPicker selected={[]} taken={taken} onToggle={handleDuplicateAs} />
         </QeBottomSheet>
+      ) : null}
+
+      {canDuplicate ? (
+        <EditorCopyDaySheet variant={variant} open={copyOpen} onOpenChange={setCopyOpen} />
       ) : null}
 
       <QeBottomSheet open={renameOpen} onOpenChange={setRenameOpen} title={QE_COPY.renameDayTitle}>
@@ -734,5 +763,157 @@ function AddSlotButton({ variantKey }: { variantKey: string }) {
         </SheetContent>
       </Sheet>
     </>
+  )
+}
+
+/**
+ * W3a (editor unico): copiar UN dia a varios dias en un gesto — T2.6 F2 con quick-select
+ * (presets con nombre + "proximos N") y modo Reemplazar/Sumar (D2). Toda la descripcion
+ * previa sale de los modulos PUROS del wizard (`copy-presets` / `copy-plan`): el aviso dice
+ * exactamente que se pisa, que se suma y que nombres quedan duplicados ANTES de confirmar.
+ * La ejecucion es UNA accion atomica (`COPY_VARIANT_TO_DAYS`); Deshacer repone el arbol
+ * previo completo (`RESTORE_DRAFT`).
+ */
+function EditorCopyDaySheet({
+  variant,
+  open,
+  onOpenChange,
+}: {
+  variant: QeVariant
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { state, dispatch, isPending } = useQuickEdit()
+  const [mode, setMode] = useState<CopyMode>('replace')
+  const [selected, setSelected] = useState<number[]>([])
+
+  const takenDows = takenDayVariantDows(state)
+  const sourceDow = variant.dayOfWeek
+
+  function toggleDay(dayOfWeek: number) {
+    setSelected((prev) =>
+      prev.includes(dayOfWeek) ? prev.filter((day) => day !== dayOfWeek) : [...prev, dayOfWeek],
+    )
+  }
+
+  /** Chips de seleccion rapida: fijan la seleccion completa (mismo criterio que el wizard). */
+  function applyDays(days: readonly number[]) {
+    setSelected(days.filter((day) => day !== sourceDow))
+  }
+
+  const occupantByDay = new Map<number, QeVariant>()
+  for (const candidate of state.variants) {
+    if (!candidate.isDefault && candidate.dayOfWeek != null) occupantByDay.set(candidate.dayOfWeek, candidate)
+  }
+
+  const plan = planCopy({
+    mode,
+    sourceSlotNames: variant.slots.map((slot) => slot.name),
+    destinations: selected.map((dayOfWeek) => {
+      const occupant = occupantByDay.get(dayOfWeek)
+      return {
+        dayOfWeek,
+        occupied: occupant != null,
+        slotNames: occupant ? occupant.slots.map((slot) => slot.name) : [],
+      }
+    }),
+    room: MAX_DAY_VARIANTS - takenDows.size,
+  })
+  const warning = copyPlanWarning(plan)
+  const effectiveCount = plan.entries.filter((entry) => !entry.skippedNoRoom).length
+
+  function handleCopy() {
+    if (selected.length === 0) {
+      toast.info(QE_COPY.copyDayNothing)
+      return
+    }
+    const previous = state
+    dispatch({
+      type: 'COPY_VARIANT_TO_DAYS',
+      sourceVariantKey: variant.key,
+      days: selected,
+      mode,
+      keySeed: genQuickEditKey(),
+    })
+    onOpenChange(false)
+    setSelected([])
+    toast(QE_COPY.copyDayDone(effectiveCount), {
+      duration: 8000,
+      action: {
+        label: QE_COPY.undo,
+        onClick: () => dispatch({ type: 'RESTORE_DRAFT', state: previous }),
+      },
+    })
+  }
+
+  return (
+    <QeBottomSheet open={open} onOpenChange={onOpenChange} title={QE_COPY.copyDayTitle(variant.label)}>
+      <p className="text-xs leading-5 text-muted">{QE_COPY.copyDayHint}</p>
+
+      <SegmentedControl
+        size="sm"
+        options={[
+          { value: 'replace', label: QE_COPY.copyDayModeReplace },
+          { value: 'append', label: QE_COPY.copyDayModeAppend },
+        ]}
+        value={mode}
+        onChange={(value) => setMode(value as CopyMode)}
+      />
+
+      {/* Quick-select: presets con nombre + "proximos N" relativo (solo con dia de origen). */}
+      <div className="flex flex-wrap gap-1.5">
+        {COPY_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() =>
+              applyDays(
+                daysForCopyPreset(preset, { takenDays: takenDows, sourceDayOfWeek: sourceDow }).map(
+                  (day) => day.dayOfWeek,
+                ),
+              )
+            }
+            className="rounded-pill border border-border-default bg-surface-card px-2.5 py-1 text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {preset.label}
+          </button>
+        ))}
+        {sourceDow != null
+          ? NEXT_DAYS_QUICK_PICKS.map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => applyDays(nextDaysFrom(sourceDow, count))}
+                className="rounded-pill border border-border-default bg-surface-card px-2.5 py-1 text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {QE_COPY.copyDayNextDays(count)}
+              </button>
+            ))
+          : null}
+      </div>
+
+      <DayPicker
+        selected={selected}
+        taken={new Set(sourceDow != null ? [sourceDow] : [])}
+        onToggle={toggleDay}
+      />
+
+      {warning ? (
+        <p className="flex items-start gap-1.5 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <AlertTriangle aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {warning}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        disabled={isPending || selected.length === 0 || effectiveCount === 0}
+        onClick={handleCopy}
+        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      >
+        <CalendarRange aria-hidden="true" className="h-4 w-4" />
+        {QE_COPY.copyDayCta(Math.max(effectiveCount, 1))}
+      </button>
+    </QeBottomSheet>
   )
 }
