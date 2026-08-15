@@ -33,7 +33,9 @@ import { macrosForTargets, type ExchangeGroup, type ExchangeMacroTotals } from '
 import {
   computeItemMacros,
   slotMergeName,
+  MAX_ITEM_SUBSTITUTIONS,
   type BuilderFood,
+  type BuilderFoodMacrosPatch,
   type ItemMacros,
 } from '../builder/_lib/draft-builder'
 // Diagnostico de porciones huerfanas (defecto B4): la logica pura ya vive en el builder y es
@@ -66,6 +68,13 @@ export interface QeItemSubstitution {
   customName: string | null
   quantity: number | null
   unit: string | null
+  /**
+   * Nombre visible del reemplazo (snapshot congelado de la version base, o del catalogo al
+   * agregarlo en el editor). SOLO display: la proyeccion al draft no lo transporta — el
+   * server re-deriva nombre/macros por foodId al congelar el snapshot nuevo. Ausente en
+   * respaldos locales pre-W2: la UI cae a customName o "Alimento".
+   */
+  displayName?: string | null
 }
 
 export interface QeItem {
@@ -261,6 +270,8 @@ function readSubstitutionToQe(read: NutritionItemSubstitutionRead): QeItemSubsti
     customName: isCustom ? read.name : null,
     quantity: read.quantity,
     unit: read.unit,
+    // Snapshot congelado para pintar la lista editable del editor (W2). Display-only.
+    displayName: read.name,
   }
 }
 
@@ -719,6 +730,29 @@ export type QuickEditAction =
    * previo (toca N dias, ningun `RESTORE_*` puntual la cubre).
    */
   | { type: 'APPLY_BASE_PORTIONS' }
+  // ── Capacidades wizard-only migradas al editor (W2). El quick-edit clasico no las
+  //    despacha (los menus que las ofrecen se gatean a `state.meta`). ──
+  /**
+   * Agrega un reemplazo autorizado al item (espejo del wizard): mismo tope, sin duplicar el
+   * mismo alimento ni ofrecer como reemplazo el propio alimento prescrito. Sin cantidad/unidad
+   * (equivalencia por alimento, como en el wizard); el server congela nombre/macros al publicar.
+   */
+  | { type: 'ADD_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; food: BuilderFood }
+  | { type: 'REMOVE_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; index: number }
+  | { type: 'RESTORE_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; index: number; sub: QeItemSubstitution }
+  /**
+   * Ajuste de macros del alimento (coach_food_overrides, T2.1) aplicado en vivo: patchea
+   * TODAS las apariciones con `food` en mano (swap/alta). Los items hidratados del read model
+   * (macroBase congelado, food null) no se tocan — mismo criterio que el quick-edit RN; el
+   * server re-deriva de foods al publicar igual.
+   */
+  | { type: 'APPLY_FOOD_OVERRIDE'; foodId: string; macros: BuilderFoodMacrosPatch }
+  /**
+   * Duplica un dia ESPECIFICO (con sus metas y franjas) como otro dia de la semana — espejo
+   * de `DUPLICATE_VARIANT_AS` del wizard. `ADD_VARIANT` solo clona el dia base; esto permite
+   * "duplicar el sabado como domingo". `variantKey` lo genera el llamador (reducer puro).
+   */
+  | { type: 'DUPLICATE_VARIANT_AS'; sourceVariantKey: string; dayOfWeek: number; variantKey: string }
   // ── Metadatos del plan (solo con state.meta presente; no-op en el quick-edit clasico) ──
   | { type: 'SET_PLAN_NAME'; value: string }
   | { type: 'SET_STRATEGY'; value: NutritionStrategy }
@@ -1461,6 +1495,69 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
           [action.field]: stepTargetText(variant.targets[action.field], targetStep(action.field), action.direction),
         },
       }))
+    case 'ADD_ITEM_SUBSTITUTION':
+      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) => {
+        const subs = item.substitutions ?? []
+        // Cinturon (espejo del wizard): tope, sin duplicar el mismo alimento, y el propio
+        // alimento prescrito jamas es su reemplazo. La UI ya lo evita; esto lo garantiza.
+        if (subs.length >= MAX_ITEM_SUBSTITUTIONS) return item
+        if (subs.some((sub) => sub.foodId === action.food.id)) return item
+        if (item.foodId === action.food.id) return item
+        return {
+          ...item,
+          substitutions: [
+            ...subs,
+            {
+              foodId: action.food.id,
+              recipeId: null,
+              customName: null,
+              quantity: null,
+              unit: null,
+              displayName: action.food.name,
+            },
+          ],
+        }
+      })
+    case 'REMOVE_ITEM_SUBSTITUTION':
+      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) => ({
+        ...item,
+        substitutions: (item.substitutions ?? []).filter((_, index) => index !== action.index),
+      }))
+    case 'RESTORE_ITEM_SUBSTITUTION':
+      // Deshacer del quitar (T2.6 F1): restituye en el indice original. Idempotente: si el
+      // mismo reemplazo ya volvio (doble clic en Deshacer), no-op — jamas duplicar.
+      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) => {
+        const subs = item.substitutions ?? []
+        if (subs.some((sub) => sameSubstitution(sub, action.sub))) return item
+        return { ...item, substitutions: insertAt(subs, action.index, action.sub) }
+      })
+    case 'APPLY_FOOD_OVERRIDE': {
+      const { foodId, macros } = action
+      return {
+        ...state,
+        variants: state.variants.map((variant) => ({
+          ...variant,
+          slots: variant.slots.map((slot) => ({
+            ...slot,
+            items: slot.items.map((item) =>
+              item.food && item.food.id === foodId ? { ...item, food: { ...item.food, ...macros } } : item,
+            ),
+          })),
+        })),
+      }
+    }
+    case 'DUPLICATE_VARIANT_AS': {
+      const source = state.variants.find((variant) => variant.key === action.sourceVariantKey)
+      if (!source || !isValidDow(action.dayOfWeek)) return state
+      if (takenDayVariantDows(state).has(action.dayOfWeek)) return state
+      if (state.variants.some((variant) => variant.key === action.variantKey || variant.variantKey === action.variantKey)) {
+        return state
+      }
+      return {
+        ...state,
+        variants: [...state.variants, cloneQeVariantForDay(source, action.dayOfWeek, action.variantKey)],
+      }
+    }
     case 'SET_PLAN_NAME': {
       if (!state.meta) return state
       return { ...state, meta: { ...state.meta, name: action.value } }
@@ -1500,6 +1597,17 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
     default:
       return state
   }
+}
+
+/** Igualdad de reemplazo por CONTENIDO proyectable (displayName es display-only y no cuenta). */
+function sameSubstitution(a: QeItemSubstitution, b: QeItemSubstitution): boolean {
+  return (
+    a.foodId === b.foodId &&
+    a.recipeId === b.recipeId &&
+    (a.customName ?? null) === (b.customName ?? null) &&
+    (a.quantity ?? null) === (b.quantity ?? null) &&
+    (a.unit ?? null) === (b.unit ?? null)
+  )
 }
 
 /**
@@ -1984,6 +2092,52 @@ function projectVariant(variant: QeVariant, orderIndex: number): DraftVariant {
  * dejaria la barra en "0 cambios" y el coach no podria publicar su propia edicion. El
  * paquete es compartido con otras superficies y queda fuera de este cluster.
  */
+/** Firma orden-insensible de la lista de reemplazos de un item (contenido proyectable). */
+function substitutionsSignature(subs: readonly NutritionItemSubstitution[] | undefined): string {
+  return (subs ?? [])
+    .map((sub) => `${sub.foodId ?? ''}|${sub.recipeId ?? ''}|${sub.customName ?? ''}|${sub.quantity ?? ''}|${sub.unit ?? ''}`)
+    .sort()
+    .join('~')
+}
+
+/**
+ * Cambios en los REEMPLAZOS autorizados entre dos drafts, emparejando items por `id` (solo los
+ * que ya existian en la version base; un item nuevo ya cuenta como alta entera).
+ *
+ * Se suma aparte porque `countDraftChanges` del paquete no compara `substitutions`: hasta W2
+ * ninguna superficie los editaba (solo carry-over) y el contador no los necesitaba. Con el
+ * editor unico editandolos, sin esto quitar o agregar un reemplazo dejaria la barra en
+ * "0 cambios" y el coach no podria publicar su propia edicion. Mismo criterio (y mismo motivo
+ * de vivir aca y no en el paquete) que `countVariantHeaderChanges`.
+ */
+export function countItemSubstitutionChanges(
+  baseline: NutritionPlanDraft,
+  current: NutritionPlanDraft,
+): number {
+  const baselineById = new Map<string, DraftItem>()
+  for (const variant of baseline.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      for (const item of slot.items) {
+        if (item.id) baselineById.set(item.id, item)
+      }
+    }
+  }
+  let count = 0
+  for (const variant of current.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      for (const item of slot.items) {
+        if (!item.id) continue
+        const base = baselineById.get(item.id)
+        if (!base) continue
+        if (substitutionsSignature(base.substitutions) !== substitutionsSignature(item.substitutions)) {
+          count += 1
+        }
+      }
+    }
+  }
+  return count
+}
+
 export function countVariantHeaderChanges(
   baseline: NutritionPlanDraft,
   current: NutritionPlanDraft,

@@ -104,6 +104,25 @@ function buildPlanModel(): NutritionPlanReadModel {
           },
         ],
       },
+      // Segundo dia: habilita el menu por-dia (solo se pinta en multi-dia) para verificar
+      // "Duplicar como…" (W2) en el harness.
+      {
+        id: '44444444-4444-4444-8444-555555555555',
+        key: 'dow-6',
+        label: 'Sábado',
+        dayOfWeek: 6,
+        isDefault: false,
+        targets: {
+          calories: 2400,
+          proteinG: 170,
+          carbsG: 240,
+          fatsG: 75,
+          fiberG: null,
+          sodiumMg: null,
+          waterMl: null,
+        },
+        mealSlots: [],
+      },
     ],
     syncToken: 'harness-sync-token',
   }

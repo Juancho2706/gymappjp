@@ -14,18 +14,35 @@
  */
 
 import { useState } from 'react'
-import { ArrowLeftRight, BookmarkPlus, Loader2, MoreVertical, MoveRight, Trash2 } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  BookmarkPlus,
+  ListPlus,
+  Loader2,
+  MoreVertical,
+  MoveRight,
+  Repeat2,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { foodCategoryIconUrl } from '@/lib/food-image'
-import { BUILDER_UNITS } from '../builder/_lib/draft-builder'
+import { BUILDER_UNITS, MAX_ITEM_SUBSTITUTIONS } from '../builder/_lib/draft-builder'
 import { stepCountedQuantity } from '../builder/_lib/quantity-format'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from '../builder/_components/food-card-presentation'
 import { FoodThumb } from '../builder/_components/FoodImage'
 import { ItemQuantityField } from '../builder/_components/ItemQuantityField'
+import { FoodMacrosOverrideDialog } from '../builder/_components/FoodMacrosOverrideDialog'
 import { createCoachFoodAction } from '../builder/_actions/builder.actions'
-import { qeCoachFoodCandidate, qeItemMacros, type QeItem, type QeSlot } from './quick-edit-state'
+import {
+  qeCoachFoodCandidate,
+  qeItemMacros,
+  type QeItem,
+  type QeItemSubstitution,
+  type QeSlot,
+} from './quick-edit-state'
 import { useQuickEdit } from './QuickEditProvider'
 import { FoodPickerSheet } from './FoodPickerSheet'
 import { QeBottomSheet } from './QeBottomSheet'
@@ -61,6 +78,12 @@ export function EditableItemRow({
   const [menuOpen, setMenuOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  // W2 (solo editor unico, `state.meta`): reemplazos autorizados editables + editar macros.
+  const [subsOpen, setSubsOpen] = useState(false)
+  const [subsPickerOpen, setSubsPickerOpen] = useState(false)
+  const [macrosOpen, setMacrosOpen] = useState(false)
+  const isEditor = state.meta !== undefined
+  const substitutions = item.substitutions ?? []
   const macros = qeItemMacros(item)
   const quantityError = showErrors ? errors[`item.${item.key}.quantity`] : undefined
   const nameError = showErrors ? errors[`item.${item.key}.name`] : undefined
@@ -118,6 +141,26 @@ export function EditableItemRow({
             toSlotKey: slotKey,
             itemKey: item.key,
             toIndex: fromIndex,
+          }),
+      },
+    })
+  }
+
+  /** Quitar un reemplazo autorizado: optimista + Deshacer que restituye en su indice (T2.6 F1). */
+  function handleRemoveSubstitution(sub: QeItemSubstitution, subIndex: number) {
+    dispatch({ type: 'REMOVE_ITEM_SUBSTITUTION', variantKey, slotKey, itemKey: item.key, index: subIndex })
+    toast(QE_COPY.substitutionRemovedUndo, {
+      duration: UNDO_TOAST_MS,
+      action: {
+        label: QE_COPY.undo,
+        onClick: () =>
+          dispatch({
+            type: 'RESTORE_ITEM_SUBSTITUTION',
+            variantKey,
+            slotKey,
+            itemKey: item.key,
+            index: subIndex,
+            sub,
           }),
       },
     })
@@ -270,6 +313,36 @@ export function EditableItemRow({
           ) : null}
         </div>
 
+        {isEditor ? (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setMenuOpen(false)
+              setSubsOpen(true)
+            }}
+            className={menuItemClass}
+          >
+            <Repeat2 aria-hidden="true" className="h-4 w-4 text-muted" />
+            {QE_COPY.substitutionsMenu(substitutions.length)}
+          </button>
+        ) : null}
+
+        {isEditor && item.food ? (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setMenuOpen(false)
+              setMacrosOpen(true)
+            }}
+            className={menuItemClass}
+          >
+            <SlidersHorizontal aria-hidden="true" className="h-4 w-4 text-muted" />
+            {QE_COPY.editMacros}
+          </button>
+        ) : null}
+
         {canOfferSave ? (
           <div>
             <button
@@ -323,6 +396,95 @@ export function EditableItemRow({
         onOpenChange={setSwapOpen}
         onPick={(food) => dispatch({ type: 'SWAP_ITEM_FOOD', variantKey, slotKey, itemKey: item.key, food })}
       />
+
+      {/* W2 (editor): lista editable de reemplazos autorizados del item. */}
+      {isEditor ? (
+        <>
+          <QeBottomSheet open={subsOpen} onOpenChange={setSubsOpen} title={QE_COPY.substitutionsTitle(itemLabel)}>
+            <p className="text-xs leading-5 text-muted">{QE_COPY.substitutionsHint}</p>
+            {substitutions.length === 0 ? (
+              <p className="rounded-control border border-border-subtle bg-surface-sunken px-3 py-2.5 text-sm leading-6 text-body">
+                {QE_COPY.substitutionsEmpty}
+              </p>
+            ) : (
+              <ul className="-mx-1 max-h-[46vh] space-y-2 overflow-y-auto px-1">
+                {substitutions.map((sub, subIndex) => (
+                  <li
+                    key={`${sub.foodId ?? sub.customName ?? 'sub'}-${subIndex}`}
+                    className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface-card p-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold leading-5 text-strong">
+                        {sub.displayName ?? sub.customName ?? 'Alimento'}
+                      </p>
+                      {sub.quantity != null && sub.unit ? (
+                        <p className="text-xs leading-5 text-muted">{`${sub.quantity} ${sub.unit}`}</p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Quitar reemplazo ${sub.displayName ?? sub.customName ?? ''}`}
+                      disabled={isPending}
+                      onClick={() => handleRemoveSubstitution(sub, subIndex)}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-border-subtle text-muted transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+                    >
+                      <Trash2 aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div>
+              <button
+                type="button"
+                disabled={isPending || substitutions.length >= MAX_ITEM_SUBSTITUTIONS}
+                onClick={() => {
+                  setSubsOpen(false)
+                  setSubsPickerOpen(true)
+                }}
+                className={menuItemClass}
+              >
+                <ListPlus aria-hidden="true" className="h-4 w-4 text-muted" />
+                {QE_COPY.addSubstitution}
+              </button>
+              {substitutions.length >= MAX_ITEM_SUBSTITUTIONS ? (
+                <p className="mt-1 px-1 text-xs leading-5 text-muted">
+                  {QE_COPY.substitutionLimit(MAX_ITEM_SUBSTITUTIONS)}
+                </p>
+              ) : null}
+            </div>
+          </QeBottomSheet>
+
+          <FoodPickerSheet
+            open={subsPickerOpen}
+            title={`${QE_COPY.addSubstitution} para ${itemLabel}`}
+            clientId={clientId}
+            onOpenChange={(open) => {
+              setSubsPickerOpen(open)
+              if (!open) setSubsOpen(true)
+            }}
+            onPick={(food) => {
+              if (food.id === item.foodId || substitutions.some((sub) => sub.foodId === food.id)) {
+                toast.info(QE_COPY.substitutionDuplicate)
+                return
+              }
+              dispatch({ type: 'ADD_ITEM_SUBSTITUTION', variantKey, slotKey, itemKey: item.key, food })
+            }}
+          />
+
+          {item.food ? (
+            <FoodMacrosOverrideDialog
+              food={item.food}
+              clientId={clientId}
+              open={macrosOpen}
+              onOpenChange={setMacrosOpen}
+              onApplied={(patch) =>
+                dispatch({ type: 'APPLY_FOOD_OVERRIDE', foodId: item.food!.id, macros: patch })
+              }
+            />
+          ) : null}
+        </>
+      ) : null}
     </div>
   )
 }

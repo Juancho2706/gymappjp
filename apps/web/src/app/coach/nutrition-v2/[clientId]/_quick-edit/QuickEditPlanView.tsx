@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CalendarDays,
+  CopyPlus,
   History,
   Info,
   MoreVertical,
@@ -40,6 +41,7 @@ import { PublishBar } from './PublishBar'
 import { PublishConfirmSheet } from './PublishConfirmSheet'
 import { StaleBaseDialog } from './StaleBaseDialog'
 import {
+  buildDayVariantKey,
   defaultQeVariant,
   qeDaysMissingBasePortions,
   takenDayVariantDows,
@@ -388,9 +390,12 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [dayOpen, setDayOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
+  const [duplicateOpen, setDuplicateOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState(variant.label)
   const labelError = showErrors ? errors[`variant.${variant.key}.label`] : undefined
   const taken = takenDayVariantDows(state)
+  // W2 (solo editor unico): duplicar ESTE dia —con sus metas y franjas— como otro dia.
+  const canDuplicate = state.meta !== undefined
 
   function openRename() {
     setNameDraft(variant.label)
@@ -407,6 +412,23 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
   function handlePickDay(dayOfWeek: number) {
     dispatch({ type: 'SET_VARIANT_DAY', variantKey: variant.key, dayOfWeek })
     setDayOpen(false)
+  }
+
+  /** Duplica este dia como `dayOfWeek`; el Deshacer elimina el dia recien creado. */
+  function handleDuplicateAs(dayOfWeek: number) {
+    const variantKey = buildDayVariantKey(
+      new Set(state.variants.map((candidate) => candidate.variantKey)),
+      dayOfWeek,
+    )
+    setDuplicateOpen(false)
+    dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey: variant.key, dayOfWeek, variantKey })
+    toast(QE_COPY.duplicateDayDone(formatNutritionDayOfWeek(dayOfWeek) ?? 'otro día'), {
+      duration: 5000,
+      action: {
+        label: QE_COPY.undo,
+        onClick: () => dispatch({ type: 'REMOVE_VARIANT', variantKey }),
+      },
+    })
   }
 
   function handleRemove() {
@@ -465,6 +487,19 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
             {QE_COPY.changeDay}
           </button>
         ) : null}
+        {canDuplicate ? (
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false)
+              setDuplicateOpen(true)
+            }}
+            className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <CopyPlus aria-hidden="true" className="h-4 w-4 text-muted" />
+            {QE_COPY.duplicateDay}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={openRename}
@@ -499,6 +534,13 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
           onToggle={handlePickDay}
         />
       </QeBottomSheet>
+
+      {canDuplicate ? (
+        <QeBottomSheet open={duplicateOpen} onOpenChange={setDuplicateOpen} title={QE_COPY.duplicateDayTitle}>
+          <p className="text-xs leading-5 text-muted">{QE_COPY.duplicateDayHint}</p>
+          <DayPicker selected={[]} taken={taken} onToggle={handleDuplicateAs} />
+        </QeBottomSheet>
+      ) : null}
 
       <QeBottomSheet open={renameOpen} onOpenChange={setRenameOpen} title={QE_COPY.renameDayTitle}>
         <div>

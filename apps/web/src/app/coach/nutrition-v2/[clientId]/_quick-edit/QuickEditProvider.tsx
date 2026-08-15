@@ -43,6 +43,7 @@ import {
   buildSubstitutionMap,
   catalogToPortionGroups,
   collectPortionGroups,
+  countItemSubstitutionChanges,
   countVariantHeaderChanges,
   mergePortionGroupChoices,
   qeExchangeGroups,
@@ -317,8 +318,13 @@ export function QuickEditProvider({
   // FD5: el contador del paquete no mira el ENCABEZADO de la variante (etiqueta / dia de
   // semana), asi que renombrar o mover un dia quedaria en "0 cambios" y sin barra de
   // publicar. Se suma el delta de encabezados calculado sobre los MISMOS drafts.
+  // W2: + delta de reemplazos autorizados — el paquete tampoco los compara (hasta el editor
+  // unico ninguna superficie los editaba) y sin esto quitar/agregar un reemplazo no publicaba.
   const changeCount = useMemo(
-    () => countDraftChanges(baselineDraft, currentDraft) + countVariantHeaderChanges(baselineDraft, currentDraft),
+    () =>
+      countDraftChanges(baselineDraft, currentDraft) +
+      countVariantHeaderChanges(baselineDraft, currentDraft) +
+      countItemSubstitutionChanges(baselineDraft, currentDraft),
     [baselineDraft, currentDraft],
   )
   // La validacion local necesita la ESTRATEGIA para evaluar el dia vacio (en `flexible` un dia

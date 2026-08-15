@@ -7,6 +7,7 @@ import {
 } from '@eva/nutrition-v2'
 import {
   applyQuickEditToDraft,
+  countItemSubstitutionChanges,
   draftToEditState,
   qeAllowedStrategies,
   quickEditReducer,
@@ -393,6 +394,85 @@ describe('draftToEditState (creacion)', () => {
 
     const emptyBaseline = applyQuickEditToDraft(draft, { variants: [], visibleNotes: '', meta: state.meta })
     expect(countDraftChanges(emptyBaseline, projected)).toBeGreaterThan(0)
+  })
+
+  it('sustituciones editables: alta con guardas, quitar por indice y deshacer idempotente', () => {
+    const state = hydrateWithMeta()
+    const at = { variantKey: VARIANT_ID, slotKey: SLOT_ID, itemKey: ITEM_ID }
+    // Alimento DISTINTO del prescrito (el fixture del item usa FOOD_ID).
+    const subFood = { ...TEMPLATE_FOOD, id: '12121212-1212-4212-8212-121212121212' }
+
+    const added = quickEditReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', ...at, food: subFood })
+    const subs = added.variants[0]!.slots[0]!.items[0]!.substitutions
+    expect(subs).toHaveLength(1)
+    expect(subs[0]).toMatchObject({ foodId: subFood.id, displayName: 'Arroz integral' })
+
+    // Guardas: mismo alimento dos veces = no-op; el propio alimento prescrito = no-op.
+    // (no-op semantico: mapItem reconstruye el arbol, igual que el resto de acciones QE)
+    expect(quickEditReducer(added, { type: 'ADD_ITEM_SUBSTITUTION', ...at, food: subFood })).toStrictEqual(added)
+    const selfFood = { ...TEMPLATE_FOOD, id: FOOD_ID }
+    expect(
+      quickEditReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', ...at, food: selfFood }).variants[0]!.slots[0]!
+        .items[0]!.substitutions,
+    ).toHaveLength(0)
+
+    // Quitar + deshacer restituye en el indice; doble deshacer no duplica.
+    const removedSub = subs[0]!
+    const removed = quickEditReducer(added, { type: 'REMOVE_ITEM_SUBSTITUTION', ...at, index: 0 })
+    expect(removed.variants[0]!.slots[0]!.items[0]!.substitutions).toHaveLength(0)
+    const restored = quickEditReducer(removed, { type: 'RESTORE_ITEM_SUBSTITUTION', ...at, index: 0, sub: removedSub })
+    expect(restored.variants[0]!.slots[0]!.items[0]!.substitutions).toHaveLength(1)
+    expect(quickEditReducer(restored, { type: 'RESTORE_ITEM_SUBSTITUTION', ...at, index: 0, sub: removedSub })).toStrictEqual(restored)
+
+    // El delta de reemplazos cuenta (el paquete no los compara) y displayName NO se proyecta.
+    const baseline = draftOf(state)
+    const edited = draftOf(added)
+    expect(countItemSubstitutionChanges(baseline, edited)).toBe(1)
+    expect(countItemSubstitutionChanges(baseline, baseline)).toBe(0)
+    const projectedSub = edited.dayVariants[0]!.mealSlots[0]!.items[0]!.substitutions?.[0]
+    expect(projectedSub).toMatchObject({ foodId: subFood.id, orderIndex: 0 })
+    expect(projectedSub && 'displayName' in projectedSub).toBe(false)
+    expect(NutritionPlanDraftSchema.safeParse(edited).success).toBe(true)
+  })
+
+  it('APPLY_FOOD_OVERRIDE patchea solo items con food en mano (macroBase congelado intacto)', () => {
+    const state = hydrateWithMeta()
+    const at = { variantKey: VARIANT_ID, slotKey: SLOT_ID, itemKey: ITEM_ID }
+    // Item hidratado (food null): el override no lo toca.
+    const untouched = quickEditReducer(state, {
+      type: 'APPLY_FOOD_OVERRIDE',
+      foodId: FOOD_ID,
+      macros: { calories: 999, proteinG: 1, carbsG: 1, fatsG: 1, fiberG: 1 },
+    })
+    expect(untouched.variants[0]!.slots[0]!.items[0]!.food).toBeNull()
+
+    // Tras un swap (food en mano) el override recomputa en vivo.
+    const swapped = quickEditReducer(state, { type: 'SWAP_ITEM_FOOD', ...at, food: TEMPLATE_FOOD })
+    const overridden = quickEditReducer(swapped, {
+      type: 'APPLY_FOOD_OVERRIDE',
+      foodId: TEMPLATE_FOOD.id,
+      macros: { calories: 999, proteinG: 1, carbsG: 1, fatsG: 1, fiberG: 1 },
+    })
+    expect(overridden.variants[0]!.slots[0]!.items[0]!.food?.calories).toBe(999)
+  })
+
+  it('DUPLICATE_VARIANT_AS clona un dia especifico con sus metas; dia ocupado o dow invalido = no-op', () => {
+    const state = hydrateWithMeta()
+    const dup = quickEditReducer(state, {
+      type: 'DUPLICATE_VARIANT_AS',
+      sourceVariantKey: VARIANT_ID,
+      dayOfWeek: 6,
+      variantKey: 'dow-6',
+    })
+    expect(dup.variants).toHaveLength(2)
+    expect(dup.variants[1]).toMatchObject({ dayOfWeek: 6, isDefault: false })
+    expect(dup.variants[1]!.targets).toEqual(state.variants[0]!.targets)
+    expect(dup.variants[1]!.slots).toHaveLength(1)
+
+    // Dia ya ocupado = no-op; dow invalido = no-op; key repetida = no-op.
+    expect(quickEditReducer(dup, { type: 'DUPLICATE_VARIANT_AS', sourceVariantKey: VARIANT_ID, dayOfWeek: 6, variantKey: 'dow-6b' })).toBe(dup)
+    expect(quickEditReducer(state, { type: 'DUPLICATE_VARIANT_AS', sourceVariantKey: VARIANT_ID, dayOfWeek: 9, variantKey: 'x' })).toBe(state)
+    expect(quickEditReducer(dup, { type: 'DUPLICATE_VARIANT_AS', sourceVariantKey: VARIANT_ID, dayOfWeek: 3, variantKey: 'dow-6' })).toBe(dup)
   })
 
   it('qeAllowedStrategies: flexible solo sin franjas', () => {
