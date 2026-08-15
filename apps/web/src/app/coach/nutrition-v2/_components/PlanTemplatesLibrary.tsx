@@ -445,7 +445,7 @@ function ApplyTemplateDialog({
     if (!template) return
     captureApplied('library')
     onClose()
-    router.push(`/coach/nutrition-v2/${entry.clientId}/builder?from=template:${template.id}`)
+    router.push(`/coach/nutrition-v2/${entry.clientId}/editor?from=template:${template.id}`)
   }
 
   return (

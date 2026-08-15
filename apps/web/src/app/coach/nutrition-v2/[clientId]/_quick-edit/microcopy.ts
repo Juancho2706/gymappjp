@@ -170,6 +170,8 @@ export const QE_COPY = {
   paletteTitle: 'Agregar alimentos',
   paletteSlotLabel: 'A la franja',
   paletteNoSlots: 'Este día no tiene franjas: crea una para agregar alimentos.',
+  // ── W4 (corte 1): el par viejo pasa a camino secundario del menu de la ficha.
+  classicQuickEdit: 'Edición rápida (clásica)',
   // ── Índice de días (P1-1): anclas arriba de la pila para no scrollear a ciegas.
   dayIndexLabel: 'Ir a un día del plan',
   dayIndexJump: (label: string) => `Ir a ${label}`,

@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { MoreVertical, Pencil, Wand2 } from 'lucide-react'
+import { MoreVertical, Pencil, Wand2, Zap } from 'lucide-react'
 import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import {
   DropdownMenu,
@@ -87,16 +87,17 @@ export function QuickEditEntry({
 
   return (
     <>
-      {/* Icono solo (pedido CEO 2026-07-17): el lapiz basta; el label vive en aria/title. */}
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
+      {/* W4 (corte 1, editor unico): el lapiz primario navega al EDITOR. El quick-edit
+          in-place y el wizard quedan como caminos secundarios en el menu "..." durante la
+          ventana de retiro (D3: 2 semanas estable + plantillas migradas). */}
+      <Link
+        href={`/coach/nutrition-v2/${clientId}/editor`}
         aria-label={QE_COPY.enter}
         title={QE_COPY.enter}
         className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-primary text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Pencil className="h-[18px] w-[18px]" />
-      </button>
+      </Link>
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="Más opciones del plan"
@@ -105,6 +106,10 @@ export function QuickEditEntry({
           <MoreVertical aria-hidden="true" className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuItem onClick={() => setEditing(true)}>
+            <Zap aria-hidden="true" className="h-4 w-4" />
+            {QE_COPY.classicQuickEdit}
+          </DropdownMenuItem>
           <DropdownMenuItem
             render={<Link href={`/coach/nutrition-v2/${clientId}/builder`} />}
           >

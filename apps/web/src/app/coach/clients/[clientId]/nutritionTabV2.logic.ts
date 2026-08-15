@@ -322,7 +322,7 @@ export function buildNutritionTabV2ViewModel(
     hasActivePlan,
     planName: activePlan?.name?.trim() ? activePlan.name.trim() : null,
     detailHref: `/coach/nutrition-v2/${clientId}`,
-    builderHref: `/coach/nutrition-v2/${clientId}/builder`,
+    builderHref: `/coach/nutrition-v2/${clientId}/editor`,
     builderCtaLabel: hasPlan ? 'Nueva versión' : 'Crear plan',
     strategy: activePlan?.strategy ?? null,
     week,

@@ -141,7 +141,7 @@ export function NewPlanPickerButton({
     // Con origen elegido, la MISMA ruta del builder lo recibe por `?from=` (AD-3): no hay un
     // segundo camino de creacion que pueda divergir del wizard normal.
     const suffix = source ? `?from=${source.kind}:${source.id}` : ''
-    router.push(`/coach/nutrition-v2/${clientId}/builder${suffix}`)
+    router.push(`/coach/nutrition-v2/${clientId}/editor${suffix}`)
   }
 
   return (

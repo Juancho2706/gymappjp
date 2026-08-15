@@ -174,7 +174,8 @@ describe('buildNutritionTabV2ViewModel', () => {
     expect(vm.hasActivePlan).toBe(true)
     expect(vm.strategy).toBe('structured')
     expect(vm.detailHref).toBe(`/coach/nutrition-v2/${CLIENT_ID}`)
-    expect(vm.builderHref).toBe(`/coach/nutrition-v2/${CLIENT_ID}/builder`)
+    // W4 (editor unico): la CTA del tab apunta al editor; el wizard queda como camino secundario.
+    expect(vm.builderHref).toBe(`/coach/nutrition-v2/${CLIENT_ID}/editor`)
     expect(vm.builderCtaLabel).toBe('Nueva versión')
 
     expect(vm.week).toHaveLength(7)

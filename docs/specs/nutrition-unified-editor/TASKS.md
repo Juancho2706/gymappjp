@@ -160,13 +160,23 @@ menu → sheet con modos y presets → copiar base a Lunes → toast + dia en la
 - [ ] **QA VISUAL del owner en preview** (drag real con mouse, responsive, dark mode, white-label)
   — el corte de CTAs (W4) no arranca sin este OK
 
-## W4 — Corte 1
+## W4 — Corte 1 — CERRADA 2026-08-15
 
-- [ ] Preview con OK explicito del owner
-- [ ] CTA de ficha y puerta `?from=` → editor unico; par viejo a menu secundario
-- [ ] `MOBILE_PARITY.md` declara el gap RN en el mismo commit
-- [ ] `docs/status/CURRENT.md` actualizado; arranca la ventana de 2 semanas
-- [ ] Gates + registro
+- [x] Preview con OK explicito del owner ("todo bien sin problemas", QA de la guia completa
+  sobre el deploy `df21fb27`)
+- [x] CTAs → editor: ficha (Crear plan ×2 y el lapiz de editar), `+` del Centro V2
+  (`NewPlanPickerButton`, conserva `?from=`), roster del hub (`HubRoster` ×2), tab nutricion
+  del cliente (`nutritionTabV2.logic`), "Aplicar plantilla" (`PlanTemplatesLibrary`,
+  `?from=template:`). Par viejo a secundario: menu "..." de la ficha gana "Edición rápida
+  (clásica)" (quick-edit in-place) y conserva "Rehacer con el asistente" (wizard). El builder
+  sigue aceptando URL directa; el builder de PLANTILLAS no se toca (D2: migra en T3.2b)
+- [x] `MOBILE_PARITY.md` declara el gap RN en el mismo commit (editor unico web-only hasta T3.3)
+- [x] `docs/status/CURRENT.md` actualizado; **arranca la ventana de 2 semanas de observacion**
+  (retiro del par exige ademas plantillas migradas — D2)
+- [x] Gates + registro (fila abajo)
+
+Decision del owner (2026-08-15): pasada visual UI/UX del editor = tanda propia DESPUES del
+corte, con su QA.
 
 ## T3.2b — Plantillas
 
@@ -202,4 +212,5 @@ menu → sheet con modos y presets → copiar base a Lunes → toast + dia en la
 | 2026-08-15 | W1.5 modo creacion | `8054e980` | vitest 5696 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (edit+create) · build NO (Node 24) | `?from=` template/plan/blank; vigencia elegible; estrategia segura; permisos finos; degradacion de origen CON aviso |
 | 2026-08-15 | W2 capacidades wizard-only | `d0aaa12d` | vitest 5699 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Sustituciones editables + override + duplicar dia, gateado a editor; SET_VARIANT_TARGETS/_MODE muere; APPEND → W3 |
 | 2026-08-15 | W3a copy semana + pegajosa | `a6570234` | vitest 5701 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · eslint 0 err ✓ · build NO (Node 24) — gates corridos en pasada diferida el mismo dia | Split W3a/W3b; W3b (layout) espera QA del owner |
-| 2026-08-15 | W3b layout final | `93c94014` | vitest 5702 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (movil+desktop) · eslint 0 err ✓ · build NO (Node 24) | Capsula dia activo + totales fijos + paleta lateral lg+ + reorden (accion, Subir/Bajar, drag). QUEDA el QA visual del owner en preview antes de W4 |
+| 2026-08-15 | W3b layout final | `93c94014` | vitest 5702 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (movil+desktop) · eslint 0 err ✓ · build NO (Node 24) | Capsula dia activo + totales fijos + paleta lateral lg+ + reorden (accion, Subir/Bajar, drag). QA visual del owner en preview: OK (2026-08-15) |
+| 2026-08-15 | W4 corte 1 | (commit de esta fila) | vitest 5702 ✓ (1 test actualizado al contrato nuevo) · tsc web ✓ · tokens ✓ · boundaries ✓ · eslint 0 err ✓ · docs:check ✓ · build NO (Node 24) | CTAs web → editor; par viejo a menu "..."; MOBILE_PARITY declara gap RN; ventana de 2 semanas ARRANCA |

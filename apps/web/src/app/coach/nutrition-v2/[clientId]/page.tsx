@@ -243,7 +243,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
           />
         ) : (
           <Link
-            href={`/coach/nutrition-v2/${clientId}/builder`}
+            href={`/coach/nutrition-v2/${clientId}/editor`}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-control bg-primary/100 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 md:gap-2 md:px-4"
           >
             <Plus className="h-4 w-4" />
@@ -282,7 +282,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             description="Crea y publica un plan para revisar objetivos y adherencia."
             action={
               <Link
-                href={`/coach/nutrition-v2/${clientId}/builder`}
+                href={`/coach/nutrition-v2/${clientId}/editor`}
                 className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
               >
                 <Plus className="h-4 w-4" />

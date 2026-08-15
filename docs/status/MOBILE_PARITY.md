@@ -14,6 +14,17 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-15 (T3.x editor unico de nutricion — corte web W4, rama `rnmobiledenuevo`)**: la web
+> corto sus CTAs al **editor unico** (`/coach/nutrition-v2/[clientId]/editor`): la ficha, el `+`
+> del Centro V2, el roster del hub, el tab del cliente y "Aplicar plantilla" (`?from=`) apuntan
+> ahi; el quick-edit clasico y el wizard quedan como caminos secundarios del menu "..." durante
+> la ventana de retiro. **GAP RN DECLARADO**: en `apps/mobile` NO existe el editor unico — el
+> coach movil sigue con su par builder/quick-edit de siempre (sin cabecera de metadatos, sin
+> creacion `?from=`, sin sustituciones editables, sin override en quick-edit, sin duplicar/copiar
+> dia, sin porcion pegajosa en quick-edit, sin capsula/paleta). La paridad llega en **T3.3**
+> (editor RN Android sobre los reducers compartidos de R1); nada del corte web toca RN.
+> Programa: [`specs/nutrition-unified-editor/`](../specs/nutrition-unified-editor/SPEC.md).
+
 > **2026-08-06 (F0 Sentry+RN, `7ccf7a07`/`8a7eaecf` en master)**: resuelto el crash-loop P0 de
 > arranque en Android — `expo-blur` (dimezisBlurView) reemplazado por velo JS plano (`EvaBlur`) —
 > y Sentry quedó vivo en web (replay) y RN. Pusheado; **queda build Android `eas build --local`
