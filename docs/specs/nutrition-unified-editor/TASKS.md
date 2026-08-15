@@ -65,14 +65,33 @@ QW = quick-edit web (`quick-edit-state.ts`), QR = quick-edit RN (`nutrition-v2-q
 Pendientes declarados que salen de W1: creacion `?from=` + `effectiveFrom` elegible (W1.5),
 estrategia editable con su semantica (W1.5), `quantityAdjustmentPercent` y permisos finos (W1.5).
 
-## W1.5 — Modo creacion
+## W1.5 — Modo creacion — CERRADA 2026-08-15
 
-- [ ] `draftToEditState` (draft + foods por id → arbol editable; reusa `collectPlanFoodIds`/
-  `collectTemplateFoodIds`/`fetchBuilderFoodsByIds` del builder)
-- [ ] Hidratacion `?from=` (vacio/plantilla/copia) en la page del editor
-- [ ] Publish creacion por `publishPlanAction` (sin CAS) + `effectiveFrom` elegible
-- [ ] Estrategia editable (semantica structured↔flexible↔hybrid) + permisos finos
-- [ ] Gates + registro
+- [x] `draftToEditState` (draft del contrato + foods por id + snapshots de grupos → arbol
+  editable con meta; degradacion VISIBLE: alimento no resuelto = fila sin macros en vivo,
+  grupo no resuelto = "Grupo no disponible")
+- [x] Hidratacion `?from=` en la page: `template:` (draft de la plantilla + `fetchBuilderFoodsByIds`
+  + catalogo de grupos + `markPlanTemplateUsed`), `plan:` (read model del alumno fuente —
+  macros congeladas sin fetch de foods — + carry-over de reemplazos con NUT-008 si su lectura
+  cae), blank (1 dia base vacio, nombre "Plan de {alumno}"). Origen caido degrada CON AVISO
+  (toast; leccion JP 2026-08-11) y con plan vigente degrada a EDICION, jamas a un plan nuevo
+  encima. `clientId`/`timezone` del destino SIEMPRE mandan; `planId` fuente jamas viaja
+- [x] Publish creacion por `publishPlanAction` con `effectiveFrom` elegible (`QeMeta.effectiveFrom`,
+  solo creacion; validacion local espejo de EFFECTIVE_DATE) y CAS solo si el alumno ya tenia
+  plan (reemplazo). Baseline VACIO: todo el origen cuenta como alta y la barra aparece de
+  entrada (publicar una plantilla sin tocarla es legitimo). Evento PostHog `editor`
+- [x] Estrategia editable con regla segura (`qeAllowedStrategies`: flexible SOLO sin franjas;
+  hybrid con candado sin Pro — gate real server) + permisos finos (4 switches + tope ±% con
+  `OptionalClampedIntInput`; `canSubstitute` sigue oculto por D4 de T2.5)
+- [x] Harness `?mode=create` + verificacion headless (nombre de plantilla hidratado, vigencia
+  presente, Flexible ausente con franjas, barra visible de entrada, tope ±% aparece/desaparece
+  con su switch; 0 pageerrors; screenshots 390px)
+- [x] Gates: vitest 5696 verdes (12 tests meta/creacion), eslint 0 errores, tsc web verde,
+  tokens y boundaries verdes; build local NO (Node 24)
+
+Pendientes declarados que salen de W1.5: respaldo local (localStorage) en modo creacion;
+selector de origen dentro del editor (hoy la puerta sigue siendo la URL `?from=`, el corte de
+las CTAs es W4); copy del confirm sheet especifico de creacion.
 
 ## W2 — Capacidades wizard-only
 
@@ -126,3 +145,4 @@ estrategia editable con su semantica (W1.5), `quantityAdjustmentPercent` y permi
 |-------|-------|--------|-------|-------|
 | 2026-08-15 | T3.1 SPEC | `8d931280` | docs:check | SPEC/PLAN/TASKS; D1/D2 del owner |
 | 2026-08-15 | W1 esqueleto (edicion) | `5c61d283` | vitest 5691 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Ruta `/editor` sin CTA; meta opcional en el reducer; creacion `?from=` movida a W1.5 |
+| 2026-08-15 | W1.5 modo creacion | `8054e980` | vitest 5696 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (edit+create) · build NO (Node 24) | `?from=` template/plan/blank; vigencia elegible; estrategia segura; permisos finos; degradacion de origen CON aviso |
