@@ -46,6 +46,9 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
   // salida del preview y para no perturbar el PR seleccionado del PRDetailSheet.
   const [sharePr, setSharePr] = useState<PR | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  // "Ahora" congelado al montar: el badge NUEVO no necesita reloj vivo y `Date.now()` en pleno
+  // render viola react-hooks/purity.
+  const [mountedAt] = useState(() => Date.now())
 
   useEffect(() => {
     getPersonalRecords(clientId).then((data) => setPrs(data as PR[]))
@@ -62,7 +65,7 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {prs.slice(0, 4).map((pr) => {
-          const fresh = Date.now() - new Date(pr.achievedAt).getTime() < FRESH_MS
+          const fresh = mountedAt - new Date(pr.achievedAt).getTime() < FRESH_MS
           return (
             <TouchableOpacity
               key={`${pr.exerciseId}-${pr.achievedAt}`}
@@ -96,9 +99,13 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
                 accessibilityLabel={`Compartir record de ${pr.exerciseName}`}
                 onPress={() => { setSharePr(pr); setShareOpen(true) }}
                 hitSlop={12}
-                style={({ pressed }) => ({ position: 'absolute', right: 6, bottom: 6, padding: 4, opacity: pressed ? 0.55 : 1 })}
+                // Gotcha css-interop: `style` como función pierde todo el estilo (el glyph perdía
+                // su esquina absoluta). Estático + pressed vía children-as-function.
+                style={{ position: 'absolute', right: 6, bottom: 6, padding: 4 }}
               >
-                <Share2 size={16} className="text-on-dark-muted" strokeWidth={2.2} />
+                {({ pressed }) => (
+                  <Share2 size={16} className="text-on-dark-muted" strokeWidth={2.2} style={{ opacity: pressed ? 0.55 : 1 }} />
+                )}
               </Pressable>
             </TouchableOpacity>
           )

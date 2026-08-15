@@ -30,7 +30,7 @@ const MEDIA_MAX_RETRIES = 2
  * la card grande existe (sólo si NO es 'none').
  */
 export type ExecMediaKind = 'gif' | 'video' | 'youtube' | 'image' | 'none'
-export function execMediaKind(exercise: SessionExercise): ExecMediaKind {
+export function execMediaKind(exercise: Pick<SessionExercise, 'gif_url' | 'video_url'>): ExecMediaKind {
   const videoUrl = exercise.video_url
   if (exercise.gif_url) return 'gif'
   if (!videoUrl) return 'none'
@@ -50,7 +50,7 @@ export function execMediaKind(exercise: SessionExercise): ExecMediaKind {
   return isMp4 ? 'video' : 'image'
 }
 /** ¿El ejercicio tiene media visible (gif/video/youtube/imagen)? Si es false, kind === 'none'. */
-export function hasExecMedia(exercise: SessionExercise): boolean {
+export function hasExecMedia(exercise: Pick<SessionExercise, 'gif_url' | 'video_url'>): boolean {
   return execMediaKind(exercise) !== 'none'
 }
 

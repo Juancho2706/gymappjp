@@ -31,6 +31,7 @@ import {
   getExerciseInstructions,
   resolveCatalogScope,
 } from '../../../lib/exercise-catalog'
+import { execMediaKind } from '../../../components/alumno/workout/v3/ExecMediaV3'
 
 /** Debounce de la búsqueda para no disparar un fetch server por tecla (1:1 web). */
 const SEARCH_DEBOUNCE_MS = 250
@@ -466,15 +467,21 @@ function ExerciseDetail({
     .map((l) => l.replace(/^Step:\d+\s*/i, '').trim())
     .filter(Boolean)
 
+  // Catálogo importado: el GIF ANIMADO vive en `video_url` (gif_url es null en 818/889 filas al
+  // 15-08) y un <video> apuntando a un .gif pinta NEGRO. Clasificar por TIPO real con el mismo
+  // helper del ejecutor, nunca por columna.
+  const media = execMediaKind(exercise)
+  const animatedStill = media === 'gif' ? exercise.gif_url : media === 'image' ? exercise.video_url : null
+
   return (
     <View style={styles.detail}>
       {/* Banner media (full-bleed dentro del padding del Sheet) */}
       <View style={styles.detailBanner}>
-        {exercise.gif_url ? (
+        {animatedStill ? (
           <View style={styles.detailGifWrap}>
-            <Image source={{ uri: exercise.gif_url }} style={styles.detailGif} contentFit="contain" transition={200} />
+            <Image source={{ uri: animatedStill }} style={styles.detailGif} contentFit="contain" transition={200} />
           </View>
-        ) : exercise.video_url ? (
+        ) : (media === 'youtube' || media === 'video') && exercise.video_url ? (
           <VideoPlayer
             url={exercise.video_url}
             start={exercise.video_start_time}

@@ -91,30 +91,36 @@ const FOOD_DATA_REFERENCES: Reference[] = [
 function ReferenceRow({ reference, last }: { reference: Reference; last?: boolean }) {
   const { theme } = useTheme()
   return (
+    // Gotcha css-interop (AGENTS mobile): `style` como FUNCIÓN en un Pressable pierde TODO el
+    // estilo inline — la fila quedaba sin padding, sin layout de fila y con el texto pegado al
+    // borde de la card. Estilo estático + estado pressed vía children-as-function.
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={`Abrir la fuente: ${reference.citation}`}
       onPress={() => {
         void Linking.openURL(reference.url).catch(() => {})
       }}
-      style={({ pressed }) => [
+      style={[
         styles.refRow,
         !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-        pressed && { opacity: 0.6 },
       ]}
     >
-      <View style={styles.refText}>
-        <Text style={[styles.refUsed, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-          {reference.used}
-        </Text>
-        <Text style={[styles.refCitation, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          {reference.citation}
-        </Text>
-        <Text style={[styles.refUrl, { color: theme.primary, fontFamily: theme.fontSans }]}>
-          {reference.url}
-        </Text>
-      </View>
-      <ExternalLink size={15} color={theme.mutedForeground} strokeWidth={2} />
+      {({ pressed }) => (
+        <View style={[styles.refInner, pressed && { opacity: 0.6 }]}>
+          <View style={styles.refText}>
+            <Text style={[styles.refUsed, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              {reference.used}
+            </Text>
+            <Text style={[styles.refCitation, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              {reference.citation}
+            </Text>
+            <Text style={[styles.refUrl, { color: theme.primary, fontFamily: theme.fontSans }]}>
+              {reference.url}
+            </Text>
+          </View>
+          <ExternalLink size={15} color={theme.mutedForeground} strokeWidth={2} style={{ marginTop: 2 }} />
+        </View>
+      )}
     </Pressable>
   )
 }
@@ -204,13 +210,15 @@ const styles = StyleSheet.create({
   disclaimerText: { flex: 1, fontSize: 12, lineHeight: 18 },
   groupTitle: { fontSize: 13, letterSpacing: 0.2, textTransform: 'uppercase' },
   refRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
-  refText: { flex: 1, minWidth: 0, gap: 4 },
+  refInner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  refText: { flex: 1, minWidth: 0, gap: 5 },
   refUsed: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
   refCitation: { fontSize: 11.5, lineHeight: 16 },
   refUrl: { fontSize: 11.5, lineHeight: 16 },
