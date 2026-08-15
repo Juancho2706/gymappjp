@@ -13,10 +13,20 @@
  * y UI. NO llega a produccion: la page hace notFound() fuera de development.
  */
 
-import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
+import { useMemo } from 'react'
+import type {
+  NutritionItemSubstitutionRead,
+  NutritionPlanDraft,
+  NutritionPlanReadModel,
+} from '@eva/nutrition-v2'
 import { FoodPickerPrefsProvider } from '../../coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
-import { QuickEditProvider } from '../../coach/nutrition-v2/[clientId]/_quick-edit/QuickEditProvider'
+import {
+  QuickEditProvider,
+  type EditorCreationInput,
+} from '../../coach/nutrition-v2/[clientId]/_quick-edit/QuickEditProvider'
 import { QuickEditPlanView } from '../../coach/nutrition-v2/[clientId]/_quick-edit/QuickEditPlanView'
+import { draftToEditState } from '../../coach/nutrition-v2/[clientId]/_quick-edit/quick-edit-state'
+import type { BuilderFood } from '../../coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 
 const CLIENT_ID = '33333333-3333-4333-8333-333333333333'
 const LOCAL_DATE = new Date().toISOString().slice(0, 10)
@@ -101,7 +111,107 @@ function buildPlanModel(): NutritionPlanReadModel {
 
 const NO_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = []
 
-export function EditorHarness() {
+/** Read model SIN plan vigente: el modo creacion no depende de el (solo timezone/planId null). */
+function buildEmptyPlanModel(): NutritionPlanReadModel {
+  return { ...buildPlanModel(), plan: null, dayVariants: [], visibleNotes: null }
+}
+
+const HARNESS_FOOD: BuilderFood = {
+  id: '88888888-8888-4888-8888-888888888888',
+  name: 'Arroz integral',
+  brand: null,
+  calories: 360,
+  proteinG: 7,
+  carbsG: 76,
+  fatsG: 2.5,
+  fiberG: 4,
+  servingSize: 100,
+  servingUnit: 'g',
+  category: 'cereal',
+  media: null,
+}
+
+/** Draft estilo plantilla (contrato) para el modo creacion: 1 dia, 1 franja, 1 item. */
+function buildCreationInput(): EditorCreationInput {
+  const baseDraft: NutritionPlanDraft = {
+    clientId: CLIENT_ID,
+    name: 'Plantilla harness',
+    strategy: 'structured',
+    effectiveFrom: null,
+    timezone: 'America/Santiago',
+    permissions: {
+      canRegisterFreely: true,
+      canAdjustPrescribedQuantity: true,
+      quantityAdjustmentPercent: null,
+      canSubstitute: false,
+      canMoveMealSlot: false,
+      canSkipOptionalItems: true,
+    },
+    visibleNotes: 'Nota de la plantilla',
+    privateNotes: null,
+    protocolNotes: null,
+    dayVariants: [
+      {
+        key: 'default',
+        label: 'Todos los dias',
+        dayOfWeek: null,
+        default: true,
+        targets: {
+          calories: 2000,
+          proteinG: 150,
+          carbsG: 200,
+          fatsG: 60,
+          fiberG: null,
+          sodiumMg: null,
+          waterMl: null,
+        },
+        orderIndex: 0,
+        mealSlots: [
+          {
+            code: 'slot-1',
+            name: 'Almuerzo',
+            startTime: '13:00',
+            endTime: null,
+            mode: 'anchor',
+            required: true,
+            targets: {},
+            instructions: null,
+            orderIndex: 0,
+            items: [
+              {
+                foodId: HARNESS_FOOD.id,
+                recipeId: null,
+                customName: null,
+                quantity: 150,
+                unit: 'g',
+                minimumQuantity: null,
+                maximumQuantity: null,
+                optional: false,
+                substitutionGroupId: null,
+                notes: null,
+                orderIndex: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+  return {
+    initialState: draftToEditState(
+      baseDraft,
+      { foodsById: { [HARNESS_FOOD.id]: HARNESS_FOOD } },
+      { effectiveFrom: null },
+    ),
+    baseDraft,
+    expectedCurrentVersionId: null,
+  }
+}
+
+export function EditorHarness({ mode }: { mode: 'edit' | 'create' }) {
+  const isCreate = mode === 'create'
+  // Identidad estable como en la page real (el server la manda una vez como prop).
+  const creation = useMemo(() => (isCreate ? buildCreationInput() : null), [isCreate])
   return (
     <FoodPickerPrefsProvider
       viewerCoachId={null}
@@ -112,12 +222,13 @@ export function EditorHarness() {
       <QuickEditProvider
         clientId={CLIENT_ID}
         clientName="Alumno Harness"
-        planModel={buildPlanModel()}
+        planModel={isCreate ? buildEmptyPlanModel() : buildPlanModel()}
         itemSubstitutions={NO_SUBSTITUTIONS}
         substitutionsLoadFailed={false}
         today={LOCAL_DATE}
         hasNutritionPro={false}
         editPlanMeta
+        creation={creation}
         onExit={() => {
           // En el harness no hay "ficha" a la que volver: recargar re-hidrata limpio.
           window.location.reload()

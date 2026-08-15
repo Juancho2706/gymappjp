@@ -7,12 +7,17 @@ import {
 } from '@eva/nutrition-v2'
 import {
   applyQuickEditToDraft,
+  draftToEditState,
+  qeAllowedStrategies,
   quickEditReducer,
   readModelToEditState,
   validateQuickEdit,
   PLAN_NAME_MAX,
+  type QePortionGroup,
   type QuickEditState,
 } from './quick-edit-state'
+import type { BuilderFood } from '../builder/_lib/draft-builder'
+import type { NutritionPlanDraft } from '@eva/nutrition-v2'
 
 // Metadatos del plan (editor unico T3.x): la extension `state.meta` debe ser INVISIBLE para el
 // quick-edit clasico (sin meta = proyeccion y acciones identicas a siempre) y, con meta, cada
@@ -186,6 +191,34 @@ describe('quick-edit-state meta (editor unico)', () => {
     expect(restoredInEditor.meta).toEqual(editor.meta)
   })
 
+  it('SET_EFFECTIVE_FROM solo aplica cuando meta trae effectiveFrom (creacion)', () => {
+    const editMode = hydrateWithMeta() // edicion: sin effectiveFrom en meta
+    expect(quickEditReducer(editMode, { type: 'SET_EFFECTIVE_FROM', value: '2026-09-01' })).toBe(editMode)
+
+    const creation: QuickEditState = {
+      ...editMode,
+      meta: { ...editMode.meta!, effectiveFrom: null },
+    }
+    const dated = quickEditReducer(creation, { type: 'SET_EFFECTIVE_FROM', value: '2026-09-01' })
+    expect(dated.meta?.effectiveFrom).toBe('2026-09-01')
+  })
+
+  it('validacion de vigencia: fecha pasada o invalida corta (solo con today)', () => {
+    const base = hydrateWithMeta()
+    const withDate = (value: string | null): QuickEditState => ({
+      ...base,
+      meta: { ...base.meta!, effectiveFrom: value },
+    })
+    expect(
+      validateQuickEdit(withDate('2026-08-01'), { today: '2026-08-15' }).errors['meta.effectiveFrom'],
+    ).toBeTruthy()
+    expect(
+      validateQuickEdit(withDate('basura'), { today: '2026-08-15' }).errors['meta.effectiveFrom'],
+    ).toBeTruthy()
+    expect(validateQuickEdit(withDate('2026-08-20'), { today: '2026-08-15' }).ok).toBe(true)
+    expect(validateQuickEdit(withDate(null), { today: '2026-08-15' }).ok).toBe(true)
+  })
+
   it('validacion: nombre vacio o sobre el tope solo falla cuando hay meta', () => {
     const editor = hydrateWithMeta()
     const unnamed = quickEditReducer(editor, { type: 'SET_PLAN_NAME', value: '   ' })
@@ -201,5 +234,175 @@ describe('quick-edit-state meta (editor unico)', () => {
     if (!classic) throw new Error('fixture sin plan')
     expect(validateQuickEdit(classic).errors['meta.name']).toBeUndefined()
     expect(validateQuickEdit(editor).ok).toBe(true)
+  })
+})
+
+// ── draftToEditState (modo creacion) ─────────────────────────────────────────────────────────
+
+const TEMPLATE_FOOD: BuilderFood = {
+  id: FOOD_ID,
+  name: 'Arroz integral',
+  brand: 'Marca X',
+  calories: 360,
+  proteinG: 7,
+  carbsG: 76,
+  fatsG: 2.5,
+  fiberG: 4,
+  servingSize: 100,
+  servingUnit: 'g',
+  category: 'cereal',
+  media: null,
+}
+
+const GROUP_ID = '99999999-9999-4999-8999-999999999999'
+const PORTION_GROUP: QePortionGroup = {
+  exchangeGroupId: GROUP_ID,
+  groupCode: 'C',
+  groupName: 'Carbohidratos',
+  color: '#f59e0b',
+  ref: { calories: 130, proteinG: 2, carbsG: 28, fatsG: 0.5 },
+  composedOf: null,
+  macrosConfirmed: true,
+}
+
+function makeTemplateDraft(): NutritionPlanDraft {
+  // Sin `planId`: en el contrato el campo es OPCIONAL (ausente = plan nuevo), nunca null.
+  return {
+    clientId: CLIENT_ID,
+    name: 'Plantilla corte',
+    strategy: 'structured',
+    effectiveFrom: null,
+    timezone: 'America/Santiago',
+    permissions: {
+      canRegisterFreely: true,
+      canAdjustPrescribedQuantity: true,
+      quantityAdjustmentPercent: null,
+      canSubstitute: false,
+      canMoveMealSlot: false,
+      canSkipOptionalItems: true,
+    },
+    visibleNotes: 'Nota de plantilla',
+    privateNotes: null,
+    protocolNotes: null,
+    dayVariants: [
+      {
+        key: 'default',
+        label: 'Todos los dias',
+        dayOfWeek: null,
+        default: true,
+        targets: {
+          calories: 2000,
+          proteinG: 150,
+          carbsG: 200,
+          fatsG: 60,
+          fiberG: null,
+          sodiumMg: null,
+          waterMl: null,
+        },
+        orderIndex: 0,
+        mealSlots: [
+          {
+            code: 'slot-1',
+            name: 'Almuerzo',
+            startTime: '13:00',
+            endTime: null,
+            mode: 'anchor',
+            required: true,
+            targets: {},
+            instructions: null,
+            orderIndex: 0,
+            items: [
+              {
+                foodId: FOOD_ID,
+                recipeId: null,
+                customName: null,
+                quantity: 150,
+                unit: 'g',
+                minimumQuantity: null,
+                maximumQuantity: null,
+                optional: false,
+                substitutionGroupId: null,
+                notes: null,
+                orderIndex: 0,
+              },
+              {
+                foodId: null,
+                recipeId: null,
+                customName: 'Ensalada libre',
+                quantity: 1,
+                unit: 'un',
+                minimumQuantity: null,
+                maximumQuantity: null,
+                optional: true,
+                substitutionGroupId: null,
+                notes: null,
+                orderIndex: 1,
+              },
+            ],
+            exchangeTargets: [
+              {
+                exchangeGroupId: GROUP_ID,
+                portions: 2,
+                notes: null,
+                orderIndex: 0,
+              },
+              {
+                exchangeGroupId: '10101010-1010-4010-8010-101010101010',
+                portions: 1,
+                notes: null,
+                orderIndex: 1,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+}
+
+describe('draftToEditState (creacion)', () => {
+  it('hidrata items resolviendo foods, degrada visible lo no resuelto y trae meta con vigencia', () => {
+    const draft = makeTemplateDraft()
+    const state = draftToEditState(
+      draft,
+      { foodsById: { [FOOD_ID]: TEMPLATE_FOOD }, portionGroupsById: { [GROUP_ID]: PORTION_GROUP } },
+      { effectiveFrom: null },
+    )
+
+    expect(state.meta).toMatchObject({
+      name: 'Plantilla corte',
+      strategy: 'structured',
+      effectiveFrom: null,
+    })
+    const slot = state.variants[0]!.slots[0]!
+    // Item de catalogo: nombre y food resueltos (macros en vivo via computeItemMacros).
+    expect(slot.items[0]).toMatchObject({ displayName: 'Arroz integral', quantity: '150', isCustom: false })
+    expect(slot.items[0]!.food?.id).toBe(FOOD_ID)
+    // Item libre: nombre editable.
+    expect(slot.items[1]).toMatchObject({ displayName: 'Ensalada libre', isCustom: true })
+    // Target con grupo resuelto vs grupo desconocido (degradacion visible).
+    expect(slot.portionTargets[0]).toMatchObject({ groupCode: 'C', groupName: 'Carbohidratos', portions: '2' })
+    expect(slot.portionTargets[1]).toMatchObject({ groupName: 'Grupo no disponible' })
+  })
+
+  it('proyectar el estado hidratado sobre el mismo draft base produce un draft Zod-valido y baseline vacio cuenta todo como alta', () => {
+    const draft = makeTemplateDraft()
+    const state = draftToEditState(draft, { foodsById: { [FOOD_ID]: TEMPLATE_FOOD } }, { effectiveFrom: null })
+    const projected = applyQuickEditToDraft(draft, state)
+    expect(NutritionPlanDraftSchema.safeParse(projected).success).toBe(true)
+
+    const emptyBaseline = applyQuickEditToDraft(draft, { variants: [], visibleNotes: '', meta: state.meta })
+    expect(countDraftChanges(emptyBaseline, projected)).toBeGreaterThan(0)
+  })
+
+  it('qeAllowedStrategies: flexible solo sin franjas', () => {
+    const withSlots = draftToEditState(makeTemplateDraft(), {}, {})
+    expect(qeAllowedStrategies(withSlots)).toEqual(['structured', 'hybrid'])
+
+    const noSlots: QuickEditState = {
+      ...withSlots,
+      variants: withSlots.variants.map((variant) => ({ ...variant, slots: [] })),
+    }
+    expect(qeAllowedStrategies(noSlots)).toEqual(['structured', 'flexible', 'hybrid'])
   })
 })

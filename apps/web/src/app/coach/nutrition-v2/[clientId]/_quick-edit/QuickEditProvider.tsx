@@ -27,10 +27,12 @@ import {
   countDraftChanges,
   readModelToDraft,
   type NutritionItemSubstitutionRead,
+  type NutritionPlanDraft,
   type NutritionPlanReadModel,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
+import { publishPlanAction } from '../builder/_actions/builder.actions'
 import { useCaptureCoachNutritionPlanPublished } from '@/lib/posthog/events'
 import {
   loadExchangeGroupsForBuilderAction,
@@ -69,6 +71,23 @@ interface QuickEditDraftPayload {
   planId: string
   baseVersionId: string
   state: QuickEditState
+}
+
+/**
+ * Modo CREACION del editor unico (W1.5): el arbol NO nace del read model del alumno sino de
+ * un draft del contrato (plantilla, copia de plan, o blank), hidratado server-side. El
+ * publish viaja por `publishPlanAction` (el mismo del wizard): sin CAS para plan nuevo, con
+ * CAS si el alumno ya tenia plan vigente (reemplazo). El respaldo local queda DESHABILITADO
+ * en este modo (un borrador de creacion restaurado en edicion, o al reves, mezclaria
+ * superficies contra bases distintas) — pendiente declarado de la tanda.
+ */
+export interface EditorCreationInput {
+  /** Arbol inicial ya hidratado server-side (`draftToEditState` del origen o blank). */
+  initialState: QuickEditState
+  /** Draft base de la proyeccion (clientId/timezone/planId-de-reemplazo/notas del origen). */
+  baseDraft: NutritionPlanDraft
+  /** Version vigente del alumno si ya tenia plan (CAS del reemplazo); null = plan nuevo. */
+  expectedCurrentVersionId: string | null
 }
 
 export function genQuickEditKey(): string {
@@ -170,6 +189,7 @@ export function QuickEditProvider({
   today,
   hasNutritionPro = false,
   editPlanMeta = false,
+  creation = null,
   onExit,
   children,
 }: {
@@ -197,6 +217,8 @@ export function QuickEditProvider({
    * superficies no deben ofrecerse borradores entre si.
    */
   editPlanMeta?: boolean
+  /** Modo creacion (ver EditorCreationInput). null = edicion del plan vigente, como siempre. */
+  creation?: EditorCreationInput | null
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
   children: ReactNode
@@ -207,12 +229,19 @@ export function QuickEditProvider({
   // asi que reabrir re-hidrata desde el read model fresco tras router.refresh()).
   const substitutionsByItemId = useMemo(() => buildSubstitutionMap(itemSubstitutions), [itemSubstitutions])
   const initialState = useMemo(
-    () => readModelToEditState(planModel, substitutionsByItemId, { withMeta: editPlanMeta }),
-    [planModel, substitutionsByItemId, editPlanMeta],
+    () =>
+      creation
+        ? creation.initialState
+        : readModelToEditState(planModel, substitutionsByItemId, { withMeta: editPlanMeta }),
+    [creation, planModel, substitutionsByItemId, editPlanMeta],
   )
   // El server pisa effectiveFrom (max(hoy, base)) y las notas protocolo/privadas (carry-over
-  // §2.3); las visibles viajan editadas desde el estado.
-  const baseDraft = useMemo(() => readModelToDraft(planModel, clientId), [planModel, clientId])
+  // §2.3); las visibles viajan editadas desde el estado. En creacion el base es el draft del
+  // origen (plantilla/copia/blank), hidratado server-side.
+  const baseDraft = useMemo(
+    () => (creation ? creation.baseDraft : readModelToDraft(planModel, clientId)),
+    [creation, planModel, clientId],
+  )
   const portionGroups = useMemo(() => collectPortionGroups(planModel), [planModel])
 
   if (!initialState || !baseDraft) {
@@ -270,8 +299,20 @@ export function QuickEditProvider({
   const isFirstRender = useRef(true)
 
   // Baseline y draft actual pasan por la MISMA proyeccion → cero ediciones = cero cambios,
-  // sin depender de detalles de normalizacion del paquete.
-  const baselineDraft = useMemo(() => applyQuickEditToDraft(baseDraft, initialState), [baseDraft, initialState])
+  // sin depender de detalles de normalizacion del paquete. En CREACION el baseline es VACIO
+  // (cero dias, sin notas; el meta inicial no cuenta): todo el contenido del origen cuenta
+  // como alta y la barra de publicar aparece de entrada — publicar una plantilla sin tocarla
+  // es un caso legitimo.
+  const baselineDraft = useMemo(
+    () =>
+      applyQuickEditToDraft(
+        baseDraft,
+        creation
+          ? { variants: [], visibleNotes: '', ...(initialState.meta ? { meta: initialState.meta } : {}) }
+          : initialState,
+      ),
+    [baseDraft, creation, initialState],
+  )
   const currentDraft = useMemo(() => applyQuickEditToDraft(baseDraft, state), [baseDraft, state])
   // FD5: el contador del paquete no mira el ENCABEZADO de la variante (etiqueta / dia de
   // semana), asi que renombrar o mover un dia quedaria en "0 cambios" y sin barra de
@@ -285,7 +326,8 @@ export function QuickEditProvider({
   // y la barra decia "No se pudo publicar" sin señalar el dia culpable. Con meta editable
   // (editor unico) manda la estrategia del ESTADO: es la que se va a publicar.
   const strategy: NutritionStrategy = state.meta?.strategy ?? planModel.plan?.strategy ?? 'flexible'
-  const validation = useMemo(() => validateQuickEdit(state, { strategy }), [state, strategy])
+  // `today` habilita la regla de vigencia elegible (solo hace algo con meta.effectiveFrom).
+  const validation = useMemo(() => validateQuickEdit(state, { strategy, today }), [state, strategy, today])
 
   const dispatch = useCallback(
     (action: QuickEditAction) => {
@@ -318,6 +360,9 @@ export function QuickEditProvider({
   // publico entremedio via otra pestana / RN / el builder) se descarta: restaurar contra una
   // base obsoleta seria peor que nada (mismo espiritu que el STALE_BASE del servidor).
   useEffect(() => {
+    // Creacion: sin respaldo local (pendiente declarado W1.5) — restaurar un borrador de
+    // edicion dentro de una creacion (o al reves) mezclaria arboles contra bases distintas.
+    if (creation) return
     const now = Date.now()
     sweepStaleNutritionDrafts(now)
     const record = readNutritionDraft<QuickEditDraftPayload>(draftKey, now)
@@ -332,7 +377,7 @@ export function QuickEditProvider({
     } else {
       clearNutritionDraft(draftKey)
     }
-  }, [draftKey, planId, planVersionId])
+  }, [creation, draftKey, planId, planVersionId])
 
   // Autosave debounced del arbol editable: escribe el respaldo local solo si hay cambios reales;
   // si el coach vuelve al baseline (0 cambios) borra el borrador (ya no aporta). El guard de
@@ -342,6 +387,7 @@ export function QuickEditProvider({
       isFirstRender.current = false
       return
     }
+    if (creation) return
     if (!planId || !planVersionId) return
     const timer = setTimeout(() => {
       if (changeCount > 0) {
@@ -355,14 +401,17 @@ export function QuickEditProvider({
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [state, changeCount, draftKey, clientId, planId, planVersionId])
+  }, [state, changeCount, creation, draftKey, clientId, planId, planVersionId])
 
   // Equivalencias por grupo Y catalogo de grupos: una sola lectura al montar el modo edicion,
   // y SOLO si el plan usa porciones (sin capa de porciones la seccion ni se pinta, asi que el
   // viaje sobra). Reusa la server action del builder tal cual (mismo scope de tenant que vera
   // el alumno). Degradacion en silencio: !ok o excepcion => ambos quedan en null, ninguna fila
   // dice nada y el picker sigue ofreciendo los grupos del plan.
-  const hasPortionsLayer = portionGroups.length > 0
+  // En CREACION el plan (aun) no existe, asi que `portionGroups` del read model es [] — pero
+  // el catalogo igual hace falta: el picker de porciones y los subtotales de un origen con
+  // targets (plantilla con porciones) salen SOLO del catalogo vivo.
+  const hasPortionsLayer = portionGroups.length > 0 || creation !== null
   useEffect(() => {
     if (!hasPortionsLayer) return
     let alive = true
@@ -415,10 +464,68 @@ export function QuickEditProvider({
     setConfirmOpen(false)
   }, [isPending])
 
+  // Publish del modo CREACION: `publishPlanAction` (mismo pipeline del wizard) con la fecha
+  // de vigencia elegible; CAS solo si el alumno ya tenia plan (reemplazo). Mapeo de fallos al
+  // MISMO vocabulario de la barra: fecha pasada y dia vacio marcan el campo culpable, no un
+  // "no se pudo publicar" opaco.
+  const runCreatePublish = useCallback(
+    (creationInput: EditorCreationInput, idempotencyKey: string) => {
+      setPublishError(null)
+      setUpgradeRequired(false)
+      startTransition(async () => {
+        let res: Awaited<ReturnType<typeof publishPlanAction>>
+        try {
+          res = await publishPlanAction({
+            draft: currentDraft,
+            idempotencyKey,
+            effectiveFrom: state.meta?.effectiveFrom ?? today,
+            ...(creationInput.expectedCurrentVersionId
+              ? { expectedCurrentVersionId: creationInput.expectedCurrentVersionId }
+              : {}),
+          })
+        } catch {
+          setConfirmOpen(false)
+          setPublishError(typeof navigator !== 'undefined' && !navigator.onLine ? QE_COPY.offline : QE_COPY.publishFailed)
+          return
+        }
+        if (res.ok) {
+          if (openedAtRef.current !== null) capturePublished('editor', Date.now() - openedAtRef.current)
+          idempotencyKeyRef.current = null
+          setConfirmOpen(false)
+          toast.success(QE_COPY.success(clientName))
+          router.refresh()
+          onExit()
+          return
+        }
+        setConfirmOpen(false)
+        if (res.code === 'STALE_BASE') {
+          setStaleOpen(true)
+          return
+        }
+        if (res.code === 'UPGRADE_REQUIRED') {
+          setUpgradeRequired(true)
+          return
+        }
+        if (res.code === 'EFFECTIVE_DATE' || res.code === 'EMPTY_DAY_VARIANT') {
+          setShowErrors(true)
+          setPublishError(res.error)
+          return
+        }
+        setPublishError(res.error || QE_COPY.publishFailed)
+      })
+    },
+    [capturePublished, clientName, currentDraft, onExit, router, state.meta, today],
+  )
+
   const runPublish = useCallback(() => {
-    const baseVersionId = planModel.plan?.versionId
     const idempotencyKey = idempotencyKeyRef.current
-    if (!baseVersionId || !idempotencyKey) return
+    if (!idempotencyKey) return
+    if (creation) {
+      runCreatePublish(creation, idempotencyKey)
+      return
+    }
+    const baseVersionId = planModel.plan?.versionId
+    if (!baseVersionId) return
     // Segunda barrera del guard NUT-008 (por si el retry entra sin pasar por openConfirm).
     if (substitutionsLoadFailed) {
       setConfirmOpen(false)
@@ -478,7 +585,7 @@ export function QuickEditProvider({
       // con reintento (el draft nunca se pierde y la clave de idempotencia se conserva).
       setPublishError(res.message ?? QE_COPY.publishFailed)
     })
-  }, [capturePublished, clientId, clientName, currentDraft, draftKey, onExit, planModel.plan, router, substitutionsLoadFailed])
+  }, [capturePublished, clientId, clientName, creation, currentDraft, draftKey, onExit, planModel.plan, router, runCreatePublish, substitutionsLoadFailed])
 
   // Reintento de la lectura de reemplazos: refresca el RSC (vuelve a correr el data-loader)
   // sin desmontar el modo edicion, asi que las ediciones sin publicar se conservan.

@@ -9,10 +9,11 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
 import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
-import { QuickEditProvider } from '../_quick-edit/QuickEditProvider'
+import { QuickEditProvider, type EditorCreationInput } from '../_quick-edit/QuickEditProvider'
 import { QuickEditPlanView } from '../_quick-edit/QuickEditPlanView'
 
 export function EditorClient({
@@ -26,6 +27,8 @@ export function EditorClient({
   viewerCoachId,
   foodRestrictions,
   favoriteFoodIds,
+  creation,
+  originUnavailable,
 }: {
   clientId: string
   clientName: string
@@ -37,8 +40,23 @@ export function EditorClient({
   viewerCoachId: string
   foodRestrictions: readonly FoodPickerRestriction[]
   favoriteFoodIds: readonly string[]
+  /** Modo creacion (W1.5); null = edicion del plan vigente. */
+  creation: EditorCreationInput | null
+  /** El `?from=` pedido no se pudo abrir: se degrado, y TIENE que decirse (jamas en silencio). */
+  originUnavailable: boolean
 }) {
   const router = useRouter()
+
+  // Degradacion de origen AVISADA (leccion JP 2026-08-11: plantilla soft-deleted que abria el
+  // plan vigente sin una palabra y el coach publicaba encima creyendo que era su plantilla).
+  useEffect(() => {
+    if (!originUnavailable) return
+    toast.error(
+      'No se pudo abrir el origen pedido (plantilla o plan). Estás viendo ' +
+        (creation ? 'un plan en blanco.' : 'el plan vigente del alumno.'),
+      { duration: 10000 },
+    )
+  }, [originUnavailable, creation])
 
   // Mismo lock de scroll que QuickEditEntry: en <html> (con `html { overflow-x: clip }` el del
   // body es no-op) + clase para ocultar la capsula flotante del nav del coach.
@@ -68,6 +86,7 @@ export function EditorClient({
         today={today}
         hasNutritionPro={hasNutritionPro}
         editPlanMeta
+        creation={creation}
         onExit={() => router.push(`/coach/nutrition-v2/${clientId}`)}
       >
         <QuickEditPlanView />

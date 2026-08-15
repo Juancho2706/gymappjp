@@ -200,6 +200,12 @@ export interface QeMeta {
   name: string
   strategy: NutritionStrategy
   permissions: NutritionStudentPermissions
+  /**
+   * Fecha de vigencia elegible (YYYY-MM-DD; null = hoy). Presente SOLO en modo CREACION:
+   * en edicion el campo no existe y el server computa max(hoy, base) como siempre. No viaja
+   * en la proyeccion del draft (`persistAndPublishDraft` la recibe como argumento aparte).
+   */
+  effectiveFrom?: string | null
 }
 
 export interface QuickEditState {
@@ -510,6 +516,156 @@ export function readModelToEditState(
 }
 
 // ---------------------------------------------------------------------------
+// Hidratacion desde un DRAFT del contrato (modo CREACION del editor unico)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fuentes para resolver lo que el draft del contrato NO transporta: los items solo llevan
+ * foodId/cantidad (sin nombre ni macros) y los targets de porciones solo exchangeGroupId
+ * (sin snapshot de codigo/nombre/color). Ausencias degradan visible, nunca rompen:
+ * alimento no resuelto = fila "Alimento" sin macros en vivo (el server re-deriva igual);
+ * grupo no resuelto = "Grupo no disponible" que el coach puede quitar.
+ */
+export interface DraftHydrationSources {
+  foodsById?: Record<string, BuilderFood>
+  portionGroupsById?: Record<string, QePortionGroup>
+}
+
+function draftItemToQe(
+  item: DraftItem,
+  foodsById: Record<string, BuilderFood>,
+  key: string,
+): QeItem {
+  const food = item.foodId ? (foodsById[item.foodId] ?? null) : null
+  const isCustom = item.foodId === null && item.recipeId === null
+  return {
+    key,
+    id: item.id ?? null,
+    foodId: item.foodId,
+    recipeId: item.recipeId,
+    displayName: food?.name ?? item.customName ?? (item.recipeId ? 'Receta' : 'Alimento'),
+    brand: food?.brand ?? null,
+    quantity: String(item.quantity),
+    unit: item.unit,
+    minimumQuantity: item.minimumQuantity,
+    maximumQuantity: item.maximumQuantity,
+    optional: item.optional,
+    substitutionGroupId: item.substitutionGroupId,
+    notes: item.notes,
+    food,
+    macroBase: null,
+    isCustom,
+    media: food?.media ?? null,
+    category: food?.category ?? null,
+    substitutions: (item.substitutions ?? []).map((sub) => ({
+      foodId: sub.foodId,
+      recipeId: sub.recipeId,
+      customName: sub.customName,
+      quantity: sub.quantity,
+      unit: sub.unit,
+    })),
+  }
+}
+
+function draftTargetToQe(
+  target: DraftExchangeTarget,
+  groupsById: Record<string, QePortionGroup>,
+  key: string,
+): QePortionTarget {
+  const group = groupsById[target.exchangeGroupId]
+  return {
+    key,
+    id: target.id ?? null,
+    exchangeGroupId: target.exchangeGroupId,
+    groupCode: group?.groupCode ?? '?',
+    groupName: group?.groupName ?? 'Grupo no disponible',
+    color: group?.color ?? null,
+    macrosConfirmed: group?.macrosConfirmed ?? false,
+    portions: String(target.portions),
+    notes: target.notes,
+  }
+}
+
+/**
+ * Draft del contrato (plantilla, copia de plan, o blank) → arbol editable con `meta`.
+ *
+ * SOLO para el modo CREACION del editor unico (W1.5): la edicion del plan vigente sigue
+ * hidratando del read model (`readModelToEditState`, macros congeladas + media). Los ids
+ * del draft se conservan como keys cuando existen; el resto usa un contador local
+ * determinista (estable dentro de una hidratacion, irrelevante entre hidrataciones).
+ */
+export function draftToEditState(
+  draft: NutritionPlanDraft,
+  sources: DraftHydrationSources = {},
+  options: {
+    /** Fecha de vigencia inicial elegible (YYYY-MM-DD); null = hoy. Vive en `meta`. */
+    effectiveFrom?: string | null
+  } = {},
+): QuickEditState {
+  const foodsById = sources.foodsById ?? {}
+  const groupsById = sources.portionGroupsById ?? {}
+  let seq = 0
+  const gen = (prefix: string): string => `${prefix}-${(seq += 1)}`
+
+  return {
+    variants: draft.dayVariants.map((variant): QeVariant => ({
+      key: variant.id ?? gen('variant'),
+      id: variant.id ?? null,
+      variantKey: variant.key,
+      label: variant.label,
+      dayOfWeek: variant.dayOfWeek,
+      isDefault: variant.default,
+      targets: {
+        calories: targetText(variant.targets.calories),
+        proteinG: targetText(variant.targets.proteinG),
+        carbsG: targetText(variant.targets.carbsG),
+        fatsG: targetText(variant.targets.fatsG),
+      },
+      passthroughTargets: {
+        fiberG: variant.targets.fiberG ?? null,
+        sodiumMg: variant.targets.sodiumMg ?? null,
+        waterMl: variant.targets.waterMl ?? null,
+      },
+      slots: variant.mealSlots.map((slot): QeSlot => ({
+        key: slot.id ?? gen('slot'),
+        id: slot.id ?? null,
+        code: slot.code,
+        name: slot.name,
+        startTime: normalizeTimeHHMM(slot.startTime),
+        endTime: normalizeTimeHHMM(slot.endTime) || null,
+        mode: slot.mode,
+        required: slot.required,
+        instructions: slot.instructions,
+        targets: slot.targets,
+        items: slot.items.map((item) => draftItemToQe(item, foodsById, item.id ?? gen('item'))),
+        portionTargets: (slot.exchangeTargets ?? []).map((target) =>
+          draftTargetToQe(target, groupsById, target.id ?? gen('target')),
+        ),
+      })),
+    })),
+    visibleNotes: draft.visibleNotes ?? '',
+    meta: {
+      name: draft.name,
+      strategy: draft.strategy,
+      permissions: draft.permissions,
+      effectiveFrom: options.effectiveFrom ?? null,
+    },
+  }
+}
+
+/**
+ * ¿Que estrategias puede elegir el coach desde el estado actual? `flexible` exige que NINGUN
+ * dia tenga franjas: el read model del alumno en flexible es targets-only, y publicar franjas
+ * que el alumno jamas veria es una perdida silenciosa. structured↔hybrid siempre se puede
+ * (misma gramatica de franjas; hybrid ademas es feature Pro — el gate real es del server,
+ * la UI solo pinta el candado).
+ */
+export function qeAllowedStrategies(state: QuickEditState): NutritionStrategy[] {
+  const hasAnySlot = state.variants.some((variant) => variant.slots.length > 0)
+  return hasAnySlot ? ['structured', 'hybrid'] : ['structured', 'flexible', 'hybrid']
+}
+
+// ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
 
@@ -567,6 +723,7 @@ export type QuickEditAction =
   | { type: 'SET_PLAN_NAME'; value: string }
   | { type: 'SET_STRATEGY'; value: NutritionStrategy }
   | { type: 'SET_PERMISSION'; patch: Partial<NutritionStudentPermissions> }
+  | { type: 'SET_EFFECTIVE_FROM'; value: string | null }
   | { type: 'RESET'; state: QuickEditState }
   | { type: 'RESTORE_DRAFT'; state: QuickEditState }
 
@@ -1319,6 +1476,12 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         meta: { ...state.meta, permissions: { ...state.meta.permissions, ...action.patch } },
       }
     }
+    case 'SET_EFFECTIVE_FROM': {
+      // Solo aplica en creacion (meta con effectiveFrom presente): en edicion el campo no
+      // existe y la fecha la computa el server.
+      if (!state.meta || state.meta.effectiveFrom === undefined) return state
+      return { ...state, meta: { ...state.meta, effectiveFrom: action.value } }
+    }
     case 'RESET':
       return adoptRestoredState(state, action.state)
     case 'RESTORE_DRAFT': {
@@ -1582,6 +1745,11 @@ export interface QuickEditValidationOptions {
    * validacion que antes, para los callers puros que no la conocen).
    */
   strategy?: NutritionStrategy | null
+  /**
+   * Fecha local del alumno (YYYY-MM-DD). Solo la usa la regla de vigencia del modo creacion
+   * (`meta.effectiveFrom` no puede ser pasado); ausente = la regla no se evalua.
+   */
+  today?: string
 }
 
 /**
@@ -1634,6 +1802,15 @@ export function validateQuickEdit(
     if (name.length === 0) errors['meta.name'] = 'El plan necesita un nombre.'
     else if (name.length > PLAN_NAME_MAX) {
       errors['meta.name'] = `El nombre supera los ${PLAN_NAME_MAX} caracteres.`
+    }
+    // Vigencia elegible (solo creacion): espejo local del guard EFFECTIVE_DATE del server.
+    const effectiveFrom = state.meta.effectiveFrom
+    if (typeof effectiveFrom === 'string') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) {
+        errors['meta.effectiveFrom'] = 'Fecha de inicio inválida.'
+      } else if (options.today && effectiveFrom < options.today) {
+        errors['meta.effectiveFrom'] = 'La fecha de inicio no puede ser pasada.'
+      }
     }
   }
   // Invariantes multi-dia (espejo de la base: default unico + dia de semana unico). El

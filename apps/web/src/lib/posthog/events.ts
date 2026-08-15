@@ -207,7 +207,7 @@ export function useCaptureCoachNutritionBuilderOpened() {
 export function useCaptureCoachNutritionPlanPublished() {
     const ph = usePostHog()
     return useCallback(
-        (editor: 'wizard' | 'quick_edit', durationMs: number) => {
+        (editor: 'wizard' | 'quick_edit' | 'editor', durationMs: number) => {
             ph?.capture('coach_nutrition_plan_published', { editor, duration_ms: durationMs })
         },
         [ph]
