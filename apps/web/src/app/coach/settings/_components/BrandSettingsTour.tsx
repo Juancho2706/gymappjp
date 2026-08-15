@@ -97,12 +97,14 @@ export function BrandSettingsTour({
         return () => clearTimeout(timer)
     }, [open, activeStep, total, onClose])
 
-    // Bloquear scroll del body mientras el tour está abierto
+    // Bloquear scroll mientras el tour está abierto — en <html>, no en <body>: globals.css fija
+    // `html { overflow-x: clip }` y con eso el overflow del body no propaga al viewport (el lock
+    // era un no-op y re-anclaba los sticky al body; mismo fix que TodayModal, bug QA 2026-08-14).
     useEffect(() => {
         if (!open) return
-        const originalOverflow = document.body.style.overflow
+        const originalOverflow = document.documentElement.style.overflow
         const originalTouchAction = document.body.style.touchAction
-        document.body.style.overflow = 'hidden'
+        document.documentElement.style.overflow = 'hidden'
         document.body.style.touchAction = 'none'
 
         // Bloquear scroll táctil en móvil (el scroll real está en <main>, no en body)
@@ -112,7 +114,7 @@ export function BrandSettingsTour({
         document.addEventListener('touchmove', preventScroll, { passive: false })
 
         return () => {
-            document.body.style.overflow = originalOverflow
+            document.documentElement.style.overflow = originalOverflow
             document.body.style.touchAction = originalTouchAction
             document.removeEventListener('touchmove', preventScroll)
         }

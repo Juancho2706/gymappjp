@@ -298,10 +298,15 @@ no del plan.
   container ⇒ el aside sticky se re-anclaba a el y quedaba scrolleado fuera de vista. Fix: lock
   sobre `documentElement` en `TodayModal.tsx` y `QuickEditEntry.tsx` (coach, misma mecanica).
   Verificado con harness estatico: body-lock ⇒ sticky roto + scroll NO lockeado; html-lock ⇒
-  sticky intacto + scroll lockeado. Deuda anotada: `BrandSettingsTour` y `EnterpriseNav` usan el
-  mismo lock sobre body (enterprise congelada; tour de marca sin sidebar sticky critico).
-- [ ] Validacion del owner en preview: marcar → Plan/Historial + abrir "Retirar registro"
-  scrolleado y mirar el sidebar.
+  sticky intacto + scroll lockeado. Deuda `BrandSettingsTour`: SALDADA 2026-08-14 (mismo lock a
+  documentElement); `EnterpriseNav` queda como esta (enterprise congelada).
+- [x] Validacion del owner en preview (2026-08-14 noche, deploy `a74ab574`): "ya por fin
+  funciona". Verificacion programatica previa en el mismo deploy con sesion viva: marcar →
+  Plan ✓ · Historial ✓ · retirar → Plan ✓ · modal abierto scrolleado 1200px con sidebar en
+  top 0 y lock real ✓.
+- [x] RN inmune verificado (2026-08-14): `usePortionMarks` RN es useReducer + refs y no hay
+  `useOptimistic` en todo `apps/mobile` — la tormenta H13 no puede ocurrir alla. Entrada de
+  paridad T2.7 declarada en `docs/status/MOBILE_PARITY.md`.
 
 ## F4 — Correccion (verificacion visual contra el mock)
 

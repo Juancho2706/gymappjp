@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-06"
+last_verified: "2026-08-14 @ c74b176c"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -97,6 +97,21 @@ source_of_truth: apps/web responsive + apps/mobile
 > (llamada con JWT del coach — directa o vía `/api/mobile`) y el prefill en su `ADD_ITEM`.
 > **Sin QA en dispositivo** (la corre el dueño) y **sin OTA**: iOS 1.1.0(53) está en App Review y
 > el canal es compartido — el OTA android se propone recién al salir el veredicto.
+
+> **2026-08-14 (T2.7 re-skin del alumno — qué cruzó a RN y qué es web-only)**: del programa T2.7
+> (`docs/specs/nutrition-student-reskin/`) cruzaron a RN en los MISMOS commits que web: **F1**
+> paleta de macros al trío fijo (`61718112`, canales `--color-macro-*` en `global.css` +
+> `macro.*` en tailwind, V1 RN alineada vía `MACRO_COLORS`), **F2** banda de energía + checkbox
+> de registro (`7746e18f`, `energyBandGeometry` compartido; RN anima el fill con `onLayout`),
+> **F2/F3** racha "N de 7 en rango" + tendencia del historial (`e49e2d25`, helpers en el paquete)
+> y los puntos del strip por RANGO (`477bc476`, `rangeDot` materializado en `buildNutritionWeek`
+> con fallback para payloads viejos). **Web-only por diseño** (no aplican a RN): H8-H13 — toda la
+> saga "marcar → tabs muertos" es del App Router web; la causa raíz real (H13, `c74b176c`) fue una
+> tormenta de re-renders de `usePortionMarks` web bajo delta de `useOptimistic` que dejaba las
+> transiciones (la navegación del router lo es) sin turno. **RN es inmune verificado**: su
+> `usePortionMarks` (`apps/mobile/components/alumno/nutrition-v2/usePortionMarks.ts`) es
+> useReducer + refs, sin `useOptimistic` en todo `apps/mobile`. El puente fetch H12 tampoco aplica
+> (RN ya hablaba por `/api/mobile/*`). QA en dispositivo del re-skin RN: pendiente (owner).
 
 La paridad global **no está certificada todavía**.
 
