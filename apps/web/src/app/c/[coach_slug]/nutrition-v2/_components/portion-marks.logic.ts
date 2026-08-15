@@ -93,7 +93,14 @@ export function reconcilePendingMarks(
   pending: ReadonlyArray<PendingPortionMark>,
   todayIntakeIds: ReadonlySet<string>,
 ): PendingPortionMark[] {
-  return pending.filter((m) => m.entryId === null || !todayIntakeIds.has(m.entryId))
+  const next = pending.filter((m) => m.entryId === null || !todayIntakeIds.has(m.entryId))
+  // MISMA referencia si nada salió del delta. No es una micro-optimización: mientras hay un
+  // delta optimista pendiente, `today` llega con identidad nueva EN CADA render (useOptimistic
+  // re-aplica el reducer) y el efecto de reconciliación corre cada vez; si esto devuelve un
+  // array nuevo, cada corrida agenda `setPending` → render → replay optimista → efecto → …
+  // una tormenta de updates urgentes que deja las transiciones (la navegación del App Router
+  // entre ellas) sin turno PARA SIEMPRE — el bug "marco un alimento y los tabs mueren" (T2.7).
+  return next.length === pending.length ? (pending as PendingPortionMark[]) : next
 }
 
 // ---------------------------------------------------------------------------

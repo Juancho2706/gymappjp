@@ -154,6 +154,11 @@ export function usePortionMarks({
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const commitPending = useCallback((next: PendingPortionMark[]) => {
+    // Cinturón de la reconciliación: si el delta no cambió (misma referencia — ver
+    // reconcilePendingMarks), no se agenda ningún setState. Un setPending incondicional acá
+    // re-renderizaba en cada replay optimista y sostenía la tormenta que dejaba al App Router
+    // sin navegación (T2.7, "marco → tabs muertos").
+    if (next === pendingRef.current) return
     pendingRef.current = next
     setPending(next)
   }, [])

@@ -71,11 +71,14 @@ export function QuickEditEntry({
   // quick-edit por página, así que basta un add/remove simple sin contador de referencias.
   useEffect(() => {
     if (!editing) return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    // Lock en <html>, no en <body>: con `html { overflow-x: clip }` (globals.css) el overflow
+    // del body no propaga al viewport — el lock era un no-op y ademas re-anclaba el sidebar
+    // sticky al body (mismo fix que TodayModal.tsx, bug QA 2026-08-14).
+    const previous = document.documentElement.style.overflow
+    document.documentElement.style.overflow = 'hidden'
     document.body.classList.add('eva-quickedit-open')
     return () => {
-      document.body.style.overflow = previous
+      document.documentElement.style.overflow = previous
       document.body.classList.remove('eva-quickedit-open')
     }
   }, [editing])

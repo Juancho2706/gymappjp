@@ -46,13 +46,18 @@ export function TodayModal({
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKey)
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    // Scroll-lock en <html>, NO en <body>: globals.css fija `html { overflow-x: clip }` y con
+    // eso el overflow del body deja de propagar al viewport (spec: solo propaga si el root es
+    // `visible` en ambos ejes). Bloquear el body era un no-op (la página seguía scrolleable
+    // detrás del modal) y ADEMÁS convertía al body en scroll container: el sidebar sticky del
+    // alumno se re-anclaba a él y "se iba" con el scroll congelado (bug QA 2026-08-14).
+    const previousOverflow = document.documentElement.style.overflow
+    document.documentElement.style.overflow = 'hidden'
     const target = initialFocusRef?.current ?? panelRef.current
     target?.focus()
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = previousOverflow
+      document.documentElement.style.overflow = previousOverflow
     }
   }, [open, onClose, initialFocusRef])
 

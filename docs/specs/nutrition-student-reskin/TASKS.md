@@ -265,8 +265,43 @@ no del plan.
   - `fetch()` no despacha NADA al router ⇒ navegar con la request en vuelo es seguro por
     construccion; la compuerta H9 queda montada como cinturon (inFlight siempre 0 hoy).
 - Gates: tsc web 0 · vitest 1067/1067 · boundaries 346 · eslint ok.
-- [ ] Prueba de fuego del owner con pestaña visible: marcar → tab (el QA programatico siguio
-  bloqueado por la pestaña en background que congela el renderer).
+- [x] Prueba de fuego: SUPERADA por H13 — H12 solo NO bastaba (el owner reprodujo "marcar →
+  tabs muertos" sobre el deploy con H12; re-reproducido en vivo el 14-08 noche).
+
+### 🔴 H13 (2026-08-14 noche) — CAUSA RAIZ REAL: tormenta de re-renders de PortionMarks, no el transporte
+- Repro determinista LOCAL sin auth: harness `apps/web/src/app/dev-harness/nutrition-tabs`
+  (TodayExperience real + fetch mockeado en memoria) + Playwright headless. Matriz: control
+  navega · void→tab navega · eat→tab MUERE — con transporte fetch, compuerta H9 sana
+  (defaultPrevented=false en captura) y cero server actions. El wedge era de React, no del
+  ActionQueue.
+- Bisect con flags: delta optimista real → WEDGED · sin delta → OK · delta noop (misma
+  referencia) → OK · delta CLON (misma data, identidad nueva) → WEDGED. El contenido del render
+  da lo mismo: cualquier delta con identidad nueva colgaba.
+- Mecanismo: mientras hay un delta optimista pendiente, `useOptimistic` re-aplica el reducer en
+  CADA render ⇒ `today` sale con identidad NUEVA cada vez ⇒ `todayIds` (useMemo [today]) cambia
+  ⇒ el efecto de reconciliacion de `usePortionMarks` corre cada render ⇒
+  `reconcilePendingMarks` = `pending.filter(...)` devolvia ARRAY NUEVO SIEMPRE (incluso []→[])
+  y `commitPending` hacia `setPending` incondicional ⇒ render ⇒ replay ⇒ efecto ⇒ … tormenta de
+  updates urgentes que deja las lanes de transicion (la navegacion del App Router ES una
+  transicion) sin turno PARA SIEMPRE. Cero errores JS; la pagina sigue respondiendo a clicks.
+  Por eso void navegaba: su delta remueve una entry que el sync adopta al tiro y la ventana de
+  replay no alcanza a autoalimentarse.
+- Fix (2 lineas de higiene de identidad):
+  - `portion-marks.logic.ts` — `reconcilePendingMarks` devuelve la MISMA referencia si el filtro
+    no saco nada.
+  - `PortionMarks.tsx` — `commitPending` no agenda `setPending` si `next === pendingRef.current`.
+- Verificacion headless en el harness: control OK · eat confirmado → tab OK · eat con request
+  EN VUELO → tab OK. vitest 5684/5684 · tsc web 0 · boundaries 346 · eslint tocados ok.
+- Bonus mismo QA (screenshot del owner): sidebar del alumno "se iba" al abrir "Retirar registro".
+  Causa: `html { overflow-x: clip }` (globals.css) corta la propagacion body→viewport, asi que el
+  scroll-lock del `TodayModal` sobre `body` era un NO-OP y ademas convertia al body en scroll
+  container ⇒ el aside sticky se re-anclaba a el y quedaba scrolleado fuera de vista. Fix: lock
+  sobre `documentElement` en `TodayModal.tsx` y `QuickEditEntry.tsx` (coach, misma mecanica).
+  Verificado con harness estatico: body-lock ⇒ sticky roto + scroll NO lockeado; html-lock ⇒
+  sticky intacto + scroll lockeado. Deuda anotada: `BrandSettingsTour` y `EnterpriseNav` usan el
+  mismo lock sobre body (enterprise congelada; tour de marca sin sidebar sticky critico).
+- [ ] Validacion del owner en preview: marcar → Plan/Historial + abrir "Retirar registro"
+  scrolleado y mirar el sidebar.
 
 ## F4 — Correccion (verificacion visual contra el mock)
 
