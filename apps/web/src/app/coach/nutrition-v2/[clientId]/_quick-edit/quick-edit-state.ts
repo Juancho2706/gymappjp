@@ -21,6 +21,7 @@ import type {
   NutritionPlanDraft,
   NutritionPlanReadModel,
   NutritionStrategy,
+  NutritionStudentPermissions,
 } from '@eva/nutrition-v2'
 import {
   NUTRITION_WEEK_ORDER,
@@ -189,6 +190,18 @@ export interface QeVariant {
   slots: QeSlot[]
 }
 
+/**
+ * Metadatos del plan editables — SOLO el editor unico (T3.x) los usa. `undefined` = superficie
+ * quick-edit clasica: la proyeccion conserva los metadatos del draft base intactos y las
+ * acciones de meta son no-op, asi el par viejo queda bit-identico a como era antes del editor.
+ */
+export interface QeMeta {
+  /** Nombre del plan (contrato `NutritionPlanDraftSchema.name`: 1-180 tras trim). */
+  name: string
+  strategy: NutritionStrategy
+  permissions: NutritionStudentPermissions
+}
+
 export interface QuickEditState {
   variants: QeVariant[]
   /**
@@ -197,7 +210,12 @@ export interface QuickEditState {
    * protocol_notes y private_notes siguen FUERA del estado (carry-over server-side).
    */
   visibleNotes: string
+  /** Presente solo cuando la superficie edita metadatos (editor unico). Ver QeMeta. */
+  meta?: QeMeta
 }
+
+/** Tope del contrato (`NutritionPlanDraftSchema.name`: max 180 tras trim). */
+export const PLAN_NAME_MAX = 180
 
 /** Tope del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim). */
 export const VISIBLE_NOTES_MAX = 8000
@@ -467,11 +485,27 @@ function hydrateVariant(variant: ReadVariant, subsByItemId: SubstitutionsByItemI
 export function readModelToEditState(
   planModel: NutritionPlanReadModel,
   subsByItemId: SubstitutionsByItemId = {},
+  options: {
+    /**
+     * Hidrata tambien los metadatos editables del plan (editor unico). Default false:
+     * los callers del quick-edit clasico siguen produciendo el estado de siempre.
+     */
+    withMeta?: boolean
+  } = {},
 ): QuickEditState | null {
   if (planModel.plan === null) return null
   return {
     variants: planModel.dayVariants.map((variant) => hydrateVariant(variant, subsByItemId)),
     visibleNotes: planModel.visibleNotes ?? '',
+    ...(options.withMeta
+      ? {
+          meta: {
+            name: planModel.plan.name,
+            strategy: planModel.plan.strategy ?? 'flexible',
+            permissions: planModel.permissions,
+          },
+        }
+      : {}),
   }
 }
 
@@ -529,6 +563,10 @@ export type QuickEditAction =
    * previo (toca N dias, ningun `RESTORE_*` puntual la cubre).
    */
   | { type: 'APPLY_BASE_PORTIONS' }
+  // ── Metadatos del plan (solo con state.meta presente; no-op en el quick-edit clasico) ──
+  | { type: 'SET_PLAN_NAME'; value: string }
+  | { type: 'SET_STRATEGY'; value: NutritionStrategy }
+  | { type: 'SET_PERMISSION'; patch: Partial<NutritionStudentPermissions> }
   | { type: 'RESET'; state: QuickEditState }
   | { type: 'RESTORE_DRAFT'; state: QuickEditState }
 
@@ -1266,20 +1304,53 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
           [action.field]: stepTargetText(variant.targets[action.field], targetStep(action.field), action.direction),
         },
       }))
+    case 'SET_PLAN_NAME': {
+      if (!state.meta) return state
+      return { ...state, meta: { ...state.meta, name: action.value } }
+    }
+    case 'SET_STRATEGY': {
+      if (!state.meta) return state
+      return { ...state, meta: { ...state.meta, strategy: action.value } }
+    }
+    case 'SET_PERMISSION': {
+      if (!state.meta) return state
+      return {
+        ...state,
+        meta: { ...state.meta, permissions: { ...state.meta.permissions, ...action.patch } },
+      }
+    }
     case 'RESET':
-      return action.state
-    case 'RESTORE_DRAFT':
+      return adoptRestoredState(state, action.state)
+    case 'RESTORE_DRAFT': {
       // Restaura un borrador local (localStorage) reemplazando el arbol completo. Validacion
       // defensiva minima: si el payload guardado esta corrupto o es de un shape viejo (variants
       // ausente o no-array), se ignora y se conserva el estado actual — mejor no restaurar que
       // romper la pantalla. Un borrador pre-notas (sin `visibleNotes`) restaura el arbol y
       // conserva las notas actuales (hidratadas del read model): jamas un undefined en el estado.
       if (!Array.isArray(action.state?.variants)) return state
-      if (typeof action.state.visibleNotes === 'string') return action.state
-      return { ...action.state, visibleNotes: state.visibleNotes }
+      const incoming =
+        typeof action.state.visibleNotes === 'string'
+          ? action.state
+          : { ...action.state, visibleNotes: state.visibleNotes }
+      return adoptRestoredState(state, incoming)
+    }
     default:
       return state
   }
+}
+
+/**
+ * Adopta un arbol restaurado (RESET / respaldo local) SIN cambiar de superficie: el quick-edit
+ * clasico (sin `meta`) DESCARTA un meta que venga de un respaldo del editor unico — de lo
+ * contrario publicaria un cambio de nombre/estrategia/permisos que esa superficie ni muestra —
+ * y el editor conserva su meta vigente si el respaldo es de una sesion pre-meta.
+ */
+function adoptRestoredState(current: QuickEditState, incoming: QuickEditState): QuickEditState {
+  if (current.meta === undefined) {
+    if (incoming.meta === undefined) return incoming
+    return { variants: incoming.variants, visibleNotes: incoming.visibleNotes }
+  }
+  return { ...incoming, meta: incoming.meta ?? current.meta }
 }
 
 // ---------------------------------------------------------------------------
@@ -1556,6 +1627,15 @@ export function validateQuickEdit(
   if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
     errors['plan.visibleNotes'] = `Las notas superan los ${VISIBLE_NOTES_MAX} caracteres.`
   }
+  // Metadatos del plan (editor unico): espejo de `NutritionPlanDraftSchema.name` (1-180 tras
+  // trim). Solo aplica cuando la superficie los edita; el quick-edit clasico no trae `meta`.
+  if (state.meta) {
+    const name = state.meta.name.trim()
+    if (name.length === 0) errors['meta.name'] = 'El plan necesita un nombre.'
+    else if (name.length > PLAN_NAME_MAX) {
+      errors['meta.name'] = `El nombre supera los ${PLAN_NAME_MAX} caracteres.`
+    }
+  }
   // Invariantes multi-dia (espejo de la base: default unico + dia de semana unico). El
   // reducer ya los sostiene; esto corta el publish si un respaldo local viejo o un estado
   // corrupto llegara con dos bases o dos dias iguales, en vez de dejar que el RPC falle.
@@ -1755,6 +1835,16 @@ export function countVariantHeaderChanges(
 export function applyQuickEditToDraft(base: NutritionPlanDraft, state: QuickEditState): NutritionPlanDraft {
   return {
     ...base,
+    // Metadatos editables (editor unico): sin `meta` la proyeccion conserva los del base,
+    // exactamente como siempre. Baseline y current pasan por esta MISMA rama, asi que
+    // hidratar meta sin editarlo sigue dando cero cambios (trim de un valor ya trimmed).
+    ...(state.meta
+      ? {
+          name: state.meta.name.trim(),
+          strategy: state.meta.strategy,
+          permissions: state.meta.permissions,
+        }
+      : {}),
     visibleNotes: normalizeVisibleNotes(state.visibleNotes),
     dayVariants: state.variants.map(projectVariant),
   }

@@ -31,6 +31,7 @@ import {
 import { DayVariantWeekStrip, StrategyBadge } from '@/components/nutrition-v2'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
+import { EditorMetaCard } from './EditorMetaCard'
 import { AddDayPopover } from '../builder/_components/AddDayPopover'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableSlotCard } from './EditableSlotCard'
@@ -146,6 +147,10 @@ export function QuickEditPlanView() {
           </div>
         ) : null}
 
+        {/* Editor unico (T3.x): cabecera de metadatos del plan. Solo existe con `state.meta`
+            (ruta /editor); en el quick-edit clasico este bloque no se pinta. */}
+        {state.meta ? <EditorMetaCard /> : null}
+
         {/* Índice de días (P1-1): ancla por día arriba de la pila. Con un solo día no aporta. */}
         {multiDay ? <DayAnchorNav variants={orderedVariants} todayVariantKey={todayVariantKey} /> : null}
 
@@ -212,37 +217,43 @@ export function QuickEditPlanView() {
           {protocolNotes ? (
             <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted">{protocolNotes}</p>
           ) : null}
-          <ul className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold">
-            {/*
-              "Puede sustituir" (`canSubstitute`) NO se pinta: desde T2.4 no lo lee ningun camino
-              de autorizacion, y desde T2.5 el intercambio dentro del grupo es equivalencia
-              nutricional, no un permiso. Mostrarlo le decia al coach que habia bloqueado algo que
-              nunca estuvo bloqueado. El veto real por alimento es `exchange_group_foods.is_excluded`.
-              Decision D4, `docs/specs/nutrition-exchange-swap/SPEC.md`.
-            */}
-            {(
-              [
-                [permissions.canRegisterFreely, 'Registro libre'],
-                [permissions.canAdjustPrescribedQuantity, 'Ajusta cantidades'],
-              ] as const
-            ).map(([enabled, label]) => (
-              <li
-                key={label}
-                className={
-                  'rounded-pill border px-2 py-0.5 ' +
-                  (enabled
-                    ? 'border-primary/30 bg-primary/10 text-primary'
-                    : 'border-border-subtle bg-surface-sunken text-muted')
-                }
-              >
-                {label}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 flex items-start gap-1.5 text-xs leading-5 text-muted">
-            <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            {QE_COPY.readonlyHint}
-          </p>
+          {/* En el editor unico los permisos son EDITABLES en la cabecera (EditorMetaCard);
+              repetir aca los chips read-only pareceria un bug. Solo quick-edit clasico. */}
+          {state.meta ? null : (
+            <>
+              <ul className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                {/*
+                  "Puede sustituir" (`canSubstitute`) NO se pinta: desde T2.4 no lo lee ningun camino
+                  de autorizacion, y desde T2.5 el intercambio dentro del grupo es equivalencia
+                  nutricional, no un permiso. Mostrarlo le decia al coach que habia bloqueado algo que
+                  nunca estuvo bloqueado. El veto real por alimento es `exchange_group_foods.is_excluded`.
+                  Decision D4, `docs/specs/nutrition-exchange-swap/SPEC.md`.
+                */}
+                {(
+                  [
+                    [permissions.canRegisterFreely, 'Registro libre'],
+                    [permissions.canAdjustPrescribedQuantity, 'Ajusta cantidades'],
+                  ] as const
+                ).map(([enabled, label]) => (
+                  <li
+                    key={label}
+                    className={
+                      'rounded-pill border px-2 py-0.5 ' +
+                      (enabled
+                        ? 'border-primary/30 bg-primary/10 text-primary'
+                        : 'border-border-subtle bg-surface-sunken text-muted')
+                    }
+                  >
+                    {label}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 flex items-start gap-1.5 text-xs leading-5 text-muted">
+                <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {QE_COPY.readonlyHint}
+              </p>
+            </>
+          )}
         </section>
 
         {/* Espacio para que la barra sticky no tape la ultima card. */}

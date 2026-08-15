@@ -20,6 +20,7 @@
 
 const QUICK_EDIT_PREFIX = 'eva:nutrition-qe-draft:'
 const BUILDER_PREFIX = 'eva:nutrition-builder-draft:'
+const UNIFIED_EDITOR_PREFIX = 'eva:nutrition-editor-draft:'
 
 /** Vida maxima de un borrador (7 dias): el coach puede retomar al dia siguiente sin perderlo. */
 export const NUTRITION_DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -42,6 +43,15 @@ export function quickEditDraftKey(clientId: string): string {
 /** Key del borrador del builder — distingue "plan nuevo" de "nueva version del plan X". */
 export function builderDraftKey(clientId: string, planId: string | null): string {
     return `${BUILDER_PREFIX}${clientId}:${planId ?? 'new'}`
+}
+
+/**
+ * Key del borrador del editor unico (T3.x) — prefijo PROPIO: su estado lleva metadatos del plan
+ * (`meta`) que el quick-edit clasico no muestra; compartir key ofreceria restaurar un borrador
+ * del editor dentro del quick-edit (y vice versa) contra superficies con capacidades distintas.
+ */
+export function unifiedEditorDraftKey(clientId: string): string {
+    return `${UNIFIED_EDITOR_PREFIX}${clientId}`
 }
 
 /**
@@ -90,7 +100,7 @@ export function clearNutritionDraft(key: string): void {
 }
 
 /**
- * Higiene global: barre TODOS los borradores de nutricion (ambos prefijos) vencidos o basura.
+ * Higiene global: barre TODOS los borradores de nutricion (los tres prefijos) vencidos o basura.
  * Correr al montar la ficha / el builder. Best-effort.
  */
 export function sweepStaleNutritionDrafts(nowMs: number, maxAgeMs: number = NUTRITION_DRAFT_MAX_AGE_MS): void {
@@ -99,7 +109,11 @@ export function sweepStaleNutritionDrafts(nowMs: number, maxAgeMs: number = NUTR
         for (let i = 0; i < localStorage.length; i += 1) {
             const key = localStorage.key(i)
             if (key == null) continue
-            if (!key.startsWith(QUICK_EDIT_PREFIX) && !key.startsWith(BUILDER_PREFIX)) continue
+            if (
+                !key.startsWith(QUICK_EDIT_PREFIX) &&
+                !key.startsWith(BUILDER_PREFIX) &&
+                !key.startsWith(UNIFIED_EDITOR_PREFIX)
+            ) continue
             if (readNutritionDraft(key, nowMs, maxAgeMs) == null) stale.push(key)
         }
         for (const key of stale) localStorage.removeItem(key)

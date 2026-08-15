@@ -59,6 +59,7 @@ import {
   quickEditDraftKey,
   readNutritionDraft,
   sweepStaleNutritionDrafts,
+  unifiedEditorDraftKey,
   writeNutritionDraft,
 } from '@/lib/nutrition-coach-draft-store'
 
@@ -168,6 +169,7 @@ export function QuickEditProvider({
   substitutionsLoadFailed = false,
   today,
   hasNutritionPro = false,
+  editPlanMeta = false,
   onExit,
   children,
 }: {
@@ -188,6 +190,13 @@ export function QuickEditProvider({
   today: string
   /** Entitlement Nutricion Pro server-side: gobierna la afordancia multi-dia. Default fail-closed. */
   hasNutritionPro?: boolean
+  /**
+   * Editor unico (T3.x): hidrata y publica tambien los METADATOS del plan (nombre, estrategia,
+   * permisos — `state.meta`). Default false = quick-edit clasico, bit-identico a siempre.
+   * Con meta el respaldo local usa una key propia (`unifiedEditorDraftKey`): las dos
+   * superficies no deben ofrecerse borradores entre si.
+   */
+  editPlanMeta?: boolean
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
   children: ReactNode
@@ -198,8 +207,8 @@ export function QuickEditProvider({
   // asi que reabrir re-hidrata desde el read model fresco tras router.refresh()).
   const substitutionsByItemId = useMemo(() => buildSubstitutionMap(itemSubstitutions), [itemSubstitutions])
   const initialState = useMemo(
-    () => readModelToEditState(planModel, substitutionsByItemId),
-    [planModel, substitutionsByItemId],
+    () => readModelToEditState(planModel, substitutionsByItemId, { withMeta: editPlanMeta }),
+    [planModel, substitutionsByItemId, editPlanMeta],
   )
   // El server pisa effectiveFrom (max(hoy, base)) y las notas protocolo/privadas (carry-over
   // §2.3); las visibles viajan editadas desde el estado.
@@ -210,9 +219,10 @@ export function QuickEditProvider({
     throw new Error('QuickEditProvider requiere un plan vigente en el read model')
   }
 
-  // Identidad del respaldo local: una sesion de quick-edit por alumno; el payload lleva el
+  // Identidad del respaldo local: una sesion de edicion por alumno; el payload lleva el
   // plan y la version base para descartar borradores calculados contra una base obsoleta.
-  const draftKey = quickEditDraftKey(clientId)
+  // El editor unico usa su prefijo propio (estado con `meta` que el quick-edit no muestra).
+  const draftKey = editPlanMeta ? unifiedEditorDraftKey(clientId) : quickEditDraftKey(clientId)
   const planId = planModel.plan?.id ?? null
   const planVersionId = planModel.plan?.versionId ?? null
 
@@ -272,8 +282,9 @@ export function QuickEditProvider({
   )
   // La validacion local necesita la ESTRATEGIA para evaluar el dia vacio (en `flexible` un dia
   // sin franjas es su estado correcto). Sin esto, el guard server-side rechazaba la publicacion
-  // y la barra decia "No se pudo publicar" sin señalar el dia culpable.
-  const strategy: NutritionStrategy = planModel.plan?.strategy ?? 'flexible'
+  // y la barra decia "No se pudo publicar" sin señalar el dia culpable. Con meta editable
+  // (editor unico) manda la estrategia del ESTADO: es la que se va a publicar.
+  const strategy: NutritionStrategy = state.meta?.strategy ?? planModel.plan?.strategy ?? 'flexible'
   const validation = useMemo(() => validateQuickEdit(state, { strategy }), [state, strategy])
 
   const dispatch = useCallback(
