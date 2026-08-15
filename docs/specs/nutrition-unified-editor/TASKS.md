@@ -39,13 +39,40 @@ QW = quick-edit web (`quick-edit-state.ts`), QR = quick-edit RN (`nutrition-v2-q
 | Pasos del wizard | `NEXT/PREV/SET_STEP` | si | — | — | **Muere** (D1: documento vivo, sin pasos) |
 | Reset/restore de draft | `RESTORE` | si | `RESET`+`RESTORE_DRAFT` | `RESTORE_DRAFT` | Se define en W1 (autosave/descartar del editor) |
 
-## W1 — Esqueleto
+## W1 — Esqueleto (modo edicion) — CERRADA 2026-08-15
 
-- [ ] Ruta nueva + page server (auth/scope/rollout como `builder/page.tsx`)
-- [ ] Reducer base: quick-edit web + acciones de metadatos del plan
-- [ ] Cabecera + canvas + hidratacion `?from=` (vacio/plantilla/copia) + publish CAS
-- [ ] Sin CTA publica (solo URL directa); harness local del editor + Playwright
-- [ ] Gates + registro de cierre
+- [x] Ruta nueva `/coach/nutrition-v2/[clientId]/editor` + page server (mismo perimetro fail-closed
+  que la ficha: sesion + workspace no-enterprise + scope V2 + NUT-008 + food prefs; sin plan
+  vigente redirige al wizard)
+- [x] Reducer base: quick-edit web extendido con `meta` OPCIONAL (`QeMeta`: nombre, estrategia,
+  permisos) + acciones `SET_PLAN_NAME`/`SET_STRATEGY`/`SET_PERMISSION`; sin `meta` el quick-edit
+  clasico queda bit-identico (acciones no-op, proyeccion intacta). `RESET`/`RESTORE_DRAFT` no
+  cruzan superficies (el clasico descarta meta ajeno; el editor conserva el suyo) y el respaldo
+  local del editor usa prefijo propio (`unifiedEditorDraftKey`)
+- [x] Cabecera `EditorMetaCard`: nombre editable (validacion 1-180 espejo del contrato), permisos
+  Registro libre / Ajustar cantidades con switch (los chips read-only de la card de notas se
+  ocultan en modo editor), estrategia read-only (badge) y vigencia informativa. Publish CAS
+  intacto via `quickEditPublishAction`; `countDraftChanges` ya cuenta nombre/estrategia/permisos
+- [x] Sin CTA publica (solo URL directa)
+- [x] Harness local `dev-harness/nutrition-editor` (read model sintetico, sin auth) + verificacion
+  Playwright headless: nombre hidratado, 1 cambio al renombrar, 2 con el toggle, publish cortado
+  por validacion local con nombre vacio, 0 pageerrors (evidencia: screenshot 390px)
+- [x] Gates: vitest 5691 verdes (incl. 8 tests nuevos `quick-edit-state.meta.test.ts`), eslint 0
+  errores (archivos tocados 0 warnings), `tsc --noEmit` web verde, check:tokens verde,
+  check:nutrition-v2-boundaries verde. `pnpm build` NO corrido (falla local por Node 24 — regla
+  vigente: Vercel es la verdad)
+
+Pendientes declarados que salen de W1: creacion `?from=` + `effectiveFrom` elegible (W1.5),
+estrategia editable con su semantica (W1.5), `quantityAdjustmentPercent` y permisos finos (W1.5).
+
+## W1.5 — Modo creacion
+
+- [ ] `draftToEditState` (draft + foods por id → arbol editable; reusa `collectPlanFoodIds`/
+  `collectTemplateFoodIds`/`fetchBuilderFoodsByIds` del builder)
+- [ ] Hidratacion `?from=` (vacio/plantilla/copia) en la page del editor
+- [ ] Publish creacion por `publishPlanAction` (sin CAS) + `effectiveFrom` elegible
+- [ ] Estrategia editable (semantica structured↔flexible↔hybrid) + permisos finos
+- [ ] Gates + registro
 
 ## W2 — Capacidades wizard-only
 
@@ -97,4 +124,5 @@ QW = quick-edit web (`quick-edit-state.ts`), QR = quick-edit RN (`nutrition-v2-q
 
 | Fecha | Tanda | Commit | Gates | Notas |
 |-------|-------|--------|-------|-------|
-| 2026-08-15 | T3.1 SPEC | — | docs:check | SPEC/PLAN/TASKS; D1/D2 del owner |
+| 2026-08-15 | T3.1 SPEC | `8d931280` | docs:check | SPEC/PLAN/TASKS; D1/D2 del owner |
+| 2026-08-15 | W1 esqueleto (edicion) | `5c61d283` | vitest 5691 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Ruta `/editor` sin CTA; meta opcional en el reducer; creacion `?from=` movida a W1.5 |
