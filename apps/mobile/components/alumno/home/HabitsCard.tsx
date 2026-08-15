@@ -165,17 +165,19 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
             disabled={connectingHealth}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityLabel="Conectar salud para autocompletar pasos y sueño"
+            accessibilityLabel="Autocompletar pasos y sueño desde tu teléfono o tu reloj"
             className="rounded-control border-subtle"
             style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 10, opacity: connectingHealth ? 0.6 : 1 }}
           >
             <HeartPulse size={16} color={theme.primary} strokeWidth={2} />
             <View style={{ flex: 1, minWidth: 0 }}>
+              {/* App Review 5.1.1(iv): CTA nombrada por la FEATURE, no por el permiso — nada de
+                  "Conectar salud"/"Permitir"; el aviso previo del hook ya usa Continuar/Cancelar. */}
               <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
-                {connectingHealth ? 'Conectando…' : 'Conectar salud'}
+                {connectingHealth ? 'Conectando…' : 'Autocompletar pasos y sueño'}
               </Text>
               <Text className="text-subtle" style={{ fontFamily: FONT.uiSemibold, fontSize: 11, marginTop: 1 }}>
-                Autocompleta pasos y sueño desde tu teléfono
+                Con lo que tu teléfono o tu reloj ya registran
               </Text>
             </View>
           </TouchableOpacity>

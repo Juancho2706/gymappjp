@@ -96,8 +96,10 @@ export default function SaludScreen() {
                 }}
               />
             ) : (
+              // App Review 5.1.1(iv) (rechazo 15-08-2026): el botón que precede a la hoja de permisos
+              // debe decir "Continuar"/"Siguiente" — nunca "Conectar con {agregador}" ni "Permitir".
               <Button
-                label={health.connecting ? 'Conectando…' : `Conectar con ${HEALTH_APP_NAME}`}
+                label={health.connecting ? 'Conectando…' : 'Continuar'}
                 testID="salud-connect"
                 loading={health.connecting}
                 onPress={() => {

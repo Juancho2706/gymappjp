@@ -280,14 +280,16 @@ export default function NutritionV2ScannerScreen() {
       >
         <NutritionStatePanel
           icon="permission"
-          title="Permite el uso de la cámara"
+          title="Escanear con la cámara"
           description="EVA utiliza la cámara solo para leer el código del producto. También puedes ingresarlo manualmente."
           action={
+            // App Review 5.1.1(iv): el botón previo a la hoja de permisos dice "Continuar",
+            // nunca "Permitir X" (mismo rechazo del boton de Apple Salud, 15-08-2026).
             <NutritionMotionButton
-              accessibilityLabel="Permitir cámara"
+              accessibilityLabel="Continuar para escanear con la cámara"
               onPress={() => void requestPermission()}
             >
-              Permitir cámara
+              Continuar
             </NutritionMotionButton>
           }
         />
