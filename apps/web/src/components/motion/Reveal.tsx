@@ -1,6 +1,7 @@
 'use client'
 
-import { motion, useReducedMotion, type Variants } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { type ReactNode, type ElementType } from 'react'
 
 // Inlined motion tokens (no dependency on app/enterprise/_lib/enterprise-tokens).

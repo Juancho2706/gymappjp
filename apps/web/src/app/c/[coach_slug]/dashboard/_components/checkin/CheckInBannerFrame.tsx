@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 
 /** Pulso suave en banner atrasado (§12 a11y: respeta "reducir movimiento"). */
 export function CheckInBannerFrame({ overdue, className, children }: { overdue: boolean; className?: string; children: ReactNode }) {

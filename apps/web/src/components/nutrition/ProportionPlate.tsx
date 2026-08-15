@@ -1,6 +1,7 @@
 'use client'
 
-import { motion, useReducedMotion, type Transition } from 'framer-motion'
+import { motion, type Transition } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Utensils } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

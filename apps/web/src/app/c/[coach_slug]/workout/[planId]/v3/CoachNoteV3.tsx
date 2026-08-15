@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { MessageSquare } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 
 /**
  * Ejecutor V3 — nota del coach COMPARTIDA (chip + sheet oscura #1d1d26). Extracción del sheet inline que

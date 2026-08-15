@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from 'react'
 import { Check, Utensils, ChevronDown, ChevronUp, Lock } from 'lucide-react'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { springs } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
 import { sumMealMacros, type FoodItemForMacros } from '@/lib/nutrition-utils'

@@ -1,6 +1,7 @@
 'use client'
 
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 
 export type Trend = 'up' | 'down' | 'stable'

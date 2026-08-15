@@ -1,15 +1,8 @@
 'use client'
 
 import { useEffect, type Ref } from 'react'
-import {
-  motion,
-  useMotionValue,
-  useReducedMotion,
-  useSpring,
-  useTransform,
-  type HTMLMotionProps,
-  type SpringOptions,
-} from 'framer-motion'
+import { motion, useMotionValue, useSpring, useTransform, type HTMLMotionProps, type SpringOptions } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 
 /** Resorte histórico de los contadores del DS (ComplianceRing, peso, bodycomp). */
 const DEFAULT_SPRING: SpringOptions = { stiffness: 60, damping: 20 }

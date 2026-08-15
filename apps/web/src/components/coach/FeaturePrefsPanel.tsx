@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { toast } from 'sonner'
 import { Apple, ChevronDown, Lock, Sparkles, Save } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'

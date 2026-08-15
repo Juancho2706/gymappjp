@@ -17,7 +17,8 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Maximize2, X } from 'lucide-react'
 import { extractYoutubeVideoId, isYoutubeMediaUrl } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'

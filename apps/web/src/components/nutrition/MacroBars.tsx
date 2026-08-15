@@ -1,7 +1,8 @@
 'use client'
 
 import { useRef } from 'react'
-import { motion, useInView, useReducedMotion, type Transition } from 'framer-motion'
+import { motion, useInView, type Transition } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {

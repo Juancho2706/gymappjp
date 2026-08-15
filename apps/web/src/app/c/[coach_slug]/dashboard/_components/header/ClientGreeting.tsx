@@ -1,6 +1,7 @@
 'use client'
 
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { fadeSlideUp, staggerContainer, springs } from '@/lib/animation-presets'
 
 interface ClientGreetingProps {

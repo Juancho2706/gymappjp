@@ -1,14 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import {
-  motion,
-  useReducedMotion,
-  useMotionValue,
-  useTransform,
-  animate,
-  type Transition,
-} from 'framer-motion'
+import { motion, useMotionValue, useTransform, animate, type Transition } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { easings } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
 

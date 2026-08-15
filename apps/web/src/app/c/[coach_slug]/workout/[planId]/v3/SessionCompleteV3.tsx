@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Share2, Check, ArrowRight, HeartPulse, Move, GitCommit, CloudOff, Loader2, AlertTriangle } from 'lucide-react'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { compactDistance } from '@/lib/workout-exercise-type'

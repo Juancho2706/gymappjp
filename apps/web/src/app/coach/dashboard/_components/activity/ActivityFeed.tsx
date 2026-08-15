@@ -170,7 +170,10 @@ export function ActivityFeed({
                                                         aria-label="Por revisar"
                                                     />
                                                 ))}
-                                            <span className="text-xs text-[var(--text-muted)]">
+                                            {/* suppressHydrationWarning: relativo de Date.now();
+                                                cruce de minuto SSR→hydration no debe regenerar
+                                                el arbol (familia EVA-NEXTJS-18). */}
+                                            <span suppressHydrationWarning className="text-xs text-[var(--text-muted)]">
                                                 {timeAgo(it.date)}
                                             </span>
                                         </span>

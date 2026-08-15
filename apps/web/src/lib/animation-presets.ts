@@ -1,5 +1,3 @@
-import { useReducedMotion } from 'framer-motion'
-
 export const springs = {
     snappy: { type: 'spring' as const, stiffness: 400, damping: 30 },
     smooth: { type: 'spring' as const, stiffness: 200, damping: 25 },

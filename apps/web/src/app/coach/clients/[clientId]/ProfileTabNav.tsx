@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { motion, useReducedMotion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

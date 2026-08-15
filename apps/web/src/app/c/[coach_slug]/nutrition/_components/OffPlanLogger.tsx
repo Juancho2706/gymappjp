@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useId, useMemo, useState, useTransition } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Search, X, Plus, Info, Loader2, History } from 'lucide-react'
 import { toast } from 'sonner'
 import { normalizeFoodSearchText } from '@eva/nutrition-engine'

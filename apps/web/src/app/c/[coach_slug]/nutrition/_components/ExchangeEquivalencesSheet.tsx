@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { X, Search } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { ExchangeFoodEquivalence, ExchangeGroup } from '@/domain/nutrition/exchange.types'

@@ -12,7 +12,8 @@ import {
     TriangleAlert,
     Calendar,
 } from 'lucide-react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { GlassCard } from '@/components/ui/glass-card'
 import { useTranslation } from '@/lib/i18n/LanguageContext'

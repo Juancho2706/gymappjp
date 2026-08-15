@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Check, CheckCheck, ChevronDown, Dumbbell, SkipForward } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { type ExecListMapItem } from './ExecListMapV3'

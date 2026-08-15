@@ -15,7 +15,8 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import { Copy, Loader2, MoreVertical, Plus, RefreshCcw } from 'lucide-react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { NUTRITION_MOTION } from '@eva/nutrition-v2'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { EXCHANGE_GROUP_NAME_MAX } from '@eva/schemas/nutrition-exchanges'

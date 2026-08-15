@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { useReducedMotion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import {
     celebrationTierFor,
     type WorkoutCelebrationEvent,

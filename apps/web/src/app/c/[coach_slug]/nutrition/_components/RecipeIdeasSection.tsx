@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Clock3, Lightbulb, Scale, UtensilsCrossed, X } from 'lucide-react'
 import { staggerContainer, fadeSlideUp, springsSheet } from '@/lib/animation-presets'
 import type { RecipeRow } from '@/services/nutrition-recipes.service'

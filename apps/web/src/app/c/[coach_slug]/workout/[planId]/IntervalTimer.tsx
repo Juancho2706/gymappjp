@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { X, Play, Pause, SkipForward, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { playTimerSound } from '@/lib/audioUtils'

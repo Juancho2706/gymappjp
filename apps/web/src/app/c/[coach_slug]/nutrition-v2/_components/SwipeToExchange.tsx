@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { motion, useAnimationControls, useReducedMotion } from 'framer-motion'
+import { motion, useAnimationControls } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { ArrowLeftRight } from 'lucide-react'
 import {
   NUTRITION_SWIPE_HINT_BACK_MS,

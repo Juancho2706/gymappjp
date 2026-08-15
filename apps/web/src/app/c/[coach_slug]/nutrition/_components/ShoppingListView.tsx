@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useOptimistic, useState, useTransition, useId } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Check, Info, Plus, Loader2, Share2, Copy, ShoppingCart, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'

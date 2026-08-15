@@ -16,7 +16,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Minus, Plus, Trash2 } from 'lucide-react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { NUTRITION_MOTION } from '@eva/nutrition-v2'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'

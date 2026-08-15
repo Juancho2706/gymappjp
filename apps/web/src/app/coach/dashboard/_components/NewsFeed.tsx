@@ -237,7 +237,10 @@ function ActivityRow({ item }: { item: ActivityItemClient }) {
                         aria-label="Por revisar"
                     />
                 ))}
-            <span className="shrink-0 whitespace-nowrap text-[11.5px] text-[var(--text-subtle)]">
+            {/* suppressHydrationWarning: el relativo se computa de Date.now() — si un borde de
+                minuto cruza entre el SSR y la hydration ("4m" vs "5m"), React NO debe regenerar
+                el arbol por ese texto (familia EVA-NEXTJS-18). */}
+            <span suppressHydrationWarning className="shrink-0 whitespace-nowrap text-[11.5px] text-[var(--text-subtle)]">
                 {timeAgo(item.date)}
             </span>
         </Link>

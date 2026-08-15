@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react'
 import { format, parseISO, subDays } from 'date-fns'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { staggerContainer } from '@/lib/animation-presets'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'

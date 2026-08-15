@@ -1,6 +1,7 @@
 'use client'
 
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { TrendingUp, TrendingDown, Minus, Share2, CalendarCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { WeeklyRecap, WeeklyRecapTone } from '../_data/recap.queries'

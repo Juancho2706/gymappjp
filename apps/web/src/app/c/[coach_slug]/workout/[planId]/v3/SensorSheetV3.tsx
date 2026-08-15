@@ -15,7 +15,8 @@
  * `ExecSettingsSheet`.
  */
 
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Bluetooth, HeartPulse, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { HrZoneRange } from '@eva/cardio'

@@ -54,7 +54,8 @@ import {
     deleteWorkoutProgramAction,
     duplicateWorkoutProgramAction,
 } from '../builder/[clientId]/_actions/builder.actions'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { ProgramCard, ProgramRow } from './components/ProgramRow'
 import { ProgramPreviewPanel } from './components/ProgramPreviewPanel'

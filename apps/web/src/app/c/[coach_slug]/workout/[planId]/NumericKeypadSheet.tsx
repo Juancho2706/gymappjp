@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Delete, SlidersHorizontal, Check, ArrowRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { springsSheet } from '@/lib/animation-presets'

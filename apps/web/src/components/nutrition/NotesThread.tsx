@@ -1,7 +1,8 @@
 'use client'
 
 import { useOptimistic, useRef, useState, useTransition, type FormEvent } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

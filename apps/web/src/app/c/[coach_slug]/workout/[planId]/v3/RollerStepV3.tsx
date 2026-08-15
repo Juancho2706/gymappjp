@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { GitCommit, Minus, Plus, Timer, X } from 'lucide-react'
-import { useReducedMotion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
 import { useWorkoutTimer } from '../WorkoutTimerProvider'

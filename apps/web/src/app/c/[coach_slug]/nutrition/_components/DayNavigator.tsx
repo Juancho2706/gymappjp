@@ -2,7 +2,8 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { addDays, format, parseISO } from 'date-fns'
-import { AnimatePresence, motion, useReducedMotion, type PanInfo } from 'framer-motion'
+import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { easings } from '@/lib/animation-presets'
 import { getTodayInSantiago } from '@/lib/date-utils'

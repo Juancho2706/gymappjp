@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion"
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { X, Play, Pause, RotateCcw, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { playTimerSound, playCountdownBeep } from "@/lib/audioUtils";
 import { BRAND_APP_ICON } from "@/lib/brand-assets";

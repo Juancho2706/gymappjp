@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { AlertTriangle, Check, LoaderCircle, Save } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion, type HTMLMotionProps } from 'framer-motion'
+import { AnimatePresence, motion, type HTMLMotionProps } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import {
   NUTRITION_MOTION,
   NUTRITION_STRATEGIES,

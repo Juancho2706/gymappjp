@@ -1,6 +1,7 @@
 'use client'
 
-import { motion, useReducedMotion, type Transition } from 'framer-motion'
+import { motion, type Transition } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { MACRO_GOAL_COLOR, MACRO_OVER_COLOR, macroPct } from './macro-tokens'
 

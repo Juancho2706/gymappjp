@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Share2, Download, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { canShareFiles, share } from '@/lib/web-share'

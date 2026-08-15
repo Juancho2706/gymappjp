@@ -2,7 +2,8 @@
 
 import type { ComponentType } from 'react'
 import { useEffect, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CalloutShowcaseBody, type CalloutItem } from '@/components/landing/LandingCalloutShowcase'
 import {

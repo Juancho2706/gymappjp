@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Trophy, Share2, Check, ArrowRight, HeartPulse, Move, GitCommit } from 'lucide-react'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'

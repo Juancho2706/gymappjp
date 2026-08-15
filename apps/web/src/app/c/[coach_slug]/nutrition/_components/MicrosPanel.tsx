@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { ChevronDown } from 'lucide-react'
 import { NutrientRangeBar } from '@/components/nutrition/NutrientRangeBar'
 import { InfoTooltip } from '@/components/ui/info-tooltip'

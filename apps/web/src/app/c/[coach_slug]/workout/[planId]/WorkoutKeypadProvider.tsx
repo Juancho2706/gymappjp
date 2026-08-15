@@ -9,7 +9,8 @@ import React, {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { AnimatePresence, useReducedMotion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
+import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { triggerHaptic } from '@/lib/client/haptics'
 import {
   applyKeypadIncrement,
