@@ -28,12 +28,12 @@ QW = quick-edit web (`quick-edit-state.ts`), QR = quick-edit RN (`nutrition-v2-q
 | Variantes: alta | `ADD_VARIANTS` (multiple) | si | `ADD_VARIANT` (single) | `ADD_VARIANT` | Migra forma WW (multiple) |
 | Variantes: quitar/deshacer | `REMOVE_VARIANT` | si | `REMOVE_VARIANT`+`RESTORE_VARIANT` | idem QW | Migra con restore (forma QW) |
 | Variantes: dia/label/activa | `SET_VARIANT_DAY/LABEL`+`SET_ACTIVE_VARIANT` | si | `SET_VARIANT_DAY/LABEL` | si | Migra |
-| Variantes: duplicar como / anexar franjas | `DUPLICATE_VARIANT_AS`+`APPEND_VARIANT_SLOTS_TO` | solo duplicar | — | — | Migra desde WW |
-| Targets por variante y modo | `SET_VARIANT_TARGETS`+`_MODE` | si | — | — | Migra desde WW |
+| Variantes: duplicar como / anexar franjas | `DUPLICATE_VARIANT_AS`+`APPEND_VARIANT_SLOTS_TO` | solo duplicar | ✅ W2 (`DUPLICATE_VARIANT_AS`, menu del dia) | — | Duplicar MIGRADO W2; anexar va con copy dia/semana (W3) |
+| Targets por variante y modo | `SET_VARIANT_TARGETS`+`_MODE` | si | — | — | **MUERE** (decision W2 2026-08-15): la herencia inherit/custom es un artefacto PRE-publish del wizard; el read model materializa metas por dia y en el editor `SET_TARGET` ya edita las metas reales de cada dia. Un "usar metas del dia base" futuro seria un gesto de copia, no un modo |
 | Targets globales | `SET_TARGET` | si | `SET_TARGET`+`STEP_TARGET` | `SET_TARGET` | Migra (con stepper QW) |
 | Porciones prescritas | seccion aparte (`portions-state.ts`) | seccion aparte | `ADD/SET/STEP/REMOVE/RESTORE_PORTION_TARGET`+`APPLY_BASE_PORTIONS` | seccion aparte | Migra forma QW (integrada al reducer); las `portions-state` paralelas mueren en R1 |
-| Sustituciones por item | `ADD/REMOVE_ITEM_SUBSTITUTION` | si | — (solo carry-over NUT-008) | — | Migra desde WW; carry-over y bloqueo NUT-008 intactos |
-| Override de macros | `APPLY_FOOD_OVERRIDE` | si | — | si | Migra; cierra el hueco de QW |
+| Sustituciones por item | `ADD/REMOVE_ITEM_SUBSTITUTION` | si | ✅ W2 (`ADD/REMOVE/RESTORE_ITEM_SUBSTITUTION`, sheet en el menu del item, solo editor) | — | MIGRADO W2 con undo; carry-over y bloqueo NUT-008 intactos; contador local `countItemSubstitutionChanges` (el paquete no compara subs) |
+| Override de macros | `APPLY_FOOD_OVERRIDE` | si | ✅ W2 (menu del item, solo con `food` en mano — macroBase congelado intacto, criterio QE RN) | si | MIGRADO W2; cierra el hueco de QW; dialog del builder reusado (persiste solo) |
 | Metadatos del plan (nombre/estrategia/permiso/vigencia) | `SET_PLAN_NAME/STRATEGY/PERMISSION/EFFECTIVE_FROM` | si | — | — | Migra a la cabecera |
 | Notas visibles | `SET_VISIBLE_NOTES` | si | si | si | Migra; "Rehacer" jamas las resetea (PR #174) |
 | Pasos del wizard | `NEXT/PREV/SET_STEP` | si | — | — | **Muere** (D1: documento vivo, sin pasos) |
@@ -93,11 +93,27 @@ Pendientes declarados que salen de W1.5: respaldo local (localStorage) en modo c
 selector de origen dentro del editor (hoy la puerta sigue siendo la URL `?from=`, el corte de
 las CTAs es W4); copy del confirm sheet especifico de creacion.
 
-## W2 — Capacidades wizard-only
+## W2 — Capacidades wizard-only — CERRADA 2026-08-15
 
-- [ ] Variantes avanzadas, sustituciones, override (segun matriz)
-- [ ] Matriz actualizada: cero filas sin destino
-- [ ] Gates + registro
+- [x] Sustituciones por item EDITABLES (solo editor, `state.meta`): sheet "Reemplazos
+  autorizados" en el menu ⋮ del item — lista con nombres (snapshot congelado `read.name` /
+  catalogo al agregar, display-only), quitar optimista + Deshacer al indice, alta via
+  `FoodPickerSheet` con guardas del wizard (tope 8, sin duplicados, sin auto-reemplazo).
+  Contador local `countItemSubstitutionChanges` (el paquete no compara subs; mismo precedente
+  que `countVariantHeaderChanges`)
+- [x] `APPLY_FOOD_OVERRIDE` en quick-edit web (cerraba el cruce 3-de-4): "Editar macros" en el
+  menu del item cuando hay `food` en mano; `FoodMacrosOverrideDialog` del builder reusado
+  (persiste `coach_food_overrides` solo); macroBase congelado intacto (criterio QE RN)
+- [x] `DUPLICATE_VARIANT_AS`: "Duplicar como…" en el menu del dia (multi-dia) — clona metas y
+  franjas del dia ELEGIDO (no solo el base como `ADD_VARIANT`), Deshacer elimina el dia nuevo
+- [x] Decision de matriz: `SET_VARIANT_TARGETS`/`_MODE` MUEREN (artefacto pre-publish del
+  wizard; el editor edita metas reales por dia); `APPEND_VARIANT_SLOTS_TO` va con el copy
+  dia/semana de W3
+- [x] Todo gateado a `state.meta`: el quick-edit clasico queda sin cambios de comportamiento
+- [x] Harness headless ampliado: menu del item con reemplazos (vacio + CTA), duplicar dia base
+  → Domingo con toast Deshacer; 0 pageerrors
+- [x] Gates: vitest 5699 verdes (3 tests W2 nuevos), eslint 0 errores, tsc web verde, tokens y
+  boundaries verdes; build local NO (Node 24)
 
 ## W3 — Layout final
 
@@ -146,3 +162,4 @@ las CTAs es W4); copy del confirm sheet especifico de creacion.
 | 2026-08-15 | T3.1 SPEC | `8d931280` | docs:check | SPEC/PLAN/TASKS; D1/D2 del owner |
 | 2026-08-15 | W1 esqueleto (edicion) | `5c61d283` | vitest 5691 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Ruta `/editor` sin CTA; meta opcional en el reducer; creacion `?from=` movida a W1.5 |
 | 2026-08-15 | W1.5 modo creacion | `8054e980` | vitest 5696 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (edit+create) · build NO (Node 24) | `?from=` template/plan/blank; vigencia elegible; estrategia segura; permisos finos; degradacion de origen CON aviso |
+| 2026-08-15 | W2 capacidades wizard-only | `d0aaa12d` | vitest 5699 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Sustituciones editables + override + duplicar dia, gateado a editor; SET_VARIANT_TARGETS/_MODE muere; APPEND → W3 |
