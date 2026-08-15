@@ -1,0 +1,100 @@
+# TASKS — Editor unico de nutricion
+
+Estado vivo de la ola. Deriva de [SPEC.md](SPEC.md) y [PLAN.md](PLAN.md).
+
+## T3.1 — SPEC
+
+- [x] Auditoria de las 4 superficies contra HEAD `71a829d5` (2026-08-15)
+- [x] SPEC + PLAN + TASKS escritos; D1/D2 decididas por el owner (2026-08-15)
+- [ ] Matriz de acciones VERIFICADA celda por celda al abrir W1 (la tabla de abajo nace de los
+  `case` de cada reducer; las celdas del quick-edit RN mezclan acciones con mapeo de errores y
+  hay que confirmarlas leyendo `nutrition-v2-quick-edit.ts` completo)
+
+## Matriz de acciones (borrador 2026-08-15)
+
+Leyenda: WW = wizard web (`draft-builder.ts`), WR = wizard RN (`nutrition-v2-builder.ts`),
+QW = quick-edit web (`quick-edit-state.ts`), QR = quick-edit RN (`nutrition-v2-quick-edit.ts`).
+
+| Capacidad | WW | WR | QW | QR | Destino en editor unico |
+|---|---|---|---|---|---|
+| Alta de item (catalogo/custom) | `ADD_ITEM` | `ADD_ITEM` | `ADD_CATALOG_ITEM`+`ADD_CUSTOM_ITEM` | `ADD_ITEM` | Migra (forma QW: distingue catalogo/custom) |
+| Editar item (nombre/cantidad/unidad) | `UPDATE_ITEM` | `UPDATE_ITEM` | `SET_ITEM_NAME/QUANTITY/UNIT`+`STEP_ITEM_QUANTITY` | `SET_ITEM_*` | Migra (forma QW granular + stepper) |
+| Cambiar alimento conservando fila | — | — | `SWAP_ITEM_FOOD` | `SWAP_ITEM` | Migra |
+| Quitar/deshacer item | `REMOVE_ITEM`+`RESTORE_ITEM` | `REMOVE_ITEM` (sin restore) | `REMOVE_ITEM`+`RESTORE_ITEM` | `REMOVE_ITEM`+`RESTORE_ITEM` | Migra; RN gana el restore en R1 |
+| Reordenar item | `MOVE_ITEM` | — | `MOVE_ITEM` | — | Migra (drag + fallback menu); RN lo gana en R1 |
+| Franjas (alta/edicion/quitar/deshacer) | `ADD/UPDATE/REMOVE/RESTORE_SLOT` | idem | idem | idem | Migra tal cual (gramatica T2.6/F1) |
+| Copiar franja a variantes | `COPY_SLOT_TO_VARIANTS` | si | si | si | Migra |
+| Copiar dia (quick-select prox N, anexar/reemplazar) | presets+quick-select T2.6/F2 | — | — | — | Migra desde WW; paridad RN en T3.3 |
+| Variantes: alta | `ADD_VARIANTS` (multiple) | si | `ADD_VARIANT` (single) | `ADD_VARIANT` | Migra forma WW (multiple) |
+| Variantes: quitar/deshacer | `REMOVE_VARIANT` | si | `REMOVE_VARIANT`+`RESTORE_VARIANT` | idem QW | Migra con restore (forma QW) |
+| Variantes: dia/label/activa | `SET_VARIANT_DAY/LABEL`+`SET_ACTIVE_VARIANT` | si | `SET_VARIANT_DAY/LABEL` | si | Migra |
+| Variantes: duplicar como / anexar franjas | `DUPLICATE_VARIANT_AS`+`APPEND_VARIANT_SLOTS_TO` | solo duplicar | — | — | Migra desde WW |
+| Targets por variante y modo | `SET_VARIANT_TARGETS`+`_MODE` | si | — | — | Migra desde WW |
+| Targets globales | `SET_TARGET` | si | `SET_TARGET`+`STEP_TARGET` | `SET_TARGET` | Migra (con stepper QW) |
+| Porciones prescritas | seccion aparte (`portions-state.ts`) | seccion aparte | `ADD/SET/STEP/REMOVE/RESTORE_PORTION_TARGET`+`APPLY_BASE_PORTIONS` | seccion aparte | Migra forma QW (integrada al reducer); las `portions-state` paralelas mueren en R1 |
+| Sustituciones por item | `ADD/REMOVE_ITEM_SUBSTITUTION` | si | — (solo carry-over NUT-008) | — | Migra desde WW; carry-over y bloqueo NUT-008 intactos |
+| Override de macros | `APPLY_FOOD_OVERRIDE` | si | — | si | Migra; cierra el hueco de QW |
+| Metadatos del plan (nombre/estrategia/permiso/vigencia) | `SET_PLAN_NAME/STRATEGY/PERMISSION/EFFECTIVE_FROM` | si | — | — | Migra a la cabecera |
+| Notas visibles | `SET_VISIBLE_NOTES` | si | si | si | Migra; "Rehacer" jamas las resetea (PR #174) |
+| Pasos del wizard | `NEXT/PREV/SET_STEP` | si | — | — | **Muere** (D1: documento vivo, sin pasos) |
+| Reset/restore de draft | `RESTORE` | si | `RESET`+`RESTORE_DRAFT` | `RESTORE_DRAFT` | Se define en W1 (autosave/descartar del editor) |
+
+## W1 — Esqueleto
+
+- [ ] Ruta nueva + page server (auth/scope/rollout como `builder/page.tsx`)
+- [ ] Reducer base: quick-edit web + acciones de metadatos del plan
+- [ ] Cabecera + canvas + hidratacion `?from=` (vacio/plantilla/copia) + publish CAS
+- [ ] Sin CTA publica (solo URL directa); harness local del editor + Playwright
+- [ ] Gates + registro de cierre
+
+## W2 — Capacidades wizard-only
+
+- [ ] Variantes avanzadas, sustituciones, override (segun matriz)
+- [ ] Matriz actualizada: cero filas sin destino
+- [ ] Gates + registro
+
+## W3 — Layout final
+
+- [ ] Paleta lateral / sheet, drag reorden + fallback, totales+Publicar fijos, capsula unica
+- [ ] Copy semana quick-select + porcion pegajosa + notas visibles en el lienzo
+- [ ] Harness local verde ANTES de preview; QA responsive (390px) y dark mode
+- [ ] Gates + registro
+
+## W4 — Corte 1
+
+- [ ] Preview con OK explicito del owner
+- [ ] CTA de ficha y puerta `?from=` → editor unico; par viejo a menu secundario
+- [ ] `MOBILE_PARITY.md` declara el gap RN en el mismo commit
+- [ ] `docs/status/CURRENT.md` actualizado; arranca la ventana de 2 semanas
+- [ ] Gates + registro
+
+## T3.2b — Plantillas
+
+- [ ] `nutrition-plans/new` y `[templateId]/edit` sobre el editor (modo plantilla)
+- [ ] Verificar importadores del wizard antes de tocar rutas
+- [ ] Gates + registro
+
+## R1 — Extraccion de reducers
+
+- [ ] Gramatica superset en `packages/nutrition-v2` (modulo puro, sin React)
+- [ ] Tests golden de paridad contra los 4 reducers vivos ANTES del swap
+- [ ] Web consume el paquete; los reducers web viejos mueren
+- [ ] Gates (incluye `tsc` mobile por tocar `packages/*`) + registro
+
+## T3.3 — Editor RN Android
+
+- [ ] Editor RN sobre los reducers de R1 (misma gramatica, layout sheet)
+- [ ] `MOBILE_PARITY.md` al dia; QA device Android del owner
+- [ ] OTA android al cierre (solo por GH Actions `mobile-ota.yml`, `--platform android`)
+- [ ] iOS: OTA `--platform ios` solo post-aprobacion Apple
+- [ ] Gates + registro
+
+## Retiro del par viejo
+
+- [ ] 2 semanas estable post-corte 2 + importadores verificados (tarea del programa padre)
+
+## Registro de cierres
+
+| Fecha | Tanda | Commit | Gates | Notas |
+|-------|-------|--------|-------|-------|
+| 2026-08-15 | T3.1 SPEC | — | docs:check | SPEC/PLAN/TASKS; D1/D2 del owner |

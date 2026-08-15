@@ -120,7 +120,7 @@ verificados en preview con la sesion de josefit:
 
 ## Ola 3
 
-- [ ] T3.1 SPEC editor unico (puede arrancar durante O2)
+- [x] T3.1 SPEC editor unico (2026-08-15, Fable): [SPEC/PLAN/TASKS en `nutrition-unified-editor/`](../nutrition-unified-editor/SPEC.md). Auditoria contra HEAD: 4 reducers / 2 gramaticas (wizard web 32 acciones, wizard RN 29, quick-edit web 31, quick-edit RN subconjunto), publish ya convergido en `persistAndPublishDraft` → RPC. Decisiones owner: D1 un solo editor para crear+editar (wizard muere en el retiro, puerta `?from=` vive), D2 plantillas en tanda propia T3.2b post-corte (el retiro espera a plantillas). Plan: W1-W4 (UI sobre reducer quick-edit web extendido) → T3.2b plantillas → R1 extraccion a `packages/nutrition-v2` con golden tests → T3.3 RN
 - [ ] T3.2 Editor unico web desktop + responsive/PWA (Fable)
 - [ ] T3.3 Editor RN Android
 - [ ] T3.4 Plantillas auto-escaladas (SPEC + solver puro + golden tests + preview + pineados + piso kcal)
