@@ -138,14 +138,27 @@ menu → sheet con modos y presets → copiar base a Lunes → toast + dia en la
   clasico ni lee ni escribe memoria, contexto vacio = prefill undefined)
 - [x] Gates completos de la tanda + harness headless del copy (2026-08-15, ver arriba)
 
-## W3b — Layout final (exige QA del owner)
+## W3b — Layout final — CODIGO LISTO 2026-08-15, queda QA VISUAL del owner en preview
 
-- [ ] Paleta lateral desktop / sheet responsive
-- [ ] Drag reorden + fallback menu (MOVE_ITEM ya existe)
-- [ ] Totales del dia + Publicar fijos abajo (va con la capsula: exige nocion de dia ACTIVO)
-- [ ] Capsula unica dia/variante
-- [ ] Harness local verde ANTES de preview; QA responsive (390px) y dark mode con el owner
-- [ ] Gates + registro
+- [x] Capsula de DIA ACTIVO (solo editor): un dia a la vez; los chips del indice pasan de
+  scrollear a CAMBIAR el dia en edicion (fallback en cadena: eleccion → dia de HOY → primero).
+  El encabezado del dia vive siempre en el editor (acceso al menu); clasico intacto
+- [x] Totales del dia fijos abajo: `PublishBar` gana `dayTotals` (items + porciones en vivo via
+  `qeVariantTotalWithPortions`, con la meta kcal si existe); en el editor la barra vive SIEMPRE
+  (los botones solo con cambios). Clasico sin prop = comportamiento historico
+- [x] Paleta lateral desktop (`lg+`, solo editor): `FoodPicker` compartido en modo inline
+  (patron del panel del wizard) apuntando a una franja elegida del dia activo, con porcion
+  pegajosa; grid 2 columnas `lg:max-w-6xl`. En movil no existe (el alta sigue por franja)
+- [x] Reorden dentro de la franja: `REORDER_ITEM` (clamp, no-op sin movimiento) + Subir/Bajar
+  en el menu del item (touch) + drag HTML5 con manija (desktop; mismo slot = reorden, otra
+  franja del mismo dia = mover con indice). Contador local `countItemOrderChanges` (el paquete
+  no compara orden a proposito — tercer contador local, mismo precedente)
+- [x] Harness headless verde ANTES de preview: capsula activa el dia base, totales
+  "300 / 2200 kcal" visibles, paleta presente en 1440px con selector de franja, flujo completo
+  W1→W3 sin pageerrors (screenshots 390px + desktop)
+- [x] Gates: vitest 5702 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · eslint 0 err ✓ · build NO (Node 24)
+- [ ] **QA VISUAL del owner en preview** (drag real con mouse, responsive, dark mode, white-label)
+  — el corte de CTAs (W4) no arranca sin este OK
 
 ## W4 — Corte 1
 
@@ -189,3 +202,4 @@ menu → sheet con modos y presets → copiar base a Lunes → toast + dia en la
 | 2026-08-15 | W1.5 modo creacion | `8054e980` | vitest 5696 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (edit+create) · build NO (Node 24) | `?from=` template/plan/blank; vigencia elegible; estrategia segura; permisos finos; degradacion de origen CON aviso |
 | 2026-08-15 | W2 capacidades wizard-only | `d0aaa12d` | vitest 5699 ✓ · eslint 0 err ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · build NO (Node 24) | Sustituciones editables + override + duplicar dia, gateado a editor; SET_VARIANT_TARGETS/_MODE muere; APPEND → W3 |
 | 2026-08-15 | W3a copy semana + pegajosa | `a6570234` | vitest 5701 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · eslint 0 err ✓ · build NO (Node 24) — gates corridos en pasada diferida el mismo dia | Split W3a/W3b; W3b (layout) espera QA del owner |
+| 2026-08-15 | W3b layout final | (commit de esta fila) | vitest 5702 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (movil+desktop) · eslint 0 err ✓ · build NO (Node 24) | Capsula dia activo + totales fijos + paleta lateral lg+ + reorden (accion, Subir/Bajar, drag). QUEDA el QA visual del owner en preview antes de W4 |

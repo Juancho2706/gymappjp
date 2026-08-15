@@ -55,10 +55,13 @@ import {
   buildDayVariantKey,
   defaultQeVariant,
   qeDaysMissingBasePortions,
+  qeVariantTotalWithPortions,
   takenDayVariantDows,
   VARIANT_LABEL_MAX,
   type QeVariant,
 } from './quick-edit-state'
+import { EditorPalette } from './EditorPalette'
+import type { PublishBarDayTotals } from './PublishBar'
 import { QE_COPY } from './microcopy'
 
 /**
@@ -86,6 +89,7 @@ export function QuickEditPlanView() {
     pendingRestore,
     restoreDraft,
     dismissRestore,
+    exchangeGroups,
   } = useQuickEdit()
   const usesSlots = strategy === 'structured' || strategy === 'hybrid'
   // FD5: orden de lectura del multi-dia (base primero, luego Lu→Do). El estado conserva el
@@ -98,6 +102,37 @@ export function QuickEditPlanView() {
     () => resolveNutritionDayVariantForDate(orderedVariants, today)?.key ?? null,
     [orderedVariants, today],
   )
+
+  // ── W3b (solo editor, `state.meta`): capsula de DIA ACTIVO — se edita un dia a la vez.
+  // El quick-edit clasico conserva la pila completa con anclas (cero cambios de comportamiento).
+  const isEditor = state.meta !== undefined
+  const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
+  // Fallback en cadena: eleccion del coach → dia que aplica HOY → primero en orden de lectura.
+  // Si el dia activo se elimina, la cadena resuelve sola al siguiente.
+  const activeVariant = useMemo(() => {
+    if (!isEditor) return null
+    return (
+      orderedVariants.find((variant) => variant.key === activeDayKey) ??
+      orderedVariants.find((variant) => variant.key === todayVariantKey) ??
+      orderedVariants[0] ??
+      null
+    )
+  }, [isEditor, orderedVariants, activeDayKey, todayVariantKey])
+  const visibleVariants = isEditor && activeVariant ? [activeVariant] : orderedVariants
+  // Totales EN VIVO del dia activo (items + porciones) para la barra fija de abajo.
+  const dayTotals = useMemo((): PublishBarDayTotals | null => {
+    if (!activeVariant) return null
+    const totals = qeVariantTotalWithPortions(activeVariant, exchangeGroups)
+    const target = Number(activeVariant.targets.calories.trim())
+    return {
+      label: multiDay ? activeVariant.label : null,
+      calories: totals.calories,
+      proteinG: totals.proteinG,
+      carbsG: totals.carbsG,
+      fatsG: totals.fatsG,
+      targetCalories: Number.isFinite(target) && target > 0 ? target : null,
+    }
+  }, [activeVariant, exchangeGroups, multiDay])
 
   return (
     <div
@@ -132,7 +167,15 @@ export function QuickEditPlanView() {
         </div>
       </header>
 
-      <div className={'mx-auto w-full max-w-3xl space-y-4 px-3 py-4 ' + (isPending ? 'pointer-events-none opacity-70' : '')}>
+      <div
+        className={
+          'mx-auto w-full px-3 py-4 ' +
+          // W3b: en el editor desktop el lienzo convive con la paleta lateral (grid 2 col).
+          (isEditor ? 'max-w-3xl lg:grid lg:max-w-6xl lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-6 ' : 'max-w-3xl ') +
+          (isPending ? 'pointer-events-none opacity-70' : '')
+        }
+      >
+        <div className="min-w-0 space-y-4">
         {/* Respaldo local: hay un borrador de una sesion anterior (mismo plan/version) sin publicar. */}
         {pendingRestore ? (
           <div className="animate-in slide-in-from-top-1 rounded-card border border-primary/25 bg-primary/10 p-3">
@@ -164,13 +207,26 @@ export function QuickEditPlanView() {
             (ruta /editor); en el quick-edit clasico este bloque no se pinta. */}
         {state.meta ? <EditorMetaCard /> : null}
 
-        {/* Índice de días (P1-1): ancla por día arriba de la pila. Con un solo día no aporta. */}
-        {multiDay ? <DayAnchorNav variants={orderedVariants} todayVariantKey={todayVariantKey} /> : null}
+        {/* Capsula de dia activo (W3b, editor): UN dia a la vez; los chips CAMBIAN el dia en
+            edicion. Clasico: indice de anclas de siempre (P1-1) sobre la pila completa. */}
+        {isEditor && multiDay && activeVariant ? (
+          <EditorDayCapsule
+            variants={orderedVariants}
+            activeKey={activeVariant.key}
+            todayVariantKey={todayVariantKey}
+            onSelect={setActiveDayKey}
+          />
+        ) : null}
+        {!isEditor && multiDay ? (
+          <DayAnchorNav variants={orderedVariants} todayVariantKey={todayVariantKey} />
+        ) : null}
 
-        {orderedVariants.map((variant, dayIndex) => (
+        {visibleVariants.map((variant, dayIndex) => (
           // `scroll-mt-20` deja el título del día por debajo del header sticky al saltar acá.
           <section key={variant.key} id={qeDaySectionId(dayIndex)} className="scroll-mt-20 space-y-4">
-            {multiDay ? <DayVariantHeader variant={variant} /> : null}
+            {/* En el editor el encabezado del dia vive SIEMPRE (su menu: duplicar/copiar/
+                renombrar); en el clasico solo con multi-dia, como siempre. */}
+            {multiDay || isEditor ? <DayVariantHeader variant={variant} /> : null}
             <TargetsEditorCard variant={variant} />
             {usesSlots || variant.slots.length > 0 ? (
               <>
@@ -271,9 +327,13 @@ export function QuickEditPlanView() {
 
         {/* Espacio para que la barra sticky no tape la ultima card. */}
         <div aria-hidden="true" className="h-24" />
+        </div>
+
+        {/* Paleta lateral (W3b, editor desktop): picker siempre a la vista sobre el dia activo. */}
+        {isEditor && activeVariant ? <EditorPalette variant={activeVariant} /> : null}
       </div>
 
-      <PublishBar />
+      <PublishBar dayTotals={dayTotals} />
       <PublishConfirmSheet />
       <StaleBaseDialog />
     </div>
@@ -290,6 +350,66 @@ export function QuickEditPlanView() {
  * que sirve igual con nombres tipo "Día de entrenamiento". El día que aplica HOY va con
  * anillo de acento, mismo patrón que `DayVariantWeekStrip` y `WeekDayNav`.
  */
+/**
+ * Capsula de DIA ACTIVO (W3b, solo editor): mismos chips del indice, pero en vez de scrollear
+ * la pila CAMBIAN que dia se edita (un dia a la vez). El dia que aplica HOY conserva su anillo.
+ */
+function EditorDayCapsule({
+  variants,
+  activeKey,
+  todayVariantKey,
+  onSelect,
+}: {
+  variants: readonly QeVariant[]
+  activeKey: string
+  todayVariantKey: string | null
+  onSelect: (key: string) => void
+}) {
+  return (
+    <nav aria-label={QE_COPY.daySwitcherLabel} className="-mx-3 overflow-x-auto px-3 pb-1">
+      <ul className="flex w-max min-w-full items-center gap-1.5">
+        {variants.map((variant) => {
+          const isActive = variant.key === activeKey
+          const isToday = todayVariantKey != null && variant.key === todayVariantKey
+          const short = variant.isDefault
+            ? QE_COPY.baseDayShort
+            : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
+          return (
+            <li key={variant.key}>
+              <button
+                type="button"
+                aria-pressed={isActive}
+                aria-label={variant.label + (isToday ? ` — ${QE_COPY.dayAppliesToday}` : '')}
+                title={variant.label}
+                onClick={() => onSelect(variant.key)}
+                className={
+                  'inline-flex min-h-11 max-w-[13rem] items-center gap-1.5 rounded-pill border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                  (isActive
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border-subtle bg-surface-card text-body hover:bg-surface-sunken hover:text-strong') +
+                  (isToday && !isActive ? ' ring-1 ring-primary/60' : '')
+                }
+              >
+                {short ? (
+                  <span
+                    className={
+                      'shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] ' +
+                      (isActive ? 'text-primary' : 'text-primary')
+                    }
+                  >
+                    {short}
+                  </span>
+                ) : null}
+                <span className="truncate">{variant.label}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
+
 function DayAnchorNav({
   variants,
   todayVariantKey,

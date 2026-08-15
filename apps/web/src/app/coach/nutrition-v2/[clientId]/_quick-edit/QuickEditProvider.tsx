@@ -43,6 +43,7 @@ import {
   buildSubstitutionMap,
   catalogToPortionGroups,
   collectPortionGroups,
+  countItemOrderChanges,
   countItemSubstitutionChanges,
   countVariantHeaderChanges,
   mergePortionGroupChoices,
@@ -324,7 +325,8 @@ export function QuickEditProvider({
     () =>
       countDraftChanges(baselineDraft, currentDraft) +
       countVariantHeaderChanges(baselineDraft, currentDraft) +
-      countItemSubstitutionChanges(baselineDraft, currentDraft),
+      countItemSubstitutionChanges(baselineDraft, currentDraft) +
+      countItemOrderChanges(baselineDraft, currentDraft),
     [baselineDraft, currentDraft],
   )
   // La validacion local necesita la ESTRATEGIA para evaluar el dia vacio (en `flexible` un dia

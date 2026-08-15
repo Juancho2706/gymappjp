@@ -16,7 +16,19 @@ import { QE_COPY } from './microcopy'
 // Nutricion Pro viene incluido en los planes pagos — el CTA apunta al cambio de plan.
 const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
 
-export function PublishBar() {
+/** Totales EN VIVO del dia activo (W3b, solo editor): items + porciones a eleccion. */
+export interface PublishBarDayTotals {
+  /** Etiqueta del dia (multi-dia); null = plan de un solo dia (no se nombra). */
+  label: string | null
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+  /** Meta de calorias del dia, si el coach la fijo. */
+  targetCalories: number | null
+}
+
+export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTotals | null }) {
   const {
     changeCount,
     isPending,
@@ -29,7 +41,9 @@ export function PublishBar() {
     discardChanges,
   } = useQuickEdit()
 
-  const visible = changeCount > 0 || publishError !== null || upgradeRequired || substitutionsFailed
+  const hasActions = changeCount > 0 || publishError !== null || upgradeRequired || substitutionsFailed
+  // En el editor (dayTotals presente) la barra vive SIEMPRE: totales fijos abajo (W3b).
+  const visible = dayTotals !== null || hasActions
   if (!visible) return null
 
   return (
@@ -83,6 +97,25 @@ export function PublishBar() {
             <span className="min-w-0">{publishError}</span>
           </button>
         ) : null}
+        {/* W3b: totales del dia activo, siempre a la vista mientras se edita. */}
+        {dayTotals ? (
+          <p
+            className={
+              'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs font-semibold tabular-nums text-body ' +
+              (hasActions ? 'mb-2' : '')
+            }
+          >
+            {dayTotals.label ? <span className="text-muted">{dayTotals.label} ·</span> : null}
+            <span className="text-strong">
+              {Math.round(dayTotals.calories)}
+              {dayTotals.targetCalories != null ? ` / ${Math.round(dayTotals.targetCalories)}` : ''} kcal
+            </span>
+            <span>P {Math.round(dayTotals.proteinG)}</span>
+            <span>C {Math.round(dayTotals.carbsG)}</span>
+            <span>G {Math.round(dayTotals.fatsG)}</span>
+          </p>
+        ) : null}
+        {hasActions ? (
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-sm font-semibold text-strong" aria-live="polite">
             {QE_COPY.dirtyBar(changeCount)}
@@ -107,6 +140,7 @@ export function PublishBar() {
             </button>
           </div>
         </div>
+        ) : null}
       </div>
     </div>
   )

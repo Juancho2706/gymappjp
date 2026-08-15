@@ -324,7 +324,14 @@ export function EditableSlotCard({
             </p>
           ) : (
             slot.items.map((item, itemIndex) => (
-              <EditableItemRow key={item.key} variantKey={variantKey} slotKey={slot.key} item={item} index={itemIndex} />
+              <EditableItemRow
+                key={item.key}
+                variantKey={variantKey}
+                slotKey={slot.key}
+                item={item}
+                index={itemIndex}
+                count={slot.items.length}
+              />
             ))
           )}
         </div>

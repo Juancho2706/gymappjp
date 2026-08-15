@@ -163,6 +163,13 @@ export const QE_COPY = {
   copyDayCta: (n: number) => (n === 1 ? 'Copiar a 1 día' : `Copiar a ${n} días`),
   copyDayDone: (n: number) => (n === 1 ? 'Día copiado a 1 destino' : `Día copiado a ${n} destinos`),
   copyDayNothing: 'Elige al menos un día destino.',
+  // ── W3b (editor unico): reorden dentro de la franja + capsula de dia activo.
+  moveItemUp: 'Subir',
+  moveItemDown: 'Bajar',
+  daySwitcherLabel: 'Día del plan en edición',
+  paletteTitle: 'Agregar alimentos',
+  paletteSlotLabel: 'A la franja',
+  paletteNoSlots: 'Este día no tiene franjas: crea una para agregar alimentos.',
   // ── Índice de días (P1-1): anclas arriba de la pila para no scrollear a ciegas.
   dayIndexLabel: 'Ir a un día del plan',
   dayIndexJump: (label: string) => `Ir a ${label}`,

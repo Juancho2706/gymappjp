@@ -15,8 +15,11 @@
 
 import { useRef, useState } from 'react'
 import {
+  ArrowDown,
   ArrowLeftRight,
+  ArrowUp,
   BookmarkPlus,
+  GripVertical,
   ListPlus,
   Loader2,
   MoreVertical,
@@ -63,16 +66,28 @@ function slotOptionLabel(slot: QeSlot): string {
   return slot.startTime ? `${name} · ${slot.startTime}` : name
 }
 
+/** Tipo MIME propio del drag de items del editor (W3b): jamas interpretar drops ajenos. */
+const QE_ITEM_DRAG_MIME = 'application/x-eva-qe-item'
+
+interface QeItemDragPayload {
+  variantKey: string
+  slotKey: string
+  itemKey: string
+}
+
 export function EditableItemRow({
   variantKey,
   slotKey,
   item,
   index,
+  count,
 }: {
   variantKey: string
   slotKey: string
   item: QeItem
   index: number
+  /** Total de items de la franja (habilita Subir/Bajar del editor; ausente = sin reorden). */
+  count?: number
 }) {
   const { clientId, state, dispatch, errors, showErrors, isPending } = useQuickEdit()
   const [swapOpen, setSwapOpen] = useState(false)
@@ -150,6 +165,39 @@ export function EditableItemRow({
     })
   }
 
+  /** Reorden dentro de la franja (W3b): gesto no destructivo, sin confirm ni undo. */
+  function handleReorder(toIndex: number) {
+    setMenuOpen(false)
+    dispatch({ type: 'REORDER_ITEM', variantKey, slotKey, itemKey: item.key, toIndex })
+  }
+
+  /** Drop de otro item del editor sobre ESTA fila: mismo slot = reorden; otro slot del mismo dia = mover. */
+  function handleItemDrop(event: React.DragEvent) {
+    const raw = event.dataTransfer.getData(QE_ITEM_DRAG_MIME)
+    if (!raw) return
+    event.preventDefault()
+    let payload: QeItemDragPayload
+    try {
+      payload = JSON.parse(raw) as QeItemDragPayload
+    } catch {
+      return
+    }
+    // Cruce de dias por drag no existe (la capsula muestra un dia a la vez).
+    if (payload.variantKey !== variantKey || payload.itemKey === item.key) return
+    if (payload.slotKey === slotKey) {
+      dispatch({ type: 'REORDER_ITEM', variantKey, slotKey, itemKey: payload.itemKey, toIndex: index })
+      return
+    }
+    dispatch({
+      type: 'MOVE_ITEM',
+      variantKey,
+      fromSlotKey: payload.slotKey,
+      toSlotKey: slotKey,
+      itemKey: payload.itemKey,
+      toIndex: index,
+    })
+  }
+
   /** Quitar un reemplazo autorizado: optimista + Deshacer que restituye en su indice (T2.6 F1). */
   function handleRemoveSubstitution(sub: QeItemSubstitution, subIndex: number) {
     dispatch({ type: 'REMOVE_ITEM_SUBSTITUTION', variantKey, slotKey, itemKey: item.key, index: subIndex })
@@ -190,8 +238,36 @@ export function EditableItemRow({
   }
 
   return (
-    <div className="rounded-control border border-border-subtle bg-surface-card p-2.5">
+    <div
+      className="rounded-control border border-border-subtle bg-surface-card p-2.5"
+      onDragOver={
+        isEditor
+          ? (event) => {
+              if (event.dataTransfer.types.includes(QE_ITEM_DRAG_MIME)) event.preventDefault()
+            }
+          : undefined
+      }
+      onDrop={isEditor ? handleItemDrop : undefined}
+    >
       <div className="flex items-start gap-2.5">
+        {/* W3b: manija de drag (desktop; en touch el reorden vive en el menu Subir/Bajar). */}
+        {isEditor ? (
+          <div
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData(
+                QE_ITEM_DRAG_MIME,
+                JSON.stringify({ variantKey, slotKey, itemKey: item.key } satisfies QeItemDragPayload),
+              )
+              event.dataTransfer.effectAllowed = 'move'
+            }}
+            aria-hidden="true"
+            title="Arrastra para reordenar o mover de franja"
+            className="hidden shrink-0 cursor-grab select-none items-center self-stretch text-muted hover:text-strong lg:flex"
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+        ) : null}
         <FoodThumb imageUrl={imageUrl} iconUrl={iconUrl} alt={item.displayName || 'Alimento'} />
         <div className="min-w-0 flex-1">
           {item.isCustom ? (
@@ -331,6 +407,29 @@ export function EditableItemRow({
             <p className="mt-1 px-1 text-xs leading-5 text-muted">{QE_COPY.moveFoodSingleSlot}</p>
           ) : null}
         </div>
+
+        {isEditor && typeof count === 'number' && count > 1 ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={isPending || index === 0}
+              onClick={() => handleReorder(index - 1)}
+              className={menuItemClass + ' flex-1'}
+            >
+              <ArrowUp aria-hidden="true" className="h-4 w-4 text-muted" />
+              {QE_COPY.moveItemUp}
+            </button>
+            <button
+              type="button"
+              disabled={isPending || index === count - 1}
+              onClick={() => handleReorder(index + 1)}
+              className={menuItemClass + ' flex-1'}
+            >
+              <ArrowDown aria-hidden="true" className="h-4 w-4 text-muted" />
+              {QE_COPY.moveItemDown}
+            </button>
+          </div>
+        ) : null}
 
         {isEditor ? (
           <button

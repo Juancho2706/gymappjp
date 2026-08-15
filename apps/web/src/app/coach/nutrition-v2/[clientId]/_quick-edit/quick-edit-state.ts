@@ -699,6 +699,12 @@ export type QuickEditAction =
    */
   | { type: 'MOVE_ITEM'; variantKey: string; fromSlotKey: string; toSlotKey: string; itemKey: string; toIndex?: number }
   /**
+   * Reordena un item DENTRO de su franja (W3b). `MOVE_ITEM` cubre solo el cruce de franjas;
+   * el orden interno es la secuencia visible del plato y el draft lo proyecta por posicion
+   * (`orderIndex`). Indice fuera de rango se clampa; sin movimiento real = estado intacto.
+   */
+  | { type: 'REORDER_ITEM'; variantKey: string; slotKey: string; itemKey: string; toIndex: number }
+  /**
    * `prefill` = porcion pegajosa (T2.6 F4): la ultima cantidad que el coach uso para este
    * alimento, resuelta server-side con su precedencia (alumno > coach > catalogo). Ausente =
    * `servingSize` del catalogo, comportamiento de siempre. Sugiere, nunca decide.
@@ -1404,6 +1410,17 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         }),
       }))
     }
+    case 'REORDER_ITEM':
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => {
+        const fromIndex = slot.items.findIndex((item) => item.key === action.itemKey)
+        if (fromIndex < 0) return slot
+        const toIndex = Math.max(0, Math.min(slot.items.length - 1, action.toIndex))
+        if (toIndex === fromIndex) return slot
+        const items = [...slot.items]
+        const [moved] = items.splice(fromIndex, 1)
+        items.splice(toIndex, 0, moved!)
+        return { ...slot, items }
+      })
     case 'ADD_CATALOG_ITEM': {
       const created = createCatalogItem(action.key, action.food)
       // Porcion pegajosa (T2.6 F4): la memoria pisa la precarga del catalogo, nada mas.
@@ -2218,6 +2235,42 @@ export function countItemSubstitutionChanges(
           count += 1
         }
       }
+    }
+  }
+  return count
+}
+
+/**
+ * Cambios de ORDEN de items dentro de sus franjas (W3b), emparejando franjas por `id`. El
+ * paquete no compara orden a proposito ("reordenar es F2"): hasta el editor unico ninguna
+ * superficie reordenaba dentro de la franja, y sin esto un reorden puro dejaria la barra en
+ * "0 cambios" sin poder publicar. Cuenta 1 por franja cuyo orden relativo de items (los que
+ * existen en ambos lados, por id) cambio. Mismo criterio local que los otros dos contadores.
+ */
+export function countItemOrderChanges(
+  baseline: NutritionPlanDraft,
+  current: NutritionPlanDraft,
+): number {
+  const baselineSlotsById = new Map<string, DraftSlot>()
+  for (const variant of baseline.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      if (slot.id) baselineSlotsById.set(slot.id, slot)
+    }
+  }
+  let count = 0
+  for (const variant of current.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      if (!slot.id) continue
+      const base = baselineSlotsById.get(slot.id)
+      if (!base) continue
+      const currentIds = slot.items.map((item) => item.id).filter((id): id is string => Boolean(id))
+      const currentSet = new Set(currentIds)
+      const baseShared = base.items
+        .map((item) => item.id)
+        .filter((id): id is string => Boolean(id) && currentSet.has(id as string))
+      const baseSet = new Set(baseShared)
+      const currentShared = currentIds.filter((id) => baseSet.has(id))
+      if (baseShared.join('|') !== currentShared.join('|')) count += 1
     }
   }
   return count

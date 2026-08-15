@@ -7,6 +7,7 @@ import {
 } from '@eva/nutrition-v2'
 import {
   applyQuickEditToDraft,
+  countItemOrderChanges,
   countItemSubstitutionChanges,
   draftToEditState,
   qeAllowedStrategies,
@@ -550,6 +551,51 @@ describe('draftToEditState (creacion)', () => {
     const rememberedItem = remembered.variants[0]!.slots[0]!.items.at(-1)!
     expect(rememberedItem.quantity).toBe('75')
     expect(rememberedItem.unit).toBe('g')
+  })
+
+  it('REORDER_ITEM reordena dentro de la franja, clampa el indice y el contador local lo cuenta', () => {
+    const state = hydrateWithMeta()
+    const at = { variantKey: VARIANT_ID, slotKey: SLOT_ID }
+    // Segundo item para tener algo que reordenar.
+    const two = quickEditReducer(state, { type: 'ADD_CATALOG_ITEM', ...at, key: 'k-b', food: TEMPLATE_FOOD })
+    const baseline = draftOf(two)
+
+    const reordered = quickEditReducer(two, { type: 'REORDER_ITEM', ...at, itemKey: ITEM_ID, toIndex: 1 })
+    expect(reordered.variants[0]!.slots[0]!.items.map((item) => item.key)).toEqual(['k-b', ITEM_ID])
+    // El item nuevo no tiene id (cuenta como alta entera), asi que el orden de los COMPARTIDOS
+    // no cambia el contador — reordenar dos items CON id si:
+    const current = draftOf(reordered)
+    // clamp: indice fuera de rango no revienta ni duplica
+    const clamped = quickEditReducer(two, { type: 'REORDER_ITEM', ...at, itemKey: ITEM_ID, toIndex: 99 })
+    expect(clamped.variants[0]!.slots[0]!.items).toHaveLength(2)
+    // countItemOrderChanges con un solo item con id compartido = 0 (no hay orden relativo)
+    expect(countItemOrderChanges(baseline, current)).toBe(0)
+
+    // Con DOS items con id (hidratados): duplicamos el fixture del item para simularlo.
+    const baseDraft = draftOf(state)
+    const secondId = '20202020-2020-4020-8020-202020202020'
+    const withTwoIds = {
+      ...baseDraft,
+      dayVariants: baseDraft.dayVariants.map((variant) => ({
+        ...variant,
+        mealSlots: variant.mealSlots.map((slot) => ({
+          ...slot,
+          items: [...slot.items, { ...slot.items[0]!, id: secondId, orderIndex: 1 }],
+        })),
+      })),
+    }
+    const swapped = {
+      ...withTwoIds,
+      dayVariants: withTwoIds.dayVariants.map((variant) => ({
+        ...variant,
+        mealSlots: variant.mealSlots.map((slot) => ({
+          ...slot,
+          items: [...slot.items].reverse(),
+        })),
+      })),
+    }
+    expect(countItemOrderChanges(withTwoIds, swapped)).toBe(1)
+    expect(countItemOrderChanges(withTwoIds, withTwoIds)).toBe(0)
   })
 
   it('qeAllowedStrategies: flexible solo sin franjas', () => {
