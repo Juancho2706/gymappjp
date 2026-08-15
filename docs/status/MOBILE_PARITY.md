@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-14 @ c74b176c"
+last_verified: "2026-08-15 @ dd43c45c"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -95,8 +95,9 @@ source_of_truth: apps/web responsive + apps/mobile
 > ya están en LIVE (`coach_food_last_qty_for_client` invoker+RLS, `coach_food_last_qty_remember`
 > definer con guards) y el `ADD_ITEM` web acepta `prefill`; a RN le falta el camino de datos
 > (llamada con JWT del coach — directa o vía `/api/mobile`) y el prefill en su `ADD_ITEM`.
-> **Sin QA en dispositivo** (la corre el dueño) y **sin OTA**: iOS 1.1.0(53) está en App Review y
-> el canal es compartido — el OTA android se propone recién al salir el veredicto.
+> **QA en dispositivo COMPLETO (owner, 2026-08-15)** vía OTA android `a93d01a3` (F2 copy semana y
+> F4 porción pegajosa siguen declarados SIN portar). El OTA fue android-only: iOS 1.1.0 (54) sigue
+> en App Review y el canal es compartido.
 
 > **2026-08-14 (T2.7 re-skin del alumno — qué cruzó a RN y qué es web-only)**: del programa T2.7
 > (`docs/specs/nutrition-student-reskin/`) cruzaron a RN en los MISMOS commits que web: **F1**
@@ -111,7 +112,11 @@ source_of_truth: apps/web responsive + apps/mobile
 > transiciones (la navegación del router lo es) sin turno. **RN es inmune verificado**: su
 > `usePortionMarks` (`apps/mobile/components/alumno/nutrition-v2/usePortionMarks.ts`) es
 > useReducer + refs, sin `useOptimistic` en todo `apps/mobile`. El puente fetch H12 tampoco aplica
-> (RN ya hablaba por `/api/mobile/*`). QA en dispositivo del re-skin RN: pendiente (owner).
+> (RN ya hablaba por `/api/mobile/*`). **QA en dispositivo del re-skin RN: COMPLETO (owner, 2026-08-15)**
+> sobre los OTAs android `a93d01a3` + `901dc471`; la ronda 2 (`dd43c45c`) arregló la media del detalle
+> de Aprender (el catálogo guarda el GIF animado en `video_url`, gif_url null en 818/889 → clasificar
+> con `execMediaKind`, nunca por columna) y dos víctimas del gotcha css-interop `style`-función
+> ("Fuentes y método" y el share de Records).
 
 La paridad global **no está certificada todavía**.
 
