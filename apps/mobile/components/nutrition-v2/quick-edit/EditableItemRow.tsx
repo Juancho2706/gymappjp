@@ -68,6 +68,7 @@ export function EditableItemRow({
   disabled = false,
   scope = null,
   onQuantityChange,
+  onQuantityCommit,
   onUnitChange,
   onNameChange,
   onSwap,
@@ -82,6 +83,8 @@ export function EditableItemRow({
   /** Workspace del coach; sin el no hay a donde escribir la correccion. */
   scope?: NutritionV2CoachScope | null
   onQuantityChange: (value: string) => void
+  /** Cantidad fijada (blur): la porcion pegajosa del editor la recuerda. */
+  onQuantityCommit?: () => void
   onUnitChange: (unit: string) => void
   onNameChange: (value: string) => void
   onSwap: () => void
@@ -193,6 +196,7 @@ export function EditableItemRow({
         <QuantityStepper
           value={item.quantity}
           onChange={onQuantityChange}
+          onCommit={onQuantityCommit}
           step={quantityStep(item.unit)}
           accessibilityLabel={`Cantidad de ${item.displayName || 'alimento'}`}
           disabled={disabled}

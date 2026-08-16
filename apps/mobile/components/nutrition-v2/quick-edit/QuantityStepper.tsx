@@ -13,12 +13,18 @@ import { useTheme } from '../../../context/ThemeContext'
 export function QuantityStepper({
   value,
   onChange,
+  onCommit,
   step,
   accessibilityLabel,
   disabled = false,
 }: {
   value: string
   onChange: (value: string) => void
+  /**
+   * La cantidad quedo FIJA (el campo perdio el foco). Lo usa la porcion pegajosa del editor
+   * para recordarla; el quick-edit clasico no manda nada y no escribe memoria.
+   */
+  onCommit?: () => void
   step: number
   accessibilityLabel: string
   disabled?: boolean
@@ -47,6 +53,7 @@ export function QuantityStepper({
         accessibilityLabel={accessibilityLabel}
         value={value}
         onChangeText={onChange}
+        onBlur={onCommit}
         editable={!disabled}
         keyboardType="decimal-pad"
         selectTextOnFocus

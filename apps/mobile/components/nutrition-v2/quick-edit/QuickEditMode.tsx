@@ -54,7 +54,9 @@ import {
   mergePortionGroupChoices,
   nextDaysFrom,
   planCopy,
+  qeExchangeGroups,
   qeSlotCopyTargets,
+  qeVariantTotalWithPortions,
   quickEditReducer,
   readModelToDraft,
   readModelToEditState,
@@ -100,6 +102,10 @@ import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-porti
 import { publishDraftRN, publishQuickEditRN } from '../../../lib/nutrition-v2.api'
 import type { EditorCreationInput } from '../../../lib/nutrition-v2-editor'
 import {
+  rememberFoodQuantity,
+  type RememberedQuantities,
+} from '../../../lib/nutrition-v2-last-quantity'
+import {
   clearNutritionDraft,
   quickEditDraftKey,
   readNutritionDraft,
@@ -111,7 +117,7 @@ import { EditableSlotCard } from './EditableSlotCard'
 import { EditorMetaCard } from './EditorMetaCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
-import { PublishBar, UndoSnackbar } from './PublishBar'
+import { PublishBar, UndoSnackbar, type PublishBarDayTotals } from './PublishBar'
 import { ProUpsellSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
 import {
   EDITOR_COPY,
@@ -197,6 +203,12 @@ export interface QuickEditEditorInput {
   creation: EditorCreationInput | null
   /** El `?from=` pedido no abrio: se degrado y hay que decirlo (jamas en silencio). */
   originUnavailable: boolean
+  /**
+   * Porcion pegajosa (T2.6 F4): ultima cantidad por alimento con la precedencia alumno > coach
+   * ya resuelta en SQL. El alta desde el catalogo la precarga y el commit del campo la
+   * actualiza. Vacio = todo cae al `servingSize` del catalogo, como siempre.
+   */
+  rememberedQuantities: RememberedQuantities
 }
 
 /**
@@ -355,6 +367,9 @@ export function QuickEditMode({
   const [copyDayKey, setCopyDayKey] = useState<string | null>(null)
   const [copyDayMode, setCopyDayMode] = useState<CopyMode>('replace')
   const [copyDayDays, setCopyDayDays] = useState<number[]>([])
+  // W3b (solo editor): capsula de DIA ACTIVO — se edita un dia a la vez. El quick-edit clasico
+  // conserva la pila completa con anclas (cero cambios de comportamiento).
+  const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
   // CE-5: menú de la franja + hoja multi-select de días destino de la copia.
   const [slotMenu, setSlotMenu] = useState<SlotRef | null>(null)
   const [copySource, setCopySource] = useState<SlotRef | null>(null)
@@ -379,6 +394,8 @@ export function QuickEditMode({
   // Idempotency key por INTENCION de publicar: fresca al abrir el confirm, reutilizada
   // en todos los reintentos de esa intencion (qe-design §2.5).
   const intentKeyRef = useRef<string | null>(null)
+  // Ultima firma recordada por item (porcion pegajosa): evita reescribir lo mismo en cada blur.
+  const rememberedSignatureRef = useRef<Record<string, string>>({})
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -765,6 +782,37 @@ export function QuickEditMode({
     [weekVariants, todayIso],
   )
 
+  /**
+   * Dia en edicion (solo editor). Fallback en cadena: eleccion del coach → dia que aplica HOY →
+   * primero en orden de lectura. Si el dia activo se elimina, la cadena resuelve sola.
+   */
+  const activeVariant = useMemo(() => {
+    if (!editorMode) return null
+    return (
+      orderedVariants.find((variant) => variant.key === activeDayKey) ??
+      orderedVariants.find((variant) => variant.key === todayVariantKey) ??
+      orderedVariants[0] ??
+      null
+    )
+  }, [editorMode, orderedVariants, activeDayKey, todayVariantKey])
+  const visibleVariants = editorMode && activeVariant ? [activeVariant] : orderedVariants
+  // Diccionario del engine para que los subtotales SUMEN las porciones a eleccion.
+  const exchangeGroups = useMemo(() => qeExchangeGroups(portionGroups), [portionGroups])
+  // Totales EN VIVO del dia activo (items + porciones) para la barra fija de abajo (W3b).
+  const dayTotals = useMemo((): PublishBarDayTotals | null => {
+    if (!activeVariant) return null
+    const totals = qeVariantTotalWithPortions(activeVariant, exchangeGroups)
+    const target = Number(activeVariant.targets.calories.trim())
+    return {
+      label: showVariantHeader ? activeVariant.label : null,
+      calories: totals.calories,
+      proteinG: totals.proteinG,
+      carbsG: totals.carbsG,
+      fatsG: totals.fatsG,
+      targetCalories: Number.isFinite(target) && target > 0 ? target : null,
+    }
+  }, [activeVariant, exchangeGroups, showVariantHeader])
+
   const handleDayLayout = useCallback((variantKey: string, y: number) => {
     dayOffsetsRef.current[variantKey] = y
   }, [])
@@ -1025,17 +1073,45 @@ export function QuickEditMode({
           food: builderFood,
         })
       } else {
+        // Porcion pegajosa: si el coach ya fijo una cantidad para este alimento, el alta nace
+        // con ella (y su unidad). Sin memoria, el reducer cae al `servingSize` del catalogo.
+        const prefill = editor?.rememberedQuantities[builderFood.id]
         dispatch({
           type: 'ADD_CATALOG_ITEM',
           variantKey: searchTarget.variantKey,
           slotKey: searchTarget.slotKey,
           key: genKey('item'),
           food: builderFood,
+          ...(prefill ? { prefill } : {}),
         })
       }
       setSearchTarget(null)
     },
-    [searchTarget, findItem],
+    [searchTarget, findItem, editor],
+  )
+
+  /**
+   * Porcion pegajosa: al FIJAR la cantidad (blur) se recuerda para la proxima, en este alumno y
+   * en general. Solo el editor escribe memoria (el quick-edit clasico ni lee ni escribe) y solo
+   * con alimento del catalogo en mano. La firma evita reescribir lo mismo en cada blur.
+   */
+  const handleQuantityCommit = useCallback(
+    (variantKey: string, slotKey: string, itemKey: string) => {
+      if (!editorMode) return
+      const found = findItem({ variantKey, slotKey, itemKey })
+      const food = found?.item.food
+      if (!food) return
+      const signature = food.id + ':' + found.item.quantity + ':' + found.item.unit
+      if (rememberedSignatureRef.current[itemKey] === signature) return
+      rememberedSignatureRef.current[itemKey] = signature
+      void rememberFoodQuantity(supabase as unknown as NutritionV2WriteClient, {
+        clientId,
+        foodId: food.id,
+        quantity: found.item.quantity,
+        unit: found.item.unit,
+      })
+    },
+    [editorMode, findItem, clientId],
   )
 
   const handleFreeItem = useCallback(() => {
@@ -1290,7 +1366,17 @@ export function QuickEditMode({
             <DayAnchorRow
               variants={orderedVariants}
               todayVariantKey={todayVariantKey}
-              onJump={jumpToDay}
+              activeVariantKey={activeVariant?.key ?? null}
+              onJump={(variantKey) => {
+                // Editor: los chips CAMBIAN el dia en edicion (capsula); el clasico scrollea
+                // hasta el bloque, que sigue apilado abajo.
+                if (editorMode) {
+                  setActiveDayKey(variantKey)
+                  scrollRef.current?.scrollTo({ y: 0, animated: true })
+                  return
+                }
+                jumpToDay(variantKey)
+              }}
             />
           ) : null}
         </View>
@@ -1366,7 +1452,7 @@ export function QuickEditMode({
             </View>
           ) : null}
 
-          {orderedVariants.map((variant) => (
+          {visibleVariants.map((variant) => (
             <View
               key={variant.key}
               className="gap-3"
@@ -1482,6 +1568,11 @@ export function QuickEditMode({
                       }
                       onItemQuantity={(itemKey, value) =>
                         dispatch({ type: 'SET_ITEM_QUANTITY', variantKey: variant.key, slotKey: slot.key, itemKey, value })
+                      }
+                      onItemQuantityCommit={
+                        editorMode
+                          ? (itemKey) => handleQuantityCommit(variant.key, slot.key, itemKey)
+                          : undefined
                       }
                       onItemUnit={(itemKey, unit) =>
                         dispatch({ type: 'SET_ITEM_UNIT', variantKey: variant.key, slotKey: slot.key, itemKey, unit })
@@ -1613,6 +1704,7 @@ export function QuickEditMode({
           count={count}
           publishing={publishing}
           errorMessage={publishError}
+          dayTotals={dayTotals}
           onDiscard={handleDiscard}
           onPublish={handlePublishRequest}
           onRetry={handleRetry}
@@ -2307,10 +2399,13 @@ function VariantWeekStrip({
 function DayAnchorRow({
   variants,
   todayVariantKey,
+  activeVariantKey = null,
   onJump,
 }: {
   variants: readonly QeVariant[]
   todayVariantKey: string | null
+  /** Editor: dia en edicion (chip marcado). Ausente = indice de anclas del quick-edit clasico. */
+  activeVariantKey?: string | null
   onJump: (variantKey: string) => void
 }) {
   return (
@@ -2325,6 +2420,9 @@ function DayAnchorRow({
     >
       {variants.map((variant) => {
         const isToday = todayVariantKey != null && variant.key === todayVariantKey
+        // En el editor manda el dia ACTIVO: marcar el de hoy mientras se edita otro mentiria
+        // sobre que se esta tocando.
+        const isMarked = activeVariantKey != null ? variant.key === activeVariantKey : isToday
         // Sin día fijo y sin ser la base (dato inválido, tolerado en lectura) el chip se queda
         // solo con la etiqueta: no se inventa un día de semana.
         const short = variant.isDefault
@@ -2341,7 +2439,7 @@ function DayAnchorRow({
             hitSlop={4}
             className={
               'min-h-11 flex-row items-center gap-1.5 rounded-pill border px-3 ' +
-              (isToday ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card')
+              (isMarked ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card')
             }
           >
             {short ? (
@@ -2350,7 +2448,7 @@ function DayAnchorRow({
               </Text>
             ) : null}
             <Text
-              className={'text-sm font-semibold ' + (isToday ? 'text-primary' : 'text-body')}
+              className={'text-sm font-semibold ' + (isMarked ? 'text-primary' : 'text-body')}
               numberOfLines={1}
               style={{ maxWidth: 140 }}
             >

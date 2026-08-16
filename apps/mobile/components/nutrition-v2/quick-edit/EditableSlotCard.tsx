@@ -39,6 +39,7 @@ export function EditableSlotCard({
   onSearchFood,
   onAddFreeItem,
   onItemQuantity,
+  onItemQuantityCommit,
   onItemUnit,
   onItemName,
   onSwapItem,
@@ -66,6 +67,8 @@ export function EditableSlotCard({
   onSearchFood: () => void
   onAddFreeItem: () => void
   onItemQuantity: (itemKey: string, value: string) => void
+  /** Cantidad fijada (blur) — porcion pegajosa del editor. Ausente = no se recuerda nada. */
+  onItemQuantityCommit?: (itemKey: string) => void
   onItemUnit: (itemKey: string, unit: string) => void
   onItemName: (itemKey: string, value: string) => void
   onSwapItem: (itemKey: string) => void
@@ -160,6 +163,9 @@ export function EditableSlotCard({
               scope={scope}
               onOverrideApplied={onFoodOverrideApplied}
               onQuantityChange={(value) => onItemQuantity(item.key, value)}
+              onQuantityCommit={
+                onItemQuantityCommit ? () => onItemQuantityCommit(item.key) : undefined
+              }
               onUnitChange={(unit) => onItemUnit(item.key, unit)}
               onNameChange={(value) => onItemName(item.key, value)}
               onSwap={() => onSwapItem(item.key)}

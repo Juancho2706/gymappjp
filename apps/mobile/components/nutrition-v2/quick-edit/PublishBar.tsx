@@ -11,10 +11,23 @@ import { QUICK_EDIT_COPY, dirtyBarLabel } from './microcopy'
  * de red/servidor muestra "No se pudo publicar. Reintentar" SIN perder el draft (el
  * reintento reusa la MISMA idempotency key — la maneja el orquestador).
  */
+/** Totales EN VIVO del dia en edicion (items + porciones), fijos al pie del editor (W3b). */
+export interface PublishBarDayTotals {
+  /** Etiqueta del dia; null en planes de un solo dia (no hay que desambiguar nada). */
+  label: string | null
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+  /** Meta de calorias del dia, si el coach la fijo. */
+  targetCalories: number | null
+}
+
 export function PublishBar({
   count,
   publishing,
   errorMessage,
+  dayTotals = null,
   onDiscard,
   onPublish,
   onRetry,
@@ -22,12 +35,19 @@ export function PublishBar({
   count: number
   publishing: boolean
   errorMessage: string | null
+  /**
+   * Editor unico (T3.3b/W3b): totales del dia activo. Presente ⇒ la barra vive SIEMPRE (los
+   * botones siguen apareciendo solo con cambios). Ausente = quick-edit clasico, igual que antes.
+   */
+  dayTotals?: PublishBarDayTotals | null
   onDiscard: () => void
   onPublish: () => void
   onRetry: () => void
 }) {
   const insets = useSafeAreaInsets()
   const { theme } = useTheme()
+  const hasActions = count > 0 || errorMessage !== null
+  if (dayTotals === null && !hasActions) return null
 
   return (
     <View
@@ -54,6 +74,21 @@ export function PublishBar({
           contador ("3 cam…") — justo el feedback principal del modo edición. Contador en línea
           propia y par de botones repartido en `flex-1` cada uno (gotcha conocido del proyecto:
           dos botones en fila SIEMPRE flex-1, nunca ancho intrínseco). */}
+      {/* W3b: totales del dia activo, siempre a la vista mientras se edita. */}
+      {dayTotals ? (
+        <View className="mb-2 flex-row flex-wrap items-baseline gap-x-2">
+          {dayTotals.label ? (
+            <Text className="text-xs font-semibold text-muted">{dayTotals.label} ·</Text>
+          ) : null}
+          <Text className="text-xs font-bold text-strong">
+            {Math.round(dayTotals.calories)}
+            {dayTotals.targetCalories != null ? ' / ' + Math.round(dayTotals.targetCalories) : ''} kcal
+          </Text>
+          <Text className="text-xs font-semibold text-body">P {Math.round(dayTotals.proteinG)}</Text>
+          <Text className="text-xs font-semibold text-body">C {Math.round(dayTotals.carbsG)}</Text>
+          <Text className="text-xs font-semibold text-body">G {Math.round(dayTotals.fatsG)}</Text>
+        </View>
+      ) : null}
       <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
         {dirtyBarLabel(count)}
       </Text>

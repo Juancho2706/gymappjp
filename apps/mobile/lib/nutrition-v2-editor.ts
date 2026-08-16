@@ -37,6 +37,7 @@ import { getNutritionClientDetailV2 } from './nutrition-v2.api'
 import { fetchNutritionV2ExchangeGroups } from './nutrition-v2-exchange-groups.api'
 import { fetchNutritionV2PlanTemplate } from './nutrition-v2-plan-templates.api'
 import { loadItemSubstitutionReads } from './nutrition-v2-quick-edit'
+import { fetchRememberedQuantities, type RememberedQuantities } from './nutrition-v2-last-quantity'
 import type { NutritionV2WriteClient } from './nutrition-v2-builder'
 
 /**
@@ -61,6 +62,8 @@ export interface EditorSession {
   creation: EditorCreationInput | null
   /** El `?from=` pedido no se pudo abrir: se degrado y HAY que decirlo. */
   originUnavailable: boolean
+  /** Porcion pegajosa (T2.6 F4): ultima cantidad por alimento, precedencia resuelta en SQL. */
+  rememberedQuantities: RememberedQuantities
 }
 
 /** Dia base vacio + metadatos por defecto: espejo literal del blank del editor web. */
@@ -144,6 +147,8 @@ export async function loadEditorSession(input: {
   todayIso: string
 }): Promise<EditorSession> {
   const existing = input.planModel.plan
+  // Porcion pegajosa: una sola lectura por sesion de editor (fail-soft, mapa vacio si falla).
+  const rememberedQuantities = await fetchRememberedQuantities(input.db, input.clientId)
 
   // ── EDICION: sin origen y con plan vigente ───────────────────────────────────────────────
   if (!input.origin && existing) {
@@ -153,6 +158,7 @@ export async function loadEditorSession(input: {
       substitutionsLoadFailed: subs.status === 'error',
       creation: null,
       originUnavailable: false,
+      rememberedQuantities,
     }
   }
 
@@ -239,6 +245,7 @@ export async function loadEditorSession(input: {
         substitutionsLoadFailed: subs.status === 'error',
         creation: null,
         originUnavailable: true,
+        rememberedQuantities,
       }
     }
     baseDraft = blankEditorDraft({
@@ -259,5 +266,6 @@ export async function loadEditorSession(input: {
       expectedCurrentVersionId: existing?.versionId ?? null,
     },
     originUnavailable,
+    rememberedQuantities,
   }
 }
