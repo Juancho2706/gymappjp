@@ -30,6 +30,25 @@ source_of_truth: apps/web responsive + apps/mobile
 > ACUMULADO** por decision del owner (sale junto a T3.3b + pasada visual, al cerrar el retiro del
 > par viejo). El editor unico RN completo (metadatos, creacion, plantillas) sigue en **T3.3b**.
 
+> **2026-08-16 (T3.3b — EL EDITOR UNICO YA EXISTE EN RN; gap de paridad CERRADO)**: el coach
+> movil gana `/coach/nutrition-v2/editor/[clientId]` (+ `plantillas/editor`) sobre la MISMA
+> gramatica compartida, y el **corte RN** ya ocurrio: la ficha ("Crear plan" y "Editar plan"),
+> el `+` del hub y el CTA por fila del roster entran por el editor; el par viejo queda como
+> camino secundario ("Edición rápida (clásica)" en la ficha; el wizard solo por URL directa).
+> Cruzan a RN: metadatos del plan (nombre, estrategia con la regla segura, 4 permisos + tope
+> ±%), creacion `?from=template:|plan:` o en blanco con vigencia elegible, reemplazos
+> autorizados EDITABLES, override de macros, duplicar dia, copiar dia a varios dias
+> (Reemplazar/Sumar + presets + aviso previo), reorden de items (Subir/Bajar en vez del drag
+> de escritorio), capsula de dia activo, totales del dia fijos y **porcion pegajosa (cierra la
+> deuda T2.6 F4 RN)**. Plantillas: crear/editar desde el telefono por un camino de escritura
+> movil nuevo (`saveTemplate` del endpoint de mutaciones, mismo servicio que la web).
+> **Divergencias declaradas**: (a) el editor RN muestra los 4 permisos + tope ±% (el wizard RN
+> mostraba 2 por la poda de la ola 3) — manda el editor web, que es la superficie canonica;
+> (b) el drag con manija es web-desktop y en RN se expresa como Subir/Bajar; (c) la paleta
+> lateral `lg+` no aplica al telefono; (d) sin respaldo local en creacion ni en plantilla
+> (mismo pendiente declarado que la web). **QA device del editor RN: PENDIENTE**; el OTA sigue
+> acumulado.
+
 > **2026-08-15 (T3.x editor unico de nutricion — corte web W4, rama `rnmobiledenuevo`)**: la web
 > corto sus CTAs al **editor unico** (`/coach/nutrition-v2/[clientId]/editor`): la ficha, el `+`
 > del Centro V2, el roster del hub, el tab del cliente y "Aplicar plantilla" (`?from=`) apuntan

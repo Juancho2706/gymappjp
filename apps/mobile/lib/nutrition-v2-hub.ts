@@ -272,6 +272,27 @@ export function nutritionV2BuilderHref(
   return query.length === 0 ? base : `${base}?${query.join('&')}`
 }
 
+/**
+ * Ruta del EDITOR UNICO del coach movil (T3.3b). Es la puerta canonica desde el corte RN: la
+ * ficha, el hub y el picker de plantillas navegan aca. El wizard (`nutritionV2BuilderHref`)
+ * sigue vivo por URL directa mientras dure la ventana de retiro del par viejo.
+ *
+ * `from` es la MISMA puerta que usa la web (`template:<uuid>` / `plan:<uuid>`, formato de
+ * `formatPlanBuilderOrigin`), asi que no hay dos caminos de creacion que puedan divergir. El
+ * `planId` NO viaja: el editor resuelve solo si el alumno ya tiene plan vigente (y con el, el
+ * CAS del reemplazo) leyendo su ficha.
+ */
+export function nutritionV2EditorHref(clientId: string, opts?: { from?: string | null }): string {
+  const base = `/coach/nutrition-v2/editor/${encodeURIComponent(clientId)}`
+  return opts?.from ? `${base}?from=${encodeURIComponent(opts.from)}` : base
+}
+
+/** Ruta del editor de PLANTILLAS del coach movil. Sin id = plantilla nueva. */
+export function nutritionV2TemplateEditorHref(templateId?: string | null): string {
+  const base = '/coach/nutrition-v2/plantillas/editor'
+  return templateId ? `${base}?template=${encodeURIComponent(templateId)}` : base
+}
+
 /** Fecha local (YYYY-MM-DD) de un ISO en la zona horaria dada; null si no parsea. */
 export function localDateOf(iso: string, timeZone: string): string | null {
   const date = new Date(iso)

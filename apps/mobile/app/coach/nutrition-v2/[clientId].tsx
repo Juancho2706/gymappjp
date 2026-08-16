@@ -85,6 +85,7 @@ import {
 import {
   nutritionPlanCtaLabel,
   nutritionV2BuilderHref,
+  nutritionV2EditorHref,
 } from '../../../lib/nutrition-v2-hub'
 import {
   NUTRITION_PRO_MODULE_KEY,
@@ -112,6 +113,12 @@ function todayInSantiago(): string {
 // (`ConvertedPlanBanner.tsx:6`, `eva:nutrition-v2-converted-plan-banner-dismissed:{planId}`) para
 // que el descarte sea consistente en concepto (en RN persiste en AsyncStorage, no en localStorage).
 const CONVERTED_BANNER_DISMISS_PREFIX = 'eva:nutrition-v2-converted-plan-banner-dismissed:'
+
+/**
+ * Corte RN (T3.3b): el par viejo pasa a camino secundario. Misma cadena que la web
+ * (`QE_COPY.classicQuickEdit`) — el coach lee lo mismo en las dos plataformas.
+ */
+const CLASSIC_QUICK_EDIT_LABEL = 'Edición rápida (clásica)'
 
 /**
  * Formatea un timestamp ISO (`nutrition_v2_conversion_links.converted_at`) a `dd-mm-yyyy` en
@@ -254,7 +261,8 @@ export default function CoachNutritionV2ClientScreen() {
   // vigente. El link NO viaja en el read-model/API RN (igual que en web); se lee aparte RLS-scoped.
   // null = sin link (o fail-soft) => sin banner, paridad con el `null` del web.
   const [convertedAtLabel, setConvertedAtLabel] = useState<string | null>(null)
-  const date = useMemo(todayInSantiago, [])
+  // Inline a proposito: `react-hooks/use-memo` exige una expresion de funcion (lint preexistente).
+  const date = useMemo(() => todayInSantiago(), [])
   // T3.5 — semana Lu-Do del alumno dentro de la ficha. Estado LOCAL (la ficha no navega ni vuelve
   // a pedir nada): la semana se pinta con el payload que `clientDetail` ya trajo. Hoy arranca
   // seleccionado porque es el día del que el coach pregunta primero.
@@ -519,6 +527,10 @@ export default function CoachNutritionV2ClientScreen() {
   // NUT-004: con plan vigente el builder DEBE recibir la raiz (`?planId=`) para publicar una
   // version nueva sobre ella; sin plan queda sin query y crea la primera raiz. Espejo del web.
   const builderHref = nutritionV2BuilderHref(detail.client.id, { planId: activePlan?.id ?? null })
+  // CORTE RN (T3.3b): el camino primario de crear Y editar es el EDITOR UNICO. El wizard y la
+  // edicion rapida clasica quedan como caminos secundarios del menu mientras dure la ventana de
+  // retiro del par viejo. El editor resuelve solo el planId del alumno (y su CAS).
+  const editorHref = nutritionV2EditorHref(detail.client.id)
   const showTodayPlanLag = activePlan !== null && (todayPlan === null || todayPlan.id !== activePlan.id)
   const todayPlanLagMessage =
     todayPlan === null
@@ -643,7 +655,7 @@ export default function CoachNutritionV2ClientScreen() {
           action={
             <NutritionMotionButton
               accessibilityLabel="Crear plan"
-              onPress={() => router.push(builderHref)}
+              onPress={() => router.push(editorHref)}
             >
               Crear plan
             </NutritionMotionButton>
@@ -731,14 +743,25 @@ export default function CoachNutritionV2ClientScreen() {
             <Text className="mt-3 text-sm leading-5 text-body">
               {detail.plan.visibleNotes || 'Sin indicaciones visibles.'}
             </Text>
-            <View className="mt-4">
+            <View className="mt-4 gap-2">
               <NutritionMotionButton
                 accessibilityLabel={QUICK_EDIT_COPY.enter}
                 disabled={!userId}
-                onPress={() => setEditing(true)}
+                onPress={() => router.push(editorHref)}
               >
                 {QUICK_EDIT_COPY.enter}
               </NutritionMotionButton>
+              {/* Camino SECUNDARIO durante la ventana de retiro: la edicion rapida clasica
+                  (in-place, sin metadatos). Espejo del menu "..." de la ficha web. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={CLASSIC_QUICK_EDIT_LABEL}
+                disabled={!userId}
+                onPress={() => setEditing(true)}
+                className="min-h-11 items-center justify-center rounded-control px-3"
+              >
+                <Text className="text-sm font-semibold text-muted">{CLASSIC_QUICK_EDIT_LABEL}</Text>
+              </Pressable>
             </View>
           </NutritionCard>
         </>

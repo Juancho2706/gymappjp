@@ -262,12 +262,40 @@ corte, con su QA.
   (cantidades/steppers, franjas, dias, porciones +notas, copia de franja, override tras swap,
   restaurar borrador, publicar). El OTA NO sale todavia: decision del owner de ACUMULAR hasta
   cerrar T3.3b + pasada visual + retiro del par
-- [ ] T3.3b — editor unico RN completo (metadatos, creacion `?from=`, plantillas, capacidades
-  W2/W3) sobre la misma gramatica
+- [x] **T3.3b — editor unico RN completo: CODIGO LISTO 2026-08-16 (SIN QA device)**, en 5 olas:
+  - **W1** ruta `/coach/nutrition-v2/editor/[clientId]` + `QuickEditMode` con prop `editor`:
+    `state.meta` hidratado (nombre, estrategia, permisos, vigencia en creacion), cabecera
+    `EditorMetaCard` RN, key de respaldo propia (`unifiedEditorDraftKey`). Creacion
+    `?from=template:|plan:|blanco` con `loadEditorSession` (espejo del server component web:
+    clientId/timezone del destino mandan, planId de la fuente jamas viaja, degradacion CON
+    aviso y caida a EDICION con plan vigente). Publish de creacion por `publishDraftRN` con
+    CAS solo si ya habia plan. Reemplazos F-02 ahora HIDRATADOS en el arbol
+    (`loadItemSubstitutionReads`), NUT-008 intacto. Picker de porciones suma el catalogo vivo
+  - **W2** capacidades del wizard: menu ⋮ del item con reemplazos EDITABLES (lista, quitar con
+    Deshacer al indice, alta por buscador en modo `substitution`, guardas enunciadas), reorden
+    Subir/Bajar (`REORDER_ITEM`), "Duplicar como…" y "Copiar a otros días…" (Reemplazar/Sumar,
+    presets Lu-Vi/Finde/Todos + próximos N, aviso previo `copyPlanWarning`, Deshacer del arbol).
+    Para no duplicar logica, `copy-presets`/`copy-plan` del wizard web se MUEVEN al paquete
+    (`editor-copy-presets`/`editor-copy-plan`) con sus tests; las rutas web quedan re-export
+  - **W3** capsula de DIA ACTIVO (chips que cambian el dia), totales del dia fijos en la barra
+    (`dayTotals`, la barra vive siempre en el editor) y **porcion pegajosa RN** sobre las dos
+    RPC ya en LIVE (`nutrition-v2-last-quantity.ts`): prefill en el alta + commit al blur con
+    guard de firma. Cierra la deuda declarada de T2.6 F4 en MOBILE_PARITY
+  - **W4** modo PLANTILLA (`plantillas/editor`, `?template=`): vocabulario de guardar, banner
+    permanente, descripcion editable, ids sinteticos, sin porcion pegajosa. Camino de escritura
+    movil NUEVO: accion `saveTemplate` del endpoint de mutaciones reusando el servicio web
+    (4 tests) + `purpose=edit` en el GET de plantillas (abrir para editar no cuenta como uso)
+  - **W5 corte RN**: ficha (Crear plan / Editar plan), `+` del hub, CTA por fila del roster y
+    picker de plantillas (Nueva plantilla + lapiz por fila) apuntan al editor; el par viejo
+    queda secundario ("Edición rápida (clásica)"; wizard por URL directa)
 - [ ] OTA android al cierre (solo por GH Actions `mobile-ota.yml`, `--platform android`) —
   **ACUMULADO por decision del owner (2026-08-16)**: no sale con T3.3a; junta T3.3a + T3.3b +
   pasada visual y se propone al cerrar el retiro del par viejo
 - [ ] iOS: OTA `--platform ios` solo post-aprobacion Apple
+
+- [ ] **QA device Android del EDITOR RN** (acumulado con el OTA): editar el plan vigente con
+  metadatos, crear desde plantilla / desde otro alumno / en blanco, reemplazos autorizados,
+  duplicar y copiar dia, reorden, porcion pegajosa, y crear/editar una plantilla
 
 ## Retiro del par viejo
 

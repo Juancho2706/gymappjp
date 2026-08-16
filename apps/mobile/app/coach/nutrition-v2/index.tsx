@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Copy,
   FilePlus2,
+  Pencil,
   Plus,
   ScanLine,
   Scale,
@@ -81,7 +82,8 @@ import {
   nutritionAttentionCardTone,
   nutritionHubMetricScopeLabel,
   nutritionPlanCtaLabel,
-  nutritionV2BuilderHref,
+  nutritionV2EditorHref,
+  nutritionV2TemplateEditorHref,
   resolveNutritionHubInitialTab,
   type NutritionHubTabKey,
   type NutritionRosterFilters,
@@ -354,11 +356,22 @@ export default function CoachNutritionV2Screen() {
   const choosePickerClient = useCallback(
     (clientId: string, planId: string | null, origin: string | null) => {
       setPickerOpen(false)
-      router.push(
-        origin
-          ? nutritionV2BuilderHref(clientId, { planId, from: origin })
-          : nutritionV2BuilderHref(clientId, { planId }),
-      )
+      // CORTE RN (T3.3b): el `+` entra por el EDITOR UNICO, con la MISMA puerta `?from=` que la
+      // web. El `planId` ya no viaja: el editor lee la ficha del alumno y resuelve solo si hay
+      // plan vigente (y con el, el CAS del reemplazo) — imposible crear una segunda raiz.
+      router.push(nutritionV2EditorHref(clientId, { from: origin }))
+    },
+    [router],
+  )
+
+  /**
+   * Administrar material reutilizable desde el telefono (corte RN, T3.3b): `null` = plantilla
+   * nueva. Hasta ahora crear o editar una plantilla exigia la web.
+   */
+  const editTemplate = useCallback(
+    (templateId: string | null) => {
+      setPickerOpen(false)
+      router.push(nutritionV2TemplateEditorHref(templateId))
     },
     [router],
   )
@@ -666,7 +679,7 @@ export default function CoachNutritionV2Screen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
-              onPress={() => router.push(nutritionV2BuilderHref(item.clientId, { planId: item.planId }))}
+              onPress={() => router.push(nutritionV2EditorHref(item.clientId))}
               className="mt-3 min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
             >
               <Plus color={theme.primary} size={15} />
@@ -762,6 +775,7 @@ export default function CoachNutritionV2Screen() {
         templatesLoading={pickerTemplatesLoading}
         templatesError={pickerTemplatesError}
         onLoadTemplates={loadPickerTemplates}
+        onEditTemplate={editTemplate}
       />
     </View>
   )
@@ -937,6 +951,7 @@ function NewPlanPickerSheet({
   templatesLoading,
   templatesError,
   onLoadTemplates,
+  onEditTemplate,
 }: {
   open: boolean
   onClose: () => void
@@ -953,6 +968,11 @@ function NewPlanPickerSheet({
   templatesLoading: boolean
   templatesError: string | null
   onLoadTemplates: () => void
+  /**
+   * Corte RN (T3.3b): administrar la plantilla en el EDITOR. `null` = plantilla nueva. Es la
+   * primera vez que el coach movil puede crear o editar material reutilizable sin la web.
+   */
+  onEditTemplate: (templateId: string | null) => void
 }) {
   const [tab, setTab] = useState<'scratch' | 'reuse'>('scratch')
   // Origen elegido: hasta que exista, "Reutilizar" muestra la biblioteca; después, el roster.
@@ -1027,7 +1047,17 @@ function NewPlanPickerSheet({
 
         {showTemplates ? (
           <View className="gap-2">
-            <Text className="text-xs font-bold uppercase tracking-wide text-muted">Tus plantillas</Text>
+            <View className="flex-row items-center justify-between gap-2">
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">Tus plantillas</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Nueva plantilla"
+                onPress={() => onEditTemplate(null)}
+                className="min-h-11 flex-row items-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
+              >
+                <Text className="text-sm font-semibold text-primary">Nueva plantilla</Text>
+              </Pressable>
+            </View>
             {templatesLoading ? (
               // Tambien durante el REINTENTO: sin esto, recargar tras un error mostraria el estado
               // vacio (la lista ya no es `null`) y parpadearia "Aún no tienes plantillas".
@@ -1053,37 +1083,50 @@ function NewPlanPickerSheet({
               <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">
                 <Copy color={textSecondary} size={26} />
                 <Text className="mt-2 text-center text-sm text-muted">
-                  Aún no tienes plantillas. Guarda el plan de un alumno como plantilla —desde la web o
-                  desde un plan ya publicado— y aparecerá acá.
+                  Aún no tienes plantillas. Crea una desde cero con «Nueva plantilla», o guarda el
+                  plan de un alumno como plantilla.
                 </Text>
               </View>
             ) : (
               <View className="gap-1.5">
                 {(templates ?? []).map((template) => (
-                  <Pressable
-                    key={template.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: !template.readable }}
-                    accessibilityLabel={`Partir de la plantilla ${template.name}`}
-                    disabled={!template.readable}
-                    onPress={() => setSource({ id: template.id, name: template.name })}
-                    className={`min-h-11 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5 ${template.readable ? '' : 'opacity-50'}`}
-                  >
-                    {template.isFavorite ? (
-                      <Star color={favoriteColor} size={16} />
-                    ) : (
-                      <Copy color={textSecondary} size={16} />
-                    )}
-                    <View className="min-w-0 flex-1">
-                      <Text className="font-semibold text-strong" numberOfLines={1}>
-                        {template.name}
-                      </Text>
-                      <Text className="text-xs text-muted" numberOfLines={1}>
-                        {planTemplateSubtitle(template)}
-                      </Text>
-                    </View>
-                    <ChevronRight color={textSecondary} size={16} />
-                  </Pressable>
+                  <View key={template.id} className="flex-row items-center gap-1">
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: !template.readable }}
+                      accessibilityLabel={`Partir de la plantilla ${template.name}`}
+                      disabled={!template.readable}
+                      onPress={() => setSource({ id: template.id, name: template.name })}
+                      className={`min-h-11 flex-1 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5 ${template.readable ? '' : 'opacity-50'}`}
+                    >
+                      {template.isFavorite ? (
+                        <Star color={favoriteColor} size={16} />
+                      ) : (
+                        <Copy color={textSecondary} size={16} />
+                      )}
+                      <View className="min-w-0 flex-1">
+                        <Text className="font-semibold text-strong" numberOfLines={1}>
+                          {template.name}
+                        </Text>
+                        <Text className="text-xs text-muted" numberOfLines={1}>
+                          {planTemplateSubtitle(template)}
+                        </Text>
+                      </View>
+                      <ChevronRight color={textSecondary} size={16} />
+                    </Pressable>
+                    {/* Editar el CONTENIDO en el editor de plantillas. Solo si el draft guardado
+                        todavia valida: una plantilla ilegible abriria un editor en blanco. */}
+                    {template.readable ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Editar la plantilla ${template.name}`}
+                        onPress={() => onEditTemplate(template.id)}
+                        className="h-11 w-11 items-center justify-center rounded-control"
+                      >
+                        <Pencil color={textSecondary} size={16} />
+                      </Pressable>
+                    ) : null}
+                  </View>
                 ))}
               </View>
             )}
