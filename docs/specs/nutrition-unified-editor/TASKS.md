@@ -178,6 +178,32 @@ menu → sheet con modos y presets → copiar base a Lunes → toast + dia en la
 Decision del owner (2026-08-15): pasada visual UI/UX del editor = tanda propia DESPUES del
 corte, con su QA.
 
+## V1 — Pasada visual UI/UX — CODIGO LISTO 2026-08-16, queda QA del owner
+
+Evidencia: harness `dev-harness/nutrition-editor` (edit / create / template) capturado con
+Playwright a 390 px y 1440 px, claro y oscuro, 0 pageerrors y 0 errores de consola. Los cinco
+arreglos salen de mirar esas capturas, no de una lista teorica:
+
+- [x] **La cabecera de metadatos dejaba al coach sin ver una sola comida**: ocupaba el primer
+  pantallazo entero (390 px) y toda la primera pantalla en desktop. Ahora nace COLAPSADA cuando
+  se edita un plan que YA existe (sus metadatos ya estan decididos) y resume
+  `nombre · estrategia · permisos activos`; en CREACION y en PLANTILLA sigue abierta, porque ahi
+  definirlos es el primer paso. Un error de validacion en un campo escondido la abre sola
+- [x] **"Notas y permisos" mentia en el editor**: los permisos viven en la cabecera desde W1 y
+  el titulo mandaba a buscar controles que no estan. Pasa a "Notas para tu alumno" (y muere el
+  label repetido debajo, que decia la misma frase dos veces)
+- [x] **Creacion hablaba como edicion**: el eyebrow decia "Editar plan" y la barra "Publicar
+  cambios" sobre un plan que todavia no existe. Ahora dicen "Nuevo plan" / "Publicar plan", con
+  su confirm propio (cierra el pendiente declarado de W1.5)
+- [x] **Contador truncado en 390 px** ("3 cambios sin p…"): en movil el contador toma su propia
+  linea y los dos botones reparten el ancho — mismo criterio que la barra RN (H-18/QW-12)
+- [x] **Tope de ajuste (±%)**: era una caja vacia sin explicacion; ahora dice "Sin tope"
+- [x] Espejo RN de los cinco (cabecera colapsable, titulo de notas, vocabulario de creacion,
+  placeholder del tope; la barra RN ya apilaba el contador)
+- [x] Gates: vitest editor+paquete 1036 ✓ · tsc web ✓ · tsc mobile ✓ · eslint 0 err en tocados ✓
+  · tokens 86/86 ✓ · boundaries ✓ · expo export android ✓ · harness headless ✓
+- [ ] **QA visual del owner** (web preview + device Android): dark mode, white-label, 390 px
+
 ## T3.2b — Plantillas
 
 - [x] Importadores del wizard de plantillas VERIFICADOS antes de tocar nada (2026-08-15):

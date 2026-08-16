@@ -215,6 +215,16 @@ export const QE_COPY = {
   templateBanner: 'Esto es una plantilla: no le llega a ningún alumno hasta que la apliques.',
   templateFooterInfo: 'Al guardar, la plantilla se actualiza solo para ti.',
   templateEyebrow: 'Plantilla',
+  /** Modo creacion: no hay plan previo que "editar" — se esta armando uno. */
+  createEyebrow: 'Nuevo plan',
+  /**
+   * Vocabulario de CREACION (pendiente declarado de W1.5): "Publicar cambios" sobre un plan que
+   * todavia no existe le prometia al coach que estaba tocando algo que su alumno ya veia.
+   */
+  createPublish: 'Publicar plan',
+  createConfirmTitle: 'Publicar el plan',
+  createConfirmBody: (studentName: string, dateLabel: string | null) =>
+    `${studentName} verá este plan ${dateLabel ? `desde el ${dateLabel}` : 'desde hoy'} y pasa a ser su plan vigente.`,
   templateUntitled: 'Nueva plantilla',
   /** Se pidio editar una plantilla concreta y no se pudo abrir (misma degradacion del wizard). */
   templateUnavailable:

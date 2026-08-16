@@ -103,6 +103,13 @@ export const QUICK_EDIT_COPY = {
  */
 export const EDITOR_COPY = {
   eyebrow: 'Editor de plan',
+  /** Modo creacion: no hay plan previo que "editar" — se esta armando uno. */
+  createEyebrow: 'Nuevo plan',
+  /** Vocabulario de CREACION: "Publicar cambios" prometia tocar algo que el alumno ya veia. */
+  createPublish: 'Publicar plan',
+  createConfirmTitle: 'Publicar el plan',
+  createConfirmBody: (studentName: string, dateLabel: string | null) =>
+    `${studentName} verá este plan ${dateLabel ? `desde el ${dateLabel}` : 'desde hoy'} y pasa a ser su plan vigente.`,
   planTitle: 'Plan',
   planNameLabel: 'Nombre del plan',
   planNamePlaceholder: 'Ej: Plan definición 2026',

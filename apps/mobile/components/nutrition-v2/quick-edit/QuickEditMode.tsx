@@ -1418,9 +1418,11 @@ export function QuickEditMode({
               >
                 {template
                   ? EDITOR_COPY.templateEyebrow
-                  : editorMode
-                    ? EDITOR_COPY.eyebrow
-                    : QUICK_EDIT_COPY.editingEyebrow}
+                  : creation
+                    ? EDITOR_COPY.createEyebrow
+                    : editorMode
+                      ? EDITOR_COPY.eyebrow
+                      : QUICK_EDIT_COPY.editingEyebrow}
               </Text>
               <Text
                 accessibilityRole="header"
@@ -1714,13 +1716,18 @@ export function QuickEditMode({
           <NutritionCard>
             <View className="flex-row items-center gap-2">
               <NotebookPen color={theme.textSecondary} size={16} />
+              {/* En el editor los permisos viven en la cabecera: seguir titulando "y permisos"
+                  mandaba a buscar aca unos controles que no estan. */}
               <Text className="font-display text-base font-semibold text-strong">
-                {QUICK_EDIT_COPY.notesPermissionsTitle}
+                {state.meta ? QUICK_EDIT_COPY.notesLabel : QUICK_EDIT_COPY.notesPermissionsTitle}
               </Text>
             </View>
-            <Text className="mt-3 text-xs font-semibold text-muted">
-              {QUICK_EDIT_COPY.notesLabel}
-            </Text>
+            {/* En el editor el titulo de la card YA es "Notas para tu alumno". */}
+            {state.meta ? null : (
+              <Text className="mt-3 text-xs font-semibold text-muted">
+                {QUICK_EDIT_COPY.notesLabel}
+              </Text>
+            )}
             <TextInput
               accessibilityLabel={QUICK_EDIT_COPY.notesLabel}
               value={state.visibleNotes}
@@ -1731,7 +1738,7 @@ export function QuickEditMode({
               textAlignVertical="top"
               placeholder={QUICK_EDIT_COPY.notesPlaceholder}
               placeholderTextColor={theme.mutedForeground}
-              className="mt-1.5 min-h-28 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm leading-6 text-body"
+              className="mt-3 min-h-28 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm leading-6 text-body"
             />
             {errors['plan.visibleNotes'] ? (
               <Text className="mt-1 text-xs font-medium text-danger-600">
@@ -1789,6 +1796,7 @@ export function QuickEditMode({
           errorMessage={publishError}
           dayTotals={dayTotals}
           template={template !== null}
+          creation={creation !== null}
           onDiscard={handleDiscard}
           onPublish={handlePublishRequest}
           onRetry={handleRetry}
@@ -1808,6 +1816,7 @@ export function QuickEditMode({
         studentName={clientName}
         futureDate={futureDate}
         template={template !== null}
+        creation={creation ? { effectiveFrom: state.meta?.effectiveFrom ?? null } : null}
         onConfirm={() => void doPublish()}
         onClose={() => setConfirmOpen(false)}
       />

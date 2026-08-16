@@ -99,7 +99,14 @@ export function QuickEditPlanView() {
   const overlayTitle = isTemplate
     ? state.meta?.name.trim() || QE_COPY.templateUntitled
     : clientName
-  const overlayEyebrow = isTemplate ? QE_COPY.templateEyebrow : QE_COPY.enter
+  // Pasada visual: en CREACION el eyebrow decia "Editar plan" sobre un plan que todavia no
+  // existe. La señal de que se esta ARMANDO uno nuevo es justamente la que el coach necesita
+  // antes de tocar nada (no hay version previa que se pueda pisar).
+  const overlayEyebrow = isTemplate
+    ? QE_COPY.templateEyebrow
+    : state.meta?.effectiveFrom !== undefined
+      ? QE_COPY.createEyebrow
+      : QE_COPY.enter
   // FD5: orden de lectura del multi-dia (base primero, luego Lu→Do). El estado conserva el
   // orden de alta; la presentacion usa el MISMO helper que la ficha y el alumno.
   const orderedVariants = useMemo(() => sortNutritionDayVariantsForDisplay(state.variants), [state.variants])
@@ -280,13 +287,22 @@ export function QuickEditPlanView() {
         <section className="rounded-card border border-border-subtle bg-surface-card p-4">
           <div className="flex items-center gap-2">
             <NotebookPen aria-hidden="true" className="h-4 w-4 text-muted" />
-            <h2 className="font-display text-base font-semibold text-strong">Notas y permisos</h2>
+            {/* En el editor los permisos viven en la cabecera: seguir titulando "y permisos"
+                mandaba a buscar aca unos controles que no estan. */}
+            <h2 className="font-display text-base font-semibold text-strong">
+              {state.meta ? 'Notas para tu alumno' : 'Notas y permisos'}
+            </h2>
           </div>
-          <label htmlFor="qe-visible-notes" className="mt-3 block text-xs font-semibold text-muted">
-            {QE_COPY.notesLabel}
-          </label>
+          {/* En el editor el titulo de la card YA es "Notas para tu alumno": repetirlo como label
+              era la misma frase dos veces seguidas. El textarea conserva su nombre accesible. */}
+          {state.meta ? null : (
+            <label htmlFor="qe-visible-notes" className="mt-3 block text-xs font-semibold text-muted">
+              {QE_COPY.notesLabel}
+            </label>
+          )}
           <textarea
             id="qe-visible-notes"
+            aria-label={QE_COPY.notesLabel}
             value={state.visibleNotes}
             onChange={(event) => dispatch({ type: 'SET_VISIBLE_NOTES', value: event.target.value })}
             placeholder={QE_COPY.notesPlaceholder}
@@ -294,7 +310,7 @@ export function QuickEditPlanView() {
             maxLength={8000}
             disabled={isPending}
             aria-invalid={showErrors && Boolean(errors['plan.visibleNotes'])}
-            className="mt-1.5 w-full resize-y rounded-control border border-border-subtle bg-surface-app px-3 py-2.5 text-sm leading-6 text-body placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-3 w-full resize-y rounded-control border border-border-subtle bg-surface-app px-3 py-2.5 text-sm leading-6 text-body placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           {showErrors && errors['plan.visibleNotes'] ? (
             <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors['plan.visibleNotes']}</p>

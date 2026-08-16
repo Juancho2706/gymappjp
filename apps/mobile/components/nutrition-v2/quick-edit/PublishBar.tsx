@@ -29,6 +29,7 @@ export function PublishBar({
   errorMessage,
   dayTotals = null,
   template = false,
+  creation = false,
   onDiscard,
   onPublish,
   onRetry,
@@ -43,6 +44,8 @@ export function PublishBar({
   dayTotals?: PublishBarDayTotals | null
   /** Modo PLANTILLA: se GUARDA material del coach, no se publica nada a un alumno. */
   template?: boolean
+  /** Modo CREACION: se publica un plan NUEVO, no cambios sobre uno vigente. */
+  creation?: boolean
   onDiscard: () => void
   onPublish: () => void
   onRetry: () => void
@@ -50,6 +53,11 @@ export function PublishBar({
   const insets = useSafeAreaInsets()
   const { theme } = useTheme()
   const hasActions = count > 0 || errorMessage !== null
+  const publishLabel = template
+    ? EDITOR_COPY.templateSave
+    : creation
+      ? EDITOR_COPY.createPublish
+      : QUICK_EDIT_COPY.publish
   if (dayTotals === null && !hasActions) return null
 
   return (
@@ -108,12 +116,12 @@ export function PublishBar({
         </View>
         <View className="flex-1">
           <NutritionMotionButton
-            accessibilityLabel={template ? EDITOR_COPY.templateSave : QUICK_EDIT_COPY.publish}
+            accessibilityLabel={publishLabel}
             pending={publishing}
             disabled={publishing || count === 0}
             onPress={onPublish}
           >
-            {template ? EDITOR_COPY.templateSave : QUICK_EDIT_COPY.publish}
+            {publishLabel}
           </NutritionMotionButton>
         </View>
       </View>

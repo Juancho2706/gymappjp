@@ -40,12 +40,19 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
     retryPublish,
     discardChanges,
     surface,
+    state,
   } = useQuickEdit()
 
   // Modo plantilla (T3.2b): no se publica nada — se guarda material del coach.
   const isTemplate = surface === 'template'
+  // Creacion: la vigencia elegible existe solo ahi (ver `QeMeta.effectiveFrom`).
+  const isCreation = state.meta?.effectiveFrom !== undefined
   const dirtyLabel = isTemplate ? QE_COPY.templateDirtyBar(changeCount) : QE_COPY.dirtyBar(changeCount)
-  const ctaLabel = isTemplate ? QE_COPY.templateSave : QE_COPY.publish
+  const ctaLabel = isTemplate
+    ? QE_COPY.templateSave
+    : isCreation
+      ? QE_COPY.createPublish
+      : QE_COPY.publish
 
   const hasActions = changeCount > 0 || publishError !== null || upgradeRequired || substitutionsFailed
   // En el editor (dayTotals presente) la barra vive SIEMPRE: totales fijos abajo (W3b).
@@ -122,7 +129,10 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
           </p>
         ) : null}
         {hasActions ? (
-        <div className="flex items-center justify-between gap-3">
+        /* Pasada visual: en 390 px el contador se truncaba ("3 cambios sin p…") porque compartia
+           fila con los dos botones — justo el feedback principal del modo edicion. Debajo de sm
+           el contador toma su propia linea (mismo criterio que la barra RN, H-18/QW-12). */
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <p className="min-w-0 truncate text-sm font-semibold text-strong" aria-live="polite">
             {dirtyLabel}
           </p>
@@ -131,7 +141,7 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
               type="button"
               onClick={discardChanges}
               disabled={isPending}
-              className="inline-flex min-h-11 items-center rounded-control border border-border-default bg-surface-card px-3.5 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-control border border-border-default bg-surface-card px-3.5 text-sm font-semibold text-strong sm:flex-none transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
               {QE_COPY.discard}
             </button>
@@ -139,7 +149,7 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
               type="button"
               onClick={openConfirm}
               disabled={isPending || changeCount === 0 || substitutionsFailed}
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white sm:flex-none transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {ctaLabel}

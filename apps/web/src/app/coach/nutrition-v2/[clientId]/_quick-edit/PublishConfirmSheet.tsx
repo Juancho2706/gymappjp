@@ -10,26 +10,50 @@
 import { Check, Loader2 } from 'lucide-react'
 import { useQuickEdit } from './QuickEditProvider'
 import { QeBottomSheet } from './QeBottomSheet'
-import { QE_COPY } from './microcopy'
+import { QE_COPY, formatIsoDateDdMmYyyy } from './microcopy'
 
 export function PublishConfirmSheet() {
-  const { confirmOpen, closeConfirm, publishNow, isPending, clientName, futureDateLabel, changeCount, surface } =
-    useQuickEdit()
+  const {
+    confirmOpen,
+    closeConfirm,
+    publishNow,
+    isPending,
+    clientName,
+    futureDateLabel,
+    changeCount,
+    surface,
+    state,
+  } = useQuickEdit()
 
   // Modo plantilla (T3.2b): guardar, no publicar — nada le llega a ningun alumno.
   const isTemplate = surface === 'template'
+  // Creacion: no hay version previa, asi que el copy habla del plan, no de "los cambios".
+  const isCreation = state.meta?.effectiveFrom !== undefined
+  const effectiveLabel = state.meta?.effectiveFrom
+    ? formatIsoDateDdMmYyyy(state.meta.effectiveFrom)
+    : null
 
   return (
     <QeBottomSheet
       open={confirmOpen}
       onOpenChange={(next) => (!next ? closeConfirm() : undefined)}
-      title={isTemplate ? QE_COPY.templateConfirmTitle : QE_COPY.confirmTitle}
+      title={
+        isTemplate
+          ? QE_COPY.templateConfirmTitle
+          : isCreation
+            ? QE_COPY.createConfirmTitle
+            : QE_COPY.confirmTitle
+      }
       showCloseButton={!isPending}
       busy={isPending}
       bodyClassName="space-y-0"
     >
       <p className="text-sm leading-6 text-body">
-        {isTemplate ? QE_COPY.templateConfirmBody : QE_COPY.confirmBody(clientName, futureDateLabel)}
+        {isTemplate
+          ? QE_COPY.templateConfirmBody
+          : isCreation
+            ? QE_COPY.createConfirmBody(clientName, effectiveLabel)
+            : QE_COPY.confirmBody(clientName, futureDateLabel)}
       </p>
       <p className="mt-2 text-xs text-muted">
         {isTemplate ? QE_COPY.templateDirtyBar(changeCount) : QE_COPY.dirtyBar(changeCount)}

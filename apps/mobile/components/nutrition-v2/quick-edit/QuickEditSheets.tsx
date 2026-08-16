@@ -18,6 +18,7 @@ export function PublishConfirmSheet({
   studentName,
   futureDate,
   template = false,
+  creation = null,
   onConfirm,
   onClose,
 }: {
@@ -28,10 +29,19 @@ export function PublishConfirmSheet({
   futureDate: string | null
   /** Modo PLANTILLA: se guarda material del coach; nada le llega a un alumno. */
   template?: boolean
+  /**
+   * Modo CREACION: fecha de vigencia elegida (YYYY-MM-DD) o `null` = hoy. Ausente (`null` de la
+   * prop) = edicion, donde el copy habla de "los cambios" sobre la version vigente.
+   */
+  creation?: { effectiveFrom: string | null } | null
   onConfirm: () => void
   onClose: () => void
 }) {
-  const title = template ? EDITOR_COPY.templateConfirmTitle : QUICK_EDIT_COPY.confirmTitle
+  const title = template
+    ? EDITOR_COPY.templateConfirmTitle
+    : creation
+      ? EDITOR_COPY.createConfirmTitle
+      : QUICK_EDIT_COPY.confirmTitle
   const cta = template ? EDITOR_COPY.templateConfirmCta : QUICK_EDIT_COPY.confirmCta
   return (
     <Sheet
@@ -43,7 +53,11 @@ export function PublishConfirmSheet({
       accessibilityLabel={title}
     >
       <Text className="text-sm leading-5 text-body">
-        {template ? EDITOR_COPY.templateConfirmBody : publishConfirmBody(studentName, futureDate)}
+        {template
+          ? EDITOR_COPY.templateConfirmBody
+          : creation
+            ? EDITOR_COPY.createConfirmBody(studentName, creation.effectiveFrom)
+            : publishConfirmBody(studentName, futureDate)}
       </Text>
       <View className="mt-2 gap-3">
         <NutritionMotionButton

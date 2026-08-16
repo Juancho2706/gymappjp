@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import { Check, ClipboardList, Info, Lock } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronUp, ClipboardList, Info, Lock } from 'lucide-react-native'
 import {
   PLAN_NAME_MAX,
   qeAllowedStrategies,
@@ -30,6 +31,11 @@ import { EDITOR_COPY } from './microcopy'
  *   max(hoy, base) y aca solo se enuncia.
  * - Permisos: los 4 switches + el tope ±%. `canSubstitute` no se pinta (D4 de T2.5: permiso
  *   muerto, ningun camino de autorizacion lo lee).
+ *
+ * PASADA VISUAL (2026-08-16, espejo del web): editando un plan que YA existe la card nace
+ * COLAPSADA — sus metadatos ya estan decididos y ocupaban la pantalla entera, asi que el coach
+ * abria el editor sin ver una sola comida. En creacion y en plantilla arranca abierta, porque
+ * ahi definirlos es el primer paso. Colapsada resume nombre · estrategia · permisos activos.
  */
 
 const STRATEGY_LABEL: Record<NutritionStrategy, string> = {
@@ -49,6 +55,19 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /** Tope del contrato de guardado (`description`: max 2000 tras trim). */
 const TEMPLATE_DESCRIPTION_MAX = 2000
+
+/** Resumen del estado colapsado: lo que el coach necesita reconocer sin abrir. */
+function metaSummary(
+  name: string,
+  strategy: NutritionStrategy,
+  permissions: NutritionStudentPermissions,
+): string {
+  const perms = [
+    permissions.canRegisterFreely ? 'registro libre' : null,
+    permissions.canAdjustPrescribedQuantity ? 'ajusta cantidades' : null,
+  ].filter(Boolean)
+  return [name.trim() || 'Sin nombre', STRATEGY_LABEL[strategy], ...perms].join(' · ')
+}
 
 export function EditorMetaCard({
   state,
@@ -84,15 +103,38 @@ export function EditorMetaCard({
   // Modo creacion = la vigencia es elegible (la llave existe). En plantilla no existe nunca.
   const isCreation = meta.effectiveFrom !== undefined
   const effectiveFromText = meta.effectiveFrom ?? today
+  const [open, setOpen] = useState(() => isCreation || template)
+  // Un error de validacion en un campo escondido seria invisible: la card se abre sola.
+  const expanded = open || Boolean(errors['meta.name'] || errors['meta.effectiveFrom'])
 
   return (
     <NutritionCard>
-      <View className="flex-row items-center gap-2">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={template ? EDITOR_COPY.templateTitle : EDITOR_COPY.planTitle}
+        onPress={() => setOpen((value) => !value)}
+        className="min-h-11 flex-row items-center gap-2"
+      >
         <ClipboardList color={theme.textSecondary} size={16} />
-        <Text className="font-display text-base font-semibold text-strong">
-          {template ? EDITOR_COPY.templateTitle : EDITOR_COPY.planTitle}
-        </Text>
-      </View>
+        <View className="min-w-0 flex-1">
+          <Text className="font-display text-base font-semibold text-strong">
+            {template ? EDITOR_COPY.templateTitle : EDITOR_COPY.planTitle}
+          </Text>
+          {expanded ? null : (
+            <Text className="mt-0.5 text-xs leading-5 text-muted" numberOfLines={1}>
+              {metaSummary(meta.name, meta.strategy, meta.permissions)}
+            </Text>
+          )}
+        </View>
+        {expanded ? (
+          <ChevronUp color={theme.textSecondary} size={16} />
+        ) : (
+          <ChevronDown color={theme.textSecondary} size={16} />
+        )}
+      </Pressable>
+      {expanded ? (
+      <>
 
       <Text className="mt-3 text-xs font-semibold text-muted">
         {template ? EDITOR_COPY.templateNameLabel : EDITOR_COPY.planNameLabel}
@@ -223,9 +265,9 @@ export function EditorMetaCard({
             editable={!disabled}
             keyboardType="number-pad"
             maxLength={3}
-            placeholder="—"
+            placeholder="Sin tope"
             placeholderTextColor={theme.mutedForeground}
-            className="min-h-12 w-20 rounded-control border border-default bg-surface-card px-3 py-2 text-right text-base leading-6 text-strong"
+            className="min-h-12 w-28 rounded-control border border-default bg-surface-card px-3 py-2 text-right text-base leading-6 text-strong"
           />
         </View>
       ) : null}
@@ -242,6 +284,8 @@ export function EditorMetaCard({
               : EDITOR_COPY.footerToday}
         </Text>
       </View>
+      </>
+      ) : null}
     </NutritionCard>
   )
 }

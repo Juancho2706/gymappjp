@@ -13,9 +13,17 @@
  *   permiso muerto — ningun camino de autorizacion lo lee).
  * - Vigencia: en CREACION (meta.effectiveFrom presente) fecha elegible >= hoy; en edicion,
  *   solo informativa (el server computa max(hoy, base)).
+ *
+ * PASADA VISUAL (2026-08-16): la card nace COLAPSADA cuando se edita un plan que ya existe. Sus
+ * metadatos ya estan decididos y ocupaban el primer pantallazo entero — el coach abria el editor
+ * y no veia ni una comida. En CREACION y en PLANTILLA arranca ABIERTA: ahi el nombre, la
+ * estrategia y la vigencia son justamente lo primero que hay que definir. El resumen colapsado
+ * dice lo que importa de un vistazo (nombre + estrategia + permisos activos) y el toggle es una
+ * fila completa de 44px.
  */
 
-import { ClipboardList, Info, LockKeyhole } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, ClipboardList, Info, LockKeyhole } from 'lucide-react'
 import type { NutritionStrategy } from '@eva/nutrition-v2'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Switch } from '@/components/ui/switch'
@@ -56,6 +64,19 @@ const PERMISSION_ROWS = [
   },
 ]
 
+/** Resumen del estado colapsado: lo que el coach necesita reconocer sin abrir. */
+function metaSummary(
+  name: string,
+  strategy: NutritionStrategy,
+  permissions: { canRegisterFreely: boolean; canAdjustPrescribedQuantity: boolean },
+): string {
+  const perms = [
+    permissions.canRegisterFreely ? 'registro libre' : null,
+    permissions.canAdjustPrescribedQuantity ? 'ajusta cantidades' : null,
+  ].filter(Boolean)
+  return [name.trim() || 'Sin nombre', STRATEGY_LABEL[strategy], ...perms].join(' · ')
+}
+
 export function EditorMetaCard() {
   const {
     state,
@@ -71,6 +92,8 @@ export function EditorMetaCard() {
     setTemplateDescription,
   } = useQuickEdit()
   const meta = state.meta
+  // Editar un plan que YA existe abre colapsado; crear (plan o plantilla) abre expandido.
+  const [open, setOpen] = useState(() => meta?.effectiveFrom !== undefined || surface === 'template')
   if (!meta) return null
 
   const nameError = showErrors ? errors['meta.name'] : undefined
@@ -81,15 +104,36 @@ export function EditorMetaCard() {
   // no existe (draftToEditState sin `effectiveFrom`), asi que el campo jamas se pinta.
   const isCreation = meta.effectiveFrom !== undefined
   const isTemplate = surface === 'template'
+  // Un error de validacion en un campo escondido seria invisible: la card se abre sola.
+  const forcedOpen = Boolean(nameError || dateError)
+  const expanded = open || forcedOpen
 
   return (
     <section className="rounded-card border border-border-subtle bg-surface-card p-4">
-      <div className="flex items-center gap-2">
-        <ClipboardList aria-hidden="true" className="h-4 w-4 text-muted" />
-        <h2 className="font-display text-base font-semibold text-strong">
-          {isTemplate ? 'Plantilla' : 'Plan'}
-        </h2>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={expanded}
+        className="-m-1 flex w-full items-center gap-2 rounded-control p-1 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ClipboardList aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-base font-semibold text-strong">
+            {isTemplate ? 'Plantilla' : 'Plan'}
+          </span>
+          {expanded ? null : (
+            <span className="mt-0.5 block truncate text-xs leading-5 text-muted">
+              {metaSummary(meta.name, meta.strategy, meta.permissions)}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={'h-4 w-4 shrink-0 text-muted transition-transform ' + (expanded ? 'rotate-180' : '')}
+        />
+      </button>
+      {expanded ? (
+      <>
 
       <label htmlFor="editor-plan-name" className="mt-3 block text-xs font-semibold text-muted">
         {isTemplate ? QE_COPY.templateNameLabel : 'Nombre del plan'}
@@ -216,7 +260,8 @@ export function EditorMetaCard() {
               max={100}
               disabled={isPending}
               aria-label="Tope de ajuste en porcentaje"
-              className="w-24 text-right"
+              placeholder="Sin tope"
+              className="w-28 text-right"
             />
           </div>
         ) : null}
@@ -232,6 +277,8 @@ export function EditorMetaCard() {
               ? `La versión vigente aplica desde el ${futureDateLabel}; al publicar, los cambios rigen desde hoy.`
               : 'Al publicar, los cambios rigen desde hoy.'}
       </p>
+      </>
+      ) : null}
     </section>
   )
 }
