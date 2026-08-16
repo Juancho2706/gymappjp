@@ -93,9 +93,13 @@ describe('frontera: la lib del coach RN ya no expone escrituras directas', () =>
     expect(typeof builderLib.CoachFoodInputSchema.safeParse).toBe('function')
   })
 
-  it('nutrition-v2-quick-edit solo arma el draft (sin publicar)', () => {
+  it('nutrition-v2-quick-edit no publica directo (T3.3a: el draft lo proyecta la gramatica compartida)', () => {
     expect('persistAndPublishQuickEdit' in quickEditLib).toBe(false)
-    expect(typeof quickEditLib.buildQuickEditPublishDraft).toBe('function')
+    // El armado del draft ya no vive aca: es applyQuickEditToDraft (@eva/nutrition-v2). La lib
+    // conserva solo carry-over F-02 y transporte.
+    expect('buildQuickEditPublishDraft' in quickEditLib).toBe(false)
+    expect(typeof quickEditLib.injectSubstitutionsIntoDraft).toBe('function')
+    expect(typeof quickEditLib.loadQuickEditSubstitutions).toBe('function')
   })
 })
 

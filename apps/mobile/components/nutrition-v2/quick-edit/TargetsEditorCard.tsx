@@ -1,14 +1,10 @@
 import { Text, View } from 'react-native'
+import { targetStep, type QeTargetsText, type QeVariant } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
-import {
-  stepForTargetField,
-  type QuickEditTargetField,
-  type QuickEditVariant,
-} from '../../../lib/nutrition-v2-quick-edit'
 import { QuantityStepper } from './QuantityStepper'
 import { QUICK_EDIT_COPY } from './microcopy'
 
-const TARGET_ROWS: Array<{ field: QuickEditTargetField; label: string }> = [
+const TARGET_ROWS: Array<{ field: keyof QeTargetsText; label: string }> = [
   { field: 'calories', label: 'Energía (kcal)' },
   { field: 'proteinG', label: 'Proteína (g)' },
   { field: 'carbsG', label: 'Carbos (g)' },
@@ -18,7 +14,8 @@ const TARGET_ROWS: Array<{ field: QuickEditTargetField; label: string }> = [
 /**
  * Card de metas de la variante (qe-design §1.2.B.3): los 4 campos tap-to-edit con los
  * mismos steppers de cantidades. En plan flexible sin franjas ESTA card es el
- * quick-edit completo.
+ * quick-edit completo. T3.3a: variante y llaves de error de la gramatica compartida
+ * (`target.<variantKey>.<field>`, la misma tabla que el editor web).
  */
 export function TargetsEditorCard({
   variant,
@@ -27,11 +24,11 @@ export function TargetsEditorCard({
   disabled = false,
   onTargetChange,
 }: {
-  variant: QuickEditVariant
+  variant: QeVariant
   showVariantLabel: boolean
   errors: Record<string, string>
   disabled?: boolean
-  onTargetChange: (field: QuickEditTargetField, value: string) => void
+  onTargetChange: (field: keyof QeTargetsText, value: string) => void
 }) {
   return (
     <NutritionCard>
@@ -41,7 +38,7 @@ export function TargetsEditorCard({
       </Text>
       <View className="mt-3 gap-3">
         {TARGET_ROWS.map(({ field, label }) => {
-          const error = errors['targets.' + variant.key + '.' + field]
+          const error = errors['target.' + variant.key + '.' + field]
           return (
             <View key={field}>
               <View className="flex-row items-center justify-between gap-3">
@@ -49,7 +46,7 @@ export function TargetsEditorCard({
                 <QuantityStepper
                   value={variant.targets[field]}
                   onChange={(value) => onTargetChange(field, value)}
-                  step={stepForTargetField(field)}
+                  step={targetStep(field)}
                   accessibilityLabel={label}
                   disabled={disabled}
                 />

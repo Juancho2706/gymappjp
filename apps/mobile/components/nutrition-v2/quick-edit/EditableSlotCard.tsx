@@ -1,25 +1,22 @@
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { MoreVertical, Plus, Search, Trash2 } from 'lucide-react-native'
-import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
+import {
+  qeItemMacros,
+  qeSlotSubtotal,
+  type NutritionV2CoachScope,
+  type QePortionTarget,
+  type QeSlot,
+} from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { MacroChipRow } from '../MacroChipRow'
 import { useTheme } from '../../../context/ThemeContext'
-import type {
-  BuilderFood,
-  BuilderFoodMacrosPatch,
-  ItemMacros,
-} from '../../../lib/nutrition-v2-builder'
-import {
-  quickEditItemMacros,
-  quickEditSlotSubtotal,
-  type QuickEditSlot,
-} from '../../../lib/nutrition-v2-quick-edit'
+import type { BuilderFoodMacrosPatch, ItemMacros } from '../../../lib/nutrition-v2-builder'
 import { EditableItemRow } from './EditableItemRow'
-import { EditablePortionsSection, type QuickEditGroupAdmin } from './EditablePortionsSection'
 import {
-  type QuickEditPortionGroup,
-  type QuickEditPortionTarget,
-} from './portions-state'
+  EditablePortionsSection,
+  type PortionPickerGroup,
+  type QuickEditGroupAdmin,
+} from './EditablePortionsSection'
 import { QUICK_EDIT_COPY } from './microcopy'
 
 /**
@@ -31,10 +28,8 @@ import { QUICK_EDIT_COPY } from './microcopy'
 export function EditableSlotCard({
   slot,
   index,
-  foodsById,
   errors,
   disabled = false,
-  portionTargets,
   portionGroups,
   scope = null,
   onFoodOverrideApplied,
@@ -54,14 +49,12 @@ export function EditableSlotCard({
   onPortionAdd,
   portionGroupAdmin,
 }: {
-  slot: QuickEditSlot
+  slot: QeSlot
   index: number
-  foodsById: ReadonlyMap<string, BuilderFood>
   errors: Record<string, string>
   disabled?: boolean
-  /** Capa opcional de porciones (T1.4); [] + [] = seccion invisible (SPEC UX-c). */
-  portionTargets: QuickEditPortionTarget[]
-  portionGroups: QuickEditPortionGroup[]
+  /** Grupos elegibles del picker; [] + franja sin targets = seccion invisible (SPEC UX-c). */
+  portionGroups: PortionPickerGroup[]
   onSlotPatch: (patch: { name?: string; startTime?: string }) => void
   onRemoveSlot: () => void
   /**
@@ -78,8 +71,8 @@ export function EditableSlotCard({
   onRemoveItem: (itemKey: string) => void
   onPortionStep: (targetKey: string, direction: 1 | -1) => void
   onPortionNotes: (targetKey: string, value: string) => void
-  onPortionRemove: (target: QuickEditPortionTarget, index: number) => void
-  onPortionAdd: (group: QuickEditPortionGroup) => void
+  onPortionRemove: (target: QePortionTarget, index: number) => void
+  onPortionAdd: (group: PortionPickerGroup) => void
   /** Porciones propias (FD6a): altas/edición de grupos desde el picker. Ausente = sin esa UI. */
   portionGroupAdmin?: QuickEditGroupAdmin
   /** Workspace del coach: habilita el lápiz de corrección de macros (T2.2). */
@@ -88,7 +81,7 @@ export function EditableSlotCard({
   onFoodOverrideApplied?: (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => void
 }) {
   const { theme } = useTheme()
-  const subtotal: ItemMacros = quickEditSlotSubtotal(slot, foodsById)
+  const subtotal: ItemMacros = qeSlotSubtotal(slot)
   const nameError = errors['slot.' + slot.key + '.name']
   const timeError = errors['slot.' + slot.key + '.startTime']
 
@@ -158,12 +151,9 @@ export function EditableSlotCard({
             <EditableItemRow
               key={item.key}
               item={item}
-              macros={quickEditItemMacros(item, foodsById)}
+              macros={qeItemMacros(item)}
               errors={errors}
               disabled={disabled}
-              // Misma resolucion que `quickEditItemMacros`: la fila hidratada manda, y el item
-              // base cae al mapa del catalogo. Sin alimento resuelto no hay lapiz.
-              food={item.food ?? (item.foodId ? (foodsById.get(item.foodId) ?? null) : null)}
               scope={scope}
               onOverrideApplied={onFoodOverrideApplied}
               onQuantityChange={(value) => onItemQuantity(item.key, value)}
@@ -202,7 +192,7 @@ export function EditableSlotCard({
       {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo
           "+ Agregar alimento". Se pinta sola solo si el plan usa porciones. */}
       <EditablePortionsSection
-        targets={portionTargets}
+        targets={slot.portionTargets}
         groups={portionGroups}
         disabled={disabled}
         onStep={onPortionStep}

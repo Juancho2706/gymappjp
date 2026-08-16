@@ -783,6 +783,13 @@ export type QuickEditAction =
   | { type: 'STEP_TARGET'; variantKey: string; field: keyof QeTargetsText; direction: 1 | -1 }
   | { type: 'SET_VISIBLE_NOTES'; value: string }
   | { type: 'SET_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string; value: string }
+  /**
+   * Nota del target de porciones (T3.3a): capacidad que el quick-edit RN ya tenia en su
+   * reducer paralelo y el superset absorbe al converger. Guarda el texto CRUDO (TextInput
+   * vivo); la proyeccion normaliza ''/espacios → null, asi que tipear solo espacios no
+   * cuenta como cambio ni publica basura.
+   */
+  | { type: 'SET_PORTION_NOTES'; variantKey: string; slotKey: string; targetKey: string; value: string }
   | { type: 'STEP_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string; direction: 1 | -1 }
   | { type: 'REMOVE_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string }
   | { type: 'RESTORE_PORTION_TARGET'; variantKey: string; slotKey: string; index: number; target: QePortionTarget }
@@ -1523,6 +1530,11 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         ...target,
         portions: action.value,
       }))
+    case 'SET_PORTION_NOTES':
+      return mapPortionTarget(state, action.variantKey, action.slotKey, action.targetKey, (target) => ({
+        ...target,
+        notes: action.value,
+      }))
     case 'STEP_PORTION_TARGET':
       return mapPortionTarget(state, action.variantKey, action.slotKey, action.targetKey, (target) => ({
         ...target,
@@ -2182,7 +2194,10 @@ function projectPortionTarget(target: QePortionTarget, orderIndex: number): Draf
     // Texto invalido proyecta 0: la validacion local bloquea el publish antes de que el
     // server vea un draft con porciones fuera del contrato (mismo patron que quantity).
     portions: parsePortionsValue(target.portions) ?? 0,
-    notes: target.notes,
+    // Nota editable (SET_PORTION_NOTES): el estado guarda el texto crudo del TextInput;
+    // aca se normaliza (trim; '' → null). Baseline y current pasan por esta MISMA
+    // proyeccion, asi que una nota intacta jamas cuenta como cambio.
+    notes: target.notes == null ? null : target.notes.trim() || null,
     orderIndex,
   }
 }

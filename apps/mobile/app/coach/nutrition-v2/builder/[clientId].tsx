@@ -144,9 +144,9 @@ import {
   type BuilderVariant,
   type NutritionV2WriteClient,
 } from '../../../../lib/nutrition-v2-builder'
-// H-07: mismo paso del stepper que el quick-edit (5 para g/ml, 0,5 para unidad/porción). Se
-// importa el helper compartido en vez de re-declarar la regla en el builder.
-import { stepForUnit } from '../../../../lib/nutrition-v2-quick-edit'
+// H-07: mismo paso del stepper que el quick-edit (5 para g/ml, 0,5 para unidad/porción). El
+// helper vive en la gramatica compartida (@eva/nutrition-v2) desde T3.3a.
+import { quantityStep } from '@eva/nutrition-v2'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 
 const STRATEGY_ORDER: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
@@ -2607,7 +2607,7 @@ function ItemEditor({
         <QuantityStepper
           value={item.quantity}
           onChange={(value) => patch({ quantity: value })}
-          step={stepForUnit(item.unit)}
+          step={quantityStep(item.unit)}
           accessibilityLabel={`Cantidad de ${item.food?.name ?? item.customName ?? 'alimento'}`}
         />
         <UnitToggle unit={item.unit} onChange={(unit) => patch({ unit })} />

@@ -31,12 +31,29 @@ import {
 } from 'lucide-react-native'
 import {
   NUTRITION_WEEK_ORDER,
+  VARIANT_LABEL_MAX,
+  applyQuickEditToDraft,
+  collectPortionGroups,
+  countDraftChanges,
+  countItemOrderChanges,
+  countVariantHeaderChanges,
   formatNutritionDayOfWeek,
+  qeSlotCopyTargets,
+  quickEditReducer,
+  readModelToDraft,
+  readModelToEditState,
   resolveNutritionDayVariantForDate,
+  sortNutritionDayVariantsForDisplay,
+  takenDayVariantDows,
+  validateQuickEdit,
   type FoodCatalogItem,
   type NutritionItemSubstitution,
   type NutritionPlanReadModel,
   type NutritionV2CoachScope,
+  type QePortionGroup,
+  type QePortionTarget,
+  type QeVariant,
+  type QuickEditState,
 } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { DayVariantWeekStrip } from '../DayVariantWeekStrip'
@@ -48,40 +65,15 @@ import { supabase } from '../../../lib/supabase'
 import {
   mapFoodCatalogItemToBuilderFood,
   strategyUsesSlots,
-  type BuilderFood,
   type BuilderFoodMacrosPatch,
   type NutritionV2WriteClient,
 } from '../../../lib/nutrition-v2-builder'
 import {
   buildQuickEditBaseline,
   buildQuickEditIdempotencyKey,
-  collectQuickEditFoodIds,
-  countQuickEditChanges,
-  loadQuickEditFoods,
   loadQuickEditSubstitutions,
-  otherQuickEditVariantKeys,
-  planDayVariantAdditions,
-  planModelToQuickEditState,
-  quickEditReducer,
-  quickEditUsesSlots,
-  resolveQuickEditSlotCopyTargets,
-  sortQuickEditVariantsForDisplay,
-  takenDayVariantDows,
-  validateQuickEditState,
-  VARIANT_LABEL_MAX,
-  type QuickEditState,
-  type QuickEditVariant,
 } from '../../../lib/nutrition-v2-quick-edit'
-import {
-  copyPortionsToSlots,
-  countPortionsChanges,
-  hydrateQuickEditPortions,
-  portionsReducer,
-  type QuickEditPortionGroup,
-  type QuickEditPortionsState,
-  type QuickEditPortionTarget,
-} from './portions-state'
-import type { QuickEditGroupAdmin } from './EditablePortionsSection'
+import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
 import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
 import { publishQuickEditRN } from '../../../lib/nutrition-v2.api'
@@ -144,17 +136,17 @@ interface UndoEntry {
 }
 
 /**
- * Payload del respaldo local del quick-edit (AsyncStorage): identifica plan + version base y
- * persiste los DOS reducers de RN (el arbol principal `state` Y las porciones `portions`, que en
- * RN viven en un reducer SEPARADO — web las pliega dentro de `state`). Persistir solo `state`
- * perderia en silencio los cambios de porciones (regresion respecto a web).
+ * Payload del respaldo local del quick-edit (AsyncStorage). `schema: 2` (T3.3a): el arbol es
+ * la gramatica COMPARTIDA del paquete y las porciones viven DENTRO de el. Un respaldo v1
+ * (dos reducers RN, formas viejas) NO se restaura: rehidratar el reducer compartido con un
+ * arbol de otra forma corromperia la edicion — se descarta, igual que una base obsoleta.
  */
 interface QuickEditDraftPayload {
+  schema: 2
   clientId: string
   planId: string
   baseVersionId: string
   state: QuickEditState
-  portions: QuickEditPortionsState
 }
 
 /**
@@ -205,24 +197,27 @@ export function QuickEditMode({
   // cache→fresh), el diff NO se corrompe y el guard optimista del publish detecta la
   // base obsoleta (STALE_BASE) — la salida segura es Recargar.
   const [frozen] = useState(() => {
-    const initial = planModelToQuickEditState(planModel, genKey)
+    // T3.3a: hidratacion de la gramatica COMPARTIDA (@eva/nutrition-v2). Las porciones viajan
+    // DENTRO del arbol (slot.portionTargets) — el reducer paralelo RN murio. Los reemplazos
+    // F-02 NO se hidratan (llegan por fetch aparte y se re-inyectan al publicar; NUT-008 gatea).
+    const initial = readModelToEditState(planModel)
+    const baseDraft = readModelToDraft(planModel, clientId)
     return {
       baseline: buildQuickEditBaseline(planModel),
       initial,
-      // Capa de porciones (T1.4): estado paralelo por slot.key + dict de grupos del
-      // plan (snapshots congelados del read model; catalogo vivo jamas).
-      portions: hydrateQuickEditPortions(planModel, initial),
+      baseDraft,
+      // Dict CONGELADO de grupos del plan (snapshots del read model; catalogo vivo jamas).
+      portionGroups: collectPortionGroups(planModel),
     }
   })
   const baseline = frozen.baseline
   const initialState = frozen.initial
-  const [state, dispatch] = useReducer(quickEditReducer, initialState)
-  const [portionsState, dispatchPortions] = useReducer(portionsReducer, frozen.portions.initial)
+  const [state, dispatch] = useReducer(quickEditReducer, initialState ?? { variants: [], visibleNotes: '' })
 
   // Porciones propias (FD6a): la lista del picker es el dict CONGELADO del plan. Crear un grupo
   // agrega una entrada; editarlo reemplaza la suya en el sitio; eliminarlo lo saca de la lista
   // (los targets ya publicados conservan su snapshot congelado — el grupo borrado no los mueve).
-  const [groupOverrides, setGroupOverrides] = useState<QuickEditPortionGroup[]>([])
+  const [groupOverrides, setGroupOverrides] = useState<PortionPickerGroup[]>([])
   const [removedGroupIds, setRemovedGroupIds] = useState<ReadonlySet<string>>(() => new Set<string>())
   // Ids de grupos PROPIOS del coach: el dict congelado no distingue system de propios, así que se
   // resuelven con UNA lectura perezosa del catálogo (RLS coach-scoped) al abrir el picker. Si falla,
@@ -230,17 +225,18 @@ export function QuickEditMode({
   const [ownGroupIds, setOwnGroupIds] = useState<ReadonlySet<string>>(() => new Set<string>())
   const ownGroupsRequestedRef = useRef(false)
 
-  const portionGroups = useMemo(() => {
+  const portionGroups = useMemo<PortionPickerGroup[]>(() => {
     const overrides = new Map(groupOverrides.map((group) => [group.exchangeGroupId, group]))
-    const merged = frozen.portions.groups.map((group) => overrides.get(group.exchangeGroupId) ?? group)
+    const merged: PortionPickerGroup[] = frozen.portionGroups.map(
+      (group: QePortionGroup) => overrides.get(group.exchangeGroupId) ?? group,
+    )
     const known = new Set(merged.map((group) => group.exchangeGroupId))
     for (const group of groupOverrides) {
       if (!known.has(group.exchangeGroupId)) merged.push(group)
     }
     return merged.filter((group) => !removedGroupIds.has(group.exchangeGroupId))
-  }, [frozen.portions.groups, groupOverrides, removedGroupIds])
+  }, [frozen.portionGroups, groupOverrides, removedGroupIds])
 
-  const [foodsById, setFoodsById] = useState<ReadonlyMap<string, BuilderFood>>(new Map())
   // Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. Carry-over PURO:
   // el read-model no los trae; se fetchean al entrar y se re-inyectan al publicar para que
   // republicar NO los pierda (misma clase del bug private_notes). No son editables en F1.
@@ -300,34 +296,14 @@ export function QuickEditMode({
     }
   }, [])
 
-  // Hidrata los foods referenciados para recomputo de macros en vivo (best-effort).
-  useEffect(() => {
-    let active = true
-    const ids = collectQuickEditFoodIds(initialState)
-    if (ids.length === 0) return
-    void loadQuickEditFoods(supabase as unknown as NutritionV2WriteClient, ids).then((map) => {
-      if (active && mountedRef.current) setFoodsById(map)
-    })
-    return () => {
-      active = false
-    }
-  }, [initialState])
-
   /**
-   * Correccion de macros de un alimento (T2.2). Alcanza TODAS sus apariciones, y hay DOS lugares
-   * que la sostienen: el `food` hidratado de cada fila (lo parchea el reducer) y el mapa del
-   * catalogo, del que leen los items base. Parchear uno solo dejaba la mitad del plan con los
-   * numeros viejos hasta recargar.
+   * Correccion de macros de un alimento (T2.2). Alcanza TODAS las filas con ese `food`
+   * hidratado (las del catalogo agregadas/swapeadas en esta sesion). Criterio W2 del editor
+   * compartido: los items BASE viven de su `macroBase` congelado y no ofrecen el lapiz — el
+   * mapa paralelo de foods (y su fetch) murio con la convergencia.
    */
   const handleFoodOverrideApplied = useCallback(
     (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => {
-      setFoodsById((prev) => {
-        const current = prev.get(foodId)
-        if (!current) return prev
-        const next = new Map(prev)
-        next.set(foodId, { ...current, ...macros })
-        return next
-      })
       dispatch({ type: 'APPLY_FOOD_OVERRIDE', foodId, macros })
       toast.success(message)
     },
@@ -360,19 +336,28 @@ export function QuickEditMode({
     setSubsReloadNonce((nonce) => nonce + 1)
   }, [])
 
-  // Franjas VIVAS del estado principal: las porciones de franjas eliminadas no cuentan
-  // ni publican (la baja de la franja ya cuenta 1 y arrastra sus targets).
-  const liveSlotKeys = useMemo(
-    () => new Set(state.variants.flatMap((variant) => variant.slots.map((slot) => slot.key))),
-    [state],
+  // Baseline y draft actual pasan por la MISMA proyeccion que el web: cero ediciones = cero
+  // cambios garantizado, diff por `id` (identidad de la version base) y porciones EN el arbol.
+  const baselineDraft = useMemo(
+    () => (frozen.baseDraft && initialState ? applyQuickEditToDraft(frozen.baseDraft, initialState) : null),
+    [frozen.baseDraft, initialState],
   )
-  const count = useMemo(
-    () =>
-      countQuickEditChanges(initialState, state) +
-      countPortionsChanges(frozen.portions.initial, portionsState, liveSlotKeys),
-    [initialState, state, frozen.portions.initial, portionsState, liveSlotKeys],
+  const currentDraft = useMemo(
+    () => (frozen.baseDraft ? applyQuickEditToDraft(frozen.baseDraft, state) : null),
+    [frozen.baseDraft, state],
   )
-  const validation = useMemo(() => validateQuickEditState(state), [state])
+  const count = useMemo(() => {
+    if (!baselineDraft || !currentDraft) return 0
+    return (
+      countDraftChanges(baselineDraft, currentDraft) +
+      countVariantHeaderChanges(baselineDraft, currentDraft) +
+      countItemOrderChanges(baselineDraft, currentDraft)
+    )
+  }, [baselineDraft, currentDraft])
+  const validation = useMemo(
+    () => validateQuickEdit(state, { strategy: baseline?.strategy ?? 'flexible' }),
+    [state, baseline],
+  )
   const errors = showErrors ? validation.errors : {}
 
   // Al montar el modo edicion: barre borradores vencidos (TTL 7d, ambos prefijos) y evalua si hay
@@ -391,6 +376,7 @@ export function QuickEditMode({
       if (!record) return
       const { payload } = record
       if (
+        payload.schema === 2 &&
         payload.planId === baseline.planId &&
         payload.baseVersionId === baseline.baseVersionId &&
         Array.isArray(payload.state?.variants)
@@ -419,11 +405,11 @@ export function QuickEditMode({
         void writeNutritionDraft<QuickEditDraftPayload>(
           draftKey,
           {
+            schema: 2,
             clientId,
             planId: baseline.planId,
             baseVersionId: baseline.baseVersionId,
             state,
-            portions: portionsState,
           },
           Date.now(),
         )
@@ -432,14 +418,13 @@ export function QuickEditMode({
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [state, portionsState, count, baseline, draftKey, clientId])
+  }, [state, count, baseline, draftKey, clientId])
 
   // Aplica el respaldo local rehidratando los DOS reducers (arbol principal + porciones) y baja el
   // banner. Persistir/restaurar solo `state` perderia los cambios de porciones (regresion vs web).
   const restoreDraft = useCallback(() => {
     if (!pendingRestore) return
     dispatch({ type: 'RESTORE_DRAFT', state: pendingRestore.state })
-    dispatchPortions({ type: 'RESTORE_PORTIONS', state: pendingRestore.portions })
     setPendingRestore(null)
   }, [pendingRestore])
 
@@ -507,20 +492,21 @@ export function QuickEditMode({
     [state, pushUndo],
   )
 
-  // Baja de un target de porciones con Deshacer (mismo snackbar de 5 s de los items).
+  // Baja de un target de porciones con Deshacer (mismo snackbar de los items). T3.3a: las
+  // porciones viven en el arbol compartido — acciones con variantKey + slotKey.
   const handleRemovePortion = useCallback(
-    (slotKey: string, target: QuickEditPortionTarget, index: number) => {
-      dispatchPortions({ type: 'REMOVE_TARGET', slotKey, targetKey: target.key })
+    (variantKey: string, slotKey: string, target: QePortionTarget, index: number) => {
+      dispatch({ type: 'REMOVE_PORTION_TARGET', variantKey, slotKey, targetKey: target.key })
       pushUndo({
         message: PORTIONS_COPY.builder.groupRemoved(target.groupName),
-        restore: () => dispatchPortions({ type: 'RESTORE_TARGET', slotKey, index, target }),
+        restore: () => dispatch({ type: 'RESTORE_PORTION_TARGET', variantKey, slotKey, index, target }),
       })
     },
     [pushUndo],
   )
 
-  const handleAddPortion = useCallback((slotKey: string, group: QuickEditPortionGroup) => {
-    dispatchPortions({ type: 'ADD_TARGET', slotKey, key: genKey('ptarget'), group })
+  const handleAddPortion = useCallback((variantKey: string, slotKey: string, group: QePortionGroup) => {
+    dispatch({ type: 'ADD_PORTION_TARGET', variantKey, slotKey, key: genKey('ptarget'), group })
   }, [])
 
   // Porciones propias (FD6a): administración de grupos desde el picker del quick-edit. La
@@ -559,16 +545,23 @@ export function QuickEditMode({
       onDeleted: (groupId) => {
         setRemovedGroupIds((prev) => new Set(prev).add(groupId))
         setGroupOverrides((prev) => prev.filter((g) => g.exchangeGroupId !== groupId))
-        for (const [slotKey, slotTargets] of Object.entries(portionsState.bySlot)) {
-          for (const target of slotTargets) {
-            if (target.exchangeGroupId === groupId) {
-              dispatchPortions({ type: 'REMOVE_TARGET', slotKey, targetKey: target.key })
+        for (const variant of state.variants) {
+          for (const slot of variant.slots) {
+            for (const target of slot.portionTargets) {
+              if (target.exchangeGroupId === groupId) {
+                dispatch({
+                  type: 'REMOVE_PORTION_TARGET',
+                  variantKey: variant.key,
+                  slotKey: slot.key,
+                  targetKey: target.key,
+                })
+              }
             }
           }
         }
       },
     }),
-    [scope, ownGroupIds, portionsState.bySlot],
+    [scope, ownGroupIds, state.variants],
   )
 
   const handleRemoveSlot = useCallback(
@@ -598,9 +591,9 @@ export function QuickEditMode({
 
   // ── Multi-dia (FD5) ────────────────────────────────────────────────────────────────
   // Dias ya reclamados por una variante especifica (el picker los deshabilita).
-  const takenDays = useMemo(() => takenDayVariantDows(state), [state])
+  const takenDays = useMemo(() => Array.from(takenDayVariantDows(state)), [state])
   // Orden de lectura: dia base primero, despues los especificos Lu→Do (espejo web).
-  const orderedVariants = useMemo(() => sortQuickEditVariantsForDisplay(state.variants), [state.variants])
+  const orderedVariants = useMemo(() => sortNutritionDayVariantsForDisplay(state.variants), [state.variants])
   const showVariantHeader = state.variants.length > 1
 
   /**
@@ -614,7 +607,7 @@ export function QuickEditMode({
       state.variants.map((variant) => ({
         id: variant.key,
         dayOfWeek: variant.dayOfWeek,
-        isDefault: variant.default,
+        isDefault: variant.isDefault,
       })),
     [state.variants],
   )
@@ -652,32 +645,16 @@ export function QuickEditMode({
    */
   const handleAddDays = useCallback(() => {
     if (addDays.length === 0) return
-    const plan = planDayVariantAdditions(state, addDays, addSource)
-    if (plan.variants.length === 0) {
-      setAddDayOpen(false)
-      return
-    }
+    // T3.3a: el reducer compartido clona el dia COMPLETO (franjas + items + porciones en el
+    // arbol) — el bloque paralelo de clonado de porciones murio con el reducer hermano.
     dispatch({ type: 'ADD_VARIANT', days: addDays, source: addSource })
-    if (plan.slotKeyClones.length > 0) {
-      const bySlot = { ...portionsState.bySlot }
-      let cloned = false
-      for (const { from, to } of plan.slotKeyClones) {
-        const targets = portionsState.bySlot[from] ?? []
-        if (targets.length === 0) continue
-        // Keys de UI propias (prefijadas por la franja nueva); el `id` de la version base se
-        // conserva igual que en los items: la persistencia lo ignora e inserta filas nuevas.
-        bySlot[to] = targets.map((target) => ({ ...target, key: to + ':' + target.key }))
-        cloned = true
-      }
-      if (cloned) dispatchPortions({ type: 'RESTORE_PORTIONS', state: { bySlot } })
-    }
     setAddDayOpen(false)
-  }, [addDays, addSource, state, portionsState])
+  }, [addDays, addSource])
 
   const handleRemoveDay = useCallback(
-    (variant: QuickEditVariant) => {
+    (variant: QeVariant) => {
       const index = state.variants.findIndex((candidate) => candidate.key === variant.key)
-      if (index < 0 || variant.default) return
+      if (index < 0 || variant.isDefault) return
       const removed = state.variants[index]
       setDayMenuKey(null)
       Alert.alert(QUICK_EDIT_COPY.removeDayTitle, removeDayConfirmBody(variant.label.trim() || 'este día'), [
@@ -713,52 +690,33 @@ export function QuickEditMode({
   const applySlotCopy = useCallback(
     (source: SlotRef, targetVariantKeys: readonly string[]) => {
       if (targetVariantKeys.length === 0) return
-      const targets = resolveQuickEditSlotCopyTargets(state, {
-        sourceVariantKey: source.variantKey,
-        slotKey: source.slotKey,
-        targetVariantKeys,
-      })
-      if (targets.length === 0) return
       const previousState = state
-      const previousPortions = portionsState
+      // T3.3a: la accion del arbol compartido copia la franja COMPLETA (items + porciones);
+      // el mirror manual del reducer hermano murio. Deshacer = arbol previo entero (una copia
+      // toca N dias; ningun RESTORE_* puntual la cubre).
       dispatch({
         type: 'COPY_SLOT_TO_VARIANTS',
         sourceVariantKey: source.variantKey,
         slotKey: source.slotKey,
         targetVariantKeys,
       })
-      const nextPortions = copyPortionsToSlots(portionsState, {
-        sourceSlotKey: source.slotKey,
-        targets,
-      })
-      if (nextPortions !== portionsState) {
-        dispatchPortions({ type: 'RESTORE_PORTIONS', state: nextPortions })
-      }
       setSlotMenu(null)
       setCopySource(null)
       setCopyTargetKeys([])
       pushUndo({
-        message: copySlotDone(targets.length),
-        restore: () => {
-          dispatch({ type: 'RESTORE_DRAFT', state: previousState })
-          dispatchPortions({ type: 'RESTORE_PORTIONS', state: previousPortions })
-        },
+        message: copySlotDone(targetVariantKeys.length),
+        restore: () => dispatch({ type: 'RESTORE_DRAFT', state: previousState }),
       })
     },
-    [state, portionsState, pushUndo],
+    [state, pushUndo],
   )
 
   // Destinos posibles de la copia + si pisan una franja homónima (se resuelve con la MISMA
   // función pura del reducer, para que la hoja prometa exactamente lo que va a pasar).
   const copyCandidates = useMemo(() => {
     if (!copySource) return []
-    const others = otherQuickEditVariantKeys(state, copySource.variantKey)
-    const resolved = resolveQuickEditSlotCopyTargets(state, {
-      sourceVariantKey: copySource.variantKey,
-      slotKey: copySource.slotKey,
-      targetVariantKeys: others,
-    })
-    const replacedByKey = new Map(resolved.map((target) => [target.variantKey, target.replaced]))
+    const resolved = qeSlotCopyTargets(state, copySource.variantKey, copySource.slotKey)
+    const replacedByKey = new Map(resolved.map((target) => [target.variantKey, target.replaces]))
     return orderedVariants
       .filter((variant) => variant.key !== copySource.variantKey)
       .map((variant) => ({ variant, replaces: replacedByKey.get(variant.key) === true }))
@@ -770,7 +728,7 @@ export function QuickEditMode({
       const builderFood = mapFoodCatalogItemToBuilderFood(food)
       if (searchTarget.mode === 'swap' && searchTarget.itemKey) {
         dispatch({
-          type: 'SWAP_ITEM',
+          type: 'SWAP_ITEM_FOOD',
           variantKey: searchTarget.variantKey,
           slotKey: searchTarget.slotKey,
           itemKey: searchTarget.itemKey,
@@ -778,7 +736,7 @@ export function QuickEditMode({
         })
       } else {
         dispatch({
-          type: 'ADD_ITEM',
+          type: 'ADD_CATALOG_ITEM',
           variantKey: searchTarget.variantKey,
           slotKey: searchTarget.slotKey,
           key: genKey('item'),
@@ -793,11 +751,10 @@ export function QuickEditMode({
   const handleFreeItem = useCallback(() => {
     if (!searchTarget || searchTarget.mode !== 'add') return
     dispatch({
-      type: 'ADD_ITEM',
+      type: 'ADD_CUSTOM_ITEM',
       variantKey: searchTarget.variantKey,
       slotKey: searchTarget.slotKey,
       key: genKey('item'),
-      food: null,
     })
     setSearchTarget(null)
   }, [searchTarget])
@@ -832,9 +789,8 @@ export function QuickEditMode({
     const res = await publishQuickEditRN({
       scope,
       clientId,
-      baseline,
+      planModel,
       state,
-      portions: { state: portionsState },
       carryOverSubstitutions: carryOverSubs,
       idempotencyKey: intentKeyRef.current,
       todayIso,
@@ -860,7 +816,7 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [baseline, scope, clientId, state, portionsState, carryOverSubs, subsStatus, todayIso, onPublished, draftKey])
+  }, [baseline, scope, clientId, planModel, state, carryOverSubs, subsStatus, todayIso, onPublished, draftKey])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return
@@ -922,7 +878,7 @@ export function QuickEditMode({
     )
   }
 
-  const usesSlots = quickEditUsesSlots(baseline, state)
+  const usesSlots = strategyUsesSlots(baseline.strategy) || state.variants.some((v) => v.slots.length > 0)
   const futureDate = baseline.effectiveFrom > todayIso ? baseline.effectiveFrom : null
   const dayMenuVariant = state.variants.find((variant) => variant.key === dayMenuKey) ?? null
   const changeDayVariant = state.variants.find((variant) => variant.key === changeDayKey) ?? null
@@ -1047,12 +1003,12 @@ export function QuickEditMode({
                   <View className="flex-row items-start gap-2">
                     <View className="min-w-0 flex-1">
                       <Text className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-                        {variant.default ? QUICK_EDIT_COPY.baseDayEyebrow : QUICK_EDIT_COPY.specificDayEyebrow}
+                        {variant.isDefault ? QUICK_EDIT_COPY.baseDayEyebrow : QUICK_EDIT_COPY.specificDayEyebrow}
                       </Text>
                       <Text className="font-display text-base font-semibold text-strong" numberOfLines={1}>
                         {variant.label}
                       </Text>
-                      {variant.default ? (
+                      {variant.isDefault ? (
                         <Text className="mt-0.5 text-xs leading-5 text-muted">
                           {QUICK_EDIT_COPY.baseDayHint}
                         </Text>
@@ -1100,24 +1056,34 @@ export function QuickEditMode({
                       key={slot.key}
                       slot={slot}
                       index={slotIndex}
-                      foodsById={foodsById}
                       errors={errors}
                       disabled={publishing}
-                      portionTargets={portionsState.bySlot[slot.key] ?? []}
                       portionGroups={portionGroups}
                       portionGroupAdmin={portionGroupAdmin}
                       scope={scope}
                       onFoodOverrideApplied={handleFoodOverrideApplied}
                       onPortionStep={(targetKey, direction) =>
-                        dispatchPortions({ type: 'STEP_PORTIONS', slotKey: slot.key, targetKey, direction })
+                        dispatch({
+                          type: 'STEP_PORTION_TARGET',
+                          variantKey: variant.key,
+                          slotKey: slot.key,
+                          targetKey,
+                          direction,
+                        })
                       }
                       onPortionNotes={(targetKey, value) =>
-                        dispatchPortions({ type: 'SET_NOTES', slotKey: slot.key, targetKey, value })
+                        dispatch({
+                          type: 'SET_PORTION_NOTES',
+                          variantKey: variant.key,
+                          slotKey: slot.key,
+                          targetKey,
+                          value,
+                        })
                       }
                       onPortionRemove={(target, targetIndex) =>
-                        handleRemovePortion(slot.key, target, targetIndex)
+                        handleRemovePortion(variant.key, slot.key, target, targetIndex)
                       }
-                      onPortionAdd={(group) => handleAddPortion(slot.key, group)}
+                      onPortionAdd={(group) => handleAddPortion(variant.key, slot.key, group)}
                       onSlotPatch={(patch) =>
                         dispatch({ type: 'UPDATE_SLOT', variantKey: variant.key, slotKey: slot.key, patch })
                       }
@@ -1132,11 +1098,10 @@ export function QuickEditMode({
                       }
                       onAddFreeItem={() =>
                         dispatch({
-                          type: 'ADD_ITEM',
+                          type: 'ADD_CUSTOM_ITEM',
                           variantKey: variant.key,
                           slotKey: slot.key,
                           key: genKey('item'),
-                          food: null,
                         })
                       }
                       onItemQuantity={(itemKey, value) =>
@@ -1161,7 +1126,7 @@ export function QuickEditMode({
                   accessibilityRole="button"
                   accessibilityLabel={QUICK_EDIT_COPY.addSlot}
                   disabled={publishing}
-                  onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot') })}
+                  onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot'), name: '', startTime: '' })}
                   className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
                 >
                   <Text className="text-sm font-semibold text-muted">+ {QUICK_EDIT_COPY.addSlot}</Text>
@@ -1391,7 +1356,7 @@ export function QuickEditMode({
         accessibilityLabel={QUICK_EDIT_COPY.dayMenuTitle}
       >
         <View className="gap-3">
-          {dayMenuVariant && !dayMenuVariant.default ? (
+          {dayMenuVariant && !dayMenuVariant.isDefault ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={QUICK_EDIT_COPY.changeDay}
@@ -1419,7 +1384,7 @@ export function QuickEditMode({
             <Pencil color={theme.textSecondary} size={16} />
             <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.renameDay}</Text>
           </Pressable>
-          {dayMenuVariant && !dayMenuVariant.default ? (
+          {dayMenuVariant && !dayMenuVariant.isDefault ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={QUICK_EDIT_COPY.removeDay}
@@ -1430,7 +1395,7 @@ export function QuickEditMode({
               <Text className="text-sm font-semibold text-danger-600">{QUICK_EDIT_COPY.removeDay}</Text>
             </Pressable>
           ) : null}
-          {dayMenuVariant?.default ? (
+          {dayMenuVariant?.isDefault ? (
             <View className="flex-row items-start gap-1.5">
               <Info color={theme.textSecondary} size={14} />
               <Text className="min-w-0 flex-1 text-xs leading-5 text-muted">
@@ -1532,7 +1497,10 @@ export function QuickEditMode({
             disabled={publishing}
             onPress={() => {
               if (!slotMenu) return
-              applySlotCopy(slotMenu, otherQuickEditVariantKeys(state, slotMenu.variantKey))
+              applySlotCopy(
+                slotMenu,
+                state.variants.filter((v) => v.key !== slotMenu.variantKey).map((v) => v.key),
+              )
             }}
             className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
           >
@@ -1570,7 +1538,7 @@ export function QuickEditMode({
           <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.copySlotHint}</Text>
           {copyCandidates.map(({ variant, replaces }) => {
             const checked = copyTargetKeys.includes(variant.key)
-            const dayCaption = variant.default
+            const dayCaption = variant.isDefault
               ? QUICK_EDIT_COPY.baseDayEyebrow
               : (formatNutritionDayOfWeek(variant.dayOfWeek) ?? QUICK_EDIT_COPY.specificDayEyebrow)
             return (
@@ -1651,7 +1619,7 @@ function DayAnchorRow({
   todayVariantKey,
   onJump,
 }: {
-  variants: readonly QuickEditVariant[]
+  variants: readonly QeVariant[]
   todayVariantKey: string | null
   onJump: (variantKey: string) => void
 }) {
@@ -1669,7 +1637,7 @@ function DayAnchorRow({
         const isToday = todayVariantKey != null && variant.key === todayVariantKey
         // Sin día fijo y sin ser la base (dato inválido, tolerado en lectura) el chip se queda
         // solo con la etiqueta: no se inventa un día de semana.
-        const short = variant.default
+        const short = variant.isDefault
           ? QUICK_EDIT_COPY.baseDayShort
           : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
         return (

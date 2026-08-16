@@ -11,10 +11,23 @@ import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 import {
   PORTION_MAX,
   PORTION_MIN,
-  formatPortionsEsCl,
-  type QuickEditPortionGroup,
-  type QuickEditPortionTarget,
-} from './portions-state'
+  parsePortionsValue,
+  type QePortionGroup,
+  type QePortionTarget,
+} from '@eva/nutrition-v2'
+
+/**
+ * Grupo elegible del picker: el `QePortionGroup` compartido + `sortOrder` opcional para el
+ * color fallback del circulito (los grupos del catalogo del coach lo traen; los snapshots
+ * congelados del read model no — caen al indice 0, solo cosmetico).
+ */
+export type PortionPickerGroup = QePortionGroup & { sortOrder?: number }
+
+/** Display es-CL con coma decimal: "1.5" → "1,5" (espejo del formato de la tabla UX-d). */
+function formatPortionsEsCl(portions: string): string {
+  const n = parsePortionsValue(portions)
+  return n == null ? portions : String(Math.round(n * 2) / 2).replace('.', ',')
+}
 
 /**
  * Porciones propias (FD6a) en el quick-edit: la lista del picker es el dict CONGELADO del plan
@@ -81,13 +94,15 @@ function PortionsStepper({
   onStep,
 }: {
   groupName: string
-  portions: number
+  /** Texto del arbol compartido ("2", "1.5"); el guard usa el numero parseado. */
+  portions: string
   disabled: boolean
   onStep: (direction: 1 | -1) => void
 }) {
   const { theme } = useTheme()
-  const canDecrement = !disabled && portions > PORTION_MIN
-  const canIncrement = !disabled && portions < PORTION_MAX
+  const numeric = parsePortionsValue(portions) ?? 0
+  const canDecrement = !disabled && numeric > PORTION_MIN
+  const canIncrement = !disabled && numeric < PORTION_MAX
   return (
     <View className="flex-row items-center gap-1">
       <Pressable
@@ -128,19 +143,19 @@ function PortionTargetRow({
   onSetNotes,
   onRemove,
 }: {
-  target: QuickEditPortionTarget
+  target: QePortionTarget
   index: number
   sortOrder: number
   disabled: boolean
   onStep: (targetKey: string, direction: 1 | -1) => void
   onSetNotes: (targetKey: string, value: string) => void
-  onRemove: (target: QuickEditPortionTarget, index: number) => void
+  onRemove: (target: QePortionTarget, index: number) => void
 }) {
   const { theme } = useTheme()
   // La nota abre con boton y queda abierta (arbol estable mientras se tipea); si el
   // target ya trae nota, arranca visible.
-  const [notesOpen, setNotesOpen] = useState(target.notes.trim() !== '')
-  const showNotes = notesOpen || target.notes.trim() !== ''
+  const [notesOpen, setNotesOpen] = useState((target.notes ?? '').trim() !== '')
+  const showNotes = notesOpen || (target.notes ?? '').trim() !== ''
 
   return (
     <View>
@@ -169,7 +184,7 @@ function PortionTargetRow({
           accessibilityRole="button"
           accessibilityLabel={PORTIONS_COPY.builder.noteFor(target.groupName)}
           disabled={disabled}
-          onPress={() => setNotesOpen((open) => !open || target.notes.trim() !== '')}
+          onPress={() => setNotesOpen((open) => !open || (target.notes ?? '').trim() !== '')}
           hitSlop={6}
           className="h-11 w-8 items-center justify-center rounded-control"
         >
@@ -189,7 +204,7 @@ function PortionTargetRow({
       {showNotes ? (
         <TextInput
           accessibilityLabel={PORTIONS_COPY.builder.noteFor(target.groupName)}
-          value={target.notes}
+          value={target.notes ?? ''}
           onChangeText={(value) => onSetNotes(target.key, value)}
           editable={!disabled}
           placeholder={PORTIONS_COPY.builder.notePlaceholder}
@@ -222,9 +237,9 @@ function GroupPickerSheet({
 }: {
   open: boolean
   onClose: () => void
-  groups: QuickEditPortionGroup[]
+  groups: PortionPickerGroup[]
   usedGroupIds: ReadonlySet<string>
-  onPick: (group: QuickEditPortionGroup) => void
+  onPick: (group: PortionPickerGroup) => void
   groupAdmin?: QuickEditGroupAdmin
 }) {
   const { theme } = useTheme()
@@ -255,7 +270,7 @@ function GroupPickerSheet({
                 onPress={() => onPick(group)}
                 className={`min-h-12 min-w-0 flex-1 flex-row items-center gap-3 rounded-control px-2 py-2 ${used ? 'opacity-50' : 'active:bg-surface-sunken'}`}
               >
-                <GroupDot group={group} sortOrder={group.sortOrder} />
+                <GroupDot group={group} sortOrder={group.sortOrder ?? 0} />
                 <View className="min-w-0 flex-1">
                   <View className="flex-row items-center gap-1.5">
                     <Text className="shrink text-sm font-semibold text-strong" numberOfLines={1}>
@@ -345,13 +360,13 @@ export function EditablePortionsSection({
   onAdd,
   groupAdmin,
 }: {
-  targets: QuickEditPortionTarget[]
-  groups: QuickEditPortionGroup[]
+  targets: QePortionTarget[]
+  groups: PortionPickerGroup[]
   disabled?: boolean
   onStep: (targetKey: string, direction: 1 | -1) => void
   onSetNotes: (targetKey: string, value: string) => void
-  onRemove: (target: QuickEditPortionTarget, index: number) => void
-  onAdd: (group: QuickEditPortionGroup) => void
+  onRemove: (target: QePortionTarget, index: number) => void
+  onAdd: (group: PortionPickerGroup) => void
   /** Porciones propias (FD6a). Ausente = picker sin altas/edición de grupos (comportamiento previo). */
   groupAdmin?: QuickEditGroupAdmin
 }) {
@@ -363,7 +378,7 @@ export function EditablePortionsSection({
   if (groups.length === 0 && targets.length === 0) return null
 
   const usedGroupIds = new Set(targets.map((target) => target.exchangeGroupId))
-  const groupOrder = new Map(groups.map((group) => [group.exchangeGroupId, group.sortOrder]))
+  const groupOrder = new Map(groups.map((group) => [group.exchangeGroupId, group.sortOrder ?? 0]))
 
   return (
     <View className="mt-3 border-t border-subtle pt-3">

@@ -613,6 +613,48 @@ describe('draftToEditState (creacion)', () => {
   })
 })
 
+// T3.3a (convergencia RN): nota editable del target de porciones — capacidad que el
+// quick-edit RN tenia en su reducer paralelo y el superset absorbe. El estado guarda el
+// texto CRUDO (TextInput vivo); la proyeccion normaliza (trim; '' → null).
+describe('SET_PORTION_NOTES (T3.3a)', () => {
+  it('edita la nota, cuenta 1 cambio y proyecta normalizada; solo-espacios no cuenta', () => {
+    const draft = withSyntheticDraftIds(makeTemplateDraft())
+    const state = draftToEditState(
+      draft,
+      { foodsById: { [FOOD_ID]: TEMPLATE_FOOD }, portionGroupsById: { [GROUP_ID]: PORTION_GROUP } },
+      {},
+    )
+    const variant = state.variants[0]!
+    const slot = variant.slots[0]!
+    const target = slot.portionTargets[0]!
+    const baseline = applyQuickEditToDraft(draft, state)
+
+    const noted = quickEditReducer(state, {
+      type: 'SET_PORTION_NOTES',
+      variantKey: variant.key,
+      slotKey: slot.key,
+      targetKey: target.key,
+      value: '  sin frituras  ',
+    })
+    const current = applyQuickEditToDraft(draft, noted)
+    expect(countDraftChanges(baseline, current)).toBe(1)
+    const projected = current.dayVariants[0]!.mealSlots[0]!.exchangeTargets?.find(
+      (t) => t.exchangeGroupId === target.exchangeGroupId,
+    )
+    expect(projected?.notes).toBe('sin frituras')
+
+    // Solo espacios = sin nota: proyecta null y NO cuenta como cambio.
+    const blank = quickEditReducer(state, {
+      type: 'SET_PORTION_NOTES',
+      variantKey: variant.key,
+      slotKey: slot.key,
+      targetKey: target.key,
+      value: '   ',
+    })
+    expect(countDraftChanges(baseline, applyQuickEditToDraft(draft, blank))).toBe(0)
+  })
+})
+
 // T3.2b (modo plantilla): la vigencia no existe en esa superficie y el guardado tiene que
 // poder reabrirse — el mismo par de barreras del servicio (strip de identidad + round trip).
 describe('modo plantilla (T3.2b)', () => {

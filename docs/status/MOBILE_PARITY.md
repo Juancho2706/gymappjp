@@ -14,6 +14,21 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-16 (T3.3a convergencia del quick-edit RN, rama `rnmobiledenuevo`, SIN QA device)**:
+> el quick-edit del coach RN consume la **gramatica compartida** de `@eva/nutrition-v2`
+> (`editor-state`, R1): murieron el reducer RN (1.600 LOC) y el reducer paralelo de porciones —
+> las porciones viven EN el arbol y el publish proyecta con la MISMA dupla del web
+> (`readModelToDraft` + `applyQuickEditToDraft`, diff por `id`). Con la convergencia el QE RN
+> **gana**: porcion pegajosa N/A (solo editor), copy de franja con porciones atomico, undo de
+> porciones al indice, y nota de porciones ahora tambien existe en la gramatica web
+> (`SET_PORTION_NOTES`). **Cambios de comportamiento declarados**: (1) el lapiz de correccion de
+> macros (T2.2) en QE RN queda SOLO para items con alimento hidratado en la sesion (swap/alta) —
+> criterio W2 del editor; los items base viven de su `macroBase` congelado (el fetch del mapa de
+> foods murio); (2) el diff pasa de key-based a id-based (semantica web: franja nueva cuenta 1,
+> no 1+N items); (3) los respaldos locales v1 (dos reducers) se DESCARTAN (`schema: 2`).
+> **QA device Android del owner PENDIENTE (acumulado)**; OTA recien tras ese QA. El editor unico
+> RN completo (metadatos, creacion, plantillas) sigue pendiente como **T3.3b**.
+
 > **2026-08-15 (T3.x editor unico de nutricion — corte web W4, rama `rnmobiledenuevo`)**: la web
 > corto sus CTAs al **editor unico** (`/coach/nutrition-v2/[clientId]/editor`): la ficha, el `+`
 > del Centro V2, el roster del hub, el tab del cliente y "Aplicar plantilla" (`?from=`) apuntan

@@ -45,13 +45,18 @@ import {
   type ArchiveWriteOutcome,
 } from './nutrition-v2-assign-archive'
 import {
-  buildQuickEditPublishDraft,
+  injectSubstitutionsIntoDraft,
   mapPublishFailureCode,
-  type QuickEditBaseline,
-  type QuickEditPortionsState,
+  quickEditEffectiveFrom,
   type QuickEditPublishResult,
-  type QuickEditState,
 } from './nutrition-v2-quick-edit'
+// T3.3a: el estado del quick-edit RN es la gramatica COMPARTIDA del paquete (R1); el draft se
+// proyecta con la MISMA dupla del web (readModelToDraft + applyQuickEditToDraft).
+import {
+  applyQuickEditToDraft,
+  readModelToDraft,
+  type QuickEditState,
+} from '@eva/nutrition-v2'
 
 // Pure workspace->scope helpers live in a RN-free module so they stay unit-testable.
 export {
@@ -513,31 +518,36 @@ export async function publishQuickEditDraftRN(input: {
 export async function publishQuickEditRN(input: {
   scope: NutritionV2CoachScope
   clientId: string
-  baseline: QuickEditBaseline
+  /** Read model CONGELADO al montar el modo edicion (misma base que hidrato el estado). */
+  planModel: NutritionPlanReadModel
+  /** Arbol editable de la gramatica compartida (@eva/nutrition-v2, R1). */
   state: QuickEditState
-  /** Estado de porciones (omitir = sin porciones). El snapshot de grupos lo congela el servidor. */
-  portions?: { state: QuickEditPortionsState }
   /** Reemplazos autorizados (F-02) de la versión base, por prescriptionItemId (carry-over). */
   carryOverSubstitutions?: ReadonlyMap<string, NutritionItemSubstitution[]>
   idempotencyKey: string
   todayIso: string
 }): Promise<QuickEditPublishResult> {
-  const built = buildQuickEditPublishDraft({
-    clientId: input.clientId,
-    baseline: input.baseline,
-    state: input.state,
-    portions: input.portions,
-    carryOverSubstitutions: input.carryOverSubstitutions,
-    todayIso: input.todayIso,
-  })
-  if (!built.ok) return { ok: false, code: built.code, message: built.message }
+  // Proyeccion identica a la del web: draft base del read model + arbol editable encima. Las
+  // porciones viajan EN el arbol (ya no hay estado paralelo) y el server re-congela snapshots.
+  const plan = input.planModel.plan
+  const baseDraft = readModelToDraft(input.planModel, input.clientId)
+  if (!plan || !baseDraft) {
+    return { ok: false, code: 'VALIDATION', message: 'No hay un plan vigente para editar.' }
+  }
+  let draft = applyQuickEditToDraft(baseDraft, input.state)
+  // Carry-over F-02: el estado RN hidrata SIN reemplazos (llegan por fetch aparte); se
+  // re-inyectan por prescriptionItemId para que republicar no los borre (NUT-008 gatea antes).
+  if (input.carryOverSubstitutions && input.carryOverSubstitutions.size > 0) {
+    draft = injectSubstitutionsIntoDraft(draft, input.carryOverSubstitutions)
+  }
+  const effectiveFrom = quickEditEffectiveFrom(input.todayIso, plan.effectiveFrom)
 
   const res = await publishQuickEditDraftRN({
     scope: input.scope,
-    draft: built.draft,
-    baseVersionId: input.baseline.baseVersionId,
+    draft,
+    baseVersionId: plan.versionId,
     idempotencyKey: input.idempotencyKey,
-    effectiveFrom: built.effectiveFrom,
+    effectiveFrom,
   })
   if (res.ok) return { ok: true, versionId: res.versionId }
   return { ok: false, code: mapPublishFailureCode(res), message: res.error, ...(res.feature ? { feature: res.feature } : {}) }

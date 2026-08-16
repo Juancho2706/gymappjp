@@ -1,19 +1,22 @@
 import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowLeftRight, Pencil, Trash2 } from 'lucide-react-native'
-import { foodCategoryFromName, type NutritionV2CoachScope } from '@eva/nutrition-v2'
+import {
+  foodCategoryFromName,
+  quantityStep,
+  type NutritionV2CoachScope,
+  type QeItem,
+} from '@eva/nutrition-v2'
 import { MacroChipRow } from '../MacroChipRow'
 import { FoodThumbnail } from '../NutritionV2Kit'
 import { FoodMacrosOverrideSheet } from '../FoodMacrosOverrideSheet'
 import { useTheme } from '../../../context/ThemeContext'
 import {
   BUILDER_UNITS,
-  type BuilderFood,
   type BuilderFoodMacrosPatch,
   type ItemMacros,
 } from '../../../lib/nutrition-v2-builder'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
-import { stepForUnit, type QuickEditItem } from '../../../lib/nutrition-v2-quick-edit'
 import { QuantityStepper } from './QuantityStepper'
 
 /**
@@ -21,6 +24,10 @@ import { QuantityStepper } from './QuantityStepper'
  * cantidad tap-to-edit con steppers, swap explicito (nunca drag), eliminar con
  * Deshacer (el snackbar vive en el orquestador). Macros de la fila en vivo.
  * Targets tactiles ≥44pt en todos los controles.
+ *
+ * T3.3a: la fila consume el `QeItem` de la gramatica compartida. El lapiz de correccion de
+ * macros (T2.2) sigue el criterio del editor web (W2): SOLO con `item.food` en mano (swap o
+ * alta de esta sesion) — los items base viven de su `macroBase` congelado, igual que en web.
  */
 
 function UnitToggle({
@@ -59,7 +66,6 @@ export function EditableItemRow({
   macros,
   errors,
   disabled = false,
-  food = null,
   scope = null,
   onQuantityChange,
   onUnitChange,
@@ -68,15 +74,10 @@ export function EditableItemRow({
   onRemove,
   onOverrideApplied,
 }: {
-  item: QuickEditItem
+  item: QeItem
   macros: ItemMacros
   errors: Record<string, string>
   disabled?: boolean
-  /**
-   * Alimento del catalogo YA resuelto (hidratado en la fila o via `foodsById`): lo necesita la
-   * correccion de macros (T2.2). Ausente => sin lapiz, igual que en un item libre.
-   */
-  food?: BuilderFood | null
   /** Workspace del coach; sin el no hay a donde escribir la correccion. */
   scope?: NutritionV2CoachScope | null
   onQuantityChange: (value: string) => void
@@ -88,21 +89,20 @@ export function EditableItemRow({
   onOverrideApplied?: (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => void
 }) {
   const { theme } = useTheme()
-  const isCustom = !item.foodId && !item.recipeId
-  // Sheet de correccion de macros (T2.2), mismo componente que el wizard: un alimento libre ya
-  // tiene sus macros en la propia fila, asi que el lapiz es solo para los del catalogo.
+  const isCustom = item.isCustom
+  // Sheet de correccion de macros (T2.2), mismo componente que el wizard. Criterio W2 del
+  // editor: solo con alimento del catalogo hidratado en la fila (swap/alta de esta sesion).
   const [macrosSheetOpen, setMacrosSheetOpen] = useState(false)
+  const food = item.food
   const canCorrectMacros = !isCustom && !!food && !!scope && !!onOverrideApplied
   const quantityError = errors['item.' + item.key + '.quantity']
   const nameError = errors['item.' + item.key + '.name']
-  // QA2-B3a: icono del producto a la izquierda del nombre — espejo del builder web
-  // (`PlanBuilderClient.tsx:619-626` + `FoodThumb`): foto del catalogo si existe, y si
-  // no el webp estatico de la categoria (item libre => categoria derivada del nombre).
-  const thumbAlt = item.displayName || item.customName || 'Alimento'
-  const thumbSrc = foodMediaThumbnailUrl(item.food?.media ?? item.media)
-  const thumbCategory = isCustom
-    ? foodCategoryFromName(item.customName ?? item.displayName)
-    : (item.food?.category ?? item.category)
+  // QA2-B3a: icono del producto a la izquierda del nombre — espejo del builder web:
+  // foto del catalogo si existe, y si no el webp estatico de la categoria (item libre =>
+  // categoria derivada del nombre).
+  const thumbAlt = item.displayName || 'Alimento'
+  const thumbSrc = foodMediaThumbnailUrl(food?.media ?? item.media)
+  const thumbCategory = isCustom ? foodCategoryFromName(item.displayName) : (food?.category ?? item.category)
 
   return (
     <View className="rounded-control border border-subtle bg-surface-sunken p-3">
@@ -113,7 +113,7 @@ export function EditableItemRow({
             {isCustom ? (
               <TextInput
                 accessibilityLabel="Nombre del alimento"
-                value={item.customName ?? ''}
+                value={item.displayName}
                 onChangeText={onNameChange}
                 editable={!disabled}
                 placeholder="Nombre del alimento"
@@ -176,7 +176,7 @@ export function EditableItemRow({
         <QuantityStepper
           value={item.quantity}
           onChange={onQuantityChange}
-          step={stepForUnit(item.unit)}
+          step={quantityStep(item.unit)}
           accessibilityLabel={`Cantidad de ${item.displayName || 'alimento'}`}
           disabled={disabled}
         />
