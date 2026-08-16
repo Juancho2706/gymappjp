@@ -212,12 +212,32 @@ corte, con su QA.
   legacy `nutrition-plans/new` → editor de plantillas; wizard de plantillas queda por URL
   directa como camino secundario; docs canonicos en el mismo commit
 
-## R1 — Extraccion de reducers
+## R1 — Extraccion de reducers — CERRADA 2026-08-16
 
-- [ ] Gramatica superset en `packages/nutrition-v2` (modulo puro, sin React)
-- [ ] Tests golden de paridad contra los 4 reducers vivos ANTES del swap
-- [ ] Web consume el paquete; los reducers web viejos mueren
-- [ ] Gates (incluye `tsc` mobile por tocar `packages/*`) + registro
+- [x] Gramatica superset en `packages/nutrition-v2` (modulo puro, sin React): el reducer del
+  editor unico (ex `quick-edit-state.ts` web, 2.400 LOC) movido VERBATIM a
+  `packages/nutrition-v2/editor-state.ts` — solo cambiaron los imports (internos del paquete
+  + `@eva/nutrition-engine`, dependencia workspace nueva declarada; precedente:
+  plan-builder→workout-engine, que el movil ya bundlea). Con el vinieron las piezas puras del
+  wizard que necesitaba y un paquete no puede importar de apps/web: `editor-food.ts`
+  (`BuilderFood`, `computeItemMacros` — congela planes, byte-identico —, `slotMergeName`,
+  `MAX_ITEM_SUBSTITUTIONS`) y `editor-portions.ts` (`portionsKey`, `daysMissingBasePortions`
+  B4). `draft-builder.ts` y `portions-state.ts` las RE-EXPORTAN desde sus rutas historicas
+  (los importadores del wizard no cambian)
+- [x] Paridad (alcance real declarado): el movimiento fue VERBATIM y la suite completa del
+  reducer (quick-edit-state{,.item-actions,.meta}.test.ts + publish-guards, cientos de
+  asserts) corre ahora CONTRA el paquete — 5705 verdes. Paridad wizard: cada capacidad
+  migrada en W2/W3 llevo test propio (matriz). Paridad RN quick-edit: se escribe en T3.3 al
+  swapear RN (sus tests golden comparan contra su reducer vivo; un test raiz que importe
+  `apps/mobile` rompe CI — gotcha conocido)
+- [x] Web consume el paquete: los 16 importadores (componentes del quick-edit/editor, pages,
+  actions, harness, tests) apuntan a `@eva/nutrition-v2`; `quick-edit-state.ts` web BORRADO.
+  El reducer del wizard web (`draft-builder.ts`) sigue vivo a proposito: muere CON el wizard
+  en el retiro del par (D2), no en R1
+- [x] Gates: vitest 5705 ✓ · tsc web ✓ · **tsc mobile ✓** · eslint 0 err/0 warn en tocados ✓ ·
+  tokens ✓ · boundaries ✓ · harness headless ✓ (template+create+edit, 0 pageerrors) ·
+  `expo export --platform android` ✓ (Metro resuelve el import nuevo del engine desde el
+  paquete) · build web NO (Node 24) + registro
 
 ## T3.3 — Editor RN Android
 
@@ -243,3 +263,4 @@ corte, con su QA.
 | 2026-08-15 | W3b layout final | `93c94014` | vitest 5702 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (movil+desktop) · eslint 0 err ✓ · build NO (Node 24) | Capsula dia activo + totales fijos + paleta lateral lg+ + reorden (accion, Subir/Bajar, drag). QA visual del owner en preview: OK (2026-08-15) |
 | 2026-08-15 | W4 corte 1 | `ef4a0ff0` | vitest 5702 ✓ (1 test actualizado al contrato nuevo) · tsc web ✓ · tokens ✓ · boundaries ✓ · eslint 0 err ✓ · docs:check ✓ · build NO (Node 24) | CTAs web → editor; par viejo a menu "..."; MOBILE_PARITY declara gap RN; ventana de 2 semanas ARRANCA |
 | 2026-08-15 | T3.2b modo plantilla (sin corte) | `8908e38b` | vitest 5705 ✓ (3 tests T3.2b nuevos) · tsc web ✓ · tokens ✓ · boundaries ✓ · eslint 0 err ✓ · harness headless ✓ (plantilla + regresiones create/edit, 0 pageerrors) · build NO (Node 24) | Ruta `plantillas/editor` sin CTA; `withSyntheticDraftIds` (contadores aparean por id); corte 2 espera QA del owner en preview |
+| 2026-08-16 | R1 extraccion de reducers | pendiente commit | vitest 5705 ✓ (suite del reducer contra el paquete) · tsc web ✓ · tsc mobile ✓ · eslint 0 ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · expo export android ✓ (bundle 18,6 MB) · build web NO (Node 24) | `editor-state`/`editor-food`/`editor-portions` en el paquete; QE web borrado (16 importadores); wizard re-exporta; dep workspace `@eva/nutrition-engine` |

@@ -641,7 +641,11 @@ importers:
 
   packages/nutrition-engine: {}
 
-  packages/nutrition-v2: {}
+  packages/nutrition-v2:
+    dependencies:
+      '@eva/nutrition-engine':
+        specifier: workspace:*
+        version: link:../nutrition-engine
 
   packages/plan-builder:
     dependencies:

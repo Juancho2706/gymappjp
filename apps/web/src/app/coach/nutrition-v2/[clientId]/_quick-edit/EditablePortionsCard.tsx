@@ -29,7 +29,7 @@ import {
   type QePortionGroup,
   type QePortionTarget,
   type QeSlot,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { QeBottomSheet } from './QeBottomSheet'
 import { StepperField } from './StepperField'

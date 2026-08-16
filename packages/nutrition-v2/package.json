@@ -8,5 +8,8 @@
   "exports": {
     ".": "./index.ts",
     "./conversion": "./conversion.ts"
+  },
+  "dependencies": {
+    "@eva/nutrition-engine": "workspace:*"
   }
 }

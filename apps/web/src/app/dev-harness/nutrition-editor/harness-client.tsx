@@ -29,7 +29,7 @@ import { QuickEditPlanView } from '../../coach/nutrition-v2/[clientId]/_quick-ed
 import {
   draftToEditState,
   withSyntheticDraftIds,
-} from '../../coach/nutrition-v2/[clientId]/_quick-edit/quick-edit-state'
+} from '@eva/nutrition-v2'
 import type { BuilderFood } from '../../coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 
 const CLIENT_ID = '33333333-3333-4333-8333-333333333333'

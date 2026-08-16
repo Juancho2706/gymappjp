@@ -60,7 +60,7 @@ import {
   type QePortionGroup,
   type QuickEditAction,
   type QuickEditState,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import { QE_COPY, formatIsoDateDdMmYyyy } from './microcopy'
 import { ExitConfirmDialog, type QuickEditExitIntent } from './ExitConfirmDialog'
 import {

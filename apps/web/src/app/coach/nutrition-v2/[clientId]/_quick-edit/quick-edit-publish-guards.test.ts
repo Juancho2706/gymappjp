@@ -13,7 +13,7 @@ import {
   type QeSlot,
   type QeVariant,
   type QuickEditState,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 
 /**
  * Regresiones del PUBLISH del quick-edit (QA del owner, 2026-08-05):

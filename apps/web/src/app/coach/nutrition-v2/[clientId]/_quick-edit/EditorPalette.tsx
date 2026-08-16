@@ -16,7 +16,7 @@ import { FoodPicker } from '@/app/coach/nutrition-v2/_components/food-picker/Foo
 import { mapCatalogItemToFood } from '../builder/_lib/builder-view-model'
 import { RememberedQuantitiesContext } from '../builder/_components/RememberedQuantitiesContext'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
-import type { QeVariant } from './quick-edit-state'
+import type { QeVariant } from '@eva/nutrition-v2'
 import { QE_COPY } from './microcopy'
 
 export function EditorPalette({ variant }: { variant: QeVariant }) {

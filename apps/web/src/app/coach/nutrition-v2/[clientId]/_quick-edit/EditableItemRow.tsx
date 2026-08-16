@@ -46,7 +46,7 @@ import {
   type QeItem,
   type QeItemSubstitution,
   type QeSlot,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import { useQuickEdit } from './QuickEditProvider'
 import { FoodPickerSheet } from './FoodPickerSheet'
 import { QeBottomSheet } from './QeBottomSheet'

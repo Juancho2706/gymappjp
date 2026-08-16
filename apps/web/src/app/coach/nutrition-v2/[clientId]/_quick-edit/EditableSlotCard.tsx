@@ -24,7 +24,7 @@ import {
   qeCombineSubtotals,
   qeVariantTotalWithPortions,
   type QeSlot,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import type { FoodPickerSummary } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { RememberedQuantitiesContext } from '../builder/_components/RememberedQuantitiesContext'

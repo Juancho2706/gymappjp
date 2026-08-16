@@ -59,7 +59,7 @@ import {
   takenDayVariantDows,
   VARIANT_LABEL_MAX,
   type QeVariant,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import { EditorPalette } from './EditorPalette'
 import type { PublishBarDayTotals } from './PublishBar'
 import { QE_COPY } from './microcopy'

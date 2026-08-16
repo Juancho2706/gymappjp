@@ -36,7 +36,7 @@ import {
   readModelToEditState,
   type QePortionGroup,
   type QuickEditState,
-} from '../_quick-edit/quick-edit-state'
+} from '@eva/nutrition-v2'
 import type { EditorCreationInput } from '../_quick-edit/QuickEditProvider'
 import { EditorClient } from './EditorClient'
 

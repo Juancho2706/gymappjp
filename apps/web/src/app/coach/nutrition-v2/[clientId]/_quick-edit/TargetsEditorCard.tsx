@@ -14,7 +14,7 @@ import {
   qeVariantTotalWithPortions,
   type QeTargetsText,
   type QeVariant,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { useQuickEdit } from './QuickEditProvider'
 import { StepperField } from './StepperField'

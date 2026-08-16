@@ -21,7 +21,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Switch } from '@/components/ui/switch'
 import { OptionalClampedIntInput } from '@/components/ui/clamped-int-input'
 import { useQuickEdit } from './QuickEditProvider'
-import { PLAN_NAME_MAX, qeAllowedStrategies } from './quick-edit-state'
+import { PLAN_NAME_MAX, qeAllowedStrategies } from '@eva/nutrition-v2'
 import { QE_COPY } from './microcopy'
 
 /** Tope del contrato de la accion de guardado (`SaveSchema.description`: max 2000 tras trim). */

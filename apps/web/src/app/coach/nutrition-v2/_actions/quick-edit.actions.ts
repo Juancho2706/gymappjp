@@ -16,7 +16,7 @@ import {
   type ActionFailure,
   type NutritionV2Db,
 } from '@/app/coach/nutrition-v2/_actions/plan-persistence'
-import { collectBlankUuidPaths } from '@/app/coach/nutrition-v2/[clientId]/_quick-edit/quick-edit-state'
+import { collectBlankUuidPaths } from '@eva/nutrition-v2'
 
 // Quick-edit V2 (edicion fluida del plan, web coach): publica una VERSION NUEVA por el MISMO
 // pipeline canonico del builder (persistAndPublishDraft -> publish_nutrition_plan_v2), pero con:

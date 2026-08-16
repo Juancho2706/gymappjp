@@ -33,7 +33,7 @@ import {
   validateQuickEdit,
   type QePortionGroup,
   type QuickEditState,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import { portionsKey } from '../builder/_components/portions-state'
 import type { BuilderFood } from '../builder/_lib/draft-builder'
 

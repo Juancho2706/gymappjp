@@ -1,9 +1,11 @@
 /**
- * Estado PURO del modo edicion in-place (quick-edit) del plan V2 — web coach.
- * Sin React/Next: tipos + hidratacion desde el read model + reducer + macros en vivo +
- * ensamblado del draft canonico. Testeable con mocks.
+ * GRAMATICA DEL EDITOR UNICO de nutricion (superset quick-edit + capacidades wizard) —
+ * modulo PURO compartido (R1 de T3.x): sin React/Next, tipos + hidratacion desde el read
+ * model + reducer + macros en vivo + ensamblado del draft canonico. Nacio como el estado del
+ * quick-edit web (`apps/web/.../_quick-edit/quick-edit-state.ts`) y se extrajo VERBATIM a
+ * este paquete para que web y RN (T3.3) consuman UNA sola gramatica. Testeable con mocks.
  *
- * Relacion con el contrato compartido (@eva/nutrition-v2/quick-edit):
+ * Relacion con el contrato compartido (./quick-edit):
  * - `readModelToDraft` (paquete) da el draft BASE (planId, permisos, notas, estrategia).
  * - Este modulo mantiene el arbol EDITABLE (con keys de UI y bases de macros) y lo
  *   proyecta sobre ese draft base via `applyQuickEditToDraft`. El contador de cambios
@@ -12,23 +14,25 @@
  */
 
 import type {
-  NutritionExchangeComposedPart,
-  NutritionExchangeGroupRead,
-  NutritionExchangeRef,
   NutritionItemSubstitution,
-  NutritionItemSubstitutionRead,
   NutritionMacroTargets,
   NutritionPlanDraft,
-  NutritionPlanReadModel,
   NutritionStrategy,
   NutritionStudentPermissions,
-} from '@eva/nutrition-v2'
+} from './contracts'
+import {
+  reconstructExchangeGroups,
+  type NutritionExchangeComposedPart,
+  type NutritionExchangeGroupRead,
+  type NutritionExchangeRef,
+  type NutritionItemSubstitutionRead,
+  type NutritionPlanReadModel,
+} from './read-models'
 import {
   NUTRITION_WEEK_ORDER,
   formatNutritionDayOfWeek,
-  reconstructExchangeGroups,
   sortNutritionDayVariantsForDisplay,
-} from '@eva/nutrition-v2'
+} from './day-variants'
 import { macrosForTargets, type ExchangeGroup, type ExchangeMacroTotals } from '@eva/nutrition-engine'
 import {
   computeItemMacros,
@@ -37,17 +41,16 @@ import {
   type BuilderFood,
   type BuilderFoodMacrosPatch,
   type ItemMacros,
-} from '../builder/_lib/draft-builder'
-// Diagnostico de porciones huerfanas (defecto B4): la logica pura ya vive en el builder y es
-// framework-neutral, asi que el quick-edit la REUSA en vez de reimplementar el emparejamiento
-// por nombre de franja (precedente del import cruzado: `AddDayPopover` en QuickEditPlanView).
+} from './editor-food'
+// Diagnostico de porciones huerfanas (defecto B4): logica pura compartida con el wizard web
+// (movida aca en R1; el wizard la re-exporta desde su ruta historica).
 import {
   daysMissingBasePortions,
   portionsKey,
   type PortionsBySlot,
   type PortionsDayGap,
   type PortionsDayLike,
-} from '../builder/_components/portions-state'
+} from './editor-portions'
 
 export const ZERO_ITEM_MACROS: ItemMacros = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 }
 

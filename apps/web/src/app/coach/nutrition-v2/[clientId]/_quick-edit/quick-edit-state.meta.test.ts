@@ -20,7 +20,7 @@ import {
   PLAN_NAME_MAX,
   type QePortionGroup,
   type QuickEditState,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 import type { BuilderFood } from '../builder/_lib/draft-builder'
 import type { NutritionPlanDraft } from '@eva/nutrition-v2'
 

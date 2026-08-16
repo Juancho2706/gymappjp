@@ -32,6 +32,13 @@ export * from './share'
 // superficies necesitan LA MISMA tabla, no dos copias que driftan sin que nadie lo note.
 export * from './nutrition-portions-copy'
 export * from './food-classification'
+// R1 (T3.x editor unico): la gramatica del editor — reducer superset + hidratacion +
+// proyeccion + validacion — extraida VERBATIM del quick-edit web para que web y RN (T3.3)
+// consuman UNA sola copia. `editor-food`/`editor-portions` son las piezas puras del wizard
+// que la gramatica necesita (el wizard web las re-exporta desde sus rutas historicas).
+export * from './editor-food'
+export * from './editor-portions'
+export * from './editor-state'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,

@@ -18,7 +18,7 @@ import {
   draftToEditState,
   withSyntheticDraftIds,
   type QePortionGroup,
-} from '../../[clientId]/_quick-edit/quick-edit-state'
+} from '@eva/nutrition-v2'
 import type { EditorTemplateInput } from '../../[clientId]/_quick-edit/QuickEditProvider'
 import { TemplateEditorClient } from './TemplateEditorClient'
 

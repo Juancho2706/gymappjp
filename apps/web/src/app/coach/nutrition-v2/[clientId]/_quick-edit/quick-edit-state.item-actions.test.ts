@@ -7,7 +7,7 @@ import {
   type QeSlot,
   type QeVariant,
   type QuickEditState,
-} from './quick-edit-state'
+} from '@eva/nutrition-v2'
 
 /**
  * Acciones de fila del quick-edit sumadas en esta ola: `MOVE_ITEM` (BD7, con su Deshacer) y el
