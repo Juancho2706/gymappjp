@@ -26,8 +26,9 @@ source_of_truth: apps/web responsive + apps/mobile
 > criterio W2 del editor; los items base viven de su `macroBase` congelado (el fetch del mapa de
 > foods murio); (2) el diff pasa de key-based a id-based (semantica web: franja nueva cuenta 1,
 > no 1+N items); (3) los respaldos locales v1 (dos reducers) se DESCARTAN (`schema: 2`).
-> **QA device Android del owner PENDIENTE (acumulado)**; OTA recien tras ese QA. El editor unico
-> RN completo (metadatos, creacion, plantillas) sigue pendiente como **T3.3b**.
+> **QA device Android del owner: OK (2026-08-16)** sobre el quick-edit convergido; el **OTA queda
+> ACUMULADO** por decision del owner (sale junto a T3.3b + pasada visual, al cerrar el retiro del
+> par viejo). El editor unico RN completo (metadatos, creacion, plantillas) sigue en **T3.3b**.
 
 > **2026-08-15 (T3.x editor unico de nutricion — corte web W4, rama `rnmobiledenuevo`)**: la web
 > corto sus CTAs al **editor unico** (`/coach/nutrition-v2/[clientId]/editor`): la ficha, el `+`

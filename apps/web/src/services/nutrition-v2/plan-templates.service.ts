@@ -156,8 +156,9 @@ export async function savePlanTemplate(
 }
 
 /**
- * Reescribe una plantilla EXISTENTE con el contenido que el coach acaba de armar en el builder
- * de plantillas (`/coach/nutrition-v2/plantillas/builder?template=<id>`).
+ * Reescribe una plantilla EXISTENTE con el contenido que el coach acaba de armar en el editor
+ * de plantillas (`/coach/nutrition-v2/plantillas/editor?template=<id>`; el wizard
+ * `plantillas/builder` sigue vivo por URL directa hasta el retiro del par viejo).
  *
  * Es el gemelo de `savePlanTemplate` y comparte sus DOS barreras — quitar la identidad
  * (`buildTemplatePayload`) y el round-trip Zod antes de escribir — porque el riesgo es el

@@ -208,9 +208,11 @@ corte, con su QA.
   sin "Vigente desde", paleta desktop, y regresiones create (vigencia+publicar) y edit; 0
   pageerrors, 0 errores de consola (screenshots 390 + 1440)
 - [x] Gates + registro (fila abajo)
-- [ ] **Corte 2** (espera QA del owner en preview): CTAs de `PlanTemplatesLibrary` y redirect
-  legacy `nutrition-plans/new` → editor de plantillas; wizard de plantillas queda por URL
-  directa como camino secundario; docs canonicos en el mismo commit
+- [x] **Corte 2 — HECHO 2026-08-16 con QA del owner en preview OK**: las 2 CTAs "Nueva plantilla"
+  de `PlanTemplatesLibrary` (cabecera y estado vacio) y el lapiz de cada fila apuntan a
+  `plantillas/editor`; el redirect legacy `nutrition-plans/new` (swap V2) tambien. El wizard de
+  plantillas queda vivo SOLO por URL directa (cero CTAs lo linkean) hasta el retiro del par
+  viejo; docblocks del servicio de plantillas alineados en el mismo commit
 
 ## R1 — Extraccion de reducers — CERRADA 2026-08-16
 
@@ -256,13 +258,15 @@ corte, con su QA.
 - [x] Gates T3.3a: vitest 5669 ✓ (−37 superseded, +1 notas) · tsc web ✓ · tsc mobile ✓ ·
   eslint 0 err (1 warning PREEXISTENTE en builder RN, verificado con stash) · tokens ✓ ·
   boundaries ✓ · expo export android ✓ · build web NO (Node 24)
-- [ ] **QA device Android del owner (ACUMULADO a pedido)** — flujo quick-edit completo:
-  cantidades/steppers, franjas, dias, porciones (+notas), copia de franja, override tras swap,
-  restaurar borrador (los v1 se descartan solos), publicar
+- [x] **QA device Android del owner: OK (2026-08-16)** — flujo quick-edit completo verificado
+  (cantidades/steppers, franjas, dias, porciones +notas, copia de franja, override tras swap,
+  restaurar borrador, publicar). El OTA NO sale todavia: decision del owner de ACUMULAR hasta
+  cerrar T3.3b + pasada visual + retiro del par
 - [ ] T3.3b — editor unico RN completo (metadatos, creacion `?from=`, plantillas, capacidades
   W2/W3) sobre la misma gramatica
 - [ ] OTA android al cierre (solo por GH Actions `mobile-ota.yml`, `--platform android`) —
-  recien tras QA device
+  **ACUMULADO por decision del owner (2026-08-16)**: no sale con T3.3a; junta T3.3a + T3.3b +
+  pasada visual y se propone al cerrar el retiro del par viejo
 - [ ] iOS: OTA `--platform ios` solo post-aprobacion Apple
 
 ## Retiro del par viejo

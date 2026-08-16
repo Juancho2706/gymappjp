@@ -3,8 +3,9 @@ import { NutritionPlanTemplateDraftSchema, TEMPLATE_SCHEMA_VERSION } from '@eva/
 import type { PlanTemplateRow } from '@/infrastructure/db/plan-templates.repository'
 
 /**
- * `updatePlanTemplateDraft` — guardar una plantilla que se abrio para EDITAR en el builder de
- * plantillas (`/coach/nutrition-v2/plantillas/builder?template=<id>`).
+ * `updatePlanTemplateDraft` — guardar una plantilla que se abrio para EDITAR en el editor de
+ * plantillas (`/coach/nutrition-v2/plantillas/editor?template=<id>`; el wizard sigue por URL
+ * directa hasta el retiro del par viejo).
  *
  * Lo que se protege aca es lo mismo que en `savePlanTemplate`, porque el riesgo es identico:
  * dejar escrito en la columna `draft` algo que despues no se pueda volver a abrir. Sumado a lo

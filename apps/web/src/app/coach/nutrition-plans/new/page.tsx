@@ -24,8 +24,11 @@ export default async function NewNutritionTemplatePage({ searchParams }: Props) 
   // Sellado V1: standalone y Team crean plantillas en V2. Espejo del swap del cockpit, ANTES de
   // cualquier query pesada, porque esta sub-ruta es alcanzable por deep-link (y por el CTA
   // "+ Nutrición" del dashboard). Enterprise conserva el builder legacy.
+  // Corte 2 de T3.2b (2026-08-16): el destino V2 pasa del wizard de plantillas al EDITOR UNICO
+  // en modo plantilla. El wizard sigue alcanzable por URL directa mientras dure la ventana de
+  // retiro del par viejo, pero ningun CTA ni redirect lo linkea.
   if (await shouldSwapCockpitToNutritionV2(user.id)) {
-    redirect('/coach/nutrition-v2/plantillas/builder')
+    redirect('/coach/nutrition-v2/plantillas/editor')
   }
 
   // Contexto de workspace del coach (template = coach-scoped, no client-scoped).

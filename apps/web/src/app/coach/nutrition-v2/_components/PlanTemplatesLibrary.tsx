@@ -39,14 +39,19 @@ import type { PlanTemplateListItem } from '@/services/nutrition-v2/plan-template
 import { useCaptureCoachNutritionTemplateApplied } from '@/lib/posthog/events'
 
 /**
- * Builder de plantillas SIN alumno (CEO 2026-08-04). Es la puerta que faltaba: hasta ahora la
- * unica alta era "desde el plan de un alumno", asi que un coach sin alumnos —o que queria
- * material generico— no podia crear ni una.
+ * Editor de plantillas SIN alumno. La puerta que faltaba (CEO 2026-08-04) era el builder: hasta
+ * entonces la unica alta era "desde el plan de un alumno", asi que un coach sin alumnos —o que
+ * queria material generico— no podia crear ni una.
+ *
+ * CORTE 2 (T3.2b, 2026-08-16, con QA del owner en preview): las dos altas y el lapiz apuntan al
+ * EDITOR UNICO en modo plantilla (`plantillas/editor`), el mismo lienzo del editor de planes. El
+ * wizard de plantillas (`plantillas/builder`) sigue vivo y alcanzable por URL directa como camino
+ * secundario durante la ventana de retiro del par viejo.
  */
-const TEMPLATE_BUILDER_HREF = '/coach/nutrition-v2/plantillas/builder'
+const TEMPLATE_EDITOR_HREF = '/coach/nutrition-v2/plantillas/editor'
 
 function editTemplateHref(templateId: string): string {
-  return `${TEMPLATE_BUILDER_HREF}?template=${templateId}`
+  return `${TEMPLATE_EDITOR_HREF}?template=${templateId}`
 }
 
 /**
@@ -247,7 +252,7 @@ export function PlanTemplatesLibrary() {
             el par no desborde en 360 px (dos w-full en una fila desbordan). */}
         <div className="flex items-center gap-2">
           <Link
-            href={TEMPLATE_BUILDER_HREF}
+            href={TEMPLATE_EDITOR_HREF}
             className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 sm:flex-none"
           >
             <Plus className="size-4 shrink-0" />
@@ -277,7 +282,7 @@ export function PlanTemplatesLibrary() {
           <Copy className="mx-auto mb-2 size-7 opacity-30" />
           <p>Todavía no tienes plantillas. Arma una desde cero y aplícala al alumno que quieras.</p>
           <Link
-            href={TEMPLATE_BUILDER_HREF}
+            href={TEMPLATE_EDITOR_HREF}
             className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
           >
             <Plus className="size-4 shrink-0" />
