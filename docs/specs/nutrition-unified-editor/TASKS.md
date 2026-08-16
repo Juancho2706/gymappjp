@@ -325,7 +325,38 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
 
 ## Retiro del par viejo
 
-- [ ] 2 semanas estable post-corte 2 + importadores verificados (tarea del programa padre)
+- [x] **Importadores VERIFICADOS (2026-08-16)** — la mitad del gate que si se podia cerrar hoy.
+  Hallazgo principal: retirar el par NO es borrar carpetas. Cero CTAs de navegacion apuntan ya
+  al wizard (web y RN), pero el EDITOR depende de modulos que viven DENTRO de `builder/`, asi
+  que el retiro es 2 movimientos: mover lo compartido y recien despues borrar lo del wizard.
+
+  **Web — sobrevive al wizard (hay que MOVERLO fuera de `[clientId]/builder/`)**:
+  | Modulo | Lo consumen |
+  |---|---|
+  | `_lib/draft-builder` (`BuilderFood`, `assembleDraft`, validaciones) | quick-edit/editor (5 archivos), `_actions/plan-persistence`, `_lib/coach-food`, `plan-templates-from-plan`, harness |
+  | `_lib/rehydrate` (`collectTemplateFoodIds`) | API movil de plantillas, editor de planes y de plantillas, `plan-templates-from-plan` |
+  | `_data/plan-foods.data` (`fetchBuilderFoodsByIds`) | idem rehydrate |
+  | `_data/last-quantity.data` | editor (porcion pegajosa) |
+  | `_components/portions-state` | `plan-templates-from-plan`, tests del reducer |
+  | `_components/PortionsGroupsAction` | editor, provider del quick-edit, `FoodCatalogBrowser` |
+  | `_components/RememberedQuantitiesContext` | editor, editor de plantillas, filas y paleta |
+  | `_lib/template-mode` (`TEMPLATE_MODE_CLIENT_ID`) | editor de plantillas |
+  | dialogos reusados (override de macros, picker) | filas del editor |
+
+  **Web — muere con el wizard**: `builder/page.tsx` + `plantillas/builder/page.tsx`, el cliente
+  del wizard y sus pasos, el reducer `draft-builder` (la parte de ESTADO del wizard; los tipos y
+  helpers de arriba se mudan), y el par secundario del menu de la ficha. Carpeta hoy: 61
+  archivos / 748 KB.
+
+  **RN — muere**: `app/coach/nutrition-v2/builder/[clientId].tsx` (3.760 LOC) y la parte de
+  ESTADO de `lib/nutrition-v2-builder.ts` (1.876 LOC). **Sobrevive** de ese archivo lo que el
+  editor usa: `BuilderFood`, `mapFoodCatalogItemToBuilderFood`, `strategyUsesSlots`,
+  `MAX_DAY_VARIANTS`, `NutritionV2WriteClient`, `BuilderFoodMacrosPatch` y los tipos de
+  publicacion — mudarlos a un modulo propio antes de borrar.
+
+- [ ] **Ejecutar el retiro** — bloqueado por el gate del owner: 2 semanas estables desde el
+  corte 2 (2026-08-16 ⇒ no antes del 2026-08-30) **y** QA device del editor RN + su OTA. Antes
+  de eso el par viejo es la unica red si el editor falla en un telefono real.
 
 ## Registro de cierres
 
