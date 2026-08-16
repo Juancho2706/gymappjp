@@ -42,7 +42,7 @@ import {
   loadExchangeGroupsForBuilderAction,
   loadExchangeGroupsForCoachAction,
   type ExchangeGroupFoodCounts,
-} from '../builder/_components/PortionsGroupsAction'
+} from '../../_actions/portions-groups.actions'
 import {
   applyQuickEditToDraft,
   buildSubstitutionMap,

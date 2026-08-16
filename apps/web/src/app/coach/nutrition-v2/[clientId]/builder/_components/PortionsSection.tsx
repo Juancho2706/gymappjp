@@ -29,7 +29,7 @@ import {
 import {
   loadExchangeGroupsForBuilderAction,
   loadExchangeGroupsForCoachAction,
-} from './PortionsGroupsAction'
+} from '../../../_actions/portions-groups.actions'
 import { PortionsGroupDot } from './PortionsGroupDot'
 import { PortionsGroupPicker } from './PortionsGroupPicker'
 import type { ExchangeGroupFormValues } from './PortionsGroupForm'

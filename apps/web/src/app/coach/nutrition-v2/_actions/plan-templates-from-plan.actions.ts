@@ -28,7 +28,7 @@ import {
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { fetchItemSubstitutionsForVersion } from '@/app/coach/nutrition-v2/_data/item-substitutions.data'
-import { fetchBuilderFoodsByIds } from '@/app/coach/nutrition-v2/[clientId]/builder/_data/plan-foods.data'
+import { fetchBuilderFoodsByIds } from '@/app/coach/nutrition-v2/_data/plan-foods.data'
 import {
   collectPlanFoodIds,
   rehydrateBuilderState,

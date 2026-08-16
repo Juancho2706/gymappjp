@@ -18,7 +18,7 @@ import { QuickEditPlanView } from '../_quick-edit/QuickEditPlanView'
 import {
   RememberedQuantitiesContext,
   type RememberedQuantity,
-} from '../builder/_components/RememberedQuantitiesContext'
+} from '../../_components/RememberedQuantitiesContext'
 
 export function EditorClient({
   clientId,

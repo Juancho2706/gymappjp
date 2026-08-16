@@ -10,14 +10,14 @@ import {
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { loadPlanTemplate } from '@/services/nutrition-v2/plan-templates.service'
-import { fetchBuilderFoodsByIds } from '../../[clientId]/builder/_data/plan-foods.data'
+import { fetchBuilderFoodsByIds } from '../../_data/plan-foods.data'
 import {
   builderStateFromTemplateDraft,
   collectTemplateFoodIds,
   type RehydratedBuilderDraft,
 } from '../../[clientId]/builder/_lib/rehydrate'
 import { portionsKey } from '../../[clientId]/builder/_components/portions-state'
-import { TEMPLATE_MODE_CLIENT_ID } from '../../[clientId]/builder/_lib/template-mode'
+import { TEMPLATE_MODE_CLIENT_ID } from '../../_lib/template-mode'
 import { PlanBuilderClient } from '../../[clientId]/builder/_components/PlanBuilderClient'
 
 /**

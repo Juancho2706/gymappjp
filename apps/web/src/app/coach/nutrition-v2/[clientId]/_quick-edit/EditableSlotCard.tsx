@@ -27,7 +27,7 @@ import {
 } from '@eva/nutrition-v2'
 import type { FoodPickerSummary } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
-import { RememberedQuantitiesContext } from '../builder/_components/RememberedQuantitiesContext'
+import { RememberedQuantitiesContext } from '../../_components/RememberedQuantitiesContext'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableItemRow } from './EditableItemRow'
 import { EditablePortionsCard } from './EditablePortionsCard'

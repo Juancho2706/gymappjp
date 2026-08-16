@@ -10,9 +10,9 @@ import {
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { collectTemplateFoodIds } from '../../[clientId]/builder/_lib/rehydrate'
-import { fetchBuilderFoodsByIds } from '../../[clientId]/builder/_data/plan-foods.data'
-import { loadExchangeGroupsForCoachAction } from '../../[clientId]/builder/_components/PortionsGroupsAction'
-import { TEMPLATE_MODE_CLIENT_ID } from '../../[clientId]/builder/_lib/template-mode'
+import { fetchBuilderFoodsByIds } from '../../_data/plan-foods.data'
+import { loadExchangeGroupsForCoachAction } from '../../_actions/portions-groups.actions'
+import { TEMPLATE_MODE_CLIENT_ID } from '../../_lib/template-mode'
 import {
   catalogToPortionGroups,
   draftToEditState,

@@ -330,10 +330,18 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
   al wizard (web y RN), pero el EDITOR depende de modulos que viven DENTRO de `builder/`, asi
   que el retiro es 2 movimientos: mover lo compartido y recien despues borrar lo del wizard.
 
-  **Web — sobrevive al wizard (hay que MOVERLO fuera de `[clientId]/builder/`)**:
+  **Web — MUDANZA HECHA (2026-08-16)**: ya salieron de `[clientId]/builder/` los cinco modulos
+  que eran leftovers puros de datos/contexto/accion — `_lib/template-mode` → `_lib/`,
+  `_data/plan-foods.data` y `_data/last-quantity.data` → `_data/`,
+  `_components/RememberedQuantitiesContext` → `_components/`, y `_components/PortionsGroupsAction`
+  → `_actions/portions-groups.actions`. Sin cambios de logica: solo `git mv` + imports (14
+  archivos). `plan-foods.data` ademas dejo de tomar `BuilderFood` del reducer del wizard y lo
+  toma del paquete, que es donde vive desde R1.
+
+  **Web — sobrevive al wizard (falta MOVERLO; es el trabajo del retiro)**:
   | Modulo | Lo consumen |
   |---|---|
-  | `_lib/draft-builder` (`BuilderFood`, `assembleDraft`, validaciones) | quick-edit/editor (5 archivos), `_actions/plan-persistence`, `_lib/coach-food`, `plan-templates-from-plan`, harness |
+  | `_lib/draft-builder` — solo sus CONSTANTES y tipos (`BUILDER_UNITS`, `MAX_DAY_VARIANTS`, `MAX_ITEM_SUBSTITUTIONS`, `BuilderFood`, `assembleDraft`, validaciones) | quick-edit/editor (5 archivos), `_actions/plan-persistence`, `_lib/coach-food`, `plan-templates-from-plan`, harness |
   | `_lib/rehydrate` (`collectTemplateFoodIds`) | API movil de plantillas, editor de planes y de plantillas, `plan-templates-from-plan` |
   | `_data/plan-foods.data` (`fetchBuilderFoodsByIds`) | idem rehydrate |
   | `_data/last-quantity.data` | editor (porcion pegajosa) |
@@ -341,7 +349,9 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
   | `_components/PortionsGroupsAction` | editor, provider del quick-edit, `FoodCatalogBrowser` |
   | `_components/RememberedQuantitiesContext` | editor, editor de plantillas, filas y paleta |
   | `_lib/template-mode` (`TEMPLATE_MODE_CLIENT_ID`) | editor de plantillas |
-  | dialogos reusados (override de macros, picker) | filas del editor |
+  | dialogos y piezas de UI reusadas | `FoodMacrosOverrideDialog`, `ItemQuantityField`, `FoodImage`, `food-card-presentation`, `AddDayPopover` (+ `useIsDesktopMd`) — los usan la fila del item, la paleta y la vista del editor |
+  | `_lib/builder-view-model` (`mapCatalogItemToFood`), `_lib/quantity-format` | picker y fila del editor |
+  | `_actions/builder.actions` (`createCoachFoodAction`, `publishPlanAction`), `_actions/last-quantity.actions` | alta de alimento libre, publish de creacion y porcion pegajosa del editor |
 
   **Web — muere con el wizard**: `builder/page.tsx` + `plantillas/builder/page.tsx`, el cliente
   del wizard y sus pasos, el reducer `draft-builder` (la parte de ESTADO del wizard; los tipos y

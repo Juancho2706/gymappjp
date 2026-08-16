@@ -10,7 +10,7 @@ import {
   createEmptyBuilderState,
   type BuilderState,
 } from './draft-builder'
-import { TEMPLATE_MODE_CLIENT_ID } from './template-mode'
+import { TEMPLATE_MODE_CLIENT_ID } from '../../../_lib/template-mode'
 import {
   attachPortionsAndValidate,
   portionsKey,

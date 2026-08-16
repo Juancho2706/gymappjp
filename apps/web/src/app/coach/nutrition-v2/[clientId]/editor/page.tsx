@@ -26,9 +26,9 @@ import {
   fetchClientFoodPrefsForPicker,
 } from '../../_data/client-food-prefs.data'
 import { collectTemplateFoodIds } from '../builder/_lib/rehydrate'
-import { fetchBuilderFoodsByIds } from '../builder/_data/plan-foods.data'
-import { fetchRememberedQuantities } from '../builder/_data/last-quantity.data'
-import { loadExchangeGroupsForBuilderAction } from '../builder/_components/PortionsGroupsAction'
+import { fetchBuilderFoodsByIds } from '../../_data/plan-foods.data'
+import { fetchRememberedQuantities } from '../../_data/last-quantity.data'
+import { loadExchangeGroupsForBuilderAction } from '../../_actions/portions-groups.actions'
 import {
   buildSubstitutionMap,
   catalogToPortionGroups,

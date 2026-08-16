@@ -64,7 +64,7 @@ import {
 } from './portions-state'
 import type { DayPlanStripHandlers } from './DayPlanStrip'
 import type { CopyMode } from '../_lib/copy-plan'
-import { RememberedQuantitiesContext, type RememberedQuantity } from './RememberedQuantitiesContext'
+import { RememberedQuantitiesContext, type RememberedQuantity } from '../../../_components/RememberedQuantitiesContext'
 // Respaldo LOCAL del wizard (W3b): store puro versionado en localStorage. El coach retoma un
 // plan a medio construir si cerró la PWA / mató la pestaña. La key incluye clientId + planId.
 import {

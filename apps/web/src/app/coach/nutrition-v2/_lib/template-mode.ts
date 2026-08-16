@@ -17,7 +17,10 @@
  *    RLS). Las dos acciones que si dependian de un alumno real —catalogo de alimentos y grupos
  *    de porciones— tienen su variante coach-scoped, que es la que usa este modo.
  *
- * Vive en un modulo PURO (sin React) a proposito: lo importan la page (server component), el
- * wizard (client) y los tests, y ninguno deberia arrastrar a los otros.
+ * Vive en un modulo PURO (sin React) a proposito: lo importan las pages (server components), el
+ * editor, el wizard y los tests, y ninguno deberia arrastrar a los otros.
+ *
+ * RETIRO DEL PAR VIEJO (2026-08-16): se mudo FUERA de `[clientId]/builder/` porque el editor de
+ * plantillas lo necesita y esa carpeta muere con el wizard.
  */
 export const TEMPLATE_MODE_CLIENT_ID = '00000000-0000-0000-0000-000000000000'

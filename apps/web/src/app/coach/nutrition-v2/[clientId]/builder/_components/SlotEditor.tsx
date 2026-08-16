@@ -22,7 +22,7 @@ import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { CopySlotMenu } from './CopySlotMenu'
 import { ItemRow } from './ItemRow'
 import { useIsTemplateMode } from './TemplateModeContext'
-import { RememberedQuantitiesContext } from './RememberedQuantitiesContext'
+import { RememberedQuantitiesContext } from '../../../_components/RememberedQuantitiesContext'
 
 /** Ventana del Deshacer, igual que en `ItemRow` y en quick-edit: una sola gramática destructiva. */
 const UNDO_TOAST_MS = 8000

@@ -20,7 +20,7 @@ import type { FoodCatalogItem, FoodCatalogCursor } from '@eva/nutrition-v2'
 import { AddFoodSheet } from './AddFoodSheet'
 import type { FoodEquivalenceGroupOption } from './FoodEquivalenceFields'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
-import { loadExchangeGroupsForCoachAction } from '../[clientId]/builder/_components/PortionsGroupsAction'
+import { loadExchangeGroupsForCoachAction } from '../_actions/portions-groups.actions'
 import { ClassifyFoodFlow, type ClassifiedFoodSummary } from './ClassifyFoodFlow'
 import {
   foodCatalogItemToCardModel,

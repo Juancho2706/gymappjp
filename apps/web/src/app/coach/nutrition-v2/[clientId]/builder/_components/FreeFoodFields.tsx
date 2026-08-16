@@ -16,7 +16,7 @@ import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import {
   loadExchangeGroupsForBuilderAction,
   loadExchangeGroupsForCoachAction,
-} from './PortionsGroupsAction'
+} from '../../../_actions/portions-groups.actions'
 import { useIsTemplateMode } from './TemplateModeContext'
 
 const CUSTOM_MACRO_FIELDS: Array<{ field: keyof Pick<BuilderItem, 'customCalories' | 'customProteinG' | 'customCarbsG' | 'customFatsG'>; label: string }> = [

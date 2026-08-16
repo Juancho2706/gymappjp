@@ -8,7 +8,7 @@ import {
   type CoachFoodOverrideValues,
   type NutritionMacrosBasis,
 } from '@eva/nutrition-v2'
-import type { BuilderFood } from '../_lib/draft-builder'
+import type { BuilderFood } from '@eva/nutrition-v2'
 
 /**
  * Alimentos del plan vigente para la REHIDRATACION del wizard (FD1c).

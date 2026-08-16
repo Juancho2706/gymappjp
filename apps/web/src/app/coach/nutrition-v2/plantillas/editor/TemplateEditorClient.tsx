@@ -19,8 +19,8 @@ import {
 } from '../../[clientId]/_quick-edit/QuickEditProvider'
 import { QuickEditPlanView } from '../../[clientId]/_quick-edit/QuickEditPlanView'
 import { QE_COPY } from '../../[clientId]/_quick-edit/microcopy'
-import { RememberedQuantitiesContext } from '../../[clientId]/builder/_components/RememberedQuantitiesContext'
-import { TEMPLATE_MODE_CLIENT_ID } from '../../[clientId]/builder/_lib/template-mode'
+import { RememberedQuantitiesContext } from '../../_components/RememberedQuantitiesContext'
+import { TEMPLATE_MODE_CLIENT_ID } from '../../_lib/template-mode'
 
 const TEMPLATES_TAB_HREF = '/coach/nutrition-v2?tab=plantillas'
 

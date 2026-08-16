@@ -14,7 +14,7 @@ import {
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { fetchItemSubstitutionsForVersion } from '@/app/coach/nutrition-v2/_data/item-substitutions.data'
 import { fetchClientFoodPrefsForPicker } from '@/app/coach/nutrition-v2/_data/client-food-prefs.data'
-import { fetchBuilderFoodsByIds } from './_data/plan-foods.data'
+import { fetchBuilderFoodsByIds } from '../../_data/plan-foods.data'
 import { fetchBuilderClientMetrics } from './_data/client-metrics.data'
 import {
   builderStateFromTemplateDraft,
@@ -26,7 +26,7 @@ import { parsePlanBuilderOrigin } from '@eva/nutrition-v2'
 import { loadPlanTemplate, markPlanTemplateUsed } from '@/services/nutrition-v2/plan-templates.service'
 import { portionsKey } from './_components/portions-state'
 import { PlanBuilderClient } from './_components/PlanBuilderClient'
-import { fetchRememberedQuantities } from './_data/last-quantity.data'
+import { fetchRememberedQuantities } from '../../_data/last-quantity.data'
 
 interface Props {
   params: Promise<{ clientId: string }>
