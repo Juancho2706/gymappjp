@@ -1,9 +1,11 @@
 # SPEC — T3.v Cabina: pasada visual del editor único de nutrición
 
 - **Programa padre:** [nutrition-unified-editor](../nutrition-unified-editor/SPEC.md) (T3.x) — esta es la
-  tanda «pasada visual UI/UX del editor (tanda propia)» declarada pendiente en
-  [CURRENT](../../status/CURRENT.md) desde el cierre de T3.3b, y la penúltima fase antes de cerrar el
-  programa (después solo quedan QA device → OTA acumulado → retiro agendado del par viejo).
+  tanda «pasada visual UI/UX del editor» y la penúltima fase antes de cerrar el programa (después
+  solo quedan QA device → OTA acumulado → retiro agendado del par viejo). Nota de estado: una
+  pasada V1 (limpieza visual web+RN) ya aterrizó en la rama el 2026-08-16 e incluso dejó el harness
+  `dev-harness/nutrition-editor`; T3.v es la **dirección elegida por el dueño** que se construye
+  encima de esa base.
 - **Rama de trabajo:** `rnmobiledenuevo`.
 - **Decisión de diseño del dueño (2026-08-16):** dirección **«Cabina v2»**, elegida sobre dos rondas de
   mockups de alta fidelidad (artifacts «Cabina, Recetario, Vitrina» y «Cabina v2 · Agenda», sesión
