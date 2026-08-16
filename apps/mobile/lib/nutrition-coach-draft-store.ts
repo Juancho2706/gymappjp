@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const QUICK_EDIT_PREFIX = 'eva:nutrition-qe-draft:'
 const BUILDER_PREFIX = 'eva:nutrition-builder-draft:'
+const UNIFIED_EDITOR_PREFIX = 'eva:nutrition-editor-draft:'
 
 /** Vida maxima de un borrador (7 dias): el coach puede retomar al dia siguiente sin perderlo. */
 export const NUTRITION_DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -46,6 +47,16 @@ export function quickEditDraftKey(clientId: string): string {
 /** Key del borrador del builder — distingue "plan nuevo" de "nueva version del plan X". */
 export function builderDraftKey(clientId: string, planId: string | null): string {
   return `${BUILDER_PREFIX}${clientId}:${planId ?? 'new'}`
+}
+
+/**
+ * Key del borrador del editor unico (T3.3b) — prefijo PROPIO, espejo del web: su estado lleva
+ * metadatos del plan (`meta`) que el quick-edit clasico no muestra; compartir key ofreceria
+ * restaurar un borrador del editor dentro del quick-edit (y al reves) entre superficies con
+ * capacidades distintas.
+ */
+export function unifiedEditorDraftKey(clientId: string): string {
+  return `${UNIFIED_EDITOR_PREFIX}${clientId}`
 }
 
 /**
@@ -98,7 +109,7 @@ export async function clearNutritionDraft(key: string): Promise<void> {
 }
 
 /**
- * Higiene global: barre TODOS los borradores de nutricion (ambos prefijos) vencidos o basura.
+ * Higiene global: barre TODOS los borradores de nutricion (los tres prefijos) vencidos o basura.
  * Correr al montar el modo edicion / el builder. Best-effort.
  */
 export async function sweepStaleNutritionDrafts(
@@ -108,7 +119,10 @@ export async function sweepStaleNutritionDrafts(
   try {
     const keys = await AsyncStorage.getAllKeys()
     const relevant = keys.filter(
-      (key) => key.startsWith(QUICK_EDIT_PREFIX) || key.startsWith(BUILDER_PREFIX),
+      (key) =>
+        key.startsWith(QUICK_EDIT_PREFIX) ||
+        key.startsWith(BUILDER_PREFIX) ||
+        key.startsWith(UNIFIED_EDITOR_PREFIX),
     )
     const stale: string[] = []
     for (const key of relevant) {

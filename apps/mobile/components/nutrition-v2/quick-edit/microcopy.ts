@@ -96,6 +96,38 @@ export const QUICK_EDIT_COPY = {
   editingHint: 'Toca una cantidad para ajustarla. Publica cuando termines.',
 } as const
 
+/**
+ * EDITOR UNICO (T3.3b) — copy de lo que el quick-edit clasico no tiene: metadatos del plan,
+ * creacion y degradacion de origen. Mismas cadenas que el editor web (`QE_COPY`), para que un
+ * coach que arma en el telefono y revisa en el escritorio lea lo mismo.
+ */
+export const EDITOR_COPY = {
+  eyebrow: 'Editor de plan',
+  planTitle: 'Plan',
+  planNameLabel: 'Nombre del plan',
+  planNamePlaceholder: 'Ej: Plan definición 2026',
+  strategyLabel: 'Estrategia',
+  flexibleBlocked:
+    'Flexible solo está disponible sin franjas: en esa estrategia el alumno ve metas, no comidas.',
+  hybridLocked: 'Híbrido viene incluido en Nutrición Pro.',
+  effectiveFromLabel: 'Vigente desde',
+  effectiveFromFormat: 'Formato AAAA-MM-DD. No puede ser anterior a hoy.',
+  effectiveFromHint: (whenLabel: string) => `Empieza a regir ${whenLabel}.`,
+  adjustPercentLabel: 'Tope de ajuste (±%)',
+  adjustPercentHint: 'Vacío = sin tope.',
+  footerCreation: 'Al publicar, el plan rige desde la fecha elegida (hoy por defecto).',
+  footerToday: 'Al publicar, los cambios rigen desde hoy.',
+  footerFuture: (dateLabel: string) =>
+    `La versión vigente aplica desde el ${dateLabel}; al publicar, los cambios rigen desde hoy.`,
+  /** Degradacion de origen AVISADA (leccion JP 2026-08-11): jamas en silencio. */
+  originUnavailableCreate:
+    'No se pudo abrir el origen pedido (plantilla o plan). Estás viendo un plan en blanco.',
+  originUnavailableEdit:
+    'No se pudo abrir el origen pedido (plantilla o plan). Estás viendo el plan vigente del alumno.',
+  loading: 'Abriendo el editor…',
+  loadFailed: 'No pudimos abrir el editor. Reintenta cuando tengas señal.',
+} as const
+
 export function dirtyBarLabel(n: number): string {
   return `${n} ${n === 1 ? 'cambio' : 'cambios'} sin publicar`
 }

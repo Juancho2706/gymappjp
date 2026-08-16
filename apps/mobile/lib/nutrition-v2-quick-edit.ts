@@ -20,6 +20,7 @@ import {
   buildNutritionIdempotencyKey,
   mapNutritionItemSubstitutionRow,
   type NutritionItemSubstitution,
+  type NutritionItemSubstitutionRead,
   type NutritionPlanDraft,
   type NutritionPlanReadModel,
   type NutritionStrategy,
@@ -101,35 +102,50 @@ export async function loadQuickEditSubstitutions(
   versionId: string,
 ): Promise<QuickEditSubstitutionsLoad> {
   const byItem = new Map<string, NutritionItemSubstitution[]>()
+  const load = await loadItemSubstitutionReads(db, versionId)
+  if (load.status === 'error') return { status: 'error', byItem: new Map() }
+  for (const mapped of load.rows) {
+    const bucket = byItem.get(mapped.prescriptionItemId) ?? []
+    bucket.push({
+      // Sin `id`: la republicacion crea filas NUEVAS (la DB genera el id); reusar el id de la
+      // version base violaria el PK. `customName` solo si es reemplazo libre (sin food/recipe).
+      foodId: mapped.foodId,
+      recipeId: mapped.recipeId,
+      customName: mapped.foodId || mapped.recipeId ? null : mapped.name,
+      quantity: mapped.quantity,
+      unit: mapped.unit,
+      orderIndex: bucket.length,
+    })
+    byItem.set(mapped.prescriptionItemId, bucket)
+  }
+  return { status: 'loaded', byItem }
+}
+
+/**
+ * Lectura CRUDA de los reemplazos de una version (forma read-model, con nombre congelado).
+ *
+ * La necesita el EDITOR UNICO (T3.3b): alli los reemplazos se HIDRATAN en el arbol
+ * (`buildSubstitutionMap` + `readModelToEditState`) para poder editarlos y mostrar su nombre,
+ * en vez de viajar aparte y re-inyectarse al publicar como en el quick-edit clasico. Misma
+ * regla NUT-008: un fallo de lectura NO se degrada a lista vacia.
+ */
+export async function loadItemSubstitutionReads(
+  db: NutritionV2WriteClient,
+  versionId: string,
+): Promise<{ status: 'loaded' | 'error'; rows: NutritionItemSubstitutionRead[] }> {
   try {
     const res = await db
       .from('nutrition_item_substitutions_v2')
       .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
       .eq('version_id', versionId)
       .order('order_index', { ascending: true })
-    if (res.error || !res.data) return { status: 'error', byItem }
-    const rows = res.data as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]
-    for (const row of rows) {
-      const mapped = mapNutritionItemSubstitutionRow(row)
-      const bucket = byItem.get(mapped.prescriptionItemId) ?? []
-      bucket.push({
-        // Sin `id`: la republicacion crea filas NUEVAS (la DB genera el id); reusar el id de la
-        // version base violaria el PK. `customName` solo si es reemplazo libre (sin food/recipe).
-        foodId: mapped.foodId,
-        recipeId: mapped.recipeId,
-        customName: mapped.foodId || mapped.recipeId ? null : mapped.name,
-        quantity: mapped.quantity,
-        unit: mapped.unit,
-        orderIndex: bucket.length,
-      })
-      byItem.set(mapped.prescriptionItemId, bucket)
-    }
+    if (res.error || !res.data) return { status: 'error', rows: [] }
+    const raw = res.data as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]
+    return { status: 'loaded', rows: raw.map(mapNutritionItemSubstitutionRow) }
   } catch {
-    // Red/parse caidos: NO es "sin reemplazos". Publicar con el mapa vacio los borraria del
-    // plan del alumno, asi que el estado viaja como 'error' y la UI bloquea el publish.
-    return { status: 'error', byItem: new Map() }
+    // Red/parse caidos: NO es "sin reemplazos" (ver NUT-008 arriba).
+    return { status: 'error', rows: [] }
   }
-  return { status: 'loaded', byItem }
 }
 
 /**

@@ -1,2 +1,2 @@
-export { QuickEditMode } from './QuickEditMode'
-export { QUICK_EDIT_COPY, publishSuccessToast } from './microcopy'
+export { QuickEditMode, type QuickEditEditorInput } from './QuickEditMode'
+export { EDITOR_COPY, QUICK_EDIT_COPY, publishSuccessToast } from './microcopy'

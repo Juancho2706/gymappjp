@@ -33,11 +33,15 @@ import {
   NUTRITION_WEEK_ORDER,
   VARIANT_LABEL_MAX,
   applyQuickEditToDraft,
+  buildSubstitutionMap,
+  catalogToPortionGroups,
   collectPortionGroups,
   countDraftChanges,
   countItemOrderChanges,
+  countItemSubstitutionChanges,
   countVariantHeaderChanges,
   formatNutritionDayOfWeek,
+  mergePortionGroupChoices,
   qeSlotCopyTargets,
   quickEditReducer,
   readModelToDraft,
@@ -48,7 +52,9 @@ import {
   validateQuickEdit,
   type FoodCatalogItem,
   type NutritionItemSubstitution,
+  type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
+  type NutritionStrategy,
   type NutritionV2CoachScope,
   type QePortionGroup,
   type QePortionTarget,
@@ -76,20 +82,24 @@ import {
 import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
 import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
-import { publishQuickEditRN } from '../../../lib/nutrition-v2.api'
+import { publishDraftRN, publishQuickEditRN } from '../../../lib/nutrition-v2.api'
+import type { EditorCreationInput } from '../../../lib/nutrition-v2-editor'
 import {
   clearNutritionDraft,
   quickEditDraftKey,
   readNutritionDraft,
   sweepStaleNutritionDrafts,
+  unifiedEditorDraftKey,
   writeNutritionDraft,
 } from '../../../lib/nutrition-coach-draft-store'
 import { EditableSlotCard } from './EditableSlotCard'
+import { EditorMetaCard } from './EditorMetaCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar } from './PublishBar'
 import { ProUpsellSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
 import {
+  EDITOR_COPY,
   QUICK_EDIT_COPY,
   addDayCta,
   copySlotCta,
@@ -150,12 +160,36 @@ interface QuickEditDraftPayload {
 }
 
 /**
+ * Modo EDITOR del editor unico (T3.3b): el mismo lienzo, con metadatos del plan y —en
+ * creacion— con un arbol que no nace del plan vigente. `null` = quick-edit clasico, sin un
+ * solo cambio de comportamiento.
+ */
+export interface QuickEditEditorInput {
+  /**
+   * Reemplazos autorizados (F-02) de la version base, forma read-model. En el editor se
+   * HIDRATAN en el arbol (se editan y se pintan con su nombre) en vez de viajar aparte y
+   * re-inyectarse al publicar, que es lo que hace el quick-edit clasico.
+   */
+  itemSubstitutions: NutritionItemSubstitutionRead[]
+  /** NUT-008: la lectura fallo ⇒ publicar los borraria. Bloquea el publish. */
+  substitutionsLoadFailed: boolean
+  /** Modo creacion (plantilla / copia de plan / blanco); null = edicion del plan vigente. */
+  creation: EditorCreationInput | null
+  /** El `?from=` pedido no abrio: se degrado y hay que decirlo (jamas en silencio). */
+  originUnavailable: boolean
+}
+
+/**
  * Modo edicion in-place del plan vigente — espejo RN del quick-edit web (qe-design
  * §1.3): editar = tocar el plan donde se ve; draft local (dirty) + UN boton "Publicar
  * cambios". El draft y su baseline viven en dos reducers locales (sobreviven re-renders) y
  * ademas se respaldan en AsyncStorage (autosave debounced) para ofrecer "Restaurar" tras
  * matar la app (F2). Publicar exige red; en fallo el draft NO se pierde y el reintento reusa
  * la MISMA idempotency key.
+ *
+ * Con `editor` (T3.3b) la MISMA pantalla es el editor unico: suma la cabecera de metadatos
+ * (`state.meta`), publica una creacion por `publishDraftRN` cuando el arbol no viene del plan
+ * vigente, y usa su propia key de respaldo local. Sin `editor` todo eso no existe.
  */
 export function QuickEditMode({
   clientId,
@@ -164,6 +198,7 @@ export function QuickEditMode({
   scope,
   todayIso,
   hasNutritionPro = false,
+  editor = null,
   onExit,
   onPublished,
   onStaleReload,
@@ -180,6 +215,8 @@ export function QuickEditMode({
    * (`multi_variant` -> UPGRADE_REQUIRED en el endpoint de mutaciones). Default fail-closed.
    */
   hasNutritionPro?: boolean
+  /** Editor unico (T3.3b). Ausente = quick-edit clasico, bit-identico a como era. */
+  editor?: QuickEditEditorInput | null
   onExit: () => void
   onPublished: () => void
   onStaleReload: () => void
@@ -198,10 +235,21 @@ export function QuickEditMode({
   // base obsoleta (STALE_BASE) — la salida segura es Recargar.
   const [frozen] = useState(() => {
     // T3.3a: hidratacion de la gramatica COMPARTIDA (@eva/nutrition-v2). Las porciones viajan
-    // DENTRO del arbol (slot.portionTargets) — el reducer paralelo RN murio. Los reemplazos
-    // F-02 NO se hidratan (llegan por fetch aparte y se re-inyectan al publicar; NUT-008 gatea).
-    const initial = readModelToEditState(planModel)
-    const baseDraft = readModelToDraft(planModel, clientId)
+    // DENTRO del arbol (slot.portionTargets) — el reducer paralelo RN murio. En el quick-edit
+    // clasico los reemplazos F-02 NO se hidratan (llegan por fetch aparte y se re-inyectan al
+    // publicar); en el EDITOR si, porque alli se editan.
+    // T3.3b creacion: el arbol y el draft base los trae el llamador ya hidratados (plantilla,
+    // copia de plan o blanco) — el plan vigente del alumno no participa.
+    const initial = editor?.creation
+      ? editor.creation.initialState
+      : readModelToEditState(
+          planModel,
+          editor ? buildSubstitutionMap(editor.itemSubstitutions) : {},
+          { withMeta: editor != null },
+        )
+    const baseDraft = editor?.creation
+      ? editor.creation.baseDraft
+      : readModelToDraft(planModel, clientId)
     return {
       baseline: buildQuickEditBaseline(planModel),
       initial,
@@ -213,6 +261,10 @@ export function QuickEditMode({
   const baseline = frozen.baseline
   const initialState = frozen.initial
   const [state, dispatch] = useReducer(quickEditReducer, initialState ?? { variants: [], visibleNotes: '' })
+  // Editor unico (T3.3b): superficie y modo. `creation` != null ⇒ el arbol NO sale del plan
+  // vigente, asi que no hay version base, ni CAS del quick-edit, ni respaldo local.
+  const editorMode = editor != null
+  const creation = editor?.creation ?? null
 
   // Porciones propias (FD6a): la lista del picker es el dict CONGELADO del plan. Crear un grupo
   // agrega una entrada; editarlo reemplaza la suya en el sitio; eliminarlo lo saca de la lista
@@ -225,28 +277,39 @@ export function QuickEditMode({
   const [ownGroupIds, setOwnGroupIds] = useState<ReadonlySet<string>>(() => new Set<string>())
   const ownGroupsRequestedRef = useRef(false)
 
+  // Catalogo VIVO de grupos del coach (solo editor): en creacion el plan aun no tiene grupos
+  // congelados, asi que sin esto el picker de porciones abriria vacio. null = todavia no llego o
+  // la lectura fallo ⇒ se ofrecen solo los del plan (degradacion invisible, espejo del web).
+  const [catalogGroups, setCatalogGroups] = useState<QePortionGroup[] | null>(null)
+
   const portionGroups = useMemo<PortionPickerGroup[]>(() => {
     const overrides = new Map(groupOverrides.map((group) => [group.exchangeGroupId, group]))
-    const merged: PortionPickerGroup[] = frozen.portionGroups.map(
-      (group: QePortionGroup) => overrides.get(group.exchangeGroupId) ?? group,
-    )
+    const merged: PortionPickerGroup[] = mergePortionGroupChoices(
+      frozen.portionGroups,
+      catalogGroups,
+    ).map((group: QePortionGroup) => overrides.get(group.exchangeGroupId) ?? group)
     const known = new Set(merged.map((group) => group.exchangeGroupId))
     for (const group of groupOverrides) {
       if (!known.has(group.exchangeGroupId)) merged.push(group)
     }
     return merged.filter((group) => !removedGroupIds.has(group.exchangeGroupId))
-  }, [frozen.portionGroups, groupOverrides, removedGroupIds])
+  }, [frozen.portionGroups, catalogGroups, groupOverrides, removedGroupIds])
 
   // Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. Carry-over PURO:
   // el read-model no los trae; se fetchean al entrar y se re-inyectan al publicar para que
   // republicar NO los pierda (misma clase del bug private_notes). No son editables en F1.
   // TODO(F-02 P3): editor coach RN — afordancia por item para agregar/quitar reemplazos (reusar
   // FoodSearchSheet, max 8, solo structured/hybrid). Hoy solo se preservan y se muestran al alumno.
+  // (En el EDITOR este mapa queda vacio a proposito: los reemplazos viven EN el arbol.)
   const [carryOverSubs, setCarryOverSubs] = useState<ReadonlyMap<string, NutritionItemSubstitution[]>>(new Map())
   // NUT-008: estado HONESTO del carry-over. 'loading' = el fetch sigue en vuelo (publicar
   // ahora borraria los reemplazos por carrera); 'error' = no se pudo leer (mismo dano). Solo
   // 'loaded' habilita publicar. Antes el mapa arrancaba vacio y nada distinguia los tres casos.
-  const [subsStatus, setSubsStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const [subsStatus, setSubsStatus] = useState<'loading' | 'loaded' | 'error'>(() =>
+    // El editor recibe la lectura ya resuelta por la pantalla (y ya hidratada en el arbol):
+    // no hay fetch propio que esperar, solo el veredicto NUT-008.
+    editor ? (editor.substitutionsLoadFailed ? 'error' : 'loaded') : 'loading',
+  )
   const [subsReloadNonce, setSubsReloadNonce] = useState(0)
   const [showErrors, setShowErrors] = useState(false)
   const [publishing, setPublishing] = useState(false)
@@ -282,7 +345,9 @@ export function QuickEditMode({
   const isFirstRenderRef = useRef(true)
   // Key del respaldo local: una sesion de quick-edit por alumno; el clientId va SIEMPRE en la
   // key (gotcha PR #148) para no cruzar borradores entre alumnos.
-  const draftKey = quickEditDraftKey(clientId)
+  // El editor unico usa prefijo PROPIO: su arbol lleva metadatos que el quick-edit clasico no
+  // muestra, y ofrecerse borradores entre superficies mezclaria capacidades distintas.
+  const draftKey = editorMode ? unifiedEditorDraftKey(clientId) : quickEditDraftKey(clientId)
   // Idempotency key por INTENCION de publicar: fresca al abrir el confirm, reutilizada
   // en todos los reintentos de esa intencion (qe-design §2.5).
   const intentKeyRef = useRef<string | null>(null)
@@ -295,6 +360,13 @@ export function QuickEditMode({
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
     }
   }, [])
+
+  // Degradacion de origen AVISADA (leccion JP 2026-08-11: una plantilla soft-deleted abria el
+  // plan vigente sin una palabra y el coach publicaba encima creyendo que era su plantilla).
+  useEffect(() => {
+    if (!editor?.originUnavailable) return
+    toast.error(editor.creation ? EDITOR_COPY.originUnavailableCreate : EDITOR_COPY.originUnavailableEdit)
+  }, [editor?.originUnavailable, editor?.creation, editor])
 
   /**
    * Correccion de macros de un alimento (T2.2). Alcanza TODAS las filas con ese `food`
@@ -314,6 +386,8 @@ export function QuickEditMode({
   // estado del fetch gobierna el publish (ver `doPublish`): mientras no este 'loaded' no se
   // puede publicar, porque el publish reescribe el arbol completo y borraria lo no leido.
   useEffect(() => {
+    // Editor: la pantalla ya los leyo (y los hidrato en el arbol) antes de montar esto.
+    if (editorMode) return
     if (!baseline) return
     let active = true
     setSubsStatus('loading')
@@ -328,20 +402,53 @@ export function QuickEditMode({
     return () => {
       active = false
     }
-  }, [baseline, subsReloadNonce])
+  }, [editorMode, baseline, subsReloadNonce])
 
-  // Reintento explicito del fetch de reemplazos (boton del banner de error).
+  // Catalogo de grupos del coach para el picker (solo editor; una lectura al montar). Con el
+  // llegan tambien los ids de los grupos PROPIOS, que habilitan la afordancia de editarlos.
+  // Best-effort: un fallo deja el picker con los grupos del plan y nadie se entera.
+  useEffect(() => {
+    if (!editorMode) return
+    let active = true
+    ownGroupsRequestedRef.current = true
+    void fetchNutritionV2ExchangeGroups(scope)
+      .then(({ groups }) => {
+        if (!active || !mountedRef.current) return
+        setCatalogGroups(catalogToPortionGroups(groups))
+        setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
+      })
+      .catch(() => {
+        /* best-effort */
+      })
+    return () => {
+      active = false
+    }
+  }, [editorMode, scope])
+
+  // Reintento explicito del fetch de reemplazos (boton del banner de error). En el EDITOR la
+  // lectura la hizo la pantalla ANTES de montar (y se hidrato en el arbol), asi que reintentar
+  // es volver a abrir el editor — el equivalente exacto del `router.refresh()` del web.
   const retrySubstitutions = useCallback(() => {
     setPublishError(null)
+    if (editorMode) {
+      onStaleReload()
+      return
+    }
     setSubsReloadNonce((nonce) => nonce + 1)
-  }, [])
+  }, [editorMode, onStaleReload])
 
   // Baseline y draft actual pasan por la MISMA proyeccion que el web: cero ediciones = cero
   // cambios garantizado, diff por `id` (identidad de la version base) y porciones EN el arbol.
-  const baselineDraft = useMemo(
-    () => (frozen.baseDraft && initialState ? applyQuickEditToDraft(frozen.baseDraft, initialState) : null),
-    [frozen.baseDraft, initialState],
-  )
+  // En CREACION el baseline es VACIO (cero dias, sin notas; el meta inicial no cuenta): todo el
+  // contenido del origen cuenta como alta y la barra aparece de entrada — publicar una plantilla
+  // sin tocarla es legitimo (mismo criterio que el editor web).
+  const baselineDraft = useMemo(() => {
+    if (!frozen.baseDraft || !initialState) return null
+    const baselineState: QuickEditState = creation
+      ? { variants: [], visibleNotes: '', ...(initialState.meta ? { meta: initialState.meta } : {}) }
+      : initialState
+    return applyQuickEditToDraft(frozen.baseDraft, baselineState)
+  }, [frozen.baseDraft, initialState, creation])
   const currentDraft = useMemo(
     () => (frozen.baseDraft ? applyQuickEditToDraft(frozen.baseDraft, state) : null),
     [frozen.baseDraft, state],
@@ -351,12 +458,19 @@ export function QuickEditMode({
     return (
       countDraftChanges(baselineDraft, currentDraft) +
       countVariantHeaderChanges(baselineDraft, currentDraft) +
+      // El paquete no compara reemplazos (hasta el editor unico ninguna superficie los editaba):
+      // sin esto, quitar o agregar uno dejaria la barra apagada. En el quick-edit clasico el
+      // arbol no los lleva, asi que el delta es 0 y nada cambia.
+      countItemSubstitutionChanges(baselineDraft, currentDraft) +
       countItemOrderChanges(baselineDraft, currentDraft)
     )
   }, [baselineDraft, currentDraft])
+  // Con meta editable manda la estrategia del ESTADO: es la que se va a publicar.
+  const strategy: NutritionStrategy = state.meta?.strategy ?? baseline?.strategy ?? 'flexible'
+  // `todayIso` habilita la regla de vigencia elegible (solo hace algo con `meta.effectiveFrom`).
   const validation = useMemo(
-    () => validateQuickEdit(state, { strategy: baseline?.strategy ?? 'flexible' }),
-    [state, baseline],
+    () => validateQuickEdit(state, { strategy, today: todayIso }),
+    [state, strategy, todayIso],
   )
   const errors = showErrors ? validation.errors : {}
 
@@ -366,6 +480,9 @@ export function QuickEditMode({
   // base obsoleta seria peor que nada — mismo espiritu que el guard STALE_BASE del publish.
   // AsyncStorage es async: `mountedRef`/`active` evitan tocar estado tras el desmonte (sin flash).
   useEffect(() => {
+    // Creacion: sin respaldo local (pendiente declarado, igual que en web) — restaurar un
+    // borrador de edicion dentro de una creacion mezclaria arboles contra bases distintas.
+    if (creation) return
     if (!baseline) return
     let active = true
     const now = Date.now()
@@ -389,7 +506,7 @@ export function QuickEditMode({
     return () => {
       active = false
     }
-  }, [baseline, draftKey])
+  }, [creation, baseline, draftKey])
 
   // Autosave debounced del arbol editable + porciones: escribe el respaldo local solo si hay
   // cambios reales; si el coach vuelve al baseline (0 cambios) borra el borrador (ya no aporta).
@@ -399,6 +516,7 @@ export function QuickEditMode({
       isFirstRenderRef.current = false
       return
     }
+    if (creation) return
     if (!baseline) return
     const timer = setTimeout(() => {
       if (count > 0) {
@@ -418,7 +536,7 @@ export function QuickEditMode({
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [state, count, baseline, draftKey, clientId])
+  }, [state, count, creation, baseline, draftKey, clientId])
 
   // Aplica el respaldo local rehidratando los DOS reducers (arbol principal + porciones) y baja el
   // banner. Persistir/restaurar solo `state` perderia los cambios de porciones (regresion vs web).
@@ -759,7 +877,61 @@ export function QuickEditMode({
     setSearchTarget(null)
   }, [searchTarget])
 
+  /**
+   * Publish del modo CREACION (T3.3b): `publishDraftRN` — el MISMO pipeline del wizard RN —
+   * con la vigencia elegible; CAS solo si el alumno ya tenia plan (reemplazo). No hay version
+   * base que preservar, asi que el carry-over F-02 no aplica: los reemplazos que el arbol trae
+   * (copia de plan) viajan DENTRO del draft.
+   */
+  const doCreatePublish = useCallback(async () => {
+    if (!creation || !currentDraft || !intentKeyRef.current) return
+    const net = await NetInfo.fetch()
+    if (net.isConnected === false) {
+      if (!mountedRef.current) return
+      setConfirmOpen(false)
+      setPublishError(QUICK_EDIT_COPY.offline)
+      return
+    }
+    setPublishing(true)
+    setPublishError(null)
+    const res = await publishDraftRN({
+      scope,
+      draft: currentDraft,
+      idempotencyKey: intentKeyRef.current,
+      effectiveFrom: state.meta?.effectiveFrom ?? todayIso,
+      hasNutritionPro,
+      expectedCurrentVersionId: creation.expectedCurrentVersionId,
+    })
+    if (!mountedRef.current) return
+    setPublishing(false)
+    setConfirmOpen(false)
+    if (res.ok) {
+      intentKeyRef.current = null
+      onPublished()
+      return
+    }
+    if (res.code === 'STALE_BASE') {
+      setStale(true)
+      return
+    }
+    if (res.code === 'UPGRADE_REQUIRED') {
+      setUpsell(res.error)
+      return
+    }
+    if (res.code === 'EFFECTIVE_DATE' || res.code === 'NEEDS_VARIANT' || res.code === 'NEEDS_SLOT') {
+      // El campo culpable existe en el arbol: se marcan los errores locales junto al mensaje.
+      setShowErrors(true)
+      setPublishError(res.error)
+      return
+    }
+    setPublishError(res.error)
+  }, [creation, currentDraft, scope, state.meta, todayIso, hasNutritionPro, onPublished])
+
   const doPublish = useCallback(async () => {
+    if (creation) {
+      await doCreatePublish()
+      return
+    }
     if (!baseline || !intentKeyRef.current) return
     // NUT-008 (fail-closed): sin los reemplazos autorizados de la version base, publicar los
     // BORRA (el publish reescribe el arbol completo y solo escribe lo que trae el draft).
@@ -791,6 +963,8 @@ export function QuickEditMode({
       clientId,
       planModel,
       state,
+      // Editor: los reemplazos ya viven EN el arbol (hidratados y editables), asi que no hay
+      // nada que re-inyectar — el mapa esta vacio y la proyeccion ya los lleva.
       carryOverSubstitutions: carryOverSubs,
       idempotencyKey: intentKeyRef.current,
       todayIso,
@@ -816,7 +990,7 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [baseline, scope, clientId, planModel, state, carryOverSubs, subsStatus, todayIso, onPublished, draftKey])
+  }, [creation, doCreatePublish, baseline, scope, clientId, planModel, state, carryOverSubs, subsStatus, todayIso, onPublished, draftKey])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return
@@ -867,7 +1041,9 @@ export function QuickEditMode({
     ])
   }, [count, doExit])
 
-  if (!baseline) {
+  // Sin plan vigente NO hay quick-edit; el editor en modo CREACION, en cambio, es exactamente
+  // la pantalla que sirve para ese caso (arma el primer plan del alumno).
+  if (!baseline && !creation) {
     return (
       <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionStatePanel
@@ -878,8 +1054,10 @@ export function QuickEditMode({
     )
   }
 
-  const usesSlots = strategyUsesSlots(baseline.strategy) || state.variants.some((v) => v.slots.length > 0)
-  const futureDate = baseline.effectiveFrom > todayIso ? baseline.effectiveFrom : null
+  const usesSlots = strategyUsesSlots(strategy) || state.variants.some((v) => v.slots.length > 0)
+  // Vigencia FUTURA de la version base (solo edicion): en creacion la fecha la elige el coach.
+  const futureDate =
+    baseline && !creation && baseline.effectiveFrom > todayIso ? baseline.effectiveFrom : null
   const dayMenuVariant = state.variants.find((variant) => variant.key === dayMenuKey) ?? null
   const changeDayVariant = state.variants.find((variant) => variant.key === changeDayKey) ?? null
   const slotMenuSlot = slotMenu
@@ -915,7 +1093,7 @@ export function QuickEditMode({
                 className="font-mono text-[10px] font-semibold uppercase leading-4 tracking-[1.6px] text-primary"
                 numberOfLines={1}
               >
-                {QUICK_EDIT_COPY.editingEyebrow}
+                {editorMode ? EDITOR_COPY.eyebrow : QUICK_EDIT_COPY.editingEyebrow}
               </Text>
               <Text
                 accessibilityRole="header"
@@ -942,15 +1120,31 @@ export function QuickEditMode({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          <View className="gap-1">
-            <View className="flex-row flex-wrap items-center gap-2">
-              <StrategyBadge strategy={baseline.strategy} />
-              <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
-                {baseline.name}
-              </Text>
+          {/* EDITOR UNICO (T3.3b): con `state.meta` la identidad del plan deja de ser un rotulo
+              read-only y pasa a ser la cabecera EDITABLE (nombre, estrategia, permisos, vigencia
+              en creacion). Sin meta, el quick-edit clasico pinta el rotulo de siempre. */}
+          {state.meta ? (
+            <EditorMetaCard
+              state={state}
+              meta={state.meta}
+              dispatch={dispatch}
+              errors={errors}
+              disabled={publishing}
+              hasNutritionPro={hasNutritionPro}
+              today={todayIso}
+              futureDateLabel={futureDate}
+            />
+          ) : (
+            <View className="gap-1">
+              <View className="flex-row flex-wrap items-center gap-2">
+                <StrategyBadge strategy={strategy} />
+                <Text className="text-sm font-semibold text-strong" numberOfLines={1}>
+                  {baseline?.name ?? ''}
+                </Text>
+              </View>
+              <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.editingHint}</Text>
             </View>
-            <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.editingHint}</Text>
-          </View>
+          )}
 
           {!usesSlots ? (
             <View className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
@@ -1121,7 +1315,7 @@ export function QuickEditMode({
                   ))
                 : null}
 
-              {usesSlots && strategyUsesSlots(baseline.strategy) ? (
+              {usesSlots && strategyUsesSlots(strategy) ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={QUICK_EDIT_COPY.addSlot}
@@ -1186,37 +1380,43 @@ export function QuickEditMode({
             {planModel.protocolNotes ? (
               <Text className="mt-2 text-xs leading-5 text-muted">{planModel.protocolNotes}</Text>
             ) : null}
-            <View className="mt-3 flex-row flex-wrap gap-1.5">
-              {(
-                [
-                  // "Puede sustituir" no se pinta: espejo de la decision D4 del web
-                  // (`docs/specs/nutrition-exchange-swap/SPEC.md`). El permiso no lo lee ningun
-                  // camino de autorizacion desde T2.4.
-                  [planModel.permissions.canRegisterFreely, QUICK_EDIT_COPY.permRegisterFreely],
-                  [planModel.permissions.canAdjustPrescribedQuantity, QUICK_EDIT_COPY.permAdjustQuantity],
-                ] as const
-              ).map(([enabled, label]) => (
-                <View
-                  key={label}
-                  className={
-                    'rounded-pill border px-2 py-0.5 ' +
-                    (enabled ? 'border-primary/30 bg-primary/10' : 'border-subtle bg-surface-sunken')
-                  }
-                >
-                  <Text
-                    className={'text-[11px] font-semibold ' + (enabled ? 'text-primary' : 'text-muted')}
+            {/* Los chips read-only de permisos solo existen en el quick-edit CLASICO: en el editor
+                unico los permisos son editables y viven en la cabecera. */}
+            {state.meta ? null : (
+              <View className="mt-3 flex-row flex-wrap gap-1.5">
+                  {(
+                  [
+                    // "Puede sustituir" no se pinta: espejo de la decision D4 del web
+                    // (`docs/specs/nutrition-exchange-swap/SPEC.md`). El permiso no lo lee ningun
+                    // camino de autorizacion desde T2.4.
+                    [planModel.permissions.canRegisterFreely, QUICK_EDIT_COPY.permRegisterFreely],
+                    [planModel.permissions.canAdjustPrescribedQuantity, QUICK_EDIT_COPY.permAdjustQuantity],
+                  ] as const
+                ).map(([enabled, label]) => (
+                  <View
+                    key={label}
+                    className={
+                      'rounded-pill border px-2 py-0.5 ' +
+                      (enabled ? 'border-primary/30 bg-primary/10' : 'border-subtle bg-surface-sunken')
+                    }
                   >
-                    {label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <View className="mt-3 flex-row items-start gap-1.5">
-              <Info color={theme.textSecondary} size={14} />
-              <Text className="min-w-0 flex-1 text-xs leading-5 text-muted">
-                {QUICK_EDIT_COPY.readonlyHint}
-              </Text>
-            </View>
+                    <Text
+                      className={'text-[11px] font-semibold ' + (enabled ? 'text-primary' : 'text-muted')}
+                    >
+                      {label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {state.meta ? null : (
+              <View className="mt-3 flex-row items-start gap-1.5">
+                <Info color={theme.textSecondary} size={14} />
+                <Text className="min-w-0 flex-1 text-xs leading-5 text-muted">
+                  {QUICK_EDIT_COPY.readonlyHint}
+                </Text>
+              </View>
+            )}
           </NutritionCard>
         </ScrollView>
 
