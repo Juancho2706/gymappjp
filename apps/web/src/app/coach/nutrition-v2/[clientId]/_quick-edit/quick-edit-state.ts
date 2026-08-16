@@ -598,6 +598,44 @@ function draftTargetToQe(
 }
 
 /**
+ * Ids sinteticos ESTABLES para un draft sin identidad (T3.2b, modo plantilla en EDICION:
+ * `stripDraftIdentity` quito los ids al guardar la fila). Los contadores del paquete
+ * (`countDraftChanges` y los locales de encabezado/orden) aparean variantes, franjas e items
+ * POR `id`: sin ids, cada fila cuenta contra si misma como baja+alta y el editor abriria
+ * "con cambios" sobre una plantilla intacta. Los ids viven SOLO en la sesion de edicion —
+ * el guardado (`buildTemplatePayload`) los vuelve a strippear. Targets de porciones (aparean
+ * por `exchangeGroupId`) y reemplazos (firma por contenido) no los necesitan.
+ *
+ * `idGen` inyectable: el llamador REAL es un server component (los ids nacen una vez y viajan
+ * como props — deterministas para la hidratacion); un llamador que corra en SSR+cliente (el
+ * harness) DEBE pasar un generador determinista o los ids difieren entre render de servidor y
+ * de cliente (la familia de bug de EVA-NEXTJS-18).
+ */
+export function withSyntheticDraftIds(
+  draft: NutritionPlanDraft,
+  idGen?: () => string,
+): NutritionPlanDraft {
+  const gen =
+    idGen ??
+    ((): string =>
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : 'synthetic-' + Math.random().toString(36).slice(2) + Date.now().toString(36))
+  return {
+    ...draft,
+    dayVariants: draft.dayVariants.map((variant) => ({
+      ...variant,
+      id: variant.id ?? gen(),
+      mealSlots: variant.mealSlots.map((slot) => ({
+        ...slot,
+        id: slot.id ?? gen(),
+        items: slot.items.map((item) => ({ ...item, id: item.id ?? gen() })),
+      })),
+    })),
+  }
+}
+
+/**
  * Draft del contrato (plantilla, copia de plan, o blank) → arbol editable con `meta`.
  *
  * SOLO para el modo CREACION del editor unico (W1.5): la edicion del plan vigente sigue
@@ -609,7 +647,12 @@ export function draftToEditState(
   draft: NutritionPlanDraft,
   sources: DraftHydrationSources = {},
   options: {
-    /** Fecha de vigencia inicial elegible (YYYY-MM-DD); null = hoy. Vive en `meta`. */
+    /**
+     * Fecha de vigencia inicial elegible (YYYY-MM-DD); null = hoy. Vive en `meta`.
+     * AUSENTE = la vigencia no existe en esta superficie (modo PLANTILLA, T3.2b): `meta`
+     * queda sin la llave y la card no pinta el campo — una plantilla no rige desde ninguna
+     * fecha. Los modos de creacion pasan `null` explicito, como siempre.
+     */
     effectiveFrom?: string | null
   } = {},
 ): QuickEditState {
@@ -659,7 +702,7 @@ export function draftToEditState(
       name: draft.name,
       strategy: draft.strategy,
       permissions: draft.permissions,
-      effectiveFrom: options.effectiveFrom ?? null,
+      ...(options.effectiveFrom === undefined ? {} : { effectiveFrom: options.effectiveFrom }),
     },
   }
 }

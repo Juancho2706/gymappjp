@@ -12,5 +12,7 @@ export default async function NutritionEditorHarnessPage({
 }) {
   if (process.env.NODE_ENV !== 'development') notFound()
   const { mode } = await searchParams
-  return <EditorHarness mode={mode === 'create' ? 'create' : 'edit'} />
+  return (
+    <EditorHarness mode={mode === 'create' ? 'create' : mode === 'template' ? 'template' : 'edit'} />
+  )
 }

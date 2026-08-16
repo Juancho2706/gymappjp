@@ -33,9 +33,14 @@ import {
 } from '@eva/nutrition-v2'
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
 import { publishPlanAction } from '../builder/_actions/builder.actions'
+import {
+  savePlanTemplateAction,
+  updatePlanTemplateDraftAction,
+} from '../../_actions/plan-templates.actions'
 import { useCaptureCoachNutritionPlanPublished } from '@/lib/posthog/events'
 import {
   loadExchangeGroupsForBuilderAction,
+  loadExchangeGroupsForCoachAction,
   type ExchangeGroupFoodCounts,
 } from '../builder/_components/PortionsGroupsAction'
 import {
@@ -90,6 +95,26 @@ export interface EditorCreationInput {
   baseDraft: NutritionPlanDraft
   /** Version vigente del alumno si ya tenia plan (CAS del reemplazo); null = plan nuevo. */
   expectedCurrentVersionId: string | null
+}
+
+/**
+ * Modo PLANTILLA del editor unico (T3.2b): el mismo lienzo, sin alumno ni vigencia. El arbol
+ * nace del draft guardado de la plantilla (o en blanco) y "publicar" se vuelve GUARDAR:
+ * `updatePlanTemplateDraftAction` (edicion) / `savePlanTemplateAction` (nueva). Sin CAS ni
+ * idempotencia (el guardado de plantillas nunca los tuvo — paridad wizard) y sin respaldo
+ * local (mismo pendiente declarado que el modo creacion). El `clientId` del baseDraft es el
+ * relleno `TEMPLATE_MODE_CLIENT_ID` y JAMAS persiste: `buildTemplatePayload` strippea la
+ * identidad al guardar.
+ */
+export interface EditorTemplateInput {
+  /** Plantilla en edicion; null = plantilla nueva (guardar crea una fila). */
+  templateId: string | null
+  /** Arbol inicial hidratado server-side (draft de la plantilla o blank), con `meta` SIN vigencia. */
+  initialState: QuickEditState
+  /** Draft base de la proyeccion (clientId = relleno de plantilla; timezone por defecto). */
+  baseDraft: NutritionPlanDraft
+  /** Descripcion actual de la fila (editable en la cabecera; se guarda con el draft). */
+  description: string | null
 }
 
 export function genQuickEditKey(): string {
@@ -172,6 +197,15 @@ interface QuickEditContextValue {
   pendingRestore: boolean
   restoreDraft: () => void
   dismissRestore: () => void
+  /**
+   * Que se esta editando: 'plan' (quick-edit clasico y editor de planes) o 'template'
+   * (T3.2b). Gobierna el VOCABULARIO (guardar vs publicar), apaga la porcion pegajosa de
+   * escritura (no hay alumno) y muestra la descripcion en la cabecera.
+   */
+  surface: 'plan' | 'template'
+  /** Descripcion de la plantilla (solo surface 'template'; '' = sin descripcion). */
+  templateDescription: string
+  setTemplateDescription: (value: string) => void
 }
 
 const QuickEditContext = createContext<QuickEditContextValue | null>(null)
@@ -192,6 +226,7 @@ export function QuickEditProvider({
   hasNutritionPro = false,
   editPlanMeta = false,
   creation = null,
+  template = null,
   onExit,
   children,
 }: {
@@ -221,6 +256,8 @@ export function QuickEditProvider({
   editPlanMeta?: boolean
   /** Modo creacion (ver EditorCreationInput). null = edicion del plan vigente, como siempre. */
   creation?: EditorCreationInput | null
+  /** Modo plantilla (ver EditorTemplateInput). Excluyente con `creation`. */
+  template?: EditorTemplateInput | null
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
   children: ReactNode
@@ -232,17 +269,21 @@ export function QuickEditProvider({
   const substitutionsByItemId = useMemo(() => buildSubstitutionMap(itemSubstitutions), [itemSubstitutions])
   const initialState = useMemo(
     () =>
-      creation
-        ? creation.initialState
-        : readModelToEditState(planModel, substitutionsByItemId, { withMeta: editPlanMeta }),
-    [creation, planModel, substitutionsByItemId, editPlanMeta],
+      template
+        ? template.initialState
+        : creation
+          ? creation.initialState
+          : readModelToEditState(planModel, substitutionsByItemId, { withMeta: editPlanMeta }),
+    [template, creation, planModel, substitutionsByItemId, editPlanMeta],
   )
   // El server pisa effectiveFrom (max(hoy, base)) y las notas protocolo/privadas (carry-over
   // §2.3); las visibles viajan editadas desde el estado. En creacion el base es el draft del
-  // origen (plantilla/copia/blank), hidratado server-side.
+  // origen (plantilla/copia/blank), hidratado server-side; en plantilla, el draft guardado
+  // con el relleno de identidad (que el guardado strippea).
   const baseDraft = useMemo(
-    () => (creation ? creation.baseDraft : readModelToDraft(planModel, clientId)),
-    [creation, planModel, clientId],
+    () =>
+      template ? template.baseDraft : creation ? creation.baseDraft : readModelToDraft(planModel, clientId),
+    [template, creation, planModel, clientId],
   )
   const portionGroups = useMemo(() => collectPortionGroups(planModel), [planModel])
 
@@ -270,6 +311,10 @@ export function QuickEditProvider({
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false)
   // Arbol de una sesion anterior recuperado del respaldo local; alimenta el banner "Restaurar".
   const [pendingRestore, setPendingRestore] = useState<QuickEditState | null>(null)
+  // Descripcion de la plantilla (surface 'template'): metadato de la FILA, no del draft del
+  // contrato — vive fuera del reducer a proposito (paridad con el dialogo del wizard) y se
+  // escribe junto con el draft en cada guardado.
+  const [templateDescription, setTemplateDescription] = useState(template?.description ?? '')
   // Equivalencias por grupo (catalogo vivo). Informativo puro: null hasta que llegue, y null
   // para siempre si la lectura falla — jamas bloquea ni retrasa la edicion.
   const [portionFoodCounts, setPortionFoodCounts] = useState<ExchangeGroupFoodCounts | null>(null)
@@ -304,16 +349,19 @@ export function QuickEditProvider({
   // sin depender de detalles de normalizacion del paquete. En CREACION el baseline es VACIO
   // (cero dias, sin notas; el meta inicial no cuenta): todo el contenido del origen cuenta
   // como alta y la barra de publicar aparece de entrada — publicar una plantilla sin tocarla
-  // es un caso legitimo.
+  // es un caso legitimo. En PLANTILLA: editar una existente abre en 0 cambios (baseline =
+  // arbol hidratado, como la edicion de un plan); una plantilla NUEVA usa el baseline vacio
+  // de creacion (todo cuenta como alta).
+  const isNewTemplate = template !== null && template.templateId === null
   const baselineDraft = useMemo(
     () =>
       applyQuickEditToDraft(
         baseDraft,
-        creation
+        creation || isNewTemplate
           ? { variants: [], visibleNotes: '', ...(initialState.meta ? { meta: initialState.meta } : {}) }
           : initialState,
       ),
-    [baseDraft, creation, initialState],
+    [baseDraft, creation, isNewTemplate, initialState],
   )
   const currentDraft = useMemo(() => applyQuickEditToDraft(baseDraft, state), [baseDraft, state])
   // FD5: el contador del paquete no mira el ENCABEZADO de la variante (etiqueta / dia de
@@ -321,13 +369,18 @@ export function QuickEditProvider({
   // publicar. Se suma el delta de encabezados calculado sobre los MISMOS drafts.
   // W2: + delta de reemplazos autorizados — el paquete tampoco los compara (hasta el editor
   // unico ninguna superficie los editaba) y sin esto quitar/agregar un reemplazo no publicaba.
+  // T3.2b: la descripcion de la plantilla no vive en el draft, asi que el contador del
+  // paquete no la ve — sin este +1, editar SOLO la descripcion dejaria "Guardar" apagado.
+  const templateDescriptionDirty =
+    template !== null && templateDescription.trim() !== (template.description ?? '').trim()
   const changeCount = useMemo(
     () =>
       countDraftChanges(baselineDraft, currentDraft) +
       countVariantHeaderChanges(baselineDraft, currentDraft) +
       countItemSubstitutionChanges(baselineDraft, currentDraft) +
-      countItemOrderChanges(baselineDraft, currentDraft),
-    [baselineDraft, currentDraft],
+      countItemOrderChanges(baselineDraft, currentDraft) +
+      (templateDescriptionDirty ? 1 : 0),
+    [baselineDraft, currentDraft, templateDescriptionDirty],
   )
   // La validacion local necesita la ESTRATEGIA para evaluar el dia vacio (en `flexible` un dia
   // sin franjas es su estado correcto). Sin esto, el guard server-side rechazaba la publicacion
@@ -352,16 +405,17 @@ export function QuickEditProvider({
 
   const dirty = changeCount > 0
 
-  // Guard de salida del navegador (cerrar pestana / recargar) con cambios sin publicar.
+  // Guard de salida del navegador (cerrar pestana / recargar) con cambios sin publicar/guardar.
   useEffect(() => {
     if (!dirty) return
+    const message = template ? QE_COPY.templateLeaveGuard : QE_COPY.leaveGuard
     const handler = (event: BeforeUnloadEvent) => {
       event.preventDefault()
-      event.returnValue = QE_COPY.leaveGuard
+      event.returnValue = message
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [dirty])
+  }, [dirty, template])
 
   // Al montar el modo edicion: barre borradores vencidos y evalua si hay un respaldo local
   // restaurable para ESTE plan y version base. Si el borrador es de otra version (alguien
@@ -370,7 +424,8 @@ export function QuickEditProvider({
   useEffect(() => {
     // Creacion: sin respaldo local (pendiente declarado W1.5) — restaurar un borrador de
     // edicion dentro de una creacion (o al reves) mezclaria arboles contra bases distintas.
-    if (creation) return
+    // Plantilla: mismo pendiente declarado (T3.2b).
+    if (creation || template) return
     const now = Date.now()
     sweepStaleNutritionDrafts(now)
     const record = readNutritionDraft<QuickEditDraftPayload>(draftKey, now)
@@ -385,7 +440,7 @@ export function QuickEditProvider({
     } else {
       clearNutritionDraft(draftKey)
     }
-  }, [creation, draftKey, planId, planVersionId])
+  }, [creation, template, draftKey, planId, planVersionId])
 
   // Autosave debounced del arbol editable: escribe el respaldo local solo si hay cambios reales;
   // si el coach vuelve al baseline (0 cambios) borra el borrador (ya no aporta). El guard de
@@ -395,7 +450,7 @@ export function QuickEditProvider({
       isFirstRender.current = false
       return
     }
-    if (creation) return
+    if (creation || template) return
     if (!planId || !planVersionId) return
     const timer = setTimeout(() => {
       if (changeCount > 0) {
@@ -409,7 +464,7 @@ export function QuickEditProvider({
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [state, changeCount, creation, draftKey, clientId, planId, planVersionId])
+  }, [state, changeCount, creation, template, draftKey, clientId, planId, planVersionId])
 
   // Equivalencias por grupo Y catalogo de grupos: una sola lectura al montar el modo edicion,
   // y SOLO si el plan usa porciones (sin capa de porciones la seccion ni se pinta, asi que el
@@ -419,13 +474,17 @@ export function QuickEditProvider({
   // En CREACION el plan (aun) no existe, asi que `portionGroups` del read model es [] — pero
   // el catalogo igual hace falta: el picker de porciones y los subtotales de un origen con
   // targets (plantilla con porciones) salen SOLO del catalogo vivo.
-  const hasPortionsLayer = portionGroups.length > 0 || creation !== null
+  const hasPortionsLayer = portionGroups.length > 0 || creation !== null || template !== null
   useEffect(() => {
     if (!hasPortionsLayer) return
     let alive = true
     void (async () => {
       try {
-        const res = await loadExchangeGroupsForBuilderAction({ clientId })
+        // Plantilla: no hay ficha que autorizar — variante coach-scoped (la misma puerta que
+        // usa el builder de plantillas). El resto autoriza POR el alumno, como siempre.
+        const res = template
+          ? await loadExchangeGroupsForCoachAction()
+          : await loadExchangeGroupsForBuilderAction({ clientId })
         if (!alive || !res.ok) return
         setPortionFoodCounts(res.foodCounts)
         setPortionGroupCatalog(catalogToPortionGroups(res.groups))
@@ -436,7 +495,7 @@ export function QuickEditProvider({
     return () => {
       alive = false
     }
-  }, [clientId, hasPortionsLayer])
+  }, [clientId, hasPortionsLayer, template])
 
   const futureDateLabel = useMemo(() => {
     const effectiveFrom = planModel.plan?.effectiveFrom ?? null
@@ -525,7 +584,53 @@ export function QuickEditProvider({
     [capturePublished, clientName, currentDraft, onExit, router, state.meta, today],
   )
 
+  // Guardado del modo PLANTILLA (T3.2b): sin CAS, sin idempotencia (paridad con el guardado
+  // del wizard — ultima escritura gana) y sin PostHog de publish (no se publico nada). El
+  // draft proyectado viaja tal cual; `buildTemplatePayload` (servicio) le quita la identidad
+  // y valida el round-trip antes de escribir.
+  const runTemplateSave = useCallback(
+    (templateInput: EditorTemplateInput) => {
+      const name = (state.meta?.name ?? '').trim()
+      const description = templateDescription.trim() || null
+      setPublishError(null)
+      startTransition(async () => {
+        let res: Awaited<ReturnType<typeof savePlanTemplateAction>>
+        try {
+          res = templateInput.templateId
+            ? await updatePlanTemplateDraftAction({
+                id: templateInput.templateId,
+                name,
+                description,
+                draft: currentDraft,
+              })
+            : // `source: 'builder'` a proposito: es el enum de la accion (builder|plan) y
+              // significa "nacio de un editor del coach", no "del wizard".
+              await savePlanTemplateAction({ name, description, draft: currentDraft, source: 'builder' })
+        } catch {
+          setConfirmOpen(false)
+          setPublishError(
+            typeof navigator !== 'undefined' && !navigator.onLine ? QE_COPY.offline : QE_COPY.templateSaveFailed,
+          )
+          return
+        }
+        setConfirmOpen(false)
+        if (res.ok) {
+          toast.success(QE_COPY.templateSuccess)
+          router.refresh()
+          onExit()
+          return
+        }
+        setPublishError(res.error || QE_COPY.templateSaveFailed)
+      })
+    },
+    [currentDraft, onExit, router, state.meta, templateDescription],
+  )
+
   const runPublish = useCallback(() => {
+    if (template) {
+      runTemplateSave(template)
+      return
+    }
     const idempotencyKey = idempotencyKeyRef.current
     if (!idempotencyKey) return
     if (creation) {
@@ -593,7 +698,7 @@ export function QuickEditProvider({
       // con reintento (el draft nunca se pierde y la clave de idempotencia se conserva).
       setPublishError(res.message ?? QE_COPY.publishFailed)
     })
-  }, [capturePublished, clientId, clientName, creation, currentDraft, draftKey, onExit, planModel.plan, router, runCreatePublish, substitutionsLoadFailed])
+  }, [capturePublished, clientId, clientName, creation, currentDraft, draftKey, onExit, planModel.plan, router, runCreatePublish, runTemplateSave, substitutionsLoadFailed, template])
 
   // Reintento de la lectura de reemplazos: refresca el RSC (vuelve a correr el data-loader)
   // sin desmontar el modo edicion, asi que las ediciones sin publicar se conservan.
@@ -713,6 +818,9 @@ export function QuickEditProvider({
     pendingRestore: pendingRestore !== null,
     restoreDraft,
     dismissRestore,
+    surface: template ? 'template' : 'plan',
+    templateDescription,
+    setTemplateDescription,
   }
 
   return (
@@ -722,6 +830,7 @@ export function QuickEditProvider({
         open={exitConfirmOpen}
         intent={exitIntent}
         changeCount={changeCount}
+        surface={template ? 'template' : 'plan'}
         onCancel={cancelExit}
         onConfirm={confirmExit}
       />

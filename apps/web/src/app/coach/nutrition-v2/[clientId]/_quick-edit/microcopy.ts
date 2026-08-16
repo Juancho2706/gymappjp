@@ -194,6 +194,31 @@ export const QE_COPY = {
   expandSlot: (slotName: string) => `Expandir ${slotName}`,
   flexibleTargetsOnly:
     'Plan flexible: sin franjas prescritas. Ajusta las metas diarias; el alumno registra libremente contra ellas.',
+  // ── T3.2b (editor unico, modo PLANTILLA): el arbol es el mismo, pero no se PUBLICA nada —
+  //    se GUARDA material reutilizable del coach. El vocabulario cambia entero: "publicar"
+  //    aca seria mentirle al coach que algo le llego a un alumno (leccion JP 2026-08-11).
+  templateDirtyBar: (n: number) => `${cambios(n)} sin guardar`,
+  templateSave: 'Guardar plantilla',
+  templateConfirmTitle: 'Guardar la plantilla',
+  templateConfirmBody:
+    'La plantilla se guarda en tu biblioteca. Ningún alumno recibe cambios hasta que la apliques.',
+  templateConfirmCta: 'Guardar ahora',
+  templateSaving: 'Guardando…',
+  templateSuccess: 'Plantilla guardada.',
+  templateSaveFailed: 'No se pudo guardar. Reintentar',
+  templateLeaveGuard: 'Tienes cambios sin guardar. ¿Salir y descartarlos?',
+  templateNameLabel: 'Nombre de la plantilla',
+  templateNamePlaceholder: 'Ej: Definición 1800 kcal',
+  templateDescriptionLabel: 'Descripción (opcional)',
+  templateDescriptionPlaceholder: 'Para qué sirve esta plantilla, a quién aplicarla…',
+  /** Banner permanente del modo plantilla (mismo aviso que el builder de plantillas). */
+  templateBanner: 'Esto es una plantilla: no le llega a ningún alumno hasta que la apliques.',
+  templateFooterInfo: 'Al guardar, la plantilla se actualiza solo para ti.',
+  templateEyebrow: 'Plantilla',
+  templateUntitled: 'Nueva plantilla',
+  /** Se pidio editar una plantilla concreta y no se pudo abrir (misma degradacion del wizard). */
+  templateUnavailable:
+    'No pudimos abrir la plantilla que elegiste. Estás en una plantilla en blanco: si guardas acá, no estarás actualizando esa plantilla.',
 } as const
 
 /** 'YYYY-MM-DD' → 'dd-mm-yyyy' (solo presentacion del confirm sheet). */

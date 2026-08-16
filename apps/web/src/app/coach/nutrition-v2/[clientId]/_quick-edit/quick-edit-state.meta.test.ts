@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   NutritionPlanDraftSchema,
+  buildTemplatePayload,
   countDraftChanges,
+  parseTemplatePayload,
   readModelToDraft,
   type NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
@@ -14,6 +16,7 @@ import {
   quickEditReducer,
   readModelToEditState,
   validateQuickEdit,
+  withSyntheticDraftIds,
   PLAN_NAME_MAX,
   type QePortionGroup,
   type QuickEditState,
@@ -607,5 +610,61 @@ describe('draftToEditState (creacion)', () => {
       variants: withSlots.variants.map((variant) => ({ ...variant, slots: [] })),
     }
     expect(qeAllowedStrategies(noSlots)).toEqual(['structured', 'flexible', 'hybrid'])
+  })
+})
+
+// T3.2b (modo plantilla): la vigencia no existe en esa superficie y el guardado tiene que
+// poder reabrirse — el mismo par de barreras del servicio (strip de identidad + round trip).
+describe('modo plantilla (T3.2b)', () => {
+  it('draftToEditState SIN la opcion effectiveFrom deja meta sin la llave (la card no pinta vigencia)', () => {
+    const state = draftToEditState(makeTemplateDraft(), {}, {})
+    expect(state.meta).toBeDefined()
+    expect('effectiveFrom' in (state.meta ?? {})).toBe(false)
+
+    // Con la opcion explicita (modos de creacion) la llave sigue existiendo, null = hoy.
+    const creation = draftToEditState(makeTemplateDraft(), {}, { effectiveFrom: null })
+    expect(creation.meta?.effectiveFrom).toBeNull()
+  })
+
+  it('con ids sinteticos, una plantilla intacta cuenta 0 cambios (los contadores aparean por id)', () => {
+    // Sin ids (stripDraftIdentity los quito al guardar) cada fila contaria contra si misma
+    // como baja+alta y el editor abriria "con cambios" sobre una plantilla sin tocar.
+    const draft = withSyntheticDraftIds(makeTemplateDraft())
+    const state = draftToEditState(draft, { foodsById: { [FOOD_ID]: TEMPLATE_FOOD } }, {})
+    const baseline = applyQuickEditToDraft(draft, state)
+    const current = applyQuickEditToDraft(draft, state)
+    expect(
+      countDraftChanges(baseline, current) +
+        countItemSubstitutionChanges(baseline, current) +
+        countItemOrderChanges(baseline, current),
+    ).toBe(0)
+  })
+
+  it('round trip editor → payload de plantilla: identidad fuera, contenido intacto y reabrible', () => {
+    const draft = withSyntheticDraftIds(makeTemplateDraft())
+    const state = draftToEditState(
+      draft,
+      { foodsById: { [FOOD_ID]: TEMPLATE_FOOD }, portionGroupsById: { [GROUP_ID]: PORTION_GROUP } },
+      {},
+    )
+    const projected = applyQuickEditToDraft(draft, state)
+
+    const payload = buildTemplatePayload({ draft: projected })
+    const reopened = parseTemplatePayload(payload)
+    expect(reopened).not.toBeNull()
+
+    const saved = reopened!.draft
+    // El relleno de clientId y la vigencia JAMAS quedan en la fila.
+    expect('clientId' in saved).toBe(false)
+    expect('effectiveFrom' in saved).toBe(false)
+    // Contenido: items (catalogo y libre), porciones y nombre sobreviven el viaje.
+    expect(saved.name).toBe(draft.name)
+    expect(saved.dayVariants).toHaveLength(draft.dayVariants.length)
+    const slot = saved.dayVariants[0]!.mealSlots[0]!
+    expect(slot.items.map((item) => item.foodId ?? item.customName)).toEqual([
+      FOOD_ID,
+      'Ensalada libre',
+    ])
+    expect((slot.exchangeTargets ?? []).map((target) => target.portions)).toEqual([2, 1])
   })
 })

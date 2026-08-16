@@ -13,19 +13,27 @@ import { QeBottomSheet } from './QeBottomSheet'
 import { QE_COPY } from './microcopy'
 
 export function PublishConfirmSheet() {
-  const { confirmOpen, closeConfirm, publishNow, isPending, clientName, futureDateLabel, changeCount } = useQuickEdit()
+  const { confirmOpen, closeConfirm, publishNow, isPending, clientName, futureDateLabel, changeCount, surface } =
+    useQuickEdit()
+
+  // Modo plantilla (T3.2b): guardar, no publicar — nada le llega a ningun alumno.
+  const isTemplate = surface === 'template'
 
   return (
     <QeBottomSheet
       open={confirmOpen}
       onOpenChange={(next) => (!next ? closeConfirm() : undefined)}
-      title={QE_COPY.confirmTitle}
+      title={isTemplate ? QE_COPY.templateConfirmTitle : QE_COPY.confirmTitle}
       showCloseButton={!isPending}
       busy={isPending}
       bodyClassName="space-y-0"
     >
-      <p className="text-sm leading-6 text-body">{QE_COPY.confirmBody(clientName, futureDateLabel)}</p>
-      <p className="mt-2 text-xs text-muted">{QE_COPY.dirtyBar(changeCount)}</p>
+      <p className="text-sm leading-6 text-body">
+        {isTemplate ? QE_COPY.templateConfirmBody : QE_COPY.confirmBody(clientName, futureDateLabel)}
+      </p>
+      <p className="mt-2 text-xs text-muted">
+        {isTemplate ? QE_COPY.templateDirtyBar(changeCount) : QE_COPY.dirtyBar(changeCount)}
+      </p>
       <div className="mt-4 flex flex-col gap-2">
         <button
           type="button"
@@ -34,7 +42,13 @@ export function PublishConfirmSheet() {
           className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
         >
           {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          {isPending ? 'Publicando…' : QE_COPY.confirmCta}
+          {isPending
+            ? isTemplate
+              ? QE_COPY.templateSaving
+              : 'Publicando…'
+            : isTemplate
+              ? QE_COPY.templateConfirmCta
+              : QE_COPY.confirmCta}
         </button>
         <button
           type="button"

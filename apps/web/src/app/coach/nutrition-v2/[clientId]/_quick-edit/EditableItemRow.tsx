@@ -89,7 +89,7 @@ export function EditableItemRow({
   /** Total de items de la franja (habilita Subir/Bajar del editor; ausente = sin reorden). */
   count?: number
 }) {
-  const { clientId, state, dispatch, errors, showErrors, isPending } = useQuickEdit()
+  const { clientId, state, dispatch, errors, showErrors, isPending, surface } = useQuickEdit()
   const [swapOpen, setSwapOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
@@ -327,7 +327,9 @@ export function EditableItemRow({
               // Porcion pegajosa (T2.6 F4): al fijar la cantidad se recuerda para la proxima,
               // en este alumno y en general. Solo en el EDITOR (el quick-edit clasico no
               // escribe memoria) y solo con alimento de catalogo en mano. Fire-and-forget.
-              if (!isEditor || item.food == null) return
+              // En PLANTILLA (T3.2b) no hay alumno: el clientId es un relleno y la memoria
+              // por-alumno seria ruido — no se escribe.
+              if (!isEditor || surface === 'template' || item.food == null) return
               const signature = `${item.food.id}:${item.quantity}:${item.unit}`
               if (lastRememberedRef.current === signature) return
               lastRememberedRef.current = signature

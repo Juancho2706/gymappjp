@@ -22,6 +22,10 @@ import { Switch } from '@/components/ui/switch'
 import { OptionalClampedIntInput } from '@/components/ui/clamped-int-input'
 import { useQuickEdit } from './QuickEditProvider'
 import { PLAN_NAME_MAX, qeAllowedStrategies } from './quick-edit-state'
+import { QE_COPY } from './microcopy'
+
+/** Tope del contrato de la accion de guardado (`SaveSchema.description`: max 2000 tras trim). */
+const TEMPLATE_DESCRIPTION_MAX = 2000
 
 const STRATEGY_LABEL: Record<NutritionStrategy, string> = {
   structured: 'Estructurado',
@@ -53,8 +57,19 @@ const PERMISSION_ROWS = [
 ]
 
 export function EditorMetaCard() {
-  const { state, dispatch, errors, showErrors, isPending, futureDateLabel, today, hasNutritionPro } =
-    useQuickEdit()
+  const {
+    state,
+    dispatch,
+    errors,
+    showErrors,
+    isPending,
+    futureDateLabel,
+    today,
+    hasNutritionPro,
+    surface,
+    templateDescription,
+    setTemplateDescription,
+  } = useQuickEdit()
   const meta = state.meta
   if (!meta) return null
 
@@ -62,18 +77,22 @@ export function EditorMetaCard() {
   const dateError = showErrors ? errors['meta.effectiveFrom'] : undefined
   const allowed = qeAllowedStrategies(state)
   const flexibleBlocked = !allowed.includes('flexible')
-  // Modo creacion = la vigencia es elegible (el campo existe en meta).
+  // Modo creacion = la vigencia es elegible (el campo existe en meta). En plantilla la llave
+  // no existe (draftToEditState sin `effectiveFrom`), asi que el campo jamas se pinta.
   const isCreation = meta.effectiveFrom !== undefined
+  const isTemplate = surface === 'template'
 
   return (
     <section className="rounded-card border border-border-subtle bg-surface-card p-4">
       <div className="flex items-center gap-2">
         <ClipboardList aria-hidden="true" className="h-4 w-4 text-muted" />
-        <h2 className="font-display text-base font-semibold text-strong">Plan</h2>
+        <h2 className="font-display text-base font-semibold text-strong">
+          {isTemplate ? 'Plantilla' : 'Plan'}
+        </h2>
       </div>
 
       <label htmlFor="editor-plan-name" className="mt-3 block text-xs font-semibold text-muted">
-        Nombre del plan
+        {isTemplate ? QE_COPY.templateNameLabel : 'Nombre del plan'}
       </label>
       <input
         id="editor-plan-name"
@@ -84,12 +103,30 @@ export function EditorMetaCard() {
         disabled={isPending}
         aria-invalid={Boolean(nameError)}
         className="mt-1.5 w-full rounded-control border border-border-subtle bg-surface-app px-3 py-2.5 text-sm leading-6 text-body placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder="Ej: Plan definición 2026"
+        placeholder={isTemplate ? QE_COPY.templateNamePlaceholder : 'Ej: Plan definición 2026'}
       />
       {nameError ? (
         <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-300">
           {nameError}
         </p>
+      ) : null}
+
+      {isTemplate ? (
+        <>
+          <label htmlFor="editor-template-description" className="mt-4 block text-xs font-semibold text-muted">
+            {QE_COPY.templateDescriptionLabel}
+          </label>
+          <textarea
+            id="editor-template-description"
+            value={templateDescription}
+            onChange={(event) => setTemplateDescription(event.target.value)}
+            maxLength={TEMPLATE_DESCRIPTION_MAX}
+            disabled={isPending}
+            rows={2}
+            className="mt-1.5 w-full resize-y rounded-control border border-border-subtle bg-surface-app px-3 py-2.5 text-sm leading-6 text-body placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder={QE_COPY.templateDescriptionPlaceholder}
+          />
+        </>
       ) : null}
 
       <p className="mt-4 text-xs font-semibold text-muted">Estrategia</p>
@@ -187,11 +224,13 @@ export function EditorMetaCard() {
 
       <p className="mt-4 flex items-start gap-1.5 text-xs leading-5 text-muted">
         <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        {isCreation
-          ? 'Al publicar, el plan rige desde la fecha elegida (hoy por defecto).'
-          : futureDateLabel
-            ? `La versión vigente aplica desde el ${futureDateLabel}; al publicar, los cambios rigen desde hoy.`
-            : 'Al publicar, los cambios rigen desde hoy.'}
+        {isTemplate
+          ? QE_COPY.templateFooterInfo
+          : isCreation
+            ? 'Al publicar, el plan rige desde la fecha elegida (hoy por defecto).'
+            : futureDateLabel
+              ? `La versión vigente aplica desde el ${futureDateLabel}; al publicar, los cambios rigen desde hoy.`
+              : 'Al publicar, los cambios rigen desde hoy.'}
       </p>
     </section>
   )

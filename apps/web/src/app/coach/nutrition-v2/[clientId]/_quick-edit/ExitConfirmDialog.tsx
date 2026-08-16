@@ -48,6 +48,7 @@ export function ExitConfirmDialog({
   open,
   intent,
   changeCount,
+  surface = 'plan',
   onCancel,
   onConfirm,
 }: {
@@ -58,17 +59,21 @@ export function ExitConfirmDialog({
    */
   intent: QuickEditExitIntent
   changeCount: number
+  /** 'template' (T3.2b) habla de "guardar", no de "publicar" — una plantilla no se publica. */
+  surface?: 'plan' | 'template'
   onCancel: () => void
   onConfirm: () => void
 }) {
   const copy = EXIT_COPY[intent]
+  const body =
+    surface === 'template' && intent === 'leave' ? QE_COPY.templateLeaveGuard : copy.body(changeCount)
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onCancel() : undefined)}>
       <DialogContent showCloseButton={false} className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="normal-case tracking-tight">{copy.title}</DialogTitle>
-          <DialogDescription>{copy.body(changeCount)}</DialogDescription>
+          <DialogDescription>{body}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           {/* "Seguir editando" va PRIMERO en el DOM (recibe el foco inicial del dialogo);

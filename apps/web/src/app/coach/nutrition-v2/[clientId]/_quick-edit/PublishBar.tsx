@@ -39,7 +39,13 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
     openConfirm,
     retryPublish,
     discardChanges,
+    surface,
   } = useQuickEdit()
+
+  // Modo plantilla (T3.2b): no se publica nada — se guarda material del coach.
+  const isTemplate = surface === 'template'
+  const dirtyLabel = isTemplate ? QE_COPY.templateDirtyBar(changeCount) : QE_COPY.dirtyBar(changeCount)
+  const ctaLabel = isTemplate ? QE_COPY.templateSave : QE_COPY.publish
 
   const hasActions = changeCount > 0 || publishError !== null || upgradeRequired || substitutionsFailed
   // En el editor (dayTotals presente) la barra vive SIEMPRE: totales fijos abajo (W3b).
@@ -118,7 +124,7 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
         {hasActions ? (
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-sm font-semibold text-strong" aria-live="polite">
-            {QE_COPY.dirtyBar(changeCount)}
+            {dirtyLabel}
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -136,7 +142,7 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
               className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {QE_COPY.publish}
+              {ctaLabel}
             </button>
           </div>
         </div>

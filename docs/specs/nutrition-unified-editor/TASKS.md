@@ -180,9 +180,37 @@ corte, con su QA.
 
 ## T3.2b — Plantillas
 
-- [ ] `nutrition-plans/new` y `[templateId]/edit` sobre el editor (modo plantilla)
-- [ ] Verificar importadores del wizard antes de tocar rutas
-- [ ] Gates + registro
+- [x] Importadores del wizard de plantillas VERIFICADOS antes de tocar nada (2026-08-15):
+  la puerta V2 real es `/coach/nutrition-v2/plantillas/builder?template=<id>` (los
+  `nutrition-plans/new`/`[templateId]/edit` legacy solo redirigen con el swap V2); la linkean
+  SOLO `PlanTemplatesLibrary` (2 CTAs "Nueva plantilla" + `editHref`) y el redirect legacy.
+  RN consume plantillas via `/api/mobile/nutrition-v2/plan-templates` (payload intacto) y su
+  adaptador ya degrada plantillas SIN `builder` (rama b de `nutrition-v2-builder-template.ts`)
+- [x] MODO PLANTILLA del editor (2026-08-15): ruta `/coach/nutrition-v2/plantillas/editor`
+  (`?template=<id>` = editar; sin id = nueva; SIN CTA publica hasta el corte 2). Provider gana
+  `template` (`EditorTemplateInput`): guardar via `updatePlanTemplateDraftAction` /
+  `savePlanTemplateAction` (sin CAS ni idempotencia — paridad wizard), vocabulario completo
+  "guardar" (barra, sheet, guard de salida), descripcion de la fila editable en la cabecera
+  (fuera del reducer, cuenta +1 propio), banner permanente "esto es una plantilla" (leccion
+  JP 11-08), degradacion de plantilla ilegible = blanco CON aviso y `templateId` null (jamas
+  pisa a ciegas). Sin vigencia: `draftToEditState` ahora solo pone `meta.effectiveFrom` si la
+  opcion viene (ausente = la card no pinta el campo). Coach-scoped: grupos de porciones por
+  `loadExchangeGroupsForCoachAction`, picker sin alumno, porcion pegajosa NI lee NI escribe.
+  El `builder` payload del wizard se cae al guardar desde el editor (a proposito: el draft es
+  el canonico; wizard y RN ya reconstruyen desde el draft)
+- [x] Hallazgo de la tanda: los contadores aparean por `id` y `stripDraftIdentity` los quito
+  al guardar ⇒ una plantilla intacta abria "con 2 cambios". Fix `withSyntheticDraftIds`
+  (ids de sesion, el guardado los re-strippea) + regresion en vitest. Gotcha harness: ids
+  random en componente SSR+cliente = hydration mismatch (familia EVA-NEXTJS-18) — generador
+  determinista inyectable
+- [x] Harness `?mode=template` + verificacion headless (Playwright): hidratacion
+  nombre/descripcion, 0 cambios de entrada, +1 por descripcion, sheet "Guardar la plantilla",
+  sin "Vigente desde", paleta desktop, y regresiones create (vigencia+publicar) y edit; 0
+  pageerrors, 0 errores de consola (screenshots 390 + 1440)
+- [x] Gates + registro (fila abajo)
+- [ ] **Corte 2** (espera QA del owner en preview): CTAs de `PlanTemplatesLibrary` y redirect
+  legacy `nutrition-plans/new` → editor de plantillas; wizard de plantillas queda por URL
+  directa como camino secundario; docs canonicos en el mismo commit
 
 ## R1 — Extraccion de reducers
 
@@ -214,3 +242,4 @@ corte, con su QA.
 | 2026-08-15 | W3a copy semana + pegajosa | `a6570234` | vitest 5701 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ · eslint 0 err ✓ · build NO (Node 24) — gates corridos en pasada diferida el mismo dia | Split W3a/W3b; W3b (layout) espera QA del owner |
 | 2026-08-15 | W3b layout final | `93c94014` | vitest 5702 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · harness headless ✓ (movil+desktop) · eslint 0 err ✓ · build NO (Node 24) | Capsula dia activo + totales fijos + paleta lateral lg+ + reorden (accion, Subir/Bajar, drag). QA visual del owner en preview: OK (2026-08-15) |
 | 2026-08-15 | W4 corte 1 | `ef4a0ff0` | vitest 5702 ✓ (1 test actualizado al contrato nuevo) · tsc web ✓ · tokens ✓ · boundaries ✓ · eslint 0 err ✓ · docs:check ✓ · build NO (Node 24) | CTAs web → editor; par viejo a menu "..."; MOBILE_PARITY declara gap RN; ventana de 2 semanas ARRANCA |
+| 2026-08-15 | T3.2b modo plantilla (sin corte) | pendiente commit | vitest 5705 ✓ (3 tests T3.2b nuevos) · tsc web ✓ · tokens ✓ · boundaries ✓ · eslint 0 err ✓ · harness headless ✓ (plantilla + regresiones create/edit, 0 pageerrors) · build NO (Node 24) | Ruta `plantillas/editor` sin CTA; `withSyntheticDraftIds` (contadores aparean por id); corte 2 espera QA del owner en preview |

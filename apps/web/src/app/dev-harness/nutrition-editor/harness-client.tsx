@@ -23,9 +23,13 @@ import { FoodPickerPrefsProvider } from '../../coach/nutrition-v2/_components/fo
 import {
   QuickEditProvider,
   type EditorCreationInput,
+  type EditorTemplateInput,
 } from '../../coach/nutrition-v2/[clientId]/_quick-edit/QuickEditProvider'
 import { QuickEditPlanView } from '../../coach/nutrition-v2/[clientId]/_quick-edit/QuickEditPlanView'
-import { draftToEditState } from '../../coach/nutrition-v2/[clientId]/_quick-edit/quick-edit-state'
+import {
+  draftToEditState,
+  withSyntheticDraftIds,
+} from '../../coach/nutrition-v2/[clientId]/_quick-edit/quick-edit-state'
 import type { BuilderFood } from '../../coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 
 const CLIENT_ID = '33333333-3333-4333-8333-333333333333'
@@ -227,27 +231,58 @@ function buildCreationInput(): EditorCreationInput {
   }
 }
 
-export function EditorHarness({ mode }: { mode: 'edit' | 'create' }) {
+/**
+ * Modo PLANTILLA (T3.2b): mismo baseDraft del modo creacion pero con `template` — abre como
+ * EDICION de una plantilla existente (baseline = arbol hidratado, 0 cambios de entrada) y
+ * `meta` SIN `effectiveFrom` (la card no debe pintar vigencia).
+ */
+function buildTemplateInput(): EditorTemplateInput {
+  const { baseDraft } = buildCreationInput()
+  // Ids sinteticos como la page real: sin ids, los contadores aparean cada fila contra si
+  // misma como baja+alta y la plantilla abriria "con cambios". Generador DETERMINISTA: este
+  // componente corre en SSR y en el cliente — ids random divergirian entre ambos renders
+  // (hydration mismatch, familia EVA-NEXTJS-18).
+  let seq = 0
+  const templateDraft: NutritionPlanDraft = withSyntheticDraftIds(
+    { ...baseDraft, name: 'Plantilla harness T3.2b' },
+    () => `00000000-0000-4000-8000-00000000000${(seq += 1)}`,
+  )
+  return {
+    templateId: '99999999-9999-4999-8999-999999999999',
+    initialState: draftToEditState(
+      templateDraft,
+      { foodsById: { [HARNESS_FOOD.id]: HARNESS_FOOD } },
+      {},
+    ),
+    baseDraft: templateDraft,
+    description: 'Descripción harness',
+  }
+}
+
+export function EditorHarness({ mode }: { mode: 'edit' | 'create' | 'template' }) {
   const isCreate = mode === 'create'
+  const isTemplate = mode === 'template'
   // Identidad estable como en la page real (el server la manda una vez como prop).
   const creation = useMemo(() => (isCreate ? buildCreationInput() : null), [isCreate])
+  const template = useMemo(() => (isTemplate ? buildTemplateInput() : null), [isTemplate])
   return (
     <FoodPickerPrefsProvider
       viewerCoachId={null}
-      clientName="Alumno Harness"
+      clientName={isTemplate ? null : 'Alumno Harness'}
       restrictions={[]}
       favoriteIds={[]}
     >
       <QuickEditProvider
         clientId={CLIENT_ID}
-        clientName="Alumno Harness"
-        planModel={isCreate ? buildEmptyPlanModel() : buildPlanModel()}
+        clientName={isTemplate ? '' : 'Alumno Harness'}
+        planModel={isCreate || isTemplate ? buildEmptyPlanModel() : buildPlanModel()}
         itemSubstitutions={NO_SUBSTITUTIONS}
         substitutionsLoadFailed={false}
         today={LOCAL_DATE}
         hasNutritionPro={false}
         editPlanMeta
         creation={creation}
+        template={template}
         onExit={() => {
           // En el harness no hay "ficha" a la que volver: recargar re-hidrata limpio.
           window.location.reload()

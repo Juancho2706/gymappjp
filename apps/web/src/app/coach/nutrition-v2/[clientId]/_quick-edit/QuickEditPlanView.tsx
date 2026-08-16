@@ -90,8 +90,16 @@ export function QuickEditPlanView() {
     restoreDraft,
     dismissRestore,
     exchangeGroups,
+    surface,
   } = useQuickEdit()
   const usesSlots = strategy === 'structured' || strategy === 'hybrid'
+  // T3.2b: en plantilla el "cliente" es un relleno — el titulo sale del nombre de la
+  // plantilla (vivo, editable en la cabecera) y el banner recuerda que nada llega a nadie.
+  const isTemplate = surface === 'template'
+  const overlayTitle = isTemplate
+    ? state.meta?.name.trim() || QE_COPY.templateUntitled
+    : clientName
+  const overlayEyebrow = isTemplate ? QE_COPY.templateEyebrow : QE_COPY.enter
   // FD5: orden de lectura del multi-dia (base primero, luego Lu→Do). El estado conserva el
   // orden de alta; la presentacion usa el MISMO helper que la ficha y el alumno.
   const orderedVariants = useMemo(() => sortNutritionDayVariantsForDisplay(state.variants), [state.variants])
@@ -138,7 +146,7 @@ export function QuickEditPlanView() {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`${QE_COPY.enter} de ${clientName}`}
+      aria-label={`${overlayEyebrow}: ${overlayTitle}`}
       aria-busy={isPending}
       className="fixed inset-0 z-[60] overflow-y-auto bg-surface-app"
     >
@@ -155,10 +163,10 @@ export function QuickEditPlanView() {
           </button>
           <div className="min-w-0 flex-1">
             <p className="truncate font-mono text-[10px] font-semibold uppercase leading-4 tracking-[0.16em] text-primary">
-              {QE_COPY.enter}
+              {overlayEyebrow}
             </p>
             <h1 className="truncate font-display text-lg font-bold leading-tight tracking-[-0.02em] text-strong">
-              {clientName}
+              {overlayTitle}
             </h1>
           </div>
           <div className="shrink-0">
@@ -200,6 +208,14 @@ export function QuickEditPlanView() {
                 </button>
               </div>
             </div>
+          </div>
+        ) : null}
+
+        {/* T3.2b: recordatorio permanente del modo plantilla (lo que confundio al coach JP,
+            2026-08-11 — esta pantalla es casi identica a editar el plan de un alumno). */}
+        {isTemplate ? (
+          <div className="rounded-card border border-primary/25 bg-primary/10 px-3 py-2">
+            <p className="text-xs font-semibold leading-relaxed text-primary">{QE_COPY.templateBanner}</p>
           </div>
         ) : null}
 
