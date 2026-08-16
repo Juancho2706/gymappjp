@@ -126,3 +126,16 @@ export function computeItemMacros(food: BuilderFood, quantity: number, unit: str
   const fiber = food.fiberG == null ? 0 : Math.round(food.fiberG * factor * 10) / 10
   return { calories: m.calories, proteinG: m.protein, carbsG: m.carbs, fatsG: m.fats, fiberG: fiber }
 }
+
+/**
+ * Unidades que el coach puede prescribir. Vivian en el reducer del wizard web (`draft-builder`),
+ * que muere con el; la fila del editor y el wizard las comparten, asi que su casa es el paquete.
+ */
+export const BUILDER_UNITS = ['g', 'ml', 'un'] as const
+export type BuilderUnit = (typeof BUILDER_UNITS)[number]
+
+/**
+ * Tope de dias propios por plan (uno por dia de la semana). Regla de dominio, no del wizard:
+ * la usan el editor (copiar dia), el wizard y el builder RN.
+ */
+export const MAX_DAY_VARIANTS = 7

@@ -209,3 +209,27 @@ export function parsePlanBuilderOrigin(raw: string | null | undefined): PlanBuil
 export function formatPlanBuilderOrigin(origin: Exclude<PlanBuilderOrigin, null>): string {
   return `${origin.kind}:${origin.id}`
 }
+
+/** Forma minima que necesita `collectTemplateFoodIds` (draft de plantilla o de plan). */
+interface TemplateDraftLike {
+  dayVariants?: Array<{
+    mealSlots?: Array<{ items?: Array<{ foodId?: string | null }> }>
+  }>
+}
+
+/**
+ * Ids de alimentos referenciados por un draft (dedupe), para resolverlos server-side antes de
+ * hidratar. Vivia en el `rehydrate` del wizard web; lo usan el editor de planes, el de
+ * plantillas y el endpoint movil de plantillas, asi que su casa es el paquete.
+ */
+export function collectTemplateFoodIds(draft: TemplateDraftLike): string[] {
+  const ids = new Set<string>()
+  for (const variant of draft.dayVariants ?? []) {
+    for (const slot of variant.mealSlots ?? []) {
+      for (const item of slot.items ?? []) {
+        if (item.foodId) ids.add(item.foodId)
+      }
+    }
+  }
+  return [...ids]
+}

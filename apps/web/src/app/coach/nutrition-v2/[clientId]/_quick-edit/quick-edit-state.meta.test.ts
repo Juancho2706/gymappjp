@@ -21,7 +21,7 @@ import {
   type QePortionGroup,
   type QuickEditState,
 } from '@eva/nutrition-v2'
-import type { BuilderFood } from '../builder/_lib/draft-builder'
+import type { BuilderFood } from '@eva/nutrition-v2'
 import type { NutritionPlanDraft } from '@eva/nutrition-v2'
 
 // Metadatos del plan (editor unico T3.x): la extension `state.meta` debe ser INVISIBLE para el

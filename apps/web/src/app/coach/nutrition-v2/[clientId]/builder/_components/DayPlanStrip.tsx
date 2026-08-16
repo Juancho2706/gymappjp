@@ -68,7 +68,7 @@ import { COPY_PRESETS, daysForCopyPreset, replacedDaysOf, type CopyPresetDay } f
 import { NEXT_DAYS_QUICK_PICKS, copyPlanWarning, nextDaysFrom, planCopy, type CopyMode } from '../_lib/copy-plan'
 // El candado y el detector de desktop se reusan del módulo de "Agregar día" (que sigue vivo en
 // la edición rápida): mismo límite comercial, mismas palabras, mismo popover/sheet.
-import { UpsellPanel, useIsDesktopMd } from './AddDayPopover'
+import { UpsellPanel, useIsDesktopMd } from '@/app/coach/nutrition-v2/_components/AddDayPopover'
 
 // Ruta canónica de cambio de plan: se inlinea (igual que en PlanBuilderClient/AddDayPopover)
 // porque `_lib/nutrition-pro.ts` es server-only y no puede importarse en un client component.

@@ -5,8 +5,8 @@ import { BadgeCheck, ShieldCheck } from 'lucide-react'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { MacroChipRow } from '@/components/nutrition-v2'
 import { ImageLightbox } from '@/components/ImageLightbox'
-import { foodCardImage } from './food-card-presentation'
-import { FoodCoverImage } from './FoodImage'
+import { foodCardImage } from '@/app/coach/nutrition-v2/_components/food-card-presentation'
+import { FoodCoverImage } from '@/app/coach/nutrition-v2/_components/FoodImage'
 
 // Resultado de busqueda del catalogo: SIEMPRE una fila horizontal delgada (QA CEO 08-04) —
 // thumbnail cuadrado a la izquierda (clickeable: abre la foto en lightbox), nombre + marca +

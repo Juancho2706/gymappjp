@@ -5,7 +5,7 @@ import { Plus, Repeat, X } from 'lucide-react'
 import { FoodPicker } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
 import { MAX_ITEM_SUBSTITUTIONS, type BuilderItem } from '../_lib/draft-builder'
 import { genId, mapCatalogItemToFood, type Dispatch } from '../_lib/builder-view-model'
-import { secondaryButtonClass } from '../_lib/builder-ui-classes'
+import { secondaryButtonClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 import { useIsTemplateMode } from './TemplateModeContext'
 
 // Reemplazos autorizados por el coach (F-02): afordancia compacta bajo cada item prescrito.

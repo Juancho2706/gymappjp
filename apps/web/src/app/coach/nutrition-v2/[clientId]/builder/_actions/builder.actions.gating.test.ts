@@ -15,7 +15,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
 import { getCurrentCoachSession } from '@/services/auth/current-coach.service'
-import { publishPlanAction } from './builder.actions'
+import { publishPlanAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
 
 const COACH_ID = '22222222-2222-4222-8222-222222222222'
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'

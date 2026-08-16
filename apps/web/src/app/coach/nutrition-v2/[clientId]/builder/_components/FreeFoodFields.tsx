@@ -9,9 +9,9 @@ import {
   macroEnergyMismatch,
   type BuilderItem,
 } from '../_lib/draft-builder'
-import { createCoachFoodAction } from '../_actions/builder.actions'
+import { createCoachFoodAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
 import type { Dispatch } from '../_lib/builder-view-model'
-import { labelClass, macroInputClass, secondaryButtonClass } from '../_lib/builder-ui-classes'
+import { labelClass, macroInputClass, secondaryButtonClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import {
   loadExchangeGroupsForBuilderAction,

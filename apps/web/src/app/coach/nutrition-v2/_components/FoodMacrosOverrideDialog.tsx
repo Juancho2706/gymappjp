@@ -16,8 +16,8 @@ import {
   restoreFoodMacrosAction,
   saveFoodOverrideAction,
 } from '@/app/coach/nutrition-v2/_actions/food-overrides.actions'
-import type { BuilderFood, BuilderFoodMacrosPatch } from '../_lib/draft-builder'
-import { inputClass } from '../_lib/builder-ui-classes'
+import type { BuilderFood, BuilderFoodMacrosPatch } from '@eva/nutrition-v2'
+import { inputClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 
 /**
  * Corregir los macros de un alimento del catálogo (T2.2 — specs/nutrition-food-overrides).

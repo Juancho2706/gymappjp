@@ -25,7 +25,7 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { useIsDesktopMd } from '../builder/_components/AddDayPopover'
+import { useIsDesktopMd } from '@/app/coach/nutrition-v2/_components/AddDayPopover'
 
 /** Ancho del dialogo en desktop: `md` para menus y formularios; `lg` para listas y buscadores. */
 export type QeSheetSize = 'md' | 'lg'

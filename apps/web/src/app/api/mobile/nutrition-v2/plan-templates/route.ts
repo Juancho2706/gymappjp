@@ -12,7 +12,7 @@ import type { Database } from '@/lib/database.types'
 // Import server-side puro (el modulo NO es 'use client' y solo depende de `draft-builder`, que a su
 // vez es zod + motor compartido): asi el criterio de "que alimentos referencia una plantilla" tiene
 // UNA sola definicion para web y movil.
-import { collectTemplateFoodIds } from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/rehydrate'
+import { collectTemplateFoodIds } from '@eva/nutrition-v2'
 import {
   listPlanTemplates,
   loadPlanTemplate,

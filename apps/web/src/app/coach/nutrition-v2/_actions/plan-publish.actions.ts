@@ -9,7 +9,7 @@ import {
   hasNutritionProV2,
   requiredNutritionProFeature,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
-import type { BuilderFood } from '../_lib/draft-builder'
+import type { BuilderFood } from '@eva/nutrition-v2'
 import { CoachFoodInputSchema, insertCoachFood } from '@/app/coach/nutrition-v2/_lib/coach-food'
 import {
   authorizeCoach,

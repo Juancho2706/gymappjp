@@ -387,15 +387,7 @@ export function builderStateFromTemplateDraft(input: {
   }
 }
 
-/** Ids de alimentos referenciados por una plantilla, para resolverlos de una sola lectura. */
-export function collectTemplateFoodIds(draft: TemplateDraftLike): string[] {
-  const ids = new Set<string>()
-  for (const variant of draft.dayVariants ?? []) {
-    for (const slot of variant.mealSlots ?? []) {
-      for (const item of slot.items ?? []) {
-        if (item.foodId) ids.add(item.foodId)
-      }
-    }
-  }
-  return [...ids]
-}
+// `collectTemplateFoodIds` se mudo a `@eva/nutrition-v2` (retiro del par viejo): lo usan el
+// editor, el de plantillas y el endpoint movil, ninguno de los cuales deberia importar del
+// wizard. Se re-exporta para los importadores historicos.
+export { collectTemplateFoodIds } from '@eva/nutrition-v2'

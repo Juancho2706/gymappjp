@@ -35,16 +35,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditorMetaCard } from './EditorMetaCard'
-import { AddDayPopover } from '../builder/_components/AddDayPopover'
-import { COPY_PRESETS, daysForCopyPreset } from '../builder/_lib/copy-presets'
+import { AddDayPopover } from '@/app/coach/nutrition-v2/_components/AddDayPopover'
+import { COPY_PRESETS, daysForCopyPreset } from '@eva/nutrition-v2'
 import {
   NEXT_DAYS_QUICK_PICKS,
   copyPlanWarning,
   nextDaysFrom,
   planCopy,
   type CopyMode,
-} from '../builder/_lib/copy-plan'
-import { MAX_DAY_VARIANTS } from '../builder/_lib/draft-builder'
+} from '@eva/nutrition-v2'
+import { MAX_DAY_VARIANTS } from '@eva/nutrition-v2'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableSlotCard } from './EditableSlotCard'
 import { TargetsEditorCard } from './TargetsEditorCard'

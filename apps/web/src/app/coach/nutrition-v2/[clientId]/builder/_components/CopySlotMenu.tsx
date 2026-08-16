@@ -7,10 +7,10 @@ import type { BuilderSlot, BuilderVariant } from '../_lib/draft-builder'
 import type { SlotCopyRequest } from '../_lib/builder-view-model'
 import { COPY_PRESETS, targetsForCopyPreset } from '../_lib/copy-presets'
 import { NEXT_DAYS_QUICK_PICKS, targetsForNextDays } from '../_lib/copy-plan'
-import { secondaryButtonClass } from '../_lib/builder-ui-classes'
+import { secondaryButtonClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 // El menu "Copiar a otros dias" de la franja usa el MISMO patron responsive que el resto de las
 // afordancias del paso (popover en desktop / bottom sheet en movil), asi que reusa el hook.
-import { useIsDesktopMd } from './AddDayPopover'
+import { useIsDesktopMd } from '@/app/coach/nutrition-v2/_components/AddDayPopover'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 

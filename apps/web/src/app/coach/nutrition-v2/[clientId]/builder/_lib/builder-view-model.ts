@@ -4,8 +4,7 @@
  * antes vivian inline en PlanBuilderClient.tsx.
  */
 
-import type { FoodCatalogItem } from '@eva/nutrition-v2'
-import type { BuilderAction, BuilderFood, BuilderState } from './draft-builder'
+import type { BuilderAction, BuilderState } from './draft-builder'
 
 export type Dispatch = (action: BuilderAction) => void
 
@@ -14,34 +13,9 @@ export function genId(): string {
   return 'k-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-export function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
-  return {
-    id: item.id,
-    name: item.name,
-    brand: item.brand,
-    calories: item.calories,
-    proteinG: item.proteinG,
-    carbsG: item.carbsG,
-    fatsG: item.fatsG,
-    fiberG: item.fiberG,
-    servingSize: item.servingSize,
-    servingUnit: item.servingUnit,
-    category: item.category,
-    /**
-     * Base declarada (NUT-001). El catálogo la emite desde T2.1 y el builder la respeta: sin
-     * ella, un alimento con macros POR PORCIÓN ("Arepa": 1 unidad = 240 kcal) se previsualiza
-     * y se congela como 2,4. El dato quedó auditado en `20260807230000` — solo 10 filas del
-     * catálogo son realmente `per_serving`; las otras 50 estaban mal etiquetadas y volvieron a
-     * `per_100`. Ausente en una respuesta vieja ⇒ `null` y rige la fórmula histórica.
-     */
-    macrosBasis: item.macrosBasis ?? null,
-    // Corrección del coach ya aplicada por el catálogo (T2.1): los macros de arriba son los
-    // corregidos; esto solo alimenta el badge ✎ y el valor tachado.
-    hasOverride: item.hasOverride ?? false,
-    originalMacros: item.original ?? null,
-    media: item.media,
-  }
-}
+// `mapCatalogItemToFood` se mudo a `_lib/food-catalog-mapping.ts` (retiro del par viejo): lo
+// usan el picker y la paleta del editor, que no deben importar del wizard.
+export { mapCatalogItemToFood } from '@/app/coach/nutrition-v2/_lib/food-catalog-mapping'
 
 export function numOr0(value: string): number {
   const n = Number(String(value).trim())

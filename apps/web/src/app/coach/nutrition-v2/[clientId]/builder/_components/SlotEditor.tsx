@@ -15,7 +15,7 @@ import {
   inputClass,
   labelClass,
   secondaryButtonClass,
-} from '../_lib/builder-ui-classes'
+} from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 import { PortionsSection, type PortionsController } from './PortionsSection'
 import { combineSubtotals, portionsKey, slotPortionTotals } from './portions-state'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'

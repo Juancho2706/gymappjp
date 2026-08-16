@@ -25,7 +25,7 @@ import {
   EMPTY_CLIENT_FOOD_PREFS,
   fetchClientFoodPrefsForPicker,
 } from '../../_data/client-food-prefs.data'
-import { collectTemplateFoodIds } from '../builder/_lib/rehydrate'
+import { collectTemplateFoodIds } from '@eva/nutrition-v2'
 import { fetchBuilderFoodsByIds } from '../../_data/plan-foods.data'
 import { fetchRememberedQuantities } from '../../_data/last-quantity.data'
 import { loadExchangeGroupsForBuilderAction } from '../../_actions/portions-groups.actions'

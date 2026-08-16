@@ -12,7 +12,7 @@ import {
   type BuilderState,
 } from '../_lib/draft-builder'
 import { genId, type Dispatch } from '../_lib/builder-view-model'
-import { inputClass, labelClass } from '../_lib/builder-ui-classes'
+import { inputClass, labelClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 import type { BuilderClientMetrics } from '../_lib/target-suggestion'
 import { SuggestTargetsPanel } from './SuggestTargetsPanel'
 import {

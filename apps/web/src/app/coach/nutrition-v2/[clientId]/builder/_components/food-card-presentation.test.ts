@@ -5,7 +5,7 @@ import {
   foodCategoryIconUrlFromName,
   resolveFoodImageUrl,
   foodCardImage,
-} from './food-card-presentation'
+} from '@/app/coach/nutrition-v2/_components/food-card-presentation'
 
 const BASE = 'https://proj.supabase.co'
 

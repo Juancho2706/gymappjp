@@ -29,7 +29,7 @@ import {
   type SuggestedTargets,
   type SuggestionForm,
 } from '../_lib/target-suggestion'
-import { labelClass, macroInputClass } from '../_lib/builder-ui-classes'
+import { labelClass, macroInputClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 
 const KCAL_FORMAT = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
 

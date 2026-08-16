@@ -29,8 +29,8 @@ import {
 } from '../_lib/draft-builder'
 import { genId, type SlotCopyRequest } from '../_lib/builder-view-model'
 import type { BuilderClientMetrics } from '../_lib/target-suggestion'
-import { primaryButtonClass, secondaryButtonClass } from '../_lib/builder-ui-classes'
-import { publishPlanAction } from '../_actions/builder.actions'
+import { primaryButtonClass, secondaryButtonClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
+import { publishPlanAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
 import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-archive.actions'
 // Guardar el BORRADOR en pantalla como plantilla (F3): mismo action que usa la biblioteca del
 // hub, pero con `source: 'builder'` — aca todavia no hay plan publicado que copiar.

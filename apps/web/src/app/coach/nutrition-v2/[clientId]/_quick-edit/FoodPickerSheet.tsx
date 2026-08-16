@@ -20,8 +20,8 @@ import {
   FoodPicker,
   type FoodPickerSummary,
 } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
-import { mapCatalogItemToFood } from '../builder/_lib/builder-view-model'
-import type { BuilderFood } from '../builder/_lib/draft-builder'
+import { mapCatalogItemToFood } from '../../_lib/food-catalog-mapping'
+import type { BuilderFood } from '@eva/nutrition-v2'
 import { QeBottomSheet } from './QeBottomSheet'
 
 export function FoodPickerSheet({

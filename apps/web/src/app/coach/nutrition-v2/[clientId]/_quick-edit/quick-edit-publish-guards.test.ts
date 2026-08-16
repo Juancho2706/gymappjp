@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NutritionPlanDraft } from '@eva/nutrition-v2'
 import { NutritionPlanDraftSchema } from '@eva/nutrition-v2'
-import { mapCatalogItemToFood } from '../builder/_lib/builder-view-model'
+import { mapCatalogItemToFood } from '../../_lib/food-catalog-mapping'
 import {
   applyQuickEditToDraft,
   collectBlankUuidPaths,

@@ -34,8 +34,8 @@ import {
   type QePortionGroup,
   type QuickEditState,
 } from '@eva/nutrition-v2'
-import { portionsKey } from '../builder/_components/portions-state'
-import type { BuilderFood } from '../builder/_lib/draft-builder'
+import { portionsKey } from '@eva/nutrition-v2'
+import type { BuilderFood } from '@eva/nutrition-v2'
 
 // Invariante central del quick-edit web: hidratar el read model y proyectarlo SIN editar
 // debe dar CERO cambios contra el baseline (mismo pipeline de proyeccion en ambos lados),

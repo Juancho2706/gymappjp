@@ -32,7 +32,7 @@ import {
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
-import { publishPlanAction } from '../builder/_actions/builder.actions'
+import { publishPlanAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
 import {
   savePlanTemplateAction,
   updatePlanTemplateDraftAction,

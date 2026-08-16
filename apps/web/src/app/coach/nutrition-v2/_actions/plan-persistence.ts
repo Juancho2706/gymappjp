@@ -30,8 +30,8 @@ import {
   collectSubstitutionFoodIds,
   ExchangeGroupSnapshotError,
   type BuilderExchangeGroup,
-  type BuilderFood,
-} from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
+} from '@/app/coach/nutrition-v2/_lib/plan-draft-rows'
+import type { BuilderFood } from '@eva/nutrition-v2'
 
 // Persistencia compartida del Builder V2 (web coach). Este modulo NO es 'use server':
 // aloja los tipos, helpers del lado servidor y la rutina TRANSACCIONAL de persistir+publicar

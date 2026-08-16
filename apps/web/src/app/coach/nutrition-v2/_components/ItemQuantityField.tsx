@@ -22,7 +22,7 @@ import {
   canStepCountedQuantity,
   formatCountedQuantity,
   isCountedUnit,
-} from '../_lib/quantity-format'
+} from '@/app/coach/nutrition-v2/_lib/quantity-format'
 
 const stepButtonClass =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-border-default bg-surface-card text-strong transition-colors hover:bg-surface-sunken active:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40'

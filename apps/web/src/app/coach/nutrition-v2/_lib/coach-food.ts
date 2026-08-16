@@ -8,7 +8,7 @@ import {
 } from '@eva/schemas/nutrition-exchanges'
 import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { syncFoodExchangeListRow } from '@/services/nutrition-exchanges/exchange-lists.service'
-import type { BuilderFood } from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
+import type { BuilderFood } from '@eva/nutrition-v2'
 import {
   fail,
   mapWriteError,

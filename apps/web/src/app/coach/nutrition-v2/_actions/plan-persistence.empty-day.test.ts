@@ -9,12 +9,13 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { NutritionPlanDraftSchema, type NutritionPlanDraft } from '@eva/nutrition-v2'
+import {
+  NutritionPlanDraftSchema,
+  type BuilderFood,
+  type NutritionPlanDraft,
+} from '@eva/nutrition-v2'
 import { buildPersistDraftPayload } from './plan-persistence'
-import type {
-  BuilderExchangeGroup,
-  BuilderFood,
-} from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
+import type { BuilderExchangeGroup } from '@/app/coach/nutrition-v2/_lib/plan-draft-rows'
 
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 

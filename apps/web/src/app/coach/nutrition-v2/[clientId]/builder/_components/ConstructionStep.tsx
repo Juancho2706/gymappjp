@@ -14,7 +14,7 @@ import {
   type BuilderState,
 } from '../_lib/draft-builder'
 import { genId, variantErrorsOf, type Dispatch, type SlotCopyRequest } from '../_lib/builder-view-model'
-import { secondaryButtonClass } from '../_lib/builder-ui-classes'
+import { secondaryButtonClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
 import { combineSubtotals, derivePortionTotals, portionsKey } from './portions-state'
 import type { PortionsController } from './PortionsSection'
 import { PortionsDeriveCard } from './PortionsDeriveCard'

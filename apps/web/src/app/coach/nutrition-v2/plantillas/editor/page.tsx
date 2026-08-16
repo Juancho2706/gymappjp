@@ -9,7 +9,7 @@ import {
   hasNutritionProV2,
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
-import { collectTemplateFoodIds } from '../../[clientId]/builder/_lib/rehydrate'
+import { collectTemplateFoodIds } from '@eva/nutrition-v2'
 import { fetchBuilderFoodsByIds } from '../../_data/plan-foods.data'
 import { loadExchangeGroupsForCoachAction } from '../../_actions/portions-groups.actions'
 import { TEMPLATE_MODE_CLIENT_ID } from '../../_lib/template-mode'

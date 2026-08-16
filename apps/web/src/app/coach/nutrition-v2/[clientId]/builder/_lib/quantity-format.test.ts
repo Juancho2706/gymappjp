@@ -7,7 +7,7 @@ import {
   isCountedUnit,
   parseQuantityText,
   stepCountedQuantity,
-} from './quantity-format'
+} from '@/app/coach/nutrition-v2/_lib/quantity-format'
 
 describe('isCountedUnit — que unidad se cuenta y cual se mide', () => {
   it('porciones y unidades se CUENTAN (steppers)', () => {

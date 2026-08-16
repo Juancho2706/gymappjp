@@ -12,8 +12,8 @@ import {
 import { NutritionCard, PlanDowSelector, PrescribedPortionChips } from '@/components/nutrition-v2'
 import { foodCategoryIconUrl, foodCategoryIconUrlFromName } from '@/lib/food-image'
 import { cn } from '@/lib/utils'
-import { FoodThumb } from './builder/_components/FoodImage'
-import { resolveFoodImageUrl } from './builder/_components/food-card-presentation'
+import { FoodThumb } from '../_components/FoodImage'
+import { resolveFoodImageUrl } from '../_components/food-card-presentation'
 
 type PlanDayVariant = NutritionPlanReadModel['dayVariants'][number]
 

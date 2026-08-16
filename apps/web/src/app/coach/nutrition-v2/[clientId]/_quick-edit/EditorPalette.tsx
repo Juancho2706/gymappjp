@@ -13,7 +13,7 @@
 import { useContext, useEffect, useState } from 'react'
 import { UtensilsCrossed } from 'lucide-react'
 import { FoodPicker } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
-import { mapCatalogItemToFood } from '../builder/_lib/builder-view-model'
+import { mapCatalogItemToFood } from '../../_lib/food-catalog-mapping'
 import { RememberedQuantitiesContext } from '../../_components/RememberedQuantitiesContext'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import type { QeVariant } from '@eva/nutrition-v2'
