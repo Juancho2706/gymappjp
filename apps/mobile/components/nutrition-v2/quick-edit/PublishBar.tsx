@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RotateCcw } from 'lucide-react-native'
 import { NutritionMotionButton } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
-import { QUICK_EDIT_COPY, dirtyBarLabel } from './microcopy'
+import { EDITOR_COPY, QUICK_EDIT_COPY, dirtyBarLabel } from './microcopy'
 
 /**
  * Barra de publicacion sticky del modo edicion (qe-design §1.2.C adaptado a RN §1.3):
@@ -28,6 +28,7 @@ export function PublishBar({
   publishing,
   errorMessage,
   dayTotals = null,
+  template = false,
   onDiscard,
   onPublish,
   onRetry,
@@ -40,6 +41,8 @@ export function PublishBar({
    * botones siguen apareciendo solo con cambios). Ausente = quick-edit clasico, igual que antes.
    */
   dayTotals?: PublishBarDayTotals | null
+  /** Modo PLANTILLA: se GUARDA material del coach, no se publica nada a un alumno. */
+  template?: boolean
   onDiscard: () => void
   onPublish: () => void
   onRetry: () => void
@@ -90,7 +93,7 @@ export function PublishBar({
         </View>
       ) : null}
       <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
-        {dirtyBarLabel(count)}
+        {template ? EDITOR_COPY.templateDirtyBar(count) : dirtyBarLabel(count)}
       </Text>
       <View className="mt-2 flex-row items-center gap-3">
         <View className="flex-1">
@@ -105,12 +108,12 @@ export function PublishBar({
         </View>
         <View className="flex-1">
           <NutritionMotionButton
-            accessibilityLabel={QUICK_EDIT_COPY.publish}
+            accessibilityLabel={template ? EDITOR_COPY.templateSave : QUICK_EDIT_COPY.publish}
             pending={publishing}
             disabled={publishing || count === 0}
             onPress={onPublish}
           >
-            {QUICK_EDIT_COPY.publish}
+            {template ? EDITOR_COPY.templateSave : QUICK_EDIT_COPY.publish}
           </NutritionMotionButton>
         </View>
       </View>

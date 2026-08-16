@@ -33,6 +33,8 @@ export interface NutritionV2PlanTemplateListItem {
 export interface NutritionV2PlanTemplateDetail {
   id: string
   name: string
+  /** Descripcion de la fila (editable en el editor); null = sin descripcion. */
+  description: string | null
   draft: NutritionPlanTemplateDraft
   /** Estado exacto del wizard web guardado con la plantilla (`{state, portionsBySlot}`), si existe. */
   builder: unknown
@@ -138,10 +140,20 @@ export async function fetchNutritionV2PlanTemplates(input: {
  */
 export async function fetchNutritionV2PlanTemplate(
   templateId: string,
-  input: { scope: NutritionV2CoachScope },
+  input: {
+    scope: NutritionV2CoachScope
+    /**
+     * `edit` = abrir para EDITARLA en el editor unico: NO cuenta como uso (el contador ordena la
+     * biblioteca por uso real). Default `apply` = cargar-para-aplicar, que si lo cuenta.
+     */
+    purpose?: 'apply' | 'edit'
+  },
 ): Promise<NutritionV2PlanTemplateDetail | null> {
   const raw = await apiFetch<{ template?: unknown }>(
-    `/api/mobile/nutrition-v2/plan-templates${query(input.scope, { id: templateId })}`,
+    `/api/mobile/nutrition-v2/plan-templates${query(input.scope, {
+      id: templateId,
+      ...(input.purpose === 'edit' ? { purpose: 'edit' } : {}),
+    })}`,
     { authenticated: true },
   )
   const t = raw.template
@@ -160,6 +172,7 @@ export async function fetchNutritionV2PlanTemplate(
   return {
     id: template.id,
     name: typeof template.name === 'string' ? template.name : '',
+    description: typeof template.description === 'string' ? template.description : null,
     draft: template.draft as NutritionPlanTemplateDraft,
     builder: template.builder ?? null,
     usageCount: num(template.usageCount) ?? 0,

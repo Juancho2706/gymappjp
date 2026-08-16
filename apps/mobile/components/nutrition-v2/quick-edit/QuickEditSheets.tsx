@@ -4,7 +4,7 @@ import { Lock, RefreshCw } from 'lucide-react-native'
 import { Sheet } from '../../Sheet'
 import { NutritionMotionButton } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
-import { QUICK_EDIT_COPY, publishConfirmBody } from './microcopy'
+import { EDITOR_COPY, QUICK_EDIT_COPY, publishConfirmBody } from './microcopy'
 
 /**
  * Sheets criticos del quick-edit — TODOS en Sheet nativeModal (gorhom vetado bajo
@@ -17,6 +17,7 @@ export function PublishConfirmSheet({
   publishing,
   studentName,
   futureDate,
+  template = false,
   onConfirm,
   onClose,
 }: {
@@ -25,29 +26,33 @@ export function PublishConfirmSheet({
   studentName: string
   /** Fecha (YYYY-MM-DD) si la version vigente arranca en el futuro; null = hoy. */
   futureDate: string | null
+  /** Modo PLANTILLA: se guarda material del coach; nada le llega a un alumno. */
+  template?: boolean
   onConfirm: () => void
   onClose: () => void
 }) {
+  const title = template ? EDITOR_COPY.templateConfirmTitle : QUICK_EDIT_COPY.confirmTitle
+  const cta = template ? EDITOR_COPY.templateConfirmCta : QUICK_EDIT_COPY.confirmCta
   return (
     <Sheet
       open={open}
       onClose={onClose}
       nativeModal
       dynamicSizing
-      title={QUICK_EDIT_COPY.confirmTitle}
-      accessibilityLabel={QUICK_EDIT_COPY.confirmTitle}
+      title={title}
+      accessibilityLabel={title}
     >
       <Text className="text-sm leading-5 text-body">
-        {publishConfirmBody(studentName, futureDate)}
+        {template ? EDITOR_COPY.templateConfirmBody : publishConfirmBody(studentName, futureDate)}
       </Text>
       <View className="mt-2 gap-3">
         <NutritionMotionButton
-          accessibilityLabel={QUICK_EDIT_COPY.confirmCta}
+          accessibilityLabel={cta}
           pending={publishing}
           disabled={publishing}
           onPress={onConfirm}
         >
-          {QUICK_EDIT_COPY.confirmCta}
+          {cta}
         </NutritionMotionButton>
         <NutritionMotionButton
           accessibilityLabel={QUICK_EDIT_COPY.keepEditing}

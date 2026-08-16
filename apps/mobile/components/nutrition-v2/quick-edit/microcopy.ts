@@ -151,6 +151,27 @@ export const EDITOR_COPY = {
     'No se pudo abrir el origen pedido (plantilla o plan). Estás viendo un plan en blanco.',
   originUnavailableEdit:
     'No se pudo abrir el origen pedido (plantilla o plan). Estás viendo el plan vigente del alumno.',
+  // ── Modo PLANTILLA: el arbol es el mismo, pero no se PUBLICA nada — se GUARDA material
+  //    reutilizable del coach. "Publicar" aca seria mentirle que algo le llego a un alumno.
+  templateTitle: 'Plantilla',
+  templateEyebrow: 'Editor de plantilla',
+  templateNameLabel: 'Nombre de la plantilla',
+  templateNamePlaceholder: 'Ej: Definición 1800 kcal',
+  templateDescriptionLabel: 'Descripción (opcional)',
+  templateDescriptionPlaceholder: 'Para qué sirve esta plantilla, a quién aplicarla…',
+  templateSave: 'Guardar plantilla',
+  templateDirtyBar: (n: number) => `${n} ${n === 1 ? 'cambio' : 'cambios'} sin guardar`,
+  templateConfirmTitle: 'Guardar la plantilla',
+  templateConfirmBody:
+    'La plantilla se actualiza solo para ti. No le llega a ningún alumno hasta que la apliques.',
+  templateConfirmCta: 'Guardar ahora',
+  templateLeaveGuard: 'Tienes cambios sin guardar. ¿Salir y descartarlos?',
+  templateBanner: 'Esto es una plantilla: no le llega a ningún alumno hasta que la apliques.',
+  templateFooterInfo: 'Al guardar, la plantilla se actualiza solo para ti.',
+  templateSuccess: 'Plantilla guardada.',
+  templateUnavailable:
+    'No se pudo abrir esa plantilla. Estás viendo una plantilla en blanco: al guardar se creará una nueva.',
+  templateLoading: 'Abriendo la plantilla…',
   loading: 'Abriendo el editor…',
   loadFailed: 'No pudimos abrir el editor. Reintenta cuando tengas señal.',
 } as const

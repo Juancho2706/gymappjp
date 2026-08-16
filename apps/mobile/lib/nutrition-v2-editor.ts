@@ -25,6 +25,7 @@ import {
   draftToEditState,
   readModelToDraft,
   readModelToEditState,
+  withSyntheticDraftIds,
   type NutritionItemSubstitutionRead,
   type NutritionPlanDraft,
   type NutritionPlanReadModel,
@@ -51,6 +52,25 @@ export interface EditorCreationInput {
   /** Version vigente del alumno destino si ya tenia plan (CAS del reemplazo); null = plan nuevo. */
   expectedCurrentVersionId: string | null
 }
+
+/**
+ * Modo PLANTILLA del editor (T3.3b, espejo de T3.2b en web): el mismo lienzo sin alumno ni
+ * vigencia. El arbol nace del draft guardado (o en blanco) y "publicar" se vuelve GUARDAR.
+ */
+export interface EditorTemplateInput {
+  /** Plantilla en edicion; null = nueva (guardar CREA una fila, jamas pisa). */
+  templateId: string | null
+  initialState: QuickEditState
+  baseDraft: NutritionPlanDraft
+  /** Descripcion de la FILA (editable en la cabecera; viaja junto al draft al guardar). */
+  description: string | null
+}
+
+/**
+ * `clientId` de relleno del modo plantilla: no autoriza NADA y el guardado
+ * (`buildTemplatePayload`, server-side) lo strippea antes de escribir. Mismo valor que el web.
+ */
+export const TEMPLATE_MODE_CLIENT_ID = '00000000-0000-0000-0000-000000000000'
 
 /** Todo lo que la pantalla del editor necesita resuelto ANTES de montar el arbol editable. */
 export interface EditorSession {
@@ -267,5 +287,144 @@ export async function loadEditorSession(input: {
     },
     originUnavailable,
     rememberedQuantities,
+  }
+}
+
+/** Plantilla en blanco: un dia base vacio y nombre vacio (la validacion lo exige al guardar). */
+function blankTemplateDraft(): NutritionPlanDraft {
+  return {
+    clientId: TEMPLATE_MODE_CLIENT_ID,
+    name: '',
+    strategy: 'structured',
+    effectiveFrom: null,
+    timezone: 'America/Santiago',
+    permissions: {
+      canRegisterFreely: true,
+      canAdjustPrescribedQuantity: true,
+      quantityAdjustmentPercent: null,
+      canSubstitute: false,
+      canMoveMealSlot: false,
+      canSkipOptionalItems: true,
+    },
+    visibleNotes: null,
+    privateNotes: null,
+    protocolNotes: null,
+    dayVariants: [
+      {
+        key: 'default',
+        label: 'Todos los días',
+        dayOfWeek: null,
+        default: true,
+        targets: {
+          calories: null,
+          proteinG: null,
+          carbsG: null,
+          fatsG: null,
+          fiberG: null,
+          sodiumMg: null,
+          waterMl: null,
+        },
+        orderIndex: 0,
+        mealSlots: [],
+      },
+    ],
+  }
+}
+
+/**
+ * Read model NEUTRO para el modo plantilla: el arbol no sale de aca (nace del draft guardado),
+ * pero la pantalla necesita un `NutritionPlanReadModel` para sus lecturas laterales. `plan: null`
+ * es la señal honesta de que no hay version publicada detras.
+ */
+export function buildTemplatePlanModel(todayIso: string): NutritionPlanReadModel {
+  return {
+    schemaVersion: 1,
+    generatedAt: `${todayIso}T00:00:00.000Z`,
+    asOfDate: todayIso,
+    timezone: 'America/Santiago',
+    plan: null,
+    visibleNotes: null,
+    protocolNotes: null,
+    permissions: {
+      canRegisterFreely: true,
+      canAdjustPrescribedQuantity: true,
+      quantityAdjustmentPercent: null,
+      canSubstitute: false,
+      canMoveMealSlot: false,
+      canSkipOptionalItems: true,
+    },
+    dayVariants: [],
+    syncToken: 'template-editor',
+  }
+}
+
+/**
+ * Resuelve la sesion del editor en modo PLANTILLA. Una plantilla ilegible (o de otro coach, via
+ * RLS) degrada a editor en blanco CON AVISO y con `templateId` null: guardar ahi CREA una
+ * plantilla nueva y jamas pisa a ciegas la que no se pudo abrir (leccion JP 2026-08-11).
+ *
+ * Abrir para EDITAR no cuenta como uso (`purpose: 'edit'`): el contador ordena la biblioteca por
+ * uso real — mismo criterio que el editor web.
+ */
+export async function loadTemplateEditorSession(input: {
+  scope: NutritionV2CoachScope
+  templateId: string | null
+}): Promise<{ template: EditorTemplateInput; templateUnavailable: boolean }> {
+  if (input.templateId) {
+    try {
+      const loaded = await fetchNutritionV2PlanTemplate(input.templateId, {
+        scope: input.scope,
+        purpose: 'edit',
+      })
+      if (loaded && loaded.foodsComplete) {
+        const portionGroupsById = await loadPortionGroupsById(input.scope)
+        // Ids sinteticos: el draft guardado no trae ids y los contadores aparean POR id — sin
+        // esto una plantilla intacta abriria "con cambios" (el guardado los vuelve a strippear).
+        const baseDraft = withSyntheticDraftIds({
+          ...loaded.draft,
+          clientId: TEMPLATE_MODE_CLIENT_ID,
+          effectiveFrom: null,
+          name: loaded.name,
+        })
+        return {
+          template: {
+            templateId: input.templateId,
+            // Sin `effectiveFrom` en las opciones: una plantilla no rige desde ninguna fecha,
+            // asi que la llave no existe en `meta` y la cabecera no pinta el campo.
+            initialState: draftToEditState(
+              baseDraft,
+              { foodsById: loaded.foods, portionGroupsById },
+              {},
+            ),
+            baseDraft,
+            description: loaded.description,
+          },
+          templateUnavailable: false,
+        }
+      }
+    } catch {
+      // Cae a blanco CON aviso (abajo).
+    }
+    const baseDraft = blankTemplateDraft()
+    return {
+      template: {
+        templateId: null,
+        initialState: draftToEditState(baseDraft, {}, {}),
+        baseDraft,
+        description: null,
+      },
+      templateUnavailable: true,
+    }
+  }
+
+  const baseDraft = blankTemplateDraft()
+  return {
+    template: {
+      templateId: null,
+      initialState: draftToEditState(baseDraft, {}, {}),
+      baseDraft,
+      description: null,
+    },
+    templateUnavailable: false,
   }
 }

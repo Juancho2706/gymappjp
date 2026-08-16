@@ -47,6 +47,9 @@ const PERMISSION_ROWS: Array<[keyof NutritionStudentPermissions, string, string]
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
+/** Tope del contrato de guardado (`description`: max 2000 tras trim). */
+const TEMPLATE_DESCRIPTION_MAX = 2000
+
 export function EditorMetaCard({
   state,
   meta,
@@ -56,6 +59,9 @@ export function EditorMetaCard({
   hasNutritionPro,
   today,
   futureDateLabel,
+  template = false,
+  templateDescription = '',
+  onTemplateDescription,
 }: {
   state: QuickEditState
   meta: QeMeta
@@ -67,6 +73,10 @@ export function EditorMetaCard({
   today: string
   /** Vigencia FUTURA de la version base (dd-mm-yyyy) o null si ya rige. Solo en edicion. */
   futureDateLabel: string | null
+  /** Modo PLANTILLA: cambia el vocabulario y suma la descripcion de la fila. */
+  template?: boolean
+  templateDescription?: string
+  onTemplateDescription?: (value: string) => void
 }) {
   const { theme } = useTheme()
   const allowed = qeAllowedStrategies(state)
@@ -79,22 +89,46 @@ export function EditorMetaCard({
     <NutritionCard>
       <View className="flex-row items-center gap-2">
         <ClipboardList color={theme.textSecondary} size={16} />
-        <Text className="font-display text-base font-semibold text-strong">{EDITOR_COPY.planTitle}</Text>
+        <Text className="font-display text-base font-semibold text-strong">
+          {template ? EDITOR_COPY.templateTitle : EDITOR_COPY.planTitle}
+        </Text>
       </View>
 
-      <Text className="mt-3 text-xs font-semibold text-muted">{EDITOR_COPY.planNameLabel}</Text>
+      <Text className="mt-3 text-xs font-semibold text-muted">
+        {template ? EDITOR_COPY.templateNameLabel : EDITOR_COPY.planNameLabel}
+      </Text>
       <TextInput
-        accessibilityLabel={EDITOR_COPY.planNameLabel}
+        accessibilityLabel={template ? EDITOR_COPY.templateNameLabel : EDITOR_COPY.planNameLabel}
         value={meta.name}
         onChangeText={(value) => dispatch({ type: 'SET_PLAN_NAME', value })}
         editable={!disabled}
         maxLength={PLAN_NAME_MAX}
-        placeholder={EDITOR_COPY.planNamePlaceholder}
+        placeholder={template ? EDITOR_COPY.templateNamePlaceholder : EDITOR_COPY.planNamePlaceholder}
         placeholderTextColor={theme.mutedForeground}
         className="mt-1.5 min-h-12 rounded-control border border-default bg-surface-card px-3 py-2 text-base leading-6 text-strong"
       />
       {errors['meta.name'] ? (
         <Text className="mt-1 text-xs font-medium text-danger-600">{errors['meta.name']}</Text>
+      ) : null}
+
+      {template && onTemplateDescription ? (
+        <>
+          <Text className="mt-4 text-xs font-semibold text-muted">
+            {EDITOR_COPY.templateDescriptionLabel}
+          </Text>
+          <TextInput
+            accessibilityLabel={EDITOR_COPY.templateDescriptionLabel}
+            value={templateDescription}
+            onChangeText={onTemplateDescription}
+            editable={!disabled}
+            multiline
+            maxLength={TEMPLATE_DESCRIPTION_MAX}
+            textAlignVertical="top"
+            placeholder={EDITOR_COPY.templateDescriptionPlaceholder}
+            placeholderTextColor={theme.mutedForeground}
+            className="mt-1.5 min-h-20 rounded-control border border-default bg-surface-card px-3 py-2 text-base leading-6 text-strong"
+          />
+        </>
       ) : null}
 
       <Text className="mt-4 text-xs font-semibold text-muted">{EDITOR_COPY.strategyLabel}</Text>
@@ -199,7 +233,9 @@ export function EditorMetaCard({
       <View className="mt-4 flex-row items-start gap-1.5">
         <Info color={theme.textSecondary} size={14} />
         <Text className="min-w-0 flex-1 text-xs leading-5 text-muted">
-          {isCreation
+          {template
+            ? EDITOR_COPY.templateFooterInfo
+            : isCreation
             ? EDITOR_COPY.footerCreation
             : futureDateLabel
               ? EDITOR_COPY.footerFuture(futureDateLabel)

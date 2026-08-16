@@ -553,6 +553,35 @@ export async function publishQuickEditRN(input: {
   return { ok: false, code: mapPublishFailureCode(res), message: res.error, ...(res.feature ? { feature: res.feature } : {}) }
 }
 
+/**
+ * Guarda una PLANTILLA desde el editor unico RN (T3.3b): `templateId` presente la reescribe,
+ * ausente crea una nueva. Sin CAS ni idempotencia — paridad exacta con el guardado del editor
+ * web (ultima escritura gana). El servicio server-side quita la identidad del draft y valida el
+ * round-trip antes de escribir, asi que el `clientId` de relleno jamas persiste.
+ */
+export async function savePlanTemplateRN(input: {
+  scope: NutritionV2CoachScope
+  templateId: string | null
+  name: string
+  description: string | null
+  draft: unknown
+}): Promise<{ ok: true; templateId: string } | { ok: false; error: string }> {
+  const parsed = NutritionPlanDraftSchema.safeParse(input.draft)
+  if (!parsed.success) {
+    return { ok: false, error: 'La plantilla tiene datos invalidos.' }
+  }
+  const res = await coachMutate<{ ok: true; template: { id: string; name: string } }>({
+    action: 'saveTemplate',
+    workspace: input.scope,
+    ...(input.templateId ? { templateId: input.templateId } : {}),
+    name: input.name,
+    description: input.description,
+    draft: parsed.data,
+  })
+  if (!res.ok) return { ok: false, error: res.error }
+  return { ok: true, templateId: res.data.template.id }
+}
+
 export type AssignNutritionPlanResult =
   | { ok: true; results: AssignClientResult[]; summary: AssignSummary }
   | { ok: false; code: string; error: string; feature?: NutritionProFeature }

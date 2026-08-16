@@ -254,13 +254,19 @@ export async function GET(request: NextRequest) {
 
   // Cargar-para-aplicar cuenta como uso (espejo de `builder/page.tsx`). Best-effort por dentro: el
   // servicio se traga cualquier error para no impedir abrir el builder.
-  await markPlanTemplateUsed(db, template)
+  //
+  // `purpose=edit` (editor unico RN, T3.3b) NO cuenta: abrir una plantilla para EDITARLA no es
+  // usarla, y el contador ordena la biblioteca por uso real — mismo criterio que el editor web,
+  // que tampoco la marca. Cualquier otro valor (incluida su ausencia) conserva el bump.
+  const editing = params.get('purpose') === 'edit'
+  if (!editing) await markPlanTemplateUsed(db, template)
 
   const response = jsonNoStore({
     ok: true,
     template: {
       id: template.id,
       name: template.name,
+      description: template.description,
       draft: template.draft,
       builder: template.builder ?? null,
       usageCount: template.usageCount,

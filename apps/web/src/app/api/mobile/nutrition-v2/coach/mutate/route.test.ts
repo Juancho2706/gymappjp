@@ -47,6 +47,13 @@ vi.mock('@/app/coach/nutrition-v2/_lib/nutrition-pro', async (importOriginal) =>
   return { ...actual, hasNutritionProV2: (...a: unknown[]) => hasNutritionProV2(...a) }
 })
 
+const savePlanTemplate = vi.fn()
+const updatePlanTemplateDraft = vi.fn()
+vi.mock('@/services/nutrition-v2/plan-templates.service', () => ({
+  savePlanTemplate: (...a: unknown[]) => savePlanTemplate(...a),
+  updatePlanTemplateDraft: (...a: unknown[]) => updatePlanTemplateDraft(...a),
+}))
+
 const persistAndPublishDraft = vi.fn()
 const resolveActiveClientPlanId = vi.fn()
 // Mock PARCIAL: solo se doblan las dos rutinas de persistencia. Los helpers puros de mapeo de
@@ -66,6 +73,7 @@ const CLIENT = '11111111-1111-4111-8111-111111111111'
 const TEAM_ID = '22222222-2222-4222-8222-222222222222'
 const PLAN_ROOT = '33333333-3333-4333-8333-333333333333'
 const VERSION_ID = '44444444-4444-4444-8444-444444444444'
+const TEMPLATE_ID = '55555555-5555-4555-8555-555555555555'
 
 import { POST } from './route'
 
@@ -138,6 +146,11 @@ beforeEach(() => {
   admin({ coaches: { id: COACH }, clients: { id: CLIENT }, team_members: { id: 'tm' }, teams: { id: TEAM_ID } })
   hasNutritionProV2.mockResolvedValue(true)
   persistAndPublishDraft.mockResolvedValue({ ok: true, versionId: VERSION_ID, planId: PLAN_ROOT })
+  savePlanTemplate.mockResolvedValue({ success: true, template: { id: TEMPLATE_ID, name: 'Plantilla' } })
+  updatePlanTemplateDraft.mockResolvedValue({
+    success: true,
+    template: { id: TEMPLATE_ID, name: 'Plantilla' },
+  })
   mockBaseVersionRead({ data: baseVersionRow() })
 })
 
@@ -585,5 +598,73 @@ describe('POST coach/mutate · setFoodEquivalence', () => {
     expect(userFrom).not.toHaveBeenCalledWith('exchange_groups')
     expect(calls.listDeletes).toBe(1)
     expect(calls.listInserts).toHaveLength(0)
+  })
+})
+
+/**
+ * T3.3b: guardar plantillas desde el editor RN. Era la ultima capacidad del editor sin camino
+ * de escritura movil. Lo que se protege aca es que el endpoint NO decida tenencia por su cuenta
+ * (delega en el servicio + RLS) y que `templateId` sea lo unico que separa crear de reescribir.
+ */
+describe('POST coach/mutate · saveTemplate', () => {
+  it('sin templateId => CREA con el coach de la sesion como autor', async () => {
+    const res = await POST(
+      req({
+        action: 'saveTemplate',
+        workspace: SCOPE,
+        name: 'Definición 1800',
+        description: 'Para recomposición',
+        draft: draft(),
+      }),
+    )
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toMatchObject({ ok: true, template: { id: TEMPLATE_ID } })
+    expect(updatePlanTemplateDraft).not.toHaveBeenCalled()
+    expect(savePlanTemplate).toHaveBeenCalledTimes(1)
+    const args = savePlanTemplate.mock.calls[0][1] as Record<string, unknown>
+    expect(args.actorCoachId).toBe(COACH)
+    expect(args.name).toBe('Definición 1800')
+    expect(args.description).toBe('Para recomposición')
+    expect(args.source).toBe('builder')
+  })
+
+  it('con templateId => REESCRIBE esa plantilla (nunca crea una segunda)', async () => {
+    const res = await POST(
+      req({
+        action: 'saveTemplate',
+        workspace: SCOPE,
+        templateId: TEMPLATE_ID,
+        name: 'Definición 1800',
+        draft: draft(),
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(savePlanTemplate).not.toHaveBeenCalled()
+    const args = updatePlanTemplateDraft.mock.calls[0][1] as Record<string, unknown>
+    expect(args.id).toBe(TEMPLATE_ID)
+    expect(args.description).toBeNull()
+  })
+
+  it('nombre vacio => INVALID_PAYLOAD sin tocar el servicio', async () => {
+    const res = await POST(
+      req({ action: 'saveTemplate', workspace: SCOPE, name: '   ', draft: draft() }),
+    )
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ ok: false, code: 'INVALID_PAYLOAD' })
+    expect(savePlanTemplate).not.toHaveBeenCalled()
+    expect(updatePlanTemplateDraft).not.toHaveBeenCalled()
+  })
+
+  it('el servicio rechaza (tope de plantillas) => el error del dominio llega tal cual', async () => {
+    savePlanTemplate.mockResolvedValue({ success: false, error: 'Alcanzaste el máximo de plantillas.' })
+    const res = await POST(
+      req({ action: 'saveTemplate', workspace: SCOPE, name: 'Otra', draft: draft() }),
+    )
+    expect(res.status).toBe(422)
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      code: 'TEMPLATE_SAVE_FAILED',
+      error: 'Alcanzaste el máximo de plantillas.',
+    })
   })
 })

@@ -41,6 +41,10 @@ import {
   refineFoodExchangeEquivalence,
 } from '@eva/schemas/nutrition-exchanges'
 import { setOwnFoodExchangeEquivalence } from '@/services/nutrition-exchanges/exchange-lists.service'
+import {
+  savePlanTemplate,
+  updatePlanTemplateDraft,
+} from '@/services/nutrition-v2/plan-templates.service'
 import type { Database } from '@/lib/database.types'
 
 /**
@@ -128,6 +132,28 @@ const SetFoodEquivalenceSchema = z
     ...foodExchangeEquivalenceShape,
   })
   .superRefine(refineFoodExchangeEquivalence)
+
+/**
+ * Guardar una PLANTILLA desde el editor unico RN (T3.3b). Era la ultima capacidad del editor
+ * que RN no podia ejercer: la biblioteca de plantillas se leia por `/plan-templates` pero no
+ * habia camino de ESCRITURA movil, y escribir directo contra PostgREST repetiria justamente lo
+ * que NUT-005 vino a cerrar.
+ *
+ * Sin CAS ni idempotencia a proposito: paridad con el guardado del wizard/editor web (ultima
+ * escritura gana). Las dos barreras del contenido las pone el servicio compartido
+ * (`buildTemplatePayload` quita la identidad + round-trip Zod antes de escribir), asi que el
+ * body no es autoridad sobre nada.
+ */
+const SaveTemplateSchema = z.object({
+  action: z.literal('saveTemplate'),
+  workspace: WorkspaceSchema,
+  /** Plantilla existente (edicion); ausente/null = alta. */
+  templateId: z.string().uuid().nullish(),
+  name: z.string().trim().min(1, 'Ponle un nombre a la plantilla').max(180),
+  description: z.string().trim().max(2000).nullish(),
+  /** Draft del contrato; el servicio lo valida entero. */
+  draft: NutritionPlanDraftSchema,
+})
 
 const ROUTE = 'mobile.nutrition-v2.coach.mutate'
 
@@ -284,6 +310,8 @@ export async function POST(request: NextRequest) {
       return handleCreateFood(gate, db, raw, startedAt)
     case 'setFoodEquivalence':
       return handleSetFoodEquivalence(gate, db, raw, startedAt)
+    case 'saveTemplate':
+      return handleSaveTemplate(gate, raw, startedAt)
     default:
       return failure(startedAt, 'INVALID_ACTION', 'Acción inválida.', {})
   }
@@ -676,4 +704,47 @@ async function handleSetFoodEquivalence(
   const payload = { ok: true as const }
   logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload })
   return jsonNoStore(payload)
+}
+
+/**
+ * Alta / actualizacion de una plantilla del coach desde el editor RN. Reusa EXACTAMENTE el
+ * servicio del camino web (mismo tope por coach, misma normalizacion del payload y mismo
+ * round-trip) con el cliente RLS del usuario: la tenencia la sigue decidiendo la RLS de
+ * `nutrition_plan_templates_v2`, nunca el `templateId` que manda la UI.
+ */
+async function handleSaveTemplate(
+  gate: NutritionV2ApiGate,
+  raw: Record<string, unknown>,
+  startedAt: number,
+) {
+  const parsed = SaveTemplateSchema.safeParse(raw)
+  if (!parsed.success) {
+    return failure(startedAt, 'INVALID_PAYLOAD', 'La plantilla tiene datos inválidos.', {
+      fields: zodFields(parsed.error),
+    })
+  }
+  const { templateId, name, description, draft } = parsed.data
+  const templatesDb = gate.rpc as unknown as SupabaseClient<Database>
+
+  const result = templateId
+    ? await updatePlanTemplateDraft(templatesDb, {
+        id: templateId,
+        name,
+        description: description ?? null,
+        draft,
+      })
+    : await savePlanTemplate(templatesDb, {
+        actorCoachId: gate.userId,
+        name,
+        description: description ?? null,
+        draft,
+        // `source: 'builder'` = "nacio de un editor del coach" (enum del servicio), no del wizard.
+        source: 'builder',
+      })
+
+  if (!result.success) {
+    return failure(startedAt, 'TEMPLATE_SAVE_FAILED', result.error)
+  }
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200 })
+  return jsonNoStore({ ok: true, template: { id: result.template.id, name: result.template.name } })
 }

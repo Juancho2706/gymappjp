@@ -99,8 +99,8 @@ import {
 import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
 import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
-import { publishDraftRN, publishQuickEditRN } from '../../../lib/nutrition-v2.api'
-import type { EditorCreationInput } from '../../../lib/nutrition-v2-editor'
+import { publishDraftRN, publishQuickEditRN, savePlanTemplateRN } from '../../../lib/nutrition-v2.api'
+import type { EditorCreationInput, EditorTemplateInput } from '../../../lib/nutrition-v2-editor'
 import {
   rememberFoodQuantity,
   type RememberedQuantities,
@@ -201,6 +201,10 @@ export interface QuickEditEditorInput {
   substitutionsLoadFailed: boolean
   /** Modo creacion (plantilla / copia de plan / blanco); null = edicion del plan vigente. */
   creation: EditorCreationInput | null
+  /** Modo PLANTILLA (sin alumno ni vigencia; publicar se vuelve guardar). Excluyente con `creation`. */
+  template?: EditorTemplateInput | null
+  /** Se pidio `?template=` y no se pudo abrir: blanco CON aviso (jamas en silencio). */
+  templateUnavailable?: boolean
   /** El `?from=` pedido no abrio: se degrado y hay que decirlo (jamas en silencio). */
   originUnavailable: boolean
   /**
@@ -272,16 +276,20 @@ export function QuickEditMode({
     // publicar); en el EDITOR si, porque alli se editan.
     // T3.3b creacion: el arbol y el draft base los trae el llamador ya hidratados (plantilla,
     // copia de plan o blanco) — el plan vigente del alumno no participa.
-    const initial = editor?.creation
-      ? editor.creation.initialState
-      : readModelToEditState(
-          planModel,
-          editor ? buildSubstitutionMap(editor.itemSubstitutions) : {},
-          { withMeta: editor != null },
-        )
-    const baseDraft = editor?.creation
-      ? editor.creation.baseDraft
-      : readModelToDraft(planModel, clientId)
+    const initial = editor?.template
+      ? editor.template.initialState
+      : editor?.creation
+        ? editor.creation.initialState
+        : readModelToEditState(
+            planModel,
+            editor ? buildSubstitutionMap(editor.itemSubstitutions) : {},
+            { withMeta: editor != null },
+          )
+    const baseDraft = editor?.template
+      ? editor.template.baseDraft
+      : editor?.creation
+        ? editor.creation.baseDraft
+        : readModelToDraft(planModel, clientId)
     return {
       baseline: buildQuickEditBaseline(planModel),
       initial,
@@ -297,6 +305,10 @@ export function QuickEditMode({
   // vigente, asi que no hay version base, ni CAS del quick-edit, ni respaldo local.
   const editorMode = editor != null
   const creation = editor?.creation ?? null
+  const template = editor?.template ?? null
+  // Descripcion de la plantilla: metadato de la FILA, no del draft del contrato — vive fuera del
+  // reducer a proposito (paridad con el editor web) y se escribe junto al draft en cada guardado.
+  const [templateDescription, setTemplateDescription] = useState(template?.description ?? '')
 
   // Porciones propias (FD6a): la lista del picker es el dict CONGELADO del plan. Crear un grupo
   // agrega una entrada; editarlo reemplaza la suya en el sitio; eliminarlo lo saca de la lista
@@ -489,15 +501,21 @@ export function QuickEditMode({
   // sin tocarla es legitimo (mismo criterio que el editor web).
   const baselineDraft = useMemo(() => {
     if (!frozen.baseDraft || !initialState) return null
-    const baselineState: QuickEditState = creation
-      ? { variants: [], visibleNotes: '', ...(initialState.meta ? { meta: initialState.meta } : {}) }
-      : initialState
+    // Plantilla NUEVA: mismo baseline vacio que la creacion (todo cuenta como alta). Editar una
+    // plantilla existente abre en 0 cambios, como la edicion de un plan.
+    const isNewTemplate = template !== null && template.templateId === null
+    const baselineState: QuickEditState =
+      creation || isNewTemplate
+        ? { variants: [], visibleNotes: '', ...(initialState.meta ? { meta: initialState.meta } : {}) }
+        : initialState
     return applyQuickEditToDraft(frozen.baseDraft, baselineState)
-  }, [frozen.baseDraft, initialState, creation])
+  }, [frozen.baseDraft, initialState, creation, template])
   const currentDraft = useMemo(
     () => (frozen.baseDraft ? applyQuickEditToDraft(frozen.baseDraft, state) : null),
     [frozen.baseDraft, state],
   )
+  const templateDescriptionDirty =
+    template !== null && templateDescription.trim() !== (template.description ?? '').trim()
   const count = useMemo(() => {
     if (!baselineDraft || !currentDraft) return 0
     return (
@@ -507,9 +525,12 @@ export function QuickEditMode({
       // sin esto, quitar o agregar uno dejaria la barra apagada. En el quick-edit clasico el
       // arbol no los lleva, asi que el delta es 0 y nada cambia.
       countItemSubstitutionChanges(baselineDraft, currentDraft) +
-      countItemOrderChanges(baselineDraft, currentDraft)
+      countItemOrderChanges(baselineDraft, currentDraft) +
+      // La descripcion de la plantilla no vive en el draft: sin este +1, editar SOLO la
+      // descripcion dejaria "Guardar" apagado.
+      (templateDescriptionDirty ? 1 : 0)
     )
-  }, [baselineDraft, currentDraft])
+  }, [baselineDraft, currentDraft, templateDescriptionDirty])
   // Con meta editable manda la estrategia del ESTADO: es la que se va a publicar.
   const strategy: NutritionStrategy = state.meta?.strategy ?? baseline?.strategy ?? 'flexible'
   // `todayIso` habilita la regla de vigencia elegible (solo hace algo con `meta.effectiveFrom`).
@@ -525,9 +546,9 @@ export function QuickEditMode({
   // base obsoleta seria peor que nada — mismo espiritu que el guard STALE_BASE del publish.
   // AsyncStorage es async: `mountedRef`/`active` evitan tocar estado tras el desmonte (sin flash).
   useEffect(() => {
-    // Creacion: sin respaldo local (pendiente declarado, igual que en web) — restaurar un
-    // borrador de edicion dentro de una creacion mezclaria arboles contra bases distintas.
-    if (creation) return
+    // Creacion y PLANTILLA: sin respaldo local (pendiente declarado, igual que en web) —
+    // restaurar un borrador de otra superficie mezclaria arboles contra bases distintas.
+    if (creation || template) return
     if (!baseline) return
     let active = true
     const now = Date.now()
@@ -551,7 +572,7 @@ export function QuickEditMode({
     return () => {
       active = false
     }
-  }, [creation, baseline, draftKey])
+  }, [creation, template, baseline, draftKey])
 
   // Autosave debounced del arbol editable + porciones: escribe el respaldo local solo si hay
   // cambios reales; si el coach vuelve al baseline (0 cambios) borra el borrador (ya no aporta).
@@ -561,7 +582,7 @@ export function QuickEditMode({
       isFirstRenderRef.current = false
       return
     }
-    if (creation) return
+    if (creation || template) return
     if (!baseline) return
     const timer = setTimeout(() => {
       if (count > 0) {
@@ -581,7 +602,7 @@ export function QuickEditMode({
       }
     }, 1500)
     return () => clearTimeout(timer)
-  }, [state, count, creation, baseline, draftKey, clientId])
+  }, [state, count, creation, template, baseline, draftKey, clientId])
 
   // Aplica el respaldo local rehidratando los DOS reducers (arbol principal + porciones) y baja el
   // banner. Persistir/restaurar solo `state` perderia los cambios de porciones (regresion vs web).
@@ -607,14 +628,18 @@ export function QuickEditMode({
 
   const requestExit = useCallback(() => {
     if (count > 0) {
-      Alert.alert(QUICK_EDIT_COPY.leaveGuardTitle, QUICK_EDIT_COPY.leaveGuard, [
-        { text: QUICK_EDIT_COPY.keepEditing, style: 'cancel' },
-        { text: 'Salir', style: 'destructive', onPress: doExit },
-      ])
+      Alert.alert(
+        QUICK_EDIT_COPY.leaveGuardTitle,
+        template ? EDITOR_COPY.templateLeaveGuard : QUICK_EDIT_COPY.leaveGuard,
+        [
+          { text: QUICK_EDIT_COPY.keepEditing, style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: doExit },
+        ],
+      )
       return
     }
     doExit()
-  }, [count, doExit])
+  }, [count, doExit, template])
 
   // Guard de salida por back de hardware (Android) — espejo del beforeunload web.
   useEffect(() => {
@@ -1097,7 +1122,8 @@ export function QuickEditMode({
    */
   const handleQuantityCommit = useCallback(
     (variantKey: string, slotKey: string, itemKey: string) => {
-      if (!editorMode) return
+      // En PLANTILLA no hay alumno: el clientId es un relleno y la memoria seria ruido.
+      if (!editorMode || template) return
       const found = findItem({ variantKey, slotKey, itemKey })
       const food = found?.item.food
       if (!food) return
@@ -1111,7 +1137,7 @@ export function QuickEditMode({
         unit: found.item.unit,
       })
     },
-    [editorMode, findItem, clientId],
+    [editorMode, template, findItem, clientId],
   )
 
   const handleFreeItem = useCallback(() => {
@@ -1175,7 +1201,45 @@ export function QuickEditMode({
     setPublishError(res.error)
   }, [creation, currentDraft, scope, state.meta, todayIso, hasNutritionPro, onPublished])
 
+  /**
+   * Guardado del modo PLANTILLA: sin CAS ni idempotencia (paridad con el wizard — ultima
+   * escritura gana) y sin PostHog de publish, porque no se publico nada. El draft proyectado
+   * viaja tal cual; el servicio le quita la identidad y valida el round-trip antes de escribir.
+   */
+  const doTemplateSave = useCallback(async () => {
+    if (!template || !currentDraft) return
+    const net = await NetInfo.fetch()
+    if (net.isConnected === false) {
+      if (!mountedRef.current) return
+      setConfirmOpen(false)
+      setPublishError(QUICK_EDIT_COPY.offline)
+      return
+    }
+    setPublishing(true)
+    setPublishError(null)
+    const res = await savePlanTemplateRN({
+      scope,
+      templateId: template.templateId,
+      name: (state.meta?.name ?? '').trim(),
+      description: templateDescription.trim() || null,
+      draft: currentDraft,
+    })
+    if (!mountedRef.current) return
+    setPublishing(false)
+    setConfirmOpen(false)
+    if (res.ok) {
+      intentKeyRef.current = null
+      onPublished()
+      return
+    }
+    setPublishError(res.error)
+  }, [template, currentDraft, scope, state.meta, templateDescription, onPublished])
+
   const doPublish = useCallback(async () => {
+    if (template) {
+      await doTemplateSave()
+      return
+    }
     if (creation) {
       await doCreatePublish()
       return
@@ -1238,13 +1302,14 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [creation, doCreatePublish, baseline, scope, clientId, planModel, state, carryOverSubs, subsStatus, todayIso, onPublished, draftKey])
+  }, [template, doTemplateSave, creation, doCreatePublish, baseline, scope, clientId, planModel, state, carryOverSubs, subsStatus, todayIso, onPublished, draftKey])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return
     // Guard NUT-008 antes de abrir el confirm: no se ofrece publicar si el carry-over de
-    // reemplazos no esta resuelto (misma razon que en doPublish).
-    if (subsStatus !== 'loaded') {
+    // reemplazos no esta resuelto (misma razon que en doPublish). En PLANTILLA no aplica:
+    // no hay alumno ni version base de la que arrastrar reemplazos.
+    if (!template && subsStatus !== 'loaded') {
       setPublishError(
         subsStatus === 'loading'
           ? QUICK_EDIT_COPY.substitutionsLoading
@@ -1262,7 +1327,7 @@ export function QuickEditMode({
     // Key FRESCA por intencion (abrir el confirm); los reintentos de esta intencion la reusan.
     intentKeyRef.current = buildQuickEditIdempotencyKey({ clientId, operationId: genKey('qe') })
     setConfirmOpen(true)
-  }, [count, publishing, validation.ok, clientId, subsStatus])
+  }, [count, publishing, validation.ok, clientId, subsStatus, template])
 
   const handleRetry = useCallback(() => {
     // Con el carry-over sin resolver, "Reintentar" reintenta la LECTURA de reemplazos (es
@@ -1291,7 +1356,7 @@ export function QuickEditMode({
 
   // Sin plan vigente NO hay quick-edit; el editor en modo CREACION, en cambio, es exactamente
   // la pantalla que sirve para ese caso (arma el primer plan del alumno).
-  if (!baseline && !creation) {
+  if (!baseline && !creation && !template) {
     return (
       <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionStatePanel
@@ -1351,14 +1416,18 @@ export function QuickEditMode({
                 className="font-mono text-[10px] font-semibold uppercase leading-4 tracking-[1.6px] text-primary"
                 numberOfLines={1}
               >
-                {editorMode ? EDITOR_COPY.eyebrow : QUICK_EDIT_COPY.editingEyebrow}
+                {template
+                  ? EDITOR_COPY.templateEyebrow
+                  : editorMode
+                    ? EDITOR_COPY.eyebrow
+                    : QUICK_EDIT_COPY.editingEyebrow}
               </Text>
               <Text
                 accessibilityRole="header"
                 className="font-display-black text-[22px] leading-7 tracking-[-0.44px] text-strong"
                 numberOfLines={1}
               >
-                {clientName}
+                {template ? (state.meta?.name.trim() || EDITOR_COPY.templateTitle) : clientName}
               </Text>
             </View>
           </View>
@@ -1401,6 +1470,9 @@ export function QuickEditMode({
               hasNutritionPro={hasNutritionPro}
               today={todayIso}
               futureDateLabel={futureDate}
+              template={template !== null}
+              templateDescription={templateDescription}
+              onTemplateDescription={template ? setTemplateDescription : undefined}
             />
           ) : (
             <View className="gap-1">
@@ -1413,6 +1485,17 @@ export function QuickEditMode({
               <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.editingHint}</Text>
             </View>
           )}
+
+          {/* Banner PERMANENTE (leccion JP 2026-08-11): una plantilla no le llega a nadie hasta
+              aplicarla, y confundirla con un plan publicado ya costo un reporte de coach. */}
+          {template ? (
+            <View className="flex-row items-start gap-2 rounded-control border border-primary/25 bg-primary/10 px-4 py-3">
+              <Info color={theme.primary} size={16} />
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-body">
+                {EDITOR_COPY.templateBanner}
+              </Text>
+            </View>
+          ) : null}
 
           {!usesSlots ? (
             <View className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
@@ -1705,6 +1788,7 @@ export function QuickEditMode({
           publishing={publishing}
           errorMessage={publishError}
           dayTotals={dayTotals}
+          template={template !== null}
           onDiscard={handleDiscard}
           onPublish={handlePublishRequest}
           onRetry={handleRetry}
@@ -1723,6 +1807,7 @@ export function QuickEditMode({
         publishing={publishing}
         studentName={clientName}
         futureDate={futureDate}
+        template={template !== null}
         onConfirm={() => void doPublish()}
         onClose={() => setConfirmOpen(false)}
       />
