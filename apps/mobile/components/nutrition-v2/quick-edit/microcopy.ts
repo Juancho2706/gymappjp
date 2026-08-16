@@ -119,6 +119,33 @@ export const EDITOR_COPY = {
   footerToday: 'Al publicar, los cambios rigen desde hoy.',
   footerFuture: (dateLabel: string) =>
     `La versión vigente aplica desde el ${dateLabel}; al publicar, los cambios rigen desde hoy.`,
+  // ── Capacidades que el editor trae del wizard (W2/W3 del editor web) ──
+  itemMenuTitle: 'Opciones del alimento',
+  substitutionsMenu: (n: number) => (n > 0 ? `Reemplazos autorizados (${n})` : 'Reemplazos autorizados'),
+  substitutionsTitle: (name: string) => `Reemplazos de ${name}`,
+  substitutionsHint:
+    'El alumno puede registrar cualquiera de estos en lugar del alimento prescrito.',
+  substitutionsEmpty: 'Este alimento aún no tiene reemplazos autorizados.',
+  addSubstitution: 'Agregar reemplazo',
+  substitutionLimit: (max: number) => `Máximo ${max} reemplazos por alimento.`,
+  substitutionDuplicate: 'Ese alimento ya está como reemplazo.',
+  substitutionRemovedUndo: 'Reemplazo quitado',
+  moveItemUp: 'Subir',
+  moveItemDown: 'Bajar',
+  duplicateDay: 'Duplicar como…',
+  duplicateDayTitle: 'Duplicar este día como',
+  duplicateDayHint: 'El día nuevo copia las comidas y metas de este día.',
+  duplicateDayDone: (label: string) => `Día duplicado como ${label}`,
+  copyDayMenu: 'Copiar a otros días…',
+  copyDayTitle: (label: string) => `Copiar ${label} a`,
+  copyDayHint:
+    'Elige los días destino. Reemplazar los deja iguales a este día; Sumar agrega estas franjas a lo que ya tienen.',
+  copyDayModeReplace: 'Reemplazar',
+  copyDayModeAppend: 'Sumar',
+  copyDayNextDays: (n: number) => `Próximos ${n}`,
+  copyDayCta: (n: number) => (n === 1 ? 'Copiar a 1 día' : `Copiar a ${n} días`),
+  copyDayDone: (n: number) => (n === 1 ? 'Día copiado a 1 destino' : `Día copiado a ${n} destinos`),
+  copyDayNothing: 'Elige al menos un día destino.',
   /** Degradacion de origen AVISADA (leccion JP 2026-08-11): jamas en silencio. */
   originUnavailableCreate:
     'No se pudo abrir el origen pedido (plantilla o plan). Estás viendo un plan en blanco.',

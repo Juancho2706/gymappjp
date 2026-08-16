@@ -6,7 +6,7 @@ import {
   planCopy,
   targetsForNextDays,
   type CopyDestination,
-} from './copy-plan'
+} from './editor-copy-plan'
 
 /** Destino ocupado con las franjas que ya tiene. */
 function taken(dayOfWeek: number, slotNames: string[]): CopyDestination {

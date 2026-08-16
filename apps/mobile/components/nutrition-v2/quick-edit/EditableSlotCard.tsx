@@ -43,6 +43,7 @@ export function EditableSlotCard({
   onItemName,
   onSwapItem,
   onRemoveItem,
+  onOpenItemMenu,
   onPortionStep,
   onPortionNotes,
   onPortionRemove,
@@ -69,6 +70,8 @@ export function EditableSlotCard({
   onItemName: (itemKey: string, value: string) => void
   onSwapItem: (itemKey: string) => void
   onRemoveItem: (itemKey: string) => void
+  /** Menu por item (solo editor unico): reemplazos autorizados + reorden. */
+  onOpenItemMenu?: (itemKey: string) => void
   onPortionStep: (targetKey: string, direction: 1 | -1) => void
   onPortionNotes: (targetKey: string, value: string) => void
   onPortionRemove: (target: QePortionTarget, index: number) => void
@@ -161,6 +164,7 @@ export function EditableSlotCard({
               onNameChange={(value) => onItemName(item.key, value)}
               onSwap={() => onSwapItem(item.key)}
               onRemove={() => onRemoveItem(item.key)}
+              onOpenMenu={onOpenItemMenu ? () => onOpenItemMenu(item.key) : undefined}
             />
           ))}
         </View>

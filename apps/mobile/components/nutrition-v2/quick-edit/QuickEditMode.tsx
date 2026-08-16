@@ -14,13 +14,18 @@ import NetInfo from '@react-native-community/netinfo'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
+  AlertTriangle,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   CalendarDays,
+  CalendarRange,
   Check,
   Copy,
   CopyCheck,
   History,
   Info,
+  ListPlus,
   Lock,
   MoreVertical,
   NotebookPen,
@@ -30,18 +35,25 @@ import {
   X,
 } from 'lucide-react-native'
 import {
+  COPY_PRESETS,
+  MAX_ITEM_SUBSTITUTIONS,
+  NEXT_DAYS_QUICK_PICKS,
   NUTRITION_WEEK_ORDER,
   VARIANT_LABEL_MAX,
   applyQuickEditToDraft,
   buildSubstitutionMap,
   catalogToPortionGroups,
   collectPortionGroups,
+  copyPlanWarning,
   countDraftChanges,
   countItemOrderChanges,
   countItemSubstitutionChanges,
   countVariantHeaderChanges,
+  daysForCopyPreset,
   formatNutritionDayOfWeek,
   mergePortionGroupChoices,
+  nextDaysFrom,
+  planCopy,
   qeSlotCopyTargets,
   quickEditReducer,
   readModelToDraft,
@@ -50,12 +62,14 @@ import {
   sortNutritionDayVariantsForDisplay,
   takenDayVariantDows,
   validateQuickEdit,
+  type CopyMode,
   type FoodCatalogItem,
   type NutritionItemSubstitution,
   type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
   type NutritionStrategy,
   type NutritionV2CoachScope,
+  type QeItemSubstitution,
   type QePortionGroup,
   type QePortionTarget,
   type QeVariant,
@@ -69,6 +83,7 @@ import { toast } from '../../Toast'
 import { useTheme } from '../../../context/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import {
+  MAX_DAY_VARIANTS,
   mapFoodCatalogItemToBuilderFood,
   strategyUsesSlots,
   type BuilderFoodMacrosPatch,
@@ -130,6 +145,11 @@ interface SearchTarget {
 interface SlotRef {
   variantKey: string
   slotKey: string
+}
+
+/** Item apuntado por el menú del alimento (editor unico: reemplazos + reorden). */
+interface ItemRef extends SlotRef {
+  itemKey: string
 }
 
 /** Variante proyectada al contrato compartido de la tira Lu-Do (`NutritionDayVariantLike`). */
@@ -327,6 +347,14 @@ export function QuickEditMode({
   const [changeDayKey, setChangeDayKey] = useState<string | null>(null)
   const [renameKey, setRenameKey] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
+  // Editor unico (T3.3b): menu por item (reemplazos + reorden), hoja de reemplazos, duplicar
+  // dia y copiar dia a varios dias. Todo gateado a `state.meta` (el clasico no los ofrece).
+  const [itemMenu, setItemMenu] = useState<ItemRef | null>(null)
+  const [subsTarget, setSubsTarget] = useState<ItemRef | null>(null)
+  const [duplicateDayKey, setDuplicateDayKey] = useState<string | null>(null)
+  const [copyDayKey, setCopyDayKey] = useState<string | null>(null)
+  const [copyDayMode, setCopyDayMode] = useState<CopyMode>('replace')
+  const [copyDayDays, setCopyDayDays] = useState<number[]>([])
   // CE-5: menú de la franja + hoja multi-select de días destino de la copia.
   const [slotMenu, setSlotMenu] = useState<SlotRef | null>(null)
   const [copySource, setCopySource] = useState<SlotRef | null>(null)
@@ -840,10 +868,154 @@ export function QuickEditMode({
       .map((variant) => ({ variant, replaces: replacedByKey.get(variant.key) === true }))
   }, [copySource, state, orderedVariants])
 
+  // ── Editor unico: capacidades W2/W3 del editor web ────────────────────────────────────
+  /** Resuelve el item apuntado por un `ItemRef` sobre el estado vigente. */
+  const findItem = useCallback(
+    (ref: ItemRef | null) => {
+      if (!ref) return null
+      const variant = state.variants.find((candidate) => candidate.key === ref.variantKey)
+      const slot = variant?.slots.find((candidate) => candidate.key === ref.slotKey)
+      const index = slot?.items.findIndex((candidate) => candidate.key === ref.itemKey) ?? -1
+      if (!slot || index < 0) return null
+      return { slot, item: slot.items[index], index }
+    },
+    [state],
+  )
+
+  /** Reorden dentro de la franja (W3b): Subir/Bajar, la afordancia tactil del drag del web. */
+  const handleMoveItem = useCallback(
+    (ref: ItemRef, direction: -1 | 1) => {
+      const found = findItem(ref)
+      if (!found) return
+      const toIndex = found.index + direction
+      if (toIndex < 0 || toIndex >= found.slot.items.length) return
+      dispatch({ type: 'REORDER_ITEM', variantKey: ref.variantKey, slotKey: ref.slotKey, itemKey: ref.itemKey, toIndex })
+    },
+    [findItem],
+  )
+
+  /** Quitar un reemplazo autorizado con Deshacer al MISMO indice (W2). */
+  const handleRemoveSubstitution = useCallback(
+    (ref: ItemRef, sub: QeItemSubstitution, index: number) => {
+      dispatch({ type: 'REMOVE_ITEM_SUBSTITUTION', variantKey: ref.variantKey, slotKey: ref.slotKey, itemKey: ref.itemKey, index })
+      pushUndo({
+        message: EDITOR_COPY.substitutionRemovedUndo,
+        restore: () =>
+          dispatch({
+            type: 'RESTORE_ITEM_SUBSTITUTION',
+            variantKey: ref.variantKey,
+            slotKey: ref.slotKey,
+            itemKey: ref.itemKey,
+            index,
+            sub,
+          }),
+      })
+    },
+    [pushUndo],
+  )
+
+  /**
+   * Duplica el dia elegido como otro dia de la semana (W2). `ADD_VARIANT` solo clona el dia
+   * BASE; esto permite "duplicar el sabado como domingo". Deshacer elimina el dia nuevo.
+   */
+  const handleDuplicateDay = useCallback(
+    (sourceVariantKey: string, dayOfWeek: number) => {
+      const variantKey = genKey('variant')
+      dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, dayOfWeek, variantKey })
+      setDuplicateDayKey(null)
+      pushUndo({
+        message: EDITOR_COPY.duplicateDayDone(formatNutritionDayOfWeek(dayOfWeek) ?? ''),
+        restore: () => dispatch({ type: 'REMOVE_VARIANT', variantKey }),
+      })
+    },
+    [pushUndo],
+  )
+
+  // Copia de UN dia a varios (W3a): la descripcion previa sale de los modulos PUROS del wizard
+  // (`planCopy`/`copyPlanWarning`, hoy en el paquete), asi que el aviso promete exactamente lo
+  // que va a pasar: que se pisa, que se suma y que nombres quedan duplicados.
+  const copyDayVariant = useMemo(
+    () => state.variants.find((variant) => variant.key === copyDayKey) ?? null,
+    [state.variants, copyDayKey],
+  )
+  const copyDayPlan = useMemo(() => {
+    if (!copyDayVariant) return null
+    const occupantByDay = new Map<number, QeVariant>()
+    for (const candidate of state.variants) {
+      if (!candidate.isDefault && candidate.dayOfWeek != null) occupantByDay.set(candidate.dayOfWeek, candidate)
+    }
+    return planCopy({
+      mode: copyDayMode,
+      sourceSlotNames: copyDayVariant.slots.map((slot) => slot.name),
+      destinations: copyDayDays.map((dayOfWeek) => {
+        const occupant = occupantByDay.get(dayOfWeek)
+        return {
+          dayOfWeek,
+          occupied: occupant != null,
+          slotNames: occupant ? occupant.slots.map((slot) => slot.name) : [],
+        }
+      }),
+      room: MAX_DAY_VARIANTS - takenDays.length,
+    })
+  }, [copyDayVariant, copyDayMode, copyDayDays, state.variants, takenDays])
+  const copyDayEffectiveCount = copyDayPlan
+    ? copyDayPlan.entries.filter((entry) => !entry.skippedNoRoom).length
+    : 0
+
+  const handleCopyDay = useCallback(() => {
+    if (!copyDayVariant) return
+    if (copyDayDays.length === 0) {
+      toast.info(EDITOR_COPY.copyDayNothing)
+      return
+    }
+    const previousState = state
+    dispatch({
+      type: 'COPY_VARIANT_TO_DAYS',
+      sourceVariantKey: copyDayVariant.key,
+      days: copyDayDays,
+      mode: copyDayMode,
+      keySeed: genKey('copy'),
+    })
+    setCopyDayKey(null)
+    setCopyDayDays([])
+    pushUndo({
+      message: EDITOR_COPY.copyDayDone(copyDayEffectiveCount),
+      restore: () => dispatch({ type: 'RESTORE_DRAFT', state: previousState }),
+    })
+  }, [copyDayVariant, copyDayDays, copyDayMode, copyDayEffectiveCount, state, pushUndo])
+
   const handleSelectFood = useCallback(
     (food: FoodCatalogItem) => {
       if (!searchTarget) return
       const builderFood = mapFoodCatalogItemToBuilderFood(food)
+      if (searchTarget.mode === 'substitution' && searchTarget.itemKey) {
+        // Guardas de la UI (el reducer tambien las aplica): ni el propio alimento prescrito ni
+        // uno ya autorizado — un tap que "no hace nada" parece un bug.
+        const found = findItem({
+          variantKey: searchTarget.variantKey,
+          slotKey: searchTarget.slotKey,
+          itemKey: searchTarget.itemKey,
+        })
+        const subs = found?.item.substitutions ?? []
+        if (food.id === found?.item.foodId || subs.some((sub) => sub.foodId === food.id)) {
+          toast.info(EDITOR_COPY.substitutionDuplicate)
+          return
+        }
+        dispatch({
+          type: 'ADD_ITEM_SUBSTITUTION',
+          variantKey: searchTarget.variantKey,
+          slotKey: searchTarget.slotKey,
+          itemKey: searchTarget.itemKey,
+          food: builderFood,
+        })
+        setSearchTarget(null)
+        setSubsTarget({
+          variantKey: searchTarget.variantKey,
+          slotKey: searchTarget.slotKey,
+          itemKey: searchTarget.itemKey,
+        })
+        return
+      }
       if (searchTarget.mode === 'swap' && searchTarget.itemKey) {
         dispatch({
           type: 'SWAP_ITEM_FOOD',
@@ -863,7 +1035,7 @@ export function QuickEditMode({
       }
       setSearchTarget(null)
     },
-    [searchTarget],
+    [searchTarget, findItem],
   )
 
   const handleFreeItem = useCallback(() => {
@@ -1070,6 +1242,16 @@ export function QuickEditMode({
         .find((variant) => variant.key === copySource.variantKey)
         ?.slots.find((slot) => slot.key === copySource.slotKey) ?? null)
     : null
+  // Editor unico: refs resueltos de los menus nuevos (item, reemplazos, duplicar, copiar dia).
+  const itemMenuItem = findItem(itemMenu)
+  const itemMenuIsFirst = (itemMenuItem?.index ?? 0) <= 0
+  const itemMenuIsLast =
+    itemMenuItem === null || itemMenuItem.index >= itemMenuItem.slot.items.length - 1
+  const subsItem = findItem(subsTarget)
+  const subsList = subsItem?.item.substitutions ?? []
+  const duplicateDayVariant = state.variants.find((variant) => variant.key === duplicateDayKey) ?? null
+  const copyDaySourceDow = copyDayVariant?.dayOfWeek ?? null
+  const copyDayWarning = copyDayPlan ? copyPlanWarning(copyDayPlan) : null
 
   return (
     <View className="flex-1 bg-surface-app">
@@ -1311,6 +1493,11 @@ export function QuickEditMode({
                         setSearchTarget({ mode: 'swap', variantKey: variant.key, slotKey: slot.key, itemKey })
                       }
                       onRemoveItem={(itemKey) => handleRemoveItem(variant.key, slot.key, itemKey)}
+                      onOpenItemMenu={
+                        state.meta
+                          ? (itemKey) => setItemMenu({ variantKey: variant.key, slotKey: slot.key, itemKey })
+                          : undefined
+                      }
                     />
                   ))
                 : null}
@@ -1456,6 +1643,277 @@ export function QuickEditMode({
       />
       <ProUpsellSheet message={upsell} onClose={() => setUpsell(null)} />
 
+      {/* ── EDITOR UNICO (T3.3b): menu del item + reemplazos + duplicar/copiar dia ────────── */}
+      <Sheet
+        open={itemMenu !== null}
+        onClose={() => setItemMenu(null)}
+        nativeModal
+        dynamicSizing
+        title={itemMenuItem?.item.displayName || EDITOR_COPY.itemMenuTitle}
+        accessibilityLabel={EDITOR_COPY.itemMenuTitle}
+      >
+        <View className="gap-3">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={EDITOR_COPY.substitutionsMenu(itemMenuItem?.item.substitutions.length ?? 0)}
+            onPress={() => {
+              setSubsTarget(itemMenu)
+              setItemMenu(null)
+            }}
+            className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
+          >
+            <ListPlus color={theme.textSecondary} size={16} />
+            <Text className="text-sm font-semibold text-strong">
+              {EDITOR_COPY.substitutionsMenu(itemMenuItem?.item.substitutions.length ?? 0)}
+            </Text>
+          </Pressable>
+          {/* Reorden dentro de la franja: en el telefono no hay drag con manija (el web lo tiene
+              en desktop); Subir/Bajar es la afordancia tactil equivalente. */}
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={EDITOR_COPY.moveItemUp}
+                accessibilityState={{ disabled: itemMenuIsFirst }}
+                disabled={itemMenuIsFirst}
+                onPress={() => {
+                  if (itemMenu) handleMoveItem(itemMenu, -1)
+                  setItemMenu(null)
+                }}
+                className={
+                  'min-h-12 flex-row items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-3 ' +
+                  (itemMenuIsFirst ? 'opacity-50' : '')
+                }
+              >
+                <ArrowUp color={theme.textSecondary} size={16} />
+                <Text className="text-sm font-semibold text-strong">{EDITOR_COPY.moveItemUp}</Text>
+              </Pressable>
+            </View>
+            <View className="flex-1">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={EDITOR_COPY.moveItemDown}
+                accessibilityState={{ disabled: itemMenuIsLast }}
+                disabled={itemMenuIsLast}
+                onPress={() => {
+                  if (itemMenu) handleMoveItem(itemMenu, 1)
+                  setItemMenu(null)
+                }}
+                className={
+                  'min-h-12 flex-row items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-3 ' +
+                  (itemMenuIsLast ? 'opacity-50' : '')
+                }
+              >
+                <ArrowDown color={theme.textSecondary} size={16} />
+                <Text className="text-sm font-semibold text-strong">{EDITOR_COPY.moveItemDown}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Sheet>
+
+      {/* Reemplazos autorizados del item (W2): lista con el nombre congelado, quitar con Deshacer
+          y alta por el buscador. Los guards (tope 8, sin duplicados, sin auto-reemplazo) los
+          aplica el reducer compartido; la UI los enuncia antes de que el coach choque. */}
+      <Sheet
+        open={subsTarget !== null}
+        onClose={() => setSubsTarget(null)}
+        nativeModal
+        dynamicSizing
+        title={EDITOR_COPY.substitutionsTitle(subsItem?.item.displayName || 'este alimento')}
+        accessibilityLabel={EDITOR_COPY.substitutionsTitle(subsItem?.item.displayName || 'este alimento')}
+      >
+        <View className="gap-3">
+          <Text className="text-xs leading-5 text-muted">{EDITOR_COPY.substitutionsHint}</Text>
+          {subsList.length === 0 ? (
+            <Text className="rounded-control border border-subtle bg-surface-sunken px-3 py-2.5 text-sm leading-6 text-body">
+              {EDITOR_COPY.substitutionsEmpty}
+            </Text>
+          ) : (
+            <View className="gap-2">
+              {subsList.map((sub, subIndex) => (
+                <View
+                  key={(sub.foodId ?? sub.customName ?? 'sub') + '-' + subIndex}
+                  className="flex-row items-center gap-2 rounded-control border border-subtle bg-surface-card p-2.5"
+                >
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-sm font-semibold leading-5 text-strong" numberOfLines={2}>
+                      {sub.displayName ?? sub.customName ?? 'Alimento'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={'Quitar reemplazo ' + (sub.displayName ?? sub.customName ?? '')}
+                    onPress={() => {
+                      if (subsTarget) handleRemoveSubstitution(subsTarget, sub, subIndex)
+                    }}
+                    className="h-11 w-11 items-center justify-center rounded-control"
+                  >
+                    <Trash2 color={theme.destructive} size={17} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={EDITOR_COPY.addSubstitution}
+            accessibilityState={{ disabled: subsList.length >= MAX_ITEM_SUBSTITUTIONS }}
+            disabled={subsList.length >= MAX_ITEM_SUBSTITUTIONS}
+            onPress={() => {
+              if (!subsTarget) return
+              setSearchTarget({ mode: 'substitution', ...subsTarget })
+              setSubsTarget(null)
+            }}
+            className={
+              'min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3 ' +
+              (subsList.length >= MAX_ITEM_SUBSTITUTIONS ? 'opacity-50' : '')
+            }
+          >
+            <ListPlus color={theme.textSecondary} size={16} />
+            <Text className="text-sm font-semibold text-strong">{EDITOR_COPY.addSubstitution}</Text>
+          </Pressable>
+          {subsList.length >= MAX_ITEM_SUBSTITUTIONS ? (
+            <Text className="text-xs leading-5 text-muted">
+              {EDITOR_COPY.substitutionLimit(MAX_ITEM_SUBSTITUTIONS)}
+            </Text>
+          ) : null}
+        </View>
+      </Sheet>
+
+      {/* Duplicar ESTE dia como otro (W2): clona metas y franjas del dia elegido, no del base. */}
+      <Sheet
+        open={duplicateDayVariant !== null}
+        onClose={() => setDuplicateDayKey(null)}
+        nativeModal
+        dynamicSizing
+        title={EDITOR_COPY.duplicateDayTitle}
+        accessibilityLabel={EDITOR_COPY.duplicateDayTitle}
+      >
+        <View className="gap-3">
+          <Text className="text-xs leading-5 text-muted">{EDITOR_COPY.duplicateDayHint}</Text>
+          <DayPickerRow
+            selected={[]}
+            taken={takenDays}
+            onToggle={(dayOfWeek) => {
+              if (duplicateDayVariant) handleDuplicateDay(duplicateDayVariant.key, dayOfWeek)
+            }}
+          />
+        </View>
+      </Sheet>
+
+      {/* Copiar el dia a VARIOS dias (W3a): modo Reemplazar/Sumar + quick-select + aviso previo. */}
+      <Sheet
+        open={copyDayVariant !== null}
+        onClose={() => setCopyDayKey(null)}
+        nativeModal
+        dynamicSizing
+        title={EDITOR_COPY.copyDayTitle(copyDayVariant?.label ?? '')}
+        accessibilityLabel={EDITOR_COPY.copyDayTitle(copyDayVariant?.label ?? '')}
+      >
+        <View className="gap-3">
+          <Text className="text-xs leading-5 text-muted">{EDITOR_COPY.copyDayHint}</Text>
+          <View className="flex-row gap-2">
+            {(
+              [
+                ['replace', EDITOR_COPY.copyDayModeReplace],
+                ['append', EDITOR_COPY.copyDayModeAppend],
+              ] as const
+            ).map(([value, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: copyDayMode === value }}
+                accessibilityLabel={label}
+                onPress={() => setCopyDayMode(value)}
+                className={
+                  'min-h-11 flex-1 items-center justify-center rounded-control border px-3 ' +
+                  (copyDayMode === value ? 'border-primary bg-primary/10' : 'border-default bg-surface-card')
+                }
+              >
+                <Text
+                  className={
+                    'text-sm font-semibold ' + (copyDayMode === value ? 'text-primary' : 'text-strong')
+                  }
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Quick-select: presets con nombre + "proximos N" relativo (solo con dia de origen). */}
+          <View className="flex-row flex-wrap gap-1.5">
+            {COPY_PRESETS.map((preset) => (
+              <Pressable
+                key={preset.id}
+                accessibilityRole="button"
+                accessibilityLabel={preset.label}
+                onPress={() =>
+                  setCopyDayDays(
+                    daysForCopyPreset(preset, {
+                      takenDays: new Set(takenDays),
+                      sourceDayOfWeek: copyDayVariant?.dayOfWeek ?? null,
+                    })
+                      .map((day) => day.dayOfWeek)
+                      .filter((day) => day !== copyDayVariant?.dayOfWeek),
+                  )
+                }
+                className="min-h-11 items-center justify-center rounded-pill border border-default bg-surface-card px-3"
+              >
+                <Text className="text-xs font-semibold text-strong">{preset.label}</Text>
+              </Pressable>
+            ))}
+            {copyDaySourceDow != null
+              ? NEXT_DAYS_QUICK_PICKS.map((count) => (
+                  <Pressable
+                    key={count}
+                    accessibilityRole="button"
+                    accessibilityLabel={EDITOR_COPY.copyDayNextDays(count)}
+                    onPress={() =>
+                      setCopyDayDays(
+                        nextDaysFrom(copyDaySourceDow, count).filter((day) => day !== copyDaySourceDow),
+                      )
+                    }
+                    className="min-h-11 items-center justify-center rounded-pill border border-default bg-surface-card px-3"
+                  >
+                    <Text className="text-xs font-semibold text-strong">
+                      {EDITOR_COPY.copyDayNextDays(count)}
+                    </Text>
+                  </Pressable>
+                ))
+              : null}
+          </View>
+
+          <DayPickerRow
+            selected={copyDayDays}
+            taken={copyDaySourceDow != null ? [copyDaySourceDow] : []}
+            onToggle={(dayOfWeek) =>
+              setCopyDayDays((current) =>
+                current.includes(dayOfWeek)
+                  ? current.filter((day) => day !== dayOfWeek)
+                  : [...current, dayOfWeek],
+              )
+            }
+          />
+
+          {copyDayWarning ? (
+            <View className="flex-row items-start gap-2 rounded-control border border-warning-500/30 bg-warning-500/10 px-3 py-2">
+              <AlertTriangle color={theme.warning} size={14} />
+              <Text className="min-w-0 flex-1 text-xs leading-5 text-body">{copyDayWarning}</Text>
+            </View>
+          ) : null}
+
+          <NutritionMotionButton
+            accessibilityLabel={EDITOR_COPY.copyDayCta(Math.max(copyDayEffectiveCount, 1))}
+            disabled={copyDayDays.length === 0 || copyDayEffectiveCount === 0}
+            onPress={handleCopyDay}
+          >
+            {EDITOR_COPY.copyDayCta(Math.max(copyDayEffectiveCount, 1))}
+          </NutritionMotionButton>
+        </View>
+      </Sheet>
+
       {/* FD5 — alta de días: multi-select Lu-Do + origen del contenido. Sin Pro, upsell. */}
       <Sheet
         open={addDayOpen}
@@ -1568,6 +2026,38 @@ export function QuickEditMode({
             >
               <CalendarDays color={theme.textSecondary} size={16} />
               <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.changeDay}</Text>
+            </Pressable>
+          ) : null}
+          {/* Editor unico (W2/W3a): duplicar este dia como otro, y copiarlo a varios dias en un
+              gesto. El quick-edit clasico no las ofrece (gate `state.meta`). */}
+          {state.meta && dayMenuVariant ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={EDITOR_COPY.duplicateDay}
+              onPress={() => {
+                setDuplicateDayKey(dayMenuVariant.key)
+                setDayMenuKey(null)
+              }}
+              className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
+            >
+              <CopyCheck color={theme.textSecondary} size={16} />
+              <Text className="text-sm font-semibold text-strong">{EDITOR_COPY.duplicateDay}</Text>
+            </Pressable>
+          ) : null}
+          {state.meta && dayMenuVariant && dayMenuVariant.slots.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={EDITOR_COPY.copyDayMenu}
+              onPress={() => {
+                setCopyDayKey(dayMenuVariant.key)
+                setCopyDayMode('replace')
+                setCopyDayDays([])
+                setDayMenuKey(null)
+              }}
+              className="min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
+            >
+              <CalendarRange color={theme.textSecondary} size={16} />
+              <Text className="text-sm font-semibold text-strong">{EDITOR_COPY.copyDayMenu}</Text>
             </Pressable>
           ) : null}
           <Pressable

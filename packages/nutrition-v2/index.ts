@@ -38,6 +38,8 @@ export * from './food-classification'
 // que la gramatica necesita (el wizard web las re-exporta desde sus rutas historicas).
 export * from './editor-food'
 export * from './editor-portions'
+export * from './editor-copy-presets'
+export * from './editor-copy-plan'
 export * from './editor-state'
 export {
   NUTRITION_V2_PERMISSION_DENIED,

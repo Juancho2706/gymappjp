@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import { ArrowLeftRight, Pencil, Trash2 } from 'lucide-react-native'
+import { ArrowLeftRight, MoreVertical, Pencil, Trash2 } from 'lucide-react-native'
 import {
   foodCategoryFromName,
   quantityStep,
@@ -72,6 +72,7 @@ export function EditableItemRow({
   onNameChange,
   onSwap,
   onRemove,
+  onOpenMenu,
   onOverrideApplied,
 }: {
   item: QeItem
@@ -85,6 +86,11 @@ export function EditableItemRow({
   onNameChange: (value: string) => void
   onSwap: () => void
   onRemove: () => void
+  /**
+   * Menu del item (solo EDITOR unico): reemplazos autorizados y reorden dentro de la franja.
+   * Ausente = quick-edit clasico, que no ofrece ninguna de las dos.
+   */
+  onOpenMenu?: () => void
   /** La correccion es del ALIMENTO: la pantalla la propaga a todas sus apariciones. */
   onOverrideApplied?: (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => void
 }) {
@@ -168,6 +174,17 @@ export function EditableItemRow({
           >
             <Trash2 color={theme.destructive} size={18} />
           </Pressable>
+          {onOpenMenu ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Opciones de ${item.displayName || 'alimento'}`}
+              disabled={disabled}
+              onPress={onOpenMenu}
+              className="h-11 w-11 items-center justify-center rounded-control"
+            >
+              <MoreVertical color={theme.textSecondary} size={17} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
       {nameError ? <Text className="mt-1 text-xs font-medium text-danger-600">{nameError}</Text> : null}

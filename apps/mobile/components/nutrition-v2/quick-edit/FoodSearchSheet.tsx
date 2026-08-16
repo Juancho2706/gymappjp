@@ -7,16 +7,29 @@ import { FoodThumbnail } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { searchFoodCatalogV2 } from '../../../lib/nutrition-v2-catalog.api'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
-import { QUICK_EDIT_COPY } from './microcopy'
+import { EDITOR_COPY, QUICK_EDIT_COPY } from './microcopy'
 
-export type FoodSearchMode = 'add' | 'swap'
+export type FoodSearchMode = 'add' | 'swap' | 'substitution'
 
 /**
  * Buscador de catalogo del quick-edit en Sheet nativeModal (gorhom vetado bajo
- * reanimated 4 — patron QA-12). Sirve dos flujos: agregar alimento a una franja
- * (con fallback "Alimento libre") y swap de una fila existente (qe-design §1.2.B.1:
- * elegir alimento reemplaza food/nombre/macros conservando cantidad y unidad).
+ * reanimated 4 — patron QA-12). Sirve tres flujos: agregar alimento a una franja
+ * (con fallback "Alimento libre"), swap de una fila existente (qe-design §1.2.B.1:
+ * elegir alimento reemplaza food/nombre/macros conservando cantidad y unidad) y —solo en el
+ * editor unico— agregar un REEMPLAZO autorizado al item (T3.3b, capacidad W2 del editor web).
  */
+
+const MODE_TITLE: Record<FoodSearchMode, string> = {
+  add: QUICK_EDIT_COPY.addFood,
+  swap: QUICK_EDIT_COPY.swapFood,
+  substitution: EDITOR_COPY.addSubstitution,
+}
+
+const MODE_VERB: Record<FoodSearchMode, string> = {
+  add: 'Agregar',
+  swap: 'Reemplazar por',
+  substitution: 'Autorizar',
+}
 export function FoodSearchSheet({
   open,
   mode,
@@ -87,8 +100,8 @@ export function FoodSearchSheet({
       onClose={onClose}
       nativeModal
       snapPoints={['85%']}
-      title={mode === 'swap' ? QUICK_EDIT_COPY.swapFood : QUICK_EDIT_COPY.addFood}
-      accessibilityLabel={mode === 'swap' ? QUICK_EDIT_COPY.swapFood : QUICK_EDIT_COPY.addFood}
+      title={MODE_TITLE[mode]}
+      accessibilityLabel={MODE_TITLE[mode]}
     >
       <View className="flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3">
         <Search color={theme.mutedForeground} size={16} />
@@ -129,7 +142,7 @@ export function FoodSearchSheet({
             <Pressable
               key={food.id}
               accessibilityRole="button"
-              accessibilityLabel={`${mode === 'swap' ? 'Reemplazar por' : 'Agregar'} ${food.name}`}
+              accessibilityLabel={`${MODE_VERB[mode]} ${food.name}`}
               onPress={() => onSelect(food)}
               className="min-h-14 flex-row items-center gap-3 rounded-control border border-subtle bg-surface-card px-3 py-2.5"
             >

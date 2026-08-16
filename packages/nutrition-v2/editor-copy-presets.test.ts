@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { COPY_PRESETS, daysForCopyPreset, replacedDaysOf, targetsForCopyPreset } from './copy-presets'
+import { COPY_PRESETS, daysForCopyPreset, replacedDaysOf, targetsForCopyPreset } from './editor-copy-presets'
 
 const WEEKDAYS = COPY_PRESETS[0]
 const WEEKEND = COPY_PRESETS[1]
