@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-15 @ dd43c45c"
+last_verified: "2026-08-16"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -13,6 +13,28 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
 ## Resumen ejecutivo
+
+> **2026-08-16 (T3.v Cabina — pasada visual del editor único, web+RN, SIN QA del owner)**:
+> **MacroSpark** (kcal mono + barra apilada P/C/G por aporte calórico 4/4/9, popover de gramos
+> con contrato D3: hover 120 ms en puntero fino, tap en grueso, Esc/tap-fuera/scroll cierran,
+> uno abierto a la vez) reemplaza a `MacroChipRow` en TODAS las superficies del editor
+> único/quick-edit convergido, **web y RN**: fila de item (foto real de producto 34–36 px con
+> fallback a ícono de categoría; item libre = tile punteado), header y contraída de franja
+> (stack de hasta 4 fotos + subtotal con «% de la meta»), PublishBar (kcal x/meta + micro-barras
+> por macro con su token), picker/paleta (spark por la base REAL del alimento — `per_serving`
+> no miente «por 100 g», prop `basisLabel`). Porcentajes = `macroCalorieShares` en
+> `@eva/nutrition-v2` (una sola fuente con tests golden: drift web↔RN imposible por
+> construcción). Web además: **cinta** ≥768 (anillo semántico de kcal + «Metas del día ▾» que
+> hospeda `TargetsEditorCard`; el canvas deja de pintar la card de metas bajo cinta viva) y
+> **rail de días** ≥1024 (dots verde/ámbar, kcal por día, defecto B4 como enlace
+> `APPLY_BASE_PORTIONS`; cápsula horizontal sigue <1024). RN espeja con **mini-cinta sticky**
+> (kcal x/meta + 3 % con dot de macro) y «Metas» como hoja del header en `QuickEditMode`
+> (cubre ambas pantallas del editor). Divergencias declaradas: rail/paleta = solo desktop web;
+> popover RN sobre `_anchored` (Modal medido con flip/clamp). Builder y área alumno con diff
+> CERO. Gates 2026-08-16 todo verde: typecheck web+mobile, vitest (3.336), `check:tokens`,
+> boundaries, `expo export --platform android`, Playwright harness 41 asserts × 5 anchos ×
+> 2 temas. **QA del owner (web responsive + device Android) PENDIENTE; el OTA android
+> ACUMULADO sigue retenido hasta ese QA.**
 
 > **2026-08-16 (T3.3a convergencia del quick-edit RN, rama `rnmobiledenuevo`, SIN QA device)**:
 > el quick-edit del coach RN consume la **gramatica compartida** de `@eva/nutrition-v2`
