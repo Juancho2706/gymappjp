@@ -104,6 +104,8 @@ export default async function OrgBrandPage({ params }: Props) {
                     initial={{
                         name,
                         primaryColor,
+                        // W-brand B3: par vigente (draft sobre live) para detectar el preset por valor.
+                        secondaryColor: (draft?.brand_secondary_color ?? org.brand_secondary_color) ?? null,
                         logoUrl,
                         logoUrlDark: (draft && 'logo_url_dark' in draft ? draft.logo_url_dark : org.logo_url_dark) ?? null,
                         loaderText: (draft?.loader_text ?? org.loader_text) ?? '',

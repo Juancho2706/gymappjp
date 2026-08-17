@@ -395,7 +395,11 @@ export async function updateTeamBrandAction(teamId: string, formData: FormData) 
     }
 
     // Colores: vacío = limpiar (vuelve al default del sistema); hex válido = setear.
-    for (const field of ['primary_color', 'accent_light', 'accent_dark', 'splash_bg_color', 'loader_text_color'] as const) {
+    // W-brand B3: `brand_secondary_color` entra al whitelist — el studio lo rellena SIEMPRE
+    // desde el motor (par curado del preset o sealPair del hex exacto), nunca de un input
+    // libre; el GRANT UPDATE(col) existe desde 20260621220000. Los acentos siguen aceptando
+    // '' = limpiar porque aplicar un tema nuevo pisa los acentos sueltos legacy.
+    for (const field of ['primary_color', 'brand_secondary_color', 'accent_light', 'accent_dark', 'splash_bg_color', 'loader_text_color'] as const) {
         const raw = formData.get(field)
         if (raw === null) continue
         const v = String(raw).trim()

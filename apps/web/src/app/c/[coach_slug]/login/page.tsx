@@ -7,7 +7,7 @@ import { BRAND_APP_ICON, BRAND_APP_ICON_512 } from '@/lib/brand-assets'
 import { LoginEntrance, LoginEntranceItem } from './_components/LoginEntrance'
 import { getClientLoginCoach, getClientLoginMetadataCoach } from './_data/login.queries'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
-import { resolveBrandTheme, resolvePresetBranding } from '@eva/brand-kit'
+import { resolveBrandTheme, resolvePresetBranding, consolidateStandaloneBranding } from '@eva/brand-kit'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { generateBrandPalette } from '@/lib/color-utils'
@@ -60,13 +60,19 @@ export default async function ClientLoginPage({ params }: Props) {
     const presetBrand = resolvePresetBranding(coach)
     const brandingAllowed = isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)
     const brandColor = brandingAllowed ? (presetBrand.primary_color || BRAND_PRIMARY_COLOR) : BRAND_PRIMARY_COLOR
+    // W-brand B2: login del alumno = superficie standalone — sin preset (legacy custom) el
+    // secundario resuelto se deriva del primario (sealPair) y los accent_*/secundario
+    // ALMACENADOS dejan de leerse. Con preset, passthrough (par curado del catálogo).
+    const consolidatedBrand = brandingAllowed
+        ? consolidateStandaloneBranding(presetBrand, brandColor)
+        : presetBrand
     const theme = resolveBrandTheme({
         brandColor,
-        accentLight: brandingAllowed ? (presetBrand.accent_light || null) : null,
-        accentDark: brandingAllowed ? (presetBrand.accent_dark || null) : null,
-        secondaryLight: brandingAllowed ? (presetBrand.brand_secondary_color || null) : null,
-        secondaryDark: brandingAllowed ? (presetBrand.brand_secondary_color || null) : null,
-        neutralTint: brandingAllowed ? (presetBrand.neutral_tint ?? false) : false,
+        accentLight: brandingAllowed ? (consolidatedBrand.accent_light || null) : null,
+        accentDark: brandingAllowed ? (consolidatedBrand.accent_dark || null) : null,
+        secondaryLight: brandingAllowed ? (consolidatedBrand.brand_secondary_color || null) : null,
+        secondaryDark: brandingAllowed ? (consolidatedBrand.brand_secondary_color || null) : null,
+        neutralTint: brandingAllowed ? (consolidatedBrand.neutral_tint ?? false) : false,
     })
     const accentRgb = generateBrandPalette(theme.light.accent).primaryRgb.replace(/,\s*/g, ' ')
     const logoUrl = brandingAllowed ? coach.logo_url : null

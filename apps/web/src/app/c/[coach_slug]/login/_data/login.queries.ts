@@ -23,7 +23,9 @@ export const getClientLoginCoach = cache(async (coachSlug: string) => {
         // white-label v2: +subscription_tier (gate) + campos v2 (color2/accent/logo dark/fuente).
         // white-label W1b: +theme_preset_key (galería de temas) + login_layout_key (variante de layout)
         // + loader_config (compositor de loader, para la variante "energia") + loader_variant/neutral_tint.
-        .select('brand_name, primary_color, logo_url, welcome_message, subscription_tier, brand_secondary_color, accent_light, accent_dark, logo_url_dark, brand_font_key, loader_variant, neutral_tint, theme_preset_key, login_layout_key, loader_config, use_custom_loader, loader_text, loader_text_color, loader_icon_mode')
+        // W-brand B4: loader_text_color salió del select — el standalone no lo lee (nadie lo
+        // consumía en este flujo; el color del texto del loader lo decide el motor de contraste).
+        .select('brand_name, primary_color, logo_url, welcome_message, subscription_tier, brand_secondary_color, accent_light, accent_dark, logo_url_dark, brand_font_key, loader_variant, neutral_tint, theme_preset_key, login_layout_key, loader_config, use_custom_loader, loader_text, loader_icon_mode')
         .eq(coachIdentifierColumn(coachSlug), coachSlug)
         .maybeSingle()
 
@@ -32,6 +34,6 @@ export const getClientLoginCoach = cache(async (coachSlug: string) => {
         | 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message' | 'subscription_tier'
         | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'logo_url_dark' | 'brand_font_key'
         | 'loader_variant' | 'neutral_tint' | 'theme_preset_key' | 'login_layout_key' | 'loader_config'
-        | 'use_custom_loader' | 'loader_text' | 'loader_text_color' | 'loader_icon_mode'
+        | 'use_custom_loader' | 'loader_text' | 'loader_icon_mode'
     > | null
 })

@@ -15,7 +15,7 @@ import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding, consolidateStandaloneBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, getTierMaxClients, TIER_LABELS, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
@@ -156,11 +156,18 @@ export default async function CoachLayout({
             : SYSTEM_PRIMARY_COLOR
 
     // Campos v2 (color2/accent/fuente) solo para el coach standalone Pro+ con el toggle en "mi marca".
-    const accentLight = standaloneBrandOn ? (presetBrand.accent_light || null) : null
-    const accentDark = standaloneBrandOn ? (presetBrand.accent_dark || null) : null
-    const neutralTint = standaloneBrandOn && presetBrand.neutral_tint === true
-    const secondaryColor = standaloneBrandOn ? (presetBrand.brand_secondary_color || null) : null
-    const brandFontStack = resolveBrandFontStack(standaloneBrandOn ? (presetBrand.brand_font_key ?? '') : '')
+    // W-brand B2 (dueño 2026-08-17): para el standalone SIN preset (legacy custom) el secundario
+    // resuelto se deriva SIEMPRE del primario (sealPair) y los brand_secondary_color/accent_*
+    // ALMACENADOS dejan de leerse (quedan en DB, inertes). Con preset, passthrough (el catálogo
+    // ya pisaba). Managed (org/team) no pasa por acá (standaloneBrandOn = false).
+    const consolidatedBrand = standaloneBrandOn
+        ? consolidateStandaloneBranding(presetBrand, primaryColor)
+        : presetBrand
+    const accentLight = standaloneBrandOn ? (consolidatedBrand.accent_light || null) : null
+    const accentDark = standaloneBrandOn ? (consolidatedBrand.accent_dark || null) : null
+    const neutralTint = standaloneBrandOn && consolidatedBrand.neutral_tint === true
+    const secondaryColor = standaloneBrandOn ? (consolidatedBrand.brand_secondary_color || null) : null
+    const brandFontStack = resolveBrandFontStack(standaloneBrandOn ? (consolidatedBrand.brand_font_key ?? '') : '')
     const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
     const palette = generateBrandPalette(brandTheme.light.accent, brandTheme.light.accent2)
     // D2 white-label: rampa SPORT derivada (--sport-100..700 + cta-fill + focus-ring) del color de marca.
@@ -194,7 +201,9 @@ export default async function CoachLayout({
     const loaderConfig = useCustomStyles ? {
         customText: coach.loader_text ?? undefined,
         useCustom: coach.use_custom_loader ?? false,
-        textColor: coach.loader_text_color ?? undefined,
+        // W-brand B4: loader_text_color almacenado deja de leerse — el texto del loader se pinta
+        // con el gradiente derivado del primario (contraste curado por el motor de paleta).
+        textColor: undefined,
         iconMode: (coach.loader_icon_mode ?? 'eva') as 'eva' | 'coach' | 'none',
         coachLogoUrl: coach.logo_url ?? undefined,
     } : {

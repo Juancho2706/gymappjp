@@ -32,7 +32,7 @@ interface Props {
     welcomeMessage?: string | null
     loaderText?: string
     useCustomLoader?: boolean
-    loaderTextColor?: string
+    /* W-brand B4: loaderTextColor murió — el texto del loader se pinta con el gradiente del primario. */
     loaderIconMode?: 'eva' | 'coach' | 'none'
     /** Fuente curada resuelta (white-label v2) — se aplica a los títulos del mockup. */
     fontFamily?: string
@@ -383,7 +383,6 @@ export function BrandThemePreview({
     welcomeMessage,
     loaderText,
     useCustomLoader,
-    loaderTextColor,
     loaderIconMode,
     fontFamily,
     loaderVariant = 'eva',
@@ -553,8 +552,7 @@ export function BrandThemePreview({
                         <EvaRouteLoader
                             customText={loaderText}
                             useCustom={useCustomLoader}
-                            textColor={loaderTextColor || undefined}
-                            primaryColor={!loaderTextColor ? primaryColor : undefined}
+                            primaryColor={primaryColor}
                             iconMode={loaderIconMode}
                             size="sm"
                         />

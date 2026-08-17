@@ -27,7 +27,7 @@ import { CircularBrandLogo } from '../../../components/CircularBrandLogo'
 import { getCoachOrgContext } from '../../../lib/org'
 import { getCoachProfile } from '../../../lib/coach'
 import { canUseBranding, type SubscriptionTier } from '../../../lib/coach-tiers'
-import { THEME_PRESETS, getThemePreset, resolveBrandTheme, type BrandPreset } from '@eva/brand-kit'
+import { THEME_PRESETS, getThemePreset, resolveBrandTheme, sealPair, type BrandPreset } from '@eva/brand-kit'
 import { FONT_KEY_TUPLE } from '@eva/schemas'
 import {
   DEFAULT_LOADER_COMPOSITE,
@@ -132,7 +132,7 @@ export default function MiMarcaScreen() {
   const [useBrandColors, setUseBrandColors] = useState(false)
   const [useCustomLoader, setUseCustomLoader] = useState(false)
   const [loaderText, setLoaderText] = useState('')
-  const [loaderTextColor, setLoaderTextColor] = useState('')
+  // W-brand B4: murió el estado `loaderTextColor` — el color del texto lo decide el motor.
   const [loaderIconMode, setLoaderIconMode] = useState<'eva' | 'coach' | 'none'>('eva')
   const [welcomeMessage, setWelcomeMessage] = useState('')
   const [welcomeModalEnabled, setWelcomeModalEnabled] = useState(false)
@@ -142,11 +142,10 @@ export default function MiMarcaScreen() {
   const [logoUrlDark, setLogoUrlDark] = useState<string | null>(null)
 
   // E7-10 — white-label v2 avanzado (mismas columnas que respeta el login del alumno, lib/branding.ts).
+  // W-brand B1/B2: murieron los estados de secundario/acentos — el par del tema se deriva
+  // (sealPair) o viene curado del preset; ya no hay hex editable.
   const [themePresetKey, setThemePresetKey] = useState<string | null>(null)
   const [loginLayoutKey, setLoginLayoutKey] = useState<LoginLayoutKey>('clasico')
-  const [secondaryColor, setSecondaryColor] = useState('')
-  const [accentLight, setAccentLight] = useState('')
-  const [accentDark, setAccentDark] = useState('')
   const [neutralTint, setNeutralTint] = useState(false)
   const [fontKey, setFontKey] = useState('')
   const [loaderVariant, setLoaderVariant] = useState('eva')
@@ -177,7 +176,6 @@ export default function MiMarcaScreen() {
         setUseBrandColors(s.useBrandColors)
         setUseCustomLoader(s.useCustomLoader)
         setLoaderText(s.loaderText ?? '')
-        setLoaderTextColor(s.loaderTextColor ?? '')
         setLoaderIconMode((s.loaderIconMode as 'eva' | 'coach' | 'none') ?? 'eva')
         setWelcomeMessage(s.welcomeMessage ?? '')
         setWelcomeModalEnabled(s.welcomeModalEnabled)
@@ -187,9 +185,6 @@ export default function MiMarcaScreen() {
         setLogoUrlDark(s.logoUrlDark)
         setThemePresetKey(s.themePresetKey)
         setLoginLayoutKey(resolveLoginLayout(s.loginLayoutKey))
-        setSecondaryColor(s.brandSecondaryColor ?? '')
-        setAccentLight(s.accentLight ?? '')
-        setAccentDark(s.accentDark ?? '')
         setNeutralTint(s.neutralTint)
         setFontKey(s.brandFontKey ?? '')
         setLoaderVariant(s.loaderVariant ?? 'eva')
@@ -200,34 +195,40 @@ export default function MiMarcaScreen() {
     })()
   }, [])
 
-  const isGradient = !loaderTextColor
-
   // E7-10 — tema (preset) activo gobierna el color de los previews (espejo de resolvePresetBranding):
   // sin preset ⇒ color libre legacy. El color libre se PRESERVA (reversible al chip "Personalizado").
   const activePreset = useMemo(() => getThemePreset(themePresetKey), [themePresetKey])
   const effectivePrimary = activePreset ? activePreset.brandColor : color
   const hasLegacyCustom = !!color && !EVA_DEFAULT_COLORS.has(color.toLowerCase())
+  // W-brand B2 — par del tema EN VIVO (mismo contrato que resolveEffectiveCoachBrandTheme):
+  // preset ⇒ par curado del catálogo (modo estricto de sealPair); sin preset ⇒ secundario
+  // derivado del primario. Alimenta el preview del acordeón; ya no hay hex editable.
+  const advPair = useMemo(() => {
+    const base = HEX6.test(effectivePrimary) ? effectivePrimary : EVA_BLUE
+    return sealPair({ brandColor: base, themePresetKey: themePresetKey ?? null })
+  }, [effectivePrimary, themePresetKey])
   // Tema derivado en vivo (mismo motor que el render real del alumno) → previews del avanzado.
+  // Acentos: solo los del preset (los almacenados dejaron de aplicar — B2).
   const advTheme = useMemo(() => {
-    const opt = (v: string) => (HEX6.test(v) ? v : null)
     const base = HEX6.test(effectivePrimary) ? effectivePrimary : EVA_BLUE
     return resolveBrandTheme({
       brandColor: base,
-      accentLight: opt(accentLight),
-      accentDark: opt(accentDark),
-      secondaryLight: opt(secondaryColor),
-      secondaryDark: opt(secondaryColor),
+      accentLight: activePreset?.accentLight ?? null,
+      accentDark: activePreset?.accentDark ?? null,
+      secondaryLight: advPair.secondary,
+      secondaryDark: advPair.secondary,
       neutralTint,
     })
-  }, [effectivePrimary, accentLight, accentDark, secondaryColor, neutralTint])
+  }, [effectivePrimary, activePreset, advPair, neutralTint])
   const tintThemes = useMemo(() => {
     const base = HEX6.test(effectivePrimary) ? effectivePrimary : EVA_BLUE
     return { off: resolveBrandTheme({ brandColor: base, neutralTint: false }), on: resolveBrandTheme({ brandColor: base, neutralTint: true }) }
   }, [effectivePrimary])
 
   // Brand Score — pesos 1:1 con el web BrandSettingsForm (H6): logo20 · color15 · welcomeMsg10 ·
-  // modal10 · brandName10 · loader10 · fuente10 · variante10 · secundario5. La fuente y la variante
-  // se cuentan por su valor EFECTIVO (el preset activo aporta si el coach no eligió).
+  // modal10 · brandName10 · loader10 · fuente10 · variante10. La fuente y la variante se cuentan
+  // por su valor EFECTIVO (el preset activo aporta si el coach no eligió). W-brand B1: el criterio
+  // "secundario 5" murió con su input — el par ahora existe siempre (curado o derivado).
   const effectiveFontKey = fontKey || (activePreset?.fontKey ?? '')
   const effectiveLoaderVariant = loaderVariant && loaderVariant !== 'eva' ? loaderVariant : (activePreset?.loaderVariant ?? 'eva')
   // Serialización estable del compositor — se compara y se persiste siempre por esta vía.
@@ -243,9 +244,8 @@ export default function MiMarcaScreen() {
     if (effectiveFontKey) s += 10
     // Variante O compositor (1:1 con web: "loader variante/config 10").
     if (loaderConfigJson || effectiveLoaderVariant !== 'eva') s += 10
-    if (HEX6.test(secondaryColor)) s += 5
     return Math.min(100, s)
-  }, [logoUrl, activePreset, color, welcomeMessage, welcomeModalEnabled, welcomeModalContent, brandName, fullName, useCustomLoader, loaderText, effectiveFontKey, effectiveLoaderVariant, loaderConfigJson, secondaryColor])
+  }, [logoUrl, activePreset, color, welcomeMessage, welcomeModalEnabled, welcomeModalContent, brandName, fullName, useCustomLoader, loaderText, effectiveFontKey, effectiveLoaderVariant, loaderConfigJson])
 
   // "Sin guardar" (dirty) — mirrors the web BrandSettingsForm indicator + drives
   // the unified save FAB. Logo is excluded: it persists immediately on upload.
@@ -258,18 +258,14 @@ export default function MiMarcaScreen() {
       useBrandColors !== settings.useBrandColors ||
       useCustomLoader !== settings.useCustomLoader ||
       (loaderText || '') !== (settings.loaderText || '') ||
-      (loaderTextColor || '') !== (settings.loaderTextColor || '') ||
       loaderIconMode !== ((settings.loaderIconMode as string) ?? 'eva') ||
       (welcomeMessage || '') !== (settings.welcomeMessage || '') ||
       welcomeModalEnabled !== settings.welcomeModalEnabled ||
       welcomeModalType !== settings.welcomeModalType ||
       (welcomeModalContent || '') !== (settings.welcomeModalContent || '') ||
-      // E7-10 — avanzado
+      // E7-10 — avanzado (W-brand B1/B2: secundario/acentos ya no son estado del editor)
       (themePresetKey ?? null) !== (settings.themePresetKey ?? null) ||
       loginLayoutKey !== resolveLoginLayout(settings.loginLayoutKey) ||
-      (secondaryColor || '') !== (settings.brandSecondaryColor || '') ||
-      (accentLight || '') !== (settings.accentLight || '') ||
-      (accentDark || '') !== (settings.accentDark || '') ||
       neutralTint !== settings.neutralTint ||
       (fontKey || '') !== (settings.brandFontKey || '') ||
       (loaderVariant || 'eva') !== (settings.loaderVariant || 'eva') ||
@@ -277,7 +273,7 @@ export default function MiMarcaScreen() {
       loaderConfigJson !== (settings.loaderConfig ?? '') ||
       executorTheme !== (settings.executorTheme === 'eva' ? 'eva' : 'coach')
     )
-  }, [settings, fullName, brandName, color, useBrandColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeMessage, welcomeModalEnabled, welcomeModalType, welcomeModalContent, themePresetKey, loginLayoutKey, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, loaderConfigJson, executorTheme])
+  }, [settings, fullName, brandName, color, useBrandColors, useCustomLoader, loaderText, loaderIconMode, welcomeMessage, welcomeModalEnabled, welcomeModalType, welcomeModalContent, themePresetKey, loginLayoutKey, neutralTint, fontKey, loaderVariant, loaderConfigJson, executorTheme])
 
   async function pickLogo(variant: 'light' | 'dark' = 'light') {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
@@ -323,19 +319,15 @@ export default function MiMarcaScreen() {
       primaryColor: color,
       useBrandColors,
       loaderText: loaderText || null,
-      loaderTextColor: loaderTextColor || null,
       loaderIconMode,
       useCustomLoader,
       welcomeMessage: welcomeMessage || null,
       welcomeModalEnabled,
       welcomeModalContent: welcomeModalContent || null,
       welcomeModalType,
-      // E7-10 — avanzado
+      // E7-10 — avanzado (W-brand B1/B2/B4: secundario/acentos/color de texto ya no viajan)
       themePresetKey,
       loginLayoutKey,
-      brandSecondaryColor: secondaryColor || null,
-      accentLight: accentLight || null,
-      accentDark: accentDark || null,
       neutralTint,
       brandFontKey: fontKey || null,
       loaderVariant,
@@ -356,7 +348,6 @@ export default function MiMarcaScreen() {
         useBrandColors,
         useCustomLoader,
         loaderText: loaderText || null,
-        loaderTextColor: loaderTextColor || null,
         loaderIconMode,
         welcomeMessage: welcomeMessage || null,
         welcomeModalEnabled,
@@ -365,9 +356,6 @@ export default function MiMarcaScreen() {
         logoUrlDark,
         themePresetKey,
         loginLayoutKey,
-        brandSecondaryColor: secondaryColor || null,
-        accentLight: accentLight || null,
-        accentDark: accentDark || null,
         neutralTint,
         brandFontKey: fontKey || null,
         loaderVariant,
@@ -389,9 +377,11 @@ export default function MiMarcaScreen() {
         inviteCode: settings.inviteCode ?? '',
         subscriptionTier: tier,
         themePresetKey,
-        brandSecondaryColor: secondaryColor || null,
-        accentLight: accentLight || null,
-        accentDark: accentDark || null,
+        // W-brand B1/B2: campos muertos — null EXPLÍCITO para limpiar restos de la cache local
+        // del device (mergeStoredBranding: null limpia). La DB no se toca (grandfather pasivo).
+        brandSecondaryColor: null,
+        accentLight: null,
+        accentDark: null,
         neutralTint,
         brandFontKey: fontKey || null,
         logoUrl,
@@ -403,7 +393,8 @@ export default function MiMarcaScreen() {
         useCustomLoader,
         loaderText: loaderText || null,
         loaderIconMode,
-        loaderTextColor: loaderTextColor || null,
+        // W-brand B4: idem — se limpia el color de texto legacy cacheado.
+        loaderTextColor: null,
         executorTheme,
         useBrandColorsCoach: useBrandColors,
       }
@@ -516,7 +507,6 @@ export default function MiMarcaScreen() {
                   useCustomLoader={useCustomLoader}
                   loaderText={loaderText}
                   loaderIconMode={loaderIconMode}
-                  loaderTextColor={loaderTextColor}
                   logoUrl={logoUrl}
                   logoUrlDark={logoUrlDark}
                   fallbackColor={effectivePrimary}
@@ -728,27 +718,13 @@ export default function MiMarcaScreen() {
                       }}
                     />
 
-                    <FieldLabel>Estilo del texto</FieldLabel>
-                    <SegmentedTabs
-                      items={[{ value: 'gradient', label: 'Gradiente' }, { value: 'solid', label: 'Color sólido' }]}
-                      value={isGradient ? 'gradient' : 'solid'}
-                      onChange={(v) => setLoaderTextColor(v === 'gradient' ? '' : (loaderTextColor || color))}
-                    />
-                    {!isGradient ? (
-                      <Input
-                        label="Color del texto (hex)"
-                        value={loaderTextColor}
-                        onChangeText={(v: string) => setLoaderTextColor(v.startsWith('#') || v === '' ? v : `#${v}`)}
-                        placeholder={color}
-                        autoCapitalize="characters"
-                        testID="mimarca-loader-color"
-                      />
-                    ) : (
-                      <Text className="font-sans text-muted" style={{ fontSize: 11, lineHeight: 15 }}>
-                        El degradado animado se ve en la app web de tus alumnos. En la app del celular el
-                        texto va en tu color de marca (así se muestra en la vista previa).
-                      </Text>
-                    )}
+                    {/* W-brand B4: murieron el selector Gradiente/Sólido y el input hex del color
+                        del texto — el color lo decide el motor de contraste del tema (siempre
+                        legible en claro y oscuro). */}
+                    <Text className="font-sans text-muted" style={{ fontSize: 11, lineHeight: 15 }}>
+                      El texto se pinta automáticamente con tu color de marca, calibrado para ser
+                      legible en claro y oscuro.
+                    </Text>
                   </>
                 ) : null}
               </SectionCard>
@@ -852,35 +828,35 @@ export default function MiMarcaScreen() {
                         <Text className="font-sans-bold text-sport-600" style={{ fontSize: 9, letterSpacing: 0.4 }}>PRO</Text>
                       </View>
                     </View>
-                    <Text className="font-sans text-muted" style={{ fontSize: 11.5 }} numberOfLines={2}>Color secundario, fuente, tinte, acento por modo y loader.</Text>
+                    <Text className="font-sans text-muted" style={{ fontSize: 11.5 }} numberOfLines={2}>Par de colores del tema, fuente, tinte y pantalla de carga.</Text>
                   </View>
                   <ChevronDown size={18} className="text-muted" style={{ transform: [{ rotate: advancedOpen ? '180deg' : '0deg' }] }} />
                 </Pressable>
 
                 {advancedOpen ? (
                   <View style={{ gap: 20 }}>
-                    {/* Color secundario */}
+                    {/* W-brand B1/B2: murió el input hex del secundario. El par lo decide el tema:
+                        preset ⇒ par curado del catálogo; sin preset ⇒ derivado del primario vía
+                        sealPair (misma fórmula que el Sello v2). Solo lectura. */}
                     <View style={{ gap: 8 }}>
-                      <FieldLabel>Color secundario</FieldLabel>
-                      <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }}>Para badges, etiquetas y la 2ª serie de gráficos. Opcional.</Text>
-                      <View className="flex-row items-center" style={{ gap: 10 }}>
-                        <View className="border-subtle" style={{ width: 42, height: 42, borderRadius: 10, borderWidth: 1, backgroundColor: HEX6.test(secondaryColor) ? secondaryColor : advTheme.light.accent2 }} />
-                        <View style={{ flex: 1 }}>
-                          <Input
-                            value={secondaryColor}
-                            onChangeText={(v: string) => setSecondaryColor(v.startsWith('#') || v === '' ? v : `#${v}`)}
-                            placeholder="#00C7BE (opcional)"
-                            autoCapitalize="characters"
-                            testID="mimarca-secondary"
-                          />
-                        </View>
-                        {secondaryColor ? (
-                          <Pressable onPress={() => setSecondaryColor('')} hitSlop={8} accessibilityRole="button">
-                            <Text className="font-sans-medium text-muted" style={{ fontSize: 12, textDecorationLine: 'underline' }}>Quitar</Text>
-                          </Pressable>
-                        ) : null}
+                      <FieldLabel>Par de colores de tu tema</FieldLabel>
+                      <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }}>
+                        {activePreset
+                          ? 'Tu tema trae su par curado: primario + secundario para badges, etiquetas y la 2ª serie de gráficos.'
+                          : 'El secundario (badges, etiquetas y 2ª serie de gráficos) se deriva automáticamente de tu color principal.'}
+                      </Text>
+                      <View className="flex-row" style={{ gap: 10 }} testID="mimarca-theme-pair">
+                        {([['Primario', advPair.primary], ['Secundario', advPair.secondary]] as const).map(([label, hex]) => (
+                          <View key={label} className="flex-row items-center rounded-control border border-subtle bg-surface-sunken" style={{ flex: 1, gap: 8, padding: 8 }}>
+                            <View className="border-subtle" style={{ width: 30, height: 30, borderRadius: 8, borderWidth: 1, backgroundColor: hex }} />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text className="font-sans-bold text-strong" style={{ fontSize: 11 }}>{label}</Text>
+                              <Text className="text-muted" style={{ fontFamily: FONT.mono, fontSize: 10.5 }} numberOfLines={1}>{hex.toUpperCase()}</Text>
+                            </View>
+                          </View>
+                        ))}
                       </View>
-                      <AdvPreviewFrame label={secondaryColor ? 'Así se ven tus badges' : 'Sin secundario · usa tu color principal'}>
+                      <AdvPreviewFrame label="Así se ven tus badges">
                         <View className="flex-row" style={{ gap: 8 }}>
                           {(['light', 'dark'] as const).map((mode) => {
                             const t = advTheme[mode]
@@ -913,7 +889,7 @@ export default function MiMarcaScreen() {
                       />
                     </View>
 
-                    {/* Tinte de marca + acento por modo */}
+                    {/* Tinte de marca */}
                     <View style={{ gap: 10 }}>
                       <ToggleRow label="Tinte de marca en los fondos" value={neutralTint} onValueChange={setNeutralTint} testID="mimarca-neutral-tint" />
                       <AdvPreviewFrame label="Sin tinte vs. con tinte (se nota más en oscuro)">
@@ -934,25 +910,8 @@ export default function MiMarcaScreen() {
                           })}
                         </View>
                       </AdvPreviewFrame>
-                      <FieldLabel>Acento por modo (opcional)</FieldLabel>
-                      <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }}>Fuerza un acento distinto en claro y oscuro. Vacío = se calcula solo desde tu color.</Text>
-                      <Input label="Acento claro" value={accentLight} onChangeText={(v: string) => setAccentLight(v.startsWith('#') || v === '' ? v : `#${v}`)} placeholder="auto" autoCapitalize="characters" testID="mimarca-accent-light" />
-                      <Input label="Acento oscuro" value={accentDark} onChangeText={(v: string) => setAccentDark(v.startsWith('#') || v === '' ? v : `#${v}`)} placeholder="auto" autoCapitalize="characters" testID="mimarca-accent-dark" />
-                      <AdvPreviewFrame label="Acento resuelto por modo">
-                        <View className="flex-row" style={{ gap: 8 }}>
-                          {(['light', 'dark'] as const).map((mode) => {
-                            const t = advTheme[mode]
-                            return (
-                              <View key={mode} style={{ flex: 1, borderRadius: 8, borderWidth: 1, padding: 8, backgroundColor: t.bg, borderColor: t.border }}>
-                                <Text style={{ fontSize: 8, fontFamily: FONT.uiBold, letterSpacing: 0.5, color: t.textMuted, marginBottom: 5 }}>{mode === 'light' ? 'CLARO' : 'OSCURO'}</Text>
-                                <View style={{ borderRadius: 6, paddingVertical: 4, alignItems: 'center', backgroundColor: t.accent }}>
-                                  <Text style={{ fontSize: 10, fontFamily: FONT.uiBold, color: t.accentText }}>Acción</Text>
-                                </View>
-                              </View>
-                            )
-                          })}
-                        </View>
-                      </AdvPreviewFrame>
+                      {/* W-brand B1/B2: murieron los inputs "Acento claro/oscuro" — el acento se
+                          calcula siempre desde el color principal (o lo trae el preset). */}
                     </View>
 
                     {/* Pantalla de carga — unificada: elegir una animación lista O armar la tuya
@@ -1018,7 +977,6 @@ export default function MiMarcaScreen() {
                                 useCustomLoader={useCustomLoader}
                                 loaderText={loaderText}
                                 loaderIconMode={loaderIconMode}
-                                loaderTextColor={loaderTextColor}
                                 logoUrl={logoUrl}
                                 logoUrlDark={logoUrlDark}
                                 fallbackColor={effectivePrimary}
@@ -1136,7 +1094,6 @@ function LoaderPreview({
   useCustomLoader,
   loaderText,
   loaderIconMode,
-  loaderTextColor,
   logoUrl,
   logoUrlDark,
   fallbackColor,
@@ -1147,7 +1104,6 @@ function LoaderPreview({
   useCustomLoader: boolean
   loaderText: string
   loaderIconMode: 'eva' | 'coach' | 'none'
-  loaderTextColor: string
   logoUrl: string | null
   logoUrlDark: string | null
   fallbackColor: string
@@ -1180,7 +1136,8 @@ function LoaderPreview({
         <EvaFigure size={44} style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }} />
       ) : null}
       {useCustomLoader && customText ? (
-        <Text style={{ fontSize: 24, lineHeight: 28, color: loaderTextColor || fallbackColor, fontFamily: FONT.displayBold, letterSpacing: -0.5 }}>
+        // W-brand B4: el color del texto ya no es configurable — va en el color de marca efectivo.
+        <Text style={{ fontSize: 24, lineHeight: 28, color: fallbackColor, fontFamily: FONT.displayBold, letterSpacing: -0.5 }}>
           {word}
         </Text>
       ) : null}

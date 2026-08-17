@@ -22,11 +22,14 @@ export interface CoachBranding {
   subscriptionTier?: string | null
   /** Variante de layout del login: clasico | hero | energia | minimal (`login_layout_key`). */
   loginLayoutKey?: string | null
-  /** Color secundario (color2) white-label v2 (`brand_secondary_color`). */
+  /**
+   * LEGACY (W-brand B2): color secundario suelto (`brand_secondary_color`). Ya no se lee de DB
+   * ni se resuelve — el campo sobrevive en el tipo solo por compat con caches viejas del device.
+   */
   brandSecondaryColor?: string | null
-  /** Override de acento por modo claro (`accent_light`). */
+  /** LEGACY (W-brand B2): override de acento claro (`accent_light`). Ya no se lee ni resuelve. */
   accentLight?: string | null
-  /** Override de acento por modo oscuro (`accent_dark`). */
+  /** LEGACY (W-brand B2): override de acento oscuro (`accent_dark`). Ya no se lee ni resuelve. */
   accentDark?: string | null
   /** Tiñe neutrales con el hue de marca (`neutral_tint`). */
   neutralTint?: boolean | null
@@ -42,6 +45,7 @@ export interface CoachBranding {
   useCustomLoader?: boolean
   loaderText?: string | null
   loaderIconMode?: 'eva' | 'coach' | 'none' | string | null
+  /** LEGACY (W-brand B4): ya no se lee ni escribe — el color lo decide el motor de contraste. */
   loaderTextColor?: string | null
   /**
    * Ejecutor V3 (E0.7) — tema del ejecutor del alumno (`executor_theme`): 'coach' usa los
@@ -77,8 +81,12 @@ export function normalizeCoachIdentifier(input: string): string {
 // Nota: `display_name` NO es columna de `coaches` (fuente de verdad = `brand_name`, alineado con la
 // query del login web). El select rich pide todo el payload white-label del login; el min es el
 // fallback DB-compat para DBs viejas que no tengan las columnas v2 (todas con GRANT anon).
+// W-brand B1/B2/B4 (dueño 2026-08-17): `brand_secondary_color`, `accent_light`, `accent_dark` y
+// `loader_text_color` SALIERON del select — las columnas quedan en DB (grandfather pasivo) pero
+// dejan de leerse: el par se deriva vía `sealPair` y el color del texto del loader lo decide el
+// motor de contraste del tema.
 const BRANDING_COLS_RICH =
-  'id, slug, primary_color, brand_name, invite_code, logo_url, logo_url_dark, welcome_message, subscription_tier, login_layout_key, brand_secondary_color, accent_light, accent_dark, neutral_tint, brand_font_key, theme_preset_key, loader_variant, loader_config, use_custom_loader, loader_text, loader_icon_mode, loader_text_color, executor_theme'
+  'id, slug, primary_color, brand_name, invite_code, logo_url, logo_url_dark, welcome_message, subscription_tier, login_layout_key, neutral_tint, brand_font_key, theme_preset_key, loader_variant, loader_config, use_custom_loader, loader_text, loader_icon_mode, executor_theme'
 const BRANDING_COLS_MIN = 'id, slug, primary_color, brand_name, invite_code'
 
 export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
@@ -117,9 +125,11 @@ function mapCoachRowToBranding(data: any): CoachBranding {
     welcomeMessage: data.welcome_message ?? null,
     subscriptionTier: data.subscription_tier ?? null,
     loginLayoutKey: data.login_layout_key ?? null,
-    brandSecondaryColor: data.brand_secondary_color ?? null,
-    accentLight: data.accent_light ?? null,
-    accentDark: data.accent_dark ?? null,
+    // W-brand B2: secundario/acentos almacenados ya no se leen — quedan null en el payload
+    // (el resolutor deriva el par del primario; con preset manda el catálogo).
+    brandSecondaryColor: null,
+    accentLight: null,
+    accentDark: null,
     neutralTint: data.neutral_tint ?? null,
     brandFontKey: data.brand_font_key ?? null,
     themePresetKey: data.theme_preset_key ?? null,
@@ -133,7 +143,8 @@ function mapCoachRowToBranding(data: any): CoachBranding {
     useCustomLoader: data.use_custom_loader ?? false,
     loaderText: data.loader_text ?? null,
     loaderIconMode: data.loader_icon_mode ?? null,
-    loaderTextColor: data.loader_text_color ?? null,
+    // W-brand B4: el color del texto del loader ya no se lee — lo decide el motor de contraste.
+    loaderTextColor: null,
     executorTheme: data.executor_theme ?? 'coach',
     // Solo viene por el camino autenticado; ausente ⇒ null (= desconocido = activado).
     useBrandColorsCoach: data.use_brand_colors_coach ?? null,

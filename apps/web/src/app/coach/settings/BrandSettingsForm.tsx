@@ -23,6 +23,7 @@ import type { SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack, isFontKey, type FontKey } from '@/lib/brand-fonts'
 import { resolveLoaderVariant, type LoaderVariant } from '@/lib/brand-loaders'
 import { getThemePreset } from '@/lib/brand-presets'
+import { sealPair } from '@eva/brand-kit'
 import { parseLoaderConfig, serializeLoaderConfig, resolveLoginLayout, type LoginLayoutKey, type LoaderComposite } from '@/lib/brand-composer'
 import { BRAND_LOGO_WEB, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 
@@ -135,7 +136,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [useCoachColors, setUseCoachColors] = useState(!!coach.use_brand_colors_coach)
     const [useCustomLoader, setUseCustomLoader] = useState(coach.use_custom_loader ?? false)
     const [loaderText, setLoaderText] = useState(coach.loader_text ?? '')
-    const [loaderTextColor, setLoaderTextColor] = useState(coach.loader_text_color ?? '')
+    // W-brand B4: loader_text_color murió (ni estado ni input) — el texto del loader se pinta
+    // con el gradiente derivado del primario. El valor almacenado queda inerte en DB.
     const [loaderIconMode, setLoaderIconMode] = useState<'eva' | 'coach' | 'none'>(
         (coach.loader_icon_mode as 'eva' | 'coach' | 'none') ?? 'eva'
     )
@@ -150,9 +152,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     )
     // white-label v2 (branding avanzado Pro): estado LEVANTADO al padre (antes vivía local en
     // BrandAdvancedSection) para que el preview del teléfono lo refleje y el dirty/beforeunload lo cuente.
-    const [secondaryColor, setSecondaryColor] = useState(coach.brand_secondary_color ?? '')
-    const [accentLight, setAccentLight] = useState(coach.accent_light ?? '')
-    const [accentDark, setAccentDark] = useState(coach.accent_dark ?? '')
+    // W-brand B2: secondaryColor/accentLight/accentDark murieron como estado editable — el par se
+    // deriva del tema (preset) o del primario (sealPair); los valores almacenados quedan inertes.
     const [neutralTint, setNeutralTint] = useState(coach.neutral_tint ?? false)
     const [fontKey, setFontKey] = useState<FontKey | ''>(isFontKey(coach.brand_font_key) ? coach.brand_font_key : '')
     const [loaderVariant, setLoaderVariant] = useState<LoaderVariant>(resolveLoaderVariant(coach.loader_variant))
@@ -175,21 +176,17 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [logoErrors, setLogoErrors] = useState<{ light?: string | null; dark?: string | null }>({})
     const objectUrlsRef = useRef<string[]>([])
 
-    const advancedValue: AdvancedBrandValue = { secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant }
+    const advancedValue: AdvancedBrandValue = { neutralTint, fontKey, loaderVariant }
     const handleAdvancedChange = (patch: Partial<AdvancedBrandValue>) => {
-        if (patch.secondaryColor !== undefined) setSecondaryColor(patch.secondaryColor)
-        if (patch.accentLight !== undefined) setAccentLight(patch.accentLight)
-        if (patch.accentDark !== undefined) setAccentDark(patch.accentDark)
         if (patch.neutralTint !== undefined) setNeutralTint(patch.neutralTint)
         if (patch.fontKey !== undefined) setFontKey(patch.fontKey)
         if (patch.loaderVariant !== undefined) setLoaderVariant(patch.loaderVariant)
     }
-    const loaderValue: AdvancedLoaderValue = { useCustomLoader, loaderText, loaderIconMode, loaderTextColor }
+    const loaderValue: AdvancedLoaderValue = { useCustomLoader, loaderText, loaderIconMode }
     const handleLoaderChange = (patch: Partial<AdvancedLoaderValue>) => {
         if (patch.useCustomLoader !== undefined) setUseCustomLoader(patch.useCustomLoader)
         if (patch.loaderText !== undefined) setLoaderText(patch.loaderText)
         if (patch.loaderIconMode !== undefined) setLoaderIconMode(patch.loaderIconMode)
-        if (patch.loaderTextColor !== undefined) setLoaderTextColor(patch.loaderTextColor)
     }
     // Tema (preset) activo: gobierna color/fuente/loader de la vista previa (y del alumno vía el proxy).
     // Sin preset → modo legacy: usa el color guardado + los overrides del branding avanzado.
@@ -203,6 +200,11 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const effectiveFontKey: FontKey | '' = fontKey || (activePreset?.fontKey ?? '')
     // Grandfather: el coach tiene un color custom real (≠ defaults EVA) → ofrecer el chip legacy/reversa.
     const hasLegacyCustom = !!coach.primary_color && !EVA_DEFAULT_COLORS.has(coach.primary_color.toLowerCase())
+    // W-brand B2: secundario RESUELTO para el acordeón (solo lectura) — par curado del preset,
+    // o derivado del primario efectivo vía sealPair para el legacy custom. El hex almacenado no cuenta.
+    const effectiveSecondary = activePreset
+        ? activePreset.secondaryColor
+        : sealPair({ brandColor: effectivePrimary || '#10B981', themePresetKey: null }).secondary
 
     // Fuente resuelta para el preview del teléfono (preset o override; '' = default de display de EVA).
     const previewFontFamily = effectiveFontKey ? resolveBrandFontStack(effectiveFontKey) : undefined
@@ -214,21 +216,21 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     // slug legacy: solo lectura (inmutable). Sigue funcionando como alias para alumnos antiguos.
     const legacyStudentUrl = coach.slug ? `https://eva-app.cl/c/${coach.slug}/login` : null
 
-    // Brand Score (H6): recalibrado para que el branding avanzado (fuente / loader / color2) cuente
-    // y el 100% sea alcanzable. Suma exacta = 100.
+    // Brand Score (H6): recalibrado para que el branding avanzado (fuente / loader) cuente
+    // y el 100% sea alcanzable. Suma exacta = 100. W-brand B2: el ítem del secundario custom
+    // murió (el par se deriva solo) — sus 5 puntos pasaron al tema/color elegido (15→20).
     const brandScore = useMemo(() => {
         let score = 0
         if (coach.logo_url || stagedLogo) score += 20
-        if (activePreset || (selectedColor && selectedColor !== '#007AFF')) score += 15
+        if (activePreset || (selectedColor && selectedColor !== '#007AFF')) score += 20
         if (welcomeMessageInput.trim()) score += 10
         if (welcomeModalEnabled && welcomeModalContent.trim()) score += 10
         if (coach.brand_name && coach.brand_name !== coach.full_name) score += 10
         if (useCustomLoader && loaderText.trim()) score += 10
         if (effectiveFontKey) score += 10
         if (effectiveLoaderVariant !== 'eva' || loaderConfig) score += 10
-        if (/^#[0-9a-fA-F]{6}$/.test(secondaryColor)) score += 5
         return score
-    }, [coach, stagedLogo, activePreset, selectedColor, welcomeMessageInput, welcomeModalEnabled, welcomeModalContent, useCustomLoader, loaderText, effectiveFontKey, effectiveLoaderVariant, loaderConfig, secondaryColor])
+    }, [coach, stagedLogo, activePreset, selectedColor, welcomeMessageInput, welcomeModalEnabled, welcomeModalContent, useCustomLoader, loaderText, effectiveFontKey, effectiveLoaderVariant, loaderConfig])
 
     const qrNode = useMemo(() => (
         <QRCodeSVG value={studentUrl} size={96} level="M" />
@@ -241,7 +243,6 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             useCoachColors !== !!coach.use_brand_colors_coach ||
             useCustomLoader !== (coach.use_custom_loader ?? false) ||
             loaderText !== (coach.loader_text ?? '') ||
-            loaderTextColor !== (coach.loader_text_color ?? '') ||
             loaderIconMode !== ((coach.loader_icon_mode as 'eva' | 'coach' | 'none') ?? 'eva') ||
             welcomeModalEnabled !== (coach.welcome_modal_enabled ?? false) ||
             welcomeModalContent !== (coach.welcome_modal_content ?? '') ||
@@ -250,10 +251,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             // logo (staged, se sube en el save)
             stagedLogo !== null ||
             stagedLogoDark !== null ||
-            // white-label v2 (branding avanzado Pro) — fuente/loader/color2/acentos/tinte
-            secondaryColor !== (coach.brand_secondary_color ?? '') ||
-            accentLight !== (coach.accent_light ?? '') ||
-            accentDark !== (coach.accent_dark ?? '') ||
+            // white-label v2 (branding avanzado Pro) — fuente/loader/tinte (B2: los hex de color murieron)
             neutralTint !== (coach.neutral_tint ?? false) ||
             fontKey !== (isFontKey(coach.brand_font_key) ? coach.brand_font_key : '') ||
             loaderVariant !== resolveLoaderVariant(coach.loader_variant) ||
@@ -264,7 +262,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             // Ejecutor V3 (E0.7) — tema del ejecutor
             executorTheme !== (coach.executor_theme === 'eva' ? 'eva' : 'coach')
         )
-    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, stagedLogo, stagedLogoDark, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, themePresetKey, loginLayoutKey, loaderConfig, executorTheme, coach])
+    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, stagedLogo, stagedLogoDark, neutralTint, fontKey, loaderVariant, themePresetKey, loginLayoutKey, loaderConfig, executorTheme, coach])
 
     // Live Preview Effect (H7: el mockup del teléfono SIEMPRE usa selectedColor; este efecto solo
     // tiñe el CHROME del panel del coach, y solo si use_brand_colors_coach está ON).
@@ -447,7 +445,6 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     welcomeMessage={welcomeMessageInput}
                     loaderText={loaderText}
                     useCustomLoader={useCustomLoader}
-                    loaderTextColor={loaderTextColor}
                     loaderIconMode={loaderIconMode}
                     fontFamily={previewFontFamily}
                     loaderVariant={effectiveLoaderVariant}
@@ -788,10 +785,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         </div>
                     </div>
 
-                    {/* white-label v2 — branding avanzado (Pro): acordeón cerrado (color2 + fuente + dark + loader) */}
+                    {/* white-label v2 — branding avanzado (Pro): acordeón cerrado (fuente + tinte + loader).
+                        W-brand B2: el secundario viaja RESUELTO (preset o sealPair) — solo lectura. */}
                     <BrandAdvancedSection
                         tier={(coach.subscription_tier ?? 'free') as SubscriptionTier}
                         primaryColor={effectivePrimary || '#10B981'}
+                        secondaryColor={effectiveSecondary}
                         value={advancedValue}
                         onChange={handleAdvancedChange}
                         loader={loaderValue}
@@ -800,7 +799,6 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         onLoaderConfigChange={setLoaderConfig}
                         brandName={coach.brand_name}
                         logoUrl={previewLogoUrl}
-                        presetActive={!!activePreset}
                     />
 
                     {/* Share with students */}
@@ -863,7 +861,6 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         welcomeMessage={welcomeMessageInput}
                         loaderText={loaderText}
                         useCustomLoader={useCustomLoader}
-                        loaderTextColor={loaderTextColor}
                         loaderIconMode={loaderIconMode}
                         fontFamily={previewFontFamily}
                         loaderVariant={loaderVariant}
@@ -949,7 +946,6 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             welcomeMessage={welcomeMessageInput}
                             loaderText={loaderText}
                             useCustomLoader={useCustomLoader}
-                            loaderTextColor={loaderTextColor}
                             loaderIconMode={loaderIconMode}
                             fontFamily={previewFontFamily}
                             loaderVariant={loaderVariant}

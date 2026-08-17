@@ -12,7 +12,11 @@ export async function BrandClientLoadingShell({
     const h = await headers()
     const customText = decodeBrandHeaderValue(h.get('x-coach-loader-text')) || undefined
     const useCustom = h.get('x-coach-use-custom-loader') === 'true'
-    const textColor = h.get('x-coach-loader-text-color') || undefined
+    // W-brand B4: el standalone deja de leer loader_text_color — el texto del loader se pinta
+    // con el gradiente derivado del primario. Managed (org/team) conserva su camino hasta W3.
+    const brandSource = h.get('x-workspace-brand-source')
+    const isManagedBrand = brandSource === 'organization' || brandSource === 'orphan'
+    const textColor = isManagedBrand ? (h.get('x-coach-loader-text-color') || undefined) : undefined
     const iconModeRaw = h.get('x-coach-loader-icon-mode') ?? 'eva'
     const iconMode = (iconModeRaw === 'coach' || iconModeRaw === 'none') ? iconModeRaw : 'eva' as const
     const coachLogoUrl = h.get('x-coach-logo-url') || undefined

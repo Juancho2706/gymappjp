@@ -45,7 +45,7 @@ export interface CoachBrandSettings {
   /** E7-10: logo alternativo para modo oscuro (`logo_url_dark`). */
   logoUrlDark: string | null
   loaderText: string | null
-  loaderTextColor: string | null
+  // W-brand B4: `loader_text_color` salió del contrato — el color lo decide el motor de contraste.
   loaderIconMode: string
   useCustomLoader: boolean
   welcomeMessage: string | null
@@ -57,12 +57,9 @@ export interface CoachBrandSettings {
   themePresetKey: string | null
   /** Variante de layout del login del alumno: clasico|hero|energia|minimal (`login_layout_key`). */
   loginLayoutKey: string | null
-  /** Color secundario (color2) para badges/2ª serie (`brand_secondary_color`). */
-  brandSecondaryColor: string | null
-  /** Override de acento en modo claro (`accent_light`). */
-  accentLight: string | null
-  /** Override de acento en modo oscuro (`accent_dark`). */
-  accentDark: string | null
+  // W-brand B1/B2 (dueño 2026-08-17): `brand_secondary_color`/`accent_light`/`accent_dark`
+  // SALIERON del contrato del editor — el par se deriva del primario vía `sealPair` (o viene
+  // curado del preset) y los valores almacenados quedan en DB inertes (grandfather pasivo).
   /** Tiñe neutrales con el hue de marca (`neutral_tint`). */
   neutralTint: boolean
   /** Fuente de display curada (`brand_font_key`). */
@@ -85,7 +82,6 @@ export interface CoachBrandEditable {
   primaryColor: string
   useBrandColors: boolean
   loaderText: string | null
-  loaderTextColor: string | null
   loaderIconMode: string
   useCustomLoader: boolean
   welcomeMessage: string | null
@@ -93,11 +89,11 @@ export interface CoachBrandEditable {
   welcomeModalContent: string | null
   welcomeModalType: 'text' | 'video'
   // E7-10 — avanzado (opcionales; brand.tsx los envía siempre desde el baseline cargado).
+  // W-brand B1/B2/B4: secundario, acentos y color de texto del loader YA NO son editables —
+  // el editor no los manda y el update no los escribe (whitelist explícita, espejo de la
+  // server action web). Los valores almacenados en DB quedan intactos.
   themePresetKey?: string | null
   loginLayoutKey?: string | null
-  brandSecondaryColor?: string | null
-  accentLight?: string | null
-  accentDark?: string | null
   neutralTint?: boolean
   brandFontKey?: string | null
   loaderVariant?: string | null
@@ -114,12 +110,14 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const baseCols = 'id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type'
+  // W-brand B1/B2/B4: brand_secondary_color, accent_light, accent_dark y loader_text_color
+  // salieron de ambos selects — el editor ya no los muestra ni los escribe (las columnas quedan).
+  const baseCols = 'id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type'
   // E7-10: columnas white-label v2 (avanzado). Van en la query RICH; si una prod vieja no las
   // tiene, selectWithFallback cae a baseCols y quedan en null/defaults (degradación limpia).
   // QA4: loader_config + executor_theme entran SOLO por este camino AUTENTICADO (el coach lee su
   // propia fila bajo RLS). El select anonimo del login del alumno (lib/branding.ts) NO se toca.
-  const v2Cols = 'logo_url_dark, theme_preset_key, login_layout_key, brand_secondary_color, accent_light, accent_dark, neutral_tint, brand_font_key, loader_variant, loader_config, executor_theme'
+  const v2Cols = 'logo_url_dark, theme_preset_key, login_layout_key, neutral_tint, brand_font_key, loader_variant, loader_config, executor_theme'
   // P4: traer slug_changed_at/previous_slugs para saber si el slug es legacy personalizado.
   // selectWithFallback: si esas columnas no existen en una prod vieja, cae a la query base.
   const { data } = await selectWithFallback<any>(
@@ -142,7 +140,6 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
     logoUrl: data.logo_url ?? null,
     logoUrlDark: data.logo_url_dark ?? null,
     loaderText: data.loader_text ?? null,
-    loaderTextColor: data.loader_text_color ?? null,
     loaderIconMode: (data.loader_icon_mode as string) ?? 'eva',
     useCustomLoader: Boolean(data.use_custom_loader),
     welcomeMessage: data.welcome_message ?? null,
@@ -151,9 +148,6 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
     welcomeModalType: (data.welcome_modal_type as 'text' | 'video') ?? 'text',
     themePresetKey: data.theme_preset_key ?? null,
     loginLayoutKey: data.login_layout_key ?? null,
-    brandSecondaryColor: data.brand_secondary_color ?? null,
-    accentLight: data.accent_light ?? null,
-    accentDark: data.accent_dark ?? null,
     neutralTint: Boolean(data.neutral_tint),
     brandFontKey: data.brand_font_key ?? null,
     loaderVariant: data.loader_variant ?? null,
@@ -181,19 +175,8 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
   if (!brandValidation.success) {
     return { ok: false, error: brandValidation.error.issues[0]?.message ?? 'Datos de marca inválidos.' }
   }
-  // E7-10: colores avanzados son OPCIONALES; vacío ⇒ null (el motor deriva desde el principal).
-  // Si vienen con valor, deben ser #RRGGBB (mismo guard que la web).
-  const optHex = (v: string | null | undefined): { ok: true; value: string | null } | { ok: false } => {
-    const t = (v ?? '').trim()
-    if (!t) return { ok: true, value: null }
-    return /^#[0-9a-fA-F]{6}$/.test(t) ? { ok: true, value: t } : { ok: false }
-  }
-  const sec = optHex(input.brandSecondaryColor)
-  if (!sec.ok) return { ok: false, error: 'Color secundario inválido (usa formato #RRGGBB).' }
-  const al = optHex(input.accentLight)
-  if (!al.ok) return { ok: false, error: 'Acento claro inválido (usa formato #RRGGBB).' }
-  const ad = optHex(input.accentDark)
-  if (!ad.ok) return { ok: false, error: 'Acento oscuro inválido (usa formato #RRGGBB).' }
+  // W-brand B1/B2/B4: murieron los inputs hex de secundario/acentos/color de texto del loader —
+  // no hay nada que validar acá; esos campos ya no entran al payload (whitelist explícita abajo).
 
   // Bump welcome_modal_version when the modal changes so students re-see it (web parity).
   const { data: current } = await supabase
@@ -235,18 +218,17 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
   }
 
   if (brandingAllowed) {
+    // W-brand B1/B2/B4 — whitelist explícita: brand_secondary_color, accent_light, accent_dark y
+    // loader_text_color NO se escriben más desde standalone (ni con null: los valores almacenados
+    // quedan intactos en DB — grandfather pasivo, inertes porque la lectura también murió).
     Object.assign(updatePayload, {
       primary_color: input.primaryColor,
       use_brand_colors_coach: input.useBrandColors,
       loader_text: input.loaderText?.trim() || null,
-      loader_text_color: input.loaderTextColor?.trim() || null,
       loader_icon_mode: input.loaderIconMode || 'eva',
       use_custom_loader: input.useCustomLoader,
       theme_preset_key: input.themePresetKey ?? null,
       login_layout_key: input.loginLayoutKey || 'clasico',
-      brand_secondary_color: sec.value,
-      accent_light: al.value,
-      accent_dark: ad.value,
       neutral_tint: !!input.neutralTint,
       brand_font_key: input.brandFontKey || null,
       loader_variant: input.loaderVariant || 'eva',

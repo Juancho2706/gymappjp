@@ -6,7 +6,6 @@ import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { CURATED_FONTS, FONT_KEY_TUPLE, resolveBrandFontStack, type FontKey } from '@/lib/brand-fonts'
 import { LOADER_VARIANTS, LOADER_VARIANT_TUPLE, type LoaderVariant } from '@/lib/brand-loaders'
 import { serializeLoaderConfig, DEFAULT_LOADER_COMPOSITE, type LoaderComposite } from '@/lib/brand-composer'
-import { generateBrandPalette } from '@/lib/color-utils'
 import { Sparkles, Lock, Palette, Type as TypeIcon, Loader2, Check, AlertTriangle, ChevronRight, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
@@ -24,33 +23,34 @@ function hexToSpaceRgb(hex: string): string {
     return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
-/** Valores persistidos del branding avanzado — viven levantados en el form padre (preview + dirty). */
+/** Valores persistidos del branding avanzado — viven levantados en el form padre (preview + dirty).
+ *  W-brand B1/B2: murieron los hex de color (secundario + acentos por modo) — el par se deriva
+ *  del tema/primario y ya no se edita acá. Solo queda lo no-color. */
 export type AdvancedBrandValue = {
-    secondaryColor: string
-    accentLight: string
-    accentDark: string
     neutralTint: boolean
     fontKey: FontKey | ''
     loaderVariant: LoaderVariant
 }
 
-/** Config del loader legacy (texto/ícono/color) — también levantado al padre (preview + dirty).
- *  Se fusiona acá con `loaderVariant` para tener UNA sola sección "Pantalla de carga". */
+/** Config del loader legacy (texto/ícono) — también levantado al padre (preview + dirty).
+ *  Se fusiona acá con `loaderVariant` para tener UNA sola sección "Pantalla de carga".
+ *  W-brand B4: `loaderTextColor` murió — el texto se pinta con el gradiente derivado del primario. */
 export type AdvancedLoaderValue = {
     useCustomLoader: boolean
     loaderText: string
     loaderIconMode: 'eva' | 'coach' | 'none'
-    loaderTextColor: string
 }
 
 type Props = {
     tier: SubscriptionTier
     /** Color primario reactivo (lo controla el form padre) — base del cálculo de contraste. */
     primaryColor: string
+    /** Secundario RESUELTO (par curado del preset o derivado vía sealPair) — solo lectura (B2). */
+    secondaryColor: string
     /** Estado controlado por el form padre (para reflejarlo en el preview del teléfono + dirty). */
     value: AdvancedBrandValue
     onChange: (patch: Partial<AdvancedBrandValue>) => void
-    /** Config del loader (texto/ícono/color) — controlado por el padre; se fusiona con la variante. */
+    /** Config del loader (texto/ícono) — controlado por el padre; se fusiona con la variante. */
     loader: AdvancedLoaderValue
     onLoaderChange: (patch: Partial<AdvancedLoaderValue>) => void
     /** Loader compuesto "Crear el mío" (W1b) — precede a la variante cuando está definido. */
@@ -60,8 +60,6 @@ type Props = {
     brandName: string
     /** Logo actual (o el recién elegido) — habilita la opción de ícono "Mi logo". */
     logoUrl?: string | null
-    /** Hay un tema (preset) activo → los ajustes de abajo los define el tema salvo que los personalices. */
-    presetActive?: boolean
 }
 
 const CARD = 'bg-surface-card border border-subtle rounded-card p-4 sm:p-6 shadow-[var(--shadow-sm)]'
@@ -76,30 +74,31 @@ function PreviewFrame({ label, children, className }: { label: string; children:
     )
 }
 
-/** Sección "Branding avanzado (Pro)" del white-label v2: color2 + fuente + dark + pantalla de carga
- *  (variante O compositor, unificados). Cada control muestra un mini-preview inmediato de LO QUE cambia,
+/** Sección "Branding avanzado (Pro)" del white-label v2: fuente + tinte + pantalla de carga
+ *  (variante O compositor, unificados). W-brand B1: los inputs hex de color murieron — el par de
+ *  marca se muestra solo-lectura (curado del preset o derivado del primario vía sealPair, B2).
+ *  Cada control muestra un mini-preview inmediato de LO QUE cambia,
  *  además de la vista previa grande del teléfono (que se mantiene). Acordeón CERRADO por defecto.
  *  Los valores persistidos se emiten como hidden inputs SIEMPRE presentes (fuera del cuerpo colapsable)
  *  para que guardar funcione aunque el acordeón esté cerrado. Controlado: el estado vive en el padre. */
-export function BrandAdvancedSection({ tier, primaryColor, value, onChange, loader, onLoaderChange, loaderConfig, onLoaderConfigChange, brandName, logoUrl, presetActive }: Props) {
-    const { secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant } = value
+export function BrandAdvancedSection({ tier, primaryColor, secondaryColor, value, onChange, loader, onLoaderChange, loaderConfig, onLoaderConfigChange, brandName, logoUrl }: Props) {
+    const { neutralTint, fontKey, loaderVariant } = value
     const [open, setOpen] = useState(false)
-    const [accentOpen, setAccentOpen] = useState(!!(value.accentLight || value.accentDark))
 
     const primaryHex = HEX_RE.test(primaryColor) ? primaryColor : '#10B981'
 
     // Tema derivado en vivo (mismo motor que el render real) → guardia de contraste + mini-previews.
+    // W-brand B2: el secundario llega YA resuelto (par curado del preset o sealPair del primario);
+    // los acentos por modo murieron — el motor los deriva solo del primario.
     const theme = useMemo(() => {
-        const opt = (v: string) => (HEX_RE.test(v) ? v : null)
+        const sec = HEX_RE.test(secondaryColor) ? secondaryColor : null
         return resolveBrandTheme({
             brandColor: primaryHex,
-            accentLight: opt(accentLight),
-            accentDark: opt(accentDark),
             neutralTint,
-            secondaryLight: opt(secondaryColor),
-            secondaryDark: opt(secondaryColor),
+            secondaryLight: sec,
+            secondaryDark: sec,
         })
-    }, [primaryHex, accentLight, accentDark, neutralTint, secondaryColor])
+    }, [primaryHex, neutralTint, secondaryColor])
 
     // Par de temas con/sin tinte (solo varía neutralTint) → mini-preview del tinte neutro.
     const tintThemes = useMemo(() => ({
@@ -109,9 +108,6 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
 
     const report = useMemo(() => contrastReport(theme), [theme])
     const failing = report.items.filter((i) => !i.passes)
-
-    const loaderPalette = generateBrandPalette(primaryHex)
-    const brandGradient = `linear-gradient(90deg, ${loaderPalette.primaryLight}, ${loaderPalette.primary}, ${loaderPalette.primaryDark}, ${loaderPalette.primaryLight})`
 
     // Fuente de muestra (títulos). '' → default de display de EVA (Montserrat).
     const sampleFontFamily = resolveBrandFontStack(fontKey || null)
@@ -137,7 +133,7 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                     <span className="ml-auto text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">Pro</span>
                 </div>
                 <p className="text-xs text-muted -mt-3">
-                    Color secundario, fuente personalizada, modo oscuro con tu marca y loaders. Disponible desde el plan Pro.
+                    Fuente personalizada, tinte de marca, modo oscuro con tu marca y loaders. Disponible desde el plan Pro.
                 </p>
             </div>
         )
@@ -160,64 +156,33 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                         <h2 className="text-base font-bold text-strong">Branding avanzado</h2>
                         <span className="text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">Pro</span>
                     </div>
-                    <p className="text-xs text-muted">Color secundario, fuente, acento por modo y pantalla de carga. Cada ajuste muestra un ejemplo en vivo.</p>
+                    <p className="text-xs text-muted">Fuente, tinte de marca y pantalla de carga. Cada ajuste muestra un ejemplo en vivo.</p>
                 </div>
                 <ChevronRight className={`w-[18px] h-[18px] shrink-0 text-subtle transition-transform ${open ? 'rotate-90' : ''}`} />
             </button>
 
-            {/* Hidden inputs → SIEMPRE presentes (aunque el acordeón esté cerrado) para no perder datos al guardar */}
-            <input type="hidden" name="brand_secondary_color" value={secondaryColor} />
-            <input type="hidden" name="accent_light" value={accentLight} />
-            <input type="hidden" name="accent_dark" value={accentDark} />
+            {/* Hidden inputs → SIEMPRE presentes (aunque el acordeón esté cerrado) para no perder datos al guardar.
+                W-brand B1/B2/B4: brand_secondary_color / accent_light / accent_dark / loader_text_color ya NO
+                viajan — la server action los descarta igual (whitelist) y el par se deriva del tema. */}
             <input type="hidden" name="neutral_tint" value={neutralTint ? 'on' : ''} />
             <input type="hidden" name="brand_font_key" value={fontKey} />
             <input type="hidden" name="loader_variant" value={loaderVariant} />
             <input type="hidden" name="use_custom_loader" value={loader.useCustomLoader ? 'on' : ''} />
             <input type="hidden" name="loader_text" value={loader.loaderText} />
             <input type="hidden" name="loader_icon_mode" value={loader.loaderIconMode} />
-            <input type="hidden" name="loader_text_color" value={loader.loaderTextColor} />
             <input type="hidden" name="loader_config" value={serializeLoaderConfig(loaderConfig)} />
 
             {open && (
                 <div className="mt-5 space-y-6">
-                    {presetActive && (
-                        <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
-                            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                            <p className="text-[11px] leading-relaxed text-muted">
-                                Tu <b className="text-strong">tema</b> ya define color, fuente y loader. Cambia algo acá
-                                solo si quieres personalizar sobre tu tema.
-                            </p>
-                        </div>
-                    )}
-
-                    {/* ── Color secundario ── */}
+                    {/* ── Par de marca (solo lectura — B2: el secundario se deriva del tema/primario) ── */}
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
                             <Palette className="w-3.5 h-3.5 text-muted" />
-                            <span className="text-sm font-semibold text-strong">Color secundario</span>
+                            <span className="text-sm font-semibold text-strong">Tu par de marca</span>
                         </div>
-                        <p className="text-xs text-muted">Para badges, etiquetas, macros de nutrición y la 2ª serie de gráficos. Independiente del principal.</p>
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="color"
-                                aria-label="Color secundario"
-                                value={HEX_RE.test(secondaryColor) ? secondaryColor : '#00C7BE'}
-                                onChange={(e) => onChange({ secondaryColor: e.target.value })}
-                                className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
-                            />
-                            <input
-                                type="text"
-                                value={secondaryColor}
-                                onChange={(e) => onChange({ secondaryColor: e.target.value })}
-                                placeholder="#00C7BE (opcional)"
-                                className="h-10 w-full rounded-lg border border-border bg-background px-3 font-mono text-sm uppercase outline-none focus:ring-2 focus:ring-primary/40"
-                            />
-                            {secondaryColor && (
-                                <button type="button" onClick={() => onChange({ secondaryColor: '' })} className="text-xs text-muted underline shrink-0">Quitar</button>
-                            )}
-                        </div>
-                        {/* Mini-preview: badge + macro pintados con el secundario, en claro y oscuro */}
-                        <PreviewFrame label={secondaryColor ? 'Así se ven tus badges' : 'Sin secundario · usa tu color principal'}>
+                        <p className="text-xs text-muted">Badges, etiquetas y macros usan un color secundario que combina con tu tema. Se calcula solo — si eliges un tema, usa su par curado.</p>
+                        {/* Mini-preview: badge + macro pintados con el secundario RESUELTO, en claro y oscuro */}
+                        <PreviewFrame label="Así se ven tus badges">
                             <div className="grid grid-cols-2 gap-2">
                                 {(['light', 'dark'] as const).map((mode) => {
                                     const t: BrandThemeTokens = theme[mode]
@@ -270,7 +235,7 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                         </PreviewFrame>
                     </div>
 
-                    {/* ── Tinte neutro + acento avanzado ── */}
+                    {/* ── Tinte neutro ── */}
                     <div className="space-y-3">
                         <label className="flex cursor-pointer items-start justify-between gap-3">
                             <span className="min-w-0">
@@ -310,45 +275,6 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                             </div>
                             <p className="mt-1.5 text-[9px] text-subtle">El tinte se nota más en modo oscuro.</p>
                         </PreviewFrame>
-                        <button type="button" onClick={() => setAccentOpen((v) => !v)} className="text-xs font-medium text-primary underline">
-                            {accentOpen ? 'Ocultar acento por modo' : 'Ajustar acento por modo (avanzado)'}
-                        </button>
-                        {accentOpen && (
-                            <div className="space-y-3">
-                                <p className="text-xs text-muted">Fuerza un color de acento distinto en claro y oscuro. Si lo dejas vacío, se calcula solo desde tu color principal.</p>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    {([['accentLight', 'Acento claro', accentLight, '#047857'], ['accentDark', 'Acento oscuro', accentDark, '#34d399']] as const).map(
-                                        ([field, label, val, ph]) => {
-                                            const set = (v: string) => onChange(field === 'accentLight' ? { accentLight: v } : { accentDark: v })
-                                            return (
-                                                <div key={label} className="space-y-1">
-                                                    <span className="text-xs font-medium text-muted">{label}</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <input type="color" aria-label={label} value={HEX_RE.test(val) ? val : ph} onChange={(e) => set(e.target.value)} className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5" />
-                                                        <input type="text" value={val} onChange={(e) => set(e.target.value)} placeholder={`${ph} (auto)`} className="h-9 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs uppercase outline-none focus:ring-2 focus:ring-primary/40" />
-                                                    </div>
-                                                </div>
-                                            )
-                                        }
-                                    )}
-                                </div>
-                                {/* Mini-preview: swatch del acento resuelto en claro y oscuro, lado a lado */}
-                                <PreviewFrame label="Acento resuelto por modo">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {(['light', 'dark'] as const).map((mode) => {
-                                            const t: BrandThemeTokens = theme[mode]
-                                            return (
-                                                <div key={mode} className="rounded-md border p-2" style={{ background: t.bg, borderColor: t.border }}>
-                                                    <span className="mb-1 block text-[8px] font-bold uppercase tracking-wide" style={{ color: t.textMuted }}>{mode === 'light' ? 'Claro' : 'Oscuro'}</span>
-                                                    <div className="rounded-md px-2 py-1 text-center text-[10px] font-bold" style={{ background: t.accent, color: t.accentText }}>Acción</div>
-                                                    <p className="mt-1 text-[9px]" style={{ color: t.text }}>Enlace de <span style={{ color: t.accent }}>acento</span></p>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                </PreviewFrame>
-                            </div>
-                        )}
                     </div>
 
                     {/* ── Pantalla de carga (unificada: variante O compositor) ── */}
@@ -436,8 +362,7 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                                             <EvaRouteLoader
                                                 customText={loader.loaderText}
                                                 useCustom={loader.useCustomLoader}
-                                                textColor={loader.loaderTextColor || undefined}
-                                                primaryColor={!loader.loaderTextColor ? primaryHex : undefined}
+                                                primaryColor={primaryHex}
                                                 iconMode={loader.loaderIconMode}
                                                 coachLogoUrl={logoUrl ?? undefined}
                                                 size="sm"
@@ -492,57 +417,9 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                                     </div>
                                 )}
 
-                                {/* Estilo del texto — solo el estilo EVA (default) usa un color propio */}
-                                {loaderVariant === 'eva' && (
-                                    <div className="space-y-2">
-                                        <span className="text-sm font-semibold text-strong">Estilo del texto</span>
-                                        <p className="text-xs text-muted">Cómo se pinta el texto del loader EVA.</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => onLoaderChange({ loaderTextColor: '' })}
-                                                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-3 transition-all ${
-                                                    loader.loaderTextColor === '' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
-                                                }`}
-                                            >
-                                                <span className="bg-clip-text text-xl font-extrabold text-transparent" style={{ backgroundImage: brandGradient }}>
-                                                    {(loader.loaderText || 'EVA').toUpperCase()}
-                                                </span>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Gradiente animado</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => onLoaderChange({ loaderTextColor: loader.loaderTextColor || primaryHex })}
-                                                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-3 transition-all ${
-                                                    loader.loaderTextColor !== '' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
-                                                }`}
-                                            >
-                                                <span className="text-xl font-extrabold" style={{ color: loader.loaderTextColor || primaryHex }}>
-                                                    {(loader.loaderText || 'EVA').toUpperCase()}
-                                                </span>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Color sólido</span>
-                                            </button>
-                                        </div>
-                                        {loader.loaderTextColor !== '' && (
-                                            <div className="flex items-center gap-3 pt-2">
-                                                <input
-                                                    type="color"
-                                                    value={HEX_RE.test(loader.loaderTextColor) ? loader.loaderTextColor : primaryHex}
-                                                    onChange={(e) => onLoaderChange({ loaderTextColor: e.target.value })}
-                                                    className="h-9 w-9 cursor-pointer rounded-xl border-2 border-border bg-transparent"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={loader.loaderTextColor}
-                                                    onChange={(e) => onLoaderChange({ loaderTextColor: e.target.value })}
-                                                    placeholder="#007AFF"
-                                                    className="h-10 flex-1 rounded-xl border border-default bg-surface-sunken px-3 text-sm text-strong outline-none focus:border-primary"
-                                                />
-                                            </div>
-                                        )}
-                                        <p className="text-[10px] text-muted">Gradiente: el mismo estilo animado que usa EVA. Color sólido: tu color con animación de pulso.</p>
-                                    </div>
-                                )}
+                                {/* W-brand B4: murió el selector de color del texto — el loader EVA pinta su
+                                    texto con el gradiente derivado del color principal (contraste curado por
+                                    el motor), sin campo editable. */}
                             </div>
                         )}
                     </div>

@@ -17,6 +17,9 @@ const HexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color hexadecimal invál
 export const OrgBrandDraftSchema = z.object({
     name: z.string().min(2).max(80).optional(),
     primary_color: HexColor.optional(),
+    // W-brand B3: par de marca del org — lo rellena el studio desde el motor (par curado del
+    // preset o sealPair del hex exacto), viaja por el draft y se promueve en publish.
+    brand_secondary_color: HexColor.optional().or(z.literal('')).nullable(),
     logo_url: z.string().url().nullish().or(z.literal('')),
     logo_url_dark: z.string().url().nullish().or(z.literal('')),
     loader_text: z.string().max(20).regex(/^[^<>]*$/, 'Caracteres no permitidos').optional().or(z.literal('')).nullable(),

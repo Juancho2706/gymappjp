@@ -34,3 +34,22 @@ export const THEME_PRESET_LIST: BrandPreset[] = Array.isArray(THEME_PRESETS)
 export function isThemePresetKey(key: string | null | undefined): key is string {
     return !!getThemePreset(key)
 }
+
+/**
+ * W-brand B3 — matchea un PAR (primario, secundario) contra el catálogo curado.
+ *
+ * Team/Org no guardan `theme_preset_key` (cero DDL): el preset es un «rellenador» de columnas,
+ * así que la selección vigente se detecta por VALOR. Regla: primario igual (case-insensitive) y
+ * secundario igual o ausente/null (una fila que solo guardó el primario del preset sigue
+ * contando como ese preset; un secundario distinto = tema custom → escape hatch).
+ */
+export function matchThemePresetByPair(
+    primary: string | null | undefined,
+    secondary?: string | null,
+): BrandPreset | null {
+    if (!primary) return null
+    const preset = THEME_PRESET_LIST.find((p) => p.brandColor.toLowerCase() === primary.toLowerCase())
+    if (!preset) return null
+    if (secondary && secondary.toLowerCase() !== preset.secondaryColor.toLowerCase()) return null
+    return preset
+}

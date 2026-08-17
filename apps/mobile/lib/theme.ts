@@ -1,5 +1,5 @@
 import type { ViewStyle } from 'react-native'
-import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding, sealPair, consolidateStandaloneBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { GLOWS } from './shadows'
 import { FONT } from './typography'
@@ -353,51 +353,57 @@ export function resolveEffectiveCoachBrandPresentation<T extends CoachBrandPrese
   } as T
 }
 
+/** Tema fail-closed (sin marca / tier bloqueado): azul de sistema con su par derivado. */
+function defaultBrandTheme(): EffectiveCoachBrandTheme {
+  return {
+    brandColor: DEFAULT_BRAND,
+    accentLight: null,
+    accentDark: null,
+    // W-brand B2: cada tema tiene su par — también el default deriva el suyo vía sealPair.
+    secondaryColor: sealPair({ brandColor: DEFAULT_BRAND, themePresetKey: null }).secondary,
+    neutralTint: false,
+  }
+}
+
 /**
  * Resuelve tier + preset antes de derivar tokens, espejo del layout web `/c`.
  *
  * Un tier por debajo de Pro, ausente o inválido cae al azul de sistema. Es el
  * mismo fail-closed de web: una caché legacy nunca concede white-label por sí sola.
+ *
+ * Regla W-brand B2 (dueño 2026-08-17): para un brand SIN preset (legacy custom),
+ * el primario se conserva tal cual (grandfather) pero el secundario se DERIVA
+ * SIEMPRE del primario vía `sealPair`, y los `brand_secondary_color`/`accent_*`
+ * almacenados dejan de resolverse (quedan en DB, inertes por contrato). Con
+ * preset aplicado nada cambia: par curado + acentos del catálogo.
  */
 export function resolveEffectiveCoachBrandTheme(
   source: CoachBrandThemeSource | null | undefined,
 ): EffectiveCoachBrandTheme {
-  if (!source) {
-    return {
-      brandColor: DEFAULT_BRAND,
-      accentLight: null,
-      accentDark: null,
-      secondaryColor: null,
-      neutralTint: false,
-    }
-  }
+  if (!source) return defaultBrandTheme()
 
   const allowed = isBrandingAllowed(source.subscriptionTier as SubscriptionTier)
-  if (!allowed) {
-    return {
-      brandColor: DEFAULT_BRAND,
-      accentLight: null,
-      accentDark: null,
-      secondaryColor: null,
-      neutralTint: false,
-    }
-  }
+  if (!allowed) return defaultBrandTheme()
 
+  // B2: al hidratador de presets ya NO se le pasan brand_secondary_color/accent_* de la
+  // fila — el passthrough legacy de esos campos murió (quedan en DB, inertes).
   const preset = resolvePresetBranding({
     theme_preset_key: source.themePresetKey ?? null,
     primary_color: source.primaryColor ?? null,
-    brand_secondary_color: source.brandSecondaryColor ?? null,
-    accent_light: source.accentLight ?? null,
-    accent_dark: source.accentDark ?? null,
     neutral_tint: source.neutralTint ?? null,
   })
 
+  // Con preset ⇒ passthrough intacto (par curado + acentos del catálogo). Sin preset ⇒
+  // secundario derivado del primario efectivo, acentos nulos — MISMO helper compartido
+  // que usa el resolutor standalone web (cero drift web/RN).
+  const brandColor = preset.primary_color || DEFAULT_BRAND
+  const consolidated = consolidateStandaloneBranding(preset, brandColor)
   return {
-    brandColor: preset.primary_color || source.primaryColor || DEFAULT_BRAND,
-    accentLight: preset.accent_light,
-    accentDark: preset.accent_dark,
-    secondaryColor: preset.brand_secondary_color,
-    neutralTint: preset.neutral_tint === true,
+    brandColor,
+    accentLight: consolidated.accent_light,
+    accentDark: consolidated.accent_dark,
+    secondaryColor: consolidated.brand_secondary_color,
+    neutralTint: consolidated.neutral_tint === true,
   }
 }
 

@@ -45,12 +45,18 @@ export async function updateBrandSettingsAction(
         welcome_message: (formData.get('welcome_message') as string | null)?.trim() ?? '',
         loader_text: (formData.get('loader_text') as string | null)?.trim() ?? '',
         use_custom_loader: formData.get('use_custom_loader') === 'on',
-        loader_text_color: (formData.get('loader_text_color') as string | null)?.trim() ?? '',
+        // W-brand B2/B4 (dueño 2026-08-17): loader_text_color, brand_secondary_color, accent_light
+        // y accent_dark salieron de la whitelist de escritura standalone. Cualquier valor posteado
+        // (form viejo/cacheado, POST directo) se DESCARTA en silencio — ni error ni persistencia:
+        // se fijan a '' ANTES del schema para que un hex basura tampoco bloquee el guardado.
+        // Las columnas quedan en DB (grandfather pasivo, cero DDL) pero dejan de leerse: el par
+        // sale de sealPair(primario)/preset y el texto del loader se pinta derivado del primario.
+        loader_text_color: '',
         loader_icon_mode: (formData.get('loader_icon_mode') as string | null) ?? 'eva',
         // white-label v2 (gateados a Pro+ más abajo)
-        brand_secondary_color: (formData.get('brand_secondary_color') as string | null)?.trim() ?? '',
-        accent_light: (formData.get('accent_light') as string | null)?.trim() ?? '',
-        accent_dark: (formData.get('accent_dark') as string | null)?.trim() ?? '',
+        brand_secondary_color: '',
+        accent_light: '',
+        accent_dark: '',
         neutral_tint: formData.get('neutral_tint') === 'on',
         brand_font_key: (formData.get('brand_font_key') as string | null)?.trim() ?? '',
         loader_variant: (formData.get('loader_variant') as string | null) ?? 'eva',
@@ -127,12 +133,11 @@ export async function updateBrandSettingsAction(
         updatePayload.use_brand_colors_coach = parsed.data.use_brand_colors_coach
         updatePayload.loader_text = parsed.data.loader_text || null
         updatePayload.use_custom_loader = parsed.data.use_custom_loader
-        updatePayload.loader_text_color = parsed.data.loader_text_color || null
+        // W-brand B2/B4: whitelist EXPLÍCITA — brand_secondary_color / accent_light / accent_dark /
+        // loader_text_color NO se escriben desde standalone (los valores posteados se descartaron
+        // arriba). Los valores almacenados quedan intactos en DB, inertes por contrato.
         updatePayload.loader_icon_mode = parsed.data.loader_icon_mode
         // white-label v2 (mismo gate Pro+). logo_url_dark se sube aparte (updateLogoDarkAction, W2 UI).
-        updatePayload.brand_secondary_color = parsed.data.brand_secondary_color || null
-        updatePayload.accent_light = parsed.data.accent_light || null
-        updatePayload.accent_dark = parsed.data.accent_dark || null
         updatePayload.neutral_tint = parsed.data.neutral_tint
         updatePayload.brand_font_key = parsed.data.brand_font_key || null
         updatePayload.loader_variant = parsed.data.loader_variant

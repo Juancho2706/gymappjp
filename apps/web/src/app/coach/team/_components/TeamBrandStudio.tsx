@@ -2,14 +2,17 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react'
 import {
-    Palette, Loader, Loader2, Check, CheckCircle2, Sun, Moon, Plus, ImagePlus, X, Pipette,
+    Palette, Loader, Loader2, Check, CheckCircle2, Sun, Moon, ImagePlus, X,
     ChevronDown, AlertTriangle, ShieldCheck, Dumbbell, House, UserRound, Utensils,
 } from 'lucide-react'
-import { isThemeReadable, pickOnColor } from '@eva/brand-kit'
+import { isThemeReadable, pickOnColor, sealPair, type BrandPreset } from '@eva/brand-kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
+import { matchThemePresetByPair, getThemePreset } from '@/lib/brand-presets'
+import { ThemePresetGallery } from '@/components/brand/ThemePresetGallery'
+import { BrandHexEscapeHatch } from '@/components/brand/BrandHexEscapeHatch'
 import { cn } from '@/lib/utils'
 import { compressLogo, putToSignedUrl } from '@/lib/uploads/logo-upload.client'
 import { updateTeamBrandAction, createTeamLogoUploadUrlAction } from '../_actions/team.actions'
@@ -17,6 +20,7 @@ import { updateTeamBrandAction, createTeamLogoUploadUrlAction } from '../_action
 export type TeamBrandValues = {
     name: string
     primary_color: string | null
+    brand_secondary_color: string | null
     logo_url: string | null
     logo_url_dark: string | null
     accent_light: string | null
@@ -35,9 +39,6 @@ type Props = {
     brand: TeamBrandValues
     canEdit: boolean
 }
-
-/** Paleta curada para centros deportivos — un tap y la marca queda decente. */
-const PRESET_COLORS = ['#EC4899', '#8B5CF6', '#F59E0B', '#10B981', '#0EA5E9', '#EF4444', '#14B8A6', '#F97316'] as const
 
 const ICON_MODES = [
     { value: 'logo', label: 'Logo' },
@@ -61,6 +62,7 @@ function teamInitials(name: string): string {
 type Draft = {
     name: string
     primary_color: string
+    brand_secondary_color: string
     accent_light: string
     accent_dark: string
     splash_bg_color: string
@@ -75,6 +77,7 @@ function toDraft(b: TeamBrandValues): Draft {
     return {
         name: b.name,
         primary_color: b.primary_color ?? '#10B981',
+        brand_secondary_color: b.brand_secondary_color ?? '',
         accent_light: b.accent_light ?? '',
         accent_dark: b.accent_dark ?? '',
         splash_bg_color: b.splash_bg_color ?? '',
@@ -84,63 +87,6 @@ function toDraft(b: TeamBrandValues): Draft {
         use_custom_loader: b.use_custom_loader,
         neutral_tint: b.neutral_tint,
     }
-}
-
-/** Swatch + hex + limpiar — TeamColorInput del kit (teams-equipo.jsx:43-60). */
-function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
-    label: string
-    value: string
-    onChange: (v: string) => void
-    fallback: string
-    disabled: boolean
-    hint?: string
-}) {
-    const valid = HEX_RE.test(value)
-    return (
-        <div>
-            <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-xs font-bold text-strong">{label}</span>
-                {value && (
-                    <button
-                        type="button"
-                        onClick={() => onChange('')}
-                        disabled={disabled}
-                        className="text-[11px] font-semibold text-subtle"
-                    >
-                        Limpiar
-                    </button>
-                )}
-            </div>
-            <div className="flex items-center gap-2">
-                <label
-                    className={cn(
-                        'relative flex h-[38px] w-[38px] shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-sm border-[1.5px] border-default',
-                        !valid && 'bg-surface-sunken'
-                    )}
-                    style={valid ? { backgroundColor: value } : undefined}
-                >
-                    {!valid && <Pipette className="h-[15px] w-[15px] text-subtle" />}
-                    <input
-                        type="color"
-                        value={valid ? value : fallback}
-                        onChange={(e) => onChange(e.target.value)}
-                        disabled={disabled}
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        aria-label={`Selector ${label}`}
-                    />
-                </label>
-                <Input
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    disabled={disabled}
-                    maxLength={7}
-                    placeholder={fallback}
-                    className="h-[38px] min-w-0 flex-1 font-mono text-[13.5px] font-semibold"
-                />
-            </div>
-            {hint && <p className="mt-[5px] text-[10.5px] leading-snug text-subtle">{hint}</p>}
-        </div>
-    )
 }
 
 /** Dropzone de logo del kit (teams-equipo.jsx:24-40): 76px, logo centrado + "x" para quitar el pick local. */
@@ -283,6 +229,57 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
     const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }))
 
+    // ── W-brand B3: presets primero, hex exacto como escape hatch ──────────────
+    // Team no guarda `theme_preset_key` (cero DDL): el preset vigente se detecta por VALOR
+    // (par primario+secundario contra el catálogo). El preset/hex es un «rellenador»: al
+    // aplicarlo se escriben primario + par en las columnas actuales y los acentos sueltos
+    // legacy se limpian (precedencia asimétrica: los colores del tema siempre pisan).
+    const draftPreset = matchThemePresetByPair(
+        HEX_RE.test(draft.primary_color) ? draft.primary_color : null,
+        HEX_RE.test(draft.brand_secondary_color) ? draft.brand_secondary_color : null,
+    )
+    const savedPreset = matchThemePresetByPair(
+        HEX_RE.test(saved.primary_color) ? saved.primary_color : null,
+        HEX_RE.test(saved.brand_secondary_color) ? saved.brand_secondary_color : null,
+    )
+    // Grandfather: el color guardado actual (sin preset detectado) es el «hex exacto vigente».
+    const savedCustomHex = !savedPreset && HEX_RE.test(saved.primary_color) ? saved.primary_color : null
+    const chipHex = !draftPreset
+        ? (HEX_RE.test(draft.primary_color) ? draft.primary_color : null)
+        : savedCustomHex
+
+    /** Rellena el par + limpia los acentos sueltos legacy (splash/loader color quedan derivados). */
+    const applyThemeColors = (primaryHex: string, secondaryHex: string, preset?: BrandPreset | null) => {
+        setDraft((d) => ({
+            ...d,
+            primary_color: primaryHex,
+            brand_secondary_color: secondaryHex,
+            accent_light: preset?.accentLight ?? '',
+            accent_dark: preset?.accentDark ?? '',
+            splash_bg_color: '',
+            loader_text_color: '',
+        }))
+    }
+
+    const onGalleryChange = (key: string | null) => {
+        if (key === null) {
+            // Volver al hex exacto guardado (reversible, como el chip legacy de Mi Marca).
+            setDraft((d) => ({
+                ...d,
+                primary_color: saved.primary_color,
+                brand_secondary_color: saved.brand_secondary_color,
+                accent_light: saved.accent_light,
+                accent_dark: saved.accent_dark,
+                splash_bg_color: saved.splash_bg_color,
+                loader_text_color: saved.loader_text_color,
+            }))
+            return
+        }
+        const preset = getThemePreset(key)
+        if (!preset) return
+        applyThemeColors(preset.brandColor, preset.secondaryColor, preset)
+    }
+
     const dirty = useMemo(
         () => logoPicked || logoDarkPicked || logoRemoved || logoDarkRemoved || JSON.stringify(draft) !== JSON.stringify(saved),
         [draft, saved, logoPicked, logoDarkPicked, logoRemoved, logoDarkRemoved]
@@ -323,7 +320,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
         if (previewMode === 'light') N.surf = hexA(primary, 0.03)
     }
 
-    const splashText = HEX_RE.test(draft.loader_text_color) ? draft.loader_text_color : '#FFFFFF'
+    // B4: sin valor legacy almacenado, el color del texto del splash lo deriva el contraste.
+    const splashText = HEX_RE.test(draft.loader_text_color) ? draft.loader_text_color : pickOnColor(splash)
     const showSplashText = draft.use_custom_loader && (!!draft.loader_text || draft.loader_icon_mode === 'text')
     const splashLabel = (draft.loader_text || (draft.name || 'EVA')).toUpperCase().slice(0, 12)
 
@@ -391,6 +389,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
             {/* name/colores van como inputs hidden controlados para que el form mande el draft */}
             <input type="hidden" name="name" value={draft.name} />
             <input type="hidden" name="primary_color" value={draft.primary_color} />
+            <input type="hidden" name="brand_secondary_color" value={draft.brand_secondary_color} />
             <input type="hidden" name="accent_light" value={draft.accent_light} />
             <input type="hidden" name="accent_dark" value={draft.accent_dark} />
             <input type="hidden" name="splash_bg_color" value={draft.splash_bg_color} />
@@ -534,38 +533,32 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                     />
                 </div>
 
-                {/* Color principal */}
+                {/* Tema del equipo — W-brand B3: galería de 14 presets curados como camino default
+                    (reemplaza los 8 swatches + rueda libre). El preset rellena primario + par
+                    curado; el chip «Hex exacto» es el grandfather del color guardado. */}
                 <div className="mt-4">
-                    <Label className="mb-2 block text-xs font-bold text-strong">Color principal</Label>
-                    <div className="flex flex-wrap items-center gap-2">
-                        {PRESET_COLORS.map((c) => (
-                            <button
-                                key={c}
-                                type="button"
-                                disabled={dis}
-                                onClick={() => set('primary_color', c)}
-                                className={cn(
-                                    'h-8 w-8 rounded-full transition-transform active:scale-90',
-                                    draft.primary_color.toLowerCase() === c.toLowerCase()
-                                        ? 'border-[2.5px] border-strong shadow-[inset_0_0_0_2px_var(--surface-card)]'
-                                        : 'border-2 border-subtle hover:scale-105'
-                                )}
-                                style={{ backgroundColor: c }}
-                                aria-label={`Color ${c}`}
-                            />
-                        ))}
-                        <label className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-dashed border-strong text-subtle">
-                            <Plus className="h-[15px] w-[15px]" />
-                            <input
-                                type="color"
-                                value={primary}
-                                disabled={dis}
-                                onChange={(e) => set('primary_color', e.target.value)}
-                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                aria-label="Color personalizado"
-                            />
-                        </label>
-                    </div>
+                    <Label className="mb-2 block text-xs font-bold text-strong">Tema del equipo</Label>
+                    <ThemePresetGallery
+                        value={draftPreset?.key ?? null}
+                        onChange={onGalleryChange}
+                        disabled={dis}
+                        customChip={chipHex
+                            ? {
+                                primaryColor: chipHex,
+                                secondaryColor: HEX_RE.test(draft.brand_secondary_color) && !draftPreset
+                                    ? draft.brand_secondary_color
+                                    : sealPair({ brandColor: chipHex, themePresetKey: null }).secondary,
+                                title: 'Hex exacto',
+                                subtitle: `${chipHex.toUpperCase()} · manual de marca`,
+                            }
+                            : null}
+                    />
+                    {/* Escape hatch: UN input de hex → generateBrandPalette + sealPair + gate WCAG. */}
+                    <BrandHexEscapeHatch
+                        currentHex={chipHex ?? (HEX_RE.test(draft.primary_color) ? draft.primary_color : null)}
+                        disabled={dis}
+                        onApply={(hex, derivedSecondary) => applyThemeColors(hex, derivedSecondary, null)}
+                    />
                 </div>
 
                 {/* Banner AA */}
@@ -580,31 +573,25 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                         : <><AlertTriangle className="h-[15px] w-[15px] shrink-0" /> Contraste bajo — EVA lo ajustará automáticamente al publicar.</>}
                 </div>
 
-                {/* Avanzado: colores */}
-                <Collapsible icon={Palette} title="Ajustes avanzados de color" sub="Acentos y fondo del splash">
-                    <div className="flex flex-col gap-3.5">
-                        <ColorInput label="Acento · modo claro" value={draft.accent_light} onChange={(v) => set('accent_light', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
-                        <ColorInput label="Acento · modo oscuro" value={draft.accent_dark} onChange={(v) => set('accent_dark', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
-                        <ColorInput label="Fondo del splash" value={draft.splash_bg_color} onChange={(v) => set('splash_bg_color', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
-                        <button
-                            type="button"
-                            disabled={dis}
-                            onClick={() => set('neutral_tint', !draft.neutral_tint)}
-                            className="flex w-full items-center gap-[11px] rounded-sm bg-surface-sunken px-3 py-2.5 text-left"
-                        >
-                            <span
-                                className={cn(
-                                    'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px]',
-                                    !draft.neutral_tint && 'border-2 border-strong'
-                                )}
-                                style={draft.neutral_tint ? { background: primary, color: pickOnColor(primary) } : undefined}
-                            >
-                                {draft.neutral_tint && <Check className="h-3.5 w-3.5" />}
-                            </span>
-                            <span className="flex-1 text-[13px] font-semibold text-strong">Teñir los grises con el color de marca</span>
-                        </button>
-                    </div>
-                </Collapsible>
+                {/* W-brand B3: murieron los acentos sueltos y el fondo del splash (el motor deriva
+                    todo del primario/par). Solo sobrevive el tinte neutro (no es un hex libre). */}
+                <button
+                    type="button"
+                    disabled={dis}
+                    onClick={() => set('neutral_tint', !draft.neutral_tint)}
+                    className="mt-3.5 flex w-full items-center gap-[11px] rounded-sm bg-surface-sunken px-3 py-2.5 text-left"
+                >
+                    <span
+                        className={cn(
+                            'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px]',
+                            !draft.neutral_tint && 'border-2 border-strong'
+                        )}
+                        style={draft.neutral_tint ? { background: primary, color: pickOnColor(primary) } : undefined}
+                    >
+                        {draft.neutral_tint && <Check className="h-3.5 w-3.5" />}
+                    </span>
+                    <span className="flex-1 text-[13px] font-semibold text-strong">Teñir los grises con el color de marca</span>
+                </button>
 
                 {/* Avanzado: loader */}
                 <Collapsible icon={Loader} title="Pantalla de carga" sub="Lo que ven al abrir la app del equipo">
@@ -638,7 +625,9 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                 className="h-[42px] text-sm font-semibold"
                             />
                         </div>
-                        <ColorInput label="Color del texto" value={draft.loader_text_color} onChange={(v) => set('loader_text_color', v)} fallback="#FFFFFF" disabled={dis} />
+                        {/* W-brand B4: el color del texto del loader ya no se elige — lo deriva el
+                            contraste sobre el fondo del splash (pickOnColor). El valor almacenado
+                            legacy se respeta hasta que el equipo cambie de tema. */}
                         <div>
                             <Label className="mb-2 block text-xs font-bold text-strong">Ícono del loader</Label>
                             <div className="flex gap-1.5" role="radiogroup" aria-label="Ícono del loader">

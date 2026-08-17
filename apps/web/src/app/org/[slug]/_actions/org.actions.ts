@@ -113,7 +113,7 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
  */
 export async function saveBrandDraftAction(
     orgSlug: string,
-    draft: { name?: string; primary_color?: string; logo_url?: string | null; loader_text?: string | null; use_custom_loader?: boolean; loader_icon_mode?: string; loader_text_color?: string | null; splash_bg_color?: string | null; accent_light?: string | null; accent_dark?: string | null; logo_url_dark?: string | null; neutral_tint?: boolean }
+    draft: { name?: string; primary_color?: string; brand_secondary_color?: string | null; logo_url?: string | null; loader_text?: string | null; use_custom_loader?: boolean; loader_icon_mode?: string; loader_text_color?: string | null; splash_bg_color?: string | null; accent_light?: string | null; accent_dark?: string | null; logo_url_dark?: string | null; neutral_tint?: boolean }
 ) {
     const context = await resolveOrgAdminContext(orgSlug, rolesWithOrgPermission('org.brand.edit'))
     if ('error' in context) return { error: context.error }
@@ -164,7 +164,7 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
     // Fetch the full brand row (context.org only carries a subset of columns).
     const { data: full, error: fullErr } = await admin
         .from('organizations')
-        .select('id, name, primary_color, logo_url, brand_draft, loader_text, use_custom_loader, loader_icon_mode, loader_text_color, splash_bg_color, accent_light, accent_dark, logo_url_dark, neutral_tint, brand_history')
+        .select('id, name, primary_color, brand_secondary_color, logo_url, brand_draft, loader_text, use_custom_loader, loader_icon_mode, loader_text_color, splash_bg_color, accent_light, accent_dark, logo_url_dark, neutral_tint, brand_history')
         .eq('id', org.id)
         .single()
     if (fullErr || !full) return { error: fullErr?.message ?? 'Organización no encontrada' }
@@ -175,6 +175,9 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
     const eff = {
         name: pick('name', full.name),
         primaryColor: pick<string | null>('primary_color', full.primary_color) ?? '#10B981',
+        // W-brand B3: el par de marca (curado por preset o derivado por sealPair en el studio)
+        // viaja por el mismo draft → publish; '' normaliza a null (limpiar).
+        brandSecondary: pick<string | null>('brand_secondary_color', full.brand_secondary_color) || null,
         logoUrl: pick<string | null>('logo_url', full.logo_url),
         useCustomLoader: pick<boolean | null>('use_custom_loader', full.use_custom_loader) ?? false,
         loaderText: pick<string | null>('loader_text', full.loader_text),
@@ -196,7 +199,8 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
     // History snapshot for rollback (keep last 3 published versions).
     const prevHistory = Array.isArray(full.brand_history) ? (full.brand_history as Json[]) : []
     const snapshot = {
-        name: eff.name, primary_color: eff.primaryColor, logo_url: eff.logoUrl ?? full.logo_url,
+        name: eff.name, primary_color: eff.primaryColor, brand_secondary_color: eff.brandSecondary,
+        logo_url: eff.logoUrl ?? full.logo_url,
         accent_light: eff.accentLight, accent_dark: eff.accentDark, logo_url_dark: eff.logoUrlDark,
         neutral_tint: eff.neutralTint, loader_text: eff.loaderText, use_custom_loader: eff.useCustomLoader,
         loader_icon_mode: eff.loaderIconMode, loader_text_color: eff.loaderTextColor, splash_bg_color: eff.splashBgColor,
@@ -208,6 +212,7 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
     await admin.from('organizations').update({
         name: eff.name,
         primary_color: eff.primaryColor,
+        brand_secondary_color: eff.brandSecondary,
         logo_url: eff.logoUrl ?? full.logo_url,
         loader_text: eff.loaderText,
         use_custom_loader: eff.useCustomLoader,

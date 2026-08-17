@@ -20,7 +20,7 @@
  * manual; ningún preset los trae).
  */
 import { converter, formatHex } from 'culori'
-import { getThemePreset } from './presets'
+import { getThemePreset, type ResolvedPresetBranding } from './presets'
 
 const toHsl = converter('hsl')
 
@@ -137,4 +137,43 @@ export function sealPair(input: SealPairInput): SealPair {
     const primary = normalizeHex(input.brandColor) ?? input.brandColor
     const secondary = resolveCuratedSecondary(input) ?? deriveSealSecondary(input.brandColor)
     return { primary, secondary }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// W-brand B2 — consolidación de color del coach STANDALONE
+// (SPEC docs/specs/whitelabel-color-consolidation, decisión del dueño 2026-08-17)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Aplica la regla B2 sobre un branding YA hidratado por `resolvePresetBranding`:
+ *
+ * - CON preset aplicado ⇒ passthrough INTACTO (el catálogo ya cura su par y sus
+ *   acentos; cero cambio para el coach con tema elegido).
+ * - SIN preset (legacy custom) ⇒ el coach conserva SU primario tal cual, pero el
+ *   secundario resuelto pasa a ser `sealPair(primario).secondary` (fórmula derivada
+ *   D3.2) y los `brand_secondary_color`/`accent_light`/`accent_dark` ALMACENADOS
+ *   dejan de aplicar (las columnas quedan en DB, inertes por contrato).
+ *
+ * `effectivePrimary` es el primario RESUELTO del punto de lectura (con los fallbacks
+ * de marca ya aplicados): el par debe derivar del MISMO hex que se pinta. Si se
+ * omite, se usa el `primary_color` de la fila; sin ninguno, el secundario queda
+ * `null` (el motor cae a su default accent2 = accent, como hoy).
+ *
+ * SOLO para superficies STANDALONE (marca personal del coach): las marcas managed
+ * (org/team) conservan su camino actual hasta la wave W3.
+ */
+export function consolidateStandaloneBranding(
+    resolved: ResolvedPresetBranding,
+    effectivePrimary?: string | null,
+): ResolvedPresetBranding {
+    if (resolved.appliedPreset) return resolved
+    const primary = effectivePrimary ?? resolved.primary_color
+    return {
+        ...resolved,
+        brand_secondary_color: primary
+            ? sealPair({ brandColor: primary, themePresetKey: null }).secondary
+            : null,
+        accent_light: null,
+        accent_dark: null,
+    }
 }

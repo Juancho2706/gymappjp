@@ -31,8 +31,9 @@ export async function BrandCoachLoadingShell({
                         className="py-1"
                         customText={coach?.loader_text ?? undefined}
                         useCustom={coach?.use_custom_loader ?? false}
-                        textColor={coach?.loader_text_color ?? undefined}
-                        primaryColor={!coach?.loader_text_color ? (preset?.primary_color ?? coach?.primary_color ?? undefined) : undefined}
+                        /* W-brand B4: loader_text_color almacenado deja de leerse — el texto se
+                           pinta con el gradiente derivado del primario (preset o legacy). */
+                        primaryColor={preset?.primary_color ?? coach?.primary_color ?? undefined}
                         iconMode={(coach?.loader_icon_mode ?? 'eva') as 'eva' | 'coach' | 'none'}
                         coachLogoUrl={coach?.logo_url ?? undefined}
                         coachLogoDarkUrl={coach?.logo_url_dark ?? undefined}

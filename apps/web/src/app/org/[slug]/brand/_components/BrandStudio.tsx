@@ -10,7 +10,10 @@ import {
     saveBrandDraftAction,
     uploadOrgLogoAction,
 } from '../../_actions/org.actions'
-import { resolveBrandTheme, contrastReport, type ThemeMode } from '@eva/brand-kit'
+import { resolveBrandTheme, contrastReport, sealPair, type ThemeMode } from '@eva/brand-kit'
+import { matchThemePresetByPair, getThemePreset } from '@/lib/brand-presets'
+import { ThemePresetGallery } from '@/components/brand/ThemePresetGallery'
+import { BrandHexEscapeHatch } from '@/components/brand/BrandHexEscapeHatch'
 import { BrandLivePreview } from './BrandLivePreview'
 
 export interface BrandStudioProps {
@@ -22,6 +25,8 @@ export interface BrandStudioProps {
     initial: {
         name: string
         primaryColor: string
+        /** Par de marca vigente (W-brand B3) — curado por preset o derivado; null = solo primario. */
+        secondaryColor: string | null
         logoUrl: string | null
         logoUrlDark: string | null
         loaderText: string
@@ -33,6 +38,8 @@ export interface BrandStudioProps {
         neutralTint: boolean
     }
 }
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
 function SaveButton({ disabled }: { disabled: boolean }) {
     const { pending } = useFormStatus()
@@ -65,24 +72,66 @@ export function BrandStudio({ orgSlug, canEdit, canPublish, publishedAt, hasDraf
 
     const [name, setName] = useState(initial.name)
     const [primaryColor, setPrimaryColor] = useState(initial.primaryColor)
+    // W-brand B3: el par de marca ya no se edita a mano — lo rellena el tema elegido (par curado
+    // del preset) o el escape hatch (sealPair del hex exacto). Los acentos sueltos y el color de
+    // texto del loader (B4) murieron como UI: quedan como estado INVISIBLE grandfather — conservan
+    // el valor guardado hasta que se aplique un tema/hex nuevo (que los limpia, nada se pisa solo).
+    const [secondaryColor, setSecondaryColor] = useState<string | null>(initial.secondaryColor)
+    const [accentLight, setAccentLight] = useState<string | null>(initial.accentLight)
+    const [accentDark, setAccentDark] = useState<string | null>(initial.accentDark)
+    const [loaderTextColor, setLoaderTextColor] = useState<string | null>(initial.loaderTextColor)
     const [logoUrl, setLogoUrl] = useState(initial.logoUrl)
     const [logoUrlDark, setLogoUrlDark] = useState(initial.logoUrlDark)
     const [useCustomLoader, setUseCustomLoader] = useState(initial.useCustomLoader)
     const [loaderText, setLoaderText] = useState(initial.loaderText)
     const [loaderIconMode, setLoaderIconMode] = useState<'logo' | 'text'>(initial.loaderIconMode)
-    const [customTextColor, setCustomTextColor] = useState(Boolean(initial.loaderTextColor))
-    const [loaderTextColor, setLoaderTextColor] = useState(initial.loaderTextColor ?? initial.primaryColor)
     const [neutralTint, setNeutralTint] = useState(initial.neutralTint)
-    const [accentLightOn, setAccentLightOn] = useState(Boolean(initial.accentLight))
-    const [accentLight, setAccentLight] = useState(initial.accentLight ?? initial.primaryColor)
-    const [accentDarkOn, setAccentDarkOn] = useState(Boolean(initial.accentDark))
-    const [accentDark, setAccentDark] = useState(initial.accentDark ?? initial.primaryColor)
+
+    // Selección vigente en la galería: Org no guarda `theme_preset_key` (cero DDL) — el preset
+    // se detecta por VALOR (par primario+secundario contra el catálogo curado).
+    const activePreset = matchThemePresetByPair(
+        HEX_RE.test(primaryColor) ? primaryColor : null,
+        secondaryColor && HEX_RE.test(secondaryColor) ? secondaryColor : null,
+    )
+    const savedPreset = matchThemePresetByPair(
+        HEX_RE.test(initial.primaryColor) ? initial.primaryColor : null,
+        initial.secondaryColor && HEX_RE.test(initial.secondaryColor) ? initial.secondaryColor : null,
+    )
+    // Grandfather: el color guardado (sin preset detectado) aparece como «hex exacto vigente».
+    const savedCustomHex = !savedPreset && HEX_RE.test(initial.primaryColor) ? initial.primaryColor : null
+    const chipHex = !activePreset
+        ? (HEX_RE.test(primaryColor) ? primaryColor : null)
+        : savedCustomHex
+
+    /** Rellena primario + par y limpia los acentos sueltos legacy (precedencia asimétrica B3). */
+    function applyThemeColors(primaryHex: string, secondaryHex: string, accentLightHex?: string | null, accentDarkHex?: string | null) {
+        setPrimaryColor(primaryHex)
+        setSecondaryColor(secondaryHex)
+        setAccentLight(accentLightHex ?? null)
+        setAccentDark(accentDarkHex ?? null)
+        setLoaderTextColor(null)
+    }
+
+    function onGalleryChange(key: string | null) {
+        if (key === null) {
+            // Volver al hex exacto guardado (reversible: nada se pierde por mirar presets).
+            setPrimaryColor(initial.primaryColor)
+            setSecondaryColor(initial.secondaryColor)
+            setAccentLight(initial.accentLight)
+            setAccentDark(initial.accentDark)
+            setLoaderTextColor(initial.loaderTextColor)
+            return
+        }
+        const preset = getThemePreset(key)
+        if (!preset) return
+        applyThemeColors(preset.brandColor, preset.secondaryColor, preset.accentLight ?? null, preset.accentDark ?? null)
+    }
 
     // Resolve theme + contrast guard live (brand-kit is pure → runs client-side).
     const theme = resolveBrandTheme({
         brandColor: primaryColor,
-        accentLight: accentLightOn ? accentLight : null,
-        accentDark: accentDarkOn ? accentDark : null,
+        accentLight,
+        accentDark,
         neutralTint,
     })
     const report = contrastReport(theme)
@@ -101,13 +150,15 @@ export function BrandStudio({ orgSlug, canEdit, canPublish, publishedAt, hasDraf
         async () => saveBrandDraftAction(orgSlug, {
             name,
             primary_color: primaryColor,
+            // B3: el par viaja con el draft (curado por preset o sealPair del hex exacto).
+            brand_secondary_color: secondaryColor,
             loader_text: loaderText || null,
             use_custom_loader: useCustomLoader,
             loader_icon_mode: loaderIconMode,
-            loader_text_color: customTextColor ? loaderTextColor : null,
+            loader_text_color: loaderTextColor,
             splash_bg_color: primaryColor,
-            accent_light: accentLightOn ? accentLight : null,
-            accent_dark: accentDarkOn ? accentDark : null,
+            accent_light: accentLight,
+            accent_dark: accentDark,
             neutral_tint: neutralTint,
         }),
         null
@@ -123,7 +174,6 @@ export function BrandStudio({ orgSlug, canEdit, canPublish, publishedAt, hasDraf
 
     const disabled = !canEdit
     const inputCls = 'mt-2 h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-amber-300 disabled:opacity-50'
-    const colorCls = 'mt-2 h-10 w-full cursor-pointer rounded-lg border border-zinc-700 bg-zinc-950 p-1 disabled:opacity-50'
 
     return (
         <div className="space-y-4">
@@ -183,11 +233,9 @@ export function BrandStudio({ orgSlug, canEdit, canPublish, publishedAt, hasDraf
                                 <p className="mt-1 text-[10px] text-zinc-600">Opcional. Un logo oscuro desaparece en modo oscuro.</p>
                             </form>
                         </div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_120px]">
+                        <div className="mt-4">
                             <label className="block"><span className="text-xs font-semibold text-zinc-500">Nombre visible</span>
                                 <input value={name} onChange={(e) => setName(e.target.value)} disabled={disabled} maxLength={80} className={inputCls} /></label>
-                            <label className="block"><span className="text-xs font-semibold text-zinc-500">Color de marca</span>
-                                <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} disabled={disabled} className={colorCls} /></label>
                         </div>
                         <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-zinc-400">
                             <input type="checkbox" checked={neutralTint} disabled={disabled} onChange={(e) => setNeutralTint(e.target.checked)} className="h-4 w-4 rounded accent-amber-400" />
@@ -195,19 +243,35 @@ export function BrandStudio({ orgSlug, canEdit, canPublish, publishedAt, hasDraf
                         </label>
                     </div>
 
-                    {/* Per-mode accent */}
+                    {/* Tema — W-brand B3: galería de 14 presets curados como camino default (mata la
+                        rueda de color libre y los acentos sueltos por modo). El chip «Hex exacto»
+                        es el grandfather del color guardado; el escape hatch deriva la paleta con
+                        generateBrandPalette + sealPair y el gate WCAG decide el contraste. */}
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 space-y-4">
-                        <h3 className="text-sm font-black text-white">Acento por modo</h3>
-                        <p className="text-xs text-zinc-500">Por defecto se usa el color de marca. Puedes ajustar un acento distinto para claro y oscuro — el texto se calcula solo, nunca queda ilegible.</p>
-                        {([['light', 'Modo claro', Sun, accentLightOn, setAccentLightOn, accentLight, setAccentLight], ['dark', 'Modo oscuro', Moon, accentDarkOn, setAccentDarkOn, accentDark, setAccentDark]] as const).map(([id, label, Icon, on, setOn, val, setVal]) => (
-                            <div key={id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                                <label className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-                                    <input type="checkbox" checked={on} disabled={disabled} onChange={(e) => setOn(e.target.checked)} className="h-4 w-4 rounded accent-amber-400" />
-                                    <Icon className="h-3.5 w-3.5" />{label}: acento personalizado
-                                </label>
-                                {on && <input type="color" value={val} onChange={(e) => setVal(e.target.value)} disabled={disabled} className="mt-2 h-9 w-full cursor-pointer rounded-lg border border-zinc-700 bg-zinc-950 p-1 disabled:opacity-50" />}
-                            </div>
-                        ))}
+                        <h3 className="text-sm font-black text-white">Tema de tu marca</h3>
+                        <p className="text-xs text-zinc-500">Elige un tema curado — color y par calibrados para leerse en claro y oscuro. ¿Manual de marca? Usa tu hex exacto abajo.</p>
+                        <ThemePresetGallery
+                            value={activePreset?.key ?? null}
+                            onChange={onGalleryChange}
+                            disabled={disabled}
+                            appearance="dark"
+                            customChip={chipHex
+                                ? {
+                                    primaryColor: chipHex,
+                                    secondaryColor: secondaryColor && HEX_RE.test(secondaryColor) && !activePreset
+                                        ? secondaryColor
+                                        : sealPair({ brandColor: chipHex, themePresetKey: null }).secondary,
+                                    title: 'Hex exacto',
+                                    subtitle: `${chipHex.toUpperCase()} · manual de marca`,
+                                }
+                                : null}
+                        />
+                        <BrandHexEscapeHatch
+                            currentHex={chipHex ?? (HEX_RE.test(primaryColor) ? primaryColor : null)}
+                            disabled={disabled}
+                            appearance="dark"
+                            onApply={(hex, derivedSecondary) => applyThemeColors(hex, derivedSecondary)}
+                        />
                     </div>
 
                     {/* Loader */}
@@ -229,10 +293,9 @@ export function BrandStudio({ orgSlug, canEdit, canPublish, publishedAt, hasDraf
                                         ))}
                                     </div>
                                 </div>
-                                <label className="flex items-center gap-2 text-xs font-semibold text-zinc-400">
-                                    <input type="checkbox" checked={customTextColor} disabled={disabled} onChange={(e) => setCustomTextColor(e.target.checked)} className="h-4 w-4 rounded accent-amber-400" />Color de texto personalizado
-                                </label>
-                                {customTextColor && <input type="color" value={loaderTextColor} onChange={(e) => setLoaderTextColor(e.target.value)} disabled={disabled} className="h-10 w-full cursor-pointer rounded-lg border border-zinc-700 bg-zinc-950 p-1 disabled:opacity-50" />}
+                                {/* W-brand B4: el color de texto del loader murió como campo — lo decide
+                                    el contraste derivado del tema. El valor legacy almacenado se respeta
+                                    hasta que se aplique un tema/hex nuevo. */}
                             </div>
                         )}
                     </div>
@@ -296,7 +359,7 @@ export function BrandStudio({ orgSlug, canEdit, canPublish, publishedAt, hasDraf
                         loaderText={loaderText}
                         useCustomLoader={useCustomLoader}
                         loaderIconMode={loaderIconMode}
-                        loaderTextColor={customTextColor ? loaderTextColor : null}
+                        loaderTextColor={loaderTextColor}
                     />
                 </div>
             </div>

@@ -19,7 +19,7 @@ import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding, consolidateStandaloneBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
@@ -171,6 +171,13 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const primaryColor = isFreeTier
         ? SYSTEM_PRIMARY_COLOR
         : (preset.primary_color ?? BRAND_PRIMARY_COLOR)
+    // W-brand B2 (dueño 2026-08-17): consolidación de color SOLO para el coach STANDALONE —
+    // sin preset (legacy custom), el secundario resuelto = sealPair(primario).secondary y los
+    // brand_secondary_color/accent_* almacenados dejan de leerse. Con preset, passthrough
+    // (el catálogo ya pisaba). Managed (org/team/orphan) conserva su camino actual hasta W3.
+    const consolidatedBrand = (isFreeTier || isManagedBrand)
+        ? preset
+        : consolidateStandaloneBranding(preset, primaryColor)
     const logoUrl = isFreeTier
         ? BRAND_APP_ICON
         : (headersList.get('x-coach-logo-url') || BRAND_APP_ICON)
@@ -196,7 +203,9 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const executorTheme = executorThemeRaw === 'eva' ? 'eva' : 'coach'
     const loaderText = isFreeTier ? '' : (decodeBrandHeaderValue(headersList.get('x-coach-loader-text')) ?? '')
     const useCustomLoader = !isFreeTier && headersList.get('x-coach-use-custom-loader') === 'true'
-    const loaderTextColor = isFreeTier ? undefined : (headersList.get('x-coach-loader-text-color') ?? undefined)
+    // W-brand B4: el standalone deja de leer loader_text_color (el texto del loader se pinta con
+    // el gradiente derivado del primario). Managed (org/team) mantiene su camino actual hasta W3.
+    const loaderTextColor = (isFreeTier || !isManagedBrand) ? undefined : (headersList.get('x-coach-loader-text-color') ?? undefined)
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
     const loaderIconMode = isFreeTier
         ? 'eva'
@@ -233,11 +242,13 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     // Per-mode white-label accent (org-driven). brand-kit resolves a readable
     // light + dark accent from the brand color + optional per-mode overrides.
-    const accentLight = isFreeTier ? null : (preset.accent_light || null)
-    const accentDark = isFreeTier ? null : (preset.accent_dark || null)
-    const neutralTint = !isFreeTier && preset.neutral_tint === true
-    // color2 INDEPENDIENTE (white-label v2): un color → clampeado por-modo a accent2 (legible en ambos).
-    const secondaryColor = isFreeTier ? null : (preset.brand_secondary_color || null)
+    // W-brand B2: para standalone estos valores ya vienen consolidados (legacy custom ⇒
+    // accents null + secundario derivado del primario); managed pasa intacto.
+    const accentLight = isFreeTier ? null : (consolidatedBrand.accent_light || null)
+    const accentDark = isFreeTier ? null : (consolidatedBrand.accent_dark || null)
+    const neutralTint = !isFreeTier && consolidatedBrand.neutral_tint === true
+    // color2 (white-label v2): un color → clampeado por-modo a accent2 (legible en ambos).
+    const secondaryColor = isFreeTier ? null : (consolidatedBrand.brand_secondary_color || null)
     const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
 
     // Generate full brand palette (derived shades) from the resolved light accent + secondary.

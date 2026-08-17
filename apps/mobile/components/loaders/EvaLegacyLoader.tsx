@@ -26,11 +26,13 @@ export function EvaLegacyLoader({ size = 'lg', subtitle }: { size?: EvaLoaderSiz
   const reduceMotion = useReducedMotion()
   const fontSize = FONT[size]
 
-  // M-F1: loader personalizado del coach. Si está activo, honra texto/color/icon-mode/logo.
+  // M-F1: loader personalizado del coach. Si está activo, honra texto/icon-mode/logo.
   const custom = branding?.useCustomLoader
   const iconMode = branding?.loaderIconMode ?? 'eva'
   const customText = (branding?.loaderText ?? '').trim()
-  const textColor = branding?.loaderTextColor || theme.primary
+  // W-brand B4: `loader_text_color` murió (UI y lectura) — el color del texto lo decide el motor
+  // de contraste del tema: `theme.primary` ES el acento de marca clampeado WCAG por scheme.
+  const textColor = theme.primary
   // QA4 b2: en oscuro gana `logo_url_dark` (cae al claro si no existe) — misma regla que
   // `resolveThemedLogoSrcs` en web. Antes el loader ignoraba la variante oscura.
   const coachLogo =

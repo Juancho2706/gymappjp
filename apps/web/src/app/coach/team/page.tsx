@@ -156,6 +156,7 @@ export default async function CoachTeamPage() {
                                 brand={{
                                     name: team.name,
                                     primary_color: team.primary_color,
+                                    brand_secondary_color: team.brand_secondary_color,
                                     logo_url: team.logo_url,
                                     logo_url_dark: team.logo_url_dark,
                                     accent_light: team.accent_light,

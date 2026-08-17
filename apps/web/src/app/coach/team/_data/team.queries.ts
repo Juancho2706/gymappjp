@@ -17,6 +17,7 @@ export type TeamOverview = {
     owner_coach_id: string
     invite_code: string | null
     primary_color: string | null
+    brand_secondary_color: string | null
     logo_url: string | null
     logo_url_dark: string | null
     accent_light: string | null
@@ -51,7 +52,7 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
 
     const { data: teams } = await supabase
         .from('teams')
-        .select('id, name, slug, seat_limit, owner_coach_id, invite_code, primary_color, logo_url, logo_url_dark, accent_light, accent_dark, neutral_tint, splash_bg_color, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, enabled_modules')
+        .select('id, name, slug, seat_limit, owner_coach_id, invite_code, primary_color, brand_secondary_color, logo_url, logo_url_dark, accent_light, accent_dark, neutral_tint, splash_bg_color, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, enabled_modules')
         .eq('id', activeTeamId)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
@@ -105,6 +106,7 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
                 owner_coach_id: t.owner_coach_id,
                 invite_code: t.invite_code,
                 primary_color: t.primary_color,
+                brand_secondary_color: t.brand_secondary_color,
                 logo_url: t.logo_url,
                 logo_url_dark: t.logo_url_dark,
                 accent_light: t.accent_light,
