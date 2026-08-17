@@ -89,7 +89,8 @@ const EVA_DEFAULT_COLORS = new Set(['#1462dc', '#007aff', '#10b981', '#2680ff'])
 // ── Metadata white-label v2 (espejo de las tablas web brand-presets/brand-fonts/brand-loaders/brand-composer) ──
 // Nombres de `feel` (mirror FEEL_META de la web) para el filtro/badge de la galería de temas.
 const FEEL_ORDER = ['bold', 'calm', 'techy', 'warm'] as const
-const FEEL_LABELS: Record<string, string> = { bold: 'Audaz', calm: 'Calmo', techy: 'Tech', warm: 'Cálido' }
+// Paridad 17-08: mismas etiquetas que FEEL_META web (Intenso/Sereno/Techy/Cálido).
+const FEEL_LABELS: Record<string, string> = { bold: 'Intenso', calm: 'Sereno', techy: 'Techy', warm: 'Cálido' }
 
 // Etiquetas de las 12 fuentes curadas (mirror CURATED_FONTS). RN no carga estas familias → se muestra
 // solo la etiqueta; el brand_font_key persistido lo renderiza el login del alumno (servido por web).
@@ -236,7 +237,8 @@ export default function MiMarcaScreen() {
   const brandScore = useMemo(() => {
     let s = 0
     if (logoUrl) s += 20
-    if (activePreset || (color && color.toLowerCase() !== '#007aff')) s += 15
+    // Paridad 17-08: 20 pts como en web (W-brand movió los 5 del secundario al tema; RN quedaba en 95).
+    if (activePreset || (color && color.toLowerCase() !== '#007aff')) s += 20
     if (welcomeMessage.trim()) s += 10
     if (welcomeModalEnabled && welcomeModalContent.trim()) s += 10
     if (brandName.trim() && brandName.trim() !== fullName.trim()) s += 10
@@ -320,7 +322,8 @@ export default function MiMarcaScreen() {
       useBrandColors,
       loaderText: loaderText || null,
       loaderIconMode,
-      useCustomLoader,
+      // Paridad web 17-08: sin texto no hay loader custom (web lo deriva del texto; el toggle solo no basta).
+      useCustomLoader: useCustomLoader && loaderText.trim().length > 0,
       welcomeMessage: welcomeMessage || null,
       welcomeModalEnabled,
       welcomeModalContent: welcomeModalContent || null,
@@ -346,7 +349,7 @@ export default function MiMarcaScreen() {
         brandName,
         primaryColor: color,
         useBrandColors,
-        useCustomLoader,
+        useCustomLoader: useCustomLoader && loaderText.trim().length > 0,
         loaderText: loaderText || null,
         loaderIconMode,
         welcomeMessage: welcomeMessage || null,
@@ -390,7 +393,7 @@ export default function MiMarcaScreen() {
         loginLayoutKey,
         loaderVariant,
         loaderConfig: loaderConfigJson || null,
-        useCustomLoader,
+        useCustomLoader: useCustomLoader && loaderText.trim().length > 0,
         loaderText: loaderText || null,
         loaderIconMode,
         // W-brand B4: idem — se limpia el color de texto legacy cacheado.

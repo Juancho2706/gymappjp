@@ -856,14 +856,14 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                 <div className="hidden @4xl/brandform:block @4xl/brandform:sticky @4xl/brandform:top-6 @4xl/brandform:self-start space-y-6" data-tour-id="brand-preview">
                     <BrandThemePreview
                         brandName={coach.brand_name}
-                        primaryColor={selectedColor}
+                        primaryColor={effectivePrimary}
                         logoUrl={previewLogoUrl}
                         welcomeMessage={welcomeMessageInput}
                         loaderText={loaderText}
                         useCustomLoader={useCustomLoader}
                         loaderIconMode={loaderIconMode}
                         fontFamily={previewFontFamily}
-                        loaderVariant={loaderVariant}
+                        loaderVariant={effectiveLoaderVariant}
                         loaderConfig={loaderConfig}
                         isDark={previewDark}
                         onToggleDark={() => setPreviewDark((v) => !v)}
@@ -941,14 +941,14 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         </button>
                         <BrandThemePreview
                             brandName={coach.brand_name}
-                            primaryColor={selectedColor}
+                            primaryColor={effectivePrimary}
                             logoUrl={previewLogoUrl}
                             welcomeMessage={welcomeMessageInput}
                             loaderText={loaderText}
                             useCustomLoader={useCustomLoader}
                             loaderIconMode={loaderIconMode}
                             fontFamily={previewFontFamily}
-                            loaderVariant={loaderVariant}
+                            loaderVariant={effectiveLoaderVariant}
                             loaderConfig={loaderConfig}
                             isDark={previewDark}
                             onToggleDark={() => setPreviewDark((v) => !v)}
