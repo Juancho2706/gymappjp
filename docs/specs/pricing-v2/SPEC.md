@@ -89,8 +89,8 @@ aún pendiente). Sin baseline no se evalúa nada de lo anterior.
 
 ## Decisiones PENDIENTES del dueño (anotadas, NO van en esta tanda)
 
-1. **Tramo de entrada Pro $17.990 ≤10 alumnos** (propuesta F1 de agosto): se
-   evalúa con datos POST-campaña Meta, no antes.
+1. ~~Tramo de entrada Pro $17.990 ≤10 alumnos~~ — **DESCARTADO por el dueño
+   (2026-08-17)**: Pro queda plano en 29.990, sin sub-tramos.
 2. **WhatsApp 1:1 con los 9 pros actuales**: contarles que conservan 30 y que
    free ahora regala más (transparencia > que se enteren solos). Y revisar si
    alguno con ≤2 alumnos y sin marca podría bajarse (riesgo −29.990).
