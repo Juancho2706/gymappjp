@@ -1469,7 +1469,8 @@ export default function ProgramBuilderScreen() {
       end_date: isActive ? endDate : null,
       start_date_flexible: startDateFlexible,
       duration_days: durationType === 'weeks' ? null : durationDays,
-      program_phases: phases.length ? phases : null,
+      // La columna es jsonb NOT NULL DEFAULT '[]': null explicito viola la constraint.
+      program_phases: phases.length ? phases : [],
       source_template_id: isActive
         ? (sourceTemplateId ?? (isTemplate ? (programId ?? templateId ?? null) : null))
         : null,
@@ -1564,7 +1565,7 @@ export default function ProgramBuilderScreen() {
         start_date: options.startDateFlexible ? null : options.startDate,
         end_date: null,
         start_date_flexible: options.startDateFlexible,
-        program_phases: Array.isArray(template.program_phases) ? template.program_phases : null,
+        program_phases: Array.isArray(template.program_phases) ? template.program_phases : [],
         source_template_id: programId,
         last_edited_by_coach_id: null,
       }
