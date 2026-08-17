@@ -14,6 +14,7 @@ import {
     rateLimitSignup,
 } from '@/lib/rate-limit'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
+import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
 
 const RESERVED_SLUGS = new Set([
     'admin', 'api', 'coach', 'coaches', 'register', 'login', 'logout', 'pricing',
@@ -161,6 +162,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
             { error: coachError.message || 'Error al configurar el perfil de coach.', code: 'COACH_CREATE_FAILED' },
             { status: 500 }
+        )
+    }
+
+    // admin.createUser no dispara los mails de auth de Supabase — enviar manualmente via Resend
+    // (espejo del registro web en register.actions.ts). Si falla, rollback: sin este mail la
+    // cuenta queda pending_email sin ninguna forma de confirmarse.
+    const emailSent = await sendCoachSignupConfirmationEmail({
+        email: emailSan,
+        password,
+        coachName: fullName,
+    })
+    if (!emailSent.ok) {
+        await adminDb.from('coaches').delete().eq('id', authData.user.id)
+        await adminDb.auth.admin.deleteUser(authData.user.id)
+        return NextResponse.json(
+            { error: 'No pudimos enviar el correo de confirmación. Revisa el email e intenta de nuevo.', code: 'CONFIRMATION_EMAIL_FAILED' },
+            { status: 502 }
         )
     }
 
