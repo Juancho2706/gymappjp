@@ -559,7 +559,7 @@ export function HubRoster({
                       data-tour={rowIndex === 0 ? 'alumno-row' : undefined}
                       className="border-b border-border-subtle last:border-0 hover:bg-surface-sunken/60"
                     >
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-2.5 align-middle">
                         <SelectCheckbox
                           checked={selectedSet.has(item.clientId)}
                           clientName={item.clientName}
@@ -567,7 +567,7 @@ export function HubRoster({
                           onChange={() => toggleSelected(item.clientId)}
                         />
                       </td>
-                      <td className="px-4 py-2.5 align-top">
+                      <td className="px-4 py-2.5 align-middle">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-strong">{item.clientName}</span>
                           {item.strategy ? (
@@ -578,10 +578,10 @@ export function HubRoster({
                           {reason ?? <span className="text-subtle">Al día</span>}
                         </p>
                       </td>
-                      <td className="px-4 py-2.5 align-top text-muted">
+                      <td className="px-4 py-2.5 align-middle text-muted">
                         <span className="truncate">{item.planName ?? 'Sin plan'}</span>
                       </td>
-                      <td className="px-4 py-2.5 align-top">
+                      <td className="px-4 py-2.5 align-middle">
                         <AdherenceWeekDots
                           days7d={item.days7d}
                           fallbackActiveDays={item.activeDays7d}
@@ -589,10 +589,10 @@ export function HubRoster({
                           todayIso={todayIso}
                         />
                       </td>
-                      <td className="px-4 py-2.5 align-top text-right tabular-nums text-strong">
+                      <td className="px-4 py-2.5 align-middle text-right tabular-nums text-strong">
                         {item.intakeEntries7d}
                       </td>
-                      <td className="px-4 py-2.5 align-top">
+                      <td className="px-4 py-2.5 align-middle">
                         <div className="flex items-center justify-end gap-2">
                           {waHref ? (
                             <a
