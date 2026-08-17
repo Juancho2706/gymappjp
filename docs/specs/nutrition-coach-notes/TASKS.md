@@ -1,0 +1,11 @@
+# TASKS — Notas del coach (worker-ready)
+
+Convenciones de la casa. Corre junto al retiro del par viejo (workflow compartido).
+
+| ID | Modelo | Archivos | Instrucción | DoD |
+|---|---|---|---|---|
+| N-A | Opus | `packages/nutrition-v2/editor-state.ts` (+tests) | Verificar si `UPDATE_SLOT`/patch cubre `instructions` y si el grupo tiene acción de patch para `notes`; agregar lo que falte (whitespace ⇒ null); publish payload los incluye. Tests set/clear/undo/payload. | vitest paquete verde. |
+| N-B | Opus | `EditableSlotCard.tsx`, `EditablePortionsCard.tsx` web (+sheet) | 📝 header franja + fila grupo (N2); QeBottomSheet textarea+contador+limpiar; tinte con-nota por marca. SIN mover anclas del tour. | tsc + vitest; visual check verde. |
+| N-C | Opus | espejo RN `QuickEditMode`/`EditableSlotCard`/porciones RN | Igual que N-B en RN (sheet nativo del kit). | tsc mobile + export android. |
+| N-D | Opus | Hoy del alumno web (`c/[coach_slug]/nutrition`) + RN alumno + fetch/RPC | Banda 💬 bajo franja/grupo (N3); verificar que el camino de datos exponga `instructions`/`notes` (RPC/endpoint) y sumarlos SI faltan (aditivo, cero DDL — si exige migración de RPC, DETENERSE y reportar al jefe). | tsc ×2; render probado con nota y sin nota. |
+| N-E | jefe | juicio + gates + docs | CURRENT/MOBILE_PARITY + docs:check. | todo verde. |
