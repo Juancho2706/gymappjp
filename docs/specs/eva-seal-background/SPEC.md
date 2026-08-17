@@ -21,6 +21,12 @@ deriva + grano. La grilla 40×40 actual del RN **se retira**.
   `surface-app` + **solo grano** (sin blobs — el tinte no compite con datos). El grano ahí
   es una capa estática local.
 - Sheets, modales, popovers, PDFs/print y capturas de export: superficies sólidas, sin sello.
+- **Chrome del shell (regla del dueño 2026-08-17): topbar y sidebar desktop conservan su
+  superficie opaca `var(--surface-app)` tal como hoy** (`CoachTopBar.tsx` y el `aside` de
+  `CoachSidebar.tsx`) — blanco en claro, oscuro en dark, SIN sello detrás ni translucidez
+  nueva. El sello vive solo en el lienzo de contenido; el wrapper del contenido no debe
+  pintar un fondo opaco que lo tape. La pill-nav móvil translúcida (74% + backdrop-blur)
+  queda como está: el blur difumina los blobs detrás y mantiene legibilidad solo.
 
 **D3 — El par sale del TEMA del coach (regla del dueño 2026-08-17: «cada tema debe tener
 su par»).** Fuente de verdad del secundario, en orden:
