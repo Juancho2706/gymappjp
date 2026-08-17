@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { Copy, Plus, RotateCcw, Search, X } from 'lucide-react-native'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { formatPortionSentence } from '@eva/nutrition-v2'
@@ -36,6 +37,11 @@ const GROUP_COPY = PORTIONS_COPY.groupEditor
  * Toda escritura pasa por `/api/mobile/nutrition/exchanges/group-foods` (lección NUT-005): cero
  * escrituras Supabase directas nuevas desde el teléfono.
  *
+ * PANTALLA PROPIA (QA T3.v). Hasta esta pasada se montaba EMBEBIDA como pestaña del hub, bajo el
+ * overlay del tablist: sin `paddingTop` del chrome, la cabecera y la tira de grupos nacían tapadas.
+ * La web no tiene esa pestaña (su tablist es Alumnos · Plantillas · Alimentos · Curación) y la web
+ * manda, así que ahora se entra por `router.push` desde Alimentos y la cabecera lleva su vuelta.
+ *
  * Presentación: tokens semánticos del DS vía NativeWind (`bg-surface-*`, `text-*`, `border-*`,
  * `rounded-control`, `hit-min`). Lo único que sigue viviendo en `style` es el color de marca del
  * coach (`theme.primary` / `theme.primaryForeground`), que es runtime y no tiene clase propia
@@ -43,6 +49,7 @@ const GROUP_COPY = PORTIONS_COPY.groupEditor
  */
 export default function CoachPortionsScreen() {
   const { theme } = useTheme()
+  const router = useRouter()
   const { ready: workspaceReady, kind, teamId, orgId } = useWorkspace()
 
   const scope = useMemo(
@@ -138,8 +145,14 @@ export default function CoachPortionsScreen() {
   // catálogo en pantalla y no debe parpadear.
   if (!workspaceReady || (loadingGroups && groups.length === 0)) {
     return (
-      <SafeAreaView className="flex-1 bg-surface-app" edges={['top']}>
-        <NutritionHeader title={COPY.manageEntry} description={COPY.manageEntryHint} />
+      <SafeAreaView className="flex-1 bg-surface-app" edges={['top', 'bottom']}>
+        <View className="px-4 pt-1">
+          <NutritionHeader
+            title={COPY.manageEntry}
+            description={COPY.manageEntryHint}
+            onBack={() => router.back()}
+          />
+        </View>
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={theme.primary} />
         </View>
@@ -150,25 +163,50 @@ export default function CoachPortionsScreen() {
   // Enterprise no tiene scope de coach V2 (fail-closed en `nutritionV2CoachScope`).
   if (!scope) {
     return (
-      <SafeAreaView className="flex-1 bg-surface-app" edges={['top']}>
-        <NutritionHeader title={COPY.manageEntry} description={COPY.manageEntryHint} />
-        <NutritionStatePanel
-          title="No disponible en este espacio"
-          description="Cambia a tu espacio de coach para administrar las porciones."
-          icon="permission"
-        />
+      <SafeAreaView className="flex-1 bg-surface-app" edges={['top', 'bottom']}>
+        <View className="px-4 pt-1">
+          <NutritionHeader
+            title={COPY.manageEntry}
+            description={COPY.manageEntryHint}
+            onBack={() => router.back()}
+          />
+        </View>
+        <View className="px-4 pt-4">
+          <NutritionStatePanel
+            title="No disponible en este espacio"
+            description="Cambia a tu espacio de coach para administrar las porciones."
+            icon="permission"
+          />
+        </View>
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-app" edges={['top']}>
-      <NutritionHeader title={COPY.manageEntry} description={COPY.manageEntryHint} />
+    <SafeAreaView className="flex-1 bg-surface-app" edges={['top', 'bottom']}>
+      {/* La cabecera compacta (con flecha) no trae padding propio: el `-ml-2` de la flecha la
+          pegaría al borde sin este contenedor. */}
+      <View className="px-4 pt-1">
+        <NutritionHeader
+          title={COPY.manageEntry}
+          description={COPY.manageEntryHint}
+          onBack={() => router.back()}
+        />
+      </View>
 
+      {/* Tira de grupos: alto NATURAL, jamás estirada.
+          Bug QA T3.v ("óvalos gigantes"): un `ScrollView` de RN trae `flexGrow: 1` en su estilo
+          base, así que dentro de esta columna la tira se repartía el alto sobrante con la lista de
+          abajo y quedaba altísima; como el contenedor de contenido alinea en `stretch` por
+          defecto, cada chip se estiraba a ese alto y con `rounded-pill` se veía como un óvalo
+          gigante. `flexGrow/flexShrink: 0` la devuelve al alto de su contenido y `items-center`
+          evita el estirado aunque el contenedor vuelva a crecer. Van en `style` (objeto estático,
+          no función: css-interop descarta el prop si es función y el elemento pierde el estilo). */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerClassName="gap-2 px-4 py-2"
+        style={{ flexGrow: 0, flexShrink: 0 }}
+        contentContainerClassName="items-center gap-2 px-4 py-2"
       >
         {groups.map((entry) => {
           const active = entry.id === groupId
@@ -254,7 +292,9 @@ export default function CoachPortionsScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerClassName="gap-2 p-4">
+      {/* La lista SÍ toma el alto sobrante (`flex-1`): es la única superficie scrollable larga de
+          la pantalla, y sin esto competía por el espacio con la tira de grupos. */}
+      <ScrollView className="flex-1" contentContainerClassName="gap-2 p-4 pb-10">
         {rows.map((row) => (
           <View
             key={row.id}
@@ -344,9 +384,10 @@ export default function CoachPortionsScreen() {
  * no lleva una copia de la fórmula, así que jamás puede sugerir algo distinto del navegador.
  *
  * Chrome del DS: `components/Sheet` (mismo bottom sheet que el resto del dominio) en modo
- * `nativeModal`, porque esta pantalla se monta EMBEBIDA en el hub por pestaña y el contenedor de
- * @gorhom no es confiable en ese arranque (ver `SheetProps.nativeModal`). El montaje sigue siendo
- * condicional desde la pantalla, así que `open` va fijo en true.
+ * `nativeModal` — se eligió cuando la pantalla se montaba embebida en el hub (el contenedor de
+ * @gorhom no era confiable en ese arranque, ver `SheetProps.nativeModal`) y se conserva ahora que
+ * es pantalla propia: abre igual de bien y no hay razón para arriesgar el cambio. El montaje sigue
+ * siendo condicional desde la pantalla, así que `open` va fijo en true.
  */
 function AddEntrySheet({
   groupId,

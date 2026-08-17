@@ -114,8 +114,14 @@ const FOOD_CATEGORY_ICONS: Record<string, ReturnType<typeof require>> = {
   otro: require('../../assets/food-icons/otro.webp'),
 }
 
-/** Icono de categoría; cae a `otro` si es desconocida/null (web `foodCategoryIconUrl`). */
-function foodCategoryIconSource(category: string | null | undefined): ReturnType<typeof require> {
+/**
+ * Icono de categoría; cae a `otro` si es desconocida/null (web `foodCategoryIconUrl`).
+ *
+ * Exportado (T3.v Cabina, swap Familia N): el `stack` de «Agregar alimento» necesita los MISMOS
+ * assets bundleados que pintan las filas del catálogo. Re-`require`arlos en la superficie sería
+ * repetir la tabla de rutas en dos lados y arriesgar que un asset se renombre en uno solo.
+ */
+export function foodCategoryIconSource(category: string | null | undefined): ReturnType<typeof require> {
   return category && category in FOOD_CATEGORY_ICONS
     ? FOOD_CATEGORY_ICONS[category]
     : FOOD_CATEGORY_ICONS.otro

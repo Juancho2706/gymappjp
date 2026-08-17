@@ -13,11 +13,11 @@
 
 import { useContext, useMemo, useState } from 'react'
 import Image from 'next/image'
-import { Check, ChevronDown, Copy, CopyCheck, MoreVertical, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Copy, CopyCheck, MoreVertical, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { exchangeGroupColor } from '@eva/nutrition-engine'
 import { formatNutritionDayOfWeek } from '@eva/nutrition-v2'
-import { NutritionCard } from '@/components/nutrition-v2'
+import { AddActionButton, NutritionCard, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import { MacroSparkPopover } from '@/components/nutrition-v2/MacroSparkPopover'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import {
@@ -54,6 +54,18 @@ const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 /** Fotos que entran en el stack de la franja contraida antes del «+n» (mockup «Cabina v2» A·1/A·2). */
 const STACK_MAX_THUMBS = 4
 
+/**
+ * Las tres monedas del botón «Agregar alimento» (Familia N): carbohidrato · proteína · verdura.
+ * Son los MISMOS íconos estáticos de categoría que ya usa la fila y el picker (`/food-icons/*`,
+ * parte del build), no assets nuevos. El trío no describe lo que hay en la franja: es la firma
+ * visual de «acá se agrega comida».
+ */
+const ADD_FOOD_STACK = [
+  foodCategoryIconUrl('carbohidrato'),
+  foodCategoryIconUrl('proteina'),
+  foodCategoryIconUrl('verdura'),
+] as const
+
 export function EditableSlotCard({
   variantKey,
   slot,
@@ -68,6 +80,9 @@ export function EditableSlotCard({
   // Porcion pegajosa (T2.6 F4): mapa foodId → ultima cantidad, resuelto server-side. Solo el
   // editor unico monta el provider; en el quick-edit clasico esto es {} (sin cambios).
   const rememberedQuantities = useContext(RememberedQuantitiesContext)
+  // Marca del coach de ESTA pantalla (white-label): pinta el «+» de las pastillas de alta. Fuera
+  // del panel (harness) es null y la Familia N cae al primary de EVA.
+  const brandHex = useBrandPrimaryHex()
   const [addOpen, setAddOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
@@ -170,6 +185,15 @@ export function EditableSlotCard({
     })
   }
 
+  /**
+   * Alta de alimento LIBRE desde el pie de la franja: la misma acción que ya despachaba el picker
+   * en `onPickCustom` (`ADD_CUSTOM_ITEM`), sin nombre precargado porque acá no hubo búsqueda que
+   * reusar — la fila entra vacía y el coach le escribe el nombre encima.
+   */
+  function handleAddFreeFood() {
+    dispatch({ type: 'ADD_CUSTOM_ITEM', variantKey, slotKey: slot.key, key: genQuickEditKey() })
+  }
+
   function openCopySheet() {
     setCopySelection([])
     setMenuOpen(false)
@@ -188,9 +212,16 @@ export function EditableSlotCard({
     <NutritionCard>
       {/* Header v2 (mockup «Cabina v2» A·1): nombre · hora · [stack de fotos si esta contraida] ·
           spark del subtotal · contraer · ⋮. Envuelve (`flex-wrap`) en vez de comprimir: en 390 px
-          el nombre y la hora quedan en la primera linea y el bloque de la derecha baja entero. */}
-      <div className="flex flex-wrap items-start gap-2">
-        <div className="min-w-0 flex-1 basis-48">
+          el nombre y la hora quedan en la primera linea y el bloque de la derecha baja entero.
+          Fix F4 del QA visual: a 1024 el lienzo es la columna MAS angosta de todo el editor (rail +
+          paleta se llevan los costados) y la base de 12rem del nombre alcanzaba para tirar el spark
+          y los dos botones a una segunda linea casi vacia. Desde `md:` la base baja a 8rem — como
+          el input igual es `flex-1`, su ancho RENDERIZADO no cambia cuando entra en una linea: lo
+          unico que cambia es la decision de wrap. Y si igual llega a envolver (nombre larguisimo,
+          zoom), `justify-end` en vez de `ml-auto` hace que la segunda linea se pegue entera a la
+          derecha en lugar de dejar el hueco muerto que reporto el owner. */}
+      <div className="flex flex-wrap items-start justify-end gap-2">
+        <div className="min-w-0 flex-1 basis-48 md:basis-32">
           <label className="sr-only" htmlFor={`qe-slot-name-${slot.key}`}>
             Nombre de la franja
           </label>
@@ -224,7 +255,7 @@ export function EditableSlotCard({
             className="h-11 w-[6.5rem] rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold tabular-nums text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
         </div>
-        <div className="ml-auto flex min-h-11 shrink-0 items-center gap-2">
+        <div className="flex min-h-11 shrink-0 items-center gap-2">
           {/* Contraída: qué lleva la franja SIN abrirla. El stack de fotos es la versión de un
               vistazo de la lista que el body esconde; decorativo (`aria-hidden`) porque el spark
               de al lado ya anuncia el subtotal y el botón de contraer nombra la franja. La franja
@@ -247,18 +278,29 @@ export function EditableSlotCard({
 
           {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
               Contraída, la card sigue diciendo lo único que importa de un vistazo: nombre, hora,
-              su subtotal con las macros completas y el stack de fotos. */}
+              su subtotal con las macros completas y el stack de fotos.
+
+              Pasada 2 (hallazgo 3 del owner: «el chevron es un fantasma»). El botón tenía el MISMO
+              traje que el ⋮ de al lado —fondo de card sobre card— así que no se leía como algo que se
+              pueda apretar. Ahora arranca hundido (`bg-surface-sunken`) con borde de contorno, que es
+              como el DS pinta un control disponible sobre una card, y el hover lo ENCIENDE: sube al
+              plano de la card y toma el color de marca. Los 44 px y el contrato aria no se tocan. */}
           <button
             type="button"
             aria-label={collapsed ? QE_COPY.expandSlot(slotLabel) : QE_COPY.collapseSlot(slotLabel)}
             aria-expanded={!collapsed}
             aria-controls={slotBodyId}
             onClick={() => setCollapsed((previous) => !previous)}
-            className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-11 w-11 shrink-0 rounded-control border border-border-default bg-surface-sunken text-body transition-colors hover:border-primary/40 hover:bg-surface-card hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
+            {/* Media vuelta al abrir/cerrar: la punta señala hacia dónde va el cuerpo (abajo = «se
+                abre», arriba = «se cierra»). `motion-reduce` la deja instantánea. */}
             <ChevronDown
               aria-hidden="true"
-              className={'mx-auto h-4 w-4 transition-transform ' + (collapsed ? '-rotate-90' : '')}
+              className={
+                'mx-auto h-4 w-4 transition-transform duration-200 ease-out motion-reduce:transition-none ' +
+                (collapsed ? 'rotate-0' : 'rotate-180')
+              }
             />
           </button>
           <button
@@ -374,7 +416,22 @@ export function EditableSlotCard({
         </button>
       </QeBottomSheet>
 
-      <div id={slotBodyId} hidden={collapsed}>
+      {/* Cuerpo de la franja con colapso ANIMADO (hallazgo 3): el patrón `grid-template-rows` de
+          `0fr` a `1fr` sobre un envoltorio con `overflow-hidden` adentro — la misma técnica que ya usa
+          el ejecutor (`.exec-v3-ss-body` en globals.css). Anima la altura REAL sin medirla en JS, así
+          que no hay ni un `useEffect` ni un ResizeObserver de por medio y la card puede crecer o
+          encogerse (agregar un alimento, abrir porciones) sin recalcular nada.
+
+          Contraída sigue siendo invisible Y fuera de alcance: `inert` la saca del tab-order y de la
+          accesibilidad —lo que hacía `hidden`—, mientras el `id`/`aria-controls`/`aria-expanded` del
+          botón quedan intactos. `prefers-reduced-motion` desactiva la transición (`motion-reduce`). */}
+      <div
+        className={
+          'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ' +
+          (collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]')
+        }
+      >
+      <div id={slotBodyId} inert={collapsed} className="min-h-0 overflow-hidden">
         <div className="mt-3 space-y-2">
           {slot.items.length === 0 ? (
             <p className="rounded-control border border-dashed border-border-subtle bg-surface-sunken px-3 py-3 text-center text-sm text-muted">
@@ -394,19 +451,36 @@ export function EditableSlotCard({
           )}
         </div>
 
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={() => setAddOpen(true)}
-          className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Plus className="h-4 w-4" />
-          {QE_COPY.addFood}
-        </button>
+        {/* Pie de la franja (Familia N): las dos altas de alimento, una al lado de la otra.
+            «Agregar alimento» lleva el STACK de tres monedas de categoría —la silueta que dice
+            «esto agrega comida» sin leer— y «Alimento libre» va punteado (hueco por llenar), el
+            mismo idioma que «Agregar día». Los handlers son los de siempre: el primero abre el
+            picker (que además ofrece el alta libre con el texto buscado precargado) y el segundo
+            despacha el alta libre en seco, la misma acción que `onPickCustom` sin nombre. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <AddActionButton
+            stack={ADD_FOOD_STACK}
+            label={QE_COPY.addFood}
+            brandColor={brandHex}
+            disabled={isPending}
+            onClick={() => setAddOpen(true)}
+            data-testid="qe-add-food"
+          />
+          <AddActionButton
+            icon="libre"
+            variant="dashed"
+            label={QE_COPY.freeFood}
+            brandColor={brandHex}
+            disabled={isPending}
+            onClick={handleAddFreeFood}
+            data-testid="qe-add-free-food"
+          />
+        </div>
 
         {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo "+ Alimento".
             Se pinta sola solo si el plan usa porciones (capa invisible si no). */}
         <EditablePortionsCard variantKey={variantKey} slot={slot} />
+      </div>
       </div>
 
       {/* Pie v2 (mockup A·1, `q-portions`): la fila «Subtotal franja + chips» ya no existe — el

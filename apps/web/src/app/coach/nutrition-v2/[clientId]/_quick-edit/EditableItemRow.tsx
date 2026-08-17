@@ -20,7 +20,6 @@ import {
   ArrowUp,
   BookmarkPlus,
   GripVertical,
-  ListPlus,
   Loader2,
   MoreVertical,
   MoveRight,
@@ -30,8 +29,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 // Import DIRECTO (no por el barrel `components/nutrition-v2`): el barrel arrastra el kit entero
-// a este bundle de cliente y acá solo hace falta el spark.
+// a este bundle de cliente y acá solo hace falta el spark (y, desde la Familia N, la pastilla de
+// alta con su lector de marca).
 import { MacroSparkPopover } from '@/components/nutrition-v2/MacroSparkPopover'
+import { AddActionButton } from '@/components/nutrition-v2/AddActionButton'
+import { useBrandPrimaryHex } from '@/components/nutrition-v2/useBrandPrimaryHex'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { BUILDER_UNITS, MAX_ITEM_SUBSTITUTIONS } from '@eva/nutrition-v2'
@@ -103,6 +105,16 @@ function itemDensityLabel(item: QeItem): string | null {
 /** Tipo MIME propio del drag de items del editor (W3b): jamas interpretar drops ajenos. */
 const QE_ITEM_DRAG_MIME = 'application/x-eva-qe-item'
 
+/**
+ * Monedas del botón «Agregar reemplazo» (Familia N): DOS íconos de categoría —proteína y
+ * carbohidrato—, los mismos assets estáticos que ya usa la fila. Dos y no tres a propósito: un
+ * reemplazo es un par (lo prescrito ⇄ lo que lo sustituye), no un surtido.
+ */
+const SUBSTITUTION_STACK = [
+  foodCategoryIconUrl('proteina'),
+  foodCategoryIconUrl('carbohidrato'),
+] as const
+
 interface QeItemDragPayload {
   variantKey: string
   slotKey: string
@@ -124,6 +136,7 @@ export function EditableItemRow({
   count?: number
 }) {
   const { clientId, state, dispatch, errors, showErrors, isPending, surface } = useQuickEdit()
+  const brandHex = useBrandPrimaryHex()
   const [swapOpen, setSwapOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
@@ -404,11 +417,19 @@ export function EditableItemRow({
         )}
       </div>
 
-      {/* cols 3 y 4 (una sola linea bajo `md`) — cantidad + unidad, y el spark de macros. */}
+      {/* cols 3 y 4 (una sola linea bajo `md`) — cantidad + unidad, y el spark de macros.
+          Pasada 2 (hallazgo 2 del owner): cantidad y unidad tienen que leerse como UN control partido
+          en dos. Las dos cajas miden 44 px (`h-11`) y el contenedor las centra (`items-center`); el
+          envoltorio de la cantidad se declara `flex items-center` para que su alto sea EXACTAMENTE el
+          del campo — un div de bloque con un input adentro suma el hueco de la línea base de la fuente
+          y bajaría el centro del campo un par de píxeles respecto del de la unidad. */}
       <div className="col-start-2 col-span-2 row-start-2 flex items-center gap-2 md:contents">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <div className="min-w-0 flex-1 md:w-[148px] md:flex-none">
+          <div className="flex min-w-0 flex-1 items-center md:w-[148px] md:flex-none">
             <ItemQuantityField
+              // El envoltorio es flex: sin `w-full` la variante con steppers (unidades contadas)
+              // dejaría de llenar los 148 px de la columna y se encogería a su contenido.
+              className="w-full"
               label={`Cantidad de ${itemLabel}`}
               value={item.quantity}
               unit={item.unit}
@@ -451,7 +472,9 @@ export function EditableItemRow({
               onChange={(event) =>
                 dispatch({ type: 'SET_ITEM_UNIT', variantKey, slotKey, itemKey: item.key, unit: event.target.value })
               }
-              className="h-11 w-20 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+              /* 44×64 — el mismo cajón que la caja de solo lectura de abajo (las unidades son de dos
+                 letras: g · ml · un), para que la columna no se corra entre filas con y sin catálogo. */
+              className="h-11 w-16 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
             >
               {BUILDER_UNITS.map((unit) => (
                 <option key={unit} value={unit}>
@@ -460,9 +483,13 @@ export function EditableItemRow({
               ))}
             </select>
           ) : (
+            /* Mismo alto (44 px) y el MISMO ancho que el select de al lado: en un día se mezclan filas
+               hidratadas (esta caja) con filas recién agregadas o intercambiadas (el select), y con
+               anchos distintos la columna de cantidad de cada fila arrancaba en una x diferente —
+               la escalera que reportó el owner en la fila «100 | ml». */
             <span
               title="Reemplaza el alimento desde el catalogo para cambiar la unidad"
-              className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken text-sm font-semibold text-muted"
+              className="inline-flex h-11 w-16 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken text-sm font-semibold text-muted"
             >
               {item.unit}
             </span>
@@ -475,7 +502,12 @@ export function EditableItemRow({
         <MacroSparkPopover
           size="sm"
           hideUnit
-          className="shrink-0 justify-self-end"
+          // `xl:min-w-[5.25rem]`: cada fila es su PROPIA grilla, así que una fila con 4 dígitos de kcal
+          // ensancha su columna del spark y corre la cantidad y la unidad unos píxeles a la izquierda
+          // respecto de la fila de arriba. Un piso de ancho que cubre hasta 4 dígitos deja la columna
+          // quieta (el contenido sigue alineado a la derecha). Solo desde `xl:`: entre 1024 y 1279 el
+          // lienzo es la columna más angosta del editor y esos píxeles le hacen falta al NOMBRE.
+          className="shrink-0 justify-self-end xl:min-w-[5.25rem]"
           ariaContext={itemLabel}
           calories={macros.calories}
           proteinG={macros.proteinG}
@@ -677,18 +709,22 @@ export function EditableItemRow({
               </ul>
             )}
             <div>
-              <button
-                type="button"
+              {/* Familia N: el alta de un reemplazo es un alta de ALIMENTO (abre el mismo picker
+                  del catálogo), así que lleva monedas de categoría y no un ícono suelto — dos y
+                  no tres, que es la cuenta de un reemplazo: lo prescrito y lo que lo sustituye.
+                  Handler, límite y flujo del sheet, idénticos. */}
+              <AddActionButton
+                stack={SUBSTITUTION_STACK}
+                label={QE_COPY.addSubstitution}
+                brandColor={brandHex}
                 disabled={isPending || substitutions.length >= MAX_ITEM_SUBSTITUTIONS}
                 onClick={() => {
                   setSubsOpen(false)
                   setSubsPickerOpen(true)
                 }}
-                className={menuItemClass}
-              >
-                <ListPlus aria-hidden="true" className="h-4 w-4 text-muted" />
-                {QE_COPY.addSubstitution}
-              </button>
+                className="w-full justify-center"
+                data-testid="qe-add-substitution"
+              />
               {substitutions.length >= MAX_ITEM_SUBSTITUTIONS ? (
                 <p className="mt-1 px-1 text-xs leading-5 text-muted">
                   {QE_COPY.substitutionLimit(MAX_ITEM_SUBSTITUTIONS)}

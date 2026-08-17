@@ -30,7 +30,7 @@ import {
   resolveNutritionDayVariantForDate,
   sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
-import { DayVariantWeekStrip, StrategyBadge } from '@/components/nutrition-v2'
+import { AddActionButton, DayVariantWeekStrip, StrategyBadge, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditorMetaCard } from './EditorMetaCard'
@@ -178,7 +178,13 @@ export function QuickEditPlanView() {
       // está montado — sin eso, el fadeIn del shell (fill-mode both) crea un stacking context
       // permanente y el sidebar sticky (z-6) / topbar (z-4) pintan ENCIMA del editor.
       data-qe-overlay=""
-      className="fixed inset-0 z-[60] overflow-y-auto bg-surface-app"
+      // `scrollbar-gutter: stable both-edges` (solo 2xl, donde manda el centrado): este overlay es
+      // su PROPIO contenedor de scroll, así que en Windows/Linux su barra se come ~15 px del lado
+      // derecho y todo lo que centra `mx-auto` queda medio ancho de barra a la izquierda del centro
+      // real de la ventana — mientras la barra de totales, que es `fixed` a la VENTANA, se centra sin
+      // ese descuento. Reservando el hueco en los DOS bordes, el eje del lienzo y el de la barra
+      // vuelven a ser el mismo. Donde la barra es overlay (macOS, touch) mide 0 px y esto no hace nada.
+      className="fixed inset-0 z-[60] overflow-y-auto bg-surface-app 2xl:[scrollbar-gutter:stable_both-edges]"
     >
       {/* Cinta v2 (T3.v, solo editor ≥768 — compacta 768–1023, completa desde 1024): identidad +
           diagnóstico del día + acciones. */}
@@ -240,8 +246,16 @@ export function QuickEditPlanView() {
           // le da MÁS aire al lienzo, nunca menos, así que no reabre el bug del nombre recortado.
           // A `2xl:` (≥1536) el contenedor deja de topar en 80rem para que sobre espacio real: el
           // lienzo interior (más abajo) se centra solo en 880 px en vez de estirarse.
+          //
+          // T3.v pasada 2 (hallazgo 1 del owner, «maximizado»): hasta acá los dos costados PESABAN
+          // distinto (rail 190 · paleta 288), así que el track del centro —y con él el lienzo y el eje
+          // de la barra de totales— quedaba 49 px a la izquierda del centro de la pantalla. Medido con
+          // Playwright a 1536 y 1920. Desde `2xl:` los dos tracks laterales pasan a medir LO MISMO
+          // (18rem): la paleta conserva su ancho interno de 288 y el rail conserva el suyo (190, ver
+          // `EditorDayRail`) dejando el resto como aire, que es exactamente el gutter simétrico que le
+          // faltaba al otro lado. Bajo 1536 no se toca nada (el contrato responsive de la SPEC manda).
           (isEditor
-            ? 'max-w-3xl lg:grid lg:max-w-[80rem] lg:grid-cols-[10.5rem_minmax(0,1fr)_16.25rem] lg:items-start lg:gap-4 xl:grid-cols-[11.875rem_minmax(0,1fr)_18rem] xl:gap-6 2xl:max-w-[100rem] '
+            ? 'max-w-3xl lg:grid lg:max-w-[80rem] lg:grid-cols-[10.5rem_minmax(0,1fr)_16.25rem] lg:items-start lg:gap-4 xl:grid-cols-[11.875rem_minmax(0,1fr)_18rem] xl:gap-6 2xl:max-w-[100rem] 2xl:grid-cols-[18rem_minmax(0,1fr)_18rem] '
             : 'max-w-3xl ') +
           (isPending ? 'pointer-events-none opacity-70' : '')
         }
@@ -261,8 +275,15 @@ export function QuickEditPlanView() {
             quick-edit clásico conserva sus 16 px en todo ancho. V2.5: desde `2xl:` (≥1536) el
             lienzo deja de estirarse a lo ancho de la columna 1fr — se centra en 880 px (55rem),
             el resto del espacio extra que dejó el contenedor sin tope de arriba queda como aire a
-            los costados (SPEC «canvas max-w 880 centrado»). */}
-        <div className={'min-w-0 space-y-4 ' + (isEditor ? 'lg:space-y-3.5 2xl:mx-auto 2xl:max-w-[55rem]' : '')}>
+            los costados (SPEC «canvas max-w 880 centrado»).
+            `2xl:w-full` no es decorativo: un item de grid con márgenes `auto` y SIN ancho definido se
+            encoge a su contenido (fit-content), y por eso el lienzo venía midiendo ~708 px en vez de
+            los 880 del contrato. Con el ancho al 100 % del track, el tope de 55rem manda y los
+            márgenes automáticos reparten el sobrante — que ahora es simétrico. */}
+        <div
+          data-testid="editor-canvas"
+          className={'min-w-0 space-y-4 ' + (isEditor ? 'lg:space-y-3.5 2xl:mx-auto 2xl:w-full 2xl:max-w-[55rem]' : '')}
+        >
         {/* Respaldo local: hay un borrador de una sesion anterior (mismo plan/version) sin publicar. */}
         {pendingRestore ? (
           <div className="animate-in slide-in-from-top-1 rounded-card border border-primary/25 bg-primary/10 p-3">
@@ -968,6 +989,7 @@ function PortionsDayGapNotice({ className }: { className?: string }) {
 /** "+ Agregar franja" (§1.2.B.2): nombre + hora en un bottom sheet. */
 function AddSlotButton({ variantKey }: { variantKey: string }) {
   const { dispatch, isPending } = useQuickEdit()
+  const brandHex = useBrandPrimaryHex()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [startTime, setStartTime] = useState('')
@@ -988,15 +1010,20 @@ function AddSlotButton({ variantKey }: { variantKey: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        disabled={isPending}
-        onClick={() => handleOpenChange(true)}
-        className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Plus className="h-4 w-4" />
-        {QE_COPY.addSlot}
-      </button>
+      {/* Familia N: la pastilla de alta CENTRADA entre cards, no una barra punteada de ancho
+          completo. La barra competía en peso con las propias franjas (mismo ancho, mismo borde);
+          la pastilla se lee como un gesto y deja respirar la pila de comidas. Mismo handler: abre
+          la QeBottomSheet con nombre + hora. */}
+      <div className="flex justify-center">
+        <AddActionButton
+          icon="franja"
+          label={QE_COPY.addSlot}
+          brandColor={brandHex}
+          disabled={isPending}
+          onClick={() => handleOpenChange(true)}
+          data-testid="qe-add-slot"
+        />
+      </div>
       {/* QeBottomSheet y no Sheet crudo: en desktop un bottom sheet a todo el ancho del monitor
           es ilegible (queja del CEO 08-04, reincidió en el QA de T3.v) — el compartido ya lo
           resuelve como diálogo centrado. */}

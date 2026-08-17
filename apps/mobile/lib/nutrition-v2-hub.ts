@@ -10,15 +10,27 @@
 
 export type NutritionAttentionReason = 'no_plan' | 'draft_pending' | 'no_recent_intake' | 'none'
 
-/** Claves del tablist del hub V2 (orden fijo, espejo de web `NutritionHubTabs`). */
-export const NUTRITION_HUB_TAB_KEYS = ['roster', 'portions', 'foods', 'curation'] as const
+/**
+ * Claves del tablist del hub V2 (orden fijo, espejo de web `NutritionHubTabs.tsx:10-17`).
+ *
+ * PARIDAD (decision owner, QA T3.v): la web es el JEFE. Su segunda pestaña es **Plantillas**, no
+ * "Porciones" — RN tenia una tablist propia que ningun coach podia reconocer viniendo del
+ * navegador. Porciones NO se retira: dejo de ser pestaña y vive como PANTALLA propia
+ * (`/coach/nutrition-v2/portions`), alcanzable desde la pestaña Alimentos.
+ */
+export const NUTRITION_HUB_TAB_KEYS = ['roster', 'templates', 'foods', 'curation'] as const
 export type NutritionHubTabKey = (typeof NUTRITION_HUB_TAB_KEYS)[number]
 
 /**
  * Tab inicial del hub a partir del query `?tab=` (NUT-027). El deep link `/coach/foods` redirige a
  * `/coach/nutricion?tab=foods`, pero con V2 ON el hub montaba con `roster` fijo y el parametro se
- * perdia. Traduce ADEMAS el vocabulario legacy de V1 (`templates|clients|foods|recipes`) al de V2:
- * `foods` mapea directo y todo lo demas (incluido un valor invalido o ausente) cae a `roster`.
+ * perdia.
+ *
+ * Acepta DOS vocabularios a proposito: las claves internas (`foods`, `curation`, `templates`) que
+ * usan los redirects nativos, y los slugs en español que la web escribe en su propia URL
+ * (`alimentos`, `curacion`, `plantillas`, `alumnos` — ver `TAB_SLUG` de `NutritionHubTabs`), para
+ * que un link copiado del navegador aterrice en la misma pestaña en el telefono. Cualquier otro
+ * valor (incluido el `portions` viejo, que ya no es pestaña) cae a `roster`.
  * `useLocalSearchParams` puede entregar `string[]`; se toma el primer valor.
  */
 export function resolveNutritionHubInitialTab(
@@ -26,13 +38,14 @@ export function resolveNutritionHubInitialTab(
 ): NutritionHubTabKey {
   const raw = Array.isArray(tab) ? tab[0] : tab
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
-  if (value === 'foods') return 'foods'
-  if (value === 'curation') return 'curation'
-  // `portions` (F4): la gestion de listas de equivalencia del coach, espejo de la seccion
-  // "Porciones" de /coach/foods en web.
-  if (value === 'portions') return 'portions'
+  if (value === 'foods' || value === 'alimentos') return 'foods'
+  if (value === 'curation' || value === 'curacion') return 'curation'
+  if (value === 'templates' || value === 'plantillas') return 'templates'
   return 'roster'
 }
+
+/** Ruta de la pantalla Porciones del coach (ya no es pestaña del hub: se navega). */
+export const NUTRITION_V2_PORTIONS_HREF = '/coach/nutrition-v2/portions'
 
 export type NutritionAttentionFilter =
   | 'all'

@@ -100,7 +100,10 @@ export function PublishBar({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[65] px-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
-      <div className="pointer-events-auto mx-auto w-full max-w-3xl rounded-card border border-border-default bg-surface-card/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-surface-card/85">
+      <div
+        data-testid="qe-publish-bar"
+        className="pointer-events-auto mx-auto w-full max-w-3xl rounded-card border border-border-default bg-surface-card/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-surface-card/85"
+      >
         {upgradeRequired ? (
           <div className="mb-2 flex items-start gap-2 rounded-control border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-body">
             <LockKeyhole aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />

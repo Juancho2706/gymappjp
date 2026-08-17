@@ -48,6 +48,7 @@ import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchan
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import { useWorkspace } from '../../../lib/workspace'
 import { nutritionV2CoachScope } from '../../../lib/nutrition-v2.api'
+import { NUTRITION_V2_PORTIONS_HREF } from '../../../lib/nutrition-v2-hub'
 
 /**
  * Catálogo V2 del coach (RN, read-only) — port de
@@ -600,24 +601,45 @@ export default function CoachNutritionCatalogScreen({
           })}
         </View>
 
-        {/* Sin scope resuelto no hay a dónde escribir: se deshabilita en vez de abrir un sheet que
-            fallaría al guardar. El relleno es `bg-primary` (token de marca, white-label safe) y el
-            texto/icono su foreground legible — el mismo par que el CTA del sheet de macros. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Crear un alimento nuevo"
-          accessibilityState={{ disabled: scope === null }}
-          disabled={scope === null}
-          onPress={() => setCreateOpen(true)}
-          className={`min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-pill bg-primary px-3 ${
-            scope === null ? 'opacity-50' : ''
-          }`}
-        >
-          <Plus color={theme.primaryForeground} size={14} />
-          <Text numberOfLines={1} className="text-xs font-semibold text-primary-foreground">
-            Nuevo alimento
-          </Text>
-        </Pressable>
+        {/* Par de acciones a la derecha, agrupado para que `justify-between` siga separando
+            filtros de acciones (y no reparta tres bloques sueltos). */}
+        <View className="flex-row items-center gap-2">
+          {/* Puerta a PORCIONES (QA T3.v). Dejó de ser pestaña del hub —la web no la tiene— y pasó
+              a ser pantalla propia; sin este acceso quedaba huérfana. Va acá porque es el mismo
+              trabajo: clasificar alimentos en grupos de equivalencia. Secundaria a propósito
+              (borde + superficie de tarjeta): el verbo protagonista sigue siendo el alta. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Abrir Porciones para clasificar alimentos en grupos"
+            onPress={() => router.push(NUTRITION_V2_PORTIONS_HREF)}
+            className="min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-pill border border-default bg-surface-card px-3"
+          >
+            <Scale color={theme.mutedForeground} size={14} />
+            <Text numberOfLines={1} className="text-xs font-semibold text-muted">
+              Porciones
+            </Text>
+          </Pressable>
+
+          {/* Sin scope resuelto no hay a dónde escribir: se deshabilita en vez de abrir un sheet
+              que fallaría al guardar. El relleno es `bg-primary` (token de marca, white-label
+              safe) y el texto/icono su foreground legible — el mismo par que el CTA del sheet de
+              macros. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Crear un alimento nuevo"
+            accessibilityState={{ disabled: scope === null }}
+            disabled={scope === null}
+            onPress={() => setCreateOpen(true)}
+            className={`min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-pill bg-primary px-3 ${
+              scope === null ? 'opacity-50' : ''
+            }`}
+          >
+            <Plus color={theme.primaryForeground} size={14} />
+            <Text numberOfLines={1} className="text-xs font-semibold text-primary-foreground">
+              Nuevo alimento
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   )

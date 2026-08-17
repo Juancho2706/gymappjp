@@ -17,8 +17,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Copy, Loader2, Pencil, Plus, Search, SlidersHorizontal, Star, Trash2, Users } from 'lucide-react'
+import { Copy, Loader2, Pencil, Search, SlidersHorizontal, Star, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
+import { AddActionButton, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import {
   Dialog,
   DialogContent,
@@ -90,6 +91,10 @@ function summaryLine(template: PlanTemplateListItem): string {
 }
 
 export function PlanTemplatesLibrary() {
+  const router = useRouter()
+  // Marca REAL del coach (white-label): la CTA primaria pinta ese hex de fondo, así que la tinta
+  // del label se decide contra ÉL — una marca clara sale con tinta oscura, no con blanco ilegible.
+  const brandHex = useBrandPrimaryHex()
   const [templates, setTemplates] = useState<PlanTemplateListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -251,13 +256,18 @@ export function PlanTemplatesLibrary() {
             alumnos CON plan, así que no puede ser la única puerta. `flex-1` en ambos para que
             el par no desborde en 360 px (dos w-full en una fila desbordan). */}
         <div className="flex items-center gap-2">
-          <Link
-            href={TEMPLATE_EDITOR_HREF}
-            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 sm:flex-none"
-          >
-            <Plus className="size-4 shrink-0" />
-            Nueva plantilla
-          </Link>
+          {/* Familia N, variante `primary`: es la única alta de esta pestaña que merece el color
+              de la marca. `brandColor` es el hex REAL del coach (no el token) porque el fondo ES
+              ese color y la tinta se calcula contra él. */}
+          <AddActionButton
+            icon="plantilla"
+            variant="primary"
+            label="Nueva plantilla"
+            brandColor={brandHex}
+            onClick={() => router.push(TEMPLATE_EDITOR_HREF)}
+            className="flex-1 justify-center sm:flex-none"
+            data-testid="templates-new"
+          />
           <button
             type="button"
             onClick={() => setCreating(true)}
@@ -281,13 +291,17 @@ export function PlanTemplatesLibrary() {
         <div className="rounded-control border border-border-subtle bg-surface-sunken px-4 py-10 text-center text-sm text-muted">
           <Copy className="mx-auto mb-2 size-7 opacity-30" />
           <p>Todavía no tienes plantillas. Arma una desde cero y aplícala al alumno que quieras.</p>
-          <Link
-            href={TEMPLATE_EDITOR_HREF}
-            className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
-          >
-            <Plus className="size-4 shrink-0" />
-            Nueva plantilla
-          </Link>
+          {/* Mismo botón que el header: el vacío no es lugar para una segunda forma de la misma
+              acción — el coach ya aprendió esta silueta arriba. */}
+          <div className="mt-3 flex justify-center">
+            <AddActionButton
+              icon="plantilla"
+              variant="primary"
+              label="Nueva plantilla"
+              brandColor={brandHex}
+              onClick={() => router.push(TEMPLATE_EDITOR_HREF)}
+            />
+          </div>
         </div>
       ) : (
         <ul className="space-y-2">

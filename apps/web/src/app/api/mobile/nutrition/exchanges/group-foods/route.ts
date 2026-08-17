@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import {
     ExcludeExchangeGroupFoodSchema,
     RemoveExchangeGroupFoodSchema,
@@ -33,7 +34,21 @@ import { gateExchanges } from '../_shared'
  */
 
 const MOBILE_SCOPE = { orgId: null, activeTeamId: null } as const
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/**
+ * `z.guid()`, NUNCA una regex RFC 4122 propia (ni `z.uuid()`).
+ *
+ * BUG QA (T3.v, 2026-08-16): el `groupId` del GET se validaba con una regex hecha a mano que
+ * exigia version `[1-5]` y variante `[89ab]`. Los grupos de porciones del SISTEMA se sembraron
+ * con ids fijos no-RFC (`_POST_DEPLOY_20260611093002_nutrition_exchanges_seed.sql`:
+ * `0000e8c0-0000-0000-0000-00000000000N` — version `0` y variante `0`), asi que TODA lectura de
+ * lista sobre un grupo del sistema moria en 400 `INVALID_PAYLOAD` y el telefono mostraba
+ * "No pudimos cargar la lista". Las escrituras nunca fallaron porque van por los schemas
+ * compartidos, que ya usan `z.guid()` por esta misma razon (ver cabecera de
+ * `packages/schemas/nutrition-exchanges.ts` y `_actions/exchange-lists.actions.ts`, que valida el
+ * MISMO parametro con `z.guid`). Divergir de la web aca es exactamente lo que produjo el bug.
+ */
+const GroupIdSchema = z.guid('Grupo de porciones invalido.')
 
 function invalid(messages: string[]) {
     return NextResponse.json({ error: messages.join('. '), code: 'INVALID_PAYLOAD' }, { status: 400 })
@@ -51,7 +66,8 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const groupId = url.searchParams.get('groupId')
     if (!groupId) return invalid(['Falta el grupo de porciones.'])
-    if (!UUID.test(groupId)) return invalid(['Grupo de porciones invalido.'])
+    const parsedGroupId = GroupIdSchema.safeParse(groupId)
+    if (!parsedGroupId.success) return invalid(parsedGroupId.error.issues.map((i) => i.message))
     const search = url.searchParams.get('search')
     const wantsCandidates = url.searchParams.get('candidates') === '1'
 

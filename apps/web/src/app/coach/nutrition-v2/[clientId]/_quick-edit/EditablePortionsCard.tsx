@@ -21,9 +21,10 @@
  */
 
 import { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { exchangeGroupColor } from '@eva/nutrition-engine'
+import { AddActionButton, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import {
   type QePortionGroup,
@@ -62,6 +63,8 @@ function GroupDot({ group, sortOrder }: { group: { groupCode: string; color: str
 export function EditablePortionsCard({ variantKey, slot }: { variantKey: string; slot: QeSlot }) {
   const { portionGroups, portionGroupChoices } = useQuickEdit()
   const [pickerOpen, setPickerOpen] = useState(false)
+  // Antes del early-return de abajo: los hooks no pueden quedar detrás de un `return null`.
+  const brandHex = useBrandPrimaryHex()
 
   // Plan sin capa de porciones: CERO UI nueva (SPEC UX-c). Los grupos elegibles derivan
   // del read model, asi que un plan sin targets nunca pinta esta seccion.
@@ -91,14 +94,18 @@ export function EditablePortionsCard({ variantKey, slot }: { variantKey: string;
       ) : null}
 
       {portionGroupChoices.length > 0 ? (
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-control px-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 active:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Plus aria-hidden="true" className="h-4 w-4" />
-          {PORTIONS_COPY.builder.addGroup}
-        </button>
+        // Familia N: el alta de un grupo de porciones comparte silueta con el resto de las altas
+        // del editor (ícono ilustrado + «+» en el acento de marca). Mismo handler: abre el picker
+        // de grupos del catálogo del coach.
+        <div className="mt-2">
+          <AddActionButton
+            icon="porciones"
+            label={PORTIONS_COPY.builder.addGroup}
+            brandColor={brandHex}
+            onClick={() => setPickerOpen(true)}
+            data-testid="qe-add-portion-group"
+          />
+        </div>
       ) : null}
 
       {/* Una sola vez por seccion (no por fila): que pasa con lo que ya esta publicado. */}

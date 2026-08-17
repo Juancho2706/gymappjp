@@ -6,7 +6,9 @@ import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { GroupDot as PortionGroupDot } from '../../alumno/nutrition-v2/PortionChip'
 import { Sheet } from '../../Sheet'
 import { ExchangeGroupFormSheet, type ExchangeGroupFormInitial } from '../ExchangeGroupFormSheet'
+import { AddActionButton } from '../AddActionButton'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveEffectiveCoachBrandTheme } from '../../../lib/theme'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 import {
   PORTION_MAX,
@@ -370,7 +372,9 @@ export function EditablePortionsSection({
   /** Porciones propias (FD6a). Ausente = picker sin altas/edición de grupos (comportamiento previo). */
   groupAdmin?: QuickEditGroupAdmin
 }) {
-  const { theme } = useTheme()
+  const { branding } = useTheme()
+  // Marca real del coach para el acento de la pastilla (ver nota en `EditableSlotCard`).
+  const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
   const [pickerOpen, setPickerOpen] = useState(false)
 
   // Plan sin capa de porciones: CERO UI nueva (SPEC UX-c). Los grupos elegibles derivan
@@ -403,19 +407,20 @@ export function EditablePortionsSection({
       ) : null}
 
       {groups.length > 0 || groupAdmin ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={PORTIONS_COPY.builder.addGroup}
+        // «Familia N» (T3.v Cabina): misma pastilla de alta que el resto del editor. El handler
+        // (carga perezosa de los grupos propios + apertura del picker) es el de siempre.
+        <AddActionButton
+          variant="neutral"
+          icon="porciones"
+          label={PORTIONS_COPY.builder.addGroup}
+          brandColor={brandColor}
           disabled={disabled}
           onPress={() => {
             groupAdmin?.ensureLoaded()
             setPickerOpen(true)
           }}
-          className="mt-2 min-h-11 flex-row items-center gap-1.5 self-start rounded-control px-2 active:bg-primary/10"
-        >
-          <Plus color={theme.primary} size={16} />
-          <Text className="text-sm font-semibold text-primary">{PORTIONS_COPY.builder.addGroup}</Text>
-        </Pressable>
+          className="mt-2 self-start"
+        />
       ) : null}
 
       <GroupPickerSheet

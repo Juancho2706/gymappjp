@@ -88,8 +88,12 @@ export function EditorDayRail({
          dos navegaciones con el MISMO nombre. */
       aria-labelledby={RAIL_TITLE_ID}
       /* Mismo patrón sticky que la paleta del otro costado (`EditorPalette`): la columna acompaña
-         el scroll del lienzo sin salirse del viewport. */
-      className="sticky top-20 hidden max-h-[calc(100vh-7rem)] flex-col overflow-y-auto lg:flex"
+         el scroll del lienzo sin salirse del viewport.
+         `2xl:w-[11.875rem]`: desde 1536 el track lateral izquierdo mide lo mismo que el de la paleta
+         (18rem) para que el lienzo quede centrado en la pantalla (ver `QuickEditPlanView`); el rail
+         conserva ahí sus 190 px del contrato de la SPEC («≥1536 | rail 190 / paleta 288 fijos») y el
+         sobrante del track queda como aire. Sin esto el rail se estiraría a 288. */
+      className="sticky top-20 hidden max-h-[calc(100vh-7rem)] flex-col overflow-y-auto lg:flex 2xl:w-[11.875rem]"
     >
       <p
         id={RAIL_TITLE_ID}

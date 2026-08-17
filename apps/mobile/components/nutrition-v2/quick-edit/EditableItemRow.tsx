@@ -17,7 +17,11 @@ import {
   type ItemMacros,
 } from '../../../lib/nutrition-v2-builder'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
-import { QuantityStepper } from './QuantityStepper'
+import {
+  QUANTITY_CONTROL_HEIGHT_CLASS,
+  QUANTITY_TEXT_METRICS,
+  QuantityStepper,
+} from './QuantityStepper'
 import { QUICK_EDIT_COPY } from './microcopy'
 
 /**
@@ -75,9 +79,14 @@ function UnitToggle({
         const index = cycle.indexOf(unit)
         onChange(cycle[(index + 1) % cycle.length])
       }}
-      className="h-11 min-w-14 items-center justify-center rounded-control border border-default bg-surface-sunken px-2"
+      // Misma altura declarada que el stepper (constante compartida) y mismo centrado:
+      // el flexbox centra la etiqueta y las metricas de texto son las del numero, asi que
+      // «180» y «g» quedan a la misma altura optica dentro de las dos cajas de 44 pt.
+      className={`${QUANTITY_CONTROL_HEIGHT_CLASS} min-w-14 shrink-0 items-center justify-center rounded-control border border-default bg-surface-sunken px-2`}
     >
-      <Text className="text-sm font-semibold text-strong">{unit}</Text>
+      <Text className="text-sm font-semibold text-strong" style={QUANTITY_TEXT_METRICS}>
+        {unit}
+      </Text>
     </Pressable>
   )
 }
@@ -299,7 +308,9 @@ export function EditableItemRow({
 
       {/* Linea 3 — cantidad · unidad · spark. Los gramos exactos NO desaparecen: viven a un tap
           del spark (SPEC D3). Item sin macros = track vacio + «Sin macros registrados» en el
-          panel, que lo resuelve el propio componente. */}
+          panel, que lo resuelve el propio componente.
+          Cantidad y unidad comparten alto declarado y metricas de texto (ver QuantityStepper):
+          el hallazgo 2 del owner era que el numero y la unidad no se leian a la misma altura. */}
       <View className="mt-2 flex-row items-center gap-2">
         <QuantityStepper
           value={item.quantity}

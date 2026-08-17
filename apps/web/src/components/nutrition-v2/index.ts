@@ -45,3 +45,18 @@ export {
   type NutritionEmptyState,
   type NutritionIllustrationSource,
 } from './state-illustration'
+// T3.v Cabina «Familia N»: la pastilla única de alta (franja/porciones/día/plantilla/versión/libre
+// y alimento) + el lector del hex de marca que necesita su variante `primary` (white-label).
+export { useBrandPrimaryHex } from './useBrandPrimaryHex'
+export {
+  ADD_ACTION_DARK_INK,
+  ADD_ACTION_DEFAULT_BRAND,
+  ADD_ACTION_ICONS,
+  AddActionButton,
+  addActionIconSrc,
+  addActionInk,
+  type AddActionButtonProps,
+  type AddActionIcon,
+  type AddActionInk,
+  type AddActionVariant,
+} from './AddActionButton'

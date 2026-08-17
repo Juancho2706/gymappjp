@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -21,21 +22,20 @@ import {
   ChevronRight,
   Copy,
   FilePlus2,
-  Pencil,
   Plus,
   ScanLine,
-  Scale,
   Search,
-  Star,
   Users,
   X,
 } from 'lucide-react-native'
 import {
+  AddActionButton,
   CoachAttentionCard,
   NutritionHeader,
   NutritionSkeleton,
   NutritionStatePanel,
   NutritionCard,
+  PlanTemplateList,
   StrategyBadge,
   SyncOfflineState,
 } from '../../../components/nutrition-v2'
@@ -50,6 +50,7 @@ import {
   formatPlanBuilderOrigin,
   type NutritionCoachHubItem,
   type NutritionCoachHubPageReadModel,
+  type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../lib/supabase'
 import { useEntitlements } from '../../../lib/entitlements'
@@ -90,11 +91,12 @@ import {
   type NutritionSortKey,
 } from '../../../lib/nutrition-v2-hub'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveEffectiveCoachBrandTheme } from '../../../lib/theme'
 // Cuerpos embebibles de las otras dos superficies del hub, montados bajo el tablist (4B-17).
 // `foods.tsx` expone la variante `embedded` sobre su default; `curation.tsx` (4B-07) expone el
 // cuerpo embebible como export nombrado `CurationQueueScreen` — se usa el export REAL entregado.
+// `portions.tsx` YA NO se embebe (QA T3.v): es una pantalla propia, se navega desde Alimentos.
 import CoachNutritionCatalogScreen from './foods'
-import CoachPortionsScreen from './portions'
 import { CurationQueueScreen } from './curation'
 
 const PAGE_SIZE = 25
@@ -113,20 +115,33 @@ type HubCursor = { updatedAt: string; clientId: string }
 // una version nueva sobre ella en vez de insertar otra raiz activa.
 type PickerEntry = { clientId: string; clientName: string; planStatus: string | null; planId: string | null }
 
-// Tablist del hub — espejo de web `NutritionHubTabs.tsx:10-14`: orden fijo, copys verbatim,
-// default "Alumnos". Estado local; el deep link `?tab=` (NUT-027) solo fija el valor INICIAL y se
-// re-aplica si el parametro cambia (nunca pisa la seleccion manual del coach).
+// Tablist del hub — espejo de web `NutritionHubTabs.tsx:12-17`: orden fijo, copys e iconos
+// verbatim, default "Alumnos". Estado local; el deep link `?tab=` (NUT-027) solo fija el valor
+// INICIAL y se re-aplica si el parametro cambia (nunca pisa la seleccion manual del coach).
+//
+// PARIDAD (decision owner, QA T3.v): la segunda pestaña es "Plantillas", como en la web. Antes
+// era "Porciones", que la web no tiene: el coach que venia del navegador no reconocia el hub y su
+// biblioteca de plantillas era inalcanzable sin abrir el sheet "Nuevo plan". Porciones no se
+// pierde — es una PANTALLA propia a la que se entra desde la pestaña Alimentos.
 type HubTabKey = NutritionHubTabKey
 const HUB_TABS: Array<{ key: HubTabKey; label: string; icon: typeof Users }> = [
   { key: 'roster', label: 'Alumnos', icon: Users },
-  { key: 'portions', label: 'Porciones', icon: Scale },
+  { key: 'templates', label: 'Plantillas', icon: Copy },
   { key: 'foods', label: 'Alimentos', icon: Apple },
   { key: 'curation', label: 'Curación', icon: ScanLine },
 ]
 
 export default function CoachNutritionV2Screen() {
   const router = useRouter()
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
+  /**
+   * Color de marca REAL del coach para las pastillas `primary` de la «Familia N». Es el requisito
+   * duro del white-label: el fondo de esas pastillas ES la marca y la tinta se calcula CONTRA ese
+   * hex, así que si el botón se pintara con el default del componente (#2563EB, el primary de la
+   * web) una marca clara terminaría con texto blanco sobre amarillo. `resolveEffectiveCoachBrandTheme`
+   * es el mismo resolutor del que sale `theme` (tier + preset + azul EVA de fallback).
+   */
+  const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
   const insets = useSafeAreaInsets()
   const entitlements = useEntitlements()
   const {
@@ -496,8 +511,8 @@ export default function CoachNutritionV2Screen() {
           chrome en el árbol: el overlay es hermano posterior, así pinta y recibe toques encima
           en Android sin depender solo de `zIndex`. */}
       <View className="flex-1">
-        {activeTab === 'portions' ? (
-          <CoachPortionsScreen />
+        {activeTab === 'templates' ? (
+          <HubTemplatesTab scope={scope} chromeHeight={chromeHeight} onScroll={onBodyScroll} />
         ) : activeTab === 'foods' ? (
           <CoachNutritionCatalogScreen embedded chromeHeight={chromeHeight} onScroll={onBodyScroll} />
         ) : activeTab === 'curation' ? (
@@ -676,17 +691,19 @@ export default function CoachNutritionV2Screen() {
                 <ChevronRight color={theme.textSecondary} size={20} />
               </View>
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
+            {/* Alta del plan del alumno, «Familia N» (T3.v Cabina): es LA acción de la fila, así
+                que va en la variante `primary` — fondo de marca real del coach, con la tinta
+                calculada contra ese hex. `justify-center` conserva el CTA centrado de ancho
+                completo que la fila ya tenía; la navegación es la de siempre. */}
+            <AddActionButton
+              variant="primary"
+              icon="version"
+              label={nutritionPlanCtaLabel(item.planStatus)}
               accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
+              brandColor={brandColor}
               onPress={() => router.push(nutritionV2EditorHref(item.clientId))}
-              className="mt-3 min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
-            >
-              <Plus color={theme.primary} size={15} />
-              <Text className="text-sm font-semibold text-primary">
-                {nutritionPlanCtaLabel(item.planStatus)}
-              </Text>
-            </Pressable>
+              className="mt-3 justify-center"
+            />
             {/* Web (HubRoster): la tarjeta de atención va al FINAL de la fila, tras el CTA. */}
             {item.attentionReason !== 'none' ? (
               <View className="mt-3">
@@ -770,7 +787,6 @@ export default function CoachNutritionV2Screen() {
         loading={pickerLoading}
         onChoose={choosePickerClient}
         textSecondary={theme.textSecondary}
-        favoriteColor={theme.warning}
         templates={pickerTemplates}
         templatesLoading={pickerTemplatesLoading}
         templatesError={pickerTemplatesError}
@@ -814,6 +830,117 @@ function Metric({ label, value }: { label: string; value: number }) {
       <Text className="font-display text-2xl font-bold text-strong">{value}</Text>
       <Text className="mt-1 text-xs text-muted">{label}</Text>
     </View>
+  )
+}
+
+/**
+ * Cuerpo de la pestaña "Plantillas" (paridad con la web, QA T3.v).
+ *
+ * Es la biblioteca del coach — la MISMA lista que el sheet "Nuevo plan → Reutilizar", vía el
+ * componente compartido `PlanTemplateList` — con el verbo cambiado: aca cada fila ABRE la
+ * plantilla en el editor único, y el CTA de cabecera crea una nueva. Nada de esto existía sin
+ * pasar antes por el sheet.
+ *
+ * Estado PROPIO (no el del picker) para que entrar a la pestaña no arrastre ni pise la carga
+ * perezosa del sheet. Se monta al activarse la pestaña (conmutación inline del hub), así que
+ * cargar en el montaje ES cargar al entrar; volver del editor no re-monta nada, y por eso hay
+ * pull-to-refresh: es la única forma de ver una plantilla recién creada sin salir del hub.
+ *
+ * "Desde un alumno" (segunda alta de la web) queda fuera: ese camino no tiene endpoint mobile.
+ */
+function HubTemplatesTab({
+  scope,
+  chromeHeight,
+  onScroll,
+}: {
+  scope: NutritionV2CoachScope
+  chromeHeight: number
+  onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+}) {
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+  // Marca real del coach: la pastilla «Nueva plantilla» va en `primary` y su fondo ES la marca.
+  const { branding } = useTheme()
+  const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
+  const [templates, setTemplates] = useState<NutritionV2PlanTemplateListItem[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setError(null)
+    try {
+      setTemplates(await fetchNutritionV2PlanTemplates({ scope }))
+    } catch {
+      setTemplates([])
+      setError('No pudimos cargar tus plantillas. Revisa tu conexión e intenta de nuevo.')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [scope])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // «Familia N» (T3.v Cabina). El blanco crudo del label MUERE aquí: antes el texto era
+  // `text-white` fijo sobre `bg-primary`, así que una marca clara (un amarillo, un lima) dejaba el
+  // CTA ilegible. Ahora la tinta la decide el contraste WCAG contra el hex real de la marca.
+  const newTemplateCta = (
+    <AddActionButton
+      variant="primary"
+      icon="plantilla"
+      label="Nueva plantilla"
+      brandColor={brandColor}
+      onPress={() => router.push(nutritionV2TemplateEditorHref(null))}
+    />
+  )
+
+  return (
+    <ScrollView
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true)
+            void load()
+          }}
+          // Sin offset el spinner nace DETRAS del overlay opaco del chrome.
+          progressViewOffset={chromeHeight}
+        />
+      }
+      // El chrome del hub es un overlay opaco y esta lista pasa POR DETRAS: sin este paddingTop
+      // la cabecera de la pestaña nace tapada por el tablist.
+      contentContainerStyle={{
+        paddingHorizontal: 16,
+        paddingTop: chromeHeight,
+        paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE,
+      }}
+    >
+      <View className="gap-3 pb-5 pt-2">
+        <Text className="text-sm text-muted">
+          Arma un plan reutilizable y aplícalo a cualquier alumno desde «Nuevo plan → Reutilizar».
+        </Text>
+        <View className="flex-row">{newTemplateCta}</View>
+        <PlanTemplateList
+          templates={templates}
+          loading={loading}
+          error={error}
+          onRetry={() => {
+            setLoading(true)
+            void load()
+          }}
+          onOpen={(template) => router.push(nutritionV2TemplateEditorHref(template.id))}
+          openAccessibilityLabel={(name) => `Abrir la plantilla ${name} en el editor`}
+          showDescription
+          emptyMessage="Todavía no tienes plantillas. Arma una desde cero y aplícala al alumno que quieras."
+          emptyAction={newTemplateCta}
+        />
+      </View>
+    </ScrollView>
   )
 }
 
@@ -912,23 +1039,6 @@ function HubSortSheet({
   )
 }
 
-/**
- * Resumen de una plantilla en una línea (espejo verbatim del modal web `NewPlanPickerButton`):
- * kcal del día base · franjas · veces usada. Sin datos legibles cae a "Plantilla".
- */
-function planTemplateSubtitle(template: NutritionV2PlanTemplateListItem): string {
-  if (!template.readable) return 'No se puede abrir: se guardó con una versión anterior.'
-  const parts = [
-    template.summary?.calories ? `${template.summary.calories} kcal` : null,
-    template.summary?.dayVariantCount && template.summary.dayVariantCount > 1
-      ? `${template.summary.dayVariantCount} días`
-      : null,
-    template.summary?.mealSlotCount ? `${template.summary.mealSlotCount} franjas` : null,
-    template.usageCount > 0 ? `usada ${template.usageCount}×` : null,
-  ].filter((part): part is string => part != null)
-  return parts.length === 0 ? 'Plantilla' : parts.join(' · ')
-}
-
 // CTA global "Nuevo plan" (espejo de `NewPlanPickerButton` web): el hub no tiene alumno
 // seleccionado, asi que abre un selector buscable con el roster COMPLETO del workspace y navega al
 // builder del alumno elegido. Sheet nativo (nativeModal) para abrir con teclado de forma robusta.
@@ -946,7 +1056,6 @@ function NewPlanPickerSheet({
   loading,
   onChoose,
   textSecondary,
-  favoriteColor,
   templates,
   templatesLoading,
   templatesError,
@@ -961,8 +1070,6 @@ function NewPlanPickerSheet({
   loading: boolean
   onChoose: (clientId: string, planId: string | null, origin: string | null) => void
   textSecondary: string
-  /** `--warning-500` imperativo: única forma de teñir el glifo lucide de la plantilla favorita. */
-  favoriteColor: string
   /** `null` = la biblioteca todavía no se intentó cargar (pestaña "Reutilizar" sin abrir). */
   templates: NutritionV2PlanTemplateListItem[] | null
   templatesLoading: boolean
@@ -1058,78 +1165,18 @@ function NewPlanPickerSheet({
                 <Text className="text-sm font-semibold text-primary">Nueva plantilla</Text>
               </Pressable>
             </View>
-            {templatesLoading ? (
-              // Tambien durante el REINTENTO: sin esto, recargar tras un error mostraria el estado
-              // vacio (la lista ya no es `null`) y parpadearia "Aún no tienes plantillas".
-              <NutritionSkeleton variant="coach" rows={2} />
-            ) : templatesError ? (
-              <NutritionStatePanel
-                icon="error"
-                tone="danger"
-                title="No pudimos cargar tus plantillas"
-                description={templatesError}
-                action={
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Reintentar cargar plantillas"
-                    onPress={onLoadTemplates}
-                    className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
-                  >
-                    <Text className="text-sm font-semibold text-strong">Reintentar</Text>
-                  </Pressable>
-                }
-              />
-            ) : (templates?.length ?? 0) === 0 ? (
-              <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">
-                <Copy color={textSecondary} size={26} />
-                <Text className="mt-2 text-center text-sm text-muted">
-                  Aún no tienes plantillas. Crea una desde cero con «Nueva plantilla», o guarda el
-                  plan de un alumno como plantilla.
-                </Text>
-              </View>
-            ) : (
-              <View className="gap-1.5">
-                {(templates ?? []).map((template) => (
-                  <View key={template.id} className="flex-row items-center gap-1">
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: !template.readable }}
-                      accessibilityLabel={`Partir de la plantilla ${template.name}`}
-                      disabled={!template.readable}
-                      onPress={() => setSource({ id: template.id, name: template.name })}
-                      className={`min-h-11 flex-1 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5 ${template.readable ? '' : 'opacity-50'}`}
-                    >
-                      {template.isFavorite ? (
-                        <Star color={favoriteColor} size={16} />
-                      ) : (
-                        <Copy color={textSecondary} size={16} />
-                      )}
-                      <View className="min-w-0 flex-1">
-                        <Text className="font-semibold text-strong" numberOfLines={1}>
-                          {template.name}
-                        </Text>
-                        <Text className="text-xs text-muted" numberOfLines={1}>
-                          {planTemplateSubtitle(template)}
-                        </Text>
-                      </View>
-                      <ChevronRight color={textSecondary} size={16} />
-                    </Pressable>
-                    {/* Editar el CONTENIDO en el editor de plantillas. Solo si el draft guardado
-                        todavia valida: una plantilla ilegible abriria un editor en blanco. */}
-                    {template.readable ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Editar la plantilla ${template.name}`}
-                        onPress={() => onEditTemplate(template.id)}
-                        className="h-11 w-11 items-center justify-center rounded-control"
-                      >
-                        <Pencil color={textSecondary} size={16} />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            )}
+            {/* MISMA lista que la pestaña "Plantillas" del hub (componente compartido): el picker
+                solo cambia el verbo de la fila — aca elegir origen, alla abrir el editor. */}
+            <PlanTemplateList
+              templates={templates}
+              loading={templatesLoading}
+              error={templatesError}
+              onRetry={onLoadTemplates}
+              onOpen={(template) => setSource({ id: template.id, name: template.name })}
+              openAccessibilityLabel={(name) => `Partir de la plantilla ${name}`}
+              onEdit={(template) => onEditTemplate(template.id)}
+              emptyMessage="Aún no tienes plantillas. Crea una desde cero con «Nueva plantilla», o guarda el plan de un alumno como plantilla."
+            />
           </View>
         ) : roster.length === 0 && !loading ? (
           <View className="items-center rounded-control border border-subtle bg-surface-sunken px-4 py-8">

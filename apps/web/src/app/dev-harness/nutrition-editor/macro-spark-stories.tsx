@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { MacroSpark, MacroSparkPopover } from '@/components/nutrition-v2'
+import { AddActionButton, MacroSpark, MacroSparkPopover } from '@/components/nutrition-v2'
 
 /**
  * HARNESS LOCAL (solo dev) — stories de MacroSpark / MacroSparkPopover (T3.v Cabina V0.4).
@@ -11,6 +11,10 @@ import { MacroSpark, MacroSparkPopover } from '@/components/nutrition-v2'
  * drag-and-drop del editor real. Monta los 3 tamaños del spark puro (V0.2) y las 5 variantes
  * del popover que pide PLAN §2 / TASKS V0.3: macros normales, con fibra, con % de la meta,
  * por 100 g y sin macros.
+ *
+ * Desde la «Familia N» monta también los botones de alta (`AddActionButton`): las 3 variantes, el
+ * `stack` de categorías y —lo que el gate visual tiene que mirar sí o sí— `primary` con una marca
+ * CLARA y con una OSCURA, que es donde se ve si el contraste dinámico está decidiendo la tinta.
  *
  * `data-testid` en cada fila: son los anclas que usa `scripts/cabina-visual-check.mjs` — no
  * renombrar sin actualizar el script.
@@ -95,9 +99,79 @@ export function MacroSparkStories() {
           </StoryRow>
         </div>
       </section>
+
+      <section aria-labelledby="story-add-action-heading" className="flex flex-col gap-3">
+        <h2 id="story-add-action-heading" className="text-sm font-semibold text-strong">
+          Familia N — botones de alta (AddActionButton)
+        </h2>
+        <p className="max-w-prose text-xs text-muted">
+          Las dos filas de marca existen para el gate visual del contraste dinámico: con la marca
+          clara la tinta tiene que salir oscura y con la oscura, blanca. Si alguna vez se ven las
+          dos iguales, `addActionInk` dejó de decidir.
+        </p>
+
+        <div className="flex max-w-3xl flex-col gap-3">
+          <StoryRow label="neutral" testId="story-add-action-neutral">
+            <AddActionButton icon="franja" label="Agregar franja" />
+          </StoryRow>
+
+          <StoryRow label="dashed" testId="story-add-action-dashed">
+            <AddActionButton icon="dia" label="Agregar día" variant="dashed" />
+          </StoryRow>
+
+          <StoryRow label="primary (marca por defecto)" testId="story-add-action-primary">
+            <AddActionButton icon="plantilla" label="Usar plantilla" variant="primary" />
+          </StoryRow>
+
+          <StoryRow label="primary · marca CLARA ⇒ tinta oscura" testId="story-add-action-primary-light">
+            <AddActionButton
+              icon="version"
+              label="Nueva versión"
+              variant="primary"
+              brandColor="#F5D90A"
+            />
+          </StoryRow>
+
+          <StoryRow label="primary · marca OSCURA ⇒ tinta blanca" testId="story-add-action-primary-dark">
+            <AddActionButton
+              icon="porciones"
+              label="Agregar porciones"
+              variant="primary"
+              brandColor="#1D4ED8"
+            />
+          </StoryRow>
+
+          <StoryRow label="stack (3 categorías)" testId="story-add-action-stack">
+            <AddActionButton
+              stack={STORY_STACK}
+              label="Agregar alimento"
+            />
+          </StoryRow>
+
+          <StoryRow label="stack sobre primary" testId="story-add-action-stack-primary">
+            <AddActionButton
+              stack={STORY_STACK}
+              label="Agregar alimento"
+              variant="primary"
+              brandColor="#F5D90A"
+            />
+          </StoryRow>
+
+          <StoryRow label="deshabilitado" testId="story-add-action-disabled">
+            <AddActionButton icon="libre" label="Comida libre" variant="dashed" disabled />
+          </StoryRow>
+        </div>
+      </section>
     </div>
   )
 }
+
+/** Íconos de categoría reales del build (los mismos que usa el picker de alimentos). */
+const STORY_STACK = [
+  '/food-icons/proteina.webp',
+  '/food-icons/carbohidrato.webp',
+  '/food-icons/verdura.webp',
+] as const
 
 function StoryRow({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
   return (

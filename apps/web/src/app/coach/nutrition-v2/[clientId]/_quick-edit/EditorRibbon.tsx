@@ -20,10 +20,20 @@
  * solo con la zona de totales para que no haya doble CTA de publicar/descartar en ningún ancho.
  *
  * V2.5 (pasada responsive): la cinta se montó primero SOLO ≥1024 (V2.1); la tabla responsive de la
- * SPEC la extiende a 768–1023 en variante COMPACTA (anillo 40 px, barras de macro 60 px — la fila
- * `w-[60px]` de abajo, achicada de nuevo a 58/70 en `lg:`/`xl:`, que son los tamaños que V2.1 ya
- * tenía calibrados). En <768 esta cinta no existe: manda el header compacto de siempre +
- * `PublishBar` completa (el "mini-cinta móvil" de la SPEC, PLAN §3 — mismo componente).
+ * SPEC la extiende a 768–1023 en variante COMPACTA (anillo 40 px). En <768 esta cinta no existe:
+ * manda el header compacto de siempre + `PublishBar` completa (el "mini-cinta móvil" de la SPEC,
+ * PLAN §3 — mismo componente).
+ *
+ * V2.6 (fix F1 del QA visual): en 768–1023 la variante compacta intentaba meter TODO y el ancho no
+ * daba — la `StrategyBadge` se pintaba encima del anillo y las micro-barras P/C/G quedaban tapadas
+ * por «Metas del día». El presupuesto de la cinta compacta es ahora explícito y son SOLO estas
+ * piezas: ✕ · alumno (truncable) · anillo · kcal x/meta · «Metas del día» · «Descartar» ·
+ * «Publicar» · contador. La badge y las micro-barras vuelven recién en `lg:` (1024), donde el
+ * diagnóstico completo sí entra. Además el track del centro dejó de poder colapsar
+ * (`minmax(min-content,1fr)`): antes, con `minmax(0,1fr)`, el track se achicaba por debajo de su
+ * contenido y el `justify-center` derramaba el anillo/barras HACIA AFUERA, montándose sobre los
+ * vecinos sin que ningún gate de overflow-x lo notara. Con el piso `min-content` un ancho
+ * insuficiente empuja la barra (overflow del body, que sí está asertado) en vez de superponer.
  */
 
 import { useState, useSyncExternalStore } from 'react'
@@ -143,7 +153,13 @@ function KcalRing({ pct }: { pct: number | null }) {
   )
 }
 
-/** Centro de la cinta: anillo + kcal del día + micro-barras P/C/G (mockup A·1). */
+/**
+ * Centro de la cinta: anillo + kcal del día + micro-barras P/C/G (mockup A·1).
+ *
+ * Las micro-barras son `lg:` en adelante (fix F1): en 768–1023 no hay ancho para ellas y lo que
+ * hacían era meterse debajo de «Metas del día». El anillo + «x / meta» sí sobreviven en compacto —
+ * es el diagnóstico mínimo del día y el único dato que la cinta no repite en ningún otro lado.
+ */
 function RibbonDayReadout({ dayTotals }: { dayTotals: PublishBarDayTotals }) {
   const target = dayTotals.targetCalories
   const pct = target != null && target > 0 ? (Math.max(0, dayTotals.calories) / target) * 100 : null
@@ -177,14 +193,19 @@ function RibbonDayReadout({ dayTotals }: { dayTotals: PublishBarDayTotals }) {
         </span>
       </div>
 
-      <div className="grid shrink grid-cols-3 gap-x-3">
+      {/* El ancho vive en la GRILLA, no en cada columna (fix F1): con `w-[58px]` por columna, al
+          apretarse la cinta las columnas conservaban su ancho fijo y se derramaban fuera de sus
+          tracks (`grid-cols-3` = `minmax(0,1fr)`), que es como las barras terminaban debajo de los
+          botones. Ahora la grilla mide 3×58+2×12 (y 3×70+2×12 en `xl:`) — los MISMOS píxeles que
+          V2.1 tenía calibrados — y al achicarse arrastra a sus columnas, que truncan. */}
+      <div className="hidden min-w-0 shrink grid-cols-3 gap-x-3 lg:grid lg:w-[198px] xl:w-[234px]">
         {DAY_MACRO_ROWS.map(({ key, actual, target: targetField }) => {
           const meta = MACRO_META[key]
           const actualValue = dayTotals[actual]
           const targetValue = dayTotals[targetField]
           const barPct = targetValue != null ? macroPct(actualValue, targetValue) : 0
           return (
-            <div key={key} className="w-[60px] min-w-0 lg:w-[58px] xl:w-[70px]">
+            <div key={key} className="min-w-0">
               <div className="flex items-baseline justify-between gap-1">
                 <span className="shrink-0 font-mono text-[9.5px] font-semibold" style={{ color: meta.color }}>
                   {meta.short}
@@ -266,7 +287,12 @@ export function EditorRibbon({
       data-testid="editor-ribbon"
       className="sticky top-0 z-20 border-b border-border-subtle bg-surface-app/95 backdrop-blur supports-[backdrop-filter]:bg-surface-app/85"
     >
-      <div className="mx-auto grid w-full max-w-[110rem] grid-cols-[minmax(0,auto)_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 xl:gap-5 xl:px-4">
+      {/* Pisos de track EXPLÍCITOS (fix F1). Identidad y centro pueden encogerse, pero nunca por
+          debajo de su `min-content`: la identidad llega hasta ✕ + nombre en elipsis, el centro
+          hasta anillo + cifra. Con `minmax(0,…)` en ambos, un ancho corto colapsaba los tracks y
+          el contenido (que es `shrink-0`) se derramaba encima del vecino. Las acciones son `auto`:
+          los CTA no se truncan ni se apilan jamás. */}
+      <div className="mx-auto grid w-full max-w-[110rem] grid-cols-[minmax(min-content,auto)_minmax(min-content,1fr)_auto] items-center gap-2 px-3 py-2 xl:gap-5 xl:px-4">
         {/* ── Identidad: salir + quién/qué se está editando.
             El tope de ancho en 1024–1279 es a propósito: entre truncar un nombre (que el coach ya
             sabe de memoria) y apretar los números del día hasta la elipsis, se trunca el nombre. */}
@@ -290,7 +316,9 @@ export function EditorRibbon({
               {planName ? <span className="font-medium text-muted"> · {planName}</span> : null}
             </h1>
           </div>
-          <div className="shrink-0">
+          {/* `lg:` en adelante (fix F1): en la cinta compacta 768–1023 la badge era lo primero que
+              se montaba sobre el anillo, y la estrategia ya se lee en la card de plan del lienzo. */}
+          <div className="hidden shrink-0 lg:block">
             <StrategyBadge strategy={strategy} compact />
           </div>
         </div>

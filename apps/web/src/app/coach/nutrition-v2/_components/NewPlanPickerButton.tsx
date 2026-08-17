@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ChevronRight, Copy, FilePlus2, Loader2, Plus, Search, Star, Users } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Copy, FilePlus2, Loader2, Search, Star, Users } from 'lucide-react'
+import { AddActionButton, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,7 @@ export function NewPlanPickerButton({
   hasMore?: boolean
 }) {
   const router = useRouter()
+  const brandHex = useBrandPrimaryHex()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [remote, setRemote] = useState<NewPlanPickerEntry[] | null>(null)
@@ -146,17 +148,21 @@ export function NewPlanPickerButton({
 
   return (
     <>
-      {/* En el header compacto del hub (movil ~390px) el label no cabe junto al titulo:
-          bajo `sm` queda icono solo (44px, aria-label) y desde `sm` icono + texto. */}
-      <button
-        type="button"
-        onClick={() => onOpenChange(true)}
+      {/* Familia N, variante `primary`: la CTA global del Centro V2 con el color REAL de la marca
+          del coach. La tinta del label la decide `AddActionButton` contra ese hex (white-label:
+          una marca amarilla sale con tinta oscura, no con blanco ilegible).
+          El label ya no se esconde bajo `sm`: el header lo absorbe truncando el título (el bloque
+          de título es `min-w-0 flex-1` y las acciones `shrink-0`), y un ícono ilustrado sin
+          palabra al lado no se lee como «nuevo plan». */}
+      <AddActionButton
+        icon="version"
+        variant="primary"
+        label="Nuevo plan"
+        brandColor={brandHex}
         aria-label="Nuevo plan"
-        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-control bg-primary px-3 text-sm font-semibold text-white hover:bg-primary/90 sm:px-4"
-      >
-        <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
-        <span className="hidden sm:inline">Nuevo plan</span>
-      </button>
+        onClick={() => onOpenChange(true)}
+        data-testid="hub-new-plan"
+      />
 
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg">

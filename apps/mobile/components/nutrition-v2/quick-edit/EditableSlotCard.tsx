@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { useCallback, useState } from 'react'
+import { Animated, Easing, LayoutAnimation, Pressable, Text, TextInput, View } from 'react-native'
+import { useReducedMotion } from 'react-native-reanimated'
 import { Image } from 'expo-image'
-import { ChevronDown, MoreVertical, Plus, Search, Trash2 } from 'lucide-react-native'
+import { ChevronDown, MoreVertical, Trash2 } from 'lucide-react-native'
 import { exchangeGroupColor } from '@eva/nutrition-engine'
 import {
   qeExchangeGroups,
@@ -15,7 +16,10 @@ import {
 } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { MacroSparkPopover } from '../MacroSparkPopover'
+import { AddActionButton } from '../AddActionButton'
+import { foodCategoryIconSource } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveEffectiveCoachBrandTheme } from '../../../lib/theme'
 import type { BuilderFoodMacrosPatch, ItemMacros } from '../../../lib/nutrition-v2-builder'
 import {
   foodCategoryEmoji,
@@ -45,6 +49,10 @@ import { QUICK_EDIT_COPY } from './microcopy'
  *  - Franja CONTRAIBLE (chevron, estado local sin persistencia): con 5-6 comidas la pila
  *    obliga a scrollear a ciegas. Contraída la card sigue diciendo lo que importa de un
  *    vistazo — nombre, hora, subtotal y el stack de hasta 4 fotos de sus alimentos.
+ *    QA T3.v (hallazgo 3 del owner): el chevron no se leía como botón y el plegado era un
+ *    salto seco. Ahora el disparador tiene caja (relleno hundido + filete sutil del kit), el
+ *    icono GIRA y el alto de la card se interpola con `LayoutAnimation` (easeInEaseOut, misma
+ *    duración que el giro). Bajo reduced motion del sistema las dos cosas son instantáneas.
  *  - Strip de porciones al pie (filete punteado): pills con el punto de color de identidad del
  *    grupo, y el aporte referencial «≈ n kcal». Las pills SOLO aparecen contraída (expandida,
  *    `EditablePortionsSection` ya muestra los mismos grupos con sus steppers tres píxeles más
@@ -56,6 +64,26 @@ import { QUICK_EDIT_COPY } from './microcopy'
 
 /** Fotos que entran en el stack de la franja contraida antes del «+n» (mockup A·1/A·2). */
 const STACK_MAX_THUMBS = 4
+
+/**
+ * Trío del `stack` de «Agregar alimento» (Familia N): proteína + carbohidrato + verdura, el plato
+ * completo. Es FIJO y decorativo a propósito — no espeja lo que la franja ya tiene cargado, porque
+ * la gracia de la familia es que el botón se reconozca por silueta SIEMPRE igual, y un stack que
+ * cambia con el contenido se leería como estado, no como acción. Son los mismos assets bundleados
+ * que pintan las filas del catálogo (`foodCategoryIconSource`), así que no suman peso al bundle.
+ */
+const ADD_FOOD_STACK = [
+  foodCategoryIconSource('proteina'),
+  foodCategoryIconSource('carbohidrato'),
+  foodCategoryIconSource('verdura'),
+] as const
+
+/**
+ * Duracion del contraer/expandir. Un solo numero para el alto de la card (LayoutAnimation) y
+ * para el giro del chevron: si divergen, el icono termina de girar antes o despues de que el
+ * cuerpo termine de plegarse y el gesto se lee como dos animaciones distintas.
+ */
+const COLLAPSE_MS = 220
 
 export function EditableSlotCard({
   slot,
@@ -125,13 +153,64 @@ export function EditableSlotCard({
   /** La corrección es del ALIMENTO: la pantalla la propaga a todas sus apariciones. */
   onFoodOverrideApplied?: (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => void
 }) {
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
+  /**
+   * Color de marca REAL del coach para la «Familia N». El default del componente es el primary de
+   * la web (#2563EB) y el del móvil es otro (#1462DC): dejarlo librado al default pintaría el «+»
+   * de un azul que no es el de esta pantalla, y en las pastillas `primary` de otras superficies
+   * calcularía la tinta contra un fondo que no es el que se ve. `resolveEffectiveCoachBrandTheme`
+   * es el MISMO resolutor del que sale `theme` (tier + preset + fallback EVA), así que el acento
+   * del botón y el `bg-primary` del resto de la card no pueden divergir.
+   */
+  const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
   /**
    * Franja contraida (chevron). Estado LOCAL y sin persistencia a proposito (mismo criterio que
    * la web): cual dejo abierta el coach no es una preferencia que valga recordar entre sesiones.
    * Arranca expandida.
    */
   const [collapsed, setCollapsed] = useState(false)
+  /**
+   * Reduced motion del SISTEMA. Mismo helper que ya usa el resto de la app (`useReducedMotion`
+   * de reanimated, con `<ReducedMotionConfig mode={System}>` montado en app/_layout.tsx): con
+   * el ajuste activo el plegado es INSTANTANEO — ni LayoutAnimation ni giro.
+   */
+  const reduceMotion = useReducedMotion()
+  /**
+   * Giro del chevron: 0 = franja abierta (apunta abajo), 1 = contraida (apunta a la izquierda).
+   * `Animated` del core basta para una rotacion — no hace falta Reanimated ni Moti aqui, y
+   * `useNativeDriver` la saca del hilo de JS.
+   */
+  const [chevronSpin] = useState(() => new Animated.Value(0))
+  const chevronRotate = chevronSpin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-90deg'],
+  })
+  const toggleCollapsed = useCallback(() => {
+    const next = !collapsed
+    if (reduceMotion) {
+      // Sin animacion: el cuerpo aparece/desaparece de una y el chevron salta a su angulo.
+      chevronSpin.setValue(next ? 1 : 0)
+      setCollapsed(next)
+      return
+    }
+    // El alto de la card lo anima el propio sistema de layout: `configureNext` pide que el
+    // PROXIMO commit (el del setState de abajo) se interpole en vez de saltar. Presets
+    // easeInEaseOut + opacity, que es lo que hace que las filas se disuelvan al plegarse.
+    LayoutAnimation.configureNext(
+      LayoutAnimation.create(
+        COLLAPSE_MS,
+        LayoutAnimation.Types.easeInEaseOut,
+        LayoutAnimation.Properties.opacity,
+      ),
+    )
+    setCollapsed(next)
+    Animated.timing(chevronSpin, {
+      toValue: next ? 1 : 0,
+      duration: COLLAPSE_MS,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start()
+  }, [chevronSpin, collapsed, reduceMotion])
   const subtotal: ItemMacros = qeSlotSubtotal(slot)
   // Aporte referencial de las porciones a eleccion de ESTA franja, solo para el strip del pie
   // (el subtotal del header sigue siendo el de los items, como esta card ya lo mostraba).
@@ -155,8 +234,16 @@ export function EditableSlotCard({
         <Text className="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
           Franja {index + 1}
         </Text>
-        <View className="flex-row items-center">
-          {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas. */}
+        {/* `gap-1`: el botón de contraer ahora tiene caja propia, y pegado al ⋮ y al tacho (que
+            son icono pelado) se leería como un error de render. */}
+        <View className="flex-row items-center gap-1">
+          {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
+              Es un BOTON, no un icono suelto: caja de 44 pt con relleno hundido y filete sutil
+              (el mismo par `border-subtle` + `bg-surface-sunken` del kit), para que se lea como
+              control y no como adorno del header — espejo del botón web, que ahí se delata con
+              el hover que el teléfono no tiene. El chevron GIRA (no salta) y el cuerpo se pliega
+              con la misma curva y duración; con reduced motion las dos cosas son instantáneas.
+              `className` sin `style`-función: css-interop descartaría el estilo entero. */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
@@ -165,14 +252,12 @@ export function EditableSlotCard({
                 : QUICK_EDIT_COPY.collapseSlot(slotLabel)
             }
             accessibilityState={{ expanded: !collapsed }}
-            onPress={() => setCollapsed((previous) => !previous)}
-            className="h-11 w-11 items-center justify-center rounded-control"
+            onPress={toggleCollapsed}
+            className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-sunken"
           >
-            <ChevronDown
-              color={theme.textSecondary}
-              size={18}
-              style={collapsed ? { transform: [{ rotate: '-90deg' }] } : undefined}
-            />
+            <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+              <ChevronDown color={theme.textSecondary} size={18} />
+            </Animated.View>
           </Pressable>
           {onOpenMenu ? (
             <Pressable
@@ -272,27 +357,30 @@ export function EditableSlotCard({
             </View>
           )}
 
-          <View className="mt-3 flex-row gap-2">
-            <Pressable
-              accessibilityRole="button"
+          {/* Altas de la franja, «Familia N» (T3.v Cabina): la misma pastilla que agrega en TODO
+              el editor. `flex-wrap` y ancho natural (nada de `flex-1`): con el trío de íconos, el
+              «+» y las dos etiquetas del microcopy, las dos pastillas no entran en una línea de
+              390 px — forzarlas comprimía el label hasta partirlo en dos renglones. Envolviendo,
+              cada una conserva su silueta y la segunda baja limpia. */}
+          <View className="mt-3 flex-row flex-wrap items-center gap-2">
+            <AddActionButton
+              variant="neutral"
+              stack={ADD_FOOD_STACK}
+              label={QUICK_EDIT_COPY.addFood}
               accessibilityLabel={`${QUICK_EDIT_COPY.addFood} en ${slot.name || 'la franja'}`}
+              brandColor={brandColor}
               disabled={disabled}
               onPress={onSearchFood}
-              className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
-            >
-              <Search color={theme.primary} size={15} />
-              <Text className="text-sm font-semibold text-primary">{QUICK_EDIT_COPY.addFood}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={QUICK_EDIT_COPY.freeFood}
+            />
+            {/* Punteado = «hueco por llenar»: el alimento libre lo escribe el coach a mano. */}
+            <AddActionButton
+              variant="dashed"
+              icon="libre"
+              label={QUICK_EDIT_COPY.freeFood}
+              brandColor={brandColor}
               disabled={disabled}
               onPress={onAddFreeItem}
-              className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-default bg-surface-card px-3"
-            >
-              <Plus color={theme.foreground} size={15} />
-              <Text className="text-sm font-semibold text-strong">Libre</Text>
-            </Pressable>
+            />
           </View>
 
           {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo

@@ -18,15 +18,16 @@
  * con feature `multi_variant`); esto solo evita el callejón sin salida.
  */
 
-import { useState, useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore, type HTMLAttributes, type Ref } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Lock, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
   NUTRITION_DAY_LABELS,
   NUTRITION_DAY_SHORT_LABELS,
   NUTRITION_WEEK_ORDER,
 } from '@eva/nutrition-v2'
+import { AddActionButton, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 
@@ -57,11 +58,14 @@ const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
 
 export type AddDayOrigin = 'copy-base' | 'empty'
 
+/**
+ * Props que el `render` del trigger de Base UI reenvía al elemento (handlers, atributos de
+ * accesibilidad y la ref del anchor). Espeja `HTMLProps` del paquete, que no se exporta.
+ */
+type TriggerRenderProps = HTMLAttributes<HTMLButtonElement> & { ref?: Ref<HTMLButtonElement> }
+
 /** Orden de lectura Lu→Do como `number[]` (el del paquete es una tupla literal readonly). */
 const WEEK_ORDER: number[] = [...NUTRITION_WEEK_ORDER]
-
-const triggerClass =
-  'inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-dashed border-border-default bg-surface-card px-3 text-xs font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
 
 /**
  * Panel de "dias distintos" para el coach FREE. Se EXPORTA porque el selector de dia del creador
@@ -214,6 +218,7 @@ export function AddDayPopover({
 }) {
   const [open, setOpen] = useState(false)
   const isDesktop = useIsDesktopMd()
+  const brandHex = useBrandPrimaryHex()
 
   function handleCreate(days: number[], origin: AddDayOrigin) {
     onCreate(days, origin)
@@ -226,31 +231,50 @@ export function AddDayPopover({
     <DaySelector takenDays={takenDays} canCopyBase={canCopyBase} onCreate={handleCreate} />
   )
 
-  // Límite LEGIBLE antes de abrir (P1-7): candado + pastilla "Plan pago" en el propio chip, para
-  // que el coach free no descubra el límite recién dentro del panel. No dice "Pro": los módulos
-  // no se compran aparte, vienen con cualquier plan pago.
-  const trigger = (
-    <>
-      {locked ? <Lock aria-hidden="true" className="h-3.5 w-3.5" /> : <Plus aria-hidden="true" className="h-3.5 w-3.5" />}
-      Agregar día
-      {locked ? (
-        <span className="rounded-pill border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15">
-          Plan pago
-        </span>
-      ) : null}
-    </>
-  )
   const triggerLabel = locked
     ? 'Agregar un día distinto al plan (incluido en los planes pagos)'
     : 'Agregar un día distinto al plan'
   const triggerTitle = locked ? 'Días distintos: incluido en cualquier plan pago' : undefined
 
+  // T3.v Cabina «Familia N»: el trigger pasa a ser la pastilla única de alta, punteada (hueco por
+  // llenar) y con el ícono ilustrado del día. Cambia SOLO la presentación: el popover/sheet, el
+  // `aria-label`, el `title` y el gate del plan son los mismos de siempre.
+  //
+  // Límite LEGIBLE antes de abrir (P1-7): la pastilla "Plan pago" sigue viva al lado del botón —
+  // la Familia N no admite hijos (su nombre accesible ES el label), así que el badge sale del
+  // botón y queda como hermano. El `aria-label` del propio botón ya cuenta el límite, así que el
+  // badge no aporta información nueva a un lector de pantalla.
+  // `HTMLProps` de Base UI (props del trigger + su ref) es exactamente lo que hay que reenviar.
+  const familyTrigger = (props: TriggerRenderProps = {}) => (
+    <AddActionButton
+      {...props}
+      icon="dia"
+      variant="dashed"
+      label="Agregar día"
+      brandColor={brandHex}
+      aria-label={triggerLabel}
+      title={triggerTitle}
+      data-testid="qe-add-day"
+    />
+  )
+  const lockedBadge = locked ? (
+    <span
+      aria-hidden="true"
+      className="rounded-pill border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15"
+    >
+      Plan pago
+    </span>
+  ) : null
+
   if (isDesktop) {
     return (
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger aria-label={triggerLabel} title={triggerTitle} className={triggerClass}>
-          {trigger}
-        </PopoverTrigger>
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          {/* `render` (Base UI) en vez de un botón propio: el trigger sigue recibiendo sus props
+              de accesibilidad y su ref del popover — solo cambia el elemento que las lleva. */}
+          <PopoverTrigger render={(triggerProps) => familyTrigger(triggerProps)} />
+          {lockedBadge}
+        </span>
         <PopoverContent
           align="start"
           className="w-80 rounded-card border border-border-subtle bg-surface-card p-2 text-body shadow-lg"
@@ -263,9 +287,10 @@ export function AddDayPopover({
 
   return (
     <>
-      <button type="button" aria-label={triggerLabel} title={triggerTitle} onClick={() => setOpen(true)} className={triggerClass}>
-        {trigger}
-      </button>
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        {familyTrigger({ onClick: () => setOpen(true) })}
+        {lockedBadge}
+      </span>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[85dvh] rounded-t-card bg-surface-card text-body dark:bg-surface-card">
           <SheetHeader className="border-border-subtle bg-transparent p-4 pb-2 dark:border-border-subtle">

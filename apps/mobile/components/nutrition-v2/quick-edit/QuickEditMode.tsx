@@ -31,7 +31,6 @@ import {
   MoreVertical,
   NotebookPen,
   Pencil,
-  Plus,
   Trash2,
   X,
 } from 'lucide-react-native'
@@ -81,9 +80,11 @@ import {
 import { NutritionCard } from '../NutritionCard'
 import { DayVariantWeekStrip } from '../DayVariantWeekStrip'
 import { NutritionMotionButton, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
+import { AddActionButton } from '../AddActionButton'
 import { Sheet } from '../../Sheet'
 import { toast } from '../../Toast'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveEffectiveCoachBrandTheme } from '../../../lib/theme'
 import { supabase } from '../../../lib/supabase'
 import {
   MAX_DAY_VARIANTS,
@@ -259,7 +260,10 @@ export function QuickEditMode({
   onPublished: () => void
   onStaleReload: () => void
 }) {
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
+  // Marca real del coach para la «Familia N» (ver nota en `EditableSlotCard`): el default del
+  // componente es el primary de la WEB, y en el móvil el azul de sistema es otro.
+  const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
   const router = useRouter()
   // QA2-B4: el modo edicion se monta como pantalla completa dentro de una ruta SIN
   // header nativo (root Stack con headerShown:false), asi que el inset superior es
@@ -1733,36 +1737,45 @@ export function QuickEditMode({
                 : null}
 
               {usesSlots && strategyUsesSlots(strategy) ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={QUICK_EDIT_COPY.addSlot}
+                // «Familia N» (T3.v Cabina): la pastilla de alta, no una barra de ancho completo.
+                // `self-start` porque el ancho completo la volvía indistinguible de una card vacía
+                // de franja — que es justo lo que estas cards de arriba son. Dispatch intacto.
+                <AddActionButton
+                  variant="neutral"
+                  icon="franja"
+                  label={QUICK_EDIT_COPY.addSlot}
+                  brandColor={brandColor}
                   disabled={publishing}
                   onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot'), name: '', startTime: '' })}
-                  className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
-                >
-                  <Text className="text-sm font-semibold text-muted">+ {QUICK_EDIT_COPY.addSlot}</Text>
-                </Pressable>
+                  className="self-start"
+                />
               ) : null}
             </View>
           ))}
 
           {/* FD5: "+ Agregar día" al final de la lista de días. Sin Nutrición Pro el CTA lleva
-              candado y el sheet muestra el upsell (el server rechaza igual: multi_variant). */}
+              candado y el sheet muestra el upsell (el server rechaza igual: multi_variant).
+
+              «Familia N» (T3.v Cabina): pastilla PUNTEADA — el día que todavía no existe es el
+              caso de «hueco por llenar» del que vive esa variante. El candado del gate Pro NO se
+              pierde: la pastilla no admite hijos (su forma es fija a propósito), así que viaja al
+              lado, como sello. Sigue siendo decorativo — quien anuncia el gate es el sheet. */}
           {takenDays.length < NUTRITION_WEEK_ORDER.length ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={QUICK_EDIT_COPY.addDay}
-              disabled={publishing}
-              onPress={openAddDay}
-              className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-default bg-surface-card px-3"
-            >
-              {hasNutritionPro ? (
-                <Plus color={theme.textSecondary} size={16} />
-              ) : (
-                <Lock color={theme.primary} size={16} />
+            <View className="flex-row items-center gap-1.5">
+              <AddActionButton
+                variant="dashed"
+                icon="dia"
+                label={QUICK_EDIT_COPY.addDay}
+                brandColor={brandColor}
+                disabled={publishing}
+                onPress={openAddDay}
+              />
+              {hasNutritionPro ? null : (
+                <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  <Lock color={theme.primary} size={16} />
+                </View>
               )}
-              <Text className="text-sm font-semibold text-muted">{QUICK_EDIT_COPY.addDay}</Text>
-            </Pressable>
+            </View>
           ) : null}
 
           {/* Notas visibles EDITABLES (visible_notes, espejo web QuickEditPlanView); permisos
