@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-16"
+last_verified: "2026-08-17"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -13,6 +13,48 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
 ## Resumen ejecutivo
+
+> **2026-08-17 (paquete post-QA de T3.v: wave 2 + «Familia N», web+RN)**: cierran los
+> hallazgos restantes del QA del owner — cinta compacta 768-1023 sin solapes (track
+> `minmax(0,1fr)` que derramaba sin crecer el body; gate anti-solape nuevo probado en rojo),
+> centrado real del lienzo a 2xl (49px→0 medido, lienzo por fin a los 880 del contrato),
+> columna cantidad/unidad estable en web y `TextInput` de Android centrado en RN (métricas
+> compartidas `QUANTITY_CONTROL_HEIGHT_CLASS`), chevrons con afordancia + rotación + altura
+> animada (`grid-rows` + `inert` web / LayoutAnimation RN, reduced-motion respetado).
+> **«Familia N»**: TODA alta de nutrición (alimento·libre·franja·grupo·día·plantilla·nueva
+> versión) usa la pastilla `AddActionButton` con los iconos clay del owner
+> (`public/action-icons` + assets RN bundleados); «alimento» = stack de 3 categorías;
+> primarias con **contraste white-label dinámico** — web `getContrastInfo` sobre el
+> `--theme-primary` computado (`useBrandPrimaryHex`), RN `readableInkOn` espejo matemático
+> exacto (mismos casos verificados en ambas plataformas por tests y por el gate contra DOM:
+> `#F5D90A`→tinta oscura 13.05:1, `#1D4ED8`→blanca 6.70:1) — de paso se arregló el CTA de
+> plantillas RN que llevaba `text-white` fijo sobre la marca. Gate visual: 75+ asserts.
+> **QA device del owner pendiente sobre el OTA #2.**
+
+> **2026-08-16 (fixes del QA T3.v — el hub RN copia el tablist de la web; Porciones se rescata)**:
+> decisión del owner: **la web/PWA es el jefe**. El tablist del hub V2 en RN pasa a ser
+> `Alumnos · Plantillas · Alimentos · Curación`, idéntico a
+> `apps/web/.../nutrition-v2/_components/NutritionHubTabs.tsx`. La pestaña **Plantillas** es nueva
+> en RN: monta la biblioteca del coach con `PlanTemplateList`
+> (`apps/mobile/components/nutrition-v2/PlanTemplateList.tsx`), extraída del sheet
+> «Nuevo plan → Reutilizar» para que picker y pestaña compartan una sola lista; cada fila abre la
+> plantilla en el editor único (`plantillas/editor?template=<id>`) y el CTA de cabecera crea una
+> nueva. Sin paridad: «Desde un alumno» (segunda alta de la web) sigue siendo web-only — no tiene
+> endpoint mobile. **Porciones deja de ser pestaña** y vuelve a ser **pantalla propia**
+> (`/coach/nutrition-v2/portions`), a la que se entra desde un acceso secundario en la pestaña
+> Alimentos; embebida bajo el overlay del tablist nacía tapada y su tira de grupos se estiraba
+> (un `ScrollView` de RN trae `flexGrow: 1` y el content container alinea en `stretch`: los chips
+> `rounded-pill` se veían como óvalos gigantes). El deep link viejo `?tab=portions` ya no existe y
+> cae a `roster`; a cambio `resolveNutritionHubInitialTab` acepta los slugs en español que escribe
+> la web (`alumnos|plantillas|alimentos|curacion`), así que un link copiado del navegador aterriza
+> en la misma pestaña. **Bug de datos arreglado**: la lista de equivalencias del teléfono siempre
+> fallaba con «No pudimos cargar la lista» porque el GET de
+> `/api/mobile/nutrition/exchanges/group-foods` validaba el `groupId` con una regex RFC 4122 propia
+> y los grupos del SISTEMA están sembrados con ids no-RFC
+> (`0000e8c0-0000-0000-0000-00000000000N`); ahora usa `z.guid()`, igual que los schemas
+> compartidos y la server action web, con test de regresión en `route.test.ts`. Gates:
+> typecheck web+mobile, `expo export --platform android`, `check:tokens` y vitest de las rutas de
+> exchanges, todo verde. **QA en dispositivo PENDIENTE.**
 
 > **2026-08-16 (T3.v Cabina — pasada visual del editor único, web+RN, SIN QA del owner)**:
 > **MacroSpark** (kcal mono + barra apilada P/C/G por aporte calórico 4/4/9, popover de gramos
