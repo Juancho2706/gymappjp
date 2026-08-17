@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const WEB_CSS = join(ROOT, 'apps/web/src/app/globals.css')
 const MOBILE_CSS = join(ROOT, 'apps/mobile/global.css')
+const MOBILE_THEME_TS = join(ROOT, 'apps/mobile/lib/theme.ts')
 
 /**
  * DS tokens governed by the contract (canonical names, without the `--` / `--color-`
@@ -157,6 +158,112 @@ function fmt(t) {
   return t ? `rgb(${t.r}, ${t.g}, ${t.b})` : 'UNRESOLVED'
 }
 
+/* ============================================================================
+ * Sello EVA v2 (SPEC docs/specs/eva-seal-background/ D5): tokens `--seal-*` de
+ * web globals.css (:root = light, .dark = dark) espejados a mano en el objeto
+ * `SEAL_TOKENS` de apps/mobile/lib/theme.ts. NO son canales rgb como los
+ * GOVERNED_TOKENS: son ALPHAS de capa (números) y colores rgba con el alpha
+ * horneado, así que se comparan acá con su propio resolver (alpha INCLUIDO).
+ * ========================================================================== */
+const SEAL_TOKEN_MAP = [
+  { web: 'seal-blob1-alpha', mobile: 'blobPrimaryAlpha' },
+  { web: 'seal-blob2-alpha', mobile: 'blobSecondaryAlpha' },
+  { web: 'seal-grain-opacity', mobile: 'grainOpacity' },
+  { web: 'seal-grain-h', mobile: 'grainLineH' },
+  { web: 'seal-grain-v', mobile: 'grainLineV' },
+]
+
+/**
+ * Normaliza un valor de token del sello a forma comparable:
+ * - número ("0.15") → { kind: 'num', n }
+ * - rgba(r,g,b,a) → { kind: 'rgba', r, g, b, a }
+ * Devuelve null si no parsea.
+ */
+function parseSealValue(raw) {
+  if (raw == null) return null
+  const value = String(raw).trim().replace(/^'|'$/g, '')
+  const num = value.match(/^[0-9.]+$/)
+  if (num) return { kind: 'num', n: Number.parseFloat(value) }
+  const rgba = value.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*(?:,\s*([0-9.]+)\s*)?\)$/)
+  if (rgba) {
+    return {
+      kind: 'rgba',
+      r: Math.round(+rgba[1]),
+      g: Math.round(+rgba[2]),
+      b: Math.round(+rgba[3]),
+      a: rgba[4] != null ? Number.parseFloat(rgba[4]) : 1,
+    }
+  }
+  return null
+}
+
+function sealEq(a, b) {
+  if (!a || !b || a.kind !== b.kind) return false
+  if (a.kind === 'num') return a.n === b.n
+  return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a
+}
+
+function fmtSeal(v) {
+  if (!v) return 'UNRESOLVED'
+  return v.kind === 'num' ? String(v.n) : `rgba(${v.r}, ${v.g}, ${v.b}, ${v.a})`
+}
+
+/**
+ * Extrae los escenarios light/dark del objeto `SEAL_TOKENS` de theme.ts
+ * (parse textual sin ejecutar TS: pares `clave: número | 'rgba(...)'` dentro de
+ * cada `light:/dark: Object.freeze({ ... })`). Comentarios fuera vía stripComments.
+ */
+function parseSealMobileTokens(src) {
+  const clean = stripComments(src)
+  const block = clean.match(/export const SEAL_TOKENS\s*=\s*Object\.freeze\(\{([\s\S]*?)\n\}\)/)
+  if (!block) return null
+  const scopes = {}
+  for (const scope of ['light', 'dark']) {
+    const scopeMatch = block[1].match(new RegExp(`${scope}:\\s*Object\\.freeze\\(\\{([\\s\\S]*?)\\}\\)`))
+    if (!scopeMatch) return null
+    const entries = {}
+    const pairRe = /(\w+):\s*([0-9.]+|'[^']*')/g
+    let p
+    while ((p = pairRe.exec(scopeMatch[1])) !== null) {
+      entries[p[1]] = p[2]
+    }
+    scopes[scope] = entries
+  }
+  return scopes
+}
+
+/** Corre la sección del sello; empuja mismatches al array del caller. */
+function checkSealTokens(web, mismatches) {
+  let mobileSeal = null
+  try {
+    mobileSeal = parseSealMobileTokens(readFileSync(MOBILE_THEME_TS, 'utf8'))
+  } catch {
+    mobileSeal = null
+  }
+  const webHasSeal = SEAL_TOKEN_MAP.some(({ web: w }) => w in web.light)
+  if (!webHasSeal && !mobileSeal) return // sello aún no introducido en ninguna punta
+  if (!mobileSeal) {
+    mismatches.push({ token: 'SEAL_TOKENS', scope: 'theme.ts', web: 'presente', mobile: 'AUSENTE (apps/mobile/lib/theme.ts)' })
+    return
+  }
+  for (const { web: webName, mobile: mobileName } of SEAL_TOKEN_MAP) {
+    for (const scope of ['light', 'dark']) {
+      // Web: el .dark redefine todo el juego; si faltara, cae al :root (var CSS real).
+      const webRaw = scope === 'dark' ? (web.dark[webName] ?? web.light[webName]) : web.light[webName]
+      const w = parseSealValue(webRaw)
+      const m = parseSealValue(mobileSeal[scope][mobileName])
+      if (!sealEq(w, m)) {
+        mismatches.push({
+          token: `${webName} (≙ SEAL_TOKENS.${scope}.${mobileName})`,
+          scope,
+          web: fmtSeal(w),
+          mobile: fmtSeal(m),
+        })
+      }
+    }
+  }
+}
+
 function main() {
   const web = parseScopes(readFileSync(WEB_CSS, 'utf8'))
   const mobile = parseScopes(readFileSync(MOBILE_CSS, 'utf8'))
@@ -183,6 +290,9 @@ function main() {
     }
   }
 
+  // Sello EVA v2: `--seal-*` (web) ↔ SEAL_TOKENS de apps/mobile/lib/theme.ts (alphas incluidos).
+  checkSealTokens(web, mismatches)
+
   if (warnings.length > 0) {
     console.log('\nToken parity warnings (token present on only one platform):')
     console.log(warnings.join('\n'))
@@ -202,7 +312,10 @@ function main() {
     process.exit(1)
   }
 
-  console.log(`✓ EVA DS token parity OK — ${GOVERNED_TOKENS.length} governed tokens match across web and mobile (light + dark).`)
+  console.log(
+    `✓ EVA DS token parity OK — ${GOVERNED_TOKENS.length} governed tokens + ` +
+    `${SEAL_TOKEN_MAP.length} seal tokens (--seal-* ↔ SEAL_TOKENS) match across web and mobile (light + dark).`,
+  )
 }
 
 main()

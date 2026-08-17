@@ -1790,17 +1790,38 @@ export function QuickEditMode({
 
               {usesSlots && strategyUsesSlots(strategy) ? (
                 // «Familia N» (T3.v Cabina): la pastilla de alta, no una barra de ancho completo.
-                // `self-start` porque el ancho completo la volvía indistinguible de una card vacía
-                // de franja — que es justo lo que estas cards de arriba son. Dispatch intacto.
-                <AddActionButton
-                  variant="neutral"
-                  icon="franja"
-                  label={QUICK_EDIT_COPY.addSlot}
-                  brandColor={brandColor}
-                  disabled={publishing}
-                  onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot'), name: '', startTime: '' })}
-                  className="self-start"
-                />
+                // QA owner 17-08: las DOS altas van en UNA fila (apiladas ocupaban el doble de
+                // alto). «Agregar día» acompaña solo al ÚLTIMO día visible — es alta del plan, no
+                // del día — con su candado Pro intacto al lado. `flex-wrap` para pantallas
+                // angostas: si no entran juntas, envuelven sin desbordar.
+                <View className="flex-row flex-wrap items-center gap-1.5">
+                  <AddActionButton
+                    variant="neutral"
+                    icon="franja"
+                    label={QUICK_EDIT_COPY.addSlot}
+                    brandColor={brandColor}
+                    disabled={publishing}
+                    onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot'), name: '', startTime: '' })}
+                  />
+                  {variantIndex === visibleVariants.length - 1 &&
+                  takenDays.length < NUTRITION_WEEK_ORDER.length ? (
+                    <>
+                      <AddActionButton
+                        variant="dashed"
+                        icon="dia"
+                        label={QUICK_EDIT_COPY.addDay}
+                        brandColor={brandColor}
+                        disabled={publishing}
+                        onPress={openAddDay}
+                      />
+                      {hasNutritionPro ? null : (
+                        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                          <Lock color={theme.primary} size={16} />
+                        </View>
+                      )}
+                    </>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           ))}
@@ -1811,8 +1832,12 @@ export function QuickEditMode({
               «Familia N» (T3.v Cabina): pastilla PUNTEADA — el día que todavía no existe es el
               caso de «hueco por llenar» del que vive esa variante. El candado del gate Pro NO se
               pierde: la pastilla no admite hijos (su forma es fija a propósito), así que viaja al
-              lado, como sello. Sigue siendo decorativo — quien anuncia el gate es el sheet. */}
-          {takenDays.length < NUTRITION_WEEK_ORDER.length ? (
+              lado, como sello. Sigue siendo decorativo — quien anuncia el gate es el sheet.
+
+              QA owner 17-08: solo para días SIN fila de altas (estrategia flexible) — el caso
+              estructurado/híbrido lo hospeda la fila del último día, arriba. */}
+          {takenDays.length < NUTRITION_WEEK_ORDER.length &&
+          !(usesSlots && strategyUsesSlots(strategy)) ? (
             <View className="flex-row items-center gap-1.5">
               <AddActionButton
                 variant="dashed"

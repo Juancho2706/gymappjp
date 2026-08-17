@@ -1171,6 +1171,109 @@ body.eva-quickedit-open nav.coach-nav-mobile {
   z-index: 50;
 }
 
+/* ============================================================
+   Sello EVA v2 — fondo «Horizonte B» (remix B del artifact «Variaciones del
+   Sello», valores normativos; SPEC docs/specs/eva-seal-background/). Lo monta
+   <AppSeal> (components/AppSeal.tsx) en los shells logueados; los layouts
+   publican --seal-p-rgb / --seal-s-rgb (tripletes "r, g, b" del par sealPair,
+   D3) junto a --theme-primary. Tokens de alphas por tema (D5) espejados en
+   apps/mobile/lib/theme.ts (SEAL_TOKENS) y gobernados por check:tokens.
+   ============================================================ */
+:root {
+  /* Blobs (alpha del wash): en claro DEBE notarse (decisión del dueño 2026-08-17). */
+  --seal-blob1-alpha: 0.15;
+  --seal-blob2-alpha: 0.13;
+  /* Grano crosshatch claro: tinta ink-900, capa 0.55. JAMÁS anima (D4). */
+  --seal-grain-opacity: 0.55;
+  --seal-grain-h: rgba(15, 23, 42, 0.016);
+  --seal-grain-v: rgba(15, 23, 42, 0.013);
+}
+.dark {
+  --seal-blob1-alpha: 0.16;
+  --seal-blob2-alpha: 0.14;
+  /* Grano oscuro: blanco, capa 0.5 (los mismos valores del grano de la entrada). */
+  --seal-grain-opacity: 0.5;
+  --seal-grain-h: rgba(255, 255, 255, 0.012);
+  --seal-grain-v: rgba(255, 255, 255, 0.010);
+}
+
+/* Capas de blob: inset -25% (150% del viewport) para que la deriva jamás asome un
+   borde. Fallback del par si un árbol monta AppSeal sin publicarlo: --theme-*-rgb
+   del layout y, en última instancia, el par EVA (#1462DC → derivado #7855e2). */
+.eva-seal-blob {
+  position: absolute;
+  inset: -25%;
+}
+.eva-seal-blob1 {
+  background: radial-gradient(
+    circle at 32% 22%,
+    rgba(var(--seal-p-rgb, var(--theme-primary-rgb, 20, 98, 220)), var(--seal-blob1-alpha)) 0%,
+    transparent 38%
+  );
+}
+.eva-seal-blob2 {
+  background: radial-gradient(
+    circle at 76% 82%,
+    rgba(var(--seal-s-rgb, var(--theme-secondary-rgb, 120, 85, 226)), var(--seal-blob2-alpha)) 0%,
+    transparent 34%
+  );
+}
+.eva-seal-grain {
+  opacity: var(--seal-grain-opacity);
+  background:
+    repeating-linear-gradient(to bottom, var(--seal-grain-h) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(to right, var(--seal-grain-v) 0 1px, transparent 1px 3px);
+}
+
+/* Contrato de animación (SPEC D4): SOLO la luz se mueve — transform puro en
+   compositor, cero JS por frame. `prefers-reduced-motion` ⇒ los blobs quedan
+   ESTÁTICOS (no desaparecen); el kill-switch animated={false} quita el atributo. */
+@media (prefers-reduced-motion: no-preference) {
+  /* will-change SOLO con deriva activa: sin animación (reduced-motion o
+     animated=false) no se pagan dos capas compositadas de 150% del viewport. */
+  [data-eva-seal='b'][data-seal-animated] .eva-seal-blob {
+    will-change: transform;
+  }
+  [data-eva-seal='b'][data-seal-animated] .eva-seal-blob1 {
+    animation: eva-seal-drift1 46s ease-in-out infinite alternate;
+  }
+  [data-eva-seal='b'][data-seal-animated] .eva-seal-blob2 {
+    animation: eva-seal-drift2 58s ease-in-out infinite alternate;
+  }
+}
+@keyframes eva-seal-drift1 {
+  0% { transform: translate3d(-2.5%, -1.5%, 0); }
+  50% { transform: translate3d(0.5%, 1.8%, 0); }
+  100% { transform: translate3d(2.5%, -0.6%, 0); }
+}
+@keyframes eva-seal-drift2 {
+  0% { transform: translate3d(2%, 2.5%, 0); }
+  50% { transform: translate3d(-1.2%, 0.4%, 0); }
+  100% { transform: translate3d(-2.5%, -2%, 0); }
+}
+
+/* D2 — pre-auth intacto: el login del alumno (/c/‹slug›/login) vive bajo el MISMO
+   (y único) layout que el shell del alumno, así que el apagado es ESTRUCTURAL (por
+   el árbol DOM, no por pathname, regla del PLAN): la raíz de la página de login ya
+   marca `.login-brand`; con ella presente el sello del shell ni pinta ni anima. */
+main:has(.login-brand) [data-eva-seal] {
+  display: none;
+}
+
+/* D2 — overlay denso del editor: mientras [data-qe-overlay] (opaco, fixed z-60) está
+   montado, los blobs del shell de abajo se apagan (no se ven y no queman batería);
+   el overlay trae su PROPIA capa local de solo-grano (AppSeal variant="grain"). */
+.coach-layout-container main:has([data-qe-overlay]) [data-eva-seal='b'] {
+  display: none;
+}
+
+/* Invariante SPEC: el sello no se imprime ni sale en exports print. */
+@media print {
+  [data-eva-seal] {
+    display: none !important;
+  }
+}
+
 /* Perfil alumno — exportar / imprimir informe */
 @media print {
   .coach-layout-container > aside {

@@ -31,7 +31,16 @@
  *      WCAG ≥ 4.5:1 — el bug del owner era tinta blanca sobre una marca clara), y en el editor los
  *      botones nuevos DISPARAN: «Agregar franja» abre su sheet, «Alimento libre» agrega la fila y
  *      «Agregar día» sigue abriendo su popover.
- *   8. Guía Viva (`docs/specs/nutrition-onboarding-tour/`, G2.3 — LOS DOS INVARIANTES BLOQUEANTES
+ *   8. Sello EVA v2 (`docs/specs/eva-seal-background/`, gate S2.2): con `?seal=1` el harness
+ *      monta `AppSeal b` publicando el par `--seal-*` como los layouts de producción. Se afirma
+ *      (a) el COLOR real de los blobs — hue del par derivado (primario y primario+38°) y alphas
+ *      D5 por tema — para 2 marcas (EVA azul default y verde vía `?sealBrand`); (b) que el
+ *      contraste WCAG de 3 textos clave del editor NO cambia con el sello prendido (mismos
+ *      colores computados y misma razón de luminancia que sin sello); (c) que reduced-motion
+ *      emulado congela la deriva SIN apagar los blobs — y el grano jamás anima; y (d) que las
+ *      rutas pre-auth (fetch del HTML de /login) no traen rastro del marcador `data-eva-seal`
+ *      que sí existe en el harness. Capturas dark/light × 2 marcas a 1280.
+ *   9. Guía Viva (`docs/specs/nutrition-onboarding-tour/`, G2.3 — LOS DOS INVARIANTES BLOQUEANTES
  *      del dueño): D2, el «?» real del editor (`?mode=edit`, esquina/PublishBar según ancho) mide
  *      CERO intersecciones contra todo `button/a/input/select` visible en los 5 anchos del harness;
  *      D3, el recorrido COMPLETO de los dos guiones (editor y hub, vía `?tour=editor|hub`) deja la
@@ -47,7 +56,7 @@
 
 import { chromium } from '@playwright/test'
 import { spawn, execSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -1108,6 +1117,416 @@ async function smokeThemeToggleWorks(browser) {
 }
 
 // ---------------------------------------------------------------------------
+// 3.97. Sello EVA v2 (SPEC `docs/specs/eva-seal-background/`, gate S2.2 — PLAN §4).
+//
+// El harness gana `?seal=1`: monta `AppSeal b` sobre la maqueta activa publicando el par
+// `--seal-p-rgb`/`--seal-s-rgb` EXACTAMENTE como los layouts de producción (misma
+// `buildSealCssVars`: par `sealPair` derivado — el harness no tiene preset — y pintado claro
+// del blob 2). `?sealBrand=RRGGBB` cambia la marca de prueba, así que la segunda marca entra
+// por el MISMO camino que en producción (page → buildSealCssVars → sealPair), no por un var
+// forzado a mano que el blob podría ignorar.
+//
+// Qué se afirma y por qué:
+//   (a) COLOR REAL de los blobs, no solo presencia: el gradiente computado resuelve las vars,
+//       así que se le parsea el rgba() y se compara HUE contra el par derivado esperado
+//       (blob 1 = hue del primario; blob 2 = hue+38° — la fórmula D3.2 rota el hue y solo
+//       mueve S/L, y el pintado claro del blob 2 tampoco toca el hue, así que el hue es el
+//       invariante estable frente al redondeo hsl→hex). Los ALPHAS son los tokens D5 por tema
+//       (claro .15/.13, dark .16/.14): un token pisado o un `.dark` que no aplica cae acá.
+//   (b) CONTRASTE INTACTO (invariante de la SPEC: «el contraste WCAG de los textos de las
+//       superficies clave no cambia con el sello activo»): 3 textos clave del editor medidos
+//       con getComputedStyle + la misma matemática de luminancia de la «familia N», CON y SIN
+//       sello — colores idénticos y razón idéntica. Atraparía a quien "integre" el sello
+//       volviendo translúcida una superficie de contenido.
+//   (c) REDUCED-MOTION (D4): `page.emulateMedia({reducedMotion:'reduce'})` ⇒ getAnimations()
+//       de los blobs queda vacío o pausado, y los blobs SIGUEN visibles (estáticos, no
+//       desaparecen). Control positivo antes de emular: con motion normal las 2 derivas
+//       corren — sin esto, el «0 animaciones» podría estar verde porque el CSS de la deriva
+//       nunca cargó. El grano no anima JAMÁS, ni siquiera con motion normal.
+//   (d) PRE-AUTH LIMPIO (D2): fetch del HTML de /login del dev server ⇒ cero apariciones del
+//       marcador `data-eva-seal="` (la forma de MARKUP del atributo que `AppSeal` expone —
+//       con `="` para no confundirse con el selector de globals.css si algún día viajara
+//       inline). El mismo marcador se confirma PRESENTE en el harness con `?seal=1` y AUSENTE
+//       sin él: el positivo evita un verde vacío y el negativo prueba que sin `?seal` el
+//       árbol del harness queda como siempre.
+//
+// Capturas: dark/light × 2 marcas a 1280 (misma infraestructura de SHOTS_DIR/shotCount),
+// con la raíz opaca de la maqueta vuelta transparente SOLO para la foto (la oclusión no
+// existe en los shells de producción) y un assert de que las 2 marcas difieren en píxeles —
+// una captura donde el sello no se VE no le sirve al QA visual del dueño.
+// ---------------------------------------------------------------------------
+const SEAL_BRANDS = [
+  // `hex` = lo que la page resuelve: sin `?sealBrand` cae a BRAND_PRIMARY_COLOR (#1462DC).
+  { label: 'eva', hex: '#1462DC', query: '' },
+  // Verde de las marcas de prueba de la SPEC (criterios de aceptación).
+  { label: 'verde', hex: '#16A34A', query: '&sealBrand=16A34A' },
+]
+/** Rotación de hue de la fórmula derivada D3.2 (espejo de SEAL_HUE_SHIFT en brand-kit/seal.ts). */
+const SEAL_HUE_SHIFT_DEG = 38
+/** El redondeo hsl→hex de 8 bits puede correr el hue ~1-2° en colores oscuros/saturados. */
+const SEAL_HUE_TOLERANCE_DEG = 3
+const SEAL_ALPHA_TOLERANCE = 0.005
+/** Tokens D5 (`--seal-blob*-alpha` de globals.css, espejo SEAL_TOKENS de theme.ts). */
+const SEAL_BLOB_ALPHAS = {
+  light: { blob1: 0.15, blob2: 0.13 },
+  dark: { blob1: 0.16, blob2: 0.14 },
+}
+const SEAL_MARKER = 'data-eva-seal="'
+
+/** `rgba(20, 98, 220, 0.15)` / `rgb(...)` → `{r,g,b,a}` (a=1 si falta); null si no parsea. */
+function parseRgba(value) {
+  const match = /rgba?\(([^)]+)\)/.exec(value ?? '')
+  if (!match) return null
+  const parts = match[1]
+    .split(/[,\s/]+/)
+    .filter(Boolean)
+    .map(Number)
+  if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) return null
+  return { r: parts[0], g: parts[1], b: parts[2], a: parts.length >= 4 ? parts[3] : 1 }
+}
+
+/** `#RRGGBB` → `{r,g,b}`. */
+function hexToRgbTriple(hex) {
+  const clean = hex.replace('#', '')
+  return {
+    r: parseInt(clean.slice(0, 2), 16),
+    g: parseInt(clean.slice(2, 4), 16),
+    b: parseInt(clean.slice(4, 6), 16),
+  }
+}
+
+/** Hue HSL en grados [0, 360). Gris (delta 0) ⇒ 0, mismo criterio fail-safe del helper RN/web. */
+function rgbToHue({ r, g, b }) {
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const delta = max - min
+  if (delta === 0) return 0
+  let hue
+  if (max === rn) hue = ((gn - bn) / delta) % 6
+  else if (max === gn) hue = (bn - rn) / delta + 2
+  else hue = (rn - gn) / delta + 4
+  return (hue * 60 + 360) % 360
+}
+
+/** Distancia angular mínima entre dos hues (el círculo: 359° y 1° distan 2°, no 358°). */
+function hueDistance(a, b) {
+  const d = Math.abs(a - b) % 360
+  return Math.min(d, 360 - d)
+}
+
+/**
+ * Lee las DOS capas de blob del sello montado: visibilidad real + primer color del gradiente
+ * computado (las custom properties ya vienen resueltas en el valor computado).
+ * @param {import('@playwright/test').Page} page
+ */
+function sealBlobSnapshot(page) {
+  return page.evaluate(() => {
+    const seal = document.querySelector('[data-eva-seal="b"]')
+    if (!seal) return { error: 'no hay [data-eva-seal="b"] en el DOM' }
+    const read = (selector) => {
+      const el = seal.querySelector(selector)
+      if (!el) return null
+      const rect = el.getBoundingClientRect()
+      const style = getComputedStyle(el)
+      const match = /rgba?\(([^)]+)\)/.exec(style.backgroundImage)
+      return {
+        visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.opacity !== '0',
+        color: match ? match[0] : null,
+        backgroundImage: style.backgroundImage.slice(0, 90),
+      }
+    }
+    return {
+      isDark: document.documentElement.classList.contains('dark'),
+      blob1: read('.eva-seal-blob1'),
+      blob2: read('.eva-seal-blob2'),
+    }
+  })
+}
+
+/** @param {import('@playwright/test').Browser} browser */
+async function smokeSealBlobsDerivedColors(browser) {
+  mkdirSync(SHOTS_DIR, { recursive: true })
+  for (const brand of SEAL_BRANDS) {
+    const brandHue = rgbToHue(hexToRgbTriple(brand.hex))
+    const expectedHues = {
+      blob1: brandHue,
+      blob2: (brandHue + SEAL_HUE_SHIFT_DEG) % 360,
+    }
+    for (const theme of THEMES) {
+      const context = await newCheckContext(browser, {
+        viewport: { width: 1280, height: 800 },
+        colorScheme: theme,
+      })
+      const page = await context.newPage()
+      await gotoHarness(page, `?stories=1&seal=1${brand.query}`)
+      await page.waitForTimeout(150)
+
+      // SOLO para la CAPTURA: la raíz de las stories pinta `bg-surface-app` OPACO encima del
+      // sello (`-z-10`), así que la foto saldría sin un solo píxel de blob (y dos marcas
+      // darían PNGs byte-idénticos — verificado). En producción los shells dejan el lienzo
+      // de contenido transparente sobre el sello (SPEC D2); esta regla reproduce ESA
+      // condición solo en la raíz directa de la maqueta bajo SealStage. Los asserts de color
+      // de arriba no dependen de esto (computed style no ve oclusión).
+      await page.addStyleTag({
+        content: "div:has(> [data-eva-seal='b']) > .bg-surface-app { background-color: transparent !important; }",
+      })
+      await page.waitForTimeout(50)
+
+      const snap = await sealBlobSnapshot(page)
+      if (snap.error) {
+        report(`Sello (a): blobs presentes — ${brand.label} ${theme}`, false, snap.error)
+        await context.close()
+        continue
+      }
+      report(
+        `Sello (a): tema aplicado — ${brand.label} ${theme}`,
+        snap.isDark === (theme === 'dark'),
+        `html.dark=${snap.isDark}`,
+      )
+      for (const key of ['blob1', 'blob2']) {
+        const blob = snap[key]
+        const label = `Sello (a): ${key} ${brand.label} (${brand.hex}) ${theme}`
+        if (!blob || !blob.visible) {
+          report(`${label} — visible`, false, `blob=${JSON.stringify(blob)}`)
+          continue
+        }
+        const rgba = parseRgba(blob.color)
+        if (!rgba) {
+          report(`${label} — color del gradiente parseable`, false, `backgroundImage="${blob.backgroundImage}"`)
+          continue
+        }
+        const hue = rgbToHue(rgba)
+        const hueDelta = hueDistance(hue, expectedHues[key])
+        report(
+          `${label} — hue del par derivado`,
+          hueDelta <= SEAL_HUE_TOLERANCE_DEG,
+          `hue=${hue.toFixed(1)}° esperado=${expectedHues[key].toFixed(1)}° Δ=${hueDelta.toFixed(1)}° (${blob.color})`,
+        )
+        const expectedAlpha = SEAL_BLOB_ALPHAS[theme][key]
+        report(
+          `${label} — alpha D5`,
+          Math.abs(rgba.a - expectedAlpha) <= SEAL_ALPHA_TOLERANCE,
+          `alpha=${rgba.a} esperado=${expectedAlpha}`,
+        )
+      }
+
+      const filePath = join(SHOTS_DIR, `seal-1280-${theme}-${brand.label}.png`)
+      await page.screenshot({ path: filePath, fullPage: true })
+      shotCount += 1
+      console.log(`      captura: ${filePath}`)
+
+      await context.close()
+    }
+  }
+
+  // Las capturas tienen que MOSTRAR el sello: con los blobs tapados por algo opaco, las 2
+  // marcas producen PNGs byte-idénticos (exactamente así se descubrió la oclusión de la
+  // maqueta de stories). Los asserts de color de arriba NO atrapan eso — computed style no
+  // ve oclusión — así que se compara el pixel real.
+  for (const theme of THEMES) {
+    const pathA = join(SHOTS_DIR, `seal-1280-${theme}-${SEAL_BRANDS[0].label}.png`)
+    const pathB = join(SHOTS_DIR, `seal-1280-${theme}-${SEAL_BRANDS[1].label}.png`)
+    try {
+      const bufferA = readFileSync(pathA)
+      const bufferB = readFileSync(pathB)
+      report(
+        `Sello (a): las capturas de las 2 marcas difieren en píxeles (el sello se VE) — ${theme}`,
+        !bufferA.equals(bufferB),
+        bufferA.equals(bufferB)
+          ? 'PNGs byte-idénticos: los blobs están tapados'
+          : `bytes ${SEAL_BRANDS[0].label}=${bufferA.length} ${SEAL_BRANDS[1].label}=${bufferB.length}`,
+      )
+    } catch (err) {
+      report(
+        `Sello (a): capturas de las 2 marcas — ${theme}`,
+        false,
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+}
+
+/**
+ * (b) Los 3 textos clave del editor cuyos colores computados NO pueden moverse con el sello.
+ * Superficies distintas a propósito: CTA sólido de la cinta, input de la card de franja y la
+ * pastilla punteada de «Alimento libre».
+ */
+const SEAL_CONTRAST_TEXTS = [
+  { label: 'CTA de la cinta', selector: '[data-testid="editor-ribbon"] button' },
+  { label: 'nombre de franja (input)', selector: 'input[id^="qe-slot-name-"]' },
+  { label: 'botón «Alimento libre»', selector: '[data-testid="qe-add-free-food"]' },
+]
+const SEAL_CONTRAST_RATIO_TOLERANCE = 0.01
+
+/**
+ * Color de tinta + fondo EFECTIVO (el primer background-color con alpha ≥ .99 subiendo por los
+ * ancestros — los textos clave viven sobre cards sólidas, ese es justamente el invariante).
+ * @param {import('@playwright/test').Page} page
+ */
+function sealTextColorSnapshot(page) {
+  return page.evaluate((texts) => {
+    const effectiveBackground = (el) => {
+      let node = el
+      while (node && node !== document.documentElement) {
+        const bg = getComputedStyle(node).backgroundColor
+        const match = /rgba?\(([^)]+)\)/.exec(bg)
+        if (match) {
+          const parts = match[1]
+            .split(/[,\s/]+/)
+            .filter(Boolean)
+            .map(Number)
+          const alpha = parts.length >= 4 ? parts[3] : 1
+          if (alpha >= 0.99) return bg
+        }
+        node = node.parentElement
+      }
+      return getComputedStyle(document.body).backgroundColor
+    }
+    return texts.map(({ label, selector }) => {
+      const el = document.querySelector(selector)
+      if (!el) return { label, error: `no existe ${selector}` }
+      return { label, color: getComputedStyle(el).color, background: effectiveBackground(el) }
+    })
+  }, SEAL_CONTRAST_TEXTS)
+}
+
+async function smokeSealContrastUnchanged(browser) {
+  for (const theme of THEMES) {
+    const context = await newCheckContext(browser, {
+      viewport: { width: 1280, height: 960 },
+      colorScheme: theme,
+    })
+    const page = await context.newPage()
+
+    await gotoHarness(page, '?mode=edit')
+    await page.waitForTimeout(250)
+    const withoutSeal = await sealTextColorSnapshot(page)
+
+    await gotoHarness(page, '?mode=edit&seal=1')
+    await page.waitForTimeout(250)
+    const withSeal = await sealTextColorSnapshot(page)
+
+    for (let i = 0; i < SEAL_CONTRAST_TEXTS.length; i++) {
+      const off = withoutSeal[i]
+      const on = withSeal[i]
+      const label = `Sello (b): contraste intacto «${SEAL_CONTRAST_TEXTS[i].label}» — ${theme}`
+      if (off.error || on.error) {
+        report(label, false, off.error ?? on.error)
+        continue
+      }
+      const offInk = parseRgb(off.color)
+      const offBg = parseRgb(off.background)
+      const onInk = parseRgb(on.color)
+      const onBg = parseRgb(on.background)
+      if (!offInk || !offBg || !onInk || !onBg) {
+        report(label, false, `sin parsear: off=${off.color}/${off.background} on=${on.color}/${on.background}`)
+        continue
+      }
+      const ratioOff = contrastRatio(offInk, offBg)
+      const ratioOn = contrastRatio(onInk, onBg)
+      report(
+        label,
+        off.color === on.color &&
+          off.background === on.background &&
+          Math.abs(ratioOff - ratioOn) <= SEAL_CONTRAST_RATIO_TOLERANCE,
+        `off=${ratioOff.toFixed(2)}:1 on=${ratioOn.toFixed(2)}:1 tinta=${on.color} fondo=${on.background}`,
+      )
+    }
+
+    await context.close()
+  }
+}
+
+async function smokeSealReducedMotionFreezes(browser) {
+  const context = await newCheckContext(browser, {
+    viewport: { width: 1280, height: 800 },
+    colorScheme: 'light',
+  })
+  const page = await context.newPage()
+  await gotoHarness(page, '?stories=1&seal=1')
+  await page.waitForTimeout(150)
+
+  // Control positivo (motion normal): las 2 derivas corren y el grano no anima NUNCA.
+  const before = await page.evaluate(() => {
+    const blobs = [...document.querySelectorAll('[data-eva-seal="b"] .eva-seal-blob')]
+    const grain = document.querySelector('[data-eva-seal="b"] .eva-seal-grain')
+    return {
+      blobCount: blobs.length,
+      states: blobs.flatMap((el) => el.getAnimations().map((a) => a.playState)),
+      grainAnimations: grain ? grain.getAnimations().length : -1,
+    }
+  })
+  report(
+    'Sello (c): control positivo — con motion normal las 2 derivas corren',
+    before.blobCount === 2 && before.states.length === 2 && before.states.every((s) => s === 'running'),
+    `blobs=${before.blobCount} estados=[${before.states.join(', ')}]`,
+  )
+  report(
+    'Sello (c): el grano JAMÁS anima (ni con motion normal)',
+    before.grainAnimations === 0,
+    `animaciones=${before.grainAnimations}`,
+  )
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.waitForTimeout(200)
+  const after = await page.evaluate(() => {
+    const blobs = [...document.querySelectorAll('[data-eva-seal="b"] .eva-seal-blob')]
+    return {
+      blobCount: blobs.length,
+      running: blobs.flatMap((el) => el.getAnimations().filter((a) => a.playState === 'running')).length,
+      visible: blobs.every((el) => {
+        const rect = el.getBoundingClientRect()
+        const style = getComputedStyle(el)
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.opacity !== '0'
+      }),
+    }
+  })
+  report(
+    'Sello (c): reduced-motion emulado congela la deriva (0 animaciones corriendo)',
+    after.blobCount === 2 && after.running === 0,
+    `blobs=${after.blobCount} corriendo=${after.running}`,
+  )
+  report('Sello (c): los blobs quedan ESTÁTICOS, no desaparecen', after.visible, `visibles=${after.visible}`)
+
+  await context.close()
+}
+
+async function smokeSealPreAuthClean() {
+  const cases = [
+    {
+      label: 'el marcador existe en el harness con ?seal=1 (positivo anti-verde-vacío)',
+      url: `${BASE_URL}${HARNESS_PATH}?stories=1&seal=1`,
+      expectMarker: true,
+    },
+    {
+      label: 'sin ?seal el harness NO monta el sello (árbol como siempre)',
+      url: `${BASE_URL}${HARNESS_PATH}?stories=1`,
+      expectMarker: false,
+    },
+    { label: '/login (pre-auth) sin rastro del sello', url: `${BASE_URL}/login`, expectMarker: false },
+  ]
+  for (const c of cases) {
+    try {
+      // Timeout AMPLIO: la primera visita a una ruta bajo `next dev` la COMPILA — la /login
+      // fría pasaba de 30s y el abort del fetch se disfrazaba de rojo del assert.
+      const res = await fetch(c.url, { signal: AbortSignal.timeout(120_000) })
+      const html = await res.text()
+      const hasMarker = html.includes(SEAL_MARKER)
+      report(
+        `Sello (d): ${c.label}`,
+        res.ok && hasMarker === c.expectMarker,
+        `status=${res.status} marcador=${hasMarker}`,
+      )
+    } catch (err) {
+      report(`Sello (d): ${c.label}`, false, err instanceof Error ? err.message : String(err))
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 4. Guía Viva (SPEC `nutrition-onboarding-tour`, G2.3) — D2 «?» sin solapes + D3 recorrido
 //    completo con tarjeta ⊆ viewport + D4 flag evita re-auto-arranque. Los DOS invariantes con
 //    "gate geométrico" del dueño (D2 y D3) son BLOQUEANTES: en rojo, la tanda no cierra.
@@ -1406,10 +1825,16 @@ async function main() {
     await smokeAddActionsInEditor(browser)
     await smokeAddDayTriggerStillOpens(browser)
 
-    console.log('\nPaso 8/9 — toggle de tema…')
+    console.log('\nPaso 8/10 — toggle de tema…')
     await smokeThemeToggleWorks(browser)
 
-    console.log('\nPaso 9/9 — Guía Viva (D2 «?» sin solapes · D3 recorrido completo · D4 flag)…')
+    console.log('\nPaso 9/10 — Sello EVA v2 (colores del par · contraste intacto · reduced-motion · pre-auth)…')
+    await smokeSealBlobsDerivedColors(browser)
+    await smokeSealContrastUnchanged(browser)
+    await smokeSealReducedMotionFreezes(browser)
+    await smokeSealPreAuthClean()
+
+    console.log('\nPaso 10/10 — Guía Viva (D2 «?» sin solapes · D3 recorrido completo · D4 flag)…')
     await smokeTourHelpNoOverlap(browser)
     await smokeTourWalkthrough(browser, 'editor')
     await smokeTourWalkthrough(browser, 'hub')

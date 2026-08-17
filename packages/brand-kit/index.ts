@@ -339,3 +339,6 @@ export * from './motion'
 
 // Catálogo de temas preset curados (white-label v2.1) + resolvePresetBranding. Pure TS, DOM-free.
 export * from './presets'
+
+// Par de marca del Sello EVA v2 (SPEC eva-seal-background D3). Pure TS, DOM-free.
+export * from './seal'

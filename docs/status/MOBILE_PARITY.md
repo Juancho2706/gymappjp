@@ -241,6 +241,17 @@ source_of_truth: apps/web responsive + apps/mobile
 > paso «Metas» dice «popover» y en RN abre bottom sheet (copy cerrado por D6, decisión del owner);
 > QA en device del tour RN pendiente — entra al pase único del owner sobre el OTA #3.
 
+> **2026-08-17 (Sello EVA v2 — fondo Horizonte B, paridad por contrato)**: `AppBackground` RN v2
+> = espejo del `AppSeal` web. La grilla 40×40 se RETIRÓ y el `SKY #38BDF8` fijo murió: el segundo
+> blob sale del par del tema (`sealPair` de `@eva/brand-kit`, mismo helper que publica
+> `--seal-*-rgb` en web — preset ⇒ par curado del catálogo; legacy ⇒ derivado H+38°, W-brand B2
+> estricto). Deriva Reanimated UI-thread pura (46s/58s, cero JS por frame), gateada por
+> reduce-motion y prop `animated` (kill-switch para el QA de batería del owner). Grano jamás
+> anima; alphas por tema en `SEAL_TOKENS`, gobernados por `check:tokens` contra los `--seal-*`
+> web (5 tokens × light/dark). Familia de entrada RN intacta (usa `EntryBackground`). Nota para
+> QA: `alumno/onboarding` y `change-password` ya montaban `AppBackground` ⇒ ganan Horizonte B
+> implícito (decisión pendiente menor si el owner los considera «entrada»).
+
 La paridad global **no está certificada todavía**.
 
 | Bloque | Código y revisión estática | QA en dispositivo | Estado efectivo |

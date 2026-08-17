@@ -23,6 +23,8 @@ import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@ev
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
+import { buildSealCssVars } from '@/lib/seal-vars'
+import { AppSeal } from '@/components/AppSeal'
 import { STUDENT_ACCESS_COPY, STUDENT_ACCESS_STATE_HEADER } from '@/lib/student-access'
 
 interface Props {
@@ -242,6 +244,16 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const palette = generateBrandPalette(brandTheme.light.accent, brandTheme.light.accent2)
     // D2 white-label: rampa SPORT derivada (--sport-100..700 + cta-fill + focus-ring) del color de marca.
     const sportTokens = deriveSportTokens(primaryColor)
+    // Sello EVA v2 (SPEC eva-seal-background D3): par del sello por modo desde el tema
+    // RESUELTO, publicado como --seal-p-rgb/--seal-s-rgb junto a --theme-*. Modo estricto
+    // de sealPair — la key del preset viaja con el MISMO gating que `preset` arriba:
+    // managed/free ⇒ null ⇒ par derivado del primario (regla B2: el secundario suelto
+    // de un legacy no pinta el sello).
+    const sealVars = buildSealCssVars({
+        lightBrandColor: brandTheme.light.accent,
+        darkBrandColor: brandTheme.dark.accent,
+        themePresetKey: (isFreeTier || isManagedBrand) ? null : headersList.get('x-coach-theme-preset-key'),
+    })
     const lightAccent = brandTheme.light.accent
     const lightOnAccent = brandTheme.light.accentText
     const darkAccent = brandTheme.dark.accent
@@ -305,6 +317,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --theme-secondary: ${lightAccent2};
                     --theme-secondary-rgb: ${palette.secondaryRgb ?? palette.primaryRgb};
                     --theme-secondary-foreground: ${lightOnAccent2};
+                    --seal-p-rgb: ${sealVars.light.primaryRgb};
+                    --seal-s-rgb: ${sealVars.light.secondaryRgb};
                     --sport-100: ${sportTokens.ramp['100']};
                     --sport-200: ${sportTokens.ramp['200']};
                     --sport-300: ${sportTokens.ramp['300']};
@@ -331,6 +345,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --primary-foreground: ${darkOnAccent};
                     --theme-secondary: ${darkAccent2};
                     --theme-secondary-foreground: ${darkOnAccent2};
+                    --seal-p-rgb: ${sealVars.dark.primaryRgb};
+                    --seal-s-rgb: ${sealVars.dark.secondaryRgb};
                     --sport-100: ${sportTokens.dark['100']};
                     --sport-600: ${sportTokens.dark['600']};
                     --sport-700: ${sportTokens.dark['700']};
@@ -382,6 +398,14 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         el `bg-muted/20` del tema claro era la capa que se veía blanca bajo la
                         pantalla final del ejecutor. */}
                     <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:bg-[var(--exec-canvas)] has-[.is-workout-page]:pb-0">
+                        {/* Sello EVA v2 «Horizonte B» (SPEC eva-seal-background D1): fondo por
+                            defecto del shell logueado del alumno/PWA, detrás del contenido (el
+                            main ya es `relative z-0` = stacking context, así el `-z-10` del sello
+                            pinta sobre el fondo del main y bajo las cards). Este árbol tiene UN
+                            solo layout: el login del alumno (/c/‹slug›/login) se apaga
+                            estructuralmente en globals.css (`main:has(.login-brand)` — D2
+                            pre-auth intacto, sin pathname). */}
+                        <AppSeal variant="b" />
                         {isStudentGrace && (
                             <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
                                 {/* info-* = rampa DS fija (nunca white-label): banner discreto, tono

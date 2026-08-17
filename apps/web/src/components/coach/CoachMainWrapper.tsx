@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { AppSeal } from '@/components/AppSeal'
 
 /**
  * Coach móvil: SIN header fijo global (cada pantalla renderiza su propio header + la cápsula
@@ -50,11 +51,18 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
             className={cn(
                 // Móvil: el scroll vive en window (overflow-y-visible) → sticky de las pantallas
                 // (tabs de ficha, action-bars) pega contra el viewport. Desktop: scroll interno (chrome fijo).
-                'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-visible md:overflow-y-auto pb-[var(--mobile-content-bottom-offset)] md:pb-0',
+                // `isolate`: stacking context propio para que el AppSeal `-z-10` pinte ENCIMA del
+                // fondo opaco del contenedor del shell y DEBAJO de todo el contenido (SPEC D2:
+                // el sello vive solo en el lienzo de contenido; el chrome opaco queda encima).
+                'relative isolate flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-visible md:overflow-y-auto pb-[var(--mobile-content-bottom-offset)] md:pb-0',
                 COACH_MOBILE_TOP_CHROME_PT,
                 'md:pt-0'
             )}
         >
+            {/* Sello EVA v2 «Horizonte B» (SPEC eva-seal-background D1/D6): fondo por defecto del
+                shell logueado del coach. Solo la rama NO-builder: los builders son overlays de
+                trabajo denso (D2) y quedan fuera de este montaje. */}
+            <AppSeal variant="b" />
             <div
                 className={cn(
                     'mx-auto w-full min-w-0 max-w-full animate-fade-in',

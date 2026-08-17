@@ -841,3 +841,47 @@ export const ENTRY_TOKENS = Object.freeze({
   /** `--lux-soft-rgb` (canal `127 176 255`) en hex: horizonte de la capa de luz. */
   luxSoft: '#7FB0FF',
 })
+
+/**
+ * Tokens del SELLO EVA v2 (fondo «Horizonte B») — SPEC
+ * `docs/specs/eva-seal-background/SPEC.md` (D5), valores normativos del artifact
+ * «Variaciones del Sello» (remix B). Los consume `AppBackground.tsx`.
+ *
+ * Por que viven aca (y no en `DS`/`Theme`): igual que `ENTRY_TOKENS`, son valores
+ * para props imperativas de Skia/react-native-svg (fill/opacity numericos), no
+ * clases NativeWind. Su gemelo web es el juego `--seal-*` de
+ * `apps/web/src/app/globals.css` (S1.2 de la misma SPEC): si cambia uno, cambian
+ * los dos — y `pnpm check:tokens` lo VERIFICA (seccion del sello de
+ * `scripts/check-token-parity.mjs`, alphas incluidos; SPEC D5 "gobernados por
+ * check:tokens").
+ *
+ * Blobs (alpha del wash sobre el hex del par `sealPair`): dark .16/.14 ·
+ * light .15/.13 — en claro DEBE notarse (decision del dueño 2026-08-17).
+ * Grano (JAMAS anima): dark = crosshatch blanco .012/.010 con capa .5 (los
+ * MISMOS valores que el grano de la entrada, `ENTRY_TOKENS.grainLine*`);
+ * light = tinta ink-900 .016/.013 con capa .55 (calibracion propia del artifact,
+ * reemplaza el .010/.008 capa .4 pre-sello que quedaba invisible en claro).
+ */
+export const SEAL_TOKENS = Object.freeze({
+  dark: Object.freeze({
+    /** Alpha del blob 1 (primario de marca). */
+    blobPrimaryAlpha: 0.16,
+    /** Alpha del blob 2 (secundario del par). */
+    blobSecondaryAlpha: 0.14,
+    /** Linea horizontal del crosshatch. */
+    grainLineH: 'rgba(255,255,255,0.012)',
+    /** Linea vertical del crosshatch. */
+    grainLineV: 'rgba(255,255,255,0.010)',
+    /** Opacidad de la capa completa de grano. */
+    grainOpacity: 0.5,
+  }),
+  light: Object.freeze({
+    blobPrimaryAlpha: 0.15,
+    blobSecondaryAlpha: 0.13,
+    grainLineH: 'rgba(15,23,42,0.016)',
+    grainLineV: 'rgba(15,23,42,0.013)',
+    grainOpacity: 0.55,
+  }),
+  /** Celda del pattern de grano, en pt (misma celda 3 de la entrada). */
+  grainCell: 3,
+})

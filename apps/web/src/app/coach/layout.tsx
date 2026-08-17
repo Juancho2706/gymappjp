@@ -19,6 +19,7 @@ import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@ev
 import { isBrandingAllowed, getTierMaxClients, TIER_LABELS, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
+import { buildSealCssVars } from '@/lib/seal-vars'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender, listUserWorkspacesForRender } from '@/services/auth/workspace-render-cache'
@@ -165,6 +166,16 @@ export default async function CoachLayout({
     // D2 white-label: rampa SPORT derivada (--sport-100..700 + cta-fill + focus-ring) del color de marca.
     // El diseño recolorea TODO sobreescribiendo --sport-*; ember/aqua/ink/status quedan fijos.
     const sportTokens = deriveSportTokens(primaryColor)
+    // Sello EVA v2 (SPEC eva-seal-background D3): par del sello por modo desde el tema
+    // RESUELTO, publicado como --seal-p-rgb/--seal-s-rgb junto a --theme-*. Modo estricto
+    // de sealPair: la key del preset personal solo cuenta en standalone con marca activa;
+    // managed (org/team) y EVA-default derivan del primario (regla B2 — el secundario
+    // suelto de un legacy no pinta el sello).
+    const sealVars = buildSealCssVars({
+        lightBrandColor: brandTheme.light.accent,
+        darkBrandColor: brandTheme.dark.accent,
+        themePresetKey: standaloneBrandOn ? (coach.theme_preset_key ?? null) : null,
+    })
 
     // Loader del panel: custom solo si la marca está activa (standalone Pro+) o si es managed con toggle on.
     const useCustomStyles = isManaged ? (coach.use_brand_colors_coach !== false) : standaloneBrandOn
@@ -219,6 +230,8 @@ export default async function CoachLayout({
                 --theme-secondary: ${brandTheme.light.accent2};
                 --theme-secondary-rgb: ${palette.secondaryRgb ?? palette.primaryRgb};
                 --theme-secondary-foreground: ${brandTheme.light.accent2Text};
+                --seal-p-rgb: ${sealVars.light.primaryRgb};
+                --seal-s-rgb: ${sealVars.light.secondaryRgb};
                 --sport-100: ${sportTokens.ramp['100']};
                 --sport-200: ${sportTokens.ramp['200']};
                 --sport-300: ${sportTokens.ramp['300']};
@@ -245,6 +258,8 @@ export default async function CoachLayout({
                 --primary-foreground: ${brandTheme.dark.accentText};
                 --theme-secondary: ${brandTheme.dark.accent2};
                 --theme-secondary-foreground: ${brandTheme.dark.accent2Text};
+                --seal-p-rgb: ${sealVars.dark.primaryRgb};
+                --seal-s-rgb: ${sealVars.dark.secondaryRgb};
                 /* Pasos soft 100-500 FLIPEAN a tintes traslúcidos de marca en dark
                    (espejo del diseño: globals .dark --sport-100 = rgba(...,0.20)).
                    Sin esto la rampa LIGHT del :root se filtra al dark y los fills
@@ -313,8 +328,11 @@ export default async function CoachLayout({
                             />
                         )}
                         <CoachMainWrapper>
-                            {/* Fondo limpio (surface-app claro/oscuro) — sin glow ambient
-                                brand-tinted; el diseño CD no tiene tonalidad de color en el fondo. */}
+                            {/* Sello EVA v2 (SPEC eva-seal-background D6): el dueño revierte el
+                                «fondo limpio sin glow ambient» de la pasada CD (2026-08-17) — el
+                                lienzo de contenido lleva el fondo B (blobs del par de marca +
+                                grano), montado por CoachMainWrapper DETRÁS del contenido. El
+                                chrome (topbar/sidebar) sigue opaco surface-app encima (D2). */}
                             {children}
                         </CoachMainWrapper>
                     </RosterViewProvider>

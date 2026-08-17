@@ -41,6 +41,7 @@ import {
   useTourController,
 } from '@/components/nutrition-v2'
 import { useFoodPickerPrefs } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
+import { AppSeal } from '@/components/AppSeal'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditorMetaCard } from './EditorMetaCard'
@@ -221,6 +222,11 @@ export function QuickEditPlanView() {
       // vuelven a ser el mismo. Donde la barra es overlay (macOS, touch) mide 0 px y esto no hace nada.
       className="fixed inset-0 z-[60] overflow-y-auto bg-surface-app 2xl:[scrollbar-gutter:stable_both-edges]"
     >
+      {/* Sello EVA v2 (SPEC eva-seal-background D2): overlay de trabajo denso ⇒ fondo
+          surface-app + SOLO grano (sin blobs — el tinte no compite con datos). Capa
+          estática local: vive en el stacking context de este overlay (z-60) y se
+          desmonta con él; los blobs del shell de abajo se apagan vía globals.css. */}
+      <AppSeal variant="grain" />
       {/* Cinta v2 (T3.v, solo editor ≥768 — compacta 768–1023, completa desde 1024): identidad +
           diagnóstico del día + acciones. */}
       {desktopRibbon ? (
@@ -412,7 +418,15 @@ export function QuickEditPlanView() {
                     {errors[`variant.${variant.key}.slots`]}
                   </p>
                 ) : null}
-                <AddSlotButton variantKey={variant.key} />
+                {/* QA owner 17-08: las dos altas en UNA fila centrada — apiladas ocupaban el
+                    doble de alto en móvil. «Agregar día» acompaña solo al ÚLTIMO día (es alta
+                    del plan, no del día); en el editor ≥1024 sigue viviendo en el rail. */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <AddSlotButton variantKey={variant.key} />
+                  {dayIndex === visibleVariants.length - 1 ? (
+                    <AddDayButton className={isEditor ? 'lg:hidden' : undefined} />
+                  ) : null}
+                </div>
               </>
             ) : (
               <p className="flex items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2.5 text-sm leading-6 text-body">
@@ -424,8 +438,13 @@ export function QuickEditPlanView() {
         ))}
 
         {/* FD5: "+ Agregar día" al final de la lista de días (multi-select Lu-Do + origen). En el
-            editor ≥1024 el alta vive en el rail: acá quedaría un segundo botón para lo mismo. */}
-        <AddDayButton className={isEditor ? 'lg:hidden' : undefined} />
+            editor ≥1024 el alta vive en el rail: acá quedaría un segundo botón para lo mismo.
+            QA owner 17-08: si el último día ya hospeda la fila de altas (AddSlot+AddDay juntos),
+            este botón suelto no se pinta — solo queda para días flexibles sin franjas. */}
+        {visibleVariants.length > 0 &&
+        (usesSlots || visibleVariants[visibleVariants.length - 1].slots.length > 0) ? null : (
+          <AddDayButton className={isEditor ? 'lg:hidden' : undefined} />
+        )}
 
         {/* Defecto B4: las porciones se quedaron solo en el día base (con un día no aplica).
             En el editor ≥1024 su acción vive en el rail (línea-enlace bajo el día ámbar). */}

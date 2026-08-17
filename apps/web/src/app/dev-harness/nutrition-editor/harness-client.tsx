@@ -42,6 +42,8 @@ import {
 } from '@eva/nutrition-v2'
 import type { BuilderFood } from '@eva/nutrition-v2'
 import type { TourId } from '@/components/nutrition-v2'
+import { AppSeal } from '@/components/AppSeal'
+import { buildSealCssVars } from '@/lib/seal-vars'
 import { MacroSparkStories } from './macro-spark-stories'
 import { TourStories } from './tour-stories'
 
@@ -531,41 +533,80 @@ function HarnessThemeToggle() {
   )
 }
 
+/**
+ * Escenario del Sello (S1.2/S2.2, SPEC `eva-seal-background`): con `?seal=1` la maqueta
+ * activa se envuelve acá — publica el par `--seal-p-rgb`/`--seal-s-rgb` en `:root`/`.dark`
+ * EXACTAMENTE como los layouts de producción (misma `buildSealCssVars`: par `sealPair`
+ * derivado — sin preset en el harness — y pintado claro del blob 2) y monta `AppSeal b`.
+ * `isolate`: stacking context propio para que el `-z-10` del sello pinte sobre el fondo
+ * opaco del body y bajo la maqueta (mismo requisito que en los shells). En `?mode=edit`
+ * el overlay del editor (opaco, con su capa propia de solo-grano) TAPA los blobs — eso
+ * es fiel a producción (D2); las stories/tour sí dejan los blobs a la vista.
+ */
+function SealStage({ brand, children }: { brand: string; children: React.ReactNode }) {
+  const vars = useMemo(
+    () => buildSealCssVars({ lightBrandColor: brand, darkBrandColor: brand, themePresetKey: null }),
+    [brand],
+  )
+  return (
+    <div className="isolate">
+      <style
+        dangerouslySetInnerHTML={{
+          __html:
+            `:root{--seal-p-rgb:${vars.light.primaryRgb};--seal-s-rgb:${vars.light.secondaryRgb};}` +
+            `.dark{--seal-p-rgb:${vars.dark.primaryRgb};--seal-s-rgb:${vars.dark.secondaryRgb};}`,
+        }}
+      />
+      <AppSeal variant="b" />
+      {children}
+    </div>
+  )
+}
+
 export function EditorHarness({
   mode,
   stories = false,
   tour = null,
+  seal = false,
+  sealBrand = '#1462DC',
 }: {
   mode: 'edit' | 'create' | 'template'
   stories?: boolean
   /** `?tour=editor|hub`: stories de la Guía Viva en vez del editor (ver tour-stories.tsx). */
   tour?: TourId | null
+  /** `?seal=1`: monta AppSeal `b` sobre la maqueta activa (gate S2.2 del Sello). */
+  seal?: boolean
+  /** Marca de prueba del sello (hex ya validado por la page; default EVA). */
+  sealBrand?: string
 }) {
   const isCreate = mode === 'create'
   const isTemplate = mode === 'template'
   // Identidad estable como en la page real (el server la manda una vez como prop).
   const creation = useMemo(() => (isCreate ? buildCreationInput() : null), [isCreate])
   const template = useMemo(() => (isTemplate ? buildTemplateInput() : null), [isTemplate])
+  // Sin `?seal=1` el árbol queda BYTE-IDÉNTICO al de siempre (cero wrapper): las corridas
+  // existentes del gate (edit/stories/tour) no ven diferencia alguna.
+  const wrap = (node: React.ReactNode) => (seal ? <SealStage brand={sealBrand}>{node}</SealStage> : node)
 
   if (tour) {
-    return (
+    return wrap(
       <>
         <HarnessThemeToggle />
         <TourStories tourId={tour} />
-      </>
+      </>,
     )
   }
 
   if (stories) {
-    return (
+    return wrap(
       <>
         <HarnessThemeToggle />
         <MacroSparkStories />
-      </>
+      </>,
     )
   }
 
-  return (
+  return wrap(
     <>
       <HarnessThemeToggle />
       <FoodPickerPrefsProvider
@@ -593,6 +634,6 @@ export function EditorHarness({
           <QuickEditPlanView />
         </QuickEditProvider>
       </FoodPickerPrefsProvider>
-    </>
+    </>,
   )
 }
