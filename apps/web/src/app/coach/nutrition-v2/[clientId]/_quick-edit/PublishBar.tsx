@@ -9,6 +9,8 @@
 
 import Link from 'next/link'
 import { AlertTriangle, Loader2, LockKeyhole, RefreshCcw } from 'lucide-react'
+import { MacroSparkPopover } from '@/components/nutrition-v2'
+import { MACRO_META, macroPct, type MacroKey } from '@/components/nutrition/macro-tokens'
 import { useQuickEdit } from './QuickEditProvider'
 import { QE_COPY } from './microcopy'
 
@@ -26,9 +28,44 @@ export interface PublishBarDayTotals {
   fatsG: number
   /** Meta de calorias del dia, si el coach la fijo. */
   targetCalories: number | null
+  /** Metas de gramos por macro del dia (steppers de "Metas ▾"/`TargetsEditorCard`), si el coach las fijo. */
+  targetProteinG: number | null
+  targetCarbsG: number | null
+  targetFatsG: number | null
 }
 
-export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTotals | null }) {
+/**
+ * T3.v Cabina: fila macro→campo de `PublishBarDayTotals`, en el orden de pintado P·C·G
+ * (mismo orden que la leyenda y que `MacroSpark`). El color del fill es SIEMPRE el token de la
+ * macro — SIN semantica ok/warn nueva acá (esa vive en el anillo de la cinta, W2 EditorRibbon).
+ *
+ * Exportada para que la cinta (`EditorRibbon`, V2.1) pinte las MISMAS tres micro-barras con el
+ * mismo mapeo: dos tablas paralelas serían dos verdades sobre qué meta le toca a cada macro.
+ */
+export const DAY_MACRO_ROWS: ReadonlyArray<{
+  key: MacroKey
+  actual: keyof Pick<PublishBarDayTotals, 'proteinG' | 'carbsG' | 'fatsG'>
+  target: keyof Pick<PublishBarDayTotals, 'targetProteinG' | 'targetCarbsG' | 'targetFatsG'>
+}> = [
+  { key: 'protein', actual: 'proteinG', target: 'targetProteinG' },
+  { key: 'carbs', actual: 'carbsG', target: 'targetCarbsG' },
+  { key: 'fats', actual: 'fatsG', target: 'targetFatsG' },
+]
+
+export function PublishBar({
+  dayTotals = null,
+  hideActions = false,
+}: {
+  dayTotals?: PublishBarDayTotals | null
+  /**
+   * T3.v Cabina (V2.1; umbral bajado a ≥768 en V2.5): con la cinta viva (`EditorRibbon`, compacta
+   * 768–1023 / completa desde 1024) el contador, Descartar y Publicar viven ARRIBA y acá se apagan
+   * para no duplicar CTAs. La barra se queda con la zona de totales del día. Los avisos de error
+   * (upgrade, NUT-008, reintento de publicación) NO se apagan: la cinta no los tiene, y esconderlos
+   * sí sería perder una afordancia.
+   */
+  hideActions?: boolean
+}) {
   const {
     changeCount,
     isPending,
@@ -55,6 +92,8 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
       : QE_COPY.publish
 
   const hasActions = changeCount > 0 || publishError !== null || upgradeRequired || substitutionsFailed
+  // Contador + Descartar + Publicar: solo cuando la cinta NO los está mostrando (ver `hideActions`).
+  const showActions = hasActions && !hideActions
   // En el editor (dayTotals presente) la barra vive SIEMPRE: totales fijos abajo (W3b).
   const visible = dayTotals !== null || hasActions
   if (!visible) return null
@@ -110,25 +149,84 @@ export function PublishBar({ dayTotals = null }: { dayTotals?: PublishBarDayTota
             <span className="min-w-0">{publishError}</span>
           </button>
         ) : null}
-        {/* W3b: totales del dia activo, siempre a la vista mientras se edita. */}
+        {/* W3b: totales del dia activo, siempre a la vista mientras se edita.
+            T3.v Cabina (V1.3): kcal "x / meta" + spark del reparto calorico del dia (popover con
+            los gramos exactos) + tres micro-metas P/C/G "actual/meta" con su propia barra —
+            SIN semantica ok/warn nueva, el fill es siempre el token de esa macro.
+            V2.5 (contrato responsive de la SPEC, fila <768): el spark de esta barra —el
+            "mini-cinta móvil" del PLAN §3, misma superficie con otro nombre— achica a `sm` bajo
+            768 px; desde `md:` sigue en `md` (el tamaño que ya tenía). Dos instancias con
+            visibilidad CSS por breakpoint en vez de leer el viewport por JS: cero riesgo de
+            mismatch de hidratación (mismo criterio que `EditorRibbon`/`MacroSparkPopover`, que sí
+            necesitan JS por el contrato de interacción, pero acá el tamaño es puro CSS. */}
         {dayTotals ? (
-          <p
-            className={
-              'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs font-semibold tabular-nums text-body ' +
-              (hasActions ? 'mb-2' : '')
-            }
-          >
-            {dayTotals.label ? <span className="text-muted">{dayTotals.label} ·</span> : null}
-            <span className="text-strong">
-              {Math.round(dayTotals.calories)}
-              {dayTotals.targetCalories != null ? ` / ${Math.round(dayTotals.targetCalories)}` : ''} kcal
-            </span>
-            <span>P {Math.round(dayTotals.proteinG)}</span>
-            <span>C {Math.round(dayTotals.carbsG)}</span>
-            <span>G {Math.round(dayTotals.fatsG)}</span>
-          </p>
+          <div className={showActions ? 'mb-2.5' : ''}>
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <p className="min-w-0 truncate text-xs font-semibold tabular-nums text-body">
+                {dayTotals.label ? <span className="text-muted">{dayTotals.label} · </span> : null}
+                <span className="text-strong">
+                  {Math.round(dayTotals.calories)}
+                  {dayTotals.targetCalories != null ? ` / ${Math.round(dayTotals.targetCalories)}` : ''} kcal
+                </span>
+              </p>
+              <MacroSparkPopover
+                size="sm"
+                className="md:hidden"
+                calories={dayTotals.calories}
+                proteinG={dayTotals.proteinG}
+                carbsG={dayTotals.carbsG}
+                fatsG={dayTotals.fatsG}
+                targetCalories={dayTotals.targetCalories}
+                ariaContext={dayTotals.label ?? undefined}
+              />
+              <MacroSparkPopover
+                size="md"
+                className="hidden md:inline-flex"
+                calories={dayTotals.calories}
+                proteinG={dayTotals.proteinG}
+                carbsG={dayTotals.carbsG}
+                fatsG={dayTotals.fatsG}
+                targetCalories={dayTotals.targetCalories}
+                ariaContext={dayTotals.label ?? undefined}
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-x-3">
+              {DAY_MACRO_ROWS.map(({ key, actual, target }) => {
+                const meta = MACRO_META[key]
+                const actualValue = dayTotals[actual]
+                const targetValue = dayTotals[target]
+                const pct = targetValue != null ? macroPct(actualValue, targetValue) : 0
+                return (
+                  <div key={key} className="min-w-0">
+                    <div className="flex items-baseline justify-between gap-1">
+                      <span
+                        className="font-mono text-[10px] font-semibold"
+                        style={{ color: meta.color }}
+                      >
+                        {meta.short}
+                      </span>
+                      <span className="truncate font-mono text-[10px] font-semibold tabular-nums text-strong">
+                        {Math.round(actualValue)}
+                        {targetValue != null ? `/${Math.round(targetValue)}` : ''}
+                      </span>
+                    </div>
+                    {/* Barra decorativa: los numeros de arriba ya son el texto accesible. */}
+                    <div
+                      aria-hidden
+                      className="mt-1 flex h-1 overflow-hidden rounded-pill bg-surface-sunken"
+                    >
+                      <div
+                        className="h-full rounded-pill"
+                        style={{ width: `${pct}%`, backgroundColor: meta.color }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         ) : null}
-        {hasActions ? (
+        {showActions ? (
         /* Pasada visual: en 390 px el contador se truncaba ("3 cambios sin p…") porque compartia
            fila con los dos botones — justo el feedback principal del modo edicion. Debajo de sm
            el contador toma su propia linea (mismo criterio que la barra RN, H-18/QW-12). */

@@ -24,6 +24,11 @@ export {
   StudentPreview,
 } from './NutritionV2Overrides'
 export { MacroChipRow, type MacroChipRowProps } from './MacroChipRow'
+// T3.v Cabina: el par MacroSpark + su popover de gramos (reemplaza a MacroChipRow SOLO en las
+// superficies del editor único / picker / publish — el builder y el área del alumno siguen con
+// MacroChipRow, ver SPEC D2).
+export { MacroSpark, type MacroSparkProps, type MacroSparkSize } from './MacroSpark'
+export { MacroSparkPopover, type MacroSparkPopoverProps } from './MacroSparkPopover'
 export { DayVariantWeekStrip } from './DayVariantWeekStrip'
 export { WeekDayNav, type WeekDayNavProps } from './WeekDayNav'
 export { PlanDowSelector } from './PlanDowSelector'

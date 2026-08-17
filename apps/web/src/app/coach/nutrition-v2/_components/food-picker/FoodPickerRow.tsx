@@ -4,8 +4,9 @@
  * Fila del picker de alimentos: miniatura + nombre + marca/envase + MACROS COMPLETAS.
  *
  * REGLA DURA (owner 2026-08-05): todo alimento individual muestra SIEMPRE kcal · P · C · G,
- * aunque sea en tipografía mínima. Por eso `MacroChipRow` va en TODAS las filas —sugerencias
- * y resultados— y nunca se recorta a "kcal solamente" por falta de ancho.
+ * aunque sea en tipografía mínima. Por eso `MacroSparkPopover` (T3.v Cabina) va en TODAS las
+ * filas —sugerencias y resultados—: la barra resume por aporte calórico y el popover trae los
+ * gramos exactos a un hover/tap, así que nunca se recorta a "kcal solamente" por falta de ancho.
  *
  * Estados de la fila:
  *  - normal: `+` agrega (en multi-add no cierra; la fila pasa a ✓ y permite repetir),
@@ -15,11 +16,11 @@
  */
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { AlertTriangle, BadgeCheck, Check, Plus, ShieldCheck, Star } from 'lucide-react'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
-import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
+import { MacroSparkPopover } from '@/components/nutrition-v2/MacroSparkPopover'
 import type { FoodVerificationTone } from '@/lib/food-detail'
+import { FoodThumb } from '../FoodImage'
 import { foodCatalogItemToCardModel } from '../../_lib/food-catalog-card'
 import { canAddFoodPickerItem, type FoodPickerRestrictionState } from './food-picker-grouping'
 
@@ -85,58 +86,49 @@ export function FoodPickerRow({
       }
     >
       <div className="flex items-center gap-2.5 p-2">
-        {model.thumbnailUrl ? (
-          <Image
-            src={model.thumbnailUrl}
-            alt=""
-            width={40}
-            height={40}
-            loading="lazy"
-            sizes="40px"
-            className="size-10 shrink-0 rounded-control border border-border-subtle object-cover"
-          />
-        ) : (
-          <Image
-            src={model.categoryIconUrl}
-            alt=""
-            aria-hidden
-            width={40}
-            height={40}
-            unoptimized
-            loading="lazy"
-            className="size-10 shrink-0 rounded-control border border-border-subtle bg-primary/10 object-contain p-1.5"
-          />
-        )}
+        <FoodThumb imageUrl={model.thumbnailUrl} iconUrl={model.categoryIconUrl} alt={item.name} />
 
-        <button
-          type="button"
-          disabled={!addable}
-          onClick={onPick}
-          aria-label={`${added ? 'Agregar otra vez' : 'Agregar'} ${item.name}${item.brand ? ` (${item.brand})` : ''}`}
-          className="min-w-0 flex-1 rounded-control text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
-        >
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate text-sm font-semibold text-strong">{item.name}</span>
-            {favorite ? (
-              <Star
-                aria-label="Favorito del alumno"
-                className="size-3.5 shrink-0 fill-amber-400 text-amber-500"
-              />
-            ) : null}
-          </span>
-          {meta ? <span className="mt-0.5 block truncate text-[11px] text-muted">{meta}</span> : null}
-          {/* Macros COMPLETAS siempre (regla dura): kcal · P · C · G por 100 g/ml. */}
-          <span className="mt-1 block">
-            <MacroChipRow
+        {/*
+          El trigger del popover de macros renderiza su propio <button> (Base UI): no puede
+          anidarse dentro del botón "Agregar" (HTML inválido + el click de la barra dispararía
+          también el alta). Por eso el nombre/meta y el spark son DOS elementos hermanos —mismo
+          patrón que el mockup Cabina v2 (`.p-row`: foto · nombre · spark · +)— en vez del botón
+          único de antes.
+        */}
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            disabled={!addable}
+            onClick={onPick}
+            aria-label={`${added ? 'Agregar otra vez' : 'Agregar'} ${item.name}${item.brand ? ` (${item.brand})` : ''}`}
+            className="block w-full rounded-control text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="min-w-0 truncate text-sm font-semibold text-strong">{item.name}</span>
+              {favorite ? (
+                <Star
+                  aria-label="Favorito del alumno"
+                  className="size-3.5 shrink-0 fill-amber-400 text-amber-500"
+                />
+              ) : null}
+            </span>
+            {meta ? <span className="mt-0.5 block truncate text-[11px] text-muted">{meta}</span> : null}
+          </button>
+          {/* Macros COMPLETAS siempre (regla dura): kcal · P · C · G, ahora vía MacroSpark + su
+              popover de gramos (T3.v Cabina). `basisLabel` viaja dinámico (NUT-001: filas
+              `per_serving` NO son "por 100 g"). */}
+          <div className="mt-1">
+            <MacroSparkPopover
               size="sm"
               calories={item.calories}
               proteinG={item.proteinG}
               carbsG={item.carbsG}
               fatsG={item.fatsG}
-              per={model.basisLabel}
+              basisLabel={model.basisLabel}
+              ariaContext={item.name}
             />
-          </span>
-        </button>
+          </div>
+        </div>
 
         <span className="flex shrink-0 flex-col items-end gap-1">
           {addable ? (

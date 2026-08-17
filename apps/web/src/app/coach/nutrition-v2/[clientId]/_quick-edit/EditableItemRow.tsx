@@ -29,13 +29,16 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
+// Import DIRECTO (no por el barrel `components/nutrition-v2`): el barrel arrastra el kit entero
+// a este bundle de cliente y acá solo hace falta el spark.
+import { MacroSparkPopover } from '@/components/nutrition-v2/MacroSparkPopover'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { BUILDER_UNITS, MAX_ITEM_SUBSTITUTIONS } from '@eva/nutrition-v2'
 import { stepCountedQuantity } from '@/app/coach/nutrition-v2/_lib/quantity-format'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from '@/app/coach/nutrition-v2/_components/food-card-presentation'
 import { FoodThumb } from '@/app/coach/nutrition-v2/_components/FoodImage'
+import { useRememberedQuantity } from '@/app/coach/nutrition-v2/_components/RememberedQuantitiesContext'
 import { ItemQuantityField } from '@/app/coach/nutrition-v2/_components/ItemQuantityField'
 import { FoodMacrosOverrideDialog } from '@/app/coach/nutrition-v2/_components/FoodMacrosOverrideDialog'
 import { createCoachFoodAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
@@ -64,6 +67,37 @@ const menuItemClass =
 function slotOptionLabel(slot: QeSlot): string {
   const name = slot.name.trim() || 'Franja sin nombre'
   return slot.startTime ? `${name} · ${slot.startTime}` : name
+}
+
+/** Badge inline del nombre (⇄ n / macros editadas / libre): pill chica, sin peso visual. */
+const badgeClass =
+  'inline-flex shrink-0 items-center rounded-pill border px-1.5 py-px text-[9.5px] font-semibold leading-4'
+
+/**
+ * "402 kcal / 100 g" — la DENSIDAD del alimento, que es lo que el coach compara entre productos
+ * (el aporte de ESTA cantidad ya lo dice el spark de la derecha). T3.v Cabina, mockup A·1.
+ *
+ * Dos fuentes, ninguna inventada:
+ *  - `item.food` (alimento del catalogo en mano, tras un swap o un alta): sus macros vienen por
+ *    100 g/ml salvo que declare `per_serving` (NUT-001), y ahi se imprime la base declarada —
+ *    imprimir "por 100" sobre una fila `per_serving` seria una mentira visual.
+ *  - `item.macroBase` (item hidratado del read model: solo trae las macros de la cantidad
+ *    prescrita): se reescala a 100 SOLO en g/ml, que son las unidades donde "por 100" significa
+ *    algo. En unidades contadas (porcion/unidad) no hay densidad que mostrar y devuelve null.
+ */
+function itemDensityLabel(item: QeItem): string | null {
+  const food = item.food
+  if (food) {
+    const unitLabel = food.servingUnit === 'ml' ? 'ml' : 'g'
+    const basis = food.macrosBasis === 'per_serving' ? food.servingSize : 100
+    if (!Number.isFinite(basis) || basis <= 0) return null
+    const amount = Number.isInteger(basis) ? String(basis) : basis.toFixed(1)
+    return QE_COPY.itemDensity(Math.round(food.calories), amount, unitLabel)
+  }
+  const base = item.macroBase
+  const unit = (item.unit || '').toLowerCase()
+  if (!base || base.quantity <= 0 || (unit !== 'g' && unit !== 'ml')) return null
+  return QE_COPY.itemDensity(Math.round((base.macros.calories / base.quantity) * 100), '100', unit)
 }
 
 /** Tipo MIME propio del drag de items del editor (W3b): jamas interpretar drops ajenos. */
@@ -127,6 +161,17 @@ export function EditableItemRow({
   const imageUrl = resolveFoodImageUrl(media as FoodCatalogItem['media'], SUPABASE_BASE)
   const category = item.food?.category ?? item.category
   const iconUrl = category ? foodCategoryIconUrl(category) : foodCategoryIconUrlFromName(item.displayName)
+  // Subtitulo de la fila v2 (mockup A·1): "marca · 402 kcal / 100 g · la sueles usar aquí".
+  // La porcion pegajosa (T2.6 F4) ya viaja por contexto resuelta desde el servidor; en el
+  // quick-edit clasico el mapa es {} y la señal simplemente no aparece.
+  const rememberedQuantity = useRememberedQuantity(item.foodId)
+  const subtitle = [
+    item.brand,
+    itemDensityLabel(item),
+    rememberedQuantity ? QE_COPY.itemUsualHere : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   function handleRemove() {
     const removed = item
@@ -238,8 +283,24 @@ export function EditableItemRow({
   }
 
   return (
+    /**
+     * Fila v2 (T3.v Cabina, mockup A·1): grid `34px 1fr auto auto 26px` en una sola linea, SIN
+     * card por fila — la comida se lee como una lista, separada por un pelo de 1 px, y la caja la
+     * pone la franja. Debajo de `md` la fila se parte en dos renglones (identidad arriba,
+     * cantidad + spark abajo) porque los 44 px del campo de cantidad no entran al lado del nombre
+     * en 390 px; el envoltorio de la segunda linea es `md:contents`, asi que de md para arriba sus
+     * hijos vuelven a ser celdas del MISMO grid y no queda ni un div de mas en el layout.
+     *
+     * En desktop (`lg`, solo modo editor) se antepone la columna de la manija de drag: es una
+     * afordancia existente (W3b) y esta pasada es VISUAL, no le quita capacidades a nadie.
+     */
     <div
-      className="rounded-control border border-border-subtle bg-surface-card p-2.5"
+      className={
+        'grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2 border-t border-border-subtle py-2.5 first:border-t-0 md:grid-cols-[34px_minmax(0,1fr)_auto_auto_44px] ' +
+        (isEditor
+          ? 'lg:grid-cols-[16px_34px_minmax(0,1fr)_auto_auto_26px]'
+          : 'lg:grid-cols-[34px_minmax(0,1fr)_auto_auto_26px]')
+      }
       onDragOver={
         isEditor
           ? (event) => {
@@ -249,134 +310,195 @@ export function EditableItemRow({
       }
       onDrop={isEditor ? handleItemDrop : undefined}
     >
-      <div className="flex items-start gap-2.5">
-        {/* W3b: manija de drag (desktop; en touch el reorden vive en el menu Subir/Bajar). */}
-        {isEditor ? (
-          <div
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData(
-                QE_ITEM_DRAG_MIME,
-                JSON.stringify({ variantKey, slotKey, itemKey: item.key } satisfies QeItemDragPayload),
-              )
-              event.dataTransfer.effectAllowed = 'move'
-            }}
-            aria-hidden="true"
-            title="Arrastra para reordenar o mover de franja"
-            className="hidden shrink-0 cursor-grab select-none items-center self-stretch text-muted hover:text-strong lg:flex"
-          >
-            <GripVertical className="h-4 w-4" />
-          </div>
-        ) : null}
-        <FoodThumb imageUrl={imageUrl} iconUrl={iconUrl} alt={item.displayName || 'Alimento'} />
-        <div className="min-w-0 flex-1">
-          {item.isCustom ? (
-            <>
-              <input
-                aria-label="Nombre del alimento libre"
-                placeholder="Nombre del alimento libre"
-                value={item.displayName}
-                disabled={isPending}
-                onChange={(event) =>
-                  dispatch({ type: 'SET_ITEM_NAME', variantKey, slotKey, itemKey: item.key, value: event.target.value })
-                }
-                className={
-                  'min-h-11 w-full rounded-control border bg-surface-card px-3 text-base text-strong outline-none transition-colors placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/25 md:text-sm ' +
-                  (nameError ? 'border-rose-400 dark:border-rose-700' : 'border-border-default')
-                }
-              />
-              {nameError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{nameError}</p> : null}
-            </>
-          ) : (
-            <>
-              <p className="line-clamp-2 text-sm font-semibold leading-snug text-strong">{item.displayName}</p>
-              {item.brand ? <p className="mt-0.5 truncate text-xs text-muted">{item.brand}</p> : null}
-            </>
-          )}
-          <div className="mt-1">
-            <MacroChipRow
-              size="sm"
-              calories={macros.calories}
-              proteinG={macros.proteinG}
-              carbsG={macros.carbsG}
-              fatsG={macros.fatsG}
-            />
-          </div>
-        </div>
-        <button
-          type="button"
-          aria-label={QE_COPY.itemMenu(itemLabel)}
-          disabled={isPending}
-          onClick={() => setMenuOpen(true)}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      {/* W3b: manija de drag (desktop; en touch el reorden vive en el menu Subir/Bajar). */}
+      {isEditor ? (
+        <div
+          draggable
+          onDragStart={(event) => {
+            event.dataTransfer.setData(
+              QE_ITEM_DRAG_MIME,
+              JSON.stringify({ variantKey, slotKey, itemKey: item.key } satisfies QeItemDragPayload),
+            )
+            event.dataTransfer.effectAllowed = 'move'
+          }}
+          aria-hidden="true"
+          title="Arrastra para reordenar o mover de franja"
+          className="hidden cursor-grab select-none items-center justify-center text-muted hover:text-strong lg:flex"
         >
-          <MoreVertical aria-hidden="true" className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="mt-2 flex items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <ItemQuantityField
-            label={`Cantidad de ${itemLabel}`}
-            value={item.quantity}
-            unit={item.unit}
-            invalid={Boolean(quantityError)}
-            disabled={isPending}
-            onChange={(value) => dispatch({ type: 'SET_ITEM_QUANTITY', variantKey, slotKey, itemKey: item.key, value })}
-            onCommit={() => {
-              // Porcion pegajosa (T2.6 F4): al fijar la cantidad se recuerda para la proxima,
-              // en este alumno y en general. Solo en el EDITOR (el quick-edit clasico no
-              // escribe memoria) y solo con alimento de catalogo en mano. Fire-and-forget.
-              // En PLANTILLA (T3.2b) no hay alumno: el clientId es un relleno y la memoria
-              // por-alumno seria ruido — no se escribe.
-              if (!isEditor || surface === 'template' || item.food == null) return
-              const signature = `${item.food.id}:${item.quantity}:${item.unit}`
-              if (lastRememberedRef.current === signature) return
-              lastRememberedRef.current = signature
-              void rememberFoodQuantityAction({
-                clientId,
-                foodId: item.food.id,
-                quantity: item.quantity,
-                unit: item.unit,
-              })
-            }}
-            onStep={(direction) =>
-              dispatch({
-                type: 'SET_ITEM_QUANTITY',
-                variantKey,
-                slotKey,
-                itemKey: item.key,
-                value: stepCountedQuantity(item.quantity, direction),
-              })
-            }
-          />
+          <GripVertical className="h-4 w-4" />
         </div>
-        {item.food ? (
-          <select
-            aria-label="Unidad"
-            value={item.unit}
-            disabled={isPending}
-            onChange={(event) =>
-              dispatch({ type: 'SET_ITEM_UNIT', variantKey, slotKey, itemKey: item.key, unit: event.target.value })
-            }
-            className="h-11 w-20 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
-          >
-            {BUILDER_UNITS.map((unit) => (
-              <option key={unit} value={unit}>
-                {unit}
-              </option>
-            ))}
-          </select>
-        ) : (
+      ) : null}
+
+      {/* col 1 — foto real del producto (34×34 reservados: cero layout shift). El alimento LIBRE
+          no tiene producto que fotografiar: tile punteado con sus iniciales. */}
+      <span className="col-start-1 row-start-1 md:col-start-auto md:row-start-auto">
+        {item.isCustom ? (
           <span
-            title="Reemplaza el alimento desde el catalogo para cambiar la unidad"
-            className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken text-sm font-semibold text-muted"
+            aria-hidden="true"
+            className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-control border border-dashed border-border-default bg-surface-sunken font-mono text-[10px] font-semibold uppercase text-muted"
           >
-            {item.unit}
+            {item.displayName.trim().slice(0, 2)}
           </span>
+        ) : (
+          <FoodThumb
+            size="sm"
+            imageUrl={imageUrl}
+            iconUrl={iconUrl}
+            alt={item.displayName || 'Alimento'}
+          />
+        )}
+      </span>
+
+      {/* col 2 — nombre con sus badges inline + subtitulo "marca · densidad · porcion pegajosa". */}
+      <div className="col-start-2 row-start-1 min-w-0 md:col-start-auto md:row-start-auto">
+        {item.isCustom ? (
+          <>
+            <input
+              aria-label="Nombre del alimento libre"
+              placeholder="Nombre del alimento libre"
+              value={item.displayName}
+              disabled={isPending}
+              onChange={(event) =>
+                dispatch({ type: 'SET_ITEM_NAME', variantKey, slotKey, itemKey: item.key, value: event.target.value })
+              }
+              className={
+                'min-h-11 w-full rounded-control border bg-surface-card px-3 text-base text-strong outline-none transition-colors placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/25 md:text-sm lg:min-h-9 ' +
+                (nameError ? 'border-rose-400 dark:border-rose-700' : 'border-border-default')
+              }
+            />
+            {nameError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{nameError}</p> : null}
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+              <span className={badgeClass + ' border-border-subtle bg-surface-sunken text-muted'}>
+                {QE_COPY.itemBadgeFree}
+              </span>
+              <span className="truncate text-[10.5px] leading-4 text-muted">
+                {subtitle || QE_COPY.itemFreeHint}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[13px] font-semibold leading-tight text-strong">
+                {item.displayName}
+              </span>
+              {substitutions.length > 0 ? (
+                <span
+                  title={QE_COPY.substitutionsMenu(substitutions.length)}
+                  aria-label={QE_COPY.substitutionsMenu(substitutions.length)}
+                  className={badgeClass + ' border-sport-500/30 bg-sport-100 text-sport-700'}
+                >
+                  {QE_COPY.itemBadgeSubstitutions(substitutions.length)}
+                </span>
+              ) : null}
+              {item.food?.hasOverride ? (
+                <span className={badgeClass + ' border-warning-500/30 bg-warning-100 text-warning-700'}>
+                  {QE_COPY.itemBadgeMacrosEdited}
+                </span>
+              ) : null}
+            </div>
+            {subtitle ? (
+              <p className="mt-0.5 truncate text-[10.5px] leading-4 text-muted">{subtitle}</p>
+            ) : null}
+          </>
         )}
       </div>
-      {quantityError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{quantityError}</p> : null}
+
+      {/* cols 3 y 4 (una sola linea bajo `md`) — cantidad + unidad, y el spark de macros. */}
+      <div className="col-start-2 col-span-2 row-start-2 flex items-center gap-2 md:contents">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="min-w-0 flex-1 md:w-[148px] md:flex-none">
+            <ItemQuantityField
+              label={`Cantidad de ${itemLabel}`}
+              value={item.quantity}
+              unit={item.unit}
+              invalid={Boolean(quantityError)}
+              disabled={isPending}
+              onChange={(value) => dispatch({ type: 'SET_ITEM_QUANTITY', variantKey, slotKey, itemKey: item.key, value })}
+              onCommit={() => {
+                // Porcion pegajosa (T2.6 F4): al fijar la cantidad se recuerda para la proxima,
+                // en este alumno y en general. Solo en el EDITOR (el quick-edit clasico no
+                // escribe memoria) y solo con alimento de catalogo en mano. Fire-and-forget.
+                // En PLANTILLA (T3.2b) no hay alumno: el clientId es un relleno y la memoria
+                // por-alumno seria ruido — no se escribe.
+                if (!isEditor || surface === 'template' || item.food == null) return
+                const signature = `${item.food.id}:${item.quantity}:${item.unit}`
+                if (lastRememberedRef.current === signature) return
+                lastRememberedRef.current = signature
+                void rememberFoodQuantityAction({
+                  clientId,
+                  foodId: item.food.id,
+                  quantity: item.quantity,
+                  unit: item.unit,
+                })
+              }}
+              onStep={(direction) =>
+                dispatch({
+                  type: 'SET_ITEM_QUANTITY',
+                  variantKey,
+                  slotKey,
+                  itemKey: item.key,
+                  value: stepCountedQuantity(item.quantity, direction),
+                })
+              }
+            />
+          </div>
+          {item.food ? (
+            <select
+              aria-label="Unidad"
+              value={item.unit}
+              disabled={isPending}
+              onChange={(event) =>
+                dispatch({ type: 'SET_ITEM_UNIT', variantKey, slotKey, itemKey: item.key, unit: event.target.value })
+              }
+              className="h-11 w-20 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+            >
+              {BUILDER_UNITS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span
+              title="Reemplaza el alimento desde el catalogo para cambiar la unidad"
+              className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken text-sm font-semibold text-muted"
+            >
+              {item.unit}
+            </span>
+          )}
+        </div>
+
+        {/* Los gramos exactos NO desaparecen: viven a un hover/tap del spark (SPEC D3). Item sin
+            macros = track vacio + «Sin macros registrados» en el panel, que lo resuelve el propio
+            componente. `hideUnit`: el "kcal" ya lo dice el header de la franja una vez. */}
+        <MacroSparkPopover
+          size="sm"
+          hideUnit
+          className="shrink-0 justify-self-end"
+          ariaContext={itemLabel}
+          calories={macros.calories}
+          proteinG={macros.proteinG}
+          carbsG={macros.carbsG}
+          fatsG={macros.fatsG}
+          fiberG={macros.fiberG > 0 ? macros.fiberG : null}
+        />
+      </div>
+
+      {/* col 5 — el menu ⋮ con TODAS las acciones de la fila, sin tocar nada. */}
+      <button
+        type="button"
+        aria-label={QE_COPY.itemMenu(itemLabel)}
+        disabled={isPending}
+        onClick={() => setMenuOpen(true)}
+        className="col-start-3 row-start-1 inline-flex h-11 w-11 shrink-0 items-center justify-center justify-self-end rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 md:col-start-auto md:row-start-auto lg:h-[26px] lg:w-[26px]"
+      >
+        <MoreVertical aria-hidden="true" className="h-4 w-4" />
+      </button>
+
+      {quantityError ? (
+        <p className="col-span-full text-xs text-rose-600 dark:text-rose-300">{quantityError}</p>
+      ) : null}
 
       <QeBottomSheet open={menuOpen} onOpenChange={setMenuOpen} title={item.displayName || 'Alimento'} busy={saving}>
         <button

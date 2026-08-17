@@ -109,24 +109,35 @@ export function EditorMetaCard() {
   const expanded = open || forcedOpen
 
   return (
-    <section className="rounded-card border border-border-subtle bg-surface-card p-4">
+    /* T3.v (V2.4): colapsada la card es una FILA de una línea — rótulo mono + resumen — y su caja
+       se aprieta a 10 px. Abierta conserva su título display y su respiro de 16 px. Solo estilos:
+       mismos textos, mismo toggle, mismo `forcedOpen`. */
+    <section
+      className={
+        'rounded-card border border-border-subtle bg-surface-card ' + (expanded ? 'p-4' : 'px-3 py-1.5')
+      }
+    >
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={expanded}
-        className="-m-1 flex w-full items-center gap-2 rounded-control p-1 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="-m-1 flex min-h-11 w-full items-center gap-2 rounded-control p-1 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ClipboardList aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
-        <span className="min-w-0 flex-1">
-          <span className="block font-display text-base font-semibold text-strong">
+        {expanded ? (
+          <span className="min-w-0 flex-1 font-display text-base font-semibold text-strong">
             {isTemplate ? 'Plantilla' : 'Plan'}
           </span>
-          {expanded ? null : (
-            <span className="mt-0.5 block truncate text-xs leading-5 text-muted">
+        ) : (
+          <span className="flex min-w-0 flex-1 items-baseline gap-2">
+            <span className="shrink-0 font-mono text-[10px] font-semibold uppercase leading-4 tracking-[0.14em] text-muted">
+              {isTemplate ? 'Plantilla' : 'Plan'}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-xs leading-5 text-body">
               {metaSummary(meta.name, meta.strategy, meta.permissions)}
             </span>
-          )}
-        </span>
+          </span>
+        )}
         <ChevronDown
           aria-hidden="true"
           className={'h-4 w-4 shrink-0 text-muted transition-transform ' + (expanded ? 'rotate-180' : '')}

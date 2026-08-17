@@ -61,7 +61,10 @@ import {
   type QeVariant,
 } from '@eva/nutrition-v2'
 import { EditorPalette } from './EditorPalette'
-import type { PublishBarDayTotals } from './PublishBar'
+import { EditorDayRail } from './EditorDayRail'
+import { EditorRibbon, useRibbonViewport } from './EditorRibbon'
+import { DAY_MACRO_ROWS, type PublishBarDayTotals } from './PublishBar'
+import { MACRO_META } from '@/components/nutrition/macro-tokens'
 import { QE_COPY } from './microcopy'
 
 /**
@@ -139,6 +142,9 @@ export function QuickEditPlanView() {
     if (!activeVariant) return null
     const totals = qeVariantTotalWithPortions(activeVariant, exchangeGroups)
     const target = Number(activeVariant.targets.calories.trim())
+    const targetProtein = Number(activeVariant.targets.proteinG.trim())
+    const targetCarbs = Number(activeVariant.targets.carbsG.trim())
+    const targetFats = Number(activeVariant.targets.fatsG.trim())
     return {
       label: multiDay ? activeVariant.label : null,
       calories: totals.calories,
@@ -146,8 +152,22 @@ export function QuickEditPlanView() {
       carbsG: totals.carbsG,
       fatsG: totals.fatsG,
       targetCalories: Number.isFinite(target) && target > 0 ? target : null,
+      targetProteinG: Number.isFinite(targetProtein) && targetProtein > 0 ? targetProtein : null,
+      targetCarbsG: Number.isFinite(targetCarbs) && targetCarbs > 0 ? targetCarbs : null,
+      targetFatsG: Number.isFinite(targetFats) && targetFats > 0 ? targetFats : null,
     }
   }, [activeVariant, exchangeGroups, multiDay])
+
+  // ── T3.v Cabina (V2.1/V2.2, breakpoint extendido en V2.5): en el editor ≥768 la CINTA reemplaza
+  // al header compacto y hospeda las metas del día (compacta 768–1023, completa desde 1024 — ver
+  // `EditorRibbon`). En <768 y en el quick-edit clásico no cambia nada (cero regresión).
+  // El breakpoint se lee por JS (mismo `md:` de Tailwind) para que la card de metas DESAPAREZCA del
+  // lienzo en vez de quedar oculta y duplicada dentro del popover; las clases `md:hidden` que
+  // acompañan cubren el paint previo a la hidratación (en tablet/desktop no se pinta lo que va a
+  // irse). El rail y la paleta de 3 zonas NO siguen este umbral: son exclusivos de `lg:` (1024) —
+  // a 768–1023 el contrato responsive de la SPEC los reemplaza por la cápsula de día y el sheet de
+  // alta de siempre (sin paleta).
+  const desktopRibbon = useRibbonViewport() && isEditor
 
   return (
     <div
@@ -157,8 +177,28 @@ export function QuickEditPlanView() {
       aria-busy={isPending}
       className="fixed inset-0 z-[60] overflow-y-auto bg-surface-app"
     >
-      {/* Header compacto sticky: salir + titulo. */}
-      <header className="sticky top-0 z-10 border-b border-border-subtle bg-surface-app/95 backdrop-blur supports-[backdrop-filter]:bg-surface-app/85">
+      {/* Cinta v2 (T3.v, solo editor ≥768 — compacta 768–1023, completa desde 1024): identidad +
+          diagnóstico del día + acciones. */}
+      {desktopRibbon ? (
+        <EditorRibbon
+          eyebrow={overlayEyebrow}
+          title={overlayTitle}
+          // En plantilla el título YA es el nombre editable: repetirlo sería decir dos veces lo mismo.
+          planName={isTemplate ? null : (state.meta?.name.trim() || null)}
+          variant={activeVariant}
+          dayTotals={dayTotals}
+        />
+      ) : null}
+
+      {/* Header compacto sticky: salir + titulo. Desde T3.v es el header de <768 en el editor
+          (arriba manda la cinta); en el quick-edit clásico sigue siendo el único, en todo ancho. */}
+      {desktopRibbon ? null : (
+      <header
+        className={
+          'sticky top-0 z-10 border-b border-border-subtle bg-surface-app/95 backdrop-blur supports-[backdrop-filter]:bg-surface-app/85 ' +
+          (isEditor ? 'md:hidden' : '')
+        }
+      >
         <div className="mx-auto flex w-full max-w-3xl items-center gap-1.5 px-3 py-2 pt-[max(env(safe-area-inset-top,0px),0.5rem)]">
           <button
             type="button"
@@ -181,16 +221,45 @@ export function QuickEditPlanView() {
           </div>
         </div>
       </header>
+      )}
 
       <div
         className={
           'mx-auto w-full px-3 py-4 ' +
-          // W3b: en el editor desktop el lienzo convive con la paleta lateral (grid 2 col).
-          (isEditor ? 'max-w-3xl lg:grid lg:max-w-6xl lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-6 ' : 'max-w-3xl ') +
+          // W3b: en el editor desktop el lienzo convive con la paleta lateral.
+          // T3.v (V2.3): con el rail de días son TRES zonas (rail · lienzo · paleta). El tope de
+          // ancho sube junto con la columna nueva para que el lienzo no pierda el espacio que ya
+          // tenía, y entre 1024 y 1279 rail y paleta se aprietan a los anchos del contrato
+          // responsive de la SPEC (168 / 1fr / 260): el presupuesto ahí es todo del lienzo, que es
+          // donde se edita. Desde 1280 (`xl:`) el contrato fija rail/paleta en 190/288 — el mismo
+          // ancho hasta 2xl (SPEC: «1280–1535 | 190/1fr/288» y «≥1536 | rail 190 / paleta 288
+          // fijos»). V2.5: se corrige acá el 22rem/352 heredado de V2.3 (no era el contrato) — 288
+          // le da MÁS aire al lienzo, nunca menos, así que no reabre el bug del nombre recortado.
+          // A `2xl:` (≥1536) el contenedor deja de topar en 80rem para que sobre espacio real: el
+          // lienzo interior (más abajo) se centra solo en 880 px en vez de estirarse.
+          (isEditor
+            ? 'max-w-3xl lg:grid lg:max-w-[80rem] lg:grid-cols-[10.5rem_minmax(0,1fr)_16.25rem] lg:items-start lg:gap-4 xl:grid-cols-[11.875rem_minmax(0,1fr)_18rem] xl:gap-6 2xl:max-w-[100rem] '
+            : 'max-w-3xl ') +
           (isPending ? 'pointer-events-none opacity-70' : '')
         }
       >
-        <div className="min-w-0 space-y-4">
+        {/* Rail de días (T3.v V2.3): columna izquierda SOLO ≥1024. En <1024 no existe y manda la
+            cápsula horizontal de siempre, más abajo. */}
+        {isEditor && activeVariant ? (
+          <EditorDayRail
+            variants={orderedVariants}
+            activeKey={activeVariant.key}
+            todayVariantKey={todayVariantKey}
+            onSelect={setActiveDayKey}
+          />
+        ) : null}
+
+        {/* Lienzo: en el editor desktop se aprieta un punto la pila de cards (mockup: 14 px). El
+            quick-edit clásico conserva sus 16 px en todo ancho. V2.5: desde `2xl:` (≥1536) el
+            lienzo deja de estirarse a lo ancho de la columna 1fr — se centra en 880 px (55rem),
+            el resto del espacio extra que dejó el contenedor sin tope de arriba queda como aire a
+            los costados (SPEC «canvas max-w 880 centrado»). */}
+        <div className={'min-w-0 space-y-4 ' + (isEditor ? 'lg:space-y-3.5 2xl:mx-auto 2xl:max-w-[55rem]' : '')}>
         {/* Respaldo local: hay un borrador de una sesion anterior (mismo plan/version) sin publicar. */}
         {pendingRestore ? (
           <div className="animate-in slide-in-from-top-1 rounded-card border border-primary/25 bg-primary/10 p-3">
@@ -231,14 +300,17 @@ export function QuickEditPlanView() {
         {state.meta ? <EditorMetaCard /> : null}
 
         {/* Capsula de dia activo (W3b, editor): UN dia a la vez; los chips CAMBIAN el dia en
-            edicion. Clasico: indice de anclas de siempre (P1-1) sobre la pila completa. */}
+            edicion. Desde T3.v es la afordancia de <1024: en ≥1024 manda el rail (V2.3).
+            Clasico: indice de anclas de siempre (P1-1) sobre la pila completa. */}
         {isEditor && multiDay && activeVariant ? (
-          <EditorDayCapsule
-            variants={orderedVariants}
-            activeKey={activeVariant.key}
-            todayVariantKey={todayVariantKey}
-            onSelect={setActiveDayKey}
-          />
+          <div className="lg:hidden">
+            <EditorDayCapsule
+              variants={orderedVariants}
+              activeKey={activeVariant.key}
+              todayVariantKey={todayVariantKey}
+              onSelect={setActiveDayKey}
+            />
+          </div>
         ) : null}
         {!isEditor && multiDay ? (
           <DayAnchorNav variants={orderedVariants} todayVariantKey={todayVariantKey} />
@@ -250,7 +322,15 @@ export function QuickEditPlanView() {
             {/* En el editor el encabezado del dia vive SIEMPRE (su menu: duplicar/copiar/
                 renombrar); en el clasico solo con multi-dia, como siempre. */}
             {multiDay || isEditor ? <DayVariantHeader variant={variant} /> : null}
-            <TargetsEditorCard variant={variant} />
+            {/* T3.v (V2.2, umbral bajado a 768 en V2.5): con la cinta viva las metas viven en su
+                popover «Metas del día» y el lienzo queda solo con comida. En <768 y en el
+                quick-edit clásico se pinta acá como siempre — incluido el flexible sin franjas,
+                donde esta card ES el editor. */}
+            {desktopRibbon ? null : (
+              <div className={isEditor ? 'md:hidden' : undefined}>
+                <TargetsEditorCard variant={variant} />
+              </div>
+            )}
             {usesSlots || variant.slots.length > 0 ? (
               <>
                 {variant.slots.map((slot, index) => (
@@ -277,11 +357,13 @@ export function QuickEditPlanView() {
           </section>
         ))}
 
-        {/* FD5: "+ Agregar día" al final de la lista de días (multi-select Lu-Do + origen). */}
-        <AddDayButton />
+        {/* FD5: "+ Agregar día" al final de la lista de días (multi-select Lu-Do + origen). En el
+            editor ≥1024 el alta vive en el rail: acá quedaría un segundo botón para lo mismo. */}
+        <AddDayButton className={isEditor ? 'lg:hidden' : undefined} />
 
-        {/* Defecto B4: las porciones se quedaron solo en el día base (con un día no aplica). */}
-        {multiDay ? <PortionsDayGapNotice /> : null}
+        {/* Defecto B4: las porciones se quedaron solo en el día base (con un día no aplica).
+            En el editor ≥1024 su acción vive en el rail (línea-enlace bajo el día ámbar). */}
+        {multiDay ? <PortionsDayGapNotice className={isEditor ? 'lg:hidden' : undefined} /> : null}
 
         {/* Notas visibles EDITABLES (visible_notes); permisos siguen read-only con hint. */}
         <section className="rounded-card border border-border-subtle bg-surface-card p-4">
@@ -365,7 +447,9 @@ export function QuickEditPlanView() {
         {isEditor && activeVariant ? <EditorPalette variant={activeVariant} /> : null}
       </div>
 
-      <PublishBar dayTotals={dayTotals} />
+      {/* Con la cinta viva la barra se queda SOLO con los totales: publicar/descartar y el contador
+          mandan desde arriba (sin doble CTA). En <768 la barra sigue completa en la thumb-zone. */}
+      <PublishBar dayTotals={dayTotals} hideActions={desktopRibbon} />
       <PublishConfirmSheet />
       <StaleBaseDialog />
     </div>
@@ -548,6 +632,36 @@ function DayPicker({
  * etiquetas libres ("Día de entrenamiento", "Descarga"), el coach no podia saber que dia de
  * la semana estaba editando sin abrir "Cambiar día".
  */
+/**
+ * Leyenda P·C·G (T3.v V2.4): la clave de color de los sparks, UNA sola vez por pantalla — junto al
+ * título del día, que es lo primero que se lee antes de bajar por las franjas. Los colores salen
+ * SIEMPRE del token de cada macro (`MACRO_META`) y el orden del MISMO mapeo que pintan la barra de
+ * totales y la cinta (`DAY_MACRO_ROWS`): dos listas paralelas serían dos verdades.
+ *
+ * Es una clave de lectura, no un dato: las letras van `aria-hidden` y el bloque entero se anuncia
+ * con una sola etiqueta. Bajo 640 px no se pinta (ahí el encabezado del día ya va al límite y la
+ * leyenda es lo primero que sobra).
+ */
+function MacroLegend() {
+  return (
+    <span
+      role="img"
+      aria-label={QE_COPY.legendLabel}
+      className="hidden shrink-0 items-center gap-2.5 font-mono text-[9px] uppercase leading-4 tracking-[0.08em] sm:inline-flex"
+    >
+      {DAY_MACRO_ROWS.map(({ key }) => {
+        const meta = MACRO_META[key]
+        return (
+          <span key={key} aria-hidden="true" className="inline-flex items-center gap-1 font-semibold text-body">
+            <span className="h-[7px] w-[7px] rounded-full" style={{ backgroundColor: meta.color }} />
+            {meta.short}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
 function DayVariantHeader({ variant }: { variant: QeVariant }) {
   const { state, dispatch, isPending, errors, showErrors, today } = useQuickEdit()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -558,8 +672,9 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
   const [nameDraft, setNameDraft] = useState(variant.label)
   const labelError = showErrors ? errors[`variant.${variant.key}.label`] : undefined
   const taken = takenDayVariantDows(state)
+  const isEditor = state.meta !== undefined
   // W2 (solo editor unico): duplicar ESTE dia —con sus metas y franjas— como otro dia.
-  const canDuplicate = state.meta !== undefined
+  const canDuplicate = isEditor
 
   function openRename() {
     setNameDraft(variant.label)
@@ -623,15 +738,21 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
           ) : null}
           {labelError ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{labelError}</p> : null}
         </div>
-        <button
-          type="button"
-          aria-label={QE_COPY.dayMenu(variant.label)}
-          disabled={isPending}
-          onClick={() => setMenuOpen(true)}
-          className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
-        </button>
+        {/* Leyenda + menú del día: en el editor se lee UN día a la vez, así que la clave de color
+            aparece exactamente una vez por pantalla (en el clásico la pila es de varios días y
+            repetirla en cada encabezado sería ruido). El menú ⋮ queda donde siempre. */}
+        <div className="flex shrink-0 items-center gap-2.5">
+          {isEditor ? <MacroLegend /> : null}
+          <button
+            type="button"
+            aria-label={QE_COPY.dayMenu(variant.label)}
+            disabled={isPending}
+            onClick={() => setMenuOpen(true)}
+            className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* QW-4: qué días de la semana cubre ESTE bloque (read-only, hoy con anillo). */}
@@ -759,13 +880,13 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
  * Gate Pro: `locked` pinta candado + upsell en vez del selector. La barrera REAL es el
  * servidor (`multi_variant` → UPGRADE_REQUIRED al publicar); esto solo evita el viaje.
  */
-function AddDayButton() {
+function AddDayButton({ className }: { className?: string }) {
   const { state, dispatch, hasNutritionPro } = useQuickEdit()
   const takenDays = useMemo(() => [...takenDayVariantDows(state)], [state])
   const base = useMemo(() => defaultQeVariant(state), [state])
 
   return (
-    <div className="flex justify-center">
+    <div className={'flex justify-center ' + (className ?? '')}>
       <AddDayPopover
         takenDays={takenDays}
         canCopyBase={(base?.slots.length ?? 0) > 0}
@@ -788,7 +909,7 @@ function AddDayButton() {
  * Un día SIN franjas homónimas (`unmatched`) no se arregla copiando: se nombra aparte porque
  * ahí el alumno ve el día entero vacío, no solo sin porciones.
  */
-function PortionsDayGapNotice() {
+function PortionsDayGapNotice({ className }: { className?: string }) {
   const { state, dispatch, isPending } = useQuickEdit()
   const gaps = useMemo(() => qeDaysMissingBasePortions(state.variants), [state.variants])
   if (gaps.length === 0) return null
@@ -803,7 +924,10 @@ function PortionsDayGapNotice() {
   return (
     <div
       role="status"
-      className="rounded-card border border-amber-300/70 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10"
+      className={
+        'rounded-card border border-amber-300/70 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10 ' +
+        (className ?? '')
+      }
     >
       <div className="flex items-start gap-2">
         <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />

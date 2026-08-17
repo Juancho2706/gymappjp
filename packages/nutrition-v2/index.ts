@@ -41,6 +41,9 @@ export * from './editor-portions'
 export * from './editor-copy-presets'
 export * from './editor-copy-plan'
 export * from './editor-state'
+// T3.v Cabina: reparto porcentual P/C/G del "MacroSpark" — UNA sola fuente para web y RN
+// (prohibido recalcular porcentajes en componentes, ver PLAN §1).
+export * from './macro-spark'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,

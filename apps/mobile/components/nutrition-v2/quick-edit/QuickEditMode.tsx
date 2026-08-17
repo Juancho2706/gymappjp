@@ -21,6 +21,7 @@ import {
   CalendarDays,
   CalendarRange,
   Check,
+  ChevronDown,
   Copy,
   CopyCheck,
   History,
@@ -114,6 +115,7 @@ import {
   writeNutritionDraft,
 } from '../../../lib/nutrition-coach-draft-store'
 import { EditableSlotCard } from './EditableSlotCard'
+import { EditorDayRibbon } from './EditorRibbon'
 import { EditorMetaCard } from './EditorMetaCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
@@ -356,6 +358,10 @@ export function QuickEditMode({
   )
   const [subsReloadNonce, setSubsReloadNonce] = useState(0)
   const [showErrors, setShowErrors] = useState(false)
+  // T3.v Cabina (V3.3): hoja «Metas ▾» del header (editor único). El usuario la pide con el
+  // botón; un error de validación de metas la fuerza abierta aunque el usuario intente cerrarla
+  // (espejo del patrón `forcedOpen`/`metasOpen` de `EditorRibbon.tsx` web).
+  const [metasRequested, setMetasRequested] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -828,6 +834,11 @@ export function QuickEditMode({
     if (!activeVariant) return null
     const totals = qeVariantTotalWithPortions(activeVariant, exchangeGroups)
     const target = Number(activeVariant.targets.calories.trim())
+    // T3.v Cabina (V3.3): metas de gramos por macro — alimentan la mini-cinta (`EditorDayRibbon`)
+    // sin un segundo cálculo (mismo criterio "no se inventa un porcentaje" que `targetCalories`).
+    const targetProteinG = Number(activeVariant.targets.proteinG.trim())
+    const targetCarbsG = Number(activeVariant.targets.carbsG.trim())
+    const targetFatsG = Number(activeVariant.targets.fatsG.trim())
     return {
       label: showVariantHeader ? activeVariant.label : null,
       calories: totals.calories,
@@ -835,6 +846,9 @@ export function QuickEditMode({
       carbsG: totals.carbsG,
       fatsG: totals.fatsG,
       targetCalories: Number.isFinite(target) && target > 0 ? target : null,
+      targetProteinG: Number.isFinite(targetProteinG) && targetProteinG > 0 ? targetProteinG : null,
+      targetCarbsG: Number.isFinite(targetCarbsG) && targetCarbsG > 0 ? targetCarbsG : null,
+      targetFatsG: Number.isFinite(targetFatsG) && targetFatsG > 0 ? targetFatsG : null,
     }
   }, [activeVariant, exchangeGroups, showVariantHeader])
 
@@ -1394,6 +1408,15 @@ export function QuickEditMode({
   const copyDaySourceDow = copyDayVariant?.dayOfWeek ?? null
   const copyDayWarning = copyDayPlan ? copyPlanWarning(copyDayPlan) : null
 
+  // T3.v Cabina (V3.3): «Metas ▾» del header hospeda el MISMO `TargetsEditorCard` del día
+  // activo — el lienzo deja de pintarlo (ver `visibleVariants.map` abajo). Un error de
+  // validación de metas del día activo fuerza la hoja abierta (espejo `EditorRibbon.tsx` web).
+  const targetsInvalid =
+    editorMode &&
+    activeVariant !== null &&
+    Object.keys(errors).some((key) => key.startsWith('target.' + activeVariant.key + '.'))
+  const metasOpen = metasRequested || targetsInvalid
+
   return (
     <View className="flex-1 bg-surface-app">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
@@ -1432,6 +1455,21 @@ export function QuickEditMode({
                 {template ? (state.meta?.name.trim() || EDITOR_COPY.templateTitle) : clientName}
               </Text>
             </View>
+            {/* T3.v Cabina (V3.3): «Metas ▾» migra del lienzo al header (espejo `EditorRibbon.tsx`
+                web) — hospeda el MISMO `TargetsEditorCard` del día activo en la hoja de abajo. */}
+            {editorMode && activeVariant ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={EDITOR_COPY.metasPopover}
+                accessibilityState={{ expanded: metasOpen }}
+                onPress={() => setMetasRequested(true)}
+                hitSlop={8}
+                className="min-h-11 shrink-0 flex-row items-center gap-1 rounded-control border border-subtle bg-surface-card px-3"
+              >
+                <Text className="text-xs font-bold text-strong">{EDITOR_COPY.metasPopover}</Text>
+                <ChevronDown color={theme.textSecondary} size={14} />
+              </Pressable>
+            ) : null}
           </View>
           {showVariantHeader ? (
             <DayAnchorRow
@@ -1451,6 +1489,10 @@ export function QuickEditMode({
             />
           ) : null}
         </View>
+
+        {/* T3.v Cabina (V3.3): mini-cinta sticky bajo el header — kcal x/meta + 3 % con dot de
+            macro del día activo. FUERA del scroll (mismo criterio que la barra de arriba). */}
+        {editorMode && dayTotals ? <EditorDayRibbon dayTotals={dayTotals} /> : null}
 
         <ScrollView
           ref={scrollRef}
@@ -1587,15 +1629,20 @@ export function QuickEditMode({
                   />
                 </View>
               ) : null}
-              <TargetsEditorCard
-                variant={variant}
-                showVariantLabel={false}
-                errors={errors}
-                disabled={publishing}
-                onTargetChange={(field, value) =>
-                  dispatch({ type: 'SET_TARGET', variantKey: variant.key, field, value })
-                }
-              />
+              {/* T3.v Cabina (V3.3): en el editor único la card de metas se mudó a la hoja
+                  «Metas ▾» del header (ver arriba) — el lienzo ya no la pinta. El quick-edit
+                  clásico (`!editorMode`) la conserva exactamente igual que antes. */}
+              {editorMode ? null : (
+                <TargetsEditorCard
+                  variant={variant}
+                  showVariantLabel={false}
+                  errors={errors}
+                  disabled={publishing}
+                  onTargetChange={(field, value) =>
+                    dispatch({ type: 'SET_TARGET', variantKey: variant.key, field, value })
+                  }
+                />
+              )}
 
               {usesSlots
                 ? variant.slots.map((slot, slotIndex) => (
@@ -1606,6 +1653,13 @@ export function QuickEditMode({
                       errors={errors}
                       disabled={publishing}
                       portionGroups={portionGroups}
+                      // T3.v Cabina (V3.2): meta de kcal del DIA para el «{n}% de la meta» del
+                      // popover del subtotal de la franja. Meta vacia o no numerica ⇒ null y el
+                      // panel no dice el porcentaje (jamas se inventa contra una meta ausente).
+                      targetCalories={(() => {
+                        const target = Number(variant.targets.calories.trim())
+                        return Number.isFinite(target) && target > 0 ? target : null
+                      })()}
                       portionGroupAdmin={portionGroupAdmin}
                       scope={scope}
                       onFoodOverrideApplied={handleFoodOverrideApplied}
@@ -1828,6 +1882,31 @@ export function QuickEditMode({
         }}
       />
       <ProUpsellSheet message={upsell} onClose={() => setUpsell(null)} />
+
+      {/* T3.v Cabina (V3.3): «Metas ▾» del header — hospeda el MISMO `TargetsEditorCard` y los
+          MISMOS dispatches (`SET_TARGET`) que antes vivían en el lienzo; solo cambia el host.
+          Un error de validación fuerza la hoja abierta y `onClose` no puede cerrarla mientras
+          persista (espejo del patrón `forcedOpen`/`Popover` web). */}
+      <Sheet
+        open={metasOpen}
+        onClose={() => setMetasRequested(false)}
+        nativeModal
+        dynamicSizing
+        title={EDITOR_COPY.metasPopover}
+        accessibilityLabel={EDITOR_COPY.metasPopover}
+      >
+        {activeVariant ? (
+          <TargetsEditorCard
+            variant={activeVariant}
+            showVariantLabel={showVariantHeader}
+            errors={errors}
+            disabled={publishing}
+            onTargetChange={(field, value) =>
+              dispatch({ type: 'SET_TARGET', variantKey: activeVariant.key, field, value })
+            }
+          />
+        ) : null}
+      </Sheet>
 
       {/* ── EDITOR UNICO (T3.3b): menu del item + reemplazos + duplicar/copiar dia ────────── */}
       <Sheet

@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RotateCcw } from 'lucide-react-native'
+import type { NutritionMacroKey } from '@eva/nutrition-v2'
 import { NutritionMotionButton } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { EDITOR_COPY, QUICK_EDIT_COPY, dirtyBarLabel } from './microcopy'
@@ -21,7 +22,32 @@ export interface PublishBarDayTotals {
   fatsG: number
   /** Meta de calorias del dia, si el coach la fijo. */
   targetCalories: number | null
+  /**
+   * T3.v Cabina (V3.3): metas de gramos por macro del dia (steppers de «Metas ▾»/
+   * `TargetsEditorCard`), si el coach las fijo. Alimentan la mini-cinta (`EditorRibbon.tsx`);
+   * `null` = sin meta fijada para ese macro (no se inventa un porcentaje).
+   */
+  targetProteinG: number | null
+  targetCarbsG: number | null
+  targetFatsG: number | null
 }
+
+/**
+ * T3.v Cabina: fila macro→campo de `PublishBarDayTotals`, en el orden de pintado P·C·G
+ * (mismo orden que `MacroSpark` y que la leyenda web). Exportada para que la mini-cinta
+ * (`EditorRibbon.tsx`, V3.3) calcule el % de cumplimiento de cada macro SIN un segundo mapeo
+ * paralelo — dos tablas serían dos verdades sobre qué meta le toca a cada macro. Espejo exacto
+ * de `DAY_MACRO_ROWS` en `apps/web/.../_quick-edit/PublishBar.tsx`.
+ */
+export const DAY_MACRO_ROWS: ReadonlyArray<{
+  key: NutritionMacroKey
+  actual: keyof Pick<PublishBarDayTotals, 'proteinG' | 'carbsG' | 'fatsG'>
+  target: keyof Pick<PublishBarDayTotals, 'targetProteinG' | 'targetCarbsG' | 'targetFatsG'>
+}> = [
+  { key: 'protein', actual: 'proteinG', target: 'targetProteinG' },
+  { key: 'carbs', actual: 'carbsG', target: 'targetCarbsG' },
+  { key: 'fats', actual: 'fatsG', target: 'targetFatsG' },
+]
 
 export function PublishBar({
   count,

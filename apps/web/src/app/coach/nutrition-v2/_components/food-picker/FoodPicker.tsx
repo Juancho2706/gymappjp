@@ -393,7 +393,9 @@ export function FoodPicker({
             const slice = isExpanded ? section.items : section.items.slice(0, COLLAPSED_LIMIT)
             return (
               <div key={section.key} role="group" aria-label={section.title}>
-                <p className="px-0.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                {/* Encabezado de sección caps-mono (T3.v Cabina, mockup `.p-cap`): mismo idioma
+                    tipográfico que la leyenda P·C·G y el rail de días. */}
+                <p className="px-0.5 pb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
                   {section.title}
                 </p>
                 <ul role="none" className="space-y-1.5">

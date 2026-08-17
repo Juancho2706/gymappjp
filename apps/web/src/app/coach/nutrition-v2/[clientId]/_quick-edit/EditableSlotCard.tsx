@@ -12,17 +12,27 @@
  */
 
 import { useContext, useMemo, useState } from 'react'
+import Image from 'next/image'
 import { Check, ChevronDown, Copy, CopyCheck, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { exchangeGroupColor } from '@eva/nutrition-engine'
 import { formatNutritionDayOfWeek } from '@eva/nutrition-v2'
 import { NutritionCard } from '@/components/nutrition-v2'
-import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
+import { MacroSparkPopover } from '@/components/nutrition-v2/MacroSparkPopover'
+import { foodCategoryIconUrl } from '@/lib/food-image'
+import {
+  foodCategoryIconUrlFromName,
+  resolveFoodImageUrl,
+} from '@/app/coach/nutrition-v2/_components/food-card-presentation'
 import {
   qeSlotCopyTargets,
   qeSlotPortionTotals,
   qeSlotSubtotal,
   qeCombineSubtotals,
   qeVariantTotalWithPortions,
+  type FoodCatalogItem,
+  type QeItem,
+  type QePortionTarget,
   type QeSlot,
 } from '@eva/nutrition-v2'
 import type { FoodPickerSummary } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPicker'
@@ -38,6 +48,12 @@ import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 /** Ventana del Deshacer, la misma de `EditableItemRow` y del wizard: una sola gramática. */
 const UNDO_TOAST_MS = 8000
 
+/** Base publica del bucket de fotos (mismo camino que la fila y el picker: URL directa, cero transformaciones). */
+const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
+
+/** Fotos que entran en el stack de la franja contraida antes del «+n» (mockup «Cabina v2» A·1/A·2). */
+const STACK_MAX_THUMBS = 4
+
 export function EditableSlotCard({
   variantKey,
   slot,
@@ -47,7 +63,8 @@ export function EditableSlotCard({
   slot: QeSlot
   index: number
 }) {
-  const { clientId, state, dispatch, errors, showErrors, isPending, exchangeGroups } = useQuickEdit()
+  const { clientId, state, dispatch, errors, showErrors, isPending, exchangeGroups, portionGroups } =
+    useQuickEdit()
   // Porcion pegajosa (T2.6 F4): mapa foodId → ultima cantidad, resuelto server-side. Solo el
   // editor unico monta el provider; en el quick-edit clasico esto es {} (sin cambios).
   const rememberedQuantities = useContext(RememberedQuantitiesContext)
@@ -85,6 +102,21 @@ export function EditableSlotCard({
     Number.isFinite(summaryTargetProtein)
   const slotLabel = slot.name.trim() || 'la franja'
   const slotBodyId = `qe-slot-body-${slot.key}`
+  // Meta de kcal del DÍA (no de la franja): habilita el «{n}% de la meta» del popover del
+  // subtotal. Sin meta cargada (texto vacío o no numérico) el popover simplemente no lo dice.
+  const dayTargetCalories =
+    Number.isFinite(summaryTargetCalories) && summaryTargetCalories > 0 ? summaryTargetCalories : null
+  // Orden del catálogo del plan: es el `sortOrder` con el que `exchangeGroupColor` elige el color
+  // de identidad de cada grupo. Misma fuente y mismo criterio que `EditablePortionsCard`, para que
+  // el punto de la pill y el de la fila con stepper nunca tengan colores distintos.
+  const portionGroupOrder = useMemo(
+    () => new Map(portionGroups.map((group, groupIndex) => [group.exchangeGroupId, groupIndex])),
+    [portionGroups],
+  )
+  // Las pills de grupo son el sustituto de la sección de porciones mientras está escondida: con la
+  // franja abierta, `EditablePortionsCard` ya la muestra entera (y editable) tres píxeles más
+  // arriba. Sin pills ni nota, el strip no se pinta: nada de filetes punteados vacíos.
+  const showPortionPills = collapsed && slot.portionTargets.length > 0
   const pickerSummary: FoodPickerSummary = {
     slotLabel: slot.name.trim() || 'Franja',
     slot: { calories: subtotal.calories, proteinG: subtotal.proteinG },
@@ -154,8 +186,11 @@ export function EditableSlotCard({
 
   return (
     <NutritionCard>
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
+      {/* Header v2 (mockup «Cabina v2» A·1): nombre · hora · [stack de fotos si esta contraida] ·
+          spark del subtotal · contraer · ⋮. Envuelve (`flex-wrap`) en vez de comprimir: en 390 px
+          el nombre y la hora quedan en la primera linea y el bloque de la derecha baja entero. */}
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1 basis-48">
           <label className="sr-only" htmlFor={`qe-slot-name-${slot.key}`}>
             Nombre de la franja
           </label>
@@ -189,132 +224,155 @@ export function EditableSlotCard({
             className="h-11 w-[6.5rem] rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold tabular-nums text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
         </div>
-        {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
-            Contraída, la card sigue diciendo lo único que importa de un vistazo: nombre, hora
-            y su subtotal con las macros completas. */}
-        <button
-          type="button"
-          aria-label={collapsed ? QE_COPY.expandSlot(slotLabel) : QE_COPY.collapseSlot(slotLabel)}
-          aria-expanded={!collapsed}
-          aria-controls={slotBodyId}
-          onClick={() => setCollapsed((previous) => !previous)}
-          className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ChevronDown
-            aria-hidden="true"
-            className={'mx-auto h-4 w-4 transition-transform ' + (collapsed ? '-rotate-90' : '')}
+        <div className="ml-auto flex min-h-11 shrink-0 items-center gap-2">
+          {/* Contraída: qué lleva la franja SIN abrirla. El stack de fotos es la versión de un
+              vistazo de la lista que el body esconde; decorativo (`aria-hidden`) porque el spark
+              de al lado ya anuncia el subtotal y el botón de contraer nombra la franja. La franja
+              solo-porciones no tiene fotos que apilar: sus grupos se leen en el strip del pie. */}
+          {collapsed && slot.items.length > 0 ? <SlotItemStack items={slot.items} /> : null}
+
+          {/* Subtotal de la franja (items + porciones: el MISMO número de antes): una cifra y la
+              barra apilada. Los gramos exactos viven en el popover (SPEC D3), que además dice qué
+              porcentaje de la meta de kcal del día se lleva esta franja. */}
+          <MacroSparkPopover
+            size="md"
+            calories={subtotal.calories}
+            proteinG={subtotal.proteinG}
+            carbsG={subtotal.carbsG}
+            fatsG={subtotal.fatsG}
+            fiberG={subtotal.fiberG > 0 ? subtotal.fiberG : null}
+            targetCalories={dayTargetCalories}
+            ariaContext={`Subtotal de ${slotLabel}`}
           />
-        </button>
-        <button
-          type="button"
-          aria-label={`Opciones de la franja ${slot.name || 'sin nombre'}`}
-          disabled={isPending}
-          onClick={() => setMenuOpen(true)}
-          className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
-        </button>
 
-        <QeBottomSheet
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          title={slot.name.trim() || 'Franja sin nombre'}
-        >
-          {/* Copiar entre dias: solo con multi-dia (con un dia no hay destino posible). */}
-          {copyTargets.length > 0 ? (
-            <>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={openCopySheet}
-                className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                <Copy aria-hidden="true" className="h-4 w-4 text-muted" />
-                {QE_COPY.copySlot}
-              </button>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => handleCopy(copyTargets.map((target) => target.variantKey))}
-                className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                <CopyCheck aria-hidden="true" className="h-4 w-4 text-muted" />
-                {QE_COPY.copySlotAll}
-              </button>
-            </>
-          ) : null}
+          {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
+              Contraída, la card sigue diciendo lo único que importa de un vistazo: nombre, hora,
+              su subtotal con las macros completas y el stack de fotos. */}
           <button
             type="button"
-            onClick={handleRemoveSlot}
-            className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-rose-300 bg-surface-card px-3 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
+            aria-label={collapsed ? QE_COPY.expandSlot(slotLabel) : QE_COPY.collapseSlot(slotLabel)}
+            aria-expanded={!collapsed}
+            aria-controls={slotBodyId}
+            onClick={() => setCollapsed((previous) => !previous)}
+            className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Trash2 aria-hidden="true" className="h-4 w-4" />
-            {QE_COPY.removeSlot}
+            <ChevronDown
+              aria-hidden="true"
+              className={'mx-auto h-4 w-4 transition-transform ' + (collapsed ? '-rotate-90' : '')}
+            />
           </button>
-        </QeBottomSheet>
-
-        {/* Multi-select de dias destino: etiqueta libre del coach + dia de semana real. */}
-        <QeBottomSheet open={copyOpen} onOpenChange={setCopyOpen} title={QE_COPY.copySlotTitle}>
-          <p className="text-xs leading-5 text-muted">{QE_COPY.copySlotHint}</p>
-          {/* El bottom sheet crece con el contenido (h-auto): con 6 destinos la lista scrollea
-              sola en vez de empujar el CTA fuera de pantalla. */}
-          <ul className="-mx-1 max-h-[46vh] space-y-2 overflow-y-auto px-1">
-            {copyTargets.map((target) => {
-              const checked = copySelection.includes(target.variantKey)
-              const dayCaption = target.isDefault
-                ? QE_COPY.baseDayEyebrow
-                : (formatNutritionDayOfWeek(target.dayOfWeek) ?? QE_COPY.specificDayEyebrow)
-              return (
-                <li key={target.variantKey}>
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={checked}
-                    onClick={() => toggleCopyTarget(target.variantKey)}
-                    className={
-                      'flex min-h-12 w-full items-center gap-3 rounded-control border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
-                      (checked
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border-default bg-surface-card hover:bg-surface-sunken')
-                    }
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ' +
-                        (checked
-                          ? 'border-primary bg-primary/100 text-white'
-                          : 'border-border-default bg-surface-card text-transparent')
-                      }
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-strong">{target.label}</span>
-                      <span className="block truncate text-xs text-muted">{dayCaption}</span>
-                    </span>
-                    {target.replaces ? (
-                      <span className="shrink-0 rounded-pill border border-border-subtle bg-surface-sunken px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                        {QE_COPY.copySlotReplaces}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
           <button
             type="button"
-            disabled={isPending || copySelection.length === 0}
-            onClick={() => handleCopy(copySelection)}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            aria-label={`Opciones de la franja ${slot.name || 'sin nombre'}`}
+            disabled={isPending}
+            onClick={() => setMenuOpen(true)}
+            className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
-            <Copy aria-hidden="true" className="h-4 w-4" />
-            {QE_COPY.copySlotCta(copySelection.length)}
+            <MoreVertical aria-hidden="true" className="mx-auto h-4 w-4" />
           </button>
-        </QeBottomSheet>
+        </div>
       </div>
 
+      {/* Sheets del header (menú ⋮ y copia a otros días): fuera de la fila flex — se portalean,
+          así que como hijos de un contenedor `flex-wrap` solo aportaban ítems vacíos al wrap. */}
+      <QeBottomSheet
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        title={slot.name.trim() || 'Franja sin nombre'}
+      >
+        {/* Copiar entre dias: solo con multi-dia (con un dia no hay destino posible). */}
+        {copyTargets.length > 0 ? (
+          <>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={openCopySheet}
+              className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            >
+              <Copy aria-hidden="true" className="h-4 w-4 text-muted" />
+              {QE_COPY.copySlot}
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => handleCopy(copyTargets.map((target) => target.variantKey))}
+              className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            >
+              <CopyCheck aria-hidden="true" className="h-4 w-4 text-muted" />
+              {QE_COPY.copySlotAll}
+            </button>
+          </>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleRemoveSlot}
+          className="inline-flex min-h-12 w-full items-center gap-2 rounded-control border border-rose-300 bg-surface-card px-3 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
+        >
+          <Trash2 aria-hidden="true" className="h-4 w-4" />
+          {QE_COPY.removeSlot}
+        </button>
+      </QeBottomSheet>
+
+      {/* Multi-select de dias destino: etiqueta libre del coach + dia de semana real. */}
+      <QeBottomSheet open={copyOpen} onOpenChange={setCopyOpen} title={QE_COPY.copySlotTitle}>
+        <p className="text-xs leading-5 text-muted">{QE_COPY.copySlotHint}</p>
+        {/* El bottom sheet crece con el contenido (h-auto): con 6 destinos la lista scrollea
+            sola en vez de empujar el CTA fuera de pantalla. */}
+        <ul className="-mx-1 max-h-[46vh] space-y-2 overflow-y-auto px-1">
+          {copyTargets.map((target) => {
+            const checked = copySelection.includes(target.variantKey)
+            const dayCaption = target.isDefault
+              ? QE_COPY.baseDayEyebrow
+              : (formatNutritionDayOfWeek(target.dayOfWeek) ?? QE_COPY.specificDayEyebrow)
+            return (
+              <li key={target.variantKey}>
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={checked}
+                  onClick={() => toggleCopyTarget(target.variantKey)}
+                  className={
+                    'flex min-h-12 w-full items-center gap-3 rounded-control border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                    (checked
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border-default bg-surface-card hover:bg-surface-sunken')
+                  }
+                >
+                  <span
+                    aria-hidden="true"
+                    className={
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ' +
+                      (checked
+                        ? 'border-primary bg-primary/100 text-white'
+                        : 'border-border-default bg-surface-card text-transparent')
+                    }
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-strong">{target.label}</span>
+                    <span className="block truncate text-xs text-muted">{dayCaption}</span>
+                  </span>
+                  {target.replaces ? (
+                    <span className="shrink-0 rounded-pill border border-border-subtle bg-surface-sunken px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      {QE_COPY.copySlotReplaces}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        <button
+          type="button"
+          disabled={isPending || copySelection.length === 0}
+          onClick={() => handleCopy(copySelection)}
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        >
+          <Copy aria-hidden="true" className="h-4 w-4" />
+          {QE_COPY.copySlotCta(copySelection.length)}
+        </button>
+      </QeBottomSheet>
 
       <div id={slotBodyId} hidden={collapsed}>
         <div className="mt-3 space-y-2">
@@ -351,22 +409,43 @@ export function EditableSlotCard({
         <EditablePortionsCard variantKey={variantKey} slot={slot} />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subtotal franja</span>
-        <MacroChipRow
-          size="sm"
-          calories={subtotal.calories}
-          proteinG={subtotal.proteinG}
-          carbsG={subtotal.carbsG}
-          fatsG={subtotal.fatsG}
-        />
-        {portionTotals ? (
-          // Redondeo entero + prefijo ~: valor referencial (mismo copy que el builder).
-          <p className="w-full text-xs text-muted">
-            {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
-          </p>
-        ) : null}
-      </div>
+      {/* Pie v2 (mockup A·1, `q-portions`): la fila «Subtotal franja + chips» ya no existe — el
+          subtotal vive en el spark del header, con sus gramos a un hover/tap. Lo que queda es el
+          strip de porciones: filete punteado, pills con el color de identidad del grupo y el
+          aporte referencial. Las pills solo aparecen CONTRAÍDA (expandida, `EditablePortionsCard`
+          ya muestra los mismos grupos con sus steppers justo arriba: repetirlos sería ruido). */}
+      {showPortionPills || portionTotals ? (
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-dashed border-border-subtle pt-2.5">
+          {showPortionPills ? (
+            <>
+              <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+                {PORTIONS_COPY.builder.sectionTitle}
+              </span>
+              {slot.portionTargets.map((target) => (
+                <PortionGroupPill
+                  key={target.key}
+                  target={target}
+                  sortOrder={portionGroupOrder.get(target.exchangeGroupId) ?? 0}
+                />
+              ))}
+            </>
+          ) : null}
+          {portionTotals ? (
+            // Redondeo entero + prefijo ~: valor referencial (mismo copy que el builder). Lo que
+            // se LEE es la forma corta del mockup («≈ 118 kcal»); la nota completa de siempre
+            // viaja igual en el DOM para lector de pantalla y como `title` al pasar el mouse.
+            <span
+              className="ml-auto font-mono text-[11px] tabular-nums text-muted"
+              title={PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
+            >
+              <span aria-hidden="true">{`≈ ${Math.round(portionTotals.calories)} kcal`}</span>
+              <span className="sr-only">
+                {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
+              </span>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <FoodPickerSheet
         open={addOpen}
@@ -401,5 +480,91 @@ export function EditableSlotCard({
         }}
       />
     </NutritionCard>
+  )
+}
+
+/**
+ * Stack de fotos de la franja contraída (mockup «Cabina v2» A·1/A·2): hasta cuatro miniaturas de
+ * 22 px solapadas, con anillo del color de la card para que se lean como una baraja, y «+n» si
+ * quedan más. Mismo camino de imagen que la fila (`EditableItemRow`) y el picker: URL pública
+ * directa del bucket y respaldo garantizado al ícono de categoría — cero Image Transformations
+ * (cuota) y cero huecos vacíos.
+ *
+ * Decorativo a propósito (`aria-hidden`): la lista real vive en el body de la card, y cuando está
+ * contraída el subtotal ya se anuncia por el `aria-label` del spark de al lado.
+ */
+function SlotItemStack({ items }: { items: QeItem[] }) {
+  const shown = items.slice(0, STACK_MAX_THUMBS)
+  const rest = items.length - shown.length
+
+  return (
+    <span aria-hidden="true" className="inline-flex shrink-0 items-center">
+      {shown.map((item, thumbIndex) => {
+        const media = item.food?.media ?? item.media
+        const imageUrl = resolveFoodImageUrl(media as FoodCatalogItem['media'], SUPABASE_BASE)
+        const category = item.food?.category ?? item.category
+        const iconUrl = category
+          ? foodCategoryIconUrl(category)
+          : foodCategoryIconUrlFromName(item.displayName)
+        return (
+          <span
+            key={item.key}
+            className={
+              'relative grid h-[22px] w-[22px] shrink-0 place-items-center overflow-hidden rounded-md bg-surface-sunken ring-2 ring-surface-card ' +
+              (thumbIndex > 0 ? '-ml-2' : '')
+            }
+          >
+            {imageUrl ? (
+              <Image
+                alt=""
+                src={imageUrl}
+                width={22}
+                height={22}
+                unoptimized
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="absolute inset-0 grid place-items-center bg-primary/10">
+                <Image
+                  alt=""
+                  src={iconUrl}
+                  width={14}
+                  height={14}
+                  unoptimized
+                  loading="lazy"
+                  className="h-3.5 w-3.5 object-contain"
+                />
+              </span>
+            )}
+          </span>
+        )
+      })}
+      {rest > 0 ? (
+        <span className="-ml-2 grid h-[22px] min-w-[22px] shrink-0 place-items-center rounded-md bg-surface-sunken px-1 font-mono text-[9px] font-bold tabular-nums text-muted ring-2 ring-surface-card">
+          {`+${rest}`}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+/**
+ * Pill de un grupo de porciones en el strip del pie: punto con el color de identidad del grupo
+ * (el del catálogo, vía `exchangeGroupColor` — NO es un color de macro) + nombre + «×n».
+ * Presentación pura: quien edita las porciones sigue siendo `EditablePortionsCard`.
+ */
+function PortionGroupPill({ target, sortOrder }: { target: QePortionTarget; sortOrder: number }) {
+  const portions = target.portions.trim()
+  return (
+    <span className="inline-flex max-w-[12rem] items-center gap-1.5 rounded-pill border border-border-subtle bg-surface-card px-2 py-0.5 text-[11px] font-semibold text-body">
+      <span
+        aria-hidden="true"
+        className="h-2.5 w-2.5 shrink-0 rounded-[4px]"
+        style={{ backgroundColor: exchangeGroupColor({ color: target.color, sortOrder }) }}
+      />
+      <span className="truncate">{target.groupName}</span>
+      {portions !== '' ? <span className="shrink-0 font-mono tabular-nums">{`×${portions}`}</span> : null}
+    </span>
   )
 }

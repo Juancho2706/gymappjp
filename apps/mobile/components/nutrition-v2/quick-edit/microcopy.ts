@@ -94,6 +94,19 @@ export const QUICK_EDIT_COPY = {
   discardTitle: '¿Descartar los cambios?',
   editingEyebrow: 'Modo edición',
   editingHint: 'Toca una cantidad para ajustarla. Publica cuando termines.',
+  // ── T3.v (Cabina) V3.2: fila v2 del item y franja contraible. Mismas cadenas que el editor
+  //    web (`QE_COPY`), para que un coach que arma en el telefono y revisa en el escritorio lea
+  //    exactamente lo mismo. El `MacroSparkPopover` mantiene sus propios textos internos
+  //    (limite de capas: el componente compartido no importa el copy del quick-edit).
+  /** Densidad del alimento: "402 kcal / 100 g" (o la base declarada si es `per_serving`). */
+  itemDensity: (calories: number, amount: string, unit: string) => `${calories} kcal / ${amount} ${unit}`,
+  /** Badge de reemplazos autorizados de la fila: "⇄ 2" (su nombre accesible es `substitutionsMenu`). */
+  itemBadgeSubstitutions: (n: number) => `⇄ ${n}`,
+  itemBadgeMacrosEdited: 'macros editadas',
+  itemBadgeFree: 'libre',
+  itemFreeHint: 'alimento libre del coach',
+  collapseSlot: (slotName: string) => `Contraer ${slotName}`,
+  expandSlot: (slotName: string) => `Expandir ${slotName}`,
 } as const
 
 /**
@@ -103,6 +116,11 @@ export const QUICK_EDIT_COPY = {
  */
 export const EDITOR_COPY = {
   eyebrow: 'Editor de plan',
+  /**
+   * T3.v Cabina (V3.3): título del botón/hoja «Metas ▾» del header — hospeda el MISMO
+   * `TargetsEditorCard` que antes vivía en el lienzo (espejo del `QE_COPY.metasPopover` web).
+   */
+  metasPopover: 'Metas del día',
   /** Modo creacion: no hay plan previo que "editar" — se esta armando uno. */
   createEyebrow: 'Nuevo plan',
   /** Vocabulario de CREACION: "Publicar cambios" prometia tocar algo que el alumno ya veia. */

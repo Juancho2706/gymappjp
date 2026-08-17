@@ -229,6 +229,30 @@ export const QE_COPY = {
   /** Se pidio editar una plantilla concreta y no se pudo abrir (misma degradacion del wizard). */
   templateUnavailable:
     'No pudimos abrir la plantilla que elegiste. Estás en una plantilla en blanco: si guardas acá, no estarás actualizando esa plantilla.',
+  // ── T3.v (Cabina): microcopy del MacroSpark/MacroSparkPopover consumido por las superficies
+  //    del editor unico (W1/W2). El componente compartido (components/nutrition-v2) mantiene
+  //    sus propios defaults internos; estas claves NO se importan ahí (limite de capas).
+  /** edit.sparkAria — texto del aria-label del popover de macros. */
+  sparkAria: (proteinG: number, carbsG: number, fatsG: number) =>
+    `Macros: proteína ${proteinG} g, carbohidratos ${carbsG} g, grasas ${fatsG} g`,
+  sparkNoMacros: 'Sin macros registrados',
+  sparkPer100: 'por 100 g',
+  sparkPctOfTarget: (n: number) => `${n}% de la meta`,
+  metasPopover: 'Metas del día',
+  /** Rótulo de la columna de días del editor ≥1024 (V2.3). */
+  railTitle: 'Días del plan',
+  railApplyBase: 'sin porciones · Aplicar del base',
+  legendLabel: 'P · C · G',
+  // ── T3.v (Cabina) V1.1: fila v2 del item — badges inline y subtítulo «marca · densidad».
+  /** Densidad del alimento: "402 kcal / 100 g" (o la base declarada si es `per_serving`). */
+  itemDensity: (calories: number, amount: string, unit: string) => `${calories} kcal / ${amount} ${unit}`,
+  /** Badge de reemplazos autorizados de la fila: "⇄ 2" (su nombre accesible es `substitutionsMenu`). */
+  itemBadgeSubstitutions: (n: number) => `⇄ ${n}`,
+  itemBadgeMacrosEdited: 'macros editadas',
+  itemBadgeFree: 'libre',
+  itemFreeHint: 'alimento libre del coach',
+  /** Porción pegajosa (T2.6 F4) del alimento de la fila: hay memoria de cuánto usa el coach. */
+  itemUsualHere: 'la sueles usar aquí',
 } as const
 
 /** 'YYYY-MM-DD' → 'dd-mm-yyyy' (solo presentacion del confirm sheet). */

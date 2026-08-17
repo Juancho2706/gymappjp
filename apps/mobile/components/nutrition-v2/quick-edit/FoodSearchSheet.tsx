@@ -3,10 +3,11 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { Plus, Search } from 'lucide-react-native'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { Sheet } from '../../Sheet'
+import { MacroSparkPopover } from '../MacroSparkPopover'
 import { FoodThumbnail } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { searchFoodCatalogV2 } from '../../../lib/nutrition-v2-catalog.api'
-import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
+import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
 import { EDITOR_COPY, QUICK_EDIT_COPY } from './microcopy'
 
 export type FoodSearchMode = 'add' | 'swap' | 'substitution'
@@ -30,6 +31,21 @@ const MODE_VERB: Record<FoodSearchMode, string> = {
   swap: 'Reemplazar por',
   substitution: 'Autorizar',
 }
+
+/**
+ * Base declarada de los macros de la fila, tal cual la escribe el picker web (NUT-001): el
+ * catalogo tiene DOS convenciones vivas y las filas `per_serving` (seed de intercambios) traen
+ * los macros de la PORCION, no de 100 g — imprimir «por 100 g» ahi seria una mentira visual.
+ * Sin base declarada rige la regla historica (`per_100`); nunca se inventa la otra.
+ */
+function foodBasisLabel(food: FoodCatalogItem): string {
+  const unitLabel = food.servingUnit === 'ml' ? 'ml' : 'g'
+  if (food.macrosBasis !== 'per_serving') return `por 100 ${unitLabel}`
+  const size = food.servingSize
+  const amount = Number.isInteger(size) ? String(size) : size.toFixed(1)
+  return `por ${amount} ${unitLabel}`
+}
+
 export function FoodSearchSheet({
   open,
   mode,
@@ -138,31 +154,56 @@ export function FoodSearchSheet({
         </Text>
       ) : (
         <View className="gap-2">
+          {/*
+            Fila v2 del picker (T3.v Cabina, espejo de `FoodPickerRow` web): foto + identidad +
+            MacroSpark con los gramos a un tap. REGLA DURA del dueño (2026-08-05): todo alimento
+            individual muestra SIEMPRE kcal · P · C · G — la barra resume por aporte calórico y
+            el popover trae los gramos exactos, así que la fila nunca se recorta a "kcal solo".
+
+            El trigger del popover es su propio Pressable: por eso la identidad y el spark son
+            HERMANOS (misma decisión que el picker web) en vez de anidarse dentro del pressable
+            de alta — un tap en la barra abriría el panel Y agregaría el alimento.
+          */}
           {items.map((food) => (
-            <Pressable
+            <View
               key={food.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${MODE_VERB[mode]} ${food.name}`}
-              onPress={() => onSelect(food)}
-              className="min-h-14 flex-row items-center gap-3 rounded-control border border-subtle bg-surface-card px-3 py-2.5"
+              className="flex-row items-center gap-2 rounded-control border border-subtle bg-surface-card pr-3"
             >
-              <FoodThumbnail
-                alt={food.name}
-                src={foodMediaThumbnailUrl(food.media)}
-                fallbackEmoji={foodCategoryEmoji(food.category)}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${MODE_VERB[mode]} ${food.name}`}
+                onPress={() => onSelect(food)}
+                className="min-h-14 min-w-0 flex-1 flex-row items-center gap-3 py-2.5 pl-3"
+              >
+                <FoodThumbnail
+                  alt={food.name}
+                  src={foodMediaThumbnailUrl(food.media)}
+                  fallbackCategory={food.category}
+                  size="sm"
+                />
+                <View className="min-w-0 flex-1">
+                  <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
+                    {food.name}
+                  </Text>
+                  {food.brand ? (
+                    <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
+                      {food.brand}
+                    </Text>
+                  ) : null}
+                </View>
+              </Pressable>
+              <MacroSparkPopover
                 size="sm"
+                className="shrink-0"
+                ariaContext={food.name}
+                calories={food.calories}
+                proteinG={food.proteinG}
+                carbsG={food.carbsG}
+                fatsG={food.fatsG}
+                fiberG={food.fiberG}
+                basisLabel={foodBasisLabel(food)}
               />
-              <View className="min-w-0 flex-1">
-                <Text className="text-sm font-semibold text-strong" numberOfLines={2}>
-                  {food.name}
-                </Text>
-                <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
-                  {[food.brand, `${Math.round(food.calories)} kcal / ${food.servingSize}${food.servingUnit}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
-              </View>
-            </Pressable>
+            </View>
           ))}
         </View>
       )}
