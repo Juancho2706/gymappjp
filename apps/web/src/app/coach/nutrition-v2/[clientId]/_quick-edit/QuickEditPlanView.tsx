@@ -31,7 +31,6 @@ import {
   sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
 import { DayVariantWeekStrip, StrategyBadge } from '@/components/nutrition-v2'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditorMetaCard } from './EditorMetaCard'
@@ -175,6 +174,10 @@ export function QuickEditPlanView() {
       aria-modal="true"
       aria-label={`${overlayEyebrow}: ${overlayTitle}`}
       aria-busy={isPending}
+      // data-qe-overlay: globals.css promueve el <main> del shell del coach cuando este overlay
+      // está montado — sin eso, el fadeIn del shell (fill-mode both) crea un stacking context
+      // permanente y el sidebar sticky (z-6) / topbar (z-4) pintan ENCIMA del editor.
+      data-qe-overlay=""
       className="fixed inset-0 z-[60] overflow-y-auto bg-surface-app"
     >
       {/* Cinta v2 (T3.v, solo editor ≥768 — compacta 768–1023, completa desde 1024): identidad +
@@ -994,14 +997,11 @@ function AddSlotButton({ variantKey }: { variantKey: string }) {
         <Plus className="h-4 w-4" />
         {QE_COPY.addSlot}
       </button>
-      <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetContent side="bottom" className="rounded-t-card bg-surface-card text-body dark:bg-surface-card">
-          <SheetHeader className="border-border-subtle bg-transparent p-4 pb-2 dark:border-border-subtle">
-            <SheetTitle className="pr-10 font-display text-lg font-semibold normal-case tracking-tight text-strong">
-              {QE_COPY.addSlot}
-            </SheetTitle>
-          </SheetHeader>
-          <div className="space-y-3 px-4 pb-[max(env(safe-area-inset-bottom,0px),1rem)]">
+      {/* QeBottomSheet y no Sheet crudo: en desktop un bottom sheet a todo el ancho del monitor
+          es ilegible (queja del CEO 08-04, reincidió en el QA de T3.v) — el compartido ya lo
+          resuelve como diálogo centrado. */}
+      <QeBottomSheet open={open} onOpenChange={handleOpenChange} title={QE_COPY.addSlot} size="md">
+        <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="qe-new-slot-name">
                 Nombre de la franja
@@ -1036,8 +1036,7 @@ function AddSlotButton({ variantKey }: { variantKey: string }) {
               {QE_COPY.addSlot}
             </button>
           </div>
-        </SheetContent>
-      </Sheet>
+      </QeBottomSheet>
     </>
   )
 }

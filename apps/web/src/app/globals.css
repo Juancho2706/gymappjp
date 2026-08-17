@@ -1161,6 +1161,16 @@ body.eva-quickedit-open nav.coach-nav-mobile {
   display: none !important;
 }
 
+/* T3.v Cabina — el overlay del editor/quick-edit (fixed z-60, [data-qe-overlay]) vive DENTRO de
+   <main>, y el wrapper del shell (animate-fade-in, fill-mode both) deja un stacking context
+   permanente: el overlay quedaba atrapado y el chrome sticky del coach (sidebar z-6, topbar z-4)
+   pintaba ENCIMA (rail de días y cinta tapados). Con un overlay montado, <main> se promueve por
+   sobre el chrome; CSS puro para que también valga en el primer paint del server. */
+.coach-layout-container main:has([data-qe-overlay]) {
+  position: relative;
+  z-index: 50;
+}
+
 /* Perfil alumno — exportar / imprimir informe */
 @media print {
   .coach-layout-container > aside {
