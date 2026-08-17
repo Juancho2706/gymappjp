@@ -13,6 +13,12 @@ import type { BuilderBlock } from '../../lib/plan-builder/types'
 const RECENTS_KEY = 'builder_recent_exercises'
 const EMPTY: Ex[] = [] // ref estable para no virtualizar nada con el sheet colapsado
 
+// Fuera del componente a propósito: `Date.now`/`Math.random` son impuras y react-hooks/purity las
+// prohíbe en el cuerpo de un componente aunque solo corran dentro de un handler.
+function newBlockUid() {
+  return `block-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
 type Ex = Pick<
   ExerciseRow,
   | 'id'
@@ -93,7 +99,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
     function handleSelect(ex: Ex) {
       pushRecent(ex)
       onSelect({
-        uid: `block-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        uid: newBlockUid(),
         exercise_id: ex.id,
         exercise_name: ex.name,
         muscle_group: ex.muscle_group ?? 'General',
@@ -173,6 +179,16 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
         snapPoints={snapPoints}
         enableDynamicSizing={false}
         enablePanDownToClose={false}
+        // CRASH iOS 1.1.0 (54), Sentry EVA-MOBILE-8: con el paneo por contenido activo, gorhom marca el
+        // scrollable como LOCKED en todo snap que no sea el máximo (acá: 12% y 42%) y su worklet de
+        // onScroll llama `scrollTo` — un `dispatchCommand` SÍNCRONO contra el UIManager desde el hilo de
+        // UI (useScrollEventsHandlersDefault.ts:54-63). Cuando el onScroll no lo produce el dedo sino el
+        // ajuste de contentOffset dentro de un commit de montaje, ese comando resuelve un shadow node del
+        // árbol que se está montando y lanza un JSError. En el hilo de UI nadie lo atrapa: es abort().
+        // Con la bandera en false, useScrollable.ts:41-48 devuelve UNLOCKED incondicional y esa rama muere.
+        // Costo: la lista deja de arrastrar el sheet; el handle sí lo sigue arrastrando y su Pressable
+        // hace snapToIndex(2), que es el gesto que el copy ya enseña.
+        enableContentPanningGesture={false}
         onChange={handleIndexChange}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
@@ -191,7 +207,10 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
           initialNumToRender={10}
           maxToRenderPerBatch={10}
           windowSize={7}
-          removeClippedSubviews
+          // `removeClippedSubviews` retirado con el fix del crash: en Fabric/iOS multiplica el
+          // montaje y desmontaje de filas, que es justo lo que dispara el commit en el que el
+          // contentSize salta y UIKit emite el onScroll sintético. La virtualización de FlatList
+          // (initialNumToRender/maxToRenderPerBatch/windowSize) ya acota lo que se renderiza.
           ListHeaderComponent={
             <View style={{ gap: 10 }}>
               <View style={styles.headerRow}>
