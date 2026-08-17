@@ -60,3 +60,6 @@ export {
   type AddActionInk,
   type AddActionVariant,
 } from './AddActionButton'
+// Guía Viva (onboarding por spotlight): motor + «?» + guiones cerrados + memoria local por coach.
+// Ver `./tour/index.ts` y la SPEC `docs/specs/nutrition-onboarding-tour/`.
+export * from './tour'

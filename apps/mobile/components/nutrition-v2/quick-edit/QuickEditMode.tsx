@@ -115,6 +115,15 @@ import {
   unifiedEditorDraftKey,
   writeNutritionDraft,
 } from '../../../lib/nutrition-coach-draft-store'
+import {
+  TourHelpButton,
+  TourOverlay,
+  TourTarget,
+  TourTargetsProvider,
+  tourSteps,
+  useTourController,
+  useTourTarget,
+} from '../tour'
 import { EditableSlotCard } from './EditableSlotCard'
 import { EditorDayRibbon } from './EditorRibbon'
 import { EditorMetaCard } from './EditorMetaCard'
@@ -399,6 +408,27 @@ export function QuickEditMode({
   // Respaldo local (F2) de una sesion anterior recuperado de AsyncStorage; alimenta el banner
   // "Restaurar". Guarda el payload completo (state + portions) hasta que el coach decida.
   const [pendingRestore, setPendingRestore] = useState<QuickEditDraftPayload | null>(null)
+
+  /* ── Guía Viva (SPEC `nutrition-onboarding-tour`) ────────────────────────────────────────────
+   * El tour del editor: 6 pasos, auto-arranque UNA vez por coach y «?» a demanda para siempre.
+   * Vive solo en el editor único — el quick-edit clásico no tiene mini-cinta ni «Metas ▾», así que
+   * la mitad del guion no existiría ahí. */
+  const tourCoachId = branding?.coachId ?? null
+  const tour = useTourController({
+    tourId: 'editor',
+    coachId: tourCoachId,
+    // Jamás en creación ni en plantilla (invariante de la SPEC): un tour sobre un plan vacío enseña
+    // menos, y el auto-arranque espera a la próxima entrada en edición normal.
+    autoStart: editorMode && creation === null && template === null,
+    // La identidad del coach llega del branding guardado, que puede hidratar un tick después del
+    // primer render. Sin ella el flag se marcaría bajo el cajón `anon` y la guía volvería a saltar.
+    autoStartReady: tourCoachId !== null,
+  })
+  // Target del paso «Metas sin salir del flujo»: el botón vive suelto en el header, así que se
+  // registra por ref en vez de envolverlo (ver `TourTargets.tsx`).
+  const metasTourRef = useTourTarget('metas')
+  // Alto real de la PublishBar. El «?» se apoya JUSTO encima: ver la nota de D2 en el render.
+  const [publishBarHeight, setPublishBarHeight] = useState(0)
 
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Anclas por día: el scroll apila los N días completos, así que cada bloque publica su
@@ -1422,6 +1452,10 @@ export function QuickEditMode({
   const metasOpen = metasRequested || targetsInvalid
 
   return (
+    // Guía Viva: el provider es puro contexto (no renderiza ninguna vista), así que envolver la
+    // pantalla con él no puede mover un píxel. Tiene que quedar por encima TANTO de los targets
+    // como del overlay, que es quien los mide.
+    <TourTargetsProvider>
     <View className="flex-1 bg-surface-app">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         {/* Barra fija del modo edición: salida + identidad del alumno + anclas por día. Vive
@@ -1463,6 +1497,10 @@ export function QuickEditMode({
                 web) — hospeda el MISMO `TargetsEditorCard` del día activo en la hoja de abajo. */}
             {editorMode && activeVariant ? (
               <Pressable
+                // Guía Viva: target del paso «Metas sin salir del flujo». `collapsable={false}` es
+                // lo que impide que Android aplane la vista y la vuelva imposible de medir.
+                ref={metasTourRef}
+                collapsable={false}
                 accessibilityRole="button"
                 accessibilityLabel={EDITOR_COPY.metasPopover}
                 accessibilityState={{ expanded: metasOpen }}
@@ -1496,7 +1534,12 @@ export function QuickEditMode({
 
         {/* T3.v Cabina (V3.3): mini-cinta sticky bajo el header — kcal x/meta + 3 % con dot de
             macro del día activo. FUERA del scroll (mismo criterio que la barra de arriba). */}
-        {editorMode && dayTotals ? <EditorDayRibbon dayTotals={dayTotals} /> : null}
+        {editorMode && dayTotals ? (
+          // Guía Viva: target del paso «Tu tablero de vuelo».
+          <TourTarget name="ribbon">
+            <EditorDayRibbon dayTotals={dayTotals} />
+          </TourTarget>
+        ) : null}
 
         <ScrollView
           ref={scrollRef}
@@ -1583,7 +1626,7 @@ export function QuickEditMode({
             </View>
           ) : null}
 
-          {visibleVariants.map((variant) => (
+          {visibleVariants.map((variant, variantIndex) => (
             <View
               key={variant.key}
               className="gap-3"
@@ -1650,8 +1693,16 @@ export function QuickEditMode({
 
               {usesSlots
                 ? variant.slots.map((slot, slotIndex) => (
-                    <EditableSlotCard
+                    // Guía Viva: la PRIMERA franja del día activo es el target del paso «Franjas
+                    // que se leen solas» y la que además hospeda «agregar» y «porciones». Se
+                    // envuelven TODAS (con el nombre en `null` no se registra nada) para que
+                    // ninguna franja quede con un nivel de vista distinto de sus hermanas.
+                    <TourTarget
                       key={slot.key}
+                      name={editorMode && variantIndex === 0 && slotIndex === 0 ? 'slot' : null}
+                    >
+                    <EditableSlotCard
+                      tourTargets={editorMode && variantIndex === 0 && slotIndex === 0}
                       slot={slot}
                       index={slotIndex}
                       errors={errors}
@@ -1733,6 +1784,7 @@ export function QuickEditMode({
                           : undefined
                       }
                     />
+                    </TourTarget>
                   ))
                 : null}
 
@@ -1857,18 +1909,54 @@ export function QuickEditMode({
 
         {undo ? <UndoSnackbar message={undo.message} onUndo={handleUndo} /> : null}
 
-        <PublishBar
-          count={count}
-          publishing={publishing}
-          errorMessage={publishError}
-          dayTotals={dayTotals}
-          template={template !== null}
-          creation={creation !== null}
-          onDiscard={handleDiscard}
-          onPublish={handlePublishRequest}
-          onRetry={handleRetry}
-        />
+        {/* Guía Viva: target del paso «Publica y ya llegó». El `onLayout` no es del tour: es lo que
+            le dice al «?» dónde termina la barra para poder apoyarse justo encima. */}
+        <TourTarget
+          name="publicar"
+          onLayout={(event) => setPublishBarHeight(event.nativeEvent.layout.height)}
+        >
+          <PublishBar
+            count={count}
+            publishing={publishing}
+            errorMessage={publishError}
+            dayTotals={dayTotals}
+            template={template !== null}
+            creation={creation !== null}
+            onDiscard={handleDiscard}
+            onPublish={handlePublishRequest}
+            onRetry={handleRetry}
+          />
+        </TourTarget>
       </KeyboardAvoidingView>
+
+      {/* El «?» de la Guía Viva (D2, INVARIANTE del dueño: «jamás tapa nada»).
+       *
+       * La SPEC lo ubica «flotante sobre la PublishBar, lado IZQUIERDO (los CTAs viven a la
+       * derecha)». Eso es literal en la web, donde esa barra deja su mitad izquierda libre. En RN
+       * NO: acá «Descartar» y «Publicar» son dos botones `flex-1` que ocupan el ancho ENTERO de la
+       * barra (gotcha conocido del proyecto: dos botones en fila siempre `flex-1`), así que
+       * apoyarlo dentro de la barra taparía «Descartar» — exactamente lo que D2 prohíbe.
+       *
+       * Se resuelve por el invariante y no por la letra: el botón flota por el lado izquierdo JUSTO
+       * ENCIMA de la barra (`publishBarHeight` sale del `onLayout` de arriba, y ese alto ya incluye
+       * el área segura inferior, que la barra se paga sola). Es el mismo lugar que la web le da en
+       * ≥1024 —esquina inferior izquierda del lienzo—, y el único punto de la pantalla donde el «?»
+       * no se apoya sobre ningún control. Queda declarado para el juicio del dueño. */}
+      {editorMode ? (
+        <TourHelpButton
+          tourId="editor"
+          coachId={tourCoachId}
+          variant="floating"
+          onOpen={tour.start}
+          // `Math.max` con el área segura: si la barra no se pintó (plan de un día sin metas y sin
+          // cambios) su alto es 0 y `bottom: 10` dejaría el botón bajo la barra de gestos.
+          style={{ left: 14, bottom: Math.max(publishBarHeight, insets.bottom) + 10 }}
+        />
+      ) : null}
+
+      {editorMode ? (
+        <TourOverlay steps={tourSteps('editor')} active={tour.active} onEnd={tour.end} />
+      ) : null}
 
       <FoodSearchSheet
         open={searchTarget !== null}
@@ -2551,6 +2639,7 @@ export function QuickEditMode({
         </View>
       </Sheet>
     </View>
+    </TourTargetsProvider>
   )
 }
 

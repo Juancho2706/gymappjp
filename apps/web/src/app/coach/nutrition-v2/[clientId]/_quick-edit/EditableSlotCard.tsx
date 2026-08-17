@@ -209,7 +209,15 @@ export function EditableSlotCard({
   }
 
   return (
-    <NutritionCard>
+    <NutritionCard
+      /* Guía Viva: la PRIMERA franja del día es el paso «Franjas que se leen solas», y de ella
+         cuelgan los otros dos anclas que viven adentro (el ⋮ del primer alimento y la sección de
+         porciones). Se ancla una sola franja —la primera— porque el recorte del tour ilumina UN
+         elemento: con el atributo en todas, el paso apuntaría a la que el DOM devuelva primero
+         igual, pero cualquier reordenamiento cambiaría a cuál. `undefined` no renderiza atributo:
+         las demás franjas quedan exactamente como estaban. */
+      data-tour={index === 0 ? 'slot' : undefined}
+    >
       {/* Header v2 (mockup «Cabina v2» A·1): nombre · hora · [stack de fotos si esta contraida] ·
           spark del subtotal · contraer · ⋮. Envuelve (`flex-wrap`) en vez de comprimir: en 390 px
           el nombre y la hora quedan en la primera linea y el bloque de la derecha baja entero.
@@ -446,6 +454,10 @@ export function EditableSlotCard({
                 item={item}
                 index={itemIndex}
                 count={slot.items.length}
+                /* Guía Viva: el paso «El ⋮ guarda los superpoderes» ilumina el menú del PRIMER
+                   alimento de la PRIMERA franja. La fila no puede saber sola que es esa (no conoce
+                   el índice de su franja), así que la decisión baja desde acá como bandera. */
+                tourMenuTarget={index === 0 && itemIndex === 0}
               />
             ))
           )}
@@ -465,6 +477,10 @@ export function EditableSlotCard({
             disabled={isPending}
             onClick={() => setAddOpen(true)}
             data-testid="qe-add-food"
+            /* Guía Viva, guion CORTO (<768 y RN): ahí no hay paleta lateral y el paso del catálogo
+               apunta a esta alta (`EDITOR_TOUR_STEPS_COMPACT`, target `agregar`). En ≥768 el guion
+               largo usa `paleta` y este ancla queda sin consultar. */
+            data-tour={index === 0 ? 'agregar' : undefined}
           />
           <AddActionButton
             icon="libre"
@@ -479,7 +495,9 @@ export function EditableSlotCard({
 
         {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo "+ Alimento".
             Se pinta sola solo si el plan usa porciones (capa invisible si no). */}
-        <EditablePortionsCard variantKey={variantKey} slot={slot} />
+        {/* `tourTarget`: la sección de porciones de la PRIMERA franja es la que ilumina el paso
+            «Porciones a elección» (mismo criterio que el ⋮ de arriba). */}
+        <EditablePortionsCard variantKey={variantKey} slot={slot} tourTarget={index === 0} />
       </div>
       </div>
 

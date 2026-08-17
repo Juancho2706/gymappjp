@@ -39,6 +39,14 @@ import {
   StrategyBadge,
   SyncOfflineState,
 } from '../../../components/nutrition-v2'
+import {
+  TourHelpButton,
+  TourOverlay,
+  TourTarget,
+  TourTargetsProvider,
+  tourSteps,
+  useTourController,
+} from '../../../components/nutrition-v2/tour'
 import { Button, Sheet } from '../../../components'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import {
@@ -421,6 +429,25 @@ export default function CoachNutritionV2Screen() {
   )
   const clearFilters = useCallback(() => setFilters(DEFAULT_NUTRITION_ROSTER_FILTERS), [])
 
+  /* ── Guía Viva (SPEC `nutrition-onboarding-tour`) ────────────────────────────────────────────
+   * El tour del hub: 6 pasos, auto-arranque UNA vez por coach y «?» a demanda para siempre. */
+  const tourCoachId = branding?.coachId ?? null
+  const tour = useTourController({
+    tourId: 'hub',
+    coachId: tourCoachId,
+    autoStart: true,
+    /**
+     * Tres condiciones, y ninguna es paranoia:
+     * - identidad del coach resuelta (si no, el flag se marcaría en el cajón `anon` y la guía
+     *   volvería a saltar en la próxima entrada);
+     * - la pestaña Alumnos activa, que es lo que la SPEC pide (D4) — y como esto se observa en
+     *   vivo, un deep link a `?tab=alimentos` no dispara el tour del roster, pero cambiar a
+     *   Alumnos después sí lo hace, sin remontar la pantalla;
+     * - el roster ya cargado: cuatro de los seis pasos iluminan cosas que solo existen con datos.
+     */
+    autoStartReady: tourCoachId !== null && activeTab === 'roster' && !loading,
+  })
+
   // ── Chrome colapsable del hub (QA-4 H2) ───────────────────────────────────────────────────
   // Requerimiento: SOLO las 3 pestanas quedan pegadas arriba. El bloque de titulo (+ pill de
   // sync + CTA "Nuevo plan") se va con el scroll. Como las 3 superficies del hub usan FlashList
@@ -499,6 +526,9 @@ export default function CoachNutritionV2Screen() {
   }
 
   return (
+    // Guía Viva: el provider es puro contexto (no renderiza vistas) — envolver la pantalla con él
+    // no puede mover un píxel. Tiene que quedar por encima de los targets Y del overlay.
+    <TourTargetsProvider>
     <View className="flex-1 bg-surface-app">
       {/* Franja de safe-area SOLIDA y en flujo: el overlay de abajo es `absolute` dentro de un
           contenedor sin padding (`top: 0` sin ambigüedad de Yoga) y ninguna lista puede quedar
@@ -537,11 +567,14 @@ export default function CoachNutritionV2Screen() {
         }}
         ListHeaderComponent={
           <View className="gap-4 pb-5 pt-2">
-            <View className="flex-row gap-3">
-              <Metric label="Con plan" value={metrics.withPlan} />
-              <Metric label="Sin plan" value={metrics.withoutPlan} />
-              <Metric label="Activos hoy" value={metrics.activeToday} />
-            </View>
+            {/* Guía Viva: target del paso «La foto en 3 números». */}
+            <TourTarget name="stats">
+              <View className="flex-row gap-3">
+                <Metric label="Con plan" value={metrics.withPlan} />
+                <Metric label="Sin plan" value={metrics.withoutPlan} />
+                <Metric label="Activos hoy" value={metrics.activeToday} />
+              </View>
+            </TourTarget>
             <Text className="text-xs text-muted">
               {metrics.total} {metrics.total === 1 ? 'alumno' : 'alumnos'} {scopeLabel}
             </Text>
@@ -559,6 +592,9 @@ export default function CoachNutritionV2Screen() {
                 className="flex-1 py-2 text-sm text-strong"
               />
             </View>
+            {/* Guía Viva: target del paso «Filtros de atención» — la fila de chips, que es lo que
+                el paso promete («te dejan la lista en quienes están sin plan o atrasados»). */}
+            <TourTarget name="filters">
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -583,6 +619,7 @@ export default function CoachNutritionV2Screen() {
                 )
               })}
             </ScrollView>
+            </TourTarget>
             <View className="flex-row items-center gap-2">
               <Pressable
                 accessibilityRole="button"
@@ -663,7 +700,13 @@ export default function CoachNutritionV2Screen() {
           />
         }
         ItemSeparatorComponent={() => <View className="h-3" />}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
+          // Guía Viva: la PRIMERA fila es el target del paso «La semana de un vistazo» y hospeda el
+          // de «Nueva versión en 2 toques». Se envuelven TODAS (con el nombre en `null` no se
+          // registra nada) para que ninguna fila tenga un nivel de vista distinto de las otras —
+          // FlashList recicla, y una diferencia de árbol por índice sería justo lo que reciclar
+          // vuelve impredecible.
+          <TourTarget name={index === 0 ? 'alumno-row' : null}>
           <NutritionCard>
             <Pressable
               accessibilityRole="button"
@@ -695,15 +738,17 @@ export default function CoachNutritionV2Screen() {
                 que va en la variante `primary` — fondo de marca real del coach, con la tinta
                 calculada contra ese hex. `justify-center` conserva el CTA centrado de ancho
                 completo que la fila ya tenía; la navegación es la de siempre. */}
-            <AddActionButton
-              variant="primary"
-              icon="version"
-              label={nutritionPlanCtaLabel(item.planStatus)}
-              accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
-              brandColor={brandColor}
-              onPress={() => router.push(nutritionV2EditorHref(item.clientId))}
-              className="mt-3 justify-center"
-            />
+            <TourTarget name={index === 0 ? 'nueva-version' : null}>
+              <AddActionButton
+                variant="primary"
+                icon="version"
+                label={nutritionPlanCtaLabel(item.planStatus)}
+                accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
+                brandColor={brandColor}
+                onPress={() => router.push(nutritionV2EditorHref(item.clientId))}
+                className="mt-3 justify-center"
+              />
+            </TourTarget>
             {/* Web (HubRoster): la tarjeta de atención va al FINAL de la fila, tras el CTA. */}
             {item.attentionReason !== 'none' ? (
               <View className="mt-3">
@@ -721,6 +766,7 @@ export default function CoachNutritionV2Screen() {
               </View>
             ) : null}
           </NutritionCard>
+          </TourTarget>
         )}
       />
         )}
@@ -751,6 +797,14 @@ export default function CoachNutritionV2Screen() {
                 description="Planes, consumo reciente y alumnos por atender."
                 actions={
                   <View className="flex-row items-center gap-2">
+                    {/* El «?» de la Guía Viva (D2): INLINE, en la fila de acciones de la cabecera —
+                        o sea, EN FLUJO. Es la ubicación que hace al invariante trivialmente cierto:
+                        un control en flujo no puede solaparse con ningún otro, y queda a la altura
+                        del título «Centro de Nutrición», que es donde la SPEC lo pide. Solo en la
+                        pestaña Alumnos: en las otras tres el guion no tendría qué iluminar. */}
+                    {activeTab === 'roster' ? (
+                      <TourHelpButton tourId="hub" coachId={tourCoachId} onOpen={tour.start} />
+                    ) : null}
                     <SyncOfflineState state={offline ? 'offline' : 'synced'} />
                     <Pressable
                       accessibilityRole="button"
@@ -765,7 +819,10 @@ export default function CoachNutritionV2Screen() {
               />
             </View>
             <View className="px-4 pb-3 pt-4">
-              <HubTablist active={activeTab} onSelect={setActiveTab} inactiveColor={theme.textSecondary} />
+              {/* Guía Viva: target del paso «Cuatro pestañas, todo tu mundo». */}
+              <TourTarget name="tabs">
+                <HubTablist active={activeTab} onSelect={setActiveTab} inactiveColor={theme.textSecondary} />
+              </TourTarget>
             </View>
           </View>
         </Animated.View>
@@ -793,7 +850,14 @@ export default function CoachNutritionV2Screen() {
         onLoadTemplates={loadPickerTemplates}
         onEditTemplate={editTemplate}
       />
+
+      {/* Guía Viva: el overlay del guion del hub. Solo en la pestaña Alumnos — los seis pasos
+          iluminan el roster, y sobre Plantillas o Alimentos no habría nada que enseñar. */}
+      {activeTab === 'roster' ? (
+        <TourOverlay steps={tourSteps('hub')} active={tour.active} onEnd={tour.end} />
+      ) : null}
     </View>
+    </TourTargetsProvider>
   )
 }
 

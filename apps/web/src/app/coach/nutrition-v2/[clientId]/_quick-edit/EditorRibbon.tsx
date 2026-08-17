@@ -285,6 +285,10 @@ export function EditorRibbon({
   return (
     <header
       data-testid="editor-ribbon"
+      /* Guía Viva (paso 1 del guion del editor ≥768). Los `data-tour` de este archivo son SOLO
+         anclas del tour: no cambian estilos ni comportamiento de la cinta, y su ausencia solo hace
+         que ese paso pinte la tarjeta al centro sin recorte. Ver `components/nutrition-v2/tour/`. */
+      data-tour="ribbon"
       className="sticky top-0 z-20 border-b border-border-subtle bg-surface-app/95 backdrop-blur supports-[backdrop-filter]:bg-surface-app/85"
     >
       {/* Pisos de track EXPLÍCITOS (fix F1). Identidad y centro pueden encogerse, pero nunca por
@@ -333,7 +337,9 @@ export function EditorRibbon({
               open={metasOpen}
               onOpenChange={(next: boolean) => setMetasRequested(next)}
             >
-              <PopoverTrigger className={RIBBON_BUTTON}>
+              {/* Paso 2 del guion: «Metas sin salir del flujo». `PopoverTrigger` reenvía los props
+                  al botón que renderiza, así que el ancla queda sobre el control real. */}
+              <PopoverTrigger data-tour="metas" className={RIBBON_BUTTON}>
                 {QE_COPY.metasPopover}
                 <ChevronDown
                   aria-hidden="true"
@@ -369,6 +375,9 @@ export function EditorRibbon({
           <div className="flex flex-col items-end gap-0.5">
             <button
               type="button"
+              /* Último paso del guion: «Publica y ya llegó». En <768 la cinta no existe y el ancla
+                 la lleva la PublishBar (ver `PublishBar`), así que nunca hay dos a la vez. */
+              data-tour="publicar"
               onClick={openConfirm}
               disabled={isPending || changeCount === 0 || substitutionsFailed}
               className="inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-control bg-primary/100 px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 xl:px-3.5 [@media(pointer:coarse)]:min-h-11"

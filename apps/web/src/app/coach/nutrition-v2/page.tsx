@@ -8,6 +8,7 @@ import {
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { NutritionHubTabs } from './_components/NutritionHubTabs'
+import { HubTourGuide } from './_components/HubTourGuide'
 import { HubRoster } from './_components/HubRoster'
 import { NewPlanPickerButton, type NewPlanPickerEntry } from './_components/NewPlanPickerButton'
 import {
@@ -80,7 +81,15 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
       backHref="/coach/dashboard"
       title="Centro de Nutrición"
       description="Planes, consumo reciente y alumnos por atender."
-      actions={<NewPlanPickerButton roster={pickerRoster} hasMore={initialRoster.hasMore} />}
+      /* Guía Viva: el «?» va PRIMERO, o sea pegado al título (D2: «inline junto al título», nunca
+         flotante) y a la izquierda de la CTA. Es la fila del encabezado que compone esta página; el
+         velo del tour lo monta el mismo componente y se portalea al <body>. */
+      actions={
+        <>
+          <HubTourGuide coachId={user.id} />
+          <NewPlanPickerButton roster={pickerRoster} hasMore={initialRoster.hasMore} />
+        </>
+      }
     >
       <NutritionHubTabs
         coachId={user.id}

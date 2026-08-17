@@ -31,6 +31,13 @@
  *      WCAG ≥ 4.5:1 — el bug del owner era tinta blanca sobre una marca clara), y en el editor los
  *      botones nuevos DISPARAN: «Agregar franja» abre su sheet, «Alimento libre» agrega la fila y
  *      «Agregar día» sigue abriendo su popover.
+ *   8. Guía Viva (`docs/specs/nutrition-onboarding-tour/`, G2.3 — LOS DOS INVARIANTES BLOQUEANTES
+ *      del dueño): D2, el «?» real del editor (`?mode=edit`, esquina/PublishBar según ancho) mide
+ *      CERO intersecciones contra todo `button/a/input/select` visible en los 5 anchos del harness;
+ *      D3, el recorrido COMPLETO de los dos guiones (editor y hub, vía `?tour=editor|hub`) deja la
+ *      tarjeta ⊆ viewport en CADA paso de los 5 anchos, con halo visible cuando el paso tiene target
+ *      en pantalla; y D4, «Saltar» cierra y marca el flag — que entonces evita el re-auto-arranque
+ *      tras un reload (y limpiarlo con «Reiniciar guía» lo vuelve a habilitar).
  *
  * Sale con codigo != 0 si cualquier asercion falla. Corre desde la RAIZ del repo:
  *   node scripts/cabina-visual-check.mjs
@@ -75,7 +82,47 @@ const VISTAS = [
  * -------------------------------------------------------------------------- */
 const CONSENT_STORAGE_KEY = 'eva-cookie-consent-v1'
 const COOKIE_BANNER = '[role="dialog"][aria-label="Consentimiento de cookies"]'
+
+/* ---------------------------------------------------------------------------
+ * Guía Viva: memoria del tour sembrada, por la MISMA razón que el consentimiento.
+ *
+ * El editor auto-arranca su guía la primera vez que un coach entra sin flag (D4 de
+ * `docs/specs/nutrition-onboarding-tour/SPEC.md`), y cada contexto de Playwright es un navegador
+ * recién estrenado: sin esto, TODAS las capturas saldrían bajo el velo del tour y todos los smokes
+ * clickearían contra sus paños (que son `pointer-events-auto` a propósito, para dejar inerte la UI
+ * de abajo). El harness monta `FoodPickerPrefsProvider` con `viewerCoachId=null`, así que la clave
+ * cae en el cajón anónimo.
+ *
+ * Los asserts del tour (G2.3) NO deben usar este `storageState`: para ver el auto-arranque hay que
+ * abrir un contexto SIN la semilla, y para probar que el flag lo evita, uno con ella.
+ * -------------------------------------------------------------------------- */
+const TOUR_FLAG_KEYS = ['eva.tour.editor.v1.anon', 'eva.tour.hub.v1.anon']
+
 const STORAGE_STATE = {
+  cookies: [],
+  origins: [
+    {
+      origin: new URL(BASE_URL).origin,
+      localStorage: [
+        { name: CONSENT_STORAGE_KEY, value: 'rejected' },
+        ...TOUR_FLAG_KEYS.map((name) => ({ name, value: '1' })),
+      ],
+    },
+  ],
+}
+
+/** @param {import('@playwright/test').Browser} browser @param {Record<string, unknown>} options */
+function newCheckContext(browser, options = {}) {
+  return browser.newContext({ ...options, storageState: STORAGE_STATE })
+}
+
+/**
+ * Contexto SIN la semilla del tour (solo cookies) — la mitad «sin flag» del invariante D4 que el
+ * comentario de `tour-stories.tsx` pide: acá el auto-arranque tiene que dispararse solo. La otra
+ * mitad («con flag sembrada no arranca») no necesita un contexto aparte: la prueban `smokeTourWalkthrough`
+ * marcando el flag de verdad (con «Saltar») y recargando la MISMA página.
+ */
+const FRESH_TOUR_STORAGE_STATE = {
   cookies: [],
   origins: [
     {
@@ -86,8 +133,8 @@ const STORAGE_STATE = {
 }
 
 /** @param {import('@playwright/test').Browser} browser @param {Record<string, unknown>} options */
-function newCheckContext(browser, options = {}) {
-  return browser.newContext({ ...options, storageState: STORAGE_STATE })
+function newTourContext(browser, options = {}) {
+  return browser.newContext({ ...options, storageState: FRESH_TOUR_STORAGE_STATE })
 }
 
 /** @param {import('@playwright/test').Page} page */
@@ -1061,6 +1108,258 @@ async function smokeThemeToggleWorks(browser) {
 }
 
 // ---------------------------------------------------------------------------
+// 4. Guía Viva (SPEC `nutrition-onboarding-tour`, G2.3) — D2 «?» sin solapes + D3 recorrido
+//    completo con tarjeta ⊆ viewport + D4 flag evita re-auto-arranque. Los DOS invariantes con
+//    "gate geométrico" del dueño (D2 y D3) son BLOQUEANTES: en rojo, la tanda no cierra.
+// ---------------------------------------------------------------------------
+
+/**
+ * 4.1 — D2: el «?» real del editor (`?mode=edit`) NUNCA intersecta ningún control interactivo.
+ *
+ * El editor monta DOS instancias de `TourHelpButton` a la vez (`corner` ≥1024 fijo a la esquina del
+ * lienzo, `docked` <1024 dentro de la `PublishBar`) y usan CSS —no JS— para turnarse (SPEC D2, y el
+ * comentario de `EditorTourHelpButton` en `QuickEditPlanView.tsx`): por eso el assert primero filtra
+ * a la VISIBLE (rect > 0, no `display:none`) y falla también si hay más de una visible a la vez —
+ * eso significaría que las dos clases responsive se solaparon y el invariante de "una sola por
+ * breakpoint" ya se rompió antes de medir nada.
+ *
+ * Tolerancia 0 literal (SPEC D2): cualquier píxel de intersección real cuenta. Bordes que se TOCAN
+ * (overlap = 0 exacto) no son intersección — mismo criterio que `rectsIntersect` de `tour-geometry.ts`.
+ */
+const TOUR_HELP_OVERLAP_TOLERANCE_PX = 0
+
+/** @param {import('@playwright/test').Page} page @param {number} tolerance */
+function helpButtonOverlaps(page, tolerance) {
+  return page.evaluate((tol) => {
+    const isVisible = (el) => {
+      const rect = el.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return false
+      const style = getComputedStyle(el)
+      return style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0'
+    }
+    const describe = (el) => {
+      const label = el.getAttribute('aria-label') ?? ''
+      const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 28)
+      return `${el.tagName.toLowerCase()}${label ? `[${label}]` : ''}${text ? ` «${text}»` : ''}`
+    }
+
+    const helpCandidates = [...document.querySelectorAll('[data-tour="help"]')].filter(isVisible)
+    if (helpCandidates.length === 0) return { error: 'no hay [data-tour="help"] visible en el DOM' }
+    if (helpCandidates.length > 1) {
+      return {
+        error: `${helpCandidates.length} instancias de [data-tour="help"] visibles a la vez (debería turnarse una sola por breakpoint)`,
+      }
+    }
+    const help = helpCandidates[0]
+    const helpRect = help.getBoundingClientRect()
+
+    const interactive = [...document.querySelectorAll('button, a, input, select')].filter(
+      (el) => el !== help && isVisible(el),
+    )
+
+    const collisions = []
+    for (const el of interactive) {
+      const rect = el.getBoundingClientRect()
+      const overlapX = Math.min(helpRect.right, rect.right) - Math.max(helpRect.left, rect.left)
+      const overlapY = Math.min(helpRect.bottom, rect.bottom) - Math.max(helpRect.top, rect.top)
+      if (overlapX > tol && overlapY > tol) {
+        collisions.push(`${describe(el)} (${Math.round(overlapX)}×${Math.round(overlapY)}px)`)
+      }
+    }
+    return {
+      helpRect: {
+        top: Math.round(helpRect.top),
+        left: Math.round(helpRect.left),
+        width: Math.round(helpRect.width),
+        height: Math.round(helpRect.height),
+      },
+      interactiveCount: interactive.length,
+      collisions,
+    }
+  }, tolerance)
+}
+
+async function smokeTourHelpNoOverlap(browser) {
+  for (const viewport of VIEWPORTS) {
+    const context = await newCheckContext(browser, {
+      viewport: { width: viewport.width, height: viewport.height },
+      colorScheme: 'light',
+    })
+    const page = await context.newPage()
+    await gotoHarness(page, '?mode=edit')
+    await page.waitForTimeout(250)
+
+    const result = await helpButtonOverlaps(page, TOUR_HELP_OVERLAP_TOLERANCE_PX)
+    if (result.error) {
+      report(`Guía Viva D2: «?» sin solapes — ${viewport.label}px`, false, result.error)
+    } else {
+      report(
+        `Guía Viva D2: «?» sin solapes — ${viewport.label}px`,
+        result.collisions.length === 0,
+        result.collisions.length === 0
+          ? `rect=${JSON.stringify(result.helpRect)} · ${result.interactiveCount} interactivos · 0 solapes`
+          : result.collisions.join(' | '),
+      )
+    }
+
+    await context.close()
+  }
+}
+
+/**
+ * 4.2 — D3/D4: recorrido COMPLETO de un guion (`?tour=editor|hub`, ver `tour-stories.tsx`) por
+ * ancho. Por cada paso: la tarjeta (`[data-tour-card]`) tiene que caber ENTERA en el viewport
+ * (tolerancia 0, SPEC D3) y, cuando el paso SÍ encuentra su target en ese ancho, el halo tiene que
+ * estar visible (SPEC D5 — el halo es lo que tapa el hueco y deja la UI de abajo inerte).
+ *
+ * "Cuando el paso encuentra su target" no es una salvedad del gate: es el contrato documentado del
+ * propio motor (`tour-geometry.ts`, `computeSpotlight`): si el `data-tour` de un paso vive detrás de
+ * un breakpoint que lo oculta (la maqueta del editor esconde `rail`/`paleta` bajo `lg`/`xl`, IGUAL
+ * que las superficies reales), el recorte degrada a 0×0 y la tarjeta se centra sola — sin halo,
+ * porque no hay nada que iluminar. Pedirle halo a un paso sin target sería un falso rojo permanente
+ * a los anchos angostos, no un bug real.
+ */
+const TOUR_SEL = {
+  overlay: '[data-tour-overlay]',
+  card: '[data-tour-card]',
+  halo: '[data-tour-halo]',
+  next: '[data-tour-action="next"]',
+  skip: '[data-tour-action="skip"]',
+  flag: '[data-testid="tour-story-flag"]',
+  reset: '[data-testid="tour-story-reset"]',
+}
+
+/** Pausa que cubre la transición de geometría (D5: 220-280ms) + margen de re-medición. */
+const TOUR_STEP_SETTLE_MS = 320
+
+/**
+ * El widget de Next.js Dev Tools (`<nextjs-portal>`, SOLO existe bajo `next dev`) vive fijo cerca de
+ * la esquina inferior izquierda con un z-index por encima de todo — justo donde cae «Saltar» en la
+ * variante `dock` (<768, SPEC D3: "tarjeta anclada abajo a lo ancho"). Un click de Playwright hace
+ * hit-testing como un mouse real: el widget se queda con el evento y `page.click()` cuelga 30s
+ * reintentando (`<nextjs-portal>… subtree intercepts pointer events`). Este disparo va directo al
+ * listener del DOM — el mismo evento `click` que dispara un mouse real, sin el hit-testing del
+ * navegador — y NO tapa un bug de producto: el widget no existe fuera de `next dev`.
+ * @param {import('@playwright/test').Page} page @param {string} selector
+ */
+async function clickTourControl(page, selector) {
+  await page.locator(selector).waitFor({ state: 'visible' })
+  await page.locator(selector).evaluate((el) => el.click())
+}
+
+/** @param {import('@playwright/test').Page} page */
+function tourStepGeometry(page) {
+  return page.evaluate((sel) => {
+    const overlay = document.querySelector(sel.overlay)
+    const card = document.querySelector(sel.card)
+    if (!overlay || !card) {
+      return { cardInViewport: false, hasTarget: false, haloVisible: false, detail: 'sin overlay/tarjeta en el DOM' }
+    }
+    const cardRect = card.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const cardInViewport =
+      cardRect.left >= 0 && cardRect.top >= 0 && cardRect.right <= vw && cardRect.bottom <= vh
+
+    const targetName = overlay.getAttribute('data-tour-target')
+    const value = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(targetName ?? '') : targetName
+    const targetEl = targetName ? document.querySelector(`[data-tour="${value}"]`) : null
+    const hasTarget = Boolean(targetEl && targetEl.getClientRects().length > 0)
+
+    const halo = document.querySelector(sel.halo)
+    const haloVisible = Boolean(halo) && halo.getBoundingClientRect().width > 0 && halo.getBoundingClientRect().height > 0
+
+    return {
+      cardInViewport,
+      hasTarget,
+      haloVisible,
+      detail:
+        `card=[${Math.round(cardRect.left)},${Math.round(cardRect.top)},${Math.round(cardRect.right)},${Math.round(cardRect.bottom)}]` +
+        ` viewport=${vw}x${vh} target="${targetName}" hasTarget=${hasTarget} halo=${haloVisible}`,
+    }
+  }, TOUR_SEL)
+}
+
+/** @param {import('@playwright/test').Browser} browser @param {'editor' | 'hub'} tourId */
+async function smokeTourWalkthrough(browser, tourId) {
+  for (const viewport of VIEWPORTS) {
+    const label = `${tourId} @ ${viewport.label}px`
+    const context = await newTourContext(browser, {
+      viewport: { width: viewport.width, height: viewport.height },
+      colorScheme: 'light',
+    })
+    const page = await context.newPage()
+    await gotoHarness(page, `?tour=${tourId}`)
+
+    // D4, mitad 1: SIN flag sembrado, el guion auto-arranca solo (invariante de la SPEC).
+    await page.waitForSelector(TOUR_SEL.overlay, { timeout: 5_000 }).catch(() => {})
+    const autoOpened = (await page.locator(TOUR_SEL.overlay).count()) > 0
+    report(`Guía Viva D4: auto-arranca sin flag — ${label}`, autoOpened)
+    if (!autoOpened) {
+      await context.close()
+      continue
+    }
+
+    const totalRaw = await page.getAttribute(TOUR_SEL.overlay, 'data-tour-total')
+    const total = Number(totalRaw) || 0
+    report(`Guía Viva: el guion "${tourId}" tiene pasos — ${label}`, total > 0, `total=${totalRaw}`)
+
+    await page.waitForTimeout(TOUR_STEP_SETTLE_MS) // asienta el paso 1 (auto-arranque + 1ra medición)
+
+    for (let step = 1; step <= total; step++) {
+      const geo = await tourStepGeometry(page)
+      report(`Guía Viva D3: tarjeta ⊆ viewport — paso ${step}/${total} — ${label}`, geo.cardInViewport, geo.detail)
+      if (geo.hasTarget) {
+        report(`Guía Viva D5: halo visible (target en pantalla) — paso ${step}/${total} — ${label}`, geo.haloVisible, geo.detail)
+      }
+      if (step < total) {
+        await clickTourControl(page, TOUR_SEL.next)
+        await page.waitForTimeout(TOUR_STEP_SETTLE_MS)
+      }
+    }
+
+    // «Saltar» SIEMPRE visible (SPEC D5) y cierra el tour desde cualquier paso — se prueba en el
+    // último, que es donde «Saltar» convive con «Listo» en vez de con la flecha «→».
+    await clickTourControl(page, TOUR_SEL.skip)
+    await page.waitForTimeout(200)
+    const closedAfterSkip = (await page.locator(TOUR_SEL.card).count()) === 0
+    report(`Guía Viva: «Saltar» cierra el tour — ${label}`, closedAfterSkip)
+
+    // D4, mitad 2: «Saltar» marca el flag igual que «Listo» — no se insiste.
+    const flagAfterSkip = (await page.locator(TOUR_SEL.flag).textContent())?.trim()
+    report(`Guía Viva D4: «Saltar» marca el flag — ${label}`, flagAfterSkip === 'marcado', `flag="${flagAfterSkip}"`)
+
+    // El flag sobrevive un reload real (no es solo estado de React) y evita el re-auto-arranque.
+    await page.reload({ waitUntil: 'networkidle' })
+    await ensureNoCookieBanner(page)
+    await page.waitForTimeout(300)
+    const overlayCountAfterReload = await page.locator(TOUR_SEL.overlay).count()
+    report(
+      `Guía Viva D4: el flag evita re-auto-arranque tras reload — ${label}`,
+      overlayCountAfterReload === 0,
+      `overlayCount=${overlayCountAfterReload}`,
+    )
+
+    // Cierra el círculo con la OTRA mitad del invariante (comentario de `tour-stories.tsx`: "el gate
+    // de G2.3 puede verificar las DOS mitades"): limpiar el flag con «Reiniciar guía» + reload vuelve
+    // a auto-arrancar. Si esto fallara, «evita re-auto-arranque» de arriba podría estar en verde por
+    // una razón equivocada (p.ej. el guion roto y `TourStories` sin montar nada nunca).
+    await clickTourControl(page, TOUR_SEL.reset)
+    await page.reload({ waitUntil: 'networkidle' })
+    await ensureNoCookieBanner(page)
+    await page.waitForTimeout(300)
+    const overlayCountAfterReset = await page.locator(TOUR_SEL.overlay).count()
+    report(
+      `Guía Viva D4: «Reiniciar guía» + reload vuelve a auto-arrancar — ${label}`,
+      overlayCountAfterReset > 0,
+      `overlayCount=${overlayCountAfterReset}`,
+    )
+
+    await context.close()
+  }
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 async function main() {
@@ -1107,8 +1406,13 @@ async function main() {
     await smokeAddActionsInEditor(browser)
     await smokeAddDayTriggerStillOpens(browser)
 
-    console.log('\nPaso 8/8 — toggle de tema…')
+    console.log('\nPaso 8/9 — toggle de tema…')
     await smokeThemeToggleWorks(browser)
+
+    console.log('\nPaso 9/9 — Guía Viva (D2 «?» sin solapes · D3 recorrido completo · D4 flag)…')
+    await smokeTourHelpNoOverlap(browser)
+    await smokeTourWalkthrough(browser, 'editor')
+    await smokeTourWalkthrough(browser, 'hub')
   } finally {
     await browser.close()
     killDevServer(devServer)

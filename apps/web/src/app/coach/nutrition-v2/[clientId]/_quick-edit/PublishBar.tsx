@@ -7,6 +7,7 @@
  * misma clave de idempotencia). Safe-area inset para no chocar con el home indicator.
  */
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Loader2, LockKeyhole, RefreshCcw } from 'lucide-react'
 import { MacroSparkPopover } from '@/components/nutrition-v2'
@@ -55,8 +56,21 @@ export const DAY_MACRO_ROWS: ReadonlyArray<{
 export function PublishBar({
   dayTotals = null,
   hideActions = false,
+  leading = null,
 }: {
   dayTotals?: PublishBarDayTotals | null
+  /**
+   * Ranura al principio de la fila de totales. Existe por UNA razón: el «?» de la Guía Viva, que en
+   * <1024 la SPEC ubica «flotante sobre la PublishBar, lado IZQUIERDO» (D2).
+   *
+   * Es una ranura y no un botón `fixed` porque D2 es un invariante BLOQUEANTE de geometría —el rect
+   * del «?» no puede intersectar NINGÚN control— y un elemento flotante sobre una pantalla que
+   * scrollea no lo puede garantizar: cualquier botón del lienzo termina pasando por debajo, y con
+   * cambios sin publicar los CTA de esta barra ocupan el ancho completo en <640 (`flex-1`). Como
+   * hijo de un flex, en cambio, la no-superposición es una propiedad del layout, no una coincidencia.
+   * (Verificado: con el «?» flotante a 390 px el smoke lo cazaba encima de «Agregar grupo».)
+   */
+  leading?: ReactNode
   /**
    * T3.v Cabina (V2.1; umbral bajado a ≥768 en V2.5): con la cinta viva (`EditorRibbon`, compacta
    * 768–1023 / completa desde 1024) el contador, Descartar y Publicar viven ARRIBA y acá se apagan
@@ -102,6 +116,15 @@ export function PublishBar({
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[65] px-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
       <div
         data-testid="qe-publish-bar"
+        /* Guía Viva, guion CORTO (<768): ahí no hay cinta, y esta barra es a la vez el «tablero de
+           vuelo» (sus totales, ver más abajo) y el lugar donde se publica. El ancla de publicar va
+           en la BARRA y no en el botón «Publicar cambios» porque el botón solo existe con cambios
+           pendientes (`showActions`) — un coach que abre la guía sobre un plan intacto se quedaría
+           sin el último paso. La barra, en el editor, está siempre.
+
+           Condicionado a `!hideActions` para que nunca haya DOS `publicar` en pantalla: desde 768
+           el ancla la lleva el botón de la cinta (`EditorRibbon`), que es donde el coach publica. */
+        data-tour={hideActions ? undefined : 'publicar'}
         className="pointer-events-auto mx-auto w-full max-w-3xl rounded-card border border-border-default bg-surface-card/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-surface-card/85"
       >
         {upgradeRequired ? (
@@ -163,15 +186,28 @@ export function PublishBar({
             mismatch de hidratación (mismo criterio que `EditorRibbon`/`MacroSparkPopover`, que sí
             necesitan JS por el contrato de interacción, pero acá el tamaño es puro CSS. */}
         {dayTotals ? (
-          <div className={showActions ? 'mb-2.5' : ''}>
+          <div
+            /* Guía Viva, primer paso del guion corto: la «mini-cinta móvil» es este bloque de
+               totales (kcal + spark + micro-metas), el equivalente exacto de lo que en ≥768 muestra
+               la cinta. Mismo criterio que el ancla de publicar: solo cuando la cinta no está. */
+            data-tour={hideActions ? undefined : 'ribbon'}
+            className={showActions ? 'mb-2.5' : ''}
+          >
             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-              <p className="min-w-0 truncate text-xs font-semibold tabular-nums text-body">
-                {dayTotals.label ? <span className="text-muted">{dayTotals.label} · </span> : null}
-                <span className="text-strong">
-                  {Math.round(dayTotals.calories)}
-                  {dayTotals.targetCalories != null ? ` / ${Math.round(dayTotals.targetCalories)}` : ''} kcal
-                </span>
-              </p>
+              {/* La ranura y el rótulo van juntos en un grupo para que el `justify-between` de la
+                  fila siga repartiendo DOS bloques (rótulo a la izquierda, spark a la derecha): con
+                  el «?» suelto como tercer hijo, el reparto habría corrido las kcal al centro. Con
+                  la ranura vacía este div no cambia nada de lo que ya había. */}
+              <div className="flex min-w-0 items-center gap-2">
+                {leading}
+                <p className="min-w-0 truncate text-xs font-semibold tabular-nums text-body">
+                  {dayTotals.label ? <span className="text-muted">{dayTotals.label} · </span> : null}
+                  <span className="text-strong">
+                    {Math.round(dayTotals.calories)}
+                    {dayTotals.targetCalories != null ? ` / ${Math.round(dayTotals.targetCalories)}` : ''} kcal
+                  </span>
+                </p>
+              </div>
               <MacroSparkPopover
                 size="sm"
                 className="md:hidden"

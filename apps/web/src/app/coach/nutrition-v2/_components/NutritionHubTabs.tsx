@@ -34,8 +34,15 @@ const TAB_BY_SLUG: Record<string, TabKey> = {
   curacion: 'curation',
 }
 
-/** Slug de la URL → tab. Ausente o desconocido cae al roster (el default de siempre). */
-function parseTabParam(raw: string | null): TabKey {
+/**
+ * Slug de la URL → tab. Ausente o desconocido cae al roster (el default de siempre).
+ *
+ * Exportada para la Guía Viva: su «?» vive junto al TÍTULO del hub (D2 de la SPEC), o sea fuera de
+ * este componente, y necesita la misma respuesta a «¿la pestaña que se está montando es Alumnos?»
+ * para decidir el auto-arranque. Leer el mismo helper evita que la tabla de slugs viva en dos lados
+ * y se despeguen (`?tab=alumnos` es un slug de UI, no la clave interna).
+ */
+export function parseTabParam(raw: string | null): TabKey {
   if (!raw) return 'roster'
   return TAB_BY_SLUG[raw] ?? 'roster'
 }
@@ -134,6 +141,9 @@ export function NutritionHubTabs({ roster, coachId }: { roster: ReactNode; coach
       <div
         role="tablist"
         aria-label="Secciones del centro de nutrición"
+        /* Guía Viva, paso 1 del guion del hub («Cuatro pestañas, todo tu mundo»). Ancla del tour y
+           nada más: no cambia estilos ni comportamiento. Ver `components/nutrition-v2/tour/`. */
+        data-tour="tabs"
         onKeyDown={onKeyDown}
         className="mb-5 flex gap-1 rounded-control border border-border-default bg-surface-card p-1"
       >

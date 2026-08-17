@@ -87,6 +87,10 @@ export function EditorDayRail({
          repita): así el rail y la cápsula de <1024 —montada a la vez, oculta acá— no quedan como
          dos navegaciones con el MISMO nombre. */
       aria-labelledby={RAIL_TITLE_ID}
+      /* Guía Viva, paso 3 del guion del editor («Días del plan»). Ancla del tour y nada más: no
+         cambia estilos ni comportamiento. El rail solo existe ≥1024, que es justo donde vive el
+         guion largo — en el corto (<768) este paso no está. */
+      data-tour="rail"
       /* Mismo patrón sticky que la paleta del otro costado (`EditorPalette`): la columna acompaña
          el scroll del lienzo sin salirse del viewport.
          `2xl:w-[11.875rem]`: desde 1536 el track lateral izquierdo mide lo mismo que el de la paleta

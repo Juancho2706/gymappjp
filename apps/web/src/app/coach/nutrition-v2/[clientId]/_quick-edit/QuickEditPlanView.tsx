@@ -30,7 +30,17 @@ import {
   resolveNutritionDayVariantForDate,
   sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
-import { AddActionButton, DayVariantWeekStrip, StrategyBadge, useBrandPrimaryHex } from '@/components/nutrition-v2'
+import {
+  AddActionButton,
+  DayVariantWeekStrip,
+  StrategyBadge,
+  TourHelpButton,
+  TourOverlay,
+  tourSteps,
+  useBrandPrimaryHex,
+  useTourController,
+} from '@/components/nutrition-v2'
+import { useFoodPickerPrefs } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditorMetaCard } from './EditorMetaCard'
@@ -166,7 +176,32 @@ export function QuickEditPlanView() {
   // irse). El rail y la paleta de 3 zonas NO siguen este umbral: son exclusivos de `lg:` (1024) —
   // a 768–1023 el contrato responsive de la SPEC los reemplaza por la cápsula de día y el sheet de
   // alta de siempre (sin paleta).
-  const desktopRibbon = useRibbonViewport() && isEditor
+  const ribbonWide = useRibbonViewport()
+  const desktopRibbon = ribbonWide && isEditor
+
+  // ── Guía Viva (SPEC `nutrition-onboarding-tour`): el onboarding por spotlight del editor.
+  //
+  // Solo en modo EDITOR (`state.meta`): el quick-edit clásico es un camino saliente y el guion
+  // habla de piezas que ahí no existen (cinta, rail, paleta).
+  //
+  // `viewerCoachId` sale del contexto del picker de alimentos, que es cómo esta pantalla ya sabe
+  // quién es el coach (lo monta la page server-side: `EditorClient` / `QuickEditEntry`); así la
+  // memoria del tour queda por coach sin agregarle una prop a la cadena. En el harness no hay coach
+  // y el flag cae en el cajón anónimo (ver `tour-flags`).
+  const { viewerCoachId } = useFoodPickerPrefs()
+  // MISMO breakpoint JS de la cinta: desde 768 el guion largo (8 pasos, con rail y paleta); debajo,
+  // el corto de 6. Se reusa el valor que la vista ya calcula en vez de suscribir un segundo media
+  // query al mismo umbral, que podría diferir por un frame durante un resize.
+  const editorTourSteps = useMemo(() => tourSteps('editor', !ribbonWide), [ribbonWide])
+  // Invariante de la SPEC: jamás auto-arranca en CREACIÓN — un tour sobre un plan vacío enseña
+  // menos, así que espera a la próxima entrada en edición normal (`useTourController` congela este
+  // valor al montar). `isCreation` se deriva igual que en la cinta y en la PublishBar.
+  const isCreation = state.meta?.effectiveFrom !== undefined
+  const tour = useTourController({
+    tourId: 'editor',
+    coachId: viewerCoachId,
+    autoStart: isEditor && !isCreation,
+  })
 
   return (
     <div
@@ -351,7 +386,14 @@ export function QuickEditPlanView() {
                 quick-edit clásico se pinta acá como siempre — incluido el flexible sin franjas,
                 donde esta card ES el editor. */}
             {desktopRibbon ? null : (
-              <div className={isEditor ? 'md:hidden' : undefined}>
+              <div
+                /* Guía Viva, paso «Metas sin salir del flujo» del guion CORTO: en <768 no hay
+                   popover de la cinta y las metas SON esta card. En ≥768 este bloque no se pinta,
+                   así que nunca hay dos anclas `metas` a la vez. Solo en el editor: el quick-edit
+                   clásico no monta el tour. */
+                data-tour={isEditor ? 'metas' : undefined}
+                className={isEditor ? 'md:hidden' : undefined}
+              >
                 <TargetsEditorCard variant={variant} />
               </div>
             )}
@@ -473,10 +515,74 @@ export function QuickEditPlanView() {
 
       {/* Con la cinta viva la barra se queda SOLO con los totales: publicar/descartar y el contador
           mandan desde arriba (sin doble CTA). En <768 la barra sigue completa en la thumb-zone. */}
-      <PublishBar dayTotals={dayTotals} hideActions={desktopRibbon} />
+      <PublishBar
+        dayTotals={dayTotals}
+        hideActions={desktopRibbon}
+        leading={
+          isEditor ? (
+            <EditorTourHelpButton placement="docked" coachId={viewerCoachId} onOpen={tour.start} />
+          ) : null
+        }
+      />
       <PublishConfirmSheet />
       <StaleBaseDialog />
+
+      {/* ── Guía Viva: el «?» de escritorio y el velo. El velo va al final del overlay a propósito
+          (es la última capa de la pantalla y ninguna pieza de arriba depende de él); además se
+          portalea al <body>, así que su lugar en el árbol no cambia lo que ilumina. En el
+          quick-edit clásico no se monta nada. */}
+      {isEditor ? (
+        <>
+          <EditorTourHelpButton placement="corner" coachId={viewerCoachId} onOpen={tour.start} />
+          <TourOverlay steps={editorTourSteps} active={tour.active} onEnd={tour.end} />
+        </>
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * El «?» de la Guía Viva en el editor (D2, INVARIANTE BLOQUEANTE: «el "?" jamás tapa nada»).
+ *
+ * D2 le da al editor DOS ubicaciones según el ancho, y acá son dos instancias que se turnan por
+ * CSS —no por JS— para que el HTML servido y el hidratado coincidan y no haya un frame con el
+ * botón en el lugar equivocado (misma familia de cuidados que `EditorRibbon`):
+ *
+ *  - `docked` (**<1024**, `lg:hidden`) — hijo de la fila de totales de la `PublishBar` (ranura
+ *    `leading`): «flotante sobre la PublishBar, lado IZQUIERDO». Al estar EN el layout de la barra,
+ *    no superponerse con los CTA («Descartar»/«Publicar», que en <640 ocupan el ancho completo) es
+ *    una garantía del flex y no una coincidencia de píxeles. Un botón `fixed` ahí abajo no lo puede
+ *    prometer: el lienzo scrollea y cualquiera de sus botones termina pasando por debajo — con el
+ *    «?» flotante a 390 px el smoke lo cazó encima de «Agregar grupo».
+ *  - `corner` (**≥1024**, `hidden lg:inline-flex`) — `fixed` a la esquina inferior izquierda del
+ *    lienzo, a 14 px del borde. Ahí la barra de totales está centrada (`max-w-3xl mx-auto`) y
+ *    arranca muy a la derecha de esa esquina, así que el botón flota sobre el fondo del canvas sin
+ *    tocar nada (verificado con el smoke en 1024, 1280 y 1536).
+ *
+ * Son dos elementos y no uno con `lg:fixed` porque la barra lleva `backdrop-blur`: un
+ * `backdrop-filter` convierte al elemento en bloque contenedor de sus descendientes `fixed`, así
+ * que el botón «fijo» quedaba anclado a la barra (medido: `left:14px` pintando en x=271 a 1280) en
+ * vez de al viewport. El que no corresponde al ancho es `display:none`, o sea rect cero y fuera del
+ * árbol de accesibilidad; el motor del tour ya elige el `data-tour` RENDERIZADO (ver `findTarget`),
+ * y para distinguirlos desde afuera está `data-tour-help="inline|floating"`.
+ */
+function EditorTourHelpButton({
+  placement,
+  coachId,
+  onOpen,
+}: {
+  placement: 'docked' | 'corner'
+  coachId: string | null
+  onOpen: () => void
+}) {
+  return (
+    <TourHelpButton
+      tourId="editor"
+      coachId={coachId}
+      variant={placement === 'corner' ? 'floating' : 'inline'}
+      onOpen={onOpen}
+      className={placement === 'corner' ? 'hidden lg:inline-flex' : 'lg:hidden'}
+    />
   )
 }
 

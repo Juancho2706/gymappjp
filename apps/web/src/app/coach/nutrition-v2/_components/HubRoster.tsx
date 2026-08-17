@@ -269,7 +269,12 @@ export function HubRoster({
             Resumen de la página
           </p>
         )}
-        <div className="grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-card shadow-sm">
+        {/* Guía Viva, paso 2 del guion del hub («La foto en 3 números»). Los `data-tour` de este
+            archivo son SOLO anclas del tour: no cambian estilos ni comportamiento. */}
+        <div
+          data-tour="stats"
+          className="grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-card shadow-sm"
+        >
           <Metric label="Con plan" value={metrics.withPlan} />
           <Metric
             active={attention === 'no_plan'}
@@ -325,7 +330,9 @@ export function HubRoster({
       ) : null}
 
       {/* Filtros: busqueda ancho completo (server-side) + chips de estado + orden. */}
-      <div className="mb-5 space-y-2">
+      {/* Guía Viva, paso 3 («Filtros de atención»): el bloque entero, que es lo que el copy nombra
+          (buscador + chips + orden), no solo los chips. */}
+      <div data-tour="filters" className="mb-5 space-y-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-subtle" />
           <input
@@ -446,11 +453,17 @@ export function HubRoster({
         <>
           {/* Movil: cards */}
           <div className="space-y-3 lg:hidden">
-            {visible.map((item) => {
+            {visible.map((item, rowIndex) => {
               const reason = attentionReasonLabel(item, ctx)
               const waHref = whatsappHref(item.phone)
               return (
-                <NutritionCard key={item.clientId}>
+                /* Guía Viva, paso 4 («La semana de un vistazo»): la PRIMERA fila del roster. La
+                   misma fila existe dos veces —card en móvil, `<tr>` en desktop— y las dos llevan
+                   el ancla: el motor se queda con la que el CSS está pintando (ver `findTarget`). */
+                <NutritionCard
+                  key={item.clientId}
+                  data-tour={rowIndex === 0 ? 'alumno-row' : undefined}
+                >
                   <div className="flex items-start gap-2">
                     <SelectCheckbox
                       checked={selectedSet.has(item.clientId)}
@@ -505,6 +518,8 @@ export function HubRoster({
                     </Link>
                     <Link
                       href={`${BASE_PATH}/${item.clientId}/editor`}
+                      /* Paso 5 («Nueva versión en 2 toques»): la CTA de plan de la primera fila. */
+                      data-tour={rowIndex === 0 ? 'nueva-version' : undefined}
                       className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-control bg-primary/100 px-3 text-sm font-semibold text-white hover:bg-primary/90"
                     >
                       <FilePlus2 className="h-4 w-4" />
@@ -534,12 +549,14 @@ export function HubRoster({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((item) => {
+                {visible.map((item, rowIndex) => {
                   const reason = attentionReasonLabel(item, ctx)
                   const waHref = whatsappHref(item.phone)
                   return (
                     <tr
                       key={item.clientId}
+                      /* Gemela desktop del ancla de la card móvil (paso 4 del guion del hub). */
+                      data-tour={rowIndex === 0 ? 'alumno-row' : undefined}
                       className="border-b border-border-subtle last:border-0 hover:bg-surface-sunken/60"
                     >
                       <td className="px-3 py-2.5 align-top">
@@ -598,6 +615,8 @@ export function HubRoster({
                           </Link>
                           <Link
                             href={`${BASE_PATH}/${item.clientId}/editor`}
+                            /* Gemela desktop del ancla de la CTA móvil (paso 5). */
+                            data-tour={rowIndex === 0 ? 'nueva-version' : undefined}
                             className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-primary/100 px-2.5 text-xs font-semibold text-white hover:bg-primary/90"
                           >
                             <FilePlus2 className="h-3.5 w-3.5" />

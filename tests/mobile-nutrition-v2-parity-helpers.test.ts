@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   NUTRITION_HUB_TAB_KEYS,
   NUTRITION_SORT_OPTIONS,
+  NUTRITION_V2_PORTIONS_HREF,
   applyNutritionAttentionFilter,
   applyNutritionRosterFilters,
   filterNutritionPickerEntries,
@@ -83,7 +84,8 @@ describe('nutrition-v2-hub resolveNutritionHubInitialTab (NUT-027)', () => {
   })
   it('traduce el vocabulario legacy V1 y cae a roster ante cualquier otro valor', () => {
     expect(resolveNutritionHubInitialTab('clients')).toBe('roster')
-    expect(resolveNutritionHubInitialTab('templates')).toBe('roster')
+    expect(resolveNutritionHubInitialTab('templates')).toBe('templates')
+    expect(resolveNutritionHubInitialTab('plantillas')).toBe('templates')
     expect(resolveNutritionHubInitialTab('recipes')).toBe('roster')
     expect(resolveNutritionHubInitialTab('basura')).toBe('roster')
     expect(resolveNutritionHubInitialTab(undefined)).toBe('roster')
@@ -94,15 +96,16 @@ describe('nutrition-v2-hub resolveNutritionHubInitialTab (NUT-027)', () => {
     expect(resolveNutritionHubInitialTab(' FOODS ')).toBe('foods')
     expect(resolveNutritionHubInitialTab([])).toBe('roster')
   })
-  it('expone exactamente las claves del tablist, en su orden', () => {
-    // 'portions' entro con F4 (paridad de la seccion Porciones de la web). El orden importa:
-    // el chrome del hub y el deep link `?tab=` lo espejan.
-    expect([...NUTRITION_HUB_TAB_KEYS]).toEqual(['roster', 'portions', 'foods', 'curation'])
+  it('expone exactamente las claves del tablist de la web, en su orden', () => {
+    // Paridad "la web es JEFE" (paquete post-QA): el tablist RN espeja al de la PWA
+    // (Alumnos / Plantillas / Alimentos / Curación). Porciones dejó de ser pestaña y vive
+    // como pantalla propia alcanzable desde Alimentos.
+    expect([...NUTRITION_HUB_TAB_KEYS]).toEqual(['roster', 'templates', 'foods', 'curation'])
   })
 
-  it('el deep link ?tab=portions abre la gestion de porciones', () => {
-    expect(resolveNutritionHubInitialTab('portions')).toBe('portions')
-    expect(resolveNutritionHubInitialTab(' PORTIONS ')).toBe('portions')
+  it('el ?tab=portions viejo ya no es pestaña: cae a roster y la ruta propia existe', () => {
+    expect(resolveNutritionHubInitialTab('portions')).toBe('roster')
+    expect(NUTRITION_V2_PORTIONS_HREF).toBe('/coach/nutrition-v2/portions')
   })
 })
 

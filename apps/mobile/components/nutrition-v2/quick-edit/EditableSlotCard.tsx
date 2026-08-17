@@ -33,6 +33,7 @@ import {
   type PortionPickerGroup,
   type QuickEditGroupAdmin,
 } from './EditablePortionsSection'
+import { TourTarget } from '../tour'
 import { QUICK_EDIT_COPY } from './microcopy'
 
 /**
@@ -111,6 +112,7 @@ export function EditableSlotCard({
   onPortionRemove,
   onPortionAdd,
   portionGroupAdmin,
+  tourTargets = false,
 }: {
   slot: QeSlot
   index: number
@@ -152,6 +154,13 @@ export function EditableSlotCard({
   scope?: NutritionV2CoachScope | null
   /** La corrección es del ALIMENTO: la pantalla la propaga a todas sus apariciones. */
   onFoodOverrideApplied?: (foodId: string, macros: BuilderFoodMacrosPatch, message: string) => void
+  /**
+   * Guía Viva (SPEC `nutrition-onboarding-tour`): esta franja hospeda los targets «agregar» y
+   * «porciones» del guion del editor. Lo pone SOLO la primera franja del día activo — hay un target
+   * por nombre y dos franjas registrando el mismo pisarían la del guion. No cambia nada de lo que se
+   * ve: la envoltura del target se pinta igual en todas las franjas (ver `TourTarget`).
+   */
+  tourTargets?: boolean
 }) {
   const { theme, branding } = useTheme()
   /**
@@ -362,39 +371,50 @@ export function EditableSlotCard({
               «+» y las dos etiquetas del microcopy, las dos pastillas no entran en una línea de
               390 px — forzarlas comprimía el label hasta partirlo en dos renglones. Envolviendo,
               cada una conserva su silueta y la segunda baja limpia. */}
-          <View className="mt-3 flex-row flex-wrap items-center gap-2">
-            <AddActionButton
-              variant="neutral"
-              stack={ADD_FOOD_STACK}
-              label={QUICK_EDIT_COPY.addFood}
-              accessibilityLabel={`${QUICK_EDIT_COPY.addFood} en ${slot.name || 'la franja'}`}
-              brandColor={brandColor}
-              disabled={disabled}
-              onPress={onSearchFood}
-            />
-            {/* Punteado = «hueco por llenar»: el alimento libre lo escribe el coach a mano. */}
-            <AddActionButton
-              variant="dashed"
-              icon="libre"
-              label={QUICK_EDIT_COPY.freeFood}
-              brandColor={brandColor}
-              disabled={disabled}
-              onPress={onAddFreeItem}
-            />
-          </View>
+          {/* Guía Viva: paso «Tu catálogo, con memoria» — el target es el par de altas entero, no
+              solo la pastilla del catálogo, porque lo que el paso enseña es de dónde salen los
+              alimentos de una franja. */}
+          <TourTarget name={tourTargets ? 'agregar' : null}>
+            <View className="mt-3 flex-row flex-wrap items-center gap-2">
+              <AddActionButton
+                variant="neutral"
+                stack={ADD_FOOD_STACK}
+                label={QUICK_EDIT_COPY.addFood}
+                accessibilityLabel={`${QUICK_EDIT_COPY.addFood} en ${slot.name || 'la franja'}`}
+                brandColor={brandColor}
+                disabled={disabled}
+                onPress={onSearchFood}
+              />
+              {/* Punteado = «hueco por llenar»: el alimento libre lo escribe el coach a mano. */}
+              <AddActionButton
+                variant="dashed"
+                icon="libre"
+                label={QUICK_EDIT_COPY.freeFood}
+                brandColor={brandColor}
+                disabled={disabled}
+                onPress={onAddFreeItem}
+              />
+            </View>
+          </TourTarget>
 
           {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo
-              "+ Agregar alimento". Se pinta sola solo si el plan usa porciones. */}
-          <EditablePortionsSection
-            targets={slot.portionTargets}
-            groups={portionGroups}
-            disabled={disabled}
-            onStep={onPortionStep}
-            onSetNotes={onPortionNotes}
-            onRemove={onPortionRemove}
-            onAdd={onPortionAdd}
-            groupAdmin={portionGroupAdmin}
-          />
+              "+ Agregar alimento". Se pinta sola solo si el plan usa porciones.
+
+              Guía Viva: cuando el plan NO usa porciones la sección devuelve `null` y el target queda
+              en 0×0 — el motor lo lee como ausente y ese paso degrada a velo liso, que es lo
+              correcto: no se ilumina una capacidad que este plan no tiene. */}
+          <TourTarget name={tourTargets ? 'porciones' : null}>
+            <EditablePortionsSection
+              targets={slot.portionTargets}
+              groups={portionGroups}
+              disabled={disabled}
+              onStep={onPortionStep}
+              onSetNotes={onPortionNotes}
+              onRemove={onPortionRemove}
+              onAdd={onPortionAdd}
+              groupAdmin={portionGroupAdmin}
+            />
+          </TourTarget>
         </>
       )}
 

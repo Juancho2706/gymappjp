@@ -229,6 +229,18 @@ source_of_truth: apps/web responsive + apps/mobile
 > con `execMediaKind`, nunca por columna) y dos víctimas del gotcha css-interop `style`-función
 > ("Fuentes y método" y el share de Records).
 
+> **2026-08-17 (Guía Viva — onboarding de nutrición, paridad 1:1 por diseño)**: los tours
+> spotlight del editor y del hub existen en las dos plataformas con el MISMO contrato: guiones
+> compartidos en espíritu (editor 8 pasos web ancho / 6 compacto = el guion RN; hub 6 idéntico,
+> copys literales del artifact aprobado), flag `eva.tour.<id>.v1.<coachId>` con clave IDÉNTICA
+> (localStorage web / AsyncStorage RN — un test de contrato cruzado importa ambos módulos y exige
+> igualdad), «Saltar»=«Listo» para la memoria, y «?» de 30 px repetible. Diferencias deliberadas:
+> RN no tiene guion de 8 (rail y paleta no existen en el teléfono), la tarjeta RN es SIEMPRE dock
+> (D3 por construcción), y el «?» del editor RN flota sobre la PublishBar porque sus dos CTA
+> `flex-1` ocupan todo el ancho (D2 manda sobre la letra de la SPEC). Deuda menor declarada: el
+> paso «Metas» dice «popover» y en RN abre bottom sheet (copy cerrado por D6, decisión del owner);
+> QA en device del tour RN pendiente — entra al pase único del owner sobre el OTA #3.
+
 La paridad global **no está certificada todavía**.
 
 | Bloque | Código y revisión estática | QA en dispositivo | Estado efectivo |

@@ -34,7 +34,13 @@ export function EditorPalette({ variant }: { variant: QeVariant }) {
   const targetSlot = variant.slots.find((slot) => slot.key === slotKey) ?? null
 
   return (
-    <aside className="sticky top-20 hidden max-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-card p-4 lg:flex">
+    <aside
+      /* Guía Viva, paso 7 del guion del editor («Tu catálogo, con memoria»). Ancla del tour y nada
+         más. La paleta solo existe ≥1024; el guion corto de <768 no incluye este paso (ahí el alta
+         vive en el botón de la franja, que es el que lleva `data-tour="agregar"`). */
+      data-tour="paleta"
+      className="sticky top-20 hidden max-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-card p-4 lg:flex"
+    >
       <div className="flex items-center gap-2">
         <UtensilsCrossed aria-hidden="true" className="h-4 w-4 text-muted" />
         <h2 className="font-display text-base font-semibold text-strong">{QE_COPY.paletteTitle}</h2>

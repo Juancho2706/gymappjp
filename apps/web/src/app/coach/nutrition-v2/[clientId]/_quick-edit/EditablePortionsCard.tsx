@@ -60,7 +60,22 @@ function GroupDot({ group, sortOrder }: { group: { groupCode: string; color: str
   )
 }
 
-export function EditablePortionsCard({ variantKey, slot }: { variantKey: string; slot: QeSlot }) {
+export function EditablePortionsCard({
+  variantKey,
+  slot,
+  tourTarget = false,
+}: {
+  variantKey: string
+  slot: QeSlot
+  /**
+   * Guía Viva: esta sección es la que ilumina el paso «Porciones a elección». Solo agrega el
+   * atributo `data-tour` — cero cambios de estilo o comportamiento. Lo decide `EditableSlotCard`,
+   * que sabe cuál de sus franjas es la primera. En un plan SIN capa de porciones esta card no se
+   * pinta y el paso queda sin recorte (el motor centra la tarjeta): es correcto, no hay nada que
+   * enseñar ahí.
+   */
+  tourTarget?: boolean
+}) {
   const { portionGroups, portionGroupChoices } = useQuickEdit()
   const [pickerOpen, setPickerOpen] = useState(false)
   // Antes del early-return de abajo: los hooks no pueden quedar detrás de un `return null`.
@@ -74,7 +89,11 @@ export function EditablePortionsCard({ variantKey, slot }: { variantKey: string;
   const groupOrder = new Map(portionGroups.map((group, index) => [group.exchangeGroupId, index]))
 
   return (
-    <section aria-label={PORTIONS_COPY.builder.sectionTitle} className="mt-3 border-t border-border-subtle pt-3">
+    <section
+      aria-label={PORTIONS_COPY.builder.sectionTitle}
+      data-tour={tourTarget ? 'porciones' : undefined}
+      className="mt-3 border-t border-border-subtle pt-3"
+    >
       <p className="text-sm font-medium text-strong">{PORTIONS_COPY.builder.sectionTitle}</p>
       <p className="mt-0.5 text-xs text-muted">{PORTIONS_COPY.builder.sectionHint}</p>
 

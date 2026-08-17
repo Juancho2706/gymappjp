@@ -41,7 +41,9 @@ import {
   withSyntheticDraftIds,
 } from '@eva/nutrition-v2'
 import type { BuilderFood } from '@eva/nutrition-v2'
+import type { TourId } from '@/components/nutrition-v2'
 import { MacroSparkStories } from './macro-spark-stories'
+import { TourStories } from './tour-stories'
 
 const CLIENT_ID = '33333333-3333-4333-8333-333333333333'
 const LOCAL_DATE = new Date().toISOString().slice(0, 10)
@@ -532,15 +534,27 @@ function HarnessThemeToggle() {
 export function EditorHarness({
   mode,
   stories = false,
+  tour = null,
 }: {
   mode: 'edit' | 'create' | 'template'
   stories?: boolean
+  /** `?tour=editor|hub`: stories de la Guía Viva en vez del editor (ver tour-stories.tsx). */
+  tour?: TourId | null
 }) {
   const isCreate = mode === 'create'
   const isTemplate = mode === 'template'
   // Identidad estable como en la page real (el server la manda una vez como prop).
   const creation = useMemo(() => (isCreate ? buildCreationInput() : null), [isCreate])
   const template = useMemo(() => (isTemplate ? buildTemplateInput() : null), [isTemplate])
+
+  if (tour) {
+    return (
+      <>
+        <HarnessThemeToggle />
+        <TourStories tourId={tour} />
+      </>
+    )
+  }
 
   if (stories) {
     return (

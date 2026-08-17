@@ -325,7 +325,7 @@ describe('registerAction', () => {
 
     await expect(
       registerAction({}, buildRegisterFormData({ subscription_tier: 'free', billing_cycle: 'monthly' }))
-    ).rejects.toThrow('REDIRECT:/verify-email?email=coach%40example.com')
+    ).rejects.toThrow(/REDIRECT:\/verify-email\?email=coach%40example\.com&eid=/)
 
     expect(adminDb.auth.admin.createUser).toHaveBeenCalledWith({
       email: 'coach@example.com',
@@ -342,6 +342,9 @@ describe('registerAction', () => {
       trial_used_email: 'coach@example.com',
     }))
     expect(createClientMock).not.toHaveBeenCalled()
-    expect(redirectMock).toHaveBeenCalledWith('/verify-email?email=coach%40example.com')
+    // El `eid` (event_id de dedup Meta CAPI/pixel, commit 7df9aa6c) es aleatorio por registro.
+    expect(redirectMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/verify-email\?email=coach%40example\.com&eid=.+/)
+    )
   })
 })

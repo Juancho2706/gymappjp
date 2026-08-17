@@ -127,6 +127,7 @@ export function EditableItemRow({
   item,
   index,
   count,
+  tourMenuTarget = false,
 }: {
   variantKey: string
   slotKey: string
@@ -134,6 +135,12 @@ export function EditableItemRow({
   index: number
   /** Total de items de la franja (habilita Subir/Bajar del editor; ausente = sin reorden). */
   count?: number
+  /**
+   * Guía Viva: esta fila es la que el tour usa para enseñar el ⋮ («El ⋮ guarda los superpoderes»).
+   * Solo agrega el atributo `data-tour` al botón del menú — cero cambios de estilo o comportamiento.
+   * Quién es «la» fila lo decide `EditableSlotCard`, que sí sabe si su franja es la primera.
+   */
+  tourMenuTarget?: boolean
 }) {
   const { clientId, state, dispatch, errors, showErrors, isPending, surface } = useQuickEdit()
   const brandHex = useBrandPrimaryHex()
@@ -521,6 +528,7 @@ export function EditableItemRow({
       <button
         type="button"
         aria-label={QE_COPY.itemMenu(itemLabel)}
+        data-tour={tourMenuTarget ? 'item-menu' : undefined}
         disabled={isPending}
         onClick={() => setMenuOpen(true)}
         className="col-start-3 row-start-1 inline-flex h-11 w-11 shrink-0 items-center justify-center justify-self-end rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 md:col-start-auto md:row-start-auto lg:h-[26px] lg:w-[26px]"
