@@ -24,14 +24,18 @@ deriva + grano. La grilla 40×40 actual del RN **se retira**.
 
 **D3 — El par sale del TEMA del coach (regla del dueño 2026-08-17: «cada tema debe tener
 su par»).** Fuente de verdad del secundario, en orden:
-1. `secondaryColor` del tema de marca RESUELTO — los 19 presets curados de
-   `packages/brand-kit/presets.ts` ya definen su par (y sus `accentLight/accentDark` por
-   modo); el Sello consume el MISMO resolutor de branding que el resto de la app
+1. `secondaryColor` del tema de marca RESUELTO — los 14 presets curados de
+   `packages/brand-kit/presets.ts` ya definen su par (ningún preset define
+   `accentLight/accentDark` hoy; esos solo llegan por el acordeón manual y el resolutor
+   ya los respeta); el Sello consume el MISMO resolutor de branding que el resto de la app
    (`resolveEffectiveCoachBrandTheme` RN / las vars `--theme-*` web). CERO paletas nuevas.
 2. Fallback SOLO si el brand vigente no trae secundario (custom/legacy sin par): fórmula
    derivada `hsl(H+38°, S×0.85, min(L+14%, 68%))` del primario, en el helper compartido
    `sealPair` — misma matemática web/RN con tests golden.
 En ambos casos muere el `SKY #38BDF8` fijo de `AppBackground`.
+Nota (auditoría 2026-08-17): `--theme-secondary` ya se emite en los layouts web pero hoy
+NADIE lo lee — el Sello pasa a ser su primer consumidor real; en RN el resolutor ya expone
+el secundario del preset.
 
 **D4 — Contrato de animación (flexibiliza el «jamás anima» del AppBackground actual, con
 compromiso firmado por el dueño en el artifact):** SOLO la luz se mueve; el grano JAMÁS.
