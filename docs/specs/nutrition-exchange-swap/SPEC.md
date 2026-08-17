@@ -1,5 +1,8 @@
 # SPEC — T2.5 Intercambio: sheet de dos bloques + swipe
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: en producción, OTA `7a9b3877`.
+
 - **Programa padre:** [nutrition-flows-redesign](../nutrition-flows-redesign/SPEC.md) — Ola 2, tarea T2.5.
 - **Antecedente directo:** [nutrition-substitution-intake](../nutrition-substitution-intake/SPEC.md) (T2.4, en produccion desde 2026-08-10). Esta tanda **consume** su action, su equivalencia y su guard.
 - **Diseno:** catalogo de pantallas del rediseno, seccion **"Alumno · 02 — Intercambio: swipe rapido, sheet completo"**.

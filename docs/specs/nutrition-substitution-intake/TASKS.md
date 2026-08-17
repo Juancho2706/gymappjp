@@ -1,5 +1,8 @@
 # TASKS — T2.4 Sustituciones FULL
 
+> **Nota 2026-08-17:** en producción desde `654efd33`; el checklist de device queda pendiente de
+> acta — cerrable a criterio del owner.
+
 Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes (se anota commit) · `[!]` bloqueado (se anota por que).
 
 ## Fase 0 — Especificacion

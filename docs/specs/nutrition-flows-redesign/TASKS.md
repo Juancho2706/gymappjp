@@ -60,7 +60,7 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [x] F3 merge en `food_catalog_v2_item_json` (drop+create) + las 3 RPC pasan el coach 1 vez. **Eran 3, no 4: `get_food_by_id_v2` no existe** — `6edecffd`
   - [x] F5 repository → service → actions, sin service-role — `0502ef07`
   - [x] F4 merge en freeze y rehidratacion (4 superficies, un helper) + N+1 muerto + **auditoria de `foods.macros_basis`**: 50 filas mal etiquetadas volvieron a `per_100`, 10 son `per_serving` de verdad — `660e1ef4`
-  - [ ] Regen COMPLETO de `database.types.ts` (deja 13 errores en 7 archivos V1) + retirar el cast `V2ReadClient` de T1.1 — tanda propia
+  - [ ] Regen COMPLETO de `database.types.ts` (deja 13 errores en 7 archivos V1) + retirar el cast `V2ReadClient` de T1.1 — tanda propia. **Este es el registro ÚNICO de esta deuda** (nota 2026-08-17: se retiró el duplicado en [`nutrition-food-overrides/TASKS.md`](../nutrition-food-overrides/TASKS.md), que apunta aquí)
   - [ ] QA manual en preview (requiere push de la rama)
 - [x] T2.2 Overrides UI — hecha 2026-08-07 en **web y RN**: sheet de edicion (5 macros + medida casera + aviso suave de Atwater), badge ✎ con el catalogo tachado, restaurar original, aviso de republicar. La base declarada NO se pregunta: se hereda del alimento y se enuncia. Pendiente: filtro "Editados por mi" (va con el hub de alimentos, T2.3) y la lista de alumnos afectados en el aviso
 - [x] T2.3 Hub Alimentos casa unica — CERRADA 2026-08-09 (detalle y evidencia en [`nutrition-food-hub/TASKS.md`](../nutrition-food-hub/TASKS.md); revision de Fable previa al codigo, aprobada con correcciones)
@@ -114,15 +114,15 @@ verificados en preview con la sesion de josefit:
       que un fallo dejaba cargado el plan VIGENTE del alumno rotulado con el nombre de la plantilla.
       Verificado con la plantilla soft-deleted: sale el aviso y ya no dice "Partiendo de…"
 
-- [ ] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard
-- [ ] T2.7 Re-skin del alumno (catalogo de pantallas, decision owner 06-08: va AL CIERRE de O2, antes del OTA unico) + **paleta de macros al trio fijo** (decision owner 07-08, opcion 2): `@eva/nutrition-v2/design.ts` pasa a P #5E9FD6 / C #FFB74D / G #81C784 en web Y RN, los carbos dejan de seguir la rampa sport white-label (`resolveNutritionMacroColors` deja de recibir brandColor), y las superficies V1 quedan alineadas con los mismos `--color-macro-*`. Toca anillos, chips y barras ya QA-eadas en O1 ⇒ exige re-QA visual completa en el mismo corte.
+- [x] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard — CERRADA (registro en [`nutrition-authoring-speed/TASKS.md`](../nutrition-authoring-speed/TASKS.md), cierre 2026-08-17 segun CURRENT)
+- [x] T2.7 Re-skin del alumno (catalogo de pantallas, decision owner 06-08: va AL CIERRE de O2, antes del OTA unico) + **paleta de macros al trio fijo** (decision owner 07-08, opcion 2): `@eva/nutrition-v2/design.ts` pasa a P #5E9FD6 / C #FFB74D / G #81C784 en web Y RN, los carbos dejan de seguir la rampa sport white-label (`resolveNutritionMacroColors` deja de recibir brandColor), y las superficies V1 quedan alineadas con los mismos `--color-macro-*`. Toca anillos, chips y barras ya QA-eadas en O1 ⇒ exige re-QA visual completa en el mismo corte. — CERRADA (registro en [`nutrition-student-reskin/TASKS.md`](../nutrition-student-reskin/TASKS.md), cierre 2026-08-17 segun CURRENT)
 - [ ] Cierre O2: overrides W2 (ficha detalle web, RN builder/quick-edit) + regresion + push + **OTA android O1+O2** (runbook SPEC; proponer al owner)
 
 ## Ola 3
 
 - [x] T3.1 SPEC editor unico (2026-08-15, Fable): [SPEC/PLAN/TASKS en `nutrition-unified-editor/`](../nutrition-unified-editor/SPEC.md). Auditoria contra HEAD: 4 reducers / 2 gramaticas (wizard web 32 acciones, wizard RN 29, quick-edit web 31, quick-edit RN subconjunto), publish ya convergido en `persistAndPublishDraft` → RPC. Decisiones owner: D1 un solo editor para crear+editar (wizard muere en el retiro, puerta `?from=` vive), D2 plantillas en tanda propia T3.2b post-corte (el retiro espera a plantillas). Plan: W1-W4 (UI sobre reducer quick-edit web extendido) → T3.2b plantillas → R1 extraccion a `packages/nutrition-v2` con golden tests → T3.3 RN
-- [ ] T3.2 Editor unico web desktop + responsive/PWA (Fable)
-- [ ] T3.3 Editor RN Android
+- [x] T3.2 Editor unico web desktop + responsive/PWA (Fable) — CERRADA (registro en [`nutrition-unified-editor/TASKS.md`](../nutrition-unified-editor/TASKS.md), cierre segun CURRENT)
+- [x] T3.3 Editor RN Android — CERRADA (registro en [`nutrition-unified-editor/TASKS.md`](../nutrition-unified-editor/TASKS.md), cierre segun CURRENT)
 - [ ] T3.4 Plantillas auto-escaladas (SPEC + solver puro + golden tests + preview + pineados + piso kcal)
 - [ ] T3.5 Registro inteligente texto (SPEC + parser server + revision siempre + memoria por alumno)
 - [ ] T3.6 Presupuesto semanal + libres presupuestadas + franja flexible A/B/C (SPECs)

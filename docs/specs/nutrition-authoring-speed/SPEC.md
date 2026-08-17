@@ -1,5 +1,9 @@
 # SPEC — T2.6 Velocidad de autoria del coach
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: migración `20260813034721_coach_food_last_qty` + `last-quantity.data.ts` + QA
+> device del owner 2026-08-15.
+
 - **Programa padre:** [nutrition-flows-redesign](../nutrition-flows-redesign/SPEC.md) — Ola 2, tarea T2.6.
 - **Antecedentes directos:** [nutrition-food-overrides](../nutrition-food-overrides/SPEC.md) (T2.1, patron de tabla coach-keyed) y [nutrition-exchange-swap](../nutrition-exchange-swap/SPEC.md) (T2.5, en produccion).
 - **Rama de trabajo:** `rnmobiledenuevo`.

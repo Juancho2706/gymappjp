@@ -71,21 +71,21 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 
 ## F3 — DDL `coach_food_last_qty` (LIVE)
 
-- [ ] EXPLAIN + tx-rollback con JWT reales ANTES de aplicar
-- [ ] Migracion aditiva: tabla + unique `(coach_id, food_id, client_id)` **nulls not distinct** +
-      check de rango + RLS `to authenticated` + grants por columna
-- [ ] Advisors de Supabase DESPUES, sin hallazgos nuevos
-- [ ] Regen de `database.types.ts` para la tabla nueva (sin arrastrar el regen completo, que es
-      deuda propia del programa padre)
+- [x] EXPLAIN + tx-rollback con JWT reales ANTES de aplicar (cierre 2026-08-17)
+- [x] Migracion aditiva: tabla + unique `(coach_id, food_id, client_id)` **nulls not distinct** +
+      check de rango + RLS `to authenticated` + grants por columna (cierre 2026-08-17)
+- [x] Advisors de Supabase DESPUES, sin hallazgos nuevos (cierre 2026-08-17)
+- [x] Regen de `database.types.ts` para la tabla nueva (sin arrastrar el regen completo, que es
+      deuda propia del programa padre) (cierre 2026-08-17)
 
 ## F4 — Porcion pegajosa punta a punta
 
-- [ ] Lectura con precedencia resuelta en SQL (`client_id nulls last`), repository → service →
-      action, sin service-role
-- [ ] Escritura en el commit del campo (blur), `on conflict do update`, best-effort: si falla, no se
-      le dice nada al coach y nunca bloquea guardar
-- [ ] `ADD_ITEM` precarga la cantidad y la unidad recordadas; sin memoria, cae al `servingSize` del
-      catalogo (comportamiento actual intacto)
+- [x] Lectura con precedencia resuelta en SQL (`client_id nulls last`), repository → service →
+      action, sin service-role (cierre 2026-08-17)
+- [x] Escritura en el commit del campo (blur), `on conflict do update`, best-effort: si falla, no se
+      le dice nada al coach y nunca bloquea guardar (cierre 2026-08-17)
+- [x] `ADD_ITEM` precarga la cantidad y la unidad recordadas; sin memoria, cae al `servingSize` del
+      catalogo (comportamiento actual intacto) (cierre 2026-08-17)
 - [x] Verificacion en DB (2026-08-13): al fijar 137 g se escriben las DOS memorias (de la alumna y general del coach); al volver a agregar el alimento precarga 137 en vez del 100 del catalogo
 - [x] Tercer camino verificado (2026-08-13, tx-rollback en LIVE con claims del coach real): con la
       fila de la alumna en 150 y la general en 137, la RPC devuelve 150 para la alumna (su fila
@@ -112,8 +112,8 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
       validacion + campo en el paso "El plan" del builder RN. Lo que NO cruza en esta tanda
       (F2 copy semana y F4 porcion pegajosa) quedo DECLARADO con su inventario en
       `docs/status/MOBILE_PARITY.md` (entrada 2026-08-13).
-- [ ] QA en device fisico Android (el dueño la corre)
-- [ ] OTA android `--platform android` propuesto al dueño. CORRECCION 2026-08-13 (lo señalo el
+- [x] QA en device fisico Android (el dueño la corre) (cierre 2026-08-17)
+- [x] OTA android `--platform android` propuesto al dueño (cierre 2026-08-17). CORRECCION 2026-08-13 (lo señalo el
       owner): un OTA `--platform android` NO toca a la build iOS en App Review — publica solo el
       bundle android del grupo y los clientes iOS nunca lo ven. Es la practica de siempre
       (`7a9b3877`, `723c92d6`, `12a32906`… todos android-only con iOS en revision). Lo PROHIBIDO

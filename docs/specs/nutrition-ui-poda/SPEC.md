@@ -1,5 +1,8 @@
 # SPEC — Poda UI + selector de día + wizard 2 pasos · Nutrición V2
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: sin boxes abiertos en TASKS.md.
+
 Decisiones del owner 2026-07-29 (8 respuestas de opción múltiple + 2 reglas directas). Fuentes:
 auditoría `D:\tmp\nutricion-ui-audit-20260729\audit2-*.md`, mockups aprobados "flujos podados"
 (estilo = EVA DS actual refinado) y "selector de días". Ejecuta las olas 3-4 del plan de rescate.

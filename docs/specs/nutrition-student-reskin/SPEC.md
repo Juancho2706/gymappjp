@@ -1,5 +1,8 @@
 # SPEC — T2.7 Re-skin del alumno + paleta de macros fija
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: en producción web `ad08e319..5175de5b` + `MOBILE_PARITY.md:213`.
+
 - **Programa padre:** [nutrition-flows-redesign](../nutrition-flows-redesign/TASKS.md) (item T2.7, Ola 2).
 - **Rama:** `rnmobiledenuevo`. Web a prod = merge a master con OK del owner.
 - **Fuente visual canonica:** [catalogo de pantallas](https://claude.ai/code/artifact/1333da4a-a9f2-4acc-9f82-952aa936d3eb) (2026-08-06), secciones Alumno 01 (Hoy), 03 (Correccion) y 05 (Plan + Historial).

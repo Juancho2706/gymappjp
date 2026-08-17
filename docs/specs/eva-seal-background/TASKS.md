@@ -1,5 +1,9 @@
 # TASKS — Sello EVA v2 (worker-ready)
 
+> **CERRADA — 2026-08-17.** Todas las waves de esta tabla (S1-S4) quedan cerradas: implementación
+> verificada en el árbol (auditoría specs-vs-código). Este archivo usa formato de tabla sin
+> checkboxes; no hay casillas individuales que marcar.
+
 Convenciones de la casa (Opus implementa guiado, Sonnet mecánico, jefe juzga; DoD +
 typecheck local antes de DONE; guardia backend-cero). Referencia visual normativa: artifact
 «Variaciones del Sello» — sección finalistas (V1 remix B) con sus valores exactos.

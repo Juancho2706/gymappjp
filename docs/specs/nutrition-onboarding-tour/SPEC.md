@@ -1,5 +1,8 @@
 # SPEC — Guía Viva: onboarding por spotlight de Nutrición (web + PWA + RN)
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: `tour-engine`/`tour-geometry`/`tour-flags` web + `TourOverlay`/`TourTargets` RN.
+
 - **Origen:** decisión del dueño (2026-08-17) sobre los artifacts «Dos Bienvenidas» (eligió el
   tour A sobre la checklist B) y «Guía Viva EVA» (dirección aprobada: «me encantó… deberías
   implementarlo»). Los mockups funcionales de ese artifact son la referencia normativa visual

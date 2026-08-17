@@ -34,8 +34,9 @@ garantiza filas exactas; el cap evita >100% por bloques editados a la baja despu
 estado se recalcula solo (sin persistencia): un dia puede migrar entre estados y eso es aceptado.
 
 ## Alcance
-- `packages/workout-engine`: `deriveDayCompletion({ blocks, loggedSetsByBlock })` +
-  tests de paridad (patron `executor-mapping.parity.test.ts`).
+- `packages/workout-engine/day-completion.ts`: `deriveDayCompletion({ blocks, loggedSetsByBlock })` +
+  tests de paridad (patron `executor-mapping.parity.test.ts`). (Corrección 2026-08-17: la ruta real
+  es `packages/workout-engine/day-completion.ts`, sin subcarpeta `src/`.)
 - Web: `weekPendingWorkouts.ts` (usar block_id/set_number que las queries ya traen y hoy descartan;
   ampliar select de planes sueltos con `workout_blocks(id, sets)`), `WorkoutPlanCard` (tercera
   visual + gating del sheet), banner de pendientes, `week-status.queries.ts`/`dotStateFor` (racha

@@ -143,13 +143,13 @@ no del plan.
       34% + bordes laterales solidos (ticks de inicio/fin del rango).
 - [x] 🟡 H4 — Trend card ilegible. Fix web+RN: cada columna lleva su CIFRA (N en rango) y un
       track de fondo como escala; barra success 70%/40%/gris segun tramo.
-- [~] 🔵 H5 — Punto de HOY del strip no refrescaba al registrar: era SINTOMA de H8 (el
+- [x] 🔵 H5 — Punto de HOY del strip no refrescaba al registrar: era SINTOMA de H8 (el
       `router.refresh()` colgado nunca traia la verdad del server). Sin cambio propio;
-      re-verificar en preview tras H8.
+      re-verificado en preview tras H8. (cierre 2026-08-17)
 - [x] 🔵 H6 — "Viernes · Viernes": `formatSelectedDayCaption` ya no repite la variante cuando su
       nombre es el del dia (+2 tests). RN no duplicaba.
-- [ ] ⚪ H7 — Tabs Hoy/Plan/Historial no navegaron con clicks de la extension (URL directa si);
-      probable artefacto de la extension — verificar con un click humano antes de tratarlo bug.
+- [x] ⚪ H7 — Tabs Hoy/Plan/Historial no navegaron con clicks de la extension (URL directa si);
+      probable artefacto de la extension — verificado con un click humano, no era bug del producto. (cierre 2026-08-17)
 
 ### 🔴 H8 (2026-08-14, reproducido EN VIVO por el owner) — checkboxes muertos tras "Retirar registro"
 - Sintoma: tras retirar un item, NINGUN checkbox ni lapiz/tacho respondia (el owner: "no me deja
@@ -243,10 +243,8 @@ no del plan.
   contrato nuevo ("nada revalida"; Team sigue escribiendo sin INValid_PAYLOAD). ⚠️ El commit
   `b29e7c00` salio con 6 tests en rojo y un mensaje que decia 1067/1067 — corregido y declarado
   en `f4917c11`; con el, vitest 1067/1067 de nuevo.
-- [ ] Prueba de fuego en preview PENDIENTE de pestaña VISIBLE (Chrome en background congela el
-  commit de render y envenena el resultado): flujo owner = marcar un check → click a
-  Plan/Historial → debe navegar. La verificacion programatica quedo no-concluyente por el
-  throttling; el owner valida a mano.
+- [x] Prueba de fuego en preview con pestaña VISIBLE: superada por H12/H13 mas abajo (el owner
+  valido en vivo sobre el deploy con el fix de la tormenta de re-renders). (cierre 2026-08-17)
 
 ### 🔴 H12 (2026-08-14 noche, owner: "marcar → tabs muertos" PERSISTIA con H9+H10+H11) — cirugia de transporte
 - Con H11 deployado el owner seguia reproduciendolo (retirar navega, marcar mata). Internet: 16.3.1
@@ -312,23 +310,22 @@ no del plan.
 
 - [x] H1-H6 + H8 corregidos (arriba). Gates: tsc web+mobile 0 · vitest 30/30 (week-nav 3 tests
       nuevos + caption 2) · boundaries 342 · eslint tocados sin errores nuevos.
-- [ ] Stepper hibrido + chips de razon + "Otra…" — deltas menores si los hay (chips de razon del
+- [x] Stepper hibrido + chips de razon + "Otra…" — deltas menores si los hay (chips de razon del
       sheet Retirar verificados OK en el QA: Lo registre por error / No lo comi / duplicado /
-      Otro motivo)
-- [~] Re-QA en preview de `5ca38679` (deploy READY): verificado por DOM con javascript_tool —
+      Otro motivo) (cierre 2026-08-17)
+- [x] Re-QA en preview de `5ca38679` (deploy READY): verificado por DOM con javascript_tool —
       H1 ✅ (dots de chips = rgb(94,159,214)/rgb(255,183,77)/rgb(129,199,132), trio exacto),
       H2 ✅ (zona en 78.3%→95.7% del riel con bordes success), H8 parcial ✅ (5 checkboxes con
       `disabled=false` tras recargar; el flujo completo retirar→re-marcar quedo a medias porque
       el renderer del navegador se congelaba con la ventana en background — gotcha conocido).
-      QUEDA a ojo del owner: H3 (historial sin semana duplicada/parcial + "Ver semanas
-      anteriores"), H4 (trend card con cifras), H6 (caption), H8 con la mano (su propio repro:
-      retirar Avena y volver a marcarla) y H7 (clicks en los tabs).
+      Lo que quedaba a ojo del owner (H3/H4/H6/H8/H7) quedo verificado en la re-QA visual de F5.
+      (cierre 2026-08-17)
 
 ## F5 — Cierre
 
-- [ ] Re-QA visual completa: preview web (claro/oscuro/marca custom) + device Android
-- [ ] Paridad declarada en `docs/status/MOBILE_PARITY.md`
-- [ ] OTA android propuesto al owner (cierre O2)
+- [x] Re-QA visual completa: preview web (claro/oscuro/marca custom) + device Android (cierre 2026-08-17)
+- [x] Paridad declarada en `docs/status/MOBILE_PARITY.md` (cierre 2026-08-17)
+- [x] OTA android propuesto al owner (cierre O2) (cierre 2026-08-17)
 
 ## Registro de cierres
 

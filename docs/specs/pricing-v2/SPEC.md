@@ -1,5 +1,10 @@
 # SPEC — Pricing v2: Free total (2), Pro 25, Elite 60, Starter fuera de venta
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: `packages/tiers/index.ts` (`SALE_TIERS` / límites 2-25-60 / `PRICING_V2_CUTOVER`).
+> Decisiones pendientes 1 y 2 de la SPEC quedaron resueltas en `5fb58efc` y `39262d4e`; queda
+> solo el estudio de IVA aparte (punto 3).
+
 - **Origen:** decisión del dueño (2026-08-17) sobre el informe «Precios EVA v2»
   (artifact `e1c1f0db`, investigación de 5 workers: repo + DB LIVE + Supabase + 9
   competidores + economía freemium). La reestructura cuesta $0 de MRR hoy: nadie

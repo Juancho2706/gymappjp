@@ -1,5 +1,8 @@
 # SPEC — "Comí toda esta comida" (bulk-mark de franja) · Nutrición V2 alumno
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: `packages/nutrition-v2/bulk-mark.ts`.
+
 ## Problema
 Hoy el alumno marca cada alimento prescrito con "Lo comí" **uno por uno**. En comidas de 4-6
 alimentos es tedioso. El CEO pide un botón por comida/franja que registre de una toda la tanda.

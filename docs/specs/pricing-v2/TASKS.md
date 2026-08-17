@@ -1,5 +1,9 @@
 # TASKS — Pricing v2 (worker-ready)
 
+> **CERRADA — 2026-08-17.** Todas las waves de esta tabla (A-E, F1) quedan cerradas: implementación
+> verificada en el árbol (auditoría specs-vs-código); F2 (QA del dueño) queda a criterio del dueño.
+> Este archivo usa formato de tabla sin checkboxes; no hay casillas individuales que marcar.
+
 Convenciones de la casa. Prerrequisito: Sello v2 commiteado (adyacencia en layouts).
 Referencia de sitios exactos (file:line): informe del worker repo en el artifact
 «Precios EVA v2» — el worker DEBE re-verificar cada línea contra el árbol actual.

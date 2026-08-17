@@ -9,7 +9,10 @@
 - [x] T7. UI coach builder web: editor de reemplazos por item (reusa buscador de alimentos, ≤8, solo structured/hybrid).
 - [x] T8. UI alumno web Today: render de reemplazos por item, fallback `notes` legado.
 - [x] T9. RN data path: persist en builder móvil + fetch/merge/carry-over + render alumno en Today.
-- [ ] T10. UI alumno Plan web/RN: integrar reemplazos estructurados y fallback legado.
-- [ ] T11. RN coach: editor visual de reemplazos en quick-edit/builder.
+- [ ] T10. UI alumno Plan web/RN: integrar reemplazos estructurados y fallback legado. Único
+      pendiente real: reemplazos estructurados en el tab Plan del alumno web
+      (`PlanVariantCard.tsx:156` solo lee `notes`) (nota 2026-08-17).
+- [x] T11. RN coach: editor visual de reemplazos en quick-edit/builder — verificado en
+      `editor-state.ts:826-828` + `QuickEditMode` (cierre 2026-08-17).
 - [x] T12. Gates estáticos (tsc web+mobile, vitest, eslint, boundaries) + PR #159 integrado en `master`.
 - [ ] T13. QA device web/RN del flujo completo; seguimiento consolidado en `MOBILE_PARITY.md`.

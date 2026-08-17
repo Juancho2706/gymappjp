@@ -6,9 +6,10 @@ Estado vivo de la ola. Deriva de [SPEC.md](SPEC.md) y [PLAN.md](PLAN.md).
 
 - [x] Auditoria de las 4 superficies contra HEAD `71a829d5` (2026-08-15)
 - [x] SPEC + PLAN + TASKS escritos; D1/D2 decididas por el owner (2026-08-15)
-- [ ] Matriz de acciones VERIFICADA celda por celda al abrir W1 (la tabla de abajo nace de los
+- [x] Matriz de acciones VERIFICADA celda por celda al abrir W1 (la tabla de abajo nace de los
   `case` de cada reducer; las celdas del quick-edit RN mezclan acciones con mapeo de errores y
-  hay que confirmarlas leyendo `nutrition-v2-quick-edit.ts` completo)
+  hay que confirmarlas leyendo `nutrition-v2-quick-edit.ts` completo) — CURRENT la da cerrada
+  16-08 (cierre 2026-08-17)
 
 ## Matriz de acciones (borrador 2026-08-15)
 
@@ -157,8 +158,9 @@ menu → sheet con modos y presets → copiar base a Lunes → toast + dia en la
   "300 / 2200 kcal" visibles, paleta presente en 1440px con selector de franja, flujo completo
   W1→W3 sin pageerrors (screenshots 390px + desktop)
 - [x] Gates: vitest 5702 ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · eslint 0 err ✓ · build NO (Node 24)
-- [ ] **QA VISUAL del owner en preview** (drag real con mouse, responsive, dark mode, white-label)
-  — el corte de CTAs (W4) no arranca sin este OK
+- [x] **QA VISUAL del owner en preview** (drag real con mouse, responsive, dark mode, white-label)
+  — el corte de CTAs (W4) no arranca sin este OK; W4 registra el OK explicito del owner, CURRENT
+  la da cerrada 16-08 (cierre 2026-08-17)
 
 ## W4 — Corte 1 — CERRADA 2026-08-15
 
@@ -202,7 +204,8 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
   placeholder del tope; la barra RN ya apilaba el contador)
 - [x] Gates: vitest editor+paquete 1036 ✓ · tsc web ✓ · tsc mobile ✓ · eslint 0 err en tocados ✓
   · tokens 86/86 ✓ · boundaries ✓ · expo export android ✓ · harness headless ✓
-- [ ] **QA visual del owner** (web preview + device Android): dark mode, white-label, 390 px
+- [x] **QA visual del owner** (web preview + device Android): dark mode, white-label, 390 px —
+  CURRENT la da cerrada 16-08 (cierre 2026-08-17)
 
 ## T3.2b — Plantillas
 
@@ -360,9 +363,19 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
   (`BuilderFood`, `mapFoodCatalogItemToBuilderFood`, `strategyUsesSlots`, `MAX_DAY_VARIANTS`,
   `NutritionV2WriteClient`, `BuilderFoodMacrosPatch` y los tipos de publicacion).
 
-- [ ] **Ejecutar el retiro** — bloqueado por el gate del owner: 2 semanas estables desde el
-  corte 2 (2026-08-16 ⇒ no antes del 2026-08-30) **y** QA device del editor RN + su OTA. Antes
-  de eso el par viejo es la unica red si el editor falla en un telefono real.
+- [x] **WEB: puertas retiradas (2026-08-17)** — el owner declaro cumplida la ventana de QA
+  (workflow nutrition-unified-editor, fila R1) y autorizo el retiro de ACCESOS web:
+  - Ficha del alumno: el menu "..." (Edición rápida clásica + Rehacer con el asistente) se
+    elimino de `QuickEditEntry`; queda solo el lapiz al editor unico. La maquinaria del
+    overlay clasico sigue en el archivo SIN puerta (nada pone `editing=true`).
+  - `[clientId]/builder` redirige a `[clientId]/editor` conservando `?from=`; el resto de la
+    page queda inalcanzable pero VIVO (la demolicion es otra tanda).
+  - `plantillas/builder` redirige a `plantillas/editor` conservando `?template=`.
+  - Cero CTAs al par viejo (grep final en el registro); V1 (`nutrition-plans` Enterprise) intacta.
+- [ ] **Ejecutar la demolicion (web) + retiro RN** — sigue bloqueado: QA device del editor RN +
+  su OTA, y la reescritura de "guardar como plantilla" sobre la gramatica del editor. Recien
+  entonces se borran wizard/clasico (web y RN) segun el inventario de arriba. **EN EJECUCIÓN
+  (workflow 17-08)** — nota de higiene documental 2026-08-17.
 
 ## Registro de cierres
 

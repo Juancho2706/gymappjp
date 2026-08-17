@@ -1,5 +1,8 @@
 # SPEC — Semana completa de nutrición (week view) · Nutrición V2 coach + alumno
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: `packages/nutrition-v2/week-view.ts` + `WeekDayNav` web/RN.
+
 ## Problema
 Con multi-día (variantes por día de semana) ni el coach ni el alumno pueden ver la semana:
 el alumno solo ve HOY (perdió la navegación por fecha que V1 tenía) y su tab Plan apila las 7

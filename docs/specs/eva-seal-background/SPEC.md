@@ -1,5 +1,8 @@
 # SPEC — Sello EVA v2: fondo por defecto «Horizonte B» (web + PWA + RN)
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: `packages/brand-kit/seal.ts` + `AppSeal.tsx` + `AppBackground.tsx`.
+
 - **Origen:** decisión del dueño (2026-08-17) sobre el artifact «Variaciones del Sello»
   (`dcdab0a7-3308-4664-8209-d95394918ebc`, versión finalistas + remixes): gana el remix
   **B — Horizonte sin rejilla** (blobs del par de marca derivado, animados a la deriva +

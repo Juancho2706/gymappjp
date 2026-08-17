@@ -21,7 +21,7 @@ Checklist de la [SPEC](./SPEC.md) segun el [PLAN](./PLAN.md). Convenciones del p
 - [x] F2.3 RLS enable + las 6 policies `cfo_*`. **DESVIO ANOTADO vs SPEC: sin `force row level security`** — ninguna tabla del repo la usa y aca romperia la feature: `food_catalog_v2_item_json` es SECURITY DEFINER y corre como dueño de la tabla; con FORCE el dueño queda sujeto a RLS y, siendo todas las policies `to authenticated`, no matchearia ninguna ⇒ el merge de F3 devolveria cero overrides **en silencio**. El aislamiento del merge lo da el `p_coach_id` server-side (leccion B1), no la RLS del definer
 - [x] F2.4 **tx-rollback en LIVE** con JWT real (`set local role authenticated` + `request.jwt.claims`), abortado con `raise exception` para garantizar el rollback; `to_regclass` posterior = `null` (cero residuo). Evidencia: `policies=6; col_update_grants=8; insert_own=OK; update_valores=OK; update_identidad=DENEGADO_OK; par_incompleto=RECHAZADO_OK; unique_coach_food=OK; insert_ajeno=DENEGADO_OK; visible_para_otro_coach=0; visible_para_alumno_del_coach=1`. EXPLAIN va en F3.6 (sobre una tabla vacia y sin el join todavia, aca no mide nada)
 - [x] F2.5 Aplicada en LIVE (`apply_migration coach_food_overrides`). Post: `rls_enabled=true`, `rls_forced=false`, `policies=6`, `indices=3`, `filas=0`. **Advisors security: CERO menciones de la tabla nueva** (sin RLS-disabled, sin policy-sin-RLS, sin FK-sin-indice)
-- [~] F2.6 `database.types.ts`: bloque `coach_food_overrides` agregado y **verificado byte a byte contra el generador** (`generate_typescript_types`), en su lugar alfabetico. El **regen COMPLETO queda pendiente como tanda propia**: probado en esta sesion y deja `pnpm typecheck` en **13 errores sobre 7 archivos V1** (`client-detail.service`, `dashboard.queries`, `heroComplianceBundle`, `recap.queries`, `c/[coach_slug]/nutrition/page`, `workout-execution.queries`, `org.repository`) — anotaciones estrechas del tipo `{ plan_id?: string }` contra columnas que el regen tipa `string | null`. Arreglarlas es tocar superficies V1 ajenas a esta feature ⇒ **el cast `V2ReadClient` de T1.1 sigue vivo**
+- [x] F2.6 `database.types.ts`: bloque `coach_food_overrides` agregado y **verificado byte a byte contra el generador** (`generate_typescript_types`), en su lugar alfabetico. El regen COMPLETO (13 errores sobre 7 archivos V1) y el retiro del cast `V2ReadClient` quedan como deuda — **registro ÚNICO en [`nutrition-flows-redesign/TASKS.md`](../nutrition-flows-redesign/TASKS.md)** (T2.1), no aquí
 
 ## F3 — Merge en discovery
 
@@ -94,7 +94,7 @@ inflado (deberia rondar 25 g). La base quedo bien etiquetada; los gramos siguen 
 - [x] Suite completa (**5401 tests verdes**) + typecheck web + tsc mobile + eslint 0 errores + boundaries + tokens + docs:check
 - [ ] QA manual coach josefit en preview: crear override por SQL, verificar que aparece en busqueda, scanner y sugerencias; publicar plan y verificar que congela el numero corregido; alumno ve el plan sin cambios de contrato. **Requiere push a la rama** (decision del owner)
 - [ ] Acta con evidencia + actualizar TASKS del programa padre
-- [ ] **Deuda declarada**: regen completo de `database.types.ts` (13 errores en 7 archivos V1) y con el, retirar el cast `V2ReadClient` de T1.1
+- [x] **Deuda de tipos retirada de aquí (2026-08-17)**: registro ÚNICO en [`nutrition-flows-redesign/TASKS.md`](../nutrition-flows-redesign/TASKS.md) (T2.1) — regen completo de `database.types.ts` + retiro del cast `V2ReadClient` de T1.1
 
 ## T2.2 — UI del coach (hecha 2026-08-07, web + RN)
 

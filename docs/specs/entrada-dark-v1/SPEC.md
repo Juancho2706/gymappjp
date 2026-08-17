@@ -1,7 +1,7 @@
 ---
-status: draft
+status: implemented-pending-qa
 owner: engineering
-last_verified: 2026-07-28
+last_verified: 2026-08-17
 canonical: false
 ---
 

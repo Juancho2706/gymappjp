@@ -1,5 +1,9 @@
 # SPEC — T3.v Cabina: pasada visual del editor único de nutrición
 
+> **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);
+> evidencia clave: `macro-spark.ts` + `MacroSpark*.tsx` + `cabina-visual-check.mjs`. QA del owner
+> consumido el 2026-08-17.
+
 - **Programa padre:** [nutrition-unified-editor](../nutrition-unified-editor/SPEC.md) (T3.x) — esta es la
   tanda «pasada visual UI/UX del editor» y la penúltima fase antes de cerrar el programa (después
   solo quedan QA device → OTA acumulado → retiro agendado del par viejo). Nota de estado: una

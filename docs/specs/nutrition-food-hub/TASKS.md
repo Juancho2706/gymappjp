@@ -183,9 +183,10 @@ estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
         requerido (esa superficie siempre tiene alumno).
       - Gates: typecheck web y mobile exit 0 · vitest FULL 5636 pass / 0 fail (426 archivos) ·
         eslint 0 errores · boundaries 333/8 · tokens 86/86 · `expo export --platform android` verde
-- [ ] F6.4 RN: clasificar desde la ficha (lectura aditiva para movil + flujo grupo → gramos → medida
-      casera, espejo de `ClassifyFoodFlow`)
-- [ ] F6.5 QA en device fisico + `MOBILE_PARITY.md` + OTA android
+- [x] F6.4 RN: clasificar desde la ficha (lectura aditiva para movil + flujo grupo → gramos → medida
+      casera, espejo de `ClassifyFoodFlow`) — verificado en `foods.tsx:148,790` (cierre 2026-08-17)
+- [ ] F6.5 QA en device fisico + `MOBILE_PARITY.md` + OTA android — se resuelve en el QA del OTA
+      acumulado (nota 2026-08-17)
 
 ## Registro de cierres
 

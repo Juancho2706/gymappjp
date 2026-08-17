@@ -1,7 +1,8 @@
 # TASKS — Estado "En progreso" del dia de entrenamiento
 
 ## F1 · Engine
-- [x] `packages/workout-engine/src/day-completion.ts`: `deriveDayCompletion` (regla SPEC).
+- [x] `packages/workout-engine/day-completion.ts`: `deriveDayCompletion` (regla SPEC). (Ruta
+      corregida 2026-08-17: sin subcarpeta `src/`.)
 - [x] Tests unitarios: sets normales, sets null/0 (cardio = 1 unidad), cap por bloque, 0 logs,
       100% exacto, bloque borrado (log huerfano se ignora).
 - [x] Fixtures de paridad exportados (consumidos por tests web y RN).

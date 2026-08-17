@@ -1,5 +1,9 @@
 # TASKS — T3.v Cabina (worker-ready)
 
+> **CERRADA — 2026-08-17.** Todas las waves de esta tabla (W0-W4) quedan cerradas: implementación
+> verificada en el árbol (auditoría specs-vs-código); QA del owner consumido el 2026-08-17. Este
+> archivo usa formato de tabla sin checkboxes; no hay casillas individuales que marcar.
+
 Convenciones: cada tarea es autocontenida para un worker (política del dueño: **Sonnet** = mecánico
 bien especificado; **Opus** = layout/transcripción guiada por mockup; **jefe** = juicio, no ejecuta).
 Referencia visual = artifact «Cabina v2 · Agenda» (secciones 00 y A·1–A·5). Antes de marcar una tarea

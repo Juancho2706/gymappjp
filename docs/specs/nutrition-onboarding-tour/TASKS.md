@@ -1,5 +1,9 @@
 # TASKS — Guía Viva (worker-ready)
 
+> **CERRADA — 2026-08-17.** Todas las waves de esta tabla (G1-G4) quedan cerradas: implementación
+> verificada en el árbol (auditoría specs-vs-código). Este archivo usa formato de tabla sin
+> checkboxes; no hay casillas individuales que marcar.
+
 Convenciones de la casa: Sonnet = mecánico bien especificado; Opus = implementación guiada;
 jefe = juicio. DoD por tarea + `pnpm typecheck` del paquete tocado antes de DONE. Gates
 completos por wave según [PLAN](PLAN.md). Guardia backend-cero en TODAS. Referencia visual y
