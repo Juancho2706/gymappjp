@@ -91,13 +91,17 @@ aún pendiente). Sin baseline no se evalúa nada de lo anterior.
 
 1. ~~Tramo de entrada Pro $17.990 ≤10 alumnos~~ — **DESCARTADO por el dueño
    (2026-08-17)**: Pro queda plano en 29.990, sin sub-tramos.
-2. **WhatsApp 1:1 con los 9 pros actuales**: contarles que conservan 30 y que
-   free ahora regala más (transparencia > que se enteren solos). Y revisar si
-   alguno con ≤2 alumnos y sin marca podría bajarse (riesgo −29.990).
-3. **IVA**: estudio aparte en curso (precio+IVA mostrado y cobrado). Toca montos,
-   checkout, boleta/factura y a los 9 preapprovals vigentes.
-4. **Cupones starter históricos** (`COUPON_TIERS`): ¿rechazar canje futuro o
-   migrar a pro? (hoy: dejar de emitir; canje existente se decide aquí).
+2. ~~WhatsApp 1:1 con los 9 pros~~ — **DESCARTADO por el dueño (2026-08-17)**: en
+   su lugar, **EMAIL MASIVO a todos los coaches** contando lo nuevo (draft en
+   artifact, aprobación del dueño ANTES de enviar). Nota del dueño anotada aquí:
+   **los add-ons YA NO SE COBRAN — se vende SOLO por planes** (los 4 módulos van
+   incluidos en todo plan, free incluido; el camino de compra de add-ons queda
+   muerto de forma permanente, no solo dormido).
+3. **IVA/aumento**: el dueño lo conversa con su socio (aumento a nuevos + boletas,
+   estudio artifact `63daf16b`). Misma nota que el punto 2: cualquier precio
+   futuro es POR PLAN — no existen add-ons cobrables que sumar al composite.
+4. ~~Cupones starter históricos~~ — **CERRADO por el dueño (2026-08-17): quedan
+   RECHAZADOS** (canje de cupón starter existente ⇒ error claro; no se migran).
 5. **Compresión client-side de fotos de check-in** (695 KB → ~100 KB): backlog
    técnico barato, único costo que escala por alumno.
 6. **Backfill del drip** de los coaches free existentes sin welcome (deuda de
