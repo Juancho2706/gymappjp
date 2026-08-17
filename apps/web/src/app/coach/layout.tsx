@@ -43,9 +43,9 @@ export const dynamic = 'force-dynamic'
 
 /** Parse del tier crudo de DB a uno de los 6 valores del CHECK (incluye legacy). NO es venta. */
 function normalizeCoachTier(raw: string | null | undefined): SubscriptionTier {
-    const v = String(raw ?? 'starter').toLowerCase()
+    const v = String(raw ?? 'free').toLowerCase()
     if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
-    return 'starter'
+    return 'free'
 }
 
 /**

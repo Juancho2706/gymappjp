@@ -3,7 +3,7 @@ import { getCoachProfile, type CoachProfile } from './coach'
 import { getCoachOrgContext } from './org'
 import { apiFetch } from './api'
 // F6 (plan 04): TIER_LABELS vive en @eva/tiers (fuente única web+mobile). Re-export, no espejo a mano.
-import { TIER_LABELS, getTierMaxClients } from '@eva/tiers'
+import { TIER_LABELS, tierMaxClientsFor } from '@eva/tiers'
 import type { ModuleKey } from '@eva/module-catalog'
 
 /** Alumno activo listable en el panel de archivado de /coach/reactivate. */
@@ -21,8 +21,14 @@ export interface CoachSubscriptionOverview {
   activeClients: ReactivateArchiveClient[]
 }
 
-/** Cupo del plan gratuito (3). Fuente unica @eva/tiers — jamas hardcodear el numero en la UI. */
-export const FREE_CLIENT_LIMIT = getTierMaxClients('free')
+/**
+ * Cupo del plan gratuito de ESTE coach (grandfather pricing v2, P2): un coach creado antes del
+ * corte conserva su 3; uno nuevo entra con 2. Fuente unica @eva/tiers — jamas hardcodear el numero
+ * en la UI. Fecha desconocida ⇒ fail-safe generoso (limites viejos); el server revalida igual.
+ */
+export function freeClientLimitFor(coachCreatedAt: string | Date | null | undefined): number {
+  return tierMaxClientsFor('free', coachCreatedAt)
+}
 
 export { TIER_LABELS }
 
@@ -76,8 +82,8 @@ export async function getCoachSubscriptionOverview(): Promise<CoachSubscriptionO
  * Baja al plan gratuito desde la app (salida del deadlock de cupo, SIN pagar).
  *
  * No es una operacion de cobro: el bridge cancela la suscripcion en el gateway y deja al coach en
- * `free`. El servidor revalida estado bloqueado + cupo <= FREE_CLIENT_LIMIT; esta llamada NO
- * autoriza nada por si misma.
+ * `free`. El servidor revalida estado bloqueado + cupo <= limite free del coach (grandfather P2,
+ * mismo helper tierMaxClientsFor); esta llamada NO autoriza nada por si misma.
  */
 export function activateFreePlan(): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>('/api/mobile/coach/activate-free', { method: 'POST', authenticated: true })

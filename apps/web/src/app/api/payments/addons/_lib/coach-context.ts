@@ -25,6 +25,8 @@ type DB = SupabaseClient<Database>
 /** Fila mínima del coach que necesitan los endpoints de add-ons (billing). */
 export type CoachBillingRow = {
     id: string
+    /** Fecha de creación del coach — decide su límite grandfathered (pricing v2, tierMaxClientsFor). */
+    created_at: string | null
     subscription_tier: string
     subscription_status: string
     billing_cycle: string | null
@@ -47,7 +49,7 @@ export async function fetchCoachBillingRow(
     const { data, error } = await admin
         .from('coaches')
         .select(
-            'id, subscription_tier, subscription_status, billing_cycle, current_period_end, subscription_mp_id, subscription_provider, subscription_provider_external_id'
+            'id, created_at, subscription_tier, subscription_status, billing_cycle, current_period_end, subscription_mp_id, subscription_provider, subscription_provider_external_id'
         )
         .eq('id', coachId)
         .maybeSingle()

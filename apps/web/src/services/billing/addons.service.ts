@@ -4,7 +4,6 @@ import {
     ADDON_CONFIG,
     BILLING_CYCLE_CONFIG,
     computeDiscountedClp,
-    getTierCapabilities,
     getTierPriceClp,
     type BillingCycle,
     type DiscountSpec,
@@ -43,7 +42,12 @@ type DB = SupabaseClient<Database>
  * Decisiones del dueño congeladas (2026-06-11, NO re-litigar): $9.990/mes UNIFORME los 4
  * módulos; descuento por ciclo (trim −10%, anual −20%); TODOS los ciclos (incluido mensual)
  * = one-shot prorrateado inmediato + PUT del valor completo desde la renovación; compromiso
- * mínimo 1 ciclo; starter NO compra nutrition_exchanges (Pro+).
+ * mínimo 1 ciclo.
+ * SUPERSEDIDO por Pricing v2 P3 (2026-08-17, `docs/specs/pricing-v2/SPEC.md`): la regla
+ * «starter NO compra nutrition_exchanges (Pro+)» murió — nutrition_exchanges viene INCLUIDO
+ * en todo plan (free también) vía la derivación de `entitlements.service`, así que su compra
+ * se retira (`canPurchaseAddon` la rechaza como `included_in_plan`). El motor de cobro se
+ * conserva intacto para el billing histórico y las cortesías `admin_grant`.
  */
 
 // ── Puerto de pagos: SOLO las ops que este service necesita (F3 implementa en MP) ──
@@ -239,15 +243,23 @@ const PAID_ACTIVE_STATUSES = new Set(['active', 'trialing'])
 
 /**
  * D8 — requisitos de compra:
+ *   - `nutrition_exchanges` NO se compra (Pricing v2 P3): viene incluido en TODO plan (free
+ *     también) vía la derivación de `entitlements.service` ⇒ rechazo `included_in_plan`.
+ *     (Antes se gateaba por `canUseNutrition` del tier — ese camino murió con el tier-gate.)
  *   - plan pago activo (no free, status activo con preapproval donde sumar el monto);
- *   - `nutrition_exchanges` exige tier con nutrición (Pro+; starter NO);
  *   - coach de team/org: excluido (sus add-ons van por contrato).
  * El kill-switch (`EVA_DISABLED_MODULES`) NO bloquea la compra: es palanca de incidentes.
+ * Nota: esta validación quedó DORMIDA para altas nuevas (el endpoint de alta responde 403
+ * `MODULES_INCLUDED` desde 2026-07-17) — se mantiene correcta por si se reactiva el catálogo.
  */
 export function canPurchaseAddon(
     coach: CoachPurchaseContext,
     key: ModuleKey
 ): CanPurchaseAddonResult {
+    // Pricing v2: incluido para todo coach activo — comprarlo sería cobrar por algo ya entregado.
+    if (key === 'nutrition_exchanges') {
+        return { allowed: false, reason: 'included_in_plan' }
+    }
     if (coach.isManagedByTeamOrOrg) {
         return { allowed: false, reason: 'managed_by_team_or_org' }
     }
@@ -259,9 +271,6 @@ export function canPurchaseAddon(
     const hasActivePaidPlan = tier !== 'free' && PAID_ACTIVE_STATUSES.has(status)
     if (!hasActivePaidPlan) {
         return { allowed: false, reason: 'no_paid_plan' }
-    }
-    if (key === 'nutrition_exchanges' && !getTierCapabilities(tier).canUseNutrition) {
-        return { allowed: false, reason: 'requires_nutrition_tier' }
     }
     return { allowed: true }
 }

@@ -10,7 +10,6 @@ import {
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierBillingCycleSummary,
-    getTierMaxClients,
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
@@ -18,17 +17,19 @@ import {
     SALE_TIERS,
     SUBSCRIPTION_BLOCKED_STATUSES,
     TIER_CONFIG,
-    TIER_STUDENT_RANGE_LABEL,
+    tierMaxClientsFor,
     type BillingCycle,
     type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
+import { useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import { formatStudentAccessDate, resolveStudentGraceEndsAt } from '@/lib/student-access'
 import { ReactivateCouponCard } from './_components/ReactivateCouponCard'
 import { ReactivateArchivePanel, type ReactivateArchiveClient } from './_components/ReactivateArchivePanel'
 
-// Solo se ofertan tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera (LEGACY).
+// Solo se ofertan tiers a la venta (pricing v2: free/pro/elite — starter salió de la venta,
+// mismo trato que growth/scale: LEGACY, grandfathered, fuera de la oferta).
 const tierOptions = SALE_TIERS.map((key) => [key, TIER_CONFIG[key]] as const)
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
@@ -53,32 +54,55 @@ interface ReactivateClientProps {
     recentlyCancelledAddons?: ModuleKey[]
     /** Flag de cupones (COUPON_REDEMPTION_ENABLED) leído server-side: muestra el canje de código. */
     couponsEnabled?: boolean
+    /**
+     * `coaches.created_at` — ancla del grandfather de pricing v2 (P2). TODO límite mostrado en esta
+     * página sale de `tierMaxClientsFor(tier, coachCreatedAt)`: un coach viejo ve free 3 / pro 30 /
+     * elite 100; uno nuevo ve el catálogo 2 / 25 / 60. null ⇒ fail-safe generoso (límites viejos).
+     */
+    coachCreatedAt?: string | null
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null }: ReactivateClientProps) {
     const searchParams = useSearchParams()
+    // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
+    const captureCheckoutStarted = useCaptureCheckoutStarted()
+
+    // Límite REAL de alumnos de ESTE coach por tier (grandfather P2) — jamás el catálogo plano:
+    // el write-path de reactivación (activate-free / confirms de pago) fija max_clients con este
+    // mismo helper, así que lo que se muestra acá es exactamente lo que quedará en la fila.
+    const limitFor = useCallback(
+        (t: SubscriptionTier) => tierMaxClientsFor(t, coachCreatedAt),
+        [coachCreatedAt]
+    )
 
     // Pre-select the minimum viable tier for the coach's current client count,
-    // anchored to their actual tier (not always starter). growth/scale ya no se venden:
-    // un currentTier/query legacy ancla a 'elite' (D4 — la reactivacion publica nunca
-    // resucita un tier muerto; quien supere elite ve el puente a Teams, no un auto-bump).
+    // anchored to their actual tier. Los tiers fuera de venta anclan al vecino de la lista
+    // (la reactivacion publica nunca resucita un tier muerto): starter (pricing v2) y sus
+    // deep-links viejos (?tier=starter / starter_lite) anclan a 'pro'; growth/scale a 'elite'
+    // (quien supere elite ve el puente a Teams, no un auto-bump).
     const initialTier = useMemo<SaleTier>(() => {
         const raw = searchParams.get('tier')
-        const queryTier = raw === 'starter_lite' ? 'starter' : raw
+        const queryTier = raw === 'starter_lite' || raw === 'starter' ? 'pro' : raw
+        // starter se chequea ANTES de isSaleTier: el guard tipa SaleTier (que aún incluye starter
+        // por compat) pero en runtime devuelve false para starter — chequearlo después haría que
+        // TS lo crea inalcanzable (TS2367) aunque es el caso real del grandfathered.
         const candidate: SaleTier =
             queryTier && isSaleTier(queryTier)
                 ? queryTier
+                : currentTier === 'starter'
+                ? 'pro'
                 : isSaleTier(currentTier)
                 ? currentTier
                 : 'elite'
         // If the candidate can't cover current clients, bump up to the minimum viable sale tier.
         // Si ni siquiera elite (el techo de venta) los cubre, anclamos a elite y la UI muestra
-        // el bloque "conversemos de EVA Teams" (boton de pago deshabilitado).
-        if (TIER_CONFIG[candidate].maxClients < activeClientCount) {
-            return SALE_TIERS.find((t) => TIER_CONFIG[t].maxClients >= activeClientCount) ?? 'elite'
+        // el bloque "conversemos de EVA Teams" (boton de pago deshabilitado). Los límites son los
+        // del COACH (grandfather P2), no el catálogo: un pro viejo con 28 alumnos sigue cabiendo en Pro.
+        if (limitFor(candidate) < activeClientCount) {
+            return SALE_TIERS.find((t) => limitFor(t) >= activeClientCount) ?? 'elite'
         }
         return candidate
-    }, [searchParams, currentTier, activeClientCount])
+    }, [searchParams, currentTier, activeClientCount, limitFor])
 
     const [tier, setTier] = useState<SaleTier>(initialTier)
     const [billingCycle, setBillingCycle] = useState<BillingCycle>(() => {
@@ -102,13 +126,13 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
         [tier]
     )
 
-    const tierBlockedByClients = useMemo(() => getTierMaxClients(tier) < activeClientCount, [tier, activeClientCount])
+    const tierBlockedByClients = useMemo(() => limitFor(tier) < activeClientCount, [tier, activeClientCount, limitFor])
 
-    // La cartera supera el plan mas alto a la venta (elite): ya no hay tier al que auto-subir
-    // (growth/scale estan fuera de venta). Mostramos el puente a EVA Teams y deshabilitamos el pago.
+    // La cartera supera el plan mas alto a la venta (elite, con SU límite grandfathered): ya no hay
+    // tier al que auto-subir (growth/scale fuera de venta). Puente a EVA Teams y pago deshabilitado.
     const exceedsTopSaleTier = useMemo(
-        () => activeClientCount > getTierMaxClients('elite'),
-        [activeClientCount]
+        () => activeClientCount > limitFor('elite'),
+        [activeClientCount, limitFor]
     )
 
     const paymentStatus = searchParams.get('payment')
@@ -186,6 +210,9 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     const handleCheckout = useCallback(async (gateway: 'mercadopago' | 'flow' = 'mercadopago') => {
         setIsLoading(true)
         setError(null)
+        // E1 (P8): funnel de checkout — el coach confirmo la reactivacion y se va a pedir la
+        // preference/enrolamiento. Gated por consentimiento (no-op sin opt-in), sin PII.
+        captureCheckoutStarted({ tier, billingCycle, gateway, source: 'reactivate' })
         try {
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
@@ -207,7 +234,7 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
         } finally {
             setIsLoading(false)
         }
-    }, [billingCycle, tier])
+    }, [billingCycle, captureCheckoutStarted, tier])
 
     const handleActivateFree = useCallback(async () => {
         setIsActivatingFree(true)
@@ -227,13 +254,17 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
 
     useEffect(() => {
         const fromRegister = searchParams.get('from') === 'register'
-        const canAutostart = fromRegister && !fromSuccessfulCheckout && !paymentStatus
+        // Free no tiene checkout: jamás auto-disparar create-preference con tier='free' (el enum
+        // del server solo acepta pro/elite y respondería 400).
+        const canAutostart = fromRegister && !fromSuccessfulCheckout && !paymentStatus && tier !== 'free'
         if (!canAutostart || hasAutoStartedCheckoutRef.current) return
         hasAutoStartedCheckoutRef.current = true
         void handleCheckout()
-    }, [fromSuccessfulCheckout, handleCheckout, paymentStatus, searchParams])
+    }, [fromSuccessfulCheckout, handleCheckout, paymentStatus, searchParams, tier])
 
-    const freeLimit = getTierMaxClients('free')
+    // Cupo free de ESTE coach (grandfather P2): viejo 3, nuevo 2. El server (activate-free)
+    // revalida con el mismo helper — mostrado == aplicado.
+    const freeLimit = limitFor('free')
     // Cualquier estado bloqueado que canda el panel (expired/pending_payment/past_due/paused pasada
     // la gracia) sufre el mismo deadlock de cupo. El gate de dinero real lo re-valida el endpoint.
     const isBlockedStatus = (SUBSCRIPTION_BLOCKED_STATUSES as readonly string[]).includes(subscriptionStatus ?? '')
@@ -353,7 +384,9 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
             {/* Tier — radio-cards (kit Reactivar) */}
             <div className="mb-4 flex flex-col gap-2.5">
                 {tierOptions.map(([key, option]) => {
-                    const tooSmall = option.maxClients < activeClientCount
+                    // Límite del COACH para este tier (grandfather P2), no el del catálogo de venta.
+                    const coachLimit = limitFor(key)
+                    const tooSmall = coachLimit < activeClientCount
                     const active = tier === key
                     return (
                         <button
@@ -385,7 +418,7 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                                         <span className="inline-flex items-center rounded-full bg-sport-500 px-2 py-0.5 text-[10px] font-bold text-white">Popular</span>
                                     )}
                                 </span>
-                                <span className="block text-[12.5px] text-muted">Hasta {option.maxClients} alumnos</span>
+                                <span className="block text-[12.5px] text-muted">Hasta {coachLimit} alumno{coachLimit !== 1 ? 's' : ''}</span>
                                 {tooSmall && (
                                     <span className="block text-[12px] font-medium text-[var(--danger-600)]">
                                         No cubre tus {activeClientCount} alumnos
@@ -427,7 +460,7 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                     <div>
                         <p className="font-semibold text-strong">Plan insuficiente</p>
                         <p className="mt-0.5 text-[var(--danger-600)]">
-                            Debes archivar {activeClientCount - getTierMaxClients(tier)} alumno{activeClientCount - getTierMaxClients(tier) !== 1 ? 's' : ''} antes de continuar con Plan {selectedTier.label}.{' '}
+                            Debes archivar {activeClientCount - limitFor(tier)} alumno{activeClientCount - limitFor(tier) !== 1 ? 's' : ''} antes de continuar con Plan {selectedTier.label}.{' '}
                             <a href="#reactivate-archive" className="underline font-medium">Archivar alumnos aquí →</a>
                         </p>
                     </div>
@@ -474,6 +507,31 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
             )}
 
             <div className="mt-6 flex flex-col gap-2">
+                {tier === 'free' ? (
+                    <>
+                        {/* Free no pasa por checkout (el enum de create-preference solo acepta pro/elite):
+                            la salida es activate-free, que revalida server-side estado bloqueado + cupo
+                            (grandfather P2: fija max_clients con tierMaxClientsFor). */}
+                        <button
+                            type="button"
+                            onClick={handleActivateFree}
+                            disabled={isActivatingFree || tierBlockedByClients || !isBlockedStatus}
+                            title={!isBlockedStatus ? 'Disponible cuando tu suscripción quede vencida o pausada.' : undefined}
+                            className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 px-5 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        >
+                            {isActivatingFree ? 'Activando...' : (
+                                <>
+                                    <span>Activar plan gratuito (sin costo)</span>
+                                    <ArrowRight className="h-4 w-4" />
+                                </>
+                            )}
+                        </button>
+                        <p className="text-xs text-muted">
+                            El plan gratuito cubre hasta {freeLimit} alumno{freeLimit !== 1 ? 's' : ''} activo{freeLimit !== 1 ? 's' : ''}. Tus datos y tu historial quedan intactos.
+                        </p>
+                    </>
+                ) : (
+                <>
                 <button
                     type="button"
                     onClick={() => void handleCheckout('mercadopago')}
@@ -522,6 +580,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                         </p>
                     </>
                 )}
+                </>
+                )}
 
                 <button
                     type="button"
@@ -540,7 +600,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-strong">Continuar con plan gratuito</p>
                             <p className="mt-0.5 text-xs text-muted">
-                                Tienes {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. El plan gratuito cubre hasta 3 alumnos — calificas sin archivar a nadie.
+                                {/* Límite del COACH (grandfather P2): un coach viejo ve 3, uno nuevo 2. */}
+                                Tienes {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. Tu plan gratuito cubre hasta {freeLimit} alumno{freeLimit !== 1 ? 's' : ''} — calificas sin archivar a nadie.
                             </p>
                             <button
                                 type="button"
@@ -577,7 +638,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                                 className={`border-b border-subtle last:border-0 ${tier === key ? 'bg-sport-100/40' : ''}`}
                             >
                                 <td className="px-4 py-2.5 font-medium text-strong">{option.label}</td>
-                                <td className="px-4 py-2.5 text-muted">{TIER_STUDENT_RANGE_LABEL[key]}</td>
+                                {/* Límite del COACH por tier (grandfather P2) — no el label del catálogo de venta. */}
+                                <td className="px-4 py-2.5 text-muted">Hasta {limitFor(key)} alumno{limitFor(key) !== 1 ? 's' : ''}</td>
                                 <td className="px-4 py-2.5 text-strong">
                                     ${option.monthlyPriceClp.toLocaleString('es-CL')} CLP
                                 </td>

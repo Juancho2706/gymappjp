@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import { useCaptureCheckoutConfirmed } from '@/lib/posthog/events'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutos
 const POLL_INTERVAL_MS = 4000 // 4s
@@ -72,6 +73,17 @@ export default function FlowProcessingPage() {
 
     const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl
     const cycleLabel = BILLING_CYCLE_CONFIG[cycleFromUrl]?.label ?? cycleFromUrl
+
+    // E1 (P8) — checkout_confirmed en PostHog, gated por consentimiento (no-op sin opt-in).
+    // Solo lo que la URL trae de verdad (el retorno Flow SIEMPRE incluye tier/cycle, pero el
+    // fallback visual 'starter' de esta pantalla no debe contaminar el funnel).
+    const captureCheckoutConfirmed = useCaptureCheckoutConfirmed()
+    const tierForFunnel =
+        normalizedTierParam && normalizedTierParam in TIER_CONFIG
+            ? (normalizedTierParam as SubscriptionTier)
+            : null
+    const cycleForFunnel = searchParams.get('cycle')
+    const confirmedFiredRef = useRef(false)
 
     const stopPolling = useCallback(() => {
         if (pollRef.current) {
@@ -143,6 +155,17 @@ export default function FlowProcessingPage() {
             }
 
             if (payload.status === 'active' || payload.alreadyCreated) {
+                // E1 (P8): confirm visible — una sola vez por aterrizaje (ref guard); el hook manda
+                // con sendBeacon para sobrevivir al redirect al dashboard.
+                if (!confirmedFiredRef.current) {
+                    confirmedFiredRef.current = true
+                    captureCheckoutConfirmed({
+                        tier: tierForFunnel,
+                        billingCycle: cycleForFunnel,
+                        gateway: 'flow',
+                        result: 'active',
+                    })
+                }
                 window.location.href = '/coach/dashboard?subscription=active'
                 return false
             }
@@ -154,7 +177,7 @@ export default function FlowProcessingPage() {
             // Error de red transitorio: seguimos pooleando.
             return true
         }
-    }, [addonsFromUrl])
+    }, [addonsFromUrl, captureCheckoutConfirmed, cycleForFunnel, tierForFunnel])
 
     const startPolling = useCallback(() => {
         stopPolling()

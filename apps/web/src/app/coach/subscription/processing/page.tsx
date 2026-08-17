@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import { useCaptureCheckoutConfirmed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -96,10 +97,41 @@ export default function SubscriptionProcessingPage() {
     const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl
     const cycleLabel = BILLING_CYCLE_CONFIG[cycleFromUrl]?.label ?? cycleFromUrl
 
+    // E1 (P8) — funnel de checkout en PostHog, gated por consentimiento (no-op sin opt-in).
+    const captureCheckoutStarted = useCaptureCheckoutStarted()
+    const captureCheckoutConfirmed = useCaptureCheckoutConfirmed()
+    // Para checkout_confirmed SOLO va lo que la URL trae de verdad: la vuelta estandar de MP llega
+    // sin tier/cycle y el fallback visual 'starter'/'monthly' de esta pantalla contaminaria el dato.
+    const tierForFunnel =
+        normalizedTierParam && normalizedTierParam in TIER_CONFIG
+            ? (normalizedTierParam as SubscriptionTier)
+            : null
+    const cycleForFunnel = searchParams.get('cycle')
+    // Una sola vez por aterrizaje: confirmNow y el poll comparten el mismo desenlace 'active'.
+    const confirmedFiredRef = useRef(false)
+    function fireCheckoutConfirmed(result: 'active' | 'scheduled') {
+        if (confirmedFiredRef.current) return
+        confirmedFiredRef.current = true
+        captureCheckoutConfirmed({
+            tier: tierForFunnel,
+            billingCycle: cycleForFunnel,
+            gateway: 'mercadopago',
+            result,
+        })
+    }
+
     async function startCheckoutFromRegister() {
         setError(null)
         setCanRetry(false)
         setStatusText('Preparando tu suscripción...')
+        // E1 (P8): el registro pago confirmo su plan y se va a pedir la preference. Aca tier/cycle
+        // SI vienen en la URL (el register redirige con ambos), son lo que viaja al server.
+        captureCheckoutStarted({
+            tier: tierFromUrl,
+            billingCycle: cycleFromUrl,
+            gateway: 'mercadopago',
+            source: 'register',
+        })
         try {
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
@@ -195,6 +227,8 @@ export default function SubscriptionProcessingPage() {
         // timeout falso. Cortamos el poll y mostramos la confirmación con la fecha del corte.
         async function handleScheduled() {
             stopPolling()
+            // E1 (P8): cambio agendado al corte — el confirm aterrizo visible sin activacion inmediata.
+            fireCheckoutConfirmed('scheduled')
             const cutDate = await fetchCurrentPeriodEnd()
             if (!alive) return
             setScheduledCutDate(cutDate)
@@ -219,6 +253,8 @@ export default function SubscriptionProcessingPage() {
                     return
                 }
                 if (payload.subscriptionStatus === 'active') {
+                    // E1 (P8): confirm visible — sendBeacon en el hook para sobrevivir al redirect.
+                    fireCheckoutConfirmed('active')
                     window.location.href = '/coach/dashboard?subscription=active'
                 }
             } catch (err) {
@@ -304,6 +340,8 @@ export default function SubscriptionProcessingPage() {
 
                 if (payload.subscriptionStatus === 'active') {
                     stopPolling()
+                    // E1 (P8): confirm visible via poll — mismo evento, una sola vez (ref guard).
+                    fireCheckoutConfirmed('active')
                     window.location.href = '/coach/dashboard?subscription=active'
                 }
             } catch {

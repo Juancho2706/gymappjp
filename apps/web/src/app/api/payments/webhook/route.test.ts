@@ -229,6 +229,9 @@ function makeRequest(): Request {
 
 const PAID_COACH = {
     id: 'coach-1',
+    // created_at POST-corte de pricing v2 ⇒ los writes de max_clients usan el catálogo nuevo
+    // (pro 25 / elite 60). El grandfather (coach viejo ⇒ 30/100) se prueba con su propio caso.
+    created_at: '2026-09-01T00:00:00.000Z',
     subscription_status: 'active',
     subscription_tier: 'pro',
     billing_cycle: 'monthly',
@@ -351,6 +354,7 @@ describe('POST /api/payments/webhook — primer pago sin order.id escribe el tie
 
     const FREE_PENDING_COACH = {
         id: 'coach-1',
+        created_at: '2026-09-01T00:00:00.000Z', // post-corte pricing v2 (catálogo nuevo)
         subscription_status: 'pending_payment',
         subscription_tier: 'free',
         billing_cycle: 'monthly',
@@ -359,14 +363,16 @@ describe('POST /api/payments/webhook — primer pago sin order.id escribe el tie
         superseded_mp_preapproval_id: null,
     }
 
-    it('coach free + pago aprobado SIN order.id → escribe tier=pro + max_clients=30, status active, sin pisar mp_id', async () => {
+    it('coach free + pago aprobado SIN order.id → escribe tier=pro + max_clients=25, status active, sin pisar mp_id', async () => {
         coachRow = { ...FREE_PENDING_COACH }
         processWebhook.mockResolvedValue(firstPaymentNoOrderId())
         const res = await POST(makeRequest())
         expect(res.status).toBe(200)
         const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
         expect(patch).toBeTruthy()
-        expect(patch!.max_clients).toBe(30)
+        // Pricing v2: catálogo de venta pro=25. B1 migra este write al helper con created_at
+        // (grandfather: un pro VIEJO que reactiva conserva 30).
+        expect(patch!.max_clients).toBe(25)
         expect(patch!.billing_cycle).toBe('monthly')
         expect(patch!.subscription_status).toBe('active')
         // checkoutId null → NO sobrescribir subscription_mp_id (dejaría al coach sin con qué cobrar).
@@ -381,6 +387,16 @@ describe('POST /api/payments/webhook — primer pago sin order.id escribe el tie
         const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
         expect(patch).toBeTruthy()
         expect(patch!.subscription_mp_id).toBe('preapproval-aef')
+    })
+
+    it('grandfather (P2): coach VIEJO (pre-corte) que activa pro escribe max_clients=30, no 25', async () => {
+        coachRow = { ...FREE_PENDING_COACH, created_at: '2026-01-15T12:00:00.000Z' }
+        processWebhook.mockResolvedValue(firstPaymentNoOrderId())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
+        expect(patch).toBeTruthy()
+        expect(patch!.max_clients).toBe(30)
     })
 })
 
@@ -722,7 +738,8 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
         // (a) activación rank-guarded: coaches.update al destino completo.
         const activate = coachUpdates.find((p) => p.subscription_tier === 'elite')
         expect(activate).toBeTruthy()
-        expect(activate!.max_clients).toBe(100) // elite
+        // Pricing v2: catálogo de venta elite=60 (B1 migra el write al helper con created_at).
+        expect(activate!.max_clients).toBe(60) // elite
         expect(activate!.billing_cycle).toBe('monthly')
         expect(activate).not.toHaveProperty('subscription_status') // status intacto
 

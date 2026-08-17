@@ -27,9 +27,11 @@ import { TeamsPlanCard } from './TeamsPlanCard'
 
 const ALL_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
+// Pricing v2: free es el único tier sin ciclos de cobro — el tier mínimo que soporta
+// cualquier ciclo prepagado es pro (primer plan pago a la venta; starter salió de venta).
 const MIN_TIER_FOR_CYCLE: Partial<Record<BillingCycle, SubscriptionTier>> = {
-    annual: 'starter',
-    quarterly: 'elite',
+    annual: 'pro',
+    quarterly: 'pro',
 }
 
 
@@ -62,15 +64,8 @@ const planDisplay: Array<{
         topBorder: 'border-t-slate-400/60',
         badge: 'Gratis para siempre',
     },
-    {
-        id: 'starter',
-        descKey: 'landing.pricing.plan.starter.desc',
-        icon: Zap,
-        color: 'text-sky-600 dark:text-sky-400',
-        bg: 'bg-sky-500/10',
-        border: 'border-sky-500/20',
-        topBorder: 'border-t-sky-500/70 dark:border-t-sky-400/60',
-    },
+    // Pricing v2 — starter FUERA de venta (patrón growth/scale): sigue en union/TIER_CONFIG/CHECK
+    // para el histórico, pero no se vende. NO re-agregar aquí.
     {
         id: 'pro',
         descKey: 'landing.pricing.plan.pro.desc',
@@ -93,10 +88,10 @@ const planDisplay: Array<{
     // LEGACY — growth/scale fuera de venta (grandfathered + placeholder team/org_managed). Recortados de planDisplay; runtime/DB/admin intactos. NO re-agregar aquí.
 ]
 
-// SALE_TIERS = ['free','starter','pro','elite']. La card Teams (re-layout 6→4) la agrega el plan 02.
+// SALE_TIERS = ['free','pro','elite'] (pricing v2). La card Teams (no-tier) la agrega el plan 02.
 const ALL_ORDER: readonly SubscriptionTier[] = SALE_TIERS
 
-// Slides del carousel mobile = los 4 tiers comprables + 1 slide Teams (no-tier).
+// Slides del carousel mobile = los 3 tiers comprables + 1 slide Teams (no-tier).
 // Lista paralela para que el carousel y los dots incluyan Teams SIN contaminar
 // `SubscriptionTier` con un valor no comprable (D8 del plan 02).
 const TEAMS_SLIDE = 'teams' as const
@@ -841,18 +836,15 @@ export function LandingPricingPreview() {
                     scrollFnRef={carouselScrollFnRef}
                 />
 
-                {/* Desktop grid — 4 tiers + card Teams (plan 02).
-                    lg: 2×2 tiers + TeamsPlanCard a lo ancho (col-span-2, horizontal) debajo.
-                    xl: 5 cards en una fila (TeamsPlanCard vuelve a vertical). */}
-                <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-5 gap-3 overflow-y-visible pt-3">
+                {/* Desktop grid — 3 tiers a la venta (pricing v2: sin starter) + card Teams.
+                    lg: parrilla 2×2 (free/pro arriba, elite/teams abajo).
+                    xl: 4 cards en una fila. */}
+                <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-4 gap-3 overflow-y-visible pt-3">
                     <PlanCardCompact plan={planById('free')} billingCycle={billingCycle} />
-                    <PlanCardCompact plan={planById('starter')} billingCycle={billingCycle} />
                     <PlanCardCompact plan={planById('pro')} billingCycle={billingCycle} />
                     <PlanCardCompact plan={planById('elite')} billingCycle={billingCycle} />
-                    {/* growth/scale recortados (LEGACY, fuera de venta). Card Teams = componente dedicado, sin precio. */}
-                    <div className="lg:col-span-2 xl:col-span-1">
-                        <TeamsPlanCard variant="grid" />
-                    </div>
+                    {/* starter/growth/scale recortados (fuera de venta). Card Teams = componente dedicado, sin precio. */}
+                    <TeamsPlanCard variant="grid" />
                 </div>
 
                 {/* Teams callout — sin precios pre-cierre Movida (D6 + D11 plan 02). Estilo emerald. */}

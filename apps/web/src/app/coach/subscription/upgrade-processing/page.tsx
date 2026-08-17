@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { TIER_CONFIG, type SubscriptionTier } from '@/lib/constants'
+import { useCaptureCheckoutConfirmed } from '@/lib/posthog/events'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutos
 const SUCCESS_URL = '/coach/subscription?upgrade=success'
@@ -42,6 +44,24 @@ export default function UpgradeProcessingPage() {
     // Tier objetivo opcional (la página de suscripción lo agrega al success_url para un match exacto).
     const targetTier = useMemo(() => searchParams.get('tier') ?? null, [searchParams])
 
+    // E1 (P8) — checkout_confirmed del upgrade mid-cycle (one-shot prorrateado por MP), gated por
+    // consentimiento (no-op sin opt-in). Solo lo que la URL trae de verdad: tier invalido/ausente
+    // viaja como null, jamas un fallback inventado. Una sola vez por aterrizaje (ref guard).
+    const captureCheckoutConfirmed = useCaptureCheckoutConfirmed()
+    const tierForFunnel = targetTier && targetTier in TIER_CONFIG ? (targetTier as SubscriptionTier) : null
+    const cycleForFunnel = searchParams.get('cycle')
+    const confirmedFiredRef = useRef(false)
+    function fireCheckoutConfirmed() {
+        if (confirmedFiredRef.current) return
+        confirmedFiredRef.current = true
+        captureCheckoutConfirmed({
+            tier: tierForFunnel,
+            billingCycle: cycleForFunnel,
+            gateway: 'mercadopago',
+            result: 'active',
+        })
+    }
+
     useEffect(() => {
         let alive = true
 
@@ -72,6 +92,8 @@ export default function UpgradeProcessingPage() {
                 }
                 if (payload.status === 'active') {
                     stopPolling()
+                    // E1 (P8): confirm sincrono visible del upgrade.
+                    fireCheckoutConfirmed()
                     router.replace(SUCCESS_URL)
                     return
                 }
@@ -109,6 +131,8 @@ export default function UpgradeProcessingPage() {
             const activated = targetTier ? tier === targetTier : baseline !== null && tier !== baseline
             if (activated) {
                 stopPolling()
+                // E1 (P8): el upgrade activo via poll (webhook backstop) — mismo evento, una vez.
+                fireCheckoutConfirmed()
                 router.replace(SUCCESS_URL)
             }
         }, 3000)

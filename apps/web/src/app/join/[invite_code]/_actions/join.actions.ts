@@ -5,6 +5,7 @@ import { z } from 'zod/v4'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitInviteAccept } from '@/lib/rate-limit'
 import { resolveInvite, STANDALONE_REGISTRATION_DISABLED_MESSAGE } from '../_lib/resolve-invite'
+import { checkJoinCapacity } from '../_lib/join-capacity'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
 const JoinSchema = z.object({
@@ -52,6 +53,19 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         .eq('email', parsed.data.email)
         .maybeSingle()
     if (existing) return { error: 'Ya existe una cuenta con ese email' }
+
+    // P7 (pricing v2): cerco de verdad — contar activos vs el cupo APLICABLE ANTES de crear
+    // auth.user + fila (así no queda usuario huérfano que borrar). enterprise gatea por
+    // organizations.client_limit; team no tiene cuota de alumnos (seat_limit es de coaches);
+    // standalone (hoy apagado por C-KILL, cubierto igual por el helper si se reenciende)
+    // gatea por max_clients ?? tierMaxClientsFor con grandfather. Fail-closed ante errores.
+    const capacity = await checkJoinCapacity(admin, invite)
+    if (!capacity.ok) {
+        if (capacity.reason === 'limit_reached') {
+            return { error: 'Este espacio ya alcanzó su límite de alumnos. Pídele a tu coach que libere un cupo.' }
+        }
+        return { error: 'No pudimos validar el cupo de alumnos. Intenta de nuevo en unos minutos.' }
+    }
 
     const { data: newUser, error: authErr } = await admin.auth.admin.createUser({
         email: parsed.data.email,

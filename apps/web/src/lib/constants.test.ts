@@ -39,7 +39,9 @@ describe('subscription constants', () => {
 
     it('returns max clients and capabilities by tier', () => {
         expect(getTierMaxClients('starter')).toBe(10)
-        expect(getTierMaxClients('pro')).toBe(30)
+        // Pricing v2: catálogo de VENTA (coaches nuevos) — pro baja a 25; los pro
+        // existentes retienen 30 vía tierMaxClientsFor (ver packages/tiers/pricing-v2.test.ts).
+        expect(getTierMaxClients('pro')).toBe(25)
         expect(getTierCapabilities('starter').canUseNutrition).toBe(false)
         // white-label v2 (decision CEO 2026-06-21): branding = Pro+ ENTERO → starter SIN branding.
         expect(getTierCapabilities('starter').canUseBranding).toBe(false)
@@ -61,8 +63,8 @@ describe('subscription constants', () => {
         expect(isBrandingAllowed(null as unknown as SubscriptionTier)).toBe(false)
     })
 
-    it('pins elite ceiling at 100 (F0-a)', () => {
-        expect(getTierMaxClients('elite')).toBe(100)
+    it('pins elite ceiling at 60 (pricing v2; los elite existentes retienen 100 vía grandfather)', () => {
+        expect(getTierMaxClients('elite')).toBe(60)
     })
 
     it('enforces allowed billing cycles by tier', () => {
@@ -91,10 +93,14 @@ describe('subscription constants', () => {
         expect(isBillingCycleAllowedForTier('scale', 'annual')).toBe(true)
     })
 
-    it('free tier — zero price, 3 clients, no features', () => {
-        expect(getTierMaxClients('free')).toBe(3)
+    // Pricing v2 (P1/P4): free = 2 alumnos (catálogo de venta; los free existentes retienen 3
+    // vía grandfather) con TODO liberado excepto branding (white-label sigue Pro+ ENTERO).
+    it('free tier — zero price, 2 clients (venta), todo liberado excepto branding', () => {
+        expect(getTierMaxClients('free')).toBe(2)
         expect(getTierPriceClp('free', 'monthly')).toBe(0)
-        expect(getTierCapabilities('free').canUseNutrition).toBe(false)
+        expect(getTierCapabilities('free').canUseNutrition).toBe(true)
+        expect(getTierCapabilities('free').canCreateCustomExercises).toBe(true)
+        expect(getTierCapabilities('free').canImportClients).toBe(true)
         expect(getTierCapabilities('free').canUseBranding).toBe(false)
         expect(getTierCapabilities('free').canUseAdvancedReports).toBe(false)
     })
@@ -109,17 +115,18 @@ describe('subscription constants', () => {
     })
 })
 
-describe('sale tiers (D1)', () => {
-    it('SALE_TIERS has exactly the 4 tiers on sale', () => {
-        expect(SALE_TIERS.length).toBe(4)
-        expect([...SALE_TIERS]).toEqual(['free', 'starter', 'pro', 'elite'])
+describe('sale tiers (D1 + pricing v2)', () => {
+    it('SALE_TIERS has exactly the 3 tiers on sale (starter fuera de venta — pricing v2)', () => {
+        expect(SALE_TIERS.length).toBe(3)
+        expect([...SALE_TIERS]).toEqual(['free', 'pro', 'elite'])
     })
 
-    it('isSaleTier discriminates sale vs legacy/unknown', () => {
+    it('isSaleTier discriminates sale vs fuera-de-venta/legacy/unknown', () => {
         expect(isSaleTier('free')).toBe(true)
-        expect(isSaleTier('starter')).toBe(true)
         expect(isSaleTier('pro')).toBe(true)
         expect(isSaleTier('elite')).toBe(true)
+        // fuera de venta desde pricing v2 (sigue en union/TIER_CONFIG/CHECK, patrón growth/scale)
+        expect(isSaleTier('starter')).toBe(false)
         // legacy fuera de venta
         expect(isSaleTier('growth')).toBe(false)
         expect(isSaleTier('scale')).toBe(false)
@@ -130,22 +137,25 @@ describe('sale tiers (D1)', () => {
 })
 
 describe('getRecommendedTier (SALE_TIERS only, fallback elite)', () => {
-    it('recommends the smallest sale tier that fits the client count', () => {
+    it('recommends the smallest sale tier that fits the client count (pricing v2: sin starter)', () => {
         expect(getRecommendedTier(0)).toBe('free')
-        expect(getRecommendedTier(3)).toBe('free')
-        expect(getRecommendedTier(8)).toBe('starter')
+        expect(getRecommendedTier(2)).toBe('free')
+        // free ahora topa en 2 y starter salió de la venta: 3..25 ⇒ pro
+        expect(getRecommendedTier(3)).toBe('pro')
+        expect(getRecommendedTier(8)).toBe('pro')
         expect(getRecommendedTier(25)).toBe('pro')
-        // 80 cabe en el techo nuevo de elite (100)
-        expect(getRecommendedTier(80)).toBe('elite')
+        expect(getRecommendedTier(40)).toBe('elite')
     })
 
     it('falls back to elite above the elite ceiling (Teams bridge, not a tier)', () => {
+        // 80 supera el techo nuevo de elite (60) ⇒ fallback elite
+        expect(getRecommendedTier(80)).toBe('elite')
         expect(getRecommendedTier(1000)).toBe('elite')
     })
 
-    it('never recommends a legacy tier', () => {
-        for (const count of [200, 350, 500, 5000]) {
-            expect(getRecommendedTier(count)).toBe('elite')
+    it('never recommends starter nor a legacy tier', () => {
+        for (const count of [5, 10, 200, 350, 500, 5000]) {
+            expect(['free', 'pro', 'elite']).toContain(getRecommendedTier(count))
         }
     })
 })

@@ -16,7 +16,7 @@ import { listUserWorkspaces, pickPreferredWorkspace } from '@/services/auth/work
 import { findWorkspacePreference } from '@/infrastructure/db/workspace.repository'
 import { canAccessWorkspacePath, defaultWorkspaceHome } from '@/services/auth/workspace-route-guard.service'
 import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
-import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, tierMaxClientsFor, type SubscriptionTier } from '@eva/tiers'
 import { isPrefetchRequest } from '@/lib/http/prefetch-request'
 import { isServerActionRequest, toServerActionRedirect } from '@/lib/http/server-action-redirect'
 import {
@@ -438,11 +438,11 @@ async function proxyInner(request: NextRequest) {
         // Verify the user has a coaches record
         const { data: coachData } = await supabase
             .from('coaches')
-            .select('id, subscription_status, subscription_tier, current_period_end')
+            .select('id, subscription_status, subscription_tier, current_period_end, max_clients, created_at')
             .eq('id', user.id)
             .maybeSingle()
 
-        const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end'> & { subscription_tier?: string } | null
+        const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end' | 'max_clients' | 'created_at'> & { subscription_tier?: string } | null
 
         if (!coach) {
             // User is logged in but isn't a coach → send to OAuth onboarding
@@ -547,6 +547,9 @@ async function proxyInner(request: NextRequest) {
                 subscriptionTier: coach.subscription_tier,
                 activeStandaloneClientCount,
                 workspaceType: activeWorkspace?.type ?? null,
+                // Pricing v2 (P2): cupo free EFECTIVO — la columna gana; sin columna, el helper con
+                // la fecha de creación (un free VIEJO mide contra 3, uno nuevo contra 2).
+                freeClientLimit: coach.max_clients ?? tierMaxClientsFor('free', coach.created_at),
             },
         )
         if (redirectPath) {
@@ -882,7 +885,7 @@ async function proxyInner(request: NextRequest) {
         }
 
         const resolvedColor = coach.primary_color || BRAND_PRIMARY_COLOR
-        const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+        const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
         const brandingAllowed = isBrandingAllowed(tier)
 
         // White-label v2: el branding VISUAL es Pro+ ENTERO. Identidad (id/slug/brand-name/tier)

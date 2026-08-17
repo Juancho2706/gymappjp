@@ -265,7 +265,7 @@ export default async function CoachSettingsPage() {
         )
     }
 
-    const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+    const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
     const capabilities = getTierCapabilities(tier)
     // Sin branding (Free): el hub Opciones se mantiene ENTERO (kit: la card Mi Marca lleva
     // badge Pro y rutea al upsell — /coach/settings/brand lo renderiza como sub-pantalla).
@@ -286,7 +286,8 @@ export default async function CoachSettingsPage() {
                 <BrandSettingsForm coach={coach} />
             </PaneBody>
         ) : (
-            <PaneBody desc="Tu app, con tu identidad — disponible desde Starter.">
+            // Pricing v2 (D3): starter fuera de venta; branding es Pro+ (white-label v2, CEO 2026-06-21).
+            <PaneBody desc="Tu app, con tu identidad — disponible desde el plan Pro.">
                 <BrandUpsell tier={tier} />
             </PaneBody>
         ),
@@ -362,7 +363,7 @@ export default async function CoachSettingsPage() {
                 <IdentityHero
                     name={displayName}
                     subtitle={`Coach · ${clientLabel}`}
-                    badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`}
+                    badge={`Plan ${TIER_LABEL[tier] ?? 'Gratis'}`}
                     logoUrl={standaloneBrandingVisible ? coach.logo_url : null}
                     logoDarkUrl={standaloneBrandingVisible ? coach.logo_url_dark : null}
                 />

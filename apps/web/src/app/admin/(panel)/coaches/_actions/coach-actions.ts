@@ -5,7 +5,9 @@ import { AdminCreateCoachSchema } from '@eva/schemas'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
-import { getRecommendedTier, getTierMaxClients, TIER_CONFIG } from '@/lib/constants'
+// getTierMaxClients (catálogo de VENTA) queda SOLO para la creación de coaches nuevos;
+// los emails sobre un coach EXISTENTE usan los helpers con fecha (grandfather pricing v2).
+import { getRecommendedTierFor, getTierMaxClients, tierMaxClientsFor, TIER_CONFIG } from '@/lib/constants'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
@@ -391,7 +393,7 @@ export async function sendAnnouncementEmailAction(): Promise<
 
         const { subject, html } = buildExistingCoachAnnouncementEmail({
             coachName: coach.full_name?.split(' ')[0] ?? 'Coach',
-            currentTier: coach.subscription_tier ?? 'starter',
+            currentTier: coach.subscription_tier ?? 'free',
             subscriptionUrl: `${appUrl}/coach/subscription`,
         })
         const result = await sendTransactionalEmail({ to: email, subject, html })
@@ -415,7 +417,7 @@ export async function sendIndividualCoachEmailAction(
     const [coachRes, authUserRes] = await Promise.all([
         adminClient
             .from('coaches')
-            .select('full_name, trial_ends_at, subscription_tier')
+            .select('full_name, trial_ends_at, subscription_tier, created_at')
             .eq('id', coachId)
             .maybeSingle(),
         adminClient.auth.admin.getUserById(coachId),
@@ -432,8 +434,11 @@ export async function sendIndividualCoachEmailAction(
         .eq('is_archived', false)
 
     const activeCount = clientCount ?? 0
-    const recTier = getRecommendedTier(activeCount)
+    // Pricing v2 (P2): recomendación y límite con el grandfather del coach (espejo del cron
+    // trial-expiry) — un pro VIEJO con 28 activos recibe «Pro (hasta 30)», no un salto a Elite.
+    const recTier = getRecommendedTierFor(activeCount, coach.created_at)
     const recConfig = TIER_CONFIG[recTier]
+    const recMaxClients = tierMaxClientsFor(recTier, coach.created_at)
     const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
     const reactivateUrl = `${appUrl}/coach/reactivate?tier=${recTier}`
     const coachName = coach.full_name ?? 'Coach'
@@ -448,14 +453,14 @@ export async function sendIndividualCoachEmailAction(
         ;({ subject, html } = buildTrialExpiryWarningEmail({
             coachName, brandName, daysLeft, activeClientCount: activeCount,
             recommendedTierLabel: recConfig.label, recommendedTierSlug: recTier,
-            recommendedMaxClients: recConfig.maxClients, recommendedPriceClp: recConfig.monthlyPriceClp,
+            recommendedMaxClients: recMaxClients, recommendedPriceClp: recConfig.monthlyPriceClp,
             reactivateUrl,
         }))
     } else {
         ;({ subject, html } = buildTrialExpiredEmail({
             coachName, brandName, activeClientCount: activeCount,
             recommendedTierLabel: recConfig.label, recommendedTierSlug: recTier,
-            recommendedMaxClients: recConfig.maxClients, recommendedPriceClp: recConfig.monthlyPriceClp,
+            recommendedMaxClients: recMaxClients, recommendedPriceClp: recConfig.monthlyPriceClp,
             reactivateUrl,
         }))
     }

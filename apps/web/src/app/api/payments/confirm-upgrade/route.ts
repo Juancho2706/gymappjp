@@ -16,7 +16,7 @@ import { resolveActiveDiscountSpec, buildAmountPutIdempotencyKey } from '@/servi
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import { fetchCoachBillingRow } from '../addons/_lib/coach-context'
-import { getTierMaxClients, getTierRank, type SubscriptionTier } from '@/lib/constants'
+import { tierMaxClientsFor, getTierRank, type SubscriptionTier } from '@/lib/constants'
 
 /**
  * POST /api/payments/confirm-upgrade — camino SÍNCRONO de confirmación del one-shot de UPGRADE
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
             })
         }
 
-        const currentTier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+        const currentTier = (coach.subscription_tier ?? 'free') as SubscriptionTier
 
         // Activación idempotente con RANK-GUARD: solo subimos tier/max_clients/cycle si el tier
         // vigente es de rango MENOR al nuevo (si ya activó —este camino o el webhook—, no-op).
@@ -163,7 +163,8 @@ export async function POST(request: Request) {
                 .from('coaches')
                 .update({
                     subscription_tier: ref.newTier,
-                    max_clients: getTierMaxClients(ref.newTier),
+                    // Pricing v2 (P2): límite con grandfather — un coach viejo que sube a elite recibe 100.
+                    max_clients: tierMaxClientsFor(ref.newTier, coach.created_at),
                     billing_cycle: ref.cycle,
                     // status se mantiene 'active' (no se toca): el upgrade no cambia el estado.
                 })

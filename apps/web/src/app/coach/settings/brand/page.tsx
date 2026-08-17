@@ -20,7 +20,7 @@ export default async function CoachBrandPage() {
     if (coach.subscription_status === 'org_managed') redirect('/coach/dashboard')
     if (coach.subscription_status === 'team_managed') redirect('/coach/settings')
 
-    const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+    const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
     const capabilities = getTierCapabilities(tier)
 
     // Sin branding (free tier): esta ruta ES el upsell (kit: card Mi Marca badge Pro → miMarcaUpsell).

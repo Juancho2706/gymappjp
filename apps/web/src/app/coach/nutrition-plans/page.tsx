@@ -41,7 +41,7 @@ export default async function NutritionPlansPage() {
   if (await shouldSwapCockpitToNutritionV2(coachId)) {
     redirect('/coach/nutrition-v2')
   }
-  const tier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
+  const tier = (coach?.subscription_tier ?? 'free') as SubscriptionTier
   const capabilities = getTierCapabilities(tier)
   if (!capabilities.canUseNutrition) {
     const proMonthly = getTierPriceClp('pro', 'monthly')

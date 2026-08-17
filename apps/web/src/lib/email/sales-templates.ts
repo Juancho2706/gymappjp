@@ -45,11 +45,19 @@ export type ClientLimitReachedContext = {
     /** Cupo de alumnos activos del plan vigente. */
     currentLimit: number
     subscriptionUrl: string
+    /**
+     * Tier de venta recomendado como próximo paso (pricing v2, D3: el upsell apunta a Pro — nunca a
+     * starter, que salió de la venta). 'Pro' para free/starter, 'Elite' para pro; null (elite o
+     * legacy sin techo de venta mayor) mantiene el copy genérico. Sin números de cupo a propósito:
+     * el límite concreto depende del grandfather de cada coach y se ve en /coach/subscription.
+     */
+    recommendedTierLabel?: string | null
 }
 
 export function buildClientLimitReachedEmail(ctx: ClientLimitReachedContext) {
     const coachName = escHtml(ctx.coachName)
     const tierLabel = escHtml(ctx.tierLabel)
+    const recommended = ctx.recommendedTierLabel ? escHtml(ctx.recommendedTierLabel) : null
     const subject = `Alcanzaste el límite de ${ctx.currentLimit} alumnos de tu plan ${ctx.tierLabel}`
 
     const body = `
@@ -63,10 +71,13 @@ ${badge('LÍMITE ALCANZADO', '#F59E0B')}
   Por eso no pudimos sumar al alumno que intentaste agregar.
 </p>
 <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-  Con un plan más grande subes el cupo al instante: tus alumnos actuales, sus rutinas y su historial
-  se quedan donde están, y puedes seguir sumando gente sin tener que archivar a nadie.
+  ${recommended
+      ? `Con el plan <strong style="color:#111827;">${recommended}</strong> subes el cupo al instante: tus alumnos actuales, sus rutinas y su historial
+  se quedan donde están, y puedes seguir sumando gente sin tener que archivar a nadie.`
+      : `Con un plan más grande subes el cupo al instante: tus alumnos actuales, sus rutinas y su historial
+  se quedan donde están, y puedes seguir sumando gente sin tener que archivar a nadie.`}
 </p>
-${ctaButton('Ampliar mi plan', ctx.subscriptionUrl)}
+${ctaButton(recommended ? `Pasar a ${recommended}` : 'Ampliar mi plan', ctx.subscriptionUrl)}
 <p style="margin:20px 0 0;font-size:13px;color:#6b7280;line-height:1.6;">
   ¿Prefieres no cambiar de plan por ahora? También puedes archivar a un alumno inactivo para liberar
   un cupo. Si tienes dudas, responde este correo y te ayudamos.

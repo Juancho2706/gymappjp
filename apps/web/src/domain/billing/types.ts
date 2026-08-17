@@ -89,7 +89,9 @@ export type CoachPurchaseContext = {
 /** Razón por la que un módulo NO se puede comprar (para copy del catálogo). */
 export type AddonPurchaseDenialReason =
     | 'no_paid_plan'
-    | 'requires_nutrition_tier'
+    /** Pricing v2 P3: nutrition_exchanges viene incluido en todo plan — su compra se retiró
+     * (reemplaza al viejo `requires_nutrition_tier`, que gateaba por tier con nutrición). */
+    | 'included_in_plan'
     | 'managed_by_team_or_org'
 
 export type CanPurchaseAddonResult =

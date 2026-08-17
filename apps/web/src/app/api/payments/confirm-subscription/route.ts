@@ -7,7 +7,7 @@ import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subsc
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import {
     getDefaultBillingCycleForTier,
-    getTierMaxClients,
+    tierMaxClientsFor,
     isBillingCycleAllowedForTier,
     type BillingCycle,
     type SubscriptionTier,
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         const { data: coach } = await admin
             .from('coaches')
             .select(
-                'id, subscription_tier, billing_cycle, subscription_mp_id, current_period_end, subscription_status, superseded_mp_preapproval_id, subscription_provider_external_id, provider_plan_id'
+                'id, created_at, subscription_tier, billing_cycle, subscription_mp_id, current_period_end, subscription_status, superseded_mp_preapproval_id, subscription_provider_external_id, provider_plan_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
             }
         }
 
-        let tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+        let tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
         let billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
         if (parsedRef?.tier && parsedRef.billingCycle) {
             tier = parsedRef.tier
@@ -238,7 +238,8 @@ export async function POST(request: Request) {
                 ...(isPaidLike ? { paid_access_ended_at: null } : {}),
                 subscription_tier: tier,
                 billing_cycle: billingCycle,
-                max_clients: getTierMaxClients(tier),
+                // Pricing v2 (P2): límite con grandfather — un pro viejo que renueva/reactiva conserva 30.
+                max_clients: tierMaxClientsFor(tier, coach.created_at),
                 subscription_mp_id: preapprovalId,
                 // ── B3: al persistir un preapproval MP VIVO, el gateway dueño de la sub vuelve a MP y los
                 // refs Flow MUERTOS se limpian. Sin esto, un ex-coach Flow reactivado por MP quedaria con

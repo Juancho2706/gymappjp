@@ -283,7 +283,7 @@ export default function CoachSettingsHubScreen() {
 
   const isTeam = ws.kind === 'team_owner' || ws.kind === 'team_member'
   const managed = ws.isManaged
-  const tier = profile?.subscriptionTier ?? 'starter'
+  const tier = profile?.subscriptionTier ?? 'free'
   const brandingOk = canUseBranding(tier)
   const displayName = profile?.brandName?.trim() || profile?.fullName?.trim() || 'Coach'
   // QA2-B2: el hero pinta el LOGO de la marca cuando existe (`coaches.logo_url`, la misma
@@ -298,7 +298,7 @@ export default function CoachSettingsHubScreen() {
         : 'Miembro'
     : managed
       ? 'Gestionado'
-      : `Plan ${TIER_LABEL[tier] ?? 'Starter'}`
+      : `Plan ${TIER_LABEL[tier] ?? 'Gratis'}`
   const heroSubtitle = isTeam ? 'Pool de coaches' : managed ? 'Cuenta gestionada por tu organización' : 'Tu negocio EVA'
 
   function confirmLogout() {

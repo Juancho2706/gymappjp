@@ -6,7 +6,7 @@ import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { CreateClientSchema, UpdateClientDataSchema } from '@eva/schemas'
-import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
+import { tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
     buildClientWelcomeEmail,
@@ -85,16 +85,18 @@ export async function createClientAction(
 
     const { data: rawCoachData } = await supabase
         .from('coaches')
-        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id, primary_color, logo_url')
+        .select('id, created_at, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id, primary_color, logo_url')
         .eq('id', coachUser.id)
         .maybeSingle()
 
-    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients' | 'primary_color' | 'logo_url'> & { active_org_id?: string | null } | null
+    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'created_at' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients' | 'primary_color' | 'logo_url'> & { active_org_id?: string | null } | null
 
     if (!coach) return { error: 'Coach no encontrado.' }
 
-    const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
-    const maxClients = coach.max_clients ?? getTierMaxClients(tier)
+    const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+    // Pricing v2 (P2): la columna max_clients SIGUE ganando; el fallback usa el helper con la fecha
+    // de creación (grandfather) — nunca el catálogo de venta plano para un coach existente.
+    const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at)
     let activeClientsQuery = supabase
         .from('clients')
         .select('id', { count: 'exact', head: true })

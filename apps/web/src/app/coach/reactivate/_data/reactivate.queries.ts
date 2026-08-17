@@ -21,7 +21,9 @@ export const getReactivatePageData = cache(async () => {
             // sobre current_period_end: los flujos de expiracion (cron/webhook/espejo manual)
             // pueden NULLear current_period_end, y sin esta columna el banner degrada a copy
             // generico sin fecha.
-            .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id')
+            // created_at: ancla del grandfather de pricing v2 (P2) — la UI comunica el límite REAL
+            // del coach vía tierMaxClientsFor(tier, created_at), no el catálogo de venta plano.
+            .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id, created_at')
             .eq('id', user.id)
             .maybeSingle(),
         // Cupo STANDALONE (`coach_id` + `org_id IS NULL` + `team_id IS NULL`): mismo scoping que la lista archivable, el archivado

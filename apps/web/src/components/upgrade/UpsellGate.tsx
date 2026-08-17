@@ -68,9 +68,12 @@ export function UpsellGate({ variant, currentTier }: Props) {
 
     const title = isExercises ? 'Mi Biblioteca de Ejercicios' : 'Importar Alumnos desde Excel'
 
+    // Pricing v2 (P4/D3): estas capacidades vienen incluidas en TODOS los planes (free tambien),
+    // asi que este gate solo puede aparecer en estados anomalos; si aparece, el upsell apunta a Pro
+    // (starter salio de la venta — jamas ofrecer un plan muerto).
     const subtitle = isExercises
-        ? <>Crea tus propios ejercicios con video de YouTube y apareceran en el builder. Disponible en <span className="font-semibold text-foreground">Starter</span>.</>
-        : <>Migra toda tu cartera de alumnos desde Excel en minutos, sin cargar uno por uno. Disponible en <span className="font-semibold text-foreground">Starter</span>.</>
+        ? <>Crea tus propios ejercicios con video de YouTube y apareceran en el builder. Disponible en <span className="font-semibold text-foreground">Pro</span>.</>
+        : <>Migra toda tu cartera de alumnos desde Excel en minutos, sin cargar uno por uno. Disponible en <span className="font-semibold text-foreground">Pro</span>.</>
 
     const features = isExercises
         ? [
@@ -87,8 +90,8 @@ export function UpsellGate({ variant, currentTier }: Props) {
           ]
 
     const ctaLabel = isExercises
-        ? 'Crear mi biblioteca con Starter →'
-        : 'Importar alumnos con Starter →'
+        ? 'Crear mi biblioteca con Pro →'
+        : 'Importar alumnos con Pro →'
 
     return (
         <div className="p-4 md:p-8 max-w-2xl mx-auto animate-fade-in space-y-4">
@@ -146,19 +149,19 @@ export function UpsellGate({ variant, currentTier }: Props) {
                         <div className={`mt-2.5 h-7 w-full rounded-lg ${c.mockupItemBg} border ${c.mockupItemBorder}`} />
                         <div className="h-7 w-full rounded-lg bg-muted/50" />
                     </div>
-                    <p className={`px-3 pb-3 text-[10px] font-medium ${c.mockupBadge}`}>Con Starter ✓</p>
+                    <p className={`px-3 pb-3 text-[10px] font-medium ${c.mockupBadge}`}>Con Pro ✓</p>
                 </div>
             </div>
 
             {/* Pricing + features + CTA */}
             <div className="rounded-2xl border border-border bg-card p-5 space-y-5">
                 <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Disponible en Starter</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Disponible en Pro</p>
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 mt-1.5">
-                        <span className="text-2xl font-extrabold text-foreground">$19.990</span>
+                        <span className="text-2xl font-extrabold text-foreground">$29.990</span>
                         <span className="text-sm text-muted-foreground">/mes</span>
                         <span className="text-muted-foreground/40">·</span>
-                        <span className={`text-sm font-semibold ${c.priceAccent}`}>$15.992/mes anual</span>
+                        <span className={`text-sm font-semibold ${c.priceAccent}`}>$23.992/mes anual</span>
                         <span className={`rounded-md ${c.priceBadgeBg} px-1.5 py-0.5 text-[10px] font-bold ${c.priceBadgeText}`}>−20%</span>
                     </div>
                 </div>
@@ -173,7 +176,7 @@ export function UpsellGate({ variant, currentTier }: Props) {
                 </ul>
 
                 <Link
-                    href="/coach/subscription?upgrade=starter"
+                    href="/coach/subscription?upgrade=pro"
                     className={`flex h-11 w-full items-center justify-center rounded-xl ${c.cta} px-6 text-sm font-semibold text-white transition-colors`}
                 >
                     {ctaLabel}

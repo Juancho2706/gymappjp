@@ -6,7 +6,7 @@ import { mapProviderStatus, resolveCurrentPeriodEnd, resolveTerminalEvent } from
 import {
     ADDON_CONFIG,
     BILLING_CYCLE_CONFIG,
-    getTierMaxClients,
+    tierMaxClientsFor,
     getTierRank,
     isBillingCycleAllowedForTier,
     type BillingCycle,
@@ -186,7 +186,7 @@ export async function runWebhookPipeline(
     const { data: coach } = await admin
         .from('coaches')
         .select(
-            'id, full_name, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id, subscription_provider, subscription_provider_external_id'
+            'id, created_at, full_name, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id, subscription_provider, subscription_provider_external_id'
         )
         .eq('id', result.coachId)
         .maybeSingle()
@@ -249,7 +249,7 @@ export async function runWebhookPipeline(
               })
             : null
         if (recurringStatus === 'active') {
-            const tierForCharge = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+            const tierForCharge = (coach.subscription_tier ?? 'free') as SubscriptionTier
             const cycleForCharge = (coach.billing_cycle ?? 'monthly') as BillingCycle
             const paidAt = result.paidAt ?? new Date().toISOString()
             // Ref del gateway (B1): Flow → external_id; MP → mp_id. Un coach Flow tiene mp_id NULL, así
@@ -451,7 +451,7 @@ export async function runWebhookPipeline(
                 return NextResponse.json({ ok: true })
             }
         }
-        const tierForAddon = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+        const tierForAddon = (coach.subscription_tier ?? 'free') as SubscriptionTier
         const cycleForAddon = (coach.billing_cycle ?? 'monthly') as BillingCycle
         const paidAt = result.paidAt ?? new Date().toISOString()
         const moduleKey = result.oneShotAddon.moduleKey
@@ -655,7 +655,7 @@ export async function runWebhookPipeline(
         }
         const newTier = result.tierUpgrade.newTier
         const cycle = result.tierUpgrade.cycle
-        const currentTier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+        const currentTier = (coach.subscription_tier ?? 'free') as SubscriptionTier
         const paidAt = result.paidAt ?? new Date().toISOString()
         try {
             // Activación idempotente con RANK-GUARD: solo subimos tier/max_clients/cycle si el tier
@@ -665,7 +665,8 @@ export async function runWebhookPipeline(
                     .from('coaches')
                     .update({
                         subscription_tier: newTier,
-                        max_clients: getTierMaxClients(newTier),
+                        // Pricing v2 (P2): límite con grandfather (espejo de confirm-upgrade).
+                        max_clients: tierMaxClientsFor(newTier, coach.created_at),
                         billing_cycle: cycle,
                         // status se mantiene (el upgrade no cambia el estado de la suscripción).
                     })
@@ -858,7 +859,7 @@ export async function runWebhookPipeline(
             mapProviderStatus(result.providerStatus) === 'active'
         ) {
             try {
-                const tierForCharge = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+                const tierForCharge = (coach.subscription_tier ?? 'free') as SubscriptionTier
                 const cycleForCharge = (coach.billing_cycle ?? 'monthly') as BillingCycle
                 // Ref del gateway (B1): Flow → external_id; MP → mp_id. Espejo de la rama recurrente.
                 const chargeRef = subRef
@@ -1074,7 +1075,7 @@ export async function runWebhookPipeline(
     }
 
     const status = mapProviderStatus(result.providerStatus)
-    let tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+    let tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
     let billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
 
     if (result.subscriptionTier && result.billingCycle) {
@@ -1113,7 +1114,8 @@ export async function runWebhookPipeline(
     if (isPaidLike && (checkoutId || hasResolvedPlan)) {
         coachUpdate.subscription_tier = tier
         coachUpdate.billing_cycle = billingCycle
-        coachUpdate.max_clients = getTierMaxClients(tier)
+        // Pricing v2 (P2): límite con grandfather — un pro viejo que activa/renueva conserva 30.
+        coachUpdate.max_clients = tierMaxClientsFor(tier, coach.created_at)
         // subscription_mp_id: SOLO con un checkoutId real. Un `payment` sin `order.id` trae checkoutId
         // null → NO pisar el preapproval id vigente con null (lo dejaría sin con qué cobrar/reconciliar).
         if (checkoutId) {

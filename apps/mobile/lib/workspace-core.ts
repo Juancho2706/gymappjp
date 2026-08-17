@@ -155,6 +155,12 @@ export function resolveReactivateRequired(
         subscriptionTier?: string | null
         activeStandaloneClientCount?: number | null
         workspaceKind?: WorkspaceKind | null
+        /**
+         * Cupo free EFECTIVO del coach (pricing v2, P2 grandfather): `coaches.max_clients` cuando
+         * el caller lo tiene (coach-access lo trae del perfil). Sin este dato se cae al catálogo de
+         * venta (coaches nuevos, free 2) — un free VIEJO conserva su 3 vía la columna.
+         */
+        freeClientLimit?: number | null
     },
 ): boolean {
     if (!subscriptionStatus) return false
@@ -163,7 +169,8 @@ export function resolveReactivateRequired(
         capacity?.subscriptionTier === 'free' &&
         capacity.workspaceKind === 'standalone' &&
         typeof capacity.activeStandaloneClientCount === 'number' &&
-        capacity.activeStandaloneClientCount > getTierMaxClients('free')
+        // Espejo del gate web (coach-subscription-gate.ts): el cupo efectivo manda sobre el catálogo.
+        capacity.activeStandaloneClientCount > (capacity.freeClientLimit ?? getTierMaxClients('free'))
     return !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd, now) || isFreeStandaloneOverCapacity
 }
 

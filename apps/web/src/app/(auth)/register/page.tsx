@@ -26,7 +26,8 @@ import {
 
 const initialState: RegisterState = {}
 const googleInitialState: CompleteOnboardingState = {}
-// Solo se ofrecen tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera de venta (grandfathered, ver plan 04).
+// Solo se ofrecen tiers a la venta (free/pro/elite — pricing v2). starter salió de venta;
+// growth/scale siguen fuera de venta (grandfathered, ver plan 04).
 const tierOptions = SALE_TIERS.map((tier) => [tier, TIER_CONFIG[tier]] as const)
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
@@ -91,7 +92,8 @@ export default function RegisterPage() {
     const [password, setPassword] = useState('')
     const [clientError, setClientError] = useState<string | null>(null)
     const [fromGoogle, setFromGoogle] = useState(false)
-    const [tier, setTier] = useState<SaleTier>('starter')
+    // Pricing v2: pro es el plan destacado y el default del selector (starter fuera de venta).
+    const [tier, setTier] = useState<SaleTier>('pro')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     // Código de descuento (REGISTER-CODE): manual (campo colapsado) o auto-aplicado desde ?codigo=.
     // Solo se threadea a /processing (el canje + disclosure SERNAC + consentimiento ocurren allá).
@@ -134,13 +136,13 @@ export default function RegisterPage() {
         }
 
         const rawTier = params.get('tier')
-        const normalizedTier = rawTier === 'starter_lite' ? 'starter' : rawTier
         const queryCycle = params.get('cycle')
-        // Solo aceptamos tiers a la venta. Un link viejo con ?tier=growth/scale degrada a 'starter'.
+        // Solo aceptamos tiers a la venta (free/pro/elite). Un link viejo con
+        // ?tier=starter/starter_lite/growth/scale (fuera de venta) degrada a 'pro'.
         const nextTier: SaleTier =
-            normalizedTier && isSaleTier(normalizedTier)
-                ? normalizedTier
-                : 'starter'
+            rawTier && isSaleTier(rawTier)
+                ? rawTier
+                : 'pro'
         setTier(nextTier)
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) {
             const candidateCycle = queryCycle as BillingCycle
@@ -494,6 +496,9 @@ export default function RegisterPage() {
                                             // planes, Free incluido. `caps.canUseNutrition` solo gatea la compra
                                             // del add-on en billing, por eso esta fila no lo consulta.
                                             { label: 'Planes de nutrición', included: true },
+                                            // Pricing v2 (P3): los 4 módulos van incluidos en TODOS los planes,
+                                            // Free incluido — el gate server ya los libera (hasPaidModuleAccess).
+                                            { label: '4 módulos profesionales incluidos', included: true },
                                             { label: 'Branding personalizado', included: caps.canUseBranding },
                                         ]
                                         return (
@@ -622,17 +627,18 @@ export default function RegisterPage() {
                                 </section>
                             )}
 
-                            {/* Módulos: incluidos en los planes pagos (CEO 2026-07-17) — ya no se
-                                compran como add-ons en el signup. El código de descuento se conserva. */}
-                            {!isFreeTier && (
-                                <section className="space-y-2">
-                                    <div className="rounded-control border border-border-subtle bg-surface-sunken p-3">
-                                        <p className="text-sm font-semibold text-text-strong">Módulos profesionales incluidos</p>
-                                        <p className="mt-0.5 text-xs text-text-muted">
-                                            Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen con tu plan, sin costo extra.
-                                        </p>
-                                    </div>
-                                    {/* REGISTER-CODE: código de descuento colapsado (camino primario = link auto-aplicado ?codigo=). */}
+                            {/* Módulos: incluidos en TODOS los planes, Free incluido (pricing v2 P3 —
+                                el gate server ya los libera). Ya no se compran como add-ons en el signup. */}
+                            <section className="space-y-2">
+                                <div className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+                                    <p className="text-sm font-semibold text-text-strong">Módulos profesionales incluidos</p>
+                                    <p className="mt-0.5 text-xs text-text-muted">
+                                        Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen con todos los planes — Free incluido, sin costo extra.
+                                    </p>
+                                </div>
+                                {/* REGISTER-CODE: código de descuento colapsado (camino primario = link
+                                    auto-aplicado ?codigo=). Solo aplica a planes pagos. */}
+                                {!isFreeTier && (
                                     <div className="rounded-control border border-border-subtle bg-surface-sunken/60 p-3">
                                         {!couponFieldOpen ? (
                                             <button
@@ -659,8 +665,8 @@ export default function RegisterPage() {
                                             </div>
                                         )}
                                     </div>
-                                </section>
-                            )}
+                                )}
+                            </section>
                         </>
                     ) : null}
 
@@ -701,12 +707,12 @@ export default function RegisterPage() {
                                         {getTierCapabilities(tier).canUseBranding ? 'Incluida' : 'No incluida'}
                                     </span>
                                 </div>
-                                {!isFreeTier && (
-                                    <div className="flex justify-between">
-                                        <span className="text-text-muted">Módulos profesionales (4)</span>
-                                        <span className="font-semibold text-[var(--success-600)]">Incluidos</span>
-                                    </div>
-                                )}
+                                {/* Pricing v2 (P3): los 4 módulos van incluidos en TODOS los planes,
+                                    Free incluido — el gate server ya los libera. */}
+                                <div className="flex justify-between">
+                                    <span className="text-text-muted">Módulos profesionales (4)</span>
+                                    <span className="font-semibold text-[var(--success-600)]">Incluidos</span>
+                                </div>
                                 <div className="flex justify-between border-t border-border-default pt-2 mt-2">
                                     <span className="text-text-muted">{isFreeTier ? 'Costo' : 'Total a pagar'}</span>
                                     <span className="text-lg font-black text-text-strong">

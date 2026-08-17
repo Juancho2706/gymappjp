@@ -12,8 +12,16 @@
  * Plan 04 (consolidación de planes + ciclos):
  * - growth/scale fuera de venta, pero INTACTOS en runtime/DB/admin (grandfathered + placeholder
  *   team/org_managed, migración 20260609230000). NO borrar del union ni del catálogo.
- * - elite.maxClients = 100 (techo subido, bump regalado — F0-a).
  * - trimestral + anual habilitados en los 3 pagos (F0/D2).
+ *
+ * Pricing v2 (specs/pricing-v2, decisión del dueño 2026-08-17):
+ * - Estructura de venta Free / Pro / Elite. starter SALE de la venta (SALE_TIERS) pero QUEDA
+ *   en el union, en TIER_CONFIG y en el CHECK de DB — mismo trato que growth/scale.
+ * - TIER_CONFIG.maxClients = catálogo de VENTA (coaches NUEVOS): free 2 / pro 25 / elite 60.
+ * - Los coaches EXISTENTES conservan sus límites viejos (free 3 / pro 30 / elite 100) vía
+ *   `tierMaxClientsFor(tier, coachCreatedAt)` con corte en PRICING_V2_CUTOVER. Todo sitio con
+ *   el coach a mano usa ESE helper; getTierMaxClients queda solo como catálogo de venta.
+ * - Los PRECIOS CLP no cambian en esta tanda (el estudio de IVA va aparte).
  */
 
 // ── Tipos de negocio ────────────────────────────────────────────────────────
@@ -23,7 +31,12 @@ export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
 /** Union completo (CHECK de DB). growth/scale LEGACY pero vivos en runtime — NO borrar. */
 export type SubscriptionTier = 'free' | 'starter' | 'pro' | 'elite' | 'growth' | 'scale'
 
-/** Tiers actualmente a la venta. Subconjunto de SubscriptionTier; growth/scale quedan fuera de venta (grandfathered). */
+/**
+ * Tiers estructuralmente vendibles. Subconjunto de SubscriptionTier; growth/scale quedan fuera (grandfathered).
+ * Pricing v2: starter QUEDA en este TIPO (compat con superficies que aún lo referencian: register,
+ * reactivate, cupones históricos) pero ya NO está en SALE_TIERS — la venta real es free/pro/elite.
+ * `isSaleTier('starter')` devuelve false; las superficies se limpian en la wave D.
+ */
 export type SaleTier = 'free' | 'starter' | 'pro' | 'elite'
 
 export type TierConfig = {
@@ -44,8 +57,12 @@ export type TierCapabilities = {
 
 // ── Listas de venta / legacy ──────────────────────────────────────────────────
 
-/** Tiers a la venta (orden de menor a mayor). Fuente única para selectores y recomendación. */
-export const SALE_TIERS: readonly SaleTier[] = ['free', 'starter', 'pro', 'elite'] as const
+/**
+ * Tiers a la venta (orden de menor a mayor). Fuente única para selectores y recomendación.
+ * Pricing v2: starter FUERA de venta (patrón growth/scale — sigue en el union, TIER_CONFIG y el
+ * CHECK de DB para el histórico; compras/cupones nuevos de starter se rechazan en waves C).
+ */
+export const SALE_TIERS: readonly SaleTier[] = ['free', 'pro', 'elite'] as const
 
 /** Tiers fuera de venta, conservados en runtime/DB/admin para coaches grandfathered. */
 export const LEGACY_TIERS = ['growth', 'scale'] as const
@@ -74,12 +91,17 @@ const SHARED_TIER_FEATURES = [
 // Ya no se venden como add-ons; el valor lo captura la suscripción.
 const MODULES_INCLUDED_FEATURE = '4 módulos profesionales incluidos'
 
-/** Rango de alumnos por tier (copy marketing / UI). */
+/**
+ * Rango de alumnos por tier (copy marketing / UI de VENTA — catálogo nuevo pricing v2).
+ * Un coach grandfathered ve SU límite real vía tierMaxClientsFor(), no este label.
+ */
 export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
-    free: 'Hasta 3 alumnos',
+    free: 'Hasta 2 alumnos',
+    // Fuera de venta desde pricing v2 (grandfathered) — label solo para display de cuentas históricas.
     starter: '1–10 alumnos',
-    pro: '11–30 alumnos',
-    elite: '31–100 alumnos',
+    pro: 'Hasta 25 alumnos',
+    // Contrato de venta pricing v2: Elite = el tramo 26–60 (Pro cubre hasta 25).
+    elite: '26–60 alumnos',
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     growth: '61–120 alumnos',
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
@@ -96,18 +118,17 @@ export const TIER_LABELS: Record<SubscriptionTier, string> = {
     scale: 'Scale',
 }
 
+// Pricing v2: maxClients = catálogo de VENTA (coaches NUEVOS, creados >= PRICING_V2_CUTOVER):
+// free 2 / pro 25 / elite 60. Los coaches existentes conservan sus límites viejos (3/30/100) vía
+// tierMaxClientsFor(); las filas existentes de coaches.max_clients NO se tocan (la columna gana).
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     free: {
         label: 'Free',
-        maxClients: 3,
+        maxClients: 2,
         monthlyPriceClp: 0,
-        features: [
-            'Rutinas ilimitadas con GIFs',
-            'Catálogo de ejercicios con GIF',
-            'Programas de entrenamiento',
-            'Check-in y progreso',
-            'Dashboard coach',
-        ],
+        // Pricing v2 (P1): free = TODO EVA (módulos y nutrición incluidos — el gate server ya los
+        // libera, waves A2/A1) EXCEPTO white-label. Los bullets de venta salen de esta lista.
+        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Planes de nutrición'],
     },
     starter: {
         label: 'Starter',
@@ -118,13 +139,13 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     },
     pro: {
         label: 'Pro',
-        maxClients: 30,
+        maxClients: 25,
         monthlyPriceClp: 29990,
         features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
     elite: {
         label: 'Elite',
-        maxClients: 100,
+        maxClients: 60,
         monthlyPriceClp: 44990,
         features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
@@ -146,18 +167,19 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
 
 /**
  * Feature gates by tier.
- * free/starter: no nutrition (upgrade driver).
- * free/starter: no branding — branding (color/logo/loader + white-label v2: color2/font/dark) es
- * Pro+ ENTERO (decision CEO 2026-06-21, white-label v2). El gate único es isBrandingAllowed().
+ * Pricing v2 (P1/P4): free = TODO liberado (nutrición, ejercicios custom, importar alumnos)
+ * EXCEPTO branding. starter (fuera de venta) conserva su set histórico grandfathered.
+ * Branding (color/logo/loader + white-label v2: color2/font/dark) sigue siendo Pro+ ENTERO
+ * (decision CEO 2026-06-21, white-label v2). El gate único es isBrandingAllowed().
  * canUseAdvancedReports reserved for future implementation — gate not active yet.
  */
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     free: {
-        canUseNutrition: false,
+        canUseNutrition: true,
         canUseBranding: false,
         canUseAdvancedReports: false,
-        canCreateCustomExercises: false,
-        canImportClients: false,
+        canCreateCustomExercises: true,
+        canImportClients: true,
     },
     starter: {
         canUseNutrition: false,
@@ -212,8 +234,75 @@ export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
     return applyDiscount(monthly * 12, ANNUAL_DISCOUNT)
 }
 
+/**
+ * Catálogo de VENTA: límite de alumnos para coaches NUEVOS (creados >= PRICING_V2_CUTOVER).
+ * NO usar cuando hay un coach concreto a mano — ahí manda `tierMaxClientsFor(tier, created_at)`
+ * (grandfather de pricing v2). Los callers con coach migran al helper en waves B.
+ */
 export function getTierMaxClients(tier: SubscriptionTier) {
     return TIER_CONFIG[tier].maxClients
+}
+
+// ── Grandfather pricing v2 (specs/pricing-v2, P2) ────────────────────────────
+
+/**
+ * Fecha de corte de pricing v2 (el deploy de la reestructura Free/Pro/Elite).
+ * Coaches creados ANTES de este instante conservan los límites viejos; los creados
+ * DESPUÉS (>=) entran con el catálogo nuevo. ISO UTC, comparable vía Date.parse.
+ */
+export const PRICING_V2_CUTOVER = '2026-08-18T00:00:00Z'
+
+const PRICING_V2_CUTOVER_MS = Date.parse(PRICING_V2_CUTOVER)
+
+/**
+ * Límites de alumnos PRE pricing-v2 (los que regían hasta PRICING_V2_CUTOVER).
+ * starter conserva 10 en ambos mundos (fuera de venta, no cambia); growth/scale
+ * son legacy puros y mantienen su techo en ambos lados del corte.
+ */
+const PRE_CUTOVER_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
+    free: 3,
+    starter: 10,
+    pro: 30,
+    elite: 100,
+    growth: 120,
+    scale: 500,
+}
+
+/**
+ * Límite de alumnos para UN coach concreto (grandfather de pricing v2 — P2).
+ *
+ * Regla del dueño (2026-08-17, literal): «los pro actuales retienen sus 30; los free
+ * actuales retienen sus 3; y los demás archivados igual». Es decir: NINGÚN coach
+ * existente pierde capacidad — un coach viejo que se archiva y reactiva, o un pro
+ * viejo que cae y vuelve, conserva su límite de siempre.
+ *
+ * - Coach creado ANTES de PRICING_V2_CUTOVER ⇒ límites viejos (free 3 / starter 10 /
+ *   pro 30 / elite 100).
+ * - Coach creado DESPUÉS (>= corte) ⇒ catálogo nuevo (free 2 / starter 10 / pro 25 /
+ *   elite 60).
+ * - Fecha null/undefined/ inválida ⇒ se trata como coach VIEJO (fail-safe GENEROSO:
+ *   ante la duda jamás se le quita capacidad a nadie).
+ *
+ * Este helper es el fallback/write-path canónico; la columna `coaches.max_clients`
+ * sigue GANANDO cuando existe (las filas existentes no se tocan).
+ */
+export function tierMaxClientsFor(
+    tier: SubscriptionTier,
+    coachCreatedAt: string | Date | null | undefined
+): number {
+    const createdMs =
+        coachCreatedAt instanceof Date
+            ? coachCreatedAt.getTime()
+            : typeof coachCreatedAt === 'string'
+              ? Date.parse(coachCreatedAt)
+              : NaN
+    // Solo una fecha VÁLIDA y >= corte da los límites nuevos; todo lo demás cae al mundo viejo.
+    const isPostCutover = Number.isFinite(createdMs) && createdMs >= PRICING_V2_CUTOVER_MS
+    if (isPostCutover) {
+        // Tier fuera del union (string arbitrario de DB): fail-safe al piso nuevo de free.
+        return TIER_CONFIG[tier]?.maxClients ?? TIER_CONFIG.free.maxClients
+    }
+    return PRE_CUTOVER_TIER_MAX_CLIENTS[tier] ?? PRE_CUTOVER_TIER_MAX_CLIENTS.free
 }
 
 export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
@@ -284,8 +373,10 @@ export function getTierBillingCycleSummary(tier: SubscriptionTier): string {
  * Texto corto para badges: nutrición en el plan.
  *
  * La superficie de nutrición V2 no tiene gate de tier — está incluida en TODOS los
- * planes, Free incluido. Por eso este resumen es constante y NO deriva de
- * `canUseNutrition`, que solo gatea la COMPRA del add-on en billing.
+ * planes, Free incluido (pricing v2 además puso `canUseNutrition` de free en true,
+ * así el copy y la capability ya no se contradicen). El resumen es constante y NO
+ * deriva de `canUseNutrition`, que solo gateaba la COMPRA del add-on en billing
+ * (compra que se retira de la UI en la wave A2).
  *
  * Se mantiene el parámetro `tier` para no romper a los consumidores existentes
  * (`/pricing`, onboarding, reactivate) y por si algún plan vuelve a diferenciarse.
@@ -298,6 +389,21 @@ export function getTierNutritionSummary(_tier: SubscriptionTier): string {
 export function getRecommendedTier(clientCount: number): SubscriptionTier {
     // Solo recomendamos tiers a la venta. "Más de elite" lo maneja la UI con el puente Teams, no un tier.
     return SALE_TIERS.find(t => TIER_CONFIG[t].maxClients >= clientCount) ?? 'elite'
+}
+
+/**
+ * Recomendación de tier para UN coach concreto (pricing v2, waves B): igual que
+ * `getRecommendedTier` pero midiendo cada tier con SU límite real vía `tierMaxClientsFor`
+ * (grandfather P2). Un coach VIEJO con 28 alumnos debe recibir «Pro (hasta 30)», no «Elite»:
+ * si compra Pro, el write-path le fija 30. Para un coach nuevo (o fecha desconocida ⇒ fail-safe
+ * viejo/generoso) la recomendación coincide con la del catálogo que le aplica.
+ * Consumidores: emails de trial-expiry y el envío manual del panel admin.
+ */
+export function getRecommendedTierFor(
+    clientCount: number,
+    coachCreatedAt: string | Date | null | undefined
+): SubscriptionTier {
+    return SALE_TIERS.find(t => tierMaxClientsFor(t, coachCreatedAt) >= clientCount) ?? 'elite'
 }
 
 // ── Dirección del cambio de plan (upgrade/downgrade) ──────────────────────────

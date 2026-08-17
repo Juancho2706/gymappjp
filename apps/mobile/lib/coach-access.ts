@@ -56,6 +56,12 @@ interface AccessState {
     currentPeriodEnd: string | null
     /** Cupo personal ya resuelto; Team nunca entra en este número. */
     activeStandaloneClientCount: number | null
+    /**
+     * `coaches.max_clients` del perfil — el cupo EFECTIVO del coach (pricing v2, P2 grandfather):
+     * un free VIEJO conserva su 3 en la columna aunque el catálogo nuevo diga 2. null = desconocido
+     * (cache vieja / perfil sin dato) ⇒ el guard cae al catálogo de venta.
+     */
+    maxClients: number | null
     workspaceKind: WorkspaceKind | null
     /** `true` si se resolvio contra el estado actual de servidor, no solo desde cache. */
     ready: boolean
@@ -73,6 +79,7 @@ const EMPTY_ACCESS: Omit<AccessState, 'ready' | 'errored'> = {
     subscriptionTier: null,
     currentPeriodEnd: null,
     activeStandaloneClientCount: null,
+    maxClients: null,
     workspaceKind: null,
 }
 
@@ -136,6 +143,8 @@ async function hydrateFromCache(): Promise<void> {
             currentPeriodEnd: typeof parsed.currentPeriodEnd === 'string' ? parsed.currentPeriodEnd : null,
             activeStandaloneClientCount:
                 typeof parsed.activeStandaloneClientCount === 'number' ? parsed.activeStandaloneClientCount : null,
+            // Cache v2 vieja sin el campo ⇒ null (el guard cae al catálogo hasta revalidar).
+            maxClients: typeof parsed.maxClients === 'number' ? parsed.maxClients : null,
             workspaceKind: parsed.workspaceKind ?? null,
             // A cache is only a warm start. The gate stays closed until the current account and
             // current workspace capacity are revalidated against the server.
@@ -202,6 +211,8 @@ export function refreshCoachAccess(force = false): Promise<void> {
                 subscriptionTier: profile.subscriptionTier,
                 currentPeriodEnd: profile.currentPeriodEnd,
                 activeStandaloneClientCount,
+                // Cupo efectivo (grandfather P2): la columna del perfil manda sobre el catálogo.
+                maxClients: typeof profile.maxClients === 'number' ? profile.maxClients : null,
                 workspaceKind,
                 ready: true,
                 errored: false,
@@ -312,6 +323,8 @@ function toAccessValue(s: AccessState, now: number): CoachAccessValue {
             subscriptionTier: s.subscriptionTier,
             activeStandaloneClientCount: s.activeStandaloneClientCount,
             workspaceKind: s.workspaceKind,
+            // Pricing v2 (P2): el cupo free se mide contra el max_clients real del coach.
+            freeClientLimit: s.maxClients,
         })
     const status: CoachAccessStatus = s.errored && !s.ready ? 'error' : !s.ready ? 'resolving' : blocked ? 'blocked' : 'allowed'
     return { ready: s.ready, blocked, status, subscriptionStatus: s.subscriptionStatus, refresh: refreshCoachAccess }

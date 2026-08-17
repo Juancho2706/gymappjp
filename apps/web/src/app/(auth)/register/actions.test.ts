@@ -41,7 +41,8 @@ function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
     email: 'coach@example.com',
     password: 'super-secret-123',
     brand_name: 'Antigravity Pro',
-    subscription_tier: 'starter',
+    // Pricing v2: starter salió de SALE_TIERS (registro lo rechaza) — la fixture de tier PAGO es pro.
+    subscription_tier: 'pro',
     billing_cycle: 'monthly',
     ...overrides,
   }
@@ -144,15 +145,25 @@ describe('registerAction', () => {
     expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.' })
   })
 
-  // Plan 04 (D2): trimestral ahora habilitado en starter/pro/elite — starter+quarterly
-  // ya NO debe rechazarse por frecuencia. Pin de que la compuerta quedó abierta.
-  it('accepts quarterly for a sale tier (starter) — passes cycle validation', async () => {
+  // Plan 04 (D2): trimestral habilitado en los tiers pagos a la venta — pro+quarterly
+  // no debe rechazarse por frecuencia. Pin de que la compuerta quedó abierta.
+  // (Pricing v2: la fixture era starter; starter ya no está a la venta.)
+  it('accepts quarterly for a sale tier (pro) — passes cycle validation', async () => {
     const result = await registerAction(
       {},
-      buildRegisterFormData({ subscription_tier: 'starter', billing_cycle: 'quarterly' })
+      buildRegisterFormData({ subscription_tier: 'pro', billing_cycle: 'quarterly' })
     )
     // No frena en la validación de frecuencia; cae más adelante (slug sin mocks).
     expect(result.error).not.toBe('La frecuencia elegida no está disponible para ese plan.')
+  })
+
+  // Pricing v2 (P1): starter fuera de venta — el registro lo rechaza como tier inválido.
+  it('rejects starter (fuera de venta desde pricing v2)', async () => {
+    const result = await registerAction(
+      {},
+      buildRegisterFormData({ subscription_tier: 'starter', billing_cycle: 'monthly' })
+    )
+    expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.' })
   })
 
   it('rolls back auth user when coach insert fails', async () => {
@@ -259,7 +270,7 @@ describe('registerAction', () => {
     createClientMock.mockResolvedValue(userSupabase)
 
     await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(
-      'REDIRECT:/coach/subscription/processing?from=register&tier=starter&cycle=monthly&plan=mensual'
+      'REDIRECT:/coach/subscription/processing?from=register&tier=pro&cycle=monthly&plan=mensual'
     )
 
     expect(userSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
@@ -269,7 +280,7 @@ describe('registerAction', () => {
     expect(adminDb.rpc).toHaveBeenCalledWith('check_platform_email_availability', {
       p_email: 'coach@example.com',
     })
-    expect(redirectMock).toHaveBeenCalledWith('/coach/subscription/processing?from=register&tier=starter&cycle=monthly&plan=mensual')
+    expect(redirectMock).toHaveBeenCalledWith('/coach/subscription/processing?from=register&tier=pro&cycle=monthly&plan=mensual')
   })
 
   it('creates free account pending email confirmation', async () => {
@@ -338,7 +349,9 @@ describe('registerAction', () => {
       // PR #28 (drip fix): web free signup nace 'pending_email' hasta confirmar el correo (no 'active').
       subscription_status: 'pending_email',
       payment_provider: 'admin',
-      max_clients: 3,
+      // Pricing v2: registro nuevo = catálogo nuevo (free 2). Los free existentes retienen 3
+      // vía tierMaxClientsFor (grandfather); acá siempre es un coach recién creado.
+      max_clients: 2,
       trial_used_email: 'coach@example.com',
     }))
     expect(createClientMock).not.toHaveBeenCalled()

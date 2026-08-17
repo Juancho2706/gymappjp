@@ -102,13 +102,13 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [events, setEvents] = useState<SubscriptionEventRow[] | null>(null)
     const [loadingEvents, setLoadingEvents] = useState(false)
-    const [editTier, setEditTier] = useState(coach.subscription_tier ?? 'starter')
+    const [editTier, setEditTier] = useState(coach.subscription_tier ?? 'free')
     const [editMaxClients, setEditMaxClients] = useState(coach.max_clients ?? 10)
     const [editColorHex, setEditColorHex] = useState((coach as any).primary_color ?? '#10B981')
     const [modules, setModules] = useState<Record<string, boolean> | null>(null)
 
     useEffect(() => {
-        setEditTier(coach.subscription_tier ?? 'starter')
+        setEditTier(coach.subscription_tier ?? 'free')
         setEditMaxClients(coach.max_clients ?? 10)
         setEditColorHex((coach as any).primary_color ?? '#10B981')
         // El historial solo se cargaba al CAMBIAR de tab, pero el tab inicial ya es Info —

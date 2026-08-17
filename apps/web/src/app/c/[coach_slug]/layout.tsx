@@ -147,7 +147,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     // Read branding from middleware headers (set in middleware.ts)
     // Free coaches: enforce EVA branding — white-label is a paid feature
-    const subscriptionTier = (headersList.get('x-coach-subscription-tier') ?? 'starter') as SubscriptionTier
+    const subscriptionTier = (headersList.get('x-coach-subscription-tier') ?? 'free') as SubscriptionTier
     // white-label v2: branding = Pro+ ENTERO (no solo 'free'). `isFreeTier` ahora significa "< Pro".
     // El proxy ya manda defaults EVA para < Pro; esto es defense-in-depth (fila stale post-downgrade).
     const isFreeTier = !isBrandingAllowed(subscriptionTier)

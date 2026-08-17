@@ -501,21 +501,21 @@ describe('POST /api/payments/flow/confirm-enrollment — happy path', () => {
     })
 })
 
-describe('POST /api/payments/flow/confirm-enrollment — coherencia D8 de add-ons', () => {
-    it('nutrition_exchanges con tier starter → filtrado en silencio (materialize sin el)', async () => {
+// ════════════════════════════════════════════════════════════════════════════════════
+// Pricing v2 (specs/pricing-v2, C2) — starter FUERA de venta. La Fase 2 solo crea subs de tiers
+// pagos EN VENTA (pro/elite): un coach row starter (fallback sin intent) se rechaza con 409, espejo
+// del enum de create-preference. El filtro D8 de nutrition_exchanges queda como defensa (pro/elite
+// siempre tienen nutricion, asi que ya no hay tier valido que lo dispare por esta puerta).
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/flow/confirm-enrollment — Pricing v2 (C2): starter fuera de venta', () => {
+    it('coach row starter (fallback sin intent) → 409 INVALID_CHECKOUT_INTENT, NO crea sub', async () => {
         coachRow!.subscription_tier = 'starter'
-        createSubscriptionForEnrolledCustomer.mockResolvedValue({
-            subscriptionId: 'sus_1',
-            planId: 'eva_starter_monthly_14990',
-            periodEnd: '2026-08-04T00:00:00.000Z',
-            firstInvoice: { id: '1167928', paid: true, paidAmountClp: 14990 },
-        })
-        const res = await POST(makeRequest({ addons: ['nutrition_exchanges', 'cardio'] }))
-        expect(res.status).toBe(200)
-        expect(materializeAddonsFromPreapproval).toHaveBeenCalledOnce()
-        const addonsArg = materializeAddonsFromPreapproval.mock.calls[0][2] as string[]
-        // nutrition_exchanges se filtro (incoherente con starter); cardio sobrevive.
-        expect(addonsArg).toEqual(['cardio'])
+        intentPayloadRow = null
+        const res = await POST(makeRequest({ addons: ['cardio'] }))
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('INVALID_CHECKOUT_INTENT')
+        expect(createSubscriptionForEnrolledCustomer).not.toHaveBeenCalled()
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
     })
 })
 
@@ -583,6 +583,14 @@ describe('POST /api/payments/flow/confirm-enrollment — F2 intent durable', () 
 
     it('intent invalido (tier free) → 409 INVALID_CHECKOUT_INTENT, NO crea sub', async () => {
         intentPayloadRow = { tier: 'free', cycle: 'monthly', addons: [] }
+        const res = await POST(makeRequest({}))
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('INVALID_CHECKOUT_INTENT')
+        expect(createSubscriptionForEnrolledCustomer).not.toHaveBeenCalled()
+    })
+
+    it('Pricing v2 (C2): intent starter (residual de un checkout viejo) → 409 INVALID_CHECKOUT_INTENT', async () => {
+        intentPayloadRow = { tier: 'starter', cycle: 'monthly', addons: [] }
         const res = await POST(makeRequest({}))
         expect(res.status).toBe(409)
         expect((await res.json()).code).toBe('INVALID_CHECKOUT_INTENT')

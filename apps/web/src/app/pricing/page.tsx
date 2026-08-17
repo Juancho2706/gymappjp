@@ -3,6 +3,7 @@ import { Check, Zap, Crown, Dumbbell, Sprout, Users2 } from 'lucide-react'
 import type { Metadata } from 'next'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
+import { PricingPlanLink, PricingViewTracker } from '@/components/analytics/PricingTracker'
 import { SALES_EMAIL, teamsContactMailto } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import {
@@ -12,6 +13,7 @@ import {
     getTierBillingCycleSummary,
     getTierNutritionSummary,
     getTierPriceClp,
+    SALE_TIERS,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
@@ -59,7 +61,9 @@ function buildStructuredData() {
     const base = resolveMetadataBase()
     const pricingUrl = new URL('/pricing', base).href
 
-    const offerTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite']
+    // Pricing v2: el JSON-LD se regenera SOLO desde el catálogo de venta (SALE_TIERS =
+    // free/pro/elite) — starter fuera de venta ya no se emite como Offer.
+    const offerTiers: readonly SubscriptionTier[] = SALE_TIERS
     const registerUrl = (tier: SubscriptionTier) =>
         tier === 'free'
             ? new URL('/register?tier=free', base).href
@@ -86,7 +90,7 @@ function buildStructuredData() {
             priceCurrency: 'CLP',
             lowPrice: '0',
             highPrice: String(getTierPriceClp('elite', 'monthly')),
-            offerCount: 4,
+            offerCount: offers.length,
             offers,
         },
     }
@@ -138,7 +142,7 @@ const planDisplay: Array<{
 }> = [
     {
         id: 'free',
-        description: 'Prueba EVA sin tarjeta de crédito',
+        description: 'Todo EVA · 2 alumnos · sin marca propia',
         icon: Sprout,
         color: 'text-slate-400',
         bg: 'bg-slate-500/10',
@@ -146,16 +150,8 @@ const planDisplay: Array<{
         badge: 'Gratis para siempre',
     },
     {
-        id: 'starter',
-        description: 'Para coaches que están comenzando',
-        icon: Zap,
-        color: 'text-sky-400',
-        bg: 'bg-sky-500/10',
-        border: 'border-sky-500/20',
-    },
-    {
         id: 'pro',
-        description: 'El favorito de los coaches activos',
+        description: 'Hasta 25 alumnos + tu marca completa',
         icon: Crown,
         color: 'text-violet-400',
         bg: 'bg-violet-500/10',
@@ -164,12 +160,14 @@ const planDisplay: Array<{
     },
     {
         id: 'elite',
-        description: 'Para escalar con analítica avanzada',
+        description: 'Para negocios de 26 a 60 alumnos',
         icon: Dumbbell,
         color: 'text-amber-400',
         bg: 'bg-amber-500/10',
         border: 'border-amber-500/20',
     },
+    // Pricing v2 — starter FUERA de venta (patrón growth/scale: sigue en union/TIER_CONFIG/CHECK
+    // para el histórico, pero no se vende). NO re-agregar aquí.
     // LEGACY — growth/scale fuera de venta (grandfathered + placeholder team/org_managed). Recortados de planDisplay; runtime/DB/admin intactos. NO re-agregar aquí.
 ]
 
@@ -182,6 +180,9 @@ export default function PricingPage() {
             {/* Meta ViewContent: señal de intencion media del funnel. No-op si el usuario no aceptó
                 cookies o si falta NEXT_PUBLIC_FB_PIXEL_ID. */}
             <MetaTrackEvent event="ViewContent" params={{ content_name: 'pricing' }} />
+            {/* PostHog pricing_viewed (Pricing v2 E1, P8): pageview propio del funnel, mismo gate
+                de consentimiento que el resto (opted-out ⇒ cero requests). */}
+            <PricingViewTracker />
             {/* JSON-LD inline (server-rendered) → visible al crawler sin ejecutar JS. */}
             <script
                 type="application/ld+json"
@@ -208,56 +209,29 @@ export default function PricingPage() {
 
             {/* Hero */}
             <div className="text-center px-6 py-16 max-w-3xl mx-auto">
-                <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 text-xs font-medium text-violet-300 mb-6">
+                {/* Colores theme-aware: los hardcodes dark (zinc-50/violet-300) dejaban el hero
+                    casi invisible en light mode (detectado en las capturas QA de pricing v2). */}
+                <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-300 mb-6">
                     <Zap className="w-3 h-3" />
                     Empieza gratis — sin tarjeta de crédito
                 </div>
-                <h1 className="text-4xl sm:text-5xl font-bold text-zinc-50 mb-4 leading-tight">
+                <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 leading-tight">
                     Precios en CLP,<br />
                     <span className="text-violet-400">para cada etapa de tu negocio</span>
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                    Empieza gratis con 3 alumnos. Cuando tu negocio crezca, elige el plan que se adapta.
+                    Empieza gratis con todo EVA para 2 alumnos. Cuando tu negocio crezca, elige el plan que se adapta.
                 </p>
             </div>
 
-            {/* Plans — 3 groups */}
+            {/* Planes — pricing v2: una sola parrilla de 3 planes (Free/Pro/Elite) + card Teams.
+                El agrupado viejo (starter+pro) murió con starter fuera de venta. */}
             <div className="px-6 pb-20 max-w-6xl mx-auto">
-
-                {/* Group 1: Free */}
-                <div className="mb-3 flex items-center gap-3">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Empieza gratis</span>
-                    <div className="flex-1 border-t border-border" />
-                </div>
-                <div className="grid grid-cols-1 md:max-w-sm md:mx-0 gap-6 mb-10">
-                    {planDisplay.filter((p) => p.id === 'free').map((plan) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                    {planDisplay.map((plan) => (
                         <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
                     ))}
-                </div>
-
-                {/* Group 2: Individual coaches */}
-                <div className="mb-3 flex items-center gap-3">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Coach individual</span>
-                    <div className="flex-1 border-t border-border" />
-                    <span className="rounded-md bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Mensual o anual</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                    {planDisplay.filter((p) => ['starter', 'pro'].includes(p.id)).map((plan) => (
-                        <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
-                    ))}
-                </div>
-
-                {/* Group 3: Established business */}
-                <div className="mb-3 flex items-center gap-3">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Negocio establecido</span>
-                    <div className="flex-1 border-t border-border" />
-                    <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Mensual, trimestral o anual</span>
-                </div>
-                {/* Elite + card "EVA Teams" (conversemos, sin números pre-cierre Movida — plan 02). */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {planDisplay.filter((p) => p.id === 'elite').map((plan) => (
-                        <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
-                    ))}
+                    {/* Card "EVA Teams" — conversemos, sin números pre-cierre Movida (plan 02). */}
                     <TeamsContactCard />
                 </div>
 
@@ -349,8 +323,10 @@ function PlanCard({
 
             <h2 className="text-lg font-bold text-foreground mb-1">{tier.label}</h2>
             <p className="text-muted-foreground text-sm mb-3">{plan.description}</p>
+            {/* Rango de venta por plan (free «Hasta 2» / pro «Hasta 25» / elite «26–60»).
+                Un coach grandfathered ve SU límite real en su panel, no este label. */}
             <p className="text-xs text-muted-foreground mb-3">
-                {TIER_STUDENT_RANGE_LABEL[plan.id]} · Hasta {tier.maxClients} alumnos
+                {TIER_STUDENT_RANGE_LABEL[plan.id]}
             </p>
 
             <div className="mb-4 flex flex-wrap gap-1.5">
@@ -410,7 +386,9 @@ function PlanCard({
                 ))}
             </ul>
 
-            <Link
+            {/* E1 (P8): CTA trackeado — pricing_plan_clicked({ tier }) antes de navegar a register. */}
+            <PricingPlanLink
+                tier={plan.id}
                 href={isFree ? '/register?tier=free' : `/register?tier=${plan.id}&cycle=${getDefaultBillingCycleForTier(plan.id)}`}
                 className={`w-full py-3 rounded-xl text-sm font-semibold text-center transition-all duration-200 block ${
                     isFree
@@ -421,7 +399,7 @@ function PlanCard({
                 }`}
             >
                 {isFree ? 'Empezar gratis' : 'Elegir plan'}
-            </Link>
+            </PricingPlanLink>
         </div>
     )
 }

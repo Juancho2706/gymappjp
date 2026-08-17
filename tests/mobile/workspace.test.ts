@@ -251,27 +251,47 @@ describe('subscriptionState + guard de reactivar', () => {
         expect(resolveReactivateRequired('expired', null, NOW)).toBe(true)
         expect(resolveReactivateRequired('org_managed', null, NOW)).toBe(false) // managed nunca
         expect(resolveReactivateRequired('team_managed', null, NOW)).toBe(false)
-        expect(
-            resolveReactivateRequired('active', null, NOW, {
-                subscriptionTier: 'free',
-                activeStandaloneClientCount: 4,
-                workspaceKind: 'standalone',
-            }),
-        ).toBe(true)
+        // Pricing v2: cupo free de catálogo = 2 (borde 2 dentro / 3 sobre). B2 migra este guard
+        // al helper con created_at (grandfather: un free VIEJO mide contra 3).
         expect(
             resolveReactivateRequired('active', null, NOW, {
                 subscriptionTier: 'free',
                 activeStandaloneClientCount: 3,
                 workspaceKind: 'standalone',
             }),
+        ).toBe(true)
+        expect(
+            resolveReactivateRequired('active', null, NOW, {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 2,
+                workspaceKind: 'standalone',
+            }),
+        ).toBe(false)
+        expect(
+            resolveReactivateRequired('active', null, NOW, {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 3,
+                workspaceKind: 'team_owner',
+            }),
+        ).toBe(false)
+        // Grandfather (P2): con freeClientLimit (columna max_clients del coach) el cupo efectivo
+        // manda — un free VIEJO con sus 3 de siempre NO queda bloqueado por el catálogo nuevo.
+        expect(
+            resolveReactivateRequired('active', null, NOW, {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 3,
+                workspaceKind: 'standalone',
+                freeClientLimit: 3,
+            }),
         ).toBe(false)
         expect(
             resolveReactivateRequired('active', null, NOW, {
                 subscriptionTier: 'free',
                 activeStandaloneClientCount: 4,
-                workspaceKind: 'team_owner',
+                workspaceKind: 'standalone',
+                freeClientLimit: 3,
             }),
-        ).toBe(false)
+        ).toBe(true)
         expect(resolveReactivateRequired(null, null, NOW)).toBe(false)
     })
 })

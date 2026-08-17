@@ -20,7 +20,7 @@ export function resolveStudentEmailBranding(input: {
     primaryColor?: string | null
 }): { logoUrl: string | null; primaryColor: string | null } {
     const eligible =
-        input.isStandalone && isBrandingAllowed((input.tier ?? 'starter') as SubscriptionTier)
+        input.isStandalone && isBrandingAllowed((input.tier ?? 'free') as SubscriptionTier)
     return eligible
         ? { logoUrl: input.logoUrl ?? null, primaryColor: input.primaryColor ?? null }
         : { logoUrl: null, primaryColor: null }

@@ -8,7 +8,7 @@ import {
     comparePlanDirection,
     FLOW_ENABLED,
     getTierCapabilities,
-    getTierMaxClients,
+    tierMaxClientsFor,
     isBillingCycleAllowedForTier,
     SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
@@ -32,14 +32,15 @@ import { countActiveStandaloneClients } from '@/services/billing/capacity.servic
 import { claimUpgradeInFlight, clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import type { BillableAddon } from '@/domain/billing/types'
 
-// El checkout solo acepta los tiers EN VENTA (SALE_TIERS sin free): starter/pro/elite.
-// growth/scale quedan fuera de venta (LEGACY). Consecuencia D4: un coach grandfathered
-// en growth/scale NO puede re-checkout en su tier por esta puerta (el enum lo rechaza con 400);
-// su continuidad/cambio se gestiona vía admin o conversación EVA Teams (elite). NO reintroducir
-// growth/scale aquí. El guard de ciclo (isBillingCycleAllowedForTier) y el monto
-// (getTierPriceClp) mantienen su firma — el plan 05 sumará add-ons sobre esa misma base.
+// El checkout solo acepta los tiers EN VENTA pagos: pro/elite. Pricing v2 (specs/pricing-v2, C2):
+// starter SALIÓ de la venta — mismo trato que growth/scale (LEGACY): queda en el union/TIER_CONFIG/
+// CHECK de DB para el histórico, pero su compra NUEVA se rechaza acá con 400 de Zod. Consecuencia
+// (igual que la D4 de growth/scale): un coach grandfathered en starter/growth/scale NO puede
+// re-checkout en su tier por esta puerta; su continuidad/cambio se gestiona vía admin o conversación
+// EVA Teams (elite). NO reintroducir starter/growth/scale aquí. El guard de ciclo
+// (isBillingCycleAllowedForTier) y el monto (getTierPriceClp) mantienen su firma.
 const schema = z.object({
-    tier: z.enum(['starter', 'pro', 'elite']),
+    tier: z.enum(['pro', 'elite']),
     billingCycle: z.enum(['monthly', 'quarterly', 'annual']),
     // Add-ons opcionales del signup (plan 05 F3.3). Solo MODULE_KEYS; del body JAMÁS se acepta
     // monto ni precio — el cálculo compuesto lo hace el server (getCompositeAmountClp).
@@ -101,7 +102,9 @@ export async function POST(request: Request) {
 
         // Add-ons solicitados (signup/supersede). Dedup + filtro contra MODULE_KEYS (defensa extra
         // sobre el Zod). D8: coherencia contra el tier SOLICITADO del body — NO confiar en que la UI
-        // del registro lo filtró. starter + nutrition_exchanges → 400 (cobrar algo inusable).
+        // del registro lo filtró. Tier sin nutrición + nutrition_exchanges → 400 (cobrar algo
+        // inusable). Pricing v2: con starter fuera del enum, pro/elite siempre tienen nutrición —
+        // el 400 queda como DEFENSA por si el catálogo vuelve a diferenciarse.
         //
         // FAIL-CLOSED del switch de lanzamiento: con SELF_SERVICE_ADDONS_ENABLED OFF, se IGNORAN los
         // add-ons NUEVOS del body (tratados como []). Las superficies dedicadas (/addons, /addons/cancel,
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
         const { data: currentCoach } = await supabase
             .from('coaches')
             .select(
-                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id, subscription_provider, subscription_provider_external_id'
+                'created_at, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id, subscription_provider, subscription_provider_external_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -357,7 +360,9 @@ export async function POST(request: Request) {
             // El conteo usa el filtro canónico standalone (is_archived=false + org_id IS NULL).
             if (direction === 'downgrade') {
                 const activeClients = await countActiveStandaloneClients(admin, user.id)
-                const maxClients = getTierMaxClients(tier)
+                // Pricing v2 (P2): el tope del tier DESTINO se mide con el grandfather del coach —
+                // un pro VIEJO admite 30 (no 25), así un elite viejo con 28 activos SÍ puede bajar a pro.
+                const maxClients = tierMaxClientsFor(tier, currentCoach?.created_at ?? null)
                 if (maxClients < activeClients) {
                     return NextResponse.json(
                         {
@@ -599,7 +604,8 @@ export async function POST(request: Request) {
                 subscription_tier: tier,
                 subscription_status: newStatus,
                 billing_cycle: billingCycle,
-                max_clients: getTierMaxClients(tier),
+                // Pricing v2 (P2): límite con grandfather — un coach viejo que (re)activa conserva su tope.
+                max_clients: tierMaxClientsFor(tier, currentCoach?.created_at ?? null),
                 payment_provider: provider.name,
                 provider_customer_id: checkout.checkoutId,
                 subscription_mp_id: null,
@@ -613,7 +619,8 @@ export async function POST(request: Request) {
                 subscription_tier: tier,
                 subscription_status: newStatus,
                 billing_cycle: billingCycle,
-                max_clients: getTierMaxClients(tier),
+                // Pricing v2 (P2): límite con grandfather — un coach viejo que (re)activa conserva su tope.
+                max_clients: tierMaxClientsFor(tier, currentCoach?.created_at ?? null),
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
                 superseded_mp_preapproval_id: supersededForUpdate,

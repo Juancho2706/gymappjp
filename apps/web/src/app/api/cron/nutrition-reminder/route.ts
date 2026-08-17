@@ -328,7 +328,7 @@ export async function GET(req: Request) {
       const brandName = coach?.brand_name ?? undefined
       const isStandalone = !recipient.orgId && !recipient.teamId
       const brandingOn =
-        isStandalone && isBrandingAllowed((coach?.subscription_tier ?? 'starter') as SubscriptionTier)
+        isStandalone && isBrandingAllowed((coach?.subscription_tier ?? 'free') as SubscriptionTier)
       const iconUrl = brandingOn && coach?.logo_url ? coach.logo_url : undefined
 
       const mealsToday = recipient.mealsToday

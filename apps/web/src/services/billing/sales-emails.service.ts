@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientLimitReachedEmail } from '@/lib/email/sales-templates'
-import { TIER_LABELS, type SubscriptionTier } from '@/lib/constants'
+import { getTierRank, TIER_LABELS, type SubscriptionTier } from '@/lib/constants'
 
 /**
  * Envío de los correos de VENTA por evento (límite de alumnos, vence pronto, venció).
@@ -234,11 +234,18 @@ export async function sendClientLimitReachedEmail(
     input: ClientLimitEmailInput
 ): Promise<SalesEmailOutcome> {
     const tier = (input.tier ?? 'free') as SubscriptionTier
+    // Pricing v2 (D3): el upsell apunta a Pro (starter salió de la venta) — free/starter reciben
+    // «Pasar a Pro», un pro recibe «Pasar a Elite», elite+/legacy mantienen el copy genérico
+    // (su siguiente paso es Teams, no un tier de venta). Solo la ETIQUETA, sin números: el cupo
+    // exacto depende del grandfather de cada coach y se ve en /coach/subscription.
+    const recommendedTier: SubscriptionTier | null =
+        getTierRank(tier) < getTierRank('pro') ? 'pro' : tier === 'pro' ? 'elite' : null
     const { subject, html } = buildClientLimitReachedEmail({
         coachName: input.coachName?.trim() || 'Coach',
         tierLabel: TIER_LABELS[tier] ?? TIER_LABELS.free,
         currentLimit: input.currentLimit,
         subscriptionUrl: buildSubscriptionUrl(),
+        recommendedTierLabel: recommendedTier ? TIER_LABELS[recommendedTier] : null,
     })
     return sendSalesEmailOnce(admin, {
         event: 'client_limit_reached',

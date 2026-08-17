@@ -8,7 +8,7 @@ import {
     BILLING_CYCLE_CONFIG,
     FLOW_ENABLED,
     getTierCapabilities,
-    getTierMaxClients,
+    tierMaxClientsFor,
     isBillingCycleAllowedForTier,
     SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
         const { data: coach } = await admin
             .from('coaches')
             .select(
-                'id, subscription_tier, billing_cycle, subscription_status, current_period_end, provider_customer_id, subscription_provider_external_id, subscription_mp_id'
+                'id, created_at, subscription_tier, billing_cycle, subscription_status, current_period_end, provider_customer_id, subscription_provider_external_id, subscription_mp_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -226,9 +226,10 @@ export async function POST(request: Request) {
             requestedAddonsSource = Array.isArray(intentPayload.addons)
                 ? (intentPayload.addons as string[])
                 : []
-            // Validaciones DURAS del intent: nunca base free; ciclo permitido para el tier. Si no cumple,
-            // el intent esta corrupto/inconsistente → 409 (no crear).
-            if (tier !== 'starter' && tier !== 'pro' && tier !== 'elite') {
+            // Validaciones DURAS del intent: solo tiers pagos EN VENTA (pro/elite). Pricing v2 (C2):
+            // starter salio de la venta — un intent starter (residual de un checkout viejo) ya no es
+            // valido. Si no cumple, el intent esta corrupto/inconsistente → 409 (no crear).
+            if (tier !== 'pro' && tier !== 'elite') {
                 return NextResponse.json(
                     { code: 'INVALID_CHECKOUT_INTENT', error: 'El checkout no es valido.' },
                     { status: 409 }
@@ -241,11 +242,14 @@ export async function POST(request: Request) {
                 )
             }
         } else {
-            // Fallback back-compat: tier/cycle del coach row. GUARD: jamas crear una sub con base free.
-            tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+            // Fallback back-compat: tier/cycle del coach row. GUARD: jamas crear una sub que no sea de
+            // un tier pago EN VENTA (pro/elite) — cubre free (base $0) y, desde pricing v2 (C2), tambien
+            // starter/growth/scale: la compra nueva de un tier fuera de venta se rechaza en TODAS las
+            // puertas de pago (espejo del enum de create-preference).
+            tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
             cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
             requestedAddonsSource = parsed.data.addons ?? []
-            if (tier === 'free') {
+            if (tier !== 'pro' && tier !== 'elite') {
                 return NextResponse.json(
                     { code: 'INVALID_CHECKOUT_INTENT', error: 'El checkout no es valido.' },
                     { status: 409 }
@@ -408,7 +412,8 @@ export async function POST(request: Request) {
                 current_period_end: result.firstInvoice?.paid ? result.periodEnd : null,
                 subscription_tier: tier,
                 billing_cycle: cycle,
-                max_clients: getTierMaxClients(tier),
+                // Pricing v2 (P2): límite con grandfather — la fecha de creación del coach decide su tope.
+                max_clients: tierMaxClientsFor(tier, coach.created_at),
                 // Tarjeta enrolada (display-only, E2E QA: quedaba "Sin tarjeta registrada"): el
                 // getCustomerEnrollmentStatus de arriba ya trae marca+last4 de customer/get.
                 card_brand: enrollment.cardType,

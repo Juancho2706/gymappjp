@@ -128,7 +128,6 @@ import {
     getTierUpgradeProrationClp,
 } from '@/services/billing/addons.service'
 import { buildTierUpgradeExternalReference } from '@/lib/payments/providers/mercadopago'
-import { TIER_CONFIG } from '@/lib/constants'
 import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
 
 function makeRequest(body: unknown): Request {
@@ -142,7 +141,10 @@ function makeRequest(body: unknown): Request {
 const STANDALONE_WS = { type: 'coach_standalone', coachId: 'coach-1', userId: 'coach-1' }
 
 // Suscriptor pago ACTIVO en `pro` mensual con corte futuro (contexto de cambio de plan mid-cycle).
+// created_at POST-corte de pricing v2: los checks/writes de límite usan tierMaxClientsFor con esta
+// fecha ⇒ catálogo nuevo (pro 25 / elite 60). El grandfather (coach viejo) se prueba aparte.
 const ACTIVE_PRO_COACH = {
+    created_at: '2026-09-01T00:00:00.000Z',
     subscription_status: 'active',
     subscription_tier: 'pro',
     billing_cycle: 'monthly',
@@ -325,24 +327,54 @@ describe('POST /api/payments/create-preference — DOWNGRADE sobre capacidad (OV
         expect(res.status).toBe(409)
         const json = await res.json()
         expect(json.code).toBe('OVER_CAPACITY')
-        expect(json.maxClients).toBe(30) // pro
+        // Pricing v2: catálogo de venta pro=25 (B1 migra este check al helper con created_at
+        // para que un pro VIEJO siga midiendo contra 30).
+        expect(json.maxClients).toBe(25) // pro
         expect(json.activeClients).toBe(50)
         expect(typeof json.error).toBe('string')
         // Mensaje accionable con N y M.
-        expect(json.error).toContain('30')
+        expect(json.error).toContain('25')
         expect(json.error).toContain('50')
         // CERO efectos colaterales: ni checkout, ni one-shot, ni UPDATE del coach.
         expect(createCheckout).not.toHaveBeenCalled()
         expect(createOneShotPayment).not.toHaveBeenCalled()
         expect(lastUpdatePayload()).toBeUndefined()
     })
+
+    // Grandfather (P2, wave B1): el tope del tier destino se mide con tierMaxClientsFor y la fecha
+    // de creación del coach — un elite VIEJO baja a pro midiendo contra 30, no contra 25.
+    it('elite VIEJO (pre-corte) → pro con 28 alumnos: NO over-capacity (límite viejo 30), downgrade procede', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: {
+                ...ACTIVE_PRO_COACH,
+                subscription_tier: 'elite',
+                created_at: '2026-01-15T12:00:00.000Z',
+            },
+            error: null,
+        })
+        countActiveStandaloneClients.mockResolvedValue(28)
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        expect(createCheckout).toHaveBeenCalledOnce()
+    })
+
+    it('elite NUEVO (post-corte) → pro con 28 alumnos: 409 OVER_CAPACITY (límite nuevo 25)', async () => {
+        countActiveStandaloneClients.mockResolvedValue(28)
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('OVER_CAPACITY')
+        expect(json.maxClients).toBe(25)
+        expect(json.activeClients).toBe(28)
+    })
 })
 
 // ════════════════════════════════════════════════════════════════════════════════════
 // P1-3: BLOQUEAR el downgrade a un tier SIN nutrición mientras un add-on de nutrición por
-// intercambios está VIVO (decisión owner = BLOCK). Espejo del guard OVER_CAPACITY: el coach
-// debe quitar el módulo antes de bajar a Starter. starter/free → canUseNutrition=false; pro/elite
-// → true. Detección vía listLive(admin, user.id) buscando moduleKey==='nutrition_exchanges'.
+// intercambios está VIVO (decisión owner = BLOCK). Pricing v2 (C2): starter (único destino sin
+// nutrición) salió del enum del checkout, así que la rama 409 del guard ya no es alcanzable por
+// esta puerta — el guard QUEDA como defensa y acá se conserva el caso negativo (elite→pro con
+// nutrición viva NO bloquea). Los rechazos de starter viven en el describe C2 de más abajo.
 // ════════════════════════════════════════════════════════════════════════════════════
 function liveNutritionAddon(status: 'active' | 'cancel_pending' = 'active', source: 'self_service' | 'admin_grant' = 'self_service') {
     // listLive ya devuelve solo filas vivas (active/cancel_pending); el route solo mira moduleKey.
@@ -365,51 +397,11 @@ function liveNutritionAddon(status: 'active' | 'cancel_pending' = 'active', sour
     }
 }
 
-describe('POST /api/payments/create-preference — DOWNGRADE con add-on de nutrición VIVO (NUTRITION_ADDON_ON_DOWNGRADE 409)', () => {
+describe('POST /api/payments/create-preference — DOWNGRADE con add-on de nutrición VIVO (guard defensivo)', () => {
     beforeEach(() => {
-        // Coach en pro (tiene nutrición) con add-on de nutrición vivo; bajar a starter (sin nutrición).
         currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_PRO_COACH, error: null })
         // Bajo capacidad: el OVER_CAPACITY no aplica, aislamos el guard de nutrición.
         countActiveStandaloneClients.mockResolvedValue(0)
-    })
-
-    it('pro→starter con nutrición viva: 409 NUTRITION_ADDON_ON_DOWNGRADE y CERO efectos', async () => {
-        listLive.mockResolvedValue([liveNutritionAddon('active')])
-        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
-        expect(res.status).toBe(409)
-        const json = await res.json()
-        expect(json.code).toBe('NUTRITION_ADDON_ON_DOWNGRADE')
-        expect(typeof json.error).toBe('string')
-        // El copy menciona el plan destino (label de Starter).
-        expect(json.error).toContain(TIER_CONFIG.starter.label)
-        // CERO efectos colaterales: ni checkout, ni one-shot, ni UPDATE del coach.
-        expect(createCheckout).not.toHaveBeenCalled()
-        expect(createOneShotPayment).not.toHaveBeenCalled()
-        expect(lastUpdatePayload()).toBeUndefined()
-    })
-
-    it('add-on de nutrición en cancel_pending (ya dado de baja) NO bloquea: el downgrade procede (ambos al corte)', async () => {
-        listLive.mockResolvedValue([liveNutritionAddon('cancel_pending')])
-        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
-        // Solo nutrición ACTIVE bloquea; cancel_pending expira al corte, igual que arranca el plan nuevo.
-        expect(res.status).toBe(200)
-        expect(createCheckout).toHaveBeenCalledOnce()
-    })
-
-    it('cortesía del CEO (admin_grant) de nutrición viva también bloquea el downgrade', async () => {
-        listLive.mockResolvedValue([liveNutritionAddon('active', 'admin_grant')])
-        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
-        expect(res.status).toBe(409)
-        expect((await res.json()).code).toBe('NUTRITION_ADDON_ON_DOWNGRADE')
-    })
-
-    it('pro→starter SIN add-on de nutrición vivo: NO bloquea por esta regla (procede el downgrade al corte)', async () => {
-        listLive.mockResolvedValue([]) // ningún add-on vivo
-        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
-        expect(res.status).toBe(200)
-        // El downgrade a starter procede: preapproval nuevo al corte (no es upgrade → sin one-shot).
-        expect(createCheckout).toHaveBeenCalledOnce()
-        expect(createOneShotPayment).not.toHaveBeenCalled()
     })
 
     it('downgrade a un tier QUE SÍ tiene nutrición (elite→pro) NO lo bloquea esta regla, aunque haya add-on vivo', async () => {
@@ -423,6 +415,39 @@ describe('POST /api/payments/create-preference — DOWNGRADE con add-on de nutri
         expect(res.status).toBe(200)
         expect(createCheckout).toHaveBeenCalledOnce()
         expect(createOneShotPayment).not.toHaveBeenCalled()
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// Pricing v2 (specs/pricing-v2, C2) — starter FUERA de venta. El enum del body (['pro','elite'])
+// rechaza starter con 400 de Zod ANTES de cualquier guard/checkout/UPDATE: tanto la compra nueva
+// como el re-checkout (downgrade a starter) mueren en la puerta. free/growth/scale ya venían fuera.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — Pricing v2 (C2): starter rechazado por el enum', () => {
+    it('coach free comprando starter → 400 de Zod y CERO efectos (ni checkout ni UPDATE)', async () => {
+        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
+        expect(res.status).toBe(400)
+        expect(typeof (await res.json()).error).toBe('string')
+        expect(createCheckout).not.toHaveBeenCalled()
+        expect(createOneShotPayment).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('coach pago ACTIVO pidiendo bajar a starter → mismo 400 (ni siquiera evalúa capacidad/nutrición)', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_PRO_COACH, error: null })
+        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
+        expect(res.status).toBe(400)
+        // El rechazo es del parse: no llega a los guards de downgrade ni al checkout.
+        expect(countActiveStandaloneClients).not.toHaveBeenCalled()
+        expect(listLive).not.toHaveBeenCalled()
+        expect(createCheckout).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('growth (legacy) sigue rechazado igual que siempre → 400', async () => {
+        const res = await POST(makeRequest({ tier: 'growth', billingCycle: 'monthly' }))
+        expect(res.status).toBe(400)
+        expect(createCheckout).not.toHaveBeenCalled()
     })
 })
 
@@ -649,6 +674,7 @@ describe('POST /api/payments/create-preference — P1 cross-cycle upgrade fija c
 
 // Coach FREE (primera compra): status active pero sin corte → isFreeTierCoach true, isActiveUpgrade false.
 const FREE_COACH = {
+    created_at: '2026-09-01T00:00:00.000Z', // post-corte pricing v2 (catálogo nuevo)
     subscription_status: 'active',
     subscription_tier: 'free',
     billing_cycle: null,

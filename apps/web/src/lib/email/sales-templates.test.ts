@@ -69,6 +69,24 @@ describe('buildClientLimitReachedEmail', () => {
         expect(html).not.toContain('<script>')
         expect(html).toContain('&lt;script&gt;')
     })
+
+    // Pricing v2 (D3): el upsell apunta a Pro — jamás a Starter (fuera de venta).
+    it('con tier recomendado, el copy y el CTA apuntan a ese plan (Pro) y nunca a Starter', () => {
+        const { html } = buildClientLimitReachedEmail({ ...ctx, recommendedTierLabel: 'Pro' })
+        expect(html).toContain('Con el plan <strong style="color:#111827;">Pro</strong>')
+        expect(html).toContain('Pasar a Pro')
+        expect(html).not.toContain('Starter')
+        // Sigue siendo UN solo CTA a /coach/subscription, sin precios.
+        expect(countLinks(html)).toBe(1)
+        expect(html).toContain(`href="${SUBSCRIPTION_URL}"`)
+        assertNoPrices(html)
+    })
+
+    it('sin tier recomendado (elite/legacy) conserva el copy genérico', () => {
+        const { html } = buildClientLimitReachedEmail({ ...ctx, recommendedTierLabel: null })
+        expect(html).toContain('Con un plan más grande')
+        expect(html).toContain('Ampliar mi plan')
+    })
 })
 
 describe('buildPlanExpiringSoonEmail', () => {

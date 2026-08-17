@@ -1,8 +1,7 @@
 import type { Json, TablesInsert } from '@/lib/database.types'
 import type { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
-import { getTierMaxClients, SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
-import type { SubscriptionTier } from '@/lib/constants'
+import { tierMaxClientsFor, SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import { countActiveStandaloneClients } from './capacity.service'
 
 type AdminClient = ReturnType<typeof createServiceRoleClient>
@@ -42,7 +41,7 @@ export async function activateFreePlanForCoach(
     const { data: coach } = await admin
         .from('coaches')
         .select(
-            'id, subscription_status, subscription_mp_id, subscription_provider, subscription_provider_external_id'
+            'id, created_at, subscription_status, subscription_mp_id, subscription_provider, subscription_provider_external_id'
         )
         .eq('id', coachId)
         .maybeSingle()
@@ -59,7 +58,10 @@ export async function activateFreePlanForCoach(
     }
 
     const activeCount = await countActiveStandaloneClients(admin, coachId)
-    const freeLimit = getTierMaxClients('free' as SubscriptionTier)
+    // Pricing v2 (P2, grandfather): el cupo free del coach depende de su fecha de creación —
+    // un coach VIEJO que reactiva conserva su 3; uno nuevo entra con 2. Fecha ausente ⇒ fail-safe
+    // viejo (generoso). Antes acá se escribía el freeLimit plano del catálogo.
+    const freeLimit = tierMaxClientsFor('free', coach.created_at)
 
     if (activeCount > freeLimit) {
         return {

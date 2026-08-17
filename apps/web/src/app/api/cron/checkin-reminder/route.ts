@@ -114,7 +114,7 @@ export async function GET(req: Request) {
       const brandName = coach?.brand_name ?? undefined
       const isStandalone = !client.org_id && !client.team_id
       const brandingOn =
-        isStandalone && isBrandingAllowed((coach?.subscription_tier ?? 'starter') as SubscriptionTier)
+        isStandalone && isBrandingAllowed((coach?.subscription_tier ?? 'free') as SubscriptionTier)
       const iconUrl = brandingOn && coach?.logo_url ? coach.logo_url : undefined
 
       await sendPushToClient(client.id, {

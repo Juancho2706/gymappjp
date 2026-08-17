@@ -48,6 +48,43 @@ describe('resolveCoachSubscriptionRedirect', () => {
             }),
         ).toBeNull()
     })
+
+    // Pricing v2 (P2, wave B): el cupo free se mide contra el límite EFECTIVO del coach
+    // (freeClientLimit = columna max_clients / helper con created_at). Un free VIEJO con sus 3 de
+    // siempre NO puede quedar expulsado por el catálogo nuevo (free 2).
+    describe('freeClientLimit (grandfather pricing v2)', () => {
+        it('free viejo (límite efectivo 3) con 3 activos: NO bloquea', () => {
+            expect(
+                resolveCoachSubscriptionRedirect('/coach/dashboard', 'active', null, Date.now(), {
+                    subscriptionTier: 'free',
+                    activeStandaloneClientCount: 3,
+                    workspaceType: 'coach_standalone',
+                    freeClientLimit: 3,
+                }),
+            ).toBeNull()
+        })
+
+        it('free viejo (límite efectivo 3) con 4 activos: bloquea', () => {
+            expect(
+                resolveCoachSubscriptionRedirect('/coach/dashboard', 'active', null, Date.now(), {
+                    subscriptionTier: 'free',
+                    activeStandaloneClientCount: 4,
+                    workspaceType: 'coach_standalone',
+                    freeClientLimit: 3,
+                }),
+            ).toBe('/coach/reactivate')
+        })
+
+        it('sin freeClientLimit cae al catálogo de venta (free 2): 3 activos bloquean', () => {
+            expect(
+                resolveCoachSubscriptionRedirect('/coach/dashboard', 'active', null, Date.now(), {
+                    subscriptionTier: 'free',
+                    activeStandaloneClientCount: 3,
+                    workspaceType: 'coach_standalone',
+                }),
+            ).toBe('/coach/reactivate')
+        })
+    })
 })
 
 // P0-3a: dunning involuntario (paused/past_due) conserva acceso hasta current_period_end (gracia,

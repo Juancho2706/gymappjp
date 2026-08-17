@@ -50,7 +50,7 @@ function asModules(value: unknown): EnabledModules {
     return (value && typeof value === 'object' ? (value as EnabledModules) : {})
 }
 
-/** Los 4 módulos en ON (mapa completo). Base de la derivación "pago ⇒ todos incluidos". */
+/** Los 4 módulos en ON (mapa completo). Base de la derivación "coach ACTIVO ⇒ todos incluidos". */
 const ALL_MODULES_ON: EnabledModules = {
     cardio: true,
     movement_assessment: true,
@@ -59,28 +59,32 @@ const ALL_MODULES_ON: EnabledModules = {
 }
 
 /**
- * Decisión CEO (2026-07-17, definitiva): los 4 módulos quedan INCLUIDOS para todo coach con
- * suscripción PAGA activa. Señal de "pago activo":
+ * Decisión CEO (2026-07-17) + Pricing v2 P3 (2026-08-17, `docs/specs/pricing-v2/SPEC.md`): los 4
+ * módulos quedan INCLUIDOS para TODO coach ACTIVO — free incluido. Señal de "activo":
  *   - managed (org/team): el pool/org paga ⇒ acceso siempre (isManagedSubscription).
  *   - standalone: `hasEffectiveAccess(status, current_period_end)` (respeta gracia por cancel/
- *     trial/dunning hasta el corte; bloquea pending_payment/expired) Y tier != 'free'.
- * FREE / expirado / bloqueado ⇒ false (sin derivación; sus cortesías `admin_grant` siguen valiendo
- * porque no se tocan las filas crudas).
+ *     trial/dunning hasta el corte; bloquea pending_payment/expired). El tier YA NO gatea:
+ *     un free activo deriva módulos igual que un pago.
+ * INACTIVO / expirado / bloqueado ⇒ false (sin derivación; sus cortesías `admin_grant` siguen
+ * valiendo porque no se tocan las filas crudas).
+ * Nombre histórico: hoy significa "acceso a módulos por suscripción vigente" (paga o free);
+ * `subscriptionTier` queda en la firma por compatibilidad de call sites, pero ya no influye.
  */
 export function hasPaidModuleAccess(access: {
     subscriptionStatus?: string | null
     currentPeriodEnd?: string | null
+    /** Ya no gatea (Pricing v2): se conserva para no romper a los llamadores que arman el snapshot. */
     subscriptionTier?: string | null
 }): boolean {
     if (isManagedSubscription(access.subscriptionStatus)) return true
-    if (!hasEffectiveAccess(access.subscriptionStatus, access.currentPeriodEnd)) return false
-    return (access.subscriptionTier ?? 'free') !== 'free'
+    return hasEffectiveAccess(access.subscriptionStatus, access.currentPeriodEnd)
 }
 
 /**
  * Deriva el mapa de módulos efectivo para un STANDALONE a partir de sus flags crudos + su acceso
- * de suscripción. UNION con las filas crudas (cortesías `admin_grant` ya presentes = no-op, ya que
- * quedan todos en true para pago; para FREE se respeta el raw tal cual, incluida una cortesía puntual).
+ * de suscripción. Desde Pricing v2 aplica también a FREE: todo coach ACTIVO deriva los 4 en ON.
+ * UNION con las filas crudas (cortesías `admin_grant` ya presentes = no-op, quedan todos en true).
+ * Solo el INACTIVO (expirado/bloqueado) respeta el raw tal cual, incluida una cortesía puntual.
  * Derivar SOLO en LECTURA: jamás escribe `coach_addons` ni `coaches.enabled_modules` (billing intacto).
  */
 export function deriveModulesForPaidAccess(

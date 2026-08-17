@@ -181,7 +181,7 @@ export async function GET(req: Request) {
             }
 
             // ── Pasada de ADD-ONS (plan 05 F3.5) — la DB manda, MP solo se ALERTA (nunca auto-fix) ──
-            const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+            const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
             const cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
             const live = await listLive(admin, coach.id)
 
@@ -343,7 +343,7 @@ export async function GET(req: Request) {
     }
     for (const coach of payingCoaches ?? []) {
         try {
-            const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+            const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
             const cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
             const live = await listLive(admin, coach.id)
             for (const addon of live) {

@@ -12,20 +12,20 @@ import {
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierCapabilities,
-    getTierMaxClients,
     getTierPriceClp,
     computeDiscountedClp,
     isBillingCycleAllowedForTier,
     isSaleTier,
     SALE_TIERS,
     TIER_CONFIG,
-    TIER_STUDENT_RANGE_LABEL,
+    tierMaxClientsFor,
     type BillingCycle,
     type DiscountSpec,
     type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
+import { useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Check, CheckCircle2, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './CouponRedeemCard'
@@ -60,7 +60,10 @@ type CoachSubscription = {
     id: string
     subscription_tier: string
     subscription_status: string
-    max_clients: number
+    /** Cupo EFECTIVO persistido — cuando existe, gana sobre cualquier catálogo (grandfather P2). */
+    max_clients: number | null
+    /** Ancla del grandfather de pricing v2: los límites por tier salen de tierMaxClientsFor(tier, created_at). */
+    created_at?: string | null
     billing_cycle: string
     current_period_end: string | null
     payment_provider: string
@@ -114,6 +117,8 @@ const cycleOptions = Object.keys(BILLING_CYCLE_CONFIG) as BillingCycle[]
 export function SubscriptionContent({ embedded = false }: { embedded?: boolean }) {
     const router = useRouter()
     const searchParams = useSearchParams()
+    // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
+    const captureCheckoutStarted = useCaptureCheckoutStarted()
     // Refs para hacer scroll-into-view del banner relevante al setearse (off-screen en móvil).
     const blockedMsgRef = useRef<HTMLDivElement | null>(null)
     const feedbackBannerRef = useRef<HTMLDivElement | null>(null)
@@ -133,7 +138,8 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const [reason, setReason] = useState('')
     // Panel de cancelación (diseño: ghost danger al pie que revela el motivo). Conserva handleCancel.
     const [showCancelPanel, setShowCancelPanel] = useState(false)
-    const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('starter')
+    // Pricing v2: starter salió de la venta — el default es Pro (el pago más económico de la lista).
+    const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('pro')
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
     const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false)
@@ -177,18 +183,19 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
                 const tier = payload.coach.subscription_tier as SubscriptionTier
                 const cycle = payload.coach.billing_cycle as BillingCycle
-                // Pre-seleccion para la lista de venta (starter/pro/elite):
-                //  - un tier de venta pago (starter/pro/elite) se pre-selecciona a si mismo;
-                //  - un tier legacy (growth/scale, fuera de venta) ancla a 'elite' — sin esto un
-                //    grandfathered abriria con selectedTier='growth', que ya no se renderiza, y
-                //    "Continuar" mandaria un tier que create-preference rechaza (400);
-                //  - free / desconocido cae al default 'starter' (el pago mas economico de la lista).
+                // Pre-seleccion para la lista de venta (pricing v2: pro/elite):
+                //  - un tier de venta pago (pro/elite) se pre-selecciona a si mismo;
+                //  - un tier fuera de venta ancla al vecino de la lista: growth/scale a 'elite',
+                //    starter (grandfathered) a 'pro' — sin esto un grandfathered abriria con un
+                //    selectedTier que ya no se renderiza y "Continuar" mandaria un tier que
+                //    create-preference rechaza (400);
+                //  - free / desconocido cae al default 'pro' (el pago mas economico de la lista).
                 const preselectTier: SaleTier =
                     tier && isSaleTier(tier) && tier !== 'free'
                         ? tier
                         : tier === 'growth' || tier === 'scale'
                         ? 'elite'
-                        : 'starter'
+                        : 'pro'
                 setSelectedTier(preselectTier)
                 if (cycle && cycle in BILLING_CYCLE_CONFIG) {
                     setSelectedCycle(
@@ -317,6 +324,14 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         setSaving(true)
         setError(null)
         setSuccessMessage(null)
+        // E1 (P8): funnel de checkout — el coach confirmo el cambio de plan y se va a pedir la
+        // preference. Gated por consentimiento (no-op sin opt-in), sin PII: tier/ciclo/gateway.
+        captureCheckoutStarted({
+            tier: selectedTier,
+            billingCycle: selectedCycle,
+            gateway,
+            source: 'subscription',
+        })
         try {
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
@@ -395,7 +410,15 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const selectedCompositeNet = selectedCouponResult ? selectedCouponResult.netClp : selectedComposite
     const selectedCouponDiscount = selectedCouponResult ? selectedCouponResult.discountClp : 0
     const coachCycle = (coach?.billing_cycle ?? 'monthly') as BillingCycle
-    const coachTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
+    const coachTier = (coach?.subscription_tier ?? 'free') as SubscriptionTier
+    // Límite de alumnos de ESTE coach para un tier dado (grandfather pricing v2, P2): para su tier
+    // ACTUAL la columna `max_clients` persiste el cupo efectivo y GANA; para cualquier otro tier
+    // (destino de un cambio) se resuelve con tierMaxClientsFor + created_at — espejo exacto del
+    // write-path de confirms y del guard OVER_CAPACITY del server. Un pro VIEJO ve/conserva 30.
+    function coachLimitFor(t: SubscriptionTier): number {
+        if (coach && t === coachTier && coach.max_clients != null) return coach.max_clients
+        return tierMaxClientsFor(t, coach?.created_at ?? null)
+    }
     // Dirección del cambio de plan elegido vs el tier vigente — bifurca el copy del modal (issue #1).
     // Espejo de comparePlanDirection del server: 'upgrade' cobra la diferencia prorrateada y activa
     // AHORA; 'downgrade'/'same' (cambio de ciclo) se agendan al corte.
@@ -541,7 +564,10 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                                 ? 'Gratis para siempre'
                                                 : periodDate
                                                 ? `${coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'} · ${periodDate}`
-                                                : TIER_STUDENT_RANGE_LABEL[t] ?? ''}
+                                                // Cupo REAL del coach (grandfather P2) — no el label del catálogo de venta.
+                                                : isKnownTier
+                                                ? `Hasta ${coachLimitFor(t)} alumnos`
+                                                : ''}
                                         </p>
                                     </div>
                                     {total > 0 ? (
@@ -658,8 +684,8 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 </section>
             ) : null}
 
-            {/* Gateado en `coach` cargado: sin esto la sección renderiza con coachTier='starter'
-                default (coach=null) y los bloqueos (cupo/nutrición) no aplican → Starter clickeable
+            {/* Gateado en `coach` cargado: sin esto la sección renderiza con el coach default
+                (coach=null) y los bloqueos (cupo/nutrición) no aplican → un plan clickeable
                 unos segundos hasta que carga subscription-status. coach se setea junto a addons +
                 activeClientCount en el mismo fetch → al aparecer la sección, la data está completa. */}
             {coach && (
@@ -699,7 +725,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         const features = TIER_CONFIG[tier].features.slice(0, 3)
                         // Downgrade que no cabe: bajar a un tier con menos cupo que tus alumnos
                         // activos. Se bloquea (mismo guard que el 409 OVER_CAPACITY del server).
-                        const tierMaxClients = getTierMaxClients(tier)
+                        // El cupo es el de ESTE coach (grandfather P2): un elite viejo bajando a Pro
+                        // se mide contra SU pro (30), no contra el catálogo nuevo (25).
+                        const tierMaxClients = coachLimitFor(tier)
                         const wouldExceed =
                             comparePlanDirection(coachTier, tier) === 'downgrade' &&
                             tierMaxClients < activeClientCount

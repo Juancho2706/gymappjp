@@ -20,20 +20,25 @@ export interface CoachProfile {
   currentPeriodEnd: string | null
   trialEndsAt: string | null
   maxClients: number
+  /**
+   * `coaches.created_at` — ancla del grandfather de pricing v2 (P2): los límites por tier de este
+   * coach se resuelven con `tierMaxClientsFor(tier, createdAt)` (viejo: free 3 / pro 30 / elite 100).
+   */
+  createdAt: string | null
   hasCoachLogo?: boolean
   logoUrl?: string | null
 }
 
 function normalizeSubscriptionTier(raw: string | null | undefined): CoachProfile['subscriptionTier'] {
-  const v = String(raw ?? 'starter').toLowerCase()
+  const v = String(raw ?? 'free').toLowerCase()
   // LEGACY: reconoce los 6 valores del CHECK de DB (incluye growth/scale) para no degradar
   // cuentas grandfathered a 'starter'. Fuera de venta, pero vivas en runtime (plan 04).
   if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
-  return 'starter'
+  return 'free'
 }
 
 const COACH_PROFILE_COLUMNS =
-  'id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients'
+  'id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients, created_at'
 
 /**
  * Variante ESTRICTA para GATES (coach-access): distingue "no hay fila de coach" (=> `null`, estado
@@ -87,6 +92,7 @@ type CoachRow = {
   current_period_end: string | null
   trial_ends_at: string | null
   max_clients: number
+  created_at?: string | null
 }
 
 function mapCoachRow(data: CoachRow): CoachProfile {
@@ -106,6 +112,7 @@ function mapCoachRow(data: CoachRow): CoachProfile {
     currentPeriodEnd: data.current_period_end,
     trialEndsAt: data.trial_ends_at,
     maxClients: data.max_clients,
+    createdAt: data.created_at ?? null,
     hasCoachLogo: brandingAllowed && Boolean(data.logo_url?.trim()),
     logoUrl: brandingAllowed ? data.logo_url ?? null : null,
   }

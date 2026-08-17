@@ -790,7 +790,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
                     {/* white-label v2 — branding avanzado (Pro): acordeón cerrado (color2 + fuente + dark + loader) */}
                     <BrandAdvancedSection
-                        tier={(coach.subscription_tier ?? 'starter') as SubscriptionTier}
+                        tier={(coach.subscription_tier ?? 'free') as SubscriptionTier}
                         primaryColor={effectivePrimary || '#10B981'}
                         value={advancedValue}
                         onChange={handleAdvancedChange}

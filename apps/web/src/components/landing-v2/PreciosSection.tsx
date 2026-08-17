@@ -8,9 +8,8 @@
  *  - Precios computados en vivo desde `@eva/tiers` (NO los números del diseño).
  *  - Equivalente mensual = round(total período / meses) — mismo cálculo que
  *    `LandingPricingPreview.tsx`.
- *  - Rango Elite = 31–100 (maxClients real), NO el 31–60 del diseño. Se deriva de
- *    `getTierMaxClients` en AMBOS idiomas → corrige también el `pe_1` (31–60) que
- *    quedó stale en `copy.ts`/EN_DICT.
+ *  - Rangos derivados de `getTierMaxClients` en AMBOS idiomas (pricing v2:
+ *    Free hasta 2 · Pro hasta 25 · Elite 26–60; starter fuera de venta).
  *  - CTAs → `/register?tier=<id>&cycle=<ciclo activo>` (Free → `/register`).
  *
  * Estado transversal desde el provider (§7): `t` (i18n), `cycle`/`setCycle` (ciclo
@@ -37,12 +36,12 @@ const FONT_MONO = 'var(--font-geist-mono), ui-monospace, monospace'
 const FONT_DISPLAY = 'var(--font-montserrat), var(--font-inter), sans-serif'
 const FONT_NUM = 'var(--font-archivo), var(--font-montserrat), sans-serif'
 
-// Rangos derivados de la fuente REAL (@eva/tiers) — corrige el 31–60 del diseño a 31–100.
-const FREE_HI = getTierMaxClients('free') // 3
-const PRO_LO = getTierMaxClients('starter') + 1 // 11
-const PRO_HI = getTierMaxClients('pro') // 30
-const ELITE_LO = getTierMaxClients('pro') + 1 // 31
-const ELITE_HI = getTierMaxClients('elite') // 100
+// Rangos derivados de la fuente REAL (@eva/tiers) — catálogo de venta pricing v2.
+// Pro ya no arranca «después de starter» (fuera de venta): su rango es «hasta 25».
+const FREE_HI = getTierMaxClients('free') // 2
+const PRO_HI = getTierMaxClients('pro') // 25
+const ELITE_LO = getTierMaxClients('pro') + 1 // 26
+const ELITE_HI = getTierMaxClients('elite') // 60
 
 // Ciclo del provider ('m'|'q'|'a') → BillingCycle de @eva/tiers.
 const CYCLE_MAP = { m: 'monthly', q: 'quarterly', a: 'annual' } as const satisfies Record<
@@ -269,7 +268,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     <div style={planKicker}>{'// free'}</div>
                     <h3 style={planName}>Free</h3>
                     <p style={planSub}>
-                        {t('pf_sub', 'Prueba EVA sin tarjeta. Hasta 3 alumnos, para siempre.')}
+                        {t('pf_sub', 'Todo EVA sin tarjeta. Hasta 2 alumnos, para siempre.')}
                     </p>
                     <div style={priceRow}>
                         <span style={priceNum}>$0</span>
@@ -297,9 +296,16 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             <span style={{ color: '#4ADE80' }}>✓</span>
                             {t('pf_4', 'Planes de nutrición incluidos')}
                         </li>
+                        {/* Pricing v2 (P1/P3): los 4 módulos van incluidos en TODOS los planes,
+                            Free incluido — el gate server ya los libera (hasPaidModuleAccess). Lo
+                            único que Free NO trae es white-label (sigue Pro+). */}
+                        <li style={liStyle}>
+                            <span style={{ color: '#4ADE80' }}>✓</span>
+                            {t('pf_5', '4 módulos profesionales incluidos')}
+                        </li>
                         <li style={{ ...liStyle, color: '#8A8A93' }}>
                             <span style={{ color: '#8A8A93' }}>✗</span>
-                            {t('pf_5', 'Sin módulos profesionales')}
+                            {t('pf_6', 'Sin marca propia (white-label)')}
                         </li>
                     </ul>
                     <Link href="/register" style={ghostCta('free')} {...hoverHandlers('free')}>
@@ -372,7 +378,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     </div>
                     <h3 style={{ ...planName, position: 'relative' }}>Pro</h3>
                     <p style={{ ...planSub, position: 'relative' }}>
-                        {t('pp_sub', 'El equilibrio habitual: más cupos y nutrición incluida.')}
+                        {t('pp_sub', 'Hasta 25 alumnos y tu marca completa en la app.')}
                     </p>
                     <div style={{ ...priceRow, position: 'relative' }}>
                         <span data-price="pro" style={priceNum}>
@@ -383,7 +389,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     <ul style={{ ...featureList, position: 'relative' }}>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
-                            {rangeLabel(PRO_LO, PRO_HI)}
+                            {rangeLabel(null, PRO_HI)}
                         </li>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
@@ -499,9 +505,11 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     letterSpacing: '0.1em',
                 }}
             >
+                {/* Pricing v2: la venta es SOLO free/pro/elite — nada de starter/growth/scale acá.
+                    Más de 60 alumnos o equipos → EVA Teams (sección tm_* más abajo). */}
                 {t(
                     'table_note',
-                    '// también: starter (1–10) · growth (61–120) · scale (hasta 500) — todos con rutinas ilimitadas y dashboard'
+                    '// ¿más de 60 alumnos o un equipo? conversemos — eva teams'
                 )}
             </div>
         </section>

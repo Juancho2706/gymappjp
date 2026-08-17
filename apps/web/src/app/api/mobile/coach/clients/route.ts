@@ -3,7 +3,7 @@ import { CreateClientSchema } from '@eva/schemas'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
-import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
+import { tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
 import { sendClientLimitReachedEmail } from '@/services/billing/sales-emails.service'
@@ -135,13 +135,13 @@ export async function POST(request: NextRequest) {
 
     const { data: rawCoachData, error: coachError } = await admin
         .from('coaches')
-        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, subscription_status, max_clients, active_org_id, primary_color, logo_url')
+        .select('id, created_at, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, subscription_status, max_clients, active_org_id, primary_color, logo_url')
         .eq('id', coachUser.id)
         .maybeSingle()
 
     const coach = rawCoachData as Pick<
         Tables<'coaches'>,
-        'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'subscription_status' | 'max_clients' | 'primary_color' | 'logo_url'
+        'id' | 'created_at' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'subscription_status' | 'max_clients' | 'primary_color' | 'logo_url'
     > & { active_org_id?: string | null } | null
 
     if (coachError) {
@@ -185,8 +185,10 @@ export async function POST(request: NextRequest) {
     const orgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
     const teamId = workspace.type === 'coach_team' ? workspace.teamId : null
 
-    const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
-    const maxClients = coach.max_clients ?? getTierMaxClients(tier)
+    const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+    // Pricing v2 (P2): la columna max_clients SIGUE ganando; el fallback usa el helper con la fecha
+    // de creación (grandfather) — nunca el catálogo de venta plano para un coach existente.
+    const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at)
     const { count: activeClientsCount, error: countError } = workspace.type === 'coach_standalone'
         ? await admin
             .from('clients')

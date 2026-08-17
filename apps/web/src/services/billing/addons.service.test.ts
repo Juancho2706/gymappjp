@@ -255,20 +255,24 @@ describe('canPurchaseAddon', () => {
         expect(r).toEqual({ allowed: false, reason: 'no_paid_plan' })
     })
 
-    it('starter + nutrition_exchanges → requires_nutrition_tier', () => {
-        const r = canPurchaseAddon(
-            {
-                subscriptionTier: 'starter',
-                subscriptionStatus: 'active',
-                isManagedByTeamOrOrg: false,
-                currentPeriodEnd: null,
-            },
-            'nutrition_exchanges'
-        )
-        expect(r).toEqual({ allowed: false, reason: 'requires_nutrition_tier' })
+    // Pricing v2 P3: nutrition_exchanges viene incluido en TODO plan (free también) —
+    // la compra se retiró; ya no existe el gate por tier con nutrición (requires_nutrition_tier).
+    it('nutrition_exchanges → included_in_plan para CUALQUIER tier (compra retirada)', () => {
+        for (const tier of ['starter', 'pro', 'elite'] as const) {
+            const r = canPurchaseAddon(
+                {
+                    subscriptionTier: tier,
+                    subscriptionStatus: 'active',
+                    isManagedByTeamOrOrg: false,
+                    currentPeriodEnd: null,
+                },
+                'nutrition_exchanges'
+            )
+            expect(r).toEqual({ allowed: false, reason: 'included_in_plan' })
+        }
     })
 
-    it('starter + cardio → permitido (no exige nutrición)', () => {
+    it('starter + cardio → permitido (el resto del catálogo no cambió)', () => {
         const r = canPurchaseAddon(
             {
                 subscriptionTier: 'starter',
@@ -277,19 +281,6 @@ describe('canPurchaseAddon', () => {
                 currentPeriodEnd: null,
             },
             'cardio'
-        )
-        expect(r).toEqual({ allowed: true })
-    })
-
-    it('pro + nutrition_exchanges → permitido (tier con nutrición)', () => {
-        const r = canPurchaseAddon(
-            {
-                subscriptionTier: 'pro',
-                subscriptionStatus: 'active',
-                isManagedByTeamOrOrg: false,
-                currentPeriodEnd: null,
-            },
-            'nutrition_exchanges'
         )
         expect(r).toEqual({ allowed: true })
     })

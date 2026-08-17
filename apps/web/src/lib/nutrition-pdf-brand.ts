@@ -121,6 +121,6 @@ export function pdfBrandFromProxyHeaders(h: {
         brandName: decodeBrandHeaderValue(h.get('x-coach-brand-name')),
         primaryColor: h.get('x-coach-primary-color'),
         logoUrl: h.get('x-coach-logo-url'),
-        subscriptionTier: h.get('x-coach-subscription-tier') ?? 'starter',
+        subscriptionTier: h.get('x-coach-subscription-tier') ?? 'free',
     })
 }

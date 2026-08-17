@@ -53,8 +53,9 @@ const GUIDES: Guide[] = [
         title: 'Módulos Pro',
         steps: [
             'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro son módulos profesionales.',
-            'Vienen incluidos con cualquier plan pago, sin costo extra. En el plan Free no están disponibles.',
-            'Con un plan pago activo aparecen en la ficha del alumno y enriquecen el builder.',
+            // Pricing v2 (P3): los módulos vienen incluidos en TODOS los planes, Free incluido.
+            'Vienen incluidos con todos los planes, sin costo extra — también en el plan Free.',
+            'Con tu plan activo aparecen en la ficha del alumno y enriquecen el builder.',
         ],
     },
     {
@@ -62,7 +63,8 @@ const GUIDES: Guide[] = [
         steps: [
             'En Opciones › Mi Marca defines logo, colores, nombre y mensajes de bienvenida.',
             'Tus alumnos ven TU marca en su app, no la de EVA.',
-            'La personalización de marca está disponible desde el plan Starter.',
+            // Pricing v2 (D3): starter salió de la venta; branding es Pro+ (white-label v2, CEO 2026-06-21).
+            'La personalización de marca está disponible desde el plan Pro.',
         ],
     },
     {
@@ -118,7 +120,8 @@ const FAQS: Faq[] = [
     },
     {
         q: '¿Puedo usar mi propio logo?',
-        a: 'Sí. En Opciones › Mi Marca subes tu logo y eliges tus colores. Disponible desde el plan Starter.',
+        // Pricing v2 (D3): starter salió de la venta; branding es Pro+ (white-label v2).
+        a: 'Sí. En Opciones › Mi Marca subes tu logo y eliges tus colores. Disponible desde el plan Pro.',
     },
     {
         q: '¿Qué pasa si cancelo?',

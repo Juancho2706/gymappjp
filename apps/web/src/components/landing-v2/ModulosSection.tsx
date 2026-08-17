@@ -156,7 +156,8 @@ export default function ModulosSection({ exerciseCount }: { exerciseCount: numbe
     {
       n: '02',
       title: 'Nutrición',
-      desc: 'Planes de comida con macros calculadas y log diario del alumno desde su app. Disponible desde el plan Pro.',
+      // Pricing v2: nutrición incluida en TODOS los planes (Free incluido) — nada de «desde Pro».
+      desc: 'Planes de comida con macros calculadas y log diario del alumno desde su app. Incluido en todos los planes.',
       tag: 'macros · log diario',
     },
     {

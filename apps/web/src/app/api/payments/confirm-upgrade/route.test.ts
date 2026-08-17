@@ -163,8 +163,11 @@ function makeRequest(body: unknown): Request {
 
 const STANDALONE_WS = { type: 'coach_standalone', coachId: 'coach-1', userId: 'coach-1' }
 // Coach vigente en PRO mensual con preapproval — el upgrade lo sube a ELITE.
+// created_at POST-corte de pricing v2 ⇒ la activación escribe el catálogo nuevo (elite 60);
+// el grandfather (coach viejo ⇒ elite 100) tiene su propio caso más abajo.
 const PRO_COACH = {
     id: 'coach-1',
+    created_at: '2026-09-01T00:00:00.000Z',
     subscription_tier: 'pro',
     subscription_status: 'active',
     billing_cycle: 'monthly',
@@ -316,6 +319,14 @@ describe('POST /api/payments/confirm-upgrade — activación rank-guarded (pago 
         await POST(makeRequest({ paymentId: 'pay-1' }))
         // clearUpgradeInFlight borra la fila keyed por el candado del coach.
         expect(subscriptionEventDeletes).toContain(upgradeInFlightKey('coach-1'))
+    })
+
+    it('grandfather (P2): coach VIEJO (pre-corte) que sube a elite escribe max_clients=100, no 60', async () => {
+        fetchCoachBillingRow.mockResolvedValue({ ...PRO_COACH, created_at: '2026-01-15T12:00:00.000Z' })
+        const res = await POST(makeRequest({ paymentId: 'pay-1' }))
+        expect(res.status).toBe(200)
+        expect(coachUpdates).toHaveLength(1)
+        expect(coachUpdates[0]).toMatchObject({ subscription_tier: 'elite', max_clients: 100 })
     })
 })
 

@@ -7,6 +7,12 @@ export type CoachSubscriptionGateContext = {
     subscriptionTier?: string | null
     activeStandaloneClientCount?: number | null
     workspaceType?: string | null
+    /**
+     * Cupo free EFECTIVO del coach (pricing v2, P2): `coaches.max_clients` cuando existe, o
+     * `tierMaxClientsFor('free', created_at)` — lo resuelve el caller (proxy) que tiene la fila.
+     * Sin este dato se cae al catálogo de venta (coaches nuevos); un free VIEJO mide contra su 3.
+     */
+    freeClientLimit?: number | null
 }
 
 /**
@@ -75,7 +81,10 @@ export function resolveCoachSubscriptionRedirect(
         context?.subscriptionTier === 'free' &&
         context.workspaceType === 'coach_standalone' &&
         typeof context.activeStandaloneClientCount === 'number' &&
-        context.activeStandaloneClientCount > getTierMaxClients('free')
+        // Pricing v2 (P2): medir contra el cupo EFECTIVO del coach (columna/grandfather) cuando el
+        // caller lo aporta — con el catálogo nuevo (free 2) un free VIEJO con sus 3 de siempre
+        // quedaría expulsado a /coach/reactivate sin este dato.
+        context.activeStandaloneClientCount > (context.freeClientLimit ?? getTierMaxClients('free'))
     const isBlocked = !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd, now) || isFreeStandaloneOverCapacity
 
     if (isBlocked && !isSubscriptionGatePage) {

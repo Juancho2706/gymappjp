@@ -31,6 +31,8 @@ type Profile = {
     subscriptionStatus: string
     subscriptionTier: string
     currentPeriodEnd: string | null
+    /** coaches.max_clients — cupo EFECTIVO (grandfather pricing v2); ausente ⇒ catálogo. */
+    maxClients?: number
 }
 
 const profile = (over: Partial<Profile> = {}): Profile => ({
@@ -356,8 +358,10 @@ describe('veredictos resueltos', () => {
         expect(h.getCoachAccessSnapshot().blocked).toBe(false)
     })
 
+    // Pricing v2: cupo free de catálogo = 2 (B2 migra este guard al helper con created_at para
+    // que un free VIEJO siga midiendo contra 3 — grandfather).
     it('free standalone sobre el cupo => blocked (usa el conteo real de clientes)', async () => {
-        const h = await setup({ clientCount: 4, profile: async () => profile({ subscriptionTier: 'free' }) })
+        const h = await setup({ clientCount: 3, profile: async () => profile({ subscriptionTier: 'free' }) })
         await h.refreshCoachAccess(true)
 
         const s = h.getCoachAccessSnapshot()
@@ -366,9 +370,29 @@ describe('veredictos resueltos', () => {
     })
 
     it('free standalone dentro del cupo => acceso', async () => {
-        const h = await setup({ clientCount: 3, profile: async () => profile({ subscriptionTier: 'free' }) })
+        const h = await setup({ clientCount: 2, profile: async () => profile({ subscriptionTier: 'free' }) })
         await h.refreshCoachAccess(true)
         expect(h.getCoachAccessSnapshot().blocked).toBe(false)
+    })
+
+    // Grandfather (P2): el cupo efectivo viene de coaches.max_clients (perfil) — un free VIEJO
+    // con su 3 de siempre NO queda bloqueado por el catálogo nuevo (free 2).
+    it('free VIEJO (max_clients=3) con 3 activos => acceso (la columna manda sobre el catálogo)', async () => {
+        const h = await setup({
+            clientCount: 3,
+            profile: async () => profile({ subscriptionTier: 'free', maxClients: 3 }),
+        })
+        await h.refreshCoachAccess(true)
+        expect(h.getCoachAccessSnapshot().blocked).toBe(false)
+    })
+
+    it('free VIEJO (max_clients=3) con 4 activos => blocked (sobre su propio cupo)', async () => {
+        const h = await setup({
+            clientCount: 4,
+            profile: async () => profile({ subscriptionTier: 'free', maxClients: 3 }),
+        })
+        await h.refreshCoachAccess(true)
+        expect(h.getCoachAccessSnapshot().blocked).toBe(true)
     })
 
     it('managed (team) nunca queda bloqueado por suscripcion', async () => {

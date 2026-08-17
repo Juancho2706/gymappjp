@@ -100,7 +100,7 @@ ${divider()}
   <tr>
     <td>
       <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
-        <strong>Nutrición disponible desde Pro ($29.990/mes).</strong> Si estás en el plan Free o Starter, pasarte tarda 2 minutos y puedes cancelar cuando quieras.
+        <strong>La nutrición viene incluida en todos los planes, también en el gratuito.</strong> Ábrela desde la ficha de tu alumno y arma el primer plan en minutos.
       </p>
     </td>
   </tr>
@@ -123,20 +123,14 @@ ${badge('Día 14 — Siguiente nivel')}
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
   <tr style="background-color:#f9fafb;">
     <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">
-      <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#111827;">Starter — $19.990/mes</p>
-      <p style="margin:0;font-size:12px;color:#6b7280;">10 alumnos · Tu logo y colores · Mensual o anual (−20%)</p>
-    </td>
-  </tr>
-  <tr style="background-color:#f9fafb;">
-    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">
       <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#111827;">Pro — $29.990/mes</p>
-      <p style="margin:0;font-size:12px;color:#6b7280;">30 alumnos · Nutrición · Mensual o anual (−20%)</p>
+      <p style="margin:0;font-size:12px;color:#6b7280;">Hasta 25 alumnos · Tu marca propia · Mensual, trimestral o anual (−20%)</p>
     </td>
   </tr>
   <tr style="background-color:#f0fdf4;">
     <td style="padding:12px 16px;">
       <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#065f46;">Elite — $44.990/mes</p>
-      <p style="margin:0;font-size:12px;color:#6b7280;">60 alumnos · Todo incluido · Mensual / Trimestral / Anual</p>
+      <p style="margin:0;font-size:12px;color:#6b7280;">Hasta 60 alumnos · Tu marca propia · Mensual, trimestral o anual (−20%)</p>
     </td>
   </tr>
 </table>

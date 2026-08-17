@@ -44,13 +44,36 @@ function buildFormData() {
     return fd
 }
 
-/** Admin double: `clients` supports select-chain + insert; `coach_client_assignments` supports insert. */
-function buildAdmin({ existingClient = null }: { existingClient?: { id: string } | null } = {}) {
+/**
+ * Admin double: `clients` soporta select-chain + insert + conteo (await directo del builder,
+ * para el cerco P7); `organizations` soporta el select de `client_limit`;
+ * `coach_client_assignments` soporta insert.
+ */
+function buildAdmin({
+    existingClient = null,
+    orgRow = { client_limit: 100 },
+    activeCount = 0,
+    countError = null,
+}: {
+    existingClient?: { id: string } | null
+    orgRow?: { client_limit: number } | null
+    activeCount?: number
+    countError?: { message: string } | null
+} = {}) {
     const clientsQuery = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: existingClient }),
         insert: vi.fn().mockResolvedValue({ error: null }),
+        // El conteo de activos del cerco P7 hace `await` del builder directo (head:true).
+        then: (onFulfilled: (v: unknown) => unknown) =>
+            Promise.resolve({ count: countError ? null : activeCount, error: countError }).then(onFulfilled),
+    }
+    const organizationsQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: orgRow }),
     }
     const assignmentsQuery = {
         insert: vi.fn().mockResolvedValue({ error: null }),
@@ -58,6 +81,7 @@ function buildAdmin({ existingClient = null }: { existingClient?: { id: string }
     const admin = {
         from: vi.fn((table: string) => {
             if (table === 'clients') return clientsQuery
+            if (table === 'organizations') return organizationsQuery
             if (table === 'coach_client_assignments') return assignmentsQuery
             throw new Error(`Unexpected table: ${table}`)
         }),
@@ -70,7 +94,19 @@ function buildAdmin({ existingClient = null }: { existingClient?: { id: string }
             },
         },
     }
-    return { admin, clientsQuery, assignmentsQuery }
+    return { admin, clientsQuery, organizationsQuery, assignmentsQuery }
+}
+
+const ENTERPRISE_INVITE = {
+    scope: 'enterprise' as const,
+    coachId: 'coach-9',
+    orgId: 'org-9',
+    teamId: null,
+    brandName: 'Org',
+    primaryColor: null,
+    logoUrl: null,
+    welcomeMessage: null,
+    loginHref: '/c/coach-9/login',
 }
 
 describe('joinViaInviteAction', () => {
@@ -157,5 +193,80 @@ describe('joinViaInviteAction', () => {
         expect(assignmentsQuery.insert).toHaveBeenCalledWith(
             expect.objectContaining({ org_id: 'org-9', client_id: 'new-user-1', coach_id: 'coach-9' })
         )
+    })
+
+    // ── P7 (pricing v2): cerco de verdad — el join cuenta activos vs el cupo ANTES del insert ──
+
+    it('enterprise → cupo lleno (client_limit alcanzado): rechaza SIN crear auth.user ni fila', async () => {
+        const { admin, clientsQuery } = buildAdmin({ orgRow: { client_limit: 2 }, activeCount: 2 })
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue(ENTERPRISE_INVITE)
+
+        const result = await joinViaInviteAction('CODE-ORG', null, buildFormData())
+
+        expect((result as { error?: string }).error).toMatch(/límite de alumnos/i)
+        expect((result as { success?: boolean }).success).toBeUndefined()
+        // Cero efectos: el hueco era exactamente este insert sin conteo.
+        expect(admin.auth.admin.createUser).not.toHaveBeenCalled()
+        expect(clientsQuery.insert).not.toHaveBeenCalled()
+        expect(createClientIdentityMock).not.toHaveBeenCalled()
+    })
+
+    it('enterprise → un cupo libre (used < limit): el alta procede', async () => {
+        const { admin, clientsQuery } = buildAdmin({ orgRow: { client_limit: 3 }, activeCount: 2 })
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue(ENTERPRISE_INVITE)
+
+        const result = await joinViaInviteAction('CODE-ORG', null, buildFormData())
+
+        expect(result).toEqual({ success: true, loginHref: '/c/coach-9/login' })
+        expect(clientsQuery.insert).toHaveBeenCalledTimes(1)
+    })
+
+    it('enterprise → organización sin fila/limite inválido: fail-closed, no crea nada', async () => {
+        const { admin, clientsQuery } = buildAdmin({ orgRow: null })
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue(ENTERPRISE_INVITE)
+
+        const result = await joinViaInviteAction('CODE-ORG', null, buildFormData())
+
+        expect((result as { error?: string }).error).toMatch(/no pudimos validar el cupo/i)
+        expect(admin.auth.admin.createUser).not.toHaveBeenCalled()
+        expect(clientsQuery.insert).not.toHaveBeenCalled()
+    })
+
+    it('enterprise → error contando activos: fail-closed, no crea nada', async () => {
+        const { admin, clientsQuery } = buildAdmin({ countError: { message: 'boom' } })
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue(ENTERPRISE_INVITE)
+
+        const result = await joinViaInviteAction('CODE-ORG', null, buildFormData())
+
+        expect((result as { error?: string }).error).toMatch(/no pudimos validar el cupo/i)
+        expect(admin.auth.admin.createUser).not.toHaveBeenCalled()
+        expect(clientsQuery.insert).not.toHaveBeenCalled()
+    })
+
+    it('team → pool sin cuota de alumnos: el alta procede sin consultar organizaciones ni coaches', async () => {
+        // teams.seat_limit limita COACHES (team_members_seat_guard), no el pool de alumnos:
+        // el mock lanza ante cualquier tabla inesperada, así que este test también prueba
+        // que el camino team no consulta organizations/coaches.
+        const { admin } = buildAdmin()
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue({
+            scope: 'team',
+            coachId: 'owner-1',
+            orgId: null,
+            teamId: 'team-1',
+            brandName: 'Equipo',
+            primaryColor: null,
+            logoUrl: null,
+            welcomeMessage: null,
+            loginHref: '/t/equipo/login',
+        })
+
+        const result = await joinViaInviteAction('CODE-TEAM', null, buildFormData())
+
+        expect(result).toEqual({ success: true, loginHref: '/t/equipo/login' })
     })
 })

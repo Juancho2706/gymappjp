@@ -35,7 +35,9 @@ export async function GET() {
     const { data: coach, error } = await supabase
         .from('coaches')
         .select(
-            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_provider, subscription_mp_id, superseded_mp_preapproval_id, card_last4, card_brand'
+            // created_at: ancla del grandfather de pricing v2 (P2) — la UI resuelve los límites por
+            // tier de ESTE coach con tierMaxClientsFor(tier, created_at) (espejo del guard server).
+            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_provider, subscription_mp_id, superseded_mp_preapproval_id, card_last4, card_brand, created_at'
         )
         .eq('id', user.id)
         .maybeSingle()

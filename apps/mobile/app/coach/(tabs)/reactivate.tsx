@@ -17,7 +17,7 @@ import { useWorkspace } from '../../../lib/workspace'
 import { refreshEntitlements } from '../../../lib/entitlements'
 import { refreshCoachAccess } from '../../../lib/coach-access'
 import {
-  FREE_CLIENT_LIMIT,
+  freeClientLimitFor,
   STATUS_LABELS,
   TIER_LABELS,
   activateFreePlan,
@@ -39,9 +39,10 @@ const WARNING_700 = { light: '#8F5A05', dark: '#FFD489' } as const
  *
  * Lo que SÍ queda son las salidas que viven dentro de la app:
  *  - ACTUALIZAR ESTADO: revalida entitlements; si el plan volvió, el guard suelta al toque.
- *  - VOLVER A FREE: no cobra nada — es la salida gratuita. Si está sobre el cupo de Free, el panel
- *    de archivado lo deja bajar a ≤ FREE_CLIENT_LIMIT primero (el endpoint revalida el cupo
- *    server-side de todos modos).
+ *  - VOLVER A FREE: no cobra nada — es la salida gratuita. El cupo comunicado es el de ESTE coach
+ *    (grandfather pricing v2, P2: viejo ve 3, nuevo 2 — `freeClientLimitFor(created_at)`). Si está
+ *    sobre el cupo, el panel de archivado lo deja bajar primero (el endpoint revalida server-side
+ *    con el mismo helper de todos modos).
  *  - CERRAR SESIÓN.
  */
 export default function CoachReactivateScreen() {
@@ -108,7 +109,10 @@ export default function CoachReactivateScreen() {
   // La salida gratuita es exclusiva del coach STANDALONE: en org/team el plan lo paga la
   // organización y este muro ni siquiera debería aparecer (el guard nunca gatea a managed).
   const canGoFree = workspace.kind === 'standalone' && !data?.orgManaged
-  const overFreeLimit = clientCount > FREE_CLIENT_LIMIT
+  // Cupo free de ESTE coach (grandfather P2): sin perfil cargado cae al fail-safe generoso
+  // (límites viejos) — solo display; el endpoint revalida con el mismo helper.
+  const freeLimit = freeClientLimitFor(data?.profile.createdAt)
+  const overFreeLimit = clientCount > freeLimit
 
   return (
     <SafeAreaView edges={['top']} style={styles.root} className="bg-surface-app" testID="coach-reactivate">
@@ -157,12 +161,12 @@ export default function CoachReactivateScreen() {
           </Text>
         </Card>
 
-        {/* Salida gratuita. Sobre cupo: primero archivar/eliminar hasta ≤ FREE_CLIENT_LIMIT. */}
+        {/* Salida gratuita. Sobre cupo: primero archivar/eliminar hasta ≤ el cupo free del coach. */}
         {canGoFree && overFreeLimit ? (
           <ReactivateArchivePanel
             clients={data?.activeClients ?? []}
             activeClientCount={clientCount}
-            freeLimit={FREE_CLIENT_LIMIT}
+            freeLimit={freeLimit}
             workspace={{ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }}
             onChanged={() => { void Promise.all([load(), refreshCoachAccess(true)]) }}
           />
@@ -175,7 +179,8 @@ export default function CoachReactivateScreen() {
               <Text style={textStyle('md', FONT.uiBold)} className="text-strong">Continuar con el plan gratuito</Text>
             </View>
             <Text style={TYPE.caption} className="text-muted">
-              Sigue usando EVA sin pagar, con hasta {FREE_CLIENT_LIMIT} alumnos activos. Tus datos quedan intactos.
+              {/* Límite del COACH (grandfather P2): un coach viejo ve 3, uno nuevo 2. */}
+              Sigue usando EVA sin pagar, con hasta {freeLimit} alumno{freeLimit !== 1 ? 's' : ''} activo{freeLimit !== 1 ? 's' : ''}. Tus datos quedan intactos.
             </Text>
             {freeError ? (
               <View className="bg-danger-100" style={styles.errorBox}>

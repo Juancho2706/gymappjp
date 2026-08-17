@@ -55,7 +55,7 @@ export async function registerAction(
     const acceptLegal = formData.get('accept_legal')
     const acceptHealthData = formData.get('accept_health_data')
     const acceptMarketing = formData.get('accept_marketing') === 'on'
-    const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'starter'
+    const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'free'
     const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
     // Add-ons opcionales del signup (plan 05 F5.5): CSV de MODULE_KEYS. Se validan contra la
     // whitelist + coherencia D8 (nutrition_exchanges solo en tier con nutrición). El monto se

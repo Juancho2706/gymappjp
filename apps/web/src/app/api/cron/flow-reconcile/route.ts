@@ -122,7 +122,7 @@ export async function GET(req: Request) {
             // un webhook perdido, o drift real. La correccion la hace el expiry pass de mp-reconcile / soporte.
             const planAmount = parseFlowPlanAmount(coach.provider_plan_id)
             if (flowIsActive && planAmount != null) {
-                const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+                const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
                 const cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
                 const live = await listLive(admin, coach.id)
                 const couponSpec = await resolveDiscountSpecByRedemptionId(admin, coach.active_coupon_redemption_id)

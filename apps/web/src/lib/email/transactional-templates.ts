@@ -179,7 +179,7 @@ export function buildFreeCoachWelcomeEmail(ctx: FreeCoachWelcomeContext) {
   Hola ${ctx.coachName}, bienvenido/a a EVA 🎉
 </h1>
 <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-  Tu espacio de coaching para <strong>${ctx.brandName}</strong> ya está listo. Empieza con hasta <strong>3 alumnos</strong> sin costo — sin tarjeta, sin fecha de vencimiento.
+  Tu espacio de coaching para <strong>${ctx.brandName}</strong> ya está listo. Empieza con el <strong>plan gratuito</strong> — sin tarjeta, sin fecha de vencimiento.
 </p>
 
 ${featureRow('👥', 'Agrega tu primer alumno', 'Crea el perfil, asígnale una rutina y activa el flujo completo de coaching.')}
@@ -190,7 +190,7 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú
   <tr>
     <td>
       <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
-        <strong>¿Quieres crecer más allá de 3 alumnos?</strong> Cuando llegues al límite, upgradear a Starter tarda menos de 2 minutos y activa branding propio y hasta 10 alumnos.
+        <strong>¿Quieres crecer sin techo?</strong> Cuando llegues al límite de alumnos, pasarte a <strong>Pro</strong> tarda menos de 2 minutos y suma más cupo y tu marca propia.
       </p>
     </td>
   </tr>
@@ -205,7 +205,7 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: `Tu cuenta EVA está lista. Empieza con hasta 3 alumnos gratis.`,
+        previewText: `Tu cuenta EVA está lista. Empieza gratis con tus primeros alumnos.`,
         headerTitle: 'Bienvenido a EVA',
     })
 

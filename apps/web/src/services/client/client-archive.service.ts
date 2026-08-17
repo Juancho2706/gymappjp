@@ -2,7 +2,7 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
+import { tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 
 type Db = SupabaseClient<Database>
 
@@ -218,12 +218,14 @@ async function getWorkspaceCapacity(db: Db, actor: ClientArchiveActor): Promise<
   if (actor.workspace.type === 'standalone') {
     const { data } = await db
       .from('coaches')
-      .select('max_clients, subscription_tier')
+      .select('max_clients, subscription_tier, created_at')
       .eq('id', actor.coachId)
       .maybeSingle()
     if (!data) return null
     return {
-      limit: data.max_clients ?? getTierMaxClients((data.subscription_tier ?? 'free') as SubscriptionTier),
+      // Pricing v2 (P2): la columna max_clients SIGUE ganando; el fallback usa el helper con la
+      // fecha de creación (grandfather) — nunca el catálogo de venta plano para un coach existente.
+      limit: data.max_clients ?? tierMaxClientsFor((data.subscription_tier ?? 'free') as SubscriptionTier, data.created_at),
       label: 'tu plan actual',
     }
   }

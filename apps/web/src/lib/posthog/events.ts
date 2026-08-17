@@ -223,3 +223,72 @@ export function useCaptureCoachNutritionTemplateApplied() {
         [ph]
     )
 }
+
+/**
+ * Funnel de adquisicion/checkout (Pricing v2, tarea E1 — invariante P8: baseline en PostHog
+ * ANTES de encender Meta Ads). Como todo lo demas de este modulo: gated por el consentimiento
+ * de cookies (init con opt_out por defecto ⇒ capture es no-op hasta el opt-in del banner) y
+ * SIN PII en propiedades — tier/ciclo/gateway si; email o nombres jamas.
+ *
+ *   pricing_viewed       → /pricing quedo visible (pageview propio del funnel; ver PricingTracker)
+ *   pricing_plan_clicked → click en el CTA de un plan de /pricing ({ tier })
+ *   checkout_started     → el usuario confirmo y se pide la preference/enrolamiento al server
+ *   checkout_confirmed   → la confirmacion aterrizo visible (processing / flow-processing /
+ *                          upgrade-processing); result separa activacion inmediata de cambio agendado
+ *
+ * Los checkout_* preceden una navegacion DURA (redirect a MP/Webpay o al dashboard): van con
+ * send_instantly + sendBeacon para que el evento no muera con la pagina (el batch normal si moriria).
+ */
+export type CheckoutGateway = 'mercadopago' | 'flow'
+export type CheckoutStartSource = 'subscription' | 'reactivate' | 'register'
+
+export function useCaptureCheckoutStarted() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: {
+            tier: SubscriptionTier
+            billingCycle: string
+            gateway: CheckoutGateway
+            source: CheckoutStartSource
+        }) => {
+            ph?.capture(
+                'checkout_started',
+                {
+                    tier: props.tier,
+                    billing_cycle: props.billingCycle,
+                    gateway: props.gateway,
+                    source: props.source,
+                },
+                { send_instantly: true, transport: 'sendBeacon' }
+            )
+        },
+        [ph]
+    )
+}
+
+export function useCaptureCheckoutConfirmed() {
+    const ph = usePostHog()
+    return useCallback(
+        // tier/billingCycle nullable a proposito: la vuelta estandar de MP llega a /processing SIN
+        // tier ni cycle en la URL — mandar el fallback visual ('starter'/'monthly') envenenaria el
+        // funnel, mejor null honesto.
+        (props: {
+            tier: SubscriptionTier | null
+            billingCycle: string | null
+            gateway: CheckoutGateway
+            result: 'active' | 'scheduled'
+        }) => {
+            ph?.capture(
+                'checkout_confirmed',
+                {
+                    tier: props.tier,
+                    billing_cycle: props.billingCycle,
+                    gateway: props.gateway,
+                    result: props.result,
+                },
+                { send_instantly: true, transport: 'sendBeacon' }
+            )
+        },
+        [ph]
+    )
+}

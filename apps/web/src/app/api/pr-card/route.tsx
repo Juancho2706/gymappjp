@@ -134,7 +134,7 @@ async function resolveBrand(
             .maybeSingle()
         if (coach) {
             brandName = coach.brand_name || brandName
-            const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+            const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
             if (isBrandingAllowed(tier)) {
                 accent = safeColor(coach.primary_color, accent)
                 logoUrl = coach.logo_url || null

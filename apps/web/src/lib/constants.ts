@@ -76,6 +76,11 @@ export {
     TIER_CONFIG,
     getTierPriceClp,
     getTierMaxClients,
+    // Pricing v2 (P2): grandfather por fecha de creación — todo sitio con un coach a mano usa
+    // tierMaxClientsFor(tier, coach.created_at); getTierMaxClients queda solo como catálogo de VENTA.
+    PRICING_V2_CUTOVER,
+    tierMaxClientsFor,
+    getRecommendedTierFor,
     getTierCapabilities,
     BILLING_CYCLE_CONFIG,
     TIER_ALLOWED_BILLING_CYCLES,

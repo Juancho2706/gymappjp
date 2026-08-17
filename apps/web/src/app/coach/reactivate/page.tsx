@@ -8,7 +8,7 @@ export default async function ReactivatePage() {
     const { user, coach, activeClientCount, activeClients, recentlyCancelledAddons } = await getReactivatePageData()
     if (!user) redirect('/login')
 
-    const currentTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
+    const currentTier = (coach?.subscription_tier ?? 'free') as SubscriptionTier
     const subscriptionStatus = coach?.subscription_status ?? null
     // Mismo gate de dinero fail-closed que el endpoint redeem-coupon-signup ('=== true' exacto).
     const couponsEnabled = process.env.COUPON_REDEMPTION_ENABLED === 'true'
@@ -22,6 +22,7 @@ export default async function ReactivatePage() {
                 subscriptionStatus={subscriptionStatus}
                 currentPeriodEnd={coach?.current_period_end ?? null}
                 paidAccessEndedAt={coach?.paid_access_ended_at ?? null}
+                coachCreatedAt={coach?.created_at ?? null}
                 recentlyCancelledAddons={recentlyCancelledAddons}
                 couponsEnabled={couponsEnabled}
             />
