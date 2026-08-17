@@ -188,12 +188,21 @@ describe('computeCardPlacement — dock (<768 y RN)', () => {
     expect(rectContainsRect(viewportRect(viewport), cardRect(placement, CARD.height))).toBe(true)
   })
 
-  it('el dock ignora la posición del target: siempre abajo (thumb-zone)', () => {
-    const arriba = place({ top: 0, left: 0, width: 50, height: 30 }, viewport, true)
-    const abajo = place({ top: 800, left: 300, width: 50, height: 30 }, viewport, true)
+  it('el dock vive abajo, pero flipea arriba cuando taparía su target (QA owner 17-08)', () => {
+    // Target arriba: el dock de abajo no lo toca ⇒ se queda en la thumb-zone.
+    const targetArriba = place({ top: 0, left: 0, width: 50, height: 30 }, viewport, true)
+    expect(targetArriba.side).toBe('bottom')
+    expect(targetArriba.top).toBe(844 - TOUR_VIEWPORT_MARGIN - CARD.height)
 
-    expect(arriba.top).toBe(abajo.top)
-    expect(arriba.left).toBe(abajo.left)
+    // Target en la zona del dock (la PublishBar/mini-cinta): la tarjeta se va arriba —
+    // jamás debe sentarse ENCIMA de lo que está explicando.
+    const targetAbajo = place({ top: 800, left: 300, width: 50, height: 30 }, viewport, true)
+    expect(targetAbajo.side).toBe('top')
+    expect(targetAbajo.top).toBe(TOUR_VIEWPORT_MARGIN)
+
+    // Target gigante que tocaría AMBOS extremos: gana abajo (regla D3 sobre el solape).
+    const targetGigante = place({ top: 0, left: 0, width: 390, height: 844 }, viewport, true)
+    expect(targetGigante.side).toBe('bottom')
   })
 })
 

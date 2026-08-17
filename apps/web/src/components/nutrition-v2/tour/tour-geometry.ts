@@ -158,12 +158,24 @@ export function computeCardPlacement(input: CardPlacementInput): TourCardPlaceme
 
   if (input.dock) {
     const width = Math.max(0, viewport.width - margin * 2)
-    const top = clampToRange(
+    const bottomTop = clampToRange(
       viewport.height - safeBottom - margin - height,
       margin,
       viewport.height - height - margin,
     )
-    return { mode: 'dock', side: 'bottom', top, left: margin, width, maxHeight }
+    // QA owner 17-08: la tarjeta dock JAMÁS debe tapar lo que ilumina. El caso real: el paso de la
+    // mini-cinta/publicar apunta a la PublishBar, que vive exactamente donde el dock se apoya. Si
+    // el target intersecta el dock de abajo Y arriba queda libre, la tarjeta se va arriba. Si el
+    // target taparía en ambos extremos (target gigante), gana abajo — regla D3: mejor solapar que
+    // no poder leer/cerrar.
+    if (target) {
+      const bottomRect = { top: bottomTop, left: margin, width, height }
+      const topRect = { top: margin, left: margin, width, height }
+      if (rectsIntersect(target, bottomRect) && !rectsIntersect(target, topRect)) {
+        return { mode: 'dock', side: 'top', top: margin, left: margin, width, maxHeight }
+      }
+    }
+    return { mode: 'dock', side: 'bottom', top: bottomTop, left: margin, width, maxHeight }
   }
 
   const width = Math.min(input.card.width, Math.max(0, viewport.width - margin * 2))

@@ -168,6 +168,8 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
   const [index, setIndex] = useState(0)
   const [frame, setFrame] = useState<Frame | null>(null)
   const [hole, setHole] = useState<TourRect | null>(null)
+  // Alto medido de la tarjeta: lo necesita el flip de abajo (saber si taparía al target).
+  const [cardHeight, setCardHeight] = useState(0)
   const rootRef = useRef<View | null>(null)
 
   const total = steps.length
@@ -244,6 +246,21 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
     safeFrame.height - insets.top - CARD_MARGIN - cardBottom - CARD_MARGIN,
   )
 
+  // QA owner 17-08 (paridad con `computeCardPlacement` web): la tarjeta dock JAMÁS debe tapar lo
+  // que ilumina. Caso real: los pasos de la mini-cinta y de publicar apuntan a la PublishBar, que
+  // vive exactamente donde el dock se apoya. Si el recorte cae en la franja de abajo Y arriba
+  // queda libre, la tarjeta flipea al borde superior; si taparía en ambos extremos (target
+  // gigante) gana abajo — regla D3: mejor solapar que no poder leer/cerrar.
+  const cardTopWhenFlipped = insets.top + CARD_MARGIN
+  const overlapsCardZone = (zoneTop: number) =>
+    hole !== null &&
+    cardHeight > 0 &&
+    hole.top < zoneTop + cardHeight &&
+    hole.top + hole.height > zoneTop
+  const dockAtTop =
+    overlapsCardZone(safeFrame.height - cardBottom - cardHeight) &&
+    !overlapsCardZone(cardTopWhenFlipped)
+
   return (
     <Modal
       transparent
@@ -303,10 +320,11 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
           accessibilityViewIsModal
           accessibilityLabel={TOUR_COPY.dialog}
           className="absolute rounded-card border border-subtle bg-surface-card"
+          onLayout={(event) => setCardHeight(event.nativeEvent.layout.height)}
           style={{
             left: CARD_MARGIN,
             right: CARD_MARGIN,
-            bottom: cardBottom,
+            ...(dockAtTop ? { top: cardTopWhenFlipped } : { bottom: cardBottom }),
             maxHeight: cardMaxHeight > 0 ? cardMaxHeight : undefined,
           }}
         >

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, Pencil, Plus, Scale, Search, User, X } from 'lucide-react'
+import { BadgeCheck, Loader2, Pencil, Plus, Scale, Search, User, X } from 'lucide-react'
 import { MacroChipRow, NutritionStatePanel } from '@/components/nutrition-v2'
 import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
 import {
@@ -632,11 +632,21 @@ export function FoodCatalogBrowser({
                     ) : null}
                     <span
                       className={
-                        'inline-flex h-5 shrink-0 items-center rounded-pill border px-1.5 text-[10px] font-bold ' +
+                        'inline-flex h-5 shrink-0 items-center gap-1 rounded-pill border px-1.5 text-[10px] font-bold ' +
                         VERIFICATION_TONE_CLASSES[model.verificationTone]
                       }
+                      title={model.verificationTone === 'verified' ? model.verificationLabel : undefined}
                     >
-                      {model.verificationLabel}
+                      {/* QA owner 17-08: chips «Verificado por …» = solo el check (texto a sr-only),
+                          mismo trato que el picker. Los demás tonos conservan su texto. */}
+                      {model.verificationTone === 'verified' ? (
+                        <>
+                          <BadgeCheck aria-hidden="true" className="size-3" />
+                          <span className="sr-only">{model.verificationLabel}</span>
+                        </>
+                      ) : (
+                        model.verificationLabel
+                      )}
                     </span>
                   </div>
                   <p className="mt-0.5 truncate text-xs text-muted">

@@ -263,7 +263,11 @@ export function EditableSlotCard({
             className="h-11 w-[6.5rem] rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold tabular-nums text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
         </div>
-        <div className="flex min-h-11 shrink-0 items-center gap-2">
+        {/* QA owner 17-08 (2ª ronda): cuando este bloque envuelve a su propia línea (<md), pegado
+            entero a la derecha dejaba un hueco muerto gigante a la izquierda del kcal. En esa
+            línea ahora ocupa todo el ancho y el spark (con el stack) se va a la izquierda
+            (`mr-auto`) mientras los botones quedan a la derecha. En ≥md no cambia nada. */}
+        <div className="flex min-h-11 shrink-0 items-center gap-2 max-md:w-full">
           {/* Contraída: qué lleva la franja SIN abrirla. El stack de fotos es la versión de un
               vistazo de la lista que el body esconde; decorativo (`aria-hidden`) porque el spark
               de al lado ya anuncia el subtotal y el botón de contraer nombra la franja. La franja
@@ -273,16 +277,18 @@ export function EditableSlotCard({
           {/* Subtotal de la franja (items + porciones: el MISMO número de antes): una cifra y la
               barra apilada. Los gramos exactos viven en el popover (SPEC D3), que además dice qué
               porcentaje de la meta de kcal del día se lleva esta franja. */}
-          <MacroSparkPopover
-            size="md"
-            calories={subtotal.calories}
-            proteinG={subtotal.proteinG}
-            carbsG={subtotal.carbsG}
-            fatsG={subtotal.fatsG}
-            fiberG={subtotal.fiberG > 0 ? subtotal.fiberG : null}
-            targetCalories={dayTargetCalories}
-            ariaContext={`Subtotal de ${slotLabel}`}
-          />
+          <span className="inline-flex min-w-0 items-center max-md:mr-auto">
+            <MacroSparkPopover
+              size="md"
+              calories={subtotal.calories}
+              proteinG={subtotal.proteinG}
+              carbsG={subtotal.carbsG}
+              fatsG={subtotal.fatsG}
+              fiberG={subtotal.fiberG > 0 ? subtotal.fiberG : null}
+              targetCalories={dayTargetCalories}
+              ariaContext={`Subtotal de ${slotLabel}`}
+            />
+          </span>
 
           {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
               Contraída, la card sigue diciendo lo único que importa de un vistazo: nombre, hora,

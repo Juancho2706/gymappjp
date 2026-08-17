@@ -12,7 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Pencil, Plus, Scale, Search, User, X } from 'lucide-react-native'
+import { BadgeCheck, Pencil, Plus, Scale, Search, User, X } from 'lucide-react-native'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { NutritionHeader, NutritionStatePanel, FoodThumbnail } from '../../../components/nutrition-v2'
 // Import por ruta directa (no via el barrel): respeta el contrato de MacroChipRow.
@@ -696,10 +696,19 @@ export default function CoachNutritionCatalogScreen({
                     <Text className="shrink text-sm font-semibold text-strong" numberOfLines={1}>
                       {item.name}
                     </Text>
-                    <View className={`shrink-0 rounded-pill border px-1.5 py-0.5 ${tone.box}`}>
-                      <Text className={`text-[10px] font-bold ${tone.text}`}>
-                        {verification.label}
-                      </Text>
+                    {/* QA owner 17-08: chips «Verificado por …» = solo el check (espejo del picker
+                        web); el texto queda en accessibilityLabel. Los otros tonos conservan texto. */}
+                    <View
+                      accessibilityLabel={verification.label}
+                      className={`shrink-0 flex-row items-center rounded-pill border px-1.5 py-0.5 ${tone.box}`}
+                    >
+                      {verification.tone === 'verified' ? (
+                        <BadgeCheck color={theme.success} size={12} />
+                      ) : (
+                        <Text className={`text-[10px] font-bold ${tone.text}`}>
+                          {verification.label}
+                        </Text>
+                      )}
                     </View>
                     {/* ✎ = corregiste los macros de este alimento. Estricto contra `true`: en el
                         contrato el campo es opcional y ausente significa "el catálogo no aplicó

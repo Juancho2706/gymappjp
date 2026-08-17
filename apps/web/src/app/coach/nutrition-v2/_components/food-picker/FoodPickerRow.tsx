@@ -161,13 +161,21 @@ export function FoodPickerRow({
             'inline-flex h-5 items-center gap-1 rounded-pill border px-1.5 text-[10px] font-bold ' +
             VERIFICATION_TONE_CLASSES[model.verificationTone]
           }
+          title={model.verificationTone === 'verified' ? model.verificationLabel : undefined}
         >
           {model.verificationTone === 'verified' ? (
             <BadgeCheck aria-hidden="true" className="size-3" />
           ) : item.verificationStatus === 'coach_verified' ? (
             <ShieldCheck aria-hidden="true" className="size-3" />
           ) : null}
-          {model.verificationLabel}
+          {/* QA owner 17-08: el «Verificado por …» completo hacía ruido en la lista — el chip
+              verificado queda SOLO con el check (el texto sobrevive para lectores de pantalla
+              vía title/aria). Los demás tonos (p. ej. «Sin verificar») conservan su texto. */}
+          {model.verificationTone === 'verified' ? (
+            <span className="sr-only">{model.verificationLabel}</span>
+          ) : (
+            model.verificationLabel
+          )}
         </span>
         {usageCount != null && usageCount > 0 ? (
           <span className="inline-flex h-5 items-center rounded-pill border border-border-subtle bg-surface-sunken px-1.5 text-[10px] font-semibold text-muted">
