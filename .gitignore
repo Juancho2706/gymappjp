@@ -19,6 +19,10 @@ docs/anidocs/
 .cursor/
 .mcp.json
 .playwright-mcp/
+.serena/
+.github/agents/
+.github/hooks/
+.github/skills/
 
 # Secrets and deployment metadata
 .env*
