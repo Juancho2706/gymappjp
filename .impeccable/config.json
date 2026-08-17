@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit/EditorDayRail.tsx"
+        ],
+        "createdAt": "2026-08-17T01:38:23.545Z",
+        "reason": "Borde 2px del dia activo del rail: mockup Cabina v2 aprobado, confirmado por el owner en QA 17-08"
+      }
+    ]
+  }
+}
