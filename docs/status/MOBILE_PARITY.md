@@ -33,8 +33,9 @@ source_of_truth: apps/web responsive + apps/mobile
 > popover RN sobre `_anchored` (Modal medido con flip/clamp). Builder y área alumno con diff
 > CERO. Gates 2026-08-16 todo verde: typecheck web+mobile, vitest (3.336), `check:tokens`,
 > boundaries, `expo export --platform android`, Playwright harness 41 asserts × 5 anchos ×
-> 2 temas. **QA del owner (web responsive + device Android) PENDIENTE; el OTA android
-> ACUMULADO sigue retenido hasta ese QA.**
+> 2 temas. **QA del owner (web responsive + device Android) PENDIENTE; OTA android ACUMULADO
+> PUBLICADO 2026-08-17 por decisión del owner (grupo `aca6fc76`, android `01a00d3d`,
+> runtime 1.1.0, GH Actions run 31983615828) — el QA device corre sobre ese OTA.**
 
 > **2026-08-16 (T3.3a convergencia del quick-edit RN, rama `rnmobiledenuevo`, SIN QA device)**:
 > el quick-edit del coach RN consume la **gramatica compartida** de `@eva/nutrition-v2`
