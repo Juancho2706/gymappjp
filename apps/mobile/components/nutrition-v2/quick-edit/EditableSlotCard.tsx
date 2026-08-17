@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Animated, Easing, LayoutAnimation, Pressable, Text, TextInput, View } from 'react-native'
 import { useReducedMotion } from 'react-native-reanimated'
 import { Image } from 'expo-image'
-import { ChevronDown, MoreVertical, StickyNote, Trash2 } from 'lucide-react-native'
+import { ChevronDown, MoreVertical, StickyNote } from 'lucide-react-native'
 import { exchangeGroupColor } from '@eva/nutrition-engine'
 import {
   SLOT_INSTRUCTIONS_MAX,
@@ -38,6 +38,11 @@ import {
 } from './EditablePortionsSection'
 import { TourTarget } from '../tour'
 import { QUICK_EDIT_COPY } from './microcopy'
+
+// Un solo traje para los tres controles del header de la franja (contraer, nota, ⋮): caja de 44 pt
+// del kit. `_BASE` es la caja sin relleno, para cuando la nota se tiñe con la marca del coach.
+const SLOT_HEADER_BTN_BASE = 'h-11 w-11 items-center justify-center rounded-control'
+const SLOT_HEADER_BTN = `${SLOT_HEADER_BTN_BASE} border border-subtle bg-surface-sunken`
 
 /**
  * Franja editable (qe-design §1.2.B.2): nombre y hora inline en el header, filas de
@@ -100,7 +105,6 @@ export function EditableSlotCard({
   onFoodOverrideApplied,
   onSlotPatch,
   onSlotInstructions,
-  onRemoveSlot,
   onOpenMenu,
   onSearchFood,
   onAddFreeItem,
@@ -137,7 +141,6 @@ export function EditableSlotCard({
    * `UPDATE_SLOT` no la cubre (su patch es solo nombre/hora), por eso es un handler aparte.
    */
   onSlotInstructions: (value: string) => void
-  onRemoveSlot: () => void
   /**
    * Menú de la franja (CE-5): copiar a otros días / aplicar a todos. Ausente = plan de un
    * solo día, donde copiar no tiene destino y la afordancia sería ruido.
@@ -261,34 +264,20 @@ export function EditableSlotCard({
         <Text className="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
           Franja {index + 1}
         </Text>
-        {/* `gap-1`: el botón de contraer ahora tiene caja propia, y pegado al ⋮ y al tacho (que
-            son icono pelado) se leería como un error de render. */}
-        <View className="flex-row items-center gap-1">
-          {/* Nota del coach de la franja («el globito», SPEC nutrition-coach-notes N2): mismo
-              trato que el botón de contraer (caja de 44 pt del kit) para que el header hable un
-              solo idioma. SIN nota va neutro apagado — el editor ya está denso y un 📝 vacío no
-              tiene que cantar; CON nota se tiñe con la marca REAL del coach y la tinta del glifo
-              la elige `readableInkOn` (patrón de contraste de la Familia N: mismo hex ⇒ misma
-              tinta que en la web). `style` es objeto estático, jamás función (gotcha css-interop). */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={QUICK_EDIT_COPY.slotNote(slotLabel)}
-            disabled={disabled}
-            onPress={() => setNoteOpen(true)}
-            className={
-              'h-11 w-11 items-center justify-center rounded-control' +
-              (hasNote ? '' : ' border border-subtle bg-surface-sunken')
-            }
-            style={hasNote ? { backgroundColor: brandColor } : undefined}
-          >
-            <StickyNote color={hasNote ? readableInkOn(brandColor) : theme.textSecondary} size={18} />
-          </Pressable>
+        {/* QA del dueño 17-08: «los botones de notas de franja y para colapsar hazle un rework
+            visual y que no estén tan pegadas del input».
+            Eran CUATRO controles con TRES trajes distintos —nota y chevron como cajas hundidas
+            gemelas (indistinguibles entre sí), ⋮ y tacho como íconos pelados sin caja— y el tacho
+            solo existía porque la hoja del ⋮ en RN no traía «Eliminar franja». Ahora son los mismos
+            TRES de la web, en su orden, con UN solo traje de caja: [contraer][nota][⋮]. Borrar vive
+            dentro de la hoja, como en la web — una acción destructiva no va a un toque de distancia
+            del control de contraer.
+            `gap-1.5` y `mt-3` en la fila de inputs: el header y los campos eran dos bloques de 44 pt
+            pegados borde con borde. */}
+        <View className="flex-row items-center gap-1.5">
           {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
-              Es un BOTON, no un icono suelto: caja de 44 pt con relleno hundido y filete sutil
-              (el mismo par `border-subtle` + `bg-surface-sunken` del kit), para que se lea como
-              control y no como adorno del header — espejo del botón web, que ahí se delata con
-              el hover que el teléfono no tiene. El chevron GIRA (no salta) y el cuerpo se pliega
-              con la misma curva y duración; con reduced motion las dos cosas son instantáneas.
+              El chevron GIRA (no salta) y el cuerpo se pliega con la misma curva y duración; con
+              reduced motion las dos cosas son instantáneas.
               `className` sin `style`-función: css-interop descartaría el estilo entero. */}
           <Pressable
             accessibilityRole="button"
@@ -299,11 +288,27 @@ export function EditableSlotCard({
             }
             accessibilityState={{ expanded: !collapsed }}
             onPress={toggleCollapsed}
-            className="h-11 w-11 items-center justify-center rounded-control border border-subtle bg-surface-sunken"
+            className={SLOT_HEADER_BTN}
           >
             <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
               <ChevronDown color={theme.textSecondary} size={18} />
             </Animated.View>
+          </Pressable>
+          {/* Nota del coach de la franja («el globito», SPEC nutrition-coach-notes N2). SIN nota va
+              neutro apagado, igual que sus hermanos — el editor ya está denso y un 📝 vacío no tiene
+              que cantar; CON nota se tiñe con la marca REAL del coach y la tinta del glifo la elige
+              `readableInkOn` (patrón de contraste de la Familia N: mismo hex ⇒ misma tinta que en la
+              web). Es el ÚNICO bloque sólido de la fila, y ahora sí significa algo.
+              `style` es objeto estático, jamás función (gotcha css-interop). */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={QUICK_EDIT_COPY.slotNote(slotLabel)}
+            disabled={disabled}
+            onPress={() => setNoteOpen(true)}
+            className={hasNote ? SLOT_HEADER_BTN_BASE : SLOT_HEADER_BTN}
+            style={hasNote ? { backgroundColor: brandColor } : undefined}
+          >
+            <StickyNote color={hasNote ? readableInkOn(brandColor) : theme.textSecondary} size={18} />
           </Pressable>
           {onOpenMenu ? (
             <Pressable
@@ -311,24 +316,15 @@ export function EditableSlotCard({
               accessibilityLabel={`${QUICK_EDIT_COPY.slotMenuTitle} ${slot.name || index + 1}`}
               disabled={disabled}
               onPress={onOpenMenu}
-              className="h-11 w-11 items-center justify-center rounded-control"
+              className={SLOT_HEADER_BTN}
             >
-              <MoreVertical color={theme.textSecondary} size={17} />
+              <MoreVertical color={theme.textSecondary} size={18} />
             </Pressable>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Eliminar franja ${slot.name || index + 1}`}
-            disabled={disabled}
-            onPress={onRemoveSlot}
-            className="h-11 w-11 items-center justify-center rounded-control"
-          >
-            <Trash2 color={theme.destructive} size={17} />
-          </Pressable>
         </View>
       </View>
 
-      <View className="flex-row gap-2">
+      <View className="mt-3 flex-row gap-2">
         <View className="flex-1">
           <TextInput
             accessibilityLabel="Nombre de la franja"

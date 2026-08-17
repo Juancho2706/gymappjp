@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BackHandler, Pressable, ScrollView, Text, View } from 'react-native'
+import { BackHandler, Platform, Pressable, ScrollView, StatusBar, Text, View } from 'react-native'
 import type { LayoutRectangle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
@@ -58,6 +58,10 @@ const HOLE_PADDING = 6
 
 /** Margen mínimo de la tarjeta contra los bordes. Es el colchón que hace verdadero a D3. */
 const CARD_MARGIN = 12
+// Piso de la safe area superior. `useSafeAreaInsets` devuelve 0 arriba en algunos OEM con
+// edge-to-edge (reproducido en el Xiaomi del dueño), y sin piso la tarjeta flipeada se apoya sobre
+// el reloj y los iconos de señal. 24 dp es la altura mínima histórica de la barra de estado Android.
+const MIN_TOP_INSET = 24
 
 export const TOUR_COPY = {
   skip: 'Saltar',
@@ -157,9 +161,15 @@ export type TourOverlayProps = {
   active: boolean
   /** «Listo» manda `done`; «Saltar» y el back de Android mandan `skip`. Los dos marcan (D4). */
   onEnd: (reason: TourEndReason) => void
+  /**
+   * Banda que la tarjeta dock debe dejar libre abajo, ADEMÁS de la safe area. Existe para el chrome
+   * flotante que se pinta después de la escena y al que ningún `zIndex` del overlay le gana: el hub
+   * la pasa con `COACH_TABBAR_CLEARANCE` (la cápsula del coach), el editor la deja en 0.
+   */
+  bottomClearance?: number
 }
 
-export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
+export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourOverlayProps) {
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
   const { theme } = useTheme()
@@ -270,12 +280,29 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
   const panes = panesFor(hole ?? EMPTY_HOLE, safeFrame)
   const transition = { type: 'timing', duration: motion.duration('base'), easing: EASE.out } as const
 
+  // QA del dueño 17-08 (Xiaomi, barra de gestos): la tarjeta se metía DEBAJO del reloj arriba y la
+  // cápsula flotante del coach le pasaba POR ENCIMA abajo. Dos síntomas, una causa: el posicionador
+  // conocía las safe areas pero ninguna franja de chrome flotante.
+  //
+  // Abajo no hay arreglo por z-order. Desde `fd13886a` el overlay dejó de ser `Modal` y es un hermano
+  // dentro de la pantalla, mientras que el `BottomTabView` pinta su barra DESPUÉS de todas las
+  // escenas: ningún `zIndex` de acá le gana. Hay que reservar la banda, y por eso el hueco entra por
+  // prop — el hub vive bajo la cápsula del coach, el editor no.
+  //
+  // Arriba, `insets.top` llega en 0 en algunos OEM con edge-to-edge, y `insets.top + CARD_MARGIN`
+  // dejaba la tarjeta pisando la hora. Se le pone piso con la altura real de la barra de estado.
+  const topSafe = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
+    MIN_TOP_INSET,
+  )
+
   // Techo de alto de la tarjeta (D3). Si el contenido no cabe, scrollea ADENTRO en vez de
   // desbordar: una tarjeta más alta que la pantalla no puede ser ⊆ viewport de ninguna otra forma.
-  const cardBottom = Math.max(insets.bottom, CARD_MARGIN)
+  const cardBottom = Math.max(insets.bottom, CARD_MARGIN) + bottomClearance
   const cardMaxHeight = Math.max(
     0,
-    safeFrame.height - insets.top - CARD_MARGIN - cardBottom - CARD_MARGIN,
+    safeFrame.height - topSafe - CARD_MARGIN - cardBottom - CARD_MARGIN,
   )
 
   // QA owner 17-08 (paridad con `computeCardPlacement` web): la tarjeta dock JAMÁS debe tapar lo
@@ -283,7 +310,7 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
   // vive exactamente donde el dock se apoya. Si el recorte cae en la franja de abajo Y arriba
   // queda libre, la tarjeta flipea al borde superior; si taparía en ambos extremos (target
   // gigante) gana abajo — regla D3: mejor solapar que no poder leer/cerrar.
-  const cardTopWhenFlipped = insets.top + CARD_MARGIN
+  const cardTopWhenFlipped = topSafe + CARD_MARGIN
   const overlapsCardZone = (zoneTop: number) =>
     hole !== null &&
     cardHeight > 0 &&

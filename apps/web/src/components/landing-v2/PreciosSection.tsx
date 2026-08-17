@@ -308,7 +308,9 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             {t('pf_6', 'Sin marca propia (white-label)')}
                         </li>
                     </ul>
-                    <Link href="/register" style={ghostCta('free')} {...hoverHandlers('free')}>
+                    {/* Explícito: los CTA de pago ya mandan su tier (`?tier=pro` / `?tier=elite`), y
+                        el de Free no puede quedarse en el default del wizard. */}
+                    <Link href="/register?tier=free" style={ghostCta('free')} {...hoverHandlers('free')}>
                         {t('pf_cta', 'Empezar gratis')}
                     </Link>
                 </div>

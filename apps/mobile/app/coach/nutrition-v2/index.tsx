@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -852,9 +853,16 @@ export default function CoachNutritionV2Screen() {
       />
 
       {/* Guía Viva: el overlay del guion del hub. Solo en la pestaña Alumnos — los seis pasos
-          iluminan el roster, y sobre Plantillas o Alimentos no habría nada que enseñar. */}
+          iluminan el roster, y sobre Plantillas o Alimentos no habría nada que enseñar.
+          `bottomClearance`: la cápsula flotante del coach se pinta después de la escena, así que sin
+          reservarle la banda la tarjeta del tour queda debajo de ella (QA del dueño 17-08). */}
       {activeTab === 'roster' ? (
-        <TourOverlay steps={tourSteps('hub')} active={tour.active} onEnd={tour.end} />
+        <TourOverlay
+          steps={tourSteps('hub')}
+          active={tour.active}
+          onEnd={tour.end}
+          bottomClearance={COACH_TABBAR_CLEARANCE}
+        />
       ) : null}
     </View>
     </TourTargetsProvider>
@@ -1008,11 +1016,23 @@ function HubTemplatesTab({
   )
 }
 
-// Tablist DS del hub (espejo de web `NutritionHubTabs.tsx:28-54`): fila segmentada 3-en-1 con
-// los mismos tokens (`bg-surface-card`/`border-default`; activo `bg-primary` + texto
-// blanco, inactivo `text-muted`). Sin `hover`/breakpoint (no aplican en RN): icono+label
-// siempre visibles. Estado local en el padre; conmutar NO toca la URL. White-label safe (solo
-// el blanco del texto activo es crudo, igual que web `text-white`).
+// Tablist DS del hub (espejo de web `NutritionHubTabs.tsx`): fila segmentada 4-en-1 con los mismos
+// tokens (`bg-surface-card`/`border-default`; activo `bg-primary` + texto blanco, inactivo
+// `text-muted`). Estado local en el padre; conmutar NO toca la URL. White-label safe (solo el blanco
+// del texto activo es crudo, igual que web `text-white`).
+//
+// QA del dueño 17-08: los cuatro labels salían truncados («Alum…», «Plantil…», «Alime…», «Curac…»).
+// No era un problema nuevo de diseño: la WEB ya lo resuelve ocultando el ícono bajo `sm` para que los
+// labels quepan, y este port copió los tokens pero descartó la regla («no aplican en RN» era el bug).
+// Se repone la MISMA regla, con el breakpoint calculado en vez de heredado:
+//   chip = (ancho − 32 de padding de pantalla − 20 del contenedor) / 4
+//   con ícono el texto pierde 38 dp (px-2 16 + ícono 16 + gap 6); sin ícono, solo 16.
+// El label más ancho es «Alimentos» (~63 dp a 14 px en HankenGrotesk SemiBold). Con ícono haría falta
+// una pantalla de ≥432 dp — o sea ningún teléfono. Sin ícono entra desde 376 dp, y bajo eso el paso a
+// 13 px cierra los últimos dos dígitos sin que se note.
+const TABS_ICON_MIN_WIDTH = 440
+const TABS_COMPACT_TEXT_MAX_WIDTH = 400
+
 function HubTablist({
   active,
   onSelect,
@@ -1022,6 +1042,10 @@ function HubTablist({
   onSelect: (key: HubTabKey) => void
   inactiveColor: string
 }) {
+  const { width } = useWindowDimensions()
+  const showIcon = width >= TABS_ICON_MIN_WIDTH
+  const compactText = width < TABS_COMPACT_TEXT_MAX_WIDTH
+
   return (
     <View
       accessibilityRole="tablist"
@@ -1038,11 +1062,11 @@ function HubTablist({
             accessibilityState={{ selected: on }}
             accessibilityLabel={tab.label}
             onPress={() => onSelect(tab.key)}
-            className={`min-h-11 min-w-0 flex-1 flex-row items-center justify-center gap-1.5 rounded-[10px] px-2 ${on ? 'bg-primary' : ''}`}
+            className={`min-h-11 min-w-0 flex-1 flex-row items-center justify-center gap-1.5 rounded-[10px] ${showIcon ? 'px-2' : 'px-1.5'} ${on ? 'bg-primary' : ''}`}
           >
-            <Icon size={16} color={on ? '#FFFFFF' : inactiveColor} />
+            {showIcon ? <Icon size={16} color={on ? '#FFFFFF' : inactiveColor} /> : null}
             <Text
-              className={`shrink text-sm font-semibold ${on ? 'text-white' : 'text-muted'}`}
+              className={`shrink ${compactText ? 'text-[13px]' : 'text-sm'} font-semibold ${on ? 'text-white' : 'text-muted'}`}
               numberOfLines={1}
             >
               {tab.label}

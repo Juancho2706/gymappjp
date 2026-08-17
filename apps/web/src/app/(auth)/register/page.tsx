@@ -92,8 +92,11 @@ export default function RegisterPage() {
     const [password, setPassword] = useState('')
     const [clientError, setClientError] = useState<string | null>(null)
     const [fromGoogle, setFromGoogle] = useState(false)
-    // Pricing v2: pro es el plan destacado y el default del selector (starter fuera de venta).
-    const [tier, setTier] = useState<SaleTier>('pro')
+    // Pricing v2: pro es el plan DESTACADO en la vitrina, pero el default del wizard es FREE.
+    // Llegar sin `?tier` significa que el visitante entró por un CTA de alta genérico —y todos los
+    // CTA genéricos dicen «gratis»—, así que abrir en un plan de pago rompe la promesa y manda a un
+    // checkout que nadie pidió. Los CTA de pago mandan su tier explícito.
+    const [tier, setTier] = useState<SaleTier>('free')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     // Código de descuento (REGISTER-CODE): manual (campo colapsado) o auto-aplicado desde ?codigo=.
     // Solo se threadea a /processing (el canje + disclosure SERNAC + consentimiento ocurren allá).
@@ -138,11 +141,12 @@ export default function RegisterPage() {
         const rawTier = params.get('tier')
         const queryCycle = params.get('cycle')
         // Solo aceptamos tiers a la venta (free/pro/elite). Un link viejo con
-        // ?tier=starter/starter_lite/growth/scale (fuera de venta) degrada a 'pro'.
+        // ?tier=starter/starter_lite/growth/scale (fuera de venta) degrada a 'free': ante un tier
+        // que ya no existe, el default seguro es el que no cobra.
         const nextTier: SaleTier =
             rawTier && isSaleTier(rawTier)
                 ? rawTier
-                : 'pro'
+                : 'free'
         setTier(nextTier)
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) {
             const candidateCycle = queryCycle as BillingCycle

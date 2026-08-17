@@ -165,7 +165,10 @@ function Hero() {
           }}
         >
           <Link
-            href="/register"
+            // El CTA promete GRATIS: tiene que llegar al wizard con Free elegido. Sin el parámetro
+            // el registro abría en Pro y terminaba en el checkout de MercadoPago — la ruptura de
+            // promesa justo en el punto de conversión del tráfico pago.
+            href="/register?tier=free"
             onMouseEnter={reduced ? undefined : (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
             onMouseLeave={reduced ? undefined : (e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
             style={{

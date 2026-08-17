@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import {
   Alert,
   BackHandler,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -439,6 +440,27 @@ export function QuickEditMode({
   // y la fila de chips salta ahí. Ref y no estado: medir no debe re-renderizar el árbol.
   const scrollRef = useRef<ScrollView>(null)
   const dayOffsetsRef = useRef<Record<string, number | undefined>>({})
+  // QA del dueño 17-08: escribiendo en «Notas para tu alumno» no se veía lo que se escribía. El
+  // `KeyboardAvoidingView` de esta pantalla es INERTE en Android (`behavior` va undefined ahí) y la
+  // PublishBar vive FUERA del scroll, así que se interpone entre el fondo del lienzo y el teclado.
+  // Se mide el teclado y se le devuelve ese alto al scroll como padding: el contenido vuelve a tener
+  // a dónde subir. Seguro para el crash del 16-08 — este `onScroll` corre en el hilo de JS, no es un
+  // worklet de Reanimated como el del catálogo de ejercicios.
+  const [keyboardInset, setKeyboardInset] = useState(0)
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (event) => setKeyboardInset(event.endCoordinates?.height ?? 0),
+    )
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardInset(0),
+    )
+    return () => {
+      show.remove()
+      hide.remove()
+    }
+  }, [])
   // Host de scroll para la Guía Viva (QA owner 17-08): el overlay necesita traer el target al
   // viewport antes de recortar (espejo del scrollIntoView web). Offset por ref, no estado.
   const tourScrollOffsetYRef = useRef(0)
@@ -1561,7 +1583,11 @@ export function QuickEditMode({
         <ScrollView
           ref={scrollRef}
           className="flex-1"
-          contentContainerClassName="gap-4 px-4 pb-8 pt-4"
+          // `pb-8` sale del className y pasa acá porque `contentContainerStyle` lo pisaría: el alto
+          // del teclado se SUMA al respiro de siempre (ver `keyboardInset`). Sin esto el último
+          // campo queda bajo el teclado y la PublishBar, y el cursor se hunde línea a línea.
+          contentContainerClassName="gap-4 px-4 pt-4"
+          contentContainerStyle={{ paddingBottom: 32 + keyboardInset }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           // Guía Viva: el host del tour necesita el offset vivo para scrollear al target.
@@ -1771,7 +1797,6 @@ export function QuickEditMode({
                       onSlotInstructions={(value) =>
                         dispatch({ type: 'SET_SLOT_INSTRUCTIONS', variantKey: variant.key, slotKey: slot.key, value })
                       }
-                      onRemoveSlot={() => handleRemoveSlot(variant.key, slot.key)}
                       onOpenMenu={
                         showVariantHeader
                           ? () => setSlotMenu({ variantKey: variant.key, slotKey: slot.key })
@@ -1910,6 +1935,14 @@ export function QuickEditMode({
               textAlignVertical="top"
               placeholder={QUICK_EDIT_COPY.notesPlaceholder}
               placeholderTextColor={theme.mutedForeground}
+              // Tope de alto = paridad exacta con el `<textarea rows={5}>` de la web, que es
+              // justamente por qué la web NO reproduce este defecto: sin tope, el campo crece línea
+              // a línea, Android scrollea al foco UNA sola vez y el cursor termina bajo el borde.
+              style={{ maxHeight: 140 }}
+              // Al enfocar, traer la tarjeta al área visible por encima del teclado.
+              onFocus={() => {
+                requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }))
+              }}
               className="mt-3 min-h-28 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm leading-6 text-body"
             />
             {errors['plan.visibleNotes'] ? (
@@ -2615,6 +2648,25 @@ export function QuickEditMode({
           >
             <CopyCheck color={theme.textSecondary} size={16} />
             <Text className="text-sm font-semibold text-strong">{QUICK_EDIT_COPY.copySlotAll}</Text>
+          </Pressable>
+          {/* «Eliminar franja» vive ACÁ, como en la web. Antes era un tacho suelto en el header,
+              a un toque de distancia del control de contraer (QA del dueño 17-08). Va última y
+              separada por el filete: es la única destructiva de la hoja. `handleRemoveSlot` ya trae
+              su propia confirmación. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Eliminar franja ${slotMenuSlot?.name || ''}`.trim()}
+            disabled={publishing}
+            onPress={() => {
+              if (!slotMenu) return
+              const target = slotMenu
+              setSlotMenu(null)
+              handleRemoveSlot(target.variantKey, target.slotKey)
+            }}
+            className="mt-1 min-h-12 flex-row items-center gap-2 rounded-control border border-default bg-surface-card px-3"
+          >
+            <Trash2 color={theme.destructive} size={16} />
+            <Text className="text-sm font-semibold text-danger-600">Eliminar franja</Text>
           </Pressable>
         </View>
       </Sheet>
