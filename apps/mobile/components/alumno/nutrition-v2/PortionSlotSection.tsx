@@ -27,6 +27,7 @@ import {
 } from '../../../lib/nutrition-v2-portions'
 import { useEvaMotion } from '../../../lib/motion'
 import { useTheme } from '../../../context/ThemeContext'
+import { CoachNoteBand } from './CoachNoteBand'
 import { PortionChip } from './PortionChip'
 
 export function portionTargetColor(target: NutritionSlotExchangeTargetRead): string {
@@ -174,6 +175,9 @@ function PortionSlotSectionBase({
             onLongPress={() => onOpenEquivalences(slotCode, target.groupCode)}
             disabled={lockedGroups.has(target.groupCode)}
           />
+          {/* Nota del coach del grupo (SPEC nutrition-coach-notes N3): banda 💬 bajo el
+              chip del grupo. Sin nota ⇒ cero render. */}
+          <CoachNoteBand className="mb-1.5" note={target.notes} />
           {confirmGroup === target.groupCode ? (
             <MotiView
               from={reduced ? undefined : { opacity: 0, translateY: -2 }}

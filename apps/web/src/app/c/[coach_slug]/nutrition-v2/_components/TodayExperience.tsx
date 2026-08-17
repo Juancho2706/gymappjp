@@ -78,6 +78,7 @@ import {
 } from './nutrition-today.logic'
 import { usePortionMarks, type PortionMarksApi } from './PortionMarks'
 import { PortionCoverageRow } from './PortionCoverageRow'
+import { CoachNoteBand } from './CoachNoteBand'
 import { PortionSlotSection } from './PortionSlotSection'
 import { PortionEquivalencesSheet } from './PortionEquivalencesSheet'
 import { formatPortionsEs, slotsWithPrescribedContent } from './portion-marks.logic'
@@ -1199,6 +1200,9 @@ function PrescribedSection({
                 <MealProgressMeter consumed={bulk.requiredConsumed} total={bulk.requiredTotal} />
               ) : null}
             </div>
+            {/* Nota del coach de la franja (SPEC nutrition-coach-notes N3): banda 💬 bajo el
+                título. Viaja congelada en el snapshot del publish; sin nota ⇒ cero render. */}
+            <CoachNoteBand className="mt-2" note={slot.instructions} />
             <div className="mt-3 divide-y divide-border-subtle">
               {slot.prescriptionItems.map((item) => {
                 // El registro consumido se pinta EN la fila del item (check + hora): auditoría

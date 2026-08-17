@@ -323,7 +323,8 @@ export function NutritionV2Summary({
   )
 
   const openDetail = () => router.push(view.detailHref)
-  const openBuilder = () => router.push(view.builderHref)
+  // RETIRO del par viejo (R2): el CTA de crear/editar navega al EDITOR UNICO, ya no al wizard.
+  const openEditor = () => router.push(view.editorHref)
 
   // Semana Lu-Do de vistazo (mismo mecanismo que la ficha completa: `plan.dayVariants` + el
   // historial disperso ya descargado, CERO fetch nuevo y cero `get_nutrition_today_v2` con otra
@@ -381,7 +382,7 @@ export function NutritionV2Summary({
           <EmberCta
             label={view.builderCtaLabel}
             accessibilityLabel={view.builderCtaLabel}
-            onPress={openBuilder}
+            onPress={openEditor}
           />
         </View>
       </View>
@@ -391,7 +392,7 @@ export function NutritionV2Summary({
           icon="empty"
           title="Sin plan publicado"
           description="Este alumno todavía no tiene un plan de nutrición publicado. Crea la primera para ver metas, franjas y adherencia."
-          action={<EmberCta label="Crear plan" accessibilityLabel="Crear plan" onPress={openBuilder} />}
+          action={<EmberCta label="Crear plan" accessibilityLabel="Crear plan" onPress={openEditor} />}
         />
       ) : (
         // Card única de vistazo (SPEC punto 6 / mockup "Tab del menu de alumnos — resumen, no

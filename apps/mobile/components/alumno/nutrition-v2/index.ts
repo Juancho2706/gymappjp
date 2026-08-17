@@ -19,6 +19,12 @@ export { usePortionMarks, type UsePortionMarksResult } from './usePortionMarks'
  * lectura — pasado con sus resultados congelados, futuro como vista previa del plan.
  */
 export { PastDaySummary, type PastDaySummaryProps } from './PastDaySummary'
+
+/**
+ * Nota del coach por franja/grupo en el Hoy (SPEC nutrition-coach-notes N3):
+ * banda 💬 tenue de marca; sin nota, cero render.
+ */
+export { CoachNoteBand } from './CoachNoteBand'
 export { LegacyHistoryDetail } from './LegacyHistoryDetail'
 export { ReadOnlyDayBanner, type ReadOnlyDayBannerProps } from './ReadOnlyDayBanner'
 export { useNutritionWeekHistory, type NutritionWeekHistory } from './useNutritionWeekHistory'

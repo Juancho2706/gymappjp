@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Minus, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react-native'
 import { exchangeGroupColor, type ExchangeGroup } from '@eva/nutrition-engine'
 import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
@@ -9,10 +9,14 @@ import { ExchangeGroupFormSheet, type ExchangeGroupFormInitial } from '../Exchan
 import { AddActionButton } from '../AddActionButton'
 import { useTheme } from '../../../context/ThemeContext'
 import { resolveEffectiveCoachBrandTheme } from '../../../lib/theme'
+import { readableInkOn } from '../../../lib/color-contrast'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
+import { CoachNoteSheet } from './CoachNoteSheet'
+import { QUICK_EDIT_COPY } from './microcopy'
 import {
   PORTION_MAX,
   PORTION_MIN,
+  PORTION_NOTES_MAX,
   parsePortionsValue,
   type QePortionGroup,
   type QePortionTarget,
@@ -53,8 +57,8 @@ export interface QuickEditGroupAdmin {
  * `EditablePortionsCard` web, DENTRO de la card de franja bajo "+ Agregar alimento":
  * fila grupo (circulito `exchangeGroupColor` con letra blanca + nombre + stepper 0,5
  * SOLO de botones — jamas teclado numerico, hallazgo M4 — + eliminar con Deshacer via
- * snackbar del orquestador) + nota opcional del target (TextInput inline: el
- * KeyboardAvoidingView del QuickEditMode lo mantiene visible) + altas via Sheet
+ * snackbar del orquestador) + nota opcional del target (📝 → `CoachNoteSheet`, SPEC
+ * nutrition-coach-notes N2: reemplaza al TextInput inline de T1.4) + altas via Sheet
  * nativeModal (gorhom vetado bajo reanimated 4) con los grupos que el plan YA usa.
  * Plan sin porciones => la seccion NO se pinta (capa invisible, SPEC UX-c).
  */
@@ -140,6 +144,7 @@ function PortionTargetRow({
   target,
   index,
   sortOrder,
+  brandColor,
   disabled,
   onStep,
   onSetNotes,
@@ -148,16 +153,20 @@ function PortionTargetRow({
   target: QePortionTarget
   index: number
   sortOrder: number
+  /** Marca REAL del coach para el tinte con-nota del 📝 (ver nota en `EditableSlotCard`). */
+  brandColor: string
   disabled: boolean
   onStep: (targetKey: string, direction: 1 | -1) => void
   onSetNotes: (targetKey: string, value: string) => void
   onRemove: (target: QePortionTarget, index: number) => void
 }) {
   const { theme } = useTheme()
-  // La nota abre con boton y queda abierta (arbol estable mientras se tipea); si el
-  // target ya trae nota, arranca visible.
-  const [notesOpen, setNotesOpen] = useState((target.notes ?? '').trim() !== '')
-  const showNotes = notesOpen || (target.notes ?? '').trim() !== ''
+  // Nota del grupo en sheet (SPEC nutrition-coach-notes N2, espejo del QeBottomSheet web N-B):
+  // reemplaza el TextInput inline de T1.4 — el textarea + contador + limpiar viven en la hoja
+  // y la fila solo delata la nota por el tinte de marca del 📝. Solo la VISIBILIDAD es local;
+  // el texto sigue viajando por `SET_PORTION_NOTES` como siempre (misma gramatica, N5).
+  const [noteOpen, setNoteOpen] = useState(false)
+  const hasNote = (target.notes ?? '').trim() !== ''
 
   return (
     <View>
@@ -182,15 +191,19 @@ function PortionTargetRow({
           disabled={disabled}
           onStep={(direction) => onStep(target.key, direction)}
         />
+        {/* CON nota el 📝 se tiñe con la marca y la tinta la pone `readableInkOn` (mismo patrón
+            de contraste que el 📝 del header de la franja); SIN nota queda apagado como siempre.
+            `style` objeto estático, jamás función (gotcha css-interop). */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={PORTIONS_COPY.builder.noteFor(target.groupName)}
           disabled={disabled}
-          onPress={() => setNotesOpen((open) => !open || (target.notes ?? '').trim() !== '')}
+          onPress={() => setNoteOpen(true)}
           hitSlop={6}
           className="h-11 w-8 items-center justify-center rounded-control"
+          style={hasNote ? { backgroundColor: brandColor } : undefined}
         >
-          <StickyNote color={showNotes ? theme.primary : theme.mutedForeground} size={16} />
+          <StickyNote color={hasNote ? readableInkOn(brandColor) : theme.mutedForeground} size={16} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -203,18 +216,17 @@ function PortionTargetRow({
           <Trash2 color={theme.destructive} size={16} />
         </Pressable>
       </View>
-      {showNotes ? (
-        <TextInput
-          accessibilityLabel={PORTIONS_COPY.builder.noteFor(target.groupName)}
-          value={target.notes ?? ''}
-          onChangeText={(value) => onSetNotes(target.key, value)}
-          editable={!disabled}
-          placeholder={PORTIONS_COPY.builder.notePlaceholder}
-          placeholderTextColor={theme.mutedForeground}
-          maxLength={1000}
-          className="mt-1 min-h-11 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm text-strong"
-        />
-      ) : null}
+      <CoachNoteSheet
+        open={noteOpen}
+        onClose={() => setNoteOpen(false)}
+        title={PORTIONS_COPY.builder.noteFor(target.groupName)}
+        hint={QUICK_EDIT_COPY.groupNoteHint}
+        value={target.notes ?? ''}
+        maxLength={PORTION_NOTES_MAX}
+        placeholder={PORTIONS_COPY.builder.notePlaceholder}
+        disabled={disabled}
+        onChange={(value) => onSetNotes(target.key, value)}
+      />
     </View>
   )
 }
@@ -397,6 +409,7 @@ export function EditablePortionsSection({
               target={target}
               index={index}
               sortOrder={groupOrder.get(target.exchangeGroupId) ?? 0}
+              brandColor={brandColor}
               disabled={disabled}
               onStep={onStep}
               onSetNotes={onSetNotes}

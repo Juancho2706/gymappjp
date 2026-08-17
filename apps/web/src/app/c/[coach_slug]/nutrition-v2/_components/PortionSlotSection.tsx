@@ -12,6 +12,7 @@ import {
 } from '@eva/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { NutritionMotionButton } from '@/components/nutrition-v2'
+import { CoachNoteBand } from './CoachNoteBand'
 import type { PortionMarksApi } from './PortionMarks'
 import { PortionGroupCircle } from './PortionCoverageRow'
 import {
@@ -263,6 +264,9 @@ export function PortionSlotSection({
                 slot={slot}
                 target={target}
               />
+              {/* Nota del coach del grupo (SPEC nutrition-coach-notes N3): banda 💬 bajo el
+                  chip del grupo. Sin nota ⇒ cero render. */}
+              <CoachNoteBand className="mt-1" note={target.notes} />
               {confirmGroup === target.groupCode ? (
                 <div
                   className="mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700/60 dark:bg-amber-950/40"

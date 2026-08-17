@@ -45,9 +45,9 @@ import { useCaptureCoachNutritionTemplateApplied } from '@/lib/posthog/events'
  * queria material generico— no podia crear ni una.
  *
  * CORTE 2 (T3.2b, 2026-08-16, con QA del owner en preview): las dos altas y el lapiz apuntan al
- * EDITOR UNICO en modo plantilla (`plantillas/editor`), el mismo lienzo del editor de planes. El
- * wizard de plantillas (`plantillas/builder`) sigue vivo y alcanzable por URL directa como camino
- * secundario durante la ventana de retiro del par viejo.
+ * EDITOR UNICO en modo plantilla (`plantillas/editor`), el mismo lienzo del editor de planes.
+ * RETIRO DEL PAR VIEJO (2026-08-17): la URL directa del wizard (`plantillas/builder`) tambien
+ * murio — hoy redirige a `plantillas/editor` conservando `?template=`.
  */
 const TEMPLATE_EDITOR_HREF = '/coach/nutrition-v2/plantillas/editor'
 

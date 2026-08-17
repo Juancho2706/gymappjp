@@ -47,6 +47,7 @@ import { NutritionDomainOff } from '../../../../components/nutrition-v2'
 import { SubstitutionSheet } from '../../../../components/nutrition-v2/SubstitutionSheet'
 import { SwipeToExchange } from '../../../../components/nutrition-v2/SwipeToExchange'
 import {
+  CoachNoteBand,
   PastDaySummary,
   LegacyHistoryDetail,
   PortionDayCoverageRow,
@@ -2219,6 +2220,10 @@ const TodaySlotCard = memo(function TodaySlotCard({
         <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
         {slot.startTime ? <Text className="font-mono text-xs text-muted">{slot.startTime}</Text> : null}
       </View>
+
+      {/* Nota del coach de la franja (SPEC nutrition-coach-notes N3): banda 💬 bajo el
+          título. Viaja congelada en el snapshot del publish; sin nota ⇒ cero render. */}
+      <CoachNoteBand className="mt-2" note={slot.instructions} />
 
       {bulk.requiredTotal > 0 ? (
         <View className="mt-2">

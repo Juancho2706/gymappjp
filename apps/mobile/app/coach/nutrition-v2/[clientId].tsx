@@ -82,11 +82,7 @@ import {
   readNutritionV2Cache,
   writeNutritionV2Cache,
 } from '../../../lib/nutrition-v2-cache'
-import {
-  nutritionPlanCtaLabel,
-  nutritionV2BuilderHref,
-  nutritionV2EditorHref,
-} from '../../../lib/nutrition-v2-hub'
+import { nutritionV2EditorHref } from '../../../lib/nutrition-v2-hub'
 import {
   NUTRITION_PRO_MODULE_KEY,
   filterHistoryDaysToBaseWindow,
@@ -113,12 +109,6 @@ function todayInSantiago(): string {
 // (`ConvertedPlanBanner.tsx:6`, `eva:nutrition-v2-converted-plan-banner-dismissed:{planId}`) para
 // que el descarte sea consistente en concepto (en RN persiste en AsyncStorage, no en localStorage).
 const CONVERTED_BANNER_DISMISS_PREFIX = 'eva:nutrition-v2-converted-plan-banner-dismissed:'
-
-/**
- * Corte RN (T3.3b): el par viejo pasa a camino secundario. Misma cadena que la web
- * (`QE_COPY.classicQuickEdit`) — el coach lee lo mismo en las dos plataformas.
- */
-const CLASSIC_QUICK_EDIT_LABEL = 'Edición rápida (clásica)'
 
 /**
  * Formatea un timestamp ISO (`nutrition_v2_conversion_links.converted_at`) a `dd-mm-yyyy` en
@@ -522,14 +512,9 @@ export default function CoachNutritionV2ClientScreen() {
     hasPlanStructure: activePlan !== null,
     variantCount: detail.plan.dayVariants.length,
   })
-  const planStatus = activePlan ? 'published' : null
-  const ctaLabel = nutritionPlanCtaLabel(planStatus)
-  // NUT-004: con plan vigente el builder DEBE recibir la raiz (`?planId=`) para publicar una
-  // version nueva sobre ella; sin plan queda sin query y crea la primera raiz. Espejo del web.
-  const builderHref = nutritionV2BuilderHref(detail.client.id, { planId: activePlan?.id ?? null })
-  // CORTE RN (T3.3b): el camino primario de crear Y editar es el EDITOR UNICO. El wizard y la
-  // edicion rapida clasica quedan como caminos secundarios del menu mientras dure la ventana de
-  // retiro del par viejo. El editor resuelve solo el planId del alumno (y su CAS).
+  // CORTE RN (T3.3b) + RETIRO (R2): crear Y editar entran SOLO por el EDITOR UNICO. Los caminos
+  // secundarios al par viejo (wizard "Rehacer con el asistente" y edicion rapida clasica) fueron
+  // retirados de esta ficha. El editor resuelve solo el planId del alumno (y su CAS).
   const editorHref = nutritionV2EditorHref(detail.client.id)
   const showTodayPlanLag = activePlan !== null && (todayPlan === null || todayPlan.id !== activePlan.id)
   const todayPlanLagMessage =
@@ -744,6 +729,10 @@ export default function CoachNutritionV2ClientScreen() {
               {detail.plan.visibleNotes || 'Sin indicaciones visibles.'}
             </Text>
             <View className="mt-4 gap-2">
+              {/* RETIRO del par viejo (R2): el boton secundario "Edicion rapida (clasica)" que
+                  vivia aca fue retirado — el unico camino de edicion es el editor unico. El
+                  render de `QuickEditMode` clasico de arriba queda inalcanzable a proposito
+                  (rollback trivial durante la ventana de retiro). */}
               <NutritionMotionButton
                 accessibilityLabel={QUICK_EDIT_COPY.enter}
                 disabled={!userId}
@@ -751,17 +740,6 @@ export default function CoachNutritionV2ClientScreen() {
               >
                 {QUICK_EDIT_COPY.enter}
               </NutritionMotionButton>
-              {/* Camino SECUNDARIO durante la ventana de retiro: la edicion rapida clasica
-                  (in-place, sin metadatos). Espejo del menu "..." de la ficha web. */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={CLASSIC_QUICK_EDIT_LABEL}
-                disabled={!userId}
-                onPress={() => setEditing(true)}
-                className="min-h-11 items-center justify-center rounded-control px-3"
-              >
-                <Text className="text-sm font-semibold text-muted">{CLASSIC_QUICK_EDIT_LABEL}</Text>
-              </Pressable>
             </View>
           </NutritionCard>
         </>
@@ -792,15 +770,9 @@ export default function CoachNutritionV2ClientScreen() {
         <Text className="mt-2 text-xs text-muted">El alumno no recibe esta información.</Text>
       </NutritionCard>
 
-      {/* Con plan vigente el camino primario es "Editar plan" (card); el wizard queda como
-          camino secundario "Rehacer con el asistente" (qe-design §1.2.A). */}
-      <NutritionMotionButton
-        accessibilityLabel={activePlan ? QUICK_EDIT_COPY.redo : ctaLabel}
-        tone={activePlan ? 'neutral' : 'nutrition'}
-        onPress={() => router.push(builderHref)}
-      >
-        {activePlan ? QUICK_EDIT_COPY.redo : ctaLabel}
-      </NutritionMotionButton>
+      {/* RETIRO del par viejo (R2): el boton "Rehacer con el asistente" / CTA de creacion via
+          wizard que vivia aca fue retirado. Crear y editar entran SOLO por el editor unico
+          (panel "Sin plan vigente" y card "Plan vigente" de arriba). */}
 
       {/* Zona "Archivar plan vigente" (delta 7): discreta, separada y aislada del CTA primario
           para evitar toques accidentales. Solo con plan vigente. Microcopy no tóxica. */}

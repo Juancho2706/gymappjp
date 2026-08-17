@@ -30,6 +30,7 @@ import {
   qeSlotSubtotal,
   qeCombineSubtotals,
   qeVariantTotalWithPortions,
+  SLOT_INSTRUCTIONS_MAX,
   type FoodCatalogItem,
   type QeItem,
   type QePortionTarget,
@@ -39,6 +40,7 @@ import type { FoodPickerSummary } from '@/app/coach/nutrition-v2/_components/foo
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { RememberedQuantitiesContext } from '../../_components/RememberedQuantitiesContext'
 import { QeBottomSheet } from './QeBottomSheet'
+import { QeNoteButton } from './QeNoteButton'
 import { EditableItemRow } from './EditableItemRow'
 import { EditablePortionsCard } from './EditablePortionsCard'
 import { FoodPickerSheet } from './FoodPickerSheet'
@@ -317,6 +319,22 @@ export function EditableSlotCard({
               }
             />
           </button>
+          {/* Nota del coach de la franja (N-B, `docs/specs/nutrition-coach-notes`): el 📝 vive
+              en la fila de controles EXISTENTE (invariante «cero solapes nuevos») y ningún ancla
+              del tour se mueve — `data-tour="slot"` sigue en la card. SIN nota lleva el traje del
+              ⋮ de al lado; CON nota se tiñe de la marca (ese tinte es el indicador: la banda con
+              el texto es del alumno, acá el coach la lee en el sheet). */}
+          <QeNoteButton
+            subject={slotLabel}
+            value={slot.instructions}
+            maxLength={SLOT_INSTRUCTIONS_MAX}
+            placeholder={QE_COPY.notePlaceholderSlot}
+            disabled={isPending}
+            error={showErrors ? errors[`slot.${slot.key}.instructions`] : undefined}
+            onChange={(value) =>
+              dispatch({ type: 'SET_SLOT_INSTRUCTIONS', variantKey, slotKey: slot.key, value })
+            }
+          />
           <button
             type="button"
             aria-label={`Opciones de la franja ${slot.name || 'sin nombre'}`}

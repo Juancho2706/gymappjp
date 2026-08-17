@@ -111,9 +111,27 @@ async function buildDraftFromSourcePlan(input: {
   return { draft, name: sourcePlan.name }
 }
 
+/**
+ * RETIRO DEL PAR VIEJO (web, 2026-08-17): la URL directa del wizard cae SIEMPRE al EDITOR
+ * UNICO conservando el origen (`?from=template:<id>` / `?from=plan:<id>`, mismo contrato
+ * `parsePlanBuilderOrigin`). Tipada `boolean` a proposito: si fuera el literal `true`, tsc
+ * marcaria inalcanzable el resto del cuerpo y perderia el narrowing (los guards `if (!x)`
+ * dejarian de estrechar). El cuerpo queda compilable y SIN puerta hasta la tanda de
+ * demolicion (TASKS.md «Retiro del par viejo»).
+ */
+const WIZARD_RETIRED: boolean = true
+
 export default async function CoachNutritionV2BuilderPage({ params, searchParams }: Props) {
   const { clientId } = await params
   const query = await searchParams
+
+  if (WIZARD_RETIRED) {
+    const legacyFrom = typeof query.from === 'string' ? query.from : null
+    redirect(
+      `/coach/nutrition-v2/${clientId}/editor${legacyFrom ? `?from=${encodeURIComponent(legacyFrom)}` : ''}`,
+    )
+  }
+
   const origin = parsePlanBuilderOrigin(typeof query.from === 'string' ? query.from : null)
   const { user } = await getNutritionPlansPageCoach()
   if (!user) redirect('/login')

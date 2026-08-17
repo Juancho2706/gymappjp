@@ -759,7 +759,9 @@ export default function ClientDetailScreen() {
               dayLoading={nutritionDayLoading || (nutritionDayDetail?.date !== nutritionDate && nutritionDayError == null)}
               dayError={nutritionDayError}
               onRetryDay={() => setNutritionDayRetry((value) => value + 1)}
-              onEditNutrition={() => router.push(`/coach/nutrition-v2/builder/${client.id}`)} />
+              // RETIRO del par viejo (R2): editar/asignar plan entra por el editor unico, ya no
+              // por el wizard. El editor resuelve solo si el alumno tiene plan vigente.
+              onEditNutrition={() => router.push(`/coach/nutrition-v2/editor/${client.id}`)} />
           )}
         </View>
       </ScrollView>

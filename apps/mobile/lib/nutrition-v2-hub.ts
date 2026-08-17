@@ -259,7 +259,9 @@ export function nutritionPlanCtaLabel(planStatus: string | null): 'Crear plan' |
 }
 
 /**
- * Href hacia el builder del alumno. La ruta RN es un SEGMENTO dinamico
+ * Href hacia el builder del alumno. RETIRO del par viejo (R2): la app ya NO navega aca — la ruta
+ * del wizard quedo como alias que redirige al editor unico, y este helper se conserva solo por
+ * los tests de paridad de URL durante la ventana de retiro. La ruta RN es un SEGMENTO dinamico
  * (`app/coach/nutrition-v2/builder/[clientId].tsx`, lee `params.clientId`) y NO existe
  * `builder/index.tsx`, asi que la forma de query (`builder?clientId=`) navegaba a una ruta sin
  * match. Espeja al web, que navega por segmento (`/coach/nutrition-v2/{clientId}/builder`).
@@ -287,8 +289,8 @@ export function nutritionV2BuilderHref(
 
 /**
  * Ruta del EDITOR UNICO del coach movil (T3.3b). Es la puerta canonica desde el corte RN: la
- * ficha, el hub y el picker de plantillas navegan aca. El wizard (`nutritionV2BuilderHref`)
- * sigue vivo por URL directa mientras dure la ventana de retiro del par viejo.
+ * ficha, el hub, el picker de plantillas y el tab de la ficha del alumno navegan aca. RETIRO del
+ * par viejo (R2): la URL del wizard tambien redirige aca — ya no queda ningun acceso al par viejo.
  *
  * `from` es la MISMA puerta que usa la web (`template:<uuid>` / `plan:<uuid>`, formato de
  * `formatPlanBuilderOrigin`), asi que no hay dos caminos de creacion que puedan divergir. El

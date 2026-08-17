@@ -252,6 +252,16 @@ source_of_truth: apps/web responsive + apps/mobile
 > QA: `alumno/onboarding` y `change-password` ya montaban `AppBackground` ⇒ ganan Horizonte B
 > implícito (decisión pendiente menor si el owner los considera «entrada»).
 
+> **2026-08-17 (Notas del coach + retiro del par viejo — paridad 1:1)**: el 📝 de nota por
+> franja y por grupo existe idéntico en web y RN (mismo reducer compartido, mismos topes
+> 2000/1000, tinte de marca con-nota por contraste, sheet con contador y limpiar) y la banda 💬
+> del alumno se pinta en el Hoy de ambas plataformas desde el MISMO read-model. El retiro del
+> par viejo también fue simétrico: cero puertas al clásico/wizard en web y RN (R2 encontró y
+> cerró además dos CTAs del tab Nutrición de la ficha que el corte T3.3b no había convertido);
+> el código viejo queda inalcanzable pero intacto hasta la demolición. Paridad Mi Marca
+> verificada campo a campo el mismo día (informe dedicado): estructural IGUAL; 4 drifts
+> corregidos (`0b91ca17`); gaps declarados con plan en artifact «Mi Marca RN Pulido».
+
 La paridad global **no está certificada todavía**.
 
 | Bloque | Código y revisión estática | QA en dispositivo | Estado efectivo |

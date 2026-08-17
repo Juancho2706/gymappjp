@@ -108,7 +108,7 @@ export interface NutritionTabV2ViewModel extends NutritionV2Signal {
   hasPlan: boolean
   /** /coach/nutrition-v2/[clientId] — CTA "Abrir ficha de nutrición". */
   detailHref: string
-  /** /coach/nutrition-v2/[clientId]/builder — CTA del estado vacío ("Crear plan"). */
+  /** /coach/nutrition-v2/[clientId]/editor — CTA del estado vacío ("Crear plan"). */
   builderHref: string
   builderCtaLabel: 'Crear plan' | 'Nueva versión'
   /** Estrategia del plan vigente (null si no hay plan vigente hoy). */

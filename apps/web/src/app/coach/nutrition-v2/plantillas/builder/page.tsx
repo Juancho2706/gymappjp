@@ -54,8 +54,25 @@ function isUsableBuilderPayload(value: unknown): value is RehydratedBuilderDraft
   return Array.isArray(candidate.state?.variants) && candidate.state.variants.length > 0
 }
 
+/**
+ * RETIRO DEL PAR VIEJO (web, 2026-08-17): la URL directa del wizard de plantillas cae SIEMPRE
+ * al EDITOR UNICO en modo plantilla conservando `?template=<id>` (mismo contrato opcional).
+ * Tipada `boolean` a proposito: el literal `true` volveria inalcanzable el resto del cuerpo y
+ * tsc perderia el narrowing de sus guards. El cuerpo queda compilable y SIN puerta hasta la
+ * tanda de demolicion (TASKS.md «Retiro del par viejo»).
+ */
+const WIZARD_RETIRED: boolean = true
+
 export default async function CoachNutritionV2TemplateBuilderPage({ searchParams }: Props) {
   const query = await searchParams
+
+  if (WIZARD_RETIRED) {
+    const legacyTemplate = typeof query.template === 'string' ? query.template : null
+    redirect(
+      `/coach/nutrition-v2/plantillas/editor${legacyTemplate ? `?template=${encodeURIComponent(legacyTemplate)}` : ''}`,
+    )
+  }
+
   const rawTemplateId = typeof query.template === 'string' ? query.template : null
   const templateId = rawTemplateId && UUID_RE.test(rawTemplateId) ? rawTemplateId : null
 

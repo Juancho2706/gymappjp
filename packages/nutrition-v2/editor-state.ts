@@ -238,6 +238,12 @@ export const PLAN_NAME_MAX = 180
 /** Tope del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim). */
 export const VISIBLE_NOTES_MAX = 8000
 
+/** Tope del contrato (`NutritionMealSlotSchema.instructions`: max 2000 tras trim). */
+export const SLOT_INSTRUCTIONS_MAX = 2000
+
+/** Tope del contrato (nota del target de porciones, `notes`: max 1000 tras trim). */
+export const PORTION_NOTES_MAX = 1000
+
 /** Normaliza el texto editable al contrato del draft: trim; '' → null. */
 export function normalizeVisibleNotes(value: string | null | undefined): string | null {
   const trimmed = (value ?? '').trim()
@@ -765,6 +771,15 @@ export type QuickEditAction =
     }
   | { type: 'ADD_CUSTOM_ITEM'; variantKey: string; slotKey: string; key: string }
   | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<QeSlot, 'name' | 'startTime'>> }
+  /**
+   * Nota del coach de la franja («el globito», N-A): edita `slot.instructions`, campo que
+   * `UPDATE_SLOT` NO cubre (su patch es solo nombre/hora). Guarda el texto CRUDO (textarea
+   * vivo); la proyeccion normaliza ''/espacios → null — misma gramatica que
+   * `SET_PORTION_NOTES`, asi tipear solo espacios no cuenta como cambio ni publica basura.
+   * Limpiar la nota = despachar con ''. Deshacer = re-despachar con el valor previo (o
+   * `RESTORE_DRAFT` del arbol completo).
+   */
+  | { type: 'SET_SLOT_INSTRUCTIONS'; variantKey: string; slotKey: string; value: string }
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: QeSlot }
   | { type: 'ADD_SLOT'; variantKey: string; key: string; name: string; startTime: string }
@@ -1492,6 +1507,11 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       }))
     case 'UPDATE_SLOT':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
+    case 'SET_SLOT_INSTRUCTIONS':
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
+        ...slot,
+        instructions: action.value,
+      }))
     case 'REMOVE_SLOT':
       return mapVariant(state, action.variantKey, (variant) => ({
         ...variant,
@@ -2117,6 +2137,11 @@ export function validateQuickEdit(
     }
     for (const slot of variant.slots) {
       if (slot.name.trim().length === 0) errors[`slot.${slot.key}.name`] = 'La franja necesita un nombre.'
+      // Nota del coach de la franja: espejo del contrato (max 2000 tras trim), corta ANTES
+      // de que el server responda un VALIDATION generico sin señalar el campo.
+      if ((slot.instructions ?? '').trim().length > SLOT_INSTRUCTIONS_MAX) {
+        errors[`slot.${slot.key}.instructions`] = `La nota supera los ${SLOT_INSTRUCTIONS_MAX} caracteres.`
+      }
       for (const item of slot.items) {
         const qty = Number(item.quantity.trim())
         if (!(item.quantity.trim() !== '' && Number.isFinite(qty) && qty > 0)) {
@@ -2129,6 +2154,10 @@ export function validateQuickEdit(
       for (const target of slot.portionTargets) {
         if (!isValidPortionsText(target.portions)) {
           errors[`portion.${target.key}.portions`] = 'Las porciones van de 0,5 en 0,5 (mínimo 0,5).'
+        }
+        // Nota del grupo de porciones: espejo del contrato (max 1000 tras trim).
+        if ((target.notes ?? '').trim().length > PORTION_NOTES_MAX) {
+          errors[`portion.${target.key}.notes`] = `La nota supera los ${PORTION_NOTES_MAX} caracteres.`
         }
       }
     }
@@ -2212,7 +2241,10 @@ function projectSlot(slot: QeSlot, orderIndex: number): DraftSlot {
     mode: slot.mode,
     required: slot.required,
     targets: slot.targets,
-    instructions: slot.instructions,
+    // Nota del coach de la franja (SET_SLOT_INSTRUCTIONS): el estado guarda el texto crudo
+    // del textarea; aca se normaliza (trim; '' → null). Baseline y current pasan por esta
+    // MISMA proyeccion, asi que una nota intacta jamas cuenta como cambio.
+    instructions: slot.instructions == null ? null : slot.instructions.trim() || null,
     orderIndex,
     items: slot.items.map(projectItem),
     // Capa opcional: una franja sin porciones proyecta un slot IDENTICO al de antes (sin

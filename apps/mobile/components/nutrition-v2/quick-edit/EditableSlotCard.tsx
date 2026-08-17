@@ -2,9 +2,10 @@ import { useCallback, useState } from 'react'
 import { Animated, Easing, LayoutAnimation, Pressable, Text, TextInput, View } from 'react-native'
 import { useReducedMotion } from 'react-native-reanimated'
 import { Image } from 'expo-image'
-import { ChevronDown, MoreVertical, Trash2 } from 'lucide-react-native'
+import { ChevronDown, MoreVertical, StickyNote, Trash2 } from 'lucide-react-native'
 import { exchangeGroupColor } from '@eva/nutrition-engine'
 import {
+  SLOT_INSTRUCTIONS_MAX,
   qeExchangeGroups,
   qeItemMacros,
   qeSlotPortionTotals,
@@ -20,6 +21,7 @@ import { AddActionButton } from '../AddActionButton'
 import { foodCategoryIconSource } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { resolveEffectiveCoachBrandTheme } from '../../../lib/theme'
+import { readableInkOn } from '../../../lib/color-contrast'
 import type { BuilderFoodMacrosPatch, ItemMacros } from '../../../lib/nutrition-v2-builder'
 import {
   foodCategoryEmoji,
@@ -27,6 +29,7 @@ import {
   foodMediaThumbnailUrl,
 } from '../../../lib/nutrition-v2-food-media'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
+import { CoachNoteSheet } from './CoachNoteSheet'
 import { EditableItemRow } from './EditableItemRow'
 import {
   EditablePortionsSection,
@@ -96,6 +99,7 @@ export function EditableSlotCard({
   scope = null,
   onFoodOverrideApplied,
   onSlotPatch,
+  onSlotInstructions,
   onRemoveSlot,
   onOpenMenu,
   onSearchFood,
@@ -127,6 +131,12 @@ export function EditableSlotCard({
    */
   targetCalories?: number | null
   onSlotPatch: (patch: { name?: string; startTime?: string }) => void
+  /**
+   * Nota del coach de la franja («el globito», SPEC nutrition-coach-notes): texto CRUDO hacia
+   * `SET_SLOT_INSTRUCTIONS` (N-A) — la proyeccion del publish normaliza ''/espacios a null.
+   * `UPDATE_SLOT` no la cubre (su patch es solo nombre/hora), por eso es un handler aparte.
+   */
+  onSlotInstructions: (value: string) => void
   onRemoveSlot: () => void
   /**
    * Menú de la franja (CE-5): copiar a otros días / aplicar a todos. Ausente = plan de un
@@ -178,6 +188,14 @@ export function EditableSlotCard({
    * Arranca expandida.
    */
   const [collapsed, setCollapsed] = useState(false)
+  /**
+   * Sheet de la nota de la franja (📝 del header). Solo la visibilidad es local: el texto vive
+   * en el arbol del editor (`slot.instructions`), asi que cerrar/reabrir el sheet no pierde nada
+   * y undo/draft/publish lo tratan como cualquier campo (SPEC nutrition-coach-notes N5).
+   */
+  const [noteOpen, setNoteOpen] = useState(false)
+  // Con nota REAL (no whitespace): el 📝 se tine de marca; vacio queda neutro apagado (N2).
+  const hasNote = (slot.instructions ?? '').trim() !== ''
   /**
    * Reduced motion del SISTEMA. Mismo helper que ya usa el resto de la app (`useReducedMotion`
    * de reanimated, con `<ReducedMotionConfig mode={System}>` montado en app/_layout.tsx): con
@@ -246,6 +264,25 @@ export function EditableSlotCard({
         {/* `gap-1`: el botón de contraer ahora tiene caja propia, y pegado al ⋮ y al tacho (que
             son icono pelado) se leería como un error de render. */}
         <View className="flex-row items-center gap-1">
+          {/* Nota del coach de la franja («el globito», SPEC nutrition-coach-notes N2): mismo
+              trato que el botón de contraer (caja de 44 pt del kit) para que el header hable un
+              solo idioma. SIN nota va neutro apagado — el editor ya está denso y un 📝 vacío no
+              tiene que cantar; CON nota se tiñe con la marca REAL del coach y la tinta del glifo
+              la elige `readableInkOn` (patrón de contraste de la Familia N: mismo hex ⇒ misma
+              tinta que en la web). `style` es objeto estático, jamás función (gotcha css-interop). */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={QUICK_EDIT_COPY.slotNote(slotLabel)}
+            disabled={disabled}
+            onPress={() => setNoteOpen(true)}
+            className={
+              'h-11 w-11 items-center justify-center rounded-control' +
+              (hasNote ? '' : ' border border-subtle bg-surface-sunken')
+            }
+            style={hasNote ? { backgroundColor: brandColor } : undefined}
+          >
+            <StickyNote color={hasNote ? readableInkOn(brandColor) : theme.textSecondary} size={18} />
+          </Pressable>
           {/* Contraer/expandir: con 5-6 comidas por día la pila obliga a scrollear a ciegas.
               Es un BOTON, no un icono suelto: caja de 44 pt con relleno hundido y filete sutil
               (el mismo par `border-subtle` + `bg-surface-sunken` del kit), para que se lea como
@@ -452,6 +489,22 @@ export function EditableSlotCard({
           ) : null}
         </View>
       ) : null}
+
+      {/* Sheet de la nota de la franja: textarea + contador + limpiar (N2). El error del campo
+          (nota sobre el tope en un draft restaurado) se muestra DENTRO del sheet, que es donde
+          se corrige. */}
+      <CoachNoteSheet
+        open={noteOpen}
+        onClose={() => setNoteOpen(false)}
+        title={QUICK_EDIT_COPY.slotNote(slotLabel)}
+        hint={QUICK_EDIT_COPY.slotNoteHint}
+        value={slot.instructions ?? ''}
+        maxLength={SLOT_INSTRUCTIONS_MAX}
+        placeholder={QUICK_EDIT_COPY.slotNotePlaceholder}
+        disabled={disabled}
+        error={errors['slot.' + slot.key + '.instructions'] ?? null}
+        onChange={onSlotInstructions}
+      />
     </NutritionCard>
   )
 }

@@ -226,8 +226,8 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       title={detail.client.fullName}
       backHref="/coach/nutrition-v2"
       actions={
-        // Con plan vigente la CTA primaria es EDITAR in-place (quick-edit); el wizard queda
-        // como camino secundario "Rehacer con el asistente" en el menu "..." del entry.
+        // Con plan vigente la CTA es el lapiz al EDITOR UNICO. El menu "..." con el par viejo
+        // (quick-edit clasico in-place + wizard) se retiro el 2026-08-17 (ventana cumplida).
         hasPlan ? (
           <QuickEditEntry
             clientId={clientId}

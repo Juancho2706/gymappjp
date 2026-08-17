@@ -1,22 +1,21 @@
 'use client'
 
 /**
- * Entrada al modo edicion desde la ficha (§1.2.A): CTA primaria "Editar plan" (lapiz) +
- * menu "..." con el camino secundario "Rehacer con el asistente" (wizard actual).
- * Al editar monta el provider + overlay in-place (misma ruta, estado cliente editing=true).
- * Al salir se desmonta: reabrir re-hidrata desde el read model fresco (router.refresh()).
+ * Entrada al modo edicion desde la ficha (§1.2.A): CTA unica "Editar plan" (lapiz) → EDITOR
+ * UNICO (`[clientId]/editor`).
+ *
+ * RETIRO DEL PAR VIEJO (web, 2026-08-17): el menu "..." con "Edición rápida (clásica)"
+ * (quick-edit in-place, `editing=true`) y "Rehacer con el asistente" (wizard
+ * `[clientId]/builder`) se retiro al cumplirse la ventana de observacion con QA del owner.
+ * La maquinaria del overlay clasico queda abajo SIN puerta —nada vuelve a poner
+ * `editing=true`—: se demuele junto con el wizard en la tanda de borrado
+ * (TASKS.md «Retiro del par viejo»), no en esta.
  */
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { MoreVertical, Pencil, Wand2, Zap } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
 import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
 import { QuickEditProvider } from './QuickEditProvider'
@@ -87,9 +86,8 @@ export function QuickEditEntry({
 
   return (
     <>
-      {/* W4 (corte 1, editor unico): el lapiz primario navega al EDITOR. El quick-edit
-          in-place y el wizard quedan como caminos secundarios en el menu "..." durante la
-          ventana de retiro (D3: 2 semanas estable + plantillas migradas). */}
+      {/* Retiro del par viejo: el lapiz al EDITOR UNICO es la unica entrada de edicion.
+          El menu "..." (clasico in-place + wizard) murio con la ventana de observacion. */}
       <Link
         href={`/coach/nutrition-v2/${clientId}/editor`}
         aria-label={QE_COPY.enter}
@@ -98,26 +96,6 @@ export function QuickEditEntry({
       >
         <Pencil className="h-[18px] w-[18px]" />
       </Link>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="Más opciones del plan"
-          className="h-11 w-11 shrink-0 rounded-control border border-border-subtle bg-surface-card p-0 normal-case tracking-normal text-muted hover:bg-surface-sunken hover:text-strong dark:bg-surface-card"
-        >
-          <MoreVertical aria-hidden="true" className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuItem onClick={() => setEditing(true)}>
-            <Zap aria-hidden="true" className="h-4 w-4" />
-            {QE_COPY.classicQuickEdit}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            render={<Link href={`/coach/nutrition-v2/${clientId}/builder`} />}
-          >
-            <Wand2 aria-hidden="true" className="h-4 w-4" />
-            {QE_COPY.redo}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
 
       {editing ? (
         // Las senales del picker de alimentos (coach en pantalla, restricciones y favoritos del

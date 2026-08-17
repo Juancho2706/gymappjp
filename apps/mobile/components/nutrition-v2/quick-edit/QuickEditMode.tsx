@@ -1765,6 +1765,12 @@ export function QuickEditMode({
                       onSlotPatch={(patch) =>
                         dispatch({ type: 'UPDATE_SLOT', variantKey: variant.key, slotKey: slot.key, patch })
                       }
+                      // Nota del coach de la franja («el globito», N-C): accion propia porque
+                      // el patch de UPDATE_SLOT solo cubre nombre/hora. Texto crudo; la
+                      // proyeccion del publish normaliza ''/espacios a null (N-A).
+                      onSlotInstructions={(value) =>
+                        dispatch({ type: 'SET_SLOT_INSTRUCTIONS', variantKey: variant.key, slotKey: slot.key, value })
+                      }
                       onRemoveSlot={() => handleRemoveSlot(variant.key, slot.key)}
                       onOpenMenu={
                         showVariantHeader

@@ -21,7 +21,10 @@ import {
  *
  * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con Nutrición V2 activo para el coach E2E.
  */
-test.describe('Nutrición V2 · Builder publica un plan (canary)', () => {
+// Retiro del par viejo (2026-08-17): la ruta del wizard ahora redirige al editor único, así que
+// este canary quedó sin superficie. Se SKIPEA entero (no se borra: sirve de esqueleto para
+// reescribirlo contra el editor único en la tanda de demolición post 2026-08-30).
+test.describe.skip('Nutrición V2 · Builder publica un plan (canary — RETIRADO, reescribir contra el editor único)', () => {
   test.beforeEach(requireCanaryCoach)
 
   test('el flujo de 2 pasos publica un plan con catálogo', async ({ page }) => {

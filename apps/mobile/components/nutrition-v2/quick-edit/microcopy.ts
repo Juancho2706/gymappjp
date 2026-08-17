@@ -107,6 +107,19 @@ export const QUICK_EDIT_COPY = {
   itemFreeHint: 'alimento libre del coach',
   collapseSlot: (slotName: string) => `Contraer ${slotName}`,
   expandSlot: (slotName: string) => `Expandir ${slotName}`,
+  // ── Notas del coach por franja y por grupo («el globito», SPEC nutrition-coach-notes). El 📝
+  //    del header de la franja y de la fila de grupo abre un sheet con textarea + contador +
+  //    limpiar. La nota del grupo reutiliza `PORTIONS_COPY.builder.noteFor`/`notePlaceholder`
+  //    (tabla canonica compartida); aca vive solo lo que esa tabla no tiene. La nota viaja CON
+  //    el plan al publicar — no es mensajeria (regla N4: el canal de conversacion es WhatsApp).
+  slotNote: (slotName: string) => `Nota para ${slotName}`,
+  slotNotePlaceholder: 'Escribe una indicación de esta comida para tu alumno…',
+  slotNoteHint: 'Tu alumno la verá bajo el título de esta comida.',
+  groupNoteHint: 'Tu alumno la verá junto a las porciones de este grupo.',
+  noteClear: 'Limpiar nota',
+  noteDone: 'Listo',
+  /** Contador del textarea: «123/2000». El maxLength del input ya corta en el tope. */
+  noteCounter: (n: number, max: number) => `${n}/${max}`,
 } as const
 
 /**

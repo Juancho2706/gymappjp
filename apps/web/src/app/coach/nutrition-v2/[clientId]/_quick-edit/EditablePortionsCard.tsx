@@ -27,12 +27,14 @@ import { exchangeGroupColor } from '@eva/nutrition-engine'
 import { AddActionButton, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import {
+  PORTION_NOTES_MAX,
   type QePortionGroup,
   type QePortionTarget,
   type QeSlot,
 } from '@eva/nutrition-v2'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { QeBottomSheet } from './QeBottomSheet'
+import { QeNoteButton } from './QeNoteButton'
 import { StepperField } from './StepperField'
 import { QE_COPY } from './microcopy'
 
@@ -205,6 +207,20 @@ function PortionTargetRow({
             }
           />
         </div>
+        {/* Nota del coach del grupo (N-B, `docs/specs/nutrition-coach-notes`): mismo 📝 de la
+            franja, sobre `target.notes` (≤1000). En <380px el que trunca sigue siendo el nombre
+            (SPEC UX-a): stepper, nota y basurero son de ancho fijo. */}
+        <QeNoteButton
+          subject={target.groupName}
+          value={target.notes}
+          maxLength={PORTION_NOTES_MAX}
+          placeholder={QE_COPY.notePlaceholderGroup}
+          disabled={isPending}
+          error={showErrors ? errors[`portion.${target.key}.notes`] : undefined}
+          onChange={(value) =>
+            dispatch({ type: 'SET_PORTION_NOTES', variantKey, slotKey, targetKey: target.key, value })
+          }
+        />
         <button
           type="button"
           aria-label={`Quitar porciones de ${target.groupName}`}

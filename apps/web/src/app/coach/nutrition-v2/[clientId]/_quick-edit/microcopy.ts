@@ -253,6 +253,22 @@ export const QE_COPY = {
   itemFreeHint: 'alimento libre del coach',
   /** Porción pegajosa (T2.6 F4) del alimento de la fila: hay memoria de cuánto usa el coach. */
   itemUsualHere: 'la sueles usar aquí',
+  // ── Notas del coach (N-B, docs/specs/nutrition-coach-notes): el botón 📝 de la franja
+  //    (slot.instructions) y del grupo de porciones (notes del target). La nota es parte del
+  //    PLAN — viaja al publicar, no es mensajería (el canal de conversación es WhatsApp).
+  /** Nombre accesible del 📝 sin nota todavía. `subject` = «Desayuno», «Frutas», «la franja». */
+  noteAdd: (subject: string) => `Agregar nota a ${subject}`,
+  /** Nombre accesible del 📝 cuando ya hay nota escrita. */
+  noteEdit: (subject: string) => `Editar nota de ${subject}`,
+  /** Título del sheet de la nota. */
+  noteTitle: (subject: string) => `Nota de ${subject}`,
+  /** La nota NO llega sola: entra a la misma publicación que el resto de los cambios (N4/N5). */
+  noteHint: 'Tu alumno la verá en su plan cuando publiques esta edición.',
+  noteClear: 'Limpiar',
+  /** Contador de caracteres del textarea de la nota. */
+  noteCount: (n: number, max: number) => `${n} / ${max}`,
+  notePlaceholderSlot: 'Ej: come lento y sin pantallas; puedes cambiar el orden de los alimentos…',
+  notePlaceholderGroup: 'Ej: prefiere frutas enteras y variadas; evita los jugos…',
 } as const
 
 /** 'YYYY-MM-DD' → 'dd-mm-yyyy' (solo presentacion del confirm sheet). */

@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router'
 import { AlertTriangle, BookOpen, CalendarClock, Check, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
   BuilderDayStrip,
@@ -52,6 +52,7 @@ import { toast } from '../../../../components/Toast'
 import { useTheme } from '../../../../context/ThemeContext'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { isUuid, reportInvalidRouteUuid } from '../../../../lib/safe-uuid'
+import { nutritionV2EditorHref } from '../../../../lib/nutrition-v2-hub'
 import { fetchNutritionV2ExchangeGroups } from '../../../../lib/nutrition-v2-exchange-groups.api'
 import { PORTIONS_COPY } from '../../../../lib/nutrition-portions-copy'
 import {
@@ -521,7 +522,29 @@ function usePortionsBuilder(scope: NutritionV2CoachScope | null): PortionsContro
   }
 }
 
-export default function CoachNutritionV2BuilderScreen() {
+/**
+ * RETIRO del par viejo (R2, ventana hasta 2026-08-30): la ruta del wizard queda solo como alias
+ * de deep-link y REDIRIGE al editor unico, preservando la puerta `?from=` (misma gramatica).
+ * El componente del wizard (`CoachNutritionV2BuilderScreen`, abajo) se conserva integro y queda
+ * exportado por nombre: muere el acceso, no el codigo. `planId` no viaja — el editor resuelve
+ * solo la raiz vigente del alumno (NUT-004 queda cubierto por esa resolucion).
+ */
+export default function LegacyCoachNutritionV2BuilderRoute() {
+  const params = useLocalSearchParams<{ clientId: string; from?: string }>()
+  const clientId = first(params.clientId) ?? ''
+  const from = first(params.from) ?? null
+
+  // Telemetria de uuid invalido (mismo canal que tenia el wizard); el destino del rebote es el
+  // hub de nutricion, igual que el alias legacy `coach/nutrition-builder`.
+  useEffect(() => {
+    if (!isUuid(clientId)) reportInvalidRouteUuid('coach/nutrition-v2/builder/[clientId]', clientId)
+  }, [clientId])
+
+  if (!isUuid(clientId)) return <Redirect href="/coach/nutricion" />
+  return <Redirect href={nutritionV2EditorHref(clientId, { from })} />
+}
+
+export function CoachNutritionV2BuilderScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{
     clientId: string

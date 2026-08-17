@@ -6,9 +6,10 @@
  *
  * Diferencias deliberadas (adaptación nativa, documentadas en
  * docs/rn-port/specs/seccion-3/verify-fix/ficha-nutricion-v2.md):
- *  - `detailHref`/`builderHref` apuntan a las rutas expo-router del monorepo móvil
- *    (`/coach/nutrition-v2/[clientId]` y `/coach/nutrition-v2/builder/[clientId]`), no a los
- *    segmentos Next (`.../builder`). Mismo destino funcional.
+ *  - `detailHref`/`editorHref` apuntan a las rutas expo-router del monorepo móvil
+ *    (`/coach/nutrition-v2/[clientId]` y `/coach/nutrition-v2/editor/[clientId]`), no a los
+ *    segmentos Next. RETIRO del par viejo (R2): el CTA de crear/editar entra por el EDITOR
+ *    UNICO, ya no por el wizard.
  *  - El recorte del historial sin addon Pro ocurre en el componente (cliente) con
  *    `filterHistoryDaysToBaseWindow`, porque RN no tiene RSC; misma función y ventana que web.
  */
@@ -19,29 +20,29 @@ import {
   type NutritionMacroValue,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
-import { nutritionV2BuilderHref } from './nutrition-v2-hub'
+import { nutritionV2EditorHref } from './nutrition-v2-hub'
 
 /**
  * View model del tab (contrato de render de `NutritionV2Summary`). Espejo campo a campo del
  * `NutritionTabV2ViewModel` web:
- *  - `hasPlan`: existe ALGÚN plan (vigente publicado) → gobierna el label del CTA del builder
+ *  - `hasPlan`: existe ALGÚN plan (vigente publicado) → gobierna el label del CTA de crear/editar
  *    ("Crear plan" vs "Nueva versión") — web nutritionTabV2.logic.ts:120,158.
- *  - `plan`: el plan VIGENTE HOY (`today.plan`). Si es null → estado vacío con CTA al builder
- *    (web nutritionTabV2.logic.ts:121-122,159).
+ *  - `plan`: el plan VIGENTE HOY (`today.plan`). Si es null → estado vacío con CTA al editor
+ *    único (web nutritionTabV2.logic.ts:121-122,159).
  *  - `showHistoryUpgradeCta`: sin el addon Nutrición Pro el histórico se recorta a la ventana
  *    base (~30d) y se informa el estado (web nutritionTabV2.logic.ts:183).
  */
 export interface NutritionTabV2ViewModel {
   clientId: string
   clientName: string
-  /** Existe algún plan V2 (para el label del CTA del builder). */
+  /** Existe algún plan V2 (para el label del CTA de crear/editar). */
   hasPlan: boolean
   /** Hay un plan VIGENTE hoy (gobierna resumen vs estado vacío). */
   hasActivePlan: boolean
   /** Ruta expo-router de la ficha nutrición completa. */
   detailHref: string
-  /** Ruta expo-router del builder V2. */
-  builderHref: string
+  /** Ruta expo-router del EDITOR UNICO (retiro del par viejo R2: antes era el wizard). */
+  editorHref: string
   /** Ruta INTERNA (expo-router) de la pantalla de estado del plan. Nunca una URL de pago. */
   historyUpgradeHref: string
   builderCtaLabel: 'Crear plan' | 'Nueva versión'
@@ -159,9 +160,9 @@ export function buildNutritionTabV2ViewModel(
     hasPlan,
     hasActivePlan,
     detailHref: `/coach/nutrition-v2/${clientId}`,
-    // NUT-004: si el alumno ya tiene una raiz de plan, el builder debe APPENDear version sobre
-    // ella (`?planId=`), nunca insertar otra raiz activa. Espejo del web (`existingPlan?.id`).
-    builderHref: nutritionV2BuilderHref(clientId, { planId: detail.plan.plan?.id ?? null }),
+    // RETIRO del par viejo (R2): el CTA navega al editor unico. `planId` ya no viaja — el editor
+    // resuelve solo la raiz vigente del alumno (NUT-004 queda cubierto por esa resolucion).
+    editorHref: nutritionV2EditorHref(clientId),
     historyUpgradeHref: input.historyUpgradeHref ?? DEFAULT_HISTORY_UPGRADE_HREF,
     builderCtaLabel: hasPlan ? 'Nueva versión' : 'Crear plan',
     plan: activePlan

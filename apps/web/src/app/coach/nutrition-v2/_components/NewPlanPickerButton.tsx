@@ -19,8 +19,8 @@ import { listPlanTemplatesAction } from '../_actions/plan-templates.actions'
 import type { PlanTemplateListItem } from '@/services/nutrition-v2/plan-templates.service'
 
 // CTA global "Nuevo plan" del Centro V2. El hub no tiene un alumno seleccionado, asi que el
-// boton abre un selector con el roster del workspace (buscable) y, al elegir, navega al builder
-// del alumno (/coach/nutrition-v2/[clientId]/builder).
+// boton abre un selector con el roster del workspace (buscable) y, al elegir, navega al EDITOR
+// UNICO del alumno (/coach/nutrition-v2/[clientId]/editor).
 //
 // NUT-026: el RSC entrega solo la PRIMERA pagina alfabetica; escribir dispara busqueda
 // server-side (debounce 300 ms) sobre TODO el workspace. Antes el RSC pre-cargaba hasta 400
@@ -140,8 +140,8 @@ export function NewPlanPickerButton({
 
   function choose(clientId: string) {
     setOpen(false)
-    // Con origen elegido, la MISMA ruta del builder lo recibe por `?from=` (AD-3): no hay un
-    // segundo camino de creacion que pueda divergir del wizard normal.
+    // Con origen elegido, la MISMA ruta del editor lo recibe por `?from=` (AD-3): no hay un
+    // segundo camino de creacion que pueda divergir del flujo normal.
     const suffix = source ? `?from=${source.kind}:${source.id}` : ''
     router.push(`/coach/nutrition-v2/${clientId}/editor${suffix}`)
   }

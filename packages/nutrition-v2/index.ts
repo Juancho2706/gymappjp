@@ -44,6 +44,9 @@ export * from './editor-state'
 // T3.v Cabina: reparto porcentual P/C/G del "MacroSpark" — UNA sola fuente para web y RN
 // (prohibido recalcular porcentajes en componentes, ver PLAN §1).
 export * from './macro-spark'
+// Notas del coach (SPEC nutrition-coach-notes N3): la regla unica de que texto ve el
+// alumno bajo franja/grupo en el Hoy (whitespace => cero render), web y RN.
+export * from './coach-notes'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,
