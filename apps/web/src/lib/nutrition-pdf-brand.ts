@@ -3,6 +3,7 @@
  * Resolución SIEMPRE server-side; estas funciones son puras y testeables.
  */
 
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import type { PdfBrand } from '@/domain/nutrition/exchange.types'
 import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 
@@ -81,18 +82,23 @@ export type TenantBrandSource = {
     brandName: string | null | undefined
     primaryColor: string | null | undefined
     logoUrl?: string | null
-    /** Tier del coach standalone; free fuerza marca EVA (misma regla del layout del alumno). */
+    /** Tier del coach standalone; sin branding (free/starter) fuerza marca EVA — `isBrandingAllowed`,
+     * misma regla de las demás superficies. Ausente (team/org) ⇒ no gatea por tier. */
     subscriptionTier?: string | null
 }
 
 /**
  * Marca del PDF a partir del tenant resuelto server-side.
- * - free tier ⇒ EVA (poweredByEva)
+ * - tier sin branding (free/starter, W-brand B5) ⇒ EVA (poweredByEva); tier inválido cae
+ *   a EVA por el fail-closed de `isBrandingAllowed`
  * - sin color/nombre utilizables ⇒ EVA (fallback seguro, nunca un PDF "a medias")
  */
 export function resolvePdfBrand(source: TenantBrandSource | null | undefined): PdfBrand {
     if (!source) return EVA_PDF_BRAND
-    if ((source.subscriptionTier ?? '') === 'free') return EVA_PDF_BRAND
+    const tier = source.subscriptionTier
+    if (tier != null && tier !== '' && !isBrandingAllowed(tier as SubscriptionTier)) {
+        return EVA_PDF_BRAND
+    }
     const name = source.brandName?.trim()
     const color = source.primaryColor && hexToRgb(source.primaryColor) ? source.primaryColor : null
     if (!name) return EVA_PDF_BRAND

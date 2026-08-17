@@ -37,6 +37,28 @@ describe('resolvePdfBrand (resolución de marca por tenant)', () => {
         expect(b.poweredByEva).toBe(true)
     })
 
+    it('starter tampoco tiene branding ⇒ EVA (W-brand B5, alineado con isBrandingAllowed)', () => {
+        const b = resolvePdfBrand({
+            brandName: 'Coach Starter',
+            primaryColor: '#FF0000',
+            subscriptionTier: 'starter',
+        })
+        expect(b).toEqual(EVA_PDF_BRAND)
+    })
+
+    it('pro conserva su marca; tier ausente (team/org) no gatea', () => {
+        expect(
+            resolvePdfBrand({
+                brandName: 'Coach Pro',
+                primaryColor: '#EC4899',
+                subscriptionTier: 'pro',
+            }).poweredByEva
+        ).toBe(false)
+        expect(
+            resolvePdfBrand({ brandName: 'Team X', primaryColor: '#EC4899' }).poweredByEva
+        ).toBe(false)
+    })
+
     it('tenant nulo o sin nombre ⇒ fallback EVA', () => {
         expect(resolvePdfBrand(null)).toEqual(EVA_PDF_BRAND)
         expect(resolvePdfBrand({ brandName: '  ', primaryColor: '#123456' })).toEqual(EVA_PDF_BRAND)
