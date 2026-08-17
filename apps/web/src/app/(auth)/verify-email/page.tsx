@@ -4,10 +4,14 @@ import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { MailCheck, Check, ArrowRight } from 'lucide-react'
+import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
 
 function VerifyEmailContent() {
     const params = useSearchParams()
     const email = params.get('email') ?? ''
+    // `eid` lo genera el Server Action de registro y ya viajo a Meta por CAPI. Mismo event_id acá =
+    // Meta funde ambos en UNA conversion (dedupe por event_name + event_id, ventana 48h).
+    const metaEventId = params.get('eid')
 
     const benefits = [
         '3 alumnos sin costo',
@@ -18,6 +22,9 @@ function VerifyEmailContent() {
 
     return (
         <div className="w-full max-w-md mx-auto my-auto animate-slide-up text-center">
+            {metaEventId ? (
+                <MetaTrackEvent event="CompleteRegistration" eventId={metaEventId} />
+            ) : null}
             <div className="inline-flex h-[76px] w-[76px] items-center justify-center rounded-full bg-sport-100 text-sport-600 mb-5">
                 <MailCheck className="h-[34px] w-[34px]" />
             </div>

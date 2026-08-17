@@ -18,6 +18,14 @@ import posthog from 'posthog-js'
 
 const STORAGE_KEY = 'eva-cookie-consent-v1'
 
+/**
+ * Evento DOM que se emite cuando el usuario ELIGE en el banner. Existe porque el consentimiento ya
+ * no gobierna solo a PostHog: `MetaPixel` (client component montado en el root layout) tiene que
+ * armarse en el mismo instante en que se acepta, sin recargar. `localStorage` no notifica en la
+ * misma pestaña (el evento `storage` es cross-tab), asi que la notificacion va explicita.
+ */
+export const CONSENT_CHANGE_EVENT = 'eva:consent-change'
+
 export type ConsentValue = 'accepted' | 'rejected' | null
 
 export function getStoredConsent(): ConsentValue {
@@ -26,6 +34,9 @@ export function getStoredConsent(): ConsentValue {
 
 export function setStoredConsent(value: 'accepted' | 'rejected'): void {
     try { localStorage.setItem(STORAGE_KEY, value) } catch { /* noop */ }
+    try {
+        window.dispatchEvent(new CustomEvent<ConsentValue>(CONSENT_CHANGE_EVENT, { detail: value }))
+    } catch { /* noop */ }
 }
 
 /** Aplica una elección sobre la instancia REAL de posthog-js (el módulo, no window). */

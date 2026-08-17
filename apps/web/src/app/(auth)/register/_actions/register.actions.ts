@@ -27,6 +27,7 @@ import { clientIpFromRequest } from '@/lib/rate-limit'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
 import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
+import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 
 export type RegisterState = {
     error?: string
@@ -222,6 +223,20 @@ export async function registerAction(
         return { error: coachError.message || 'Error al configurar el perfil de coach' }
     }
 
+    // Meta CompleteRegistration (CAPI). El `event_id` se genera UNA vez y viaja tambien al browser
+    // por query param (`eid`) para que Meta deduplique el espejo del pixel — cruza SOLO
+    // event_name + event_id. Fire-and-forget: si Meta falla o el token no existe, el registro sigue.
+    const metaEventId = newMetaEventId()
+    const queueMetaRegistration = () =>
+        queueMetaCapiEvent({
+            eventName: 'CompleteRegistration',
+            eventId: metaEventId,
+            eventSourceUrl: '/register',
+            actionSource: 'website',
+            userData: { email: emailSan, externalId: authData.user.id },
+            customData: { content_name: selectedTier },
+        }).catch(() => { /* nunca romper el registro por analytics */ })
+
     if (isFreeTier) {
         // admin.createUser does not trigger Supabase auth emails — send manually via Resend.
         const emailSent = await sendCoachSignupConfirmationEmail({
@@ -235,7 +250,8 @@ export async function registerAction(
             return { error: 'No pudimos enviar el correo de confirmación. Revisa el email e intenta de nuevo.' }
         }
         // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
-        redirect(`/verify-email?email=${encodeURIComponent(emailSan)}`)
+        await queueMetaRegistration()
+        redirect(`/verify-email?email=${encodeURIComponent(emailSan)}&eid=${encodeURIComponent(metaEventId)}`)
     }
 
     // Paid tier: email auto-confirmed; sign in immediately and proceed to payment
@@ -260,6 +276,10 @@ export async function registerAction(
     // (el canje + disclosure SERNAC + consentimiento ocurren en /processing, antes del primer cobro).
     const couponCode = normalizeCouponCode((formData.get('coupon_code') as string | null) ?? '')
     const couponParam = couponCode ? `&coupon=${encodeURIComponent(couponCode)}` : ''
+
+    // Tier pago: la cuenta ya existe → CompleteRegistration igual. No hay espejo en el browser
+    // (el redirect va a /coach/subscription/processing), asi que este evento entra solo por CAPI.
+    await queueMetaRegistration()
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(

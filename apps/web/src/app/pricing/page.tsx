@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Check, Zap, Crown, Dumbbell, Sprout, Users2 } from 'lucide-react'
 import type { Metadata } from 'next'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
+import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
 import { SALES_EMAIL, teamsContactMailto } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import {
@@ -178,6 +179,9 @@ export default function PricingPage() {
     const { softwareApplication, faqPage, breadcrumbList } = buildStructuredData()
     return (
         <div className="min-h-dvh bg-background">
+            {/* Meta ViewContent: señal de intencion media del funnel. No-op si el usuario no aceptó
+                cookies o si falta NEXT_PUBLIC_FB_PIXEL_ID. */}
+            <MetaTrackEvent event="ViewContent" params={{ content_name: 'pricing' }} />
             {/* JSON-LD inline (server-rendered) → visible al crawler sin ejecutar JS. */}
             <script
                 type="application/ld+json"

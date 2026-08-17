@@ -15,6 +15,7 @@ import { InstallPrompt } from '@/components/InstallPrompt'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { PostHogProvider } from '@/lib/posthog/provider'
 import { CookieConsent } from '@/components/CookieConsent'
+import { MetaPixel } from '@/components/meta/MetaPixel'
 import { ThemeScriptSuppressor } from '@/components/ThemeScriptSuppressor'
 
 const metadataBase = resolveMetadataBase()
@@ -144,6 +145,10 @@ export default function RootLayout({
               <InstallPrompt brandName="EVA" />
               {children}
               <CookieConsent />
+              {/* Meta Pixel (dataset "EVA Web"). Gateado por el MISMO consentimiento que PostHog
+                  (Ley 21.719): sin `accepted` no carga el script. Nunca arranca en superficies de
+                  alumno / white-label (/join, /c, /e, /t). Ver apps/web/src/lib/meta/pixel.ts. */}
+              <MetaPixel />
               <Toaster richColors position="bottom-center" />
               {/* <Analytics /> retirado 2026-08-09: Vercel Web Analytics nunca estuvo
                   habilitado en el proyecto, asi que el componente pedia
