@@ -29,9 +29,11 @@ su par»).** Fuente de verdad del secundario, en orden:
    `accentLight/accentDark` hoy; esos solo llegan por el acordeón manual y el resolutor
    ya los respeta); el Sello consume el MISMO resolutor de branding que el resto de la app
    (`resolveEffectiveCoachBrandTheme` RN / las vars `--theme-*` web). CERO paletas nuevas.
-2. Fallback SOLO si el brand vigente no trae secundario (custom/legacy sin par): fórmula
-   derivada `hsl(H+38°, S×0.85, min(L+14%, 68%))` del primario, en el helper compartido
-   `sealPair` — misma matemática web/RN con tests golden.
+2. Brand SIN preset (custom/legacy): fórmula derivada
+   `hsl(H+38°, S×0.85, min(L+14%, 68%))` del primario, en el helper compartido
+   `sealPair` — misma matemática web/RN con tests golden. Regla del dueño 2026-08-17
+   (SPEC W-brand B2): el `brand_secondary_color` almacenado de un legacy NO se considera —
+   par curado viene de preset o se deriva del primario, nunca del hex suelto viejo.
 En ambos casos muere el `SKY #38BDF8` fijo de `AppBackground`.
 Nota (auditoría 2026-08-17): `--theme-secondary` ya se emite en los layouts web pero hoy
 NADIE lo lee — el Sello pasa a ser su primer consumidor real; en RN el resolutor ya expone
