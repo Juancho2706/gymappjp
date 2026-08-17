@@ -17,9 +17,11 @@ deriva + grano. La grilla 40×40 actual del RN **se retira**.
 - Pre-auth completo: landing, `/login`, `/c/*/login`, `/e/*/login`, registro, reset,
   código de alumno y la familia de entrada RN (conservan sus fondos actuales — la entrada
   ya tiene identidad propia).
-- Overlays de trabajo denso a pantalla completa (editor de nutrición, builders): fondo
-  `surface-app` + **solo grano** (sin blobs — el tinte no compite con datos). El grano ahí
-  es una capa estática local.
+- Overlays de trabajo denso a pantalla completa: builders = fondo `surface-app` + **solo
+  grano**. **REVERSA del dueño (2026-08-17, 2ª ronda QA): el editor de nutrición SÍ lleva
+  el fondo completo (blobs + grano, web y RN)** — «el lindo background en el edit de
+  planes igual» — con la condición de que su barra superior (cinta/header) sea OPACA
+  `surface-app` (negra o blanca según tema, sin translucidez ni blur).
 - Sheets, modales, popovers, PDFs/print y capturas de export: superficies sólidas, sin sello.
 - **Chrome del shell (regla del dueño 2026-08-17): topbar y sidebar desktop conservan su
   superficie opaca `var(--surface-app)` tal como hoy** (`CoachTopBar.tsx` y el `aside` de

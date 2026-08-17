@@ -20,11 +20,14 @@ export {
   type TourHelpButtonVariant,
 } from './TourHelpButton'
 export {
+  TourScrollHostBinder,
   TourTarget,
   TourTargetsProvider,
+  useTourScrollHost,
   useTourTarget,
   useTourTargets,
   type TourRect,
+  type TourScrollHost,
 } from './TourTargets'
 export {
   TOUR_FLAG_VERSION,

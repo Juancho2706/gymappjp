@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
+import { BackHandler, Pressable, ScrollView, Text, View } from 'react-native'
 import type { LayoutRectangle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
@@ -216,15 +216,46 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
   useEffect(() => {
     if (!active || !step || !frame) return
     let cancelled = false
-    void targets?.measureTarget(step.target).then((rect) => {
+    void (async () => {
+      // QA owner 17-08: espejo del `scrollIntoView` web — sin esto, un target bajo el pliegue se
+      // medía fuera de pantalla y el clamp pegaba el hueco al borde ENCIMA de otro componente.
+      await targets?.ensureTargetVisible(step.target)
       if (cancelled) return
-      setHole(rect ? inflateAndClamp(toOverlaySpace(rect, frame), frame) : null)
-    })
+      const rect = await targets?.measureTarget(step.target)
+      if (cancelled) return
+      if (!rect) {
+        setHole(null)
+        return
+      }
+      const overlayRect = toOverlaySpace(rect, frame)
+      // Si aun después del scroll el target sigue mayormente fuera del overlay (<40% visible),
+      // mejor velo liso con la tarjeta que un hueco clampado sobre lo que no es.
+      const visibleW =
+        Math.min(overlayRect.left + overlayRect.width, frame.width) - Math.max(overlayRect.left, 0)
+      const visibleH =
+        Math.min(overlayRect.top + overlayRect.height, frame.height) - Math.max(overlayRect.top, 0)
+      const visibleRatio =
+        overlayRect.width > 0 && overlayRect.height > 0
+          ? (Math.max(0, visibleW) * Math.max(0, visibleH)) / (overlayRect.width * overlayRect.height)
+          : 0
+      setHole(visibleRatio >= 0.4 ? inflateAndClamp(overlayRect, frame) : null)
+    })()
     if (!targets) setHole(null)
     return () => {
       cancelled = true
     }
   }, [active, step, frame, targets])
+
+  // Back de Android = Saltar (D5: «el tour jamás bloquea la salida»). Antes lo daba gratis el
+  // `onRequestClose` del Modal; sin Modal se escucha el hardware back mientras el tour está vivo.
+  useEffect(() => {
+    if (!active) return
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      onEnd('skip')
+      return true
+    })
+    return () => subscription.remove()
+  }, [active, onEnd])
 
   const goNext = useCallback(() => {
     setIndex((current) => (current >= total - 1 ? current : current + 1))
@@ -232,7 +263,8 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
 
   const goPrev = useCallback(() => setIndex((current) => Math.max(0, current - 1)), [])
 
-  if (!step) return null
+  // Sin Modal ya no hay `visible={active}`: el propio componente se desmonta del render.
+  if (!active || !step) return null
 
   const safeFrame: Frame = frame ?? { originX: 0, originY: 0, width: 0, height: 0 }
   const panes = panesFor(hole ?? EMPTY_HOLE, safeFrame)
@@ -262,24 +294,21 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
     !overlapsCardZone(cardTopWhenFlipped)
 
   return (
-    <Modal
-      transparent
-      visible={active}
-      // Sin animación con «reducir movimiento» (D5). El fade del sistema es lo único que se anima
-      // en la entrada; entre pasos anima la geometría de los paños (abajo).
-      animationType={motion.reduced ? 'none' : 'fade'}
-      // Obligatorio: sin esto, en Android la ventana del modal arranca bajo la barra de estado y el
-      // recorte quedaría corrido respecto de lo que el coach ve. Mismo criterio que `Sheet.tsx`.
-      statusBarTranslucent
-      // Back de Android = Saltar (D5: «el tour jamás bloquea la salida»).
-      onRequestClose={() => onEnd('skip')}
+    // QA owner 17-08 (Xiaomi): el overlay DEJÓ de ser `Modal`. La ventana propia del Modal medía
+    // su origen distinto de como la ventana principal mide los targets en algunos OEM (el hueco
+    // salía corrido ~1 status bar hacia arriba y «iluminaba» lo que no era). Como hermano absoluto
+    // DENTRO de la misma ventana, target y overlay comparten sistema de coordenadas por
+    // construcción — la clase entera de bugs de ventana muere. Los paños siguen tapando y
+    // bloqueando toques; el back de Android lo maneja el BackHandler del componente.
+    <View
+      ref={rootRef}
+      collapsable={false}
+      // pointerEvents por defecto («auto»): el root reclama TODO toque que ningún hijo tome —
+      // incluido el hueco del recorte, que sin Modal quedaría tapeable sobre la UI real.
+      onLayout={(event) => handleRootLayout(event.nativeEvent.layout)}
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, elevation: 999 }}
     >
-      <View
-        ref={rootRef}
-        collapsable={false}
-        onLayout={(event) => handleRootLayout(event.nativeEvent.layout)}
-        style={{ flex: 1 }}
-      >
+      <View collapsable={false} style={{ flex: 1 }}>
         {(['top', 'bottom', 'left', 'right'] as const).map((pane) => (
           <MotiView
             key={pane}
@@ -428,7 +457,7 @@ export function TourOverlay({ steps, active, onEnd }: TourOverlayProps) {
           </ScrollView>
         </View>
       </View>
-    </Modal>
+    </View>
   )
 }
 

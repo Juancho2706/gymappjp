@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { View } from 'react-native'
+import { Dimensions, View } from 'react-native'
 import type { ViewProps } from 'react-native'
 
 /**
@@ -38,11 +38,25 @@ export type TourRect = {
  */
 const MEASURE_TIMEOUT_MS = 250
 
+/**
+ * Host de scroll de la pantalla (QA owner 17-08): la web hace `scrollIntoView` antes de recortar;
+ * RN no tenía equivalente y un target bajo el pliegue se medía fuera de pantalla — el clamp del
+ * hueco lo pegaba al borde ENCIMA de otro componente (el tour «iluminaba» lo que no era). El host
+ * lo registra la pantalla dueña del ScrollView; sin host, `ensureTargetVisible` es no-op.
+ */
+export type TourScrollHost = {
+  readonly scrollTo: (y: number) => void
+  readonly getOffsetY: () => number
+}
+
 type TourTargetsRegistry = {
   registerTarget: (name: string, node: View) => void
   unregisterTarget: (name: string, node: View | null) => void
   /** `null` = el target no está montado o no es medible; el paso degrada a velo liso. */
   measureTarget: (name: string) => Promise<TourRect | null>
+  registerScrollHost: (host: TourScrollHost | null) => void
+  /** Scrollea el target a la banda visible (si hay host) y espera a que el layout asiente. */
+  ensureTargetVisible: (name: string) => Promise<void>
 }
 
 const TourTargetsContext = createContext<TourTargetsRegistry | null>(null)
@@ -88,9 +102,42 @@ export function TourTargetsProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const scrollHostRef = useRef<TourScrollHost | null>(null)
+
+  const registerScrollHost = useCallback((host: TourScrollHost | null) => {
+    scrollHostRef.current = host
+  }, [])
+
+  /**
+   * QA owner 17-08 — espejo del `scrollIntoView` web: si el target quedó fuera de la banda
+   * visible (bajo el header/cinta o bajo la zona donde se apoya la tarjeta del tour), el host
+   * scrollea para traerlo a ~1/4 de pantalla y se espera un frame largo a que el layout asiente
+   * antes de que el overlay vuelva a medir. Sin host (pantallas sin scroll propio) es no-op.
+   */
+  const ensureTargetVisible = useCallback(
+    async (name: string): Promise<void> => {
+      const host = scrollHostRef.current
+      if (!host) return
+      const rect = await measureTarget(name)
+      if (!rect) return
+      const windowHeight = Dimensions.get('window').height
+      // Banda «cómoda»: bajo el chrome de arriba (~120) y sobre la zona de la tarjeta dock (~300).
+      const bandTop = 120
+      const bandBottom = windowHeight - 300
+      const bottom = rect.top + rect.height
+      if (rect.top >= bandTop && bottom <= bandBottom) return
+      const desiredTop = Math.max(bandTop, windowHeight * 0.25)
+      const nextOffset = Math.max(0, host.getOffsetY() + rect.top - desiredTop)
+      host.scrollTo(nextOffset)
+      // El scroll es sin animación; dos frames bastan para que measureInWindow vea el mundo nuevo.
+      await new Promise((resolve) => setTimeout(resolve, 90))
+    },
+    [measureTarget],
+  )
+
   const value = useMemo<TourTargetsRegistry>(
-    () => ({ registerTarget, unregisterTarget, measureTarget }),
-    [registerTarget, unregisterTarget, measureTarget],
+    () => ({ registerTarget, unregisterTarget, measureTarget, registerScrollHost, ensureTargetVisible }),
+    [registerTarget, unregisterTarget, measureTarget, registerScrollHost, ensureTargetVisible],
   )
 
   return <TourTargetsContext.Provider value={value}>{children}</TourTargetsContext.Provider>
@@ -103,6 +150,30 @@ export function TourTargetsProvider({ children }: { children: ReactNode }) {
  */
 export function useTourTargets(): TourTargetsRegistry | null {
   return useContext(TourTargetsContext)
+}
+
+/**
+ * La pantalla dueña del ScrollView registra acá su host (QA owner 17-08). `host` puede cambiar de
+ * identidad por render sin costo: se registra el último. Fuera del provider es no-op.
+ */
+/**
+ * Binder para pantallas cuyo cuerpo vive FUERA del provider (el patrón real: el componente
+ * renderiza `<TourTargetsProvider>` en su propio JSX, así que sus hooks no ven el contexto).
+ * Se monta como hijo del provider y no pinta nada.
+ */
+export function TourScrollHostBinder({ host }: { host: TourScrollHost | null }) {
+  useTourScrollHost(host)
+  return null
+}
+
+export function useTourScrollHost(host: TourScrollHost | null): void {
+  const registry = useContext(TourTargetsContext)
+  const register = registry?.registerScrollHost
+  useEffect(() => {
+    if (!register) return
+    register(host)
+    return () => register(null)
+  }, [register, host])
 }
 
 /**

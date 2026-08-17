@@ -289,7 +289,10 @@ export function EditorRibbon({
          anclas del tour: no cambian estilos ni comportamiento de la cinta, y su ausencia solo hace
          que ese paso pinte la tarjeta al centro sin recorte. Ver `components/nutrition-v2/tour/`. */
       data-tour="ribbon"
-      className="sticky top-0 z-20 border-b border-border-subtle bg-surface-app/95 backdrop-blur supports-[backdrop-filter]:bg-surface-app/85"
+      /* Regla del dueño 17-08 (con el sello dentro del editor): la cinta queda OPACA — negra o
+         blanca según el tema — jamás translúcida sobre los blobs (mismo criterio que el chrome
+         del shell, SPEC D2). Muere el backdrop-blur. */
+      className="sticky top-0 z-20 border-b border-border-subtle bg-surface-app"
     >
       {/* Pisos de track EXPLÍCITOS (fix F1). Identidad y centro pueden encogerse, pero nunca por
           debajo de su `min-content`: la identidad llega hasta ✕ + nombre en elipsis, el centro

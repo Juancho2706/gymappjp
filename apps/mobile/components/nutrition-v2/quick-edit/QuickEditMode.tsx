@@ -118,12 +118,15 @@ import {
 import {
   TourHelpButton,
   TourOverlay,
+  TourScrollHostBinder,
   TourTarget,
   TourTargetsProvider,
   tourSteps,
   useTourController,
   useTourTarget,
+  type TourScrollHost,
 } from '../tour'
+import { AppBackground } from '../../AppBackground'
 import { EditableSlotCard } from './EditableSlotCard'
 import { EditorDayRibbon } from './EditorRibbon'
 import { EditorMetaCard } from './EditorMetaCard'
@@ -436,6 +439,16 @@ export function QuickEditMode({
   // y la fila de chips salta ahí. Ref y no estado: medir no debe re-renderizar el árbol.
   const scrollRef = useRef<ScrollView>(null)
   const dayOffsetsRef = useRef<Record<string, number | undefined>>({})
+  // Host de scroll para la Guía Viva (QA owner 17-08): el overlay necesita traer el target al
+  // viewport antes de recortar (espejo del scrollIntoView web). Offset por ref, no estado.
+  const tourScrollOffsetYRef = useRef(0)
+  const tourScrollHost = useMemo<TourScrollHost>(
+    () => ({
+      scrollTo: (y: number) => scrollRef.current?.scrollTo({ y, animated: false }),
+      getOffsetY: () => tourScrollOffsetYRef.current,
+    }),
+    [],
+  )
   // Guard para no escribir el respaldo local en la hidratacion inicial (evita un borrador vacio).
   const isFirstRenderRef = useRef(true)
   // Key del respaldo local: una sesion de quick-edit por alumno; el clientId va SIEMPRE en la
@@ -1456,7 +1469,11 @@ export function QuickEditMode({
     // pantalla con él no puede mover un píxel. Tiene que quedar por encima TANTO de los targets
     // como del overlay, que es quien los mide.
     <TourTargetsProvider>
+    <TourScrollHostBinder host={tourScrollHost} />
     <View className="flex-1 bg-surface-app">
+      {/* Sello EVA v2 — reversa del dueño 17-08 (paridad con el editor web): el editor también
+          lleva Horizonte B; la barra superior y las cards sólidas sostienen la legibilidad. */}
+      <AppBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         {/* Barra fija del modo edición: salida + identidad del alumno + anclas por día. Vive
             FUERA del scroll a propósito — con los N días apilados, el único control de
@@ -1547,6 +1564,11 @@ export function QuickEditMode({
           contentContainerClassName="gap-4 px-4 pb-8 pt-4"
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          // Guía Viva: el host del tour necesita el offset vivo para scrollear al target.
+          onScroll={(event) => {
+            tourScrollOffsetYRef.current = event.nativeEvent.contentOffset.y
+          }}
+          scrollEventThrottle={32}
         >
           {/* EDITOR UNICO (T3.3b): con `state.meta` la identidad del plan deja de ser un rotulo
               read-only y pasa a ser la cabecera EDITABLE (nombre, estrategia, permisos, vigencia

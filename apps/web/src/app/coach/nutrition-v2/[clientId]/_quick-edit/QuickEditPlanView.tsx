@@ -222,11 +222,12 @@ export function QuickEditPlanView() {
       // vuelven a ser el mismo. Donde la barra es overlay (macOS, touch) mide 0 px y esto no hace nada.
       className="fixed inset-0 z-[60] overflow-y-auto bg-surface-app 2xl:[scrollbar-gutter:stable_both-edges]"
     >
-      {/* Sello EVA v2 (SPEC eva-seal-background D2): overlay de trabajo denso ⇒ fondo
-          surface-app + SOLO grano (sin blobs — el tinte no compite con datos). Capa
-          estática local: vive en el stacking context de este overlay (z-60) y se
-          desmonta con él; los blobs del shell de abajo se apagan vía globals.css. */}
-      <AppSeal variant="grain" />
+      {/* Sello EVA v2 — REVERSA del dueño 2026-08-17 (2ª ronda de QA, SPEC D2 actualizada): el
+          editor TAMBIÉN lleva el fondo completo (blobs + grano), no solo grano — «el lindo
+          background en el edit de planes igual». La legibilidad la sostienen la cinta OPACA y
+          las cards sólidas; los blobs del shell de abajo siguen apagados vía globals.css (este
+          overlay trae los suyos, en su propio stacking context z-60, y se desmontan con él). */}
+      <AppSeal variant="b" />
       {/* Cinta v2 (T3.v, solo editor ≥768 — compacta 768–1023, completa desde 1024): identidad +
           diagnóstico del día + acciones. */}
       {desktopRibbon ? (
