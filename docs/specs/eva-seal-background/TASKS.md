@@ -8,7 +8,7 @@ typecheck local antes de DONE; guardia backend-cero). Referencia visual normativ
 
 | ID | Modelo | Archivos | Instrucción | DoD |
 |---|---|---|---|---|
-| S1.1 | Opus | helper `sealPair` donde viva la resolución de marca compartida (auditar: `@eva/brand-kit` / resolutor RN / color-utils web) + tests | Fórmula D3 exacta (`H+38°, S×.85, L+14 top 68`), determinista, con golden de 5 marcas (azul EVA, verde 142°, naranja 21°, morado 271°, rojo 0° — wrap de hue incluido). Un solo módulo consumible por web y RN sin duplicar la matemática. | vitest verde; misma salida verificada desde import web y RN (test en tests/ raíz). |
+| S1.1 | Opus | helper `sealPair` en `@eva/brand-kit` (junto a `presets.ts`) + tests | D3 v2: `sealPair(resolvedTheme)` devuelve `{primary, secondary}` tomando el `secondaryColor` DEL TEMA RESUELTO (los 19 presets ya lo curan; respetar `accentLight/accentDark` si el resolutor los aplica por modo); fórmula `H+38°, S×.85, L+14 top 68` SOLO como fallback cuando el brand no trae secundario. Golden: 3 presets reales (verificando que sale el par curado, no el derivado) + 2 fallbacks custom (wrap de hue). | vitest verde; misma salida desde import web y RN (test en tests/ raíz). |
 | S1.2 | Opus | `AppSeal` web (nuevo, ubicación coherente con el repo) + tokens `--seal-*` en `globals.css` + espejo `theme.ts` + stories harness `?seal=1` | Variantes `b` (blobs derivados con deriva `motion-safe`, keyframes 46/58s de 3 puntos, + grano) y `grain`. Alphas por tema de la SPEC D5. Capas fixed detrás del contenido, `pointer-events:none`. | typecheck + `check:tokens` verdes; stories montan. |
 
 ## S2 — Montajes web + gate

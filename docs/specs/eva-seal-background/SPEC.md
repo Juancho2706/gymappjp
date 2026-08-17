@@ -22,11 +22,16 @@ deriva + grano. La grilla 40×40 actual del RN **se retira**.
   es una capa estática local.
 - Sheets, modales, popovers, PDFs/print y capturas de export: superficies sólidas, sin sello.
 
-**D3 — Par de color derivado (mata el azul fijo).** Secundario =
-`hsl(H+38°, S×0.85, min(L+14%, 68%))` del color de marca vigente. Helper compartido ÚNICO
-(`packages/` — junto a la matemática de contraste si se consolida, o en el resolutor de
-branding existente) consumido por web (CSS vars) y RN (reemplaza el `SKY #38BDF8` fijo de
-`AppBackground`). Con marca EVA el par ≈ azul→índigo suave (continuidad visual).
+**D3 — El par sale del TEMA del coach (regla del dueño 2026-08-17: «cada tema debe tener
+su par»).** Fuente de verdad del secundario, en orden:
+1. `secondaryColor` del tema de marca RESUELTO — los 19 presets curados de
+   `packages/brand-kit/presets.ts` ya definen su par (y sus `accentLight/accentDark` por
+   modo); el Sello consume el MISMO resolutor de branding que el resto de la app
+   (`resolveEffectiveCoachBrandTheme` RN / las vars `--theme-*` web). CERO paletas nuevas.
+2. Fallback SOLO si el brand vigente no trae secundario (custom/legacy sin par): fórmula
+   derivada `hsl(H+38°, S×0.85, min(L+14%, 68%))` del primario, en el helper compartido
+   `sealPair` — misma matemática web/RN con tests golden.
+En ambos casos muere el `SKY #38BDF8` fijo de `AppBackground`.
 
 **D4 — Contrato de animación (flexibiliza el «jamás anima» del AppBackground actual, con
 compromiso firmado por el dueño en el artifact):** SOLO la luz se mueve; el grano JAMÁS.
