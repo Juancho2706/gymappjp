@@ -3,7 +3,6 @@
   "outputDirectory": "apps/web/.next",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": "nextjs",
-  "//regions": "Funciones en pdx1 (us-west-2) para quedar JUNTO a Supabase. Medido 2026-08-18: el compute corria en iad1 (Virginia) y la base en us-west-2 (Oregon), asi que cada uno de los ~14 queries bloqueantes del dashboard del alumno cruzaba el continente en serie (~65 ms por salto). OJO: mueve las FUNCIONES, no el proxy: el middleware corre en el POP del visitante y para un alumno chileno sigue cruzando a Oregon. Verificar con: curl -sSD - https://www.eva-app.cl/api/health | grep x-vercel-id  -> el segundo segmento debe decir pdx1.",
   "regions": ["pdx1"],
   "git": {
     "deploymentEnabled": {
