@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { MotiView } from 'moti'
 import { ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
-import { EvaBlur } from '../../EvaBlur'
 import { useTheme } from '../../../context/ThemeContext'
 import { useReducedMotion } from 'react-native-reanimated'
 import { hexToRgba } from '../../../lib/theme'
@@ -26,15 +25,23 @@ export interface TabItem {
 // animado a la derecha cuando las pills desbordan y no se llego al final.
 // El comportamiento sticky lo maneja el ScrollView de la pantalla.
 //
-// QA2 A4 — el backdrop (blur + tinte `surface-app` al 80%) y el borde inferior se pintaban
-// SIEMPRE, así que mientras la tira NO estaba anclada se veía como una banda casi negra
-// tapando el gradiente de la app (imagen 10 del QA). Ahora ambos viven en una capa cuya
-// opacidad la maneja `backdropProgress` (Animated.Value que la pantalla alimenta desde el
-// onScroll que ya tenía): transparente lejos → superficie al anclarse. La capa se MONTA solo
-// cerca del anclaje (`near`): montar/medir una BlurView cuesta caro y tenerla viva durante todo
-// el scroll agregaba jank. Legibilidad NO depende del blur: el tinte `surface-app` al 80% que va
-// encima es el que tapa, así que Android sin difuminado (EVA-MOBILE-7, ver `EvaBlur`) se ve igual
-// de sólido — solo pierde el frosteado del contenido que pasa por debajo.
+// QA2 A4 — el backdrop y el borde inferior se pintaban SIEMPRE, así que mientras la tira NO
+// estaba anclada se veía como una banda casi negra tapando el gradiente de la app (imagen 10
+// del QA). Ahora ambos viven en una capa cuya opacidad la maneja `backdropProgress`
+// (Animated.Value que la pantalla alimenta desde el onScroll que ya tenía): transparente lejos
+// → superficie al anclarse. La capa se MONTA solo cerca del anclaje (`near`).
+//
+// QA device 2026-08-18 (Xiaomi/Android/dark) — el fondo se TRANSPARENTABA: anclada, se leía la
+// fila de métricas ("Entreno / Nutrición / Check-In") atravesando las pastillas. Causa: la capa
+// era `blur + tinte surface-app al 80%`, y ese 80% deja 20% de lo que scrollea por detrás A
+// PROPÓSITO. En iOS el `UIVisualEffectView` difuminaba ese 20% hasta volverlo ilegible y el
+// defecto no se notaba; en Android `EvaBlur` NO difumina (gatea `experimentalBlurMethod` por el
+// crash-loop EVA-MOBILE-7) y solo suma un velo plano ⇒ el 20% pasaba nítido y legible.
+// Decisión del dueño: la barra va SÓLIDA. El tinte es ahora `theme.background` (= token
+// `--surface-app`, el mismo chrome que ya usan el SafeAreaView de la ficha y el degradé de fade)
+// SIN alpha, y el blur se retira: bajo un relleno opaco es invisible y solo costaba montar/medir
+// una BlurView por frame de scroll. La rampa de opacidad se conserva intacta, así que "sin fondo
+// lejos → sólido al anclarse" sigue igual.
 export function ClientTabBar({
   items,
   value,
@@ -49,11 +56,10 @@ export function ClientTabBar({
   stuck?: boolean
   /** ¿La tira está lo bastante cerca del anclaje para que el backdrop aporte? */
   near?: boolean
-  /** 0 = lejos del anclaje (sin fondo) · 1 = anclada (fondo glass del tema). */
+  /** 0 = lejos del anclaje (sin fondo) · 1 = anclada (superficie sólida del tema). */
   backdropProgress?: Animated.Value
 }) {
   const { theme, resolvedScheme } = useTheme()
-  const isDark = resolvedScheme === 'dark'
   const [viewW, setViewW] = useState(0)
   const [contentW, setContentW] = useState(0)
   /** Boolean de borde (no la posición cruda): solo flipea al llegar/salir del final. */
@@ -83,14 +89,12 @@ export function ClientTabBar({
     <View style={[styles.wrap, stuck ? shadow('sm', resolvedScheme) : null]}>
       {showBackdrop ? (
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: progress }]}>
-          {/* Glass: surface-app 80% + blur (1:1 con el contenedor sticky web). */}
-          <EvaBlur
-            intensity={isDark ? 20 : 30}
-            tint={isDark ? 'dark' : 'light'}
-            pointerEvents="none"
-            style={StyleSheet.absoluteFill}
-          />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.background, 0.8) }]} />
+          {/* Superficie OPACA del chrome: `theme.background` = token `--surface-app`, que flipea
+              por esquema (paper / #0A0D12) y NO es white-label —`applyEffectiveCoachBranding` y
+              `effectiveBrandVars` solo tocan primary/accent—, así que la tira queda sólida y
+              exactamente del mismo tono que el `bg-surface-app` de la pantalla con cualquier
+              marca. Sin alpha y sin blur (ver cabecera). */}
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
           {/* Hairline inferior DENTRO de la capa: se desvanece junto al fondo. */}
           <View pointerEvents="none" className={stuck ? 'border-b border-default' : 'border-b border-subtle'} style={StyleSheet.absoluteFill} />
         </Animated.View>

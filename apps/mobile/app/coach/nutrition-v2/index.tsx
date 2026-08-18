@@ -1065,12 +1065,25 @@ function HubTemplatesTab({
         paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE,
       }}
     >
-      <View className="gap-3 pb-5 pt-2">
-        {/* Copy de la web, verbatim: ya no manda a otra superficie porque «Aplicar» está en la fila. */}
-        <Text className="text-sm text-muted">
-          Arma un plan reutilizable y aplícalo a cualquier alumno con el botón «Aplicar» de su fila.
-        </Text>
-        <View className="flex-row">{newTemplateCta}</View>
+      {/* La explicación y su CTA son UN bloque (gap-3 adentro) y la lista respira aparte (gap-4).
+          Antes los tres colgaban del mismo gap-3 y el botón quedaba flotando entre el párrafo y las
+          filas, sin pertenecer a ninguno de los dos. */}
+      <View className="gap-4 pb-5 pt-2">
+        <View className="gap-3">
+          {/* La web dice «con el botón "Aplicar" de su fila»; acá ese botón NO existe —el verbo
+              primario es TOCAR la fila (ver `PlanTemplateList`)—, así que el copy verbatim mandaba
+              al coach a buscar un control inexistente. Nombra el gesto real y de paso presenta el
+              lápiz, que es la otra mitad de la fila. */}
+          <Text className="text-sm text-muted">
+            Arma un plan reutilizable y aplícalo a cualquier alumno tocando su fila; el lápiz la abre
+            para editarla.
+          </Text>
+          {/* Centrado (pedido del dueño, QA en device): es la única acción primaria de la pestaña y
+              pegada a la izquierda se leía como una nota al pie del párrafo. Ancho INTRÍNSECO, no
+              de borde a borde: la web también la deja como pastilla (`sm:flex-none`) y estirarla la
+              convertiría en una barra. */}
+          <View className="flex-row justify-center">{newTemplateCta}</View>
+        </View>
         <PlanTemplateList
           templates={templates}
           loading={loading}

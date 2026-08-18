@@ -93,22 +93,45 @@ export function computeTourHole(
   const right = Math.min(frame.width, inflatedRight)
   const bottom = Math.min(boundsBottom, inflatedBottom)
 
-  // Cuánto se comió el clamp en cada borde. Hasta `TOUR_HOLE_PADDING` es aire y no cambia a qué
-  // apunta el hueco; más que eso es target recortado, y ahí el hueco ya está mintiendo.
-  const clampedAway = Math.max(
-    top - inflatedTop,
-    left - inflatedLeft,
-    inflatedRight - right,
-    inflatedBottom - bottom,
-  )
-  // Epsilon por el redondeo de `measureInWindow` (devuelve dp fraccionarios en pantallas con
-  // densidades raras); sin él un target pegado al borde se descartaría por medio píxel.
-  if (clampedAway > TOUR_HOLE_PADDING + 0.5) return null
-
   const width = right - left
   const height = bottom - top
-  return width > 0 && height > 0 ? { top, left, width, height } : null
+  if (!(width > 0) || !(height > 0)) return null
+
+  // El recorte es la interseccion del target inflado con el area util, asi que por construccion
+  // SIEMPRE es un subconjunto del target mas su aire: nunca puede caer sobre otro componente. Lo
+  // unico que hay que decidir es si lo que queda visible alcanza para que el paso signifique algo.
+  //
+  // La regla anterior (18-08) exigia que el clamp no se comiera mas que el aire, y eso fue DEMASIADO
+  // estricto: un target mas ALTO que la pantalla —una franja del editor con tres alimentos, que es
+  // exactamente el paso 3— jamas podia caber, asi que el hueco se descartaba SIEMPRE y el paso se
+  // pintaba en velo liso aunque el target estuviera ahi, a la vista. El dueno lo reporto el 18-08.
+  //
+  // La regla correcta separa los dos casos que antes se confundian:
+  //  - target MAS GRANDE que el area util  -> clamp legitimo: se ilumina la parte visible.
+  //  - target FUERA (scrolleado, medio salido) -> el hueco mentiria: se descarta.
+  // Se mide sobre el target CRUDO (sin el aire): que sobreviva una porcion util de la cosa real.
+  const visibleTop = Math.max(top, target.top)
+  const visibleLeft = Math.max(left, target.left)
+  const visibleRight = Math.min(right, target.left + target.width)
+  const visibleBottom = Math.min(bottom, target.top + target.height)
+  const visibleW = visibleRight - visibleLeft
+  const visibleH = visibleBottom - visibleTop
+  if (!(visibleW > 0) || !(visibleH > 0)) return null
+
+  // Dos condiciones, y las dos por una razon distinta. El ratio evita iluminar una lonja
+  // irrelevante de un target que quedo casi todo afuera; el minimo absoluto evita que un target
+  // enorme pase el ratio con una franja de pocos pixeles, ilegible como spotlight.
+  const visibleRatio = (visibleW * visibleH) / (target.width * target.height)
+  const shortestSide = Math.min(visibleW, visibleH)
+  if (visibleRatio < MIN_VISIBLE_RATIO || shortestSide < MIN_VISIBLE_SIDE) return null
+
+  return { top, left, width, height }
 }
+
+/** Porcion minima del target que tiene que sobrevivir al recorte para que el hueco valga. */
+const MIN_VISIBLE_RATIO = 0.35
+/** Lado mas corto minimo del area visible del target, en dp: por debajo el spotlight no se lee. */
+const MIN_VISIBLE_SIDE = 24
 
 /**
  * Los 4 paños. Su unión cubre el overlay entero menos el recorte.

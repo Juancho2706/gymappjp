@@ -2,13 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Animated, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useReducedMotion } from 'react-native-reanimated'
 import { ArchiveRestore, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { EvaBlur } from '../../../components/EvaBlur'
-import { hexToRgba } from '../../../lib/theme'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
@@ -76,7 +74,8 @@ function sinceMonthLabel(iso: string | null): string {
 
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string; clientName?: string }>()
-  const { theme, resolvedScheme } = useTheme()
+  const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const reducedMotion = useReducedMotion()
   const router = useRouter()
   const workspace = useWorkspace()
@@ -118,18 +117,19 @@ export default function ClientDetailScreen() {
   const lastY = useRef(0)
   const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
   const [tabStuck, setTabStuck] = useState(false)
-  // QA2 A4: opacidad del backdrop de la tira de tabs por proximidad al anclaje (transparente
-  // lejos → superficie del tema al anclarse). `tabNear` solo monta/desmonta la capa (el
-  // BlurView es caro en Android); la transición fina la hace el Animated.Value.
+  // QA2 A4: opacidad del backdrop de la tira de tabs por proximidad al anclaje (sin fondo
+  // lejos → superficie sólida del tema al anclarse). `tabNear` solo monta/desmonta la capa;
+  // la transición fina la hace el Animated.Value.
   // `useState` lazy (no `useRef().current`): el value se pasa como prop en render y
   // `react-hooks/refs` prohíbe leer un ref durante el render.
   const [tabBackdrop] = useState(() => new Animated.Value(0))
   const [tabNear, setTabNear] = useState(false)
   // QA3 — El TopBar vive FUERA del ScrollView: al anclarse la tira de tabs solo ella pintaba
-  // el glass y el tope quedaba partido en dos tonos. Este value opacita una capa glass IDÉNTICA
-  // a la de ClientTabBar sobre el header para que status bar + header + tabs se lean como una
-  // sola superficie. El área del inset superior ya la pinta el `SafeAreaView` con
-  // `theme.background` sólido (misma familia de tono), así que no hace falta extender la capa.
+  // el fondo y el tope quedaba partido en dos tonos. Este value opacita una capa IDÉNTICA a la
+  // de ClientTabBar (mismo token `theme.background`, sin alpha) sobre el header, y desde el QA
+  // del 18-08 esa capa abarca TAMBIÉN el inset de la barra de estado —el `headerWrap` se lo come
+  // con un spacer— para que hora/señal/batería, header y tira se lean como una sola superficie
+  // en vez de tres franjas de tono distinto.
   const [headerGlass] = useState(() => new Animated.Value(0))
   /** Racha del RPC get_client_current_streak (regla "días asignados"); null = RPC no disponible. */
   const [rpcStreak, setRpcStreak] = useState<number | null>(null)
@@ -657,23 +657,37 @@ export default function ClientDetailScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+    // QA device 2026-08-18 — el inset superior ya NO lo pinta un `SafeAreaView edges={['top']}`.
+    // Con esa forma el área de la barra de estado quedaba FUERA del `headerWrap`, así que la capa
+    // de chrome sólo cubría el TopBar: al anclarse la tira, la franja del sistema (hora, señal,
+    // batería) seguía mostrando el sello a la deriva mientras justo debajo había una superficie
+    // plana ⇒ el corte horizontal que el dueño reportó como "un color que no acompaña". Ahora el
+    // inset lo consume el PROPIO headerWrap, con lo que su capa de chrome lo abarca y barra de
+    // estado + header + tira se leen como UNA superficie. El fondo en reposo no cambia (el
+    // contenedor sigue pintando `theme.background` y el sello encima), y los glifos del sistema
+    // los sigue resolviendo el `ThemedStatusBar` global de `app/_layout.tsx` según el esquema:
+    // este cambio es de ESTA pantalla, no global.
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      {/* Header + capa glass: sin borde inferior propio (el hairline vive en ClientTabBar,
-          así se evita el doble borde cuando la tira está anclada). El BlurView se MONTA solo
-          cerca del anclaje (en Android es caro tenerlo vivo todo el scroll). */}
+      {/* Header + capa de chrome: sin borde inferior propio (el hairline vive en ClientTabBar,
+          así se evita el doble borde cuando la tira está anclada). La capa se MONTA solo cerca
+          del anclaje. Fondo OPACO `theme.background` (token `--surface-app`) — mismo motivo que
+          en ClientTabBar: el tinte al 80% + `EvaBlur` dejaba pasar el contenido en Android, donde
+          no hay difuminado (EVA-MOBILE-7). Ambas capas usan el MISMO token, que es lo que evita
+          el escalón de tono entre header y tira. */}
       <View style={styles.headerWrap}>
         {tabNear || tabStuck ? (
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: headerGlass }]}>
-            <EvaBlur
-              intensity={resolvedScheme === 'dark' ? 20 : 30}
-              tint={resolvedScheme === 'dark' ? 'dark' : 'light'}
-              pointerEvents="none"
-              style={StyleSheet.absoluteFill}
-            />
-            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.background, 0.8) }]} />
-          </Animated.View>
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { opacity: headerGlass, backgroundColor: theme.background }]}
+          />
         ) : null}
+        {/* El inset va como HIJO EN FLUJO, no como `paddingTop` del wrap: Yoga posiciona los
+            hijos absolutos contra la caja de contenido del padre, así que con padding la capa
+            de arriba se habría detenido justo debajo de la barra de estado — exactamente el
+            recorte que estamos arreglando. Como spacer, el alto del wrap lo incluye y
+            `absoluteFill` lo cubre sin ambigüedad. */}
+        <View style={{ height: insets.top }} />
         <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
       </View>
 
@@ -830,7 +844,7 @@ export default function ClientDetailScreen() {
       </NativeDialog>
 
       <PhotoLightbox photos={lightbox?.photos ?? []} index={lightbox?.index ?? 0} visible={!!lightbox} onClose={() => setLightbox(null)} />
-    </SafeAreaView>
+    </View>
   )
 }
 

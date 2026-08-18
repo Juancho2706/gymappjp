@@ -109,16 +109,41 @@ export function PlanTemplateList({
   }
 
   return (
-    <View className="gap-1.5">
+    // `gap-2` es el `space-y-2` de la web: el mismo aire entre filas en las dos plataformas.
+    <View className="gap-2">
       {(templates ?? []).map((template) => (
-        <View key={template.id} className="flex-row items-center gap-1">
+        /* La TARJETA es el CONTENEDOR de la fila, no el verbo (QA del dueño en device, 18-08).
+         *
+         * Antes el borde y el fondo vivian en el Pressable primario y el lapiz quedaba FUERA, suelto
+         * sobre el fondo de la pantalla: se leia como un glifo huerfano —no como la accion
+         * secundaria de esa plantilla— y encima la tarjeta y el lapiz no compartian alineacion.
+         * La web nunca tuvo ese problema porque su fila es un `<li>` con borde propio y TODOS los
+         * verbos adentro (`PlanTemplatesLibrary.tsx:308-350`); aca se copia ese criterio en vez de
+         * inventar uno nuevo.
+         *
+         * Dos Pressable HERMANOS dentro de la tarjeta, NO anidados: anidarlos deja el reparto del
+         * toque al responder de RN, y con dos destinos distintos (aplicar vs. editar) esa es una
+         * loteria que no hace falta correr.
+         *
+         * `overflow-hidden` para que el resalte `active:` de la zona primaria —que llega hasta el
+         * borde izquierdo— quede recortado por el radio de la tarjeta: RN no clipea a los hijos.
+         *
+         * Ilegible ⇒ la opacidad baja va ahora en la TARJETA (antes en el Pressable, que ya no pinta
+         * fondo). Esas filas ademas nunca traen lapiz, asi que no queda nada al 100% al lado.
+         */
+        <View
+          key={template.id}
+          className={`flex-row items-center overflow-hidden rounded-control border border-default bg-surface-card ${template.readable ? '' : 'opacity-50'}`}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: !template.readable }}
             accessibilityLabel={openAccessibilityLabel(template.name)}
             disabled={!template.readable}
             onPress={() => onOpen(template)}
-            className={`min-h-11 flex-1 flex-row items-center gap-3 rounded-control border border-default bg-surface-card px-3 py-2.5 ${template.readable ? '' : 'opacity-50'}`}
+            // Gotcha del repo: `className` + `style` como FUNCION se descarta entero en css-interop,
+            // asi que el estado `pressed` vive en la variante `active:` y jamas en un `style` callback.
+            className="min-h-11 min-w-0 flex-1 flex-row items-center gap-3 px-3 py-2.5 active:bg-surface-sunken"
           >
             {template.isFavorite ? (
               <Star color={theme.warning} size={16} />
@@ -138,6 +163,8 @@ export function PlanTemplateList({
                 {planTemplateSubtitle(template)}
               </Text>
             </View>
+            {/* Se queda: es la unica pista de que TOCAR la fila hace algo. En la web ese trabajo lo
+                hace el boton «Aplicar», que aca seria un tercer target compitiendo en 360 dp. */}
             <ChevronRight color={theme.textSecondary} size={16} />
           </Pressable>
           {/* Solo si el draft guardado todavia valida: una plantilla ilegible abriria un editor
@@ -149,9 +176,17 @@ export function PlanTemplateList({
                 editAccessibilityLabel?.(template.name) ?? `Editar la plantilla ${template.name}`
               }
               onPress={() => onEdit(template)}
-              className="h-11 w-11 items-center justify-center rounded-control"
+              // 44×44 de target real (regla del repo) con la caja VISIBLE de 36: el cuadrado lleno a
+              // 44 se come la fila, y a 36 queda en la misma proporcion que la web (`p-2` sobre un
+              // glifo de 16). `mr-1` deja los 4 dp que faltan hasta el borde de la tarjeta.
+              className="mr-1 h-11 w-11 items-center justify-center active:opacity-70"
             >
-              <Pencil color={theme.textSecondary} size={16} />
+              {/* El aro + la superficie hundida son lo que lo ancla como boton en vez de glifo suelto.
+                  Funciona en los dos temas: en claro `surface-sunken` es mas oscuro que la tarjeta y
+                  en oscuro es mas claro, asi que siempre se despega. */}
+              <View className="h-9 w-9 items-center justify-center rounded-control border border-subtle bg-surface-sunken">
+                <Pencil color={theme.textSecondary} size={16} />
+              </View>
             </Pressable>
           ) : null}
         </View>

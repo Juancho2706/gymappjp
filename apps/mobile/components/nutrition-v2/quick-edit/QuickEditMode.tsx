@@ -126,7 +126,6 @@ import {
   TourTargetsProvider,
   tourSteps,
   useTourController,
-  useTourTarget,
   type TourScrollHost,
 } from '../tour'
 import { AppBackground } from '../../AppBackground'
@@ -444,7 +443,12 @@ export function QuickEditMode({
   })
   // Target del paso «Metas sin salir del flujo»: el botón vive suelto en el header, así que se
   // registra por ref en vez de envolverlo (ver `TourTargets.tsx`).
-  const metasTourRef = useTourTarget('metas')
+  // NO se registra con `useTourTarget` a proposito. Ese hook lee el contexto por `useContext`, y
+  // este componente RENDERIZA el `<TourTargetsProvider>` en su propio JSX (mas abajo): sus hooks
+  // corren POR ENCIMA del provider y ven `null`, asi que el ref quedaba mudo y el target 'metas'
+  // NUNCA se registraba. El paso 2 del tour media null y degradaba a velo liso — el sintoma que
+  // reporto el dueno el 18-08. Se envuelve con `<TourTarget>`, que es un componente y si vive
+  // dentro del provider. Es la misma trampa que `TourScrollHostBinder` ya documenta.
   // Alto real de la PublishBar. El «?» se apoya JUSTO encima: ver la nota de D2 en el render.
   const [publishBarHeight, setPublishBarHeight] = useState(0)
 
@@ -1593,10 +1597,10 @@ export function QuickEditMode({
             {/* T3.v Cabina (V3.3): «Metas ▾» migra del lienzo al header (espejo `EditorRibbon.tsx`
                 web) — hospeda el MISMO `TargetsEditorCard` del día activo en la hoja de abajo. */}
             {editorMode && activeVariant ? (
+              <TourTarget name="metas">
               <Pressable
                 // Guía Viva: target del paso «Metas sin salir del flujo». `collapsable={false}` es
                 // lo que impide que Android aplane la vista y la vuelva imposible de medir.
-                ref={metasTourRef}
                 collapsable={false}
                 accessibilityRole="button"
                 accessibilityLabel={EDITOR_COPY.metasPopover}
@@ -1608,6 +1612,7 @@ export function QuickEditMode({
                 <Text className="text-xs font-bold text-strong">{EDITOR_COPY.metasPopover}</Text>
                 <ChevronDown color={theme.textSecondary} size={14} />
               </Pressable>
+              </TourTarget>
             ) : null}
           </View>
           {showVariantHeader ? (
