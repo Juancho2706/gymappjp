@@ -115,6 +115,16 @@ export const metadata: Metadata = {
   },
   metadataBase,
   manifest: '/api/manifest/default',
+  // Verificacion de dominio de Meta (portfolio empresarial EVA, 18-08-2026). Emite
+  // <meta name="facebook-domain-verification"> en el <head> de TODA la app: Meta solo lee la
+  // home, pero el token vive en el layout raiz para que ningun rediseno de la landing lo borre.
+  // Sin esto no se puede reclamar el dominio en Business Settings ni controlar como se muestran
+  // nuestros links en Meta. Es un identificador publico, no un secreto.
+  verification: {
+    other: {
+      'facebook-domain-verification': 'ir71gvglz26t2w213tgepjf7852ino',
+    },
+  },
   // Favicon / app icons via Next file convention: app/favicon.ico + app/icon.png + app/apple-icon.png
   // (símbolo EVA blanco sólido sobre cuadrado negro). Sin bloque metadata.icons: la convención emite
   // los <link rel="icon|apple-touch-icon"> correctos y evita apuntar al outline tenue (BRAND_APP_ICON).
