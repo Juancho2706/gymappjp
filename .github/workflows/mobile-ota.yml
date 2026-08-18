@@ -59,16 +59,36 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      # El DSN de Sentry y la URL de la API salen de `eas.json`, que es su fuente UNICA. No son
+      # secrets: los dos viajan inlineados en el bundle que se publica, o sea son publicos por
+      # construccion. Duplicarlos como secret solo agregaria una copia que se desincroniza.
+      - name: Leer config publica de eas.json (fuente unica)
+        id: easenv
+        run: |
+          echo "sentry_dsn=$(jq -r '.build.production.env.EXPO_PUBLIC_SENTRY_DSN // empty' apps/mobile/eas.json)" >> "$GITHUB_OUTPUT"
+          echo "api_url=$(jq -r '.build.production.env.EXPO_PUBLIC_API_URL // empty' apps/mobile/eas.json)" >> "$GITHUB_OUTPUT"
+
       - name: Guard de secrets (fail-fast, mismo criterio que mobile-build.yml)
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SENTRY_DSN: ${{ steps.easenv.outputs.sentry_dsn }}
         run: |
           missing=""
           [ -z "${SUPABASE_URL// /}" ] && missing="$missing NEXT_PUBLIC_SUPABASE_URL"
           [ -z "${SUPABASE_KEY// /}" ] && missing="$missing NEXT_PUBLIC_SUPABASE_ANON_KEY"
           if [ -n "$missing" ]; then
             echo "ERROR: secret(s) vacio(s):$missing — sin ellas el bundle sale sin Supabase y crashea al boot ('supabaseUrl is required')."
+            exit 1
+          fi
+          # Falla ruidosa a proposito (auditoria 18-08): sin DSN el bundle publicado NO reporta NADA
+          # a Sentry. `apps/mobile/app/_layout.tsx` hace `if (SENTRY_DSN) Sentry.init(...)`, asi que
+          # la ausencia es SILENCIOSA — la app queda ciega y nadie se entera. Asi estuvimos: todos
+          # los eventos moviles de 90 dias venian de la build de tienda (`is_embedded_launch: true`)
+          # y ningun OTA reporto jamas. Un OTA sin telemetria es peor que no publicarlo.
+          if [ -z "${SENTRY_DSN// /}" ]; then
+            echo "ERROR: no pude leer EXPO_PUBLIC_SENTRY_DSN de apps/mobile/eas.json (build.production.env)."
+            echo "Sin el, el bundle sale MUDO: cero crashes reportados y cero forma de saber si un fix funciono."
             exit 1
           fi
 
@@ -79,6 +99,10 @@ jobs:
           # step alcanza (no hace falta tocar eas.json, eso es de perfiles de BUILD).
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Faltaban las dos: `eas update` solo inlinea las EXPO_PUBLIC_* que ve en el entorno del
+          # step, y estas viven en `eas.json`, que es de perfiles de BUILD y no lo lee `update`.
+          EXPO_PUBLIC_SENTRY_DSN: ${{ steps.easenv.outputs.sentry_dsn }}
+          EXPO_PUBLIC_API_URL: ${{ steps.easenv.outputs.api_url }}
         run: |
           # Reintento x3: el primer export en un arbol frio a veces muere con
           # "Cannot find module 'babel-preset-expo'" (race de inicializacion del transform
