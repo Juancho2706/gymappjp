@@ -39,7 +39,7 @@ import { fetchNutritionV2ExchangeGroups } from './nutrition-v2-exchange-groups.a
 import { fetchNutritionV2PlanTemplate } from './nutrition-v2-plan-templates.api'
 import { loadItemSubstitutionReads } from './nutrition-v2-quick-edit'
 import { fetchRememberedQuantities, type RememberedQuantities } from './nutrition-v2-last-quantity'
-import type { NutritionV2WriteClient } from './nutrition-v2-builder'
+import { newNutritionItemId, type NutritionV2WriteClient } from './nutrition-v2-builder'
 
 /**
  * Modo CREACION del editor: el arbol NO nace del read model del alumno sino de un draft del
@@ -380,12 +380,20 @@ export async function loadTemplateEditorSession(input: {
         const portionGroupsById = await loadPortionGroupsById(input.scope)
         // Ids sinteticos: el draft guardado no trae ids y los contadores aparean POR id — sin
         // esto una plantilla intacta abriria "con cambios" (el guardado los vuelve a strippear).
-        const baseDraft = withSyntheticDraftIds({
-          ...loaded.draft,
-          clientId: TEMPLATE_MODE_CLIENT_ID,
-          effectiveFrom: null,
-          name: loaded.name,
-        })
+        // `newNutritionItemId` explicito (cinturon y tirantes): el paquete ya emite UUID RFC en su
+        // fallback, pero este es el camino que se rompio el 18-08 — en Hermes no hay
+        // `globalThis.crypto` y los ids salian `synthetic-...`, que el contrato rechaza con
+        // `z.string().uuid()`. Pasarlo aca deja el guardado de plantillas sin depender de que el
+        // runtime tenga crypto.
+        const baseDraft = withSyntheticDraftIds(
+          {
+            ...loaded.draft,
+            clientId: TEMPLATE_MODE_CLIENT_ID,
+            effectiveFrom: null,
+            name: loaded.name,
+          },
+          newNutritionItemId,
+        )
         return {
           template: {
             templateId: input.templateId,

@@ -620,16 +620,43 @@ function draftTargetToQe(
  * harness) DEBE pasar un generador determinista o los ids difieren entre render de servidor y
  * de cliente (la familia de bug de EVA-NEXTJS-18).
  */
+/**
+ * UUID v4 RFC-4122 para los ids sinteticos de fila del draft.
+ *
+ * El fallback viejo emitia `synthetic-<base36>`, que NO es UUID — y los tres `id` del contrato
+ * (`dayVariants[].id`, `mealSlots[].id`, `items[].id`) exigen `z.string().uuid()`. En Node y en
+ * el navegador nunca se notaba porque `crypto.randomUUID` existe; en Hermes NO existe
+ * (`globalThis.crypto` no lo define RN 0.81 ni el winter runtime de Expo 54, y `expo-crypto`
+ * vive como modulo, jamas como global), asi que la app caia SIEMPRE al fallback: abrir una
+ * plantilla para editarla y guardarla moria en el gate del cliente con «La plantilla tiene datos
+ * invalidos», sin decir que campo, y «Reintentar» reintentaba el mismo fallo. Bucle cerrado: el
+ * coach perdia el trabajo (QA del dueno 2026-08-18, reproducido con la zod del repo).
+ *
+ * Formato RFC identico al `newNutritionItemId` de `apps/mobile/lib/nutrition-v2-builder.ts`;
+ * se duplica a proposito — este paquete es compartido y no puede importar de `apps/*`.
+ * CI no lo cazaba porque en Node/vitest `crypto.randomUUID` SI existe.
+ */
+export function randomDraftRowId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+  if (c?.randomUUID) {
+    try {
+      return c.randomUUID()
+    } catch {
+      // cae al fallback puro
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
 export function withSyntheticDraftIds(
   draft: NutritionPlanDraft,
   idGen?: () => string,
 ): NutritionPlanDraft {
-  const gen =
-    idGen ??
-    ((): string =>
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : 'synthetic-' + Math.random().toString(36).slice(2) + Date.now().toString(36))
+  const gen = idGen ?? randomDraftRowId
   return {
     ...draft,
     dayVariants: draft.dayVariants.map((variant) => ({

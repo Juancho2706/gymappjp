@@ -240,8 +240,14 @@ export default function RegisterPage() {
         <div className="w-full max-w-md mx-auto animate-slide-up">
             {/* Header sticky del wizard — back-chevron + "Paso X de N" + barras de progreso */}
             {/* SIN -mt-14: el margen negativo + sticky en el panel con pt-14 re-anclaba el header
-                56px abajo de su posición de flow → tapaba el título en TODOS los pasos. */}
-            <div className="sticky top-0 z-10 bg-surface-app pt-3.5 pb-3">
+                56px abajo de su posición de flow → tapaba el título en TODOS los pasos.
+                `-top-14` ANULA el `pt-14` del scroller de `(auth)/layout.tsx`: el sticky se ancla al
+                borde del CONTENT box, así que con `top-0` la barra se clavaba 56 px abajo y el hero
+                seguía scrolleando visible —y cortándose— en esa franja. Medido en producción: el
+                punto de anclaje es exactamente `padding-top del scroller + top`, así que -56 px lo
+                lleva a 0. No sacar el `pt-14` del layout: lo comparten login/forgot/reset, y el
+                chevron de login está posicionado dentro de esa franja. (QA del dueño 2026-08-18.) */}
+            <div className="sticky -top-14 z-10 bg-surface-app pt-3.5 pb-3">
                 <div className="flex items-center gap-2.5">
                     {step > 1 ? (
                         <button
