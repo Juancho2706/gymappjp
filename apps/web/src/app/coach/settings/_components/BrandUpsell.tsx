@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Check, Palette, Sparkles, ArrowRight, Image as ImageIcon, Type, MessageSquare } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
-import type { SubscriptionTier } from '@/lib/constants'
+import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 
 /**
  * Upsell de Mi Marca para tiers sin branding — espejo fiel de `MiMarcaUpsell` del kit
@@ -104,7 +104,8 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
                         'Tu logo en la app del alumno',
                         'Colores y nombre de tu marca',
                         'Loader y pantalla de carga personalizados',
-                        'Hasta 30 alumnos activos',
+                        // Pro son 25 desde Pricing v2; el 30 hardcodeado prometía cupo de más (QA 17-08).
+                        `Hasta ${getTierMaxClients('pro')} alumnos activos`,
                     ].map((feat) => (
                         <li key={feat} className="flex items-start gap-2.5 text-sm text-on-dark-muted">
                             <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--sport-400)' }} />

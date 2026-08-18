@@ -293,7 +293,9 @@ function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
           {totalClients}/{max} alumnos · {pct}% de tu plan Elite
         </Text>
         <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams
+          {/* `max` (tope de Elite) en vez del 100 a mano: el corte hacia Teams ES el techo del
+              plan más grande, y Pricing v2 lo bajó a 60. Paridad con la web. */}
+          ¿Más de {max} alumnos o trabajas con otros profesionales? Conoce EVA Teams
         </Text>
       </View>
       <Text style={[styles.tierAction, { color: resolvedScheme === 'dark' ? '#4FD9A0' : '#0F7D50', fontFamily: FONT.uiBold }]}>

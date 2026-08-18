@@ -8,7 +8,7 @@ import {
   getCoachClients,
   getFoodLibrary,
 } from './_data/nutrition-coach.queries'
-import { getTierCapabilities, getTierPriceClp, type SubscriptionTier } from '@/lib/constants'
+import { getTierCapabilities, getTierMaxClients, getTierPriceClp, type SubscriptionTier } from '@/lib/constants'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_data/nutrition-page.queries'
 import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
@@ -121,7 +121,10 @@ export default async function NutritionPlansPage() {
               [Utensils, 'Planes de nutrición personalizados por alumno'],
               [PieChart, 'Seguimiento de macros y calorías diarias'],
               [Repeat, 'Plantillas reutilizables por objetivo'],
-              [Users, 'Hasta 30 alumnos activos (3× más que Free)'],
+              // Derivado del catálogo (QA 17-08): decía «30 (3× más que Free)» — dos números
+              // muertos desde Pricing v2, porque Pro bajó a 25 y Free a 2. La comparación se
+              // vuelve explícita en vez de un múltiplo que se pudre con cada cambio de precios.
+              [Users, `Hasta ${getTierMaxClients('pro')} alumnos activos (Free llega a ${getTierMaxClients('free')})`],
             ] as const).map(([Icon, feature]) => (
               <div key={feature} className="flex items-center gap-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-sport-100 text-sport-600">

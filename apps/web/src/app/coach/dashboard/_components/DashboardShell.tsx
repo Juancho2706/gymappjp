@@ -304,7 +304,9 @@ function TeamsBridgeBanner({ totalClients }: { totalClients: number }) {
                     {totalClients}/{max} alumnos · {pct}% de tu plan Elite
                 </p>
                 <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                    ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams
+                    {/* `max` (tope de Elite) en vez del 100 escrito a mano: el corte hacia Teams
+                        ES el techo del plan más grande, y Pricing v2 lo bajó a 60. */}
+                    ¿Más de {max} alumnos o trabajas con otros profesionales? Conoce EVA Teams
                 </p>
             </div>
             <a
