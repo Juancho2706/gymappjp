@@ -1,0 +1,34 @@
+-- Cierra la lectura anonima de datos que NO son branding en `public.coaches`.
+--
+-- HALLAZGO (auditoria 2026-08-18): la policy `coaches_select_anon` es `USING (true)` y los GRANT de
+-- `anon` estan a nivel COLUMNA sobre 35 columnas. O sea que cualquiera con la anon key —que viaja
+-- embebida en la web y en el bundle de la app— podia listar los 26 coaches con su NOMBRE REAL, su
+-- plan y su codigo de invitacion. La auditoria previa dio la tabla por cerrada porque miro
+-- `has_table_privilege` (nivel tabla, devuelve false); hay que mirar `information_schema.column_privileges`.
+--
+-- QUE SE REVOCA Y QUE NO, y por que no es lo que la auditoria proponia:
+--
+--   * `full_name` y `previous_slugs`: se revocan. Verificado que TODOS sus lectores son admin,
+--     crons o el propio coach autenticado (`coach/settings/_data/settings.queries.ts`,
+--     `apps/mobile/lib/coach-brand.ts` con `.eq('id', user.id)`). Ningun camino anonimo los toca.
+--     `full_name` es el nombre real de la persona; el nombre publico es `brand_name`, que queda.
+--   * `created_at`, `updated_at`, `slug_changed_at`: se revocan por higiene, mismo criterio.
+--
+--   * `invite_code` y `subscription_tier` NO SE TOCAN, aunque son las mas jugosas. La ruta
+--     `apps/web/src/app/api/manifest/[coach_slug]/route.ts` corre con el cliente SSR —o sea `anon`
+--     cuando el visitante no tiene sesion, que es el caso del manifiesto de la PWA— y ahi filtra
+--     `.eq('invite_code', slug)` (:38) y selecciona `subscription_tier` (:35). Postgres exige SELECT
+--     sobre la columna tambien para FILTRAR por ella, asi que revocarlas romperia el manifiesto de
+--     la PWA de todos los alumnos. Se comprobo antes de escribir esta migracion.
+--
+-- LA ENUMERACION SIGUE ABIERTA, y hay que decirlo: con `invite_code` legible y la policy en
+-- `USING (true)`, un anonimo todavia puede pedir la lista completa de codigos. El cierre real es
+-- reemplazar esos dos call sites por una funcion `SECURITY DEFINER` que reciba slug-o-codigo y
+-- devuelva UNA fila de branding, y recien ahi revocar. Eso toca la pagina de login del alumno, que
+-- es la superficie de aterrizaje de la campana viva: va en su propia tanda, con QA.
+--
+-- Validado con `BEGIN; ... SET LOCAL ROLE anon; ... ROLLBACK;` antes de aplicar: el branding del
+-- login del alumno (5 filas) y la consulta del manifiesto (3 filas) siguen resolviendo; las
+-- columnas revocadas dan false en `has_column_privilege`. Reversible con el GRANT inverso.
+revoke select (full_name, previous_slugs, created_at, updated_at, slug_changed_at)
+  on public.coaches from anon;
