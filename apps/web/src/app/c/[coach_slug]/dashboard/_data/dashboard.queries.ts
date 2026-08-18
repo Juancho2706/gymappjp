@@ -324,13 +324,32 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
         const allW = histLogs ?? []
         if (recent.length === 0) return []
 
-        const blockIds = [...new Set([...recent.map((r) => r.block_id), ...allW.map((r) => r.block_id)])]
+        // `.filter(Boolean)` NO es defensivo, es obligatorio: 593 de las ~15.700 filas de
+        // `workout_logs` tienen `block_id` NULL (registro libre del alumno, sin bloque prescrito).
+        // Sin el filtro, PostgREST serializa el literal `null` dentro del `in.(...)` y Postgres
+        // responde 22P02 `invalid input syntax for type uuid: "null"` — 31 respuestas 400 por dia
+        // medidas en los logs, sobre 11 alumnos. El gemelo de mobile
+        // (`apps/mobile/lib/history.queries.ts`) siempre filtro; solo la web fallaba.
+        const blockIds = [
+            ...new Set(
+                [...recent.map((r) => r.block_id), ...allW.map((r) => r.block_id)].filter(
+                    (id): id is string => typeof id === 'string' && id.length > 0,
+                ),
+            ),
+        ]
         if (blockIds.length === 0) return []
 
-        const { data: blocks } = await supabase
+        // Y el `error` deja de descartarse: al tirar 400 la seccion de records y ejercicios se
+        // renderizaba VACIA sin avisarle a nadie — el alumno creia que no tenia marcas. Un fallo de
+        // lectura tiene que ser ruidoso en el servidor aunque la UI degrade.
+        const { data: blocks, error: blocksError } = await supabase
             .from('workout_blocks')
             .select('id, exercise_id')
             .in('id', blockIds)
+        if (blocksError) {
+            console.error('[dashboard.records] workout_blocks:', blocksError.message)
+            return []
+        }
 
         const blockToEx = new Map<string, string>()
         for (const b of blocks ?? []) {
