@@ -6,6 +6,19 @@ import { applyConsent, getStoredConsent, setStoredConsent } from '@/lib/posthog/
 
 export function CookieConsent() {
     const [visible, setVisible] = useState(false)
+    // QA pre-campaña 17-08: en ≤640px el banner (bottom fijo, z-70) se apoyaba EXACTAMENTE sobre el
+    // CTA sticky de la landing (#mcta, bottom 0, z-60) y tapaba el único botón siempre visible del
+    // móvil — para todo visitante nuevo, o sea todo el tráfico pago. Si el CTA está montado y
+    // visible, el banner se corre hacia arriba por su alto real. Medición en el mount: el #mcta no
+    // cambia de alto en vivo, y en cualquier página sin landing el offset queda en 0.
+    const [stickyCtaOffset, setStickyCtaOffset] = useState(0)
+
+    useEffect(() => {
+        const mcta = document.getElementById('mcta')
+        if (mcta && getComputedStyle(mcta).display !== 'none') {
+            setStickyCtaOffset(mcta.getBoundingClientRect().height)
+        }
+    }, [])
 
     useEffect(() => {
         const stored = getStoredConsent()
@@ -26,13 +39,20 @@ export function CookieConsent() {
         applyConsent(choice)
     }
 
+    // QA pre-campaña 17-08: la X mapeaba a `handle('rejected')` — el gesto natural de sacarse el
+    // cartel de encima quedaba grabado como rechazo EXPLÍCITO y permanente en localStorage, en esa
+    // visita y en todas las futuras. Cerrar no es decidir: se oculta sin persistir nada y el banner
+    // vuelve a ofrecerse en la próxima visita. Ley 21.719: rechazar sigue a un click, igual de fácil.
+    const dismissWithoutChoice = () => setVisible(false)
+
     if (!visible) return null
 
     return (
         <div
             role="dialog"
             aria-label="Consentimiento de cookies"
-            className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[70] mx-auto max-w-4xl rounded-[var(--radius-card)] border border-border bg-background/95 p-4 shadow-[var(--shadow-lg)] backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-300 sm:inset-x-6"
+            className="fixed inset-x-3 z-[70] mx-auto max-w-4xl rounded-[var(--radius-card)] border border-border bg-background/95 p-4 shadow-[var(--shadow-lg)] backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-300 sm:inset-x-6"
+            style={{ bottom: `calc(0.75rem + env(safe-area-inset-bottom) + ${stickyCtaOffset}px)` }}
         >
             <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <Cookie className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5 sm:mt-0" />
@@ -55,7 +75,7 @@ export function CookieConsent() {
                         Aceptar
                     </button>
                     <button
-                        onClick={() => handle('rejected')}
+                        onClick={dismissWithoutChoice}
                         aria-label="Cerrar"
                         className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground"
                     >

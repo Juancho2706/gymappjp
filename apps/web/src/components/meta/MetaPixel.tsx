@@ -33,6 +33,17 @@ export function MetaPixel() {
     const [consent, setConsent] = useState<ConsentValue>(null)
     const [armed, setArmed] = useState(false)
 
+    // Click-id del anuncio → cookie `_fbc`, SIN esperar el consentimiento. Antes vivía dentro de
+    // MetaRouteTracker, que solo monta con consentimiento aceptado — así que todo el tráfico frío
+    // que no tocaba el banner llegaba a CAPI sin click-id y Meta no podía atar la conversión al
+    // anuncio (QA pre-campaña 17-08). Guardarla es atribución first-party propia, no es cargar el
+    // script de un tercero: el DATO no sale de acá hasta que un evento (gateado por consentimiento
+    // del lado del pixel, y server-side por CAPI) lo use. El fbclid llega en el aterrizaje desde el
+    // ad — una carga completa de página — así que leer `location.search` una vez alcanza.
+    useEffect(() => {
+        captureFbclidCookie(new URLSearchParams(window.location.search).get('fbclid'))
+    }, [])
+
     // Lectura inicial + reaccion al click del banner (mismo tab).
     useEffect(() => {
         setConsent(getStoredConsent())

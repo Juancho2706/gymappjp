@@ -39,7 +39,9 @@ const COPY = {
     wl_p3t: 'Acceso simple para el alumno',
     wl_p3_pre: 'Tu alumno entra con un ',
     wl_p3_code: 'código de 5 dígitos',
-    wl_p3_post: ' — sin tiendas, sin descargas, sin fricción.',
+    // «sin tiendas» murió el 17-08: la app iOS está publicada. La promesa real de esta sección es
+    // que el ALUMNO no necesita pasar por una tienda para entrar con la marca del coach.
+    wl_p3_post: ' — sin registros largos, sin fricción, directo a tu marca.',
     wl_try: '// pruébalo en vivo · fija un color',
     wl_auto: '↻ auto',
   },
@@ -55,7 +57,7 @@ const COPY = {
     wl_p3t: 'Simple access for your client',
     wl_p3_pre: 'Your client logs in with a ',
     wl_p3_code: '5-digit code',
-    wl_p3_post: ' — no app stores, no downloads, no friction.',
+    wl_p3_post: ' — no long sign-ups, no friction, straight to your brand.',
     wl_try: '// try it live · lock a color',
     wl_auto: '↻ auto',
   },

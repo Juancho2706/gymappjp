@@ -11,9 +11,11 @@ import {
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
-import { normalizePlatformEmail, isDisposableEmail } from '@/lib/auth/platform-email'
+import { normalizePlatformEmail, sanitizePlatformEmail, isDisposableEmail } from '@/lib/auth/platform-email'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
+import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
+import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 
 export type CompleteOnboardingState = { error?: string }
 
@@ -128,8 +130,35 @@ export async function completeOAuthOnboarding(
         return { error: 'Error al crear tu perfil. Intenta de nuevo o contacta soporte.' }
     }
 
+    // QA pre-campaña 17-08: este camino no emitía NINGUNA conversión a Meta ni disparaba la
+    // bienvenida — y es el de menor fricción, el que más elige el tráfico frío del anuncio.
+    // Mismo contrato que el registro por email: `event_id` único generado UNA vez, CAPI ahora,
+    // y el espejo del pixel en el destino con el MISMO id (`eid`) para que Meta deduplique.
+    // Fire-and-forget: analytics jamás rompe un alta.
+    const metaEventId = newMetaEventId()
+    void queueMetaCapiEvent({
+        eventName: 'CompleteRegistration',
+        eventId: metaEventId,
+        eventSourceUrl: '/coach/onboarding/complete',
+        actionSource: 'website',
+        // `emailSan` (trim+lowercase), NUNCA `emailNorm`: el normalizado es SOLO para dedup interno
+        // — a gmail le saca puntos y +alias, y Meta hashea el email REAL del usuario. Con la forma
+        // dedup el hash no matchea nada, justo en el camino de alta más gmail-pesado que hay.
+        // Mismo criterio que el registro por email (`register.actions.ts` manda `emailSan`).
+        userData: { email: sanitizePlatformEmail(email), externalId: user.id },
+        customData: { content_name: selectedTier },
+    }).catch(() => { /* nunca romper el alta por analytics */ })
+
     if (isFreeTier) {
-        redirect('/coach/dashboard?welcome=free')
+        // La cuenta de Google ya viene confirmada: el coach nace `active` y jamás pasa por
+        // `/auth/confirm`, que era el único lugar que mandaba bienvenida + drip.
+        sendFreeCoachOnboardingEmails({
+            email,
+            coachName: fullName,
+            brandName,
+            appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl',
+        })
+        redirect(`/coach/dashboard?welcome=free&eid=${encodeURIComponent(metaEventId)}`)
     }
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()

@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { Loader2, User, Store, CheckCircle2, Sparkles } from 'lucide-react'
+import { getTierMaxClients } from '@eva/tiers'
 import { completeOAuthOnboarding, type CompleteOnboardingState } from '../_actions/complete.actions'
 import { cn } from '@/lib/utils'
 import {
@@ -255,7 +256,7 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                         <p className="text-xs font-semibold text-text-strong flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-sport-600" /> Plan Free incluye:
                         </p>
-                        {['3 alumnos activos', 'Entrenos ilimitados', 'App para tus alumnos', 'Check-ins'].map(item => (
+                        {[`${getTierMaxClients('free')} alumnos activos`, 'Entrenos ilimitados', 'App para tus alumnos', 'Check-ins'].map(item => (
                             <div key={item} className="flex items-center gap-2 text-xs text-text-muted">
                                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[var(--success-500)]" />
                                 {item}

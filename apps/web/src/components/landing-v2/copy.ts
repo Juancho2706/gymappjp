@@ -11,6 +11,12 @@
  * los componentes que las usan (ModulosPro) las renderizan con
  * `dangerouslySetInnerHTML`; las demás son texto plano.
  */
+import { getTierMaxClients } from '@eva/tiers'
+
+// El cupo Free se deriva del catálogo también acá: el ES del FAQ ya lo hacía, y dejar el EN con el
+// número escrito a mano reabre exactamente el drift que este barrido vino a cerrar (QA 17-08).
+const FREE_MAX_CLIENTS = getTierMaxClients('free')
+
 export const EN_DICT: Record<string, string> = {
   nav_marca: 'Your brand',
   nav_producto: 'Product',
@@ -38,7 +44,7 @@ export const EN_DICT: Record<string, string> = {
   wl_p2t: 'Your logo and your name',
   wl_p2d: 'Upload your logo and the app installs with your brand. EVA stays behind the scenes, always.',
   wl_p3t: 'Simple access for your client',
-  wl_p3d: 'Your client logs in with a 5-digit code — no app stores, no downloads, no friction.',
+  wl_p3d: 'Your client logs in with a 5-digit code — no long sign-ups, no friction, straight to your brand.',
   wl_try: '// try it live · lock a color',
   wl_auto: '↻ auto',
 
@@ -162,7 +168,7 @@ export const EN_DICT: Record<string, string> = {
   q4: 'Can I migrate my routines from Excel?',
   a4: 'Yes. Load a routine once in the builder —with the {{count}}-exercise catalog— and reuse it with as many clients as you want.',
   q5: 'Do I need a card to start?',
-  a5: 'No. The Free plan is permanent for up to 3 clients, no card, with the full builder.',
+  a5: `No. The Free plan is permanent for up to ${FREE_MAX_CLIENTS} clients, no card, with the full builder.`,
 
   mp0_t: 'Cardio by heart-rate zones',
   mp0_d: 'Turns “do 30 minutes of jogging” into a real prescription: effort zones computed for each client’s body, not a generic table.',

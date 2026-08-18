@@ -4,17 +4,62 @@ import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { MailCheck, Check, ArrowRight } from 'lucide-react'
+import { getTierMaxClients } from '@eva/tiers'
+import { useActionState } from 'react'
 import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
+import {
+    resendConfirmationAction,
+    type ResendConfirmationState,
+} from './_actions/resend.actions'
+
+function ResendConfirmation({ uid }: { uid: string }) {
+    const [state, formAction, pending] = useActionState<ResendConfirmationState, FormData>(
+        resendConfirmationAction,
+        {},
+    )
+
+    if (state.ok) {
+        return (
+            <p className="mt-[18px] text-[12.5px] text-[var(--success-700)]">
+                Listo — te reenviamos el correo. Revisa también la carpeta de spam.
+            </p>
+        )
+    }
+
+    return (
+        <form action={formAction} className="mt-[18px]">
+            {/* El `uid` sólo desempata cuando NO hay sesión (el proxy manda acá al coach
+                `pending_email` ya logueado). El Server Action prefiere siempre la sesión, y del id
+                saca el email autoritativo: nada de lo tipeado en el form decide a quién se escribe. */}
+            <input type="hidden" name="uid" value={uid} />
+            <p className="text-[12.5px] text-text-subtle">
+                ¿No te llegó? Revisa spam{' '}
+                <button
+                    type="submit"
+                    disabled={pending}
+                    className="font-semibold underline underline-offset-2 hover:text-text-body disabled:opacity-60"
+                >
+                    {pending ? 'reenviando…' : 'o reenvíalo ahora'}
+                </button>
+                .
+            </p>
+            {state.error ? (
+                <p className="mt-1 text-[12px] text-[var(--danger-600)]">{state.error}</p>
+            ) : null}
+        </form>
+    )
+}
 
 function VerifyEmailContent() {
     const params = useSearchParams()
     const email = params.get('email') ?? ''
+    const uid = params.get('uid') ?? ''
     // `eid` lo genera el Server Action de registro y ya viajo a Meta por CAPI. Mismo event_id acá =
     // Meta funde ambos en UNA conversion (dedupe por event_name + event_id, ventana 48h).
     const metaEventId = params.get('eid')
 
     const benefits = [
-        '3 alumnos sin costo',
+        `${getTierMaxClients('free')} alumnos sin costo`,
         'Planes de entrenamiento ilimitados',
         'Tu propia app para alumnos',
         'Upgrade cuando quieras',
@@ -55,9 +100,9 @@ function VerifyEmailContent() {
                 </div>
             </div>
 
-            <p className="mt-[18px] text-[12.5px] text-text-subtle">
-                ¿No te llegó? Revisa spam o espera un minuto.
-            </p>
+            {/* QA pre-campaña 17-08: sin reenvío, un correo perdido dejaba al coach encerrado —
+                el login lo rechaza hasta confirmar y el email ya está tomado para re-registrarse. */}
+            <ResendConfirmation uid={uid} />
 
             <Link
                 href="/login"

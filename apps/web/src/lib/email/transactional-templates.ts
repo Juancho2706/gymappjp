@@ -514,6 +514,9 @@ ${badge('PLAN GRATUITO ACTIVADO', '#6B7280')}
   Hola <strong>${ctx.coachName}</strong>, tu período de acceso Beta finalizó. Tu cuenta fue movida automáticamente al <strong>Plan Gratuito</strong>.
 </p>
 <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">
+  <!-- Este "3" es DELIBERADO, no drift de Pricing v2: el correo va solo a coaches Beta, todos
+       anteriores al corte del 2026-08-18, y el grandfather les conserva el cupo viejo de 3
+       (tierMaxClientsFor). Los coaches nuevos ven 2 en las demás superficies. -->
   Con el plan gratuito puedes gestionar hasta <strong>3 alumnos activos</strong>. Cuando estés listo para crecer, puedes activar un plan pago desde el dashboard.
 </p>
 

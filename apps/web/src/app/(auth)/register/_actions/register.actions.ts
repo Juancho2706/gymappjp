@@ -251,7 +251,12 @@ export async function registerAction(
         }
         // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
         await queueMetaRegistration()
-        redirect(`/verify-email?email=${encodeURIComponent(emailSan)}&eid=${encodeURIComponent(metaEventId)}`)
+        // `uid` alimenta el botón «reenviar correo» de esa pantalla: sin sesión (el alta free no
+        // loguea hasta confirmar) es el único modo de resolver la cuenta sin aceptar un email
+        // suelto del formulario, que crearía `auth.users` huérfanos vía generateLink.
+        redirect(
+            `/verify-email?email=${encodeURIComponent(emailSan)}&eid=${encodeURIComponent(metaEventId)}&uid=${encodeURIComponent(authData.user.id)}`
+        )
     }
 
     // Paid tier: email auto-confirmed; sign in immediately and proceed to payment

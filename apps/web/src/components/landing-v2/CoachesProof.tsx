@@ -1,14 +1,16 @@
 /**
- * CoachesProof — `#coaches` (social proof). Sección G del spec de transcripción.
- * Fuente 1:1: nuevalandingv2/LandingPrism v2.dc.html (líneas 424-453).
+ * CoachesProof — `#coaches`. Sección G del spec de transcripción.
  *
- * Server component (0 interacción): 3 testimonios estáticos. Solo `data-reveal` —
- * el observer global de reveal (montado por el brand provider) hace la animación.
- * Los avatares usan `var(--brand)` literal (lo alimenta `#landing-v2-root`).
+ * QA pre-campaña 2026-08-17: los 3 testimonios del diseño eran FICTICIOS (el propio archivo lo
+ * admitía en su TODO-copy) y con tráfico pago eso cambia de categoría — testimonios inventados
+ * violan la política de anuncios de Meta (riesgo directo sobre la cuenta publicitaria) y son
+ * publicidad engañosa ante SERNAC (Ley 19.496). Se reemplazan por HECHOS verificables del
+ * producto, sin personas: cada tarjeta afirma algo que el código o las tiendas pueden respaldar.
+ * Cuando existan testimonios reales (nombre + marca + autorización escrita de los coaches
+ * activos), esta sección vuelve a ser de quotes; el layout de figure/blockquote quedó en git.
  *
- * TODO-copy: los 3 testimonios son copy del diseño (ficticios). El código actual NO
- * tiene testimonios reales (grep en components/landing → sin fuente real). Mantener el
- * copy del diseño hasta tener testimonios verificados. Ver §6/§G del spec.
+ * Server component (0 interacción). Solo `data-reveal` — el observer global del brand provider
+ * hace la animación. Los acentos usan `var(--brand)` literal (lo alimenta `#landing-v2-root`).
  */
 
 import type { CSSProperties } from 'react'
@@ -16,7 +18,7 @@ import type { CSSProperties } from 'react'
 const MONO = 'var(--font-geist-mono), ui-monospace, monospace'
 const DISPLAY = 'var(--font-montserrat), var(--font-inter), sans-serif'
 
-const figureStyle: CSSProperties = {
+const cardStyle: CSSProperties = {
   margin: 0,
   padding: '26px 26px 22px',
   borderRadius: '22px',
@@ -25,10 +27,19 @@ const figureStyle: CSSProperties = {
   boxShadow: '0 8px 32px 0 rgba(0,0,0,0.37)',
   display: 'flex',
   flexDirection: 'column',
-  gap: '18px',
+  gap: '10px',
 }
 
-const quoteStyle: CSSProperties = {
+const statStyle: CSSProperties = {
+  fontFamily: DISPLAY,
+  fontWeight: 800,
+  fontSize: '26px',
+  letterSpacing: '-0.03em',
+  color: '#F8F9FA',
+  lineHeight: 1.1,
+}
+
+const bodyStyle: CSSProperties = {
   margin: 0,
   fontSize: '14.5px',
   lineHeight: 1.65,
@@ -36,61 +47,42 @@ const quoteStyle: CSSProperties = {
   textWrap: 'pretty',
 }
 
-const avatarStyle: CSSProperties = {
-  width: '34px',
-  height: '34px',
-  borderRadius: '50%',
-  background: 'var(--brand)',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontFamily: DISPLAY,
-  fontWeight: 800,
-  fontSize: '12px',
-  color: '#FFFFFF',
-  transition: 'background 0.4s ease',
-}
-
-const roleStyle: CSSProperties = {
+const kickerStyle: CSSProperties = {
   fontFamily: MONO,
   fontSize: '9.5px',
   letterSpacing: '0.1em',
   textTransform: 'lowercase',
-  color: '#8A8A93',
+  color: 'var(--brand)',
+  transition: 'color 0.2s linear',
 }
 
-type Testimonial = {
-  initials: string
-  quote: string
-  name: string
-  role: string
+type Fact = {
+  kicker: string
+  stat: string
+  body: string
 }
 
-const TESTIMONIALS: Testimonial[] = [
-  {
-    initials: 'CM',
-    quote:
-      '“Pasé de cinco planillas a una app con mi logo en una tarde. Mis alumnos registran solos; yo solo reviso las alertas.”',
-    name: 'Carolina M.',
-    role: 'coach online · 28 alumnos',
-  },
-  {
-    initials: 'RS',
-    quote:
-      '“El builder me ahorra horas cada semana: armo la rutina base una vez y la ajusto por alumno en minutos.”',
-    name: 'Rodrigo S.',
-    role: 'preparador físico · 41 alumnos',
-  },
-  {
-    initials: 'VR',
-    quote:
-      '“Mis alumnos creen que la app es mía. Para mi marca, eso solo ya paga el plan.”',
-    name: 'Valentina R.',
-    role: 'estudio boutique · 2 coaches',
-  },
-]
+export default function CoachesProof({ exerciseCount }: { exerciseCount: number }) {
+  // Hechos con respaldo: el count sale de la misma query que Módulos/FAQ; la app iOS está
+  // publicada (1.1.0, App Store); la marca blanca es la feature central de la sección #marca.
+  const facts: Fact[] = [
+    {
+      kicker: '// catálogo listo el día uno',
+      stat: `+${exerciseCount} ejercicios`,
+      body: 'Con video y detalle por grupo muscular, listos para prescribir. Sumas los tuyos y quedan solo en tu cuenta.',
+    },
+    {
+      kicker: '// tu marca al frente',
+      stat: 'Tu app, tu logo',
+      body: 'Tus alumnos entran a tu dominio, con tus colores y tu logo. EVA opera atrás; la marca que ven es la tuya.',
+    },
+    {
+      kicker: '// donde entrena tu alumno',
+      stat: 'iPhone y Android',
+      body: 'App nativa en la App Store y web instalable en cualquier teléfono, sincronizadas con lo que armas acá.',
+    },
+  ]
 
-export default function CoachesProof() {
   return (
     <section
       id="coaches"
@@ -125,7 +117,7 @@ export default function CoachesProof() {
             transition: 'color 0.2s linear',
           }}
         >
-          {'// coaches que ya operan con eva'}
+          {'// lo que tienes desde el primer día'}
         </div>
         <h2
           style={{
@@ -152,26 +144,12 @@ export default function CoachesProof() {
           gap: '16px',
         }}
       >
-        {TESTIMONIALS.map((t) => (
-          <figure key={t.initials} style={figureStyle}>
-            <blockquote style={quoteStyle}>{t.quote}</blockquote>
-            <figcaption
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '11px',
-                marginTop: 'auto',
-              }}
-            >
-              <span style={avatarStyle}>{t.initials}</span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                <span style={{ fontWeight: 600, fontSize: '13.5px', color: '#F8F9FA' }}>
-                  {t.name}
-                </span>
-                <span style={roleStyle}>{t.role}</span>
-              </span>
-            </figcaption>
-          </figure>
+        {facts.map((fact) => (
+          <div key={fact.kicker} style={cardStyle}>
+            <span style={kickerStyle}>{fact.kicker}</span>
+            <span style={statStyle}>{fact.stat}</span>
+            <p style={bodyStyle}>{fact.body}</p>
+          </div>
         ))}
       </div>
     </section>

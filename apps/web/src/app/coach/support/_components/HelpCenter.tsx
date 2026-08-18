@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { getTierMaxClients } from '@eva/tiers'
 import { Card } from '@/components/ui/card'
 import { BookOpen, ChevronDown, Search } from 'lucide-react'
 
@@ -141,7 +142,9 @@ const FAQS: Faq[] = [
     },
     {
         q: '¿Necesito tarjeta para el plan gratis?',
-        a: 'No. El plan gratuito no requiere tarjeta e incluye hasta 3 alumnos.',
+        // Derivado del catálogo (QA pre-campaña 17-08). Nota: un coach anterior al corte del 18-08
+        // conserva su cupo viejo por grandfather, pero el copy genérico describe el plan VIGENTE.
+        a: `No. El plan gratuito no requiere tarjeta e incluye hasta ${getTierMaxClients('free')} alumnos.`,
     },
     {
         q: '¿Cómo contacto a soporte?',

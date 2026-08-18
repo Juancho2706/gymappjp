@@ -1,14 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { NextResponse, type NextRequest } from 'next/server'
-import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
-import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
+import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const token_hash = searchParams.get('token_hash')
-    const type = searchParams.get('type') as 'email' | 'recovery' | null
+    // `magiclink`: lo emite el REENVÍO de confirmación (QA pre-campaña 17-08 — para un usuario ya
+    // creado GoTrue rechaza `invite` y `signup`, así que el reenvío firma magiclink; verificarlo
+    // confirma el email igual, y la rama de activación de abajo hace el resto).
+    const type = searchParams.get('type') as 'email' | 'recovery' | 'magiclink' | null
 
     if (!token_hash || !type) {
         return NextResponse.redirect(`${origin}/login?error=invalid_confirmation_link`)
@@ -43,21 +44,14 @@ export async function GET(request: NextRequest) {
             .update({ subscription_status: 'active' })
             .eq('id', coach.id)
 
-        // Fire welcome + drip emails now that email is confirmed
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? origin
-        const { subject, html } = buildFreeCoachWelcomeEmail({
-            coachName: coach.full_name ?? '',
-            brandName: coach.brand_name ?? '',
-            dashboardUrl: `${appUrl}/coach/dashboard`,
-            clientsUrl: `${appUrl}/coach/clients`,
-            subscriptionUrl: `${appUrl}/coach/subscription`,
-        })
-        sendTransactionalEmail({ to: data.user.email!, subject, html }).catch(() => null)
-        scheduleFreeCoachDripSequence({
+        // Fire welcome + drip now that email is confirmed. Helper compartido con el alta por
+        // Google (`completeOAuthOnboarding`), que nace `active` y nunca pasa por acá.
+        sendFreeCoachOnboardingEmails({
             email: data.user.email!,
             coachName: coach.full_name ?? '',
             brandName: coach.brand_name ?? '',
-        }).catch(() => null)
+            appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? origin,
+        })
 
         return NextResponse.redirect(`${origin}/coach/dashboard?welcome=free`)
     }

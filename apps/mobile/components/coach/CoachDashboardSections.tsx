@@ -144,7 +144,9 @@ function CardGlass({ tone }: { tone?: string }) {
 
 export function MobileBillingBanners({ coach }: { coach: CoachProfile; activeClientCount: number }) {
   const router = useRouter()
-  const nowMs = Date.now()
+  // Snapshot por montaje (react-hooks/purity prohíbe Date.now() en el cuerpo del render). Para
+  // comparar contra el fin de un período de facturación, la foto del montaje alcanza de sobra.
+  const [nowMs] = useState(() => Date.now())
   const currentPeriodEndMs = coach.currentPeriodEnd ? new Date(coach.currentPeriodEnd).getTime() : null
   const trialEndsAtMs = coach.trialEndsAt ? new Date(coach.trialEndsAt).getTime() : null
   const canceledGrace =
@@ -514,7 +516,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             PRIMEROS PASOS
           </Text>
-          <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
+          <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle={`Hasta ${TIER_CONFIG.free.maxClients} alumnos en el plan Free`} />
           <WelcomeStep icon={Zap} color={ember700} backgroundColor={ember100} title="Crea tu primera rutina" subtitle="Constructor de programas sin límites" />
           <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu marca" subtitle="Logo y colores propios · no incluido en tu plan" />
         </View>
@@ -525,7 +527,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           </Text>
           <View style={styles.freePlanGrid}>
             {[
-              { ok: true, text: '3 alumnos activos' },
+              { ok: true, text: `${TIER_CONFIG.free.maxClients} alumnos activos` },
               { ok: true, text: 'Entrenos ilimitados' },
               { ok: true, text: 'App para tus alumnos' },
               { ok: true, text: 'Check-ins' },
@@ -930,7 +932,7 @@ export function MobileOnboardingChecklist({
 function MobileOnboardingFreePlan() {
   const { theme } = useTheme()
   const items = [
-    { ok: true, text: '3 alumnos activos' },
+    { ok: true, text: `${TIER_CONFIG.free.maxClients} alumnos activos` },
     { ok: true, text: 'Entrenos ilimitados' },
     { ok: true, text: 'App para tus alumnos' },
     { ok: true, text: 'Check-ins' },
@@ -3016,7 +3018,10 @@ export function MobileNovedades({
         ? 'Aún no marcas check-ins como revisados.'
         : 'Sin novedades por ahora.'
 
-  let rowIndex = -1
+  // Índice de fila derivado, no un contador mutado en render: `react-hooks/immutability` prohíbe
+  // reasignar durante el render y el único uso es ocultar el separador de la PRIMERA fila, con
+  // las dos listas concatenadas (programas primero, actividades después).
+  const programRowCount = showPrograms ? expiringPrograms.length : 0
   function Divider({ index }: { index: number }) {
     if (index <= 0) return null
     return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
@@ -3055,8 +3060,7 @@ export function MobileNovedades({
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
           {showPrograms
-            ? expiringPrograms.map((it) => {
-                rowIndex += 1
+            ? expiringPrograms.map((it, rowIndex) => {
                 const expired = it.daysLeft <= 0
                 const urgent = expired || it.daysLeft <= 2
                 const progDark = resolvedScheme === 'dark'
@@ -3103,8 +3107,8 @@ export function MobileNovedades({
                 )
               })
             : null}
-          {shownActivities.map((it) => {
-            rowIndex += 1
+          {shownActivities.map((it, activityIndex) => {
+            const rowIndex = programRowCount + activityIndex
             const [toneBg, toneFg] = activityTone(it.type, resolvedScheme)
             const isCheckin = it.type === 'check-in'
             const reviewed = activityReviewed(it)

@@ -19,12 +19,17 @@ function appBaseUrl() {
 async function deliverConfirmationLink(input: {
     email: string
     coachName: string
-    linkType: 'signup' | 'invite'
+    linkType: 'signup' | 'magiclink'
     password?: string
 }): Promise<SendCoachEmailConfirmationResult> {
     const admin = createServiceRoleClient()
     const appUrl = appBaseUrl()
 
+    // El REENVÍO usa `magiclink`, no `invite`: GoTrue rechaza `invite` (y `signup`) para un
+    // usuario que ya existe, que es exactamente el caso del reenvío — el alta ya corrió y solo
+    // falta confirmar. Verificar un magiclink confirma el email igual, y `/auth/confirm` activa
+    // al coach `pending_email` en su rama de siempre. (QA pre-campaña 17-08: el camino viejo con
+    // `invite` habría fallado en el primer uso real.)
     const { data, error } =
         input.linkType === 'signup'
             ? await admin.auth.admin.generateLink({
@@ -34,7 +39,7 @@ async function deliverConfirmationLink(input: {
                   options: { redirectTo: `${appUrl}/auth/confirm` },
               })
             : await admin.auth.admin.generateLink({
-                  type: 'invite',
+                  type: 'magiclink',
                   email: input.email,
                   options: { redirectTo: `${appUrl}/auth/confirm` },
               })
@@ -49,7 +54,7 @@ async function deliverConfirmationLink(input: {
         return { ok: false, error: 'No se pudo generar el enlace de confirmación.' }
     }
 
-    const otpType = input.linkType === 'signup' ? 'email' : 'invite'
+    const otpType = input.linkType === 'signup' ? 'email' : 'magiclink'
     const confirmUrl = `${appUrl}/auth/confirm?token_hash=${encodeURIComponent(hashedToken)}&type=${otpType}`
     const { subject, html } = buildCoachEmailConfirmationEmail({
         coachName: input.coachName,
@@ -87,6 +92,6 @@ export async function resendCoachSignupConfirmationEmail(
     return deliverConfirmationLink({
         email: input.email,
         coachName: input.coachName,
-        linkType: 'invite',
+        linkType: 'magiclink',
     })
 }

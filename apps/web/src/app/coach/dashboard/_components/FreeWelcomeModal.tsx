@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Sparkles, Users, Palette, Zap, CheckCircle2, XCircle } from 'lucide-react'
+import { getTierMaxClients } from '@eva/tiers'
+import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
 import Link from 'next/link'
 
 const STORAGE_KEY = 'eva_free_welcome_seen'
@@ -26,15 +28,25 @@ export function FreeWelcomeModal() {
             localStorage.setItem(STORAGE_KEY, '1')
         }
         setOpen(false)
-        // Remove ?welcome=free from URL without push to history
+        // Remove ?welcome=free (y el eid del espejo de Meta) from URL without push to history
         const params = new URLSearchParams(searchParams.toString())
         params.delete('welcome')
+        params.delete('eid')
         const next = params.size > 0 ? `${pathname}?${params.toString()}` : pathname
         router.replace(next)
     }
 
+    // Espejo browser del CompleteRegistration del alta por Google: el server action ya lo mandó
+    // por CAPI con este mismo `eid`, y Meta funde ambos en UNA conversión (dedupe por
+    // event_name + event_id). El camino por email tiene su espejo en /verify-email; este es el
+    // equivalente del camino Google, cuyo destino es directamente el dashboard.
+    const metaEventId = searchParams.get('welcome') === 'free' ? searchParams.get('eid') : null
+
     return (
         <Dialog open={open} onOpenChange={(v) => !v && dismiss()}>
+            {metaEventId ? (
+                <MetaTrackEvent event="CompleteRegistration" eventId={metaEventId} />
+            ) : null}
             <DialogContent className="bg-surface-card border border-subtle text-body max-w-sm rounded-card shadow-2xl p-0 overflow-hidden">
                 {/* Header gradient */}
                 <div className="bg-gradient-to-br from-[var(--sport-100)] to-transparent border-b border-subtle px-6 pt-8 pb-6 text-center">
@@ -57,7 +69,7 @@ export function FreeWelcomeModal() {
                             </div>
                             <div>
                                 <p className="text-sm font-semibold text-strong">Agrega tu primer alumno</p>
-                                <p className="text-xs text-muted">Hasta 3 alumnos en el plan Free</p>
+                                <p className="text-xs text-muted">Hasta {getTierMaxClients('free')} alumnos en el plan Free</p>
                             </div>
                         </li>
                         <li className="flex items-start gap-3">
@@ -86,7 +98,7 @@ export function FreeWelcomeModal() {
                     <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-2.5">Tu plan Free incluye</p>
                     <div className="grid grid-cols-2 gap-1.5 text-xs">
                         {[
-                            { ok: true,  text: '3 alumnos activos' },
+                            { ok: true,  text: `${getTierMaxClients('free')} alumnos activos` },
                             { ok: true,  text: 'Entrenos ilimitados' },
                             { ok: true,  text: 'App para tus alumnos' },
                             { ok: true,  text: 'Check-ins' },

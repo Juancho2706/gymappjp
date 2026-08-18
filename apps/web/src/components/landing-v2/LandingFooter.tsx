@@ -96,7 +96,10 @@ export function LandingFooter() {
           letterSpacing: '0.08em',
         }}
       >
-        {'// hecho en chile · pwa instalable · sin tracking de terceros'}
+        {/* «sin tracking de terceros» era falso desde que el Meta Pixel quedó activo (17-08):
+            declaración engañosa en la página de destino de la campaña, y contradecía al propio
+            banner de cookies dos píxeles más arriba. */}
+        {'// hecho en chile · pwa instalable · analítica solo con tu consentimiento'}
       </div>
     </footer>
   )

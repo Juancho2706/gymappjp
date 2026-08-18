@@ -146,7 +146,7 @@ export default async function LandingPage() {
                 <Hero />
                 <MarcaShowcase />
                 <ModulosSection exerciseCount={exerciseCount} />
-                <CoachesProof />
+                <CoachesProof exerciseCount={exerciseCount} />
                 <ModulosPro />
                 <PreciosSection exerciseCount={exerciseCount} />
                 <TeamsSection />
