@@ -106,3 +106,10 @@ LINKEDIN-EVA-PLAN.md
 
 # OS metadata
 .DS_Store
+
+# Variables de entorno: ignorar cualquier .env, MENOS los ejemplos versionados
+# (los tres `.env.example` ya están trackeados, pero sin la negación un `.env.example`
+# nuevo quedaría invisible para `git add` y nadie se enteraría).
+.env*
+!.env.example
+!**/.env.example
