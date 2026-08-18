@@ -218,6 +218,10 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<void
         if (!response.ok) {
             // Sin body loggeado: contiene el access_token.
             console.warn('[meta-capi] rechazado', input.eventName, response.status)
+        } else {
+            // Confirmacion positiva: es la UNICA forma de saber desde los logs que el evento
+            // server-side llego a Meta (el Events Manager tarda horas en reflejarlo).
+            console.info('[meta-capi] enviado', input.eventName, input.eventId)
         }
     } catch (error) {
         console.warn('[meta-capi] fallo de red', input.eventName, error)
@@ -233,7 +237,17 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<void
 export async function queueMetaCapiEvent(
     input: Omit<MetaCapiEventInput, 'context'>
 ): Promise<void> {
-    if (!isMetaCapiConfigured()) return
+    if (!isMetaCapiConfigured()) {
+        // Sin este log el no-op es INDISTINGUIBLE de un envio exitoso (18-08-2026: dos horas
+        // perdidas sin poder decidir si el token estaba cargado o no). Solo dice QUE falta, nunca
+        // el valor.
+        console.warn(
+            '[meta-capi] no configurado — falta',
+            readPixelId() ? 'META_CAPI_TOKEN' : 'NEXT_PUBLIC_FB_PIXEL_ID',
+            input.eventName
+        )
+        return
+    }
 
     const context = await collectMetaCapiContext()
     const payload: MetaCapiEventInput = { ...input, context }
