@@ -20,7 +20,6 @@
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { cookies, headers } from 'next/headers'
-import { after } from 'next/server'
 
 const GRAPH_API_VERSION = 'v21.0'
 const GRAPH_API_HOST = 'https://graph.facebook.com'
@@ -221,7 +220,7 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<void
         } else {
             // Confirmacion positiva: es la UNICA forma de saber desde los logs que el evento
             // server-side llego a Meta (el Events Manager tarda horas en reflejarlo).
-            console.info('[meta-capi] enviado', input.eventName, input.eventId)
+            console.warn('[meta-capi] enviado', input.eventName, input.eventId)
         }
     } catch (error) {
         console.warn('[meta-capi] fallo de red', input.eventName, error)
@@ -229,10 +228,15 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<void
 }
 
 /**
- * Fire-and-forget: recolecta el contexto del request AHORA y difiere el POST con `after()` de Next,
- * que corre despues de enviar la respuesta. El usuario nunca espera a Meta.
+ * Recolecta el contexto del request y hace el POST a Meta.
  *
- * `after()` solo existe dentro de un request scope; fuera de el se cae al POST directo sin await.
+ * 🔴 POR QUE ESTO **NO** USA `after()` (18-08-2026, verificado en produccion): el registro free
+ * termina en `redirect()`, y en ese camino el callback de `after()` NUNCA se ejecuto — ni el log de
+ * exito ni el de rechazo aparecieron en Vercel, con el token bien cargado y el `POST /register`
+ * respondiendo 200. Resultado: CERO eventos server-side en Events Manager mientras todo "parecia"
+ * bien. Se cambio por un `await` directo: cuesta ~200-400 ms sobre una accion que ya espera al
+ * proveedor de email, y a cambio el evento SALE. `sendMetaCapiEvent` nunca lanza, asi que esperarlo
+ * no puede romper el registro.
  */
 export async function queueMetaCapiEvent(
     input: Omit<MetaCapiEventInput, 'context'>
@@ -252,11 +256,5 @@ export async function queueMetaCapiEvent(
     const context = await collectMetaCapiContext()
     const payload: MetaCapiEventInput = { ...input, context }
 
-    try {
-        after(() => {
-            void sendMetaCapiEvent(payload)
-        })
-    } catch {
-        void sendMetaCapiEvent(payload)
-    }
+    await sendMetaCapiEvent(payload)
 }
