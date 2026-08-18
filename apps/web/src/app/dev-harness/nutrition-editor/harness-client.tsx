@@ -381,6 +381,43 @@ const HARNESS_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = [
   },
 ]
 
+/**
+ * Catalogo VIGENTE de los alimentos SUSTITUTOS (macros por 100 g). Es lo que en produccion
+ * resuelve `fetchBuilderFoodsByIds` desde la page: sin el, la fila del reemplazo no puede
+ * mostrar la cantidad equivalente que ve el alumno («≈ 130 g») y el harness no reproduce el
+ * caso real. Display-only: nada de esto viaja al draft.
+ */
+const HARNESS_SUBSTITUTION_FOODS: Record<string, BuilderFood> = {
+  '88888888-8888-4888-8888-000000000009': {
+    id: '88888888-8888-4888-8888-000000000009',
+    name: 'Avena instantánea',
+    brand: 'Quaker',
+    calories: 370,
+    proteinG: 12.4,
+    carbsG: 68.5,
+    fatsG: 6.6,
+    fiberG: 8.1,
+    servingSize: 100,
+    servingUnit: 'g',
+    category: 'cereal',
+    media: null,
+  },
+  '88888888-8888-4888-8888-00000000000a': {
+    id: '88888888-8888-4888-8888-00000000000a',
+    name: 'Atún en agua',
+    brand: 'Robinson Crusoe',
+    calories: 108,
+    proteinG: 23.3,
+    carbsG: 0,
+    fatsG: 1.2,
+    fiberG: null,
+    servingSize: 100,
+    servingUnit: 'g',
+    category: 'proteina',
+    media: null,
+  },
+}
+
 /** Read model SIN plan vigente: el modo creacion no depende de el (solo timezone/planId null). */
 function buildEmptyPlanModel(): NutritionPlanReadModel {
   return { ...buildPlanModel(), plan: null, dayVariants: [], visibleNotes: null }
@@ -620,6 +657,7 @@ export function EditorHarness({
           clientName={isTemplate ? '' : 'Alumno Harness'}
           planModel={isCreate || isTemplate ? buildEmptyPlanModel() : buildPlanModel()}
           itemSubstitutions={isCreate || isTemplate ? [] : HARNESS_SUBSTITUTIONS}
+          foodsById={isCreate || isTemplate ? undefined : HARNESS_SUBSTITUTION_FOODS}
           substitutionsLoadFailed={false}
           today={LOCAL_DATE}
           hasNutritionPro={false}

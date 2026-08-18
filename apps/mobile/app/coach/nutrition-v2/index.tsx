@@ -14,7 +14,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { FlashList } from '@shopify/flash-list'
+import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import {
   Apple,
   ArrowLeft,
@@ -43,10 +43,12 @@ import {
 import {
   TourHelpButton,
   TourOverlay,
+  TourScrollHostBinder,
   TourTarget,
   TourTargetsProvider,
   tourSteps,
   useTourController,
+  type TourScrollHost,
 } from '../../../components/nutrition-v2/tour'
 import { Button, Sheet } from '../../../components'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
@@ -191,6 +193,13 @@ export default function CoachNutritionV2Screen() {
   const [pickerTemplates, setPickerTemplates] = useState<NutritionV2PlanTemplateListItem[] | null>(null)
   const [pickerTemplatesLoading, setPickerTemplatesLoading] = useState(false)
   const [pickerTemplatesError, setPickerTemplatesError] = useState<string | null>(null)
+  /**
+   * Origen SEMBRADO al abrir el picker (paridad con el «Aplicar» de la web,
+   * `PlanTemplatesLibrary.tsx:320`): el botón de la fila de la pestaña "Plantillas" no manda al coach
+   * a buscar la plantilla de nuevo dentro del sheet — la deja ya elegida y el sheet arranca pidiendo
+   * el alumno. `null` = apertura normal por el «+», que debe caer en "Desde cero".
+   */
+  const [pickerSeedSource, setPickerSeedSource] = useState<{ id: string; name: string } | null>(null)
   // Pila de cursores ancestros: cursors[i] es el cursor con que se cargo la pagina i (null = primera).
   const cursorsRef = useRef<Array<HubCursor | null>>([null])
   // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
@@ -369,6 +378,30 @@ export default function CoachNutritionV2Screen() {
   }, [loadPickerRoster])
 
   /**
+   * ÚNICA salida del picker. El origen sembrado se limpia acá y no en cada call site: si sobreviviera
+   * al cierre, el próximo «+» abriría pegado a la plantilla anterior y "Desde cero" —el camino
+   * mayoritario— quedaría inalcanzable sin tocar "Cambiar el origen".
+   */
+  const closePicker = useCallback(() => {
+    setPickerOpen(false)
+    setPickerSeedSource(null)
+  }, [])
+
+  /**
+   * «Aplicar» de la fila de plantillas (paridad web `PlanTemplatesLibrary.tsx:320` + su `apply()` de
+   * :463). Reusa el sheet que ya está montado acá: se siembra el origen y se abre por `openPicker`,
+   * NO por `setPickerOpen(true)` — el picker sin su carga perezosa cae al roster de la página visible
+   * y el coach no vería a los alumnos de las páginas siguientes.
+   */
+  const applyTemplate = useCallback(
+    (template: NutritionV2PlanTemplateListItem) => {
+      setPickerSeedSource({ id: template.id, name: template.name })
+      openPicker()
+    },
+    [openPicker],
+  )
+
+  /**
    * Alumno elegido en el picker. Con ORIGEN (plantilla) se navega a la MISMA ruta del builder con
    * `?from=template:<id>` (AD-3): no hay un segundo camino de creación que pueda divergir del
    * wizard normal.
@@ -379,13 +412,13 @@ export default function CoachNutritionV2Screen() {
    */
   const choosePickerClient = useCallback(
     (clientId: string, planId: string | null, origin: string | null) => {
-      setPickerOpen(false)
+      closePicker()
       // CORTE RN (T3.3b): el `+` entra por el EDITOR UNICO, con la MISMA puerta `?from=` que la
       // web. El `planId` ya no viaja: el editor lee la ficha del alumno y resuelve solo si hay
       // plan vigente (y con el, el CAS del reemplazo) — imposible crear una segunda raiz.
       router.push(nutritionV2EditorHref(clientId, { from: origin }))
     },
-    [router],
+    [closePicker, router],
   )
 
   /**
@@ -394,10 +427,10 @@ export default function CoachNutritionV2Screen() {
    */
   const editTemplate = useCallback(
     (templateId: string | null) => {
-      setPickerOpen(false)
+      closePicker()
       router.push(nutritionV2TemplateEditorHref(templateId))
     },
-    [router],
+    [closePicker, router],
   )
 
   const metrics = useMemo(
@@ -457,6 +490,24 @@ export default function CoachNutritionV2Screen() {
   // que se traslada hasta -alto-del-titulo y ahi se detiene (clamp). Las listas solo aportan
   // `onScroll` + `paddingTop` y pasan POR DETRAS del overlay, que es opaco a proposito.
   const scrollY = useRef(new Animated.Value(0)).current
+  /**
+   * Host de scroll de la Guía Viva (QA owner 17-08). El editor ya lo registraba (`QuickEditMode`) y
+   * el hub NO, así que `ensureTargetVisible` era no-op justo acá: los pasos que iluminan una fila del
+   * roster medían un target bajo el pliegue y el clamp del hueco lo pegaba al borde, encima de otro
+   * componente. El offset vivo va por `ref` (lo escribe `onBodyScroll`, que ya corre en cada frame de
+   * scroll) para no re-renderizar el roster; `scrollToOffset` de FlashList v2 trata `offset` como
+   * posición ABSOLUTA con su `skipFirstItemOffset` por defecto, que es la misma escala que
+   * `contentOffset.y`. Sin animación: el overlay vuelve a medir dos frames después.
+   */
+  const rosterListRef = useRef<FlashListRef<NutritionCoachHubItem>>(null)
+  const tourScrollOffsetYRef = useRef(0)
+  const tourScrollHost = useMemo<TourScrollHost>(
+    () => ({
+      scrollTo: (y: number) => rosterListRef.current?.scrollToOffset({ offset: y, animated: false }),
+      getOffsetY: () => tourScrollOffsetYRef.current,
+    }),
+    [],
+  )
   // Alto TOTAL del overlay (titulo + tabs) = paddingTop de las 3 listas.
   const [chromeHeight, setChromeHeight] = useState(HUB_CHROME_FALLBACK_HEIGHT)
   // Alto del bloque de titulo SOLO = recorrido del colapso.
@@ -487,6 +538,7 @@ export default function CoachNutritionV2Screen() {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = event.nativeEvent.contentOffset.y
       scrollY.setValue(y)
+      tourScrollOffsetYRef.current = y
       reportCoachTabbarScroll(y)
     },
     [scrollY],
@@ -495,6 +547,7 @@ export default function CoachNutritionV2Screen() {
   // lista que esta en el tope y el titulo desaparece sin forma de recuperarlo.
   useEffect(() => {
     scrollY.setValue(0)
+    tourScrollOffsetYRef.current = 0
     resetCoachTabbarScroll()
   }, [activeTab, scrollY])
 
@@ -530,6 +583,10 @@ export default function CoachNutritionV2Screen() {
     // Guía Viva: el provider es puro contexto (no renderiza vistas) — envolver la pantalla con él
     // no puede mover un píxel. Tiene que quedar por encima de los targets Y del overlay.
     <TourTargetsProvider>
+    {/* El cuerpo del hub vive FUERA del provider (lo renderiza este mismo componente), así que sus
+        hooks no ven el contexto: el host se registra desde un hijo, igual que en `QuickEditMode`.
+        No pinta nada. */}
+    <TourScrollHostBinder host={tourScrollHost} />
     <View className="flex-1 bg-surface-app">
       {/* Franja de safe-area SOLIDA y en flujo: el overlay de abajo es `absolute` dentro de un
           contenedor sin padding (`top: 0` sin ambigüedad de Yoga) y ninguna lista puede quedar
@@ -543,13 +600,20 @@ export default function CoachNutritionV2Screen() {
           en Android sin depender solo de `zIndex`. */}
       <View className="flex-1">
         {activeTab === 'templates' ? (
-          <HubTemplatesTab scope={scope} chromeHeight={chromeHeight} onScroll={onBodyScroll} />
+          <HubTemplatesTab
+            scope={scope}
+            chromeHeight={chromeHeight}
+            onScroll={onBodyScroll}
+            onApply={applyTemplate}
+          />
         ) : activeTab === 'foods' ? (
           <CoachNutritionCatalogScreen embedded chromeHeight={chromeHeight} onScroll={onBodyScroll} />
         ) : activeTab === 'curation' ? (
           <CurationQueueScreen embedded chromeHeight={chromeHeight} onScroll={onBodyScroll} />
         ) : (
       <FlashList
+        // Guía Viva: sin `ref` no hay host de scroll y el overlay no podía traer el target al viewport.
+        ref={rosterListRef}
         data={visibleItems}
         keyExtractor={(item) => item.clientId}
         onScroll={onBodyScroll}
@@ -838,7 +902,8 @@ export default function CoachNutritionV2Screen() {
 
       <NewPlanPickerSheet
         open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
+        onClose={closePicker}
+        seedSource={pickerSeedSource}
         search={pickerSearch}
         onSearch={setPickerSearch}
         roster={effectivePickerRoster}
@@ -909,9 +974,14 @@ function Metric({ label, value }: { label: string; value: number }) {
  * Cuerpo de la pestaña "Plantillas" (paridad con la web, QA T3.v).
  *
  * Es la biblioteca del coach — la MISMA lista que el sheet "Nuevo plan → Reutilizar", vía el
- * componente compartido `PlanTemplateList` — con el verbo cambiado: aca cada fila ABRE la
- * plantilla en el editor único, y el CTA de cabecera crea una nueva. Nada de esto existía sin
- * pasar antes por el sheet.
+ * componente compartido `PlanTemplateList` — y el CTA de cabecera crea una nueva. Nada de esto
+ * existía sin pasar antes por el sheet.
+ *
+ * VERBOS DE LA FILA (paridad web `PlanTemplatesLibrary.tsx:320`): el primario es APLICAR, no editar.
+ * Tocar una plantilla la abría en el editor, así que la acción por la que existe una biblioteca
+ * —ponerle ese plan a un alumno— vivía escondida detrás de cuatro toques («+» → "Reutilizar" →
+ * plantilla → alumno) y el «+» encima se iba con el scroll. Editar el contenido queda en el lápiz,
+ * que es su lugar en la web.
  *
  * Estado PROPIO (no el del picker) para que entrar a la pestaña no arrastre ni pise la carga
  * perezosa del sheet. Se monta al activarse la pestaña (conmutación inline del hub), así que
@@ -924,10 +994,13 @@ function HubTemplatesTab({
   scope,
   chromeHeight,
   onScroll,
+  onApply,
 }: {
   scope: NutritionV2CoachScope
   chromeHeight: number
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  /** Verbo primario de la fila: siembra el origen y abre el picker de alumno del hub. */
+  onApply: (template: NutritionV2PlanTemplateListItem) => void
 }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -993,8 +1066,9 @@ function HubTemplatesTab({
       }}
     >
       <View className="gap-3 pb-5 pt-2">
+        {/* Copy de la web, verbatim: ya no manda a otra superficie porque «Aplicar» está en la fila. */}
         <Text className="text-sm text-muted">
-          Arma un plan reutilizable y aplícalo a cualquier alumno desde «Nuevo plan → Reutilizar».
+          Arma un plan reutilizable y aplícalo a cualquier alumno con el botón «Aplicar» de su fila.
         </Text>
         <View className="flex-row">{newTemplateCta}</View>
         <PlanTemplateList
@@ -1005,8 +1079,10 @@ function HubTemplatesTab({
             setLoading(true)
             void load()
           }}
-          onOpen={(template) => router.push(nutritionV2TemplateEditorHref(template.id))}
-          openAccessibilityLabel={(name) => `Abrir la plantilla ${name} en el editor`}
+          onOpen={onApply}
+          openAccessibilityLabel={(name) => `Aplicar la plantilla ${name} a un alumno`}
+          onEdit={(template) => router.push(nutritionV2TemplateEditorHref(template.id))}
+          editAccessibilityLabel={(name) => `Editar la plantilla ${name}`}
           showDescription
           emptyMessage="Todavía no tienes plantillas. Arma una desde cero y aplícala al alumno que quieras."
           emptyAction={newTemplateCta}
@@ -1138,6 +1214,7 @@ function HubSortSheet({
 function NewPlanPickerSheet({
   open,
   onClose,
+  seedSource,
   search,
   onSearch,
   roster,
@@ -1152,6 +1229,11 @@ function NewPlanPickerSheet({
 }: {
   open: boolean
   onClose: () => void
+  /**
+   * Origen ya elegido por quien abre (el «Aplicar» de la pestaña "Plantillas"). Con valor, el sheet
+   * arranca en "Reutilizar" y directo en el paso del alumno. `null` = apertura por el «+».
+   */
+  seedSource: { id: string; name: string } | null
   search: string
   onSearch: (value: string) => void
   roster: PickerEntry[]
@@ -1174,20 +1256,24 @@ function NewPlanPickerSheet({
   const [source, setSource] = useState<{ id: string; name: string } | null>(null)
   const filtered = useMemo(() => filterNutritionPickerEntries(roster, search), [roster, search])
 
-  // Cada apertura empieza en "Desde cero" y sin origen: reabrir el sheet nunca hereda la intención
-  // de la vez anterior (mismo criterio que `onOpenChange` del modal web).
+  // Cada apertura arranca desde la INTENCIÓN de quien abrió y nunca hereda la de la vez anterior
+  // (mismo criterio que `onOpenChange` del modal web): el «+» cae en "Desde cero", y el «Aplicar» de
+  // una fila de plantilla llega con el origen sembrado, así que abre en "Reutilizar" y ya en el paso
+  // del alumno. El padre limpia la semilla al cerrar, que es lo que hace que el «+» siguiente vuelva
+  // a "Desde cero"; acá `seedSource` solo se lee cuando el sheet está abierto.
   useEffect(() => {
-    if (open) {
-      setTab('scratch')
-      setSource(null)
-    }
-  }, [open])
+    if (!open) return
+    setTab(seedSource ? 'reuse' : 'scratch')
+    setSource(seedSource)
+  }, [open, seedSource])
 
-  // Las plantillas se cargan al ENTRAR a "Reutilizar", no al abrir el sheet.
+  // Las plantillas se cargan al ENTRAR a "Reutilizar" SIN origen, no al abrir el sheet: quien llega
+  // con la plantilla ya elegida ve el roster, no la biblioteca, y no paga una consulta que no mira.
+  // Si vuelve con "Cambiar el origen" (`source` a null) el efecto corre ahí.
   useEffect(() => {
-    if (!open || tab !== 'reuse' || templates !== null || templatesLoading) return
+    if (!open || tab !== 'reuse' || source !== null || templates !== null || templatesLoading) return
     onLoadTemplates()
-  }, [open, tab, templates, templatesLoading, onLoadTemplates])
+  }, [open, tab, source, templates, templatesLoading, onLoadTemplates])
 
   const description = source
     ? `Partirás de «${source.name}». Elige el alumno que recibe el plan.`

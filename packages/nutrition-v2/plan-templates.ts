@@ -213,7 +213,15 @@ export function formatPlanBuilderOrigin(origin: Exclude<PlanBuilderOrigin, null>
 /** Forma minima que necesita `collectTemplateFoodIds` (draft de plantilla o de plan). */
 interface TemplateDraftLike {
   dayVariants?: Array<{
-    mealSlots?: Array<{ items?: Array<{ foodId?: string | null }> }>
+    mealSlots?: Array<{
+      items?: Array<{
+        foodId?: string | null
+        // Los reemplazos tambien referencian alimentos del catalogo: sin sus ids, la fila del
+        // reemplazo no puede resolver macros vigentes y se queda sin la equivalencia que ve el
+        // alumno (QA del dueno 2026-08-18).
+        substitutions?: Array<{ foodId?: string | null }>
+      }>
+    }>
   }>
 }
 
@@ -228,6 +236,9 @@ export function collectTemplateFoodIds(draft: TemplateDraftLike): string[] {
     for (const slot of variant.mealSlots ?? []) {
       for (const item of slot.items ?? []) {
         if (item.foodId) ids.add(item.foodId)
+        for (const sub of item.substitutions ?? []) {
+          if (sub.foodId) ids.add(sub.foodId)
+        }
       }
     }
   }

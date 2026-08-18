@@ -10,7 +10,11 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
+import type {
+  BuilderFood,
+  NutritionItemSubstitutionRead,
+  NutritionPlanReadModel,
+} from '@eva/nutrition-v2'
 import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
 import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
 import { QuickEditProvider, type EditorCreationInput } from '../_quick-edit/QuickEditProvider'
@@ -25,6 +29,7 @@ export function EditorClient({
   clientName,
   planModel,
   itemSubstitutions,
+  substitutionFoodsById,
   substitutionsLoadFailed,
   today,
   hasNutritionPro,
@@ -39,6 +44,12 @@ export function EditorClient({
   clientName: string
   planModel: NutritionPlanReadModel
   itemSubstitutions: NutritionItemSubstitutionRead[]
+  /**
+   * Catalogo VIGENTE de los alimentos de esos reemplazos (resuelto server-side). Solo alimenta el
+   * display de la equivalencia («≈ 130 g») en la fila del reemplazo; ausente = la fila no pinta
+   * numero, jamas uno falso. No viaja al draft ni al contador de cambios.
+   */
+  substitutionFoodsById?: Record<string, BuilderFood>
   substitutionsLoadFailed: boolean
   today: string
   hasNutritionPro: boolean
@@ -89,6 +100,7 @@ export function EditorClient({
         clientName={clientName}
         planModel={planModel}
         itemSubstitutions={itemSubstitutions}
+        foodsById={substitutionFoodsById}
         substitutionsLoadFailed={substitutionsLoadFailed}
         today={today}
         hasNutritionPro={hasNutritionPro}

@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { EASE, useEvaMotion } from '../../../lib/motion'
 import { hasSeenTour, markTourSeen } from './tour-flags'
+import { computeTourHole, panesFor, type TourFrame } from './tour-geometry'
 import { useTourTargets, type TourRect } from './TourTargets'
 import { tourIconSource, type TourId, type TourStep } from './tours'
 
@@ -27,9 +28,11 @@ import { tourIconSource, type TourId, type TourStep } from './tours'
  *
  * Tres cosas se resuelven distinto que en web, y ninguna es estética:
  *
- * - **La UI de abajo queda inerte GRATIS.** En web hay que poner `pointer-events` en los paños y en
- *   el halo para que el coach no dispare una acción real en medio del tour; acá el `Modal` vive en
- *   su propia ventana del sistema y nada de lo que hay detrás recibe toques.
+ * - **La UI de abajo NO queda inerte gratis.** Mientras el overlay fue `Modal` la ventana propia lo
+ *   regalaba; desde que es un hermano en la misma ventana hay que reclamar los toques a mano, igual
+ *   que el `pointer-events-auto` de los paños y del halo en web (ver el responder de los paños más
+ *   abajo). Sin eso la escena sigue scrolleando DEBAJO del velo — y un target que se mueve después
+ *   de medido es exactamente cómo un recorte termina apuntando a lo que no es.
  * - **La tarjeta es SIEMPRE dock** (SPEC D3: «En <768 (web) y RN SIEMPRE variante dock»), así que no
  *   hay clamp+flip que calcular: anclada con `left`/`right`/`bottom` y con techo de alto, el
  *   invariante «tarjeta ⊆ viewport» se cumple por construcción y no por aritmética.
@@ -53,8 +56,26 @@ const TOUR_VEIL = 'rgba(0, 0, 0, 0.74)'
 const TOUR_HALO_RING = 'rgba(255, 255, 255, 0.85)'
 const TOUR_HALO_GLOW = 'rgba(255, 255, 255, 0.14)'
 
-/** Aire alrededor del target dentro del recorte (mismo valor que `TOUR_HOLE_PADDING` en web). */
-const HOLE_PADDING = 6
+/**
+ * Reclamo de toques del velo, tal cual el `pointer-events-auto` que web pone en los paños y en el
+ * halo (D5: «que el coach no dispare una acción real en medio del tour»).
+ *
+ * No alcanza con pintar encima. Una `View` sin handlers NO bloquea nada en Android: si ninguna vista
+ * de JS se hace responder del gesto, el `dispatchTouchEvent` sigue bajando por los hermanos y el
+ * ScrollView de la escena scrollea DEBAJO del tour. Eso es lo que reportó el dueño sin saberlo — la
+ * lista se movía con el tour abierto y el recorte, medido antes del movimiento, quedaba señalando
+ * otra cosa. Con `onStartShouldSetResponder` el paño toma el gesto y RN emite el `setJSResponder`
+ * que corta al nativo; `onResponderTerminationRequest` en `false` es la otra mitad, porque si no un
+ * ScrollView puede pedir el gesto a mitad del arrastre y recuperar el scroll.
+ *
+ * Va SOLO en los paños y en el halo, nunca en la raíz: en la raíz, ese mismo «no cedo el gesto»
+ * dejaría sin scroll al ScrollView interno de la tarjeta cuando el texto del paso no entra.
+ */
+const VEIL_TOUCH_BLOCKER = {
+  onStartShouldSetResponder: () => true,
+  onMoveShouldSetResponder: () => true,
+  onResponderTerminationRequest: () => false,
+} as const
 
 /** Margen mínimo de la tarjeta contra los bordes. Es el colchón que hace verdadero a D3. */
 const CARD_MARGIN = 12
@@ -72,82 +93,6 @@ export const TOUR_COPY = {
   help: 'Abrir la guía de esta pantalla',
   dialog: 'Guía de esta pantalla',
 } as const
-
-/* ------------------------------------------------------------------------------------------------
- * Geometría
- * ---------------------------------------------------------------------------------------------- */
-
-type Frame = {
-  /** Origen de la ventana del `Modal` en coordenadas de ventana de la app. */
-  readonly originX: number
-  readonly originY: number
-  readonly width: number
-  readonly height: number
-}
-
-/**
- * El target se mide en coordenadas de VENTANA y los paños se pintan dentro del overlay. Los dos
- * orígenes coinciden casi siempre (el `Modal` va `statusBarTranslucent`), pero «casi siempre» no es
- * una base para un invariante: se mide también el propio overlay y se resta. Así el recorte cae
- * sobre el elemento correcto aunque el sistema meta un offset (barra de estado opaca, ventana del
- * modal desplazada), sin un solo número mágico por plataforma.
- */
-function toOverlaySpace(target: TourRect, frame: Frame): TourRect {
-  return {
-    top: target.top - frame.originY,
-    left: target.left - frame.originX,
-    width: target.width,
-    height: target.height,
-  }
-}
-
-/**
- * Infla el target por `padding` y lo recorta al overlay: un target medio fuera de la pantalla no
- * saca el velo por el borde.
- *
- * `null` cuando el recorte queda degenerado — o sea, cuando el target está ENTERAMENTE fuera de
- * vista (la lista lo dejó arriba o abajo del scroll). Sin esta salida el halo se dibujaría como una
- * raya de 0 px pegada a un borde, que se lee como un artefacto y no como «este elemento no está a la
- * vista»; con ella, el paso degrada al mismo velo liso que un target inexistente.
- */
-function inflateAndClamp(target: TourRect, frame: Frame): TourRect | null {
-  const top = Math.max(0, target.top - HOLE_PADDING)
-  const left = Math.max(0, target.left - HOLE_PADDING)
-  const right = Math.min(frame.width, target.left + target.width + HOLE_PADDING)
-  const bottom = Math.min(frame.height, target.top + target.height + HOLE_PADDING)
-  const width = right - left
-  const height = bottom - top
-  return width > 0 && height > 0 ? { top, left, width, height } : null
-}
-
-/**
- * Los 4 paños. Su unión cubre el overlay entero menos el recorte. Sin hueco (target ausente o no
- * medible) el recorte queda en 0×0 arriba a la izquierda y el paño inferior crece hasta taparlo
- * todo: el paso se ve como un velo liso con la tarjeta abajo, que es el degradado correcto para un
- * elemento que esta pantalla no tiene.
- */
-function panesFor(hole: TourRect, frame: Frame): Record<'top' | 'bottom' | 'left' | 'right', TourRect> {
-  const holeRight = hole.left + hole.width
-  const holeBottom = hole.top + hole.height
-  return {
-    top: { top: 0, left: 0, width: frame.width, height: hole.top },
-    bottom: {
-      top: holeBottom,
-      left: 0,
-      width: frame.width,
-      height: Math.max(0, frame.height - holeBottom),
-    },
-    left: { top: hole.top, left: 0, width: hole.left, height: hole.height },
-    right: {
-      top: hole.top,
-      left: holeRight,
-      width: Math.max(0, frame.width - holeRight),
-      height: hole.height,
-    },
-  }
-}
-
-const EMPTY_HOLE: TourRect = { top: 0, left: 0, width: 0, height: 0 }
 
 /* ------------------------------------------------------------------------------------------------
  * TourOverlay
@@ -176,7 +121,7 @@ export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourO
   const targets = useTourTargets()
 
   const [index, setIndex] = useState(0)
-  const [frame, setFrame] = useState<Frame | null>(null)
+  const [frame, setFrame] = useState<TourFrame | null>(null)
   const [hole, setHole] = useState<TourRect | null>(null)
   // Alto medido de la tarjeta: lo necesita el flip de abajo (saber si taparía al target).
   const [cardHeight, setCardHeight] = useState(0)
@@ -220,6 +165,19 @@ export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourO
   }, [])
 
   /**
+   * Banda de chrome del sistema que cae DENTRO del overlay. Solo existe cuando el overlay llega
+   * hasta el borde de la ventana (`originY <= 0`): si la pantalla ya lo montó bajo una franja de
+   * safe area, su `y = 0` es contenido real y descontar ahí la barra de estado descartaría huecos
+   * legítimos. A diferencia de la tarjeta, este número NO lleva piso de 24 dp: acá decide si un
+   * recorte válido se tira a la basura, así que vale lo medido y nada más.
+   */
+  const systemTopBand = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
+  )
+  const holeSafeTop = frame !== null && frame.originY <= 0 ? systemTopBand : 0
+
+  /**
    * Entrada a un paso: medir el target y recortar el velo. Cambia con el paso y con el frame, así
    * que una rotación de pantalla (que re-dispara `onLayout`) vuelve a medir sola.
    */
@@ -233,28 +191,17 @@ export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourO
       if (cancelled) return
       const rect = await targets?.measureTarget(step.target)
       if (cancelled) return
-      if (!rect) {
-        setHole(null)
-        return
-      }
-      const overlayRect = toOverlaySpace(rect, frame)
-      // Si aun después del scroll el target sigue mayormente fuera del overlay (<40% visible),
-      // mejor velo liso con la tarjeta que un hueco clampado sobre lo que no es.
-      const visibleW =
-        Math.min(overlayRect.left + overlayRect.width, frame.width) - Math.max(overlayRect.left, 0)
-      const visibleH =
-        Math.min(overlayRect.top + overlayRect.height, frame.height) - Math.max(overlayRect.top, 0)
-      const visibleRatio =
-        overlayRect.width > 0 && overlayRect.height > 0
-          ? (Math.max(0, visibleW) * Math.max(0, visibleH)) / (overlayRect.width * overlayRect.height)
-          : 0
-      setHole(visibleRatio >= 0.4 ? inflateAndClamp(overlayRect, frame) : null)
+      // `computeTourHole` es la ÚNICA compuerta: o el hueco cae entero sobre el target, o devuelve
+      // `null` y el paso se pinta como velo liso. Reemplazó al ratio de «≥40% visible», que dejaba
+      // pasar targets a medio salir y los aplastaba contra el borde superior — el bug del Xiaomi,
+      // donde el recorte del paso 2 terminaba sobre la barra de estado (ver `tour-geometry.ts`).
+      setHole(rect ? computeTourHole(rect, frame, { safeTop: holeSafeTop }) : null)
     })()
     if (!targets) setHole(null)
     return () => {
       cancelled = true
     }
-  }, [active, step, frame, targets])
+  }, [active, step, frame, targets, holeSafeTop])
 
   // Back de Android = Saltar (D5: «el tour jamás bloquea la salida»). Antes lo daba gratis el
   // `onRequestClose` del Modal; sin Modal se escucha el hardware back mientras el tour está vivo.
@@ -276,8 +223,8 @@ export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourO
   // Sin Modal ya no hay `visible={active}`: el propio componente se desmonta del render.
   if (!active || !step) return null
 
-  const safeFrame: Frame = frame ?? { originX: 0, originY: 0, width: 0, height: 0 }
-  const panes = panesFor(hole ?? EMPTY_HOLE, safeFrame)
+  const safeFrame: TourFrame = frame ?? { originX: 0, originY: 0, width: 0, height: 0 }
+  const panes = panesFor(hole, safeFrame)
   const transition = { type: 'timing', duration: motion.duration('base'), easing: EASE.out } as const
 
   // QA del dueño 17-08 (Xiaomi, barra de gestos): la tarjeta se metía DEBAJO del reloj arriba y la
@@ -291,11 +238,7 @@ export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourO
   //
   // Arriba, `insets.top` llega en 0 en algunos OEM con edge-to-edge, y `insets.top + CARD_MARGIN`
   // dejaba la tarjeta pisando la hora. Se le pone piso con la altura real de la barra de estado.
-  const topSafe = Math.max(
-    insets.top,
-    Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
-    MIN_TOP_INSET,
-  )
+  const topSafe = Math.max(systemTopBand, MIN_TOP_INSET)
 
   // Techo de alto de la tarjeta (D3). Si el contenido no cabe, scrollea ADENTRO en vez de
   // desbordar: una tarjeta más alta que la pantalla no puede ser ⊆ viewport de ninguna otra forma.
@@ -330,8 +273,8 @@ export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourO
     <View
       ref={rootRef}
       collapsable={false}
-      // pointerEvents por defecto («auto»): el root reclama TODO toque que ningún hijo tome —
-      // incluido el hueco del recorte, que sin Modal quedaría tapeable sobre la UI real.
+      // La raíz solo posiciona: no reclama toques (ver `VEIL_TOUCH_BLOCKER`). Quien deja inerte a la
+      // escena son los paños y el halo, que juntos cubren el overlay entero — con o sin recorte.
       onLayout={(event) => handleRootLayout(event.nativeEvent.layout)}
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, elevation: 999 }}
     >
@@ -343,18 +286,21 @@ export function TourOverlay({ steps, active, onEnd, bottomClearance = 0 }: TourO
             transition={transition}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
+            {...VEIL_TOUCH_BLOCKER}
             style={{ position: 'absolute', backgroundColor: TOUR_VEIL }}
           />
         ))}
 
-        {/* Halo: el borde del recorte. Decorativo — acá no necesita bloquear toques (el Modal ya
-            los bloquea todos), a diferencia del halo web. */}
+        {/* Halo: el borde del recorte. Decorativo a la vista, pero reclama el gesto igual que el
+            halo web: el elemento iluminado se MUESTRA, no se usa — tocarlo dispararía una acción
+            real (abrir un alumno, publicar) en medio de la explicación. */}
         {hole ? (
           <MotiView
             animate={hole}
             transition={transition}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
+            {...VEIL_TOUCH_BLOCKER}
             style={{
               position: 'absolute',
               borderRadius: 14,

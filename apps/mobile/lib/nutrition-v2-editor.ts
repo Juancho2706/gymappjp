@@ -22,11 +22,17 @@ import {
   PLAN_NAME_MAX,
   buildSubstitutionMap,
   catalogToPortionGroups,
+  coachFoodOverrideValuesFromRow,
   draftToEditState,
   readModelToDraft,
   readModelToEditState,
+  resolveFoodMacros,
   withSyntheticDraftIds,
+  type BuilderFood,
+  type CoachFoodOverrideRow,
+  type CoachFoodOverrideValues,
   type NutritionItemSubstitutionRead,
+  type NutritionMacrosBasis,
   type NutritionPlanDraft,
   type NutritionPlanReadModel,
   type NutritionV2CoachScope,
@@ -76,6 +82,12 @@ export const TEMPLATE_MODE_CLIENT_ID = '00000000-0000-0000-0000-000000000000'
 export interface EditorSession {
   /** Reemplazos autorizados de la version base (o de la fuente copiada), forma read-model. */
   itemSubstitutions: NutritionItemSubstitutionRead[]
+  /**
+   * Catalogo VIGENTE de los alimentos de esos reemplazos, por `foodId`. Solo DISPLAY: alimenta la
+   * cantidad equivalente que el alumno va a ver («≈ 130 g») en la fila del reemplazo. Vacio =
+   * la fila no pinta numero (nunca uno falso) y nada mas: no bloquea el publish ni viaja al draft.
+   */
+  substitutionFoodsById: Record<string, BuilderFood>
   /** NUT-008: la lectura fallo. Publicar los borraria ⇒ la pantalla bloquea el publish. */
   substitutionsLoadFailed: boolean
   /** null = modo EDICION del plan vigente. */
@@ -152,6 +164,127 @@ async function loadPortionGroupsById(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Catalogo de los alimentos SUSTITUTOS (display de la equivalencia)
+// ---------------------------------------------------------------------------
+
+/** Fila del catalogo que necesita el display del reemplazo. Espejo del select de la web. */
+interface SubstitutionFoodRow {
+  id: string
+  name: string
+  brand: string | null
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fats_g: number
+  fiber_g: number | null
+  serving_size: number
+  serving_unit: string | null
+  category: string | null
+  macros_basis: string | null
+}
+
+const SUBSTITUTION_FOOD_SELECT =
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, category, macros_basis'
+
+/** Override del coach sobre el alimento (T2.1). La RLS `cfo_*` ya acota las filas al actor. */
+const SUBSTITUTION_OVERRIDE_SELECT =
+  'food_id, calories, protein_g, carbs_g, fats_g, fiber_g, macros_basis, household_label, household_grams'
+
+// `NutritionV2WriteClient` no expone `.in()` (su cadena de lectura solo tiene eq/order/limit):
+// misma tactica que la web con su server client — interfaz MINIMA tipada y un cast, en vez de
+// ensanchar el contrato de escritura por una lectura de display.
+interface FoodsInReadChain<T> extends PromiseLike<{ data: T[] | null; error: unknown }> {
+  in(column: string, values: readonly string[]): FoodsInReadChain<T>
+}
+interface SubstitutionFoodsDb {
+  from(table: 'foods'): { select(columns: string): FoodsInReadChain<SubstitutionFoodRow> }
+  from(table: 'coach_food_overrides'): {
+    select(columns: string): FoodsInReadChain<CoachFoodOverrideRow>
+  }
+}
+
+function toMacrosBasis(value: string | null | undefined): NutritionMacrosBasis | null {
+  return value === 'per_100' || value === 'per_serving' ? value : null
+}
+
+/**
+ * Alimentos VIGENTES (macros ya mergeadas con el override del coach) de los reemplazos leidos.
+ *
+ * Existe SOLO para el display: con este catalogo la fila del reemplazo muestra la cantidad
+ * equivalente que el alumno va a ver («≈ 130 g»); sin el, no muestra nada. Por eso es fail-soft
+ * absoluto —cualquier fallo devuelve `{}`— y jamas toca `substitutionsLoadFailed` (NUT-008),
+ * que es la lectura de los REEMPLAZOS y esa si bloquea el publish.
+ *
+ * Los `snapshot_*` congelados del read-model NO sirven de respaldo: darian la porcion del
+ * sustituto en vez de la equivalencia (decision documentada en `readSubstitutionToQe`).
+ */
+async function loadSubstitutionFoodsById(
+  db: NutritionV2WriteClient,
+  reads: readonly NutritionItemSubstitutionRead[],
+): Promise<Record<string, BuilderFood>> {
+  const ids = [...new Set(reads.map((read) => read.foodId).filter((id): id is string => Boolean(id)))]
+  if (ids.length === 0) return {}
+  try {
+    const reader = db as unknown as SubstitutionFoodsDb
+    const res = await reader.from('foods').select(SUBSTITUTION_FOOD_SELECT).in('id', ids)
+    if (res.error || !res.data) return {}
+
+    // Overrides en UNA lectura, fail-soft aparte: sin ellos el display cae al catalogo crudo,
+    // que es exactamente lo que ve un coach que no corrigio nada.
+    const overrides = new Map<string, CoachFoodOverrideValues>()
+    try {
+      const overridesRes = await reader
+        .from('coach_food_overrides')
+        .select(SUBSTITUTION_OVERRIDE_SELECT)
+        .in('food_id', ids)
+      if (!overridesRes.error) {
+        for (const row of overridesRes.data ?? []) {
+          overrides.set(row.food_id, coachFoodOverrideValuesFromRow(row))
+        }
+      }
+    } catch {
+      /* fail-soft */
+    }
+
+    const foods: Record<string, BuilderFood> = {}
+    for (const row of res.data) {
+      const macros = resolveFoodMacros(
+        {
+          calories: row.calories,
+          proteinG: row.protein_g,
+          carbsG: row.carbs_g,
+          fatsG: row.fats_g,
+          fiberG: row.fiber_g,
+          macrosBasis: toMacrosBasis(row.macros_basis),
+        },
+        overrides.get(row.id) ?? null,
+      )
+      foods[row.id] = {
+        id: row.id,
+        name: row.name,
+        brand: row.brand,
+        calories: macros.calories,
+        proteinG: macros.proteinG,
+        carbsG: macros.carbsG,
+        fatsG: macros.fatsG,
+        fiberG: macros.fiberG,
+        macrosBasis: macros.macrosBasis,
+        hasOverride: macros.hasOverride,
+        originalMacros: macros.original,
+        servingSize: row.serving_size,
+        servingUnit: row.serving_unit ?? 'g',
+        category: row.category ?? null,
+        media: null,
+      }
+    }
+    return foods
+  } catch {
+    // Red/parse caidos: la fila se queda sin numero, que es la degradacion honesta.
+    return {}
+  }
+}
+
 /**
  * Resuelve la sesion del editor para un alumno. `planModel` es el read model YA cargado por la
  * pantalla (misma lectura que pinta la ficha): aca solo se agregan las lecturas propias del
@@ -175,6 +308,7 @@ export async function loadEditorSession(input: {
     const subs = await loadItemSubstitutionReads(input.db, existing.versionId)
     return {
       itemSubstitutions: subs.rows,
+      substitutionFoodsById: await loadSubstitutionFoodsById(input.db, subs.rows),
       substitutionsLoadFailed: subs.status === 'error',
       creation: null,
       originUnavailable: false,
@@ -235,9 +369,15 @@ export async function loadEditorSession(input: {
         const sourceSubs = await loadItemSubstitutionReads(input.db, sourcePlan.versionId)
         // NUT-008 en la copia: sin los reemplazos de la fuente, publicarla los perderia.
         substitutionsLoadFailed = sourceSubs.status === 'error'
+        // El catalogo de los sustitutos viaja solo para el display de la equivalencia (desde
+        // plantilla lo trae `collectTemplateFoodIds`; aca el arbol nace del read-model, que no
+        // lo transporta). Fail-soft: sin el, la fila no pinta numero.
         const hydrated = readModelToEditState(
           sourceDetail.plan,
-          buildSubstitutionMap(sourceSubs.rows),
+          buildSubstitutionMap(
+            sourceSubs.rows,
+            await loadSubstitutionFoodsById(input.db, sourceSubs.rows),
+          ),
           { withMeta: true },
         )
         const sourceBase = readModelToDraft(sourceDetail.plan, input.clientId)
@@ -262,6 +402,7 @@ export async function loadEditorSession(input: {
       const subs = await loadItemSubstitutionReads(input.db, existing.versionId)
       return {
         itemSubstitutions: subs.rows,
+        substitutionFoodsById: await loadSubstitutionFoodsById(input.db, subs.rows),
         substitutionsLoadFailed: subs.status === 'error',
         creation: null,
         originUnavailable: true,
@@ -279,6 +420,9 @@ export async function loadEditorSession(input: {
 
   return {
     itemSubstitutions: [],
+    // En creacion los reemplazos ya vienen HIDRATADOS dentro de `initialState` (con su catalogo
+    // resuelto arriba), asi que no hay nada que resolver aparte.
+    substitutionFoodsById: {},
     substitutionsLoadFailed,
     creation: {
       initialState,

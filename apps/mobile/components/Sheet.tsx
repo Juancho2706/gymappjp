@@ -312,7 +312,27 @@ export function Sheet({
   // reanimated 4 / Fabric). Mirrors the proven `KeypadHost` pattern (RN Modal + Moti slide-up). ──
   if (nativeModal) {
     return (
-      <Modal transparent visible={open} animationType="none" statusBarTranslucent onRequestClose={onClose}>
+      <Modal
+        transparent
+        visible={open}
+        animationType="none"
+        statusBarTranslucent
+        // Android (QA dueño 18-08: el sheet "no llegaba al borde de abajo" y por el hueco se veía la
+        // PublishBar del editor). El nativo de RN 0.81.5 decide edge-to-edge de la VENTANA del diálogo
+        // por esta prop: con ella llama a `enableEdgeToEdge()`; sin ella hace `disableEdgeToEdge()` +
+        // `setStatusBarTranslucency`, que consume SOLO el inset de arriba y deja la ventana inseteada
+        // por la barra de navegación — mientras la activity de atrás sí dibuja ahí. De ahí la franja
+        // con la pantalla anterior asomando bajo el sheet.
+        // Efecto colateral que se corrige solo: `useSafeAreaInsets()` vive en el árbol de la ACTIVITY,
+        // así que `bodyPadBottom`/el footer ya sumaban `insets.bottom`; con la ventana inseteada eso
+        // era una barra de navegación de relleno DUPLICADA. Con la ventana edge-to-edge ese inset pasa
+        // a ser lo único que separa el contenido de la barra, que es para lo que estaba puesto.
+        // Va fijo y NO como prop del Sheet: ninguno de los 68 usos de `nativeModal` (45 archivos)
+        // quiere la variante rota — una prop de opt-out solo sería API muerta con un pie de plomo.
+        // RN además avisa por consola si esta viaja sin `statusBarTranslucent`, así que van juntas.
+        navigationBarTranslucent
+        onRequestClose={onClose}
+      >
         {/* The native Modal renders in its OWN OS window — `GestureHandlerRootView` in
             `app/_layout.tsx` doesn't reach it, so any `GestureDetector` inside (e.g. the
             volume slider in ExecSettingsSheet) never receives touch events without its own

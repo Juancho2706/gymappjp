@@ -119,8 +119,14 @@ export default function CoachNutritionV2TemplateEditorScreen() {
     setReloadNonce((nonce) => nonce + 1)
   }, [])
 
+  /**
+   * Salida a la pestaña de la que se vino, no al hub pelado: `/coach/nutrition-v2` cae en "Alumnos",
+   * así que guardar una plantilla dejaba al coach en otra superficie y sin ver lo que acababa de
+   * hacer. La web sale a `?tab=plantillas` y el parser RN ya acepta ese slug español
+   * (`resolveNutritionHubInitialTab`).
+   */
   const exitToHub = useCallback(() => {
-    router.replace('/coach/nutrition-v2')
+    router.replace('/coach/nutrition-v2?tab=plantillas')
   }, [router])
 
   if (failed) {

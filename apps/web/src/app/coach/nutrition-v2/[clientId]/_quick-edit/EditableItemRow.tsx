@@ -15,6 +15,7 @@
 
 import { useRef, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
@@ -48,6 +49,7 @@ import { rememberFoodQuantityAction } from '@/app/coach/nutrition-v2/_actions/la
 import {
   qeCoachFoodCandidate,
   qeItemMacros,
+  qeSubstitutionEquivalence,
   type QeItem,
   type QeItemSubstitution,
   type QeSlot,
@@ -690,30 +692,52 @@ export function EditableItemRow({
               </p>
             ) : (
               <ul className="-mx-1 max-h-[46vh] space-y-2 overflow-y-auto px-1">
-                {substitutions.map((sub, subIndex) => (
-                  <li
-                    key={`${sub.foodId ?? sub.customName ?? 'sub'}-${subIndex}`}
-                    className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface-card p-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold leading-5 text-strong">
-                        {sub.displayName ?? sub.customName ?? 'Alimento'}
-                      </p>
-                      {sub.quantity != null && sub.unit ? (
-                        <p className="text-xs leading-5 text-muted">{`${sub.quantity} ${sub.unit}`}</p>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Quitar reemplazo ${sub.displayName ?? sub.customName ?? ''}`}
-                      disabled={isPending}
-                      onClick={() => handleRemoveSubstitution(sub, subIndex)}
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-border-subtle text-muted transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+                {substitutions.map((sub, subIndex) => {
+                  // La cantidad que el ALUMNO va a ver: un reemplazo sin cantidad propia (hoy
+                  // todos) se le muestra ya resuelto en la porción que iguala las kcal de lo
+                  // prescrito. Hasta acá el coach autorizaba a ciegas. `null` = no hay macros
+                  // vigentes con qué calcular ⇒ se cae al dato crudo de la fila, jamás a un 0.
+                  const equivalence = qeSubstitutionEquivalence(item, sub)
+                  return (
+                    <li
+                      key={`${sub.foodId ?? sub.customName ?? 'sub'}-${subIndex}`}
+                      className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface-card p-2.5"
                     >
-                      <Trash2 aria-hidden="true" className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold leading-5 text-strong">
+                          {sub.displayName ?? sub.customName ?? 'Alimento'}
+                        </p>
+                        {equivalence ? (
+                          <>
+                            <p className="text-xs font-semibold leading-5 text-body">
+                              {equivalence.label}
+                            </p>
+                            {equivalence.note ? (
+                              <p className="text-xs leading-5 text-muted">{equivalence.note}</p>
+                            ) : null}
+                            {equivalence.warning ? (
+                              <p className="mt-0.5 flex items-start gap-1 text-xs font-medium leading-5 text-amber-700 dark:text-amber-300">
+                                <AlertTriangle aria-hidden="true" className="mt-1 h-3 w-3 shrink-0" />
+                                <span className="min-w-0 flex-1">{equivalence.warning}</span>
+                              </p>
+                            ) : null}
+                          </>
+                        ) : sub.quantity != null && sub.unit ? (
+                          <p className="text-xs leading-5 text-muted">{`${sub.quantity} ${sub.unit}`}</p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Quitar reemplazo ${sub.displayName ?? sub.customName ?? ''}`}
+                        disabled={isPending}
+                        onClick={() => handleRemoveSubstitution(sub, subIndex)}
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-control border border-border-subtle text-muted transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+                      >
+                        <Trash2 aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
             <div>

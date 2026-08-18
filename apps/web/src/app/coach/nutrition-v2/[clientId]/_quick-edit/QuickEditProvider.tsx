@@ -227,6 +227,7 @@ export function QuickEditProvider({
   editPlanMeta = false,
   creation = null,
   template = null,
+  foodsById,
   onExit,
   children,
 }: {
@@ -239,6 +240,12 @@ export function QuickEditProvider({
    * read-model no los transporta; sin esto, publicar un quick-edit los perderia.
    */
   itemSubstitutions: NutritionItemSubstitutionRead[]
+  /**
+   * Catalogo de los alimentos referenciados por los REEMPLAZOS, para resolver sus macros vigentes
+   * y poder mostrarle al coach la equivalencia que ve el alumno («≈ 130 g»). Opcional y
+   * fail-soft: sin el, la fila del reemplazo simplemente no pinta el numero — nunca uno falso.
+   */
+  foodsById?: Parameters<typeof buildSubstitutionMap>[1]
   /**
    * NUT-008: la lectura server-side de los reemplazos fallo (no es "sin reemplazos").
    * Bloquea el publish: republicar con el mapa vacio borraria los reemplazos del alumno.
@@ -266,7 +273,13 @@ export function QuickEditProvider({
 
   // Hidratacion una sola vez por montaje del modo edicion (el Entry desmonta al salir,
   // asi que reabrir re-hidrata desde el read model fresco tras router.refresh()).
-  const substitutionsByItemId = useMemo(() => buildSubstitutionMap(itemSubstitutions), [itemSubstitutions])
+  // `foodsById` como 2do arg: sin el, la fila del reemplazo no resuelve macros VIGENTES y se
+  // queda sin la equivalencia («≈ 130 g») — justo en los reemplazos YA guardados, que son los
+  // unicos que existen hoy. El catalogo del coach ya esta en mano en este provider.
+  const substitutionsByItemId = useMemo(
+    () => buildSubstitutionMap(itemSubstitutions, foodsById),
+    [itemSubstitutions, foodsById]
+  )
   const initialState = useMemo(
     () =>
       template

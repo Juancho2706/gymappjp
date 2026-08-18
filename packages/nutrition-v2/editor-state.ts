@@ -42,6 +42,14 @@ import {
   type BuilderFoodMacrosPatch,
   type ItemMacros,
 } from './editor-food'
+// Equivalencia del reemplazo (T2.4): el MISMO modulo puro que resuelve la cantidad que el
+// alumno ve al sustituir. El editor lo llama para MOSTRAR ese numero, jamas para editarlo.
+import {
+  computeSubstitutionEquivalence,
+  describeSubstitutionDelta,
+} from './substitution-intake'
+import type { NutritionIntakeUnit } from './intake-units'
+import type { NutritionMacrosBasis } from './intake-normalize'
 // Diagnostico de porciones huerfanas (defecto B4): logica pura compartida con el wizard web
 // (movida aca en R1; el wizard la re-exporta desde su ruta historica).
 import {
@@ -78,6 +86,53 @@ export interface QeItemSubstitution {
    * respaldos locales pre-W2: la UI cae a customName o "Alimento".
    */
   displayName?: string | null
+  /**
+   * Macros del sustituto para calcular en el editor la cantidad equivalente que el alumno
+   * VA A VER (`qeSubstitutionEquivalence`). DISPLAY-ONLY, igual que `displayName`:
+   * `projectItem` no la transporta y `substitutionsSignature` no la mira, asi que rellenarla
+   * (o no) jamas mueve el contador de cambios ni ensucia el draft que valida el server.
+   *
+   * Son las macros VIGENTES del catalogo con el override del coach ya aplicado (tal como las
+   * trae `BuilderFood`), NUNCA los `snapshot_*` congelados de la fila: el alumno resuelve su
+   * equivalencia contra el catalogo vivo, y un coach mirando el snapshot estaria ajustando
+   * contra un numero que su alumno no tiene.
+   *
+   * Ausente = no hay con que calcular en esta fila (respaldo local viejo, reemplazo libre o
+   * hidratacion sin catalogo en mano): la UI NO pinta cantidad. Mejor vacio que mentiroso.
+   */
+  displayMacros?: QeSubstitutionFoodMacros | null
+}
+
+/**
+ * Macros VIGENTES de un alimento sustituto, en su propia base (por 100 o por porcion). Es el
+ * subconjunto de `BuilderFood` que `computeSubstitutionEquivalence` necesita — el alimento
+ * entero no viaja a proposito: esto es una carga de DISPLAY dentro del arbol editable, no otra
+ * copia del catalogo.
+ */
+export interface QeSubstitutionFoodMacros {
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+  fiberG: number | null
+  servingSize: number
+  servingUnit: string
+  /** Base declarada (NUT-001). Ausente/null = formula historica por 100 g/ml. */
+  macrosBasis?: NutritionMacrosBasis | null
+}
+
+/** Alimento del catalogo (macros ya mergeadas con el override) → carga de display del reemplazo. */
+export function qeSubstitutionMacrosFromFood(food: BuilderFood): QeSubstitutionFoodMacros {
+  return {
+    calories: food.calories,
+    proteinG: food.proteinG,
+    carbsG: food.carbsG,
+    fatsG: food.fatsG,
+    fiberG: food.fiberG,
+    servingSize: food.servingSize,
+    servingUnit: food.servingUnit,
+    macrosBasis: food.macrosBasis ?? null,
+  }
 }
 
 export interface QeItem {
@@ -269,8 +324,16 @@ type ReadItem = ReadSlot['prescriptionItems'][number]
 export type SubstitutionsByItemId = Record<string, QeItemSubstitution[]>
 
 /** Read-model del reemplazo (snapshot congelado) -> forma proyectable al draft. */
-function readSubstitutionToQe(read: NutritionItemSubstitutionRead): QeItemSubstitution {
+function readSubstitutionToQe(
+  read: NutritionItemSubstitutionRead,
+  foodsById: Record<string, BuilderFood>,
+): QeItemSubstitution {
   const isCustom = read.foodId === null && read.recipeId === null
+  // `read.macros` son los `snapshot_*` CONGELADOS de la version base y se descartan a proposito:
+  // el alumno resuelve la equivalencia contra el catalogo VIGENTE (mas el override del coach),
+  // asi que mostrarle al coach un numero derivado del snapshot lo haria ajustar contra un valor
+  // que su alumno no tiene. Sin catalogo en mano la fila queda sin cantidad, que es honesto.
+  const food = read.foodId ? (foodsById[read.foodId] ?? null) : null
   return {
     foodId: read.foodId,
     recipeId: read.recipeId,
@@ -281,6 +344,7 @@ function readSubstitutionToQe(read: NutritionItemSubstitutionRead): QeItemSubsti
     unit: read.unit,
     // Snapshot congelado para pintar la lista editable del editor (W2). Display-only.
     displayName: read.name,
+    ...(food ? { displayMacros: qeSubstitutionMacrosFromFood(food) } : {}),
   }
 }
 
@@ -288,11 +352,18 @@ function readSubstitutionToQe(read: NutritionItemSubstitutionRead): QeItemSubsti
  * Agrupa los reemplazos leidos directo de la tabla RLS-scoped por `prescriptionItemId`
  * conservando el orden de llegada (el fetch ordena por order_index). Puro: alimenta la
  * inyeccion del carry-over en `readModelToEditState`.
+ *
+ * `foodsById` (catalogo VIGENTE del coach, macros ya mergeadas con su override) es OPCIONAL y
+ * solo alimenta el display: con el, la fila del sheet puede mostrar la cantidad equivalente que
+ * el alumno vera; sin el, la muestra sin cantidad. Nada de esto viaja al draft.
  */
-export function buildSubstitutionMap(reads: readonly NutritionItemSubstitutionRead[]): SubstitutionsByItemId {
+export function buildSubstitutionMap(
+  reads: readonly NutritionItemSubstitutionRead[],
+  foodsById: Record<string, BuilderFood> = {},
+): SubstitutionsByItemId {
   const map: SubstitutionsByItemId = {}
   for (const read of reads) {
-    ;(map[read.prescriptionItemId] ??= []).push(readSubstitutionToQe(read))
+    ;(map[read.prescriptionItemId] ??= []).push(readSubstitutionToQe(read, foodsById))
   }
   return map
 }
@@ -577,13 +648,21 @@ function draftItemToQe(
     isCustom,
     media: food?.media ?? null,
     category: food?.category ?? null,
-    substitutions: (item.substitutions ?? []).map((sub) => ({
-      foodId: sub.foodId,
-      recipeId: sub.recipeId,
-      customName: sub.customName,
-      quantity: sub.quantity,
-      unit: sub.unit,
-    })),
+    substitutions: (item.substitutions ?? []).map((sub) => {
+      // Mismo catalogo que resuelve el item prescrito: si el reemplazo esta ahi, la fila del
+      // sheet puede mostrar su nombre y la cantidad equivalente. Ambos DISPLAY-ONLY.
+      const subFood = sub.foodId ? (foodsById[sub.foodId] ?? null) : null
+      return {
+        foodId: sub.foodId,
+        recipeId: sub.recipeId,
+        customName: sub.customName,
+        quantity: sub.quantity,
+        unit: sub.unit,
+        ...(subFood
+          ? { displayName: subFood.name, displayMacros: qeSubstitutionMacrosFromFood(subFood) }
+          : {}),
+      }
+    }),
   }
 }
 
@@ -1674,6 +1753,9 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
               quantity: null,
               unit: null,
               displayName: action.food.name,
+              // Macros VIGENTES (el picker ya entrega el alimento con el override aplicado):
+              // es lo que deja mostrar la cantidad equivalente en la fila. Display-only.
+              displayMacros: qeSubstitutionMacrosFromFood(action.food),
             },
           ],
         }
@@ -1693,15 +1775,43 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       })
     case 'APPLY_FOOD_OVERRIDE': {
       const { foodId, macros } = action
+      /**
+       * El mismo alimento puede estar prescrito Y autorizado como reemplazo de otro item: si la
+       * correccion no bajara tambien a la carga de display del reemplazo, la fila del sheet
+       * seguiria mostrando la cantidad equivalente calculada con los macros viejos — justo el
+       * numero que el coach acaba de declarar equivocado. Solo toca campos DISPLAY-ONLY
+       * (`displayMacros`), asi que la proyeccion al draft y el contador de cambios no se mueven.
+       */
+      const patchSubstitution = (sub: QeItemSubstitution): QeItemSubstitution =>
+        sub.foodId === foodId && sub.displayMacros
+          ? {
+              ...sub,
+              displayMacros: {
+                ...sub.displayMacros,
+                calories: macros.calories,
+                proteinG: macros.proteinG,
+                carbsG: macros.carbsG,
+                fatsG: macros.fatsG,
+                fiberG: macros.fiberG,
+                macrosBasis: macros.macrosBasis ?? null,
+              },
+            }
+          : sub
       return {
         ...state,
         variants: state.variants.map((variant) => ({
           ...variant,
           slots: variant.slots.map((slot) => ({
             ...slot,
-            items: slot.items.map((item) =>
-              item.food && item.food.id === foodId ? { ...item, food: { ...item.food, ...macros } } : item,
-            ),
+            items: slot.items.map((item) => {
+              const food = item.food && item.food.id === foodId ? { ...item.food, ...macros } : item.food
+              const subs = item.substitutions ?? []
+              const nextSubs = subs.some((sub) => sub.foodId === foodId && sub.displayMacros)
+                ? subs.map(patchSubstitution)
+                : subs
+              if (food === item.food && nextSubs === subs) return item
+              return { ...item, food, substitutions: nextSubs }
+            }),
           })),
         })),
       }
@@ -1853,6 +1963,129 @@ export function qeItemMacros(item: QeItem): ItemMacros {
     return scaleMacros(item.macroBase.macros, qty / item.macroBase.quantity)
   }
   return ZERO_ITEM_MACROS
+}
+
+// ---------------------------------------------------------------------------
+// Cantidad equivalente del reemplazo, para MOSTRARLA en el editor del coach
+//
+// Un reemplazo sin cantidad propia (hoy el 100% de las filas de LIVE) NO se registra "en la
+// misma porcion que lo prescrito": la app calcula en vivo la cantidad que IGUALA las kcal del
+// item y se la muestra al alumno ya resuelta ("Posta de vacuno · 130 g · mismas kcal"). El coach
+// autorizaba ese reemplazo a ciegas — veia el nombre y nada mas. Esto le muestra el MISMO numero,
+// con el MISMO modulo puro (`computeSubstitutionEquivalence`), para que no haya dos verdades.
+//
+// Es estrictamente de LECTURA: no hay accion del reducer que edite la cantidad del reemplazo (la
+// fase de edicion quedo descartada). Todo lo que entra aca son campos display del arbol.
+// ---------------------------------------------------------------------------
+
+/** Lo que la fila del sheet de reemplazos pinta. `null` = no hay con que calcular ⇒ no pinta. */
+export interface QeSubstitutionEquivalenceView {
+  /** Cantidad ya redondeada al escalon de su unidad (5 en g/ml, 0,5 en unidades contadas). */
+  quantity: number
+  unit: NutritionIntakeUnit
+  /** La cantidad la escribio el coach en la fila: se muestra sin "≈" y no se le discute. */
+  explicit: boolean
+  /** Supera el tope de plausibilidad ⇒ el alumno tendra que confirmarla antes de registrar. */
+  requiresConfirmation: boolean
+  /** "≈ 130 g" (calculada) o "130 g" (escrita por el coach). */
+  label: string
+  /** Una linea que explica la equivalencia; `null` cuando no hay nada honesto que decir. */
+  note: string | null
+  /** Aviso sobrio del caso absurdo (Pechuga 100 g → 715 g de espinaca). `null` = sin aviso. */
+  warning: string | null
+}
+
+export const QE_SUBSTITUTION_SAME_CALORIES_NOTE = 'Equivale en calorías a lo prescrito'
+export const QE_SUBSTITUTION_CONFIRM_WARNING =
+  'Cantidad muy alta: tu alumno tendrá que confirmarla antes de registrar'
+
+/** Numero legible es-CL: sin decimales cuando es entero, coma decimal cuando no. */
+function formatQeQuantity(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value).replace('.', ',')
+}
+
+/**
+ * Cantidad equivalente que el alumno vera para este reemplazo, o `null` si no se puede resolver.
+ *
+ * Devuelve `null` (y la UI no pinta numero) en los dos casos en que cualquier cifra seria
+ * inventada: el reemplazo no tiene macros vigentes en mano (`displayMacros` ausente: reemplazo
+ * libre, receta, o hidratado sin catalogo) o el item prescrito no tiene kcal con que comparar
+ * (alimento libre sin macros) y la equivalencia degrada a `unavailable`. Mejor vacio que
+ * mentiroso: el numero de esta fila es el que el coach va a usar para decidir.
+ */
+export function qeSubstitutionEquivalence(
+  item: QeItem,
+  sub: QeItemSubstitution,
+): QeSubstitutionEquivalenceView | null {
+  const macros = sub.displayMacros
+  if (!macros) return null
+
+  const itemMacros = qeItemMacros(item)
+  const equivalence = computeSubstitutionEquivalence({
+    item: {
+      quantity: Number(item.quantity.trim()) || 0,
+      unit: item.unit,
+      calories: itemMacros.calories,
+      proteinG: itemMacros.proteinG,
+      carbsG: itemMacros.carbsG,
+      fatsG: itemMacros.fatsG,
+    },
+    substitute: {
+      foodId: sub.foodId,
+      customName: sub.customName,
+      name: sub.displayName ?? sub.customName ?? 'Reemplazo',
+      brand: null,
+      calories: macros.calories,
+      proteinG: macros.proteinG,
+      carbsG: macros.carbsG,
+      fatsG: macros.fatsG,
+      fiberG: macros.fiberG,
+      macrosBasis: macros.macrosBasis ?? null,
+      servingSize: macros.servingSize,
+      servingUnit: macros.servingUnit,
+      quantity: sub.quantity,
+      unit: sub.unit,
+    },
+  })
+  // `unavailable` = la cantidad devuelta es la PORCION del sustituto, no una equivalencia:
+  // pintarla como "≈ 100 g · mismas kcal" seria mentir con precision.
+  if (equivalence.kind === 'unavailable') return null
+
+  const explicit = equivalence.kind === 'explicit'
+  // La linea se decide por el KIND, no leyendo el texto del delta: `calorie-equivalent` y
+  // `needs-confirmation` SON la rama que iguala las kcal (regla 3 de la equivalencia), asi que
+  // ahi la frase es un hecho. Con cantidad escrita por el coach no hay igualdad que prometer:
+  // se muestra la diferencia real, que es justo lo que el necesita ver antes de dejarla.
+  const delta = explicit
+    ? describeSubstitutionDelta({
+        item: {
+          quantity: Number(item.quantity.trim()) || 0,
+          unit: item.unit,
+          calories: itemMacros.calories,
+          proteinG: itemMacros.proteinG,
+          carbsG: itemMacros.carbsG,
+          fatsG: itemMacros.fatsG,
+        },
+        equivalence,
+      })
+    : null
+  const note = explicit
+    ? delta === null
+      ? null
+      : delta === 'mismas kcal'
+        ? QE_SUBSTITUTION_SAME_CALORIES_NOTE
+        : `${delta} respecto de lo prescrito`
+    : QE_SUBSTITUTION_SAME_CALORIES_NOTE
+
+  return {
+    quantity: equivalence.quantity,
+    unit: equivalence.unit,
+    explicit,
+    requiresConfirmation: equivalence.requiresConfirmation,
+    label: `${explicit ? '' : '≈ '}${formatQeQuantity(equivalence.quantity)} ${equivalence.unit}`,
+    note,
+    warning: equivalence.requiresConfirmation ? QE_SUBSTITUTION_CONFIRM_WARNING : null,
+  }
 }
 
 // ---------------------------------------------------------------------------

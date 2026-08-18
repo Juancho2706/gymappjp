@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import {
   Alert,
   BackHandler,
+  Dimensions,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -57,6 +58,7 @@ import {
   planCopy,
   qeExchangeGroups,
   qeSlotCopyTargets,
+  qeSubstitutionEquivalence,
   qeVariantTotalWithPortions,
   quickEditReducer,
   readModelToDraft,
@@ -156,6 +158,9 @@ function genKey(prefix: string): string {
 // T2.6 F1: ventana unica del Deshacer destructivo en todo el modulo (web y RN), era 5 s.
 const UNDO_TIMEOUT_MS = 8000
 
+/** Respiro entre el borde inferior del campo enfocado y la barrera (teclado + PublishBar). */
+const KEYBOARD_GAP = 12
+
 interface SearchTarget {
   mode: FoodSearchMode
   variantKey: string
@@ -213,6 +218,12 @@ export interface QuickEditEditorInput {
    * re-inyectarse al publicar, que es lo que hace el quick-edit clasico.
    */
   itemSubstitutions: NutritionItemSubstitutionRead[]
+  /**
+   * Catalogo VIGENTE de los alimentos de esos reemplazos, para resolver sus macros y mostrarle al
+   * coach la cantidad equivalente que ve el alumno («≈ 130 g»). Opcional y fail-soft: sin el, la
+   * fila del reemplazo no pinta el numero — nunca uno falso. No viaja al draft.
+   */
+  substitutionFoodsById?: Parameters<typeof buildSubstitutionMap>[1]
   /** NUT-008: la lectura fallo ⇒ publicar los borraria. Bloquea el publish. */
   substitutionsLoadFailed: boolean
   /** Modo creacion (plantilla / copia de plan / blanco); null = edicion del plan vigente. */
@@ -301,7 +312,10 @@ export function QuickEditMode({
         ? editor.creation.initialState
         : readModelToEditState(
             planModel,
-            editor ? buildSubstitutionMap(editor.itemSubstitutions) : {},
+            // El catalogo de los sustitutos entra como 2do arg: sin el, los reemplazos YA
+            // guardados (los unicos que existen hoy) no resuelven macros vigentes y la fila se
+            // queda sin la equivalencia («≈ 130 g»).
+            editor ? buildSubstitutionMap(editor.itemSubstitutions, editor.substitutionFoodsById) : {},
             { withMeta: editor != null },
           )
     const baseDraft = editor?.template
@@ -471,6 +485,50 @@ export function QuickEditMode({
     }),
     [],
   )
+  // QA del dueño 17-08, segunda vuelta: el padding de arriba ABRE el hueco pero nadie vuelve a
+  // scrollear, así que «Notas para tu alumno» seguía tapada. El intento previo scrolleaba dentro
+  // de un `requestAnimationFrame` del `onFocus` — ~16 ms después del foco, cuando el teclado
+  // todavía no existe y no hay nada que esquivar; y con `adjustResize` el viewport encoge sin
+  // mover el offset. Se resuelve con el patrón que ya vive en el ejecutor
+  // (`alumno/workout/StepperExecution.tsx`): se anota el pedido y se mide con `measureInWindow`
+  // contra `Keyboard.metrics().screenY` cuando el teclado YA tiene métricas (`keyboardDidShow`),
+  // o en el frame siguiente si ya estaba arriba (saltar de un input a otro no emite evento).
+  const notesInputRef = useRef<TextInput>(null)
+  const notesPendingRef = useRef(false)
+  const flushNotesVisible = useCallback(() => {
+    if (!notesPendingRef.current) return
+    const node = notesInputRef.current
+    const scroller = scrollRef.current
+    if (!node || !scroller) return
+    notesPendingRef.current = false
+    const keyboardTop = Keyboard.metrics()?.screenY ?? Dimensions.get('window').height
+    // La PublishBar vive FUERA del ScrollView y DENTRO del KeyboardAvoidingView: se interpone
+    // entre el fondo del lienzo y el teclado, así que la barrera real es el tope del teclado
+    // MENOS su alto (ya medido por el `onLayout` del target «publicar»).
+    const barrier = keyboardTop - publishBarHeight
+    node.measureInWindow((_x, y, _width, height) => {
+      const overlap = y + height + KEYBOARD_GAP - barrier
+      if (overlap > 1) {
+        scroller.scrollTo({ y: Math.max(0, tourScrollOffsetYRef.current + overlap), animated: true })
+      }
+    })
+  }, [publishBarHeight])
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', flushNotesVisible)
+    // Si el teclado se cierra sin haber resuelto el pedido se descarta: un foco posterior no
+    // debe arrastrar el lienzo hasta el campo viejo.
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      notesPendingRef.current = false
+    })
+    return () => {
+      show.remove()
+      hide.remove()
+    }
+  }, [flushNotesVisible])
+  const ensureNotesVisible = useCallback(() => {
+    notesPendingRef.current = true
+    if (Keyboard.isVisible()) requestAnimationFrame(flushNotesVisible)
+  }, [flushNotesVisible])
   // Guard para no escribir el respaldo local en la hidratacion inicial (evita un borrador vacio).
   const isFirstRenderRef = useRef(true)
   // Key del respaldo local: una sesion de quick-edit por alumno; el clientId va SIEMPRE en la
@@ -1926,6 +1984,7 @@ export function QuickEditMode({
               </Text>
             )}
             <TextInput
+              ref={notesInputRef}
               accessibilityLabel={QUICK_EDIT_COPY.notesLabel}
               value={state.visibleNotes}
               onChangeText={(value) => dispatch({ type: 'SET_VISIBLE_NOTES', value })}
@@ -1939,10 +1998,9 @@ export function QuickEditMode({
               // justamente por qué la web NO reproduce este defecto: sin tope, el campo crece línea
               // a línea, Android scrollea al foco UNA sola vez y el cursor termina bajo el borde.
               style={{ maxHeight: 140 }}
-              // Al enfocar, traer la tarjeta al área visible por encima del teclado.
-              onFocus={() => {
-                requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }))
-              }}
+              // Al enfocar sólo se ANOTA el pedido: la cuenta la resuelve `flushNotesVisible`
+              // cuando el teclado ya tiene métricas. Ver la nota del ref arriba.
+              onFocus={ensureNotesVisible}
               className="mt-3 min-h-28 rounded-control border border-default bg-surface-card px-2.5 py-2 text-sm leading-6 text-body"
             />
             {errors['plan.visibleNotes'] ? (
@@ -2183,28 +2241,60 @@ export function QuickEditMode({
             </Text>
           ) : (
             <View className="gap-2">
-              {subsList.map((sub, subIndex) => (
-                <View
-                  key={(sub.foodId ?? sub.customName ?? 'sub') + '-' + subIndex}
-                  className="flex-row items-center gap-2 rounded-control border border-subtle bg-surface-card p-2.5"
-                >
-                  <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-semibold leading-5 text-strong" numberOfLines={2}>
-                      {sub.displayName ?? sub.customName ?? 'Alimento'}
-                    </Text>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={'Quitar reemplazo ' + (sub.displayName ?? sub.customName ?? '')}
-                    onPress={() => {
-                      if (subsTarget) handleRemoveSubstitution(subsTarget, sub, subIndex)
-                    }}
-                    className="h-11 w-11 items-center justify-center rounded-control"
+              {subsList.map((sub, subIndex) => {
+                // La cantidad que el ALUMNO va a ver de verdad: un reemplazo sin cantidad propia
+                // (hoy, todos) se le muestra ya resuelto en la porción que IGUALA las kcal de lo
+                // prescrito. Hasta acá el coach autorizaba a ciegas — sólo veía el nombre.
+                // `null` = no hay macros vigentes con qué calcular ⇒ no se pinta número: mejor
+                // vacío que un 0 inventado.
+                const equivalence = subsItem ? qeSubstitutionEquivalence(subsItem.item, sub) : null
+                return (
+                  <View
+                    key={(sub.foodId ?? sub.customName ?? 'sub') + '-' + subIndex}
+                    className="flex-row items-start gap-2 rounded-control border border-subtle bg-surface-card p-2.5"
                   >
-                    <Trash2 color={theme.destructive} size={17} />
-                  </Pressable>
-                </View>
-              ))}
+                    <View className="min-w-0 flex-1">
+                      <Text className="text-sm font-semibold leading-5 text-strong" numberOfLines={2}>
+                        {sub.displayName ?? sub.customName ?? 'Alimento'}
+                      </Text>
+                      {equivalence ? (
+                        <>
+                          <Text className="text-xs font-semibold leading-5 text-body">
+                            {equivalence.label}
+                          </Text>
+                          {equivalence.note ? (
+                            <Text className="text-xs leading-5 text-muted">{equivalence.note}</Text>
+                          ) : null}
+                          {equivalence.warning ? (
+                            <View className="mt-0.5 flex-row items-start gap-1">
+                              {/* Color imperativo (prop de SVG): el token `warning` del tema, que
+                                  es el mismo que pinta `text-warning-700` en la línea de al lado. */}
+                              <AlertTriangle color={theme.warning} size={12} style={{ marginTop: 3 }} />
+                              <Text className="min-w-0 flex-1 text-xs font-medium leading-5 text-warning-700">
+                                {equivalence.warning}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </>
+                      ) : sub.quantity != null && sub.unit ? (
+                        <Text className="text-xs leading-5 text-muted">
+                          {sub.quantity + ' ' + sub.unit}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={'Quitar reemplazo ' + (sub.displayName ?? sub.customName ?? '')}
+                      onPress={() => {
+                        if (subsTarget) handleRemoveSubstitution(subsTarget, sub, subIndex)
+                      }}
+                      className="h-11 w-11 items-center justify-center rounded-control"
+                    >
+                      <Trash2 color={theme.destructive} size={17} />
+                    </Pressable>
+                  </View>
+                )
+              })}
             </View>
           )}
           <Pressable

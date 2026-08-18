@@ -34,11 +34,32 @@ import {
   catalogToPortionGroups,
   draftToEditState,
   readModelToEditState,
+  type BuilderFood,
   type QePortionGroup,
   type QuickEditState,
 } from '@eva/nutrition-v2'
 import type { EditorCreationInput } from '../_quick-edit/QuickEditProvider'
 import { EditorClient } from './EditorClient'
+
+/**
+ * Catalogo VIGENTE de los alimentos referenciados por los REEMPLAZOS leidos, para que la fila de
+ * cada reemplazo pueda mostrar la cantidad equivalente que el alumno va a ver («≈ 130 g»).
+ *
+ * DISPLAY-ONLY y fail-soft TOTAL, a diferencia de la lectura de reemplazos: sin esto la fila
+ * simplemente no pinta numero (nunca uno falso), asi que un fallo aca devuelve `undefined` y
+ * NO toca `substitutionsLoadFailed` (NUT-008), que es lo que bloquea el publish. Los
+ * `snapshot_*` congelados del read-model no sirven de reemplazo: darian la porcion del
+ * sustituto, no la equivalencia (ver `readSubstitutionToQe`).
+ */
+async function loadSubstitutionFoodsById(
+  load: ItemSubstitutionsLoad,
+): Promise<Record<string, BuilderFood> | undefined> {
+  if (!load.ok) return undefined
+  const foodIds = load.rows.map((row) => row.foodId).filter((id): id is string => Boolean(id))
+  if (foodIds.length === 0) return undefined
+  const foodsLoad = await fetchBuilderFoodsByIds(foodIds)
+  return foodsLoad.ok ? foodsLoad.foods : undefined
+}
 
 /**
  * EDITOR UNICO de nutricion (T3.x) — ruta propia, SIN CTA publica todavia: se llega solo por
@@ -109,10 +130,12 @@ export default async function NutritionUnifiedEditorPage({
     const substitutionsLoad: ItemSubstitutionsLoad = await fetchItemSubstitutionsForVersion(
       existing.versionId,
     )
+    const substitutionFoodsById = await loadSubstitutionFoodsById(substitutionsLoad)
     return (
       <EditorClient
         {...sharedProps}
         itemSubstitutions={substitutionsLoad.ok ? substitutionsLoad.rows : []}
+        substitutionFoodsById={substitutionFoodsById}
         substitutionsLoadFailed={!substitutionsLoad.ok}
         creation={null}
         originUnavailable={false}
@@ -186,9 +209,13 @@ export default async function NutritionUnifiedEditorPage({
         // NUT-008 en la copia: sin los reemplazos de la fuente, publicar la copia los
         // perderia — se bloquea el publish en vez de copiar a medias.
         substitutionsLoadFailed = !sourceSubs.ok
+        // El catalogo de los sustitutos viaja solo para el display de la equivalencia (la copia
+        // desde plantilla lo consigue via `collectTemplateFoodIds`; aca el arbol nace del
+        // read-model, que no lo transporta). Fail-soft: sin el, la fila no pinta numero.
+        const sourceSubFoodsById = await loadSubstitutionFoodsById(sourceSubs)
         const hydrated = readModelToEditState(
           sourceDetail.plan,
-          buildSubstitutionMap(sourceSubs.ok ? sourceSubs.rows : []),
+          buildSubstitutionMap(sourceSubs.ok ? sourceSubs.rows : [], sourceSubFoodsById),
           { withMeta: true },
         )
         const sourceBase = readModelToDraft(sourceDetail.plan, clientId)
@@ -215,10 +242,12 @@ export default async function NutritionUnifiedEditorPage({
       // El origen pedido no abrio pero el alumno TIENE plan vigente: degradar a EDICION con
       // aviso (espejo del wizard) — jamas abrir un "plan nuevo" en silencio sobre el vigente.
       const substitutionsLoad = await fetchItemSubstitutionsForVersion(existing.versionId)
+      const substitutionFoodsById = await loadSubstitutionFoodsById(substitutionsLoad)
       return (
         <EditorClient
           {...sharedProps}
           itemSubstitutions={substitutionsLoad.ok ? substitutionsLoad.rows : []}
+          substitutionFoodsById={substitutionFoodsById}
           substitutionsLoadFailed={!substitutionsLoad.ok}
           creation={null}
           originUnavailable
