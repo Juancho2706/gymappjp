@@ -25,6 +25,7 @@ import {
   SplashEvaMark,
   SplashMorphbar,
   splashCenterStyle,
+  splashCoachSourceCenterY,
   splashFigureCenterY,
 } from './SplashBrand'
 
@@ -79,16 +80,6 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
   // no estaban, aparecen con el MISMO umbral (§4 S4/S2) contado desde este montaje.
   const [slow, setSlow] = useState(handoff.slow)
   const [signature, setSignature] = useState(handoff.signature)
-  // Origen del sweep «Glide», heredado TAL CUAL. `null` no se rellena: normalmente
-  // significa que el gate decidio no correr la escena (rama branded, o veredicto lento que
-  // se quedo en el pre-Glide integro — `splashSweepSeed`); tambien cubre el borde
-  // pre-existente del hold branded perdiendo su carrera contra la navegacion (handoff sin
-  // marca Y sin semilla). En todos los casos, sin semilla la figura NO queda escondida:
-  // `SplashEvaMark` ni aplica el estilo animado y pinta la replica estatica de §3.1.
-  // Inventar una semilla aca relanzaria de cero, post-navegacion, la escena suprimida —
-  // exactamente el relanzamiento que el QA en device del 19-08 marco como inconsistencia.
-  const sweepStartedAt = handoff.sweepStartedAt
-
   useEffect(() => {
     const timers = [setTimeout(() => setTimedOut(true), SAFETY_MS)]
     if (!handoff.slow) timers.push(setTimeout(() => setSlow(true), SPLASH_SLOW_MS))
@@ -139,11 +130,13 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
         <>
           <LightLayer spec={ENTRY_LIGHT.returnCoach} accent={mark.accent} />
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, haloStyle]}>
+            {/* Mismo ancla que el gate: el centro optico del TILE del coach, no el de la
+                figura EVA — la luz continua exactamente donde el gate la dejo. */}
             <EntrySource
               accent={mark.accent}
               heat={ENTRY_LIGHT.returnCoach.sourceHeat}
               cx={width / 2}
-              cy={figureCenterY}
+              cy={splashCoachSourceCenterY(height)}
             />
           </Animated.View>
         </>
@@ -163,15 +156,7 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
         {mark ? (
           <SplashCoachMark mark={mark} />
         ) : (
-          <SplashEvaMark
-            signature={signature}
-            initialSignature={handoff.signature}
-            reduced={reduced}
-            // El sweep «Glide» se CONTINUA, no se relanza: el overlay hereda el instante 0
-            // del gate y calcula su propio `elapsed` al montar. Sin esto la figura volveria
-            // a salir volando por la izquierda justo cuando el gate ya la habia asentado.
-            sweepStartedAt={sweepStartedAt}
-          />
+          <SplashEvaMark signature={signature} initialSignature={handoff.signature} reduced={reduced} />
         )}
       </View>
 

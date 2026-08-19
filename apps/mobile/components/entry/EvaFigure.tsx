@@ -13,20 +13,21 @@ import type { ImageStyle, StyleProp } from 'react-native'
  * Reglas:
  *  - `transition={0}`: la imagen debe estar en el PRIMER frame. Un fade de expo-image
  *    rompe el handoff pixel-identico con el splash nativo.
- *  - Un solo asset para los 4 tamanos de la familia (150 / 30 / 22 / 22); el alto se
+ *  - Un solo asset para los 4 tamanos de la familia (180 / 30 / 22 / 22); el alto se
  *    deriva SIEMPRE del aspecto 585:526 para no deformar la silueta.
  *  - El alpha del PNG es practicamente binario (sin antialiasing): no usarlo a tamano
  *    nativo ni ampliado (§5.2).
  *  - La figura es la marca; el texto "EVA" es firma, nunca protagonista (§3.1).
  */
 
-/** Aspecto real del asset: 585 / 526 = 1.1122. */
-export const EVA_FIGURE_RATIO = 585 / 526
+/**
+ * Aspecto y alto derivan de `splash-geometry` (modulo puro, testeable en Node): el tamano
+ * del splash tiene un guard de paridad contra el `imageWidth` de `app.json` y la formula
+ * tiene que ser UNA sola. Re-exportados aca para los consumidores historicos.
+ */
+import { evaFigureHeight } from './splash-geometry'
 
-/** Alto que le corresponde a un ancho dado. 150 → 135, 30 → 27, 22 → 20. */
-export function evaFigureHeight(size: number): number {
-  return Math.round((size * 526) / 585)
-}
+export { EVA_FIGURE_RATIO, evaFigureHeight } from './splash-geometry'
 
 export interface EvaFigureProps {
   /** Ancho en pt. El alto se deriva del aspecto. */

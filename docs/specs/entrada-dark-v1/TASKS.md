@@ -58,6 +58,6 @@ Estado: `[ ]` pendiente · `[x]` hecho · `[-]` descartado. Referencias: [SPEC](
 
 ## Fase 5 — Binario (solo con pedido del owner)
 
-- [x] F5.0 `app.json`: declarar `expo.backgroundColor` (y `android.backgroundColor`) `#07080C` — GAP encontrado en DESIGN-SPEC: hoy el root view nativo es blanco default = flash post-splash (el `#000000` de la linea 36 es del adaptiveIcon, no cuenta)
-- [x] F5.1 `app.json` splash → figura blanca `eva-icon.png` (verificada: 585x526, silueta #FFF, fondo transparente; la actual `eva-mark-filled.png` es la variante NEGRA), `imageWidth` 180→150 per DESIGN-SPEC; verificar antialiasing del alpha casi-binario en device
+- [ ] F5.0 `app.json`: declarar `expo.backgroundColor` (y `android.backgroundColor`) `#07080C` — GAP encontrado en DESIGN-SPEC: hoy el root view nativo es blanco default = flash post-splash. **DESMARCADA 2026-08-19: estaba [x] sin estar hecha** — verificado en `app.json`: ni `expo.backgroundColor` ni `android.backgroundColor` existen (solo el del adaptiveIcon, que no cuenta)
+- [x] F5.1 `app.json` splash → figura blanca `eva-icon.png` (verificada: 585x526, silueta #FFF, fondo transparente). **Corregida 2026-08-19: el `imageWidth` 180→150 que pedia esta tarea NUNCA se aplico y quedo descartado** — 180 es la fuente de verdad y la replica JS se alineo a el (§3.1/§5.2, decision del owner); el antialiasing del alpha casi-binario a 3x/xxxhdpi queda en el QA §7.1
 - [x] F5.2 Entra al proximo build EAS junto a MOB-01 (HealthKit); verificacion del splash real en device

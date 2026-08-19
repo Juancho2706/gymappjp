@@ -52,17 +52,6 @@ export interface SplashHandoff {
   slow: boolean
   /** Opacidad del halo en ese frame: la respiracion continua desde ahi, sin salto. */
   halo: number
-  /**
-   * `Date.now()` del instante en que el gate sembro la coreografia «Glide» del splash EVA
-   * (`components/entry/splash-sweep.ts`). No es un progreso: es el ORIGEN del reloj, y por
-   * eso el overlay puede retomar el barrido en el ms exacto en que iba. Mismo espiritu que
-   * `signature` y `halo`: lo que viaja es el estado, no una orden de reproducir.
-   *
-   * `null` = esta espera no lleva sweep. Es el valor correcto —no un hueco— en la rama de
-   * marca de COACH: ahi el splash es la replica estatica de §3.1 hasta el crossfade, y el
-   * overlay pinta `SplashCoachMark`. El sweep existe solo en el camino sesion + marca EVA.
-   */
-  sweepStartedAt: number | null
 }
 
 export interface SplashSnapshot {
