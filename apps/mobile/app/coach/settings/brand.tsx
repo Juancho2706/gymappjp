@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { cssInterop } from 'nativewind'
 import QRCode from 'react-native-qrcode-svg'
-import { Activity, Camera, Check, ChevronDown, ChevronLeft, Dumbbell, Eye, Flame, Heart, ImageIcon, Info, LayoutTemplate, Loader, Lock, Moon, Palette, Share2, Sparkles, Star, Type, Zap } from 'lucide-react-native'
+import { Activity, AtSign, Camera, Check, ChevronDown, ChevronLeft, Dumbbell, Eye, Flame, Heart, ImageIcon, Info, LayoutTemplate, Loader, Lock, Moon, Palette, Share2, Sparkles, Star, Type, Zap } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, Input, Textarea, SegmentedTabs } from '../../../components'
@@ -29,7 +29,7 @@ import { getCoachOrgContext } from '../../../lib/org'
 import { getCoachProfile } from '../../../lib/coach'
 import { canUseBranding, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { THEME_PRESETS, getThemePreset, resolveBrandTheme, sealPair, type BrandPreset } from '@eva/brand-kit'
-import { FONT_KEY_TUPLE } from '@eva/schemas'
+import { FONT_KEY_TUPLE, normalizeInstagramHandle } from '@eva/schemas'
 import {
   DEFAULT_LOADER_COMPOSITE,
   LOADER_ANIMATION_KEYS,
@@ -130,6 +130,8 @@ export default function MiMarcaScreen() {
 
   const [fullName, setFullName] = useState('')
   const [brandName, setBrandName] = useState('')
+  // Share Entreno — handle de Instagram SIN arroba (el `@` es prefijo visual del campo).
+  const [instagramHandle, setInstagramHandle] = useState('')
   const [color, setColor] = useState('#007AFF')
   const [useBrandColors, setUseBrandColors] = useState(false)
   const [useCustomLoader, setUseCustomLoader] = useState(false)
@@ -174,6 +176,7 @@ export default function MiMarcaScreen() {
         setSettings(s)
         setFullName(s.fullName)
         setBrandName(s.brandName)
+        setInstagramHandle(s.instagramHandle ?? '')
         setColor(s.primaryColor)
         setUseBrandColors(s.useBrandColors)
         setUseCustomLoader(s.useCustomLoader)
@@ -257,6 +260,9 @@ export default function MiMarcaScreen() {
     return (
       fullName !== settings.fullName ||
       brandName !== settings.brandName ||
+      // Se compara NORMALIZADO (lo que se va a guardar), no lo tipeado: así el dirty se apaga
+      // tras guardar aunque el coach haya dejado espacios o una arroba pegada.
+      (normalizeInstagramHandle(instagramHandle) ?? '') !== (settings.instagramHandle ?? '') ||
       color.toLowerCase() !== settings.primaryColor.toLowerCase() ||
       useBrandColors !== settings.useBrandColors ||
       useCustomLoader !== settings.useCustomLoader ||
@@ -276,7 +282,7 @@ export default function MiMarcaScreen() {
       loaderConfigJson !== (settings.loaderConfig ?? '') ||
       executorTheme !== (settings.executorTheme === 'eva' ? 'eva' : 'coach')
     )
-  }, [settings, fullName, brandName, color, useBrandColors, useCustomLoader, loaderText, loaderIconMode, welcomeMessage, welcomeModalEnabled, welcomeModalType, welcomeModalContent, themePresetKey, loginLayoutKey, neutralTint, fontKey, loaderVariant, loaderConfigJson, executorTheme])
+  }, [settings, fullName, brandName, instagramHandle, color, useBrandColors, useCustomLoader, loaderText, loaderIconMode, welcomeMessage, welcomeModalEnabled, welcomeModalType, welcomeModalContent, themePresetKey, loginLayoutKey, neutralTint, fontKey, loaderVariant, loaderConfigJson, executorTheme])
 
   async function pickLogo(variant: 'light' | 'dark' = 'light') {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
@@ -319,6 +325,9 @@ export default function MiMarcaScreen() {
     const r = await updateCoachBrandSettings({
       fullName,
       brandName,
+      // Share Entreno — se manda crudo: el normalizado (trim + quitar `@` + '' ⇒ null) y la
+      // validación viven en updateCoachBrandSettings, misma fuente que la web (@eva/schemas).
+      instagramHandle,
       primaryColor: color,
       useBrandColors,
       loaderText: loaderText || null,
@@ -348,6 +357,7 @@ export default function MiMarcaScreen() {
         ...settings,
         fullName,
         brandName,
+        instagramHandle: normalizeInstagramHandle(instagramHandle),
         primaryColor: color,
         useBrandColors,
         useCustomLoader: useCustomLoader && loaderText.trim().length > 0,
@@ -380,6 +390,8 @@ export default function MiMarcaScreen() {
         displayName: brandName,
         inviteCode: settings.inviteCode ?? '',
         subscriptionTier: tier,
+        // Share Entreno — la cache del device queda al día para las tarjetas que se comparten.
+        instagramHandle: normalizeInstagramHandle(instagramHandle),
         themePresetKey,
         // W-brand B1/B2: campos muertos — null EXPLÍCITO para limpiar restos de la cache local
         // del device (mergeStoredBranding: null limpia). La DB no se toca (grandfather pasivo).
@@ -580,6 +592,24 @@ export default function MiMarcaScreen() {
                   <Input label="Nombre de tu marca" value={brandName} onChangeText={setBrandName} placeholder="Mi Gimnasio" testID="mimarca-brandname" />
                   <Text className="font-sans text-muted" style={{ fontSize: 10, lineHeight: 14 }}>
                     Nombre que ven tus alumnos en la app instalada, la pestaña del navegador y el título.
+                  </Text>
+                </View>
+                {/* Share Entreno — el `@` es prefijo VISUAL (leftIcon del DS): se guarda el handle
+                    sin arroba, y si el coach la pega igual se recorta al tipear. */}
+                <View style={{ gap: 6 }}>
+                  <Input
+                    label="Instagram de tu marca"
+                    value={instagramHandle}
+                    onChangeText={(v) => setInstagramHandle(v.replace(/^@+/, ''))}
+                    placeholder="tumarca"
+                    leftIcon={AtSign}
+                    maxLength={30}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    testID="mimarca-instagram"
+                  />
+                  <Text className="font-sans text-muted" style={{ fontSize: 10, lineHeight: 14 }}>
+                    Opcional — aparecerá en las tarjetas que compartan tus alumnos.
                   </Text>
                 </View>
                 {/* P4: el CÓDIGO es el identificador principal — permanente, no editable. */}

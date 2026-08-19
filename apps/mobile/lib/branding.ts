@@ -20,6 +20,12 @@ export interface CoachBranding {
   welcomeMessage?: string | null
   /** Tier de suscripcion — gatea el branding (isBrandingAllowed: < Pro => EVA). */
   subscriptionTier?: string | null
+  /**
+   * Share Entreno — handle de Instagram del coach (`instagram_handle`), SIN arroba (el `@` es
+   * prefijo visual). Identidad, no branding gateado: lo firman las tarjetas que comparten los
+   * alumnos. GRANT SELECT a `anon` verificado ⇒ seguro en el camino anonimo del login.
+   */
+  instagramHandle?: string | null
   /** Variante de layout del login: clasico | hero | energia | minimal (`login_layout_key`). */
   loginLayoutKey?: string | null
   /**
@@ -86,7 +92,7 @@ export function normalizeCoachIdentifier(input: string): string {
 // dejan de leerse: el par se deriva vía `sealPair` y el color del texto del loader lo decide el
 // motor de contraste del tema.
 const BRANDING_COLS_RICH =
-  'id, slug, primary_color, brand_name, invite_code, logo_url, logo_url_dark, welcome_message, subscription_tier, login_layout_key, neutral_tint, brand_font_key, theme_preset_key, loader_variant, loader_config, use_custom_loader, loader_text, loader_icon_mode, executor_theme'
+  'id, slug, primary_color, brand_name, invite_code, logo_url, logo_url_dark, welcome_message, subscription_tier, login_layout_key, neutral_tint, brand_font_key, theme_preset_key, loader_variant, loader_config, use_custom_loader, loader_text, loader_icon_mode, executor_theme, instagram_handle'
 const BRANDING_COLS_MIN = 'id, slug, primary_color, brand_name, invite_code'
 
 export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
@@ -124,6 +130,8 @@ function mapCoachRowToBranding(data: any): CoachBranding {
     logoUrlDark: data.logo_url_dark ?? null,
     welcomeMessage: data.welcome_message ?? null,
     subscriptionTier: data.subscription_tier ?? null,
+    // Share Entreno — handle sin arroba; ausente (o DB vieja, fallback min) ⇒ null.
+    instagramHandle: data.instagram_handle ?? null,
     loginLayoutKey: data.login_layout_key ?? null,
     // W-brand B2: secundario/acentos almacenados ya no se leen — quedan null en el payload
     // (el resolutor deriva el par del primario; con preset manda el catálogo).

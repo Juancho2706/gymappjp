@@ -525,6 +525,36 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             )}
                         </div>
 
+                        {/* Share Entreno — identidad pública: viaja a las tarjetas que comparten los alumnos.
+                            El `@` es prefijo VISUAL (adorno a la izquierda): se guarda el handle sin arroba. */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="instagram_handle" className="text-sm text-strong font-semibold">
+                                Instagram de tu marca
+                            </Label>
+                            <div className="flex items-center gap-0">
+                                <div className="flex h-10 items-center whitespace-nowrap rounded-l-xl border-[1.5px] border-r-0 border-default bg-surface-sunken px-3 text-sm text-muted">
+                                    @
+                                </div>
+                                <Input
+                                    id="instagram_handle"
+                                    name="instagram_handle"
+                                    defaultValue={coach.instagram_handle ?? ''}
+                                    maxLength={30}
+                                    placeholder="tumarca"
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                    className="h-10 min-w-0 flex-1 rounded-xl rounded-l-none bg-surface-sunken border-default text-strong focus:border-primary"
+                                />
+                            </div>
+                            <p className="text-[10px] text-muted">
+                                Opcional — aparecerá en las tarjetas que compartan tus alumnos.
+                            </p>
+                            {state.fieldErrors?.instagram_handle && (
+                                <p className="text-xs text-destructive">{state.fieldErrors.instagram_handle[0]}</p>
+                            )}
+                        </div>
+
                         {coach.slug && (
                             <div className="space-y-1.5">
                                 <Label className="text-sm text-strong font-semibold">

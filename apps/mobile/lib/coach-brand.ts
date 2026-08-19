@@ -1,6 +1,7 @@
 import * as ImageManipulator from 'expo-image-manipulator'
 import { decode } from 'base64-arraybuffer'
 import { z } from 'zod'
+import { INSTAGRAM_HANDLE_ERROR, INSTAGRAM_HANDLE_RE, normalizeInstagramHandle } from '@eva/schemas'
 import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
 import { parseLoaderConfig } from './brand-loaders'
@@ -35,6 +36,11 @@ export interface CoachBrandSettings {
   id: string
   fullName: string
   brandName: string
+  /**
+   * Share Entreno — handle de Instagram (`instagram_handle`) SIN arroba (el `@` es prefijo
+   * visual del input). Identidad, NO branding gateado: se escribe fuera del gate Pro+.
+   */
+  instagramHandle: string | null
   slug: string
   inviteCode: string | null
   /** P4: el coach personalizó su slug (cambió la URL alguna vez) → mantener editor de slug legacy. */
@@ -79,6 +85,12 @@ export interface CoachBrandSettings {
 export interface CoachBrandEditable {
   fullName?: string
   brandName: string
+  /**
+   * Share Entreno — handle de Instagram (sin arroba; se acepta pegado con `@` y se recorta).
+   * OPT-IN como el resto de los aditivos: `undefined` ⇒ la columna NO entra al update y queda
+   * intacta; `''`/`null` ⇒ se limpia. Se escribe FUERA del gate de branding (es identidad).
+   */
+  instagramHandle?: string | null
   primaryColor: string
   useBrandColors: boolean
   loaderText: string | null
@@ -112,7 +124,7 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
 
   // W-brand B1/B2/B4: brand_secondary_color, accent_light, accent_dark y loader_text_color
   // salieron de ambos selects — el editor ya no los muestra ni los escribe (las columnas quedan).
-  const baseCols = 'id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type'
+  const baseCols = 'id, full_name, brand_name, instagram_handle, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type'
   // E7-10: columnas white-label v2 (avanzado). Van en la query RICH; si una prod vieja no las
   // tiene, selectWithFallback cae a baseCols y quedan en null/defaults (degradación limpia).
   // QA4: loader_config + executor_theme entran SOLO por este camino AUTENTICADO (el coach lee su
@@ -132,6 +144,7 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
     id: data.id,
     fullName: data.full_name ?? '',
     brandName: data.brand_name ?? '',
+    instagramHandle: data.instagram_handle ?? null,
     slug: data.slug ?? '',
     inviteCode: data.invite_code ?? null,
     hasLegacySlug,
@@ -177,6 +190,14 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
   }
   // W-brand B1/B2/B4: murieron los inputs hex de secundario/acentos/color de texto del loader —
   // no hay nada que validar acá; esos campos ya no entran al payload (whitelist explícita abajo).
+  // Share Entreno — handle de Instagram: mismo normalizado y mismo regex que la web (fuente única
+  // en @eva/schemas, espejo del CHECK de la DB). Se valida ANTES del update para no comerse un
+  // 23514 crudo de Postgres; `undefined` (editor que no lo manda) ni se toca.
+  const instagramHandle =
+    input.instagramHandle !== undefined ? normalizeInstagramHandle(input.instagramHandle) : undefined
+  if (instagramHandle && !INSTAGRAM_HANDLE_RE.test(instagramHandle)) {
+    return { ok: false, error: `Instagram: ${INSTAGRAM_HANDLE_ERROR}` }
+  }
 
   // Bump welcome_modal_version when the modal changes so students re-see it (web parity).
   const { data: current } = await supabase
@@ -202,6 +223,9 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
       // M-F2: full_name editable desde Mi Marca (antes no se escribía).
       ...(input.fullName != null && input.fullName.trim() ? { full_name: input.fullName.trim() } : {}),
       brand_name: name,
+      // Share Entreno — identidad (va en las tarjetas que comparten los alumnos), NO branding
+      // visual: se persiste fuera del gate Pro+, igual que full_name/brand_name en la web.
+      ...(instagramHandle !== undefined ? { instagram_handle: instagramHandle } : {}),
       welcome_message: input.welcomeMessage?.trim() || null,
       welcome_modal_enabled: input.welcomeModalEnabled,
       welcome_modal_content: modalContent,

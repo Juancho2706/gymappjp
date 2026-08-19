@@ -40,6 +40,9 @@ export async function updateBrandSettingsAction(
     const raw = {
         full_name: formData.get('full_name') as string,
         brand_name: formData.get('brand_name') as string,
+        // Share Entreno — el input manda el handle SIN arroba (el `@` es prefijo visual); el schema
+        // igual recorta la que venga pegada y deja '' → null.
+        instagram_handle: (formData.get('instagram_handle') as string | null)?.trim() ?? '',
         primary_color: formData.get('primary_color') as string,
         use_brand_colors_coach: formData.get('use_brand_colors_coach') === 'on',
         welcome_message: (formData.get('welcome_message') as string | null)?.trim() ?? '',
@@ -117,6 +120,9 @@ export async function updateBrandSettingsAction(
     const updatePayload: Record<string, unknown> = {
         full_name: parsed.data.full_name,
         brand_name: parsed.data.brand_name,
+        // Share Entreno — el handle de Instagram es IDENTIDAD (va en las tarjetas que comparten
+        // los alumnos), no personalización visual: se persiste SIEMPRE, fuera del gate Pro+.
+        instagram_handle: parsed.data.instagram_handle ?? null,
         welcome_message: parsed.data.welcome_message || null,
         welcome_modal_enabled: parsed.data.welcome_modal_enabled,
         welcome_modal_content: parsed.data.welcome_modal_content || null,

@@ -3,9 +3,34 @@ import { FONT_KEY_TUPLE, LOADER_VARIANT_TUPLE } from './brand'
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
+/**
+ * Espejo EXACTO del CHECK de `coaches.instagram_handle` en la DB
+ * (`instagram_handle ~ '^[A-Za-z0-9._]{1,30}$'`). Si cambia uno, cambia el otro.
+ */
+export const INSTAGRAM_HANDLE_RE = /^[A-Za-z0-9._]{1,30}$/
+export const INSTAGRAM_HANDLE_ERROR = 'Solo letras, números, puntos y guion bajo (máx. 30)'
+
+/**
+ * Handle de Instagram crudo → valor listo para la columna. El `@` es prefijo VISUAL: el form
+ * manda el handle sin arroba, pero el coach igual lo pega con una (o varias) → se recortan acá.
+ * Vacío ⇒ `null` (limpia la columna, nunca guarda string vacío que el CHECK rechazaría).
+ * Unica fuente del normalizado: la usan el schema de la web y el editor de marca mobile.
+ */
+export function normalizeInstagramHandle(raw: string | null | undefined): string | null {
+    const clean = (raw ?? '').trim().replace(/^@+/, '').trim()
+    return clean === '' ? null : clean
+}
+
 export const BrandSettingsSchema = z.object({
     full_name: z.string().min(2, 'Nombre requerido').max(100),
     brand_name: z.string().min(2, 'Nombre de marca requerido').max(100),
+    // Share Entreno — IDENTIDAD (no branding visual): el server action lo escribe SIEMPRE, fuera
+    // del gate Pro+. Se normaliza antes de validar; `null` = sin handle (columna nullable).
+    instagram_handle: z
+        .string()
+        .optional()
+        .transform((v) => normalizeInstagramHandle(v))
+        .refine((v) => v === null || INSTAGRAM_HANDLE_RE.test(v), INSTAGRAM_HANDLE_ERROR),
     // slug e invite_code son INMUTABLES (set-once en el registro) — no se editan en settings.
     primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color hexadecimal inválido'),
     use_brand_colors_coach: z.boolean().default(false),

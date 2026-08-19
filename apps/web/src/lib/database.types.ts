@@ -743,6 +743,9 @@ export type Database = {
           org_id: string | null
           phone: string | null
           ref_5k_time_sec: number | null
+          referral_card_kind: string | null
+          referral_source: string | null
+          referred_by_client_id: string | null
           resting_hr: number | null
           subscription_start_date: string | null
           team_id: string | null
@@ -766,6 +769,9 @@ export type Database = {
           org_id?: string | null
           phone?: string | null
           ref_5k_time_sec?: number | null
+          referral_card_kind?: string | null
+          referral_source?: string | null
+          referred_by_client_id?: string | null
           resting_hr?: number | null
           subscription_start_date?: string | null
           team_id?: string | null
@@ -789,6 +795,9 @@ export type Database = {
           org_id?: string | null
           phone?: string | null
           ref_5k_time_sec?: number | null
+          referral_card_kind?: string | null
+          referral_source?: string | null
+          referred_by_client_id?: string | null
           resting_hr?: number | null
           subscription_start_date?: string | null
           team_id?: string | null
@@ -1187,6 +1196,7 @@ export type Database = {
           paid_access_ended_at?: string | null
           health_data_consent_at: string | null
           id: string
+          instagram_handle: string | null
           invite_code: string
           last_active_at: string | null
           loader_config: Json | null
@@ -1251,6 +1261,7 @@ export type Database = {
           full_name: string
           health_data_consent_at?: string | null
           id: string
+          instagram_handle?: string | null
           invite_code?: string
           last_active_at?: string | null
           loader_config?: Json | null
@@ -1315,6 +1326,7 @@ export type Database = {
           full_name?: string
           health_data_consent_at?: string | null
           id?: string
+          instagram_handle?: string | null
           invite_code?: string
           last_active_at?: string | null
           loader_config?: Json | null

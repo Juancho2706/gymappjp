@@ -16,21 +16,34 @@ encolar el build 1.1.2 (F9).
 
 ## F0 — Fixes del motor existente (prerrequisito de todo)
 
-- [ ] F0.1 `ShareCard.tsx:590`: iOS compartir SOLO archivo (quitar `message` del `Share.share`
-      cuando hay imagen); verificar share de Records sigue OK (regresión).
-- [ ] F0.2 Contrato `onShared` → semántica «share sheet abierto» (Android no distingue cancelar);
-      renombrar callback y todo consumidor; comentario de contrato en el tipo.
-- [ ] F0.3 tsc mobile + tests afectados (ACUMULAR — CPU bloqueada).
+- [x] F0.1 `ShareCard.tsx`: iOS comparte SOLO archivo (sin `message` — WhatsApp/IG tomaban el
+      texto y botaban la imagen); `shareMessage` queda como dialogTitle/fallback Android.
+      Regresión de Records: QA device pendiente (acumulado).
+- [x] F0.2 `onShared` (prop muerta, 0 consumidores) → `onShareOutcome('shared'|'dismissed'|
+      'unknown')`: iOS honesto, Android siempre 'unknown' (shareAsync no distingue cancelar);
+      contrato documentado en el tipo — instrumentar INTENTOS, el éxito lo mide `?ref=`.
+- [ ] F0.3 tsc mobile + tests afectados (ACUMULADO — CPU bloqueada por el owner).
 
 ## F1 — DDL + Mi Marca (@handle)
 
-- [ ] F1.1 DDL en LIVE (protocolo: tx-rollback antes, advisors después):
-      `coaches.instagram_handle` + CHECK + `grant update (instagram_handle)` a authenticated;
-      `clients.referred_by_client_id/referral_source/referral_card_kind` (sin grant — escribe server).
-- [ ] F1.2 Regenerar `database.types.ts` (web y mobile si aplica).
-- [ ] F1.3 Mi Marca (web): input @handle con Zod espejo del CHECK; guardado por la ruta de
-      branding existente; mostrarlo en la preview de marca.
-- [ ] F1.4 Branding payload móvil: exponer `instagram_handle` donde el móvil lee el branding.
+- [x] F1.1 DDL EN LIVE 19-08 (tx-rollback verde → `apply_migration` → advisors 0 ERROR):
+      migración `20260819223729_share_entreno_instagram_handle_y_referral` (espejo en repo).
+      Extra vs plan: `grant select (instagram_handle) to anon` (el select RICH anónimo del
+      login white-label falla entero sin él) + índice parcial en `referred_by_client_id`.
+- [x] F1.2 `database.types.ts` actualizado quirúrgico (coaches + clients, Row/Insert/Update;
+      falta solo la entrada `Relationships` del FK — la pondrá el próximo regen completo).
+- [x] F1.3 Mi Marca (web): input @handle (prefijo @ visual) en «Identidad de tu marca»;
+      Zod + normalizador ÚNICA FUENTE en `@eva/schemas` (`normalizeInstagramHandle`,
+      `INSTAGRAM_HANDLE_RE` espejo del CHECK); se escribe SIEMPRE (fuera del gate Pro+ —
+      es identidad, como brand_name); `settings.queries.ts` suma la columna al select
+      explícito (sin eso cada Guardar la borraba).
+- [x] F1.4 Móvil: `CoachBranding.instagramHandle` + `BRANDING_COLS_RICH` + mapper
+      (branding.ts); editor Mi Marca RN completo (coach-brand.ts + brand.tsx: input con
+      leftIcon @, dirty normalizado, cache del device parcheada).
+- [ ] F1.5 ⚠ DECISIÓN PRODUCTO PENDIENTE: el coach FREE no tiene UI para llegar al campo —
+      `/coach/settings/brand` (web) y `brand.tsx` (RN) están gateadas Pro+ ENTERAS
+      (`isBrandingAllowed`). El handle ya se persiste sin gate en ambos servers; falta decidir
+      dónde lo edita un Free (ligado a la discusión white-label-en-Free del socio).
 
 ## F2 — ShareCanvas + 6 presets (la imagen)
 
