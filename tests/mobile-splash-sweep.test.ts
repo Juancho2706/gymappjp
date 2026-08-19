@@ -18,6 +18,7 @@ import {
   splashSweepElapsed,
   splashSweepFigure,
   splashSweepMs,
+  splashSweepSeed,
   splashSweepProgress,
   splashSweepStreakOpacity,
   splashSweepStreakX,
@@ -245,6 +246,31 @@ describe('estelas de velocidad', () => {
     for (const [from, to] of SPLASH_SWEEP_STREAK_COLORS) {
       expect(from).toBe(to.replace(/[\d.]+\)$/, '0)'))
     }
+  })
+})
+
+describe('semilla del veredicto (splashSweepSeed — misma regla en la rama temprana y la tardia)', () => {
+  it('la semilla previa GANA: re-sembrar relanzaria la escena a mitad de vuelo', () => {
+    expect(splashSweepSeed(1_000, false, 1_400)).toBe(1_000)
+    // Gana incluso si la espera se hizo lenta despues de sembrar: la escena ya corre.
+    expect(splashSweepSeed(1_000, true, 1_400)).toBe(1_000)
+  })
+
+  it('un gate que ya se hizo lento NO siembra: pre-Glide integro, sin relanzamiento', () => {
+    // La firma lleva rato en pantalla con su fade por umbral (QA en device 19-08:
+    // «nativo → loader viejo → sweep → loader viejo»). `null` viaja hasta el overlay.
+    expect(splashSweepSeed(null, true, 1_400)).toBeNull()
+  })
+
+  it('veredicto TEMPRANO que igual se hizo lento (AsyncStorage frio, refresh de token): tampoco siembra', () => {
+    // La revision adversarial cazo que blindar solo el veredicto tardio dejaba el caso
+    // mayoritario (sin branding guardado) relanzando la escena sobre la firma visible.
+    // La regla es una sola: espera lenta ⇒ nunca sweep, sin importar la rama.
+    expect(splashSweepSeed(null, true, 900)).toBeNull()
+  })
+
+  it('veredicto rapido sin semilla previa: siembra en `now`', () => {
+    expect(splashSweepSeed(null, false, 1_400)).toBe(1_400)
   })
 })
 

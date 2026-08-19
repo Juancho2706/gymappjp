@@ -24,7 +24,10 @@
  * EVA—, no el primer paint. Sembrarlo en el primer paint hacia volar la figura EVA con sus
  * estelas por encima del crossfade a la marca del coach, y cortaba el barrido por la mitad
  * en el cold start anonimo (el gate se desmonta hacia el selector a los ~100-600 ms y ahi
- * no hay overlay que lo continue). Ver `SplashGate`.
+ * no hay overlay que lo continue). Ese veredicto tiene dos momentos: TEMPRANO (sin branding
+ * guardado no puede haber marca — cero red, ~100-150 ms) y TARDIO (habia branding que
+ * validar contra `getCoachProfile()`); el tardio pasa por `splashSweepLateSeed`, que no
+ * re-siembra ni relanza la escena sobre una espera que ya se hizo lenta. Ver `SplashGate`.
  */
 
 /** El canvas autoral se reproduce a 2x. Unica constante que traduce diseno → app. */
@@ -201,6 +204,25 @@ export function splashClockNow(): number {
 /** `splashSweepElapsed` contra el reloj del sistema. Ver `splashClockNow`. */
 export function splashSweepElapsedNow(startedAt: number | null): number {
   return splashSweepElapsed(startedAt, splashClockNow())
+}
+
+/**
+ * Semilla del sweep en el veredicto del gate — la MISMA regla para el veredicto temprano y
+ * el tardio (la revision adversarial cazo que blindar solo el tardio dejaba el caso
+ * mayoritario expuesto: un "temprano" que igual supero los 600 ms — refresh de token,
+ * AsyncStorage frio — relanzaba la escena sobre la firma ya visible). Reglas, en orden:
+ *  1. Una semilla previa GANA: re-sembrar relanzaria la escena a mitad de vuelo.
+ *  2. Un gate que ya se hizo lento NO siembra: la firma lleva rato en pantalla con su fade
+ *     por umbral, y relanzar la escena completa encima es la inconsistencia que el QA en
+ *     device marco el 19-08 (nativo → look viejo → sweep → look viejo). Gate lento =
+ *     comportamiento pre-Glide integro, `null` de punta a punta (el overlay tampoco rellena).
+ *  3. Si no, la semilla es `now`. Tanto `slow` como `now` se leen FUERA del updater de
+ *     estado que reciba esta funcion (los updaters deben ser puros).
+ */
+export function splashSweepSeed(prev: number | null, slow: boolean, now: number): number | null {
+  if (prev != null) return prev
+  if (slow) return null
+  return now
 }
 
 export interface SplashSweepFigure {

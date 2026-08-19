@@ -19,7 +19,6 @@ import {
 } from '../../context/DashboardReadyContext'
 import { EntryGrain, EntrySource } from './EntryBackground'
 import { ENTRY_LIGHT, LightLayer } from './LightLayer'
-import { splashClockNow } from './splash-sweep'
 import {
   SPLASH_SLOW_MS,
   SplashCoachMark,
@@ -80,12 +79,15 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
   // no estaban, aparecen con el MISMO umbral (§4 S4/S2) contado desde este montaje.
   const [slow, setSlow] = useState(handoff.slow)
   const [signature, setSignature] = useState(handoff.signature)
-  // Origen del sweep «Glide». Espejo del cinturon del gate: si el handoff llegara sin
-  // semilla en la rama EVA (`null`), el reloj se quedaria en 0 y la figura viviria FUERA de
-  // cuadro hasta el tope de 5 s — un splash sin marca. Con el fallback, el peor caso es que
-  // la escena arranque de cero aca. Se calcula una sola vez (inicializador perezoso): leer
-  // el reloj en cada render moveria el origen y el barrido nunca avanzaria.
-  const [sweepStartedAt] = useState(() => handoff.sweepStartedAt ?? splashClockNow())
+  // Origen del sweep «Glide», heredado TAL CUAL. `null` no se rellena: normalmente
+  // significa que el gate decidio no correr la escena (rama branded, o veredicto lento que
+  // se quedo en el pre-Glide integro — `splashSweepSeed`); tambien cubre el borde
+  // pre-existente del hold branded perdiendo su carrera contra la navegacion (handoff sin
+  // marca Y sin semilla). En todos los casos, sin semilla la figura NO queda escondida:
+  // `SplashEvaMark` ni aplica el estilo animado y pinta la replica estatica de §3.1.
+  // Inventar una semilla aca relanzaria de cero, post-navegacion, la escena suprimida —
+  // exactamente el relanzamiento que el QA en device del 19-08 marco como inconsistencia.
+  const sweepStartedAt = handoff.sweepStartedAt
 
   useEffect(() => {
     const timers = [setTimeout(() => setTimedOut(true), SAFETY_MS)]
