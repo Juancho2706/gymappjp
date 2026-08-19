@@ -22,7 +22,9 @@ encolar el build 1.1.2 (F9).
 - [x] F0.2 `onShared` (prop muerta, 0 consumidores) → `onShareOutcome('shared'|'dismissed'|
       'unknown')`: iOS honesto, Android siempre 'unknown' (shareAsync no distingue cancelar);
       contrato documentado en el tipo — instrumentar INTENTOS, el éxito lo mide `?ref=`.
-- [ ] F0.3 tsc mobile + tests afectados (ACUMULADO — CPU bloqueada por el owner).
+- [x] F0.3 Gates corridos 19-08 al liberar CPU: tsc mobile, typecheck monorepo, lint (0 err),
+      tests (5985 ✓), docs:check, boundaries, tokens — TODOS verdes. QA device de regresión
+      del share de Records queda en F9.2.
 
 ## F1 — DDL + Mi Marca (@handle)
 
@@ -47,20 +49,24 @@ encolar el build 1.1.2 (F9).
 
 ## F2 — ShareCanvas + 6 presets (la imagen)
 
-- [ ] F2.1 Estructura `apps/mobile/components/alumno/share/`: ShareCanvas + capas (Background,
-      stickers: VolumenHero, StatsRow, MuscleFigure, RecordsBand, ExerciseSetlist, BrandFooter
-      con logo+@handle, DateChip, StreakChip, QR).
-- [ ] F2.2 MuscleFigure: reuso de MuscleMapSvg/body-anatomy con intensidad de
-      `muscleGroupsToRegionIntensity`; variantes frente/espalda/ambos + chips.
-- [ ] F2.3 PresetEngine: los 6 presets como datos (Placa default, Heatmap, Sello, Marcador,
-      Set-list, Póster) con defaults de posición/visibilidad/fondo/aspect según mockup
-      (artifact `3d5e94c1`).
-- [ ] F2.4 Fondos: foto (cámara frontal default / galería), fondo de marca (sin foto),
-      TRANSPARENTE (PNG con alpha para sticker mode).
-- [ ] F2.5 Captura view-shot PNG limpia (ref sin chrome de edición); limpieza del tmpfile.
-- [ ] F2.6 Póster: segmentación de sujeto (iOS Vision / Android ML Kit) con degradación
-      número-adelante alpha 0.14 si no disponible. Si estrangula timeline: lanzar solo con
-      degradación (anotar aquí).
+- [x] F2.1 Estructura completa en `apps/mobile/components/alumno/share/` (`3191fe20`+`e585e323`):
+      share-types (StickerState con centro normalizado 0..1 + scale + rotation), 9 stickers
+      puros (contrato `{data,k,stickerScale,tokens}` en sticker-kit), ShareCanvas (anclaje por
+      centro vía onLayout con guard anti-bucle; opacity 0 hasta medir — frame capturable),
+      build-share-data (réplica exacta de la detección de récords del resumen; ★ por exerciseId).
+- [x] F2.2 MuscleBodySvg standalone (front/back/both sobre BODY_SHAPES filtrado por side,
+      mismos tiers/alfas que MuscleMapSvg, acento por prop, sin ThemeContext) + variante chips.
+- [x] F2.3 Los 6 presets como DATOS con defaults del mockup (ajustes de colisión documentados
+      en share-presets.ts; rieles laterales de Marcador/Póster con rotation ±90).
+- [x] F2.4 Fondos: foto (velo inferior de legibilidad; helpers `takeSharePhoto` cámara FRONTAL
+      default / `pickSharePhoto`), marca (tinta diagonal + halo de acento), TRANSPARENTE real
+      (PNG con alpha). Pantalla pre-permiso «Continuar» (App Review 5.1.1(iv)) → la pone F3.
+- [x] F2.5 `captureShareCanvas` (1080×1920, rename + fallback, `collapsable={false}` en raíz y
+      caller) + `cleanupShareCapture`. Harness de QA device: `dev-harness/share-canvas`
+      (guard `__DEV__`, mock realista, damero para ver el alpha, switcher de presets).
+- [~] F2.6 Póster: lanzado con DEGRADACIÓN (cifra delante con alpha, `posterGhost`) —
+      la segmentación de sujeto nativa (iOS Vision / ML Kit) queda como spike posterior
+      (módulo nativo ⇒ binario; evaluar para 1.1.2 solo si sobra timeline).
 
 ## F3 — Editor (paso 2)
 
