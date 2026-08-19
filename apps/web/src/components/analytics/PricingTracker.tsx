@@ -1,91 +1,115 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef } from 'react'
+import {
+    useCallback,
+    useEffect,
+    useState,
+    type CSSProperties,
+    type FocusEventHandler,
+    type MouseEventHandler,
+    type ReactNode,
+} from 'react'
 import { usePostHog } from 'posthog-js/react'
-import { CONSENT_CHANGE_EVENT, type ConsentValue } from '@/lib/posthog/consent'
+import { useDeferredCapture } from '@/lib/posthog/deferred-capture'
 import type { SubscriptionTier } from '@/lib/constants'
 
-// Reintento acotado (espejo del patron trackMetaEvent de lib/meta/pixel.ts): en un aterrizaje
-// directo a /pricing el effect de este hijo corre ANTES del posthog.init() del provider (los
-// effects de React van de hijo a padre), asi que el primer capture puede caer pre-init.
-const RETRY_INTERVAL_MS = 500
-const RETRY_MAX_ATTEMPTS = 6 // ~3s
+/**
+ * Donde vive la vitrina que se esta mirando. `/pricing` es una pagina HUERFANA (no la enlaza nadie):
+ * el trafico real ve los precios en la seccion `#precios` de la landing, y hasta ahora esa mitad del
+ * embudo no emitia nada. La propiedad es ADITIVA — los eventos historicos simplemente no la traen.
+ */
+export type PricingSurface = 'pricing' | 'landing'
 
 /**
- * pricing_viewed — pageview propio del funnel de /pricing (Pricing v2 E1, invariante P8).
+ * pricing_viewed — pageview propio del funnel de precios (Pricing v2 E1, invariante P8).
  *
- * MISMO gate de consentimiento que el resto de PostHog (Ley 21.719): el init corre con
- * opt_out_capturing_by_default, asi que `capture` devuelve undefined y NO manda nada por red
- * mientras el usuario no acepte el banner. Si el usuario acepta con /pricing ya abierta, el
- * banner emite CONSENT_CHANGE_EVENT (mismo mecanismo que armo MetaPixel en 7df9aa6c) y recien
- * ahi disparamos. Sin consentimiento: cero requests, cero eventos.
+ * MISMO gate de consentimiento que el resto de PostHog (Ley 21.719) y mismo reintento pre-init:
+ * ambos viven en `useDeferredCapture`.
+ *
+ * `observeElementId`: sin el (caso /pricing) la pagina ENTERA es la vitrina, asi que montarse ya es
+ * verla. En la landing los precios son una seccion muy abajo — emitir al montar convertiria
+ * `pricing_viewed` en un segundo pageview de la landing (100% de «vieron precios», dato inutil), asi
+ * que ahi el evento espera a que la seccion entre en pantalla.
  */
-export function PricingViewTracker() {
+export function PricingViewTracker({
+    surface = 'pricing',
+    observeElementId,
+}: {
+    surface?: PricingSurface
+    observeElementId?: string
+} = {}) {
     const ph = usePostHog()
-    const hasFired = useRef(false)
+    const [seen, setSeen] = useState(!observeElementId)
 
     useEffect(() => {
-        if (!ph) return
-        let attempts = 0
-        let timer: number | undefined
+        if (!observeElementId || seen) return
+        const target = document.getElementById(observeElementId)
+        // Sin target (o sin IntersectionObserver): degradamos a «visible ya» — perder el evento es
+        // peor que adelantarlo.
+        if (!target || typeof IntersectionObserver === 'undefined') {
+            setSeen(true)
+            return
+        }
+        const observer = new IntersectionObserver((entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return
+            observer.disconnect()
+            setSeen(true)
+        })
+        observer.observe(target)
+        return () => observer.disconnect()
+    }, [observeElementId, seen])
 
-        const fire = () => {
-            if (hasFired.current) return
-            // capture devuelve un CaptureResult SOLO si posthog ya inicio Y el usuario esta
-            // opted-in; undefined = no salio nada (pre-init u opted-out) y el flag no se marca.
-            if (ph.capture('pricing_viewed')) hasFired.current = true
-        }
-
-        const fireWithRetry = () => {
-            fire()
-            if (hasFired.current) return
-            attempts += 1
-            if (attempts >= RETRY_MAX_ATTEMPTS) return
-            timer = window.setTimeout(fireWithRetry, RETRY_INTERVAL_MS)
-        }
-        fireWithRetry()
-
-        // El banner despacha el evento ANTES de aplicar el opt-in sobre la instancia
-        // (setStoredConsent → applyConsent en CookieConsent.handle): diferimos un tick para
-        // capturar recien con el opt_in_capturing() ya aplicado.
-        const onConsentChange = (event: Event) => {
-            if ((event as CustomEvent<ConsentValue>).detail !== 'accepted') return
-            window.setTimeout(fire, 0)
-        }
-        window.addEventListener(CONSENT_CHANGE_EVENT, onConsentChange)
-        return () => {
-            if (timer !== undefined) window.clearTimeout(timer)
-            window.removeEventListener(CONSENT_CHANGE_EVENT, onConsentChange)
-        }
-    }, [ph])
+    const fire = useCallback(() => ph?.capture('pricing_viewed', { surface }), [ph, surface])
+    useDeferredCapture(fire, seen)
 
     return null
 }
 
 /**
- * CTA de plan en /pricing: captura pricing_plan_clicked({ tier }) al click y navega igual que
- * el Link original (patron UpgradeCTALink). Gated por consentimiento como todo capture: opted-out
- * ⇒ no-op sin requests. Client component aislado para poder usarse desde el Server Component.
+ * CTA de plan: captura pricing_plan_clicked({ tier, surface }) al click y navega igual que el Link
+ * original (patron UpgradeCTALink). Gated por consentimiento como todo capture: opted-out ⇒ no-op
+ * sin requests. Client component aislado para poder usarse desde el Server Component de /pricing.
+ *
+ * `style` + los handlers de hover existen porque la seccion de precios de la LANDING es una
+ * transcripcion 1:1 del diseño con estilos inline y hover por estado — sin esos passthrough, cambiar
+ * su `<Link>` por este componente le borraria el hover y el look.
  */
 export function PricingPlanLink({
     tier,
     href,
     className,
+    style,
+    surface = 'pricing',
     children,
+    onMouseEnter,
+    onMouseLeave,
+    onFocus,
+    onBlur,
 }: {
     tier: SubscriptionTier
     href: string
     className?: string
-    children: React.ReactNode
+    style?: CSSProperties
+    surface?: PricingSurface
+    children: ReactNode
+    onMouseEnter?: MouseEventHandler<HTMLAnchorElement>
+    onMouseLeave?: MouseEventHandler<HTMLAnchorElement>
+    onFocus?: FocusEventHandler<HTMLAnchorElement>
+    onBlur?: FocusEventHandler<HTMLAnchorElement>
 }) {
     const ph = usePostHog()
     return (
         <Link
             href={href}
             className={className}
+            style={style}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+            onFocus={onFocus}
+            onBlur={onBlur}
             onClick={() => {
-                ph?.capture('pricing_plan_clicked', { tier })
+                ph?.capture('pricing_plan_clicked', { tier, surface })
             }}
         >
             {children}

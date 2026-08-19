@@ -12,6 +12,12 @@
  *    Free hasta 2 · Pro hasta 25 · Elite 26–60; starter fuera de venta).
  *  - CTAs → `/register?tier=<id>&cycle=<ciclo activo>` (Free → `/register`).
  *
+ * Analitica (Pricing v2 E1, invariante P8): el embudo de precios vivia SOLO en `/pricing`, que es
+ * una pagina huerfana — el trafico real mira ESTOS precios. Por eso la seccion monta
+ * `PricingViewTracker` (emite `pricing_viewed` con `surface: 'landing'` recien cuando `#precios`
+ * entra en pantalla, no al montar: si no, seria un segundo pageview de la landing) y sus 3 CTA son
+ * `PricingPlanLink` (`pricing_plan_clicked`). Mismo gate de consentimiento que todo PostHog.
+ *
  * Estado transversal desde el provider (§7): `t` (i18n), `cycle`/`setCycle` (ciclo
  * compartido 'm'|'q'|'a'). El color de marca llega por CSS (`var(--brand)`), sin JS.
  * Hovers de los CTA (`style-hover` del diseño) → `onMouseEnter/Leave` + estado; el
@@ -22,7 +28,6 @@
  * `{{count}}` — ya no el "818" mock del diseño, para no mentir el tamaño del catálogo.
  */
 
-import Link from 'next/link'
 import { type CSSProperties, useEffect, useState } from 'react'
 import {
     type BillingCycle,
@@ -30,6 +35,7 @@ import {
     getTierMaxClients,
     BILLING_CYCLE_CONFIG,
 } from '@eva/tiers'
+import { PricingPlanLink, PricingViewTracker } from '@/components/analytics/PricingTracker'
 import { useLandingBrand } from './_brand-provider'
 
 const FONT_MONO = 'var(--font-geist-mono), ui-monospace, monospace'
@@ -154,6 +160,10 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                 margin: '0 auto',
             }}
         >
+            {/* pricing_viewed({ surface: 'landing' }) — no pinta nada; espera a que `#precios`
+                entre en pantalla para no confundirse con un pageview de la landing. */}
+            <PricingViewTracker surface="landing" observeElementId="precios" />
+
             {/* Header + toggle de ciclo */}
             <div
                 data-reveal
@@ -310,9 +320,15 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     </ul>
                     {/* Explícito: los CTA de pago ya mandan su tier (`?tier=pro` / `?tier=elite`), y
                         el de Free no puede quedarse en el default del wizard. */}
-                    <Link href="/register?tier=free" style={ghostCta('free')} {...hoverHandlers('free')}>
+                    <PricingPlanLink
+                        tier="free"
+                        surface="landing"
+                        href="/register?tier=free"
+                        style={ghostCta('free')}
+                        {...hoverHandlers('free')}
+                    >
                         {t('pf_cta', 'Empezar gratis')}
-                    </Link>
+                    </PricingPlanLink>
                 </div>
 
                 {/* PRO (destacada) */}
@@ -410,7 +426,9 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             {t('pp_5', '4 módulos profesionales incluidos')}
                         </li>
                     </ul>
-                    <Link
+                    <PricingPlanLink
+                        tier="pro"
+                        surface="landing"
                         href={`/register?tier=pro&cycle=${billing}`}
                         {...hoverHandlers('pro')}
                         style={{
@@ -435,7 +453,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                         }}
                     >
                         {t('pp_cta', 'Elegir Pro →')}
-                    </Link>
+                    </PricingPlanLink>
                 </div>
 
                 {/* ELITE */}
@@ -486,13 +504,15 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             {t('pe_5', '4 módulos profesionales incluidos')}
                         </li>
                     </ul>
-                    <Link
+                    <PricingPlanLink
+                        tier="elite"
+                        surface="landing"
                         href={`/register?tier=elite&cycle=${billing}`}
                         style={ghostCta('elite')}
                         {...hoverHandlers('elite')}
                     >
                         {t('pe_cta', 'Elegir Elite')}
-                    </Link>
+                    </PricingPlanLink>
                 </div>
             </div>
 

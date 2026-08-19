@@ -12,11 +12,28 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (!token) return
+        // Ley 21.719 + captura COOKIELESS pre-consentimiento (autorizada por el dueño 2026-08-19).
+        // Antes esto era `opt_out_capturing_by_default: true` a secas: mientras el visitante no
+        // tocara el banner NO salía absolutamente nada, y como el banner se ignora o se cierra con
+        // la X (que a propósito no persiste elección), el embudo de adquisición era ciego justo en
+        // el tramo que paga la campaña. Ahora, según lo GUARDADO:
+        //
+        //   null (indeciso) → persistence 'memory': se captura anónimo, sin cookie ni localStorage,
+        //                     sin identificador que sobreviva a la recarga. Nada que consentir.
+        //   'accepted'      → 'localStorage+cookie' (el default de posthog) — camino de HOY intacto.
+        //   'rejected'      → opted-out: cero eventos, cero requests. Memoria porque no hay nada
+        //                     que guardar (la elección vive en NUESTRO localStorage, no en el de ph).
+        //
+        // `applyConsent` hace el salto memoria → persistente al aceptar (conserva el distinct_id).
+        const storedConsent = getStoredConsent()
         posthog.init(token, {
             api_host: '/ph',
             ui_host: uiHost,
-            // Ley 21.719: no capturar sin consentimiento explícito. CookieConsent llama opt_in_capturing() al aceptar.
-            opt_out_capturing_by_default: true,
+            persistence: storedConsent === 'accepted' ? 'localStorage+cookie' : 'memory',
+            opt_out_capturing_by_default: storedConsent === 'rejected',
+            // Un session replay NO es «analítica anónima»: graba la pantalla. Sin un sí explícito,
+            // no se graba (si el proyecto lo tiene apagado, esto es inerte de todos modos).
+            disable_session_recording: storedConsent !== 'accepted',
             person_profiles: 'identified_only',
             capture_pageview: false,
             capture_pageleave: true,

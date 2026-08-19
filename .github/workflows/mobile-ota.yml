@@ -119,3 +119,38 @@ jobs:
             sleep 5
           done
           exit 1
+
+      # `eas update` corre `expo export --dump-sourcemap` por dentro y deja el resultado en
+      # `apps/mobile/dist` (su flag --input-dir apunta ahi por default y NO lo limpia al terminar).
+      # De ahi salen los .hbc y sus .map.
+      #
+      # Se usa el wrapper `sentry-expo-upload-sourcemaps` que trae @sentry/react-native y no
+      # `sentry-cli` a mano porque hace UN paso extra imprescindible: copia el `debugId` del mapa
+      # a `debug_id` antes de subirlo, y recien ahi el mapa matchea con el bundle (el Debug ID lo
+      # estampa metro.config.js via getSentryExpoConfig). Por dentro termina llamando
+      # `sentry-cli sourcemaps upload --debug-id-reference` grupo por grupo.
+      #
+      # Guard SOFT a proposito — es el CONTRARIO del guard duro de mobile-build.yml. Un OTA suele
+      # ser un hotfix con gente rota esperando: que muera por no poder subir sourcemaps seria peor
+      # que el problema que viene a arreglar. Avisa fuerte y sigue.
+      - name: Subir sourcemaps del OTA a Sentry
+        working-directory: apps/mobile
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # Org y project ya viven en el plugin de app.json; se repiten aca —junto a la URL, que
+          # es el default del propio script— porque con las tres presentes el wrapper NO necesita
+          # levantar `npx expo config --json` para deducirlas (y por lo tanto no puede morir ahi).
+          SENTRY_ORG: eva-zs
+          SENTRY_PROJECT: eva-mobile
+          SENTRY_URL: "https://sentry.io/"
+        run: |
+          if [ -z "${SENTRY_AUTH_TOKEN// /}" ]; then
+            echo "::warning::SENTRY_AUTH_TOKEN vacio: el OTA se publico igual, pero sus sourcemaps NO se subieron y los crashes de este bundle van a llegar minificados."
+            echo "Crealo en sentry.io -> Settings -> Auth Tokens (scopes project:releases, org:read, project:write) y guardalo como secret SENTRY_AUTH_TOKEN."
+            exit 0
+          fi
+          if [ ! -d dist ]; then
+            echo "::warning::no existe apps/mobile/dist tras publicar: el export de eas update no quedo donde se esperaba. Sourcemaps NO subidos."
+            exit 0
+          fi
+          node_modules/.bin/sentry-expo-upload-sourcemaps dist

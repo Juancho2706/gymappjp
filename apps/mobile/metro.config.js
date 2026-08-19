@@ -1,4 +1,9 @@
-const { getDefaultConfig } = require('expo/metro-config')
+// `getSentryExpoConfig` NO reemplaza a `getDefaultConfig`: lo llama por dentro (require de
+// 'expo/metro-config') y le suma el plugin que estampa el Debug ID en el bundle y en su
+// sourcemap. Sin ese id, el sourcemap subido a Sentry no matchea NUNCA con el bundle que
+// crashea y todos los stack traces llegan minificados — daba igual subir los mapas.
+// Todo lo que se configura mas abajo sigue valiendo igual: devuelve el mismo objeto MetroConfig.
+const { getSentryExpoConfig } = require('@sentry/react-native/metro')
 const { withNativeWind } = require('nativewind/metro')
 const path = require('path')
 
@@ -7,7 +12,7 @@ const monorepoRoot = path.resolve(projectRoot, '../..')
 
 process.env.EXPO_ROUTER_APP_ROOT = path.join(projectRoot, 'app')
 
-const config = getDefaultConfig(projectRoot)
+const config = getSentryExpoConfig(projectRoot)
 
 // Vigilar la raiz entera del monorepo deja al watcher de Windows caminando `.git`,
 // `apps/web` y los worktrees; alcanza con lo que el bundle nativo resuelve.

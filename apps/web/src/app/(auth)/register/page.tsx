@@ -10,6 +10,7 @@ import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coa
 import { cn } from '@/lib/utils'
 import { getCurrentOAuthUserProfile } from '@/lib/auth/client-oauth'
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
+import { useCaptureRegisterSubmitted } from '@/lib/posthog/events'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -34,8 +35,32 @@ const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
 ][]
 
-function SubmitButton({ isFreeTier }: { isFreeTier: boolean }) {
+function SubmitButton({
+    isFreeTier,
+    tier,
+    billingCycle,
+    method,
+}: {
+    isFreeTier: boolean
+    tier: SaleTier
+    billingCycle: BillingCycle
+    method: 'email' | 'google'
+}) {
     const { pending } = useFormStatus()
+    const captureRegisterSubmitted = useCaptureRegisterSubmitted()
+    // `pending` de useFormStatus pasa a false→true recién cuando el navegador validó el form
+    // (required, checkboxes legales) y el Server Action arrancó: es el único punto client-side donde
+    // «el alta se envió» es cierto. A propósito NO se engancha un `onSubmit` al <form action={...}>:
+    // el action de React 19 corre por su propio camino y un handler extra ahí es la clase de cosa
+    // que rompe un submit sin avisar. Al volver un error el pending baja y un reintento vuelve a
+    // contar, que es lo correcto (es otro intento de alta).
+    const wasPending = useRef(false)
+    useEffect(() => {
+        if (pending && !wasPending.current) {
+            captureRegisterSubmitted({ tier, billingCycle, method })
+        }
+        wasPending.current = pending
+    }, [pending, tier, billingCycle, method, captureRegisterSubmitted])
     return (
         <button
             type="submit"
@@ -815,7 +840,12 @@ export default function RegisterPage() {
                                 <ArrowRight className="w-4 h-4" />
                             </button>
                         ) : (
-                            <SubmitButton isFreeTier={isFreeTier} />
+                            <SubmitButton
+                                isFreeTier={isFreeTier}
+                                tier={tier}
+                                billingCycle={billingCycle}
+                                method={fromGoogle ? 'google' : 'email'}
+                            />
                         )}
                     </div>
                 </form>

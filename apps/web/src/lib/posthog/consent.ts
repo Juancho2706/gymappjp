@@ -39,11 +39,25 @@ export function setStoredConsent(value: 'accepted' | 'rejected'): void {
     } catch { /* noop */ }
 }
 
-/** Aplica una elección sobre la instancia REAL de posthog-js (el módulo, no window). */
+/**
+ * Aplica una elección sobre la instancia REAL de posthog-js (el módulo, no window).
+ *
+ * `null` (indeciso) NO se toca a propósito: el provider ya inició en modo cookieless
+ * (`persistence: 'memory'`, sin opt-out) y esa es la configuración correcta hasta que el visitante
+ * decida. Aceptar es lo único que habilita almacenamiento persistente.
+ */
 export function applyConsent(value: ConsentValue): void {
     if (!value) return
     try {
-        if (value === 'accepted') posthog.opt_in_capturing()
-        else posthog.opt_out_capturing()
+        if (value === 'accepted') {
+            // Salto cookieless → persistente. Va ANTES del opt-in porque `set_config` es lo que
+            // reconstruye el almacenamiento: posthog conserva las props en memoria, cambia el store
+            // y las vuelve a escribir, así que el `distinct_id` anónimo de esta sesión se mantiene
+            // (el visitante no se parte en dos personas al aceptar).
+            posthog.set_config({ persistence: 'localStorage+cookie', disable_session_recording: false })
+            posthog.opt_in_capturing()
+        } else {
+            posthog.opt_out_capturing()
+        }
     } catch { /* posthog aún sin init: el provider re-aplica en `loaded` */ }
 }

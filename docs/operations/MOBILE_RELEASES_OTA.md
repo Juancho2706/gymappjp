@@ -1,7 +1,7 @@
 ---
 status: active
 owner: mobile-release
-last_verified: "2026-07-21 @ f5301858"
+last_verified: "2026-08-19"
 canonical: true
 ---
 
@@ -12,6 +12,8 @@ Política operativa para `apps/mobile`. La configuración ejecutable prevalece:
 - `apps/mobile/app.json`: identidad nativa, `expo-updates` y `runtimeVersion`;
 - `apps/mobile/eas.json`: perfiles, canales y firma;
 - `.github/workflows/mobile-build.yml`: build y submit manuales;
+- `.github/workflows/mobile-ota.yml`: publicación OTA y subida de sourcemaps;
+- `apps/mobile/metro.config.js`: Debug ID del bundle (`getSentryExpoConfig`);
 - `apps/mobile/lib/ota.ts`: descarga y aplicación en runtime.
 
 `apps/enterprise` no está cubierto por esta guía: conserva identificadores EAS placeholder y no tiene `expo-updates` configurado.
@@ -25,6 +27,7 @@ Política operativa para `apps/mobile`. La configuración ejecutable prevalece:
 - `previewv2` genera binarios internos, pero no declara canal; no prometer ni publicar OTA para esos binarios sin configurar primero un canal explícito.
 - 2026-07-29: `staging` (apuntaba a un Supabase local por IP de LAN, inusable en CI) y `prodpreview` (subset de `production` sin submit) fueron retirados de `eas.json` y del workflow. La opción `enterprise` salió del picker del workflow (app archivada, estrategia Teams-first).
 - El build ocurre localmente dentro de GitHub Actions con `eas build --local`; no consume créditos de EAS Build.
+- 2026-08-19: `updates.fallbackToCacheTimeout` pasó de `0` a `6000`. Decisión del owner: en arranque en frío la app espera hasta 6 s a que baje el OTA disponible y lo lanza en el acto, en vez de servir el bundle embebido con bugs viejos y aplicar el update recién en el segundo arranque. Si el update no alcanza a bajar en esos 6 s, arranca con el bundle cacheado y el camino de siempre (`isUpdatePending` → aviso de reinicio en `lib/ota.ts`) sigue funcionando igual. Es configuración de binario: **no viaja por OTA**, entra recién con la build 55.
 
 | Perfil | Uso | Android | iOS | OTA |
 |---|---|---|---|---|
@@ -59,24 +62,36 @@ Los nombres de secretos y el procedimiento de firma viven en el workflow. Sus va
 
 ## Publicación OTA
 
-No existe un workflow de publicación OTA. La operación es manual y debe ejecutarla una persona autenticada en Expo desde `apps/mobile`.
+Los OTA se publican **solo** desde `.github/workflows/mobile-ota.yml` (`Mobile OTA Update` en GitHub Actions). Publicar a mano desde una máquina local está prohibido por runbook: el incidente del 2026-08-11 fueron tres OTA android publicados localmente cuyo bundle salió sin `EXPO_PUBLIC_SUPABASE_URL` y crasheaba al boot. El workflow usa las mismas secrets que las builds y falla antes de publicar si alguna está vacía.
 
 Antes de publicar:
 
 - confirmar por diff que no hay cambios nativos;
 - correr `pnpm --filter @eva/mobile exec tsc --noEmit` y las pruebas afectadas;
-- registrar commit, versión de app, canal y motivo.
+- registrar commit, versión de app, canal y motivo (el input `message` del workflow es obligatorio y es ese registro).
 
-Publicación (el canal `staging` fue retirado 2026-07-29; `production` es el único canal OTA):
-
-```bash
-cd apps/mobile
-eas update --channel production --message "<motivo y commit>"
-```
-
-No usar `previewv2` como destino mientras siga sin canal.
+`production` es el único canal OTA (`staging` fue retirado 2026-07-29). No usar `previewv2` como destino mientras siga sin canal.
 
 En runtime, `checkForOtaUpdate()` consulta al abrir y al volver a foreground, con máximo un intento por hora. Descarga en segundo plano y ofrece reiniciar; en desarrollo, cuando Updates está deshabilitado o ante error, no altera el arranque.
+
+## Observabilidad (Sentry)
+
+Un release móvil no está entregado hasta que sus símbolos están en Sentry. Un crash sin sourcemap ni dSYM es un stack trace minificado: sirve para contar, no para arreglar.
+
+Piezas y quién hace qué:
+
+| Pieza | Dónde | Qué aporta |
+|---|---|---|
+| `getSentryExpoConfig` | `apps/mobile/metro.config.js` | estampa el Debug ID en bundle y sourcemap; sin él ningún mapa matchea |
+| plugin `@sentry/react-native/expo` | `apps/mobile/app.json` | escribe `sentry.properties` con org `eva-zs` y proyecto `eva-mobile` |
+| `SENTRY_AUTH_TOKEN` | secret de GitHub Actions | credencial de subida; nunca en `eas.json` ni en Markdown |
+| `Sentry.init` | `apps/mobile/app/_layout.tsx` | gateado por `EXPO_PUBLIC_SENTRY_DSN`; sin DSN es no-op total |
+
+- 2026-08-19: se quitó `SENTRY_DISABLE_AUTO_UPLOAD` de los perfiles `production` y `previewv2` de `eas.json`. Desde entonces el build sube sourcemaps (Android vía `sentry.gradle`, iOS vía sus build phases) y dSYMs como parte del propio build.
+- `mobile-build.yml` trae un guard **duro**: sin `SENTRY_AUTH_TOKEN` la build falla antes de empezar. Un binario que se instala en tiendas y no se puede simbolizar no vale el ciclo de build.
+- `mobile-ota.yml` trae un guard **suave**: sin el secret avisa y sigue. El contraste es deliberado — un OTA suele ser un hotfix con gente rota esperando, y ya está publicado cuando corre ese paso.
+- El OTA sube sus sourcemaps con `sentry-expo-upload-sourcemaps dist` (binario de `@sentry/react-native`). No sustituirlo por `sentry-cli` a mano: el wrapper copia `debugId` a `debug_id` en el mapa antes de subirlo, y ese paso es el que hace que el mapa matchee con el bundle.
+- Crear el token: sentry.io → Settings → Auth Tokens, scopes `project:releases`, `org:read` y `project:write`. Guardarlo como secret `SENTRY_AUTH_TOKEN` en GitHub → Settings → Secrets and variables → Actions. Su valor nunca se copia a Markdown, commits ni logs.
 
 ## Rollback e incidente
 

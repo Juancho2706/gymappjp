@@ -8,6 +8,7 @@ import { NewsFeedProvider } from '@/components/coach/NewsFeedProvider'
 import { getCoach, getActiveStandaloneClientCount } from '@/lib/coach/get-coach'
 import { isValidInviteCode } from '@/lib/coach/invite-code'
 import { PwaRegister } from '@/components/PwaRegister'
+import { IdentifyOnMount } from '@/components/analytics/IdentifyOnMount'
 import { OverLimitBanner } from './_components/OverLimitBanner'
 import { PublicCodeRequiredModal } from './_components/PublicCodeRequiredModal'
 import { ensureCoachPublicCode } from './_data/public-code.queries'
@@ -351,6 +352,9 @@ export default async function CoachLayout({
             </NewsFeedProvider>
         </div>
         <PwaRegister />
+        {/* Identidad de analítica (PostHog identify + user/tags de Sentry). `overLimitTier` ya es
+            `normalizeCoachTier(coach.subscription_tier)`; solo viaja el UUID del coach, sin PII. */}
+        <IdentifyOnMount coachId={coach.id} tier={overLimitTier} />
         </>
     )
 }

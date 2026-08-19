@@ -3,6 +3,8 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut, Loader2 } from 'lucide-react'
+import posthog from 'posthog-js'
+import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/client'
 
 /**
@@ -18,6 +20,16 @@ export function useCoachSignOut() {
         startTransition(async () => {
             const supabase = createClient()
             await supabase.auth.signOut()
+            // La identidad de analítica muere con la sesión (la siembra `IdentifyOnMount` en el
+            // layout del coach): sin esto, el próximo coach que entre en este navegador hereda el
+            // distinct_id de PostHog y el user/tier de Sentry del anterior.
+            try {
+                posthog.reset()
+            } catch {
+                /* posthog puede no haber iniciado (sin token): nunca romper el logout */
+            }
+            Sentry.setUser(null)
+            Sentry.setTag('tier', undefined)
             router.push('/login')
             router.refresh()
         })

@@ -73,12 +73,53 @@ export function useCaptureModuleInterest() {
     )
 }
 
-/** Coach completed registration — free or paid. */
+/**
+ * Coach completed registration — free or paid.
+ *
+ * DEVUELVE el CaptureResult de posthog (truthy = el evento salio de verdad, undefined = pre-init u
+ * opted-out) para que `CoachRegisteredTracker` pueda reintentar con `useDeferredCapture`. No se
+ * dispara desde /register: los dos Server Actions del wizard terminan en `redirect()`, asi que el
+ * cliente jamas ve el exito — el disparo vive en los aterrizajes post-alta.
+ */
 export function useCaptureRegistration() {
     const ph = usePostHog()
     return useCallback(
-        (tier: SubscriptionTier, billingCycle?: string) => {
-            ph?.capture('coach_registered', { tier, billing_cycle: billingCycle ?? null })
+        (tier: SubscriptionTier, billingCycle?: string) =>
+            ph?.capture('coach_registered', { tier, billing_cycle: billingCycle ?? null }),
+        [ph]
+    )
+}
+
+/**
+ * register_submitted — el visitante termino el wizard de /register y el Server Action arranco.
+ *
+ * NO es `checkout_started` a proposito, aunque el paso se parezca: ese evento YA lo emite
+ * `/coach/subscription/processing` con `source: 'register'` (page.tsx, startCheckoutFromRegister)
+ * cuando de verdad se pide la preference. Duplicarlo en el submit inflaria el paso del funnel con
+ * altas que el server todavia puede rechazar (email tomado, turnstile, tope de free por IP) y
+ * romperia el contrato escrito arriba («se pide la preference/enrolamiento al server»).
+ *
+ * Este evento cubre el hueco REAL entre `pricing_plan_clicked` y `checkout_started`: cuantos
+ * terminan el wizard — y para el tier FREE es la UNICA señal del embudo, porque el alta gratis nunca
+ * pasa por checkout.
+ *
+ *   method: 'email' | 'google' — el alta por Google usa otro Server Action (onboarding/complete).
+ *
+ * Precede una navegacion: send_instantly + sendBeacon, igual que los checkout_*.
+ */
+export function useCaptureRegisterSubmitted() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: { tier: SubscriptionTier; billingCycle: string; method: 'email' | 'google' }) => {
+            ph?.capture(
+                'register_submitted',
+                {
+                    tier: props.tier,
+                    billing_cycle: props.billingCycle,
+                    method: props.method,
+                },
+                { send_instantly: true, transport: 'sendBeacon' }
+            )
         },
         [ph]
     )

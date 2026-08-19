@@ -7,6 +7,7 @@ import { MailCheck, Check, ArrowRight } from 'lucide-react'
 import { getTierMaxClients } from '@eva/tiers'
 import { useActionState } from 'react'
 import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
+import { CoachRegisteredTracker } from '@/components/analytics/RegistrationTracker'
 import {
     resendConfirmationAction,
     type ResendConfirmationState,
@@ -69,6 +70,11 @@ function VerifyEmailContent() {
         <div className="w-full max-w-md mx-auto my-auto animate-slide-up text-center">
             {metaEventId ? (
                 <MetaTrackEvent event="CompleteRegistration" eventId={metaEventId} />
+            ) : null}
+            {/* Espejo en PostHog del mismo hecho: solo con `eid` (o sea, viniendo del redirect del
+                Server Action) — aterrizar acá a mano no es un alta. Único plan que llega: free. */}
+            {metaEventId ? (
+                <CoachRegisteredTracker tier="free" dedupeKey={metaEventId} />
             ) : null}
             <div className="inline-flex h-[76px] w-[76px] items-center justify-center rounded-full bg-sport-100 text-sport-600 mb-5">
                 <MailCheck className="h-[34px] w-[34px]" />

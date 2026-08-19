@@ -75,8 +75,35 @@ if (SENTRY_DSN) {
     dsn: SENTRY_DSN,
     debug: false,
     enabled: !__DEV__,
+    // Se queda en 0 A PROPOSITO: no queremos transacciones de performance, solo el efecto
+    // colateral de `navigationIntegration` (ver arriba). Si alguna vez hiciera falta tracing,
+    // el tope es 0.1 — con 0.2+ el free tier de Sentry se agota en dias y empieza a DESCARTAR
+    // errores, que es lo unico que de verdad miramos.
     tracesSampleRate: 0,
     integrations: [navigationIntegration],
+    // 100 (default) no alcanza: en una sesion real de la app la mitad del presupuesto se la
+    // comen los GET 200 de miniaturas de Supabase Storage, y para cuando llega el crash los
+    // breadcrumbs que explican QUE hizo el usuario ya se cayeron por la ventana. 300 + el
+    // filtro de abajo dejan varios minutos de rastro util. El limite real no es este numero
+    // sino el tamano maximo del payload del evento, muy lejos todavia.
+    maxBreadcrumbs: 300,
+    // Los thumbnails de Storage son ruido puro: siempre 200, siempre iguales, nunca explican
+    // nada. Se descartan por URL. OJO al contrato: el SDK ENCADENA este callback con el suyo
+    // —primero corre el nuestro y despues el interno que filtra dev server y DSN— asi que
+    // devolver `null` aca corta bien y devolver el breadcrumb intacto no pisa ese filtro.
+    // Mismo shape que usa el SDK internamente: `type === 'http'` + `data.url`.
+    beforeBreadcrumb: (breadcrumb) => {
+      const url = breadcrumb.data?.url
+      if (breadcrumb.type === 'http' && typeof url === 'string' && url.includes('/storage/v1/')) {
+        return null
+      }
+      return breadcrumb
+    },
+    // Sesiones (Release Health): sin esto no hay crash-free rate y no se puede responder
+    // "el OTA de ayer, ¿mejoro o empeoro?". No esta en los DEFAULT_OPTIONS del SDK JS, asi que
+    // sin declararlo la clave ni siquiera cruza al SDK nativo y queda a merced del default de
+    // cada plataforma; explicito lo fija en los dos.
+    enableAutoSessionTracking: true,
   })
 }
 

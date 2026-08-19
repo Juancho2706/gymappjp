@@ -6,6 +6,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Sparkles, Users, Palette, Zap, CheckCircle2, XCircle } from 'lucide-react'
 import { getTierMaxClients } from '@eva/tiers'
 import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
+import { CoachRegisteredTracker } from '@/components/analytics/RegistrationTracker'
 import Link from 'next/link'
 
 const STORAGE_KEY = 'eva_free_welcome_seen'
@@ -46,6 +47,11 @@ export function FreeWelcomeModal() {
         <Dialog open={open} onOpenChange={(v) => !v && dismiss()}>
             {metaEventId ? (
                 <MetaTrackEvent event="CompleteRegistration" eventId={metaEventId} />
+            ) : null}
+            {/* Espejo en PostHog del mismo hecho (coach_registered): este es el aterrizaje del alta
+                free por Google, que nunca pasa por /verify-email. Mismo gate `eid`. */}
+            {metaEventId ? (
+                <CoachRegisteredTracker tier="free" dedupeKey={metaEventId} />
             ) : null}
             <DialogContent className="bg-surface-card border border-subtle text-body max-w-sm rounded-card shadow-2xl p-0 overflow-hidden">
                 {/* Header gradient */}

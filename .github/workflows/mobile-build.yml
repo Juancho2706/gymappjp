@@ -97,6 +97,23 @@ jobs:
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
 
+      # Guard DURO, mismo criterio que el de Supabase de arriba (19-08: se saco
+      # SENTRY_DISABLE_AUTO_UPLOAD=true de eas.json, asi que ahora el gradle plugin de Sentry
+      # sube sourcemaps y debug files como parte del build). Sin el token la build sale MUDA:
+      # los crashes llegan con stack traces minificados y sin dSYMs, o sea inservibles — y eso
+      # no se nota hasta que hay un crash en prod que nadie puede leer.
+      - name: Guard SENTRY_AUTH_TOKEN (fail-fast)
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "${SENTRY_AUTH_TOKEN// /}" ]; then
+            echo "ERROR: secret SENTRY_AUTH_TOKEN vacio o ausente."
+            echo "Sin el, la build sale SIN dSYMs ni sourcemaps subidos: todo crash llega minificado e ilegible."
+            echo "Como crearlo: sentry.io -> Settings -> Auth Tokens -> nuevo token con scopes project:releases, org:read y project:write."
+            echo "Despues guardalo en GitHub -> Settings -> Secrets and variables -> Actions como SENTRY_AUTH_TOKEN."
+            exit 1
+          fi
+
       # production (sin buildType) genera AAB — formato que exige Google Play.
       # previewv2 genera APK para sideload directo.
       - name: Determine Android artifact type
@@ -114,6 +131,10 @@ jobs:
           EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
           GRADLE_OPTS: "-Xmx5g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dkotlin.daemon.jvm.options=-Xmx2g,-XX:MaxMetaspaceSize=1g"
           JAVA_TOOL_OPTIONS: "-Xmx5g -XX:MaxMetaspaceSize=2g"
+          # Lo consume `sentry.gradle` (via node_modules/@sentry/react-native) durante la tarea
+          # de bundle. La org y el proyecto NO van aca: el plugin expo los escribe en
+          # `android/sentry.properties` desde app.json (organization eva-zs / project eva-mobile).
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output ./build.${{ steps.android_artifact.outputs.ext }}
 
       - name: Upload Android artifact
@@ -198,6 +219,21 @@ jobs:
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
 
+      # Guard DURO, gemelo del de Android (ver ese job). En iOS lo que se pierde sin token son
+      # los dSYMs que sube `sentry-xcode-debug-files.sh`: sin ellos ningun crash NATIVO —los
+      # peores, los que ni llegan al JS— es simbolizable.
+      - name: Guard SENTRY_AUTH_TOKEN (fail-fast)
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "${SENTRY_AUTH_TOKEN// /}" ]; then
+            echo "ERROR: secret SENTRY_AUTH_TOKEN vacio o ausente."
+            echo "Sin el, la build sale SIN dSYMs ni sourcemaps subidos: todo crash llega minificado e ilegible."
+            echo "Como crearlo: sentry.io -> Settings -> Auth Tokens -> nuevo token con scopes project:releases, org:read y project:write."
+            echo "Despues guardalo en GitHub -> Settings -> Secrets and variables -> Actions como SENTRY_AUTH_TOKEN."
+            exit 1
+          fi
+
       - name: Prepare iOS credentials
         env:
           IOS_DIST_CERT_BASE64: ${{ secrets.IOS_DIST_CERT_BASE64 }}
@@ -271,6 +307,10 @@ jobs:
         working-directory: apps/${{ inputs.app }}
         env:
           EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
+          # Lo consumen los build phases `sentry-xcode.sh` (sourcemaps) y
+          # `sentry-xcode-debug-files.sh` (dSYMs). La org y el proyecto NO van aca: el plugin
+          # expo los escribe en `ios/sentry.properties` desde app.json.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: eas build --platform ios --profile ${{ inputs.profile }} --local --non-interactive --output ./build.ipa
 
       - name: Upload IPA
