@@ -45,12 +45,22 @@ export function resolveCurrentPeriodEnd(input: {
     return addMonths(now, months).toISOString()
 }
 
-export type TerminalEventDecision = 'expire' | 'ignore-free' | 'none'
+export type TerminalEventDecision = 'expire' | 'past-due' | 'ignore-free' | 'none'
 
 /**
  * Decides how a subscription webhook event that may terminate a coach should be applied.
  *
  * - 'expire'      → block the coach (status='expired'); they must reactivate.
+ * - 'past-due'    → a RENEWAL charge was declined while the paid period is still running:
+ *                   the coach already paid for the days ahead, so they keep access as
+ *                   'past_due' (dunning) and MP keeps retrying. Only the raw provider status
+ *                   'rejected' takes this path — 'refunded'/'charged_back' collapse to the
+ *                   same 'expired' in mapProviderStatus but the money went BACK, so those
+ *                   must keep expiring on the spot. Without this branch, any transient card
+ *                   decline evicted a coach with paid days remaining (bug found via the
+ *                   Joaquin Miranda case, 2026-08-19: MP emits the `payment` topic ~80s
+ *                   BEFORE `subscription_authorized_payment`, so the dunning branch of the
+ *                   pipeline always found the coach already expired and never won).
  * - 'ignore-free' → a terminal event reached a free-tier coach who has no paid subscription
  *                   to terminate; leave their subscription untouched. Guards the race where a
  *                   coach abandons paid checkout then clicks "Activar plan gratuito":
@@ -65,11 +75,21 @@ export function resolveTerminalEvent(input: {
     statusForUpdate: string
     periodExpiredOrNull: boolean
     subscriptionTier: string | null | undefined
+    /** Raw gateway status ('rejected', 'refunded', …) — mapProviderStatus collapses several
+     *  of them into 'expired', and the decision between grace and eviction lives there. */
+    providerStatus?: string | null
 }): TerminalEventDecision {
     const isTerminal =
         input.statusForUpdate === 'expired' ||
         (input.statusForUpdate === 'canceled' && input.periodExpiredOrNull)
     if (!isTerminal) return 'none'
     if (input.subscriptionTier === 'free') return 'ignore-free'
+    if (
+        input.statusForUpdate === 'expired' &&
+        input.providerStatus === 'rejected' &&
+        !input.periodExpiredOrNull
+    ) {
+        return 'past-due'
+    }
     return 'expire'
 }

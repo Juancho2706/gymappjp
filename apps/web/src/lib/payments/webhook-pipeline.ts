@@ -268,6 +268,13 @@ export async function runWebhookPipeline(
                 paid_access_ended_at: null,
             }
             if (result.currentPeriodEnd) recurringUpdate.current_period_end = result.currentPeriodEnd
+            // Un coach que se recupera tras un terminal que nuleó `subscription_mp_id` volvía
+            // active con la sub HUÉRFANA: sin ref para first-charge de add-ons, invisible al
+            // mp-reconcile, sin poder cancelar ni cambiar tarjeta. `preapprovalId` es un concepto
+            // MP, así que para Flow esto es no-op por construcción.
+            if (!coach.subscription_mp_id?.trim() && result.preapprovalId) {
+                recurringUpdate.subscription_mp_id = result.preapprovalId
+            }
             const { error: recErr } = await admin.from('coaches').update(recurringUpdate).eq('id', coach.id)
             if (recErr) {
                 console.error('[payments.webhook] recurring charge: coach update failed', {
@@ -1165,6 +1172,10 @@ export async function runWebhookPipeline(
         statusForUpdate,
         periodExpiredOrNull,
         subscriptionTier: coach.subscription_tier,
+        // El status CRUDO decide entre gracia y expulsión: 'rejected' con período pagado
+        // vigente = past_due (la plata ya está adentro); refunded/charged_back = expire
+        // (la plata volvió). mapProviderStatus colapsa los tres en 'expired'.
+        providerStatus: result.providerStatus,
     })
 
     if (terminalDecision === 'expire') {
@@ -1175,7 +1186,61 @@ export async function runWebhookPipeline(
         // la gracia de 7 días de los alumnos ancle aunque este terminal deje current_period_end null.
         coachUpdate.paid_access_ended_at = coach.current_period_end ?? new Date().toISOString()
         coachUpdate.current_period_end = null
+        // ANTES de soltar el id, cancelar el preapproval en el gateway (espejo de la rama
+        // refund/chargeback P1-3 y de la regla que documenta el cron paid-expiry): nulear un id
+        // cuyo preapproval sigue vivo en MP deja una suscripción que puede volver a cobrar y que
+        // ya no podemos matchear, reconciliar (mp-reconcile filtra por id no-null), cancelar ni
+        // re-tarjetear. Best-effort: un fallo acá no debe impedir bloquear al coach. El caso
+        // Joaquin (19-08) quedó exactamente así: expired con el preapproval authorized y sin ref.
+        {
+            const mpIdToCancel = coach.subscription_mp_id?.trim()
+            if (mpIdToCancel) {
+                try {
+                    await provider.cancelCheckoutAtProvider(mpIdToCancel)
+                } catch (cancelErr) {
+                    console.error('[payments.webhook] failed to cancel preapproval on terminal expire', {
+                        traceId,
+                        coachId: coach.id,
+                        mpId: mpIdToCancel,
+                        message: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+                    })
+                }
+            }
+        }
         coachUpdate.subscription_mp_id = null
+    } else if (terminalDecision === 'past-due') {
+        // Renovación RECHAZADA con período pagado vigente: el coach ya pagó estos días. Gracia de
+        // dunning en vez de expulsión — `hasEffectiveAccess` respeta past_due hasta
+        // current_period_end, MP reintenta el cobro, y el cron paid-expiry es el backstop (expira
+        // past_due con período vencido hace >24 h): esto NO deja a nadie gratis para siempre.
+        // TRAMPA que motiva las dos líneas de abajo: `resolveCurrentPeriodEnd` ya devolvió null
+        // para el status colapsado 'expired', así que hay que RESTAURAR el período vigente del
+        // coach; y ni subscription_mp_id ni paid_access_ended_at se tocan (la sub sigue viva).
+        coachUpdate.subscription_status = 'past_due'
+        coachUpdate.current_period_end = coach.current_period_end
+        console.warn('[payments.webhook] renovación rechazada con período vigente → past_due (gracia)', {
+            traceId,
+            coachId: coach.id,
+            providerStatus: result.providerStatus,
+            currentPeriodEnd: coach.current_period_end,
+        })
+        // El aviso de dunning que la rama recurrente manda cuando le toca a ella: sin este correo
+        // el coach se entera del rechazo recién al perder el acceso.
+        const dunningAccessUntil = coach.current_period_end
+            ? new Date(coach.current_period_end).toLocaleDateString('es-CL', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+              })
+            : null
+        await sendDunningEmail(
+            admin,
+            coach.id,
+            coach.full_name?.trim() || 'Coach',
+            'failed',
+            `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/coach/subscription`,
+            dunningAccessUntil,
+        )
     } else if (terminalDecision === 'ignore-free') {
         // Free-tier coach has no paid subscription to terminate. A stale cancellation
         // (e.g. activate-free cancelling an abandoned checkout) must not re-lock a
@@ -1219,6 +1284,21 @@ export async function runWebhookPipeline(
             const cancelled = await cancelAllForCoach(admin, coach.id, new Date().toISOString())
             // F4: revertir el cupón vivo al expirar terminal → puntero nulo (reactivación limpia).
             await revertActiveCouponForCoach(admin, coach.id)
+            // Rastro de auditoría (espejo del cron paid-expiry y de la rama refund): hasta el
+            // 19-08 un coach expirado por ESTA rama no dejaba fila y hubo que reconstruir el caso
+            // Joaquin desde subscription_events.
+            await admin.from('admin_audit_logs').insert({
+                admin_email: 'webhook',
+                action: 'coach.expired_by_webhook',
+                target_table: 'coaches',
+                target_id: coach.id,
+                payload: {
+                    provider_status: result.providerStatus ?? null,
+                    provider_payment_id: result.providerPaymentId ?? null,
+                    addons_cancelled: cancelled,
+                    triggered_by: 'payments/webhook',
+                },
+            })
             if (cancelled > 0) {
                 console.info('[payments.webhook] cancelled all addons on terminal expire', {
                     traceId,

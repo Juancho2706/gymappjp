@@ -69,4 +69,59 @@ describe('resolveTerminalEvent', () => {
             resolveTerminalEvent({ statusForUpdate: 'pending_payment', periodExpiredOrNull: true, subscriptionTier: 'free' })
         ).toBe('none')
     })
+
+    // El hueco del caso Joaquin (19-08): un decline de renovación con período PAGADO vigente
+    // expulsaba al coach con días pagados adentro. La decisión vive en el status CRUDO del
+    // gateway porque mapProviderStatus colapsa rejected/refunded/charged_back en 'expired'.
+    it('grants dunning grace on a rejected renewal while the paid period is still running', () => {
+        expect(
+            resolveTerminalEvent({
+                statusForUpdate: 'expired',
+                periodExpiredOrNull: false,
+                subscriptionTier: 'pro',
+                providerStatus: 'rejected',
+            })
+        ).toBe('past-due')
+    })
+
+    it('still expires a rejected renewal once the paid period has lapsed (Joaquin timing)', () => {
+        expect(
+            resolveTerminalEvent({
+                statusForUpdate: 'expired',
+                periodExpiredOrNull: true,
+                subscriptionTier: 'pro',
+                providerStatus: 'rejected',
+            })
+        ).toBe('expire')
+    })
+
+    it('refund/chargeback expire on the spot even with a running period — the money went back', () => {
+        expect(
+            resolveTerminalEvent({
+                statusForUpdate: 'expired',
+                periodExpiredOrNull: false,
+                subscriptionTier: 'elite',
+                providerStatus: 'refunded',
+            })
+        ).toBe('expire')
+        expect(
+            resolveTerminalEvent({
+                statusForUpdate: 'expired',
+                periodExpiredOrNull: false,
+                subscriptionTier: 'pro',
+                providerStatus: 'charged_back',
+            })
+        ).toBe('expire')
+    })
+
+    it('free tier keeps its guard even on a rejected renewal with a running period', () => {
+        expect(
+            resolveTerminalEvent({
+                statusForUpdate: 'expired',
+                periodExpiredOrNull: false,
+                subscriptionTier: 'free',
+                providerStatus: 'rejected',
+            })
+        ).toBe('ignore-free')
+    })
 })
