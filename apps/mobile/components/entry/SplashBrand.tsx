@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { MotiView } from 'moti'
 import Animated, {
@@ -17,6 +17,13 @@ import { FONT } from '../../lib/typography'
 import type { SplashBrandMark } from '../../context/DashboardReadyContext'
 import { entryDarken, entryLighten } from './EntryBackground'
 import { EvaFigure, evaFigureHeight } from './EvaFigure'
+import {
+  SplashSweepStreaks,
+  useSplashSweepClock,
+  useSplashSweepFigureStyle,
+  useSplashSweepSignatureStyle,
+} from './SplashGlide'
+import { SPLASH_SWEEP_FIGURE_WIDTH } from './splash-sweep'
 import { CircularBrandLogo } from '../CircularBrandLogo'
 
 /**
@@ -35,8 +42,12 @@ export const SPLASH_SLOW_MS = 600
 /** Entrada de la firma EVA (hairline + wordmark), curva y duracion de §4 S2. */
 export const SPLASH_SIGNATURE_MS = 360
 
-/** Geometria del frame 01 (§3.1). El alto de la figura sale del aspecto 585:526. */
-export const SPLASH_FIGURE_SIZE = 150
+/**
+ * Geometria del frame 01 (§3.1). El alto de la figura sale del aspecto 585:526.
+ * El numero vive en `splash-sweep` —modulo puro, sin `react-native`— porque el clamp de la
+ * X inicial del barrido lo necesita y ese modulo tiene que poder cargar en Node.
+ */
+export const SPLASH_FIGURE_SIZE = SPLASH_SWEEP_FIGURE_WIDTH
 const FIGURE_HEIGHT = evaFigureHeight(SPLASH_FIGURE_SIZE) // 135
 const HAIRLINE_MARGIN_TOP = 16
 const HAIRLINE_HEIGHT = 1
@@ -63,16 +74,38 @@ const MORPHBAR_TRAVEL = MORPHBAR_WIDTH - MORPHBAR_FILL_WIDTH
  * Marca EVA — figura + firma. Va DENTRO del contenedor centrado del consumidor (que es
  * quien anima su opacidad en el crossfade).
  *
- * La FIGURA no anima su entrada: el splash nativo ya la muestra y cualquier fade rompe el
- * handoff pixel-identico (§3.1 + QA §7.1). El movimiento de S2 se aplica a la firma, que el
- * splash nativo NO tiene. La firma se mantiene MONTADA aunque este invisible: su alto es
- * parte del stack que posiciona la figura (y el ancla del halo), asi que desmontarla haria
- * saltar la figura justo en el handoff.
+ * COREOGRAFIA «GLIDE» (diseno del dueno, 18-08): la figura entra barriendo desde la
+ * izquierda con tres estelas de velocidad y la firma entra deslizando desde la derecha; el
+ * reloj y la matematica viven en `SplashGlide` / `splash-sweep`.
+ *
+ * **El sweep es OPT-IN y lo enciende `sweepStartedAt`.** Sin el —o sea: en el cold start
+ * anonimo, en el camino branded y en cualquier frame anterior al veredicto del gate— esta
+ * pieza pinta EXACTAMENTE lo de siempre: figura estatica centrada, replica pixel-identica
+ * del splash nativo (§3.1), y firma con su fade por umbral (§4 S2). No es una variante
+ * degradada: es el contrato de §3.1 intacto, y solo el camino sesion+EVA→dashboard lo
+ * cambia. Ahi la figura no anima su entrada "por continuidad" sino que la reemplaza por el
+ * gesto de marca, que es la decision explicita del dueno.
+ *
+ * Lo que NO se toca en ninguna rama: `SplashCoachMark`, el morphbar, el halo, el
+ * `LightLayer`, el grano y el canvas.
+ *
+ * Dos detalles estructurales que sostienen el relevo gate → overlay:
+ *  - La firma se mantiene MONTADA aunque este invisible: su alto es parte del
+ *    `STACK_HEIGHT` que posiciona la figura (y con ella el ancla del halo). Desmontarla
+ *    haria SALTAR la figura justo en el handoff.
+ *  - Los dos `Animated.View` envuelven SIEMPRE, con o sin sweep. Son cajas neutras (el
+ *    contenedor centra, ellas se ajustan al contenido: mismo box, misma altura de stack),
+ *    y mantenerlas fijas evita que encender el sweep remonte la figura y la firma — un
+ *    remonte ahi cuesta el `transition={0}` de la imagen y reinicia el fade de la firma.
+ *
+ * El fade-por-umbral de la firma se MULTIPLICA con el del sweep en dos nodos anidados (RN
+ * compone opacidades por nodo, no por estilo).
  */
 export function SplashEvaMark({
   signature,
   reduced,
   initialSignature = false,
+  sweepStartedAt = null,
 }: {
   /** Estado destino de la firma. */
   signature: boolean
@@ -82,19 +115,53 @@ export function SplashEvaMark({
    * animar a 1 lo que ya estaba en pantalla seria un parpadeo.
    */
   initialSignature?: boolean
+  /**
+   * `Date.now()` del VEREDICTO del gate (sesion viva y sin marca de coach) = instante 0 de
+   * la coreografia. El overlay lo hereda por `SplashHandoff` y RETOMA el sweep donde iba,
+   * igual que hace con `initialSignature` y con la opacidad del halo.
+   *
+   * `null` = no hay sweep en este frame: el gate todavia no dictamino, o dictamino una rama
+   * que no lo lleva (branded, anonimo). Se pinta la replica estatica de §3.1.
+   */
+  sweepStartedAt?: number | null
 }) {
+  const { width, height } = useWindowDimensions()
+  // Los hooks corren SIEMPRE (regla de hooks); lo que decide si el sweep se ve es si el
+  // estilo se aplica. Con `reduced` el reloj queda plantado al final (§4 R2) y con
+  // `sweepStartedAt == null` ni siquiera hay coreografia que mostrar: en los dos casos el
+  // resultado es el splash de siempre, sin una sola diferencia de pixel.
+  const clock = useSplashSweepClock(sweepStartedAt, reduced)
+  const figureStyle = useSplashSweepFigureStyle(clock, width)
+  const signatureStyle = useSplashSweepSignatureStyle(clock, width)
+  const swept = !reduced && sweepStartedAt != null
+
   return (
     <>
-      <EvaFigure size={SPLASH_FIGURE_SIZE} />
-      <MotiView
-        from={{ opacity: initialSignature ? 1 : 0 }}
-        animate={{ opacity: signature ? 1 : 0 }}
-        transition={{ type: 'timing', duration: reduced ? 0 : SPLASH_SIGNATURE_MS, easing: EASE.standard }}
-        style={styles.signature}
-      >
-        <View style={styles.hairline} />
-        <Text style={styles.wordmark}>EVA</Text>
-      </MotiView>
+      {/* Estelas primero = detras de la figura. Absolutas: no participan del stack, asi que
+          `STACK_HEIGHT` (y el ancla del halo) siguen valiendo lo mismo. */}
+      {swept ? (
+        <SplashSweepStreaks
+          clock={clock}
+          startedAt={sweepStartedAt}
+          width={width}
+          height={height}
+          centerY={splashFigureCenterY(height)}
+        />
+      ) : null}
+      <Animated.View style={swept ? figureStyle : undefined}>
+        <EvaFigure size={SPLASH_FIGURE_SIZE} />
+      </Animated.View>
+      <Animated.View style={swept ? signatureStyle : undefined}>
+        <MotiView
+          from={{ opacity: initialSignature ? 1 : 0 }}
+          animate={{ opacity: signature ? 1 : 0 }}
+          transition={{ type: 'timing', duration: reduced ? 0 : SPLASH_SIGNATURE_MS, easing: EASE.standard }}
+          style={styles.signature}
+        >
+          <View style={styles.hairline} />
+          <Text style={styles.wordmark}>EVA</Text>
+        </MotiView>
+      </Animated.View>
     </>
   )
 }

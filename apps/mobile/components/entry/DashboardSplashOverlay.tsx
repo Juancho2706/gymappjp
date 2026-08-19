@@ -19,6 +19,7 @@ import {
 } from '../../context/DashboardReadyContext'
 import { EntryGrain, EntrySource } from './EntryBackground'
 import { ENTRY_LIGHT, LightLayer } from './LightLayer'
+import { splashClockNow } from './splash-sweep'
 import {
   SPLASH_SLOW_MS,
   SplashCoachMark,
@@ -79,6 +80,12 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
   // no estaban, aparecen con el MISMO umbral (§4 S4/S2) contado desde este montaje.
   const [slow, setSlow] = useState(handoff.slow)
   const [signature, setSignature] = useState(handoff.signature)
+  // Origen del sweep «Glide». Espejo del cinturon del gate: si el handoff llegara sin
+  // semilla en la rama EVA (`null`), el reloj se quedaria en 0 y la figura viviria FUERA de
+  // cuadro hasta el tope de 5 s — un splash sin marca. Con el fallback, el peor caso es que
+  // la escena arranque de cero aca. Se calcula una sola vez (inicializador perezoso): leer
+  // el reloj en cada render moveria el origen y el barrido nunca avanzaria.
+  const [sweepStartedAt] = useState(() => handoff.sweepStartedAt ?? splashClockNow())
 
   useEffect(() => {
     const timers = [setTimeout(() => setTimedOut(true), SAFETY_MS)]
@@ -158,6 +165,10 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
             signature={signature}
             initialSignature={handoff.signature}
             reduced={reduced}
+            // El sweep «Glide» se CONTINUA, no se relanza: el overlay hereda el instante 0
+            // del gate y calcula su propio `elapsed` al montar. Sin esto la figura volveria
+            // a salir volando por la izquierda justo cuando el gate ya la habia asentado.
+            sweepStartedAt={sweepStartedAt}
           />
         )}
       </View>

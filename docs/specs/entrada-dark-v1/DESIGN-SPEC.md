@@ -328,6 +328,17 @@ Contenedor comun de todos los frames: `body` con `paddingHorizontal: 24`, `paddi
 
 **Rol**: replica JS **pixel-identica** al splash nativo, montada debajo. El movimiento arranca recien aca (el splash nativo es estatico por regla f1 §4).
 
+**Excepcion «Glide» (decision del dueno, 2026-08-18) — la unica que rompe la quietud de este frame.** En el camino **sesion viva + marca EVA** (el que rutea al dashboard EVA, sin marca de coach), la figura deja de estar quieta: sale de cuadro por la izquierda y entra barriendo con tres estelas de velocidad, mientras la firma entra deslizando desde la derecha. Coreografia completa en `apps/mobile/components/entry/splash-sweep.ts` (matematica pura, testeada en `tests/mobile-splash-sweep.test.ts`) y `SplashGlide.tsx` (capa Reanimated).
+
+Lo que hay que entender de este binario, porque es donde se equivoca cualquiera que lo retoque:
+
+- **El sweep se siembra en el VEREDICTO del gate, no en el primer paint.** `SplashGate` fija `sweepStartedAt` (`Date.now()`) recien cuando el `Promise.all` de sesion+branding+perfil resuelve en "hay sesion y no hay marca de coach". Hasta ese instante el frame 01 es la replica estatica de siempre.
+- **Branded y anonimo conservan la replica pixel-identica, sin una sola diferencia contra la version pre-Glide.** No es cortesia: con el sweep atado al primer paint, la rama **branded** mostraba la figura EVA volando con estelas cian *por encima* del crossfade a la marca del coach —que cierra a ~380 ms (hold 120 + xfade 260) mientras la figura recien aterriza a los 550—, y el cold start **anonimo** desmontaba el gate hacia el selector a los ~100-600 ms cortando el barrido a mitad de vuelo, sin overlay que lo continuara. El dueno decidio «Glide solo, sin marca de coach».
+- **El handoff nativo→JS sigue siendo pixel-identico.** `hideAsync()` sale del `onLayout` de la raiz del gate, y en ese instante todavia no hay semilla: la figura esta centrada a 150 pt donde la dejo el nativo. El costo asumido llega despues, en el veredicto: la figura **salta** fuera de cuadro para entrar barriendo. Ese blink es la decision «sweep fiel» — el gesto de marca completo vale mas que un empalme invisible, y arrancar el barrido desde donde estaba la figura convierte el diseno en otra cosa. Los 75 ms de hold de la escena son su unico colchon.
+- **El reloj es tiempo real, no un progreso local.** El gate suelta el control pocos ms despues de sembrar (el mismo veredicto dispara el `router.replace`), asi que casi toda la escena la pinta `DashboardSplashOverlay`: hereda `sweepStartedAt` por `SplashHandoff` y calcula su propio `elapsed`. Toda la coreografia es funcion pura de `t`, por eso el relevo cae en el frame exacto.
+- **La X de partida esta clampeada.** La razon autoral `-780/1080` asume un canvas de 1080 y la figura mide 150 pt fijos: en pantallas de ~320 pt no la saca de cuadro. Se toma el mayor desplazamiento entre la razon y el piso geometrico `W/2 + (150·cos9 + 135·sin9)/2` (la caja **ya inclinada** -9°, ~84.7 pt, no los 75 del rectangulo recto).
+- **Reduce Motion**: el reloj se planta en el final y no se aplica ningun estilo animado — corte limpio a §3.1 (§4 R2).
+
 **Layout**
 - Contenido centrado vertical y horizontalmente **sobre el centro de la PANTALLA** (y = 422), NO sobre el centro del body. La diferencia con el centro del body es de ~8 pt y **es visible en el handoff**: el nativo centra en la ventana completa.
 - Stack vertical, centrado:
@@ -836,7 +847,8 @@ Todo lo que en el HTML es truco de demo, y su equivalente real.
 
 ## 7. Checklist de QA visual (cierre de la spec)
 
-1. Cold start sin sesion, Android gama baja **en release build**: nativo → replica sin flash; figura en la **misma posicion** en ambos (centro de pantalla, 150 pt).
+1. Cold start sin sesion, Android gama baja **en release build**: nativo → replica sin flash; figura en la **misma posicion** en ambos (centro de pantalla, 150 pt). El «Glide» **no** entra por aca: sin sesion el gate se va al selector y el frame 01 tiene que verse igual que antes de la coreografia — figura quieta, sin estelas, firma con su fade por umbral. Mismo criterio en el **retorno branded**: si aparece una sola estela cian sobre el crossfade a la marca del coach, es un bug (§3.1, excepcion Glide).
+   - **1b. Sweep «Glide», solo en sesion + marca EVA** (cuenta sin white-label, o coach Free): tras el veredicto la figura salta fuera de cuadro y entra barriendo. Verificar (a) que el barrido **no se corta** en el relevo `SplashGate` → `DashboardSplashOverlay` —tiene que seguir de largo, no volver a empezar—, (b) que en un dispositivo de **320 pt** la figura sale **entera**, esquina inclinada incluida, durante el hold, y (c) que las 3 estelas se apagan antes de los 750 ms y no reviven.
 2. Crosshatch visible en las **7** superficies. Fotografiar el frame 07 branded: la textura debe seguir siendo **blanca**, no teñida.
 3. Cero rects solidos de gradiente en device real (regresion del bug `stopOpacity`): verificar tambien `GlassCard`, `brand.tsx`, `ProgramLibraryHero`, `NutritionHeader`.
 4. Reduce Motion ON en iOS y Android: las 22 filas de §4.1 tienen su variante y **ninguna** desaparece sin reemplazo.

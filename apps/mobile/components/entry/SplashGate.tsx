@@ -17,6 +17,7 @@ import { loadStoredBranding, type CoachBranding } from '../../lib/branding'
 import { supabase } from '../../lib/supabase'
 import { getCoachProfile } from '../../lib/coach'
 import { beginSplashHandoff, type SplashBrandMark } from '../../context/DashboardReadyContext'
+import { splashClockNow } from './splash-sweep'
 import { ENTRY_ACCENT, EntryGrain, EntrySource, entrySolidHex } from './EntryBackground'
 import { ENTRY_LIGHT, LightLayer } from './LightLayer'
 import {
@@ -115,9 +116,28 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   /** La firma EVA solo se monta si esta espera NO va a terminar en marca de coach. */
   const [evaSignature, setEvaSignature] = useState(false)
   const [slow, setSlow] = useState(false)
+  /**
+   * Instante 0 de la coreografia «Glide» (`SplashGlide`), o `null` = sin sweep.
+   *
+   * Se siembra en UN solo lugar: el veredicto **sesion viva + sin marca de coach**, el
+   * unico camino que sigue hacia el dashboard EVA con el overlay continuando la escena.
+   * Antes de ese instante el splash es la replica estatica pixel-identica de §3.1, y en las
+   * otras dos ramas se queda asi para siempre. La razon es de composicion, no de prolijidad:
+   *  - **branded**: el crossfade a la marca del coach cierra a ~380 ms (hold 120 + xfade
+   *    260) y la figura del sweep recien aterriza a los 550 → se veria la figura EVA
+   *    volando con estelas cian POR ENCIMA de la marca del coach. El dueno decidio «Glide
+   *    solo, sin marca de coach».
+   *  - **anonimo** (primera instalacion): el gate se desmonta hacia el selector apenas
+   *    resuelve —~100 ms con cache tibia, hasta 600 sin ella— y no hay overlay que continue
+   *    nada: el barrido se cortaria a mitad de vuelo.
+   *
+   * Sembrar en el veredicto tiene un costo asumido: la figura ya estaba centrada y salta
+   * fuera de cuadro para entrar barriendo. Ese blink es la decision «sweep fiel» del dueno.
+   */
+  const [sweepStartedAt, setSweepStartedAt] = useState<number | null>(null)
   const routed = useRef(false)
   const splashHidden = useRef(false)
-  const t0 = useRef(Date.now())
+  const t0 = useRef(splashClockNow())
   /** El gate ya sabe si habra marca de coach (aunque todavia no sepa el destino). */
   const decided = useRef(false)
 
@@ -146,7 +166,9 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
 
   // Bait-and-switch: el splash nativo se oculta recien cuando la replica JS ya tiene
   // layout. Android no tiene crossfade nativo, asi que la continuidad se fabrica con el
-  // mismo color y la misma figura en la misma posicion.
+  // mismo color y la misma figura en la misma posicion. Sigue siendo cierto CON el Glide:
+  // en este instante todavia no hay veredicto, o sea que no hay sweep sembrado y la figura
+  // esta quieta y centrada exactamente donde la dejo el nativo.
   const hideNativeSplash = useCallback(() => {
     if (splashHidden.current) return
     splashHidden.current = true
@@ -225,6 +247,12 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
         } else {
           // No hay marca de coach que mostrar: la espera es de EVA y lo dice.
           setEvaSignature(true)
+          // …y es EL camino del Glide: sesion viva, marca EVA, destino dashboard. El sweep
+          // arranca en este instante exacto y el overlay lo continua (ver `sweepStartedAt`).
+          // Si la espera ya se habia hecho lenta, la firma estaba en pantalla y el barrido
+          // se la lleva a la derecha para volver a entrar con ella: es la misma escena
+          // completa, no un remiendo desde la mitad.
+          setSweepStartedAt(splashClockNow())
         }
 
         // Consulta de RED. Define el DESTINO, no la marca: por eso corre despues de haber
@@ -279,9 +307,21 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   useEffect(() => {
     if (!target) return
     if (branded && !xfadeDone) return
-    beginSplashHandoff({ mark: branded, signature: evaSignature, slow, halo: halo.value })
+    // `sweepStartedAt` viaja con el resto del estado visual: el overlay RETOMA la
+    // coreografia en el ms exacto en vez de relanzarla (la figura volveria a salir volando
+    // por la izquierda a mitad del arranque). En la rama branded va `null` a proposito: ahi
+    // no hay sweep que continuar y el overlay pinta la marca del coach. El
+    // `?? splashClockNow()` es un cinturon para el caso imposible de llegar aca sin marca y
+    // sin semilla: el overlay arranca su propio sweep en vez de dejar la figura escondida.
+    beginSplashHandoff({
+      mark: branded,
+      signature: evaSignature,
+      slow,
+      halo: halo.value,
+      sweepStartedAt: branded ? null : (sweepStartedAt ?? splashClockNow()),
+    })
     navigateRef.current(target)
-  }, [branded, evaSignature, halo, slow, target, xfadeDone])
+  }, [branded, evaSignature, halo, slow, sweepStartedAt, target, xfadeDone])
 
   const evaStyle = useAnimatedStyle(() => ({ opacity: 1 - xfade.value }))
   const coachStyle = useAnimatedStyle(() => ({ opacity: xfade.value }))
@@ -327,7 +367,7 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
       {/* Capa 3 — marca EVA (`SplashBrand`, la MISMA pieza que continua el overlay-loader
           del dashboard). Su opacidad la manda el crossfade desde aca. */}
       <Animated.View pointerEvents="none" style={[splashCenterStyle, evaStyle]}>
-        <SplashEvaMark signature={evaSignature} reduced={reduced} />
+        <SplashEvaMark signature={evaSignature} reduced={reduced} sweepStartedAt={sweepStartedAt} />
       </Animated.View>
 
       {/* Capa 4 de §2.3 — marca del coach. Misma pieza para coach y alumno: solo cambia el

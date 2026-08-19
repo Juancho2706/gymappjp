@@ -11,14 +11,20 @@ import {
 } from '../../apps/mobile/context/DashboardReadyContext'
 
 /** Handoff sin marca de coach: la espera es de EVA y lo dice (firma montada). */
-const EVA: SplashHandoff = { mark: null, signature: true, slow: false, halo: 0.55 }
+const EVA: SplashHandoff = { mark: null, signature: true, slow: false, halo: 0.55, sweepStartedAt: 1_000 }
 
-/** Handoff branded: el gate ya cerro su crossfade y entrega la marca del coach. */
+/**
+ * Handoff branded: el gate ya cerro su crossfade y entrega la marca del coach.
+ * `sweepStartedAt: null` NO es un hueco del fixture — es el contrato: el sweep «Glide» solo
+ * existe en el camino sesion + marca EVA. Con marca de coach el splash es la replica
+ * estatica y el overlay pinta `SplashCoachMark`.
+ */
 const BRANDED: SplashHandoff = {
   mark: { accent: '#12A971', displayName: 'Josefit', greetingName: 'Juan', logoUri: null },
   signature: false,
   slow: true,
   halo: 0.82,
+  sweepStartedAt: null,
 }
 
 describe('resolveSplashOverlayPhase', () => {
