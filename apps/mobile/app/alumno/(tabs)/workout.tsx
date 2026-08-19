@@ -19,10 +19,16 @@ import { ProgressRing } from '../../../components/ProgressRing'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
-import { measureMorphOrigin, useSessionMorph, useTriggerMorphHide, type MorphOrigin } from '../../../components/alumno/workout/v3/session-morph'
+import { measureMorphOriginSafe, useSessionMorph, useTriggerMorphHide, type MorphOrigin } from '../../../components/alumno/workout/v3/session-morph'
 
-const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-const TODAY_DOW = new Date().getDay()
+// Convención DB (1=Lun..7=Dom), igual que `day_of_week` en toda la app. El array viejo usaba la
+// convención JS (0=Dom) y casualmente calzaba Lun-Sáb… pero `DAY_NAMES[7]` era undefined: el
+// DOMINGO no tenía ni label ni badge HOY ni hero (bug del owner 19-08, hallazgo (b)).
+const DAY_NAMES = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+// Función, no constante de módulo: la constante quedaba CONGELADA al cargar el bundle (una app
+// abierta de un día para otro seguía creyendo que era ayer) y `new Date().getDay()` usaba la
+// zona del device en convención JS. `getTodayInSantiago` resuelve ambas cosas.
+const todayDow = () => getTodayInSantiago().dayOfWeek
 const SUCCESS_500 = '#1FB877'
 
 const FONT_BOLD = 'HankenGrotesk_700Bold'
@@ -113,7 +119,7 @@ export default function WorkoutScreen() {
       const todayIso = getTodayInSantiago().iso
       const todayPlan =
         mapped.find((p) => p.assigned_date === todayIso) ??
-        mapped.find((p) => p.day_of_week === TODAY_DOW) ??
+        mapped.find((p) => p.day_of_week === todayDow()) ??
         null
       setTodayProgress(todayPlan ? await computeTodayProgress(client.id, todayPlan) : null)
     } catch {
@@ -251,7 +257,7 @@ function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart
   const ref = useRef<View>(null)
   // Ocultar la card real durante el Despegue (el clon la reemplaza); si no, se ve su caja detrás del morph.
   const { hidden, hide } = useTriggerMorphHide()
-  const isToday = item.day_of_week === TODAY_DOW
+  const isToday = item.day_of_week === todayDow()
   return (
     <MotiView
       from={{ opacity: 0, translateY: 12 }}
@@ -265,7 +271,7 @@ function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart
           padding={18}
           onPress={() => {
             hide()
-            measureMorphOrigin(ref.current, theme.radius.card, (origin) => onStart(origin, item.title))
+            measureMorphOriginSafe(ref.current, theme.radius.card, (origin) => onStart(origin, item.title))
           }}
           style={styles.card}
         >
@@ -374,7 +380,7 @@ function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (o
             onPress={() => {
               hideCta()
               // `ctaLabel` = texto real del botón (Empezar/Continuar/Ver registro) → píldora del Despegue.
-              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(origin, ctaLabel))
+              measureMorphOriginSafe(ctaRef.current, 16, (origin) => onStart(origin, ctaLabel))
             }}
           />
         </View>

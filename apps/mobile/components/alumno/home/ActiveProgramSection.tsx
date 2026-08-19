@@ -183,7 +183,8 @@ export function ActiveProgramSection({
                 {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
               </Text>
               <Text className="text-warning-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
-                Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
+                {/* Verbo por estado (paridad web WorkoutRecoverBanner): a medias = «Continuar». */}
+                {oldestPending.status === 'in_progress' ? 'Continuar' : 'Recuperar'} Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
               </Text>
             </View>
             <ArrowRight size={16} color={WARNING_700_ICON[resolvedScheme]} />
