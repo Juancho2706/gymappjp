@@ -1,7 +1,7 @@
 # Delta del mapa de deprecacion V1 — verificado contra `master` el 2026-08-03
 
 Fecha: 2026-08-03 · HEAD verificado: `d1ffbf27` + build F2 de esta sesion
-Documento base: [`v1-deprecation-map-2026-07-18.md`](./v1-deprecation-map-2026-07-18.md)
+Documento base: [`v1-deprecation-map-2026-07-18.md`](../archive/v1-deprecation-map-2026-07-18.md) (retirado a archive el 2026-08-19)
 
 > **AD-4 del plan maestro F2-F5**: el mapa del 18-jul debe repasarse contra `master` ANTES de
 > borrar nada. Esta es esa pasada. **No borra nada**: corrige el mapa.

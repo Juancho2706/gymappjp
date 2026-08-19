@@ -184,9 +184,9 @@ source_of_truth: apps/web responsive + apps/mobile
 > ser un redirect 307 al tab Alimentos del hub V2 (`1eaea68c`); crear, clasificar en grupos con
 > porciones (formulario único), filtro "Editados por mí", "Solo míos" y navegar sin buscar viven
 > ahora en `coach/nutrition-v2`. Las menciones anteriores de este documento a `/coach/foods` son
-> históricas. **Deuda de paridad nueva**: el tab Alimentos RN
-> (`apps/mobile/app/coach/nutrition-v2/foods.tsx`) no tiene crear/clasificar/filtros — seguimiento
-> propio, fuera de T2.3.
+> históricas. **Deuda de paridad SALDADA el 2026-08-11** (`6c4da722`, `949a1eab`, `a0b976e7`): el
+> tab Alimentos RN (`apps/mobile/app/coach/nutrition-v2/foods.tsx`) ganó crear/clasificar/filtros
+> — esta línea la declaró pendiente hasta el saneo documental del 19-08.
 
 > **2026-08-13 (T2.6 F6 — velocidad de autoría: qué cruzó a RN y qué queda declarado)**: del
 > programa T2.6 (`docs/specs/nutrition-authoring-speed/`) cruzaron a RN las piezas de gramática y
@@ -584,9 +584,12 @@ con 12 fixtures de paridad consumidos por los tests de AMBAS plataformas. Web y 
 (`CircleDashed` + "En progreso") y copy del sheet ("Entrenamiento incompleto"). La racha del RPC no
 se tocó (decisión CEO). Falta QA device (4 escenarios del PLAN).
 
-## Experiencia de entrada (cerrada estática 2026-07-26)
+## Experiencia de entrada (cerrada estática 2026-07-26; SUPERADA por entrada dark v1)
 
-Fuente: [`specs/mobile-entry-experience/`](../../specs/mobile-entry-experience/SPEC.md).
+Fuente histórica: [`specs/mobile-entry-experience/`](../../specs/mobile-entry-experience/SPEC.md) —
+el walkthrough de 3 escenas que describe fue reemplazado por
+[`docs/specs/entrada-dark-v1/`](../specs/entrada-dark-v1/DESIGN-SPEC.md) (vigente, última
+actualización 2026-08-19: splash «Quietud»).
 
 El owner aprobó las cuatro decisiones de la SPEC y el frente quedó aplicado sobre
 `rnmobiledenuevo`:

@@ -11,12 +11,13 @@ Estas auditorías son evidencia puntual del commit y fecha indicados en cada inf
 por sí solas el estado actual ni crean backlog.
 
 - [Specs, documentación y repositorio](auditoria-repo-2026-08-17.md) — estado real de las 34 specs, pendientes operativos, regresiones del retiro del par viejo, organización documental e higiene de git
-- [Bundle y PWA](bundle-pwa-2026-07-18.md)
-- [Salud de base de datos](db-salud-2026-07-18.md)
 - [Nutrición V2 — coach/alumno standalone + Team](nutricion-v2-coach-alumno-2026-07-28.md)
-- [SEO](seo-2026-07-18.md)
-- [Mapa de deprecación V1](v1-deprecation-map-2026-07-18.md)
 - [Mapa de deprecación V1 — delta](v1-deprecation-map-delta-2026-08-03.md)
+
+Retiradas a [`docs/archive/`](../archive/) el 2026-08-19 (30+ días sin referencias desde ningún
+canónico): Bundle y PWA, Salud de base de datos, SEO y Mapa de deprecación V1 (los cuatro del
+18-07), la carpeta `executor-v3-qa1/` (rondas qa1→qa6 de una feature ya en producción) y
+`research/executor-redesign/`.
 
 Toda conclusión vigente debe trasladarse a un documento canónico o a una spec activa. Los informes intermedios, rondas de revisión y handoffs se recuperan desde Git si vuelven a ser necesarios.
 
