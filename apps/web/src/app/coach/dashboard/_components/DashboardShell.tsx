@@ -14,6 +14,7 @@ import { AgendaCard } from './AgendaCard'
 import { NewsFeed } from './NewsFeed'
 import { DashboardFab } from './DashboardFab'
 import { DesktopBento } from './DesktopBento'
+import { InviteCodePill } from './invite/InviteCodePill'
 import { ClientStatsSheet } from './sheets/ClientStatsSheet'
 import { WorkspaceSwitchSheet } from './sheets/WorkspaceSwitchSheet'
 import { CoachOnboardingChecklist } from '../CoachOnboardingChecklist'
@@ -158,6 +159,15 @@ export function DashboardShell({
                         </div>
                     </header>
 
+                    {/* Código de invitación a un toque del saludo: el dato ya llegaba al shell pero
+                        solo se veía en Ajustes → Mi Marca. `pb-3.5` repite el aire del header para que
+                        el bloque sume una fila sin romper el ritmo vertical; `empty:hidden` colapsa esa
+                        fila (y su padding) cuando la pastilla se apaga sola por no haber código todavía
+                        — mismo truco que el bloque de banners de arriba. */}
+                    <div className="pb-3.5 empty:hidden">
+                        <InviteCodePill inviteCode={coachInviteCode} variant="mobile" />
+                    </div>
+
                     <PulseHero kpi={data.kpi} onAdherence={openInsights} />
 
                     <div className="mb-[22px]">
@@ -187,7 +197,12 @@ export function DashboardShell({
 
                 {/* ───────── Desktop (eva-desktop bento, md+) ───────── */}
                 <div className="hidden md:block">
-                    <DesktopBento data={data} coachName={coachName} onAdherence={openInsights} />
+                    <DesktopBento
+                        data={data}
+                        coachName={coachName}
+                        coachInviteCode={coachInviteCode}
+                        onAdherence={openInsights}
+                    />
                 </div>
 
                 {/* Guía de inicio — onboarding engine (real signals + server actions) */}

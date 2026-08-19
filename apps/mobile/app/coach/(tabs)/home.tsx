@@ -19,6 +19,7 @@ import {
   MobileTierUsageBanners,
   MobileTodayAgenda,
 } from '../../../components/coach/CoachDashboardSections'
+import { InviteCodePill } from '../../../components/coach/InviteStudent'
 import { useTheme } from '../../../context/ThemeContext'
 import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
 import { getCoachDashboardDataMobile, type MobileDashboardData } from '../../../lib/coach-dashboard'
@@ -146,6 +147,9 @@ export default function CoachHomeScreen() {
           onAvatar={() => router.push('/coach/(tabs)/settings')}
           pendingCount={data.topRiskClients.length + data.expiringPrograms.length + data.pendingCheckinsCount}
         />
+
+        {/* Código de invitación — pastilla + hoja "Invitar alumno" (se auto-oculta sin código) */}
+        <InviteCodePill inviteCode={data.publicCode?.inviteCode ?? null} />
 
         {/* P1 — Pulse hero (Activos · En riesgo · Adherencia) */}
         <MobilePulseHero

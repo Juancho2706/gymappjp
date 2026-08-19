@@ -23,6 +23,7 @@ import { RefreshPlanButton } from '../../../components/coach/RefreshPlanButton'
 import { toast } from '../../../components/Toast'
 import { SHADOWS } from '../../../lib/shadows'
 import { FONT } from '../../../lib/typography'
+import { studentAppUrl, studentLoginUrl } from '../../../lib/student-links'
 import { CircularBrandLogo } from '../../../components/CircularBrandLogo'
 import { getCoachOrgContext } from '../../../lib/org'
 import { getCoachProfile } from '../../../lib/coach'
@@ -297,7 +298,7 @@ export default function MiMarcaScreen() {
     if (!settings) return
     // P4: el código es el identificador principal (permanente). El slug solo si es legacy.
     const publicId = settings.inviteCode || settings.slug
-    const url = `https://eva-app.cl/c/${publicId}`
+    const url = studentAppUrl(publicId)
     // El codigo va en su propia linea: pegado al final de la URL, el punto que cerraba la frase
     // se colaba DENTRO del enlace en varios clientes y al alumno le llegaba un link roto.
     const codeLine = settings.inviteCode ? `\nTu código: ${settings.inviteCode}` : ''
@@ -587,7 +588,7 @@ export default function MiMarcaScreen() {
                 ) : null}
                 {/* slug legacy: solo-lectura (inmutable). Sigue funcionando como alias para alumnos antiguos. */}
                 {settings?.hasLegacySlug && settings.slug ? (
-                  <ReadonlyRow label="URL legacy (alias, no editable)" value={`eva-app.cl/c/${settings.slug}`} />
+                  <ReadonlyRow label="URL legacy (alias, no editable)" value={studentAppUrl(settings.slug).replace('https://', '')} />
                 ) : null}
                 <View style={{ gap: 6 }}>
                   <Input label="Tu nombre completo" value={fullName} onChangeText={setFullName} placeholder="Nombre y apellido" testID="mimarca-fullname" />
@@ -1005,14 +1006,14 @@ export default function MiMarcaScreen() {
                 </View>
               ) : null}
               {/* P4: URL principal por código (permanente). El slug solo se muestra como enlace alternativo legacy. */}
-              <ReadonlyRow label="URL" value={`eva-app.cl/c/${settings.inviteCode || settings.slug}`} />
+              <ReadonlyRow label="URL" value={studentAppUrl(settings.inviteCode || settings.slug).replace('https://', '')} />
               {settings.hasLegacySlug ? (
-                <ReadonlyRow label="Enlace alternativo (legacy)" value={`eva-app.cl/c/${settings.slug}`} />
+                <ReadonlyRow label="Enlace alternativo (legacy)" value={studentAppUrl(settings.slug).replace('https://', '')} />
               ) : null}
               {/* M-F7: QR del acceso del alumno (escaneable para instalar/entrar). */}
               <View className="items-center" style={{ gap: 8, paddingVertical: 6 }}>
                 <View className="border-subtle" style={{ backgroundColor: '#FFFFFF', padding: 12, borderRadius: 14, borderWidth: 1 }}>
-                  <QRCode value={`https://eva-app.cl/c/${settings.inviteCode || settings.slug}/login`} size={150} backgroundColor="#FFFFFF" color="#0F172A" />
+                  <QRCode value={studentLoginUrl(settings.inviteCode || settings.slug)} size={150} backgroundColor="#FFFFFF" color="#0F172A" />
                 </View>
                 <Text className="font-sans text-muted" style={{ fontSize: 11.5, textAlign: 'center' }}>
                   Tu alumno escanea y entra a tu app. Tu código es permanente.

@@ -19,6 +19,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { CreateClientModal } from '../../clients/CreateClientModal'
 import { EvaCountUp } from './EvaCountUp'
+import { InviteCodePill } from './invite/InviteCodePill'
 import { todayLabel, flagLabel } from '../_lib/dashboard-design'
 import {
     daysSinceSantiagoInstant,
@@ -31,6 +32,8 @@ import type { DashboardV2Data, ExpiringProgramItem, ActivityItemClient } from '.
 interface Props {
     data: DashboardV2Data
     coachName: string
+    /** Código de invitación permanente del coach; sin él la pastilla no se pinta. */
+    coachInviteCode?: string | null
     onAdherence: () => void
 }
 
@@ -71,7 +74,7 @@ function dayLabel(iso: string): string {
  * "Programas activos" + "Actividad reciente" apiladas a la derecha. md+; el stack
  * móvil maneja anchos angostos.
  */
-export function DesktopBento({ data, coachName, onAdherence }: Props) {
+export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: Props) {
     const router = useRouter()
     const [createOpen, setCreateOpen] = useState(false)
     const firstName = coachName?.split(' ')[0] || 'Coach'
@@ -147,6 +150,10 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
                     </h1>
                 </div>
                 <div className="flex gap-2.5">
+                    {/* A la izquierda de Importar: el código comparte fila con las acciones de alta
+                        de alumnos, que es justo cuando el coach lo necesita. Comparte el alto 48px
+                        de los botones, así que el `items-end` de la fila lo alinea sin ajustes. */}
+                    <InviteCodePill inviteCode={coachInviteCode} variant="desktop" />
                     <button
                         type="button"
                         onClick={() => router.push('/coach/clients')}

@@ -18,6 +18,7 @@ import { ThemeGallery } from './_components/ThemeGallery'
 import { LoginLayoutPicker } from './_components/LoginLayoutPicker'
 import { QRCodeSVG } from 'qrcode.react'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { buildStudentLoginUrl } from '@/lib/coach/invite-code'
 import { BrandAdvancedSection, type AdvancedBrandValue, type AdvancedLoaderValue } from './BrandAdvancedSection'
 import type { SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack, isFontKey, type FontKey } from '@/lib/brand-fonts'
@@ -212,9 +213,11 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const previewLogoUrl = stagedLogoUrl ?? coach.logo_url
 
     const publicStudentIdentifier = getCoachPublicIdentifier(coach)
-    const studentUrl = `https://eva-app.cl/c/${publicStudentIdentifier}/login`
+    // El origen sale del helper (siempre www, nunca el apex): estos links se copian, se mandan por
+    // WhatsApp y se imprimen en el QR, así que tienen que coincidir con los que emiten los correos.
+    const studentUrl = buildStudentLoginUrl(publicStudentIdentifier)
     // slug legacy: solo lectura (inmutable). Sigue funcionando como alias para alumnos antiguos.
-    const legacyStudentUrl = coach.slug ? `https://eva-app.cl/c/${coach.slug}/login` : null
+    const legacyStudentUrl = coach.slug ? buildStudentLoginUrl(coach.slug) : null
 
     // Brand Score (H6): recalibrado para que el branding avanzado (fuente / loader) cuente
     // y el 100% sea alcanzable. Suma exacta = 100. W-brand B2: el ítem del secundario custom
