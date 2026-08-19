@@ -319,9 +319,10 @@ export function AddFoodSheet({ open, onClose, scope, onCreated }: Props) {
         {/*
           El servidor deriva `is_liquid = unit === 'ml'`, y ESO decide qué unidades se le ofrecen
           al alumno cuando registra el alimento. Elegir mal acá es exactamente el bug del catálogo
-          de los 250 líquidos guardados como sólidos (CURRENT.md, prioridad 3): el alumno termina
-          pesando en gramos algo que se sirve en vasos. Por eso son dos pills excluyentes con la
-          consecuencia escrita, no un select mudo.
+          de los ~300 sólidos importados de Open Food Facts como «bebida» (corregido en LIVE el
+          2026-08-19, backup en `_bak_foods_ml_fix_20260819`): el alumno terminaba midiendo
+          fettuccine en ml. Por eso son dos pills excluyentes con la consecuencia escrita, no un
+          select mudo.
         */}
         <View className="flex-row flex-wrap gap-2">
           {(
