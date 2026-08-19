@@ -134,9 +134,12 @@ export async function completeOAuthOnboarding(
     // bienvenida — y es el de menor fricción, el que más elige el tráfico frío del anuncio.
     // Mismo contrato que el registro por email: `event_id` único generado UNA vez, CAPI ahora,
     // y el espejo del pixel en el destino con el MISMO id (`eid`) para que Meta deduplique.
-    // Fire-and-forget: analytics jamás rompe un alta.
+    // `await`, no `void`: este action termina en `redirect()`, y un action que redirige no
+    // garantiza trabajo pendiente — la lección del registro free con `after()` (531cf7b6): sin
+    // esperar, el POST a Meta muere con la invocación. El `.catch` mantiene la garantía de que
+    // analytics jamás rompe un alta.
     const metaEventId = newMetaEventId()
-    void queueMetaCapiEvent({
+    await queueMetaCapiEvent({
         eventName: 'CompleteRegistration',
         eventId: metaEventId,
         eventSourceUrl: '/coach/onboarding/complete',
