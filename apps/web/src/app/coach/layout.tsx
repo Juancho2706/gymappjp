@@ -17,7 +17,7 @@ import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding, consolidateStandaloneBranding } from '@eva/brand-kit'
-import { isBrandingAllowed, getTierMaxClients, TIER_LABELS, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, tierMaxClientsFor, TIER_LABELS, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { buildSealCssVars } from '@/lib/seal-vars'
@@ -121,9 +121,10 @@ export default async function CoachLayout({
         resolveDisabledDomains(),
         isStandalone ? getActiveStandaloneClientCount(coach.id) : Promise.resolve<number | null>(null),
     ])
-    // Sobre-límite: alumnos activos > cupo efectivo (override manual `max_clients` o el del tier).
+    // Sobre-límite: alumnos activos > cupo efectivo (override manual `max_clients` o, si falta, el
+    // del tier PARA ESTE COACH — grandfather de pricing v2, no el catálogo de venta).
     const overLimitTier = normalizeCoachTier(coach.subscription_tier)
-    const overLimitMax = coach.max_clients ?? getTierMaxClients(overLimitTier)
+    const overLimitMax = coach.max_clients ?? tierMaxClientsFor(overLimitTier, coach.created_at)
     const overLimit =
         activeStandaloneCount != null && activeStandaloneCount > overLimitMax
             ? { activeCount: activeStandaloneCount, maxClients: overLimitMax, tierLabel: TIER_LABELS[overLimitTier] }
@@ -335,6 +336,7 @@ export default async function CoachLayout({
                                 activeCount={overLimit.activeCount}
                                 maxClients={overLimit.maxClients}
                                 tierLabel={overLimit.tierLabel}
+                                coachCreatedAt={coach.created_at ?? null}
                             />
                         )}
                         <CoachMainWrapper>

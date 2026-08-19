@@ -17,10 +17,10 @@ import {
   formatBarcode,
   getFoodSourceAttribution,
   getFoodVerificationLabel,
-  resolveFoodDetailImage,
   type FoodDetailData,
   type FoodVerificationTone,
-} from '@/lib/food-detail'
+} from '@eva/nutrition-v2'
+import { resolveFoodDetailImage } from '@/lib/food-detail'
 
 type Props = {
   open: boolean

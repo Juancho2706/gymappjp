@@ -32,6 +32,11 @@ export * from './share'
 // superficies necesitan LA MISMA tabla, no dos copias que driftan sin que nadie lo note.
 export * from './nutrition-portions-copy'
 export * from './food-classification'
+// Ficha de alimento: modelo neutral + copys de fuente/verificacion/codigo de barras. Vivia
+// duplicado (`apps/web/src/lib/food-detail.ts` + su «Port 1:1» en `apps/mobile/lib`), deuda
+// abierta por F6.0 y saldada en la auditoria 2026-08-17 §1.1. La resolucion de IMAGEN NO
+// entra: web usa `@/lib/food-image` y RN `foodMediaThumbnailUrl`.
+export * from './food-detail'
 // R1 (T3.x editor unico): la gramatica del editor — reducer superset + hidratacion +
 // proyeccion + validacion — extraida VERBATIM del quick-edit web para que web y RN (T3.3)
 // consuman UNA sola copia. `editor-food`/`editor-portions` son las piezas puras del wizard

@@ -112,7 +112,7 @@ alcance, abortar la tarea y reportar.
 | W2 | Web: cinta v2 («Metas ▾» hospeda TargetsEditorCard), rail v2 + B4-enlace, leyenda, responsive 5 anchos | Playwright 5×2 capturas verdes; sin overflow-x |
 | W3 | RN: MacroSpark+popover, swaps quick-edit, fotos, mini-cinta, Metas en header | tsc + expo export; paridad declarada en MOBILE_PARITY |
 | W4 | QA: preview owner (web) + device Android owner (visual + pendiente T3.3b) | OK explícito del owner |
-| W5 | **OTA android ACUMULADO** (T3.3a+T3.3b+T3.v) vía GH Actions `mobile-ota.yml`, SIEMPRE `--platform android`; luego `eas update:insights`; `CURRENT.md`/`MOBILE_PARITY.md` al día | OTA publicado + insights sin crashes |
+| W5 | **OTA android ACUMULADO** (T3.3a+T3.3b+T3.v) vía GH Actions `mobile-ota.yml`, SIEMPRE `--platform android`; luego `eas update:insights`; `CURRENT.md`/`MOBILE_PARITY.md` al día | OTA publicado + insights sin crashes — **cumplido**: corrida del 2026-08-19 sobre los 5 grupos, tabla en [TASKS §V5.1](TASKS.md) |
 | — | **Retiro del par viejo: agendado 2026-08-30** (fuera de esta tanda; inventario y mudanzas listos) | — |
 
 W0→W1→W2 son secuenciales; W3 puede arrancar tras W0 (helper listo) en paralelo con W2 si hay

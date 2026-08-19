@@ -594,7 +594,7 @@ function SealStage({ brand, children }: { brand: string; children: React.ReactNo
             `.dark{--seal-p-rgb:${vars.dark.primaryRgb};--seal-s-rgb:${vars.dark.secondaryRgb};}`,
         }}
       />
-      <AppSeal variant="b" />
+      <AppSeal />
       {children}
     </div>
   )

@@ -53,8 +53,27 @@ según [PLAN](PLAN.md). Regla de guardia backend-cero del PLAN aplica a TODAS.
 |---|---|---|---|
 | V4.1 | jefe | Gates completos del PLAN + harness 5×2 + diff-guard: `git diff --stat` NO toca `builder/**`, alumno, `_actions`, `_data`, `services`, SQL | Todo verde; evidencia en el PR/commit |
 | V4.2 | owner | QA visual preview web + QA device Android (incluye el pendiente T3.3b del editor RN: un solo pase) | OK explícito |
-| V5.1 | jefe | OTA android ACUMULADO vía GH Actions `mobile-ota.yml` con `--platform android` (jamás sin plataforma; iOS intacto en App Review); luego `eas update:insights` | Update publicado + insights sin crashes/failed installs |
+| V5.1 | jefe | OTA android ACUMULADO vía GH Actions `mobile-ota.yml` con `--platform android` (jamás sin plataforma; iOS intacto en App Review); luego `eas update:insights` | **CUMPLIDA 2026-08-19** (corrida al final de esta sección) |
 | V5.2 | jefe | Actualizar `CURRENT.md` (T3.v cerrada; programa queda solo con retiro agendado 30-08) + `MOBILE_PARITY.md` + índice de specs si aplica | `pnpm docs:check` verde |
+
+### V5.1 — corrida de `eas update:insights` (2026-08-19, últimos 7 días, canal `production`)
+
+La mitad que faltaba: el OTA acumulado se publicó el 17-08, pero los insights posteriores nunca se
+habían corrido (la única registrada era del 15-08, anterior a esos OTA). Corridos hoy con
+`eas-cli/21.2.0` (global, autenticado como `juandeveva`) desde `apps/mobile`:
+
+| Grupo | Update ID (android) | Launches | Failed | Crash rate | Usuarios únicos | Payload |
+|---|---|---:|---:|---:|---:|---:|
+| `aca6fc76` (T3.3a+T3.3b+T3.v) | `01a00d3d` | 2 | 0 | 0,00 % | 2 | 4,93 MB |
+| `7738d234` (post-QA + Familia N) | `01a00e11` | 0 | 0 | 0,00 % | 0 | — |
+| `a4dafcea` (#3 Guía Viva + Sello + Pricing) | `01a00f74` | 1 | 0 | 0,00 % | 1 | 5,16 MB |
+| `dff7edc8` (#4 fix tour RN) | `01a010a4` | 0 | 0 | 0,00 % | 0 | — |
+| `768389fb` (#5 notas del coach + retiro) | `01a010fd` | 1 | 0 | 0,00 % | 1 | 4,92 MB |
+
+**DoD cumplido**: cero crashes y cero failed launches en los cinco grupos. Los dos en cero los
+superó el OTA siguiente el mismo día (nadie llegó a bajarlos), no son fallas. La adopción sigue
+siendo de 0-2 usuarios únicos por grupo: los números son verdes, pero la muestra es diminuta y **no
+sustituye el QA en device**.
 
 ## Opcional W-B (solo si sobra tiempo, mismo patrón, NO bloquea cierre)
 

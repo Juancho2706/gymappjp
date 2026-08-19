@@ -17,9 +17,8 @@
 
 import { useState } from 'react'
 import { AlertTriangle, BadgeCheck, Check, Plus, ShieldCheck, Star } from 'lucide-react'
-import type { FoodCatalogItem } from '@eva/nutrition-v2'
+import type { FoodCatalogItem, FoodVerificationTone } from '@eva/nutrition-v2'
 import { MacroSparkPopover } from '@/components/nutrition-v2/MacroSparkPopover'
-import type { FoodVerificationTone } from '@/lib/food-detail'
 import { FoodThumb } from '../FoodImage'
 import { foodCatalogItemToCardModel } from '../../_lib/food-catalog-card'
 import { canAddFoodPickerItem, type FoodPickerRestrictionState } from './food-picker-grouping'

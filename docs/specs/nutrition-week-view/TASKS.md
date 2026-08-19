@@ -32,3 +32,14 @@ Estado: `[ ]` pendiente · `[x]` hecho · ejecución por workers Opus con juicio
 - [x] T4.1 Gates: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm --filter @eva/mobile exec tsc --noEmit`.
 - [x] T4.2 Juicio Fable de estilo por superficie (checklist PLAN §Craft).
 - [x] T4.3 Actualizar `docs/status/CURRENT.md` + `docs/status/MOBILE_PARITY.md`.
+
+## QA (agregado el 2026-08-19)
+
+Esta spec cerró **sin una sola tarea de QA**: tener todo en `[x]` prueba código, no comportamiento.
+Ninguna de las rondas registradas del owner (15, 16, 17 y 18-08) menciona la semana completa.
+
+- [ ] QA visual web (alumno tab Plan y tab Hoy, coach ficha) y **QA en device del owner** de las 5
+      superficies — **pendiente de QA en device del owner (auditoría 17-08)**.
+- [ ] Caso de riesgo declarado en el PLAN y nunca evaluado: la semana que **cruza cambio de versión
+      del plan**. La regla «snapshot gana» cubre el caso normal; la opción B
+      (`get_nutrition_week_v2`) quedó documentada por si el QA la exigía, y nadie miró el resto.

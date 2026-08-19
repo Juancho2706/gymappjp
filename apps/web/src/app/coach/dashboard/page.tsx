@@ -45,6 +45,8 @@ export default async function CoachDashboardPage() {
                 hasCoachLogo={coachBrandingVisible && Boolean(coach.logo_url?.trim())}
                 coachLogoUrl={coachBrandingVisible ? coach.logo_url : null}
                 activeClientCount={activeClientCount}
+                coachMaxClients={coach.max_clients}
+                coachCreatedAt={coach.created_at ?? null}
             />
         </Suspense>
     )

@@ -72,6 +72,10 @@ import type {
 import type { CoachProfile } from '../../lib/coach'
 import { isUuid } from '../../lib/safe-uuid'
 import { TIER_CONFIG } from '../../lib/coach-tiers'
+// Pricing v2 (P2): cupo por coach concreto. `freeClientLimitFor` es el helper nombrado del móvil
+// (ya lo usa /coach/reactivate) y `tierMaxClientsFor` cubre el resto de los tiers.
+import { tierMaxClientsFor } from '@eva/tiers'
+import { freeClientLimitFor } from '../../lib/coach-subscription'
 import { NativeDialog } from '../NativeDialog'
 import { Sheet } from '../Sheet'
 import { Button } from '../Button'
@@ -207,20 +211,46 @@ export function MobileBillingBanners({ coach }: { coach: CoachProfile; activeCli
   return null
 }
 
+/**
+ * Cupo REAL de ESTE coach: la columna `max_clients` GANA (la escribe el write-path y respeta el
+ * override manual); si faltara, el grandfather de pricing v2 lo reconstruye desde su fecha de
+ * creación. Nunca el catálogo de VENTA — un coach anterior al corte del 18-08 conserva free 3 /
+ * elite 100 y el banner debe hablar de SU cupo. Paridad con la web (DashboardShell).
+ * `Math.max(1, …)`: el cupo sale de una COLUMNA de DB y las barras dividen por él — un 0 suelto
+ * daría `NaN%` de ancho. Piso defensivo, no una regla de negocio.
+ */
+function eliteClientLimitFor(coach: CoachProfile): number {
+  return Math.max(1, coach.maxClients ?? tierMaxClientsFor('elite', coach.createdAt))
+}
+
+/**
+ * Umbral del puente a Teams: ~80% del techo REAL del coach. El 80 escrito a mano era INALCANZABLE
+ * (Elite hoy topa en 60 ⇒ el gate de cupo corta antes) y para un grandfathered de 100 disparaba
+ * tarde. Se EXPORTA porque la pantalla que decide si monta el bloque (coach/(tabs)/home) repetía
+ * el mismo número: con el 80 duplicado, arreglar solo el banner lo dejaba igual de inalcanzable.
+ */
+export function teamsBridgeThresholdFor(coach: CoachProfile): number {
+  return Math.ceil(eliteClientLimitFor(coach) * 0.8)
+}
+
 export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachProfile; totalClients: number }) {
+  const freeLimit = Math.max(1, coach.maxClients ?? freeClientLimitFor(coach.createdAt))
+  const eliteLimit = eliteClientLimitFor(coach)
+  const teamsBridgeThreshold = teamsBridgeThresholdFor(coach)
   return (
     <View style={styles.tierStack}>
-      {coach.subscriptionTier === 'free' ? <MobileFreeTierBanner totalClients={totalClients} /> : null}
-      {/* Plan 04: umbral 80 (~80% del techo elite nuevo 100, mismo momento Head-of-Sales que el 48/60 anterior). */}
-      {coach.subscriptionTier === 'elite' && totalClients >= 80 ? <MobileTeamsBridgeBanner totalClients={totalClients} /> : null}
+      {coach.subscriptionTier === 'free' ? <MobileFreeTierBanner totalClients={totalClients} maxClients={freeLimit} /> : null}
+      {coach.subscriptionTier === 'elite' && totalClients >= teamsBridgeThreshold ? (
+        <MobileTeamsBridgeBanner totalClients={totalClients} maxClients={eliteLimit} />
+      ) : null}
     </View>
   )
 }
 
-function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
+function MobileFreeTierBanner({ totalClients, maxClients }: { totalClients: number; maxClients: number }) {
   const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
-  const max = TIER_CONFIG.free.maxClients
+  const max = maxClients
   const used = Math.min(totalClients, max)
   const pct = Math.round((used / max) * 100)
   const full = used >= max
@@ -266,9 +296,10 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
 // Plan 04 (espejo del TeamsBridgeBanner web): el plan Growth salió de la venta.
 // Coach con cartera grande → puente a EVA Teams, NO upsell a un tier muerto.
 // Sin precios (pre-cierre Movida); CTA = mailto contacto@eva-app.cl. Muere el ?upgrade=growth.
-function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
+function MobileTeamsBridgeBanner({ totalClients, maxClients }: { totalClients: number; maxClients: number }) {
   const { theme, resolvedScheme } = useTheme()
-  const max = TIER_CONFIG.elite.maxClients
+  // MISMO cupo real que dispara el banner (~80% de este número): umbral y copy no se contradicen.
+  const max = maxClients
   const pct = Math.round((Math.min(totalClients, max) / max) * 100)
 
   return (
@@ -293,8 +324,8 @@ function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
           {totalClients}/{max} alumnos · {pct}% de tu plan Elite
         </Text>
         <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          {/* `max` (tope de Elite) en vez del 100 a mano: el corte hacia Teams ES el techo del
-              plan más grande, y Pricing v2 lo bajó a 60. Paridad con la web. */}
+          {/* `max` = cupo real de ESTE coach en vez de un número a mano: el corte hacia Teams ES
+              su techo (60 con el catálogo nuevo, 100 si viene grandfathered). Paridad con la web. */}
           ¿Más de {max} alumnos o trabajas con otros profesionales? Conoce EVA Teams
         </Text>
       </View>

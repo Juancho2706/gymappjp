@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { assertModule, hasModule, isModuleKilledByOperator } from '@/services/entitlements.service'
+import {
+    assertModule,
+    hasModule,
+    isModuleKilledByOperator,
+    type StudentModulePrefetch,
+} from '@/services/entitlements.service'
 import { getCoachClientScope, type CoachClientScope } from '@/services/client/client-scope.service'
 import { logTeamClientAccess } from '@/services/team/team.service'
 import { computeIsak } from '@eva/bodycomp'
@@ -405,6 +410,27 @@ async function isOrgScopedClient(db: DB, userId: string): Promise<boolean> {
     return data.org_id != null
 }
 
+/**
+ * Espejo del helper homonimo de movement-assessment.service: resuelve la fila de scope + el flag
+ * enterprise del ALUMNO para el gate de su nav. Sin `prefetch`, los DOS SELECT de siempre con sus
+ * mismos defaults; con `prefetch`, los valores YA leidos por el arbol que llama (dedupe puro de
+ * I/O — `scope: null` == fila ausente/ilegible == el mismo default defensivo "tratar como org").
+ */
+async function resolveStudentGateScope(
+    db: DB,
+    userId: string,
+    prefetch?: StudentModulePrefetch
+): Promise<{ client: { team_id: string | null; coach_id: string | null } | null; orgScoped: boolean }> {
+    if (prefetch) {
+        const scope = prefetch.scope
+        return { client: scope, orgScoped: scope ? scope.org_id != null : true }
+    }
+    // B8: la fila de scope se lee con el cliente USER-scoped (`db`, RLS = techo).
+    const client = await repo.findClientScopeRow(db, userId)
+    if (!client) return { client: null, orgScoped: true }
+    return { client, orgScoped: await isOrgScopedClient(db, userId) }
+}
+
 export type StudentBodyCompositionView = {
     enabled: boolean
     clientName: string | null
@@ -461,19 +487,28 @@ export async function getStudentBodyCompositionView(
 /**
  * Espejo liviano para el nav del alumno (sin filas): mismo gate que getStudentBodyCompositionView
  * — el gate real sigue siendo la page (notFound).
+ *
+ * `prefetch` (opcional) es puro DEDUPE de I/O para el arbol /c, donde varios gates preguntan por
+ * la misma fila `clients` y el mismo mapa de modulos. La semantica del gate es identica en ambos
+ * caminos (kill-switch => rechazo enterprise B7 => modulo del contexto); sin `prefetch`, el
+ * camino de siempre. B8 sigue en pie: el scope JAMAS sale de un cliente service-role — el arbol
+ * que prefetchea lo lee con el cliente USER-scoped del alumno.
  */
 export async function isStudentBodyCompositionEnabled(
     db: DB,
     entitlementsDb: DB,
-    userId: string
+    userId: string,
+    prefetch?: StudentModulePrefetch
 ): Promise<boolean> {
     if (isModuleKilledByOperator(MODULE_KEY)) return false
-    // B8: la fila de scope se lee con el cliente USER-scoped (`db`, RLS = techo); `entitlementsDb`
-    // (service-role) solo lee enabled_modules despues, nunca resuelve el scope.
-    const client = await repo.findClientScopeRow(db, userId)
+    // `entitlementsDb` (service-role) solo lee enabled_modules, nunca resuelve el scope.
+    const { client, orgScoped } = await resolveStudentGateScope(db, userId, prefetch)
     if (!client) return false
     // B7: enterprise (org) excluido, igual que getStudentBodyCompositionView y movement.
-    if (await isOrgScopedClient(db, userId)) return false
+    if (orgScoped) return false
+    // El mapa prefetcheado se resolvio con la MISMA regla de `hasModule` (team manda; si no, coach)
+    // y el kill-switch ya corto arriba, asi que leerlo del mapa equivale a preguntarlo de nuevo.
+    if (prefetch) return prefetch.modules[MODULE_KEY] === true
     return hasModule(
         entitlementsDb,
         MODULE_KEY,

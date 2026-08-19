@@ -34,12 +34,13 @@
  *   8. Sello EVA v2 (`docs/specs/eva-seal-background/`, gate S2.2): con `?seal=1` el harness
  *      monta `AppSeal b` publicando el par `--seal-*` como los layouts de producción. Se afirma
  *      (a) el COLOR real de los blobs — hue del par derivado (primario y primario+38°) y alphas
- *      D5 por tema — para 2 marcas (EVA azul default y verde vía `?sealBrand`); (b) que el
+ *      D5 por tema — para las 3 marcas de prueba de la SPEC (EVA azul default, verde y naranja
+ *      vía `?sealBrand`); (b) que el
  *      contraste WCAG de 3 textos clave del editor NO cambia con el sello prendido (mismos
  *      colores computados y misma razón de luminancia que sin sello); (c) que reduced-motion
  *      emulado congela la deriva SIN apagar los blobs — y el grano jamás anima; y (d) que las
  *      rutas pre-auth (fetch del HTML de /login) no traen rastro del marcador `data-eva-seal`
- *      que sí existe en el harness. Capturas dark/light × 2 marcas a 1280.
+ *      que sí existe en el harness. Capturas dark/light × 3 marcas a 1280.
  *   9. Guía Viva (`docs/specs/nutrition-onboarding-tour/`, G2.3 — LOS DOS INVARIANTES BLOQUEANTES
  *      del dueño): D2, el «?» real del editor (`?mode=edit`, esquina/PublishBar según ancho) mide
  *      CERO intersecciones contra todo `button/a/input/select` visible en los 5 anchos del harness;
@@ -1122,7 +1123,7 @@ async function smokeThemeToggleWorks(browser) {
 // El harness gana `?seal=1`: monta `AppSeal b` sobre la maqueta activa publicando el par
 // `--seal-p-rgb`/`--seal-s-rgb` EXACTAMENTE como los layouts de producción (misma
 // `buildSealCssVars`: par `sealPair` derivado — el harness no tiene preset — y pintado claro
-// del blob 2). `?sealBrand=RRGGBB` cambia la marca de prueba, así que la segunda marca entra
+// del blob 2). `?sealBrand=RRGGBB` cambia la marca de prueba, así que las marcas extra entran
 // por el MISMO camino que en producción (page → buildSealCssVars → sealPair), no por un var
 // forzado a mano que el blob podría ignorar.
 //
@@ -1150,16 +1151,27 @@ async function smokeThemeToggleWorks(browser) {
 //       sin él: el positivo evita un verde vacío y el negativo prueba que sin `?seal` el
 //       árbol del harness queda como siempre.
 //
-// Capturas: dark/light × 2 marcas a 1280 (misma infraestructura de SHOTS_DIR/shotCount),
+// Capturas: dark/light × 3 marcas a 1280 (misma infraestructura de SHOTS_DIR/shotCount),
 // con la raíz opaca de la maqueta vuelta transparente SOLO para la foto (la oclusión no
-// existe en los shells de producción) y un assert de que las 2 marcas difieren en píxeles —
-// una captura donde el sello no se VE no le sirve al QA visual del dueño.
+// existe en los shells de producción) y un assert de que las capturas de las marcas difieren
+// entre sí en píxeles — una captura donde el sello no se VE no le sirve al QA visual del dueño.
 // ---------------------------------------------------------------------------
+/**
+ * Las TRES marcas de prueba que exige el criterio de aceptación de la SPEC («azul EVA, verde,
+ * naranja»). El gate tenía dos y la SPEC pedía tres (hallazgo de la auditoría 2026-08-17 §1.11);
+ * se sube el gate en vez de bajar la SPEC: la tercera marca cuesta 2 contextos más (dark+light)
+ * dentro de una sección que ya monta 4, sobre un script de varias secciones — el sello es
+ * white-label y una fórmula de par que se rompa en un hue cálido no la atrapan azul ni verde.
+ */
 const SEAL_BRANDS = [
   // `hex` = lo que la page resuelve: sin `?sealBrand` cae a BRAND_PRIMARY_COLOR (#1462DC).
   { label: 'eva', hex: '#1462DC', query: '' },
   // Verde de las marcas de prueba de la SPEC (criterios de aceptación).
   { label: 'verde', hex: '#16A34A', query: '&sealBrand=16A34A' },
+  // Naranja: el hex EXACTO del preset curado `tangerine` (Mandarina) de
+  // `packages/brand-kit/presets.ts`, así el hue cálido que se prueba es uno que un coach
+  // real puede tener elegido hoy.
+  { label: 'naranja', hex: '#EA580C', query: '&sealBrand=EA580C' },
 ]
 /** Rotación de hue de la fórmula derivada D3.2 (espejo de SEAL_HUE_SHIFT en brand-kit/seal.ts). */
 const SEAL_HUE_SHIFT_DEG = 38
@@ -1322,29 +1334,32 @@ async function smokeSealBlobsDerivedColors(browser) {
     }
   }
 
-  // Las capturas tienen que MOSTRAR el sello: con los blobs tapados por algo opaco, las 2
+  // Las capturas tienen que MOSTRAR el sello: con los blobs tapados por algo opaco, dos
   // marcas producen PNGs byte-idénticos (exactamente así se descubrió la oclusión de la
   // maqueta de stories). Los asserts de color de arriba NO atrapan eso — computed style no
-  // ve oclusión — así que se compara el pixel real.
+  // ve oclusión — así que se compara el pixel real. Se comparan TODOS los pares de marcas: con
+  // el `SEAL_BRANDS[0] vs [1]` fijo de antes, agregar una tercera marca sumaba capturas que
+  // nadie miraba.
   for (const theme of THEMES) {
-    const pathA = join(SHOTS_DIR, `seal-1280-${theme}-${SEAL_BRANDS[0].label}.png`)
-    const pathB = join(SHOTS_DIR, `seal-1280-${theme}-${SEAL_BRANDS[1].label}.png`)
-    try {
-      const bufferA = readFileSync(pathA)
-      const bufferB = readFileSync(pathB)
-      report(
-        `Sello (a): las capturas de las 2 marcas difieren en píxeles (el sello se VE) — ${theme}`,
-        !bufferA.equals(bufferB),
-        bufferA.equals(bufferB)
-          ? 'PNGs byte-idénticos: los blobs están tapados'
-          : `bytes ${SEAL_BRANDS[0].label}=${bufferA.length} ${SEAL_BRANDS[1].label}=${bufferB.length}`,
-      )
-    } catch (err) {
-      report(
-        `Sello (a): capturas de las 2 marcas — ${theme}`,
-        false,
-        err instanceof Error ? err.message : String(err),
-      )
+    for (let i = 0; i < SEAL_BRANDS.length; i += 1) {
+      for (let j = i + 1; j < SEAL_BRANDS.length; j += 1) {
+        const first = SEAL_BRANDS[i]
+        const second = SEAL_BRANDS[j]
+        const label = `Sello (a): las capturas de ${first.label} y ${second.label} difieren en píxeles (el sello se VE) — ${theme}`
+        try {
+          const bufferA = readFileSync(join(SHOTS_DIR, `seal-1280-${theme}-${first.label}.png`))
+          const bufferB = readFileSync(join(SHOTS_DIR, `seal-1280-${theme}-${second.label}.png`))
+          report(
+            label,
+            !bufferA.equals(bufferB),
+            bufferA.equals(bufferB)
+              ? 'PNGs byte-idénticos: los blobs están tapados'
+              : `bytes ${first.label}=${bufferA.length} ${second.label}=${bufferB.length}`,
+          )
+        } catch (err) {
+          report(label, false, err instanceof Error ? err.message : String(err))
+        }
+      }
     }
   }
 }

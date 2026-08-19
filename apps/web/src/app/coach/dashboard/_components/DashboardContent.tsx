@@ -14,6 +14,8 @@ export async function DashboardContent({
     hasCoachLogo,
     coachLogoUrl,
     activeClientCount,
+    coachMaxClients,
+    coachCreatedAt,
 }: {
     userId: string
     coachName: string
@@ -24,6 +26,10 @@ export async function DashboardContent({
     hasCoachLogo: boolean
     coachLogoUrl?: string | null
     activeClientCount?: number | null
+    /** `coaches.max_clients` — cupo efectivo del coach (override manual / grandfather). */
+    coachMaxClients?: number | null
+    /** `coaches.created_at` — ancla del grandfather de pricing v2 si falta la columna. */
+    coachCreatedAt?: string | null
 }) {
     // workspaces: React.cache-memoizado por userId (ya lo resuelve el layout en el mismo
     // request → dedup, sin costo extra de DB). Habilita el switcher de espacio del header móvil.
@@ -43,6 +49,8 @@ export async function DashboardContent({
             hasCoachLogo={hasCoachLogo}
             coachLogoUrl={coachLogoUrl}
             activeClientCount={activeClientCount}
+            coachMaxClients={coachMaxClients}
+            coachCreatedAt={coachCreatedAt}
             workspaces={workspaces}
         />
     )

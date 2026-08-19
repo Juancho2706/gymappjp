@@ -1,22 +1,72 @@
 /**
- * Ficha de alimento (RN) — helpers PUROS de fuente / verificación / código de barras.
+ * Ficha de alimento — modelo compartido + helpers PUROS de fuente / verificación /
+ * código de barras (web + PWA + RN).
  *
- * Port 1:1 de `apps/web/src/lib/food-detail.ts:62-175` (solo la parte pura): mapea
- * `catalog_source` y `verification_status` (columnas de `public.foods`) a texto/link
- * para la UI, y agrupa un GTIN para lectura. Sin React, sin Supabase, sin resolución
- * de imagen web (en RN la foto se resuelve con `foodMediaThumbnailUrl`).
+ * Vivía DUPLICADO: `apps/web/src/lib/food-detail.ts` y su «Port 1:1»
+ * `apps/mobile/lib/food-detail.ts`. Deuda abierta por T2.3 F6.0 y saldada acá
+ * (auditoría 2026-08-17 §1.1): es lógica pura y las dos superficies necesitan LA MISMA
+ * tabla de copys, no dos copias que driftan sin que nadie lo note. `apps/mobile` no
+ * puede importar de `apps/web`, así que el único hogar legal es `packages/`.
+ *
+ * Sin React, sin Supabase, sin Next: solo mapea `catalog_source` y `verification_status`
+ * (columnas de `public.foods`) a texto/link para la UI, y agrupa un GTIN para lectura.
+ * La resolución de la IMAGEN queda fuera a propósito: web la arma con `@/lib/food-image`
+ * (`resolveFoodDetailImage`) y RN con `foodMediaThumbnailUrl` — son caminos distintos.
  *
  * OBLIGACIÓN DE LICENCIA (ODbL): cuando la procedencia es Open Food Facts se DEBE
  * mostrar la atribución con enlace. `getFoodSourceAttribution` centraliza ese texto
  * para que ninguna superficie lo omita; el pie del catálogo usa además la línea
- * genérica `OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION`. Copys verbatim de la web.
+ * genérica `OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION`.
  */
+
+/** Forma neutral que consume `FoodDetailSheet` (camelCase, agnóstica de la capa de datos). */
+export interface FoodDetailData {
+  id: string
+  name: string
+  brand: string | null
+  category: string | null
+  /** Macros por 100 g/ml (o por porción base `servingSize`). */
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+  fiberG: number | null
+  sodiumMg: number | null
+  sugarG: number | null
+  saturatedFatG: number | null
+  isLiquid: boolean
+  servingSize: number
+  servingUnit: string | null
+  /** Porción casera: cuántos gramos pesa 1 `householdLabel` (ej. 1 taza ≈ 240 g). */
+  householdGrams: number | null
+  householdLabel: string | null
+  /** Envase declarado del producto (ej. 500 ml, 1 kg). */
+  packageQuantity: number | null
+  packageUnit: string | null
+  /** GTIN/EAN/UPC normalizado (solo dígitos) o null. */
+  barcode: string | null
+  countryCode: string | null
+  /** `foods.catalog_source`: eva | coach | team | import | open_food_facts | usda | other. */
+  source: string
+  /** `foods.verification_status`: unverified | community | coach_verified | eva_verified | rejected. */
+  verificationStatus: string
+  /**
+   * Path del objeto de la foto de producto en el bucket `food-media`
+   * (ej. `off/3/012/345/front.jpg`) o null. Se resuelve a URL con `foodImageUrl`.
+   */
+  imagePath: string | null
+  /**
+   * URL externa de la foto (`food_media.source_url`) para el enlace "Ver original"
+   * del lightbox, o null si la fila no la trae.
+   */
+  imageSourceUrl: string | null
+}
 
 export const OPEN_FOOD_FACTS_URL = 'https://world.openfoodfacts.org'
 export const USDA_FDC_URL = 'https://fdc.nal.usda.gov'
 
 /**
- * Línea genérica de atribución OFF para el pie del catálogo de alimentos.
+ * Línea genérica de atribución OFF para el footer/about del hub de alimentos.
  * Discreta, una sola frase — cumple ODbL a nivel de catálogo aunque una ficha
  * puntual no se abra.
  */

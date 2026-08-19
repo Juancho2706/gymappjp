@@ -35,6 +35,12 @@ export type CoachSession = Pick<
     | 'loader_config'
 > & {
     use_brand_colors_coach?: boolean
+    /**
+     * `coaches.created_at` — ancla del grandfather de pricing v2 (P2): con la fila a mano el cupo
+     * real del coach sale de `coach.max_clients ?? tierMaxClientsFor(tier, created_at)`, nunca del
+     * catálogo de VENTA. Opcional/nullable: si la lectura falla, el helper cae al fail-safe generoso.
+     */
+    created_at?: string | null
 }
 
 /**
@@ -51,14 +57,20 @@ export const getCoach = cache(async (): Promise<CoachSession | null> => {
         return null
     }
 
-    // findCoachById (repository) no incluye max_clients; se lee en paralelo para el gate de
-    // sobre-límite del plan standalone (el override manual del cupo prima sobre el del tier).
+    // findCoachById (repository) no incluye max_clients ni created_at; se leen en paralelo (misma
+    // query) para el gate de sobre-límite del plan standalone: el override manual del cupo prima
+    // sobre el del tier, y `created_at` es el ancla del grandfather de pricing v2 cuando la
+    // columna falta.
     const [row, capRes] = await Promise.all([
         findCoachById(supabase, userId),
-        supabase.from('coaches').select('max_clients').eq('id', userId).maybeSingle(),
+        supabase.from('coaches').select('max_clients, created_at').eq('id', userId).maybeSingle(),
     ])
     if (!row) return null
-    return { ...row, max_clients: capRes.data?.max_clients ?? null } as CoachSession
+    return {
+        ...row,
+        max_clients: capRes.data?.max_clients ?? null,
+        created_at: capRes.data?.created_at ?? null,
+    } as CoachSession
 })
 
 /**

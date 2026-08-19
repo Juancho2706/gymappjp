@@ -227,7 +227,7 @@ export function QuickEditPlanView() {
           background en el edit de planes igual». La legibilidad la sostienen la cinta OPACA y
           las cards sólidas; los blobs del shell de abajo siguen apagados vía globals.css (este
           overlay trae los suyos, en su propio stacking context z-60, y se desmontan con él). */}
-      <AppSeal variant="b" />
+      <AppSeal />
       {/* Cinta v2 (T3.v, solo editor ≥768 — compacta 768–1023, completa desde 1024): identidad +
           diagnóstico del día + acciones. */}
       {desktopRibbon ? (

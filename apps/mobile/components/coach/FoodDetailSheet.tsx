@@ -2,18 +2,18 @@ import { useEffect, useState } from 'react'
 import { Linking, Pressable, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Barcode, ExternalLink, Maximize2, Scale } from 'lucide-react-native'
-import type { FoodCatalogItem } from '@eva/nutrition-v2'
+import {
+  formatBarcode,
+  getFoodSourceAttribution,
+  getFoodVerificationLabel,
+  type FoodCatalogItem,
+  type FoodVerificationTone,
+} from '@eva/nutrition-v2'
 import { Sheet } from '../Sheet'
 import { PhotoLightbox } from '../PhotoLightbox'
 import { FoodThumbnail } from '../nutrition-v2'
 import { MacroChipRow } from '../nutrition-v2/MacroChipRow'
 import { useTheme } from '../../context/ThemeContext'
-import {
-  formatBarcode,
-  getFoodSourceAttribution,
-  getFoodVerificationLabel,
-  type FoodVerificationTone,
-} from '../../lib/food-detail'
 import { foodMediaThumbnailUrl } from '../../lib/nutrition-v2-food-media'
 
 /**

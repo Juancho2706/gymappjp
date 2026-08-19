@@ -122,6 +122,34 @@ export async function getCoachEnabledModules(db: DB, coachId: string): Promise<E
 }
 
 /**
+ * Fila minima de scope del PROPIO alumno (`clients`), tal como la leen los gates de su nav.
+ * Es la union de lo que hoy leen `findClientScopeRow` (id/full_name/team_id/coach_id) y el
+ * `isOrgScopedClient` de cada modulo (org_id) — se expone acá para poder pasarla YA resuelta.
+ */
+export type StudentModuleScope = {
+    id: string
+    full_name: string | null
+    team_id: string | null
+    coach_id: string | null
+    org_id: string | null
+}
+
+/**
+ * Contexto del alumno YA resuelto por el arbol que llama, para deduplicar lecturas dentro de un
+ * mismo render (varios gates preguntando por la MISMA fila `clients` y el MISMO mapa de modulos).
+ *
+ * Contrato para no mover la semantica ni un pelo:
+ *  - `scope: null` significa "no hay fila / la lectura fallo" => el gate cierra igual que hoy.
+ *  - `modules` debe resolverse con la MISMA regla que `hasModule` (LOCKED): si hay `team_id`
+ *    manda `teams.enabled_modules`; si no, `coaches.enabled_modules`. Nunca una union.
+ *  - El kill-switch de operador NO viaja acá: cada gate lo sigue evaluando por su cuenta.
+ */
+export type StudentModulePrefetch = {
+    scope: StudentModuleScope | null
+    modules: EnabledModules
+}
+
+/**
  * Is `key` enabled for the given resource context?
  * teamId present => the team decides (pool wins). Else the coach's own flags.
  */

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: "2026-07-26 @ e0db4285"
+last_verified: "2026-08-19 @ ce601562"
 canonical: true
 ---
 
@@ -22,9 +22,18 @@ El job `quality` de `.github/workflows/ci.yml` corre en pull requests hacia `mai
 
 `pnpm audit --audit-level=high --prod` también corre, pero permanece informativo (`continue-on-error`) para evitar que una indisponibilidad/advisory externo bloquee código sin revisión.
 
+## Gates locales obligatorios que CI no corre
+
+El job `quality` no los ejecuta, pero las reglas del repo y las specs vigentes los exigen antes de entregar. Saltarlos es entregar sin gate; no convierte nada en «verde» (agregados en el saneo documental del 2026-08-19: existían y este documento no los nombraba):
+
+1. `pnpm check:nutrition-v2-boundaries` — frontera de Nutrition V2 (`scripts/check-nutrition-v2-boundaries.mjs`).
+2. `pnpm check:meal-completions-deprecation` — guarda de la deprecación de `meal_completions`.
+3. `node scripts/cabina-visual-check.mjs` — gate visual Playwright del editor único (T3.v Cabina + Guía Viva + Sello v2): asserts BLOQUEANTES de geometría, contraste y recorrido de los tours sobre el harness `dev-harness/nutrition-editor` (308 declarados en el corte del Sello v2, 2026-08-17). Levanta el dev server de `apps/web` en el puerto 3123 salvo que reciba `BASE_URL`.
+4. `pnpm --filter @eva/mobile exec tsc --noEmit` — TypeScript móvil; el `typecheck` raíz solo cubre web.
+
 ## Gates manuales de CI
 
-Los jobs `e2e` y `nutrition-smoke` solo corren mediante `workflow_dispatch`.
+`e2e` solo corre mediante `workflow_dispatch`. `nutrition-smoke` sí se dispara en push/PR/dispatch, pero con `continue-on-error: true` a nivel de job y cada paso condicionado a la presencia de los secrets E2E: sin credenciales no-opea en verde y en ningún caso bloquea un PR.
 
 Motivo: usan Supabase real, secrets y datos preparados; todavía no son deterministas para cada PR. No se consideran “verdes” porque el job haya sido omitido.
 
@@ -78,6 +87,10 @@ Estado al 2026-07-26 sobre `rnmobiledenuevo` desde el baseline `e0db4285`:
 
 El frente no agregó dependencias, DDL ni migraciones. La validación nueva usa el schema y las
 relaciones existentes.
+
+## Tamaño real de la suite (2026-08-19)
+
+Las cifras de las dos tablas de arriba son evidencia fechada de julio (3.940 y 4.130 tests): **no describen la suite de hoy**. Las últimas registradas por las sesiones que efectivamente las corrieron, según [CURRENT.md](../status/CURRENT.md): **5.776** (Guía Viva), **5.889** (Pricing v2) y **5.933** (retiro del par viejo), las tres del 2026-08-17. El saneo documental del 19-08 **no volvió a correr la suite completa**, así que aquí no se declara ningún verde nuevo: quien la corra actualiza esta sección con fecha, SHA y resultado.
 
 ## Comandos locales
 
@@ -141,5 +154,6 @@ No pegar logs extensos, screenshots, payloads, credenciales ni listas de cientos
 
 - [x] Artefactos del run `30185211552` retenidos (`D:\tmp\eva-artifacts-856829fa\`: build.aab + build.ipa) y procesamiento en TestFlight/Play internal verificado por el owner (2026-07-25).
 - [ ] Completar smoke Android/iOS de la paridad activa.
-- [ ] Ejecutar E2E manual antes del siguiente release con cambios de auth/RLS/pagos/nutrición.
+- [ ] Ejecutar E2E manual antes del siguiente release con cambios de auth/RLS/pagos/nutrición. **Deuda concreta**: Pricing v2 (2026-08-17) tocó pagos, entitlements y el cerco de invitaciones y salió sin correr `e2e`.
+- [ ] Reescribir el canary E2E de publicación de plan: `tests/nutrition-v2/builder-publish.spec.ts` está en `test.describe.skip` desde el retiro del par viejo, y el editor único —hoy camino ÚNICO de escritura de planes— quedó sin E2E.
 - [ ] Hacer deterministas los jobs Playwright antes de volverlos obligatorios en cada PR.

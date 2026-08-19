@@ -11,13 +11,13 @@
  * con el mismo esquema publico que usa el scanner de alimentos.
  */
 
-import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import {
   getFoodSourceAttribution,
   getFoodVerificationLabel,
+  type FoodCatalogItem,
   type FoodDetailData,
   type FoodVerificationTone,
-} from '@/lib/food-detail'
+} from '@eva/nutrition-v2'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 
 export interface FoodCatalogCardModel {

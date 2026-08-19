@@ -134,11 +134,16 @@ const FAQS: Faq[] = [
     },
     {
         q: '¿Cómo importo alumnos desde Excel?',
-        a: 'En Alumnos › Importar subes un Excel o CSV, mapeas las columnas y confirmas. La importación masiva está disponible según tu plan.',
+        // Pricing v2 (P4): `canImportClients` es true también en free — la importación ya no
+        // depende del plan. El copy "según tu plan" mandaba a un muro que no existe.
+        a: 'En Alumnos › Importar subes un Excel o CSV, mapeas las columnas y confirmas. La importación masiva está incluida en todos los planes, también en el gratuito.',
     },
     {
         q: '¿Cómo funcionan los módulos profesionales?',
-        a: 'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen incluidos con cualquier plan pago, sin costo extra. Con tu plan activo se habilitan solos: los usas desde Alumnos › Herramientas y el builder.',
+        // Pricing v2 (P3): `hasPaidModuleAccess` ya NO mira el tier — los 4 módulos son de todo
+        // coach con suscripción vigente, plan gratuito incluido. Lo que los apaga es la cuenta
+        // inactiva (vencida/bloqueada), no el plan.
+        a: 'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen incluidos en todos los planes, también en el gratuito, sin costo extra. Mientras tu cuenta esté activa se habilitan solos: los usas desde Alumnos › Herramientas y el builder.',
     },
     {
         q: '¿Necesito tarjeta para el plan gratis?',

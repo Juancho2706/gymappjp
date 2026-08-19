@@ -3,9 +3,16 @@ import {
   formatBarcode,
   getFoodSourceAttribution,
   getFoodVerificationLabel,
+  OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION,
   OPEN_FOOD_FACTS_URL,
   USDA_FDC_URL,
-} from '@/lib/food-detail'
+} from '@eva/nutrition-v2'
+
+// El modulo vive en `packages/nutrition-v2/food-detail.ts` desde que se saldo la deuda F6.0
+// (auditoria 2026-08-17 §1.1): antes habia una copia web y un «Port 1:1» en `apps/mobile/lib`,
+// con una suite espejo (`tests/mobile-food-detail.test.ts`) que probaba que los dos textos
+// coincidieran caracter a caracter. Al quedar UNA sola copia esa suite perdio sujeto; sus casos
+// propios (pie generico ODbL, EAN-8 sin espacio final) se absorbieron aca.
 
 describe('getFoodSourceAttribution', () => {
   it('mapea open_food_facts a la atribución ODbL obligatoria con link', () => {
@@ -50,6 +57,14 @@ describe('getFoodSourceAttribution', () => {
     const required = sources.filter((s) => getFoodSourceAttribution(s).requiresAttribution)
     expect(required).toEqual(['open_food_facts'])
   })
+
+  // Copy verbatim: es la línea que cumple ODbL a nivel de catálogo (pie del hub, web y RN).
+  it('el pie genérico ODbL conserva su copy exacto', () => {
+    expect(OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION).toBe(
+      'Parte de los datos de productos proviene de Open Food Facts, disponible bajo licencia ODbL.',
+    )
+    expect(OPEN_FOOD_FACTS_URL).toBe('https://world.openfoodfacts.org')
+  })
 })
 
 describe('getFoodVerificationLabel', () => {
@@ -75,6 +90,10 @@ describe('getFoodVerificationLabel', () => {
 describe('formatBarcode', () => {
   it('agrupa dígitos de a cuatro', () => {
     expect(formatBarcode('7801234567890')).toBe('7801 2345 6789 0')
+  })
+
+  it('grupo exacto de 4 sin espacio final (EAN-8)', () => {
+    expect(formatBarcode('78012345')).toBe('7801 2345')
   })
 
   it('devuelve guion para vacío/nulo/no numérico', () => {

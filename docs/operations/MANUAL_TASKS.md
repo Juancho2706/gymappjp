@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-07-25 @ 856829fa"
+last_verified: "2026-08-19 @ ce601562"
 canonical: true
 ---
 
@@ -22,8 +22,10 @@ Reglas:
 
 MOB-01 quedó CERRADO el 2026-07-25: profile con HealthKit + Associated Domains validado en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) (`856829fa`, Android+iOS verdes con submits), procesamiento verificado por el owner en App Store Connect y Play Console, artefactos retenidos en `D:\tmp\eva-artifacts-856829fa\`. Código estático y tests no sustituyen esta prueba.
 
-- [ ] Android: smoke de alumno y coach, light/dark y marca EVA/custom.
-- [ ] iOS: mismo smoke con el build de TestFlight (`856829fa`).
+**Actualización 2026-08-19 (saneo documental)**: esta tarea pedía el smoke sobre el TestFlight de julio (`856829fa`) cuando el binario vigente ya es otro — iOS pasó por 1.1.0 (54) y `app.json` va en **1.1.1**. Las rondas de QA del owner del 15, 16, 17 y 18-08 cubrieron nutrición, el editor único y el tour; **no** la matriz transversal de esta tarea. Y no se certifica por OTA: la experiencia de entrada cambió el config plugin del splash, así que exige **binario nuevo**.
+
+- [ ] Android: smoke de alumno y coach, light/dark y marca EVA/custom, sobre el binario vigente (no sobre un OTA).
+- [ ] iOS: mismo smoke sobre el binario vigente en TestFlight/App Store, anotando versión y build usados.
 - [ ] Validar navegación, safe areas, teclado, cámara/scanner, offline/reintentos y cambio de workspace.
 - [ ] Registrar cada defecto con plataforma, build, pantalla, pasos, resultado esperado/real y captura.
 - [ ] Actualizar únicamente el resultado consolidado en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).

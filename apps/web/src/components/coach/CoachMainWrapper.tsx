@@ -62,7 +62,7 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
             {/* Sello EVA v2 «Horizonte B» (SPEC eva-seal-background D1/D6): fondo por defecto del
                 shell logueado del coach. Solo la rama NO-builder: los builders son overlays de
                 trabajo denso (D2) y quedan fuera de este montaje. */}
-            <AppSeal variant="b" />
+            <AppSeal />
             <div
                 className={cn(
                     'mx-auto w-full min-w-0 max-w-full animate-fade-in',

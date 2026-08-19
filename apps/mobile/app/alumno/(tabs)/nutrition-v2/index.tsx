@@ -3077,7 +3077,9 @@ function PlanTab({ chrome }: { chrome: ReactNode }) {
         {chrome}
         <NutritionStatePanel
           icon={offline ? 'offline' : 'empty'}
-          illustration={offline ? undefined : 'sin-plan'}
+          // Offline tambien tiene arte propio (`sin-conexion` ya vive en assets/illustrations):
+          // antes caia a `undefined` y el panel degradaba al glifo lucide.
+          illustration={offline ? 'sin-conexion' : 'sin-plan'}
           tone={offline ? 'warning' : 'neutral'}
           title={offline ? 'Sin conexión' : 'No hay un plan vigente'}
           description={
@@ -3587,7 +3589,8 @@ function HistoryTab({
       ListEmptyComponent={
         <NutritionStatePanel
           icon={offline ? 'offline' : 'empty'}
-          illustration={offline ? undefined : 'historial-vacio'}
+          // Mismo criterio que el panel "sin plan": offline usa `sin-conexion`, no el glifo.
+          illustration={offline ? 'sin-conexion' : 'historial-vacio'}
           tone={offline ? 'warning' : 'neutral'}
           title={offline ? 'Sin conexión' : items.length > 0 ? 'Todavía no hay semanas cerradas' : 'Todavía no hay historial'}
           description={

@@ -7,6 +7,13 @@ import { coachIdentifierColumn } from '@/lib/coach/invite-code'
 import { isStudentMovementEnabled } from '@/services/assessment/movement-assessment.service'
 import { isStudentBodyCompositionEnabled } from '@/services/bodycomp/body-composition.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
+import {
+    getCoachEnabledModules,
+    getTeamEnabledModules,
+    type EnabledModules,
+    type StudentModulePrefetch,
+    type StudentModuleScope,
+} from '@/services/entitlements.service'
 
 /**
  * Contexto de pool/team detectable en Server Components: el proxy /t/[team_slug] reescribe a
@@ -34,6 +41,67 @@ export const getClientRootUser = cache(async (): Promise<{ id: string; email: st
 })
 
 /**
+ * Fila de scope del PROPIO alumno, leida UNA sola vez por request.
+ *
+ * Antes cada gate del nav leia `clients` por su cuenta: `findClientScopeRow` (movimiento) +
+ * `isOrgScopedClient` (movimiento) + los dos espejos de bodycomp + el select del gate de
+ * nutricion = 5 SELECT identicos a la MISMA fila. React.cache dedupea de verdad porque este
+ * helper NO recibe argumentos: crea su propio cliente USER-scoped adentro (`createClient()`,
+ * RLS = techo, `clients.id = auth.uid()`) — un cache() keyed por el cliente no dedupearia nada.
+ *
+ * Contrato de errores preservado: `null` == no hay fila O la lectura fallo, que es exactamente
+ * lo que cada consumidor ya trataba como "cerrar el gate" (movimiento/bodycomp) o "usar los
+ * defaults vacios" (nutricion, fail-OPEN). Nunca service-role: el scope del alumno se lee
+ * siempre con SU sesion (B8).
+ */
+export const getStudentScopeRow = cache(async (): Promise<StudentModuleScope | null> => {
+    const user = await getClientRootUser()
+    if (!user) return null
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from('clients')
+        .select('id, full_name, coach_id, team_id, org_id')
+        .eq('id', user.id)
+        .maybeSingle()
+    if (error || !data) return null
+    return data as StudentModuleScope
+})
+
+/**
+ * Mapa de modulos habilitados para el contexto del alumno, memoizado por request y keyed por
+ * PRIMITIVOS (teamId/coachId) — mismo criterio que `getEnabledModulesForRender`, pero con
+ * service-role porque el alumno NO puede SELECT en teams/coaches por RLS. El cliente se crea
+ * ADENTRO a proposito: cada gate creaba el suyo y un cache() keyed por el cliente jamas
+ * dedupearia (React.cache compara argumentos por identidad).
+ *
+ * Regla de resolucion IDENTICA a `hasModule` (LOCKED): con `team_id` manda el pool
+ * (`teams.enabled_modules`); si no, los flags del coach. Nunca una union. Sin ninguno => `{}`.
+ */
+const getStudentNavEnabledModules = cache(
+    async (teamId: string | null, coachId: string | null): Promise<EnabledModules> => {
+        if (!teamId && !coachId) return {}
+        const admin = createServiceRoleClient()
+        if (teamId) return getTeamEnabledModules(admin, teamId)
+        return getCoachEnabledModules(admin, coachId!)
+    },
+)
+
+/** Cliente service-role unico por request para los gates del nav (evita instanciar uno por gate). */
+const getNavEntitlementsDb = cache(() => createServiceRoleClient())
+
+/**
+ * Scope + mapa de modulos ya resueltos, para que movimiento y bodycomp compartan las lecturas
+ * en vez de repetirlas. El kill-switch de operador NO viaja aca: cada gate lo evalua por su
+ * cuenta (es lo primero que hace cada `isStudent*Enabled`).
+ */
+const getStudentModulePrefetch = cache(async (): Promise<StudentModulePrefetch> => {
+    const scope = await getStudentScopeRow()
+    if (!scope) return { scope: null, modules: {} }
+    const modules = await getStudentNavEnabledModules(scope.team_id, scope.coach_id)
+    return { scope, modules }
+})
+
+/**
  * Espejo del modulo movement_assessment para el nav del alumno (pool => su team;
  * standalone => su coach). Service-role SOLO para leer enabled_modules (RLS no
  * deja al alumno leer teams/coaches); el gate real es la page de movimiento.
@@ -43,7 +111,8 @@ export const getStudentMovementNavEnabled = cache(async () => {
     if (!user) return false
     const supabase = await createClient()
     try {
-        return await isStudentMovementEnabled(supabase, createServiceRoleClient(), user.id)
+        const prefetch = await getStudentModulePrefetch()
+        return await isStudentMovementEnabled(supabase, getNavEntitlementsDb(), user.id, prefetch)
     } catch {
         return false
     }
@@ -59,7 +128,8 @@ export const getStudentBodyCompositionNavEnabled = cache(async () => {
     if (!user) return false
     const supabase = await createClient()
     try {
-        return await isStudentBodyCompositionEnabled(supabase, createServiceRoleClient(), user.id)
+        const prefetch = await getStudentModulePrefetch()
+        return await isStudentBodyCompositionEnabled(supabase, getNavEntitlementsDb(), user.id, prefetch)
     } catch {
         return false
     }
@@ -79,18 +149,16 @@ export const getStudentBodyCompositionNavEnabled = cache(async () => {
 export const getStudentNutritionNavEnabled = cache(async (): Promise<boolean> => {
     const user = await getClientRootUser()
     if (!user) return true
-    const supabase = await createClient()
     try {
-        const { data } = await supabase
-            .from('clients')
-            .select('coach_id, team_id, org_id')
-            .eq('id', user.id)
-            .maybeSingle()
+        // Misma fila `clients` que los gates de modulos (getStudentScopeRow, cache por request):
+        // antes este gate hacia su PROPIO select. `null` == fila ausente o lectura fallida, que es
+        // exactamente el caso que este bloque ya cubria con `data?.x ?? defecto`.
+        const scope = await getStudentScopeRow()
         return await resolveNutritionDomainEnabled({
-            coachId: (data?.coach_id ?? '') as string,
+            coachId: scope?.coach_id ?? '',
             clientId: user.id,
-            clientTeamId: (data?.team_id ?? null) as string | null,
-            clientOrgId: (data?.org_id ?? null) as string | null,
+            clientTeamId: scope?.team_id ?? null,
+            clientOrgId: scope?.org_id ?? null,
         })
     } catch {
         return true

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-17"
+last_verified: "2026-08-19 @ ce601562"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -13,6 +13,18 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
 ## Resumen ejecutivo
+
+> **2026-08-19 (saneo documental — qué QA en device existe de verdad)**: los bloques fechados de
+> abajo quedaron congelados en su día y varios dicen «QA device pendiente» sobre trabajo que el
+> owner ya probó. Estado real al 19-08: **3 rondas en device Android el 17-08** (cabina, tour,
+> sello, roster y el editor único RN, que era el pendiente T3.3b) y **una tanda más el 18-08**
+> sobre el OTA de `4de66a5c` (android **+ ios**), de la que salieron equivalencia del reemplazo
+> visible, teclado que tapaba «Notas para tu alumno», sheets `nativeModal` al borde en Android,
+> «Aplicar» plantilla y el foco del tour. Sigue **sin acta**: el flujo multi-día del editor, el tab
+> Alimentos RN (crear/clasificar/filtros y, sobre todo, clasificar un alimento **GLOBAL**), la
+> semana completa (`nutrition-week-view` cerró sin una sola tarea de QA), las notas del coach
+> (📝 por franja y por grupo, entraron después de las rondas) y la matriz transversal MOB-02 —
+> que además **no es certificable por OTA**: el config plugin del splash exige binario nuevo.
 
 > **2026-08-17 (paquete post-QA de T3.v: wave 2 + «Familia N», web+RN)**: cierran los
 > hallazgos restantes del QA del owner — cinta compacta 768-1023 sin solapes (track
@@ -111,8 +123,14 @@ source_of_truth: apps/web responsive + apps/mobile
 > mostraba 2 por la poda de la ola 3) — manda el editor web, que es la superficie canonica;
 > (b) el drag con manija es web-desktop y en RN se expresa como Subir/Bajar; (c) la paleta
 > lateral `lg+` no aplica al telefono; (d) sin respaldo local en creacion ni en plantilla
-> (mismo pendiente declarado que la web). **QA device del editor RN: PENDIENTE**; el OTA sigue
-> acumulado.
+> (mismo pendiente declarado que la web). **QA device del editor RN: HECHO** — el pase único del
+> owner del 2026-08-17 (device Android, 3 rondas; V4.2 de la Cabina lo declaraba explícitamente
+> como «incluye el pendiente T3.3b del editor RN») y el OTA **dejó de estar acumulado**: salieron
+> los grupos `aca6fc76`, `7738d234`, `a4dafcea`, el #4 (`dff7edc8`) y el #5 (`768389fb`) el 17-08,
+> y la tanda del propio QA el 18-08 desde `4de66a5c` (android + ios). Sigue **sin acta el flujo
+> multi-día** (agregar día, cambiar día, duplicar como otro día): ninguna ronda registrada lo
+> menciona — pendiente de QA en device del owner (auditoría 17-08). Esta línea decía «QA
+> PENDIENTE; el OTA sigue acumulado» hasta el saneo documental del 19-08.
 
 > **2026-08-15 (T3.x editor unico de nutricion — corte web W4, rama `rnmobiledenuevo`)**: la web
 > corto sus CTAs al **editor unico** (`/coach/nutrition-v2/[clientId]/editor`): la ficha, el `+`
@@ -209,6 +227,16 @@ source_of_truth: apps/web responsive + apps/mobile
 > **QA en dispositivo COMPLETO (owner, 2026-08-15)** vía OTA android `a93d01a3` (F2 copy semana y
 > F4 porción pegajosa siguen declarados SIN portar). El OTA fue android-only: iOS 1.1.0 (54) sigue
 > en App Review y el canal es compartido.
+>
+> **Actualización 2026-08-19 (saneo documental)**: (c) y (d) ya no describen el árbol. El nivel
+> **día** de F2 cruzó a RN con la gramática compartida de R1/T3.3b — `QuickEditMode.tsx` despacha
+> `COPY_VARIANT_TO_DAYS` (modo Reemplazar/Sumar + presets + aviso previo) contra
+> `packages/nutrition-v2/editor-state.ts` — y **F4 porción pegajosa la cerró T3.3b W3**
+> (`a95f1811`). Lo que sigue sin existir es el quick-select «próximos 1/2/4» **del menú de la
+> FRANJA**, y ya no es deuda solo-RN: su única implementación
+> (`apps/web/src/app/coach/nutrition-v2/[clientId]/builder/_components/CopySlotMenu.tsx`) cuelga
+> de `SlotEditor.tsx`, o sea del wizard que perdió todas sus puertas en `0355d67d` ⇒ hoy es
+> **inalcanzable en las dos plataformas** (regresión inventariada en la auditoría del 17-08, §3).
 
 > **2026-08-14 (T2.7 re-skin del alumno — qué cruzó a RN y qué es web-only)**: del programa T2.7
 > (`docs/specs/nutrition-student-reskin/`) cruzaron a RN en los MISMOS commits que web: **F1**
@@ -238,8 +266,13 @@ source_of_truth: apps/web responsive + apps/mobile
 > RN no tiene guion de 8 (rail y paleta no existen en el teléfono), la tarjeta RN es SIEMPRE dock
 > (D3 por construcción), y el «?» del editor RN flota sobre la PublishBar porque sus dos CTA
 > `flex-1` ocupan todo el ancho (D2 manda sobre la letra de la SPEC). Deuda menor declarada: el
-> paso «Metas» dice «popover» y en RN abre bottom sheet (copy cerrado por D6, decisión del owner);
-> QA en device del tour RN pendiente — entra al pase único del owner sobre el OTA #3.
+> paso «Metas» dice «popover» y en RN abre bottom sheet (copy cerrado por D6, decisión del owner).
+> **QA en device del tour RN: HECHO** en las rondas del owner del 17-08 y 18-08 — de ahí salieron
+> el OTA #4 (`dff7edc8`: «tour RN corregido, misma ventana + scroll al target») y el foco del tour
+> que caía en la barra de estado, arreglado en la tanda del 18-08. **Deuda viva declarada**: la
+> tarjeta del tour queda **bajo la tab bar**; el arreglo real es subir el punto de montaje del
+> overlay al layout raíz (tanda propia, verificada como NO hecha en código el 19-08). Esta línea
+> decía «QA en device del tour RN pendiente» hasta el saneo documental del 19-08.
 
 > **2026-08-17 (Sello EVA v2 — fondo Horizonte B, paridad por contrato)**: `AppBackground` RN v2
 > = espejo del `AppSeal` web. La grilla 40×40 se RETIRÓ y el `SKY #38BDF8` fijo murió: el segundo
@@ -529,7 +562,7 @@ La paridad global **no está certificada todavía**.
 > del home habilita "Revisar y editar" para días pasados (muere "Disponible pronto"). 47 tests nuevos.
 > Todo pendiente de QA física.
 
-> **2026-07-29 (rama `worktree-nutricion-ui-rescate`, sin merge)**: rescate UI de Nutrición V2 en olas 0-4 (poda de eco + permisos a 2 reales + wizard 2 pasos + selector por día) con paridad web/RN en el mismo corte — semana completa Lu-Do (`WeekDayNav` + `week-view.ts` compartidos), copia de franjas entre días (`COPY_SLOT_TO_VARIANTS` en los 4 reducers), carry-over de `visible_notes` también en el publish RN, y barrido de 677 clases muertas `text-text-*`/`border-border-*` de mobile (texto renderizaba negro incluso en dark). Las olas 4A/4B siguen "cerradas estáticas": este corte agrega superficies que requieren QA física propia. Spec: [`docs/specs/nutrition-week-view/`](../specs/nutrition-week-view/SPEC.md).
+> **2026-07-29 (`9bf856b8` + `61ae0f8f`, hoy ancestros de `master` — esta línea decía «rama `worktree-nutricion-ui-rescate`, sin merge» hasta el saneo documental del 19-08, verificado con `git merge-base --is-ancestor`)**: rescate UI de Nutrición V2 en olas 0-4 (poda de eco + permisos a 2 reales + wizard 2 pasos + selector por día) con paridad web/RN en el mismo corte — semana completa Lu-Do (`WeekDayNav` + `week-view.ts` compartidos), copia de franjas entre días (`COPY_SLOT_TO_VARIANTS` en los 4 reducers), carry-over de `visible_notes` también en el publish RN, y barrido de 677 clases muertas `text-text-*`/`border-border-*` de mobile (texto renderizaba negro incluso en dark). Las olas 4A/4B siguen "cerradas estáticas": este corte agrega superficies que requieren QA física propia. Spec: [`docs/specs/nutrition-week-view/`](../specs/nutrition-week-view/SPEC.md).
 
 > **2026-07-25 (PR #170, `60090f90`)**: el ejecutor del alumno quedó rediseñado a **V3** — único camino en web y RN, flags eliminados — e integró **cardio fases A-D** (ejes de captura por modalidad, Escaladora, intervalos por distancia, coach ve los registros). La Sección 1 sigue “cerrada estática” sobre ese código nuevo; la deuda cardio priorizada vive en [`specs/cardio-ejes-y-fixes/TASKS.md`](../../specs/cardio-ejes-y-fixes/TASKS.md) y la cola del ejecutor en [`specs/executor-v3/TASKS.md`](../../specs/executor-v3/TASKS.md).
 

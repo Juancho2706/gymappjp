@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import type { FoodDetailData } from '@/lib/food-detail'
+import type { FoodDetailData } from '@eva/nutrition-v2'
 
 /**
  * Ficha de alimento del hub V1 del coach: trae las columnas extendidas del catálogo

@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { headers } from 'next/headers'
 import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 import { redirect } from 'next/navigation'
@@ -11,8 +12,8 @@ import {
     BRAND_PRIMARY_COLOR,
 } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
-import { ClientNav } from '@/components/client/ClientNav'
-import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled, getStudentNutritionNavEnabled } from './_data/client-root.queries'
+import { ClientNavGates } from './_components/ClientNavGates'
+import { ClientNavFallback } from './_components/ClientNavFallback'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
 import { WorkoutLaunchProvider } from './dashboard/_components/launch/WorkoutLaunchMorph'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
@@ -286,15 +287,10 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         redirect('/not-found')
     }
 
-    // Espejo de los modulos movement_assessment + body_composition con el contexto del PROPIO
-    // alumno (pool => su team; standalone => su coach) — mismo gate que la page.
-    const [showMovement, showBodyComposition, showNutrition] = await Promise.all([
-        getStudentMovementNavEnabled(),
-        getStudentBodyCompositionNavEnabled(),
-        // Master switch del dominio Nutricion (plan §4.8): si el coach lo apago para este alumno,
-        // el tab "Plan Alimenticio" del nav NO se monta (render-only; la page tambien gatea).
-        getStudentNutritionNavEnabled(),
-    ])
+    // Los gates del nav (movimiento / composicion / dominio Nutricion) NO se esperan aca: viven
+    // en <ClientNavGates> bajo <Suspense> mas abajo. Mientras el await estaba en este cuerpo,
+    // `children` no podia siquiera empezar a renderizar — ni su loading.tsx salia — porque el
+    // arbol entero espera a que el layout retorne. Nada del resto del layout los consume.
 
     return (
         <>
@@ -390,16 +386,19 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                    <WorkoutLaunchProvider>
                     <OfflineNutritionQueueSync />
                     <OfflineWorkoutQueueSync />
-                    <ClientNav
-                        coachSlug={coach_slug}
-                        basePath={basePath}
-                        coachBrand={brandName}
-                        coachLogoUrl={logoUrl}
-                        coachLogoDarkUrl={logoUrlDark || undefined}
-                        showMovement={showMovement}
-                        showBodyComposition={showBodyComposition}
-                        showNutrition={showNutrition}
-                    />
+                    {/* QW1 TTFB: los 3 gates del nav son lecturas a DB (3 hops c/u antes del
+                        dedupe). Aislados aca, el shell + la page streamean primero y el nav entra
+                        cuando resuelven. El fallback solo reserva el ancho del sidebar desktop —
+                        no muestra ningun tab: qué se ve lo decide SIEMPRE el componente real. */}
+                    <Suspense fallback={<ClientNavFallback />}>
+                        <ClientNavGates
+                            coachSlug={coach_slug}
+                            basePath={basePath}
+                            coachBrand={brandName}
+                            coachLogoUrl={logoUrl}
+                            coachLogoDarkUrl={logoUrlDark || undefined}
+                        />
+                    </Suspense>
                     {/* InstallPrompt se renderiza una sola vez global (root app/layout.tsx) y se
                         auto-brandea leyendo los data-* de este wrapper cuando está bajo /c.
                         AppDownloadBanner se removió (decisión CEO: promos de app store fuera; los
@@ -416,7 +415,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                             solo layout: el login del alumno (/c/‹slug›/login) se apaga
                             estructuralmente en globals.css (`main:has(.login-brand)` — D2
                             pre-auth intacto, sin pathname). */}
-                        <AppSeal variant="b" />
+                        <AppSeal />
                         {isStudentGrace && (
                             <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
                                 {/* info-* = rampa DS fija (nunca white-label): banner discreto, tono

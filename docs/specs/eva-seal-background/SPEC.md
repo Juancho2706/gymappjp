@@ -69,12 +69,14 @@ comentario del layout citando esta SPEC.
 
 ## Alcance
 
-- **Web:** componente `AppSeal` (nuevo, `components/` compartido de app) con variantes
-  `b` (default) y `grain` (overlays); montaje en el shell del coach
-  (`app/coach/layout.tsx`/`CoachMainWrapper`), en el shell del área alumno
-  (`app/c/[coach_slug]/…` layout) y capa `grain` en los overlays del editor
-  (`QuickEditPlanView` root). CSS puro (radial-gradients + repeating-linear-gradients),
-  capas `position:fixed` tras el contenido.
+- **Web:** componente `AppSeal` (nuevo, `components/` compartido de app), **una sola
+  capa B** (la variante `grain` que este alcance pedía se borró el 2026-08-19: la reversa
+  de D2 la dejó sin un solo consumidor — ver §Decisiones D2 y la nota de cierre);
+  montaje en el shell del coach (`app/coach/layout.tsx`/`CoachMainWrapper`), en el shell
+  del área alumno (`app/c/[coach_slug]/…` layout) y en el overlay del editor
+  (`QuickEditPlanView` root), que por la reversa lleva el fondo COMPLETO con su cinta
+  superior opaca. CSS puro (radial-gradients + repeating-linear-gradients), capas
+  `position:fixed` tras el contenido.
 - **RN:** `AppBackground` evoluciona a B: fuera la grilla, secundario derivado, deriva
   Reanimated opcional (D4), mismos montajes actuales (ya es app-wide).
 - **Tokens:** `--seal-*` en `globals.css` + espejo en `theme.ts`, dentro del governance.
@@ -93,6 +95,8 @@ comentario del layout citando esta SPEC.
 
 - B visible y correcto en: coach web (dashboard/hubs/listas), alumno PWA, RN coach+alumno,
   en dark y light, con 3 marcas de prueba (azul EVA, verde, naranja) — capturas del gate.
-- Grano-solo presente en el editor overlay; pre-auth intacto (diff cero en esas rutas).
+- El overlay del editor lleva el fondo COMPLETO B con su cinta superior opaca (reversa de
+  D2, 2ª ronda de QA del dueño — ya NO se pide grano-solo); pre-auth intacto (diff cero en
+  esas rutas).
 - Reduced-motion congela la deriva (assert), kill-switch funciona.
 - Gates de siempre verdes + `check:tokens` con los tokens nuevos + QA visual del dueño.

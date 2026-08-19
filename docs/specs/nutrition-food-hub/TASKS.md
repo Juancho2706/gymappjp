@@ -187,6 +187,22 @@ estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
       casera, espejo de `ClassifyFoodFlow`) — verificado en `foods.tsx:148,790` (cierre 2026-08-17)
 - [ ] F6.5 QA en device fisico + `MOBILE_PARITY.md` + OTA android — se resuelve en el QA del OTA
       acumulado (nota 2026-08-17)
+- [x] **F6.6 (2026-08-19)** — saldada la duplicacion que F6.0 dejo anotada y la auditoria 17-08 (§1.1)
+      volvio a levantar: la parte PURA de la ficha (modelo `FoodDetailData` + copys de fuente,
+      verificacion y codigo de barras) vive en `packages/nutrition-v2/food-detail.ts`, exportada por
+      el barrel; se borro el «Port 1:1» `apps/mobile/lib/food-detail.ts` y los 8 importadores (6 web,
+      2 RN) apuntan al paquete.
+      - Queda en `apps/web/src/lib/food-detail.ts` SOLO `resolveFoodDetailImage`: depende de
+        `@/lib/food-image` (lee `NEXT_PUBLIC_SUPABASE_URL` y los iconos de `/public`), y RN resuelve
+        la foto por otro camino (`foodMediaThumbnailUrl`). El archivo web ya NO re-exporta lo mudado,
+        a proposito: una sola fuente.
+      - `tests/mobile-food-detail.test.ts` se retira: probaba que el port RN coincidiera caracter a
+        caracter con la web y al quedar una sola copia perdio sujeto. Sus dos casos propios (pie
+        generico ODbL verbatim, EAN-8 sin espacio final) se absorbieron en `tests/food-detail.test.ts`.
+      - `food-catalog-card.ts` (el otro bloqueo anotado en F6.0) sigue web-only: ademas de la ficha
+        usa `foodCategoryIconUrl`. Con esta mudanza su unica atadura restante es la imagen.
+      - Gates: vitest puntual `tests/food-detail.test.ts` + `tests/food-detail-image.test.ts`
+        24/24 verde. Typecheck/suite/build: los corre el cierre de la tanda.
 
 ## Registro de cierres
 

@@ -1260,9 +1260,10 @@ main:has(.login-brand) [data-eva-seal] {
   display: none;
 }
 
-/* D2 — overlay denso del editor: mientras [data-qe-overlay] (opaco, fixed z-60) está
-   montado, los blobs del shell de abajo se apagan (no se ven y no queman batería);
-   el overlay trae su PROPIA capa local de solo-grano (AppSeal variant="grain"). */
+/* D2 (con la REVERSA del dueño 2026-08-17): el editor SÍ lleva el sello completo, así
+   que mientras [data-qe-overlay] (opaco, fixed z-60) está montado se apagan los blobs
+   del shell de ABAJO — no se ven y no queman batería. El overlay monta su PROPIO
+   <AppSeal> en su stacking context y se desmonta con él. */
 .coach-layout-container main:has([data-qe-overlay]) [data-eva-seal='b'] {
   display: none;
 }

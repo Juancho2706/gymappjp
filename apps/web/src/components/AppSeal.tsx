@@ -12,39 +12,28 @@
  * `motion-safe`); el grano JAMÁS anima. `prefers-reduced-motion` ⇒ blobs ESTÁTICOS
  * (no desaparecen). `animated={false}` = kill-switch (QA de batería del dueño).
  *
- * Variantes:
- * - `b` (default): capa `fixed inset-0 -z-10` para los shells logueados. ⚠️ El
- *   padre DEBE crear stacking context (`isolate` o `z-0`); sin eso el `-z-10` se
- *   hunde bajo cualquier fondo opaco de la página y el sello queda invisible.
- * - `grain`: SOLO grano para overlays de trabajo denso (D2: editor de nutrición —
- *   el tinte no compite con datos). `fixed inset-0` DENTRO del overlay: el overlay
- *   del editor es `fixed inset-0` + scroll propio, así la capa cubre exactamente su
- *   área sin desplazarse con el contenido (una capa `absolute` se iría con el
- *   scroll y dejaría sin grano todo lo que pase del primer viewport). Sigue local:
- *   vive en el stacking context del overlay y se desmonta con él.
+ * UNA sola capa: `fixed inset-0 -z-10` para los shells logueados. ⚠️ El padre DEBE
+ * crear stacking context (`isolate` o `z-0`); sin eso el `-z-10` se hunde bajo
+ * cualquier fondo opaco de la página y el sello queda invisible.
+ *
+ * Hubo una variante `grain` (solo grano) para los overlays de trabajo denso del D2
+ * original. Murió el 2026-08-19 (auditoría 17-08 §1.11): la REVERSA del dueño sobre
+ * D2 dejó al editor de nutrición con el fondo COMPLETO — `QuickEditPlanView` monta el
+ * sello entero — así que la variante quedó con CERO consumidores. Si algún día un
+ * builder pide fondo plano + solo grano, se vuelve a agregar junto con su montaje;
+ * el marcador de markup `data-eva-seal="b"` (contrato del CSS y del gate visual) no
+ * cambia por eso.
  *
  * El chrome del shell NO se toca (D2, regla del dueño): topbar/sidebar conservan su
  * superficie opaca `var(--surface-app)` ENCIMA del sello. Print: `globals.css`
  * apaga `[data-eva-seal]` (el sello no se imprime).
  */
 export function AppSeal({
-    variant = 'b',
     animated = true,
 }: {
-    /** `b` = blobs + grano (shells logueados) · `grain` = solo grano (overlays D2). */
-    variant?: 'b' | 'grain'
     /** Kill-switch de la deriva (SPEC D4). `false` ⇒ blobs estáticos. */
     animated?: boolean
-}) {
-    if (variant === 'grain') {
-        return (
-            <div
-                aria-hidden
-                data-eva-seal="grain"
-                className="eva-seal-grain pointer-events-none fixed inset-0 -z-10"
-            />
-        )
-    }
+} = {}) {
     return (
         <div
             aria-hidden

@@ -9,10 +9,11 @@ import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
 import {
   OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION,
   OPEN_FOOD_FACTS_URL,
+  type FoodCatalogCursor,
+  type FoodCatalogItem,
   type FoodDetailData,
   type FoodVerificationTone,
-} from '@/lib/food-detail'
-import type { FoodCatalogItem, FoodCatalogCursor } from '@eva/nutrition-v2'
+} from '@eva/nutrition-v2'
 // T2.3 F5 — el alta se mudó al hub junto con `/coach/foods`; el contrato server (`saveCustomFood`,
 // que sigue viviendo en V1) no cambió. El gate `check:nutrition-v2-boundaries` es una lista negra
 // de shells V1 (NutritionShell, NutritionHub, PlanBuilder, `/nutrition/_components/`, flags), no

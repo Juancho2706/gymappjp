@@ -25,7 +25,7 @@ import {
   OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION,
   OPEN_FOOD_FACTS_URL,
   type FoodDetailData,
-} from '@/lib/food-detail'
+} from '@eva/nutrition-v2'
 
 type Food = FoodListItem
 

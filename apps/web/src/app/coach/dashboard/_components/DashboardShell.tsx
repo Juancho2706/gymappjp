@@ -23,7 +23,7 @@ import type { DashboardV2Data } from '../_data/types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
-import { TIER_CONFIG } from '@/lib/constants'
+import { tierMaxClientsFor } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -39,6 +39,10 @@ interface Props {
     coachLogoUrl?: string | null
     /** Alumnos activos standalone reales (is_archived=false) para el banner del plan gratuito. */
     activeClientCount?: number | null
+    /** `coaches.max_clients`: cupo efectivo del coach (override manual / grandfather). GANA. */
+    coachMaxClients?: number | null
+    /** `coaches.created_at`: ancla del grandfather de pricing v2 si faltara la columna. */
+    coachCreatedAt?: string | null
     workspaces: WorkspaceSummary[]
 }
 
@@ -53,6 +57,8 @@ export function DashboardShell({
     hasCoachLogo,
     coachLogoUrl,
     activeClientCount,
+    coachMaxClients,
+    coachCreatedAt,
     workspaces,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
@@ -63,6 +69,18 @@ export function DashboardShell({
     // espacio el avatar sigue navegando a Opciones y NO lleva caret (misma condición que el
     // topbar desktop: workspaces.length > 1).
     const hasMultiWorkspace = workspaces.length > 1
+    // Cupo REAL de ESTE coach para los dos banners de plan: la columna `coaches.max_clients` GANA
+    // (la escribe el write-path y respeta el override manual), y si faltara, el grandfather de
+    // pricing v2 la reconstruye desde su fecha de creación. NUNCA el catálogo de VENTA
+    // (TIER_CONFIG): un coach anterior al corte del 18-08 conserva free 3 / pro 30 / elite 100 y
+    // el banner tiene que hablar de SU cupo, no del de un coach nuevo.
+    // `Math.max(1, …)`: el cupo ahora sale de una COLUMNA de DB y las barras dividen por él — un 0
+    // suelto pintaría `NaN%`. Piso defensivo, no una regla de negocio.
+    const maxClients = Math.max(1, coachMaxClients ?? tierMaxClientsFor(subscriptionTier, coachCreatedAt))
+    // Puente a Teams: mismo momento de ventas de siempre (~80% del techo) pero medido contra el
+    // cupo real. Con el 80 escrito a mano el banner era INALCANZABLE — Elite hoy topa en 60 (el
+    // gate de cupo corta antes de llegar a 80) y un grandfathered de 100 lo veía recién al 80%.
+    const teamsBridgeThreshold = Math.ceil(maxClients * 0.8)
 
     return (
         <>
@@ -99,10 +117,16 @@ export function DashboardShell({
                         activeClientCount={data.kpi.totalClients}
                     />
                     {subscriptionTier === 'free' && (
-                        <FreeTierBanner activeClients={activeClientCount ?? data.kpi.totalClients} />
+                        <FreeTierBanner
+                            activeClients={activeClientCount ?? data.kpi.totalClients}
+                            maxClients={maxClients}
+                        />
                     )}
-                    {subscriptionTier === 'elite' && data.kpi.totalClients >= 80 && (
-                        <TeamsBridgeBanner totalClients={data.kpi.totalClients} />
+                    {subscriptionTier === 'elite' && data.kpi.totalClients >= teamsBridgeThreshold && (
+                        <TeamsBridgeBanner
+                            totalClients={data.kpi.totalClients}
+                            maxClients={maxClients}
+                        />
                     )}
                 </div>
 
@@ -260,8 +284,11 @@ function HeaderBrandTile({ logoUrl, name }: { logoUrl?: string | null; name: str
     )
 }
 
-function FreeTierBanner({ activeClients }: { activeClients: number }) {
-    const max = TIER_CONFIG.free.maxClients
+function FreeTierBanner({ activeClients, maxClients }: { activeClients: number; maxClients: number }) {
+    // Cupo REAL del coach (lo resuelve el shell), no el catálogo de venta: un free anterior al
+    // corte del 18-08 conserva sus 3 y el banner mostraba 2 — contradecía al gate que lo deja
+    // crear el tercero.
+    const max = maxClients
     // `activeClients` = alumnos activos reales (excluye archivados); la barra se topa en 100%.
     const pct = Math.round((Math.min(activeClients, max) / max) * 100)
     const over = activeClients > max
@@ -308,8 +335,10 @@ function FreeTierBanner({ activeClients }: { activeClients: number }) {
     )
 }
 
-function TeamsBridgeBanner({ totalClients }: { totalClients: number }) {
-    const max = TIER_CONFIG.elite.maxClients
+function TeamsBridgeBanner({ totalClients, maxClients }: { totalClients: number; maxClients: number }) {
+    // MISMO cupo real que dispara el banner (~80% de este número): así el porcentaje y el copy
+    // nunca se contradicen con el umbral («80/60 · 100%» era el síntoma del techo hardcodeado).
+    const max = maxClients
     const pct = Math.round((Math.min(totalClients, max) / max) * 100)
 
     return (
@@ -319,8 +348,8 @@ function TeamsBridgeBanner({ totalClients }: { totalClients: number }) {
                     {totalClients}/{max} alumnos · {pct}% de tu plan Elite
                 </p>
                 <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                    {/* `max` (tope de Elite) en vez del 100 escrito a mano: el corte hacia Teams
-                        ES el techo del plan más grande, y Pricing v2 lo bajó a 60. */}
+                    {/* `max` = cupo real de ESTE coach en vez de un número a mano: el corte hacia
+                        Teams ES su techo (60 con el catálogo nuevo, 100 si viene grandfathered). */}
                     ¿Más de {max} alumnos o trabajas con otros profesionales? Conoce EVA Teams
                 </p>
             </div>

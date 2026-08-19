@@ -6,6 +6,7 @@
     "version": "1.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#07080C",
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "ios": {
@@ -14,7 +15,12 @@
       "appleTeamId": "5GKWMMZ46Q",
       "buildNumber": "3",
       "supportsTablet": false,
-      "associatedDomains": ["applinks:eva-app.cl", "webcredentials:eva-app.cl"],
+      "associatedDomains": [
+        "applinks:eva-app.cl",
+        "webcredentials:eva-app.cl",
+        "applinks:www.eva-app.cl",
+        "webcredentials:www.eva-app.cl"
+      ],
       "entitlements": {
         "com.apple.security.application-groups": ["group.cl.evaapp.eva"]
       },
@@ -37,6 +43,7 @@
     "android": {
       "package": "cl.evaapp.eva",
       "versionCode": 1,
+      "backgroundColor": "#07080C",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#07080C"
@@ -94,6 +101,51 @@
             {
               "scheme": "https",
               "host": "eva-app.cl",
+              "path": "/reset-password"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.eva-app.cl",
+              "pathPrefix": "/c/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.eva-app.cl",
+              "pathPrefix": "/invite/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.eva-app.cl",
               "path": "/reset-password"
             }
           ],
