@@ -43,6 +43,12 @@ export interface BuildWorkoutShareDataInput {
     branding?: CoachBranding | null
     /** Día local `YYYY-MM-DD` (lo calcula el llamador con el reloj del device). */
     todayISO: string
+    /**
+     * `clients.id` del alumno que comparte — semilla de la atribución first-party (SPEC §Growth).
+     * `null`/ausente (sesión sin cliente resuelto: offline, recuperación) ⇒ el link sale LIMPIO, sin
+     * parámetros: un `ref` vacío no atribuye nada y sí ensucia el QR.
+     */
+    clientId?: string | null
 }
 
 /** Serie más pesada de un ejercicio, agrupada por (peso, reps) → '3×10 · 60 kg'. */
@@ -92,6 +98,7 @@ export function buildWorkoutShareData(input: BuildWorkoutShareDataInput): Workou
         weeklyStreak = null,
         branding = null,
         todayISO,
+        clientId = null,
     } = input
 
     const session = summarizeSessionByKind(blocks, logs, substitutedBlockIds)
@@ -141,6 +148,24 @@ export function buildWorkoutShareData(input: BuildWorkoutShareDataInput): Workou
 
     const inviteCode = normalizeInviteCode(branding?.inviteCode)
 
+    /**
+     * Link de invitación del coach + atribución first-party (SPEC §Growth, F6.1).
+     *
+     * `?ref={clientId}&src=share_card` es lo que `/join/[código]` va a leer para saber QUIÉN trajo al
+     * alumno nuevo — sin SDK de atribución (Branch/AppsFlyer descartados: el alta ocurre en la web).
+     *
+     * El `k={preset}` del SPEC NO viaja acá A PROPÓSITO: esta URL es la que se hornea en el QR, y el
+     * QR se rasteriza junto con la captura del canvas. El alumno puede cambiar de preset DESPUÉS de
+     * que el mini/preview ya se pintó, así que un `card_kind` incrustado en el QR mentiría en cuanto
+     * cambie de estilo. El link con `k` lo arma F5 al copiar al portapapeles, que sí ocurre en el
+     * momento de compartir y conoce el preset final.
+     */
+    const inviteUrl = inviteCode
+        ? clientId
+            ? `${studentLoginUrl(inviteCode)}?ref=${encodeURIComponent(clientId)}&src=share_card`
+            : studentLoginUrl(inviteCode)
+        : null
+
     return {
         title: planTitle,
         contextLine,
@@ -165,6 +190,6 @@ export function buildWorkoutShareData(input: BuildWorkoutShareDataInput): Workou
             accent: branding?.primaryColor || '#2680FF',
             instagramHandle: branding?.instagramHandle?.trim() || null,
         },
-        inviteUrl: inviteCode ? studentLoginUrl(inviteCode) : null,
+        inviteUrl,
     }
 }

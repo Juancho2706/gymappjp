@@ -135,7 +135,10 @@ encolar el build 1.1.2 (F9).
 
 ## F6 — Growth (atribución)
 
-- [ ] F6.1 Link `?ref={client_short_id}&src=share_card&k={preset}` armado en móvil.
+- [~] F6.1 `build-share-data` arma `?ref={clientId}&src=share_card` sobre `studentLoginUrl` cuando
+      hay `clientId` (sin él, URL limpia). FALTA el `k={preset}`: NO va en esta URL a propósito —es
+      la que se hornea en el QR y el alumno puede cambiar de preset después de que el canvas se
+      pintó—; el link con `k` lo arma F5 al copiar al portapapeles, que sí conoce el preset final.
 - [ ] F6.2 `/join/[código]` web: leer searchParams, validar `ref` pertenece al MISMO coach,
       persistir en insert de `clients` (`join.actions.ts:78`).
 - [ ] F6.3 Evento server `coach_client_referred` al concretarse el alta referida.
@@ -148,11 +151,27 @@ encolar el build 1.1.2 (F9).
 
 ## F8 — CTA del resumen (rework)
 
-- [ ] F8.1 Rework `WorkoutSummaryOverlay`: volumen héroe, mapa anatómico real con % por región,
-      récords banda fina, «Lo que viene» conservado (mockup Main).
-- [ ] F8.2 CTA v2: entra ~1,2-1,8 s post-confetti, glow pulsante + shimmer 2 pasadas +
-      iconos redes + mini-thumbnail del card real; reduced-motion = estático.
-- [ ] F8.3 Wire: CTA → WorkoutShareComposer con los datos de la sesión.
+- [~] F8.1 CORRECCIÓN DE PREMISA (verificado en código 19-08): la pantalla final VIVA es
+      `SessionCompleteV3` (montada en `ExecutorV3.tsx:1902`); `WorkoutSummaryOverlay` NO está
+      montado en ningún lado bajo V3. Y esa pantalla YA tiene lo que pedía el rework: stats con
+      tickers, mapa anatómico real (`MuscleMapSvg` con tiers), PR dorado y racha. Se decidió NO
+      rediseñarla (regla: verificar el diseño contra el código). Queda abierto solo el detalle
+      «volumen héroe» del mockup Main: hoy el volumen es un tile de la grilla, no una cifra héroe.
+- [x] F8.2 `share/ShareWorkoutCta.tsx`: pastilla juicy V3 con halo pulsante (View tintado, no
+      `shadowColor` — Android no anima color de sombra), shimmer de EXACTAMENTE 2 pasadas
+      (`withRepeat(..., 2, false)`), mini del card real (`ShareCanvas` 36×64, layout de fábrica de
+      `placa`, memoizado por referencia de `data`) y fila de redes con SVG inline (lucide ya no trae
+      iconos de marca; cero dependencias nuevas). Entrada anclada a la fase 2 del resumen
+      (1200 ms) + 320 ms ⇒ ~1,5 s post-confetti; reduced-motion = estático e inmediato. La barra de
+      acciones RESERVA el alto para que «Volver al inicio» no salte bajo el dedo.
+- [x] F8.3 Wire: el CTA REEMPLAZA al `JuicyButton` «Compartir logro» (mismo testID `final-share`) y
+      abre `WorkoutShareComposer embedded` montado dentro del Modal del resumen; la `ShareCardPreview
+      variant="default"` de sesión se retiró (el composer ocupa su lugar), la del PR queda intacta
+      como affordance aparte. `shareData` sale de `buildWorkoutShareData` en un `useMemo` (los minis
+      del composer y del CTA comparan `data` por referencia). `clientId` baja de `ExecutorV3` para el
+      `?ref=` y branding sale de `useTheme()`. Marcador `// F7:` puesto donde va
+      `student_share_card_opened`. Gates: tsc mobile ✅ · eslint de share/ + v3 tocados ✅.
+      QA device pendiente (F9.2).
 
 ## F9 — QA + release 1.1.2
 

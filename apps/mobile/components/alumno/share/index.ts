@@ -55,6 +55,13 @@ export { ShareCanvas, type ShareCanvasProps } from './ShareCanvas'
 // ── Composer (F3): la pantalla que arma el card ──────────────────────────────────────────────────
 export { WorkoutShareComposer, type WorkoutShareComposerProps } from './WorkoutShareComposer'
 
+// ── Entrada (F8): el CTA del resumen post-entreno que abre el composer ───────────────────────────
+export {
+    SHARE_CTA_ENTER_DELAY_MS,
+    ShareWorkoutCta,
+    type ShareWorkoutCtaProps,
+} from './ShareWorkoutCta'
+
 // ── Acomodar (F4): la capa de edición que se monta ENCIMA del lienzo ─────────────────────────────
 export {
     StickerGestureLayer,

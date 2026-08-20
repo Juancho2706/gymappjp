@@ -9,7 +9,6 @@ import {
   compactDistance,
   formatCardioReps,
   formatClockDuration,
-  formatSessionDuration,
   formatWeightEsCl,
   MUSCLE_REGIONS,
   muscleGroupsToRegionIntensity,
@@ -22,13 +21,15 @@ import {
 import { epleyOneRM } from '../../../../lib/profile-analytics'
 import { hexToRgba } from '../../../../lib/theme'
 import { FONT } from '../../../../lib/typography'
+import { getTodayInSantiago } from '../../../../lib/date-utils'
 import type { CheckInReminder } from '../../../../lib/checkin-thresholds'
+import { useTheme } from '../../../../context/ThemeContext'
 import { MuscleMapSvg } from '../MuscleMapSvg'
 import { WeekStreakDots } from './WeekStreakDots'
 import { NumberTicker, formatThousandsEsCl } from './NumberTicker'
-import { JuicyButton } from './JuicyButton'
 import type { ExecTheme } from './exec-theme'
 import type { WeeklyStreak } from './weekly-streak'
+import { buildWorkoutShareData, ShareWorkoutCta, WorkoutShareComposer } from '../../share'
 import {
   ShareCardDate,
   ShareCardEyebrow,
@@ -211,6 +212,12 @@ export interface SessionCompleteV3Props {
   substitutedBlockIds?: string[]
   /** Racha semanal derivada (E4.4); null = no derivable (offline) → se oculta. */
   weeklyStreak: WeeklyStreak | null
+  /**
+   * `clients.id` del alumno (Share Entreno F8): semilla del `?ref=` de atribución del card. Lo sabe
+   * el host (`useWorkoutSession`), no esta pantalla. `null` (offline / cliente sin resolver) ⇒ el
+   * link del card sale limpio y el resto de la feature funciona igual.
+   */
+  clientId?: string | null
   /** Recordatorio de check-in post-entreno (E2-18), null cuando no toca. */
   checkInReminder?: CheckInReminder | null
   checkInLastRelative?: string | null
@@ -256,6 +263,7 @@ export function SessionCompleteV3({
   durationSec,
   substitutedBlockIds = [],
   weeklyStreak,
+  clientId = null,
   checkInReminder = null,
   checkInLastRelative = null,
   onImportFromWatch = null,
@@ -266,6 +274,11 @@ export function SessionCompleteV3({
 }: SessionCompleteV3Props) {
   const s = exec.surface
   const gold = exec.pr
+  // Marca REAL del coach para el card (Share Entreno F8). Sale del contexto y no del `exec` a
+  // propósito: `exec.accent` puede ser el verde EVA (executor_theme = 'eva') mientras el card tiene
+  // que llevar el color, el nombre, el logo y el @handle del coach. `branding` ya viene resuelto y
+  // gateado por tier (ForceScheme del ejecutor lo conserva).
+  const { branding } = useTheme()
 
   const session = useMemo(
     () => summarizeSessionByKind(blocks, logs, substitutedBlockIds),
@@ -315,9 +328,7 @@ export function SessionCompleteV3({
 
   const completedSets = logs.length
   const plannedSets = useMemo(() => blocks.reduce((n, b) => n + (b.sets || 0), 0), [blocks])
-  const totalReps = useMemo(() => logs.reduce((acc, l) => acc + (l.reps_done || 0), 0), [logs])
   const totalVolume = useMemo(() => logs.reduce((acc, l) => acc + (l.weight_kg || 0) * (l.reps_done || 0), 0), [logs])
-  const durationLabel = formatSessionDuration(durationSec)
 
   // Stat secundario adaptativo: volumen (fuerza) → distancia (cardio) → series (tipado).
   const hasVolume = totalVolume > 0
@@ -340,11 +351,50 @@ export function SessionCompleteV3({
   }, [visible, reducedMotion])
   const showStats = phase === 'stats'
 
-  const [shareOpen, setShareOpen] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
   const [prCard, setPrCard] = useState<DetectedPR | null>(null)
 
-  const prSuffix = detectedPRs.length ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
-  const sessionShareMsg = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${Math.round(totalVolume)} kg${prSuffix}`
+  /**
+   * Datos del card de compartir (Share Entreno F8.3). Se arma con lo que esta pantalla YA tiene en
+   * memoria: cero queries nuevas y cero derivación propia — el adaptador reusa `summarizeSessionByKind`
+   * y replica la misma detección de récords de acá arriba, así el card no puede contradecir al resumen.
+   *
+   * `useMemo` NO es una optimización opcional: el mini del CTA y los seis minis de preset del composer
+   * son `ShareCanvas` memoizados por REFERENCIA de `data`; un objeto nuevo por render los repintaría
+   * enteros (9 stickers + silueta SVG cada uno) en cada tick de animación de la pantalla.
+   */
+  const shareData = useMemo(
+    () =>
+      buildWorkoutShareData({
+        blocks,
+        logs,
+        substitutedBlockIds,
+        exerciseMaxes,
+        exerciseMaxDates,
+        planTitle,
+        contextLine,
+        durationSec: durationSec ?? null,
+        weeklyStreak,
+        branding,
+        clientId,
+        // Mismo día que usa el ejecutor para todo lo demás (check-in, racha): la fecha del card
+        // tiene que coincidir con la del entreno que se acaba de guardar.
+        todayISO: getTodayInSantiago().iso,
+      }),
+    [
+      blocks,
+      logs,
+      substitutedBlockIds,
+      exerciseMaxes,
+      exerciseMaxDates,
+      planTitle,
+      contextLine,
+      durationSec,
+      weeklyStreak,
+      branding,
+      clientId,
+    ],
+  )
 
   const brand = exec.accent
 
@@ -579,17 +629,25 @@ export function SessionCompleteV3({
             ) : null}
           </ScrollView>
 
-          {/* Acciones — "Volver al inicio" SIEMPRE visible (skippable). Compartir arriba (secundario). */}
+          {/* Acciones — "Volver al inicio" SIEMPRE visible (skippable). Compartir arriba, ahora como
+              CTA protagonista (decisión del owner, SPEC §Decisiones 5). */}
           <View style={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 14, gap: 10, borderTopWidth: 1, borderTopColor: s.borderSubtle, backgroundColor: s.appBg }}>
-            <JuicyButton
+            {/* CTA de compartir (Share Entreno F8.2). REEMPLAZA al `JuicyButton` "Compartir logro"
+                que abría la share-card estática: mismo lugar, mismo testID y mismo lenguaje juicy,
+                pero ahora promete —y muestra— el card real y abre el composer. `play={showStats}`
+                lo ancla a la fase 2 del resumen (1200 ms) y él agrega su propia espera ⇒ entra
+                ~1,5 s tras el confetti, dentro de la ventana 1,2-1,8 s del SPEC. */}
+            <ShareWorkoutCta
               testID="final-share"
-              label="Compartir logro"
-              onPress={() => setShareOpen(true)}
-              exec={exec}
-              height={60}
-              fontSize={17}
+              data={shareData}
+              accent={exec.accent}
+              accentText={exec.accentText}
               reducedMotion={reducedMotion}
-              icon={<Share2 size={17} color={exec.accentText} />}
+              play={showStats}
+              onPress={() => {
+                // F7: student_share_card_opened (PostHog móvil todavía no existe — F7.1 es binario).
+                setComposerOpen(true)
+              }}
             />
             {/* Secundario con chrome real (.a2-finalsec): 52px, radio 15, #1c1c24 + borde 2px #2f2f3a. */}
             <Pressable
@@ -623,23 +681,20 @@ export function SessionCompleteV3({
             anidado (mismo motivo que la share-card embedded). */}
         {watchImportSlot}
 
-        {/* Share-card branded del resumen de sesion (reusa ShareCardPreview, embedded para evitar el brick
-            gris del Modal anidado en Android — mismo patron que WorkoutSummaryOverlay). */}
-        <ShareCardPreview
-          visible={shareOpen}
-          onClose={() => setShareOpen(false)}
-          variant="default"
-          shareMessage={sessionShareMsg}
-          fileName="eva-entreno"
+        {/* Composer de Share Entreno (F8.3). Ocupa el lugar de la vieja `ShareCardPreview variant="default"`
+            del resumen: aquella era una placa fija de una sola cara, esta es el editor completo (6 presets,
+            foto, stickers arrastrables, destinos). `embedded` por el MISMO motivo que la share-card del PR
+            de abajo: el resumen ya es un `<Modal>` y anidar otro deja la pantalla gris en Android al volver
+            de la Activity de compartir. */}
+        <WorkoutShareComposer
+          visible={composerOpen}
+          onClose={() => setComposerOpen(false)}
+          data={shareData}
           embedded
-        >
-          <ShareCardEyebrow color={brand}>ENTRENAMIENTO</ShareCardEyebrow>
-          <ShareCardTitle>{planTitle}</ShareCardTitle>
-          <ShareCardHero value={totalVolume > 0 ? String(Math.round(totalVolume)) : durationLabel} unit={totalVolume > 0 ? 'kg' : undefined} color={brand} />
-          <ShareCardPill>{completedSets} series{totalReps > 0 ? ` · ${totalReps} reps` : ''}</ShareCardPill>
-        </ShareCardPreview>
+        />
 
-        {/* Share-card branded de un PR. */}
+        {/* Share-card branded de un PR — affordance APARTE (se abre desde la banda dorada, comparte UN
+            récord y no la sesión). Se conserva tal cual: el CTA nuevo reemplaza la entrada de sesión. */}
         <ShareCardPreview
           visible={prCard != null}
           onClose={() => setPrCard(null)}

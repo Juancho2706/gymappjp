@@ -1913,6 +1913,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         durationSec={finishedElapsed ?? elapsedSec}
         substitutedBlockIds={substitutedBlockIds}
         weeklyStreak={weeklyStreak}
+        // Share Entreno (F8): semilla del `?ref=` de atribución del card. Sale de la sesión, que es
+        // quien resolvió la fila `clients` del alumno; la pantalla del resumen no consulta nada.
+        clientId={clientId}
         checkInReminder={checkInReminder}
         checkInLastRelative={checkInLastRelative}
         // Import del reloj (cardio-conectado F2): la card solo aparece con agregador disponible, cardio

@@ -19,8 +19,10 @@ import type { ExecTheme } from './exec-theme'
 const DEPTH = 5
 
 /** Mezcla un hex hacia negro (mix(hex, #000, `keep`)) — `keep`=0.55 ⇒ 55% del color, 45% negro.
- *  Espeja `color-mix(in srgb, accent 55%, #000)` del mockup (borde + sombra dura del juicy). */
-function mixToBlack(hex: string, keep: number): string {
+ *  Espeja `color-mix(in srgb, accent 55%, #000)` del mockup (borde + sombra dura del juicy).
+ *  Exportada para el CTA de compartir (`share/ShareWorkoutCta`), que reproduce el MISMO chrome
+ *  juicy con un contenido propio: dos definiciones del color de profundidad se desincronizarían. */
+export function mixToBlack(hex: string, keep: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
   if (!m) return hex
   const int = parseInt(m[1], 16)
