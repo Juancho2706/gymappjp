@@ -123,6 +123,17 @@ encolar el build 1.1.2 (F9).
 
 ## F5 — Compartir (paso 4, targets)
 
+> Research 19-08 (flujo App ID verificado contra docs Meta): basta el App ID («app sin caso
+> de uso», SIN review/verificación/portafolio; recomendado flip a Live con privacy URL).
+> Trampas de implementación confirmadas: `<queries>` Android SOLO por config plugin (no
+> app.json); payload iOS = data real (string URL produce el MISMO error que App ID malo);
+> FB Stories usa extra `com.facebook.platform.extra.APPLICATION_ID` (≠ patrón IG
+> `source_application`); swipe-up/attributionURL NO existe para apps normales ⇒ link SIEMPRE
+> por portapapeles; iOS 16+ muestra prompt de pegado disparado por Instagram (indeprimible;
+> si el usuario deniega, el share llega vacío — considerar en QA); colores de fondo
+> opcionales (default #222222); URIs Android requieren FLAG_GRANT_READ + grantUriPermission
+> explícito a com.instagram.android o IG rebota con ENOENT.
+
 - [ ] F5.1 `react-native-share` v12.3.1 + config plugin (iOS schemes instagram-stories/
       facebook-stories/instagram/whatsapp; Android queries IG/FB/WA/TikTok) — BINARIO.
 - [ ] F5.2 Stories directo IG/FB: `shareSingle` con backgroundImage (normal) o stickerImage
