@@ -17,7 +17,21 @@ import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 
-export type CompleteOnboardingState = { error?: string }
+export type CompleteOnboardingState = {
+    error?: string
+    /** Causa estable del rechazo (snake_case, prefijo `oauth_`). Alimenta `register_failed`. */
+    code?: string
+}
+
+/**
+ * Espejo de `reject()` del alta por email: mismo contrato, códigos prefijados `oauth_` para poder
+ * comparar los dos caminos en el mismo embudo sin colisionar. El mensaje al usuario no cambia y el
+ * log lleva SOLO el código — nunca email, nombre ni IP.
+ */
+function reject(code: string, error: string): CompleteOnboardingState {
+    console.warn('[register] rechazado', code)
+    return { error, code }
+}
 
 // Solo se vende free/starter/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
 const VALID_TIERS = SALE_TIERS
@@ -38,7 +52,7 @@ export async function completeOAuthOnboarding(
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-        return { error: 'Sesión expirada. Vuelve a iniciar sesión con Google.' }
+        return reject('oauth_session_expired', 'Sesión expirada. Vuelve a iniciar sesión con Google.')
     }
 
     const brandName = (formData.get('brand_name') as string)?.trim()
@@ -49,24 +63,24 @@ export async function completeOAuthOnboarding(
     const acceptHealthData = formData.get('accept_health_data')
     const acceptMarketing = formData.get('accept_marketing') === 'on'
 
-    if (!brandName || brandName.length < 2) return { error: 'El nombre de tu marca es obligatorio (mínimo 2 caracteres).' }
-    if (!fullName || fullName.length < 2) return { error: 'Tu nombre completo es obligatorio.' }
-    if (!acceptLegal) return { error: 'Debes aceptar los términos de servicio y la política de privacidad.' }
-    if (!acceptHealthData) return { error: 'Debes aceptar el tratamiento de datos de salud (Ley 21.719, Art. 16).' }
-    if (!(VALID_TIERS as readonly string[]).includes(selectedTier)) return { error: 'Plan inválido.' }
-    if (!VALID_CYCLES.includes(selectedBillingCycle)) return { error: 'Frecuencia de pago inválida.' }
+    if (!brandName || brandName.length < 2) return reject('oauth_brand_missing', 'El nombre de tu marca es obligatorio (mínimo 2 caracteres).')
+    if (!fullName || fullName.length < 2) return reject('oauth_name_missing', 'Tu nombre completo es obligatorio.')
+    if (!acceptLegal) return reject('oauth_terms_not_accepted', 'Debes aceptar los términos de servicio y la política de privacidad.')
+    if (!acceptHealthData) return reject('oauth_health_consent_missing', 'Debes aceptar el tratamiento de datos de salud (Ley 21.719, Art. 16).')
+    if (!(VALID_TIERS as readonly string[]).includes(selectedTier)) return reject('oauth_plan_invalid', 'Plan inválido.')
+    if (!VALID_CYCLES.includes(selectedBillingCycle)) return reject('oauth_cycle_invalid', 'Frecuencia de pago inválida.')
 
     const isFreeTier = selectedTier === 'free'
 
     if (!isFreeTier && !isBillingCycleAllowedForTier(selectedTier, selectedBillingCycle)) {
-        return { error: 'La frecuencia elegida no está disponible para ese plan.' }
+        return reject('oauth_cycle_unavailable', 'La frecuencia elegida no está disponible para ese plan.')
     }
 
     const email = user.email ?? ''
-    if (!email) return { error: 'No se pudo obtener tu email de Google.' }
+    if (!email) return reject('oauth_email_missing', 'No se pudo obtener tu email de Google.')
 
     const emailNorm = normalizePlatformEmail(email)
-    if (isDisposableEmail(emailNorm)) return { error: 'Los correos temporales no están permitidos.' }
+    if (isDisposableEmail(emailNorm)) return reject('oauth_email_disposable', 'Los correos temporales no están permitidos.')
 
     const adminDb = createServiceRoleClient()
 
@@ -78,7 +92,7 @@ export async function completeOAuthOnboarding(
         .maybeSingle()
 
     if (existingTrial) {
-        return { error: 'Ya existe una cuenta gratuita con este correo. Inicia sesión o contacta soporte.' }
+        return reject('oauth_trial_used', 'Ya existe una cuenta gratuita con este correo. Inicia sesión o contacta soporte.')
     }
 
     // Generate slug
@@ -89,13 +103,13 @@ export async function completeOAuthOnboarding(
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
 
-    if (RESERVED_SLUGS.has(baseSlug)) return { error: 'Este nombre de marca no está disponible. Prueba con otro.' }
+    if (RESERVED_SLUGS.has(baseSlug)) return reject('oauth_brand_unavailable', 'Este nombre de marca no está disponible. Prueba con otro.')
 
     let slug = baseSlug
     for (let attempt = 0; attempt < 8; attempt++) {
         const { data: existing } = await adminDb.from('coaches').select('id').eq('slug', slug).maybeSingle()
         if (!existing) break
-        if (attempt === 7) return { error: 'No se pudo generar un ID único. Prueba con otro nombre.' }
+        if (attempt === 7) return reject('oauth_slug_generation_failed', 'No se pudo generar un ID único. Prueba con otro nombre.')
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
@@ -127,7 +141,7 @@ export async function completeOAuthOnboarding(
     })
 
     if (insertError) {
-        return { error: 'Error al crear tu perfil. Intenta de nuevo o contacta soporte.' }
+        return reject('oauth_coach_insert_failed', 'Error al crear tu perfil. Intenta de nuevo o contacta soporte.')
     }
 
     // QA pre-campaña 17-08: este camino no emitía NINGUNA conversión a Meta ni disparaba la
@@ -155,7 +169,9 @@ export async function completeOAuthOnboarding(
     if (isFreeTier) {
         // La cuenta de Google ya viene confirmada: el coach nace `active` y jamás pasa por
         // `/auth/confirm`, que era el único lugar que mandaba bienvenida + drip.
-        sendFreeCoachOnboardingEmails({
+        // `await` por la misma razón que el CAPI de arriba: el `redirect()` de la línea siguiente
+        // cierra la invocación y Vercel se lleva puesto todo lo pendiente. El helper no lanza.
+        await sendFreeCoachOnboardingEmails({
             email,
             coachName: fullName,
             brandName,

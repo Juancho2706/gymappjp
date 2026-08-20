@@ -1,7 +1,7 @@
 ---
 status: active
 owner: mobile-release
-last_verified: "2026-08-19"
+last_verified: "2026-08-20 @ a2cca2a5"
 canonical: true
 ---
 
@@ -27,7 +27,25 @@ Política operativa para `apps/mobile`. La configuración ejecutable prevalece:
 - `previewv2` genera binarios internos, pero no declara canal; no prometer ni publicar OTA para esos binarios sin configurar primero un canal explícito.
 - 2026-07-29: `staging` (apuntaba a un Supabase local por IP de LAN, inusable en CI) y `prodpreview` (subset de `production` sin submit) fueron retirados de `eas.json` y del workflow. La opción `enterprise` salió del picker del workflow (app archivada, estrategia Teams-first).
 - El build ocurre localmente dentro de GitHub Actions con `eas build --local`; no consume créditos de EAS Build.
-- 2026-08-19: `updates.fallbackToCacheTimeout` pasó de `0` a `6000`. Decisión del owner: en arranque en frío la app espera hasta 6 s a que baje el OTA disponible y lo lanza en el acto, en vez de servir el bundle embebido con bugs viejos y aplicar el update recién en el segundo arranque. Si el update no alcanza a bajar en esos 6 s, arranca con el bundle cacheado y el camino de siempre (`isUpdatePending` → aviso de reinicio en `lib/ota.ts`) sigue funcionando igual. Es configuración de binario: **no viaja por OTA**, entra recién con la build 55.
+- 2026-08-19: `updates.fallbackToCacheTimeout` pasó de `0` a `6000`. Decisión del owner: en arranque en frío la app espera hasta 6 s a que baje el OTA disponible y lo lanza en el acto, en vez de servir el bundle embebido con bugs viejos y aplicar el update recién en el segundo arranque. Si el update no alcanza a bajar en esos 6 s, arranca con el bundle cacheado y el camino de siempre (`isUpdatePending` → aviso de reinicio en `lib/ota.ts`) sigue funcionando igual. Es configuración de binario: **no viaja por OTA**, entra recién con la build 57 (1.1.1) y posteriores.
+- 2026-08-20: `EXPO_PUBLIC_POSTHOG_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` viven en `eas.json` (perfiles `previewv2` y `production`) y `mobile-ota.yml` las lee de ahí. Son la project API key pública de PostHog (write-only de ingesta). El binario 1.1.2 (iOS 58 / Android 85) se compiló **sin** ellas: su bundle embebido no emite analítica de producto hasta que reciba un OTA publicado con la key, o hasta la próxima build.
+
+## Partición de runtimes vigente (2026-08-20)
+
+`runtimeVersion.policy = appVersion` significa que **un OTA alcanza solo a los binarios cuya `version` coincide con la del `app.json` del commit que se publica**. Hoy conviven tres runtimes en el canal `production`:
+
+| Runtime | Binario | Quién lo tiene | Cómo se le publica |
+|---|---|---|---|
+| `1.1.0` | 54 (iOS) / 81 (Android) | App Store y closed testing de Play — **el público** | Desde un tag `ota/1.1.0-<fecha>` creado sobre `4206f340` (último commit con `version: 1.1.0`) + cherry-picks solo-JS. Último: `ota/1.1.0-20260820` = `39e64ff8` (grupos `5d8e8110` / `bcfd1eb4`). |
+| `1.1.1` | 57 / 84 | En revisión de Apple + closed testing de Play | Desde `master` mientras `app.json` diga 1.1.1 (hasta `2fdecebd`), o un tag `ota/1.1.1-<fecha>`. Último: `ota/1.1.1-20260820` = `b4d958fa` (grupos `0f32fd7d` / `c18f92d8`). |
+| `1.1.2` | 58 / 85 | TestFlight + closed testing de Play | Desde `rnmobiledenuevo` (o un tag sobre ella): lleva Share Entreno, que necesita los módulos nativos de este binario. |
+
+Reglas que salen de esto:
+
+- **Antes de publicar, mirar `version` en `app.json` del commit que se va a exportar.** Publicar desde `master` después de un bump solo llega a la versión nueva: el 2026-08-19 los OTA de `2fdecebd` salieron a runtime 1.1.1 y los usuarios de 1.1.0 no recibieron nada hasta el tag del 20-08.
+- Para alcanzar un runtime viejo: crear un worktree en el último commit con esa `version`, aplicar solo hunks de `apps/mobile` + `packages` que no toquen `package.json`/lockfile (ningún módulo nativo nuevo), correr `tsc` mobile y los tests afectados ahí, commitear, taguear `ota/<version>-<fecha>`, pushear **solo el tag** (Vercel no construye tags) y disparar `gh workflow run mobile-ota.yml --ref <tag> -f platform=<android|ios> -f branch=production -f message="…"`.
+- `--platform all` **falla** (exporta web sin `react-native-web`); la opción se retiró del workflow el 2026-08-20. Siempre un dispatch por plataforma.
+- Verificar con `eas update:list --branch production --limit 8 --json` que cada publicación muestre el `runtimeVersion` esperado y un grupo por plataforma.
 
 | Perfil | Uso | Android | iOS | OTA |
 |---|---|---|---|---|
@@ -55,7 +73,7 @@ Ante duda, usar binario nuevo. Una migración de base de datos nunca se revierte
 2. En GitHub Actions, ejecutar `Mobile Build (Local — no EAS credits)` con `app=mobile`, plataforma y perfil correctos.
 3. Para `previewv2` y `production`, el workflow inyecta las variables públicas de Supabase desde GitHub Secrets y falla si faltan.
 4. Descargar y probar el artefacto el mismo día. El workflow solicita 14 días, pero la política efectiva actual del repositorio limita la retención a un día; no depender del valor solicitado sin verificar primero la configuración del repositorio.
-5. Activar `submit_ios` solo para una IPA destinada a TestFlight. Activar `submit_android` solo con perfil `production`; el destino es el track interno de Google Play.
+5. Activar `submit_ios` solo para una IPA destinada a TestFlight. Activar `submit_android` solo con perfil `production`; el destino es el track `alpha` (closed testing) de Google Play (`eas.json` → `submit.production.android.track`).
 6. Promover a producción solo después de smoke test en dispositivo real, sin errores de arranque, autenticación, navegación, cámara, notificaciones ni persistencia offline.
 
 Los nombres de secretos y el procedimiento de firma viven en el workflow. Sus valores nunca se copian a Markdown, commits, logs ni comentarios de PR.

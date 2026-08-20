@@ -10,7 +10,7 @@ import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coa
 import { cn } from '@/lib/utils'
 import { getCurrentOAuthUserProfile } from '@/lib/auth/client-oauth'
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
-import { useCaptureRegisterSubmitted } from '@/lib/posthog/events'
+import { useCaptureRegisterFailed, useCaptureRegisterSubmitted } from '@/lib/posthog/events'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -141,6 +141,7 @@ export default function RegisterPage() {
     const isFreeTier = tier === 'free'
     // Radiogroup del selector de plan (paso 2): navegación por flechas con roving tabindex.
     const tierGroupRef = useRef<HTMLDivElement>(null)
+    const captureRegisterFailed = useCaptureRegisterFailed()
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -190,6 +191,32 @@ export default function RegisterPage() {
             setBillingCycle(getDefaultBillingCycleForTier(tier))
         }
     }, [tier, billingCycle, isFreeTier])
+
+    // register_failed: el rechazo del server es el único desenlace del alta que NO navega (el éxito
+    // redirige y se mide en el aterrizaje), así que sin este disparo el intento fallido no deja
+    // rastro en ninguna parte — el caso del 20-08 01:43 UTC, 3 rechazos seguidos de un clic pagado
+    // sin una sola señal de por qué.
+    //
+    // El guardia es la IDENTIDAD del objeto de estado, no el texto del error: `useActionState`
+    // devuelve un objeto NUEVO por cada resultado del action, así que dos rechazos idénticos
+    // seguidos cuentan dos veces (correcto: son dos intentos). El ref arranca en `initialState`
+    // para saltarse el render inicial, y absorbe los re-runs por cambio de tier/ciclo — cambiar de
+    // plan con un error en pantalla no puede re-emitir el evento.
+    const reportedEmailStateRef = useRef<RegisterState>(initialState)
+    useEffect(() => {
+        if (reportedEmailStateRef.current === state) return
+        reportedEmailStateRef.current = state
+        if (!state?.error) return
+        captureRegisterFailed({ tier, billingCycle, method: 'email', code: state.code ?? 'unknown' })
+    }, [state, tier, billingCycle, captureRegisterFailed])
+
+    const reportedGoogleStateRef = useRef<CompleteOnboardingState>(googleInitialState)
+    useEffect(() => {
+        if (reportedGoogleStateRef.current === googleState) return
+        reportedGoogleStateRef.current = googleState
+        if (!googleState?.error) return
+        captureRegisterFailed({ tier, billingCycle, method: 'google', code: googleState.code ?? 'unknown' })
+    }, [googleState, tier, billingCycle, captureRegisterFailed])
 
     function nextStep() {
         if (step === 1) {

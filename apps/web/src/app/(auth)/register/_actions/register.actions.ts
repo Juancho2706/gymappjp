@@ -17,12 +17,10 @@ import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
+    isEmailTakenReason,
     normalizePlatformEmail,
     sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
-import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
-import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
 import { clientIpFromRequest } from '@/lib/rate-limit'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
@@ -31,6 +29,25 @@ import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 
 export type RegisterState = {
     error?: string
+    /** Causa estable del rechazo (snake_case). Alimenta `register_failed` en PostHog. */
+    code?: string
+}
+
+/**
+ * Todo rechazo del alta sale por acá: log server-side + código estable para el cliente.
+ *
+ * Hueco que cierra: un alta rechazada no dejaba NINGÚN rastro. Caso medido el 20-08 01:43 UTC —
+ * un visitante con `utm_source=meta` mandó `register_submitted` 3 veces en 28 s, el action devolvió
+ * `{ error }` las 3 y no quedó nada: ni log, ni Sentry, ni evento. Pagamos ese clic y no sabemos
+ * contra qué muro se estrelló.
+ *
+ * El mensaje al usuario NO cambia; el `code` es la causa real, la que se agrega en el funnel.
+ * El log lleva SOLO el código: nunca email, nombre, contraseña ni IP (esto vive en los logs de
+ * Vercel, que no tienen la retención acotada de un sistema de datos personales).
+ */
+function reject(code: string, error: string): RegisterState {
+    console.warn('[register] rechazado', code)
+    return { error, code }
 }
 
 // Solo se vende free/starter/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
@@ -65,14 +82,14 @@ export async function registerAction(
     // Honeypot check — bots fill hidden fields, humans don't
     const honeypot = formData.get('website') as string
     if (honeypot) {
-        return { error: 'Algo salió mal. Intenta de nuevo en unos minutos.' }
+        return reject('honeypot', 'Algo salió mal. Intenta de nuevo en unos minutos.')
     }
 
     // Cloudflare Turnstile verification (only if secret key is configured)
     if (process.env.TURNSTILE_SECRET_KEY) {
         const turnstileToken = formData.get('cf-turnstile-response') as string
         if (!turnstileToken) {
-            return { error: 'Verificación de seguridad requerida. Recarga la página e intenta de nuevo.' }
+            return reject('turnstile_missing', 'Verificación de seguridad requerida. Recarga la página e intenta de nuevo.')
         }
         const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
             method: 'POST',
@@ -81,7 +98,7 @@ export async function registerAction(
         })
         const verifyData = await verifyRes.json() as { success: boolean }
         if (!verifyData.success) {
-            return { error: 'Verificación de seguridad fallida. Intenta de nuevo.' }
+            return reject('turnstile_failed', 'Verificación de seguridad fallida. Intenta de nuevo.')
         }
     }
 
@@ -90,27 +107,27 @@ export async function registerAction(
     const isFreeTier = selectedTier === 'free'
 
     if (!fullName || !email || !password || !brandName) {
-        return { error: 'Todos los campos son obligatorios' }
+        return reject('fields_missing', 'Todos los campos son obligatorios')
     }
 
     if (password.length < 8) {
-        return { error: 'La contraseña debe tener al menos 8 caracteres' }
+        return reject('password_short', 'La contraseña debe tener al menos 8 caracteres')
     }
 
     if (!acceptLegal) {
-        return { error: 'Debes aceptar los términos de servicio y la política de privacidad.' }
+        return reject('terms_not_accepted', 'Debes aceptar los términos de servicio y la política de privacidad.')
     }
 
     if (!acceptHealthData) {
-        return { error: 'Debes aceptar el tratamiento de datos de salud para usar EVA (Ley 21.719, Art. 16).' }
+        return reject('health_consent_missing', 'Debes aceptar el tratamiento de datos de salud para usar EVA (Ley 21.719, Art. 16).')
     }
 
     if (!isTierValid || !isCycleValid) {
-        return { error: 'Debes seleccionar un plan y una frecuencia válidos.' }
+        return reject('plan_invalid', 'Debes seleccionar un plan y una frecuencia válidos.')
     }
 
     if (!isFreeTier && !isBillingCycleAllowedForTier(selectedTier, selectedBillingCycle)) {
-        return { error: 'La frecuencia elegida no está disponible para ese plan.' }
+        return reject('cycle_unavailable', 'La frecuencia elegida no está disponible para ese plan.')
     }
 
     // Generate slug from brand name
@@ -122,7 +139,7 @@ export async function registerAction(
         .replace(/^-|-$/g, '')
 
     if (RESERVED_SLUGS.has(baseSlug)) {
-        return { error: 'Este nombre de marca no está disponible. Intenta con otro nombre.' }
+        return reject('brand_unavailable', 'Este nombre de marca no está disponible. Intenta con otro nombre.')
     }
 
     const adminDb = createServiceRoleClient()
@@ -140,7 +157,7 @@ export async function registerAction(
                 .eq('subscription_tier', 'free')
                 .gte('created_at', sevenDaysAgo)
             if ((count ?? 0) >= 3) {
-                return { error: 'No se pudo completar el registro. Si crees que es un error, contacta soporte.' }
+                return reject('free_ip_limit', 'No se pudo completar el registro. Si crees que es un error, contacta soporte.')
             }
         }
     }
@@ -150,7 +167,7 @@ export async function registerAction(
         const { data: existingCoach } = await adminDb.from('coaches').select('id').eq('slug', slug).maybeSingle()
         if (!existingCoach) break
         if (attempt === 7) {
-            return { error: 'No se pudo generar un identificador único para tu marca. Prueba con otro nombre.' }
+            return reject('slug_generation_failed', 'No se pudo generar un identificador único para tu marca. Prueba con otro nombre.')
         }
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
@@ -160,7 +177,14 @@ export async function registerAction(
     const emailNorm = normalizePlatformEmail(email)
     const availability = await assertPlatformEmailAvailable(adminDb, email)
     if (!availability.ok) {
-        return { error: availability.error }
+        // `reason` ya es una categoría (nunca el correo): `taken_*` colapsa a un solo código —
+        // el copy no revela la categoría, y para el funnel «ya tiene cuenta» es una sola causa.
+        // Las demás (invalid / blocked_domain / disposable / rpc_error) viajan separadas: un pico
+        // de `email_rpc_error` es una caída nuestra, no un visitante que se equivocó.
+        return reject(
+            isEmailTakenReason(availability.reason) ? 'email_taken' : `email_${availability.reason}`,
+            availability.error
+        )
     }
 
     // Free tier requires email verification; paid tiers are auto-confirmed (payment = identity proof)
@@ -172,9 +196,11 @@ export async function registerAction(
 
     if (authError || !authData.user) {
         if (authError && isAuthDuplicateEmailMessage(authError.message)) {
-            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
+            // Código propio (no `email_taken`): acá la RPC de disponibilidad dijo que SÍ y GoTrue
+            // dijo que no. Es una carrera o un hueco del check — separado se ve, colapsado no.
+            return reject('auth_email_taken', 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.')
         }
-        return { error: authError?.message || 'Error al crear la cuenta' }
+        return reject('auth_create_failed', authError?.message || 'Error al crear la cuenta')
     }
 
     // Capture registration IP for free tier abuse detection
@@ -220,7 +246,7 @@ export async function registerAction(
     if (coachError) {
         // Rollback: delete the auth user
         await adminDb.auth.admin.deleteUser(authData.user.id)
-        return { error: coachError.message || 'Error al configurar el perfil de coach' }
+        return reject('coach_insert_failed', coachError.message || 'Error al configurar el perfil de coach')
     }
 
     // Meta CompleteRegistration (CAPI). El `event_id` se genera UNA vez y viaja tambien al browser
@@ -247,7 +273,7 @@ export async function registerAction(
         if (!emailSent.ok) {
             await adminDb.from('coaches').delete().eq('id', authData.user.id)
             await adminDb.auth.admin.deleteUser(authData.user.id)
-            return { error: 'No pudimos enviar el correo de confirmación. Revisa el email e intenta de nuevo.' }
+            return reject('confirmation_email_failed', 'No pudimos enviar el correo de confirmación. Revisa el email e intenta de nuevo.')
         }
         // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
         await queueMetaRegistration()

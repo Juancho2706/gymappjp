@@ -93,6 +93,8 @@ describe('registerAction', () => {
     const result = await registerAction({}, buildRegisterFormData())
 
     expect(result.error).toMatch(/ya está registrado en la plataforma/i)
+    // Las 4 razones `taken_*` colapsan a un solo código de funnel (el copy tampoco las distingue).
+    expect(result.code).toBe('email_taken')
     expect(adminDb.auth.admin.createUser).not.toHaveBeenCalled()
   })
 
@@ -142,7 +144,8 @@ describe('registerAction', () => {
       {},
       buildRegisterFormData({ subscription_tier: 'invalid-tier', billing_cycle: 'weekly' })
     )
-    expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.' })
+    // `code` (20-08): todo rechazo viaja con su causa estable — alimenta `register_failed`.
+    expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.', code: 'plan_invalid' })
   })
 
   // Plan 04 (D2): trimestral habilitado en los tiers pagos a la venta — pro+quarterly
@@ -163,7 +166,7 @@ describe('registerAction', () => {
       {},
       buildRegisterFormData({ subscription_tier: 'starter', billing_cycle: 'monthly' })
     )
-    expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.' })
+    expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.', code: 'plan_invalid' })
   })
 
   it('rolls back auth user when coach insert fails', async () => {
@@ -213,7 +216,7 @@ describe('registerAction', () => {
 
     const result = await registerAction({}, buildRegisterFormData())
 
-    expect(result).toEqual({ error: 'insert failed' })
+    expect(result).toEqual({ error: 'insert failed', code: 'coach_insert_failed' })
     expect(adminDb.auth.admin.deleteUser).toHaveBeenCalledWith('u123')
   })
 
