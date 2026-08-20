@@ -16,8 +16,8 @@ type Admin = SupabaseClient<Database>
  * - `standalone`: límite del COACH — la columna `coaches.max_clients` GANA cuando existe;
  *   el fallback es `tierMaxClientsFor(tier, created_at)` (grandfather P2: coach creado antes
  *   de PRICING_V2_CUTOVER conserva los límites viejos). Tier ilegible cae a 'free' (P5:
- *   jamás `?? 'starter'`). Hoy este camino está apagado por C-KILL (2026-07-04) en el
- *   action, pero el cerco queda correcto por si el registro standalone se reenciende.
+ *   jamás `?? 'starter'`). Este camino volvió a estar VIVO el 2026-08-20 (alta standalone
+ *   reabierta para el loop de Share Entreno): este cerco es el que reemplaza al C-KILL.
  * - `enterprise`: el cupo real es de la ORG — `organizations.client_limit` (migración
  *   20260517140001) sobre el pool completo de la org; el tier personal del coach no aplica
  *   (la org paga centralizado, mismo criterio que el alta manual).

@@ -43,3 +43,20 @@ export function studentLoginUrl(identifier: string): string {
 export function studentAppUrl(identifier: string): string {
   return `${STUDENT_APP_ORIGIN}/c/${identifier}`
 }
+
+/**
+ * ALTA por código de invitación (`/join/{código}`): la pantalla donde alguien que todavía NO tiene
+ * cuenta la crea. `/c/{código}/login` es otra cosa — pide credenciales que el desconocido no tiene.
+ *
+ * Dos razones por las que es un helper aparte y no un `?mode=` del login:
+ *
+ *  1. **`/join` NO está reclamada por la app** (ni en `applinks` del AASA ni en los `intentFilters`
+ *     de Android, que solo cubren `/c/`, `/invite/` y `/reset-password`), así que el link abre el
+ *     NAVEGADOR incluso con EVA instalada. Eso es deliberado: el alta vive en la web. `/c/` sí está
+ *     reclamada, y por eso el link de la tarjeta compartida se comía el flujo abriendo la app.
+ *  2. Es el único punto donde `?ref=` se lee: el capturador de la atribución vive en
+ *     `/join/[invite_code]` (F6 de workout-share), no en el login de marca.
+ */
+export function studentJoinUrl(identifier: string): string {
+  return `${STUDENT_APP_ORIGIN}/join/${identifier}`
+}

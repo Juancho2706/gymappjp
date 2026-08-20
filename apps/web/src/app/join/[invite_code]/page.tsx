@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props) {
     return { title: invite ? `Únete a ${invite.brandName}` : 'Únete' }
 }
 
-/** Shared brand header — same lockup for the sign-up form and the disabled state. */
+/** Lockup de marca del espacio al que se está uniendo el alumno (coach, equipo u organización). */
 function BrandHeader({
     brandName,
     color,
@@ -73,69 +73,6 @@ export default async function JoinPage({ params, searchParams }: Props) {
     const brandName = invite.brandName
     const color = invite.primaryColor ?? '#10B981'
     const logoUrl = invite.logoUrl
-
-    // C-KILL (2026-07-04): standalone (coaches.invite_code) self-signup is OFF. The coach
-    // adds students manually from their panel, so we render a branded, cared-for "managed
-    // signup" state instead of a form that would fail at submit. Team/org keep the form.
-    if (invite.scope === 'standalone') {
-        return (
-            <div className="min-h-dvh flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4 py-12">
-                <div className="w-full max-w-sm">
-                    <BrandHeader
-                        brandName={brandName}
-                        color={color}
-                        logoUrl={logoUrl}
-                        welcomeMessage={invite.welcomeMessage}
-                    />
-
-                    <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-                        <div
-                            className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl"
-                            style={{ backgroundColor: `${color}1A`, color }}
-                            aria-hidden="true"
-                        >
-                            <svg
-                                width="26"
-                                height="26"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                            </svg>
-                        </div>
-
-                        <h2 className="text-center text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                            Tu coach te suma a mano
-                        </h2>
-                        <p className="mt-2 text-center text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-                            El registro directo está desactivado. Pedile a{' '}
-                            <span className="font-medium text-zinc-700 dark:text-zinc-300">{brandName}</span> que te
-                            agregue desde su panel y vas a recibir tus datos para entrar.
-                        </p>
-
-                        <a
-                            href={invite.loginHref}
-                            style={{ backgroundColor: color }}
-                            className="mt-6 flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                        >
-                            Ya tengo cuenta
-                        </a>
-                    </div>
-
-                    <p className="mt-4 text-center text-xs text-zinc-400">
-                        ¿Problemas para entrar? Escribile directo a tu coach.
-                    </p>
-                </div>
-            </div>
-        )
-    }
 
     return (
         <div className="min-h-dvh flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4 py-12">

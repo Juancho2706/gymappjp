@@ -77,6 +77,9 @@ branding era fail-closed de casualidad; para `max_clients` inflaba free 3→10.
 **P7 — Cerco de verdad:** `joinViaInviteAction` (join.actions.ts) gana el
 conteo contra `max_clients` que hoy NO tiene (scope standalone está apagado,
 pero team/enterprise insertan sin tope y el hueco documentado sigue vivo).
+Actualización 2026-08-20: el alta standalone se REABRIÓ (loop de Share Entreno,
+`specs/workout-share/TASKS.md` F6) — precisamente porque este cerco ya está
+puesto, el alta nueva nace gateada por `checkJoinCapacity`.
 
 **P8 — Medición ANTES de encender Meta:** instrumentar `/pricing` (pageview +
 click de plan) y el funnel de checkout en PostHog (la F0 del informe de agosto,

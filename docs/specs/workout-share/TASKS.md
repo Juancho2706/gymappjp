@@ -154,13 +154,25 @@ encolar el build 1.1.2 (F9).
 
 ## F6 — Growth (atribución)
 
-- [~] F6.1 `build-share-data` arma `?ref={clientId}&src=share_card` sobre `studentLoginUrl` cuando
+> **Decisión del 20-08 (el loop estaba CORTADO):** la tarjeta emitía `/c/{código}/login`, pero el
+> capturador del `?ref` vive en `/join/[invite_code]` — y ahí el alta standalone estaba apagada por
+> el **C-KILL (2026-07-04)**. Dos puertas cerradas: quien recibía la tarjeta no tenía cuenta para
+> loguearse, y `/c/` además está reclamada como deep link (AASA + intentFilters), así que con EVA
+> instalada el link abría la app en vez del alta. Se **retiró el C-KILL** (el hueco de `max_clients`
+> que lo motivó ya lo cierra `checkJoinCapacity`, cableado en `join.actions.ts` desde Pricing v2) y
+> la tarjeta ahora apunta a **`/join/{código}`**, que NO está reclamada y abre el navegador.
+
+- [~] F6.1 `build-share-data` arma `?ref={clientId}&src=share_card` sobre `studentJoinUrl` cuando
       hay `clientId` (sin él, URL limpia). FALTA el `k={preset}`: NO va en esta URL a propósito —es
       la que se hornea en el QR y el alumno puede cambiar de preset después de que el canvas se
       pintó—; el link con `k` lo arma F5 al copiar al portapapeles, que sí conoce el preset final.
-- [ ] F6.2 `/join/[código]` web: leer searchParams, validar `ref` pertenece al MISMO coach,
-      persistir en insert de `clients` (`join.actions.ts:78`).
-- [ ] F6.3 Evento server `coach_client_referred` al concretarse el alta referida.
+- [x] F6.2 `/join/[código]` web: leer searchParams, validar `ref` pertenece al MISMO coach,
+      persistir en insert de `clients` (`034c6863`). Standalone reabierto el 20-08: la page renderiza
+      el `JoinForm` para los tres scopes y el action crea el alumno tras el cerco de cupo.
+- [x] F6.3 Evento server `coach_client_referred` al concretarse el alta referida (`034c6863`).
+- [x] F6.4 (20-08) Aviso al coach por Resend cuando el alta es standalone — es el único camino que
+      él no origina. `await` (nunca fire-and-forget: el redirect mata la promesa en Vercel) y
+      fail-open: un fallo de correo jamás rompe el alta.
 
 ## F7 — Analytics móvil
 

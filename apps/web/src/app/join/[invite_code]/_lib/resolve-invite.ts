@@ -5,14 +5,11 @@ import type { Database } from '@/lib/database.types'
 type Admin = SupabaseClient<Database>
 
 /**
- * C-KILL (2026-07-04): standalone (coaches.invite_code) auto-registration is OFF.
- * The coach adds students manually from their panel — killing the max_clients gap at
- * the root. Shown by BOTH the /join page (renders the disabled state instead of the
- * form) and the join action (defense-in-depth: never creates auth.user / clients row).
- * Team and org invites keep the self-signup flow intact.
+ * Alta standalone REABIERTA el 2026-08-20 para cerrar el loop de Share Entreno (la tarjeta que
+ * comparte el alumno manda a `/join/{código}`, y ahí tiene que poder crearse la cuenta). El
+ * C-KILL del 2026-07-04 la había apagado por el hueco de `max_clients`; ese hueco lo cierra hoy
+ * `checkJoinCapacity` (_lib/join-capacity.ts) ANTES de crear nada, para los tres scopes.
  */
-export const STANDALONE_REGISTRATION_DISABLED_MESSAGE =
-    'El registro directo está desactivado — pedile a tu coach que te agregue desde su panel.'
 
 /**
  * B-7 / A.bis2: an invite code ENCODES SCOPE.
@@ -134,7 +131,10 @@ export async function resolveInvite(admin: Admin, code: string): Promise<InviteR
             primaryColor: coach.primary_color ?? null,
             logoUrl: coach.logo_url ?? null,
             welcomeMessage: coach.welcome_message ?? null,
-            loginHref: `/c/${coach.slug ?? ''}/login`,
+            // `code` como respaldo: un coach solo-código (sin slug legacy) emitía `/c//login`, y
+            // con el alta standalone reabierta ese link es a donde cae el alumno recién creado.
+            // `/c/[identifier]` resuelve por invite_code o por slug (coachIdentifierColumn).
+            loginHref: `/c/${coach.slug || code}/login`,
         }
     }
 

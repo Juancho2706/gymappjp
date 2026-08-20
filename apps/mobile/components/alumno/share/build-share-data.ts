@@ -18,7 +18,7 @@ import {
     type SummaryLogLike,
 } from '@eva/workout-engine'
 import { epleyOneRM } from '../../../lib/profile-analytics'
-import { normalizeInviteCode, studentLoginUrl } from '../../../lib/student-links'
+import { normalizeInviteCode, studentJoinUrl } from '../../../lib/student-links'
 import type { CoachBranding } from '../../../lib/branding'
 import type { WeeklyStreak } from '../workout/v3/weekly-streak'
 import type { ShareExercise, ShareRecord, WorkoutShareData } from './share-types'
@@ -154,6 +154,11 @@ export function buildWorkoutShareData(input: BuildWorkoutShareDataInput): Workou
      * `?ref={clientId}&src=share_card` es lo que `/join/[código]` va a leer para saber QUIÉN trajo al
      * alumno nuevo — sin SDK de atribución (Branch/AppsFlyer descartados: el alta ocurre en la web).
      *
+     * Apunta a `/join/{código}` y NO a `/c/{código}/login` (corregido el 20-08, con el alta
+     * standalone reabierta): quien recibe la tarjeta no tiene cuenta, así que el login era una
+     * puerta cerrada — y encima `/c/` está reclamada como deep link, así que en un teléfono con EVA
+     * instalada el link abría la app en vez del alta. `/join` no está reclamada: abre el navegador.
+     *
      * El `k={preset}` del SPEC NO viaja acá A PROPÓSITO: esta URL es la que se hornea en el QR, y el
      * QR se rasteriza junto con la captura del canvas. El alumno puede cambiar de preset DESPUÉS de
      * que el mini/preview ya se pintó, así que un `card_kind` incrustado en el QR mentiría en cuanto
@@ -162,8 +167,8 @@ export function buildWorkoutShareData(input: BuildWorkoutShareDataInput): Workou
      */
     const inviteUrl = inviteCode
         ? clientId
-            ? `${studentLoginUrl(inviteCode)}?ref=${encodeURIComponent(clientId)}&src=share_card`
-            : studentLoginUrl(inviteCode)
+            ? `${studentJoinUrl(inviteCode)}?ref=${encodeURIComponent(clientId)}&src=share_card`
+            : studentJoinUrl(inviteCode)
         : null
 
     return {

@@ -97,7 +97,7 @@ export function parseReferralParams(raw: RawReferralInput): ReferralParams | nul
  *  - `enterprise`: mismo `org_id` Y mismo `coach_id`. Un referido entre coaches distintos DENTRO
  *    de la misma org se descarta (se pierde el dato, jamás el alta): enterprise está congelada y
  *    preferimos el criterio conservador antes que aflojar el cerco.
- *  - `standalone`: mismo `coach_id` y sin org ni team (hoy este alta está apagada por C-KILL).
+ *  - `standalone`: mismo `coach_id` y sin org ni team. Es el camino de la tarjeta compartida.
  *
  * Un alumno archivado SÍ puede referir: su tarjeta vieja sigue circulando y el alta que trae es
  * igual de real.

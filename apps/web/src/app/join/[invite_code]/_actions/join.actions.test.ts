@@ -7,12 +7,14 @@ const {
     createClientIdentityMock,
     rateLimitMock,
     captureServerEventMock,
+    notifyCoachMock,
 } = vi.hoisted(() => ({
     createServiceRoleClientMock: vi.fn(),
     resolveInviteMock: vi.fn(),
     createClientIdentityMock: vi.fn(),
     rateLimitMock: vi.fn(),
     captureServerEventMock: vi.fn(),
+    notifyCoachMock: vi.fn(),
 }))
 
 vi.mock('next/headers', () => ({
@@ -28,11 +30,15 @@ vi.mock('@/lib/supabase/admin-client', () => ({
 }))
 
 // Mock the resolver (its internals are unit-tested elsewhere). We drive the ACTION's
-// three scope branches from here. Provide the real disabled-message export too.
+// three scope branches from here.
 vi.mock('../_lib/resolve-invite', () => ({
     resolveInvite: resolveInviteMock,
-    STANDALONE_REGISTRATION_DISABLED_MESSAGE:
-        'El registro directo está desactivado — pedile a tu coach que te agregue desde su panel.',
+}))
+
+// El aviso al coach del alta standalone: acá importa CUÁNDO se dispara, no el HTML (el helper
+// tiene su propio fail-open y no debe pegarle a Resend en tests).
+vi.mock('@/lib/email/coach-join-notification', () => ({
+    notifyCoachOfStandaloneJoin: notifyCoachMock,
 }))
 
 vi.mock('@/infrastructure/db/client-membership.repository', () => ({
@@ -61,18 +67,21 @@ function buildFormData(referral?: { ref?: string; src?: string; k?: string }) {
 
 /**
  * Admin double: `clients` soporta select-chain + insert + conteo (await directo del builder,
- * para el cerco P7); `organizations` soporta el select de `client_limit`;
- * `coach_client_assignments` soporta insert.
+ * para el cerco P7); `organizations` soporta el select de `client_limit`; `coaches` el del cupo
+ * standalone; `coach_client_assignments` soporta insert.
  */
 function buildAdmin({
     existingClient = null,
     orgRow = { client_limit: 100 },
+    coachRow = { max_clients: 25, subscription_tier: 'pro', created_at: '2026-08-19T00:00:00.000Z' },
     activeCount = 0,
     countError = null,
     referrerRow = null,
 }: {
     existingClient?: { id: string } | null
     orgRow?: { client_limit: number } | null
+    /** Cupo del coach para el scope standalone (`max_clients` gana sobre el tier). */
+    coachRow?: { max_clients: number | null; subscription_tier: string; created_at: string } | null
     activeCount?: number
     countError?: { message: string } | null
     /** F6: fila que devuelve la búsqueda del alumno que refirió (`null` = no existe). */
@@ -104,6 +113,11 @@ function buildAdmin({
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: orgRow }),
     }
+    const coachesQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: coachRow, error: null }),
+    }
     const assignmentsQuery = {
         insert: vi.fn().mockResolvedValue({ error: null }),
     }
@@ -111,6 +125,7 @@ function buildAdmin({
         from: vi.fn((table: string) => {
             if (table === 'clients') return clientsQuery
             if (table === 'organizations') return organizationsQuery
+            if (table === 'coaches') return coachesQuery
             if (table === 'coach_client_assignments') return assignmentsQuery
             throw new Error(`Unexpected table: ${table}`)
         }),
@@ -123,7 +138,19 @@ function buildAdmin({
             },
         },
     }
-    return { admin, clientsQuery, organizationsQuery, assignmentsQuery }
+    return { admin, clientsQuery, organizationsQuery, coachesQuery, assignmentsQuery }
+}
+
+const STANDALONE_INVITE = {
+    scope: 'standalone' as const,
+    coachId: 'coach-1',
+    orgId: null,
+    teamId: null,
+    brandName: 'Coach Marca',
+    primaryColor: '#10B981',
+    logoUrl: null,
+    welcomeMessage: null,
+    loginHref: '/c/coach-marca/login',
 }
 
 const ENTERPRISE_INVITE = {
@@ -145,29 +172,47 @@ describe('joinViaInviteAction', () => {
         createClientIdentityMock.mockResolvedValue({ ok: true })
     })
 
-    it('standalone → disabled state, NO auth.user and NO clients row (C-KILL)', async () => {
-        const { admin, clientsQuery } = buildAdmin()
+    // El C-KILL (2026-07-04) apagaba este camino; se retiró el 2026-08-20 porque la tarjeta de
+    // Share Entreno manda justo acá y el hueco de cupo que lo motivó ya lo cierra checkJoinCapacity.
+    it('standalone → crea el alumno, lo deja bajo el coach y le avisa por correo', async () => {
+        const { admin, clientsQuery, assignmentsQuery } = buildAdmin()
         createServiceRoleClientMock.mockReturnValue(admin)
-        resolveInviteMock.mockResolvedValue({
-            scope: 'standalone',
-            coachId: 'coach-1',
-            orgId: null,
-            teamId: null,
-            brandName: 'Coach Marca',
-            primaryColor: '#10B981',
-            logoUrl: null,
-            welcomeMessage: null,
-            loginHref: '/c/coach-marca/login',
-        })
+        resolveInviteMock.mockResolvedValue(STANDALONE_INVITE)
 
         const result = await joinViaInviteAction('CODE-STANDALONE', null, buildFormData())
 
-        expect(result).toMatchObject({ disabled: true })
-        expect((result as { error?: string }).error).toMatch(/desactivado/i)
-        // Zero side effects: no user creation, no clients insert, no identity materialization.
+        // Termina igual que team/org: sin login automático, con el href al login de la marca.
+        expect(result).toEqual({ success: true, loginHref: '/c/coach-marca/login' })
+        expect(admin.auth.admin.createUser).toHaveBeenCalledTimes(1)
+        expect(clientsQuery.insert).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'new-user-1', coach_id: 'coach-1', org_id: null, team_id: null })
+        )
+        expect(createClientIdentityMock).toHaveBeenCalledTimes(1)
+        // standalone no es enterprise → nada de asignaciones de org.
+        expect(assignmentsQuery.insert).not.toHaveBeenCalled()
+        // El único alta que el coach no origina: se le avisa (esperado, jamás fire-and-forget).
+        expect(notifyCoachMock).toHaveBeenCalledWith(admin, {
+            coachId: 'coach-1',
+            studentName: 'Alumna Test',
+            brandName: 'Coach Marca',
+        })
+    })
+
+    it('standalone → cupo del coach lleno: rechaza SIN crear auth.user ni fila', async () => {
+        const { admin, clientsQuery } = buildAdmin({
+            coachRow: { max_clients: 2, subscription_tier: 'free', created_at: '2026-08-19T00:00:00.000Z' },
+            activeCount: 2,
+        })
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue(STANDALONE_INVITE)
+
+        const result = await joinViaInviteAction('CODE-STANDALONE', null, buildFormData())
+
+        expect((result as { error?: string }).error).toMatch(/límite de alumnos/i)
+        expect((result as { success?: boolean }).success).toBeUndefined()
         expect(admin.auth.admin.createUser).not.toHaveBeenCalled()
         expect(clientsQuery.insert).not.toHaveBeenCalled()
-        expect(createClientIdentityMock).not.toHaveBeenCalled()
+        expect(notifyCoachMock).not.toHaveBeenCalled()
     })
 
     it('team → creates the auth.user + clients row (flow intact)', async () => {
@@ -339,6 +384,34 @@ describe('joinViaInviteAction', () => {
         expect(captureServerEventMock).toHaveBeenCalledWith({
             event: 'coach_client_referred',
             distinctId: 'owner-1',
+            properties: { referred_by_client_id: REFERRER_ID, card_kind: 'placa' },
+        })
+    })
+
+    it('standalone con ref del MISMO coach → persiste la atribución y emite el evento', async () => {
+        const { admin, clientsQuery } = buildAdmin({
+            referrerRow: { id: REFERRER_ID, coach_id: 'coach-1', org_id: null, team_id: null },
+        })
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue(STANDALONE_INVITE)
+
+        const result = await joinViaInviteAction(
+            'CODE-STANDALONE',
+            null,
+            buildFormData({ ref: REFERRER_ID, src: 'share_card', k: 'placa' })
+        )
+
+        expect(result).toEqual({ success: true, loginHref: '/c/coach-marca/login' })
+        expect(clientsQuery.insert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                referred_by_client_id: REFERRER_ID,
+                referral_source: 'share_card',
+                referral_card_kind: 'placa',
+            })
+        )
+        expect(captureServerEventMock).toHaveBeenCalledWith({
+            event: 'coach_client_referred',
+            distinctId: 'coach-1',
             properties: { referred_by_client_id: REFERRER_ID, card_kind: 'placa' },
         })
     })

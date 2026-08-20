@@ -4,11 +4,12 @@ import { headers } from 'next/headers'
 import { z } from 'zod/v4'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitInviteAccept } from '@/lib/rate-limit'
-import { resolveInvite, STANDALONE_REGISTRATION_DISABLED_MESSAGE } from '../_lib/resolve-invite'
+import { resolveInvite } from '../_lib/resolve-invite'
 import { checkJoinCapacity } from '../_lib/join-capacity'
 import { resolveJoinReferral } from '../_lib/join-referral'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
+import { notifyCoachOfStandaloneJoin } from '@/lib/email/coach-join-notification'
 
 const JoinSchema = z.object({
     full_name: z.string().min(2).max(120),
@@ -40,15 +41,6 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
     const invite = await resolveInvite(admin, inviteCode)
     if (!invite) return { error: 'Código de invitación inválido' }
 
-    // C-KILL (2026-07-04): standalone auto-registration is OFF. A standalone code
-    // (coaches.invite_code) must NEVER create an auth.user or a clients row here — the
-    // coach adds students manually from their panel. The /join page already renders the
-    // disabled state for standalone, so this is defense-in-depth for a stray submit.
-    // Team and org invites keep the full self-signup flow below.
-    if (invite.scope === 'standalone') {
-        return { disabled: true as const, error: STANDALONE_REGISTRATION_DISABLED_MESSAGE }
-    }
-
     const { data: existing } = await admin
         .from('clients')
         .select('id')
@@ -59,8 +51,8 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
     // P7 (pricing v2): cerco de verdad — contar activos vs el cupo APLICABLE ANTES de crear
     // auth.user + fila (así no queda usuario huérfano que borrar). enterprise gatea por
     // organizations.client_limit; team no tiene cuota de alumnos (seat_limit es de coaches);
-    // standalone (hoy apagado por C-KILL, cubierto igual por el helper si se reenciende)
-    // gatea por max_clients ?? tierMaxClientsFor con grandfather. Fail-closed ante errores.
+    // standalone (reabierto el 2026-08-20 para el loop de Share Entreno) gatea por
+    // max_clients ?? tierMaxClientsFor con grandfather. Fail-closed ante errores.
     const capacity = await checkJoinCapacity(admin, invite)
     if (!capacity.ok) {
         if (capacity.reason === 'limit_reached') {
@@ -148,6 +140,18 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
                 referred_by_client_id: referral.referred_by_client_id,
                 card_kind: referral.referral_card_kind,
             },
+        })
+    }
+
+    // El alta standalone es la única que el coach no origina él mismo (el alumno llega solo con
+    // el código, típicamente desde una tarjeta compartida): sin este aviso el alumno nuevo aparece
+    // en el roster sin que nadie se entere. Se ESPERA por la misma razón que el evento de arriba
+    // —Vercel congela la invocación al responder— y el helper jamás lanza ni rompe el alta.
+    if (invite.scope === 'standalone') {
+        await notifyCoachOfStandaloneJoin(admin, {
+            coachId: invite.coachId,
+            studentName: parsed.data.full_name,
+            brandName: invite.brandName,
         })
     }
 
