@@ -126,6 +126,36 @@ export function useCaptureRegisterSubmitted() {
 }
 
 /**
+ * register_failed — el Server Action del alta RECHAZÓ el intento y devolvió un error al wizard.
+ *
+ * Cierra el hueco mas caro del embudo: `register_submitted` existia, `coach_registered` existia, y
+ * entre los dos no habia NADA. Caso medido el 20-08 01:43 UTC: un visitante con `utm_source=meta`
+ * mando `register_submitted` 3 veces en 28 s, el action lo rechazo las 3 y no quedo rastro en
+ * ningun lado — ni log, ni Sentry, ni evento. Clic pagado, alta perdida, causa desconocida.
+ *
+ *   code: la causa estable que devuelve el action (`RegisterState.code` /
+ *         `CompleteOnboardingState.code`). Los del alta por Google vienen prefijados `oauth_`.
+ *         `unknown` = rechazo sin codigo; si aparece, hay una rama que no pasa por `reject()`.
+ *
+ * SIN `send_instantly`: un rechazo NO precede una navegacion — la pagina se queda pintando el
+ * error, asi que el batch normal alcanza y no hay riesgo de perderlo por un unload.
+ */
+export function useCaptureRegisterFailed() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: { tier: SubscriptionTier; billingCycle: string; method: 'email' | 'google'; code: string }) => {
+            ph?.capture('register_failed', {
+                tier: props.tier,
+                billing_cycle: props.billingCycle,
+                method: props.method,
+                code: props.code,
+            })
+        },
+        [ph]
+    )
+}
+
+/**
  * Funnel de add-ons self-service (plan 05 F5.8 — analítica PASIVA, NO superficie de venta:
  * no muestra precios ni CTAs, solo observa, por eso no viola la regla anti-hostigamiento).
  *

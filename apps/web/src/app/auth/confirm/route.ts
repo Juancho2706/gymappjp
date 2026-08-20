@@ -44,9 +44,12 @@ export async function GET(request: NextRequest) {
             .update({ subscription_status: 'active' })
             .eq('id', coach.id)
 
-        // Fire welcome + drip now that email is confirmed. Helper compartido con el alta por
+        // Bienvenida + drip ahora que el email está confirmado. Helper compartido con el alta por
         // Google (`completeOAuthOnboarding`), que nace `active` y nunca pasa por acá.
-        sendFreeCoachOnboardingEmails({
+        // `await` obligatorio: al devolver el redirect Vercel congela la función y mata cualquier
+        // request pendiente — el 19-08 así se perdieron 2 de 5 bienvenidas de este camino. El
+        // helper nunca lanza (allSettled adentro), así que esto no puede romper la confirmación.
+        await sendFreeCoachOnboardingEmails({
             email: data.user.email!,
             coachName: coach.full_name ?? '',
             brandName: coach.brand_name ?? '',
