@@ -78,3 +78,17 @@ export {
     type CaptureShareCanvasOptions,
 } from './share-capture'
 export { pickSharePhoto, takeSharePhoto } from './share-photo'
+// Destinos (F5): a dónde va el PNG una vez capturado.
+export {
+    hasFacebookAppId,
+    runShareTarget,
+    saveToGallery,
+    shareToFacebookStories,
+    shareToInstagramStories,
+    shareToSheet,
+    shareToWhatsApp,
+    type ShareTarget,
+    type ShareTargetInput,
+    type ShareTargetOutcome,
+    type ShareTargetResult,
+} from './share-targets'

@@ -1,12 +1,10 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
     ActivityIndicator,
     BackHandler,
     Modal,
-    Platform,
     Pressable,
     ScrollView,
-    Share,
     StyleSheet,
     Text,
     useWindowDimensions,
@@ -16,12 +14,12 @@ import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useSharedValue } from 'react-native-reanimated'
 import { MotiView } from 'moti'
-import * as Sharing from 'expo-sharing'
 import * as ImagePicker from 'expo-image-picker'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
     ArrowLeft,
     Camera,
+    Download,
     ImageOff,
     Images,
     Minus,
@@ -36,8 +34,11 @@ import { deriveSportTokens, type SportTokens } from '@eva/brand-kit'
 import { EXEC_SURFACE } from '../workout/v3/exec-theme'
 import { FONT } from '../../../lib/typography'
 import { haptics } from '../../../lib/haptics'
+import { captureAppEvent } from '../../../lib/analytics'
 import { toast } from '../../Toast'
 import { ShareCanvas } from './ShareCanvas'
+import { FacebookGlyph, InstagramGlyph, WhatsappGlyph } from './brand-glyphs'
+import { hasFacebookAppId, runShareTarget, type ShareTarget } from './share-targets'
 import {
     cloneStickerLayout,
     DEFAULT_SHARE_PRESET_ID,
@@ -125,11 +126,24 @@ const STEP_TITLE: Record<Step, string> = {
 /**
  * Fracción del alto disponible que puede ocupar el lienzo en cada paso. El editor le cede espacio a
  * los controles (presets + fuente de foto + 10 toggles no entran si el preview se come la pantalla);
- * `compartir` casi no tiene chrome, así que el card se ve grande — que es justo cuando el alumno
- * decide si le gusta. `acomodar` deja ~150 px para el panel del sticker seleccionado (tamaño, flip
- * de silueta, restaurar) sin que el lienzo se coma la pantalla en un teléfono chico.
+ * `acomodar` deja ~150 px para el panel del sticker seleccionado (tamaño, flip de silueta,
+ * restaurar) sin que el lienzo se coma la pantalla en un teléfono chico.
+ *
+ * `compartir` bajó de 0,88 a 0,72 al entrar F5: cuando el paso era un botón único el card podía
+ * ocupar casi todo (era el momento de decidir "¿me gusta?"), pero ahora abajo hay una fila de cuatro
+ * destinos con ícono + etiqueta (~64 px) más el secundario de Facebook. Con 0,88 esa fila quedaba
+ * pegada al borde inferior en un teléfono chico y el hint no entraba.
  */
-const STAGE_FRACTION: Record<Step, number> = { editor: 0.52, acomodar: 0.62, compartir: 0.88 }
+const STAGE_FRACTION: Record<Step, number> = { editor: 0.52, acomodar: 0.62, compartir: 0.72 }
+
+/**
+ * Alto que se le RESERVA a la barra inferior antes de repartir el resto. `editor` y `acomodar`
+ * llevan un botón «Continuar» (52 px + paddings ⇒ 76, con holgura a 92); `compartir` lleva la fila
+ * de destinos (64) + el secundario de Facebook (36) + paddings ⇒ ~132. Sin esta distinción el paso
+ * Compartir calculaba el lienzo contra un presupuesto de barra que ya no era el suyo y la fila se
+ * salía de la pantalla en teléfonos de 640 px de alto.
+ */
+const FOOTER_BUDGET: Record<Step, number> = { editor: 92, acomodar: 92, compartir: 140 }
 
 /** Ancho del mini-canvas de cada chip de preset. */
 const THUMB_W = 68
@@ -207,7 +221,14 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
     const [photoSource, setPhotoSource] = useState<'camera' | 'library' | null>(null)
     const [showHandle, setShowHandle] = useState(true)
 
-    const [busy, setBusy] = useState(false)
+    /**
+     * Qué destino está corriendo (o `null`). Es el target y no un booleano porque el paso Compartir
+     * tiene cuatro botones a la vez: con un `busy` plano los cuatro mostrarían spinner y el alumno
+     * no sabría cuál apretó. Deshabilitar TODOS mientras uno corre sí es correcto — una segunda
+     * captura en paralelo pelearía por el mismo `canvasRef` y por el mismo nombre de archivo.
+     */
+    const [busyTarget, setBusyTarget] = useState<ShareTarget | null>(null)
+    const busy = busyTarget !== null
     const [cameraPrimer, setCameraPrimer] = useState(false)
     const [cameraPermission, requestCameraPermission] = ImagePicker.useCameraPermissions()
 
@@ -234,7 +255,7 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
     // El cap de ancho es `pantalla − 48` (mockup), pero manda el ALTO: el card es 9:16 y a ancho
     // completo mide ~1,6 pantallas de alto, así que sin este budget el editor no tendría dónde
     // poner sus controles. En `compartir` el budget casi no recorta y el preview llega al cap.
-    const chromeH = insets.top + insets.bottom + 52 /* header */ + 92 /* footer CTA */
+    const chromeH = insets.top + insets.bottom + 52 /* header */ + FOOTER_BUDGET[step]
     const bodyH = Math.max(280, screenH - chromeH)
     const canvasW = Math.min(screenW - 48, (bodyH * STAGE_FRACTION[step] * SHARE_CANVAS_W) / SHARE_CANVAS_H)
     // La MISMA expresión que usa `ShareCanvas` internamente, sin redondear: un `Math.round` acá deja
@@ -246,6 +267,8 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
     const selectPreset = useCallback((id: SharePresetId) => {
         if (id === presetIdRef.current) return
         haptics.select()
+        // F7.2 — solo el ID del estilo. Ningún dato del entreno viaja en analytics (21.719).
+        captureAppEvent('student_share_style_selected', { style: id })
         presetIdRef.current = id
         const next = SHARE_PRESET_BY_ID[id]
         setPresetId(id)
@@ -342,6 +365,12 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
 
     const applyPhoto = useCallback((uri: string | null, source: 'camera' | 'library' | null) => {
         backgroundTouchedRef.current = true
+        // F7.2 — solo DE DÓNDE salió la foto, jamás la foto ni nada de ella. `library` se traduce a
+        // `gallery` porque esa es la palabra de la taxonomía del PLAN (el nombre interno viene de
+        // `expo-image-picker`), y "sin foto" también es una elección que hay que poder medir.
+        captureAppEvent('student_share_photo_attached', {
+            photo_source: uri ? (source === 'camera' ? 'camera' : 'gallery') : 'none',
+        })
         setPhotoUri(uri)
         setPhotoSource(uri ? source : null)
         // Elegir una foto SALE del modo transparente: es la acción más específica y más reciente, y
@@ -410,57 +439,59 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
     }, [step])
 
     /**
-     * Captura + hoja nativa.
+     * Captura + destino (F5).
      *
-     * PROVISIONAL: F5 reemplaza este botón único por destinos EXPLÍCITOS (Stories · WhatsApp ·
-     * Guardar · Más…) con `react-native-share` — dependencia con código nativo ⇒ binario, y los
-     * botones por destino son además la ÚNICA medición fiable del target (Android no reporta qué
-     * app eligió el usuario). Hasta entonces la hoja nativa cubre todo, y el archivo que produce
-     * `captureShareCanvas` ya es exactamente el que F5 va a repartir.
+     * UNA captura POR TAP, nunca precapturada: el alumno puede volver al editor entre destino y
+     * destino (cambiar de estilo, sacarse otra foto) y un PNG guardado de antes compartiría un card
+     * viejo. Rasterizar cuesta ~100 ms; equivocarse de imagen cuesta el share entero.
      *
-     * La lógica por plataforma es la MISMA de `ShareCard.tsx:587-607`: en iOS se comparte SOLO el
-     * archivo (`Share.share({ url })`), porque con `url` + `message` juntos WhatsApp/Instagram se
-     * quedan con el texto y descartan la imagen — o sea justo la tarjeta branded que queremos que
-     * viaje. En Android va por `Sharing.shareAsync`.
+     * El evento de analytics sale ANTES de capturar, no después: mide la INTENCIÓN del alumno
+     * («toqué Stories»), que es lo único honesto — ninguna plataforma informa si terminó publicando
+     * (mismo límite que documenta F0.2), y si la captura falla igual queremos saber que lo intentó.
+     *
+     * Toda la lógica por destino vive en `share-targets.ts` y ninguna de esas funciones lanza:
+     * devuelven el `outcome` y ACÁ se decide la UI. `fallback` no es un error — el alumno pidió
+     * Stories, no tenía Instagram y se le abrió la hoja nativa; avisar de eso con un toast rojo
+     * sería mentirle sobre algo que funcionó.
      */
-    const handleShare = useCallback(async () => {
-        if (busy) return
-        setBusy(true)
-        let uri: string | null = null
-        try {
+    const runTarget = useCallback(
+        async (target: ShareTarget) => {
+            if (busy) return
+            setBusyTarget(target)
+            captureAppEvent('student_share_target_selected', { target })
+            let uri: string | null = null
             try {
-                uri = await captureShareCanvas(canvasRef, {
-                    fileName: `eva-entreno-${data.dateISO}`,
-                    transparent: background === 'transparent',
-                })
-            } catch {
-                toast.error('No pudimos generar la imagen. Intenta de nuevo.')
-                return
-            }
-            haptics.tap()
+                try {
+                    uri = await captureShareCanvas(canvasRef, {
+                        fileName: `eva-entreno-${data.dateISO}`,
+                        transparent: background === 'transparent',
+                    })
+                } catch {
+                    toast.error('No pudimos generar la imagen. Intenta de nuevo.')
+                    return
+                }
+                haptics.tap()
 
-            if (Platform.OS === 'ios') {
-                await Share.share({ url: uri })
-            } else if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(uri, {
-                    mimeType: 'image/png',
-                    dialogTitle: 'Compartir entreno',
-                    UTI: 'public.png',
+                const result = await runShareTarget(target, {
+                    fileUri: uri,
+                    transparent: background === 'transparent',
+                    accent,
+                    inviteUrl: data.inviteUrl,
+                    presetId,
                 })
-            } else {
-                await Share.share({ url: uri })
+                if (result.outcome === 'error') {
+                    toast.error('No pudimos compartir la imagen. Intenta de nuevo.')
+                }
+            } finally {
+                // Privacidad (PLAN §Privacidad): el PNG puede llevar una foto personal del alumno y
+                // no tiene por qué sobrevivir en caché. Se borra recién acá porque las dos
+                // plataformas resuelven DESPUÉS de que la app destino terminó de leer el archivo.
+                await cleanupShareCapture(uri)
+                setBusyTarget(null)
             }
-        } catch {
-            // Fallo REAL de la hoja (la cancelación del usuario no lanza: resuelve).
-            toast.error('No pudimos compartir la imagen. Intenta de nuevo.')
-        } finally {
-            // Privacidad (PLAN §Privacidad): el PNG puede llevar una foto personal del alumno y no
-            // tiene por qué sobrevivir en caché. Se borra recién acá porque ambas plataformas
-            // resuelven DESPUÉS de que la app destino terminó de leer el archivo.
-            await cleanupShareCapture(uri)
-            setBusy(false)
-        }
-    }, [busy, data.dateISO, background])
+        },
+        [busy, data.dateISO, data.inviteUrl, background, accent, presetId],
+    )
 
     // Sin Modal propio no hay `onRequestClose`, así que el back físico de Android hay que atajarlo
     // a mano — y tiene que retroceder de PASO, no cerrar el composer entero (ni, peor, cerrar el
@@ -739,10 +770,19 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                 ) : null}
 
                 {step === 'compartir' ? (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-                        <Text style={{ fontFamily: FONT.ui, fontSize: 13, color: s.textDim, textAlign: 'center' }}>
-                            Se abrirá la hoja de compartir de tu teléfono.
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 8 }}>
+                        <Text style={{ fontFamily: FONT.ui, fontSize: 13, lineHeight: 19, color: s.textDim, textAlign: 'center' }}>
+                            Elige a dónde va. La imagen se arma en tu teléfono y no se sube a ningún servidor.
                         </Text>
+                        {/* Micro-hint del QR (SPEC §Growth): el QR es inescaneable en una story vista
+                            desde el mismo teléfono, así que su caso real es la variante Guardar —
+                            mostrar la imagen en persona. Solo aparece cuando hay algo que escanear
+                            (el coach tiene código) y el QR está apagado, que es el default. */}
+                        {data.inviteUrl && !layout.qr?.visible ? (
+                            <Text style={{ fontFamily: FONT.ui, fontSize: 11.5, lineHeight: 17, color: s.textMuted, textAlign: 'center' }}>
+                                Si la vas a guardar para mostrarla en persona, activa el QR en «Editar».
+                            </Text>
+                        ) : null}
                     </View>
                 ) : null}
             </View>
@@ -758,12 +798,11 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                 }}
             >
                 {step === 'compartir' ? (
-                    <PrimaryButton
-                        label="Compartir"
-                        icon={Share2}
+                    <ShareTargetsBar
                         accent={accent}
+                        busyTarget={busyTarget}
                         busy={busy}
-                        onPress={() => void handleShare()}
+                        onTarget={(target) => void runTarget(target)}
                     />
                 ) : (
                     <PrimaryButton label="Continuar" accent={accent} onPress={goNext} />
@@ -1408,6 +1447,170 @@ function PrimaryButton({
             {/* El spinner reemplaza SOLO el ícono; el label se queda (mismo criterio que ShareCard). */}
             {busy ? <ActivityIndicator color="#FFFFFF" /> : Icon ? <Icon size={18} color="#FFFFFF" /> : null}
             <Text style={{ fontFamily: FONT.uiBold, fontSize: 15, color: '#FFFFFF' }}>{label}</Text>
+        </Pressable>
+    )
+}
+
+/**
+ * Los destinos del paso 4 (F5.4).
+ *
+ * Cuatro botones EXPLÍCITOS y no una hoja genérica, por lo que manda el SPEC (§Flujo paso 4): el
+ * salto directo a Stories no existe dentro de la hoja nativa, y estos botones son la única medición
+ * fiable del target (Android no reporta a qué app fue el share).
+ *
+ * ── JERARQUÍA ──
+ * `Stories` va con el acento del coach porque es el destino que mueve el loop de growth (la story es
+ * lo que ve la audiencia del alumno); los otros tres van en superficie neutra. Facebook Stories NO
+ * entra en la fila: el SPEC lista exactamente cuatro destinos y meter un quinto deja cada botón en
+ * ~57 px, donde "WhatsApp" ya no entra en una línea en un teléfono de 360 dp. Va abajo como
+ * secundario de texto, y SOLO si el binario trae App ID — sin ID, Facebook degradaría a la misma
+ * hoja nativa que ya ofrece «Más…» y sería un botón que miente.
+ *
+ * Los cuatro se deshabilitan mientras uno corre (dos capturas en paralelo pelean por el mismo
+ * `canvasRef` y el mismo nombre de archivo), pero el spinner lo muestra SOLO el que se tocó.
+ */
+function ShareTargetsBar({
+    accent,
+    busyTarget,
+    busy,
+    onTarget,
+}: {
+    accent: string
+    busyTarget: ShareTarget | null
+    busy: boolean
+    onTarget: (target: ShareTarget) => void
+}) {
+    const s = EXEC_SURFACE
+    return (
+        <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TargetButton
+                    label="Stories"
+                    accessibilityLabel="Compartir en tus historias de Instagram"
+                    primary
+                    accent={accent}
+                    busy={busyTarget === 'ig_stories'}
+                    disabled={busy}
+                    onPress={() => onTarget('ig_stories')}
+                    renderIcon={(color) => <InstagramGlyph color={color} size={20} />}
+                />
+                <TargetButton
+                    label="WhatsApp"
+                    accessibilityLabel="Compartir por WhatsApp"
+                    accent={accent}
+                    busy={busyTarget === 'whatsapp'}
+                    disabled={busy}
+                    onPress={() => onTarget('whatsapp')}
+                    renderIcon={(color) => <WhatsappGlyph color={color} size={20} />}
+                />
+                <TargetButton
+                    label="Guardar"
+                    accessibilityLabel="Guardar la imagen en tu galería"
+                    accent={accent}
+                    busy={busyTarget === 'save'}
+                    disabled={busy}
+                    onPress={() => onTarget('save')}
+                    renderIcon={(color) => <Download size={20} color={color} />}
+                />
+                <TargetButton
+                    label="Más…"
+                    accessibilityLabel="Compartir en otra aplicación"
+                    accent={accent}
+                    busy={busyTarget === 'sheet'}
+                    disabled={busy}
+                    onPress={() => onTarget('sheet')}
+                    renderIcon={(color) => <Share2 size={20} color={color} />}
+                />
+            </View>
+
+            {hasFacebookAppId() ? (
+                <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Compartir en tus historias de Facebook"
+                    disabled={busy}
+                    onPress={() => onTarget('fb_stories')}
+                    style={{
+                        minHeight: 36,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        opacity: busy ? 0.45 : 1,
+                    }}
+                >
+                    {busyTarget === 'fb_stories' ? (
+                        <ActivityIndicator color={s.textMuted} size="small" />
+                    ) : (
+                        <FacebookGlyph color={s.textMuted} size={14} />
+                    )}
+                    <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12.5, color: s.textMuted }}>
+                        También en Facebook Stories
+                    </Text>
+                </Pressable>
+            ) : null}
+        </View>
+    )
+}
+
+function TargetButton({
+    label,
+    accessibilityLabel,
+    accent,
+    primary,
+    busy,
+    disabled,
+    onPress,
+    renderIcon,
+}: {
+    label: string
+    accessibilityLabel: string
+    accent: string
+    primary?: boolean
+    busy?: boolean
+    disabled?: boolean
+    onPress: () => void
+    /**
+     * El ícono se pide por función y no como nodo porque su color depende de la variante: sobre el
+     * acento va blanco, sobre la superficie neutra va el texto del chrome. Pasarlo ya construido
+     * obligaría a cada call site a repetir esa decisión.
+     */
+    renderIcon: (color: string) => ReactNode
+}) {
+    const s = EXEC_SURFACE
+    const fg = primary ? '#FFFFFF' : s.text
+    return (
+        <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel}
+            disabled={disabled}
+            onPress={onPress}
+            style={{
+                flex: 1,
+                minHeight: 64,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 4,
+                borderRadius: 16,
+                backgroundColor: primary ? accent : s.surface,
+                borderWidth: primary ? 0 : 1,
+                borderColor: s.border,
+                opacity: disabled ? 0.45 : 1,
+            }}
+        >
+            {/* El spinner reemplaza al ícono y el label se queda: mismo criterio que `PrimaryButton`
+                (si desaparece el texto, el botón deja de decir qué está haciendo). */}
+            {busy ? <ActivityIndicator color={fg} size="small" /> : renderIcon(fg)}
+            {/* `adjustsFontSizeToFit` no existe en Android para texto multilínea y "WhatsApp" es la
+                etiqueta más larga: una sola línea + `numberOfLines` evita que el botón crezca en un
+                teléfono angosto y desalinee la fila. */}
+            <Text
+                numberOfLines={1}
+                style={{ fontFamily: FONT.uiBold, fontSize: 10.5, letterSpacing: 0.1, color: fg }}
+            >
+                {label}
+            </Text>
         </Pressable>
     )
 }

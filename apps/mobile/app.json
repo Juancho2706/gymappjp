@@ -29,6 +29,7 @@
         "NSSupportsLiveActivitiesFrequentUpdates": false,
         "NSCameraUsageDescription": "EVA usa la cámara para fotos de progreso y escanear códigos de barras de alimentos.",
         "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
+        "NSPhotoLibraryAddUsageDescription": "EVA guarda en tu galería la tarjeta de tu entrenamiento cuando eliges «Guardar». Solo escribe esa imagen; no lee tus fotos.",
         "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento",
         "NSFaceIDUsageDescription": "Usá Face ID para entrar a EVA de forma segura.",
         "NSBluetoothAlwaysUsageDescription": "EVA usa Bluetooth para conectar tu sensor de frecuencia cardiaca (cinta o reloj) durante el cardio.",
@@ -199,6 +200,29 @@
           "photosPermission": "EVA necesita acceso a tu galería para el check-in semanal."
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "granularPermissions": []
+        }
+      ],
+      [
+        "react-native-share",
+        {
+          "ios": [
+            "instagram",
+            "instagram-stories",
+            "facebook-stories",
+            "whatsapp"
+          ],
+          "android": [
+            "com.instagram.android",
+            "com.facebook.katana",
+            "com.whatsapp",
+            "com.zhiliaoapp.musically"
+          ]
+        }
+      ],
       "./plugins/with-android-cleartext",
       "./plugins/with-gradle-jvmargs",
       "./plugins/with-privacy-manifest",
@@ -242,7 +266,8 @@
     "extra": {
       "eas": {
         "projectId": "a5f4f7c0-861c-48b1-9ed6-fc46e7843844"
-      }
+      },
+      "facebookAppId": "28862306396704276"
     },
     "owner": "juandeveva"
   }

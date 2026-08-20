@@ -134,15 +134,23 @@ encolar el build 1.1.2 (F9).
 > opcionales (default #222222); URIs Android requieren FLAG_GRANT_READ + grantUriPermission
 > explícito a com.instagram.android o IG rebota con ENOENT.
 
-- [ ] F5.1 `react-native-share` v12.3.1 + config plugin (iOS schemes instagram-stories/
-      facebook-stories/instagram/whatsapp; Android queries IG/FB/WA/TikTok) — BINARIO.
-- [ ] F5.2 Stories directo IG/FB: `shareSingle` con backgroundImage (normal) o stickerImage
-      (transparente) + `FACEBOOK_APP_ID` de config; guard runtime → hoja nativa si falta ID o
-      app no instalada. Patrón Strava: copiar link invitación al portapapeles + toast
-      «pegalo en el sticker Link».
-- [ ] F5.3 WhatsApp `shareSingle` con fallback; Guardar vía expo-media-library
-      (+ `NSPhotoLibraryAddUsageDescription` — BINARIO); Más… = hoja nativa SOLO archivo.
-- [ ] F5.4 Botones de destino explícitos (única medición fiable de target).
+- [x] F5.1 `react-native-share@12.3.1` + plugin (schemes iOS + queries Android) + extra
+      NO pedido pero necesario: `["expo-media-library",{"granularPermissions":[]}]` — el
+      plugin auto-aplicado metía READ_MEDIA_IMAGES/VIDEO/AUDIO al manifest (declaraciones
+      de datos sensibles en Play) para una feature que solo ESCRIBE. Verificado con
+      `expo config --type prebuild`. App ID `28862306396704276` en extra.
+- [x] F5.2 Stories directo IG/FB en share-targets.ts: guard Android por
+      `isPackageInstalled` (canOpenURL con scheme custom no funciona sin intent queries;
+      sin guard la lib manda a la ficha de Play) + iOS canOpenURL (InstagramStories.m
+      resuelve true aunque no abra nada); portapapeles con `&k={preset}` + toast SOLO en
+      Stories (pisarle el clipboard a quien va a un chat es invasivo); backgroundTop/
+      BottomColor del acento (IG solo los honra en modo sticker).
+- [x] F5.3 WhatsApp shareSingle con fallback; Guardar vía expo-media-library writeOnly
+      (Android 13+ pide CERO permisos — verificado en MediaLibraryModule.kt; iOS add-only)
+      + NSPhotoLibraryAddUsageDescription es-CL; Más… = hoja nativa solo archivo.
+- [x] F5.4 Fila de destinos explícitos Stories·WhatsApp·Guardar·Más… (+FB secundario solo
+      con App ID); `busyTarget` por botón; captura por tap; ninguno lanza —
+      `{target, outcome}`. QA binario pendiente en F9.
 
 ## F6 — Growth (atribución)
 
@@ -156,9 +164,12 @@ encolar el build 1.1.2 (F9).
 
 ## F7 — Analytics móvil
 
-- [ ] F7.1 `posthog-react-native` mínimo (sin autocapture, sin replay, identified_only) — BINARIO.
-- [ ] F7.2 4 eventos del funnel (opened / style_selected / photo_attached / target_selected) —
-      SIN datos de salud (21.719).
+- [x] F7.1 `posthog-react-native@4.63.2` en lib/analytics.ts — fail-open (sin key ⇒ no-op),
+      lifecycle/replay/push/errorTracking en false EXPLÍCITO (varios default true;
+      errorTracking chocaría con los handlers de Sentry), identified_only sin identify.
+- [x] F7.2 4 eventos cableados (opened/style_selected/photo_attached/target_selected) —
+      props sin datos de salud (21.719); `card_kind` usa el mismo vocabulario que
+      `k=`/`referral_card_kind`.
 
 ## F8 — CTA del resumen (rework)
 

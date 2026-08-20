@@ -464,6 +464,9 @@ importers:
       expo-local-authentication:
         specifier: ~17.0.8
         version: 17.0.8(expo@54.0.36)
+      expo-media-library:
+        specifier: ~18.2.1
+        version: 18.2.1(expo@54.0.36)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))
       expo-notifications:
         specifier: ~0.32.17
         version: 0.32.17(expo@54.0.36)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
@@ -503,6 +506,9 @@ importers:
       nativewind:
         specifier: ^4.2.4
         version: 4.2.4(react-native-reanimated@4.1.7(react-native-worklets@0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(tailwindcss@3.4.17)
+      posthog-react-native:
+        specifier: ^4.63.2
+        version: 4.63.2(@react-native-async-storage/async-storage@3.1.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(@react-navigation/native@7.2.4(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(expo-application@7.0.8(expo@54.0.36))(expo-device@8.0.10(expo@54.0.36))(expo-file-system@19.0.23(expo@54.0.36)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)))(react-native-safe-area-context@5.6.2(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -545,6 +551,9 @@ importers:
       react-native-screens:
         specifier: ~4.16.0
         version: 4.16.0(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      react-native-share:
+        specifier: ^12.3.1
+        version: 12.3.1
       react-native-svg:
         specifier: 15.12.1
         version: 15.12.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -2486,8 +2495,14 @@ packages:
   '@posthog/core@1.28.4':
     resolution: {integrity: sha512-wmtUYHYqA3zIAKDKvYWRNWAQsWOIBwxV08e+bWzVy0wQQzpaS/LzzRupXWRMRrLOk+1x3JKFxbqA3n0QGvpqsQ==}
 
+  '@posthog/core@1.48.3':
+    resolution: {integrity: sha512-kwVDVvwtCTXctApA2tpnwDjDDan8LrkwCW1Wv6PABaVs/s5ahbQ9W3pvdXcqr71HCuqukSA1jp7MySczebubGg==}
+
   '@posthog/types@1.372.10':
     resolution: {integrity: sha512-KuT3vLu3LSFsNWCwasS4gqjH/ysAyIUcB/aJSmKyNhDd/85hAznHRz1eSSl0sMvtsDTYiQIq0I0ybduVbrpPew==}
+
+  '@posthog/types@1.405.0':
+    resolution: {integrity: sha512-4rZ/taVXKQxs9Jrf7ZjlCRgrOSL69oKAgIWJQa5kRNJ6wll1UANbrJTSY+Su1e88LIG4zZVjKKKjyQHCkHdHcw==}
 
   '@prisma/instrumentation@7.6.0':
     resolution: {integrity: sha512-ZPW2gRiwpPzEfgeZgaekhqXrbW+Y2RJKHVqUmlhZhKzRNCcvR6DykzylDrynpArKKRQtLxoZy36fK7U0p3pdgQ==}
@@ -5395,6 +5410,12 @@ packages:
     peerDependencies:
       expo: '*'
 
+  expo-media-library@18.2.1:
+    resolution: {integrity: sha512-dV1acx6Aseu+I5hmF61wY8UkD4vdt8d7YXHDfgNp6ZSs06qxayUxgrBsiG2eigLe54VLm3ycbFBbWi31lhfsCA==}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+
   expo-modules-autolinking@3.0.26:
     resolution: {integrity: sha512-WOaud6UKg16ciCOj8raKcMOoKFMHLXKI29U29yhgu1lf+Y7VxJyCktUcYo6AM+ccZ7zLD1uWZdMtgnpf+95OXA==}
     hasBin: true
@@ -7109,6 +7130,51 @@ packages:
   posthog-js@1.372.10:
     resolution: {integrity: sha512-ZQslIenDM8UpwKhmeeEnJ+t2nXr8mOIjCG+Ej3DCJnTBk9NX9Sr5RMuwHeGG8UJitwvtGOADyiY7DignOXaZwg==}
 
+  posthog-react-native@4.63.2:
+    resolution: {integrity: sha512-zNJ+zDNigVY6VTxMI42U15XKzfDME6zg+QNKoPktMO9Zzt8oe3eIjBQ2nxN1hQsww2btTQF0WEkPLEmoOCOV4Q==}
+    hasBin: true
+    peerDependencies:
+      '@posthog/react-native-plugin': '>= 2.3.0'
+      '@react-native-async-storage/async-storage': '>=1.0.0'
+      '@react-navigation/native': '>= 5.0.0'
+      expo-application: '>= 4.0.0'
+      expo-device: '>= 4.0.0'
+      expo-file-system: '>= 13.0.0'
+      expo-localization: '>= 11.0.0'
+      posthog-react-native-session-replay: '>= 1.6.0'
+      react-native-device-info: '>= 10.0.0'
+      react-native-localize: '>= 3.0.0'
+      react-native-navigation: '>= 6.0.0'
+      react-native-safe-area-context: '>= 4.0.0'
+      react-native-svg: '>= 15.0.0'
+    peerDependenciesMeta:
+      '@posthog/react-native-plugin':
+        optional: true
+      '@react-native-async-storage/async-storage':
+        optional: true
+      '@react-navigation/native':
+        optional: true
+      expo-application:
+        optional: true
+      expo-device:
+        optional: true
+      expo-file-system:
+        optional: true
+      expo-localization:
+        optional: true
+      posthog-react-native-session-replay:
+        optional: true
+      react-native-device-info:
+        optional: true
+      react-native-localize:
+        optional: true
+      react-native-navigation:
+        optional: true
+      react-native-safe-area-context:
+        optional: true
+      react-native-svg:
+        optional: true
+
   preact@10.29.1:
     resolution: {integrity: sha512-gQCLc/vWroE8lIpleXtdJhTFDogTdZG9AjMUpVkDf2iTCNwYNWA+u16dL41TqUDJO4gm2IgrcMv3uTpjd4Pwmg==}
 
@@ -7347,6 +7413,10 @@ packages:
     peerDependencies:
       react: 19.1.0
       react-native: '*'
+
+  react-native-share@12.3.1:
+    resolution: {integrity: sha512-mRVRie0qKbtj+jWqJ2POPkeSd8SxnMp6aazFZVmq8ZbkUGtQLENR/L58ky8zH4VUEF/WYRmdBiBHWHVtzOewtQ==}
+    engines: {node: '>=16'}
 
   react-native-svg@15.12.1:
     resolution: {integrity: sha512-vCuZJDf8a5aNC2dlMovEv4Z0jjEUET53lm/iILFnFewa15b4atjVxU6Wirm6O9y6dEsdjDZVD7Q3QM4T1wlI8g==}
@@ -10881,7 +10951,13 @@ snapshots:
     dependencies:
       '@posthog/types': 1.372.10
 
+  '@posthog/core@1.48.3':
+    dependencies:
+      '@posthog/types': 1.405.0
+
   '@posthog/types@1.372.10': {}
+
+  '@posthog/types@1.405.0': {}
 
   '@prisma/instrumentation@7.6.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -14214,6 +14290,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  expo-media-library@18.2.1(expo@54.0.36)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)):
+    dependencies:
+      expo: 54.0.36(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native-webview@13.15.0(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
+      react-native: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
+
   expo-modules-autolinking@3.0.26:
     dependencies:
       '@expo/spawn-async': 1.7.2
@@ -16195,6 +16276,19 @@ snapshots:
       query-selector-shadow-dom: 1.0.1
       web-vitals: 5.2.0
 
+  posthog-react-native@4.63.2(@react-native-async-storage/async-storage@3.1.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(@react-navigation/native@7.2.4(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(expo-application@7.0.8(expo@54.0.36))(expo-device@8.0.10(expo@54.0.36))(expo-file-system@19.0.23(expo@54.0.36)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)))(react-native-safe-area-context@5.6.2(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)):
+    dependencies:
+      '@posthog/core': 1.48.3
+      '@posthog/types': 1.405.0
+    optionalDependencies:
+      '@react-native-async-storage/async-storage': 3.1.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      '@react-navigation/native': 7.2.4(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo-application: 7.0.8(expo@54.0.36)
+      expo-device: 8.0.10(expo@54.0.36)
+      expo-file-system: 19.0.23(expo@54.0.36)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))
+      react-native-safe-area-context: 5.6.2(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      react-native-svg: 15.12.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+
   preact@10.29.1: {}
 
   prelude-ls@1.2.1: {}
@@ -16459,6 +16553,8 @@ snapshots:
       react-native: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
       react-native-is-edge-to-edge: 1.3.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       warn-once: 0.1.1
+
+  react-native-share@12.3.1: {}
 
   react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:

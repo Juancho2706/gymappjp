@@ -1,6 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View, type LayoutChangeEvent } from 'react-native'
-import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import Animated, {
     Easing,
     useAnimatedStyle,
@@ -21,6 +20,9 @@ import { mixToBlack } from '../workout/v3/JuicyButton'
 import { FONT } from '../../../lib/typography'
 import { haptics } from '../../../lib/haptics'
 import { ShareCanvas } from './ShareCanvas'
+// Los cuatro logos de red viven en `brand-glyphs` y no acá: los comparte con los botones de destino
+// del composer (F5), y duplicar los `Path` garantizaba que un ajuste quedara en una sola superficie.
+import { FacebookGlyph, InstagramGlyph, TiktokGlyph, WhatsappGlyph } from './brand-glyphs'
 import { cloneStickerLayout, DEFAULT_SHARE_PRESET_ID, SHARE_PRESET_BY_ID } from './share-presets'
 import { withAlpha } from './stickers'
 import { SHARE_CANVAS_H, SHARE_CANVAS_W, type WorkoutShareData } from './share-types'
@@ -379,10 +381,10 @@ function SocialRow() {
             accessibilityRole="text"
             accessibilityLabel="Instagram, WhatsApp, TikTok, Facebook y donde quieras"
         >
-            <InstagramGlyph color={c} />
-            <WhatsappGlyph color={c} />
-            <TiktokGlyph color={c} />
-            <FacebookGlyph color={c} />
+            <InstagramGlyph color={c} size={NET} opacity={NET_OPACITY} />
+            <WhatsappGlyph color={c} size={NET} opacity={NET_OPACITY} />
+            <TiktokGlyph color={c} size={NET} opacity={NET_OPACITY} />
+            <FacebookGlyph color={c} size={NET} opacity={NET_OPACITY} />
             <Text style={{ fontFamily: FONT.ui, fontSize: 11.5, color: c, marginLeft: 2 }}>y donde quieras</Text>
         </View>
     )
@@ -391,53 +393,3 @@ function SocialRow() {
 /** Tamaño de los glifos de red y su opacidad: presentes, nunca protagonistas. */
 const NET = 15
 const NET_OPACITY = 0.8
-
-function InstagramGlyph({ color }: { color: string }) {
-    return (
-        <Svg width={NET} height={NET} viewBox="0 0 24 24" opacity={NET_OPACITY}>
-            <Rect x={3} y={3} width={18} height={18} rx={5.4} stroke={color} strokeWidth={1.9} fill="none" />
-            <Circle cx={12} cy={12} r={4.2} stroke={color} strokeWidth={1.9} fill="none" />
-            <Circle cx={17.2} cy={6.8} r={1.25} fill={color} />
-        </Svg>
-    )
-}
-
-function WhatsappGlyph({ color }: { color: string }) {
-    return (
-        <Svg width={NET} height={NET} viewBox="0 0 24 24" opacity={NET_OPACITY}>
-            {/* Burbuja + cola: la silueta es lo que hace reconocible al glifo a 15 px. */}
-            <Circle cx={12.6} cy={11.5} r={8.3} stroke={color} strokeWidth={1.9} fill="none" />
-            <Path d="M7.1 17.6 L3.4 21 L5.1 15.9 Z" fill={color} />
-            {/* Auricular. */}
-            <Path
-                d="M10 8.4c.35-.6 1.05-.55 1.35.05l.5 1c.15.3.1.6-.1.8l-.35.35c.45.9 1.15 1.6 2.05 2.05l.35-.35c.2-.2.5-.25.8-.1l1 .5c.6.3.65 1 .05 1.35-1.15.65-2.7 0-4.05-1.35-1.35-1.35-2-2.9-1.35-4.05z"
-                fill={color}
-            />
-        </Svg>
-    )
-}
-
-function TiktokGlyph({ color }: { color: string }) {
-    return (
-        <Svg width={NET} height={NET} viewBox="0 0 24 24" opacity={NET_OPACITY}>
-            {/* `fillRule="evenodd"`: la nota tiene hueco (el círculo interior) y con relleno no-cero
-                se pintaría maciza — una mancha en vez de un logo. */}
-            <Path
-                d="M13.2 2.5h2.9c.25 1.6 1.15 3 2.5 3.8.7.4 1.5.65 2.3.7v2.9a8.2 8.2 0 0 1-4.5-1.45v6.6a5.8 5.8 0 1 1-5.8-5.8c.25 0 .5.02.75.05v2.95a2.9 2.9 0 1 0 2.05 2.8V2.5z"
-                fill={color}
-                fillRule="evenodd"
-            />
-        </Svg>
-    )
-}
-
-function FacebookGlyph({ color }: { color: string }) {
-    return (
-        <Svg width={NET} height={NET} viewBox="0 0 24 24" opacity={NET_OPACITY}>
-            <Path
-                d="M13.8 21v-7.4h2.5l.4-2.9h-2.9V8.85c0-.84.23-1.41 1.44-1.41h1.54V4.85c-.27-.04-1.18-.11-2.25-.11-2.22 0-3.75 1.36-3.75 3.85v2.11H8.3v2.9h2.48V21h3.02z"
-                fill={color}
-            />
-        </Svg>
-    )
-}

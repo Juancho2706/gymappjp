@@ -29,7 +29,8 @@ import { WeekStreakDots } from './WeekStreakDots'
 import { NumberTicker, formatThousandsEsCl } from './NumberTicker'
 import type { ExecTheme } from './exec-theme'
 import type { WeeklyStreak } from './weekly-streak'
-import { buildWorkoutShareData, ShareWorkoutCta, WorkoutShareComposer } from '../../share'
+import { buildWorkoutShareData, DEFAULT_SHARE_PRESET_ID, ShareWorkoutCta, WorkoutShareComposer } from '../../share'
+import { captureAppEvent } from '../../../../lib/analytics'
 import {
   ShareCardDate,
   ShareCardEyebrow,
@@ -645,7 +646,14 @@ export function SessionCompleteV3({
               reducedMotion={reducedMotion}
               play={showStats}
               onPress={() => {
-                // F7: student_share_card_opened (PostHog móvil todavía no existe — F7.1 es binario).
+                // F7.2 — boca del funnel de Compartir Entreno. `card_kind` es el estilo con el que
+                // ABRE el composer (siempre el de fábrica); el estilo que el alumno termine eligiendo
+                // lo reporta `student_share_style_selected`. Sin datos de salud en las props (21.719):
+                // nada de kg, músculos ni ejercicios, solo metadatos de la interacción.
+                captureAppEvent('student_share_card_opened', {
+                  card_kind: DEFAULT_SHARE_PRESET_ID,
+                  surface: 'workout_summary',
+                })
                 setComposerOpen(true)
               }}
             />
