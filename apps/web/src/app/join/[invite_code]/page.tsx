@@ -2,9 +2,15 @@ import { notFound } from 'next/navigation'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { JoinForm } from './_components/JoinForm'
 import { resolveInvite } from './_lib/resolve-invite'
+import { parseReferralParams } from './_lib/join-referral'
 
 interface Props {
     params: Promise<{ invite_code: string }>
+    /**
+     * F6 (workout-share): el link de una tarjeta compartida llega como
+     * `/join/[código]?ref={client_id}&src=share_card&k={preset}`.
+     */
+    searchParams: Promise<{ ref?: string | string[]; src?: string | string[]; k?: string | string[] }>
 }
 
 export async function generateMetadata({ params }: Props) {
@@ -47,9 +53,17 @@ function BrandHeader({
     )
 }
 
-export default async function JoinPage({ params }: Props) {
+export default async function JoinPage({ params, searchParams }: Props) {
     const { invite_code } = await params
     const admin = createServiceRoleClient()
+
+    // F6 (workout-share): se filtra la FORMA de los parámetros de referido acá (uuid + listas
+    // blancas) y lo que sobrevive baja al form como inputs ocultos — ese es el camino explícito
+    // por el que el referido llega al server action, sin sessionStorage ni cookies: el alta es
+    // UNA sola pantalla (landing = form = submit), no hay navegación intermedia donde perderlo.
+    // Este filtro es cosmético/defensivo; la validación que MANDA (existe + mismo espacio) corre
+    // en el action, porque un input oculto lo edita cualquiera.
+    const referral = parseReferralParams(await searchParams)
 
     // B-7: resolve scope from the code — enterprise codes show ORG branding,
     // standalone codes show coach branding.
@@ -135,7 +149,7 @@ export default async function JoinPage({ params }: Props) {
 
                 <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
                     <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-5">Crear tu cuenta</h2>
-                    <JoinForm inviteCode={invite_code} primaryColor={color} />
+                    <JoinForm inviteCode={invite_code} primaryColor={color} referral={referral} />
                 </div>
 
                 <p className="mt-4 text-center text-xs text-zinc-400">

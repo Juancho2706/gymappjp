@@ -7,9 +7,15 @@ import { joinViaInviteAction } from '../_actions/join.actions'
 interface Props {
     inviteCode: string
     primaryColor: string
+    /**
+     * F6 (workout-share): referido que venía en la URL, ya filtrado por forma en el servidor.
+     * El tipo se declara inline (y no se importa de `_lib/join-referral`) para no cruzar un
+     * módulo `server-only` al bundle del cliente.
+     */
+    referral?: { ref: string; src: string; k?: string } | null
 }
 
-export function JoinForm({ inviteCode, primaryColor }: Props) {
+export function JoinForm({ inviteCode, primaryColor, referral }: Props) {
     const [error, setError] = useState<string | null>(null)
     const [pending, start] = useTransition()
     const router = useRouter()
@@ -32,6 +38,19 @@ export function JoinForm({ inviteCode, primaryColor }: Props) {
 
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {/*
+              F6: el referido viaja al server action por el MISMO FormData del alta. Son inputs
+              ocultos (no estado del cliente ni storage) porque el submit ocurre en la misma
+              pantalla donde se leyó la URL: lo que el servidor pintó es exactamente lo que se
+              envía. El action igual revalida contra la DB — esto es transporte, no permiso.
+            */}
+            {referral && (
+                <>
+                    <input type="hidden" name="ref" value={referral.ref} />
+                    <input type="hidden" name="src" value={referral.src} />
+                    {referral.k && <input type="hidden" name="k" value={referral.k} />}
+                </>
+            )}
             <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Nombre completo</label>
                 <input name="full_name" required minLength={2} maxLength={120} className={inputClass} placeholder="Juan Pérez" />

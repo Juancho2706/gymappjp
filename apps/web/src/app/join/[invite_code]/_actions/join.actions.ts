@@ -6,7 +6,9 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitInviteAccept } from '@/lib/rate-limit'
 import { resolveInvite, STANDALONE_REGISTRATION_DISABLED_MESSAGE } from '../_lib/resolve-invite'
 import { checkJoinCapacity } from '../_lib/join-capacity'
+import { resolveJoinReferral } from '../_lib/join-referral'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
+import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 
 const JoinSchema = z.object({
     full_name: z.string().min(2).max(120),
@@ -67,6 +69,17 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         return { error: 'No pudimos validar el cupo de alumnos. Intenta de nuevo en unos minutos.' }
     }
 
+    // F6 (workout-share): atribución del alta que llegó por una tarjeta compartida. Los tres
+    // parámetros vienen del link (`?ref&src=share_card&k=`) y sobreviven en inputs ocultos del
+    // form, así que se validan contra la DB (existe + mismo espacio que el código) ANTES de
+    // crear nada: si el helper fallara, el fallo ocurre cuando todavía no hay auth.user que
+    // limpiar. Devuelve `null` ante cualquier duda y el alta sigue igual, sin atribución.
+    const referral = await resolveJoinReferral(admin, invite, {
+        ref: formData.get('ref'),
+        src: formData.get('src'),
+        k: formData.get('k'),
+    })
+
     const { data: newUser, error: authErr } = await admin.auth.admin.createUser({
         email: parsed.data.email,
         password: parsed.data.password,
@@ -86,6 +99,9 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         is_active: true,
         force_password_change: false,
         age_confirmed_at: new Date().toISOString(),
+        // Solo el server escribe estas tres columnas (no hay grant UPDATE: nadie las edita
+        // después del alta). `...referral` no agrega nada cuando no hubo atribución válida.
+        ...(referral ?? {}),
     })
 
     if (insertErr) {
@@ -111,6 +127,27 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
             client_id: newUser.user.id,
             coach_id: invite.coachId,
             assigned_by: invite.coachId,
+        })
+    }
+
+    // F6.3: la métrica que prueba que compartir el entreno TRAE altas. Va al coach (su embudo),
+    // solo cuando la fila quedó realmente escrita con atribución.
+    //
+    // Props mínimas a propósito (Ley 21.719): nada de salud (ni kg, ni músculos, ni ejercicios) y
+    // NADA del alumno nuevo — ni su id, ni su email, ni su nombre. Solo quién refirió y con qué
+    // preset de tarjeta.
+    //
+    // Se hace `await` en vez de `after()`: en este repo ya se comprobó en producción que el
+    // callback de `after()` puede no ejecutarse (ver lib/meta/capi.ts). El helper nunca lanza y
+    // corta a 1,5 s, así que esperarlo no puede romper ni colgar el alta.
+    if (referral) {
+        await capturePostHogServerEvent({
+            event: 'coach_client_referred',
+            distinctId: invite.coachId,
+            properties: {
+                referred_by_client_id: referral.referred_by_client_id,
+                card_kind: referral.referral_card_kind,
+            },
         })
     }
 
