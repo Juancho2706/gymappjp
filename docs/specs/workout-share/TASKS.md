@@ -87,13 +87,39 @@ encolar el build 1.1.2 (F9).
 
 ## F4 — Acomodar (paso 3, drag)
 
-- [ ] F4.1 StickerGestureLayer: drag (translate) + pinch/slider (scale) por sticker con
-      Gesture Handler + Reanimated.
-- [ ] F4.2 Guías de alineación (snap centro H/V + haptic), long-press = quitar,
-      flip Frente⇄Espalda para MuscleFigure.
-- [ ] F4.3 Persistir posiciones en el estado del composer (no en DB); reset al cambiar preset.
+- [x] F4.1 `StickerGestureLayer` (capa hermana del nodo capturado, montada solo en el paso):
+      zonas de gesto calcadas de cada sticker con las medidas que ahora publica el canvas
+      (`reportSizes`) + Pan por sticker y Pinch en la raíz sobre el SELECCIONADO (dos dedos
+      dentro de una pastilla de 40 px no es un gesto real), clamp 0,5–3. El sticker que se
+      mueve es el REAL: el canvas lee un `SharedValue` con el destino vivo y lo aplica en el
+      UI thread (`liveTransform`) — no hay clon ni remonte. El destino es ABSOLUTO y no un
+      delta: así el commit no parpadea (el desplazamiento vale 0 en el mismo render en que
+      React aplica la posición nueva).
+- [x] F4.2 Guías de alineación centro H/V (aparecen a 12 px, imantan a 8 con tick háptico —
+      latch de imán aparte del de la guía, si no el tick se comía el enganche), mantener
+      apretado 500 ms = quitar (por el mismo camino de overrides del editor), flip de silueta
+      reusando `MuscleViewSegmented`. Clamp del CENTRO en [0,03–0,97]×[0,02–0,98]: sobre el
+      centro y NO sobre la caja, o los rieles rotados de Marcador/Póster quedaban fuera del
+      alcance del alumno.
+- [x] F4.3 `setStickerPosition`/`setStickerScale` viven en `layout` (no en DB, no son
+      overrides): verificado que `selectPreset` los pisa al re-clonar el preset, que es el
+      comportamiento pedido. Botón «Restaurar» devuelve un sticker a su lugar de fábrica.
+      Extra encontrado al integrar: el composer necesitaba `GestureHandlerRootView` propio —
+      sus dos caminos de montaje son ventanas nativas ajenas y el root de `app/_layout.tsx`
+      no las alcanza (mismo fix que documenta `components/Sheet.tsx`).
 - [ ] F4.4 Verificar captura fiel post-drag (transforms Reanimated + view-shot) en Android
-      low-end — QA device (ACUMULAR).
+      low-end — QA device (ACUMULAR). Sumar a esa pasada: `borderStyle:'dashed'` con radio en
+      Android (algunas versiones lo pintan sólido) y el pellizco con un dedo apoyado sobre un
+      sticker (el Pan es `maxPointers(1)` justamente para dejarle el segundo dedo al Pinch).
+
+**Drifts de F4 vs el pedido/mockup** (deliberados, anotados para no redescubrirlos):
+- Sin papelera flotante: quitar es SOLO mantener apretado, anunciado en el hint del paso.
+- Tamaño por stepper de 0,1 (con barra de referencia) y no con el `Slider` del DS: ese
+  componente resuelve pista y relleno con `resolvedScheme`/`theme.primary` y este chrome es
+  oscuro SIEMPRE — en una cuenta con tema claro la pista desaparecía. Es el mismo motivo por
+  el que el composer ya tiene su propio `DarkSwitch`. El ajuste continuo es el pellizco.
+- `STAGE_FRACTION.acomodar` baja de 0,70 a 0,62 para que el panel del seleccionado entre en
+  un teléfono chico sin tapar el lienzo.
 
 ## F5 — Compartir (paso 4, targets)
 

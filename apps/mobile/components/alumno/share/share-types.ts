@@ -51,6 +51,67 @@ export interface StickerState {
 }
 
 /**
+ * Medida REAL de un sticker ya montado, en px de PANTALLA (no de diseño-1080).
+ *
+ * La emite el canvas (`ShareCanvas.reportSizes`) porque es el único que la conoce: los stickers son
+ * cajas de contenido y su tamaño depende de la copy (el chip de racha mide distinto según el texto).
+ * El modo Acomodar (F4) la necesita para poner su zona de gesto EXACTAMENTE encima del sticker.
+ */
+export interface StickerSize {
+    w: number
+    h: number
+}
+
+/**
+ * Estado VIVO de un arrastre/pellizco: el sticker que el dedo está moviendo AHORA.
+ *
+ * Vive en un `SharedValue` de Reanimated (UI thread) y describe destinos ABSOLUTOS, no deltas:
+ * `cx`/`cy` = centro objetivo en px del canvas, `scale` = escala objetivo. Es a propósito y es lo
+ * que evita el parpadeo del commit: el canvas calcula su desplazamiento como `cx − (state.x·ancho)`
+ * contra el estado YA commiteado que está pintando, así que en el mismo render en que React aplica
+ * la posición nueva el delta pasa a valer 0 solo. Con deltas relativos habría que resetearlos al
+ * soltar, y ese reset (UI thread, inmediato) llega SIEMPRE antes que el re-render de React: el
+ * sticker volvía un par de frames a su posición vieja antes de saltar a la nueva.
+ */
+export interface StickerLiveTransform {
+    id: StickerId | null
+    /** Centro objetivo en px del canvas (eje X). Sin sentido si `id` es `null`. */
+    cx: number
+    cy: number
+    /** Escala objetivo ABSOLUTA (mismo dominio que `StickerState.scale`), no un multiplicador. */
+    scale: number
+}
+
+/** Estado de reposo. Función y no constante: asignar SIEMPRE un objeto fresco al `SharedValue`. */
+export function idleStickerTransform(): StickerLiveTransform {
+    return { id: null, cx: 0, cy: 0, scale: 1 }
+}
+
+/**
+ * Desplazamiento vivo de UN sticker contra el estado que ese mismo render está pintando.
+ *
+ * WORKLET: corre en el UI thread (lo consumen los `useAnimatedStyle` del canvas y de la capa de
+ * gestos). Vive acá, en los contratos, porque las DOS capas tienen que calcular exactamente el
+ * mismo desplazamiento — si se desincronizan, el marco de selección deja de coincidir con el
+ * sticker y el alumno arrastra "al lado" de lo que ve.
+ */
+export function liveDeltaFor(
+    live: StickerLiveTransform,
+    id: StickerId,
+    baseX: number,
+    baseY: number,
+    baseScale: number,
+): { dx: number; dy: number; k: number } {
+    'worklet'
+    if (live.id !== id) return { dx: 0, dy: 0, k: 1 }
+    return {
+        dx: live.cx - baseX,
+        dy: live.cy - baseY,
+        k: baseScale > 0 ? live.scale / baseScale : 1,
+    }
+}
+
+/**
  * Cómo se dibuja el trabajo muscular: silueta anatómica (frente / espalda / ambas) o chips con los
  * grupos top. `chips` existe para los presets con poco espacio vertical (sello, set-list).
  */

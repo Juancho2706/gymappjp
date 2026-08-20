@@ -12,6 +12,8 @@
 
 // ── Contratos ────────────────────────────────────────────────────────────────────────────────────
 export {
+    idleStickerTransform,
+    liveDeltaFor,
     SHARE_CANVAS_H,
     SHARE_CANVAS_W,
     type MuscleView,
@@ -21,6 +23,8 @@ export {
     type SharePresetId,
     type ShareRecord,
     type StickerId,
+    type StickerLiveTransform,
+    type StickerSize,
     type StickerState,
     type WorkoutShareBrand,
     type WorkoutShareData,
@@ -50,6 +54,15 @@ export { ShareCanvas, type ShareCanvasProps } from './ShareCanvas'
 
 // ── Composer (F3): la pantalla que arma el card ──────────────────────────────────────────────────
 export { WorkoutShareComposer, type WorkoutShareComposerProps } from './WorkoutShareComposer'
+
+// ── Acomodar (F4): la capa de edición que se monta ENCIMA del lienzo ─────────────────────────────
+export {
+    StickerGestureLayer,
+    STICKER_LABEL,
+    STICKER_SCALE_MAX,
+    STICKER_SCALE_MIN,
+    type StickerGestureLayerProps,
+} from './StickerGestureLayer'
 
 // ── Salida: PNG y fuentes de foto ────────────────────────────────────────────────────────────────
 export {

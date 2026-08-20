@@ -13,6 +13,8 @@ import {
     View,
 } from 'react-native'
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { useSharedValue } from 'react-native-reanimated'
 import { MotiView } from 'moti'
 import * as Sharing from 'expo-sharing'
 import * as ImagePicker from 'expo-image-picker'
@@ -22,7 +24,10 @@ import {
     Camera,
     ImageOff,
     Images,
+    Minus,
     Move,
+    Plus,
+    RotateCcw,
     Share2,
     X,
     type LucideIcon,
@@ -43,6 +48,13 @@ import { captureShareCanvas, cleanupShareCapture } from './share-capture'
 import { pickSharePhoto, takeSharePhoto } from './share-photo'
 import { accentOf, withAlpha } from './stickers'
 import {
+    StickerGestureLayer,
+    STICKER_LABEL,
+    STICKER_SCALE_MAX,
+    STICKER_SCALE_MIN,
+} from './StickerGestureLayer'
+import {
+    idleStickerTransform,
     SHARE_CANVAS_H,
     SHARE_CANVAS_W,
     type MuscleView,
@@ -50,6 +62,7 @@ import {
     type SharePreset,
     type SharePresetId,
     type StickerId,
+    type StickerSize,
     type StickerState,
     type WorkoutShareData,
 } from './share-types'
@@ -113,9 +126,10 @@ const STEP_TITLE: Record<Step, string> = {
  * Fracción del alto disponible que puede ocupar el lienzo en cada paso. El editor le cede espacio a
  * los controles (presets + fuente de foto + 10 toggles no entran si el preview se come la pantalla);
  * `compartir` casi no tiene chrome, así que el card se ve grande — que es justo cuando el alumno
- * decide si le gusta.
+ * decide si le gusta. `acomodar` deja ~150 px para el panel del sticker seleccionado (tamaño, flip
+ * de silueta, restaurar) sin que el lienzo se coma la pantalla en un teléfono chico.
  */
-const STAGE_FRACTION: Record<Step, number> = { editor: 0.52, acomodar: 0.7, compartir: 0.88 }
+const STAGE_FRACTION: Record<Step, number> = { editor: 0.52, acomodar: 0.62, compartir: 0.88 }
 
 /** Ancho del mini-canvas de cada chip de preset. */
 const THUMB_W = 68
@@ -197,6 +211,14 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
     const [cameraPrimer, setCameraPrimer] = useState(false)
     const [cameraPermission, requestCameraPermission] = ImagePicker.useCameraPermissions()
 
+    // ── Paso Acomodar (F4) ──────────────────────────────────────────────────────────────────────
+    // Medidas reales de los stickers montados: las reporta el lienzo (es el único que las conoce) y
+    // las consume la capa de gestos para calcar cada zona de arrastre sobre su sticker.
+    const [stickerSizes, setStickerSizes] = useState<Partial<Record<StickerId, StickerSize>>>({})
+    const [selectedStickerId, setSelectedStickerId] = useState<StickerId | null>(null)
+    /** Destino VIVO del arrastre/pellizco. Lo escribe la capa de gestos, lo lee el lienzo. */
+    const liveTransform = useSharedValue(idleStickerTransform())
+
     const tokens = useMemo(() => deriveSportTokens(data.brand.accent), [data.brand.accent])
     const accent = accentOf(tokens)
     const s = EXEC_SURFACE
@@ -237,6 +259,80 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
         overridesRef.current = { ...overridesRef.current, [id]: next }
         setLayout((prev) => ({ ...prev, [id]: { ...prev[id], visible: next } }))
     }, [])
+
+    /**
+     * Commit de una posición arrastrada. NO es un override: las posiciones se resetean al cambiar
+     * de preset (decisión del owner, SPEC §Flujo paso 3) y eso ya lo hace `selectPreset`, que
+     * re-clona el layout del preset nuevo y solo re-aplica los `visible` que el alumno tocó.
+     */
+    const setStickerPosition = useCallback((id: StickerId, x: number, y: number) => {
+        setLayout((prev) => ({ ...prev, [id]: { ...prev[id], x, y } }))
+    }, [])
+
+    const setStickerScale = useCallback((id: StickerId, scale: number) => {
+        setLayout((prev) => {
+            const cur = prev[id]
+            if (!cur || cur.scale === scale) return prev
+            return { ...prev, [id]: { ...cur, scale } }
+        })
+    }, [])
+
+    /** Stepper del panel: 0,1 por toque, redondeado para que el valor no acumule ruido flotante. */
+    const nudgeStickerScale = useCallback((id: StickerId, delta: number) => {
+        haptics.select()
+        setLayout((prev) => {
+            const cur = prev[id]
+            if (!cur) return prev
+            const raw = Math.round((cur.scale + delta) * 10) / 10
+            const next = Math.min(STICKER_SCALE_MAX, Math.max(STICKER_SCALE_MIN, raw))
+            if (next === cur.scale) return prev
+            return { ...prev, [id]: { ...cur, scale: next } }
+        })
+    }, [])
+
+    /** Vuelve al lugar/tamaño de fábrica del preset VIGENTE (por ref: el callback queda estable). */
+    const restoreStickerPlacement = useCallback((id: StickerId) => {
+        haptics.select()
+        const factory = SHARE_PRESET_BY_ID[presetIdRef.current].stickers[id]
+        setLayout((prev) => ({
+            ...prev,
+            [id]: { ...prev[id], x: factory.x, y: factory.y, scale: factory.scale, rotation: factory.rotation },
+        }))
+    }, [])
+
+    /** Mantener apretado sobre un sticker = quitarlo. Mismo camino que el toggle del editor. */
+    const removeSticker = useCallback(
+        (id: StickerId) => {
+            setSelectedStickerId((cur) => (cur === id ? null : cur))
+            setStickerVisible(id, false)
+        },
+        [setStickerVisible],
+    )
+
+    /**
+     * Apagar el destino vivo cuando la posición commiteada ya está en pantalla.
+     *
+     * Se hace acá y no en el worklet a propósito: el UI thread resetea al instante y React tarda
+     * uno o dos frames, así que el sticker volvía a su lugar viejo antes de saltar al nuevo. Cuando
+     * este efecto corre, el render con la posición nueva ya se aplicó y el desplazamiento vivo vale
+     * 0 por cálculo (`liveDeltaFor` compara contra el estado pintado), así que apagarlo no se ve.
+     * También cubre el cambio de preset: si `layout` se re-clona, un destino viejo quedaría
+     * arrastrando el sticker a una posición que ya no existe.
+     */
+    useEffect(() => {
+        liveTransform.value = idleStickerTransform()
+    }, [layout, liveTransform])
+
+    // Salir de Acomodar suelta la selección: volver al editor con un marco punteado colgado sobre
+    // un lienzo que ya no se puede tocar confunde. El cambio de preset también la suelta (las
+    // posiciones se resetean y el sticker elegido se movió solo).
+    useEffect(() => {
+        if (step !== 'acomodar') setSelectedStickerId(null)
+    }, [step])
+
+    useEffect(() => {
+        setSelectedStickerId(null)
+    }, [presetId])
 
     const setMuscleView = useCallback((view: MuscleView) => {
         haptics.select()
@@ -460,14 +556,42 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                         tokens={tokens}
                         posterGhost={presetId === 'poster'}
                         showHandle={showHandle}
+                        reportSizes={setStickerSizes}
+                        // Se pasa SIEMPRE, en los tres pasos: sacarlo al salir de Acomodar
+                        // cambiaría el tipo de elemento de cada sticker y los remontaría (la
+                        // silueta son ~150 paths SVG). En reposo el transform vale identidad.
+                        liveTransform={liveTransform}
                     />
                 </View>
+
+                {/* Capa de edición: hermana del nodo capturado, NUNCA hija. Todo lo que dibuja
+                    (marco de selección, guías) es chrome y no puede salir en el PNG. */}
+                {step === 'acomodar' ? (
+                    <StickerGestureLayer
+                        width={canvasW}
+                        height={canvasH}
+                        stickers={layout}
+                        sizes={stickerSizes}
+                        live={liveTransform}
+                        selectedId={selectedStickerId}
+                        accent={accent}
+                        onSelect={setSelectedStickerId}
+                        onCommitPosition={setStickerPosition}
+                        onCommitScale={setStickerScale}
+                        onRemove={removeSticker}
+                    />
+                ) : null}
             </View>
         </View>
     )
 
     const body = (
-        <View style={{ flex: 1, backgroundColor: s.appBgDeep }}>
+        // `GestureHandlerRootView` y no `View`: es drop-in (no agrega nodo ni cambia layout) y sin
+        // él el paso Acomodar no recibe UN SOLO toque. Los dos caminos de montaje del composer
+        // viven en una ventana NATIVA ajena — el `<Modal>` de abajo, o el Modal del host cuando se
+        // usa `embedded` — y el root de `app/_layout.tsx` no alcanza esas ventanas. Es el mismo fix
+        // que documenta `components/Sheet.tsx` para el slider del ejecutor.
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: s.appBgDeep }}>
             <StepHeader
                 step={step}
                 accent={accent}
@@ -563,18 +687,55 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                 ) : null}
 
                 {step === 'acomodar' ? (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 }}>
-                        <Move size={22} color={s.textMuted} />
-                        {/* Placeholder HONESTO: F4 trae el drag real (Gesture Handler + Reanimated,
-                            guías de alineación, long-press = quitar). Prometer menos que mostrar un
-                            paso que no hace nada. */}
-                        <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 15, color: s.text, textAlign: 'center' }}>
-                            Arrastrar y acomodar llega en la próxima tanda (F4)
-                        </Text>
-                        <Text style={{ fontFamily: FONT.ui, fontSize: 13, color: s.textDim, textAlign: 'center' }}>
-                            Por ahora cada estilo ya trae sus elementos ubicados.
-                        </Text>
-                    </View>
+                    <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 12 }}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {/* El hint se queda SIEMPRE, también con algo seleccionado: "mantener
+                            apretado para quitar" es la única acción del paso que no tiene botón
+                            (no hay papelera flotante), así que no puede vivir solo en el vacío. */}
+                        <View
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 8,
+                                paddingHorizontal: 20,
+                                paddingTop: 10,
+                            }}
+                        >
+                            <Move size={15} color={s.textDim} />
+                            <Text style={{ flex: 1, fontFamily: FONT.ui, fontSize: 12, lineHeight: 17, color: s.textDim }}>
+                                Arrastra los elementos · mantén apretado para quitar
+                            </Text>
+                        </View>
+
+                        {selectedStickerId && layout[selectedStickerId] ? (
+                            <StickerEditPanel
+                                id={selectedStickerId}
+                                state={layout[selectedStickerId]}
+                                accent={accent}
+                                muscleView={muscleView}
+                                onMuscleView={setMuscleView}
+                                onNudgeScale={nudgeStickerScale}
+                                onRestore={restoreStickerPlacement}
+                            />
+                        ) : (
+                            <Text
+                                style={{
+                                    fontFamily: FONT.ui,
+                                    fontSize: 12,
+                                    lineHeight: 17,
+                                    color: s.textMuted,
+                                    textAlign: 'center',
+                                    paddingHorizontal: 32,
+                                    paddingTop: 22,
+                                }}
+                            >
+                                Toca un elemento del card para cambiarle el tamaño.
+                            </Text>
+                        )}
+                    </ScrollView>
                 ) : null}
 
                 {step === 'compartir' ? (
@@ -620,7 +781,7 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                     onCancel={() => setCameraPrimer(false)}
                 />
             ) : null}
-        </View>
+        </GestureHandlerRootView>
     )
 
     if (embedded) {
@@ -1067,6 +1228,150 @@ function MuscleViewSegmented({
                 )
             })}
         </View>
+    )
+}
+
+/**
+ * Panel del sticker seleccionado (paso Acomodar). Vive acá y no en `StickerGestureLayer` porque es
+ * CHROME: la capa de gestos es todo lo que se dibuja encima del lienzo, y este panel va debajo,
+ * en el flujo normal de la pantalla. Así además puede reusar `MuscleViewSegmented` sin que los dos
+ * archivos se importen en círculo.
+ *
+ * Por qué un stepper y no el `Slider` del DS: ese componente resuelve su pista con `resolvedScheme`
+ * y su relleno con `theme.primary`, y este chrome es oscuro SIEMPRE — en una cuenta con tema claro
+ * la pista se volvía invisible sobre el fondo. Es exactamente el motivo por el que este archivo ya
+ * tiene su propio `DarkSwitch` en vez del `Switch` del DS. El ajuste fino continuo igual existe:
+ * es el pellizco de dos dedos sobre el lienzo.
+ */
+function StickerEditPanel({
+    id,
+    state,
+    accent,
+    muscleView,
+    onMuscleView,
+    onNudgeScale,
+    onRestore,
+}: {
+    id: StickerId
+    state: StickerState
+    accent: string
+    muscleView: MuscleView
+    onMuscleView: (next: MuscleView) => void
+    onNudgeScale: (id: StickerId, delta: number) => void
+    onRestore: (id: StickerId) => void
+}) {
+    const s = EXEC_SURFACE
+    const pct = Math.round(state.scale * 100)
+    const fill = (state.scale - STICKER_SCALE_MIN) / (STICKER_SCALE_MAX - STICKER_SCALE_MIN)
+
+    return (
+        <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 14, color: s.text }} numberOfLines={1}>
+                    {STICKER_LABEL[id]}
+                </Text>
+                <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Restaurar posición"
+                    onPress={() => onRestore(id)}
+                    hitSlop={8}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        minHeight: 34,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: s.border,
+                    }}
+                >
+                    <RotateCcw size={13} color={s.textMuted} />
+                    <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: s.textMuted }}>Restaurar</Text>
+                </Pressable>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <ScaleStep
+                    icon={Minus}
+                    label="Achicar"
+                    disabled={state.scale <= STICKER_SCALE_MIN}
+                    onPress={() => onNudgeScale(id, -0.1)}
+                />
+                {/* Barra de referencia: no se arrastra, solo dice dónde estás dentro del rango. */}
+                <View
+                    accessible
+                    accessibilityRole="adjustable"
+                    accessibilityLabel="Tamaño"
+                    accessibilityValue={{ min: 50, max: 300, now: pct }}
+                    style={{ flex: 1, gap: 6 }}
+                >
+                    <View style={{ height: 4, borderRadius: 999, backgroundColor: s.surfaceSunken, overflow: 'hidden' }}>
+                        <View
+                            style={{
+                                width: `${Math.round(Math.min(1, Math.max(0, fill)) * 100)}%`,
+                                height: '100%',
+                                borderRadius: 999,
+                                backgroundColor: accent,
+                            }}
+                        />
+                    </View>
+                    <Text style={{ fontFamily: FONT.ui, fontSize: 11, color: s.textDim, textAlign: 'center' }}>
+                        Tamaño {pct}% · pellizca en el card para el ajuste fino
+                    </Text>
+                </View>
+                <ScaleStep
+                    icon={Plus}
+                    label="Agrandar"
+                    disabled={state.scale >= STICKER_SCALE_MAX}
+                    onPress={() => onNudgeScale(id, 0.1)}
+                />
+            </View>
+
+            {/* El flip de silueta cuelga del sticker de músculos: es SU modo, no un control global
+                del paso. Mismo control que el editor — una sola forma de elegir la vista. */}
+            {id === 'musculos' ? (
+                <View style={{ marginHorizontal: -20 }}>
+                    <MuscleViewSegmented value={muscleView} accent={accent} onChange={onMuscleView} />
+                </View>
+            ) : null}
+        </View>
+    )
+}
+
+function ScaleStep({
+    icon: Icon,
+    label,
+    disabled,
+    onPress,
+}: {
+    icon: LucideIcon
+    label: string
+    disabled: boolean
+    onPress: () => void
+}) {
+    const s = EXEC_SURFACE
+    return (
+        <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ disabled }}
+            disabled={disabled}
+            onPress={onPress}
+            style={{
+                width: 44,
+                height: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: s.border,
+                backgroundColor: s.surface,
+                opacity: disabled ? 0.4 : 1,
+            }}
+        >
+            <Icon size={17} color={s.text} />
+        </Pressable>
     )
 }
 
