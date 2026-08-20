@@ -81,13 +81,17 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
     },
     nutrition_exchanges: {
         label: 'Nutrición Pro',
+        // Corrección 2026-08-19 (auditoría `docs/audits/auditoria-repo-2026-08-17.md` §1.10): el copy
+        // seguía vendiendo «micronutrientes avanzados» —feature declarada muerta por la decisión 1 del
+        // owner en `docs/specs/nutrition-ui-poda/SPEC.md` («Micros V1: matar del todo»)— y no existe
+        // ninguna superficie de micros en V2. Se retira del pitch y de las superficies; el resto queda
+        // alineado a la frontera BASE/PRO vigente (`apps/web/src/app/coach/nutrition-v2/_lib/nutrition-pro.ts`).
         pitch:
             'El plan de nutrición a nivel profesional: desde pautas por porciones e intercambios (el método de los nutricionistas) hasta planes híbridos que combinan franjas guiadas con libertad de registro. ' +
-            'Suma variantes de día, micronutrientes avanzados, objetivos finos por alumno y notas clínicas privadas y de protocolo que solo ves tú.',
+            'Suma variantes de día, objetivos finos por alumno y notas clínicas privadas y de protocolo que solo ves tú.',
         surfaces: [
             'Estrategias avanzadas del plan (intercambios y plan híbrido)',
             'Variantes de día en un mismo plan',
-            'Micronutrientes avanzados en la ficha del alumno',
             'Notas clínicas privadas y de protocolo',
             'Histórico completo de nutrición del alumno',
         ],

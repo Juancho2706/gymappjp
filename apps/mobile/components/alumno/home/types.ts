@@ -109,13 +109,15 @@ export interface PlanDayView {
   doneOnLabel: string | null
 }
 
-/** Dia pasado esta semana sin registro → recuperable HOY (delta Fase L / E1-19). */
+/** Dia pasado esta semana sin registro o a medias → recuperable/continuable HOY (delta Fase L / E1-19). */
 export interface PendingDay {
   planId: string
   dayOfWeek: number
   dayLabel: string
   /** Fecha ISO YYYY-MM-DD de ese dia en la semana actual (param `recuperar` al ejecutor). */
   dateIso: string
+  /** 'pending' = sin nada registrado («Recuperar») · 'in_progress' = empezado a medias («Continuar») — paridad web. */
+  status: 'pending' | 'in_progress'
 }
 
 // ── Acentos DS FIJOS (rampas constantes, nunca white-label; sport sigue la marca

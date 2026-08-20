@@ -19,6 +19,10 @@ import { NutritionHeader, NutritionStatePanel, FoodThumbnail } from '../../../co
 import { MacroChipRow } from '../../../components/nutrition-v2/MacroChipRow'
 import {
   FOOD_SEARCH_MIN_QUERY,
+  OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION,
+  OPEN_FOOD_FACTS_URL,
+  getFoodSourceAttribution,
+  getFoodVerificationLabel,
   isOffsetListMode,
   matchesFoodQuery,
   nextFoodFilterMode,
@@ -27,17 +31,11 @@ import {
   type FoodCatalogCursor,
   type FoodCatalogItem,
   type FoodFilterMode,
+  type FoodVerificationTone,
 } from '@eva/nutrition-v2'
 import { useTheme } from '../../../context/ThemeContext'
 import { listCoachFoodCatalogPage, searchFoodCatalogV2 } from '../../../lib/nutrition-v2-catalog.api'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
-import {
-  OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION,
-  OPEN_FOOD_FACTS_URL,
-  getFoodSourceAttribution,
-  getFoodVerificationLabel,
-  type FoodVerificationTone,
-} from '../../../lib/food-detail'
 import { FoodDetailSheet } from '../../../components/coach/FoodDetailSheet'
 import { AddFoodSheet } from '../../../components/coach/AddFoodSheet'
 import {

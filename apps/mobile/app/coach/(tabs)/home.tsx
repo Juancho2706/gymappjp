@@ -18,6 +18,7 @@ import {
   MobileQuickActionsFab,
   MobileTierUsageBanners,
   MobileTodayAgenda,
+  teamsBridgeThresholdFor,
 } from '../../../components/coach/CoachDashboardSections'
 import { InviteCodePill } from '../../../components/coach/InviteStudent'
 import { useTheme } from '../../../context/ThemeContext'
@@ -117,10 +118,13 @@ export default function CoachHomeScreen() {
     )
   }
 
-  // Umbral 80 = misma fuente que el banner interno (MobileTierUsageBanners → TeamsBridge >= 80).
+  // Umbral del puente a Teams = MISMA fuente que el banner interno (~80% del cupo REAL del coach,
+  // grandfather de pricing v2). Antes era un 80 escrito a mano acá y otro adentro: con Elite en 60
+  // ninguno de los dos se alcanzaba nunca.
   const showTierBanners =
     data.coach.subscriptionTier === 'free' ||
-    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 80)
+    (data.coach.subscriptionTier === 'elite' &&
+      data.kpi.totalClients >= teamsBridgeThresholdFor(data.coach))
 
   return (
     <View style={{ flex: 1 }}>

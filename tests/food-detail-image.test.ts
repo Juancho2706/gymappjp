@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveFoodDetailImage, type FoodDetailData } from '@/lib/food-detail'
+import type { FoodDetailData } from '@eva/nutrition-v2'
+import { resolveFoodDetailImage } from '@/lib/food-detail'
 
 const BASE = 'https://proj.supabase.co'
 const MEDIA = BASE + '/storage/v1/object/public/food-media'

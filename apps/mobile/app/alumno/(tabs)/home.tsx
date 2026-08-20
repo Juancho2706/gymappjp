@@ -388,11 +388,15 @@ export default function AlumnoHomeScreen() {
       const doneOnLabel = doneOnDate ? DAY_FULL[dbDayByDate.get(doneOnDate) ?? 1] : null
       return { plan, status, isToday, dateIso: dIso, doneOnDate, doneOnLabel }
     })
-    // Banner ambar = dias SIN NADA registrado que ya pasaron. Un dia 'in_progress' no entra (igual que
-    // antes, cuando caia en 'done'): el alumno ya entreno ahi, el banner no lo reclama como pendiente.
+    // Banner ambar = dias pasados accionables: sin nada registrado ('pending') Y TAMBIEN los
+    // empezados a medias ('in_progress') — paridad con la web (weekPendingWorkouts.ts filtra
+    // pending || in_progress y su banner cambia el verbo a «Continuar»). Excluirlos era el bug
+    // del owner 19-08 («solo del presente a dias futuros»): un dia pasado a medias no tenia
+    // NINGUN CTA en RN — su card solo abria el sheet de solo-lectura y la unica salida era
+    // «Repetir hoy». El dia de HOY se excluye: su CTA es el hero, no el banner.
     const pending: PendingDay[] = planDays
-      .filter((d) => d.status === 'pending')
-      .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_FULL[d.plan.day_of_week as number], dateIso: d.dateIso }))
+      .filter((d) => (d.status === 'pending' || d.status === 'in_progress') && !d.isToday)
+      .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_FULL[d.plan.day_of_week as number], dateIso: d.dateIso, status: d.status as 'pending' | 'in_progress' }))
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
     const todayPlanId = planDays.find((d) => d.isToday)?.plan.id ?? todayPlan?.id ?? null
 
