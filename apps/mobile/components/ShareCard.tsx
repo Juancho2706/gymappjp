@@ -481,8 +481,14 @@ export interface ShareCardPreviewProps {
    * it). Omit for the default expo-sharing → RN Share fallback flow.
    */
   onShare?: (uri: string) => void | Promise<void>
-  /** Fired after a successful default share. */
-  onShared?: () => void
+  /**
+   * Fired when the default share flow finishes. `outcome` es honesto por plataforma:
+   * iOS distingue 'shared' de 'dismissed' (RN Share reporta la acción); Android SIEMPRE
+   * entrega 'unknown' porque `Sharing.shareAsync` resuelve igual al compartir y al
+   * cancelar — no existe señal de éxito. Instrumentación: contar INTENTOS con esto;
+   * el éxito real lo mide la atribución (?ref= del funnel de share).
+   */
+  onShareOutcome?: (outcome: 'shared' | 'dismissed' | 'unknown') => void
   /**
    * Render as an absolute-fill overlay (NO own native <Modal>) instead of a Modal.
    * QA-5 fix: a React Native <Modal> nested inside another native <Modal> (the
@@ -506,7 +512,7 @@ export function ShareCardPreview({
   shareMessage,
   fileName = 'eva-card',
   onShare,
-  onShared,
+  onShareOutcome,
   embedded = false,
   children,
 }: ShareCardPreviewProps) {
@@ -577,29 +583,36 @@ export function ShareCardPreview({
         return
       }
 
-      // Default: native share sheet with the PNG. El web comparte la IMAGEN + el TEXTO juntos
-      // (`navigator.share({ files, title, text })` — PRShareCardModal.tsx:72-75; y el brag de sesión
-      // series·reps·kg·récords viaja como `text` en WorkoutSummaryOverlay.tsx:224/231). `Sharing.shareAsync`
-      // sólo comparte el ARCHIVO: su `dialogTitle` es el título del chooser (Android), NO contenido
-      // compartido → en iOS el brag textual se perdía. En iOS usamos RN `Share.share({ url, message })`
-      // para adjuntar imagen + texto igual que web. En Android mantenemos expo-sharing (comparte el PNG
-      // real; el Share.share de Android no adjunta archivo, sólo texto — perderíamos la tarjeta branded).
+      // Default: native share sheet with the PNG. En iOS compartimos SOLO el archivo: cuando
+      // `Share.share` lleva `url` Y `message` juntos, receptores como WhatsApp/Instagram toman el
+      // TEXTO y descartan la imagen — la tarjeta branded (lo que importa) se perdía justo en las
+      // redes objetivo. Todo texto relevante debe ir quemado en el PNG; `shareMessage` queda solo
+      // como `dialogTitle`/fallback textual de Android.
       if (Platform.OS === 'ios') {
         // RN Share distingue cancelación de éxito: dismissedAction = el usuario cerró la hoja → silencio
         // (como el web, que sólo traga el AbortError de cancelación en web-share.ts:29). No es error.
-        const result = await Share.share({ url: shareUri, message: shareMessage ?? '' })
-        if (result.action === Share.dismissedAction) return
+        const result = await Share.share({ url: shareUri })
+        if (result.action === Share.dismissedAction) {
+          onShareOutcome?.('dismissed')
+          return
+        }
+        onShareOutcome?.('shared')
       } else if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(shareUri, {
           mimeType: 'image/png',
           dialogTitle: shareMessage || 'Compartir',
           UTI: 'public.png',
         })
+        // shareAsync resuelve igual en compartir y en cancelar: no hay señal de éxito en Android.
+        onShareOutcome?.('unknown')
       } else {
         const result = await Share.share({ url: shareUri, message: shareMessage ?? '' })
-        if (result.action === Share.dismissedAction) return
+        if (result.action === Share.dismissedAction) {
+          onShareOutcome?.('dismissed')
+          return
+        }
+        onShareOutcome?.('shared')
       }
-      onShared?.()
     } catch {
       // Fallo real de la hoja de compartir (expo-sharing lanza; la cancelación del
       // usuario NO lanza — resuelve). El comentario previo "silent (matches web modal
