@@ -28,7 +28,9 @@
         "APP_ENV": "production",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
         "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
-        "EXPO_PUBLIC_API_URL": "https://gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_uMyG4umpbuXb7S5AQedzVvYd7WFzfexAYaMoKLYSxBoA",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
       }
     },
     "production": {
@@ -38,7 +40,9 @@
         "APP_ENV": "production",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
         "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
-        "EXPO_PUBLIC_API_URL": "https://www.eva-app.cl"
+        "EXPO_PUBLIC_API_URL": "https://www.eva-app.cl",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_uMyG4umpbuXb7S5AQedzVvYd7WFzfexAYaMoKLYSxBoA",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
       },
       "android": {
         "credentialsSource": "remote"

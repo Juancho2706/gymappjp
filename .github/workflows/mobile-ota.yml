@@ -20,10 +20,11 @@ on:
         required: true
         default: 'android'
         type: choice
+        # `all` se retiro (2026-08-20): `eas update --platform all` exporta tambien web y este
+        # monorepo no tiene `react-native-web` => el job muere. Siempre android e ios por separado.
         options:
           - android
           - ios
-          - all
       message:
         description: 'Mensaje del update (que lleva y de que commit)'
         required: true
@@ -67,6 +68,8 @@ jobs:
         run: |
           echo "sentry_dsn=$(jq -r '.build.production.env.EXPO_PUBLIC_SENTRY_DSN // empty' apps/mobile/eas.json)" >> "$GITHUB_OUTPUT"
           echo "api_url=$(jq -r '.build.production.env.EXPO_PUBLIC_API_URL // empty' apps/mobile/eas.json)" >> "$GITHUB_OUTPUT"
+          echo "posthog_key=$(jq -r '.build.production.env.EXPO_PUBLIC_POSTHOG_KEY // empty' apps/mobile/eas.json)" >> "$GITHUB_OUTPUT"
+          echo "posthog_host=$(jq -r '.build.production.env.EXPO_PUBLIC_POSTHOG_HOST // empty' apps/mobile/eas.json)" >> "$GITHUB_OUTPUT"
 
       - name: Guard de secrets (fail-fast, mismo criterio que mobile-build.yml)
         env:
@@ -103,7 +106,17 @@ jobs:
           # step, y estas viven en `eas.json`, que es de perfiles de BUILD y no lo lee `update`.
           EXPO_PUBLIC_SENTRY_DSN: ${{ steps.easenv.outputs.sentry_dsn }}
           EXPO_PUBLIC_API_URL: ${{ steps.easenv.outputs.api_url }}
+          # PostHog (auditoria 20-08): el binario 1.1.2 salio sin esta key porque no vivia en ningun
+          # lado => `lib/analytics.ts` devolvia null y los eventos student_share_* eran no-op. Es la
+          # project API key PUBLICA (write-only de ingesta, la misma que la web expone en el
+          # navegador); vive en eas.json como el DSN. Si falta, el OTA sale igual (analytics es
+          # fail-open por diseno) pero se avisa fuerte.
+          EXPO_PUBLIC_POSTHOG_KEY: ${{ steps.easenv.outputs.posthog_key }}
+          EXPO_PUBLIC_POSTHOG_HOST: ${{ steps.easenv.outputs.posthog_host }}
         run: |
+          if [ -z "${EXPO_PUBLIC_POSTHOG_KEY// /}" ]; then
+            echo "::warning::EXPO_PUBLIC_POSTHOG_KEY vacia en apps/mobile/eas.json (build.production.env): el bundle sale SIN analytics de producto (PostHog no-op)."
+          fi
           # Reintento x3: el primer export en un arbol frio a veces muere con
           # "Cannot find module 'babel-preset-expo'" (race de inicializacion del transform
           # worker de Metro en monorepo pnpm; reproducido local: 1er intento falla, 2do pasa).
