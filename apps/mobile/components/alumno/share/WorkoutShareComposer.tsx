@@ -1,0 +1,1195 @@
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+    ActivityIndicator,
+    BackHandler,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
+} from 'react-native'
+import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
+import { MotiView } from 'moti'
+import * as Sharing from 'expo-sharing'
+import * as ImagePicker from 'expo-image-picker'
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import {
+    ArrowLeft,
+    Camera,
+    ImageOff,
+    Images,
+    Move,
+    Share2,
+    X,
+    type LucideIcon,
+} from 'lucide-react-native'
+import { deriveSportTokens, type SportTokens } from '@eva/brand-kit'
+import { EXEC_SURFACE } from '../workout/v3/exec-theme'
+import { FONT } from '../../../lib/typography'
+import { haptics } from '../../../lib/haptics'
+import { toast } from '../../Toast'
+import { ShareCanvas } from './ShareCanvas'
+import {
+    cloneStickerLayout,
+    DEFAULT_SHARE_PRESET_ID,
+    SHARE_PRESET_BY_ID,
+    SHARE_PRESETS,
+} from './share-presets'
+import { captureShareCanvas, cleanupShareCapture } from './share-capture'
+import { pickSharePhoto, takeSharePhoto } from './share-photo'
+import { accentOf, withAlpha } from './stickers'
+import {
+    SHARE_CANVAS_H,
+    SHARE_CANVAS_W,
+    type MuscleView,
+    type ShareBackground,
+    type SharePreset,
+    type SharePresetId,
+    type StickerId,
+    type StickerState,
+    type WorkoutShareData,
+} from './share-types'
+
+/**
+ * Share Entreno (F3) — el COMPOSER: la pantalla donde el alumno arma su card.
+ *
+ * Tres pasos (`editor` → `acomodar` → `compartir`) sobre UN solo lienzo montado: el `ShareCanvas`
+ * vive en la "etapa" superior y NUNCA se desmonta al cambiar de paso. Es a propósito: el canvas
+ * mide sus stickers con `onLayout` para anclarlos por el centro, y remontarlo en cada paso
+ * significaría re-medir (parpadeo) y, peor, arriesgar una captura sobre un árbol a medio medir
+ * (`share-capture.ts` documenta que capturar en el tick del montaje sale en blanco).
+ *
+ * ── QUÉ ES CHROME Y QUÉ ES CARD ──
+ * Todo lo que se vea DENTRO del View con el ref (`canvasRef`) sale en el PNG. Por eso el chrome de
+ * cada paso (header, fila de presets, toggles, botones) vive FUERA de ese View, y hasta el
+ * redondeado del preview lo aplica el wrapper de arriba: el canvas se rasteriza full-bleed y
+ * cuadrado, mientras en pantalla se ve con esquinas suaves. `captureRef` dibuja el subárbol del
+ * nodo, no el recorte de su padre.
+ *
+ * ── PALETA ──
+ * Chrome oscuro-inmersivo SIEMPRE, en ambos temas de la cuenta: son los literales `EXEC_SURFACE`
+ * del área alumno v3 (el ejecutor ya es dark-only por diseño y documenta el porqué). No se usan
+ * clases NativeWind acá porque sus tokens semánticos flipean con el esquema del sistema y el
+ * composer quedaría medio claro sobre un card que siempre es oscuro. El único color dinámico es el
+ * ACENTO, que sale de la marca del coach vía `deriveSportTokens(data.brand.accent)` — el MISMO que
+ * usa el canvas, para que el chrome y el card no discutan.
+ */
+
+// ── Contrato ─────────────────────────────────────────────────────────────────────────────────────
+
+export interface WorkoutShareComposerProps {
+    visible: boolean
+    onClose: () => void
+    data: WorkoutShareData
+    /**
+     * Montar como overlay absoluto SIN `<Modal>` propio.
+     *
+     * MISMO fix QA-5 que documenta `ShareCard.tsx`: un `<Modal>` de RN anidado dentro de otro Modal
+     * nativo (el resumen post-entreno ES un Modal) apila dos Dialog windows en Android; cuando la
+     * Activity nativa de compartir manda la app a background y el usuario vuelve, Android no logra
+     * restaurar el Dialog anidado y deja la pantalla en el scrim gris SIN contenido (el "brick" que
+     * reportó el CEO). Y este composer abre la hoja de compartir sí o sí, así que el riesgo es
+     * estructural, no hipotético. Cuando el host ya es una ventana nativa, pasar `embedded` deja
+     * UNA sola ventana y el background/resume queda limpio. Hosts de nivel superior (una ruta) se
+     * quedan con el Modal por defecto.
+     */
+    embedded?: boolean
+}
+
+type Step = 'editor' | 'acomodar' | 'compartir'
+
+const STEP_ORDER: Step[] = ['editor', 'acomodar', 'compartir']
+const STEP_TITLE: Record<Step, string> = {
+    editor: 'Editar',
+    acomodar: 'Acomodar',
+    compartir: 'Compartir',
+}
+
+/**
+ * Fracción del alto disponible que puede ocupar el lienzo en cada paso. El editor le cede espacio a
+ * los controles (presets + fuente de foto + 10 toggles no entran si el preview se come la pantalla);
+ * `compartir` casi no tiene chrome, así que el card se ve grande — que es justo cuando el alumno
+ * decide si le gusta.
+ */
+const STAGE_FRACTION: Record<Step, number> = { editor: 0.52, acomodar: 0.7, compartir: 0.88 }
+
+/** Ancho del mini-canvas de cada chip de preset. */
+const THUMB_W = 68
+
+// ── Helpers de estado ────────────────────────────────────────────────────────────────────────────
+
+/** Los toggles que el alumno cambió EXPLÍCITAMENTE; sobreviven al cambio de preset. */
+type VisibilityOverrides = Partial<Record<StickerId, boolean>>
+
+/**
+ * Layout de fábrica del preset + los toggles explícitos del alumno encima.
+ *
+ * Decisión del owner (SPEC §Flujo, paso 3): cambiar de preset RESETEA POSICIONES y CONSERVA los
+ * toggles. Por eso el layout se re-clona del preset nuevo (posiciones/escala/rotación de fábrica) y
+ * después se re-aplican los `visible` que el alumno tocó — y solo esos: un sticker que nunca tocó
+ * usa el default del preset nuevo, que es lo que hace que cada preset "se vea bien de fábrica".
+ */
+function applyOverrides(preset: SharePreset, overrides: VisibilityOverrides): Record<StickerId, StickerState> {
+    const layout = cloneStickerLayout(preset)
+    for (const key of Object.keys(overrides) as StickerId[]) {
+        const wanted = overrides[key]
+        if (wanted === undefined) continue
+        layout[key] = { ...layout[key], visible: wanted }
+    }
+    return layout
+}
+
+/**
+ * Overrides iniciales: el QR arranca APAGADO siempre.
+ *
+ * SPEC §Growth: "QR OFF por defecto; solo disponible en la variante «Guardar»" — un QR es
+ * inescaneable en una story vista desde el mismo teléfono. El preset `sello` lo trae encendido de
+ * fábrica (tiene el hueco de sobra), así que apagarlo tiene que ser un OVERRIDE y no un parche al
+ * catálogo: sembrado acá, sobrevive al cambio de preset igual que cualquier decisión del alumno, y
+ * si él lo enciende el override se da vuelta y también sobrevive.
+ */
+const INITIAL_OVERRIDES: VisibilityOverrides = { qr: false }
+
+// ── Composer ─────────────────────────────────────────────────────────────────────────────────────
+
+export function WorkoutShareComposer({ visible, onClose, data, embedded = false }: WorkoutShareComposerProps) {
+    const insets = useSafeAreaInsets()
+    const { width: screenW, height: screenH } = useWindowDimensions()
+    const canvasRef = useRef<View>(null)
+
+    const [step, setStep] = useState<Step>('editor')
+    const [presetId, setPresetId] = useState<SharePresetId>(DEFAULT_SHARE_PRESET_ID)
+    const [layout, setLayout] = useState<Record<StickerId, StickerState>>(() =>
+        applyOverrides(SHARE_PRESET_BY_ID[DEFAULT_SHARE_PRESET_ID], INITIAL_OVERRIDES),
+    )
+
+    /**
+     * Los overrides y los flags `touched` viven en REFS, no en estado: son MEMORIA, no entrada de
+     * render — lo que la UI dibuja es `layout`, que ya se actualiza en el mismo gesto. Tenerlos en
+     * estado metía `overrides` en las dependencias de `selectPreset`, así que cada toggle cambiaba
+     * la identidad del callback y repintaba los SEIS mini-canvas de la fila de presets (9 stickers
+     * y hasta una silueta SVG cada uno) por marcar una casilla. Con refs los callbacks del editor
+     * quedan estables y los chips solo se repintan cuando cambia la selección.
+     */
+    const overridesRef = useRef<VisibilityOverrides>(INITIAL_OVERRIDES)
+    const presetIdRef = useRef<SharePresetId>(DEFAULT_SHARE_PRESET_ID)
+    // `muscleView` y `background` arrancan en el default del preset, pero una vez que el alumno los
+    // toca pasan a ser SUYOS y el cambio de preset ya no los pisa — misma regla que los toggles
+    // (son dos de los 10 toggles del SPEC). El flag `touched` es lo que distingue "default heredado"
+    // de "elección del alumno"; sin él, elegir Heatmap le borraba la foto que acababa de sacar.
+    const muscleViewTouchedRef = useRef(false)
+    const backgroundTouchedRef = useRef(false)
+
+    const preset = SHARE_PRESET_BY_ID[presetId]
+
+    const [muscleView, setMuscleViewState] = useState<MuscleView>(preset.muscleView)
+    const [background, setBackground] = useState<ShareBackground>(preset.background)
+    const [photoUri, setPhotoUri] = useState<string | null>(null)
+    /** De dónde salió la foto — solo para que el chip correcto se vea seleccionado. */
+    const [photoSource, setPhotoSource] = useState<'camera' | 'library' | null>(null)
+    const [showHandle, setShowHandle] = useState(true)
+
+    const [busy, setBusy] = useState(false)
+    const [cameraPrimer, setCameraPrimer] = useState(false)
+    const [cameraPermission, requestCameraPermission] = ImagePicker.useCameraPermissions()
+
+    const tokens = useMemo(() => deriveSportTokens(data.brand.accent), [data.brand.accent])
+    const accent = accentOf(tokens)
+    const s = EXEC_SURFACE
+
+    // Volver a abrir el composer siempre arranca en el editor: cerrar desde "Compartir" y reabrir
+    // para caer otra vez en el botón de compartir es desorientador. El RESTO del estado se conserva
+    // a propósito (preset, foto, toggles) — si el alumno cerró sin querer, no le borramos la edición.
+    useEffect(() => {
+        if (visible) setStep('editor')
+    }, [visible])
+
+    // ── Geometría del lienzo ────────────────────────────────────────────────────────────────────
+    // El cap de ancho es `pantalla − 48` (mockup), pero manda el ALTO: el card es 9:16 y a ancho
+    // completo mide ~1,6 pantallas de alto, así que sin este budget el editor no tendría dónde
+    // poner sus controles. En `compartir` el budget casi no recorta y el preview llega al cap.
+    const chromeH = insets.top + insets.bottom + 52 /* header */ + 92 /* footer CTA */
+    const bodyH = Math.max(280, screenH - chromeH)
+    const canvasW = Math.min(screenW - 48, (bodyH * STAGE_FRACTION[step] * SHARE_CANVAS_W) / SHARE_CANVAS_H)
+    // La MISMA expresión que usa `ShareCanvas` internamente, sin redondear: un `Math.round` acá deja
+    // medio píxel de desfase y el wrapper con `overflow:'hidden'` recorta una línea del card.
+    const canvasH = (canvasW * SHARE_CANVAS_H) / SHARE_CANVAS_W
+
+    // ── Acciones ────────────────────────────────────────────────────────────────────────────────
+
+    const selectPreset = useCallback((id: SharePresetId) => {
+        if (id === presetIdRef.current) return
+        haptics.select()
+        presetIdRef.current = id
+        const next = SHARE_PRESET_BY_ID[id]
+        setPresetId(id)
+        setLayout(applyOverrides(next, overridesRef.current))
+        // Los defaults del preset nuevo solo entran donde el alumno todavía no decidió.
+        if (!muscleViewTouchedRef.current) setMuscleViewState(next.muscleView)
+        if (!backgroundTouchedRef.current) setBackground(next.background)
+    }, [])
+
+    const setStickerVisible = useCallback((id: StickerId, next: boolean) => {
+        overridesRef.current = { ...overridesRef.current, [id]: next }
+        setLayout((prev) => ({ ...prev, [id]: { ...prev[id], visible: next } }))
+    }, [])
+
+    const setMuscleView = useCallback((view: MuscleView) => {
+        haptics.select()
+        muscleViewTouchedRef.current = true
+        setMuscleViewState(view)
+    }, [])
+
+    const applyPhoto = useCallback((uri: string | null, source: 'camera' | 'library' | null) => {
+        backgroundTouchedRef.current = true
+        setPhotoUri(uri)
+        setPhotoSource(uri ? source : null)
+        // Elegir una foto SALE del modo transparente: es la acción más específica y más reciente, y
+        // en modo sticker el fondo no se dibuja — el alumno vería su foto desaparecer sin motivo.
+        // "Sin foto", en cambio, sí convive con el modo sticker (un PNG con alpha y sin foto es
+        // exactamente lo que se pega sobre la story propia).
+        if (uri) setBackground('photo')
+        else setBackground((prev) => (prev === 'transparent' ? prev : 'brand'))
+    }, [])
+
+    const openCamera = useCallback(async () => {
+        const uri = await takeSharePhoto()
+        if (uri) applyPhoto(uri, 'camera')
+    }, [applyPhoto])
+
+    const onPressCamera = useCallback(() => {
+        // App Review 5.1.1(iv): la hoja de permisos del sistema NO puede ser lo primero que ve el
+        // usuario — primero explicamos para qué usamos la cámara y él aprieta "Continuar" (mismo
+        // patrón que `nutrition-v2/scanner.tsx`, y mismo rechazo que ya nos costó una revisión).
+        if (!cameraPermission?.granted) {
+            setCameraPrimer(true)
+            return
+        }
+        void openCamera()
+    }, [cameraPermission?.granted, openCamera])
+
+    const continueFromPrimer = useCallback(async () => {
+        setCameraPrimer(false)
+        // Pedimos por el HOOK (no por el helper) para que su estado quede fresco: `takeSharePhoto`
+        // pide por su cuenta, pero el hook no se entera y el panel pre-permiso volvería a aparecer
+        // la próxima vez aunque el permiso ya esté concedido. Concedido acá, el request del helper
+        // resuelve solo, sin segundo diálogo.
+        const res = await requestCameraPermission()
+        if (!res.granted) {
+            toast.error('Sin permiso de cámara no podemos tomar la foto.')
+            return
+        }
+        await openCamera()
+    }, [requestCameraPermission, openCamera])
+
+    const openGallery = useCallback(async () => {
+        const uri = await pickSharePhoto()
+        if (uri) applyPhoto(uri, 'library')
+    }, [applyPhoto])
+
+    const setTransparent = useCallback(
+        (next: boolean) => {
+            backgroundTouchedRef.current = true
+            setBackground(next ? 'transparent' : photoUri ? 'photo' : 'brand')
+        },
+        [photoUri],
+    )
+
+    const goBack = useCallback(() => {
+        const i = STEP_ORDER.indexOf(step)
+        if (i <= 0) {
+            onClose()
+            return
+        }
+        setStep(STEP_ORDER[i - 1])
+    }, [step, onClose])
+
+    const goNext = useCallback(() => {
+        const i = STEP_ORDER.indexOf(step)
+        if (i < STEP_ORDER.length - 1) setStep(STEP_ORDER[i + 1])
+    }, [step])
+
+    /**
+     * Captura + hoja nativa.
+     *
+     * PROVISIONAL: F5 reemplaza este botón único por destinos EXPLÍCITOS (Stories · WhatsApp ·
+     * Guardar · Más…) con `react-native-share` — dependencia con código nativo ⇒ binario, y los
+     * botones por destino son además la ÚNICA medición fiable del target (Android no reporta qué
+     * app eligió el usuario). Hasta entonces la hoja nativa cubre todo, y el archivo que produce
+     * `captureShareCanvas` ya es exactamente el que F5 va a repartir.
+     *
+     * La lógica por plataforma es la MISMA de `ShareCard.tsx:587-607`: en iOS se comparte SOLO el
+     * archivo (`Share.share({ url })`), porque con `url` + `message` juntos WhatsApp/Instagram se
+     * quedan con el texto y descartan la imagen — o sea justo la tarjeta branded que queremos que
+     * viaje. En Android va por `Sharing.shareAsync`.
+     */
+    const handleShare = useCallback(async () => {
+        if (busy) return
+        setBusy(true)
+        let uri: string | null = null
+        try {
+            try {
+                uri = await captureShareCanvas(canvasRef, {
+                    fileName: `eva-entreno-${data.dateISO}`,
+                    transparent: background === 'transparent',
+                })
+            } catch {
+                toast.error('No pudimos generar la imagen. Intenta de nuevo.')
+                return
+            }
+            haptics.tap()
+
+            if (Platform.OS === 'ios') {
+                await Share.share({ url: uri })
+            } else if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'image/png',
+                    dialogTitle: 'Compartir entreno',
+                    UTI: 'public.png',
+                })
+            } else {
+                await Share.share({ url: uri })
+            }
+        } catch {
+            // Fallo REAL de la hoja (la cancelación del usuario no lanza: resuelve).
+            toast.error('No pudimos compartir la imagen. Intenta de nuevo.')
+        } finally {
+            // Privacidad (PLAN §Privacidad): el PNG puede llevar una foto personal del alumno y no
+            // tiene por qué sobrevivir en caché. Se borra recién acá porque ambas plataformas
+            // resuelven DESPUÉS de que la app destino terminó de leer el archivo.
+            await cleanupShareCapture(uri)
+            setBusy(false)
+        }
+    }, [busy, data.dateISO, background])
+
+    // Sin Modal propio no hay `onRequestClose`, así que el back físico de Android hay que atajarlo
+    // a mano — y tiene que retroceder de PASO, no cerrar el composer entero (ni, peor, cerrar el
+    // resumen que está detrás). Solo mientras el overlay se está mostrando.
+    useEffect(() => {
+        if (!embedded || !visible) return
+        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            goBack()
+            return true
+        })
+        return () => sub.remove()
+    }, [embedded, visible, goBack])
+
+    // ── Toggles de contenido ────────────────────────────────────────────────────────────────────
+
+    const toggles = useMemo<ToggleSpec[]>(
+        () => [
+            { id: 'volumen', label: 'Volumen total' },
+            {
+                id: 'stats',
+                label: 'Duración y series',
+                // Un solo toggle para los tres: duración, series y reps son UNA fila (`StatsRow`),
+                // no tres stickers. El SPEC los lista por separado; partirlos exigiría partir el
+                // sticker y dejaría tres cajitas sueltas peleando por el mismo hueco del preset.
+                hint: 'Duración · series · reps van juntas en la misma fila',
+            },
+            { id: 'musculos', label: 'Músculos trabajados' },
+            {
+                id: 'records',
+                label: 'Récords del día',
+                hint: 'Incluye el 1RM estimado',
+                disabled: data.records.length === 0,
+                disabledHint: 'Hoy no marcaste récords',
+            },
+            {
+                id: 'setlist',
+                label: 'Ejercicios del día',
+                disabled: data.exercises.length === 0,
+                disabledHint: 'No registraste ejercicios de fuerza',
+            },
+            { id: 'marca', label: 'Logo y marca del coach' },
+            { id: 'fecha', label: 'Fecha' },
+            {
+                id: 'racha',
+                label: 'Racha semanal',
+                disabled: !data.streakCopy,
+                disabledHint: 'Sin racha que mostrar esta semana',
+            },
+            {
+                id: 'qr',
+                label: 'QR «Entrena conmigo»',
+                hint: 'Ideal para la variante Guardar: en una story nadie lo escanea',
+                disabled: !data.inviteUrl,
+                disabledHint: 'Tu coach todavía no tiene código de invitación',
+            },
+        ],
+        [data.records.length, data.exercises.length, data.streakCopy, data.inviteUrl],
+    )
+
+    // ── Render ──────────────────────────────────────────────────────────────────────────────────
+
+    const stage = (
+        <View style={{ alignItems: 'center', paddingVertical: 14 }}>
+            {/* +2 de ancho/alto por el borde: con `borderWidth:1` la caja de contenido mide
+                `width - 2`, así que a medida exacta el wrapper le recortaba un píxel de cada lado al
+                lienzo. El redondeado y el borde son CHROME: viven fuera del nodo capturado, y por eso
+                el PNG sale full-bleed y cuadrado aunque el preview se vea con esquinas suaves. */}
+            <View
+                style={{
+                    width: canvasW + 2,
+                    height: canvasH + 2,
+                    borderRadius: 20,
+                    overflow: 'hidden',
+                    borderWidth: 1,
+                    borderColor: s.border,
+                }}
+            >
+                {/* Damero: la ÚNICA forma de que el alumno vea que "transparente" es alpha real y no
+                    un fondo negro. Va FUERA del nodo capturado (es chrome, no card). */}
+                {background === 'transparent' ? <Checkerboard width={canvasW} height={canvasH} /> : null}
+                {/* EL NODO CAPTURADO. `collapsable={false}` porque en modo transparente no pinta
+                    nada propio y Android lo fusionaría con su padre: `captureRef` se quedaría sin
+                    nodo (o rasterizaría el padre, damero incluido). Requisito documentado en
+                    `share-capture.ts`. */}
+                <View ref={canvasRef} collapsable={false}>
+                    <ShareCanvas
+                        data={data}
+                        stickers={layout}
+                        muscleView={muscleView}
+                        background={background}
+                        photoUri={photoUri}
+                        width={canvasW}
+                        tokens={tokens}
+                        posterGhost={presetId === 'poster'}
+                        showHandle={showHandle}
+                    />
+                </View>
+            </View>
+        </View>
+    )
+
+    const body = (
+        <View style={{ flex: 1, backgroundColor: s.appBgDeep }}>
+            <StepHeader
+                step={step}
+                accent={accent}
+                onBack={goBack}
+                onClose={onClose}
+                canClose={!busy}
+            />
+
+            {stage}
+
+            <View style={{ flex: 1 }}>
+                {step === 'editor' ? (
+                    <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 20 }}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        <SectionLabel>Estilo</SectionLabel>
+                        <PresetRow
+                            presetId={presetId}
+                            data={data}
+                            tokens={tokens}
+                            photoUri={photoUri}
+                            accent={accent}
+                            onSelect={selectPreset}
+                        />
+
+                        <SectionLabel>Foto</SectionLabel>
+                        <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20 }}>
+                            <SourceChip
+                                icon={Camera}
+                                label="Tomar"
+                                active={photoSource === 'camera'}
+                                accent={accent}
+                                onPress={onPressCamera}
+                            />
+                            <SourceChip
+                                icon={Images}
+                                label="Galería"
+                                active={photoSource === 'library'}
+                                accent={accent}
+                                onPress={() => void openGallery()}
+                            />
+                            <SourceChip
+                                icon={ImageOff}
+                                label="Sin foto"
+                                active={!photoUri}
+                                accent={accent}
+                                onPress={() => applyPhoto(null, null)}
+                            />
+                        </View>
+                        <ToggleRow
+                            label="Fondo transparente"
+                            hint="Para pegarlo como sticker en tus stories"
+                            value={background === 'transparent'}
+                            accent={accent}
+                            onChange={setTransparent}
+                        />
+
+                        <SectionLabel>Qué se ve</SectionLabel>
+                        {toggles.map((t) => (
+                            <View key={t.id}>
+                                <ToggleRow
+                                    label={t.label}
+                                    hint={t.disabled ? t.disabledHint : t.hint}
+                                    value={!t.disabled && !!layout[t.id]?.visible}
+                                    disabled={t.disabled}
+                                    accent={accent}
+                                    onChange={(next) => setStickerVisible(t.id, next)}
+                                />
+                                {/* El selector de silueta cuelga del toggle de músculos: es su
+                                    modo, no un toggle aparte. Oculto cuando el sticker está off. */}
+                                {t.id === 'musculos' && layout.musculos?.visible ? (
+                                    <MuscleViewSegmented value={muscleView} accent={accent} onChange={setMuscleView} />
+                                ) : null}
+                                {/* Sub-toggle del @handle: solo existe si el coach cargó su
+                                    Instagram, y depende del sticker de marca (el handle se imprime
+                                    DENTRO del footer, no suelto). */}
+                                {t.id === 'marca' && data.brand.instagramHandle ? (
+                                    <ToggleRow
+                                        sub
+                                        label={`@${data.brand.instagramHandle}`}
+                                        hint="El handle del coach, impreso en la firma"
+                                        value={showHandle && !!layout.marca?.visible}
+                                        disabled={!layout.marca?.visible}
+                                        accent={accent}
+                                        onChange={setShowHandle}
+                                    />
+                                ) : null}
+                            </View>
+                        ))}
+                    </ScrollView>
+                ) : null}
+
+                {step === 'acomodar' ? (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 }}>
+                        <Move size={22} color={s.textMuted} />
+                        {/* Placeholder HONESTO: F4 trae el drag real (Gesture Handler + Reanimated,
+                            guías de alineación, long-press = quitar). Prometer menos que mostrar un
+                            paso que no hace nada. */}
+                        <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 15, color: s.text, textAlign: 'center' }}>
+                            Arrastrar y acomodar llega en la próxima tanda (F4)
+                        </Text>
+                        <Text style={{ fontFamily: FONT.ui, fontSize: 13, color: s.textDim, textAlign: 'center' }}>
+                            Por ahora cada estilo ya trae sus elementos ubicados.
+                        </Text>
+                    </View>
+                ) : null}
+
+                {step === 'compartir' ? (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+                        <Text style={{ fontFamily: FONT.ui, fontSize: 13, color: s.textDim, textAlign: 'center' }}>
+                            Se abrirá la hoja de compartir de tu teléfono.
+                        </Text>
+                    </View>
+                ) : null}
+            </View>
+
+            <View
+                style={{
+                    paddingHorizontal: 20,
+                    paddingTop: 12,
+                    paddingBottom: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: s.borderSubtle,
+                    backgroundColor: s.appBg,
+                }}
+            >
+                {step === 'compartir' ? (
+                    <PrimaryButton
+                        label="Compartir"
+                        icon={Share2}
+                        accent={accent}
+                        busy={busy}
+                        onPress={() => void handleShare()}
+                    />
+                ) : (
+                    <PrimaryButton label="Continuar" accent={accent} onPress={goNext} />
+                )}
+            </View>
+
+            {/* Panel pre-permiso de cámara. Va al final del árbol (encima de todo) y tapa el
+                composer: el alumno lee para qué usamos la cámara ANTES de que aparezca el diálogo
+                del sistema — App Review 5.1.1(iv). El botón dice "Continuar", NUNCA "Permitir
+                cámara". */}
+            {cameraPrimer ? (
+                <CameraPrimer
+                    accent={accent}
+                    onContinue={() => void continueFromPrimer()}
+                    onCancel={() => setCameraPrimer(false)}
+                />
+            ) : null}
+        </View>
+    )
+
+    if (embedded) {
+        if (!visible) return null
+        return (
+            <View
+                style={[
+                    StyleSheet.absoluteFillObject,
+                    {
+                        zIndex: 50,
+                        elevation: 50,
+                        backgroundColor: s.appBgDeep,
+                        paddingTop: insets.top,
+                        paddingBottom: insets.bottom,
+                    },
+                ]}
+            >
+                {body}
+            </View>
+        )
+    }
+
+    return (
+        <Modal visible={visible} animationType="slide" onRequestClose={goBack} statusBarTranslucent>
+            {/* SafeAreaProvider DENTRO del Modal: en Android la ventana del Modal es otra y sin
+                proveedor propio los insets llegan en 0 (mismo patrón que `SessionCompleteV3`). */}
+            <SafeAreaProvider>
+                <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: s.appBgDeep }}>
+                    {body}
+                </SafeAreaView>
+            </SafeAreaProvider>
+        </Modal>
+    )
+}
+
+// ── Piezas del chrome ────────────────────────────────────────────────────────────────────────────
+
+interface ToggleSpec {
+    id: StickerId
+    label: string
+    hint?: string
+    /** Sin datos que mostrar: el toggle se apaga y explica por qué (no se esconde: enseña qué falta). */
+    disabled?: boolean
+    disabledHint?: string
+}
+
+function StepHeader({
+    step,
+    accent,
+    onBack,
+    onClose,
+    canClose,
+}: {
+    step: Step
+    accent: string
+    onBack: () => void
+    onClose: () => void
+    canClose: boolean
+}) {
+    const s = EXEC_SURFACE
+    const index = STEP_ORDER.indexOf(step)
+    return (
+        <View
+            style={{
+                height: 52,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 8,
+                gap: 8,
+            }}
+        >
+            <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={index === 0 ? 'Cerrar el editor' : 'Volver al paso anterior'}
+                onPress={onBack}
+                hitSlop={10}
+                style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+            >
+                <ArrowLeft size={20} color={s.text} />
+            </Pressable>
+
+            <View style={{ flex: 1, alignItems: 'center', gap: 5 }}>
+                <Text style={{ fontFamily: FONT.displayBold, fontSize: 15, color: s.text }}>{STEP_TITLE[step]}</Text>
+                <View style={{ flexDirection: 'row', gap: 5 }}>
+                    {STEP_ORDER.map((id, i) => (
+                        <View
+                            key={id}
+                            style={{
+                                width: i === index ? 14 : 5,
+                                height: 5,
+                                borderRadius: 3,
+                                backgroundColor: i === index ? accent : s.dotTrack,
+                            }}
+                        />
+                    ))}
+                </View>
+            </View>
+
+            {/* El back navega el flujo; la X aborta el composer entero. Se bloquea mientras hay una
+                captura en curso: cerrar a mitad deja el PNG temporal sin limpiar. */}
+            <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar sin compartir"
+                onPress={onClose}
+                disabled={!canClose}
+                hitSlop={10}
+                style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', opacity: canClose ? 1 : 0.4 }}
+            >
+                <X size={20} color={s.textMuted} />
+            </Pressable>
+        </View>
+    )
+}
+
+function SectionLabel({ children }: { children: string }) {
+    return (
+        <Text
+            style={{
+                fontFamily: FONT.uiSemibold,
+                fontSize: 11,
+                letterSpacing: 1.4,
+                textTransform: 'uppercase',
+                color: EXEC_SURFACE.textDim,
+                paddingHorizontal: 20,
+                paddingTop: 16,
+                paddingBottom: 10,
+            }}
+        >
+            {children}
+        </Text>
+    )
+}
+
+/**
+ * Fila de presets: cada chip es un `ShareCanvas` REAL en miniatura, no un ícono — el alumno elige
+ * "cómo se va a ver", y una etiqueta no comunica eso.
+ *
+ * PERF: 6 minis × 9 stickers es el nodo más caro del editor. Dos decisiones lo acotan:
+ *  1. Los minis pintan el layout DE FÁBRICA del preset (no el vivo), así que están memoizados y un
+ *     toggle NO los repinta. Además es lo correcto semánticamente: el chip muestra qué es ese
+ *     estilo, no cómo quedó el card del alumno.
+ *  2. Solo 3 de los 6 montan la silueta anatómica (~150 paths SVG cada una), que es lo pesado:
+ *     `sello`/`setlist` usan chips y `póster` la trae apagada.
+ * Si en un device de gama baja igual se nota, el paso siguiente es recortar los minis a
+ * fondo + volumen + silueta (el resto es textura ilegible a 68 px de ancho de todos modos).
+ *
+ * CONDICIÓN DEL HOST: el memo compara `data` por REFERENCIA. Si la pantalla que monta el composer
+ * arma un `WorkoutShareData` nuevo en cada render, los minis se repintan igual y la memoización no
+ * sirve de nada — el `data` tiene que venir de un `useMemo`.
+ */
+function PresetRow({
+    presetId,
+    data,
+    tokens,
+    photoUri,
+    accent,
+    onSelect,
+}: {
+    presetId: SharePresetId
+    data: WorkoutShareData
+    tokens: SportTokens
+    photoUri: string | null
+    accent: string
+    onSelect: (id: SharePresetId) => void
+}) {
+    return (
+        <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 10, paddingHorizontal: 20 }}
+        >
+            {SHARE_PRESETS.map((p) => (
+                <PresetChip
+                    key={p.id}
+                    preset={p}
+                    active={p.id === presetId}
+                    data={data}
+                    tokens={tokens}
+                    photoUri={photoUri}
+                    accent={accent}
+                    onPress={onSelect}
+                />
+            ))}
+        </ScrollView>
+    )
+}
+
+const PresetChip = memo(function PresetChip({
+    preset,
+    active,
+    data,
+    tokens,
+    photoUri,
+    accent,
+    onPress,
+}: {
+    preset: SharePreset
+    active: boolean
+    data: WorkoutShareData
+    tokens: SportTokens
+    photoUri: string | null
+    accent: string
+    onPress: (id: SharePresetId) => void
+}) {
+    const s = EXEC_SURFACE
+    const stickers = useMemo(() => cloneStickerLayout(preset), [preset])
+    const thumbH = (THUMB_W * SHARE_CANVAS_H) / SHARE_CANVAS_W
+
+    return (
+        <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`Estilo ${preset.label}`}
+            onPress={() => onPress(preset.id)}
+            style={{ alignItems: 'center', gap: 6 }}
+        >
+            <View
+                style={{
+                    padding: 3,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: active ? accent : s.border,
+                    backgroundColor: active ? withAlpha(accent, 0.14) : 'transparent',
+                }}
+            >
+                {/* `pointerEvents="none"`: el mini es decorativo — el tap tiene que llegar entero al
+                    Pressable de arriba, no perderse en los stickers. */}
+                <View style={{ width: THUMB_W, height: thumbH, borderRadius: 8, overflow: 'hidden' }} pointerEvents="none">
+                    <ShareCanvas
+                        data={data}
+                        stickers={stickers}
+                        muscleView={preset.muscleView}
+                        background={preset.background}
+                        photoUri={photoUri}
+                        width={THUMB_W}
+                        tokens={tokens}
+                        posterGhost={preset.id === 'poster'}
+                    />
+                </View>
+            </View>
+            <Text
+                style={{
+                    fontFamily: active ? FONT.uiSemibold : FONT.ui,
+                    fontSize: 11,
+                    color: active ? s.text : s.textMuted,
+                }}
+                numberOfLines={1}
+            >
+                {preset.label}
+            </Text>
+        </Pressable>
+    )
+})
+
+function SourceChip({
+    icon: Icon,
+    label,
+    active,
+    accent,
+    onPress,
+}: {
+    icon: LucideIcon
+    label: string
+    active: boolean
+    accent: string
+    onPress: () => void
+}) {
+    const s = EXEC_SURFACE
+    return (
+        <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: active }}
+            onPress={onPress}
+            style={{
+                flex: 1,
+                minHeight: 46,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: active ? accent : s.border,
+                backgroundColor: active ? withAlpha(accent, 0.14) : s.surface,
+            }}
+        >
+            <Icon size={16} color={active ? accent : s.textMuted} />
+            <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 13, color: active ? s.text : s.textMuted }}>
+                {label}
+            </Text>
+        </Pressable>
+    )
+}
+
+function ToggleRow({
+    label,
+    hint,
+    value,
+    disabled,
+    accent,
+    onChange,
+    sub,
+}: {
+    label: string
+    hint?: string
+    value: boolean
+    disabled?: boolean
+    accent: string
+    onChange: (next: boolean) => void
+    /** Sub-fila indentada (el @handle cuelga del sticker de marca). */
+    sub?: boolean
+}) {
+    const s = EXEC_SURFACE
+    return (
+        <Pressable
+            accessibilityRole="switch"
+            accessibilityLabel={label}
+            accessibilityState={{ checked: value, disabled: !!disabled }}
+            disabled={disabled}
+            onPress={() => {
+                haptics.select()
+                onChange(!value)
+            }}
+            style={{
+                minHeight: 52,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingVertical: 10,
+                paddingRight: 20,
+                paddingLeft: sub ? 36 : 20,
+                opacity: disabled ? 0.45 : 1,
+            }}
+        >
+            <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 14, color: s.text }}>{label}</Text>
+                {hint ? (
+                    <Text style={{ fontFamily: FONT.ui, fontSize: 11, lineHeight: 15, color: s.textDim }}>{hint}</Text>
+                ) : null}
+            </View>
+            <DarkSwitch value={value} accent={accent} />
+        </Pressable>
+    )
+}
+
+/**
+ * Carril del toggle — PRESENTACIONAL: no captura el press, lo hace la fila entera (blanco de toque
+ * grande y UN solo nodo de accesibilidad; anidar dos Pressable con rol `switch` le entregaba al
+ * lector de pantalla el mismo control dos veces).
+ *
+ * Por qué no el `Switch` del DS: su carril apagado se resuelve con `resolvedScheme` (negro al 14%
+ * en tema claro) y este chrome es oscuro SIEMPRE — en una cuenta con tema claro el carril
+ * desaparecía contra el fondo. Geometría idéntica a la del DS (32×18, pulgar 16) para que se sienta
+ * el mismo control; encendido = acento de la marca.
+ */
+function DarkSwitch({ value, accent }: { value: boolean; accent: string }) {
+    const trackW = 32
+    const trackH = 18
+    const thumb = 16
+    const pad = 1
+    const travel = trackW - thumb - pad * 2
+
+    return (
+        <MotiView
+            animate={{ backgroundColor: value ? accent : 'rgba(255,255,255,0.16)' }}
+            transition={{ type: 'timing', duration: 160 }}
+            style={{
+                width: trackW,
+                height: trackH,
+                borderRadius: trackH / 2,
+                paddingHorizontal: pad,
+                justifyContent: 'center',
+            }}
+        >
+            <MotiView
+                animate={{ translateX: value ? travel : 0 }}
+                transition={{ type: 'spring', damping: 18, stiffness: 260 }}
+                style={{ width: thumb, height: thumb, borderRadius: thumb / 2, backgroundColor: '#FFFFFF' }}
+            />
+        </MotiView>
+    )
+}
+
+const MUSCLE_VIEW_OPTIONS: { id: MuscleView; label: string }[] = [
+    { id: 'front', label: 'Frente' },
+    { id: 'back', label: 'Espalda' },
+    { id: 'both', label: 'Ambos' },
+    { id: 'chips', label: 'Chips' },
+]
+
+function MuscleViewSegmented({
+    value,
+    accent,
+    onChange,
+}: {
+    value: MuscleView
+    accent: string
+    onChange: (next: MuscleView) => void
+}) {
+    const s = EXEC_SURFACE
+    return (
+        <View
+            style={{
+                flexDirection: 'row',
+                marginHorizontal: 20,
+                marginBottom: 6,
+                padding: 3,
+                gap: 3,
+                borderRadius: 12,
+                backgroundColor: s.surfaceSunken,
+                borderWidth: 1,
+                borderColor: s.borderSubtle,
+            }}
+        >
+            {MUSCLE_VIEW_OPTIONS.map((opt) => {
+                const active = opt.id === value
+                return (
+                    <Pressable
+                        key={opt.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`Silueta ${opt.label}`}
+                        onPress={() => onChange(opt.id)}
+                        style={{
+                            flex: 1,
+                            minHeight: 34,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 9,
+                            backgroundColor: active ? withAlpha(accent, 0.18) : 'transparent',
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: active ? FONT.uiSemibold : FONT.ui,
+                                fontSize: 12,
+                                color: active ? s.text : s.textMuted,
+                            }}
+                        >
+                            {opt.label}
+                        </Text>
+                    </Pressable>
+                )
+            })}
+        </View>
+    )
+}
+
+function PrimaryButton({
+    label,
+    icon: Icon,
+    accent,
+    busy,
+    onPress,
+}: {
+    label: string
+    icon?: LucideIcon
+    accent: string
+    busy?: boolean
+    onPress: () => void
+}) {
+    return (
+        <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            disabled={busy}
+            onPress={onPress}
+            style={{
+                minHeight: 52,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 9,
+                borderRadius: 16,
+                backgroundColor: accent,
+                opacity: busy ? 0.6 : 1,
+            }}
+        >
+            {/* El spinner reemplaza SOLO el ícono; el label se queda (mismo criterio que ShareCard). */}
+            {busy ? <ActivityIndicator color="#FFFFFF" /> : Icon ? <Icon size={18} color="#FFFFFF" /> : null}
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 15, color: '#FFFFFF' }}>{label}</Text>
+        </Pressable>
+    )
+}
+
+function CameraPrimer({
+    accent,
+    onContinue,
+    onCancel,
+}: {
+    accent: string
+    onContinue: () => void
+    onCancel: () => void
+}) {
+    const s = EXEC_SURFACE
+    return (
+        <View
+            style={[
+                StyleSheet.absoluteFillObject,
+                { backgroundColor: 'rgba(0,0,0,0.82)', alignItems: 'center', justifyContent: 'center', padding: 28 },
+            ]}
+        >
+            <View
+                style={{
+                    width: '100%',
+                    maxWidth: 340,
+                    borderRadius: 20,
+                    padding: 22,
+                    gap: 12,
+                    backgroundColor: s.surface,
+                    borderWidth: 1,
+                    borderColor: s.border,
+                }}
+            >
+                <View
+                    style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: withAlpha(accent, 0.16),
+                    }}
+                >
+                    <Camera size={20} color={accent} />
+                </View>
+                <Text style={{ fontFamily: FONT.displayBold, fontSize: 17, color: s.text }}>
+                    Ponle tu foto al entreno
+                </Text>
+                <Text style={{ fontFamily: FONT.ui, fontSize: 13, lineHeight: 19, color: s.textMuted }}>
+                    Usamos la cámara solo para tomar la foto de tu card. La imagen se arma en tu teléfono y no se
+                    sube a ningún servidor. También puedes elegir una de tu galería o compartir sin foto.
+                </Text>
+                <PrimaryButton label="Continuar" accent={accent} onPress={onContinue} />
+                <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Ahora no"
+                    onPress={onCancel}
+                    style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+                >
+                    <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 14, color: s.textMuted }}>Ahora no</Text>
+                </Pressable>
+            </View>
+        </View>
+    )
+}
+
+/**
+ * Damero de "transparencia" detrás del lienzo. Un `Pattern` de SVG y no una grilla de Views: a
+ * 342×608 px la grilla serían ~400 nodos nativos para una capa puramente decorativa.
+ */
+function Checkerboard({ width, height }: { width: number; height: number }) {
+    const cell = 12
+    return (
+        <Svg
+            width={width}
+            height={height}
+            style={{ position: 'absolute', left: 0, top: 0 }}
+            pointerEvents="none"
+        >
+            <Defs>
+                <Pattern id="shareAlphaGrid" patternUnits="userSpaceOnUse" width={cell * 2} height={cell * 2}>
+                    <Rect x={0} y={0} width={cell * 2} height={cell * 2} fill="#E4E4E7" />
+                    <Rect x={0} y={0} width={cell} height={cell} fill="#F4F4F5" />
+                    <Rect x={cell} y={cell} width={cell} height={cell} fill="#F4F4F5" />
+                </Pattern>
+            </Defs>
+            <Rect x={0} y={0} width={width} height={height} fill="url(#shareAlphaGrid)" />
+        </Svg>
+    )
+}

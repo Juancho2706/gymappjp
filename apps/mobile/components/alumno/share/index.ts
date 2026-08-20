@@ -48,6 +48,9 @@ export { MuscleBodySvg, type MuscleBodySvgProps } from './MuscleBodySvg'
 export * from './stickers'
 export { ShareCanvas, type ShareCanvasProps } from './ShareCanvas'
 
+// ── Composer (F3): la pantalla que arma el card ──────────────────────────────────────────────────
+export { WorkoutShareComposer, type WorkoutShareComposerProps } from './WorkoutShareComposer'
+
 // ── Salida: PNG y fuentes de foto ────────────────────────────────────────────────────────────────
 export {
     captureShareCanvas,

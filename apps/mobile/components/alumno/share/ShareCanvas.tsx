@@ -53,6 +53,12 @@ export interface ShareCanvasProps {
     tokens: SportTokens
     /** Preset Póster: la cifra gigante va delante del sujeto con alpha bajo (PLAN §Póster). */
     posterGhost?: boolean
+    /**
+     * Sub-toggle del editor (F3): el `@handle` del coach vive DENTRO del sticker de marca, así que
+     * no tiene `visible` propio en el layout — viaja como prop hasta `BrandFooterSticker`.
+     * Default `true` (el handle es el mecanismo de growth del feature).
+     */
+    showHandle?: boolean
 }
 
 /** Medida de un sticker ya montado (necesaria para anclarlo por su CENTRO). */
@@ -92,6 +98,7 @@ export function ShareCanvas({
     width,
     tokens,
     posterGhost = false,
+    showHandle = true,
 }: ShareCanvasProps) {
     // Sin redondear: `captureRef` re-escala el nodo a 1080×1920 exactos y cualquier desvío de
     // aspecto acá se traduce en un estiramiento del PNG.
@@ -134,7 +141,7 @@ export function ShareCanvas({
             case 'setlist':
                 return <SetlistSticker {...props} />
             case 'marca':
-                return <BrandFooterSticker {...props} />
+                return <BrandFooterSticker {...props} showHandle={showHandle} />
             case 'fecha':
                 return <DateChipSticker {...props} />
             case 'racha':

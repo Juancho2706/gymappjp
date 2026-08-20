@@ -9,6 +9,7 @@ import {
     SHARE_PRESET_BY_ID,
     SHARE_PRESETS,
     ShareCanvas,
+    WorkoutShareComposer,
     type ShareBackground,
     type SharePresetId,
     type WorkoutShareData,
@@ -133,6 +134,7 @@ function ShareCanvasHarnessBody() {
     const { width: screenW } = useWindowDimensions()
     const [presetId, setPresetId] = useState<SharePresetId>(DEFAULT_SHARE_PRESET_ID)
     const [background, setBackground] = useState<ShareBackground>('brand')
+    const [composerOpen, setComposerOpen] = useState(false)
 
     const preset = SHARE_PRESET_BY_ID[presetId]
     // Copia por preset: `ShareCanvas` no muta el layout, pero así el harness se comporta igual que el
@@ -154,6 +156,23 @@ function ShareCanvasHarnessBody() {
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
                     Preset {preset.label} · fondo {background} · músculos {preset.muscleView}
                 </Text>
+
+                {/* Composer completo (F3). `embedded={false}`: acá el harness es una ruta normal, no
+                    hay Modal host, así que el composer abre su PROPIA ventana nativa — que es el
+                    camino que hay que probar en device (el `embedded` se ejercita desde el resumen
+                    post-entreno, que sí es un Modal). */}
+                <Pressable
+                    onPress={() => setComposerOpen(true)}
+                    style={{
+                        minHeight: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 12,
+                        backgroundColor: '#8B5CF6',
+                    }}
+                >
+                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Abrir composer</Text>
+                </Pressable>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                     {SHARE_PRESETS.map((p) => (
@@ -191,6 +210,8 @@ function ShareCanvasHarnessBody() {
                     />
                 </View>
             </ScrollView>
+
+            <WorkoutShareComposer visible={composerOpen} onClose={() => setComposerOpen(false)} data={MOCK} />
         </View>
     )
 }

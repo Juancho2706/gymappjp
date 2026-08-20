@@ -42,10 +42,11 @@ encolar el build 1.1.2 (F9).
 - [x] F1.4 Móvil: `CoachBranding.instagramHandle` + `BRANDING_COLS_RICH` + mapper
       (branding.ts); editor Mi Marca RN completo (coach-brand.ts + brand.tsx: input con
       leftIcon @, dirty normalizado, cache del device parcheada).
-- [ ] F1.5 ⚠ DECISIÓN PRODUCTO PENDIENTE: el coach FREE no tiene UI para llegar al campo —
-      `/coach/settings/brand` (web) y `brand.tsx` (RN) están gateadas Pro+ ENTERAS
-      (`isBrandingAllowed`). El handle ya se persiste sin gate en ambos servers; falta decidir
-      dónde lo edita un Free (ligado a la discusión white-label-en-Free del socio).
+- [x] F1.5 DECISIÓN OWNER 19-08: white-label queda COMO ESTÁ (opción C — se evaluó split
+      lite/full y se descartó por ahora). Consecuencia asumida: el @handle solo lo editan
+      coaches Pro+ (Mi Marca); el card de un alumno de coach Free sale con brand_name pero
+      acento/logo EVA y sin handle. Si el loop de shares demuestra tracción en Free,
+      reabrir con datos (student_share_* por tier).
 
 ## F2 — ShareCanvas + 6 presets (la imagen)
 
@@ -70,12 +71,19 @@ encolar el build 1.1.2 (F9).
 
 ## F3 — Editor (paso 2)
 
-- [ ] F3.1 Fila de presets deslizable (thumbnails en vivo del ShareCanvas a escala).
-- [ ] F3.2 Fuente de foto: cámara (pre-permiso «Continuar» — regla iOS), galería, sin foto.
-- [ ] F3.3 10 toggles: volumen, duración, series, récords, 1RM, músculos (silueta/chips/ambos),
-      logo, @handle, fecha, racha. Defaults del mockup. Cambio de preset conserva toggles,
-      resetea posiciones.
-- [ ] F3.4 QR solo visible/activable en variante Guardar.
+- [x] F3.1 `WorkoutShareComposer` (3 pasos, un solo lienzo montado — remontar re-mide stickers)
+      con fila de 6 minis: ShareCanvas real a 68px, layout de fábrica + React.memo (un toggle
+      no repinta los minis). Chrome con literales EXEC_SURFACE (canvas siempre-oscuro).
+- [x] F3.2 Cámara con panel pre-permiso «Continuar»/«Ahora no» (hook useCameraPermissions para
+      estado fresco), galería, sin foto. Pendiente F5: atajo a Ajustes cuando canAskAgain=false.
+- [x] F3.3 Toggles por sticker + selector de vista muscular + sub-toggle @handle (prop
+      showHandle nueva en BrandFooterSticker). DRIFT documentado: «duración y series» = UN
+      toggle (mismo sticker) y 1RM vive dentro de récords (anunciado en hint). Cambio de
+      preset: posiciones se resetean, overrides del alumno sobreviven (refs, no estado);
+      fondo/silueta con regla `touched`.
+- [x] F3.4 QR default OFF vía override sembrado (sobrevive el cambio de preset; `sello` lo
+      trae de fábrica y el SPEC manda OFF). Paso Compartir provisional: hoja nativa con
+      captura+cleanup (F5 lo reemplaza por botones de destino).
 
 ## F4 — Acomodar (paso 3, drag)
 

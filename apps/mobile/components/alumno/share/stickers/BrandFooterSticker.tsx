@@ -11,7 +11,16 @@ import { accentOf, sizer, W40, W88, type StickerProps } from './sticker-kit'
  * growth principal del feature (SPEC §Growth): sobrevive a screenshots y re-posts, que es
  * exactamente lo que un link no hace.
  */
-export function BrandFooterSticker({ data, k, stickerScale, tokens }: StickerProps) {
+export interface BrandFooterStickerProps extends StickerProps {
+    /**
+     * Sub-toggle del editor (F3): el `@handle` se imprime DENTRO de esta firma, no suelto, así que
+     * no puede ser un sticker aparte con su propio `visible`. Default `true` — el handle es el
+     * mecanismo de growth del feature y solo desaparece si el alumno lo apaga a mano.
+     */
+    showHandle?: boolean
+}
+
+export function BrandFooterSticker({ data, k, stickerScale, tokens, showHandle = true }: BrandFooterStickerProps) {
     const s = sizer(k, stickerScale)
     const accent = accentOf(tokens)
     const { name, logoUrl, instagramHandle } = data.brand
@@ -53,7 +62,7 @@ export function BrandFooterSticker({ data, k, stickerScale, tokens }: StickerPro
                 >
                     {name.toUpperCase()}
                 </Text>
-                {instagramHandle ? (
+                {instagramHandle && showHandle ? (
                     <Text
                         style={{ fontFamily: FONT.uiSemibold, fontSize: s(26), lineHeight: s(32), color: accent }}
                         numberOfLines={1}
