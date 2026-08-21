@@ -24,7 +24,7 @@ import {
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { RegisterCoachFreeSchema } from '@eva/schemas'
-import { getTierCapabilities, getTierMaxClients, type SaleTier } from '@eva/tiers'
+import { getTierCapabilities, getTierMaxClients, studentCountLabel, type SaleTier } from '@eva/tiers'
 import { useTheme } from '../../context/ThemeContext'
 import { AuthDivider, Button, Card, GoogleSignInButton, HapticPressable, Input } from '../../components'
 import { toast } from '../../components/Toast'
@@ -402,7 +402,7 @@ export default function RegisterScreen() {
                   <SummaryRow label="Marca" value={brandName.trim()} />
                   <SummaryRow label="Email" value={email.trim().toLowerCase()} />
                   <SummaryRow label="Plan" value="Gratis" />
-                  <SummaryRow label="Alumnos" value={`Hasta ${getTierMaxClients(REGISTRABLE_TIER)}`} />
+                  <SummaryRow label="Cupo" value={studentCountLabel(getTierMaxClients(REGISTRABLE_TIER))} />
                   {/* Nutricion base (V2) viene incluida en TODOS los planes, Free incluido:
                       la superficie no tiene gate de tier. `caps.canUseNutrition` solo gatea
                       la compra del add-on en billing, por eso esta fila no lo consulta. */}

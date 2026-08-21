@@ -185,8 +185,10 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
     .eq('id', user.id)
     .maybeSingle()
 
-  // La fila conserva el branding personalizado durante Free, pero este camino de escritura
-  // también debe ser fail-closed: una llamada directa no puede modificar el visual bloqueado.
+  // Pricing v3 (owner 2026-08-21): el white-label está en todos los planes vendidos — un free
+  // pasa este gate y escribe su marca. NO se borra: el camino de escritura sigue siendo
+  // fail-closed, así una llamada directa con tier inválido (o el legacy starter, que sigue sin
+  // marca) no puede modificar el visual bloqueado.
   const brandingAllowed = isBrandingAllowed(
     (current?.subscription_tier ?? 'free') as SubscriptionTier,
   )
@@ -264,8 +266,11 @@ export async function uploadCoachLogo(
     .eq('id', user.id)
     .maybeSingle()
   if (coachError || !coach) return { ok: false, error: 'No se pudo verificar tu plan.' }
+  // Pricing v3 (owner 2026-08-21): el logo propio entra en todos los planes vendidos (free
+  // incluido). El gate queda como fail-closed para tier inválido / legacy starter — sin CTA de
+  // pago en el mensaje (políticas de las tiendas).
   if (!isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)) {
-    return { ok: false, error: 'El logo personalizado requiere un plan que incluya branding.' }
+    return { ok: false, error: 'Tu plan actual no permite editar la marca.' }
   }
 
   try {

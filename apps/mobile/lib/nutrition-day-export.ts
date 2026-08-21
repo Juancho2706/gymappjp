@@ -1,7 +1,18 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { calculateFoodItemMacros, type FoodItemForMacros } from './nutrition-utils'
-import { canUseBranding, type SubscriptionTier } from './coach-tiers'
+// Gate de marca + sello desde el paquete compartido (mismo patrón que theme.ts / coach-brand.ts /
+// brand-fonts.ts). OJO: se usa `isBrandingAllowed` y NO el azúcar `canUseBranding` de
+// `./coach-tiers` — ese wrapper hace `getTierCapabilities(tier).canUseBranding` SIN optional
+// chaining y LANZA con un tier fuera del union (un `subscription_tier` corrupto reventaba el
+// export en vez de caer a EVA). `isBrandingAllowed` es fail-closed de verdad (`?.`).
+import {
+  EVA_BADGE_LABEL,
+  getEvaBadgeUrl,
+  isBrandingAllowed,
+  showsEvaBadge,
+  type SubscriptionTier,
+} from '@eva/tiers'
 
 /**
  * Export del día de nutrición del alumno (E4-16). Tres salidas, espejo exacto de
@@ -62,6 +73,12 @@ export interface NutritionExportBrand {
   primaryColor: string
   logoUrl: string | null
   poweredByEva: boolean
+  /**
+   * Sello «Hecho con EVA» en el pie del PDF (Pricing v3, D3=A, owner 2026-08-21). NO es lo
+   * contrario de `poweredByEva`: desde v3 un free tiene su MARCA PROPIA en el PDF *y* el sello.
+   * Gate único: `showsEvaBadge(tier)` de @eva/tiers (free/starter sí, pro/elite no), FAIL-OPEN.
+   */
+  showsEvaBadge: boolean
 }
 
 export const EVA_EXPORT_BRAND: NutritionExportBrand = {
@@ -69,6 +86,8 @@ export const EVA_EXPORT_BRAND: NutritionExportBrand = {
   primaryColor: '#10B981',
   logoUrl: null,
   poweredByEva: true,
+  // El PDF EVA puro también firma: si ya no hay marca de coach, el sello es la única atribución.
+  showsEvaBadge: true,
 }
 
 function hexToRgb(hex: string): Rgb | null {
@@ -87,17 +106,28 @@ function darken(rgb: Rgb, factor: number): Rgb {
 }
 
 /**
- * Marca del PDF a partir del branding del coach (mismo criterio que la web:
- * free tier / sin nombre / sin color válido ⇒ EVA exacto — nunca un PDF "a medias").
+ * Marca del PDF a partir del branding del coach (mismo criterio que la web: sin marca permitida /
+ * sin nombre / sin color válido ⇒ EVA exacto — nunca un PDF "a medias").
+ *
+ * Pricing v3 (owner 2026-08-21): el white-label está en todos los planes vendidos, así que un FREE
+ * exporta con SU marca. Lo que lo separa de Pro es el sello «Hecho con EVA» del pie
+ * (`showsEvaBadge`, FAIL-OPEN). `isBrandingAllowed` no se borra: sigue mandando a EVA al tier
+ * inválido y al legacy starter.
  */
 export function resolveNutritionExportBrand(source: NutritionExportBrandSource | null | undefined): NutritionExportBrand {
   if (!source) return EVA_EXPORT_BRAND
   const tier = (source.subscriptionTier ?? 'free') as SubscriptionTier
-  if (!canUseBranding(tier)) return EVA_EXPORT_BRAND
+  if (!isBrandingAllowed(tier)) return EVA_EXPORT_BRAND
   const name = source.displayName?.trim()
   if (!name) return EVA_EXPORT_BRAND
   const color = source.primaryColor && hexToRgb(source.primaryColor) ? source.primaryColor : EVA_EXPORT_BRAND.primaryColor
-  return { brandName: name, primaryColor: color, logoUrl: source.logoUrl ?? null, poweredByEva: false }
+  return {
+    brandName: name,
+    primaryColor: color,
+    logoUrl: source.logoUrl ?? null,
+    poweredByEva: false,
+    showsEvaBadge: showsEvaBadge(tier),
+  }
 }
 
 interface Palette {
@@ -106,9 +136,15 @@ interface Palette {
   brandName: string
   generatedWithLabel: string
   logoUrl: string | null
+  /** Sello «Hecho con EVA» del pie (Pricing v3); null ⇒ el plan del coach no lo lleva. */
+  evaBadgeLabel: string | null
 }
 
+/** Texto del sello tal cual se pinta en el pie del PDF. Cadena del paquete + dominio legible. */
+const EVA_BADGE_PDF_LABEL = `${EVA_BADGE_LABEL} · eva-app.cl`
+
 function derivePalette(brand: NutritionExportBrand): Palette {
+  const evaBadgeLabel = brand.showsEvaBadge ? EVA_BADGE_PDF_LABEL : null
   if (brand.poweredByEva) {
     return {
       accent: EVA_ACCENT,
@@ -116,6 +152,7 @@ function derivePalette(brand: NutritionExportBrand): Palette {
       brandName: EVA_EXPORT_BRAND.brandName,
       generatedWithLabel: 'Generado con EVA Fitness',
       logoUrl: null,
+      evaBadgeLabel,
     }
   }
   const accent = hexToRgb(brand.primaryColor) ?? EVA_ACCENT
@@ -126,6 +163,7 @@ function derivePalette(brand: NutritionExportBrand): Palette {
     brandName: brand.brandName,
     generatedWithLabel: `Generado con ${brand.brandName}`,
     logoUrl: brand.logoUrl,
+    evaBadgeLabel,
   }
 }
 
@@ -359,6 +397,9 @@ function buildDayPdfHtml(params: NutritionDayExportParams, brand: NutritionExpor
     .tc-goal { font-size: 7.5px; color: rgb(148,163,184); margin-top: 1px; }
     .footer { margin-top: 14px; padding: 8px 0 16px; border-top: 0.5px solid rgb(203,213,225); display: flex; justify-content: space-between; gap: 10px; }
     .footer span { font-size: 7px; color: rgb(148,163,184); }
+    /* Sello «Hecho con EVA» (Pricing v3): mismo gris muted del disclaimer, sin subrayado ni
+       color de marca — discreto pero visible, y nunca compite con el white-label del coach. */
+    .eva-badge { font-size: 7px; color: rgb(148,163,184); text-decoration: none; }
     @page { margin: 0 0 12mm; size: A4 portrait; }
   `
 
@@ -410,7 +451,9 @@ function buildDayPdfHtml(params: NutritionDayExportParams, brand: NutritionExpor
       ${mealsHtml}
       ${totalsHtml}
       <div class="footer">
-        <span>${esc(p.generatedWithLabel)}. Uso personal. No reemplaza valoración clínica, dietética ni médica.</span>
+        <span>${esc(p.generatedWithLabel)}. Uso personal. No reemplaza valoración clínica, dietética ni médica.${
+          p.evaBadgeLabel ? ` <a class="eva-badge" href="${esc(getEvaBadgeUrl('rn_export'))}">${esc(p.evaBadgeLabel)}</a>` : ''
+        }</span>
         <span>${esc(now)}</span>
       </div>
     </div>

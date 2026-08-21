@@ -2,7 +2,7 @@
  * Tipografía white-label RN (2R-3) — espejo móvil de `apps/web/src/lib/brand-fonts.ts`.
  *
  * Evidencia web:
- * - El layout `/c` resuelve `brand_font_key` (gate Pro+ vía `isBrandingAllowed` + preset curado
+ * - El layout `/c` resuelve `brand_font_key` (gate de marca vía `isBrandingAllowed` + preset curado
  *   vía `resolvePresetBranding`) y lo inyecta como `--brand-font`
  *   (apps/web/src/app/c/[coach_slug]/layout.tsx:146-166, 194-195, 309).
  * - TODO heading h1..h6 bajo `/c` consume `var(--brand-font, ...)`
@@ -113,7 +113,10 @@ export function isFontKey(value: string | null | undefined): value is FontKey {
 /**
  * Resuelve la key de fuente EFECTIVA para el branding almacenado — espejo exacto del gate
  * del layout web /c (apps/web/src/app/c/[coach_slug]/layout.tsx:146-166,194):
- * 1. tier < Pro (`isBrandingAllowed`) ⇒ sin fuente custom (web: `fontKey = ''`).
+ * 1. tier sin marca (`isBrandingAllowed` false ⇒ tier inválido o el legacy starter) ⇒ sin fuente
+ *    custom (web: `fontKey = ''`). Pricing v3 (owner 2026-08-21): el white-label está en todos los
+ *    planes vendidos, así que un free SÍ resuelve su fuente de marca; el gate queda como
+ *    fail-closed para tiers corruptos/cachés viejas.
  * 2. preset curado vía `resolvePresetBranding` — la elección explícita del coach gana
  *    sobre la sugerencia del preset (presets.ts:275,282).
  * 3. key fuera del catálogo cerrado ⇒ null (fail-closed, default EVA).

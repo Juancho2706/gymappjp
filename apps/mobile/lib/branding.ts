@@ -18,7 +18,13 @@ export interface CoachBranding {
   logoUrlDark?: string | null
   /** Tagline del hero de login (`welcome_message`). */
   welcomeMessage?: string | null
-  /** Tier de suscripcion — gatea el branding (isBrandingAllowed: < Pro => EVA). */
+  /**
+   * Tier de suscripcion. Dos usos, ambos con la MISMA fuente (`@eva/tiers`):
+   *  - `isBrandingAllowed` — gate de marca. Pricing v3 (owner 2026-08-21): el white-label esta en
+   *    todos los planes vendidos, asi que hoy solo cae a EVA un tier invalido o el legacy starter.
+   *  - `showsEvaBadge` — sello «Hecho con EVA» en las superficies del ALUMNO (free/starter si,
+   *    pro/elite no). Pro = cupo + sin sello.
+   */
   subscriptionTier?: string | null
   /** Variante de layout del login: clasico | hero | energia | minimal (`login_layout_key`). */
   loginLayoutKey?: string | null

@@ -39,10 +39,11 @@ const WARNING_700 = { light: '#8F5A05', dark: '#FFD489' } as const
  *
  * Lo que SÍ queda son las salidas que viven dentro de la app:
  *  - ACTUALIZAR ESTADO: revalida entitlements; si el plan volvió, el guard suelta al toque.
- *  - VOLVER A FREE: no cobra nada — es la salida gratuita. El cupo comunicado es el de ESTE coach
- *    (grandfather pricing v2, P2: viejo ve 3, nuevo 2 — `freeClientLimitFor(created_at)`). Si está
- *    sobre el cupo, el panel de archivado lo deja bajar primero (el endpoint revalida server-side
- *    con el mismo helper de todos modos).
+ *  - VOLVER A FREE: no cobra nada — es la salida gratuita. El cupo comunicado es el de ESTE coach:
+ *    Pricing v3 pone el grandfather en la COLUMNA `coaches.max_clients`, así que si el coach ya
+ *    está en free manda su columna; si viene de un plan pago vencido se proyecta con la escalera
+ *    (`freeClientLimitFor(created_at)`: pre-v2 3 · v2 2 · v3 1). Si está sobre el cupo, el panel de
+ *    archivado lo deja bajar primero (el endpoint revalida server-side de todos modos).
  *  - CERRAR SESIÓN.
  */
 export default function CoachReactivateScreen() {
@@ -109,9 +110,18 @@ export default function CoachReactivateScreen() {
   // La salida gratuita es exclusiva del coach STANDALONE: en org/team el plan lo paga la
   // organización y este muro ni siquiera debería aparecer (el guard nunca gatea a managed).
   const canGoFree = workspace.kind === 'standalone' && !data?.orgManaged
-  // Cupo free de ESTE coach (grandfather P2): sin perfil cargado cae al fail-safe generoso
-  // (límites viejos) — solo display; el endpoint revalida con el mismo helper.
-  const freeLimit = freeClientLimitFor(data?.profile.createdAt)
+  // Cupo free de ESTE coach. Pricing v3 (owner 2026-08-21): el grandfather vive en la COLUMNA
+  // `coaches.max_clients` (backfill por USO del día D), no en la fecha de alta — así que si el coach
+  // YA está en free, su columna manda y un free viejo con 3 alumnos sigue leyendo «hasta 3».
+  // Si viene de un plan PAGO vencido, su columna es la del plan pago (25/60) y usarla acá le
+  // prometería un Free que no existe: ahí se proyecta con la escalera (pre-v2 3 · v2 2 · v3 1),
+  // exactamente lo que activate-free escribirá. Sin perfil cargado, fail-safe generoso; solo
+  // display — el endpoint revalida el cupo antes de bajar a nadie.
+  const coachProfile = data?.profile ?? null
+  const freeLimit =
+    coachProfile && coachProfile.subscriptionTier === 'free' && typeof coachProfile.maxClients === 'number'
+      ? coachProfile.maxClients
+      : freeClientLimitFor(coachProfile?.createdAt)
   const overFreeLimit = clientCount > freeLimit
 
   return (

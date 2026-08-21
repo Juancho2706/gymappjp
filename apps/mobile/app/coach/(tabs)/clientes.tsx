@@ -505,6 +505,8 @@ export default function ClientesScreen() {
     return vals.length ? Math.round(vals.reduce((a, p) => a + p.percentage, 0) / vals.length) : 0
   }, [pulseById])
   const archivedCount = useMemo(() => clients.filter((c) => c.isArchived).length, [clients])
+  // Alumnos que ocupan cupo (los archivados no cuentan): lo usan el alta y la importación.
+  const activeCount = useMemo(() => clients.filter((c) => !c.isArchived).length, [clients])
   const archiveDisabledReason = !unarchiveCapacity
     ? 'Validando cupo…'
     : unarchiveCapacity.available
@@ -950,6 +952,8 @@ export default function ClientesScreen() {
         onCreated={() => { fetchDirectoryData().catch(() => {}) }}
         theme={theme}
         maxClients={maxClients}
+        currentTier={subscriptionTier}
+        activeCount={activeCount}
         workspace={{ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }}
       />
 
@@ -983,7 +987,7 @@ export default function ClientesScreen() {
         <ImportClientsForm
           theme={theme}
           maxClients={maxClients}
-          activeCount={clients.filter((c) => !c.isArchived).length}
+          activeCount={activeCount}
           workspace={{ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }}
           access={
             workspace.kind === 'standalone'
