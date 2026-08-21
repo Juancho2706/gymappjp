@@ -7,7 +7,7 @@ canonical: false
 
 # SPEC — Pricing v3: Free = 1 alumno con white-label · Pro = 25 + todo
 
-**Estado: APROBADA por el owner el 2026-08-21 (decisiones 1A 2A 3A 4A 5A 6A). EN EJECUCIÓN — día D = 2026-08-21.**
+**Estado: EJECUTADA el 2026-08-21 (decisiones 1A 2A 3A 4A 5A 6A). Backfill LIVE `20260821153527`, web `2edea500` en prod, OTA a los 3 runtimes, correo a 34 Free enviado. Detalle y evidencia en [TASKS](TASKS.md).**
 **Robin: decidido (B, se deja que archive — ver §Robin). `PRICING_V3_CUTOVER = 2026-08-21T00:00:00Z`.**
 
 ## Origen
