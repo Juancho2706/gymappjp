@@ -387,8 +387,12 @@ export default function LoginScreen() {
   // Reemplaza al «con tecnología de EVA» que se pintaba para TODO tier: ahora es el gancho de Pro
   // — free/starter lo llevan, pro/elite no. Un solo sello (nada de doble firma) y sobre la
   // superficie neutra de la hoja, nunca sobre el color de marca. El gate es `showsEvaBadge`,
-  // FAIL-OPEN a propósito: tier ausente/corrupto ⇒ se muestra.
-  const poweredBy = showsEvaBadge((branding?.subscriptionTier ?? 'free') as SubscriptionTier) ? (
+  // FAIL-OPEN a propósito: tier CORRUPTO ⇒ se muestra. Pero «todavía no sé el tier» no es lo
+  // mismo que «tier corrupto»: `branding` llega async desde ThemeContext (AsyncStorage) y en los
+  // primeros frames es `null` — evaluarlo como 'free' pintaba el sello un instante a los alumnos
+  // de un coach PRO (regresión 21-08). Sin branding resuelto no hay sello: el login genérico de
+  // EVA tampoco lo necesita (sería EVA firmándose a sí misma).
+  const poweredBy = branding && showsEvaBadge((branding.subscriptionTier ?? 'free') as SubscriptionTier) ? (
     <EvaBadge medium="student_login" testID="login-eva-badge" style={styles.poweredBy} />
   ) : null
 

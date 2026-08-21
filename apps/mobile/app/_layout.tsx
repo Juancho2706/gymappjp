@@ -1,4 +1,8 @@
 import 'react-native-gesture-handler'
+// Sentry SEGUNDO (detrás de gesture-handler, que exige ir primero) y antes que todo lo demás:
+// Babel emite los require() en orden de fuente, así que un throw a tiempo de módulo en cualquier
+// import de abajo solo llega a Sentry si el init ya corrió. Ver lib/sentry-boot.ts (21-08-2026).
+import { SENTRY_DSN, navigationIntegration, syncSentryUser } from '../lib/sentry-boot'
 import '../global.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -57,55 +61,9 @@ import { AppState, View } from 'react-native'
 // During Fast Refresh it may already be hidden, so that rejection is harmless.
 void SplashScreen.preventAutoHideAsync().catch(() => {})
 
-// Telemetría de errores (E0-G1 / G11 §1.8). Gateado por env: sin DSN es no-op TOTAL
-// (cero llamadas de red, cero riesgo de crash). El DSN se inyecta vía EAS build
-// (EXPO_PUBLIC_SENTRY_DSN); sin él la app corre exactamente igual que hoy.
-const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
-
-// Instrumentación de navegación de Expo Router. Se CONSTRUYE siempre —es solo un objeto con
-// closures, sin efectos hasta que un client la instala— y se registra únicamente si hay DSN,
-// para no romper el no-op total de arriba. Con `tracesSampleRate: 0` no se envía ni una
-// transacción: lo que interesa acá es su OTRO efecto, el breadcrumb `navigation`
-// ("Navigation to <ruta>") que deja en el scope en cada cambio de pantalla. Sin él un crash
-// llega sin decir DÓNDE estaba el usuario, que es justo lo que costó caro en EVA-MOBILE-7.
-const navigationIntegration = Sentry.reactNavigationIntegration()
-
-if (SENTRY_DSN) {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    debug: false,
-    enabled: !__DEV__,
-    // Se queda en 0 A PROPOSITO: no queremos transacciones de performance, solo el efecto
-    // colateral de `navigationIntegration` (ver arriba). Si alguna vez hiciera falta tracing,
-    // el tope es 0.1 — con 0.2+ el free tier de Sentry se agota en dias y empieza a DESCARTAR
-    // errores, que es lo unico que de verdad miramos.
-    tracesSampleRate: 0,
-    integrations: [navigationIntegration],
-    // 100 (default) no alcanza: en una sesion real de la app la mitad del presupuesto se la
-    // comen los GET 200 de miniaturas de Supabase Storage, y para cuando llega el crash los
-    // breadcrumbs que explican QUE hizo el usuario ya se cayeron por la ventana. 300 + el
-    // filtro de abajo dejan varios minutos de rastro util. El limite real no es este numero
-    // sino el tamano maximo del payload del evento, muy lejos todavia.
-    maxBreadcrumbs: 300,
-    // Los thumbnails de Storage son ruido puro: siempre 200, siempre iguales, nunca explican
-    // nada. Se descartan por URL. OJO al contrato: el SDK ENCADENA este callback con el suyo
-    // —primero corre el nuestro y despues el interno que filtra dev server y DSN— asi que
-    // devolver `null` aca corta bien y devolver el breadcrumb intacto no pisa ese filtro.
-    // Mismo shape que usa el SDK internamente: `type === 'http'` + `data.url`.
-    beforeBreadcrumb: (breadcrumb) => {
-      const url = breadcrumb.data?.url
-      if (breadcrumb.type === 'http' && typeof url === 'string' && url.includes('/storage/v1/')) {
-        return null
-      }
-      return breadcrumb
-    },
-    // Sesiones (Release Health): sin esto no hay crash-free rate y no se puede responder
-    // "el OTA de ayer, ¿mejoro o empeoro?". No esta en los DEFAULT_OPTIONS del SDK JS, asi que
-    // sin declararlo la clave ni siquiera cruza al SDK nativo y queda a merced del default de
-    // cada plataforma; explicito lo fija en los dos.
-    enableAutoSessionTracking: true,
-  })
-}
+// Telemetría de errores (E0-G1 / G11 §1.8): el `Sentry.init` y la integración de navegación viven
+// en `lib/sentry-boot.ts`, importado PRIMERO arriba. Acá solo se consumen `SENTRY_DSN` y
+// `navigationIntegration` (mismo gate: sin DSN, no-op total).
 
 // Expo Router: fallback global ante un throw no atrapado (en vez de pantalla blanca).
 // Envolvemos el boundary de marca para reportar el error a Sentry (si hay DSN).
@@ -190,8 +148,15 @@ function RootLayoutNav() {
 
   useEffect(() => {
     registerSessionCacheJanitor()
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
+    // `syncSentryUser`: solo el uid, para cruzar un crash con su cuenta (lib/sentry-boot.ts).
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      syncSentryUser(data.session)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => {
+      setSession(s)
+      syncSentryUser(s)
+    })
     return () => subscription.unsubscribe()
   }, [])
 

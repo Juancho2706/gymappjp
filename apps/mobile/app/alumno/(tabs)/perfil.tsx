@@ -752,8 +752,11 @@ export default function AlumnoPerfilScreen() {
                 el gate es `showsEvaBadge` de @eva/tiers (free/starter sí, pro/elite no) y el texto
                 + la URL con UTMs salen del paquete compartido. El tier del coach YA venía en el
                 mismo load (`detail.coachTier`) — cero queries nuevas. Superficie neutra, texto
-                muted del DS, sin CTA de pago (políticas de las tiendas). */}
-            {showsEvaBadge((detail?.coachTier ?? 'free') as SubscriptionTier) && (
+                muted del DS, sin CTA de pago (políticas de las tiendas). Con `detail` aún null
+                (cargando o error de red) NO se pinta: el fail-open del helper es para un tier
+                corrupto, no para «todavía no sé el tier» — si no, un alumno de coach Pro veía el
+                sello un instante (regresión 21-08). */}
+            {detail && showsEvaBadge((detail.coachTier ?? 'free') as SubscriptionTier) && (
               <EvaBadge medium="student_app" testID="perfil-eva-badge" style={{ marginTop: 12 }} />
             )}
 

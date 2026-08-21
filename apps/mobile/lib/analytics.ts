@@ -1,4 +1,6 @@
 import { PostHog } from 'posthog-react-native'
+import Constants from 'expo-constants'
+import * as Updates from 'expo-updates'
 
 /**
  * Analytics de producto del binario (Share Entreno F7.1).
@@ -11,9 +13,14 @@ import { PostHog } from 'posthog-react-native'
  *
  * ── ALCANCE DELIBERADAMENTE MÍNIMO ──
  * Sin autocapture (no hay `PostHogProvider` montado), sin session replay, sin captura de pantallas,
- * sin lifecycle events, sin error tracking (de eso ya se ocupa Sentry) y sin `identify()`: la
- * persona es el `distinct_id` anónimo que genera el SDK. Es a propósito — v1 mide UN funnel, no
- * abre una plataforma de tracking. Cualquier evento nuevo se agrega acá y se justifica.
+ * sin error tracking (de eso ya se ocupa Sentry) y sin `identify()`: la persona es el
+ * `distinct_id` anónimo que genera el SDK. Es a propósito — v1 mide UN funnel, no abre una
+ * plataforma de tracking. Cualquier evento nuevo se agrega acá y se justifica.
+ *
+ * EXCEPCIÓN (2026-08-21): lifecycle events ON (`Application Opened` / `Installed` / `Updated` /
+ * `Backgrounded`). Son la única señal de QUÉ binario y QUÉ OTA corre cada device: el crash de
+ * Android del 21-08 no se pudo atribuir a una versión porque no existían. Viajan con
+ * `$app_version`/`$app_build` (expo-constants) y las super-properties `ota_*` (expo-updates).
  *
  * ── TAXONOMÍA ──
  * `snake_case`, formato `objeto_accion` (`student_share_target_selected`), espejo de la tabla de
@@ -65,9 +72,18 @@ function createClient(): PostHog | null {
             // Sin perfil de persona hasta que alguien llame a `identify()` — que nadie llama. Los
             // eventos quedan como anónimos y no inflamos el conteo de MTU con perfiles vacíos.
             personProfiles: 'identified_only',
-            // Todo lo automático, APAGADO (ver §alcance). Los defaults del SDK son `true` en varios
-            // de estos, así que no alcanza con "no usarlos": hay que desactivarlos explícitamente.
-            captureAppLifecycleEvents: false,
+            // Lifecycle events ON (21-08-2026, ver §alcance): `Application Opened` en cada arranque con
+            // la versión REAL del binario. Sin `expo-application` (no instalado: sería un módulo
+            // nativo más) el SDK no sabe la versión ni el build, así que se los damos desde
+            // expo-constants (`Installed`/`Updated` los necesitan para dispararse).
+            captureAppLifecycleEvents: true,
+            customAppProperties: (props) => ({
+                ...props,
+                $app_version: Constants.expoConfig?.version ?? props.$app_version ?? null,
+                $app_build: Constants.nativeBuildVersion ?? props.$app_build ?? null,
+            }),
+            // El RESTO de lo automático sigue APAGADO. Los defaults del SDK son `true` en varios de
+            // estos, así que no alcanza con "no usarlos": hay que desactivarlos explícitamente.
             enableSessionReplay: false,
             capturePushNotificationSubscriptions: false,
             capturePushNotificationOpened: false,
@@ -85,6 +101,22 @@ function createClient(): PostHog | null {
 }
 
 const client = createClient()
+
+// Super-properties (viajan en TODOS los eventos, lifecycle incluidos): qué OTA de expo-updates corre
+// (`embedded` = bundle del binario) y en qué runtime. Es lo que separa «crashea el binario» de
+// «crashea el OTA» mirando PostHog. `register` persiste en file y puede devolver promesa: nunca
+// puede lanzar ni bloquear el arranque.
+try {
+    void Promise.resolve(
+        client?.register({
+            ota_update_id: Updates.updateId ?? 'embedded',
+            ota_runtime: Updates.runtimeVersion ?? null,
+            ota_channel: Updates.channel ?? null,
+        })
+    ).catch(() => {})
+} catch {
+    // Nunca tumbar el arranque por analítica.
+}
 
 /** `true` solo si hay key configurada Y el cliente se pudo construir. Útil para tests/diagnóstico. */
 export function isAnalyticsEnabled(): boolean {

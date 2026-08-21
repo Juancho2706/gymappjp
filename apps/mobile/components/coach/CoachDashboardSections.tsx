@@ -553,7 +553,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           </Text>
           <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle={`Hasta ${TIER_CONFIG.free.maxClients} alumnos en el plan Free`} />
           <WelcomeStep icon={Zap} color={ember700} backgroundColor={ember100} title="Crea tu primera rutina" subtitle="Constructor de programas sin límites" />
-          <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu marca" subtitle="Logo y colores propios · no incluido en tu plan" />
+          <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu marca" subtitle="Logo y colores propios · incluido en tu plan Free" />
         </View>
 
         <View style={styles.freeWelcomeSection}>
@@ -568,7 +568,9 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
               { ok: true, text: 'Check-ins' },
               // Nutricion incluida en todos los planes, Free incluido (paridad con web).
               { ok: true, text: 'Nutrición' },
-              { ok: false, text: 'Marca personalizada' },
+              // Pricing v3 (owner 2026-08-21): white-label completo en Free (paridad con
+              // FreeWelcomeModal web). Lo que distingue a Pro es el cupo y sacarse el sello.
+              { ok: true, text: 'Marca personalizada (tu logo y color)' },
             ].map((item) => (
               <View key={item.text} style={styles.freePlanItem}>
                 {item.ok ? (
@@ -1313,11 +1315,12 @@ export function MobileOnboardingGuideChip({
   const sport700 = dark ? sport.dark['700'] : sport.ramp['700']
   const success100 = dark ? 'rgba(31,184,119,0.18)' : '#DBF5EA'
   const success700 = dark ? '#6FE3B4' : '#0E7A50'
-  const isFree = coach.subscriptionTier === 'free'
   const [brandOverride, setBrandOverride] = useState<boolean | null>(null)
   const brandDone = brandOverride ?? Boolean(coach.hasCoachLogo)
   const steps = [
-    { key: 'brand', label: 'Personaliza tu marca', done: brandDone, route: isFree ? 'subscription' : 'brand' },
+    // Pricing v3 (owner 2026-08-21): el white-label está en TODOS los planes — el Free va a Mi
+    // Marca, no a suscripción (drift detectado 21-08: el paso 1 de la guía era un paywall).
+    { key: 'brand', label: 'Personaliza tu marca', done: brandDone, route: 'brand' },
     { key: 'client', label: 'Suma tu primer alumno', done: totalClients > 0, route: 'clients' },
     { key: 'plan', label: 'Crea tu primer plan', done: activePlans > 0, route: 'programs' },
     { key: 'checkin', label: 'Recibe el primer check-in', done: hasStudentSignal30d, route: 'clients' },

@@ -91,7 +91,6 @@ export function CoachOnboardingChecklist({
     totalClients,
     activePlans,
     hasStudentSignal30d,
-    subscriptionTier,
     hasCoachLogo,
 }: {
     coachId: string
@@ -109,7 +108,6 @@ export function CoachOnboardingChecklist({
     const [manualCompleted, setManualCompleted] = useState<Partial<Record<StepKey, boolean>>>({})
     const [brandTourSeen, setBrandTourSeen] = useState(false)
     const [guideOpenOverride, setGuideOpenOverride] = useState<boolean | null>(null)
-    const isFree = subscriptionTier === 'free'
     const previousStateRef = useRef<Partial<Record<StepKey, boolean>>>({})
     const ahaRef = useRef(false)
     const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -376,7 +374,10 @@ export function CoachOnboardingChecklist({
         {
             key: 'profile_branding',
             label: 'Personaliza tu marca',
-            href: isFree ? '/coach/subscription' : '/coach/settings?tour=1',
+            // Pricing v3 (owner 2026-08-21): el white-label está en TODOS los planes — el Free va a
+            // Mi Marca, no a la página de precios. Drift detectado 21-08: 37 `upgrade_gate_hit`
+            // (16 coaches) eran este paso 1 mandando al Free a un paywall.
+            href: '/coach/settings?tour=1',
         },
         { key: 'first_client', label: 'Suma tu primer alumno', href: '/coach/clients' },
         { key: 'first_plan', label: 'Crea tu primer plan', href: '/coach/workout-programs' },

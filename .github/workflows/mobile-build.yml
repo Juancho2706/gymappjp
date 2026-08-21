@@ -65,6 +65,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 2026-08-21: `expo-system-ui@^57` (de un SDK más nuevo) se coló en un binario Expo 54 y su AAR
+      # precompilado reventó al arrancar en TODO Android (NoClassDefFoundError AnyTypeCache, build 85).
+      # `expo install --check` sale 1 si una dependencia de Expo no coincide con la versión que el SDK
+      # instalado espera: corta el ciclo de build antes de gastarlo y antes de llegar a las tiendas.
+      - name: Guard Expo SDK compatibility (fail-fast)
+        run: pnpm --filter @eva/mobile exec expo install --check
+
       - uses: expo/expo-github-action@v9
         with:
           eas-version: latest
@@ -175,6 +182,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # 2026-08-21: `expo-system-ui@^57` (de un SDK más nuevo) se coló en un binario Expo 54 y su AAR
+      # precompilado reventó al arrancar en TODO Android (NoClassDefFoundError AnyTypeCache, build 85).
+      # `expo install --check` sale 1 si una dependencia de Expo no coincide con la versión que el SDK
+      # instalado espera: corta el ciclo de build antes de gastarlo y antes de llegar a las tiendas.
+      - name: Guard Expo SDK compatibility (fail-fast)
+        run: pnpm --filter @eva/mobile exec expo install --check
 
       - uses: expo/expo-github-action@v9
         with:
