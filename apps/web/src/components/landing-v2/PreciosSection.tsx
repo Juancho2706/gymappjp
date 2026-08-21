@@ -8,8 +8,8 @@
  *  - Precios computados en vivo desde `@eva/tiers` (NO los números del diseño).
  *  - Equivalente mensual = round(total período / meses) — mismo cálculo que
  *    `LandingPricingPreview.tsx`.
- *  - Rangos derivados de `getTierMaxClients` en AMBOS idiomas (pricing v2:
- *    Free hasta 2 · Pro hasta 25 · Elite 26–60; starter fuera de venta).
+ *  - Rangos derivados de `getTierMaxClients` en AMBOS idiomas (pricing v3:
+ *    Free 1 con marca · Pro 25 sin sello · Elite 26–60; starter fuera de venta).
  *  - CTAs → `/register?tier=<id>&cycle=<ciclo activo>` (Free → `/register`).
  *
  * Analitica (Pricing v2 E1, invariante P8): el embudo de precios vivia SOLO en `/pricing`, que es
@@ -42,9 +42,9 @@ const FONT_MONO = 'var(--font-geist-mono), ui-monospace, monospace'
 const FONT_DISPLAY = 'var(--font-montserrat), var(--font-inter), sans-serif'
 const FONT_NUM = 'var(--font-archivo), var(--font-montserrat), sans-serif'
 
-// Rangos derivados de la fuente REAL (@eva/tiers) — catálogo de venta pricing v2.
+// Rangos derivados de la fuente REAL (@eva/tiers) — catálogo de venta pricing v3.
 // Pro ya no arranca «después de starter» (fuera de venta): su rango es «hasta 25».
-const FREE_HI = getTierMaxClients('free') // 2
+const FREE_HI = getTierMaxClients('free') // 1
 const PRO_HI = getTierMaxClients('pro') // 25
 const ELITE_LO = getTierMaxClients('pro') + 1 // 26
 const ELITE_HI = getTierMaxClients('elite') // 60
@@ -92,9 +92,11 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
     // Rango de alumnos por idioma, derivado del maxClients real (NO del EN_DICT stale).
     const rangeLabel = (lo: number | null, hi: number) => {
         if (lang === 'en') {
-            return lo == null ? `Up to ${hi} active clients` : `${lo}–${hi} active clients`
+            if (lo == null) return hi === 1 ? '1 active client' : `Up to ${hi} active clients`
+            return `${lo}–${hi} active clients`
         }
-        return lo == null ? `Hasta ${hi} alumnos activos` : `${lo}–${hi} alumnos activos`
+        if (lo == null) return hi === 1 ? '1 alumno activo' : `Hasta ${hi} alumnos activos`
+        return `${lo}–${hi} alumnos activos`
     }
 
     // CTA glass (Free / Elite): hover sube el fondo 0.04 → 0.08.
@@ -278,7 +280,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     <div style={planKicker}>{'// free'}</div>
                     <h3 style={planName}>Free</h3>
                     <p style={planSub}>
-                        {t('pf_sub', 'Todo EVA sin tarjeta. Hasta 2 alumnos, para siempre.')}
+                        {t('pf_sub', 'Todo EVA con tu marca, sin tarjeta. 1 alumno, para siempre.')}
                     </p>
                     <div style={priceRow}>
                         <span style={priceNum}>$0</span>
@@ -306,16 +308,16 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             <span style={{ color: '#4ADE80' }}>✓</span>
                             {t('pf_4', 'Planes de nutrición incluidos')}
                         </li>
-                        {/* Pricing v2 (P1/P3): los 4 módulos van incluidos en TODOS los planes,
-                            Free incluido — el gate server ya los libera (hasPaidModuleAccess). Lo
-                            único que Free NO trae es white-label (sigue Pro+). */}
+                        {/* Pricing v3 (owner 2026-08-21): los 4 módulos Y el white-label van
+                            incluidos en TODOS los planes, Free incluido — el gate server ya los
+                            libera (hasPaidModuleAccess / isBrandingAllowed). */}
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
                             {t('pf_5', '4 módulos profesionales incluidos')}
                         </li>
-                        <li style={{ ...liStyle, color: '#8A8A93' }}>
-                            <span style={{ color: '#8A8A93' }}>✗</span>
-                            {t('pf_6', 'Sin marca propia (white-label)')}
+                        <li style={liStyle}>
+                            <span style={{ color: '#4ADE80' }}>✓</span>
+                            {t('pf_6', 'White-label: tu logo y tu color')}
                         </li>
                     </ul>
                     {/* Explícito: los CTA de pago ya mandan su tier (`?tier=pro` / `?tier=elite`), y
@@ -396,7 +398,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     </div>
                     <h3 style={{ ...planName, position: 'relative' }}>Pro</h3>
                     <p style={{ ...planSub, position: 'relative' }}>
-                        {t('pp_sub', 'Hasta 25 alumnos y tu marca completa en la app.')}
+                        {t('pp_sub', 'Hasta 25 alumnos y tu app sin rastro de EVA.')}
                     </p>
                     <div style={{ ...priceRow, position: 'relative' }}>
                         <span data-price="pro" style={priceNum}>
@@ -415,7 +417,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                         </li>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
-                            {t('pp_3', 'White-label: tu logo y tu color')}
+                            {t('pp_3', 'Sin el sello «Hecho con EVA»')}
                         </li>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>

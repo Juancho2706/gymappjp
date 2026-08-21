@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Sparkles, Users, Palette, Zap, CheckCircle2, XCircle } from 'lucide-react'
-import { getTierMaxClients } from '@eva/tiers'
+import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
 import { CoachRegisteredTracker } from '@/components/analytics/RegistrationTracker'
 import Link from 'next/link'
@@ -75,7 +75,7 @@ export function FreeWelcomeModal() {
                             </div>
                             <div>
                                 <p className="text-sm font-semibold text-strong">Agrega tu primer alumno</p>
-                                <p className="text-xs text-muted">Hasta {getTierMaxClients('free')} alumnos en el plan Free</p>
+                                <p className="text-xs text-muted">{studentCountLabel(getTierMaxClients('free'))} en el plan Free</p>
                             </div>
                         </li>
                         <li className="flex items-start gap-3">
@@ -92,8 +92,8 @@ export function FreeWelcomeModal() {
                                 <Palette className="h-3.5 w-3.5 text-[var(--success-600)]" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-strong">Personaliza tu app con Pro</p>
-                                <p className="text-xs text-muted">Tu logo y colores desde $29.990/mes</p>
+                                <p className="text-sm font-semibold text-strong">Crece con Pro</p>
+                                <p className="text-xs text-muted">Hasta 25 alumnos y sin el sello «Hecho con EVA», desde $29.990/mes</p>
                             </div>
                         </li>
                     </ul>
@@ -104,7 +104,7 @@ export function FreeWelcomeModal() {
                     <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-2.5">Tu plan Free incluye</p>
                     <div className="grid grid-cols-2 gap-1.5 text-xs">
                         {[
-                            { ok: true,  text: `${getTierMaxClients('free')} alumnos activos` },
+                            { ok: true,  text: `${studentCountLabel(getTierMaxClients('free'))} activos` },
                             { ok: true,  text: 'Entrenos ilimitados' },
                             { ok: true,  text: 'App para tus alumnos' },
                             { ok: true,  text: 'Check-ins' },
@@ -112,7 +112,7 @@ export function FreeWelcomeModal() {
                             // todos los planes, Free incluido. `canUseNutrition` solo gatea la COMPRA
                             // del add-on en billing, no el acceso al módulo.
                             { ok: true,  text: 'Nutrición' },
-                            { ok: false, text: 'Marca personalizada' },
+                            { ok: true, text: 'Marca personalizada (tu logo y color)' },
                         ].map(({ ok, text }) => (
                             <div key={text} className={`flex items-center gap-1.5 ${ok ? 'text-muted' : 'text-subtle opacity-70'}`}>
                                 {ok

@@ -77,7 +77,55 @@ describe('createClientAction', () => {
     })
 
     const result = await createClientAction({}, buildFormData())
-    expect(result.error).toContain('Alcanzaste el límite de 1 alumnos')
+    expect(result.error).toContain('Alcanzaste el límite de 1 alumno de tu plan')
+    // El rechazo lleva el contexto del gate para `upgrade_gate_hit` (sin PII).
+    expect(result.upgradeRequired).toBe(true)
+    expect(result.currentLimit).toBe(1)
+    expect(result.currentTier).toBe('starter')
+    expect(result.activeCount).toBe(1)
+  })
+
+  // Pricing v3 (owner 2026-08-21): Free = 1 alumno. Este es el muro que empieza a chocar el 99% de
+  // las altas nuevas, y el que alimenta el embudo `upgrade_gate_hit { gate: 'client_limit' }`.
+  it('bloquea el 2º alumno de un Free con cupo 1 y devuelve tier + conteo del rechazo', async () => {
+    const coachesQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          id: 'coach-1',
+          slug: 'coach',
+          subscription_tier: 'free',
+          // Columna del coach nuevo tras el corte v3. Manda sobre cualquier catálogo.
+          max_clients: 1,
+          created_at: '2026-08-21T10:00:00.000Z',
+        },
+      }),
+    }
+    const clientsCountQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ count: 1, error: null }),
+    }
+
+    const supabase = {
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },
+      from: vi.fn((table: string) => {
+        if (table === 'coaches') return coachesQuery
+        if (table === 'clients') return clientsCountQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    }
+
+    createClientMock.mockResolvedValue(supabase)
+    createServiceRoleClientMock.mockReturnValue({ auth: { admin: { createUser: vi.fn() } } })
+
+    const result = await createClientAction({}, buildFormData())
+    expect(result.upgradeRequired).toBe(true)
+    expect(result.error).toContain('Alcanzaste el límite de 1 alumno de tu plan')
+    expect(result.currentLimit).toBe(1)
+    expect(result.currentTier).toBe('free')
+    expect(result.activeCount).toBe(1)
   })
 
   it('creates client when under limit', async () => {

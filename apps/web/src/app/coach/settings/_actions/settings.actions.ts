@@ -56,7 +56,7 @@ export async function updateBrandSettingsAction(
         // sale de sealPair(primario)/preset y el texto del loader se pinta derivado del primario.
         loader_text_color: '',
         loader_icon_mode: (formData.get('loader_icon_mode') as string | null) ?? 'eva',
-        // white-label v2 (gateados a Pro+ más abajo)
+        // white-label v2 (se aplican bajo la red fail-closed de más abajo)
         brand_secondary_color: '',
         accent_light: '',
         accent_dark: '',
@@ -108,11 +108,12 @@ export async function updateBrandSettingsAction(
         welcomeModalVersion += 1
     }
 
-    // ── Gate de branding (decisión CEO 2026-06-21, white-label v2) ────────────────
-    // Branding VISUAL (color + loader) = Pro+ ENTERO. El page redirige y el render del alumno
-    // cae a EVA, pero el action es POSTeable directo → este es el enforcement server-side real.
-    // Identidad (full_name/brand_name) y comunicación (welcome_*) NO se gatean: el alumno ve el
-    // nombre del coach y su mensaje aunque el chrome sea EVA.
+    // ── Gate de branding (white-label en TODOS los planes, decisión owner 2026-08-21) ─────
+    // Desde Pricing v3 el white-label es de todos los tiers; Pro = cupo + sin sello «Hecho con
+    // EVA». `isBrandingAllowed` queda como red de seguridad FAIL-CLOSED: solo bloquea tiers
+    // inválidos/stale (y contextos org/team gestionados fuera de acá). El action es POSTeable
+    // directo → este sigue siendo el enforcement server-side real.
+    // Identidad (full_name/brand_name) y comunicación (welcome_*) NO se gatean.
     const tier = (currentCoach?.subscription_tier ?? 'free') as SubscriptionTier
     const brandingAllowed = isBrandingAllowed(tier)
 
@@ -121,7 +122,7 @@ export async function updateBrandSettingsAction(
         full_name: parsed.data.full_name,
         brand_name: parsed.data.brand_name,
         // Share Entreno — el handle de Instagram es IDENTIDAD (va en las tarjetas que comparten
-        // los alumnos), no personalización visual: se persiste SIEMPRE, fuera del gate Pro+.
+        // los alumnos), no personalización visual: se persiste SIEMPRE, fuera del gate de branding.
         instagram_handle: parsed.data.instagram_handle ?? null,
         welcome_message: parsed.data.welcome_message || null,
         welcome_modal_enabled: parsed.data.welcome_modal_enabled,
@@ -130,7 +131,7 @@ export async function updateBrandSettingsAction(
         welcome_modal_version: welcomeModalVersion,
         welcome_modal_updated_at: modalChanged ? new Date().toISOString() : undefined,
         // Ejecutor V3 (E0.7) — preferencia (no branding visual): se persiste SIEMPRE, igual que
-        // identidad/comunicación (fuera del gate Pro+). La columna trae GRANT UPDATE authenticated.
+        // identidad/comunicación (fuera del gate de branding). La columna trae GRANT UPDATE authenticated.
         executor_theme: parsed.data.executor_theme,
         updated_at: new Date().toISOString(),
     }
@@ -143,11 +144,11 @@ export async function updateBrandSettingsAction(
         // loader_text_color NO se escriben desde standalone (los valores posteados se descartaron
         // arriba). Los valores almacenados quedan intactos en DB, inertes por contrato.
         updatePayload.loader_icon_mode = parsed.data.loader_icon_mode
-        // white-label v2 (mismo gate Pro+). logo_url_dark se sube aparte (updateLogoDarkAction, W2 UI).
+        // white-label v2 (mismo gate de branding). logo_url_dark se sube aparte (updateLogoDarkAction, W2 UI).
         updatePayload.neutral_tint = parsed.data.neutral_tint
         updatePayload.brand_font_key = parsed.data.brand_font_key || null
         updatePayload.loader_variant = parsed.data.loader_variant
-        // white-label W1b — mismo gate Pro+. NULL = comportamiento legacy (grandfather intocable):
+        // white-label W1b — mismo gate de branding. NULL = comportamiento legacy (grandfather intocable):
         // el tema NO materializa el color custom del coach (Opción A del informe §3, reversible).
         updatePayload.theme_preset_key = wl3.data.theme_preset_key || null
         updatePayload.login_layout_key = wl3.data.login_layout_key || null
@@ -208,14 +209,15 @@ export async function createLogoUploadUrlAction(params: {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
-    // Gate Pro+ (mismo que updateLogoAction): un coach < Pro no sube logo (su app cae a EVA).
+    // Red de seguridad fail-closed (mismo que updateLogoAction): white-label abierto a todos los
+    // planes desde Pricing v3 (owner 2026-08-21); solo un tier inválido/stale cae acá.
     const { data: coach } = await supabase
         .from('coaches')
         .select('subscription_tier')
         .eq('id', user.id)
         .single()
     if (!isBrandingAllowed((coach?.subscription_tier ?? 'free') as SubscriptionTier)) {
-        return { error: 'El branding personalizado está disponible desde el plan Pro.' }
+        return { error: 'Tu plan actual no permite editar la marca. Escríbenos si crees que es un error.' }
     }
 
     // Path fijo bajo la carpeta del coach → satisface la RLS logos_owner_insert/_update.
@@ -252,15 +254,16 @@ export async function updateLogoAction(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
-    // Gate de branding (Pro+ ENTERO, decisión CEO 2026-06-21): un coach < Pro no sube logo
-    // (su app cae a EVA). Enforcement server-side — el botón se oculta en UI pero el action es POSTeable.
+    // Red de seguridad fail-closed: el white-label es de todos los planes desde Pricing v3
+    // (owner 2026-08-21) y solo un tier inválido/stale queda fuera. Enforcement server-side —
+    // el action es POSTeable aunque la UI no muestre el botón.
     const { data: logoCoach } = await supabase
         .from('coaches')
         .select('subscription_tier')
         .eq('id', user.id)
         .single()
     if (!isBrandingAllowed((logoCoach?.subscription_tier ?? 'free') as SubscriptionTier)) {
-        return { error: 'El branding personalizado está disponible desde el plan Pro.' }
+        return { error: 'Tu plan actual no permite editar la marca. Escríbenos si crees que es un error.' }
     }
 
     const ext = file.name.split('.').pop() ?? 'png'
@@ -295,7 +298,7 @@ export async function updateLogoAction(
 
 // ── Logo modo oscuro (H4, white-label v2) ────────────────────────────────────
 // Espejo EXACTO de updateLogoAction: mismo bucket ('logos'), mismas validaciones (≤2 MB +
-// magic bytes JPEG/PNG), mismo gate Pro+. Solo cambia el path (logo-dark) y la columna
+// magic bytes JPEG/PNG), misma red fail-closed. Solo cambia el path (logo-dark) y la columna
 // (logo_url_dark, que la app del alumno YA consume). El alumno usa este logo en modo oscuro.
 export async function updateLogoDarkAction(
     _prev: BrandSettingsState,
@@ -319,7 +322,8 @@ export async function updateLogoDarkAction(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
-    // Gate de branding (Pro+ ENTERO): un coach < Pro no sube logo (su app cae a EVA).
+    // Red de seguridad fail-closed: white-label en todos los planes desde Pricing v3
+    // (owner 2026-08-21); solo un tier inválido/stale cae acá.
     // Enforcement server-side — el control se oculta en UI pero el action es POSTeable.
     const { data: logoCoach } = await supabase
         .from('coaches')
@@ -327,7 +331,7 @@ export async function updateLogoDarkAction(
         .eq('id', user.id)
         .single()
     if (!isBrandingAllowed((logoCoach?.subscription_tier ?? 'free') as SubscriptionTier)) {
-        return { error: 'El branding personalizado está disponible desde el plan Pro.' }
+        return { error: 'Tu plan actual no permite editar la marca. Escríbenos si crees que es un error.' }
     }
 
     const ext = file.name.split('.').pop() ?? 'png'

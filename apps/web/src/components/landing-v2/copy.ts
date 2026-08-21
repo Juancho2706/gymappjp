@@ -11,7 +11,7 @@
  * los componentes que las usan (ModulosPro) las renderizan con
  * `dangerouslySetInnerHTML`; las demás son texto plano.
  */
-import { getTierMaxClients } from '@eva/tiers'
+import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 
 // El cupo Free se deriva del catálogo también acá: el ES del FAQ ya lo hacía, y dejar el EN con el
 // número escrito a mano reabre exactamente el drift que este barrido vino a cerrar (QA 17-08).
@@ -90,23 +90,23 @@ export const EN_DICT: Record<string, string> = {
   cyc_q: 'Quarterly −10%',
   cyc_a: 'Annual −20%',
   cyc_note: '// monthly equivalent · billed per period · clp',
-  // Pricing v2: free = all of EVA (nutrition + 4 modules included) except white-label.
-  pf_sub: 'All of EVA, no card. Up to 2 clients, forever.',
+  // Pricing v3: free = all of EVA with your brand; Pro = seats + no badge.
+  pf_sub: 'All of EVA with your brand, no card. 1 client, forever.',
   p_unit: 'clp / mo',
   p_unit2: 'clp / mo',
   p_unit3: 'clp / mo',
-  pf_1: 'Up to 2 active clients',
+  pf_1: '1 active client',
   pf_2: 'Full routine builder',
   pf_3: '{{count}}-exercise GIF catalog',
   pf_4: 'Nutrition plans included',
   pf_5: '4 professional modules included',
-  pf_6: 'No white-label branding',
+  pf_6: 'White-label: your logo and color',
   pf_cta: 'Start free',
   badge_pop: 'most popular',
-  pp_sub: 'Up to 25 clients plus your full brand on the app.',
+  pp_sub: 'Up to 25 clients and your app with no trace of EVA.',
   pp_1: 'Up to 25 active clients',
   pp_2: 'Nutrition plans included',
-  pp_3: 'White-label: your logo and color',
+  pp_3: 'No “Made with EVA” badge',
   pp_4: 'Check-ins, progress and alerts',
   pp_5: '4 professional modules included',
   pp_cta: 'Choose Pro →',
@@ -168,7 +168,7 @@ export const EN_DICT: Record<string, string> = {
   q4: 'Can I migrate my routines from Excel?',
   a4: 'Yes. Load a routine once in the builder —with the {{count}}-exercise catalog— and reuse it with as many clients as you want.',
   q5: 'Do I need a card to start?',
-  a5: `No. The Free plan is permanent for up to ${FREE_MAX_CLIENTS} clients, no card, with the full builder.`,
+  a5: `The Free plan is permanent for ${studentCountLabel(FREE_MAX_CLIENTS, 'en')}, no card, with your brand and the full builder.`,
 
   mp0_t: 'Cardio by heart-rate zones',
   mp0_d: 'Turns “do 30 minutes of jogging” into a real prescription: effort zones computed for each client’s body, not a generic table.',

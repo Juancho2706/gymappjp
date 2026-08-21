@@ -146,6 +146,7 @@ export async function createClientInternal(
             welcomeMessage: coach.welcome_message,
             logoUrl: emailBrand.logoUrl,
             primaryColor: emailBrand.primaryColor,
+            showsEvaBadge: emailBrand.showsEvaBadge,
         })
         sendTransactionalEmail({
             to: emailSan,

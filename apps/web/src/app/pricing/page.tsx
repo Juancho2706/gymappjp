@@ -142,7 +142,7 @@ const planDisplay: Array<{
 }> = [
     {
         id: 'free',
-        description: 'Todo EVA · 2 alumnos · sin marca propia',
+        description: 'Todo EVA · 1 alumno · con tu marca',
         icon: Sprout,
         color: 'text-slate-400',
         bg: 'bg-slate-500/10',
@@ -151,7 +151,7 @@ const planDisplay: Array<{
     },
     {
         id: 'pro',
-        description: 'Hasta 25 alumnos + tu marca completa',
+        description: 'Hasta 25 alumnos · sin sello EVA',
         icon: Crown,
         color: 'text-violet-400',
         bg: 'bg-violet-500/10',
@@ -220,7 +220,8 @@ export default function PricingPage() {
                     <span className="text-violet-400">para cada etapa de tu negocio</span>
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                    Empieza gratis con todo EVA para 2 alumnos. Cuando tu negocio crezca, elige el plan que se adapta.
+                    Empieza gratis con todo EVA y tu marca, para 1 alumno.
+                    Cuando tu negocio crezca, elige el plan que se adapta.
                 </p>
             </div>
 
@@ -323,7 +324,7 @@ function PlanCard({
 
             <h2 className="text-lg font-bold text-foreground mb-1">{tier.label}</h2>
             <p className="text-muted-foreground text-sm mb-3">{plan.description}</p>
-            {/* Rango de venta por plan (free «Hasta 2» / pro «Hasta 25» / elite «26–60»).
+            {/* Rango de venta por plan (free «1 alumno» / pro «Hasta 25» / elite «26–60»).
                 Un coach grandfathered ve SU límite real en su panel, no este label. */}
             <p className="text-xs text-muted-foreground mb-3">
                 {TIER_STUDENT_RANGE_LABEL[plan.id]}

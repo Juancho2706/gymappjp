@@ -8,6 +8,7 @@ import {
     comparePlanDirection,
     FLOW_ENABLED,
     getTierCapabilities,
+    studentCountLabel,
     tierMaxClientsFor,
     isBillingCycleAllowedForTier,
     SELF_SERVICE_ADDONS_ENABLED,
@@ -367,7 +368,7 @@ export async function POST(request: Request) {
                     return NextResponse.json(
                         {
                             code: 'OVER_CAPACITY',
-                            error: `El plan ${TIER_CONFIG[tier].label} permite hasta ${maxClients} alumnos y tienes ${activeClients}. Archiva alumnos antes de bajar de plan.`,
+                            error: `El plan ${TIER_CONFIG[tier].label} permite hasta ${studentCountLabel(maxClients)} y tienes ${activeClients}. Archiva alumnos antes de bajar de plan.`,
                             maxClients,
                             activeClients,
                         },

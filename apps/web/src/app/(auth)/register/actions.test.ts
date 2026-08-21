@@ -352,9 +352,10 @@ describe('registerAction', () => {
       // PR #28 (drip fix): web free signup nace 'pending_email' hasta confirmar el correo (no 'active').
       subscription_status: 'pending_email',
       payment_provider: 'admin',
-      // Pricing v2: registro nuevo = catálogo nuevo (free 2). Los free existentes retienen 3
-      // vía tierMaxClientsFor (grandfather); acá siempre es un coach recién creado.
-      max_clients: 2,
+      // Pricing v3 (owner 2026-08-21): registro nuevo = catálogo nuevo (free 1, con white-label).
+      // Los free existentes conservan su cupo en la columna coaches.max_clients (backfill del
+      // 21-08 + escalera tierMaxClientsFor); acá siempre es un coach recién creado.
+      max_clients: 1,
       trial_used_email: 'coach@example.com',
     }))
     expect(createClientMock).not.toHaveBeenCalled()

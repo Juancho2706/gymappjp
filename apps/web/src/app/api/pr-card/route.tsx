@@ -11,8 +11,9 @@ import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 // con next/og (gratis, sin servicio pago). Auth OBLIGATORIO: la imagen la puede pedir SOLO el
 // propio alumno (su record) o su coach; nada público. El artefacto que se comparte es el PNG
 // (via navigator.share files), no la URL. Marca = white-label del coach/team del alumno (NUNCA
-// EVA hardcodeado): nombre + color + logo del coach (Pro+) o del team (pool). Coach free =
-// nombre del coach + color DS por defecto, sin logo custom (respeta el gate de branding pago).
+// EVA hardcodeado): nombre + color + logo del coach o del team (pool). Desde Pricing v3
+// (owner 2026-08-21) el white-label es de todos los planes; solo un tier inválido/stale cae al
+// color DS por defecto sin logo custom (red fail-closed de `isBrandingAllowed`).
 export const runtime = 'nodejs'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -97,8 +98,9 @@ type Brand = { brandName: string; logoUrl: string | null; accent: string }
 
 /**
  * Marca white-label del alumno: TEAM si es alumno de pool (team_id set, org_id NULL), si no el
- * COACH. El color/logo del coach se aplican solo si su tier permite branding (Pro+); free/starter
- * conservan el NOMBRE del coach pero con color DS por defecto y sin logo custom (gate de marca pago).
+ * COACH. El color/logo se aplican para todo tier que pase `isBrandingAllowed` (free incluido
+ * desde Pricing v3); un tier inválido/stale conserva el NOMBRE del coach pero con color DS por
+ * defecto y sin logo custom.
  */
 async function resolveBrand(
     admin: ReturnType<typeof createServiceRoleClient>,

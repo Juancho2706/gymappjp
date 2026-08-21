@@ -358,8 +358,8 @@ describe('veredictos resueltos', () => {
         expect(h.getCoachAccessSnapshot().blocked).toBe(false)
     })
 
-    // Pricing v2: cupo free de catálogo = 2 (B2 migra este guard al helper con created_at para
-    // que un free VIEJO siga midiendo contra 3 — grandfather).
+    // Pricing v3: cupo free de catálogo = 1 (los coaches viejos conservan el suyo en
+    // `coaches.max_clients`, que gana sobre el catálogo — casos de grandfather más abajo).
     it('free standalone sobre el cupo => blocked (usa el conteo real de clientes)', async () => {
         const h = await setup({ clientCount: 3, profile: async () => profile({ subscriptionTier: 'free' }) })
         await h.refreshCoachAccess(true)
@@ -369,8 +369,25 @@ describe('veredictos resueltos', () => {
         expect(s.blocked).toBe(true)
     })
 
-    it('free standalone dentro del cupo => acceso', async () => {
+    it('free standalone dentro del cupo (1 alumno) => acceso', async () => {
+        const h = await setup({ clientCount: 1, profile: async () => profile({ subscriptionTier: 'free' }) })
+        await h.refreshCoachAccess(true)
+        expect(h.getCoachAccessSnapshot().blocked).toBe(false)
+    })
+
+    // Pricing v3: el free NUEVO con 2 alumnos ya está sobre su cupo de 1.
+    it('free standalone con 2 alumnos y cupo de catálogo 1 => blocked', async () => {
         const h = await setup({ clientCount: 2, profile: async () => profile({ subscriptionTier: 'free' }) })
+        await h.refreshCoachAccess(true)
+        expect(h.getCoachAccessSnapshot().blocked).toBe(true)
+    })
+
+    // Grandfather real de v3: free VIEJO con cupo 3 y 2 alumnos => sigue dentro.
+    it('free VIEJO (max_clients=3) con 2 activos => acceso', async () => {
+        const h = await setup({
+            clientCount: 2,
+            profile: async () => profile({ subscriptionTier: 'free', maxClients: 3 }),
+        })
         await h.refreshCoachAccess(true)
         expect(h.getCoachAccessSnapshot().blocked).toBe(false)
     })

@@ -9,9 +9,11 @@ type WelcomeClientContext = {
     loginUrl: string
     tempPassword: string
     welcomeMessage?: string | null
-    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    showsEvaBadge?: boolean
 }
 
 export function buildClientWelcomeEmail(ctx: WelcomeClientContext) {
@@ -61,7 +63,7 @@ ${welcomeLine}
     const html = wrapEmailLayout(body, {
         previewText: `Bienvenido/a a ${ctx.brandName}. Tu coach ${ctx.coachName} te espera.`,
         headerTitle: `Bienvenido/a a ${ctx.brandName}`,
-        brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
+        brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor, showsEvaBadge: ctx.showsEvaBadge },
     })
 
     return { subject, html }
@@ -75,9 +77,11 @@ type ProgramAssignedContext = {
     programName: string
     startDate: string
     dashboardUrl: string
-    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    showsEvaBadge?: boolean
 }
 
 export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
@@ -121,7 +125,7 @@ export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
     const html = wrapEmailLayout(body, {
         previewText: `Tu coach te asignó "${ctx.programName}". ¡Entra a verlo!`,
         headerTitle: `Nuevo programa — ${ctx.brandName}`,
-        brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
+        brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor, showsEvaBadge: ctx.showsEvaBadge },
     })
 
     return { subject, html }
@@ -190,7 +194,7 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú
   <tr>
     <td>
       <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
-        <strong>¿Quieres crecer sin techo?</strong> Cuando llegues al límite de alumnos, pasarte a <strong>Pro</strong> tarda menos de 2 minutos y suma más cupo y tu marca propia.
+        <strong>¿Quieres crecer sin techo?</strong> Cuando llegues al límite de alumnos, pasarte a <strong>Pro</strong> tarda menos de 2 minutos: hasta 25 alumnos y tu app sin el sello «Hecho con EVA».
       </p>
     </td>
   </tr>
@@ -409,9 +413,11 @@ type ClientArchivedContext = {
     coachName: string
     coachEmail?: string | null
     coachPublicUrl: string
-    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    showsEvaBadge?: boolean
 }
 
 export function buildClientArchivedEmail(ctx: ClientArchivedContext) {
@@ -452,7 +458,7 @@ ${badge('AVISO IMPORTANTE', '#F59E0B')}
     const html = wrapEmailLayout(body, {
         previewText: `Tu acceso a ${ctx.coachBrandName} ha sido suspendido temporalmente por tu entrenador.`,
         headerTitle: ctx.coachBrandName,
-        brand: { brandName: ctx.coachBrandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
+        brand: { brandName: ctx.coachBrandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor, showsEvaBadge: ctx.showsEvaBadge },
     })
 
     return { subject, html }
@@ -465,9 +471,11 @@ type ClientUnarchivedContext = {
     coachBrandName: string
     coachName: string
     loginUrl: string
-    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    showsEvaBadge?: boolean
 }
 
 export function buildClientUnarchivedEmail(ctx: ClientUnarchivedContext) {
@@ -494,7 +502,7 @@ ${badge('ACCESO RESTAURADO', '#10B981')}
     const html = wrapEmailLayout(body, {
         previewText: `Tu acceso a ${ctx.coachBrandName} fue restaurado. Ya puedes entrar.`,
         headerTitle: ctx.coachBrandName,
-        brand: { brandName: ctx.coachBrandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
+        brand: { brandName: ctx.coachBrandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor, showsEvaBadge: ctx.showsEvaBadge },
     })
 
     return { subject, html }

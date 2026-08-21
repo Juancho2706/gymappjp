@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClientInternal } from '@/app/coach/clients/_lib/create-client-internal'
-import { getTierCapabilities, getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
+import { getTierCapabilities, studentCountLabel, tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import type { Database, Json } from '@/lib/database.types'
 import { sanitizeCell } from '@/lib/import/csv-injection'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
@@ -233,7 +233,8 @@ export async function POST(request: NextRequest) {
 
     const { data: coach } = await admin
         .from('coaches')
-        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients, primary_color, logo_url')
+        // `created_at`: ancla de la escalera de grandfather para el fallback del cupo (ver abajo).
+        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients, created_at, primary_color, logo_url')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -248,7 +249,10 @@ export async function POST(request: NextRequest) {
 
     const rows = parsedRequest.data.rows
     if (!teamId && !orgId) {
-        const maxClients = coach?.max_clients ?? getTierMaxClients(tier)
+        // Mismo contrato que el alta unitaria y que el import web: la columna GANA (ahí vive el
+        // grandfather de Pricing v3) y el fallback es la escalera de fecha del coach, jamás el
+        // catálogo de venta plano (le daría 1 a un free viejo con cupo 3 por uso).
+        const maxClients = coach?.max_clients ?? tierMaxClientsFor(tier, coach?.created_at)
         const { count, error: countError } = await admin
             .from('clients')
             .select('id', { count: 'exact', head: true })
@@ -272,7 +276,7 @@ export async function POST(request: NextRequest) {
                 source: 'mobile_import',
             })
             return NextResponse.json({
-                error: `Tu plan permite ${maxClients} alumnos activos. Tienes ${count ?? 0} y quieres importar ${rows.length}. Actualiza tu plan o reduce la cantidad de filas.`,
+                error: `Tu plan permite ${studentCountLabel(maxClients)} activo${maxClients === 1 ? '' : 's'}. Tienes ${count ?? 0} y quieres importar ${rows.length}. Actualiza tu plan o reduce la cantidad de filas.`,
                 code: 'UPGRADE_REQUIRED',
                 currentLimit: maxClients,
             }, { status: 402 })

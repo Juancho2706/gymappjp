@@ -78,6 +78,7 @@ export async function sendArchiveLifecycleEmail(input: {
       coachPublicUrl: `${appUrl}${publicPath}`,
       logoUrl: emailBrand.logoUrl,
       primaryColor: emailBrand.primaryColor,
+      showsEvaBadge: emailBrand.showsEvaBadge,
     })
     : buildClientUnarchivedEmail({
       clientName: input.client.fullName,
@@ -86,6 +87,7 @@ export async function sendArchiveLifecycleEmail(input: {
       loginUrl: `${appUrl}${publicPath}/login`,
       logoUrl: emailBrand.logoUrl,
       primaryColor: emailBrand.primaryColor,
+      showsEvaBadge: emailBrand.showsEvaBadge,
     })
   await sendTransactionalEmail({ to: input.client.email, subject: email.subject, html: email.html })
 }

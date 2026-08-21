@@ -251,8 +251,8 @@ describe('subscriptionState + guard de reactivar', () => {
         expect(resolveReactivateRequired('expired', null, NOW)).toBe(true)
         expect(resolveReactivateRequired('org_managed', null, NOW)).toBe(false) // managed nunca
         expect(resolveReactivateRequired('team_managed', null, NOW)).toBe(false)
-        // Pricing v2: cupo free de catálogo = 2 (borde 2 dentro / 3 sobre). B2 migra este guard
-        // al helper con created_at (grandfather: un free VIEJO mide contra 3).
+        // Pricing v3: cupo free de catálogo = 1 (borde 1 dentro / 2 sobre). El free VIEJO mide
+        // contra su `coaches.max_clients` vía freeClientLimit (casos de grandfather más abajo).
         expect(
             resolveReactivateRequired('active', null, NOW, {
                 subscriptionTier: 'free',
@@ -264,6 +264,13 @@ describe('subscriptionState + guard de reactivar', () => {
             resolveReactivateRequired('active', null, NOW, {
                 subscriptionTier: 'free',
                 activeStandaloneClientCount: 2,
+                workspaceKind: 'standalone',
+            }),
+        ).toBe(true)
+        expect(
+            resolveReactivateRequired('active', null, NOW, {
+                subscriptionTier: 'free',
+                activeStandaloneClientCount: 1,
                 workspaceKind: 'standalone',
             }),
         ).toBe(false)

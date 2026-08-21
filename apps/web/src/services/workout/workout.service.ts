@@ -1089,6 +1089,7 @@ export async function assignProgramToClientsAction(
                         dashboardUrl,
                         logoUrl: emailBrand.logoUrl,
                         primaryColor: emailBrand.primaryColor,
+                        showsEvaBadge: emailBrand.showsEvaBadge,
                     })
                     const emailResult = await sendTransactionalEmail({
                         to: clientInfo.email,

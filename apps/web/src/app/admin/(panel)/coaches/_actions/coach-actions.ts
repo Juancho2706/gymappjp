@@ -15,6 +15,7 @@ import {
     buildTrialExpiryWarningEmail,
     buildTrialExpiredEmail,
 } from '@/lib/email/transactional-templates'
+import { buildFreePlanV3NoticeEmail } from '@/lib/email/pricing-v3-notice-template'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { buildCoachUpdateData, readModules } from '../../_actions/module-form'
 import { syncAdminGrants } from '@/services/billing/addons.service'
@@ -548,4 +549,182 @@ export async function countAnnouncementRecipientsAction(): Promise<{ count: numb
         .eq('subscription_status', 'active')
 
     return { count: count ?? 0 }
+}
+
+// ── Aviso Pricing v3 a los coaches Free (F5.2, 2026-08-21) ────────
+// White-label en todos los planes desde Pricing v3 (decisión owner 2026-08-21); Pro se
+// distingue por cupo (25) y por NO llevar el sello «Hecho con EVA». El correo avisa eso y
+// el cupo nuevo del Free (1 alumno activo, con los alumnos existentes conservados).
+//
+// Se manda UNA sola vez por coach: la dedupe vive en `admin_audit_logs` (una fila por envío
+// OK con action = PRICING_V3_NOTICE_ACTION y target_id = coach.id), así el botón se puede
+// reintentar tras un corte sin volver a escribirle a quien ya recibió.
+
+const PRICING_V3_NOTICE_ACTION = 'coach.pricing_v3_notice'
+/** Cuentas internas/demo: nunca reciben comunicaciones de producto. */
+const PRICING_V3_NOTICE_EXCLUDED_SLUGS = '("evademo","josefit")'
+
+type PricingV3NoticeRecipient = { id: string; slug: string; coachName: string }
+
+/**
+ * Destinatarios REALES del aviso: Free activos con el cupo ya backfilleado a 1, sin cuentas
+ * internas ni de QA, y sin fila previa de envío. Un solo lugar para el criterio: si el conteo
+ * del diálogo y el envío divergen, el número que ve el owner miente.
+ */
+async function resolvePricingV3NoticeRecipients(
+    adminClient: Awaited<ReturnType<typeof assertAdmin>>['adminClient']
+): Promise<{ recipients: PricingV3NoticeRecipient[] } | { error: string }> {
+    const { data: coaches, error } = await adminClient
+        .from('coaches')
+        .select('id, slug, full_name')
+        .eq('subscription_tier', 'free')
+        .eq('subscription_status', 'active')
+        .eq('max_clients', 1)
+        .not('slug', 'in', PRICING_V3_NOTICE_EXCLUDED_SLUGS)
+        .not('slug', 'like', 'qa-%')
+        .order('slug', { ascending: true })
+
+    if (error) return { error: error.message }
+    if (!coaches?.length) return { recipients: [] }
+
+    const { data: alreadySent, error: logError } = await adminClient
+        .from('admin_audit_logs')
+        .select('target_id')
+        .eq('action', PRICING_V3_NOTICE_ACTION)
+
+    // Sin la lista de enviados NO se puede deduplicar: preferimos abortar antes que
+    // arriesgar un segundo correo a coaches reales.
+    if (logError) return { error: `No se pudo leer la dedupe: ${logError.message}` }
+
+    const sentIds = new Set((alreadySent ?? []).map(row => row.target_id).filter(Boolean) as string[])
+
+    return {
+        recipients: coaches
+            .filter(coach => !sentIds.has(coach.id))
+            .map(coach => ({
+                id: coach.id,
+                slug: coach.slug ?? coach.id,
+                coachName: coach.full_name?.trim().split(' ')[0] || 'Coach',
+            })),
+    }
+}
+
+function pricingV3NoticeUrls() {
+    const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl'
+    return { appUrl, brandUrl: `${appUrl}/coach/settings/brand`, pricingUrl: `${appUrl}/pricing` }
+}
+
+/** Blast radius del botón: cuántos coaches reciben el aviso y una muestra de slugs. */
+export async function countPricingV3NoticeRecipientsAction(): Promise<{ count: number; sample: string[] }> {
+    const { adminClient } = await assertAdmin()
+
+    const resolved = await resolvePricingV3NoticeRecipients(adminClient)
+    if ('error' in resolved) return { count: 0, sample: [] }
+
+    return {
+        count: resolved.recipients.length,
+        sample: resolved.recipients.slice(0, 5).map(r => r.slug),
+    }
+}
+
+/** Copia de prueba a una casilla del equipo. No escribe dedupe: no consume destinatario. */
+export async function sendPricingV3NoticeTestAction(
+    email: string
+): Promise<{ success: true } | { error: string }> {
+    const { adminClient, user } = await assertAdmin()
+
+    const parsed = z.email().safeParse(email.trim())
+    if (!parsed.success) return { error: 'Correo inválido.' }
+
+    const { appUrl, brandUrl, pricingUrl } = pricingV3NoticeUrls()
+    const { subject, html, text } = buildFreePlanV3NoticeEmail({
+        coachName: 'Coach',
+        brandUrl,
+        pricingUrl,
+        appUrl,
+    })
+
+    const result = await sendTransactionalEmail({ to: parsed.data, subject, html, text })
+    if (!result.ok) return { error: result.error }
+
+    await logAdminAction(
+        adminClient,
+        'coach.pricing_v3_notice_test',
+        'coaches',
+        null,
+        { email: parsed.data, subject },
+        user.email
+    )
+    return { success: true }
+}
+
+/**
+ * Envío real. `sent` = aceptados por Resend, `failed` = rechazados por el proveedor,
+ * `skipped` = coaches sin email en auth, `auditFailed` = envíos OK cuya fila de dedupe NO se
+ * pudo escribir (⇒ un reintento les mandaría el correo DE NUEVO: hay que revisarlos a mano
+ * antes de volver a apretar el botón).
+ */
+export async function sendPricingV3NoticeAction(): Promise<
+    { success: true; sent: number; failed: number; skipped: number; auditFailed: number } | { error: string }
+> {
+    const { adminClient, user } = await assertAdmin()
+
+    const resolved = await resolvePricingV3NoticeRecipients(adminClient)
+    if ('error' in resolved) return { error: resolved.error }
+    if (!resolved.recipients.length) return { success: true, sent: 0, failed: 0, skipped: 0, auditFailed: 0 }
+
+    const { appUrl, brandUrl, pricingUrl } = pricingV3NoticeUrls()
+    let sent = 0
+    let failed = 0
+    let skipped = 0
+    let auditFailed = 0
+
+    for (const recipient of resolved.recipients) {
+        const { data: authUser } = await adminClient.auth.admin.getUserById(recipient.id)
+        const email = authUser?.user?.email
+        if (!email) { skipped++; continue }
+
+        const { subject, html, text } = buildFreePlanV3NoticeEmail({
+            coachName: recipient.coachName,
+            brandUrl,
+            pricingUrl,
+            appUrl,
+        })
+
+        const result = await sendTransactionalEmail({ to: email, subject, html, text })
+        if (result.ok) {
+            sent++
+            // Dedupe: la fila SOLO se escribe cuando el proveedor aceptó el correo. A diferencia
+            // del resto de la auditoría, acá el insert NO puede ser fire-and-forget: esta fila ES
+            // la dedupe (`resolvePricingV3NoticeRecipients` filtra por ella). Si se pierde en
+            // silencio, el próximo envío le manda el correo dos veces al mismo coach.
+            const { error: auditError } = await adminClient.from('admin_audit_logs').insert({
+                admin_email: user.email ?? 'unknown', // mismo fallback que `logAdminAction`
+                action: PRICING_V3_NOTICE_ACTION,
+                target_table: 'coaches',
+                target_id: recipient.id,
+                payload: { provider_message_id: result.providerMessageId, subject },
+            })
+            if (auditError) {
+                auditFailed++
+                // eslint-disable-next-line no-console
+                console.error('[pricing-v3-notice] dedupe insert failed', recipient.id, auditError)
+            }
+        } else {
+            failed++
+        }
+
+        // Resend free plan: 2 req/s. Mismo throttle que el anuncio masivo.
+        await new Promise(r => setTimeout(r, 600))
+    }
+
+    await logAdminAction(
+        adminClient,
+        'coach.pricing_v3_notice_batch',
+        'coaches',
+        'bulk',
+        { sent, failed, skipped, auditFailed },
+        user.email
+    )
+    return { success: true, sent, failed, skipped, auditFailed }
 }

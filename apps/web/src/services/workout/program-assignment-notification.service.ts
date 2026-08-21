@@ -197,6 +197,7 @@ export async function sendProgramAssignmentNotifications(input: {
       dashboardUrl,
       logoUrl: emailBrand.logoUrl,
       primaryColor: emailBrand.primaryColor,
+      showsEvaBadge: emailBrand.showsEvaBadge,
     })
     // Push W1 `program_assigned` (best-effort): se emite para todo programa+cliente elegible,
     // independiente del resultado del email — un proveedor de correo caído no debe silenciar

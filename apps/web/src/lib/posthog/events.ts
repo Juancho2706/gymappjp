@@ -16,12 +16,29 @@ export function useIdentifyCoach() {
     )
 }
 
-/** Coach hit a feature gate (nutrition, branding, client limit). */
+/**
+ * Coach hit a feature gate (nutrition, branding, client limit).
+ *
+ * `active` (Pricing v3, 21-08): alumnos activos al momento del rechazo. Es lo que separa «choqué
+ * el muro de Free con 1 alumno» de «lo choqué con 25»: sin ese número el gate de cupo solo dice
+ * que alguien chocó, no cuánta cartera hay detrás del upgrade. Opcional — los gates que no son de
+ * cupo (nutrition/branding) no lo mandan. Sin PII, como todo este módulo.
+ */
 export function useCaptureUpgradeGate() {
     const ph = usePostHog()
     return useCallback(
-        (gate: 'nutrition' | 'branding' | 'client_limit', currentTier: SubscriptionTier, currentLimit?: number) => {
-            ph?.capture('upgrade_gate_hit', { gate, current_tier: currentTier, current_limit: currentLimit })
+        (
+            gate: 'nutrition' | 'branding' | 'client_limit',
+            currentTier: SubscriptionTier,
+            currentLimit?: number,
+            active?: number
+        ) => {
+            ph?.capture('upgrade_gate_hit', {
+                gate,
+                current_tier: currentTier,
+                current_limit: currentLimit,
+                active: active ?? null,
+            })
         },
         [ph]
     )
@@ -80,12 +97,22 @@ export function useCaptureModuleInterest() {
  * opted-out) para que `CoachRegisteredTracker` pueda reintentar con `useDeferredCapture`. No se
  * dispara desde /register: los dos Server Actions del wizard terminan en `redirect()`, asi que el
  * cliente jamas ve el exito — el disparo vive en los aterrizajes post-alta.
+ *
+ * `pricing_version: 'v3'` (owner 2026-08-21): sella con qué catálogo se dio de alta el coach. Sin
+ * esta marca, las cohortes de altas quedan mezcladas con las de Pricing v2 (Free 2 alumnos, sin
+ * white-label) y cualquier lectura de activación post-corte compara peras con manzanas. Es un
+ * literal a propósito: cuando el catálogo cambie de nuevo, se sube acá y las cohortes se separan
+ * solas — nunca derivar la versión de la fecha del evento.
  */
 export function useCaptureRegistration() {
     const ph = usePostHog()
     return useCallback(
         (tier: SubscriptionTier, billingCycle?: string) =>
-            ph?.capture('coach_registered', { tier, billing_cycle: billingCycle ?? null }),
+            ph?.capture('coach_registered', {
+                tier,
+                billing_cycle: billingCycle ?? null,
+                pricing_version: 'v3',
+            }),
         [ph]
     )
 }

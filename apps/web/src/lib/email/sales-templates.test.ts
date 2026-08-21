@@ -50,6 +50,14 @@ describe('buildClientLimitReachedEmail', () => {
         expect(subject).toBe('Alcanzaste el límite de 3 alumnos de tu plan Gratis')
     })
 
+    // Pricing v3: el cupo free pasa a 1 ⇒ el copy no puede decir "1 alumnos".
+    it('cupo 1 (free v3) singulariza subject y cuerpo', () => {
+        const { subject, html } = buildClientLimitReachedEmail({ ...ctx, currentLimit: 1 })
+        expect(subject).toBe('Alcanzaste el límite de 1 alumno de tu plan Gratis')
+        expect(html).toContain('1 alumno activo')
+        expect(html).not.toContain('1 alumnos')
+    })
+
     it('el cuerpo lleva el nombre del coach, el cupo y el tier', () => {
         const { html } = buildClientLimitReachedEmail(ctx)
         expect(html).toContain('Josefa')

@@ -77,8 +77,17 @@ export interface PdfBrand {
     /** Hex (#RRGGBB). */
     primaryColor: string
     logoDataUrl?: string | null
-    /** true ⇒ free tier / fallback: paleta y marca EVA exactas (AC1/AC4). */
+    /**
+     * true ⇒ fallback: paleta y marca EVA exactas (AC1/AC4). Desde Pricing v3 esto ya NO significa
+     * "free tier" — el free lleva su marca propia; solo cae acá el tier inválido/stale o el tenant
+     * sin nombre utilizable.
+     */
     poweredByEva: boolean
+    /**
+     * Pricing v3 (D3=A, owner 2026-08-21): el PDF firma «Hecho con EVA» en el footer.
+     * true en free/starter y en el fallback EVA; false en Pro/Elite (`showsEvaBadge(tier)`).
+     */
+    showsEvaBadge: boolean
 }
 
 /** Totales de macros derivados (Σ porciones × ref del grupo). */

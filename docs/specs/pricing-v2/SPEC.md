@@ -5,6 +5,11 @@
 > Decisiones pendientes 1 y 2 de la SPEC quedaron resueltas en `5fb58efc` y `39262d4e`; queda
 > solo el estudio de IVA aparte (punto 3).
 
+> **SUPERADA PARCIALMENTE por [Pricing v3](../pricing-v3/SPEC.md) (2026-08-21):** Free pasa de 2 a 1
+> alumno y el white-label deja de ser Pro+ (está en todos los planes; Pro se distingue por cupo y por
+> no llevar el sello «Hecho con EVA»). Lo demás (Pro 25 / Elite 60 / Starter fuera de venta /
+> grandfather de pagadores) sigue vigente.
+
 - **Origen:** decisión del dueño (2026-08-17) sobre el informe «Precios EVA v2»
   (artifact `e1c1f0db`, investigación de 5 workers: repo + DB LIVE + Supabase + 9
   competidores + economía freemium). La reestructura cuesta $0 de MRR hoy: nadie

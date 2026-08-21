@@ -17,13 +17,13 @@ import {
     SALE_TIERS,
     SUBSCRIPTION_BLOCKED_STATUSES,
     TIER_CONFIG,
-    tierMaxClientsFor,
     type BillingCycle,
     type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
 import { useCaptureCheckoutStarted } from '@/lib/posthog/events'
+import { effectiveTierLimit } from '../_lib/effective-limit'
 import { formatStudentAccessDate, resolveStudentGraceEndsAt } from '@/lib/student-access'
 import { ReactivateCouponCard } from './_components/ReactivateCouponCard'
 import { ReactivateArchivePanel, type ReactivateArchiveClient } from './_components/ReactivateArchivePanel'
@@ -55,24 +55,36 @@ interface ReactivateClientProps {
     /** Flag de cupones (COUPON_REDEMPTION_ENABLED) leído server-side: muestra el canje de código. */
     couponsEnabled?: boolean
     /**
-     * `coaches.created_at` — ancla del grandfather de pricing v2 (P2). TODO límite mostrado en esta
-     * página sale de `tierMaxClientsFor(tier, coachCreatedAt)`: un coach viejo ve free 3 / pro 30 /
-     * elite 100; uno nuevo ve el catálogo 2 / 25 / 60. null ⇒ fail-safe generoso (límites viejos).
+     * `coaches.created_at` — ancla de la escalera de grandfather (3 peldaños: pre-v2 3 · v2 2 ·
+     * v3 1). Se usa SOLO para proyectar los tiers que el coach todavía no tiene: es lo que el
+     * write-path grabará en `max_clients` si contrata ese plan. null ⇒ fail-safe generoso.
      */
     coachCreatedAt?: string | null
+    /**
+     * `coaches.max_clients` — el cupo REAL del coach en su tier ACTUAL.
+     *
+     * En Pricing v3 el grandfather vive en esta COLUMNA, no en la fecha: el backfill del día D
+     * (2026-08-21) bajó a 1 solo a los free con 0/1 alumnos y dejó su fila intacta a los que ya
+     * tenían 2+ (conservan el cupo por USO). Por eso un coach viejo en free con columna 3 debe
+     * seguir viendo «Free: hasta 3» acá — y no el 1 del catálogo ni el 3 de la escalera por
+     * casualidad. null/ausente ⇒ se cae a la escalera de fecha.
+     */
+    coachMaxClients?: number | null
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null, coachMaxClients = null }: ReactivateClientProps) {
     const searchParams = useSearchParams()
     // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
 
-    // Límite REAL de alumnos de ESTE coach por tier (grandfather P2) — jamás el catálogo plano:
-    // el write-path de reactivación (activate-free / confirms de pago) fija max_clients con este
-    // mismo helper, así que lo que se muestra acá es exactamente lo que quedará en la fila.
+    // Límite REAL de alumnos de ESTE coach por tier — jamás el catálogo plano. Pricing v3: para el
+    // tier ACTUAL manda la COLUMNA (ahí vive el grandfather tras el backfill por uso del 21-08); la
+    // escalera de fecha solo proyecta los tiers que aún no tiene, que es exactamente lo que el
+    // write-path (activate-free / confirms de pago) escribirá en `max_clients` al contratarlos.
     const limitFor = useCallback(
-        (t: SubscriptionTier) => tierMaxClientsFor(t, coachCreatedAt),
-        [coachCreatedAt]
+        (t: SubscriptionTier) =>
+            effectiveTierLimit({ tier: t, currentTier, coachMaxClients, coachCreatedAt }),
+        [coachCreatedAt, coachMaxClients, currentTier]
     )
 
     // Pre-select the minimum viable tier for the coach's current client count,
@@ -97,7 +109,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
         // If the candidate can't cover current clients, bump up to the minimum viable sale tier.
         // Si ni siquiera elite (el techo de venta) los cubre, anclamos a elite y la UI muestra
         // el bloque "conversemos de EVA Teams" (boton de pago deshabilitado). Los límites son los
-        // del COACH (grandfather P2), no el catálogo: un pro viejo con 28 alumnos sigue cabiendo en Pro.
+        // del COACH (columna en su tier actual, escalera en los demás), no el catálogo: un pro viejo
+        // con columna 30 y 28 alumnos sigue cabiendo en Pro.
         if (limitFor(candidate) < activeClientCount) {
             return SALE_TIERS.find((t) => limitFor(t) >= activeClientCount) ?? 'elite'
         }
@@ -262,8 +275,9 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
         void handleCheckout()
     }, [fromSuccessfulCheckout, handleCheckout, paymentStatus, searchParams, tier])
 
-    // Cupo free de ESTE coach (grandfather P2): viejo 3, nuevo 2. El server (activate-free)
-    // revalida con el mismo helper — mostrado == aplicado.
+    // Cupo free de ESTE coach: si YA está en free manda su columna (grandfather por uso de
+    // Pricing v3); si viene de un plan pago se proyecta con la escalera (pre-v2 3 · v2 2 · v3 1).
+    // El server (activate-free) revalida contra la misma fuente — mostrado == aplicado.
     const freeLimit = limitFor('free')
     // Cualquier estado bloqueado que canda el panel (expired/pending_payment/past_due/paused pasada
     // la gracia) sufre el mismo deadlock de cupo. El gate de dinero real lo re-valida el endpoint.
@@ -384,7 +398,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
             {/* Tier — radio-cards (kit Reactivar) */}
             <div className="mb-4 flex flex-col gap-2.5">
                 {tierOptions.map(([key, option]) => {
-                    // Límite del COACH para este tier (grandfather P2), no el del catálogo de venta.
+                    // Límite del COACH para este tier (columna si es su tier actual, escalera si
+                    // es un plan al que se movería), no el del catálogo de venta.
                     const coachLimit = limitFor(key)
                     const tooSmall = coachLimit < activeClientCount
                     const active = tier === key
@@ -511,7 +526,7 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                     <>
                         {/* Free no pasa por checkout (el enum de create-preference solo acepta pro/elite):
                             la salida es activate-free, que revalida server-side estado bloqueado + cupo
-                            (grandfather P2: fija max_clients con tierMaxClientsFor). */}
+                            (escribe max_clients con tierMaxClientsFor, la escalera de 3 peldaños). */}
                         <button
                             type="button"
                             onClick={handleActivateFree}
@@ -600,7 +615,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-strong">Continuar con plan gratuito</p>
                             <p className="mt-0.5 text-xs text-muted">
-                                {/* Límite del COACH (grandfather P2): un coach viejo ve 3, uno nuevo 2. */}
+                                {/* Límite del COACH: su columna `max_clients` si ya está en free
+                                    (grandfather por uso, Pricing v3), si no la escalera de fecha. */}
                                 Tienes {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. Tu plan gratuito cubre hasta {freeLimit} alumno{freeLimit !== 1 ? 's' : ''} — calificas sin archivar a nadie.
                             </p>
                             <button
@@ -638,7 +654,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                                 className={`border-b border-subtle last:border-0 ${tier === key ? 'bg-sport-100/40' : ''}`}
                             >
                                 <td className="px-4 py-2.5 font-medium text-strong">{option.label}</td>
-                                {/* Límite del COACH por tier (grandfather P2) — no el label del catálogo de venta. */}
+                                {/* Límite del COACH por tier (columna en el actual, escalera en los
+                                    demás) — no el label del catálogo de venta. */}
                                 <td className="px-4 py-2.5 text-muted">Hasta {limitFor(key)} alumno{limitFor(key) !== 1 ? 's' : ''}</td>
                                 <td className="px-4 py-2.5 text-strong">
                                     ${option.monthlyPriceClp.toLocaleString('es-CL')} CLP

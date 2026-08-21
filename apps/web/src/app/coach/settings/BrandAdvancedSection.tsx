@@ -2,11 +2,11 @@
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { resolveBrandTheme, contrastReport, type BrandThemeTokens } from '@eva/brand-kit'
-import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { type SubscriptionTier } from '@eva/tiers'
 import { CURATED_FONTS, FONT_KEY_TUPLE, resolveBrandFontStack, type FontKey } from '@/lib/brand-fonts'
 import { LOADER_VARIANTS, LOADER_VARIANT_TUPLE, type LoaderVariant } from '@/lib/brand-loaders'
 import { serializeLoaderConfig, DEFAULT_LOADER_COMPOSITE, type LoaderComposite } from '@/lib/brand-composer'
-import { Sparkles, Lock, Palette, Type as TypeIcon, Loader2, Check, AlertTriangle, ChevronRight, Wand2 } from 'lucide-react'
+import { Sparkles, Palette, Type as TypeIcon, Loader2, Check, AlertTriangle, ChevronRight, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
@@ -42,6 +42,8 @@ export type AdvancedLoaderValue = {
 }
 
 type Props = {
+    /** Tier del coach. Ya NO gatea nada (white-label abierto en Pricing v3); se conserva en la
+     *  firma para no tocar a los callers y por si vuelve a hacer falta discriminar por plan. */
     tier: SubscriptionTier
     /** Color primario reactivo (lo controla el form padre) — base del cálculo de contraste. */
     primaryColor: string
@@ -81,7 +83,7 @@ function PreviewFrame({ label, children, className }: { label: string; children:
  *  además de la vista previa grande del teléfono (que se mantiene). Acordeón CERRADO por defecto.
  *  Los valores persistidos se emiten como hidden inputs SIEMPRE presentes (fuera del cuerpo colapsable)
  *  para que guardar funcione aunque el acordeón esté cerrado. Controlado: el estado vive en el padre. */
-export function BrandAdvancedSection({ tier, primaryColor, secondaryColor, value, onChange, loader, onLoaderChange, loaderConfig, onLoaderConfigChange, brandName, logoUrl }: Props) {
+export function BrandAdvancedSection({ primaryColor, secondaryColor, value, onChange, loader, onLoaderChange, loaderConfig, onLoaderConfigChange, brandName, logoUrl }: Props) {
     const { neutralTint, fontKey, loaderVariant } = value
     const [open, setOpen] = useState(false)
 
@@ -123,21 +125,8 @@ export function BrandAdvancedSection({ tier, primaryColor, secondaryColor, value
         : (loader.loaderIconMode === 'coach' && logoUrl ? logoUrl : BRAND_APP_ICON)
     const loaderVars = { '--theme-primary': primaryHex, '--theme-primary-rgb': hexToSpaceRgb(primaryHex) } as CSSProperties
 
-    // Gate defensivo: la page ya redirige a < Pro, pero por si acaso mostramos un teaser sin inputs.
-    if (!isBrandingAllowed(tier)) {
-        return (
-            <div className={`${CARD} space-y-5`}>
-                <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-muted" />
-                    <h2 className="text-base font-bold text-strong">Branding avanzado</h2>
-                    <span className="ml-auto text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">Pro</span>
-                </div>
-                <p className="text-xs text-muted -mt-3">
-                    Fuente personalizada, tinte de marca, modo oscuro con tu marca y loaders. Disponible desde el plan Pro.
-                </p>
-            </div>
-        )
-    }
+    // Sin gate: white-label COMPLETO (fuente, tinte, dark, loaders, presets) en todos los planes
+    // desde Pricing v3 — decisión owner 2026-08-21. Pro = cupo + sin sello «Hecho con EVA».
 
     return (
         <div className={CARD} data-tour-id="brand-advanced">
@@ -154,7 +143,6 @@ export function BrandAdvancedSection({ tier, primaryColor, secondaryColor, value
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                         <h2 className="text-base font-bold text-strong">Branding avanzado</h2>
-                        <span className="text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">Pro</span>
                     </div>
                     <p className="text-xs text-muted">Fuente, tinte de marca y pantalla de carga. Cada ajuste muestra un ejemplo en vivo.</p>
                 </div>

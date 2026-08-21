@@ -22,6 +22,17 @@
  *   `tierMaxClientsFor(tier, coachCreatedAt)` con corte en PRICING_V2_CUTOVER. Todo sitio con
  *   el coach a mano usa ESE helper; getTierMaxClients queda solo como catálogo de venta.
  * - Los PRECIOS CLP no cambian en esta tanda (el estudio de IVA va aparte).
+ *
+ * Pricing v3 (docs/specs/pricing-v3, decisión del owner 2026-08-21: 1A 2A 3A 4A 5A 6A):
+ * - El white-label pasa a estar en TODOS los planes desde v3. Esto REVIERTE la decisión CEO
+ *   2026-06-21 («branding = Pro+ ENTERO», white-label v2): ya NO es la regla vigente.
+ * - Pro se distingue por dos cosas y solo dos: el CUPO (25 alumnos) y NO llevar el sello
+ *   «Hecho con EVA» (capacidad `showsEvaBadge`, helper homónimo). Free/starter sí lo llevan.
+ * - Free = 1 alumno (TIER_CONFIG.free.maxClients), con marca propia completa.
+ * - El grandfather por USO vive en la columna `coaches.max_clients` (backfill del 2026-08-21,
+ *   que NO toca a los free con 2+ alumnos). La escalera de fecha (`tierMaxClientsFor`) es solo
+ *   write-path (qué número se ESCRIBE en activaciones/bajadas) y fallback defensivo cuando el
+ *   select omite la columna — NUNCA es la fuente de verdad del cupo de un coach concreto.
  */
 
 // ── Tipos de negocio ────────────────────────────────────────────────────────
@@ -53,6 +64,12 @@ export type TierCapabilities = {
     canUseAdvancedReports: boolean
     canCreateCustomExercises: boolean
     canImportClients: boolean
+    /**
+     * Pricing v3: ¿las superficies del ALUMNO llevan el sello «Hecho con EVA»?
+     * Es el gancho de Pro (D3=A): free/starter true; pro/elite/growth/scale false.
+     * NO es lo contrario de canUseBranding — desde v3 un free tiene su marca Y el sello.
+     */
+    showsEvaBadge: boolean
 }
 
 // ── Listas de venta / legacy ──────────────────────────────────────────────────
@@ -76,8 +93,11 @@ export function isSaleTier(tier: string): tier is SaleTier {
 
 const QUARTERLY_DISCOUNT = 0.1
 const ANNUAL_DISCOUNT = 0.2
-// 'Branding personalizado' YA NO es shared: branding = Pro+ ENTERO (decision CEO 2026-06-21,
-// white-label v2). Se agrega solo a pro/elite/growth/scale, no a starter.
+// 'Branding personalizado' NO es shared por una razón histórica: starter (fuera de venta) es el
+// único tier que sigue SIN marca propia. Desde pricing v3 (owner 2026-08-21) el white-label está
+// en todos los planes VENDIDOS — free incluido —, así que el bullet se agrega explícitamente a
+// free/pro/elite/growth/scale. La regla vieja «branding = Pro+ ENTERO» (decision CEO 2026-06-21,
+// white-label v2) quedó REVERTIDA por v3; no volver a leerla como vigente.
 const SHARED_TIER_FEATURES = [
     'Rutinas ilimitadas con GIFs',
     'Catálogo de ejercicios con GIF',
@@ -92,11 +112,12 @@ const SHARED_TIER_FEATURES = [
 const MODULES_INCLUDED_FEATURE = '4 módulos profesionales incluidos'
 
 /**
- * Rango de alumnos por tier (copy marketing / UI de VENTA — catálogo nuevo pricing v2).
- * Un coach grandfathered ve SU límite real vía tierMaxClientsFor(), no este label.
+ * Rango de alumnos por tier (copy marketing / UI de VENTA — catálogo pricing v3).
+ * Un coach grandfathered ve SU límite real (columna `coaches.max_clients`), no este label.
  */
 export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
-    free: 'Hasta 2 alumnos',
+    // Pricing v3: el Free vende 1 alumno CON marca propia (ese es el gancho, no el cupo).
+    free: '1 alumno con tu marca',
     // Fuera de venta desde pricing v2 (grandfathered) — label solo para display de cuentas históricas.
     starter: '1–10 alumnos',
     pro: 'Hasta 25 alumnos',
@@ -106,6 +127,19 @@ export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
     growth: '61–120 alumnos',
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     scale: 'Hasta 500 alumnos',
+}
+
+/**
+ * Plural correcto para un conteo de alumnos («1 alumno» vs «2 alumnos»).
+ *
+ * Pricing v3 lo hace obligatorio: con el free en 1, cualquier copy que interpole el cupo
+ * imprimía «1 alumnos». Fuente ÚNICA para las superficies de copy (landing, /pricing, FAQ,
+ * centro de ayuda, verify-email, correos, RN) — nadie vuelve a concatenar la 's' a mano.
+ * `lang: 'en'` sirve al espejo inglés de la landing v2 («1 client» / «N clients»).
+ */
+export function studentCountLabel(n: number, lang: 'es' | 'en' = 'es'): string {
+    const noun = lang === 'en' ? (n === 1 ? 'client' : 'clients') : n === 1 ? 'alumno' : 'alumnos'
+    return `${n} ${noun}`
 }
 
 /** Etiqueta corta por tier (espejo único web + mobile). */
@@ -118,17 +152,18 @@ export const TIER_LABELS: Record<SubscriptionTier, string> = {
     scale: 'Scale',
 }
 
-// Pricing v2: maxClients = catálogo de VENTA (coaches NUEVOS, creados >= PRICING_V2_CUTOVER):
-// free 2 / pro 25 / elite 60. Los coaches existentes conservan sus límites viejos (3/30/100) vía
-// tierMaxClientsFor(); las filas existentes de coaches.max_clients NO se tocan (la columna gana).
+// Pricing v3: maxClients = catálogo de VENTA (coaches NUEVOS, creados >= PRICING_V3_CUTOVER):
+// free 1 / pro 25 / elite 60. Los coaches anteriores conservan su cupo real en la columna
+// `coaches.max_clients` (que GANA en todos los gates); tierMaxClientsFor() es el write-path/fallback.
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     free: {
         label: 'Free',
-        maxClients: 2,
+        maxClients: 1,
         monthlyPriceClp: 0,
-        // Pricing v2 (P1): free = TODO EVA (módulos y nutrición incluidos — el gate server ya los
-        // libera, waves A2/A1) EXCEPTO white-label. Los bullets de venta salen de esta lista.
-        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Planes de nutrición'],
+        // Pricing v3 (owner 2026-08-21): free = TODO EVA (módulos, nutrición y white-label completo)
+        // con cupo 1 y el sello «Hecho con EVA» en las superficies del alumno. Mismo orden de bullets
+        // que pro/elite. Los bullets de venta salen de esta lista.
+        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
     starter: {
         label: 'Starter',
@@ -167,19 +202,30 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
 
 /**
  * Feature gates by tier.
- * Pricing v2 (P1/P4): free = TODO liberado (nutrición, ejercicios custom, importar alumnos)
- * EXCEPTO branding. starter (fuera de venta) conserva su set histórico grandfathered.
- * Branding (color/logo/loader + white-label v2: color2/font/dark) sigue siendo Pro+ ENTERO
- * (decision CEO 2026-06-21, white-label v2). El gate único es isBrandingAllowed().
+ *
+ * Pricing v3 (owner 2026-08-21, docs/specs/pricing-v3): free = TODO liberado, white-label
+ * INCLUIDO. Esto REVIERTE la regla «branding = Pro+ ENTERO» (decision CEO 2026-06-21,
+ * white-label v2) — ya no rige. El gate único de marca sigue siendo isBrandingAllowed().
+ *
+ * Lo que distingue a los planes pagos ya no es la marca sino:
+ *  - el CUPO de alumnos (TIER_CONFIG.maxClients / columna coaches.max_clients), y
+ *  - `showsEvaBadge`: el sello «Hecho con EVA» en las superficies del alumno (app /c, login,
+ *    PDF de nutrición, correos, export RN). free/starter true; pro/elite/growth/scale false.
+ *
+ * starter (fuera de venta) conserva su set histórico grandfathered: sigue SIN nutrición y SIN
+ * branding — v3 abre el white-label a los tiers VENDIDOS, no reescribe el histórico.
  * canUseAdvancedReports reserved for future implementation — gate not active yet.
  */
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     free: {
         canUseNutrition: true,
-        canUseBranding: false,
+        // Pricing v3: el free tiene su marca propia completa (logo, color, preset, fuente, loader,
+        // layout de login). Lo que paga Pro es el cupo y sacarse el sello.
+        canUseBranding: true,
         canUseAdvancedReports: false,
         canCreateCustomExercises: true,
         canImportClients: true,
+        showsEvaBadge: true,
     },
     starter: {
         canUseNutrition: false,
@@ -187,6 +233,7 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
+        showsEvaBadge: true,
     },
     pro: {
         canUseNutrition: true,
@@ -194,6 +241,7 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
+        showsEvaBadge: false,
     },
     elite: {
         canUseNutrition: true,
@@ -201,6 +249,7 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
+        showsEvaBadge: false,
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     growth: {
@@ -209,6 +258,7 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
+        showsEvaBadge: false,
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     scale: {
@@ -217,6 +267,7 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
+        showsEvaBadge: false,
     },
 }
 
@@ -235,15 +286,15 @@ export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
 }
 
 /**
- * Catálogo de VENTA: límite de alumnos para coaches NUEVOS (creados >= PRICING_V2_CUTOVER).
- * NO usar cuando hay un coach concreto a mano — ahí manda `tierMaxClientsFor(tier, created_at)`
- * (grandfather de pricing v2). Los callers con coach migran al helper en waves B.
+ * Catálogo de VENTA: límite de alumnos para coaches NUEVOS (creados >= PRICING_V3_CUTOVER).
+ * NO usar cuando hay un coach concreto a mano — ahí manda la columna `coaches.max_clients` y,
+ * como fallback, `tierMaxClientsFor(tier, created_at)` (escalera de grandfather v2/v3).
  */
 export function getTierMaxClients(tier: SubscriptionTier) {
     return TIER_CONFIG[tier].maxClients
 }
 
-// ── Grandfather pricing v2 (specs/pricing-v2, P2) ────────────────────────────
+// ── Grandfather por fecha: escalera pre-v2 / v2 / v3 (specs/pricing-v2 P2 + pricing-v3 D4) ──
 
 /**
  * Fecha de corte de pricing v2 (el deploy de la reestructura Free/Pro/Elite).
@@ -253,6 +304,14 @@ export function getTierMaxClients(tier: SubscriptionTier) {
 export const PRICING_V2_CUTOVER = '2026-08-18T00:00:00Z'
 
 const PRICING_V2_CUTOVER_MS = Date.parse(PRICING_V2_CUTOVER)
+
+/**
+ * Fecha de corte de pricing v3 (día D del deploy Free-1-con-marca, docs/specs/pricing-v3).
+ * Coaches creados >= este instante nacen con el catálogo v3 (free 1). ISO UTC.
+ */
+export const PRICING_V3_CUTOVER = '2026-08-21T00:00:00Z'
+
+const PRICING_V3_CUTOVER_MS = Date.parse(PRICING_V3_CUTOVER)
 
 /**
  * Límites de alumnos PRE pricing-v2 (los que regían hasta PRICING_V2_CUTOVER).
@@ -269,22 +328,35 @@ const PRE_CUTOVER_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
 }
 
 /**
- * Límite de alumnos para UN coach concreto (grandfather de pricing v2 — P2).
+ * Límites del mundo pricing-v2 (vigentes entre PRICING_V2_CUTOVER y PRICING_V3_CUTOVER).
+ * Solo free cambia en v3 (2 → 1); el resto es idéntico al catálogo actual y se repite acá
+ * para que el peldaño del medio sea explícito y no dependa de TIER_CONFIG (que ya es v3).
+ */
+const V2_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
+    free: 2,
+    starter: 10,
+    pro: 25,
+    elite: 60,
+    growth: 120,
+    scale: 500,
+}
+
+/**
+ * Límite de alumnos para UN coach concreto — escalera de 3 peldaños por fecha de creación.
  *
  * Regla del dueño (2026-08-17, literal): «los pro actuales retienen sus 30; los free
- * actuales retienen sus 3; y los demás archivados igual». Es decir: NINGÚN coach
- * existente pierde capacidad — un coach viejo que se archiva y reactiva, o un pro
- * viejo que cae y vuelve, conserva su límite de siempre.
+ * actuales retienen sus 3; y los demás archivados igual». NINGÚN coach existente pierde
+ * capacidad por un cambio de catálogo.
  *
- * - Coach creado ANTES de PRICING_V2_CUTOVER ⇒ límites viejos (free 3 / starter 10 /
- *   pro 30 / elite 100).
- * - Coach creado DESPUÉS (>= corte) ⇒ catálogo nuevo (free 2 / starter 10 / pro 25 /
- *   elite 60).
- * - Fecha null/undefined/ inválida ⇒ se trata como coach VIEJO (fail-safe GENEROSO:
- *   ante la duda jamás se le quita capacidad a nadie).
+ * - Creado ANTES de PRICING_V2_CUTOVER ⇒ mundo pre-v2 (free 3 / starter 10 / pro 30 / elite 100).
+ * - Creado entre V2 (incl.) y V3 (excl.) ⇒ mundo v2 (free 2 / pro 25 / elite 60).
+ * - Creado >= PRICING_V3_CUTOVER ⇒ catálogo v3 vigente (TIER_CONFIG: free 1 / pro 25 / elite 60).
+ * - Fecha null/undefined/inválida ⇒ se trata como coach PRE-v2 (fail-safe GENEROSO: ante la duda
+ *   jamás se le quita capacidad a nadie).
  *
- * Este helper es el fallback/write-path canónico; la columna `coaches.max_clients`
- * sigue GANANDO cuando existe (las filas existentes no se tocan).
+ * Pricing v3: este helper es SOLO write-path (qué número se escribe en activaciones/bajadas) y
+ * fallback defensivo. El grandfather REAL de v3 es por USO y vive en la columna
+ * `coaches.max_clients`, que gana en todos los gates cuando el select la trae.
  */
 export function tierMaxClientsFor(
     tier: SubscriptionTier,
@@ -296,13 +368,15 @@ export function tierMaxClientsFor(
             : typeof coachCreatedAt === 'string'
               ? Date.parse(coachCreatedAt)
               : NaN
-    // Solo una fecha VÁLIDA y >= corte da los límites nuevos; todo lo demás cae al mundo viejo.
-    const isPostCutover = Number.isFinite(createdMs) && createdMs >= PRICING_V2_CUTOVER_MS
-    if (isPostCutover) {
-        // Tier fuera del union (string arbitrario de DB): fail-safe al piso nuevo de free.
-        return TIER_CONFIG[tier]?.maxClients ?? TIER_CONFIG.free.maxClients
+    // Solo una fecha VÁLIDA sube peldaños; todo lo demás cae al mundo pre-v2 (generoso).
+    if (!Number.isFinite(createdMs) || createdMs < PRICING_V2_CUTOVER_MS) {
+        // Tier fuera del union (string arbitrario de DB): fail-safe al piso de free de ESE mundo.
+        return PRE_CUTOVER_TIER_MAX_CLIENTS[tier] ?? PRE_CUTOVER_TIER_MAX_CLIENTS.free
     }
-    return PRE_CUTOVER_TIER_MAX_CLIENTS[tier] ?? PRE_CUTOVER_TIER_MAX_CLIENTS.free
+    if (createdMs < PRICING_V3_CUTOVER_MS) {
+        return V2_TIER_MAX_CLIENTS[tier] ?? V2_TIER_MAX_CLIENTS.free
+    }
+    return TIER_CONFIG[tier]?.maxClients ?? TIER_CONFIG.free.maxClients
 }
 
 export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
@@ -312,12 +386,48 @@ export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
 /**
  * ¿El tier puede usar branding (white-label)? Fuente ÚNICA del gate de marca: la consumen las 5
  * superficies (proxy, layout alumno, layout coach, login query, manifest/splash) + el write-path.
- * Branding = Pro+ ENTERO (decision CEO 2026-06-21): free/starter ven TODO EVA system (color/logo/
- * loader EVA); pro/elite/growth/scale ven su marca. Fail-closed: un tier inválido (string arbitrario
- * fuera del union) cae a false.
+ *
+ * Pricing v3 (owner 2026-08-21): free SÍ tiene marca propia. La regla vieja «branding = Pro+
+ * ENTERO» (decision CEO 2026-06-21, white-label v2) está REVERTIDA. Hoy solo starter (fuera de
+ * venta, histórico) queda sin marca.
+ *
+ * FAIL-CLOSED, y sigue siéndolo: un tier inválido (string arbitrario fuera del union) cae a false,
+ * o sea NO ve marca propia — nunca se filtra la marca de nadie por un tier corrupto.
  */
 export function isBrandingAllowed(tier: SubscriptionTier): boolean {
     return TIER_CAPABILITIES[tier]?.canUseBranding === true
+}
+
+/**
+ * ¿Las superficies del ALUMNO llevan el sello «Hecho con EVA»? Gancho de Pro en pricing v3
+ * (D3=A): free/starter sí; pro/elite/growth/scale no. Superficies: shell del alumno `/c`, login
+ * del alumno, PDF de nutrición, correos al alumno y export de RN.
+ *
+ * FAIL-OPEN (a propósito, al revés que isBrandingAllowed): un tier inválido MUESTRA el sello. Ante
+ * un tier corrupto preferimos regalar atribución de EVA antes que regalar el beneficio pago.
+ */
+export function showsEvaBadge(tier: SubscriptionTier): boolean {
+    return TIER_CAPABILITIES[tier]?.showsEvaBadge !== false
+}
+
+// ── Sello «Hecho con EVA» (pricing v3, D3=A) ──────────────────────────────────
+//
+// Fuente ÚNICA del texto y del link para web + RN: nadie hardcodea la cadena ni la URL.
+
+/** Texto del sello, tal cual se pinta en las superficies del alumno. */
+export const EVA_BADGE_LABEL = 'Hecho con EVA'
+
+/** Superficie donde se pinta el sello — viaja como `utm_medium` para medir de dónde llegan. */
+export type EvaBadgeMedium =
+    | 'student_app'
+    | 'student_login'
+    | 'nutrition_pdf'
+    | 'student_email'
+    | 'rn_export'
+
+/** URL del sello con UTMs por superficie (campaña única `free_badge`). */
+export function getEvaBadgeUrl(medium: EvaBadgeMedium = 'student_app'): string {
+    return `https://www.eva-app.cl/?utm_source=badge&utm_medium=${medium}&utm_campaign=free_badge`
 }
 
 // ── Ciclos de cobro ───────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
  * Resolución SIEMPRE server-side; estas funciones son puras y testeables.
  */
 
-import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, showsEvaBadge, EVA_BADGE_LABEL, type SubscriptionTier } from '@eva/tiers'
 import type { PdfBrand } from '@/domain/nutrition/exchange.types'
 import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 
@@ -18,7 +18,12 @@ export const EVA_PDF_BRAND: PdfBrand = {
     primaryColor: '#10B981',
     logoDataUrl: null,
     poweredByEva: true,
+    // Fallback EVA ⇒ el PDF es de EVA: el sello va (fail-open, igual que `showsEvaBadge(tier)`).
+    showsEvaBadge: true,
 }
+
+/** Texto del sello dentro del PDF: label canónico + dominio (el PDF viaja fuera del navegador). */
+export const EVA_PDF_BADGE_LABEL = `${EVA_BADGE_LABEL} · eva-app.cl`
 
 export function hexToRgb(hex: string): Rgb | null {
     const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim())
@@ -35,6 +40,11 @@ export type PdfBrandPalette = {
     generatedWithLabel: string
     brandName: string
     logoDataUrl: string | null
+    /**
+     * Pricing v3 (D3=A): línea extra del footer con el sello «Hecho con EVA · eva-app.cl».
+     * `null` ⇒ Pro/Elite (sin sello) — el footer solo lleva el disclaimer y "Generado con …".
+     */
+    evaBadgeLabel: string | null
 }
 
 /** Luminancia relativa aproximada (suficiente para elegir texto claro/oscuro del header). */
@@ -49,10 +59,12 @@ function darken(rgb: Rgb, factor: number): Rgb {
 
 /**
  * Deriva la paleta del PDF desde la marca del tenant.
- * Rama `poweredByEva` (free tier / fallback) reproduce la paleta EVA EXACTA (AC1):
+ * Rama `poweredByEva` (fallback / tier inválido) reproduce la paleta EVA EXACTA (AC1):
  * accent emerald-500 + header slate-900 + footer "Generado con EVA Fitness".
+ * `evaBadgeLabel` es ortogonal al color: un coach Free lleva SU paleta y ADEMÁS el sello.
  */
 export function derivePdfPalette(brand: PdfBrand): PdfBrandPalette {
+    const evaBadgeLabel = brand.showsEvaBadge ? EVA_PDF_BADGE_LABEL : null
     if (brand.poweredByEva) {
         return {
             accent: EVA_PDF_ACCENT,
@@ -61,6 +73,7 @@ export function derivePdfPalette(brand: PdfBrand): PdfBrandPalette {
             generatedWithLabel: 'Generado con EVA Fitness',
             brandName: EVA_PDF_BRAND.brandName,
             logoDataUrl: null,
+            evaBadgeLabel,
         }
     }
     const accent = hexToRgb(brand.primaryColor) ?? EVA_PDF_ACCENT
@@ -74,6 +87,7 @@ export function derivePdfPalette(brand: PdfBrand): PdfBrandPalette {
         generatedWithLabel: `Generado con ${brand.brandName}`,
         brandName: brand.brandName,
         logoDataUrl: brand.logoDataUrl ?? null,
+        evaBadgeLabel,
     }
 }
 
@@ -82,21 +96,23 @@ export type TenantBrandSource = {
     brandName: string | null | undefined
     primaryColor: string | null | undefined
     logoUrl?: string | null
-    /** Tier del coach standalone; sin branding (free/starter) fuerza marca EVA — `isBrandingAllowed`,
-     * misma regla de las demás superficies. Ausente (team/org) ⇒ no gatea por tier. */
+    /** Tier del coach standalone. Desde Pricing v3 el white-label es de todos los planes, así que
+     * `isBrandingAllowed` solo actúa de red fail-closed (tier inválido/stale ⇒ marca EVA). El tier
+     * SÍ decide el sello. Ausente (team/org) ⇒ ni gate ni sello. */
     subscriptionTier?: string | null
 }
 
 /**
  * Marca del PDF a partir del tenant resuelto server-side.
- * - tier sin branding (free/starter, W-brand B5) ⇒ EVA (poweredByEva); tier inválido cae
- *   a EVA por el fail-closed de `isBrandingAllowed`
+ * - tier válido (free incluido, Pricing v3) ⇒ marca propia; el sello lo decide `showsEvaBadge`
+ * - tier inválido/stale ⇒ EVA (poweredByEva) por el fail-closed de `isBrandingAllowed`
  * - sin color/nombre utilizables ⇒ EVA (fallback seguro, nunca un PDF "a medias")
  */
 export function resolvePdfBrand(source: TenantBrandSource | null | undefined): PdfBrand {
     if (!source) return EVA_PDF_BRAND
     const tier = source.subscriptionTier
-    if (tier != null && tier !== '' && !isBrandingAllowed(tier as SubscriptionTier)) {
+    const hasTier = tier != null && tier !== ''
+    if (hasTier && !isBrandingAllowed(tier as SubscriptionTier)) {
         return EVA_PDF_BRAND
     }
     const name = source.brandName?.trim()
@@ -107,12 +123,15 @@ export function resolvePdfBrand(source: TenantBrandSource | null | undefined): P
         primaryColor: color ?? EVA_PDF_BRAND.primaryColor,
         logoDataUrl: null, // el dataURL se resuelve SERVER-side (resolveBrandLogoDataUrlServer)
         poweredByEva: false,
+        // Sin tier (team/org) el PDF es del team/org: la atribución de EVA no corresponde ahí.
+        showsEvaBadge: hasTier ? showsEvaBadge(tier as SubscriptionTier) : false,
     }
 }
 
 /**
  * Headers del proxy (`/c`, `/t`, `/e`) → marca del PDF del ALUMNO.
- * Misma regla del layout: free tier fuerza EVA (`app/c/[coach_slug]/layout.tsx`).
+ * Misma regla del layout (`app/c/[coach_slug]/layout.tsx`): marca propia en todos los planes y
+ * sello «Hecho con EVA» en free/starter.
  */
 export function pdfBrandFromProxyHeaders(h: {
     get(name: string): string | null

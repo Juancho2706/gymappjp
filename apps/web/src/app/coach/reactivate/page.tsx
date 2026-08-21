@@ -13,6 +13,9 @@ export default async function ReactivatePage() {
     // Mismo gate de dinero fail-closed que el endpoint redeem-coupon-signup ('=== true' exacto).
     const couponsEnabled = process.env.COUPON_REDEMPTION_ENABLED === 'true'
 
+    // `coachMaxClients`: Pricing v3 pone el grandfather en la COLUMNA `coaches.max_clients`
+    // (backfill por uso del 21-08), no en la fecha. `coachCreatedAt` queda solo para proyectar
+    // los tiers que el coach todavía NO tiene (lo que el write-path grabará si los contrata).
     return (
         <Suspense>
             <ReactivateClient
@@ -23,6 +26,7 @@ export default async function ReactivatePage() {
                 currentPeriodEnd={coach?.current_period_end ?? null}
                 paidAccessEndedAt={coach?.paid_access_ended_at ?? null}
                 coachCreatedAt={coach?.created_at ?? null}
+                coachMaxClients={coach?.max_clients ?? null}
                 recentlyCancelledAddons={recentlyCancelledAddons}
                 couponsEnabled={couponsEnabled}
             />

@@ -7,24 +7,34 @@
  *
  * White-label (W2): emails AL ALUMNO pueden pasar `brand` (logo + color + nombre del
  * coach). El header/CTA/footer usan la marca del coach; el "con tecnología de EVA" del
- * footer se mantiene discreto. Sin `brand` (coach emails, free/starter, fallback) → EVA.
+ * footer se mantiene discreto. Sin `brand` (emails al COACH, team/org, fallback) → EVA.
+ *
+ * Pricing v3 (owner 2026-08-21): el white-label del email es de TODOS los planes; lo que
+ * distingue a free/starter es `brand.showsEvaBadge` ⇒ el sello «Hecho con EVA» en el footer.
  */
 import { deriveSportTokens } from '@eva/brand-kit'
+import { EVA_BADGE_LABEL, getEvaBadgeUrl } from '@eva/tiers'
 
 export type EmailBrand = {
     /** Nombre de marca del coach (identidad). Se muestra en el header si no hay logo. */
     brandName?: string
-    /** URL ABSOLUTA del logo del coach (Supabase Storage). Solo Pro+ (gateado por el caller). */
+    /** URL ABSOLUTA del logo del coach (Supabase Storage). El caller resuelve la elegibilidad. */
     logoUrl?: string | null
-    /** Color primario del coach (hex #rrggbb). Solo Pro+ (gateado por el caller). */
+    /** Color primario del coach (hex #rrggbb). El caller resuelve la elegibilidad. */
     primaryColor?: string | null
+    /**
+     * Pricing v3 (D3=A, owner 2026-08-21): sello «Hecho con EVA» en el footer. Lo calcula el
+     * caller con `resolveStudentEmailBranding` (standalone && showsEvaBadge(tier)); en team/org
+     * es false porque la marca ahí no es del coach. Ausente ⇒ sin sello (emails al COACH).
+     */
+    showsEvaBadge?: boolean
 }
 
 export type BaseEmailOptions = {
     previewText?: string
     headerTitle?: string
     footerText?: string
-    /** White-label del email (solo emails al alumno; el caller decide el gate Pro+). */
+    /** White-label del email (solo emails al alumno; lo resuelve `resolveStudentEmailBranding`). */
     brand?: EmailBrand
 }
 
@@ -64,7 +74,7 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
     const brandName = brandNameRaw ? escHtml(brandNameRaw) : ''
     const hasLogo = !!brand?.logoUrl
     const hasColor = !!(brand?.primaryColor && HEX_RE.test(brand.primaryColor))
-    // Header brandeado SOLO si el caller pasó logo o color (⇒ Pro+ standalone). Si no → EVA (como hoy).
+    // Header brandeado SOLO si el caller pasó logo o color (⇒ standalone elegible). Si no → EVA.
     const branded = hasLogo || hasColor
     const accent = branded ? brandCtaColors(brand?.primaryColor).bg : EVA_GREEN
 
@@ -77,10 +87,17 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
         : `<span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#ffffff;">EVA</span>
                     <span style="font-size:22px;font-weight:300;color:${EVA_GREEN};margin-left:2px;">·</span>`
 
-    // Footer: siempre mantiene "con tecnología de EVA" discreto (powered-by).
+    // Footer: identifica al REMITENTE real del dominio eva-app.cl. No es el sello — se mantiene
+    // igual en todos los planes (deliverabilidad + honestidad de quién manda el correo).
     const senderLine = branded && brandName
         ? `Enviado por <strong>${brandName}</strong> · con tecnología de EVA. Si no esperabas este correo, puedes ignorarlo.`
         : `Enviado por <strong>EVA Fitness Platform</strong>. Si no esperabas este correo, puedes ignorarlo.`
+
+    // Sello «Hecho con EVA» (Pricing v3, D3=A): línea propia ANTES del remitente, sobre el footer
+    // gris neutro (nunca sobre el color de marca). Solo free/starter standalone.
+    const evaBadgeLine = brand?.showsEvaBadge
+        ? `<p style="margin:0 0 4px;"><a href="${getEvaBadgeUrl('student_email')}" target="_blank" style="color:${accent};text-decoration:none;font-size:12px;">${EVA_BADGE_LABEL}</a></p>`
+        : ''
 
     const footer = opts.footerText
         ? `<p style="margin:0 0 4px;">${opts.footerText}</p>`
@@ -128,6 +145,7 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
             <td style="background-color:#f9fafb;border:1px solid ${BORDER};border-top:none;border-radius:0 0 12px 12px;padding:16px 32px;">
               <p style="margin:0;font-size:12px;color:${TEXT_MUTED};line-height:1.6;">
                 ${footer}
+                ${evaBadgeLine}
                 ${senderLine}
               </p>
             </td>

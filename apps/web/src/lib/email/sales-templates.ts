@@ -1,3 +1,4 @@
+import { studentCountLabel } from '@eva/tiers'
 import { wrapEmailLayout, ctaButton, badge } from './base-layout'
 
 /**
@@ -58,7 +59,8 @@ export function buildClientLimitReachedEmail(ctx: ClientLimitReachedContext) {
     const coachName = escHtml(ctx.coachName)
     const tierLabel = escHtml(ctx.tierLabel)
     const recommended = ctx.recommendedTierLabel ? escHtml(ctx.recommendedTierLabel) : null
-    const subject = `Alcanzaste el límite de ${ctx.currentLimit} alumnos de tu plan ${ctx.tierLabel}`
+    // Pricing v3: el cupo free es 1 ⇒ el plural sale del helper compartido, nunca hardcodeado.
+    const subject = `Alcanzaste el límite de ${studentCountLabel(ctx.currentLimit)} de tu plan ${ctx.tierLabel}`
 
     const body = `
 ${badge('LÍMITE ALCANZADO', '#F59E0B')}
@@ -67,7 +69,7 @@ ${badge('LÍMITE ALCANZADO', '#F59E0B')}
 </h1>
 <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
   Tu plan <strong style="color:#111827;">${tierLabel}</strong> permite hasta
-  <strong style="color:#111827;">${ctx.currentLimit} alumnos activos</strong> y ya los tienes todos ocupados.
+  <strong style="color:#111827;">${studentCountLabel(ctx.currentLimit)} activo${ctx.currentLimit === 1 ? '' : 's'}</strong> y ya ${ctx.currentLimit === 1 ? 'lo tienes ocupado' : 'los tienes todos ocupados'}.
   Por eso no pudimos sumar al alumno que intentaste agregar.
 </p>
 <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
@@ -84,7 +86,7 @@ ${ctaButton(recommended ? `Pasar a ${recommended}` : 'Ampliar mi plan', ctx.subs
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: `Tu plan ${ctx.tierLabel} llegó a ${ctx.currentLimit} alumnos activos.`,
+        previewText: `Tu plan ${ctx.tierLabel} llegó a ${studentCountLabel(ctx.currentLimit)} activo${ctx.currentLimit === 1 ? '' : 's'}.`,
         headerTitle: 'Límite de alumnos — EVA',
     })
 

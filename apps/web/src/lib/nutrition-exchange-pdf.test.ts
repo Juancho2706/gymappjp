@@ -29,7 +29,7 @@ const GROUPS = [C, P]
 function baseParams(overrides: Partial<ExchangePdfParams> = {}): ExchangePdfParams {
     return {
         format: 'compact',
-        brand: { brandName: 'Movida', primaryColor: '#EC4899', poweredByEva: false },
+        brand: { brandName: 'Movida', primaryColor: '#EC4899', poweredByEva: false, showsEvaBadge: false },
         planName: 'Pauta Fran',
         clientName: 'Alumna Test',
         goals: { calories: 1800, protein: 120, carbs: 180, fats: 60 },

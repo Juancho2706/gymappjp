@@ -21,7 +21,8 @@ import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/Offl
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding, consolidateStandaloneBranding } from '@eva/brand-kit'
-import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, showsEvaBadge, type SubscriptionTier } from '@eva/tiers'
+import { EvaBadge } from '@/components/brand/EvaBadge'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { buildSealCssVars } from '@/lib/seal-vars'
@@ -146,13 +147,14 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const { coach_slug } = await params
     const headersList = await headers()
 
-    // Read branding from middleware headers (set in middleware.ts)
-    // Free coaches: enforce EVA branding — white-label is a paid feature
+    // Branding desde los headers del proxy (`proxy.ts`).
+    // Pricing v3 (owner 2026-08-21): el white-label es de TODOS los planes — Free incluido. Lo que
+    // distingue a Free/Starter es el sello «Hecho con EVA» del footer (`showsEvaBadge`), no la marca.
     const subscriptionTier = (headersList.get('x-coach-subscription-tier') ?? 'free') as SubscriptionTier
-    // white-label v2: branding = Pro+ ENTERO (no solo 'free'). `isFreeTier` ahora significa "< Pro".
-    // El proxy ya manda defaults EVA para < Pro; esto es defense-in-depth (fila stale post-downgrade).
-    const isFreeTier = !isBrandingAllowed(subscriptionTier)
-    // W1a — tema preset curado: si el coach eligió un preset (theme_preset_key, gateado a Pro+),
+    // `brandLocked` = red de seguridad FAIL-CLOSED de `isBrandingAllowed`: solo cae acá un tier
+    // inválido/stale (fila corrupta, valor desconocido). En ese caso servimos skin EVA entero.
+    const brandLocked = !isBrandingAllowed(subscriptionTier)
+    // W1a — tema preset curado: si el coach eligió un preset (theme_preset_key),
     // sus valores (color/color2/accent/tinte/fuente/loader) OVERRIDEAN los crudos ANTES de derivar
     // tokens. NULL/desconocida → passthrough intacto (grandfather del color libre legacy).
     // El preset es PERSONAL del coach: NO se aplica cuando la marca viene de una org/team o el
@@ -160,7 +162,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const brandSource = headersList.get('x-workspace-brand-source')
     const isManagedBrand = brandSource === 'organization' || brandSource === 'orphan'
     const preset = resolvePresetBranding({
-        theme_preset_key: (isFreeTier || isManagedBrand) ? null : headersList.get('x-coach-theme-preset-key'),
+        theme_preset_key: (brandLocked || isManagedBrand) ? null : headersList.get('x-coach-theme-preset-key'),
         primary_color: headersList.get('x-coach-primary-color'),
         brand_secondary_color: headersList.get('x-coach-secondary-color'),
         accent_light: headersList.get('x-coach-accent-light'),
@@ -169,17 +171,17 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         brand_font_key: headersList.get('x-coach-font-key'),
         loader_variant: headersList.get('x-coach-loader-variant'),
     })
-    const primaryColor = isFreeTier
+    const primaryColor = brandLocked
         ? SYSTEM_PRIMARY_COLOR
         : (preset.primary_color ?? BRAND_PRIMARY_COLOR)
     // W-brand B2 (dueño 2026-08-17): consolidación de color SOLO para el coach STANDALONE —
     // sin preset (legacy custom), el secundario resuelto = sealPair(primario).secondary y los
     // brand_secondary_color/accent_* almacenados dejan de leerse. Con preset, passthrough
     // (el catálogo ya pisaba). Managed (org/team/orphan) conserva su camino actual hasta W3.
-    const consolidatedBrand = (isFreeTier || isManagedBrand)
+    const consolidatedBrand = (brandLocked || isManagedBrand)
         ? preset
         : consolidateStandaloneBranding(preset, primaryColor)
-    const logoUrl = isFreeTier
+    const logoUrl = brandLocked
         ? BRAND_APP_ICON
         : (headersList.get('x-coach-logo-url') || BRAND_APP_ICON)
     const brandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name')) ?? 'Mi Coach'
@@ -202,20 +204,20 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     // por tier (es una preferencia, no branding). Fail-safe: valor desconocido/ausente => 'coach'.
     const executorThemeRaw = headersList.get('x-coach-executor-theme')
     const executorTheme = executorThemeRaw === 'eva' ? 'eva' : 'coach'
-    const loaderText = isFreeTier ? '' : (decodeBrandHeaderValue(headersList.get('x-coach-loader-text')) ?? '')
-    const useCustomLoader = !isFreeTier && headersList.get('x-coach-use-custom-loader') === 'true'
+    const loaderText = brandLocked ? '' : (decodeBrandHeaderValue(headersList.get('x-coach-loader-text')) ?? '')
+    const useCustomLoader = !brandLocked && headersList.get('x-coach-use-custom-loader') === 'true'
     // W-brand B4: el standalone deja de leer loader_text_color (el texto del loader se pinta con
     // el gradiente derivado del primario). Managed (org/team) mantiene su camino actual hasta W3.
-    const loaderTextColor = (isFreeTier || !isManagedBrand) ? undefined : (headersList.get('x-coach-loader-text-color') ?? undefined)
+    const loaderTextColor = (brandLocked || !isManagedBrand) ? undefined : (headersList.get('x-coach-loader-text-color') ?? undefined)
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
-    const loaderIconMode = isFreeTier
+    const loaderIconMode = brandLocked
         ? 'eva'
         : (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
-    // white-label v2 — fuente curada + variante de loader + logo dark (todos gateados a Pro+ por isFreeTier).
-    const fontKey = isFreeTier ? '' : (preset.brand_font_key ?? '')
+    // white-label v2 — fuente curada + variante de loader + logo dark (solo caen a EVA si `brandLocked`).
+    const fontKey = brandLocked ? '' : (preset.brand_font_key ?? '')
     const brandFontStack = resolveBrandFontStack(fontKey) // server-side; nunca el string crudo del coach
-    const loaderVariant = isFreeTier ? 'eva' : resolveLoaderVariant(preset.loader_variant)
-    const logoUrlDark = isFreeTier ? '' : (headersList.get('x-coach-logo-url-dark') || '')
+    const loaderVariant = brandLocked ? 'eva' : resolveLoaderVariant(preset.loader_variant)
+    const logoUrlDark = brandLocked ? '' : (headersList.get('x-coach-logo-url-dark') || '')
 
     // Hardening anti stored-XSS: estos valores los fija un org_admin/co-gestor de team al
     // editar su marca y se inyectan crudos en un <style>. Las comillas simples se escapan,
@@ -231,7 +233,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const safeLoaderText = sanitizeCssStringValue(loaderText || '')
     // Loader COMPUESTO (loader_config jsonb): viaja como JSON string y se emite como CSS var
     // pa' que EvaRouteLoader lo lea post-mount. Solo se acepta JSON válido con shape esperado.
-    const loaderConfigRaw = isFreeTier ? '' : (decodeBrandHeaderValue(headersList.get('x-coach-loader-config')) ?? '')
+    const loaderConfigRaw = brandLocked ? '' : (decodeBrandHeaderValue(headersList.get('x-coach-loader-config')) ?? '')
     const safeLoaderConfig = (() => {
         if (!loaderConfigRaw) return ''
         try {
@@ -245,11 +247,11 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     // light + dark accent from the brand color + optional per-mode overrides.
     // W-brand B2: para standalone estos valores ya vienen consolidados (legacy custom ⇒
     // accents null + secundario derivado del primario); managed pasa intacto.
-    const accentLight = isFreeTier ? null : (consolidatedBrand.accent_light || null)
-    const accentDark = isFreeTier ? null : (consolidatedBrand.accent_dark || null)
-    const neutralTint = !isFreeTier && consolidatedBrand.neutral_tint === true
+    const accentLight = brandLocked ? null : (consolidatedBrand.accent_light || null)
+    const accentDark = brandLocked ? null : (consolidatedBrand.accent_dark || null)
+    const neutralTint = !brandLocked && consolidatedBrand.neutral_tint === true
     // color2 (white-label v2): un color → clampeado por-modo a accent2 (legible en ambos).
-    const secondaryColor = isFreeTier ? null : (consolidatedBrand.brand_secondary_color || null)
+    const secondaryColor = brandLocked ? null : (consolidatedBrand.brand_secondary_color || null)
     const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
 
     // Generate full brand palette (derived shades) from the resolved light accent + secondary.
@@ -264,7 +266,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const sealVars = buildSealCssVars({
         lightBrandColor: brandTheme.light.accent,
         darkBrandColor: brandTheme.dark.accent,
-        themePresetKey: (isFreeTier || isManagedBrand) ? null : headersList.get('x-coach-theme-preset-key'),
+        themePresetKey: (brandLocked || isManagedBrand) ? null : headersList.get('x-coach-theme-preset-key'),
     })
     const lightAccent = brandTheme.light.accent
     const lightOnAccent = brandTheme.light.accentText
@@ -444,16 +446,13 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                             </div>
                         )}
                         {children}
-                        {isFreeTier && (
-                            <a
-                                href="https://www.eva-app.cl?utm_source=free_footer&utm_medium=client_app&utm_campaign=powered_by"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block w-full py-2 text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                            >
-                                Potenciado por EVA
-                            </a>
-                        )}
+                        {/* Pricing v3 (D3=A): el viejo «Potenciado por EVA» (opacidad 50, solo Free
+                            sin marca) muere; ahora el sello «Hecho con EVA» lo llevan Free/Starter
+                            CON su marca puesta. Va acá, sobre el fondo de página (superficie
+                            neutra) y arriba del enlace de privacidad — nunca sobre el color del
+                            coach, así el contraste no depende de su hex. La bottom-nav flotante ya
+                            está compensada por el padding inferior de <main>. */}
+                        {showsEvaBadge(subscriptionTier) && <EvaBadge medium="student_app" />}
                         <div className="py-1.5 text-center">
                             <a
                                 href="mailto:privacidad@eva-app.cl"

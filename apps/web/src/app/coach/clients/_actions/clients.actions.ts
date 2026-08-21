@@ -6,7 +6,7 @@ import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { CreateClientSchema, UpdateClientDataSchema } from '@eva/schemas'
-import { tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
+import { studentCountLabel, tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
     buildClientWelcomeEmail,
@@ -61,6 +61,13 @@ export type CreateClientState = {
     newClientId?: string
     upgradeRequired?: boolean
     currentLimit?: number
+    /**
+     * Contexto del rechazo por cupo, para el evento `upgrade_gate_hit` del modal (sin PII):
+     * `currentTier` = tier del coach al momento del rechazo · `activeCount` = alumnos activos
+     * contados por el MISMO query que gateó. Solo vienen cuando `upgradeRequired` es true.
+     */
+    currentTier?: SubscriptionTier
+    activeCount?: number
     /** 'email_taken' ⇒ el modal muestra estado informativo (no error destructivo). */
     code?: 'email_taken'
 }
@@ -128,9 +135,13 @@ export async function createClientAction(
         })
 
         return {
-            error: `Alcanzaste el límite de ${maxClients} alumnos de tu plan actual.`,
+            error: `Alcanzaste el límite de ${studentCountLabel(maxClients)} de tu plan actual.`,
             upgradeRequired: true,
             currentLimit: maxClients,
+            // Contexto para `upgrade_gate_hit` (el modal lo emite): sin esto el evento no podía
+            // decir DESDE qué plan se choca el muro ni con cuántos alumnos.
+            currentTier: tier,
+            activeCount: activeClientsCount ?? 0,
         }
     }
 
@@ -247,6 +258,7 @@ export async function createClientAction(
         welcomeMessage: coach.welcome_message,
         logoUrl: emailBrand.logoUrl,
         primaryColor: emailBrand.primaryColor,
+        showsEvaBadge: emailBrand.showsEvaBadge,
     })
     const emailResult = await sendTransactionalEmail({
         to: emailSan,
@@ -488,6 +500,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
             coachPublicUrl: buildCoachStudentUrl(appUrl, coach),
             logoUrl: emailBrand.logoUrl,
             primaryColor: emailBrand.primaryColor,
+            showsEvaBadge: emailBrand.showsEvaBadge,
         })
         sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
     }
@@ -531,6 +544,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
             loginUrl: buildCoachStudentUrl(appUrl, coachInfo, '/login'),
             logoUrl: emailBrand.logoUrl,
             primaryColor: emailBrand.primaryColor,
+            showsEvaBadge: emailBrand.showsEvaBadge,
         })
         sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
     }
@@ -585,6 +599,7 @@ export async function bulkArchiveClientsAction(clientIds: string[]): Promise<{ a
                     coachPublicUrl,
                     logoUrl: emailBrand.logoUrl,
                     primaryColor: emailBrand.primaryColor,
+                    showsEvaBadge: emailBrand.showsEvaBadge,
                 })
                 return sendTransactionalEmail({ to: r.email!, subject, html })
             })

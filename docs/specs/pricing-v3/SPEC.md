@@ -7,8 +7,8 @@ canonical: false
 
 # SPEC — Pricing v3: Free = 1 alumno con white-label · Pro = 25 + todo
 
-**Estado: APROBADA por el owner el 2026-08-21 (decisiones 1A 2A 3A 4A 5A 6A). Pendiente de ejecución.**
-**Abierto: `robin-coach` (ver §Robin).**
+**Estado: APROBADA por el owner el 2026-08-21 (decisiones 1A 2A 3A 4A 5A 6A). EN EJECUCIÓN — día D = 2026-08-21.**
+**Robin: decidido (B, se deja que archive — ver §Robin). `PRICING_V3_CUTOVER = 2026-08-21T00:00:00Z`.**
 
 ## Origen
 
@@ -60,7 +60,7 @@ que en los datos históricos aparece en horas cuando aparece.
    al alumno (`email-brand.ts` + `base-layout.ts`), export RN. Texto: «Hecho con EVA» + link
    `https://www.eva-app.cl/?utm_source=badge&utm_medium=student_app&utm_campaign=free_badge`.
 6. **Escalera de fecha** (D4=A): `PRICING_V2_CUTOVER = 2026-08-18` (existente) y `PRICING_V3_CUTOVER =
-   <fecha del deploy, 00:00Z>`; `tierMaxClientsFor('free', createdAt)` = 3 / 2 / 1 por bucket. Solo para
+   2026-08-21T00:00:00Z` (día D); `tierMaxClientsFor('free', createdAt)` = 3 / 2 / 1 por bucket. Solo para
    write-paths y fallback; el grandfather por uso vive en la columna.
 7. **Aviso** (D5=A): correo transaccional a los 27 el día del deploy, después de verificar en prod que un
    Free ve Mi Marca.
@@ -73,9 +73,12 @@ que en los datos históricos aparece en horas cuando aparece.
 - **Backfill** (una vez, con respaldo, protocolo tx-rollback → aplicar → advisors → verificación):
   `UPDATE public.coaches SET max_clients = 1 WHERE subscription_tier = 'free' AND <standalone> AND
   <ocupa> <= 1 AND max_clients > 1` donde `ocupa` = `clients` con `is_archived = false`, `org_id IS NULL`,
-  `team_id IS NULL` (`capacity.service.ts:15,30`). Excluir `evademo` y `josefit`. Esperado: **27 filas**
-  (15 de 3→1, 12 de 2→1). Los 5 con ≥2 no entran en el `WHERE`. Respaldo `_bak_pricing_v3_free_limits_<fecha>`
-  `(coach_id, max_clients_prev)` en la misma transacción.
+  `team_id IS NULL` (`capacity.service.ts:15,30`). Excluir `evademo` y `josefit`. Esperado al 21-08 (re-medido
+  antes de ejecutar): **31 filas** (15 de 3→1, 16 de 2→1; incluye `aura` en `pending_email` e `improve-motion`,
+  alta de las 15:05Z; la SPEC original decía 27). **EJECUTADO el 2026-08-21 15:35Z** (migración LIVE
+  `20260821153527_pricing_v3_free_limits_backfill`, advisors 0 ERROR). Los 5 con ≥2 no entran en el `WHERE`. Respaldo
+  `_bak_pricing_v3_free_limits_20260821` `(coach_id, slug, max_clients_prev, backed_up_at)` en la misma
+  transacción, con RLS habilitada y sin grants a `anon`/`authenticated`.
 - Lectores que miran la fecha en vez de la columna y hay que corregir: `ReactivateClient.tsx:74`,
   `_data/reactivate.queries.ts:25-26`, `OverLimitBanner.tsx:63`. Drift previo: `import.actions.ts:100`
   (`?? 10`), `:185` y `api/mobile/coach/clients/import/route.ts:251` (catálogo sin grandfather) ⇒
@@ -93,14 +96,14 @@ que en los datos históricos aparece en horas cuando aparece.
   prop `pricing_version: 'v3'` en `coach_registered`.
 - RN: capacidades y labels vienen de `packages/tiers` ⇒ OTA a los tres runtimes (1.1.0 / 1.1.1 / 1.1.2).
 
-## Robin (abierto)
+## Robin (decidido 2026-08-21: B)
 
 `robin-coach`: free/active, `max_clients 3`, **5 alumnos no archivados**. El gate duro de Free
 (`coach-subscription-gate.ts:87` + `proxy.ts:552`; RN `workspace-core.ts:173`) lo redirige a
-`/coach/reactivate`. Last active 2026-08-18 15:08Z. Con D1=A su fila no se toca y sigue bloqueado.
-Opciones: (i) `UPDATE coaches SET max_clients = 5` (honra «los que tienen esos alumnos, déjalos así»);
-(ii) dejarlo bloqueado hasta que archive 2. **Requiere OK explícito del owner; es la primera pregunta de
-la próxima sesión.** Nada en este plan depende de esa respuesta.
+`/coach/reactivate`. Last active 2026-08-18 15:08Z. Opciones presentadas: (i) `UPDATE coaches SET
+max_clients = 5`; (ii) dejarlo bloqueado hasta que archive 2. **El owner eligió (ii): su fila NO se toca;
+sale del bloqueo archivando 2 alumnos desde `/coach/reactivate` (panel de archivado) o pasando a Pro.**
+El backfill no lo alcanza (ocupa 5 > 1).
 
 ## Invariantes
 

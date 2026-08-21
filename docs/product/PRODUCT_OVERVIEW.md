@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product
-last_verified: "2026-07-28 @ 0fbf850d"
+last_verified: "2026-08-21"
 canonical: true
 ---
 
@@ -82,15 +82,14 @@ Las capacidades profesionales están sujetas a tier, módulo, consentimiento y c
 ### Marca
 
 - marca EVA por defecto;
-- branding de coach permitido por tier;
+- branding de coach en todos los planes (Pricing v3); Free muestra el sello «Hecho con EVA» en las superficies del alumno;
 - marca de Team y Enterprise;
 - logo claro/oscuro, colores, tipografía, loader y presets;
 - PWA y app nativa resuelven la marca del workspace en runtime.
 
 ### Comercial y pagos
 
-- tiers en venta: Free, Starter, Pro y Elite;
-- Growth y Scale permanecen solo por compatibilidad con cuentas legacy;
+- tiers en venta: Free (1 alumno), Pro (25) y Elite (60); Starter, Growth y Scale permanecen solo por compatibilidad con cuentas legacy;
 - suscripciones standalone, cambios de plan, cupones, grace period y reactivación;
 - MercadoPago como gateway principal;
 - integración Flow/Webpay disponible detrás de feature flag;

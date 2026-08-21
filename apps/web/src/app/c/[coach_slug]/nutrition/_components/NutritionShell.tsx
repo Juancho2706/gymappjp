@@ -912,7 +912,9 @@ export function NutritionShell({
         const logoDataUrl = await resolveClientPdfLogoDataUrl()
         await downloadNutritionExchangePdf({
           format: 'equivalences',
-          brand: pdfBrand ?? { brandName: 'EVA FITNESS', primaryColor: '#10B981', poweredByEva: true },
+          // Fallback EVA (sin marca del tenant): el PDF es de EVA ⇒ lleva el sello (fail-open, Pricing v3).
+          // No se importa `EVA_PDF_BRAND` para no arrastrar `@eva/tiers` al bundle cliente.
+          brand: pdfBrand ?? { brandName: 'EVA FITNESS', primaryColor: '#10B981', poweredByEva: true, showsEvaBadge: true },
           logoDataUrl,
           planName: plan.name ?? 'Pauta nutricional',
           instructions: plan.instructions,

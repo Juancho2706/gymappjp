@@ -75,8 +75,8 @@ describe('checkJoinCapacity — standalone (C-KILL apagado hoy; el cerco queda c
         })
     })
 
-    it('coach NUEVO free (post-corte) sin columna → límite 2', async () => {
-        const coachRow = { max_clients: null, subscription_tier: 'free', created_at: '2026-09-01T00:00:00Z' }
+    it('coach free de la ventana v2 (18-08 ≤ alta < 21-08) sin columna → límite 2', async () => {
+        const coachRow = { max_clients: null, subscription_tier: 'free', created_at: '2026-08-19T10:00:00Z' }
 
         const lleno = fakeAdmin({ coachRow, count: 2 })
         expect(await checkJoinCapacity(lleno.admin, STANDALONE)).toEqual({
@@ -84,6 +84,20 @@ describe('checkJoinCapacity — standalone (C-KILL apagado hoy; el cerco queda c
             reason: 'limit_reached',
             used: 2,
             limit: 2,
+        })
+    })
+
+    // Pricing v3 (2026-08-21): el catálogo de Free baja a 1; la escalera de `tierMaxClientsFor`
+    // es el fallback cuando la fila no trae `max_clients` (la columna sigue ganando).
+    it('coach NUEVO free (post-v3) sin columna → límite 1', async () => {
+        const coachRow = { max_clients: null, subscription_tier: 'free', created_at: '2026-09-01T00:00:00Z' }
+
+        const lleno = fakeAdmin({ coachRow, count: 1 })
+        expect(await checkJoinCapacity(lleno.admin, STANDALONE)).toEqual({
+            ok: false,
+            reason: 'limit_reached',
+            used: 1,
+            limit: 1,
         })
     })
 

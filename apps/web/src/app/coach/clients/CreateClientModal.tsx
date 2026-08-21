@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { createClientAction, type CreateClientState } from './_actions/clients.actions'
+import { useCaptureUpgradeGate } from '@/lib/posthog/events'
 import { cn } from '@/lib/utils'
 
 const initialState: CreateClientState = {}
@@ -69,6 +70,22 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
     const formRef = useRef<HTMLFormElement>(null)
     const notifiedIdRef = useRef<string | null>(null)
     const ph = usePostHog()
+    const captureUpgradeGate = useCaptureUpgradeGate()
+    const gateHitStateRef = useRef<CreateClientState | null>(null)
+
+    // `upgrade_gate_hit` del cupo de alumnos: hasta Pricing v3 este gate NO se emitía en ninguna
+    // superficie (solo existían `upgrade_modal_dismissed` / `upgrade_initiated`), así que el embudo
+    // arrancaba después del muro y no se podía medir cuánta gente lo choca ni desde qué plan.
+    //
+    // Dedupe por IDENTIDAD del state: `useActionState` devuelve un objeto NUEVO por cada submit
+    // rechazado, así que un segundo intento sí cuenta como segundo choque, pero los re-renders del
+    // mismo rechazo (abrir/cerrar, repintados del padre) no lo duplican.
+    useEffect(() => {
+        if (!state.upgradeRequired) return
+        if (gateHitStateRef.current === state) return
+        gateHitStateRef.current = state
+        captureUpgradeGate('client_limit', state.currentTier ?? 'free', state.currentLimit, state.activeCount)
+    }, [state, captureUpgradeGate])
 
     // Aviso al dueño del modal. Va ANTES del auto-close y con guarda por id: el éxito con
     // teléfono deja el modal abierto en el paso de WhatsApp y el efecto correría en cada render.

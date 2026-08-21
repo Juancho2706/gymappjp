@@ -21,8 +21,10 @@ export const getReactivatePageData = cache(async () => {
             // sobre current_period_end: los flujos de expiracion (cron/webhook/espejo manual)
             // pueden NULLear current_period_end, y sin esta columna el banner degrada a copy
             // generico sin fecha.
-            // created_at: ancla del grandfather de pricing v2 (P2) — la UI comunica el límite REAL
-            // del coach vía tierMaxClientsFor(tier, created_at), no el catálogo de venta plano.
+            // max_clients + created_at: el cupo REAL del coach. Pricing v3 (owner 2026-08-21) puso
+            // el grandfather en la COLUMNA (backfill por uso del día D), así que `max_clients` manda
+            // para el tier ACTUAL y `created_at` solo proyecta los tiers que todavía no tiene
+            // (escalera de 3 peldaños: pre-v2 3 · v2 2 · v3 1). Nunca el catálogo de venta plano.
             .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id, created_at')
             .eq('id', user.id)
             .maybeSingle(),

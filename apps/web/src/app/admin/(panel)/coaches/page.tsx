@@ -4,6 +4,7 @@ import { CoachTable } from './_components/CoachTable'
 import { CoachFilterBar } from './_components/CoachFilterBar'
 import { PageInfoButton } from '../_components/PageInfoButton'
 import { AnnouncementEmailButton } from './_components/AnnouncementEmailButton'
+import { PricingV3NoticeButton } from './_components/PricingV3NoticeButton'
 import { CoachExportButton } from './_components/CoachExportButton'
 
 export const metadata = { title: 'Coaches' }
@@ -81,6 +82,7 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
                 <div className="flex items-center gap-2">
                     <CoachExportButton params={{ search: sp.q, status: sp.status, tier: sp.tier, beta: sp.beta === 'true' || sp.provider === 'beta' ? true : undefined, provider: sp.provider && sp.provider !== 'beta' ? sp.provider : undefined, stage: sp.stage, atRisk: sp.atRisk === 'true' ? true : undefined, sort: sp.sort, dir: sp.dir }} />
                     <AnnouncementEmailButton />
+                    <PricingV3NoticeButton />
                     <PageInfoButton title="Coaches — Guía completa" sections={COACHES_INFO} />
                 </div>
             </div>

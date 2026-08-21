@@ -26,6 +26,7 @@ import {
     type MealTargetsLike,
 } from '@/services/nutrition-exchanges/exchange-calc'
 import { derivePdfPalette, hexToRgb, type Rgb } from '@/lib/nutrition-pdf-brand'
+import { getEvaBadgeUrl } from '@eva/tiers'
 
 export type ExchangePdfMeal = {
     id: string
@@ -551,6 +552,11 @@ export async function downloadNutritionExchangePdf(params: ExchangePdfParams): P
             footerY
         )
         doc.text(`${p}/${pageCount}`, pageW - margin, footerY, { align: 'right' })
+        // Sello «Hecho con EVA» (Pricing v3, D3=A — owner 2026-08-21): segunda línea del footer,
+        // misma fuente/tamaño/color que el disclaimer. `null` en Pro/Elite ⇒ no se pinta nada.
+        if (palette.evaBadgeLabel) {
+            doc.textWithLink(palette.evaBadgeLabel, margin, footerY + 3.2, { url: getEvaBadgeUrl('nutrition_pdf') })
+        }
     }
 
     const safeStem = params.fileStem.replace(/[^\w\-]+/g, '_').slice(0, 80) || 'pauta-porciones'

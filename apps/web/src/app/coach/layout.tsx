@@ -127,7 +127,9 @@ export default async function CoachLayout({
     const overLimitMax = coach.max_clients ?? tierMaxClientsFor(overLimitTier, coach.created_at)
     const overLimit =
         activeStandaloneCount != null && activeStandaloneCount > overLimitMax
-            ? { activeCount: activeStandaloneCount, maxClients: overLimitMax, tierLabel: TIER_LABELS[overLimitTier] }
+            // `currentTier` va crudo además del label: el banner necesita saber a qué plan
+            // corresponde `maxClients` (la columna) para no recomendar el plan que ya tiene.
+            ? { activeCount: activeStandaloneCount, maxClients: overLimitMax, tierLabel: TIER_LABELS[overLimitTier], currentTier: overLimitTier }
             : null
     const currentWorkspaceLabel =
         activeWorkspace?.label ??
@@ -137,8 +139,9 @@ export default async function CoachLayout({
         'Mi negocio EVA'
 
     // Marca por contexto: enterprise → org; team → team; standalone → la del coach.
-    // white-label v2 (decisión #2): el branding standalone es Pro+ ENTERO. Si el coach no es Pro o
-    // apagó el toggle, su panel cae a EVA. enterprise/team traen su marca propia (ya Pro).
+    // Pricing v3 (owner 2026-08-21): el branding standalone es de TODOS los planes (free incluido);
+    // `isBrandingAllowed` queda como red fail-closed (tier inválido/stale o starter legacy ⇒ panel
+    // EVA). Si el coach apagó el toggle, su panel también cae a EVA. enterprise/team traen su marca.
     // W1a — tema preset curado: si el coach eligió un preset, sus valores overridean color/color2/
     // accent/tinte/fuente ANTES de derivar tokens. NULL/desconocida → passthrough (grandfather).
     // Solo se consume en la rama standalone (managed usa la marca de su org/team, no la personal).
@@ -336,6 +339,7 @@ export default async function CoachLayout({
                                 activeCount={overLimit.activeCount}
                                 maxClients={overLimit.maxClients}
                                 tierLabel={overLimit.tierLabel}
+                                currentTier={overLimit.currentTier}
                                 coachCreatedAt={coach.created_at ?? null}
                             />
                         )}

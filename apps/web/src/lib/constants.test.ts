@@ -43,15 +43,17 @@ describe('subscription constants', () => {
         // existentes retienen 30 vía tierMaxClientsFor (ver packages/tiers/pricing-v2.test.ts).
         expect(getTierMaxClients('pro')).toBe(25)
         expect(getTierCapabilities('starter').canUseNutrition).toBe(false)
-        // white-label v2 (decision CEO 2026-06-21): branding = Pro+ ENTERO → starter SIN branding.
+        // Pricing v3 abre el white-label a los tiers VENDIDOS; starter está fuera de venta y
+        // conserva su set histórico ⇒ sigue siendo el único sin marca propia.
         expect(getTierCapabilities('starter').canUseBranding).toBe(false)
         expect(getTierCapabilities('pro').canUseNutrition).toBe(true)
         expect(getTierCapabilities('pro').canUseBranding).toBe(true)
     })
 
-    it('branding gate (isBrandingAllowed) — Pro+ ENTERO + fail-closed (white-label v2)', () => {
-        // free/starter NO tienen branding (ven TODO EVA system); pro/elite/growth/scale SÍ.
-        expect(isBrandingAllowed('free')).toBe(false)
+    it('branding gate (isBrandingAllowed) — abierto en free desde pricing v3, sigue fail-closed', () => {
+        // Pricing v3 (owner 2026-08-21): free ve SU marca. Revierte «branding = Pro+ ENTERO»
+        // (decision CEO 2026-06-21). starter (fuera de venta) queda como único tier sin marca.
+        expect(isBrandingAllowed('free')).toBe(true)
         expect(isBrandingAllowed('starter')).toBe(false)
         expect(isBrandingAllowed('pro')).toBe(true)
         expect(isBrandingAllowed('elite')).toBe(true)
@@ -93,16 +95,19 @@ describe('subscription constants', () => {
         expect(isBillingCycleAllowedForTier('scale', 'annual')).toBe(true)
     })
 
-    // Pricing v2 (P1/P4): free = 2 alumnos (catálogo de venta; los free existentes retienen 3
-    // vía grandfather) con TODO liberado excepto branding (white-label sigue Pro+ ENTERO).
-    it('free tier — zero price, 2 clients (venta), todo liberado excepto branding', () => {
-        expect(getTierMaxClients('free')).toBe(2)
+    // Pricing v3 (owner 2026-08-21): free = 1 alumno (catálogo de venta; los free existentes
+    // conservan su cupo en la columna coaches.max_clients) con TODO liberado, white-label incluido.
+    // Lo que paga Pro es el cupo y sacarse el sello «Hecho con EVA» (showsEvaBadge).
+    it('free tier — zero price, 1 client (venta), todo liberado incluido branding, con sello EVA', () => {
+        expect(getTierMaxClients('free')).toBe(1)
         expect(getTierPriceClp('free', 'monthly')).toBe(0)
         expect(getTierCapabilities('free').canUseNutrition).toBe(true)
         expect(getTierCapabilities('free').canCreateCustomExercises).toBe(true)
         expect(getTierCapabilities('free').canImportClients).toBe(true)
-        expect(getTierCapabilities('free').canUseBranding).toBe(false)
+        expect(getTierCapabilities('free').canUseBranding).toBe(true)
         expect(getTierCapabilities('free').canUseAdvancedReports).toBe(false)
+        expect(getTierCapabilities('free').showsEvaBadge).toBe(true)
+        expect(getTierCapabilities('pro').showsEvaBadge).toBe(false)
     })
 
     it('growth tier — grandfathered: 120 clients, full features, correct price', () => {
@@ -137,11 +142,11 @@ describe('sale tiers (D1 + pricing v2)', () => {
 })
 
 describe('getRecommendedTier (SALE_TIERS only, fallback elite)', () => {
-    it('recommends the smallest sale tier that fits the client count (pricing v2: sin starter)', () => {
+    it('recommends the smallest sale tier that fits the client count (pricing v3: sin starter)', () => {
         expect(getRecommendedTier(0)).toBe('free')
-        expect(getRecommendedTier(2)).toBe('free')
-        // free ahora topa en 2 y starter salió de la venta: 3..25 ⇒ pro
-        expect(getRecommendedTier(3)).toBe('pro')
+        expect(getRecommendedTier(1)).toBe('free')
+        // free ahora topa en 1 y starter salió de la venta: 2..25 ⇒ pro
+        expect(getRecommendedTier(2)).toBe('pro')
         expect(getRecommendedTier(8)).toBe('pro')
         expect(getRecommendedTier(25)).toBe('pro')
         expect(getRecommendedTier(40)).toBe('elite')

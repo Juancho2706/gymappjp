@@ -7,11 +7,12 @@ import {
     SALE_TIERS,
     TIER_CONFIG,
     TIER_LABELS,
-    getRecommendedTierFor,
     getTierPriceClp,
-    tierMaxClientsFor,
     type SubscriptionTier,
 } from '@/lib/constants'
+// Misma regla de cupo efectivo que /coach/reactivate: la columna manda en el tier actual, la
+// escalera de fecha proyecta los demás. Helper puro, sin dependencias de esa ruta.
+import { effectiveTierLimit } from '../_lib/effective-limit'
 
 const clpFormatter = new Intl.NumberFormat('es-CL', {
     style: 'currency',
@@ -21,12 +22,15 @@ const clpFormatter = new Intl.NumberFormat('es-CL', {
 
 interface Props {
     activeCount: number
+    /** Cupo EFECTIVO del tier actual: `coaches.max_clients` o, si es NULL, la escalera de fecha. */
     maxClients: number
     tierLabel: string
+    /** Tier crudo del coach — sin él no se puede saber a qué plan corresponde `maxClients`. */
+    currentTier: SubscriptionTier
     /**
-     * `coaches.created_at` — ancla del grandfather de pricing v2: decide con qué cupo se mide cada
-     * plan al recomendar. Un coach VIEJO con 28 alumnos debe recibir «Pro (hasta 30)», no Elite.
-     * Ausente/inválida ⇒ fail-safe generoso (límites viejos), igual que en el resto del sistema.
+     * `coaches.created_at` — escalera de grandfather (pre-v2 3 · v2 2 · v3 1). Solo proyecta los
+     * tiers que el coach NO tiene: para el actual manda `maxClients` (la columna). Ausente/inválida
+     * ⇒ fail-safe generoso (límites viejos), igual que en el resto del sistema.
      */
     coachCreatedAt?: string | null
 }
@@ -37,7 +41,7 @@ interface Props {
  * que calce o archivar alumnos. Se auto-oculta en las rutas donde estorba (pago, reactivación,
  * onboarding), donde el coach ya está resolviendo el cupo.
  */
-export function OverLimitBanner({ activeCount, maxClients, tierLabel, coachCreatedAt }: Props) {
+export function OverLimitBanner({ activeCount, maxClients, tierLabel, currentTier, coachCreatedAt }: Props) {
     const pathname = usePathname()
     if (
         pathname.startsWith('/coach/subscription') ||
@@ -47,20 +51,33 @@ export function OverLimitBanner({ activeCount, maxClients, tierLabel, coachCreat
         return null
     }
 
-    // Plan recomendado: el más barato cuyo cupo REAL PARA ESTE COACH alcanza a sus alumnos
-    // actuales; si ninguno calza (más que el techo de Elite: 60 con el catálogo nuevo, 100 si
-    // viene grandfathered), Elite. `getRecommendedTierFor` es el mismo helper que ya usan los
-    // correos de trial-expiry y el panel admin — medir con el catálogo de VENTA le ofrecía Elite a
-    // un pro viejo de 28 alumnos que con Pro (30) seguía entrando.
+    // Cupo con el que se mide CADA plan al recomendar. Pricing v3: el tier ACTUAL vale lo que dice
+    // su columna (`maxClients`, ya resuelta en el layout); los demás se proyectan con la escalera de
+    // fecha, que es lo que el write-path grabará si el coach los contrata. Medirlos a todos con la
+    // escalera mentía dos veces: prometía «hasta 30» a un pro cuya columna dice 25, y podía
+    // recomendarle su propio plan actual como salida.
+    const limitFor = (t: SubscriptionTier) =>
+        effectiveTierLimit({ tier: t, currentTier, coachMaxClients: maxClients, coachCreatedAt })
+
+    // Plan recomendado: el más barato de VENTA cuyo cupo efectivo alcanza a sus alumnos actuales.
     const paidTiers = SALE_TIERS.filter((t) => TIER_CONFIG[t].monthlyPriceClp > 0)
-    const suggested = getRecommendedTierFor(activeCount, coachCreatedAt)
-    // El banner solo existe SOBRE el cupo ⇒ jamás ofrecer el gratuito como salida (solo alcanzable
-    // con un `max_clients` manual por debajo del piso del tier): ahí cae al pago más barato.
-    const recommended: SubscriptionTier =
-        TIER_CONFIG[suggested].monthlyPriceClp > 0 ? suggested : (paidTiers[0] ?? 'elite')
+    const suggested = SALE_TIERS.find((t) => limitFor(t) >= activeCount) ?? 'elite'
+    // El banner solo existe SOBRE el cupo ⇒ la salida jamás puede ser el gratuito (solo alcanzable
+    // con un `max_clients` manual bajo el piso del tier) NI el plan que el coach ya tiene: si el
+    // sugerido cae en cualquiera de esos dos, saltamos al siguiente tier de venta PAGO que sí lo
+    // cubra (y si ninguno cubre, al pago más barato distinto del actual; el techo real es Teams).
+    const needsPaidJump =
+        TIER_CONFIG[suggested].monthlyPriceClp === 0 ||
+        (suggested === currentTier && limitFor(suggested) < activeCount)
+    const recommended: SubscriptionTier = needsPaidJump
+        ? paidTiers.find((t) => t !== currentTier && limitFor(t) >= activeCount) ??
+          paidTiers.find((t) => t !== currentTier) ??
+          paidTiers[0] ??
+          'elite'
+        : suggested
     const recommendedLabel = TIER_LABELS[recommended]
     const recommendedPrice = clpFormatter.format(getTierPriceClp(recommended, 'monthly'))
-    const recommendedMax = tierMaxClientsFor(recommended, coachCreatedAt)
+    const recommendedMax = limitFor(recommended)
 
     return (
         <div className="border-b border-[var(--danger-500)]/30 bg-[var(--danger-100)] pl-safe pr-safe pt-safe">

@@ -19,7 +19,7 @@ import {
  * 2026-07-29: migrado del envío web-push inline a `sendPushToClient` (web + Expo en una llamada)
  * — antes SOLO llegaba a la PWA y la app nativa quedaba muda pese a registrar tokens. Los
  * candidatos ahora son la unión de suscripciones web (`push_subscriptions`) y tokens nativos
- * (`push_tokens`); el resto de la lógica (plan activo, meal-aware, white-label Pro+ standalone,
+ * (`push_tokens`); el resto de la lógica (plan activo, meal-aware, white-label standalone,
  * skip si ya registró hoy) es la misma. El kill-switch por evento y la limpieza de suscripciones
  * vencidas viven en el sender.
  *
@@ -323,8 +323,9 @@ export async function GET(req: Request) {
       const coach = recipient.coach
       const coachSlug = coach?.slug ?? ''
 
-      // White-label (W2): nombre+logo del coach solo si alumno STANDALONE (no pool team ni org)
-      // con tier Pro+ (misma regla que la app). Si no → marca EVA (fallback del SW/handler).
+      // White-label (W2): nombre+logo del coach solo si alumno STANDALONE (no pool team ni org).
+      // Desde Pricing v3 aplica a TODOS los planes; `isBrandingAllowed` queda de red fail-closed
+      // (tier inválido/stale). Si no → marca EVA (fallback del SW/handler).
       const brandName = coach?.brand_name ?? undefined
       const isStandalone = !recipient.orgId && !recipient.teamId
       const brandingOn =

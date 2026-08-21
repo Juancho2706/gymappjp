@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense, type ReactNode } from 'react'
-import { getTierCapabilities, ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
+import { ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
 import { Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, LifeBuoy, type LucideIcon } from 'lucide-react'
-import { BrandUpsell } from './_components/BrandUpsell'
 import { SupportPane } from './_components/SupportPane'
 import { SubscriptionContent } from '../subscription/_components/SubscriptionContent'
 import { DangerZone } from './_components/DangerZone'
@@ -266,10 +265,8 @@ export default async function CoachSettingsPage() {
     }
 
     const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
-    const capabilities = getTierCapabilities(tier)
-    // Sin branding (Free): el hub Opciones se mantiene ENTERO (kit: la card Mi Marca lleva
-    // badge Pro y rutea al upsell — /coach/settings/brand lo renderiza como sub-pantalla).
-    const canUseBranding = capabilities.canUseBranding
+    // White-label en TODOS los planes desde Pricing v3 (decisión owner 2026-08-21): el hub y el
+    // pane "Mi Marca" son iguales para todos los tiers. Pro = cupo + sin sello «Hecho con EVA».
 
     // ── Desktop (≥760): SettingsShell de 2 paneles (rail + sección embebida) ──
     // Las sub-páginas siguen vivas como rutas directas; en desktop embebemos su contenido REAL
@@ -281,14 +278,9 @@ export default async function CoachSettingsPage() {
     ])
 
     const sections: Partial<Record<SettingsSectionId, ReactNode>> = {
-        marca: canUseBranding ? (
-            <PaneBody desc="Personaliza la app de tus alumnos: logo, colores, nombre y mensajes. Cada alumno ve TU marca, no la de EVA.">
+        marca: (
+            <PaneBody desc="Personaliza la app de tus alumnos: logo, colores, nombre y mensajes. Cada alumno ve TU marca.">
                 <BrandSettingsForm coach={coach} />
-            </PaneBody>
-        ) : (
-            // Pricing v2 (D3): starter fuera de venta; branding es Pro+ (white-label v2, CEO 2026-06-21).
-            <PaneBody desc="Tu app, con tu identidad — disponible desde el plan Pro.">
-                <BrandUpsell tier={tier} />
             </PaneBody>
         ),
         suscripcion: (
@@ -346,7 +338,7 @@ export default async function CoachSettingsPage() {
         )
     }
 
-    // Standalone (todos los tiers — Free ve el hub con Mi Marca badge Pro → upsell):
+    // Standalone (todos los tiers — Mi Marca es igual para todos desde Pricing v3):
     //  · Móvil (<760): hub "Opciones" aplanado (un solo patrón de card), verbatim del diseño móvil.
     //  · Desktop (≥760): SettingsShell de 2 paneles 1:1 con DesktopOpciones.
     return (
@@ -375,24 +367,13 @@ export default async function CoachSettingsPage() {
 
                 <div className="space-y-3">
                     <Eyebrow>Personalización</Eyebrow>
-                    {canUseBranding ? (
-                        <HubCard
-                            href="/coach/settings/brand"
-                            icon={Palette}
-                            title="Mi Marca"
-                            desc="Logo, colores, nombre y mensajes de la app del alumno"
-                            tone="sport"
-                        />
-                    ) : (
-                        <HubCard
-                            href="/coach/settings/brand"
-                            icon={Palette}
-                            title="Mi Marca"
-                            desc="Logo, colores y nombre en la app de tus alumnos"
-                            tone="sport"
-                            badge={{ label: 'Pro', tone: 'sport' }}
-                        />
-                    )}
+                    <HubCard
+                        href="/coach/settings/brand"
+                        icon={Palette}
+                        title="Mi Marca"
+                        desc="Logo, colores, nombre y mensajes de la app del alumno"
+                        tone="sport"
+                    />
                 </div>
 
                 {/* Plan: suscripción base + módulos incluidos, juntos. */}

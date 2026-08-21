@@ -132,8 +132,24 @@ describe('updateBrandSettingsAction — whitelist B2 (standalone)', () => {
         expect(sb._calls.update[0]).not.toHaveProperty('loader_text_color')
     })
 
-    it('coach free: identidad y welcome persisten; nada de branding visual (gate intacto)', async () => {
+    // Pricing v3 (owner 2026-08-21): el white-label es de TODOS los planes vendidos ⇒ un free SÍ
+    // persiste su branding visual (primary_color…), y la whitelist B2 sigue descartando los campos muertos.
+    it('coach free (pricing v3): identidad, welcome Y branding visual persisten; los campos muertos B2 siguen fuera', async () => {
         const sb = makeSupabase({ tier: 'free' })
+        createClientMock.mockResolvedValue(sb)
+
+        const res = await updateBrandSettingsAction({}, baseFormData({ brand_secondary_color: '#00FF00' }))
+
+        expect(res).toEqual({ success: true })
+        const payload = sb._calls.update[0]
+        expect(payload).toMatchObject({ full_name: 'Coach Prueba', brand_name: 'Marca Prueba', primary_color: '#E11D48' })
+        expect(payload).not.toHaveProperty('brand_secondary_color')
+        expect(payload).not.toHaveProperty('loader_text_color')
+    })
+
+    // El gate fail-closed sigue vivo para el único tier sin marca (starter, legacy fuera de venta).
+    it('coach starter (legacy sin white-label): identidad y welcome persisten; nada de branding visual (gate intacto)', async () => {
+        const sb = makeSupabase({ tier: 'starter' })
         createClientMock.mockResolvedValue(sb)
 
         const res = await updateBrandSettingsAction({}, baseFormData({ brand_secondary_color: '#00FF00' }))

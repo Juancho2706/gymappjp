@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { getTierCapabilities, getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
+import { getTierCapabilities, studentCountLabel, tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import { getCoachOrgContext } from '@/lib/coach-context'
 import { resolveCoachScope } from '@/services/auth/coach-scope.service'
 import { sendClientLimitReachedEmail } from '@/services/billing/sales-emails.service'
@@ -72,7 +72,9 @@ export async function getImportContext(): Promise<ImportContext> {
 
     const { data: coach } = await supabase
         .from('coaches')
-        .select('id, subscription_tier, max_clients')
+        // `created_at`: fallback del cupo cuando `max_clients` viene NULL (escalera de grandfather
+        // de 3 peldaños — pre-v2 3 · v2 2 · v3 1). Sin él, el precheck usaba un 10 hardcodeado.
+        .select('id, subscription_tier, max_clients, created_at')
         .eq('id', userId)
         .maybeSingle()
     if (!coach) return { allowed: false, reason: 'unauth', tier: 'free' }
@@ -97,7 +99,9 @@ export async function getImportContext(): Promise<ImportContext> {
         allowed: true,
         coachId: coach.id,
         orgId,
-        maxClients: coach.max_clients ?? 10,
+        // El precheck de UI debe mostrar el cupo REAL: la columna manda y, si es NULL, la escalera
+        // de grandfather del coach. El 10 hardcodeado anterior prometía 10 altas a un free de 1.
+        maxClients: coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at),
         activeCount: activeCount ?? 0,
     }
 }
@@ -167,7 +171,8 @@ export async function importClientsAction(
 
     const { data: rawCoach } = await supabase
         .from('coaches')
-        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients, primary_color, logo_url')
+        // `created_at`: ancla de la escalera de grandfather para el fallback del cupo (ver abajo).
+        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients, created_at, primary_color, logo_url')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -182,7 +187,9 @@ export async function importClientsAction(
 
     // Client cap check (org/team have no per-coach cap; standalone uses tier max)
     if (!orgId && !activeTeamId) {
-        const maxClients = rawCoach.max_clients ?? getTierMaxClients(tier)
+        // La columna GANA (ahí vive el grandfather de Pricing v3); si viene NULL, la escalera de
+        // fecha del coach — nunca el catálogo de venta plano, que le daría 1 a un free viejo de 3.
+        const maxClients = rawCoach.max_clients ?? tierMaxClientsFor(tier, rawCoach.created_at)
         const { count: activeCount } = await supabase
             .from('clients')
             .select('id', { count: 'exact', head: true })
@@ -200,7 +207,7 @@ export async function importClientsAction(
                 source: 'web_import',
             })
             return {
-                error: `Tu plan permite ${maxClients} alumnos activos. Tienes ${activeCount ?? 0} y quieres importar ${rows.length}. Actualiza tu plan o reduce la cantidad de filas.`,
+                error: `Tu plan permite ${studentCountLabel(maxClients)} activo${maxClients === 1 ? '' : 's'}. Tienes ${activeCount ?? 0} y quieres importar ${rows.length}. Actualiza tu plan o reduce la cantidad de filas.`,
             }
         }
     }

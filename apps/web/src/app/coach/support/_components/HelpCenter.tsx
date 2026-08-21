@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { getTierMaxClients } from '@eva/tiers'
+import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 import { Card } from '@/components/ui/card'
 import { BookOpen, ChevronDown, Search } from 'lucide-react'
 
@@ -64,8 +64,10 @@ const GUIDES: Guide[] = [
         steps: [
             'En Opciones › Mi Marca defines logo, colores, nombre y mensajes de bienvenida.',
             'Tus alumnos ven TU marca en su app, no la de EVA.',
-            // Pricing v2 (D3): starter salió de la venta; branding es Pro+ (white-label v2, CEO 2026-06-21).
-            'La personalización de marca está disponible desde el plan Pro.',
+            // Pricing v3 (owner 2026-08-21): white-label está en todos los planes desde v3; Pro se
+            // distingue por el cupo y por no llevar el sello «Hecho con EVA» — esto REVIERTE la
+            // regla vieja «branding = Pro+ ENTERO» (decisión CEO 2026-06-21, white-label v2).
+            'La personalización de marca está incluida en todos los planes, también en el gratuito.',
         ],
     },
     {
@@ -121,8 +123,9 @@ const FAQS: Faq[] = [
     },
     {
         q: '¿Puedo usar mi propio logo?',
-        // Pricing v2 (D3): starter salió de la venta; branding es Pro+ (white-label v2).
-        a: 'Sí. En Opciones › Mi Marca subes tu logo y eliges tus colores. Disponible desde el plan Pro.',
+        // Pricing v3 (owner 2026-08-21): white-label en todos los planes, Free incluido — ya no es
+        // exclusivo de Pro+ (regla vieja «branding = Pro+ ENTERO», decisión CEO 2026-06-21, REVERTIDA).
+        a: 'Sí. En Opciones › Mi Marca subes tu logo y eliges tus colores. Incluida en todos los planes.',
     },
     {
         q: '¿Qué pasa si cancelo?',
@@ -149,7 +152,7 @@ const FAQS: Faq[] = [
         q: '¿Necesito tarjeta para el plan gratis?',
         // Derivado del catálogo (QA pre-campaña 17-08). Nota: un coach anterior al corte del 18-08
         // conserva su cupo viejo por grandfather, pero el copy genérico describe el plan VIGENTE.
-        a: `No. El plan gratuito no requiere tarjeta e incluye hasta ${getTierMaxClients('free')} alumnos.`,
+        a: `No. El plan gratuito no requiere tarjeta e incluye ${studentCountLabel(getTierMaxClients('free'))} y tu marca.`,
     },
     {
         q: '¿Cómo contacto a soporte?',

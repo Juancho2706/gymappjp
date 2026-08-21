@@ -3,7 +3,7 @@ import { CreateClientSchema } from '@eva/schemas'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
-import { tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
+import { studentCountLabel, tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
 import { sendClientLimitReachedEmail } from '@/services/billing/sales-emails.service'
@@ -218,11 +218,16 @@ export async function POST(request: NextRequest) {
             source: 'mobile_create',
         })
 
+        // El cuerpo lleva el contexto del rechazo para que la app pueda emitir `upgrade_gate_hit`
+        // sin una segunda lectura del perfil. Sin PII: solo gate, tier, cupo y conteo.
         return NextResponse.json(
             {
-                error: `Alcanzaste el limite de ${maxClients} alumnos de tu plan actual.`,
+                error: `Alcanzaste el limite de ${studentCountLabel(maxClients)} de tu plan actual.`,
                 code: 'UPGRADE_REQUIRED',
+                gate: 'client_limit',
+                currentTier: tier,
                 currentLimit: maxClients,
+                activeCount: activeClientsCount ?? 0,
             },
             { status: 402 }
         )
@@ -323,6 +328,7 @@ export async function POST(request: NextRequest) {
         welcomeMessage: coach.welcome_message,
         logoUrl: emailBrand.logoUrl,
         primaryColor: emailBrand.primaryColor,
+        showsEvaBadge: emailBrand.showsEvaBadge,
     })
     const emailResult = await sendTransactionalEmail({
         to: emailSan,

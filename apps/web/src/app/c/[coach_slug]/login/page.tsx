@@ -1,12 +1,12 @@
 import { notFound } from 'next/navigation'
-import Image from 'next/image'
 import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
 import { InstallPrompt } from '@/components/InstallPrompt'
-import { BRAND_APP_ICON, BRAND_APP_ICON_512 } from '@/lib/brand-assets'
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { LoginEntrance, LoginEntranceItem } from './_components/LoginEntrance'
 import { getClientLoginCoach, getClientLoginMetadataCoach } from './_data/login.queries'
-import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, showsEvaBadge, type SubscriptionTier } from '@eva/tiers'
+import { EvaBadge } from '@/components/brand/EvaBadge'
 import { resolveBrandTheme, resolvePresetBranding, consolidateStandaloneBranding } from '@eva/brand-kit'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
@@ -54,11 +54,14 @@ export default async function ClientLoginPage({ params }: Props) {
 
     if (!coach) notFound()
 
-    // white-label v2: branding pre-auth = Pro+ ENTERO. free/starter → EVA visual, conservando el nombre.
+    // Pricing v3 (owner 2026-08-21): el branding pre-auth es de TODOS los planes. `brandingAllowed`
+    // queda como red de seguridad FAIL-CLOSED (solo un tier inválido/stale cae a skin EVA); lo que
+    // separa a Free/Starter de Pro es el sello «Hecho con EVA» bajo el formulario.
     // white-label W1a — tema preset curado: si el coach eligió un preset, sus valores overridean
     // color/color2/accent/tinte/fuente/loader ANTES de resolver el tema. NULL/desconocida → passthrough.
     const presetBrand = resolvePresetBranding(coach)
-    const brandingAllowed = isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)
+    const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+    const brandingAllowed = isBrandingAllowed(tier)
     const brandColor = brandingAllowed ? (presetBrand.primary_color || BRAND_PRIMARY_COLOR) : BRAND_PRIMARY_COLOR
     // W-brand B2: login del alumno = superficie standalone — sin preset (legacy custom) el
     // secundario resuelto se deriva del primario (sealPair) y los accent_*/secundario
@@ -155,15 +158,13 @@ export default async function ClientLoginPage({ params }: Props) {
         />
     )
 
-    const poweredBy = (
-        <div className="flex items-center justify-center gap-1.5 pt-[18px] text-[11px] text-text-subtle">
-            con tecnología de
-            <span className="inline-flex items-center gap-1 opacity-70">
-                <Image src={BRAND_APP_ICON_512} alt="EVA" width={14} height={14} className="rounded-[3px]" />
-                <span className="font-semibold text-text-muted">EVA</span>
-            </span>
-        </div>
-    )
+    // Sello «Hecho con EVA» (Pricing v3, D3=A — owner 2026-08-21). Reemplaza al viejo bloque
+    // "con tecnología de EVA" (ícono + wordmark) que se pintaba para TODOS los tiers: el gancho
+    // de Pro es justamente NO llevar atribución de EVA en la pantalla del alumno.
+    // Se monta bajo el formulario en los 4 layouts (móvil y desktop): esa zona es siempre
+    // `surface-card`/`surface-app` — nunca el hero teñido con el color del coach — así el
+    // contraste del sello no depende del hex de la marca.
+    const evaBadge = showsEvaBadge(tier) ? <EvaBadge medium="student_login" className="pt-[18px]" /> : null
 
     const loginForm = (
         <ClientLoginForm
@@ -201,7 +202,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     Entrena con <b className="text-text-strong">{coach.brand_name}</b>
                 </p>
                 <div className="mt-8">{desktopLoginForm}</div>
-                {poweredBy}
+                {evaBadge}
             </div>
         </LoginEntranceItem>
     )
@@ -294,7 +295,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     </LoginEntranceItem>
                     <LoginEntranceItem>
                         {loginForm}
-                        {poweredBy}
+                        {evaBadge}
                     </LoginEntranceItem>
                 </LoginEntrance>
             ) : layout === 'hero' ? (
@@ -319,7 +320,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     </div>
                     <LoginEntranceItem className="rounded-t-[var(--radius-2xl)] border-t border-subtle bg-surface-card px-6 pb-7 pt-6 shadow-[var(--shadow-lg)]">
                         {loginForm}
-                        {poweredBy}
+                        {evaBadge}
                     </LoginEntranceItem>
                 </LoginEntrance>
             ) : layout === 'energia' ? (
@@ -344,7 +345,7 @@ export default async function ClientLoginPage({ params }: Props) {
                             Inicia sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
                         </p>
                         {loginForm}
-                        {poweredBy}
+                        {evaBadge}
                     </LoginEntranceItem>
                 </LoginEntrance>
             ) : (
@@ -384,7 +385,7 @@ export default async function ClientLoginPage({ params }: Props) {
                             Inicia sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
                         </p>
                         {loginForm}
-                        {poweredBy}
+                        {evaBadge}
                     </LoginEntranceItem>
                 </LoginEntrance>
             )}
@@ -408,7 +409,7 @@ export default async function ClientLoginPage({ params }: Props) {
                         <LoginEntranceItem>
                             <div className="max-w-[440px]">
                                 {desktopLoginForm}
-                                {poweredBy}
+                                {evaBadge}
                             </div>
                         </LoginEntranceItem>
                     </div>

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-08-19 @ ce601562"
+last_verified: "2026-08-21"
 canonical: true
 ---
 
@@ -42,6 +42,15 @@ El catálogo productivo está operativo. Quedan decisiones humanas antes de muta
 - [ ] Exigir snapshot, dry-run y conteos antes/después para cualquier operación.
 
 Procedimiento: [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md).
+
+### COMMS-01 — Correo Pricing v3 a los Free con cupo 1
+
+Aviso «Tu plan Free ahora incluye tu marca» ([spec](../specs/pricing-v3/SPEC.md)): el white-label pasa a todos los planes con el sello «Hecho con EVA», y el cupo Free queda en 1 alumno activo conservando a los alumnos existentes. Envío manual: **panel admin › Coaches › botón «Aviso Pricing v3»**.
+
+- [ ] Ejecutar el backfill de `coaches.max_clients` ANTES del envío: el botón filtra por `max_clients = 1` y sin él la lista sale vacía.
+- [ ] Enviar la prueba a la casilla del owner desde el propio diálogo y leer el correo entero antes de confirmar.
+- [ ] Confirmar el envío real y anotar `sent / failed / skipped`; el botón deduplica contra `admin_audit_logs` (`coach.pricing_v3_notice`), así que un reintento tras un corte no reescribe a quien ya recibió.
+- [ ] Revisar los `failed` en Auditoría y decidir uno por uno (rebote, casilla inexistente) antes de reintentar.
 
 ## P2 — Gates bajo demanda
 

@@ -20,7 +20,7 @@
  * suscribirse al contexto client. El HTML igual se renderiza en SSR → SEO intacto.
  */
 
-import { getTierMaxClients } from '@eva/tiers'
+import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 import { useLandingBrand } from './_brand-provider'
 
 // QA pre-campaña 17-08: este número estaba hardcodeado en 3 mientras PreciosSection, en la misma
@@ -60,7 +60,7 @@ const FAQ_ITEMS: [string, string, string, string][] = [
         'q5',
         '¿Necesito tarjeta para empezar?',
         'a5',
-        `No. El plan Free es permanente para hasta ${FREE_MAX_CLIENTS} alumnos, sin tarjeta y con el builder completo.`,
+        `El plan Free es permanente para ${studentCountLabel(FREE_MAX_CLIENTS)}, sin tarjeta, con tu marca y con el builder completo.`,
     ],
 ]
 

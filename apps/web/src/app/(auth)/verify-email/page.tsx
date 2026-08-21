@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { MailCheck, Check, ArrowRight } from 'lucide-react'
-import { getTierMaxClients } from '@eva/tiers'
+import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 import { useActionState } from 'react'
 import { MetaTrackEvent } from '@/components/meta/MetaTrackEvent'
 import { CoachRegisteredTracker } from '@/components/analytics/RegistrationTracker'
@@ -60,7 +60,7 @@ function VerifyEmailContent() {
     const metaEventId = params.get('eid')
 
     const benefits = [
-        `${getTierMaxClients('free')} alumnos sin costo`,
+        `${studentCountLabel(getTierMaxClients('free'))} sin costo, con tu marca`,
         'Planes de entrenamiento ilimitados',
         'Tu propia app para alumnos',
         'Upgrade cuando quieras',

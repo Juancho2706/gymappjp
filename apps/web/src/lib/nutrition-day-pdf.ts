@@ -5,6 +5,7 @@
 
 import { calculateFoodItemMacros, type FoodItemForMacros } from '@/lib/nutrition-utils'
 import { derivePdfPalette, EVA_PDF_BRAND } from '@/lib/nutrition-pdf-brand'
+import { getEvaBadgeUrl } from '@eva/tiers'
 import type { PdfBrand } from '@/domain/nutrition/exchange.types'
 
 export type NutritionPdfMeal = {
@@ -375,6 +376,12 @@ export async function downloadNutritionDayPdf(params: NutritionPdfParams): Promi
     footerY
   )
   doc.text(new Date().toLocaleString('es-CL'), pageW - margin, footerY, { align: 'right' })
+
+  // Sello «Hecho con EVA» (Pricing v3, D3=A — owner 2026-08-21): segunda línea del footer, misma
+  // fuente/tamaño/color que el disclaimer. `null` en Pro/Elite ⇒ no se pinta nada.
+  if (palette.evaBadgeLabel) {
+    doc.textWithLink(palette.evaBadgeLabel, margin, footerY + 3.2, { url: getEvaBadgeUrl('nutrition_pdf') })
+  }
 
   const safeStem = params.fileStem.replace(/[^\w\-]+/g, '_').slice(0, 80) || 'plan-nutricion'
   doc.save(`${safeStem}.pdf`)

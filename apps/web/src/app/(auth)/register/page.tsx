@@ -553,7 +553,7 @@ export default function RegisterPage() {
                                         // Features clave por tarjeta — strings EXACTOS de @eva/tiers (no se inventan).
                                         // La fila "no incluida" (dash) muestra la escalera de upgrade.
                                         const features = [
-                                            { label: `Hasta ${option.maxClients} alumnos`, included: true },
+                                            { label: option.maxClients === 1 ? '1 alumno' : `Hasta ${option.maxClients} alumnos`, included: true },
                                             // Nutrición base (V2) no tiene gate de tier: incluida en todos los
                                             // planes, Free incluido. `caps.canUseNutrition` solo gatea la compra
                                             // del add-on en billing, por eso esta fila no lo consulta.

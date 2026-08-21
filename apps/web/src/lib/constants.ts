@@ -58,6 +58,8 @@ export type {
     SaleTier,
     TierConfig,
     TierCapabilities,
+    // Pricing v3 (D3): superficie donde se pinta el sello «Hecho con EVA» (viaja como utm_medium).
+    EvaBadgeMedium,
     DiscountSpec,
     DiscountResult,
     DiscountType,
@@ -76,10 +78,17 @@ export {
     TIER_CONFIG,
     getTierPriceClp,
     getTierMaxClients,
-    // Pricing v2 (P2): grandfather por fecha de creación — todo sitio con un coach a mano usa
+    // Pricing v2/v3 (P2 + D4): grandfather por fecha de creación — todo sitio con un coach a mano usa
     // tierMaxClientsFor(tier, coach.created_at); getTierMaxClients queda solo como catálogo de VENTA.
     PRICING_V2_CUTOVER,
+    PRICING_V3_CUTOVER,
     tierMaxClientsFor,
+    // Pricing v3 (D3): sello «Hecho con EVA» — gancho de Pro. Fuente única del gate, el texto y el link.
+    showsEvaBadge,
+    EVA_BADGE_LABEL,
+    getEvaBadgeUrl,
+    // Plural de alumnos («1 alumno» vs «2 alumnos») para todo el copy derivado del cupo.
+    studentCountLabel,
     getRecommendedTierFor,
     getTierCapabilities,
     BILLING_CYCLE_CONFIG,
