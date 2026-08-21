@@ -78,6 +78,10 @@ Ante duda, usar binario nuevo. Una migración de base de datos nunca se revierte
 
 Los nombres de secretos y el procedimiento de firma viven en el workflow. Sus valores nunca se copian a Markdown, commits, logs ni comentarios de PR.
 
+### Enviar a revisión de Apple sin la sesión web
+
+`iOS Submit for Review (ASC API)` (`.github/workflows/ios-submit-review.yml` → `scripts/asc-submit-review.mjs`) crea la versión en App Store Connect, carga «Novedades» por locale, adjunta una build ya procesada en TestFlight, copia la App Review Information de la versión anterior si falta y envía la review submission, usando la misma API Key de `eas submit`. Reglas: correr primero con `dry_run=true` (lista versiones/estados/build y no escribe nada); aborta solo si otra versión sigue en revisión; ASC exige «Novedades» en todas las localizaciones habilitadas (hoy `es-MX` y `en-US`). `gh workflow run` solo resuelve workflows presentes en `master`. Primer uso: 1.1.2 (58) → `WAITING_FOR_REVIEW` el 2026-08-21 02:23 UTC.
+
 ## Publicación OTA
 
 Los OTA se publican **solo** desde `.github/workflows/mobile-ota.yml` (`Mobile OTA Update` en GitHub Actions). Publicar a mano desde una máquina local está prohibido por runbook: el incidente del 2026-08-11 fueron tres OTA android publicados localmente cuyo bundle salió sin `EXPO_PUBLIC_SUPABASE_URL` y crasheaba al boot. El workflow usa las mismas secrets que las builds y falla antes de publicar si alguna está vacía.
