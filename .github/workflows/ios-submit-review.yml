@@ -1,0 +1,66 @@
+name: iOS Submit for Review (ASC API)
+
+# Envía una versión iOS a revisión en App Store Connect SIN la sesión web del titular, con la API
+# Key que ya usa `eas submit`. Script: scripts/asc-submit-review.mjs (lee estados, crea la versión,
+# carga Novedades, adjunta la build procesada, copia App Review Information y envía).
+#
+# Correr SIEMPRE primero con dry_run=true y leer el log: lista las versiones y sus estados, la
+# build y las localizaciones que va a tocar. Recién después dry_run=false.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión de marketing (p.ej. 1.1.2)'
+        required: true
+        type: string
+      build_number:
+        description: 'Número de build ya procesada en TestFlight (p.ej. 58)'
+        required: true
+        type: string
+      whats_new_es:
+        description: 'Novedades es-MX'
+        required: true
+        type: string
+      whats_new_en:
+        description: 'Novedades en-US'
+        required: true
+        type: string
+      dry_run:
+        description: 'Solo leer e imprimir el plan (no escribe nada en ASC)'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Guard de secrets
+        env:
+          K: ${{ secrets.ASC_API_KEY_ID }}
+          I: ${{ secrets.ASC_API_ISSUER_ID }}
+          P: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          [ -z "${K// /}" ] && { echo "ERROR: ASC_API_KEY_ID vacio"; exit 1; }
+          [ -z "${I// /}" ] && { echo "ERROR: ASC_API_ISSUER_ID vacio"; exit 1; }
+          [ -z "${P// /}" ] && { echo "ERROR: ASC_API_KEY_P8 vacio"; exit 1; }
+          echo "secrets OK"
+      - name: Submit
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          APP_ID: '6770426633'
+          VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          WHATS_NEW_ES: ${{ inputs.whats_new_es }}
+          WHATS_NEW_EN: ${{ inputs.whats_new_en }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: |
+          export WHATS_NEW_JSON="$(node -e 'console.log(JSON.stringify({"es-MX": process.env.WHATS_NEW_ES, "en-US": process.env.WHATS_NEW_EN}))')"
+          node scripts/asc-submit-review.mjs
