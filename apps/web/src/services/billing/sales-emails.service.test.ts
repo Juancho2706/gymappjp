@@ -4,12 +4,14 @@ const sendTransactionalEmail = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/email/send-email', () => ({ sendTransactionalEmail }))
 
 import {
+    COOLDOWN_TOLERANCE_MS,
     RENEWAL_REMINDER_THRESHOLD_DAYS,
     SALES_EMAIL_AUDIT_ACTIONS,
     buildSubscriptionUrl,
     daysUntil,
     isSalesEmailEnabled,
     isWithinRenewalReminderWindow,
+    sendClientLimitReachedEmail,
     sendSalesEmailOnce,
 } from './sales-emails.service'
 
@@ -152,6 +154,87 @@ describe('buildSubscriptionUrl', () => {
         process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000'
         expect(buildSubscriptionUrl()).toBe('http://localhost:3000/coach/subscription')
     })
+
+    // Los UTM son OPT-IN: `paid-expiry` la llama sin argumentos y su URL no puede moverse.
+    it('con utmSource agrega la atribución (medium fijo = email)', () => {
+        expect(buildSubscriptionUrl({ utmSource: 'cap_email', utmCampaign: 'sweep' })).toBe(
+            'https://www.eva-app.cl/coach/subscription?utm_source=cap_email&utm_medium=email&utm_campaign=sweep'
+        )
+    })
+
+    it('sin campaña solo lleva source y medium', () => {
+        expect(buildSubscriptionUrl({ utmSource: 'cap_email' })).toBe(
+            'https://www.eva-app.cl/coach/subscription?utm_source=cap_email&utm_medium=email'
+        )
+    })
+
+    it('objeto vacío o sin source → URL desnuda idéntica a la de hoy', () => {
+        expect(buildSubscriptionUrl({})).toBe('https://www.eva-app.cl/coach/subscription')
+        expect(buildSubscriptionUrl({ utmCampaign: 'sweep' })).toBe('https://www.eva-app.cl/coach/subscription')
+    })
+})
+
+/**
+ * Correo de cupo: mismo evento y mismo ledger para los dos gatillos (rechazo real y barrido del cron
+ * `cap-nudge`), pero copy y `utm_campaign` distintos.
+ */
+describe('sendClientLimitReachedEmail — gatillos attempt vs sweep', () => {
+    const capInput = {
+        coachId: 'coach-1',
+        coachEmail: 'coach@example.com',
+        coachName: 'Josefa',
+        tier: 'free',
+        currentLimit: 1,
+    }
+
+    function sentHtml(): string {
+        return (sendTransactionalEmail.mock.calls[0][0] as { html: string }).html
+    }
+
+    it('trigger sweep: copy de barrido, UTM de campaña y ledger con trigger + source', async () => {
+        const { admin, inserts } = makeAdmin([])
+        const outcome = await sendClientLimitReachedEmail(admin, {
+            ...capInput,
+            source: 'cron_cap_nudge',
+            trigger: 'sweep',
+        })
+
+        expect(outcome).toBe('sent')
+        const html = sentHtml()
+        expect(html).not.toContain('intentaste')
+        expect(html).toContain('El próximo alumno que quieras sumar no va a entrar')
+        expect(html).toContain('utm_source=cap_email')
+        expect(html).toContain('utm_medium=email')
+        expect(html).toContain('utm_campaign=sweep')
+        expect((inserts[0] as { payload: Record<string, unknown> }).payload).toMatchObject({
+            event: 'client_limit_reached',
+            trigger: 'sweep',
+            source: 'cron_cap_nudge',
+            current_limit: 1,
+            tier: 'free',
+        })
+    })
+
+    it('sin trigger: copy del rechazo, campaña attempt y ledger con trigger attempt', async () => {
+        const { admin, inserts } = makeAdmin([])
+        const outcome = await sendClientLimitReachedEmail(admin, { ...capInput, source: 'web_create' })
+
+        expect(outcome).toBe('sent')
+        const html = sentHtml()
+        expect(html).toContain('intentaste agregar')
+        expect(html).toContain('utm_campaign=attempt')
+        expect((inserts[0] as { payload: Record<string, unknown> }).payload).toMatchObject({
+            trigger: 'attempt',
+            source: 'web_create',
+        })
+    })
+
+    it('el subject singulariza el cupo 1 del Free v3 (no «1 alumnos»)', async () => {
+        const { admin } = makeAdmin([])
+        await sendClientLimitReachedEmail(admin, { ...capInput, source: 'cron_cap_nudge', trigger: 'sweep' })
+        const { subject } = sendTransactionalEmail.mock.calls[0][0] as { subject: string }
+        expect(subject).toBe('Alcanzaste el límite de 1 alumno de tu plan Gratis')
+    })
 })
 
 describe('sendSalesEmailOnce — gate, dedupe y no-romper-el-flujo', () => {
@@ -221,6 +304,18 @@ describe('sendSalesEmailOnce — gate, dedupe y no-romper-el-flujo', () => {
         // El ledger se consulta filtrando por la acción del evento y el coach.
         expect(reads).toContainEqual(['action', SALES_EMAIL_AUDIT_ACTIONS.client_limit_reached])
         expect(reads).toContainEqual(['target_id', 'coach-1'])
+    })
+
+    it('modo cooldown: la ventana es N días MENOS 12 h (la corrida del día N del cron ya puede mandar)', async () => {
+        const before = Date.now()
+        const { admin, reads } = makeAdmin([])
+        await sendSalesEmailOnce(admin, { ...baseInput, event: 'client_limit_reached', cooldownDays: 7 })
+        const since = reads.find(([col]) => col === 'created_at')
+        expect(since).toBeDefined()
+        const sinceMs = new Date(since![1] as string).getTime()
+        const expected = before - (7 * DAY_MS - COOLDOWN_TOLERANCE_MS)
+        // Tolerancia de ejecución del test: ±5 s alrededor del valor esperado.
+        expect(Math.abs(sinceMs - expected)).toBeLessThan(5_000)
     })
 
     it('sin dedupeKey ni cooldownDays → siempre manda (no hay dedupe que aplicar)', async () => {

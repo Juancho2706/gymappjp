@@ -78,12 +78,13 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 
 ## Crons activos
 
-`vercel.json` es la fuente ejecutable. Estado verificado el 20 de julio de 2026:
+`vercel.json` es la fuente ejecutable. Estado verificado el 21 de agosto de 2026:
 
 | Endpoint | Horario UTC | Función |
 |---|---:|---|
 | `/api/cron/nutrition-cycles` | `0 11 * * *` | ciclos nutricionales |
 | `/api/cron/nutrition-reminder` | `0 0 * * *` | recordatorios de nutrición |
+| `/api/cron/checkin-reminder` | `0 14 * * *` | recordatorio de check-in vencido (push día 8 y 15) |
 | `/api/cron/trial-expiry` | `0 12 * * *` | expiración de trials |
 | `/api/cron/purge-data` | `0 3 * * 0` | purga semanal |
 | `/api/cron/audit-checksum` | `0 2 * * 0` | integridad semanal de auditoría |
@@ -91,6 +92,7 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/flow-reconcile` | `0 11 * * *` | reconciliación Flow y sincronización acotada de monto |
 | `/api/cron/mirror-exercise-thumbnails` | `0 4 * * *` | mirror de thumbnails |
 | `/api/cron/paid-expiry` | `30 12 * * *` | backstop provider-verified de suscripciones vencidas |
+| `/api/cron/cap-nudge` | `0 13 * * *` | nudge de venta por cupo alcanzado (escalera 0/7/28 d; kill-switch `EVA_SALES_EMAILS_DISABLED=client_limit_reached`; `?dry=1` lista sin enviar) |
 
 Handlers sin schedule automático:
 

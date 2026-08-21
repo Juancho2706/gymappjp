@@ -1,0 +1,97 @@
+---
+status: active
+owner: product-engineering
+last_verified: "2026-08-21"
+canonical: false
+---
+
+# TASKS — Embudo Free → Pro
+
+Archivos:línea verificados contra `rnmobiledenuevo` @ `8bf45cf4` el 2026-08-21. Modelo sugerido entre paréntesis.
+**Orden obligado: W0 → W1 → (aprobación del owner) → W2 → W3 → W4 → W5 → W6 → W7 → W8.**
+
+## W0 — Desatascar hoy (jefe)
+- [ ] W0.1 Mandarle el link de `/coach/subscription` por WhatsApp al coach que está esperando (operación del owner, 0 h).
+- [x] W0.2 `void` → `await` en `coach/clients/_actions/clients.actions.ts:128`, `coach/clients/import/_actions/import.actions.ts:201`, `api/mobile/coach/clients/route.ts:212`, `api/mobile/coach/clients/import/route.ts:270`. Verificado antes: `sendSalesEmailOnce` envuelve todo en `try/catch` y el test «excepción inesperada se traga» lo pinnea (`sales-emails.service.test.ts`). Comentario «Fire-and-forget» corregido.
+
+## W1 — Encender el canal que ya existe: cron `cap-nudge` (2 Opus + juicio)
+- [x] W1.1 (Opus A) `lib/email/sales-templates.ts:58-94`: `ClientLimitReachedContext.trigger?: 'attempt' | 'sweep'` (default `attempt`, copy actual intacto). `sweep`: reemplaza «Por eso no pudimos sumar al alumno que intentaste agregar.» por una frase de estado («El próximo alumno que quieras sumar no va a entrar hasta que liberes un cupo o amplíes tu plan.») y ajusta el `previewText`. Mismo único CTA, cero precios.
+- [x] W1.2 (Opus A) `services/billing/sales-emails.service.ts:232-260`: `ClientLimitEmailInput.trigger?` pasa a la plantilla; `payload` del ledger lleva `trigger`; `buildSubscriptionUrl({ utmSource })` opcional (sin argumento = URL idéntica a hoy) y el correo de cupo usa `utm_source=cap_email&utm_medium=email&utm_campaign=<trigger>`.
+- [x] W1.3 (Opus A) Tests: `sales-templates.test.ts` (caso `sweep`: sin «intentaste», `assertNoPrices`, 1 link; `attempt` sin cambios) y `sales-emails.service.test.ts` (`sendClientLimitReachedEmail` con `trigger: 'sweep'` → payload y URL con UTM; sin `trigger` → comportamiento actual).
+- [x] W1.4 (Opus B) Nuevo `api/cron/cap-nudge/cap-nudge.ts` (puro, sin red): `CAP_NUDGE_SCHEDULE_DAYS = [0, 7, 28]`, `resolveCapNudgeDecision({ priorSends, currentLimit, now })` → `send | skip` con `touch` y `reason` (`first_touch | ladder_due | ladder_not_due | max_touches`); solo cuentan envíos del MISMO `current_limit` (subir de plan resetea la escalera); `isAtCap({ activeCount, maxClients })`.
+- [x] W1.5 (Opus B) Nuevo `api/cron/cap-nudge/route.ts` (forma de `checkin-reminder`, auth `timingSafeEqual` de `paid-expiry`): candidatos `coaches` con `subscription_tier = 'free'` (constante `CAP_NUDGE_TIERS`), `subscription_status = 'active'`, `active_org_id IS NULL`; conteo de `clients` no archivados, `org_id IS NULL`, `team_id IS NULL` (mismo predicado que el 402 móvil), paginado; cupo = `max_clients ?? tierMaxClientsFor(tier, created_at)`; ledger leído UNA vez (`admin_audit_logs`, acción `coach.sales_email_client_limit_reached`, 400 d); email por `resolveCoachEmail`; `isTestCoachEmail` excluye cuentas de prueba; `?dry=1` lista sin enviar; `await sendClientLimitReachedEmail(admin, { …, source: 'cron_cap_nudge', trigger: 'sweep' })`; `try/catch` por coach (fail-open); resumen `cron.cap_nudge_ran`; JSON con conteos por outcome. NO reusar `payment-reminder`.
+- [x] W1.6 (Opus B) Tests: `cap-nudge.test.ts` (escalera 0/7/28, reset por nivel, tope 3), `route.test.ts` (401 ×2; en cupo → envía `sweep`; bajo cupo → no; `dry=1` → 0 envíos; cuenta de prueba → skip; Resend 500 → `failed` y la corrida sigue 200; query de coaches rota → 500; `max_clients` null → escalera por fecha), `vercel-cron.test.ts` (entrada registrada; horario distinto a `paid-expiry`/`trial-expiry`/`mp-reconcile`/`flow-reconcile`).
+- [x] W1.7 (Opus B) `vercel.json`: `{ "path": "/api/cron/cap-nudge", "schedule": "0 13 * * *" }` (09:00/10:00 Chile). Vercel permite 100 crons/proyecto en todo plan desde 2026-01 (hoy hay 10). `docs/operations/RUNBOOK.md` §Crons activos: fila nueva + nota del kill-switch `EVA_SALES_EMAILS_DISABLED=client_limit_reached` y del `?dry=1`.
+- [x] W1.8 (jefe) Juicio de diffs + gates (21-08, todos ejecutados): vitest dirigido 106/106 (cron 40 + templates + service + paid-expiry), suite completa **6150 verdes / 468 archivos**, `pnpm lint` 0 errores (2 warnings nuevas del mismo patrón que los crons existentes: `console.info` del resumen y `_a` del mock), `pnpm typecheck` verde, `pnpm build` verde (Next 92 s + tsc), `pnpm docs:check`, `pnpm check:tokens`, `pnpm check:nutrition-v2-boundaries`. **Pendiente operativo: primera corrida `?dry=1` desde entorno seguro → lista esperada = 15 slugs.**
+- [x] W1.9 Ronda de corrección tras el revisor adversarial (re-verificada: 9/9 cerrados, 0 regresiones; residual: `maxDuration` 120→60 por precedente y tolerancia 12 h también en el cooldown del service — aplicados por el jefe) (21-08; verificó contra LIVE: 38 candidatos / 15 en cupo / 0 de prueba / 0 envíos históricos):
+  - B1 `sweep` es comunicación no solicitada ⇒ pie de baja en texto plano (Ley 19.496 art. 28 B), solo en `sweep`, sin segundo link.
+  - I1 throttle 600 ms entre envíos (Resend 2 req/s) + `maxDuration = 120`.
+  - I2 resumen `cron.cap_nudge_ran` SIEMPRE (también en 500/excepción; `outcome: 'aborted'`).
+  - I3 ledger ilegible ⇒ **fail-closed** (aborta el barrido; con mapa vacío todos vuelven a `first_touch` y el cooldown de 7 d deja spam semanal eterno).
+  - I4/M2/M3/M4 `.order('id')` antes de `.range`, chunk 100, `coaches`/`clients`/ledger paginados.
+  - M1 tolerancia 12 h en la escalera (sin ella la cadencia real era 0/8/30).
+  - M6 decisión de escalera antes de pedir el email a GoTrue.
+  - I5 tests de fail-open por coach, ledger ilegible, sin email, `ladderNotDue` en ruta, resumen en 500, insert del resumen que lanza, `order` antes de `range`.
+  - M9 RUNBOOK: fila de `checkin-reminder` que faltaba (11 crons = 11 filas).
+  - Declarados, sin cambio: M5 (el cron filtra `active_org_id`; no existe columna de team — 0 free con team en LIVE), **M7 corregido tras el mapa de W3**: el proxy clona el query al mandar a `/login` (`proxy.ts:426-431`) ⇒ el `$pageview` lleva `utm_source=cap_email` y posthog-js persiste los `utm_*`; lo que se pierde hasta W3 es el DESTINO (dashboard en vez de `/coach/subscription`), M8 `&` sin escapar en el `href` (lo parsean todos los clientes; tocar `base-layout` está fuera de W1).
+
+## W2 — El canal correo completo (2 Opus + operación)
+- [ ] W2.1 `lib/email/send-drip-sequence.ts:59-65`: `templateByKey(templates, key: DripTemplateKey)` con union derivada de `buildDripTemplates` y `throw` si falta (nunca `''`). Test en rojo primero.
+- [ ] W2.2 `lib/email/drip-templates.ts`: secuencia para Free = 1 — D+1 valor (invitación lista para copiar) · D+2 precio y link (precio desde `TIER_CONFIG`, nunca literal) · D+7 nutrición · D+14 última llamada. `send-drip-sequence.ts:28-34` agenda las 4.
+- [ ] W2.3 `lib/email/sales-templates.test.ts:26-31`: extraer `assertNoPrices` a un helper compartido y aplicarlo a `drip-templates` (salvo el D+2, que lleva el precio DEL CATÁLOGO y un test que lo pinnea contra `TIER_CONFIG.pro.monthlyPriceClp`) y a `transactional-templates`.
+- [ ] W2.4 `lib/email/transactional-templates.ts:169-209`: renderizar `subscriptionUrl` + bloque «Cómo funciona EVA»: «tu cuenta, tu plan y tu facturación se administran desde eva-app.cl con tu mismo correo y contraseña».
+- [ ] W2.5 `api/mobile/auth/complete-coach-onboarding/route.ts:165`: `await sendFreeCoachOnboardingEmails(...)` (los 4 argumentos ya están en scope). Test del endpoint.
+- [ ] W2.6 Ledger local del drip: guardar `providerMessageId` por correo agendado en `admin_audit_logs` (`coach.drip_scheduled`, sin DDL) para poder cancelar desde el repo en el futuro.
+- [ ] W2.7 Operación: purgar en el dashboard de Resend la cola viva del drip viejo (coaches de las últimas 2 semanas). Lista de ids en el PR.
+- [x] W2.8 **Diagnóstico (read-only, 21-08) — la premisa estaba invertida: el drip NO murió, murió el LEDGER.** `23f3f015` (2026-04-26, «remove unused components») borró `api/internal/email-drip/run/route.ts`, el ÚNICO escritor de `coach_email_drip_events` (drip v1, cron GH `email-drip.yml`, borrado a su vez en `1da8d3bb` 25-07 tras 3 meses de 404). El drip v2 (`98469778`, 10-05: `send-drip-sequence.ts` con `scheduled_at` de Resend) nunca escribió la tabla ⇒ las 12 filas miden abril, nada más. Resend (listado solo hasta 24-07) prueba entregas: diegishii y javi 3/3 `delivered` (jul-ago), ~20 coaches del 19-21/08 con bienvenida `delivered` + 3 `scheduled`, 0 bounces. **Causas reales de coaches sin nurture**: (1) Google web sin correo hasta `56159d64` 17-08 → 4 altas free (01-05→16-06) con cero correos; (2) fire-and-forget hasta `0be1130e` 20-08 → pérdidas sueltas (n.pueblacoach, vildanalfaro, eltiokevin1); (3) ventana 13→17-05 sin correo de confirmación (`e8cf0c37`); (4) **ABIERTO HOY**: Google móvil (`api/mobile/auth/complete-coach-onboarding/route.ts:145`) = W2.5. `coach_email_drip_events` queda como fósil (CHECK `scheduled_day IN (1,3,7,14)` y `status IN (sent,failed,skipped)` incompatibles con el drip nuevo).
+- [ ] W2.9 Ledger del drip (precisa W2.6): escribir al **agendar** (`provider_message_id` que `send-email.ts:46` ya devuelve y hoy se descarta) y cerrar el ciclo con un **webhook de Resend** (`email.delivered/bounced/complained/cancelled`, no existe ninguno en el repo). Decidir: migración aditiva de `coach_email_drip_events` vs. reutilizar `coach_onboarding_events` (forma genérica, 8.132 filas, viva). Patrón de lectura fail-closed = `api/cron/cap-nudge`.
+- [ ] W2.10 **Cancelar agendados** cuando ya no corresponden (coach sube de plan, carga el primer alumno, se da de baja): hoy no existe ninguna llamada a `DELETE /emails/:id` de Resend. Sin esto, el D+2 «precio y link» le llega a un coach que ya pagó.
+- [ ] W2.11 `RESEND_FREE_COACH_AUDIENCE_ID` (`send-drip-sequence.ts:17`) no está en `.env.example`: verificar en Vercel prod; si falta, el alta a la audiencia se salta en silencio (`send-email.ts:59`).
+
+## W3 — El destino que se pierde: `?next=` (1 Opus) — mapa verificado 21-08 (read-only)
+Estado real: el proxy manda a `/login` **conservando el query original** (clona `nextUrl` y solo cambia `pathname`, `proxy.ts:426-431`) ⇒ el `$pageview` de `/login?utm_source=cap_email…` SÍ llega a PostHog (`PageviewTracker` global, `lib/posthog/provider.tsx:58-70`). Lo que se pierde es el **destino**: `loginAction` (`(auth)/login/_actions/login.actions.ts:20-86`) no lee `next` y siempre hace `redirect(resolvePostLoginRedirect())` → dashboard. `/coach/subscription/page.tsx` no tiene lógica de `utm_` ni la necesita.
+- [ ] W3.1 Helper compartido `lib/auth/safe-next.ts`: `safeNext(raw, allowedPrefix)` — hoy hay 3 copias inline del mismo chequeo (`admin/login/_actions/login.actions.ts:17-22` hardcodeado a `/admin`, `lib/auth/post-google-auth.ts:33`, `app/auth/callback/route.ts:35`). Tests primero (`proxy.ts` no tiene ninguno): acepta solo paths relativos bajo el prefijo; rechaza absolutas, `//`, `://`, `javascript:`, `\`, y devuelve `null` si no cumple. Migrar las 3 copias al helper.
+- [ ] W3.2 `proxy.ts:426-431`: replicar el patrón de `/admin` (`proxy.ts:328-345` y `:359-370`): `redirectUrl.search = ''` + `searchParams.set('next', pathname + request.nextUrl.search)` salvo cuando el destino es `/coach` o `/coach/dashboard`. ⚠ Al limpiar `search` se pierde el `utm_*` en el `$pageview` de `/login`: el `next` debe llevar el query completo (`/coach/subscription?utm_source=…`) para que reaparezca al aterrizar.
+- [ ] W3.3 `login/page.tsx:11-13` lee `next` de `searchParams` y lo pasa a `CoachLoginForm` (`:47-51`); `CoachLoginForm.tsx:41-47` hace `fd.set('next', next)` y pasa `next` como prop a `<GoogleSignInButton intent="login" next={next} />` (`:114`); `login.actions.ts` lee `formData.get('next')` → `safeNext(raw, '/coach')` → `redirect(next ?? resolvePostLoginRedirect(...))`.
+- [ ] W3.4 Google: la cadena `auth/callback/route.ts:4-18` → `auth/exchange/AuthExchangeClient.tsx:35-41` → `resolvePostGoogleAuthUrl` (`post-google-auth.ts:27-35`) YA honra `next`. Solo cambiar los dos puntos de entrada que lo hardcodean a `/coach/dashboard`: `components/auth/GoogleSignInButton.tsx:96-101` y `lib/auth/client-oauth.ts:5-12` (`startCoachGoogleLogin`) para forwardear el `next` real.
+- [ ] W3.5 Los ~25 `redirect('/login')` pelados en páginas `/coach/**` (p. ej. `coach/layout.tsx:66`, `dashboard/page.tsx:26`) son defensa en profundidad detrás del proxy; no armar `next` ahí (el proxy corta antes). Declararlo en el PR.
+- [ ] W3.6 El correo de cupo sigue apuntando a `/coach/subscription?utm…` directo: con sesión entra; sin sesión el proxy arma el `next` solo. Verificar end-to-end en preview: correo → sin sesión → login → aterriza en `/coach/subscription` con los `utm_*` intactos → `$pageview` y `checkout_started` los llevan.
+
+## W4 — El alta móvil (1 Opus)
+- [ ] W4.1 `api/mobile/auth/register-coach-free/route.ts:185`: devolver `uid` en la respuesta.
+- [ ] W4.2 Nuevo `api/mobile/auth/resend-confirmation/route.ts` con los 7 guards de `(auth)/verify-email/resend.actions.ts` (leer entero): identidad por `uid`, `pending_email`, rate-limit, nunca `generateLink` con email suelto.
+- [ ] W4.3 `apps/mobile/lib/api.ts:138` + `app/(auth)/verify-email.tsx:66`: botón «Reenviar correo» con cooldown visible.
+- [ ] W4.4 Tests del endpoint (uid inexistente, ya confirmado, rate-limit, email ≠ pending).
+
+## W5 — Compliance y verdad en `packages/tiers` — un solo OTA (1 Opus web + 1 Opus RN)
+- [ ] W5.1 `packages/tiers/index.ts:430` (`getEvaBadgeUrl`): el sello «Hecho con EVA» aterriza en una landing SIN precios (`/hecho-con-eva` o `/?seccion=...` sin `PreciosSection`). Tests en rojo primero: `pricing-v3.test.ts:78-92`, `email-brand.test.ts:59,68,74`.
+- [ ] W5.2 `apps/mobile/components/coach/directory/CreateClientModal.tsx:292`: `studentCountLabel(upgradeLimit)` (hoy «1 alumnos»).
+- [ ] W5.3 `apps/mobile/app/coach/(tabs)/perfil.tsx:30-34`: borrar el `TIER_LABELS` local (sin `free`) y usar el de `lib/coach-subscription.ts:40` (`@eva/tiers`).
+- [ ] W5.4 `apps/web/src/app/coach/subscription/_components/SubscriptionContent.tsx:791`: con Anual seleccionado, «$287.904 /mes» → «/año» (o precio mensual equivalente con etiqueta correcta).
+- [ ] W5.5 Test `apps/mobile` no consume `monthlyPriceClp` (patrón `readFileSync` sobre `apps/mobile/**`) y `lib/coach-tiers.ts:27` deja de re-exportar `TIER_CONFIG` entero (exportar solo `maxClients`/labels; `CoachDashboardSections.tsx:970` usa `TIER_CONFIG.free.maxClients`).
+
+## W6 — La app dice la verdad y lo hace visual (2 Opus RN + 1 Opus web; mismo OTA que W5)
+- [ ] W6.1 `apps/mobile/app/coach/(tabs)/subscription.tsx:153`: `hasPaidPlan` deja de excluir `free` (el server da los 4 módulos a todo plan activo desde Pricing v2: espejo de `hasPaidModuleAccess`); `addonBadge` (`:65-72`) y pie (`:270-274`) coherentes. `apps/mobile/app/coach/modules.tsx:209`: el texto «En el plan Free los módulos no están disponibles» se elimina (es falso y lo ve un Pro).
+- [ ] W6.2 Muro de cupo rediseñado en `CreateClientModal.tsx:284-303`: ícono en círculo (ya existe), título «Alcanzaste el cupo de tu plan», cuerpo «Tu plan actual permite {studentCountLabel(n)} activo(s). Para dejar espacio puedes archivar un alumno: su historial se mantiene intacto.», **[Archivar un alumno]** (abre selector con `archiveClient` de `lib/client-actions.ts:53` / patrón de `ReactivateArchivePanel.tsx`) · **[Actualizar estado]** (`RefreshPlanButton`) · «Entendido». Android-only (`Platform.OS === 'android'`): caption «Los cambios de plan se hacen en eva-app.cl» (texto plano, sin `Linking`). Test de contrato: el string NO aparece en iOS.
+- [ ] W6.3 ⚠ Re-verificar líneas antes de tocar: la sesión DOMINGO editó `CoachDashboardSections.tsx` el 21-08 (`:563/:573` modal Free sin «Marca personalizada ✗», `:1320` checklist «Personaliza tu marca» → `brand`), sin tocar el banner. Medidor de cupo: `MobileFreeTierBanner` (`CoachDashboardSections.tsx:252-293`) pasa a usar `components/ProgressBar.tsx` (hoy barra inline) con color semántico (marca <80 %, ámbar ≥80 %, `WARNING_500` al 100 %) y el mismo medidor entra en `subscription.tsx:161-165` junto a «Alumnos activos · x de N» (`ProgressRing` como anillo en la card inverse). Sin tiers ajenos.
+- [ ] W6.4 Mi plan = verdad: `subscription.tsx` gana `RefreshControl` (pull-to-refresh reusa `RefreshPlanButton.handleRefresh`) y «Actualizado hace X»; **celebración**: si tras refrescar `maxClients` sube o `tier` cambia de `free` a pago, tarjeta «Tu cupo subió a {studentCountLabel(n)}» con micro-animación motion-safe (Moti/Reanimated, `useReducedMotion`) y toast. Es estado, no venta.
+- [ ] W6.5 `subscription.tsx:277-279`: «¿Dudas con tu cuenta? Escríbenos a contacto@eva-app.cl» tocable (`Linking.openURL('mailto:…')`).
+- [ ] W6.6 Tono: `ProgresoTab.tsx:832` «Mejorar mi plan» → «Ver mi plan» (sigue a `/coach/modules`); `BuilderDayStrip.tsx:486,490` ídem; `verify-email.tsx:16` «Upgrade cuando quieras» → «Cambia de plan cuando quieras desde eva-app.cl» SOLO Android / «Cambia de plan cuando quieras» en iOS.
+- [ ] W6.7 Web: página de éxito del checkout (`/coach/subscription/processing` o su destino) gana «Abrir EVA en el teléfono» (universal link `https://www.eva-app.cl/coach/subscription`, ya soportado por `applinks` desde 1.1.2) + texto «toca Actualizar estado si no ves el cambio».
+- [ ] W6.8 QA device del owner: iOS + Android × light/dark × marca EVA/custom: muro, medidor, Mi plan, celebración (simular con cuenta QA subiendo `max_clients` en LIVE).
+
+## W7 — Blindar la posición y poder medir (1 Sonnet + jefe)
+- [ ] W7.1 `api/mobile/auth/register-coach-free/route.ts` y `complete-coach-onboarding/route.ts`: `coach_registered` lleva `platform: 'ios' | 'android' | 'web'` (header `x-eva-platform` o `User-Agent` de Expo) + `pricing_version`. **Hallazgo DOMINGO 21-08**: el 29 % de las altas nuevas no emite `register_submitted`/`coach_registered` — el camino Google OAuth se lo come; cerrar ese hueco en la misma tarea (coordinar: DOMINGO edita `analytics.ts`/`register.actions` hoy).
+- [ ] W7.2 `apps/mobile/AGENTS.md`: sección «Pagos y tiendas — permitido/prohibido» (iOS solo estado; Android una línea; correo/WhatsApp libre; `Platform.OS`, nunca storefront). Reemplaza como regla vigente al research del 31-07.
+- [ ] W7.3 `docs/operations/APP_REVIEW_NOTES.md`: Notes for Review en inglés: modelo declarado, 3.1.3(f) por nombre, 3 cuentas demo, cierre «if any screen appears non-compliant, tell us which and we will change it in this submission». NO citar 3.1.3(b) ni (c).
+- [ ] W7.4 App Store Connect (owner): «Sitio web del desarrollador» → landing que convierte; copy de la ficha como herramienta de trabajo invitada.
+
+## W8 — Activación (decisión del owner; fuera del alcance pedido)
+- [ ] W8.0 Decidir alcance: onboarding que no termina sin el primer alumno · D+1 con link de invitación listo · `/join` adelante · estados vacíos del funnel (artifact `04324b08`).
+
+## Gates (por wave; suite completa una vez antes del push)
+`pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` · `pnpm docs:check` · `pnpm check:tokens` · RN: `pnpm --filter @eva/mobile exec tsc --noEmit` + `expo export --platform android`.
+
+## Entrega
+- Sin commit/push/deploy/OTA sin pedido explícito del owner.
+- OTA de W5+W6: tres runtimes (1.1.0/1.1.1/1.1.2), android e ios por separado, desde rama con master mergeado.

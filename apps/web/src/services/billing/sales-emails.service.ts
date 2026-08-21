@@ -107,8 +107,15 @@ type SendSalesEmailInput = {
     payload?: Record<string, Json>
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
 /** Lookback del ledger en modo ancla — generoso: las anclas avanzan con cada renovación. */
 const DEDUPE_KEY_LOOKBACK_DAYS = 400
+/**
+ * Tolerancia del modo cooldown (espejo de `LADDER_TOLERANCE_MS` del cron `cap-nudge`): un cron diario
+ * corre a la misma hora cada día y el ledger se escribe segundos después ⇒ sin tolerancia, un cooldown
+ * de 7 días bloquea la corrida del día 7 y el correo sale el día 8.
+ */
+export const COOLDOWN_TOLERANCE_MS = 12 * 60 * 60 * 1000
 /** Techo de filas leídas del ledger por consulta (el ledger es append-only y compartido). */
 const LEDGER_SCAN_LIMIT = 25
 
@@ -125,9 +132,14 @@ async function wasAlreadySent(
     cooldownDays: number | null,
     now: Date
 ): Promise<boolean> {
-    const lookbackDays = dedupeKey ? DEDUPE_KEY_LOOKBACK_DAYS : (cooldownDays ?? 0)
     if (!dedupeKey && !cooldownDays) return false
-    const sinceIso = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000).toISOString()
+    // Modo cooldown: la ventana se acorta 12 h a propósito. La fila del ledger se escribe segundos
+    // DESPUÉS del `now` de la corrida de un cron diario, así que una ventana exacta de N días vetaba
+    // el toque del día N (caía al N+1). Con la tolerancia, «7 días» significa «la corrida del día 7».
+    const lookbackMs = dedupeKey
+        ? DEDUPE_KEY_LOOKBACK_DAYS * DAY_MS
+        : Math.max(0, (cooldownDays ?? 0) * DAY_MS - COOLDOWN_TOLERANCE_MS)
+    const sinceIso = new Date(now.getTime() - lookbackMs).toISOString()
 
     const { data, error } = await admin
         .from('admin_audit_logs')
@@ -220,20 +232,38 @@ type ClientLimitEmailInput = {
     /** Tier vigente del coach (`subscription_tier`). */
     tier: string | null | undefined
     currentLimit: number
-    /** Origen del rechazo, solo para la traza: 'web_create' | 'web_import' | 'mobile_create' | … */
+    /**
+     * Origen del envío, solo para la traza: 'web_create' | 'web_import' | 'mobile_create' |
+     * 'cron_cap_nudge' | …
+     */
     source: string
+    /**
+     * Gatillo del correo (SPEC embudo-free-pro §Reglas de producto 4). `attempt` (default) = hubo un
+     * rechazo real; `sweep` = barrido del cron `cap-nudge` sobre quien ya está en cupo sin haber
+     * intentado nada. Cambia el copy y viaja al ledger para poder medir la escalera.
+     */
+    trigger?: 'attempt' | 'sweep'
 }
 
 /**
- * Correo 1 — el server rechazó un alta/importación por cupo. Se llama desde TODOS los caminos que
- * devuelven `UPGRADE_REQUIRED` por límite de alumnos (acción web, endpoint móvil, importación en
- * ambos) para que el correo llegue siempre en el mismo instante que el muro neutro de la app.
+ * Correo 1 — el coach está en el tope de alumnos de su plan. Dos gatillos:
+ *
+ * - `attempt` (default): el server rechazó un alta/importación por cupo. Se llama desde TODOS los
+ *   caminos que devuelven `UPGRADE_REQUIRED` por límite de alumnos (acción web, endpoint móvil,
+ *   importación en ambos) para que el correo llegue en el mismo instante que el muro neutro.
+ * - `sweep`: el cron `cap-nudge` (`source: 'cron_cap_nudge'`, `trigger: 'sweep'`) barre a los coaches
+ *   que YA están en cupo y nunca intentaron agregar — con Free = 1 alumno son mayoría y el gatillo
+ *   por evento jamás los alcanza.
+ *
+ * El CTA sale con UTM (`utm_source=cap_email`, `utm_campaign=<trigger>`) para separar en PostHog el
+ * checkout que nace del rechazo del que nace del barrido.
  */
 export async function sendClientLimitReachedEmail(
     admin: Db,
     input: ClientLimitEmailInput
 ): Promise<SalesEmailOutcome> {
     const tier = (input.tier ?? 'free') as SubscriptionTier
+    const trigger = input.trigger ?? 'attempt'
     // Pricing v2 (D3): el upsell apunta a Pro (starter salió de la venta) — free/starter reciben
     // «Pasar a Pro», un pro recibe «Pasar a Elite», elite+/legacy mantienen el copy genérico
     // (su siguiente paso es Teams, no un tier de venta). Solo la ETIQUETA, sin números: el cupo
@@ -244,8 +274,9 @@ export async function sendClientLimitReachedEmail(
         coachName: input.coachName?.trim() || 'Coach',
         tierLabel: TIER_LABELS[tier] ?? TIER_LABELS.free,
         currentLimit: input.currentLimit,
-        subscriptionUrl: buildSubscriptionUrl(),
+        subscriptionUrl: buildSubscriptionUrl({ utmSource: 'cap_email', utmCampaign: trigger }),
         recommendedTierLabel: recommendedTier ? TIER_LABELS[recommendedTier] : null,
+        trigger,
     })
     return sendSalesEmailOnce(admin, {
         event: 'client_limit_reached',
@@ -254,14 +285,24 @@ export async function sendClientLimitReachedEmail(
         subject,
         html,
         cooldownDays: CLIENT_LIMIT_EMAIL_COOLDOWN_DAYS,
-        payload: { current_limit: input.currentLimit, tier, source: input.source },
+        payload: { current_limit: input.currentLimit, tier, source: input.source, trigger },
     })
 }
 
-/** CTA de los correos de venta. En email SÍ es legal (la restricción anti-steering es in-app). */
-export function buildSubscriptionUrl(): string {
+/**
+ * CTA de los correos de venta. En email SÍ es legal (la restricción anti-steering es in-app).
+ *
+ * SIN argumentos devuelve la URL desnuda de siempre (la usa el cron `paid-expiry`). Con `utmSource`
+ * agrega el trío de atribución (`utm_source`/`utm_medium=email`/`utm_campaign`) para poder medir en
+ * PostHog qué correo trajo el checkout.
+ */
+export function buildSubscriptionUrl(opts?: { utmSource?: string; utmCampaign?: string }): string {
     const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl'
-    return `${base}/coach/subscription`
+    const url = `${base}/coach/subscription`
+    if (!opts?.utmSource) return url
+    const params = new URLSearchParams({ utm_source: opts.utmSource, utm_medium: 'email' })
+    if (opts.utmCampaign) params.set('utm_campaign', opts.utmCampaign)
+    return `${url}?${params.toString()}`
 }
 
 /** Correo del coach desde GoTrue (la tabla `coaches` no tiene columna email). Nunca lanza. */

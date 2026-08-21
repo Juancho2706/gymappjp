@@ -53,14 +53,36 @@ export type ClientLimitReachedContext = {
      * el límite concreto depende del grandfather de cada coach y se ve en /coach/subscription.
      */
     recommendedTierLabel?: string | null
+    /**
+     * Gatillo del envío (SPEC embudo-free-pro §Reglas de producto 4):
+     * - `attempt` (default): el server rechazó un alta que el coach SÍ intentó. Copy histórico.
+     * - `sweep`: barrido del cron `cap-nudge` sobre coaches que ya están en cupo sin haber intentado
+     *   nada. A ese coach jamás se le puede decir «el alumno que intentaste agregar».
+     */
+    trigger?: 'attempt' | 'sweep'
 }
 
 export function buildClientLimitReachedEmail(ctx: ClientLimitReachedContext) {
     const coachName = escHtml(ctx.coachName)
     const tierLabel = escHtml(ctx.tierLabel)
     const recommended = ctx.recommendedTierLabel ? escHtml(ctx.recommendedTierLabel) : null
+    const trigger = ctx.trigger ?? 'attempt'
     // Pricing v3: el cupo free es 1 ⇒ el plural sale del helper compartido, nunca hardcodeado.
-    const subject = `Alcanzaste el límite de ${studentCountLabel(ctx.currentLimit)} de tu plan ${ctx.tierLabel}`
+    const limitLabel = studentCountLabel(ctx.currentLimit)
+    const plural = ctx.currentLimit === 1 ? '' : 's'
+    const subject = `Alcanzaste el límite de ${limitLabel} de tu plan ${ctx.tierLabel}`
+
+    // La única frase que cambia entre gatillos: el barrido habla del PRÓXIMO alumno (estado), el
+    // rechazo habla del alumno concreto que no entró (evento).
+    const frictionLine =
+        trigger === 'sweep'
+            ? 'El próximo alumno que quieras sumar no va a entrar hasta que liberes un cupo o amplíes tu plan.'
+            : 'Por eso no pudimos sumar al alumno que intentaste agregar.'
+
+    const previewText =
+        trigger === 'sweep'
+            ? `Tu plan ${ctx.tierLabel} ya usa su cupo de ${limitLabel}.`
+            : `Tu plan ${ctx.tierLabel} llegó a ${limitLabel} activo${plural}.`
 
     const body = `
 ${badge('LÍMITE ALCANZADO', '#F59E0B')}
@@ -69,8 +91,8 @@ ${badge('LÍMITE ALCANZADO', '#F59E0B')}
 </h1>
 <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
   Tu plan <strong style="color:#111827;">${tierLabel}</strong> permite hasta
-  <strong style="color:#111827;">${studentCountLabel(ctx.currentLimit)} activo${ctx.currentLimit === 1 ? '' : 's'}</strong> y ya ${ctx.currentLimit === 1 ? 'lo tienes ocupado' : 'los tienes todos ocupados'}.
-  Por eso no pudimos sumar al alumno que intentaste agregar.
+  <strong style="color:#111827;">${limitLabel} activo${plural}</strong> y ya ${ctx.currentLimit === 1 ? 'lo tienes ocupado' : 'los tienes todos ocupados'}.
+  ${frictionLine}
 </p>
 <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
   ${recommended
@@ -85,9 +107,20 @@ ${ctaButton(recommended ? `Pasar a ${recommended}` : 'Ampliar mi plan', ctx.subs
   un cupo. Si tienes dudas, responde este correo y te ayudamos.
 </p>`
 
+    // Ley 19.496 art. 28 B (Chile): el barrido lo inicia EVA sin ninguna acción del coach ⇒ es
+    // comunicación promocional no solicitada y el pie DEBE dar una dirección válida para pedir la
+    // suspensión de los envíos. El gatillo `attempt` responde a una acción del propio coach (alta
+    // rechazada), así que no lleva pie y su render queda intacto.
+    // En TEXTO PLANO a propósito, sin `<a>`: el contrato del correo es UN solo link (el CTA).
+    const footerText =
+        trigger === 'sweep'
+            ? 'Recibes este aviso porque tienes una cuenta de coach en EVA. Si no quieres recibir avisos sobre tu plan, responde este correo o escríbenos a contacto@eva-app.cl y dejamos de enviarlos.'
+            : undefined
+
     const html = wrapEmailLayout(body, {
-        previewText: `Tu plan ${ctx.tierLabel} llegó a ${studentCountLabel(ctx.currentLimit)} activo${ctx.currentLimit === 1 ? '' : 's'}.`,
+        previewText,
         headerTitle: 'Límite de alumnos — EVA',
+        footerText,
     })
 
     return { subject, html }

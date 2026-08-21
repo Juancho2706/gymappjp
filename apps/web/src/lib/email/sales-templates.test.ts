@@ -95,6 +95,83 @@ describe('buildClientLimitReachedEmail', () => {
         expect(html).toContain('Con un plan más grande')
         expect(html).toContain('Ampliar mi plan')
     })
+
+    // El default es el gatillo por evento: alguien SÍ intentó agregar y el server lo rechazó.
+    it('sin trigger (default attempt) mantiene el copy del rechazo real', () => {
+        const { html } = buildClientLimitReachedEmail(ctx)
+        expect(html).toContain('Por eso no pudimos sumar al alumno que intentaste agregar.')
+        expect(html).toContain('Tu plan Gratis llegó a 3 alumnos activos.')
+        expect(buildClientLimitReachedEmail({ ...ctx, trigger: 'attempt' }).html).toBe(html)
+    })
+
+    // El correo por rechazo lo pide el propio coach al intentar el alta: no es comunicación no
+    // solicitada, así que NO lleva el pie de baja (ley 19.496 art. 28 B) y su render no cambia.
+    it('el gatillo attempt no lleva el pie de baja de envíos', () => {
+        const { html } = buildClientLimitReachedEmail(ctx)
+        expect(html).not.toContain('dejamos de enviarlos')
+        expect(buildClientLimitReachedEmail({ ...ctx, trigger: 'attempt' }).html).not.toContain(
+            'dejamos de enviarlos'
+        )
+    })
+})
+
+/**
+ * Variante `sweep`: la manda el cron `cap-nudge` a coaches que YA están en cupo sin haber intentado
+ * agregar a nadie (con Free = 1 son mayoría). Regla dura de la SPEC embudo-free-pro: jamás decirle
+ * «intentaste agregar» a quien no intentó.
+ */
+describe('buildClientLimitReachedEmail — variante sweep (cron cap-nudge)', () => {
+    const ctx = {
+        coachName: 'Josefa',
+        tierLabel: 'Gratis',
+        currentLimit: 3,
+        subscriptionUrl: SUBSCRIPTION_URL,
+        trigger: 'sweep' as const,
+    }
+
+    it('nunca acusa un intento que no existió', () => {
+        const { html } = buildClientLimitReachedEmail(ctx)
+        expect(html).not.toContain('intentaste')
+        expect(html).toContain(
+            'El próximo alumno que quieras sumar no va a entrar hasta que liberes un cupo o amplíes tu plan.'
+        )
+    })
+
+    it('el preview habla del cupo ocupado, no de un rechazo', () => {
+        const { html } = buildClientLimitReachedEmail(ctx)
+        expect(html).toContain('Tu plan Gratis ya usa su cupo de 3 alumnos.')
+        expect(html).not.toContain('llegó a 3 alumnos activos')
+    })
+
+    // Pricing v3: el barrido apunta sobre todo a los Free con 1/1 ⇒ jamás «1 alumnos».
+    it('cupo 1 singulariza subject, cuerpo y preview', () => {
+        const { subject, html } = buildClientLimitReachedEmail({ ...ctx, currentLimit: 1 })
+        expect(subject).toBe('Alcanzaste el límite de 1 alumno de tu plan Gratis')
+        expect(html).toContain('1 alumno activo')
+        expect(html).toContain('Tu plan Gratis ya usa su cupo de 1 alumno.')
+        expect(html).not.toContain('1 alumnos')
+    })
+
+    it('sigue siendo UN solo CTA a /coach/subscription, sin precios', () => {
+        const { html } = buildClientLimitReachedEmail({ ...ctx, recommendedTierLabel: 'Pro' })
+        expect(countLinks(html)).toBe(1)
+        expect(html).toContain(`href="${SUBSCRIPTION_URL}"`)
+        expect(html).toContain('Pasar a Pro')
+        assertNoPrices(html)
+    })
+
+    /**
+     * Ley 19.496 art. 28 B: el barrido lo inicia EVA sin acción del coach ⇒ comunicación
+     * promocional no solicitada, y el pie tiene que dar una dirección válida para pedir la baja.
+     * El aviso va en TEXTO PLANO: sumar un `<a>` rompería el contrato de UN solo link.
+     */
+    it('lleva el pie de baja de envíos con dirección válida, en texto plano', () => {
+        const { html } = buildClientLimitReachedEmail(ctx)
+        expect(html).toContain('contacto@eva-app.cl')
+        expect(html).toContain('dejamos de enviarlos')
+        expect(countLinks(html)).toBe(1)
+        assertNoPrices(html)
+    })
 })
 
 describe('buildPlanExpiringSoonEmail', () => {
