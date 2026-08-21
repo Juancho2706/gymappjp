@@ -80,7 +80,7 @@ Consecuencias fijadas:
 
 ## Modelo de datos
 
-Tabla nueva `public.coach_leads` (migración `supabase/migrations/20260821024000_coach_leads.sql`):
+Tabla nueva `public.coach_leads` (migración `supabase/migrations/20260821030821_coach_leads.sql`):
 
 | Columna | Tipo | Notas |
 |---|---|---|

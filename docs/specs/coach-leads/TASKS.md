@@ -14,7 +14,7 @@ Convención: `[ ]` pendiente · `[x]` hecho con evidencia real · `[~]` parcial 
 
 ## W1 — DDL + `/join` solicitud + correo (en ejecución 21-08)
 
-- [ ] W1.1 Migración `supabase/migrations/20260821024000_coach_leads.sql` con la tabla completa
+- [ ] W1.1 Migración `supabase/migrations/20260821030821_coach_leads.sql` con la tabla completa
       del SPEC: constraints de largo, `coach_leads_contact_required`, índice
       `(coach_id, status, created_at desc)`, RLS ON, política única de SELECT
       (`coach_id = auth.uid()`), `revoke all from anon, authenticated` + `grant select to

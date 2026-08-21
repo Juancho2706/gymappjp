@@ -8,7 +8,7 @@ import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 /**
  * Acciones del inbox «Solicitudes» (`coach_leads`) — panel del coach en /coach/clients.
  *
- * Régimen de permisos (migración 20260821024000): la tabla NO tiene policy ni grants de
+ * Régimen de permisos (migración 20260821030821): la tabla NO tiene policy ni grants de
  * insert/update; se escribe SOLO con service_role. Por eso cada acción de acá hace primero un
  * SELECT con el cliente del USUARIO (que pasa por la policy `coach_id = auth.uid()`) y recién
  * después escribe con service_role. El orden importa: si se escribiera con service_role sin ese

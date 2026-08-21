@@ -47,7 +47,7 @@ la única puerta de escritura es el servidor de EVA.
 
 ### W1 — DDL + `/join` solicitud + correo (web) — **en ejecución 21-08**
 
-1. Migración `supabase/migrations/20260821024000_coach_leads.sql` (tabla, constraints, índice,
+1. Migración `supabase/migrations/20260821030821_coach_leads.sql` (tabla, constraints, índice,
    RLS, política de select, revoke/grant, trigger `handle_updated_at`). Aditiva e idempotente.
    **El archivo se escribe; el jefe lo aplica** (protocolo tx-rollback + advisors de `AGENTS.md`).
 2. `database.types.ts`: entrada de `coach_leads` (Row/Insert/Update) quirúrgica.

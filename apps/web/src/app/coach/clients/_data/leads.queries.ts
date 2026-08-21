@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabase/server'
  * profundidad, no el control de acceso.
  *
  * (Las ESCRITURAS sí van con service_role — la tabla no tiene grants de insert/update a
- * propósito; ver `_actions/leads.actions.ts` y la migración 20260821024000.)
+ * propósito; ver `_actions/leads.actions.ts` y la migración 20260821030821.)
  *
  * Sin scope de workspace a propósito: hoy solo el `/join` STANDALONE genera solicitudes (team y
  * org conservan su autoalta y escriben directo en `clients`), así que todo lead tiene
