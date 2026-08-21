@@ -49,12 +49,35 @@ function SubmitButton() {
 interface CreateClientModalProps {
     open: boolean
     onClose: () => void
+    /**
+     * Precarga de los campos (`defaultValue`, no controlados: el coach puede corregir todo).
+     * Lo usa el inbox «Solicitudes» para abrir el alta con los datos que dejó el solicitante.
+     * Como son `defaultValue`, cambiar estos valores con el modal YA montado no repinta el form:
+     * quien precarga debe montarlo por solicitud (o pasarle una `key`).
+     */
+    initialValues?: {
+        full_name?: string | null
+        email?: string | null
+        phone?: string | null
+    }
+    /** Se dispara UNA vez con el id del alumno creado (cierra el lead que originó el alta). */
+    onCreated?: (clientId: string) => void
 }
 
-export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
+export function CreateClientModal({ open, onClose, initialValues, onCreated }: CreateClientModalProps) {
     const [state, formAction] = useActionState(createClientAction, initialState)
     const formRef = useRef<HTMLFormElement>(null)
+    const notifiedIdRef = useRef<string | null>(null)
     const ph = usePostHog()
+
+    // Aviso al dueño del modal. Va ANTES del auto-close y con guarda por id: el éxito con
+    // teléfono deja el modal abierto en el paso de WhatsApp y el efecto correría en cada render.
+    useEffect(() => {
+        if (!state.success || !state.newClientId) return
+        if (notifiedIdRef.current === state.newClientId) return
+        notifiedIdRef.current = state.newClientId
+        onCreated?.(state.newClientId)
+    }, [state.success, state.newClientId, onCreated])
 
     // Auto-close only when success but no phone (no WhatsApp CTA to show)
     useEffect(() => {
@@ -188,6 +211,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                             id="full_name"
                             name="full_name"
                             placeholder="Juan González"
+                            defaultValue={initialValues?.full_name ?? undefined}
                             required
                             className="h-10 bg-secondary border-border text-foreground rounded-xl placeholder:text-muted-foreground/50 focus:border-primary"
                         />
@@ -206,6 +230,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                             name="email"
                             type="email"
                             placeholder="alumno@ejemplo.com"
+                            defaultValue={initialValues?.email ?? undefined}
                             required
                             className="h-10 bg-secondary border-border text-foreground rounded-xl placeholder:text-muted-foreground/50 focus:border-primary"
                         />
@@ -224,6 +249,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                             name="phone"
                             type="tel"
                             placeholder="+56xxxxxxxxx"
+                            defaultValue={initialValues?.phone ?? undefined}
                             className="h-10 bg-secondary border-border text-foreground rounded-xl placeholder:text-muted-foreground/50 focus:border-primary"
                         />
                     </div>

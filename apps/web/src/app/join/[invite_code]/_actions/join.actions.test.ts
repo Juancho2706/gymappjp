@@ -7,14 +7,12 @@ const {
     createClientIdentityMock,
     rateLimitMock,
     captureServerEventMock,
-    notifyCoachMock,
 } = vi.hoisted(() => ({
     createServiceRoleClientMock: vi.fn(),
     resolveInviteMock: vi.fn(),
     createClientIdentityMock: vi.fn(),
     rateLimitMock: vi.fn(),
     captureServerEventMock: vi.fn(),
-    notifyCoachMock: vi.fn(),
 }))
 
 vi.mock('next/headers', () => ({
@@ -33,12 +31,6 @@ vi.mock('@/lib/supabase/admin-client', () => ({
 // three scope branches from here.
 vi.mock('../_lib/resolve-invite', () => ({
     resolveInvite: resolveInviteMock,
-}))
-
-// El aviso al coach del alta standalone: acá importa CUÁNDO se dispara, no el HTML (el helper
-// tiene su propio fail-open y no debe pegarle a Resend en tests).
-vi.mock('@/lib/email/coach-join-notification', () => ({
-    notifyCoachOfStandaloneJoin: notifyCoachMock,
 }))
 
 vi.mock('@/infrastructure/db/client-membership.repository', () => ({
@@ -172,47 +164,40 @@ describe('joinViaInviteAction', () => {
         createClientIdentityMock.mockResolvedValue({ ok: true })
     })
 
-    // El C-KILL (2026-07-04) apagaba este camino; se retiró el 2026-08-20 porque la tarjeta de
-    // Share Entreno manda justo acá y el hueco de cupo que lo motivó ya lo cierra checkJoinCapacity.
-    it('standalone → crea el alumno, lo deja bajo el coach y le avisa por correo', async () => {
+    // Decisión del owner (2026-08-21): standalone dejó de dar de alta — ahora deja una SOLICITUD
+    // (`requestJoinAction` → `coach_leads`). Este action conserva el corte como defensa en
+    // profundidad: aunque alguien lo invoque a mano con un código standalone, no crea NADA.
+    it('standalone → rechaza y manda a enviar solicitud, sin crear auth.user ni fila', async () => {
         const { admin, clientsQuery, assignmentsQuery } = buildAdmin()
         createServiceRoleClientMock.mockReturnValue(admin)
         resolveInviteMock.mockResolvedValue(STANDALONE_INVITE)
 
         const result = await joinViaInviteAction('CODE-STANDALONE', null, buildFormData())
 
-        // Termina igual que team/org: sin login automático, con el href al login de la marca.
-        expect(result).toEqual({ success: true, loginHref: '/c/coach-marca/login' })
-        expect(admin.auth.admin.createUser).toHaveBeenCalledTimes(1)
-        expect(clientsQuery.insert).toHaveBeenCalledWith(
-            expect.objectContaining({ id: 'new-user-1', coach_id: 'coach-1', org_id: null, team_id: null })
-        )
-        expect(createClientIdentityMock).toHaveBeenCalledTimes(1)
-        // standalone no es enterprise → nada de asignaciones de org.
+        expect(result).toEqual({ error: 'Para entrenar con este coach envía una solicitud.' })
+        expect(admin.auth.admin.createUser).not.toHaveBeenCalled()
+        expect(clientsQuery.insert).not.toHaveBeenCalled()
+        expect(createClientIdentityMock).not.toHaveBeenCalled()
         expect(assignmentsQuery.insert).not.toHaveBeenCalled()
-        // El único alta que el coach no origina: se le avisa (esperado, jamás fire-and-forget).
-        expect(notifyCoachMock).toHaveBeenCalledWith(admin, {
-            coachId: 'coach-1',
-            studentName: 'Alumna Test',
-            brandName: 'Coach Marca',
-        })
+        expect(captureServerEventMock).not.toHaveBeenCalled()
     })
 
-    it('standalone → cupo del coach lleno: rechaza SIN crear auth.user ni fila', async () => {
+    it('standalone con ref de tarjeta compartida → tampoco crea nada (el corte es antes)', async () => {
         const { admin, clientsQuery } = buildAdmin({
-            coachRow: { max_clients: 2, subscription_tier: 'free', created_at: '2026-08-19T00:00:00.000Z' },
-            activeCount: 2,
+            referrerRow: { id: REFERRER_ID, coach_id: 'coach-1', org_id: null, team_id: null },
         })
         createServiceRoleClientMock.mockReturnValue(admin)
         resolveInviteMock.mockResolvedValue(STANDALONE_INVITE)
 
-        const result = await joinViaInviteAction('CODE-STANDALONE', null, buildFormData())
+        const result = await joinViaInviteAction(
+            'CODE-STANDALONE',
+            null,
+            buildFormData({ ref: REFERRER_ID, src: 'share_card', k: 'placa' })
+        )
 
-        expect((result as { error?: string }).error).toMatch(/límite de alumnos/i)
-        expect((result as { success?: boolean }).success).toBeUndefined()
-        expect(admin.auth.admin.createUser).not.toHaveBeenCalled()
+        expect(result).toEqual({ error: 'Para entrenar con este coach envía una solicitud.' })
         expect(clientsQuery.insert).not.toHaveBeenCalled()
-        expect(notifyCoachMock).not.toHaveBeenCalled()
+        expect(captureServerEventMock).not.toHaveBeenCalled()
     })
 
     it('team → creates the auth.user + clients row (flow intact)', async () => {
@@ -384,34 +369,6 @@ describe('joinViaInviteAction', () => {
         expect(captureServerEventMock).toHaveBeenCalledWith({
             event: 'coach_client_referred',
             distinctId: 'owner-1',
-            properties: { referred_by_client_id: REFERRER_ID, card_kind: 'placa' },
-        })
-    })
-
-    it('standalone con ref del MISMO coach → persiste la atribución y emite el evento', async () => {
-        const { admin, clientsQuery } = buildAdmin({
-            referrerRow: { id: REFERRER_ID, coach_id: 'coach-1', org_id: null, team_id: null },
-        })
-        createServiceRoleClientMock.mockReturnValue(admin)
-        resolveInviteMock.mockResolvedValue(STANDALONE_INVITE)
-
-        const result = await joinViaInviteAction(
-            'CODE-STANDALONE',
-            null,
-            buildFormData({ ref: REFERRER_ID, src: 'share_card', k: 'placa' })
-        )
-
-        expect(result).toEqual({ success: true, loginHref: '/c/coach-marca/login' })
-        expect(clientsQuery.insert).toHaveBeenCalledWith(
-            expect.objectContaining({
-                referred_by_client_id: REFERRER_ID,
-                referral_source: 'share_card',
-                referral_card_kind: 'placa',
-            })
-        )
-        expect(captureServerEventMock).toHaveBeenCalledWith({
-            event: 'coach_client_referred',
-            distinctId: 'coach-1',
             properties: { referred_by_client_id: REFERRER_ID, card_kind: 'placa' },
         })
     })

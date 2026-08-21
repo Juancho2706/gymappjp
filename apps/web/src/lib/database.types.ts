@@ -1139,6 +1139,99 @@ export type Database = {
           },
         ]
       }
+      coach_leads: {
+        Row: {
+          coach_id: string
+          consent_accepted_at: string
+          converted_client_id: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          message: string | null
+          org_id: string | null
+          phone: string | null
+          referral_card_kind: string | null
+          referral_source: string | null
+          referred_by_client_id: string | null
+          status: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          coach_id: string
+          consent_accepted_at?: string
+          converted_client_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          message?: string | null
+          org_id?: string | null
+          phone?: string | null
+          referral_card_kind?: string | null
+          referral_source?: string | null
+          referred_by_client_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string
+          consent_accepted_at?: string
+          converted_client_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          message?: string | null
+          org_id?: string | null
+          phone?: string | null
+          referral_card_kind?: string | null
+          referral_source?: string | null
+          referred_by_client_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_leads_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_leads_converted_client_id_fkey"
+            columns: ["converted_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_leads_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_leads_referred_by_client_id_fkey"
+            columns: ["referred_by_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_leads_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_onboarding_events: {
         Row: {
           coach_id: string

@@ -154,6 +154,12 @@ encolar el build 1.1.2 (F9).
 
 ## F6 — Growth (atribución)
 
+> **NOTA 21-08 (decisión del owner):** `/join` standalone = **solicitud** (`coach_leads`), no alta
+> directa; la atribución (`referred_by_client_id`/`referral_source`/`referral_card_kind`) se
+> persiste en `clients` al **CONVERTIR** el lead desde el panel del coach. El alta directa del
+> 20-08 (`723b7acb`) **se revirtió** por decisión del owner («cada coach quiere controlar a los
+> estudiantes»). Spec: [coach-leads](../coach-leads/SPEC.md). Team/org no cambian.
+
 > **Decisión del 20-08 (el loop estaba CORTADO):** la tarjeta emitía `/c/{código}/login`, pero el
 > capturador del `?ref` vive en `/join/[invite_code]` — y ahí el alta standalone estaba apagada por
 > el **C-KILL (2026-07-04)**. Dos puertas cerradas: quien recibía la tarjeta no tenía cuenta para
@@ -170,9 +176,12 @@ encolar el build 1.1.2 (F9).
       persistir en insert de `clients` (`034c6863`). Standalone reabierto el 20-08: la page renderiza
       el `JoinForm` para los tres scopes y el action crea el alumno tras el cerco de cupo.
 - [x] F6.3 Evento server `coach_client_referred` al concretarse el alta referida (`034c6863`).
-- [x] F6.4 (20-08) Aviso al coach por Resend cuando el alta es standalone — es el único camino que
-      él no origina. `await` (nunca fire-and-forget: el redirect mata la promesa en Vercel) y
-      fail-open: un fallo de correo jamás rompe el alta.
+- [~] F6.4 Aviso al coach por Resend. (20-08) Nació como aviso «se unió» cuando el alta standalone
+      era directa. **(21-08) Pasa a AVISO DE SOLICITUD**: `coach-join-notification.ts` queda
+      obsoleto y lo reemplaza `notifyCoachOfLead` (nombre, mensaje, botón «Escribir por WhatsApp»,
+      origen, CTA «Ver solicitudes») — ver [coach-leads TASKS W1.6/W1.7](../coach-leads/TASKS.md).
+      Se conservan las dos reglas ganadas: `await` (nunca fire-and-forget: el redirect mata la
+      promesa en Vercel) y fail-open (un fallo de correo jamás rompe la solicitud).
 
 ## F7 — Analytics móvil
 

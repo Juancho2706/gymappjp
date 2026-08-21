@@ -9,7 +9,6 @@ import { checkJoinCapacity } from '../_lib/join-capacity'
 import { resolveJoinReferral } from '../_lib/join-referral'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
-import { notifyCoachOfStandaloneJoin } from '@/lib/email/coach-join-notification'
 
 const JoinSchema = z.object({
     full_name: z.string().min(2).max(120),
@@ -41,6 +40,14 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
     const invite = await resolveInvite(admin, inviteCode)
     if (!invite) return { error: 'Código de invitación inválido' }
 
+    // Decisión del owner (2026-08-21): el código standalone ya NO da de alta a nadie — deja una
+    // solicitud que el coach acepta o descarta (`requestJoinAction`, tabla `coach_leads`). La UI
+    // de `/join` ni siquiera pinta este formulario cuando el scope es standalone; este corte es
+    // defensa en profundidad: aunque alguien invoque el action viejo a mano, no crea nada.
+    if (invite.scope === 'standalone') {
+        return { error: 'Para entrenar con este coach envía una solicitud.' }
+    }
+
     const { data: existing } = await admin
         .from('clients')
         .select('id')
@@ -50,9 +57,10 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
 
     // P7 (pricing v2): cerco de verdad — contar activos vs el cupo APLICABLE ANTES de crear
     // auth.user + fila (así no queda usuario huérfano que borrar). enterprise gatea por
-    // organizations.client_limit; team no tiene cuota de alumnos (seat_limit es de coaches);
-    // standalone (reabierto el 2026-08-20 para el loop de Share Entreno) gatea por
-    // max_clients ?? tierMaxClientsFor con grandfather. Fail-closed ante errores.
+    // organizations.client_limit; team no tiene cuota de alumnos (seat_limit es de coaches).
+    // La rama standalone del helper quedó inalcanzable desde acá (el corte de arriba la ataja),
+    // pero se conserva: el cupo standalone lo sigue necesitando el alta que el coach origina.
+    // Fail-closed ante errores.
     const capacity = await checkJoinCapacity(admin, invite)
     if (!capacity.ok) {
         if (capacity.reason === 'limit_reached') {
@@ -140,18 +148,6 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
                 referred_by_client_id: referral.referred_by_client_id,
                 card_kind: referral.referral_card_kind,
             },
-        })
-    }
-
-    // El alta standalone es la única que el coach no origina él mismo (el alumno llega solo con
-    // el código, típicamente desde una tarjeta compartida): sin este aviso el alumno nuevo aparece
-    // en el roster sin que nadie se entere. Se ESPERA por la misma razón que el evento de arriba
-    // —Vercel congela la invocación al responder— y el helper jamás lanza ni rompe el alta.
-    if (invite.scope === 'standalone') {
-        await notifyCoachOfStandaloneJoin(admin, {
-            coachId: invite.coachId,
-            studentName: parsed.data.full_name,
-            brandName: invite.brandName,
         })
     }
 

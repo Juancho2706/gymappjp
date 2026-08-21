@@ -53,6 +53,12 @@ export type CreateClientState = {
     newClientPhone?: string
     loginUrl?: string
     clientName?: string
+    /**
+     * Id del alumno recién creado. Lo consume el inbox «Solicitudes» (LeadsInbox) para cerrar el
+     * lead con `markLeadConvertedAction(leadId, clientId)` — sin esto el modal no tiene forma de
+     * decirle a quien lo abrió a QUÉ ficha corresponde el alta.
+     */
+    newClientId?: string
     upgradeRequired?: boolean
     currentLimit?: number
     /** 'email_taken' ⇒ el modal muestra estado informativo (no error destructivo). */
@@ -257,6 +263,7 @@ export async function createClientAction(
         newClientPhone: parsed.data.phone || undefined,
         loginUrl,
         clientName: parsed.data.full_name,
+        newClientId: newAuthUser.user.id,
     }
 }
 

@@ -5,10 +5,14 @@ import type { Database } from '@/lib/database.types'
 type Admin = SupabaseClient<Database>
 
 /**
- * Alta standalone REABIERTA el 2026-08-20 para cerrar el loop de Share Entreno (la tarjeta que
- * comparte el alumno manda a `/join/{código}`, y ahí tiene que poder crearse la cuenta). El
- * C-KILL del 2026-07-04 la había apagado por el hueco de `max_clients`; ese hueco lo cierra hoy
- * `checkJoinCapacity` (_lib/join-capacity.ts) ANTES de crear nada, para los tres scopes.
+ * El código standalone NO da de alta: desde el 2026-08-21 abre una SOLICITUD (`coach_leads`,
+ * `_actions/join-request.actions.ts`). Decisión del owner: «cada coach quiere controlar a los
+ * estudiantes igual». El alta directa standalone vivió un día (reabierta el 20-08 para el loop de
+ * Share Entreno) y se revirtió. Team y org conservan su autoalta pre-existente, con el cerco de
+ * cupo de `checkJoinCapacity` (_lib/join-capacity.ts) ANTES de crear nada.
+ *
+ * Este resolvedor sigue devolviendo los tres scopes: la page necesita la MARCA del coach para
+ * pintar el formulario de solicitud con su white-label.
  */
 
 /**

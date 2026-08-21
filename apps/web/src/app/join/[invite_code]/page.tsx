@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { JoinForm } from './_components/JoinForm'
+import { LeadRequestForm } from './_components/LeadRequestForm'
 import { resolveInvite } from './_lib/resolve-invite'
 import { parseReferralParams } from './_lib/join-referral'
 
@@ -84,17 +85,41 @@ export default async function JoinPage({ params, searchParams }: Props) {
                     welcomeMessage={invite.welcomeMessage}
                 />
 
+                {/*
+                  El SCOPE del código decide la puerta (decisión del owner 2026-08-21):
+                   · standalone → SOLICITUD. El coach recibe el contacto y decide a quién toma;
+                     no se crea ninguna cuenta acá. El componente trae su propio título, su estado
+                     de éxito y su link al login, así que la página no pinta ninguno de los tres.
+                   · team / org → autoalta de siempre (pre-existente desde julio): ahí el dueño del
+                     espacio ya delegó la puerta a propósito.
+                */}
                 <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-                    <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-5">Crear tu cuenta</h2>
-                    <JoinForm inviteCode={invite_code} primaryColor={color} referral={referral} />
+                    {invite.scope === 'standalone' ? (
+                        <LeadRequestForm
+                            inviteCode={invite_code}
+                            primaryColor={color}
+                            brandName={brandName}
+                            loginHref={invite.loginHref}
+                            referral={referral}
+                        />
+                    ) : (
+                        <>
+                            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-5">
+                                Crear tu cuenta
+                            </h2>
+                            <JoinForm inviteCode={invite_code} primaryColor={color} referral={referral} />
+                        </>
+                    )}
                 </div>
 
-                <p className="mt-4 text-center text-xs text-zinc-400">
-                    ¿Ya tienes cuenta?{' '}
-                    <a href={invite.loginHref} className="underline hover:text-zinc-600">
-                        Inicia sesión
-                    </a>
-                </p>
+                {invite.scope !== 'standalone' && (
+                    <p className="mt-4 text-center text-xs text-zinc-400">
+                        ¿Ya tienes cuenta?{' '}
+                        <a href={invite.loginHref} className="underline hover:text-zinc-600">
+                            Inicia sesión
+                        </a>
+                    </p>
+                )}
             </div>
         </div>
     )
