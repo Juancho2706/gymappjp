@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 owner: product-engineering
 last_verified: "2026-08-21"
 canonical: false
@@ -7,61 +7,72 @@ canonical: false
 
 # TASKS — Pricing v3
 
-Borrador: nada ejecutado. Se activa cuando el owner responda D1–D6.
+Decisiones cerradas el 2026-08-21: **1A 2A 3A 4A 5A 6A**. Listas para workers (modelo sugerido entre paréntesis).
 
-## F0 — Decisiones y emergencia
-- [ ] F0.1 D1 cupo de los 5 conservados (A fila actual / B congelar en `ocupa` / C estricta).
-- [ ] F0.2 D2 alcance del white-label en Free (A completo / B básico).
-- [ ] F0.3 D3 diferenciador de Pro («Hecho con EVA» visible en Free / solo cupo).
-- [ ] F0.4 D4 vuelta a Free desde pago (escalera por fecha / override persistente).
-- [ ] F0.5 D5 aviso a los 27 (mismo día / 30 días para el cupo / sin aviso).
-- [ ] F0.6 D6 timing (esta semana / post-veredicto campaña 25-08).
-- [ ] F0.7 `robin-coach` sobre cupo hoy (5 alumnos, cupo 3): UPDATE `max_clients = 5` con OK del owner; verificar que entra.
+## W0 — Antes de tocar nada
+- [x] F0.1–F0.6 Decisiones D1–D6 (owner, 21-08).
+- [ ] F0.7 **Robin**: `robin-coach` free con `max_clients 3` y 5 alumnos → bloqueado por el gate duro. Decidir `UPDATE max_clients = 5` (recomendado) o dejar que archive. **OK explícito del owner.**
+- [ ] F0.8 Fijar `PRICING_V3_CUTOVER` (fecha del día D, 00:00Z).
 
-## F1 — Catálogo (`packages/tiers/index.ts`)
-- [ ] F1.1 `TIER_CONFIG.free.maxClients = 1`, label «1 alumno con tu marca», `features` + «Branding personalizado».
-- [ ] F1.2 `TIER_CAPABILITIES.free.canUseBranding = true` (según D2; si B, nuevo `canUseAdvancedBranding`).
-- [ ] F1.3 `PRICING_V3_CUTOVER` + `V2_TIER_MAX_CLIENTS` + `tierMaxClientsFor` de 3 peldaños; `getRecommendedTierFor` coherente.
-- [ ] F1.4 Docblocks `:14-16`, `:73-75`, `:175` reescritos (documentan la reversión de «Pro+ entero»).
-- [ ] F1.5 Tests: `pricing-v2.test.ts`, `constants.test.ts`, `register/actions.test.ts`, `nutrition-pdf-brand.test.ts`, `activate-free.service.test.ts` (caso post-v3).
+## W1 — Catálogo (`packages/tiers/index.ts`) (Opus)
+- [ ] F1.1 `TIER_CONFIG.free.maxClients = 1`; `TIER_STUDENT_RANGE_LABEL.free = '1 alumno con tu marca'`; `free.features` + `'Branding personalizado'`.
+- [ ] F1.2 `TIER_CAPABILITIES.free.canUseBranding = true`; nueva capacidad `showsEvaBadge` (free/starter `true`, pro/elite/growth/scale `false`) + helper `showsEvaBadge(tier)` fail-open a `true`.
+- [ ] F1.3 `PRICING_V3_CUTOVER` + `V2_TIER_MAX_CLIENTS = { free: 2 }` + `tierMaxClientsFor` de 3 buckets; `getRecommendedTierFor` coherente (0–1 free, 2–25 pro, 26–60 elite).
+- [ ] F1.4 Docblocks `:14-16`, `:73-75`, `:175` reescritos: «white-label en todos los planes desde v3 (decisión owner 2026-08-21); Pro = cupo + sin sello».
+- [ ] F1.5 Tests: `packages/tiers/pricing-v2.test.ts` (tabla CASES + snapshot free + recommended), `apps/web/src/lib/constants.test.ts` (`isBrandingAllowed('free')` true, labels), `apps/web/src/app/(auth)/register/actions.test.ts:356` (`max_clients: 1`), `nutrition-pdf-brand.test.ts` (free ⇒ marca propia + `poweredByEva: true`); `activate-free.service.test.ts` caso post-v3.
+- [ ] F1.6 Re-exports RN (`apps/mobile/lib/coach-tiers.ts`) exponen `showsEvaBadge`.
 
-## F2 — Backfill LIVE
-- [ ] F2.1 SQL con respaldo `_bak_pricing_v3_free_limits_<fecha>` en la misma tx; `GREATEST(1, LEAST(max_clients, ocupa))` solo Free standalone.
-- [ ] F2.2 tx-rollback de prueba con conteos antes/después; aplicar; advisors; query de verificación (0 Free con `ocupa > max_clients`).
-- [ ] F2.3 Renombrar el archivo de migración a la versión que registre `schema_migrations` (gotcha del MCP).
+## W2 — Gates, lectores y analítica (Opus)
+- [ ] F2.1 `coach/reactivate/ReactivateClient.tsx:74` y `_data/reactivate.queries.ts:25-26`: cupo efectivo = columna (`coach.max_clients`) para el tier actual; escalera solo para tiers que no son el actual.
+- [ ] F2.2 `coach/_components/OverLimitBanner.tsx:63`: columna.
+- [ ] F2.3 `coach/clients/import/_actions/import.actions.ts:100,185` y `api/mobile/coach/clients/import/route.ts:251`: `?? tierMaxClientsFor(tier, created_at)`; precheck de UI con el cupo real.
+- [ ] F2.4 `upgrade_gate_hit {gate:'client_limit', limit, active}` en `clients.actions.ts:116-133` (web) y en el alta RN (`api/mobile/coach/clients/route.ts:191` → respuesta + captura en RN con `captureAppEvent`).
+- [ ] F2.5 `checkout_started` garantizado en `/coach/subscription/processing` (verificar que exista; PostHog no lo tiene en 30 d) y `pricing_version: 'v3'` en `coach_registered`.
+- [ ] F2.6 Tests de cada servicio tocado.
 
-## F3 — Write-paths y lectores
-- [ ] F3.1 `activate-free.service.ts:64` y `cron/trial-expiry/route.ts:61`: si `subscription_tier` ya era `free`, preservar `max_clients`; tests.
-- [ ] F3.2 `ReactivateClient.tsx:74` y `_data/reactivate.queries.ts:25-26`: cupo efectivo de la columna.
-- [ ] F3.3 `OverLimitBanner.tsx:63`: columna.
-- [ ] F3.4 `import.actions.ts:100,185` y `api/mobile/coach/clients/import/route.ts:251`: `?? tierMaxClientsFor(tier, created_at)`.
+## W3 — White-label abierto + sello (Opus web + Opus RN)
+- [ ] F3.1 Web: `coach/settings/brand/page.tsx:26-39` renderiza `BrandSettingsForm` para todos; `coach/settings/page.tsx:284-288,378-397` sin badge «Pro» ni pane upsell; `BrandUpsell.tsx` → borrar o reconvertir a upsell de cupo (decisión del worker, documentada).
+- [ ] F3.2 Web: `settings.actions.ts:218,263,330` — el gate pasa a `isBrandingAllowed` (que ahora es true para free); mensajes para el único caso restante (tier inválido / org-managed).
+- [ ] F3.3 RN: `app/coach/settings/brand.tsx:434-459` pantalla gate fuera; comentario «starter+» corregido; hero de Opciones pinta logo (`app/coach/(tabs)/settings.tsx:287,290`).
+- [ ] F3.4 Sello «Hecho con EVA» por `showsEvaBadge`: `c/[coach_slug]/layout.tsx` (footer/badge discreto pero visible), `c/[coach_slug]/login/page.tsx`, `lib/nutrition-pdf-brand.ts:99-125` (`poweredByEva`), `lib/email/email-brand.ts:23` + `base-layout.ts` (footer del alumno), `api/manifest` (sin cambio), RN `lib/theme.ts:309,385` y `lib/nutrition-day-export.ts:96`. Link con UTM `utm_source=badge&utm_medium=student_app&utm_campaign=free_badge`.
+- [ ] F3.5 Proxy `apps/web/src/proxy.ts:889-910`: headers de marca para todos los tiers (hoy color/logo solo Pro+).
+- [ ] F3.6 Verificar las 5 marcas ya guardadas (`pauli-coach` #8B5CF6, `robin-coach` #4c2020 + ember + hero, `dudu` emerald + montserrat + clasico, `coach-derek` logo, `anais-perez` #0000ff + loader custom): contraste WCAG del sello sobre esos colores; ninguna rompe el login.
+- [ ] F3.7 Tests: PDF, email-brand, proxy headers, RN theme.
 
-## F4 — White-label abierto
-- [ ] F4.1 Quitar `BrandUpsell` del árbol de render (`coach/settings/brand/page.tsx:26-39`, `settings/page.tsx:284-288,378-397`); decidir si el componente muere o pasa a upsell de cupo.
-- [ ] F4.2 RN `app/coach/settings/brand.tsx:434-459`: pantalla gate fuera; corregir comentario «starter+».
-- [ ] F4.3 `settings.actions.ts:218,263,330`: mensajes de error para el caso real que quede.
-- [ ] F4.4 Política «Hecho con EVA» según D3: `email-brand.ts`, `base-layout.ts`, `nutrition-pdf-brand.ts:99-125`, `c/[coach_slug]/layout.tsx`, manifest/splash.
-- [ ] F4.5 Verificar que los 5 Free con marca guardada (`pauli-coach`, `robin-coach`, `dudu`, `coach-derek`, `anais-perez`) se ven bien (logos viejos, colores extremos como `#0000ff`).
+## W4 — Copy de venta (Sonnet + juicio)
+- [ ] F4.1 `PreciosSection.tsx`: `:281` «Todo EVA con tu marca, sin tarjeta. 1 alumno, para siempre.»; `:311-318` ✗ «Sin marca propia» → ✓ «White-label: tu logo y tu color»; `:399` Pro «Hasta 25 alumnos · sin rastro de EVA»; `:418` bullet Pro → «Sin el sello “Hecho con EVA”»; `:12` comentario; plural `:93-98`.
+- [ ] F4.2 `landing-v2/copy.ts:93-108` (EN) espejo.
+- [ ] F4.3 `/pricing/page.tsx:145` «Todo EVA · 1 alumno · con tu marca»; `:154` «Hasta 25 alumnos · sin sello EVA»; `:223`.
+- [ ] F4.4 i18n `es/en.json:29` (nutrición y marca en todos los planes), `:86`, `:108` «Lo único que cambia entre planes es el cupo de alumnos y el sello EVA», `:109-111`, `:138`.
+- [ ] F4.5 `FreeWelcomeModal.tsx:115` ✓ «Marca personalizada (tu logo y color)»; `verify-email/page.tsx:63` «1 alumno sin costo, con tu marca»; `HelpCenter.tsx:68,125` «incluida en todos los planes», `:152`; `FaqSection.tsx:63` plural + «con tu marca».
+- [ ] F4.6 Correos: `transactional-templates.ts:193` (bienvenida Free: «suma más cupo y saca el sello de EVA»); `drip-templates.ts:127,133` (Pro/Elite sin «tu marca propia», con «sin sello»); drip día 7/14 como upsell de cupo.
+- [ ] F4.7 RN: `register.tsx:405-413`, `verify-email.tsx:13`, `subscription.tsx`, `perfil.tsx` — derivados; verificar plural y «Incluida».
+- [ ] F4.8 `docs/legal` sin cambios (genérico); `PRODUCT_OVERVIEW.md:92` quitar «Starter».
 
-## F5 — Copy de venta
-- [ ] F5.1 `PreciosSection.tsx:281` («Hasta 2 alumnos, para siempre»), `:311-318` (✗ marca → ✓), `:399,418` (pitch Pro), `:12` comentario; plural `:93-98`.
-- [ ] F5.2 `landing-v2/copy.ts:93-108` (EN).
-- [ ] F5.3 `/pricing/page.tsx:145,154,223`.
-- [ ] F5.4 i18n `es/en.json:29,86,108-111,138`.
-- [ ] F5.5 `FreeWelcomeModal.tsx:115` (✗ hardcodeado), `verify-email/page.tsx:63`, `HelpCenter.tsx:68,125,152`, `FaqSection.tsx:63`.
-- [ ] F5.6 Correos: `transactional-templates.ts:193`, `drip-templates.ts:127,133`; drip día 7/14 como upsell de cupo.
-- [ ] F5.7 RN: `register.tsx`, `verify-email.tsx`, `subscription.tsx`, `perfil.tsx` (derivados; verificar plural).
+## W5 — Comunicación y docs (Opus)
+- [ ] F5.1 Plantilla `buildFreePlanV3Email` (asunto «Tu plan Free ahora incluye tu marca»): qué ganan (logo, color, tu app con tu identidad, sello «Hecho con EVA»), qué cambia (cupo 1 alumno; «los alumnos que ya tienes se conservan»), CTA «Configurar mi marca» → `/coach/settings/brand`, pie: Pro 25 alumnos sin sello. Sin promesas de precio. Texto en español neutro.
+- [ ] F5.2 Script `scripts/send-pricing-v3-notice.mjs` (o action admin) que lee de DB los Free con `max_clients = 1` tras el backfill (excluye test/evademo/josefit), manda con Resend, registra en `admin_audit_logs` (`coach.pricing_v3_notice`) y deduplica.
+- [ ] F5.3 Docs: `pricing-v2/SPEC.md` con nota «superada por v3 (21-08)»; `CURRENT.md` fila Web/PWA + prioridad; `PRODUCT_OVERVIEW.md`; `docs/operations/MANUAL_TASKS.md` si queda trámite manual.
+- [ ] F5.4 Memoria del asistente.
 
-## F6 — Analítica
-- [ ] F6.1 `upgrade_gate_hit {gate:'client_limit'}` en `clients.actions.ts` (web) y alta RN; `pricing_version: 'v3'` en `coach_registered`.
-
-## F7 — Comunicación y docs
-- [ ] F7.1 Plantilla «Tu plan Free ahora incluye tu marca» + envío a los 27 (lista desde DB, excluir test).
-- [ ] F7.2 SPEC v3 → `status: active`; `pricing-v2/SPEC.md` con nota de superación; CURRENT.md; `PRODUCT_OVERVIEW.md:92` (Starter stale).
-- [ ] F7.3 Memoria del asistente.
-
-## F8 — QA y OTA
-- [ ] F8.1 Preview: Free nuevo ve Mi Marca, su alumno ve la marca, `/pricing` y landing dicen 1 + marca.
-- [ ] F8.2 Device: RN Free ve Mi Marca; gate de cupo al 2º alumno; Pro sin cambios.
-- [ ] F8.3 OTA android+ios a runtimes 1.1.0, 1.1.1 y 1.1.2 (tags `ota/<v>-<fecha>`).
-- [ ] F8.4 Verificar los 5 conservados y `robin-coach` en LIVE tras el deploy.
+## W6 — Día D (jefe)
+- [ ] F6.1 Backfill LIVE (tx-rollback con respaldo → `apply_migration` → advisors → renombrar archivo a la versión registrada). SQL base:
+  ```sql
+  create table if not exists public._bak_pricing_v3_free_limits_20260822 as
+    select c.id as coach_id, c.max_clients as max_clients_prev, now() as backed_up_at
+    from public.coaches c
+    where c.subscription_tier = 'free'
+      and c.slug not in ('evademo','josefit')
+      and c.max_clients > 1
+      and (select count(*) from public.clients cl
+             where cl.coach_id = c.id and cl.is_archived = false
+               and cl.org_id is null and cl.team_id is null) <= 1;
+  alter table public._bak_pricing_v3_free_limits_20260822 enable row level security;
+  update public.coaches c set max_clients = 1
+    where c.id in (select coach_id from public._bak_pricing_v3_free_limits_20260822);
+  -- verificación: 27 filas; 0 tocados con ocupa > 1
+  ```
+- [ ] F6.2 Push único a `master` = `rnmobiledenuevo`; Vercel READY; verificación en prod (4 checks del PLAN).
+- [ ] F6.3 OTA android + ios a 1.1.0 / 1.1.1 / 1.1.2.
+- [ ] F6.4 Correo a los 27 (prueba al owner primero).
+- [ ] F6.5 Insight PostHog + artifact + memoria actualizados.

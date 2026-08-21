@@ -1,52 +1,72 @@
 ---
-status: draft
+status: active
 owner: product-engineering
 last_verified: "2026-08-21"
 canonical: false
 ---
 
-# PLAN — Pricing v3
+# PLAN — Pricing v3 (decisiones 1A 2A 3A 4A 5A 6A)
 
-**Prerrequisito: decisiones D1–D6 del owner** (ver [SPEC](./SPEC.md) y el artifact «Free con marca»).
-Estimación total: ~2,5 días de trabajo de agentes + QA del owner. Un solo deploy de producto (F1–F6
-juntos) precedido por el backfill.
+Estimación: ~2,5 días de agentes (3 waves) + QA del owner (1 h) + día D (2 h). Orquestación: jefe planifica
+y juzga; workers Opus para implementación guiada, Sonnet para swaps mecánicos de copy.
 
-## Fases
+## Waves
 
-| Fase | Qué | Archivos clave | Gate |
+| Wave | Qué | Workers | Gate de salida |
 |---|---|---|---|
-| F0 | Decisiones D1–D6 + arreglo inmediato de `robin-coach` (sobre cupo hoy) | — | OK del owner |
-| F1 | Catálogo: Free 1 + `canUseBranding: true` + escalera v2/v3 + labels/features + docblocks | `packages/tiers/index.ts` + tests `pricing-v2.test.ts`, `constants.test.ts`, `register/actions.test.ts`, `nutrition-pdf-brand.test.ts` | vitest paquete + web |
-| F2 | Backfill LIVE por uso (protocolo tx-rollback → aplicar → advisors → verificación post) | SQL service_role, `supabase/migrations/<ts>_pricing_v3_backfill_free_limits.sql` (aditivo, idempotente) | 0 coaches Free con `ocupa > max_clients` |
-| F3 | Write-paths respetan la columna; lectores por fecha → columna; drift de imports | `activate-free.service.ts`, `cron/trial-expiry`, `ReactivateClient.tsx`, `OverLimitBanner.tsx`, `import.actions.ts`, `api/mobile/coach/clients/import/route.ts` | tests de cada servicio |
-| F4 | White-label abierto: quitar upsells web+RN, errores de servidor, política «Hecho con EVA» | `BrandUpsell.tsx`, `coach/settings/page.tsx`, RN `settings/brand.tsx`, `settings.actions.ts`, `email-brand.ts`, `nutrition-pdf-brand.ts`, `c/layout.tsx`, manifest | tsc web+mobile, tests PDF/email |
-| F5 | Copy de venta y plural; nuevo pitch de Pro | landing-v2, `copy.ts`, `/pricing`, i18n, register, verify-email, `FreeWelcomeModal`, `HelpCenter`, drips y bienvenida | docs:check + revisión visual |
-| F6 | Analítica: `upgrade_gate_hit client_limit` + `pricing_version` | `clients.actions.ts`, `events.ts`, RN alta | evento visible en PostHog |
-| F7 | Comunicación y docs: correo a los 27, SPEC v3 → activa, CURRENT, PRODUCT_OVERVIEW, memoria | `transactional-templates.ts`, docs | envío verificado en Resend |
-| F8 | QA: preview + device; OTA a 1.1.0/1.1.1/1.1.2; verificación de los 5 conservados y de robin | — | acta de QA |
+| W0 | Decisión Robin + `PRICING_V3_CUTOVER` fijada a la fecha del día D | owner + jefe | — |
+| W1 | Catálogo + capacidades + escalera + tests (`packages/tiers`, `constants.test`, `register/actions.test`, `nutrition-pdf-brand.test`) | 1 Opus | vitest de los 4 archivos + `pnpm typecheck` |
+| W2 | Gates y lectores: reactivate/OverLimitBanner por columna; imports sin drift; `upgrade_gate_hit client_limit` web+RN; `pricing_version` | 1 Opus | tests de servicios + tsc web/mobile |
+| W3 | White-label abierto + sello: quitar upsells web+RN, errores de servidor, `showsEvaBadge` en shell `/c`, login, PDF, correos, export RN | 1 Opus (web) + 1 Opus (RN) | tsc ×2, tests PDF/email, gate visual `cabina-visual-check` si aplica |
+| W4 | Copy de venta + plural + pitch Pro + correos (bienvenida, drips) + i18n + landing EN | 1 Sonnet (swaps) + juicio | `docs:check`, revisión visual en preview |
+| W5 | Correo «Tu Free ahora tiene tu marca» (plantilla + script de envío a los 27 desde DB) + docs (SPEC v2 superada, CURRENT, PRODUCT_OVERVIEW) | 1 Opus | envío de prueba al owner |
+| W6 | Gates completos una vez (suite, build, lint, tsc ×2, tokens, boundaries, docs) | jefe | todo verde |
 
-## Orden del día de deploy
+Las waves W1–W4 pueden correr en paralelo si se reparten archivos sin solape (W1 `packages/tiers` +
+tests; W2 `coach/reactivate`, `OverLimitBanner`, imports, `clients.actions`, RN alta; W3 settings/brand
+web+RN, `email-brand`, `base-layout`, `nutrition-pdf-brand`, `c/layout`, `c/login`, RN theme/export; W4
+landing, pricing, i18n, HelpCenter, FreeWelcomeModal, verify-email, templates). W5 después de W3/W4.
 
-1. F2 backfill en LIVE (antes del código: los 3 fallbacks que leen catálogo mostrarían «1» a todos).
-2. Push a master con F1+F3+F4+F5+F6 (landing, /pricing, i18n y app en el mismo commit).
-3. OTA android+ios a los tres runtimes (capacidades y copys RN vienen de `packages/tiers`).
-4. Correo a los 27 (F7) después de verificar en prod que un Free ve Mi Marca.
+## Día D (en este orden, sin saltarse pasos)
+
+1. **Backfill LIVE** con protocolo: `BEGIN` → crear `_bak_pricing_v3_free_limits_<fecha>` con las 27 filas
+   → `UPDATE` → `SELECT` de verificación (27 filas; 0 Free con `ocupa > max_clients` entre los tocados) →
+   `ROLLBACK` de prueba; luego `apply_migration` con el mismo SQL; advisors security 0 ERROR; **renombrar el
+   archivo de migración a la versión que registre `schema_migrations`**.
+2. `PRICING_V3_CUTOVER` = fecha del día D 00:00Z en `packages/tiers` (ya en el commit de W1; confirmar).
+3. Push a `master` (= `rnmobiledenuevo`) con W1–W5: landing, `/pricing`, i18n, app y correos en el mismo
+   commit. Vercel prod READY.
+4. Verificación en prod: un Free nuevo (cuenta QA `qa-*`) ve Mi Marca y su alumno ve la marca con el sello;
+   `/pricing` y `#precios` dicen «1 alumno con tu marca»; un Free con 1 alumno ve el gate al intentar el 2º;
+   Pro sin cambios.
+5. OTA android + ios a runtimes 1.1.0, 1.1.1 y 1.1.2 (tags `ota/<v>-<fecha>` desde el último commit de cada
+   `version`, receta en `docs/operations/MOBILE_RELEASES_OTA.md`).
+6. Correo a los 27 (W5), con prueba previa al owner.
+7. Memoria, CURRENT y artifact actualizados; PostHog: insight `coach_registered` por `pricing_version` +
+   `upgrade_gate_hit` por gate.
+
+## Métricas para juzgar (2 y 6 semanas)
+
+- Activación: % de altas Free que cargan su 1º alumno en 7 días (hoy ~50% nunca lo carga).
+- Paywall: `upgrade_gate_hit {gate:'client_limit'}` por semana y `checkout_started` después del gate
+  (hoy `checkout_started` no existe en PostHog — lo agrega W2).
+- Conversión Free→Pro (hoy 0/32 histórico).
+- Marca: % de Free con `logo_url` o `primary_color` ≠ default a los 7 días del alta.
 
 ## Riesgos y mitigaciones
 
-- **Sobre-cupo = bloqueo total** (gate duro free, `proxy.ts:552`, RN `workspace-core.ts:173`): backfill
-  con `GREATEST(1, LEAST(max_clients, ocupa))`, nunca `= 1` plano; verificación post con query.
-- **Clobber del grandfather** por `activate-free`/`trial-expiry`: preservar columna si ya era Free; test
-  nuevo por cada path.
-- **Pro sin gancho**: D3 antes de tocar copy.
-- **Abuso de marca gratis**: rate-limit de uploads existente + «Hecho con EVA» en Free.
-- **ToS 30 días**: D5; si B, programar el UPDATE de cupo para +30 días y abrir white-label ya.
-- **Drift documental**: tres documentos dicen «branding = Pro+ entero»; esta SPEC los reemplaza
-  explícitamente y `packages/tiers/index.ts:73,175` se reescribe.
+- **Sobre-cupo = bloqueo total** (gate duro Free): el backfill solo toca `ocupa <= 1`; verificación
+  post-UPDATE obligatoria. Robin es el único sobre cupo y es decisión aparte.
+- **Regalo por escalera** (D4=A): un Free backfilleado a 1 que pase por `activate-free` (solo desde
+  expired/blocked) recibe 3 o 2 por fecha. Raro e inofensivo; documentado.
+- **Pro sin gancho**: resuelto con el sello (D3=A); el copy de Pro pasa a «25 alumnos · sin rastro de EVA».
+- **Abuso de marca gratis**: rate-limit de uploads existente + sello visible.
+- **ToS 30 días**: D5=A; el correo explica que nadie pierde alumnos y qué ganan.
+- **Drift documental**: `packages/tiers/index.ts:73,175` y `pricing-v2/SPEC.md` se reescriben en W1/W5.
 
 ## Rollback
 
-- Catálogo y gates: revert del commit (un archivo manda).
-- Backfill: tabla de respaldo `_bak_pricing_v3_free_limits_<fecha>` con `(coach_id, max_clients_prev)`
-  escrita en la misma transacción; restaurar = UPDATE desde ahí.
-- White-label: volver `canUseBranding` a `false` apaga los gates; las marcas guardadas no se borran.
+- Código: revert del commit del día D (catálogo + gates en un archivo manda).
+- Backfill: `UPDATE coaches c SET max_clients = b.max_clients_prev FROM _bak_pricing_v3_free_limits_<fecha> b
+  WHERE b.coach_id = c.id`.
+- White-label/sello: `canUseBranding` a `false` apaga los gates; las marcas guardadas no se borran.
