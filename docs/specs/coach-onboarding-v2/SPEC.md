@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 owner: product-engineering
 last_verified: "2026-08-21"
 canonical: false
@@ -7,7 +7,7 @@ canonical: false
 
 # SPEC — Onboarding del coach v2: «¿A qué te dedicas?» → un panel a tu medida
 
-**Estado: BORRADOR (2026-08-21). Sin código. Espera decisiones D1–D6 del owner. Investigación de base en
+**Estado: ACTIVA — «go» del owner 2026-08-21 con D1–D8 por default; D4: el socio revisa fuerza y running, nutrición y rehab arrancan con esqueleto provisional. W1 en ejecución. Investigación de base en
 `docs/specs/coach-onboarding-v2/RESEARCH.md` (auditoría web+RN, datos de activación de los 44 coaches,
 benchmarks SaaS, 26 competidores, personas).**
 
