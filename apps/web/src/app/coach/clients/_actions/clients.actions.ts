@@ -124,8 +124,10 @@ export async function createClientAction(
     // Cap del tier personal: solo standalone (enterprise y team pagan centralizado).
     if (!scope.isEnterprise && !scope.activeTeamId && (activeClientsCount ?? 0) >= maxClients) {
         // Correo de VENTA (el CTA de pago ya no puede vivir en la app móvil — compliance de tiendas).
-        // Fire-and-forget: el ledger de dedupe y el envío jamás bloquean la respuesta del rechazo.
-        void sendClientLimitReachedEmail(createServiceRoleClient(), {
+        // `await` a propósito (embudo Free→Pro W0): el helper NUNCA lanza (pinneado por test), así que
+        // no puede romper el rechazo; y sin await el envío se pierde al cerrar la request — el mismo
+        // patrón fire-and-forget que perdió 2 de 5 bienvenidas el 19-08 (auth/confirm/route.ts).
+        await sendClientLimitReachedEmail(createServiceRoleClient(), {
             coachId: coach.id,
             coachEmail: coachUser.email,
             coachName: coach.full_name,

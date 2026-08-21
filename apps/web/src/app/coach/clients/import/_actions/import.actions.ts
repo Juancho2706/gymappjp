@@ -198,7 +198,7 @@ export async function importClientsAction(
 
         if ((activeCount ?? 0) + rows.length > maxClients) {
             // Correo de VENTA por el mismo evento que el rechazo (ver sales-emails.service).
-            void sendClientLimitReachedEmail(createServiceRoleClient(), {
+            await sendClientLimitReachedEmail(createServiceRoleClient(), {
                 coachId: rawCoach.id,
                 coachEmail: user.email,
                 coachName: rawCoach.full_name,

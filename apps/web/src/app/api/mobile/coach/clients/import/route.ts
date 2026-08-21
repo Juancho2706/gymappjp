@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
         if ((count ?? 0) + rows.length > maxClients) {
             // Mismo evento que el alta unitaria: el muro de la app es neutro, el CTA de pago viaja
             // por correo (compliance de tiendas). Dedupe y fallo de envío quedan en el service.
-            void sendClientLimitReachedEmail(admin, {
+            await sendClientLimitReachedEmail(admin, {
                 coachId: user.id,
                 coachEmail: user.email,
                 coachName: coach?.full_name,

@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
     if (workspace.type === 'coach_standalone' && (activeClientsCount ?? 0) >= maxClients) {
         // La app móvil ya NO puede mostrar el CTA de pago (compliance de tiendas): pinta un muro
         // neutro y la venta viaja por este correo, disparado por el MISMO rechazo 402.
-        void sendClientLimitReachedEmail(admin, {
+        await sendClientLimitReachedEmail(admin, {
             coachId: coach.id,
             coachEmail: coachUser.email,
             coachName: coach.full_name,
