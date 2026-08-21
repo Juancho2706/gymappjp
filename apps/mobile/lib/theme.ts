@@ -312,8 +312,14 @@ export function isCoachBrandingPresentationAllowed(
 /**
  * Sanea el payload completo que llega a componentes. Con tier bloqueado conserva
  * identidad/scope (coachId, nombre, slug), pero elimina toda personalización
- * visual. Para Pro+ materializa el preset en los colores efectivos, evitando que
- * consumidores legados de `branding.primaryColor` salten la precedencia del tema.
+ * visual. Con marca permitida materializa el preset en los colores efectivos,
+ * evitando que consumidores legados de `branding.primaryColor` salten la
+ * precedencia del tema.
+ *
+ * Pricing v3 (owner 2026-08-21): el white-label está en TODOS los planes, así que
+ * la rama "bloqueada" ya casi no se pisa en producción — pero NO se borra: sigue
+ * siendo el fail-closed que protege contra un tier inválido o una caché vieja del
+ * device (`isBrandingAllowed` devuelve false ⇒ azul EVA).
  */
 export function resolveEffectiveCoachBrandPresentation<T extends CoachBrandPresentationSource>(
   source: T | null | undefined,
@@ -368,8 +374,10 @@ function defaultBrandTheme(): EffectiveCoachBrandTheme {
 /**
  * Resuelve tier + preset antes de derivar tokens, espejo del layout web `/c`.
  *
- * Un tier por debajo de Pro, ausente o inválido cae al azul de sistema. Es el
- * mismo fail-closed de web: una caché legacy nunca concede white-label por sí sola.
+ * Pricing v3 (owner 2026-08-21): el white-label está en todos los planes vendidos
+ * (free incluido), así que `isBrandingAllowed` deja pasar a casi todos. El gate NO
+ * se borra: un tier ausente, inválido o fuera del union cae al azul de sistema —
+ * mismo fail-closed que web, una caché legacy nunca concede white-label por sí sola.
  *
  * Regla W-brand B2 (dueño 2026-08-17): para un brand SIN preset (legacy custom),
  * el primario se conserva tal cual (grandfather) pero el secundario se DERIVA

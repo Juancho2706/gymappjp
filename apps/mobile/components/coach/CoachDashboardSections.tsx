@@ -72,8 +72,9 @@ import type {
 import type { CoachProfile } from '../../lib/coach'
 import { isUuid } from '../../lib/safe-uuid'
 import { TIER_CONFIG } from '../../lib/coach-tiers'
-// Pricing v2 (P2): cupo por coach concreto. `freeClientLimitFor` es el helper nombrado del móvil
-// (ya lo usa /coach/reactivate) y `tierMaxClientsFor` cubre el resto de los tiers.
+// Cupo por coach CONCRETO, nunca el catálogo. `freeClientLimitFor` es el helper nombrado del móvil
+// (ya lo usa /coach/reactivate) y `tierMaxClientsFor` cubre el resto de los tiers. Ambos son solo
+// el FALLBACK: en Pricing v3 el grandfather vive en la columna `coaches.max_clients`, que gana.
 import { tierMaxClientsFor } from '@eva/tiers'
 import { freeClientLimitFor } from '../../lib/coach-subscription'
 import { NativeDialog } from '../NativeDialog'
@@ -212,10 +213,11 @@ export function MobileBillingBanners({ coach }: { coach: CoachProfile; activeCli
 }
 
 /**
- * Cupo REAL de ESTE coach: la columna `max_clients` GANA (la escribe el write-path y respeta el
- * override manual); si faltara, el grandfather de pricing v2 lo reconstruye desde su fecha de
- * creación. Nunca el catálogo de VENTA — un coach anterior al corte del 18-08 conserva free 3 /
- * elite 100 y el banner debe hablar de SU cupo. Paridad con la web (DashboardShell).
+ * Cupo REAL de ESTE coach: la columna `max_clients` GANA (la escribe el write-path, respeta el
+ * override manual y es donde Pricing v3 dejó el grandfather tras el backfill por USO del 21-08);
+ * si faltara, la escalera de fecha lo reconstruye (3 peldaños: pre-v2 3 · v2 2 · v3 1 en free).
+ * Nunca el catálogo de VENTA — un coach anterior al corte conserva su cupo y el banner debe hablar
+ * de SU número, no del de la web pública. Paridad con la web (DashboardShell).
  * `Math.max(1, …)`: el cupo sale de una COLUMNA de DB y las barras dividen por él — un 0 suelto
  * daría `NaN%` de ancho. Piso defensivo, no una regla de negocio.
  */

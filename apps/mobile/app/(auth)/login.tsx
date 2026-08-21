@@ -19,7 +19,7 @@ import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { LoginSchema } from '@eva/schemas'
 import { resolveBrandTheme, resolvePresetBranding } from '@eva/brand-kit'
-import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, showsEvaBadge, type SubscriptionTier } from '@eva/tiers'
 import { supabase } from '../../lib/supabase'
 import { ApiError, validateStudentWorkspace } from '../../lib/api'
 import { translateAuthError } from '../../lib/auth-errors'
@@ -42,6 +42,7 @@ import { EntryGrain } from '../../components/entry/EntryBackground'
 import { EvaFigure } from '../../components/entry/EvaFigure'
 import { ENTRY_LIGHT, LightLayer } from '../../components/entry/LightLayer'
 import { CircularBrandLogo } from '../../components/CircularBrandLogo'
+import { EvaBadge } from '../../components/brand/EvaBadge'
 
 const REMEMBER_KEY = 'eva_remember_email'
 
@@ -122,9 +123,12 @@ export default function LoginScreen() {
     }
   }, [branding?.coachId, isAlumno, router])
 
-  // ── Theming white-label del login (gate Pro+ como web) ──
-  // Tier < Pro => branding EVA conservando el nombre (isBrandingAllowed). El preset curado
-  // (theme_preset_key) override color/color2/acento ANTES de derivar el tema (paridad web).
+  // ── Theming white-label del login (mismo gate que web) ──
+  // Pricing v3 (owner 2026-08-21): el white-label está en TODOS los planes vendidos, así que un
+  // free abre su login con su marca. `isBrandingAllowed` NO se borra: sigue siendo el fail-closed
+  // para tier inválido, caché vieja del device o el legacy starter ⇒ branding EVA conservando el
+  // nombre. El preset curado (theme_preset_key) override color/color2/acento ANTES de derivar el
+  // tema (paridad web). Lo que paga Pro acá es sacarse el sello «Hecho con EVA» (`showsEvaBadge`).
   const brandName = branding?.displayName ?? 'tu coach'
   const brandingAllowed = branding?.subscriptionTier
     ? isBrandingAllowed(branding.subscriptionTier as SubscriptionTier)
@@ -379,16 +383,14 @@ export default function LoginScreen() {
     )
   }
 
-  const poweredBy = (
-    <View style={styles.poweredBy}>
-      <Text className="text-subtle font-sans" style={{ fontSize: 11 }}>
-        con tecnología de{' '}
-      </Text>
-      <Text className="text-muted font-sans-bold" style={{ fontSize: 11, letterSpacing: 0.2 }}>
-        EVA
-      </Text>
-    </View>
-  )
+  // Sello «Hecho con EVA» al pie del formulario del ALUMNO (Pricing v3, D3=A, owner 2026-08-21).
+  // Reemplaza al «con tecnología de EVA» que se pintaba para TODO tier: ahora es el gancho de Pro
+  // — free/starter lo llevan, pro/elite no. Un solo sello (nada de doble firma) y sobre la
+  // superficie neutra de la hoja, nunca sobre el color de marca. El gate es `showsEvaBadge`,
+  // FAIL-OPEN a propósito: tier ausente/corrupto ⇒ se muestra.
+  const poweredBy = showsEvaBadge((branding?.subscriptionTier ?? 'free') as SubscriptionTier) ? (
+    <EvaBadge medium="student_login" testID="login-eva-badge" style={styles.poweredBy} />
+  ) : null
 
   // ════════════════ COACH — identidad EVA dark (frame 05) ════════════════
   // El coach que entra a su panel ES la marca; su branding se aplica DESPUES del login
@@ -898,7 +900,9 @@ function BrandSubmit({
 const styles = StyleSheet.create({
   heroTitleSm: { fontSize: 27, lineHeight: 30, letterSpacing: -0.6, marginTop: 16, textAlign: 'center' },
   heroTagline: { fontSize: 14, lineHeight: 20, marginTop: 6, textAlign: 'center', maxWidth: 300, fontFamily: FONT.ui },
-  poweredBy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+  // Sello «Hecho con EVA» al pie del form del alumno: el EvaBadge ya se auto-centra
+  // (`alignSelf: 'center'`), acá solo queda el aire respecto del último campo.
+  poweredBy: { marginTop: 18 },
 })
 
 /**

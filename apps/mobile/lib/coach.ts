@@ -2,6 +2,8 @@ import { supabase } from './supabase'
 import { isBrandingAllowed } from '@eva/tiers'
 
 // Contrato de color del panel coach cuando el branding white-label no está incluido.
+// Pricing v3 (owner 2026-08-21): el white-label está en todos los planes vendidos (free incluido),
+// así que esta rama es hoy el fail-closed de `isBrandingAllowed` — tier inválido o legacy starter.
 const SYSTEM_PRIMARY_COLOR = '#007AFF'
 // F6 (plan 04): el union de tiers vive en @eva/tiers (fuente única web+mobile). NO redeclarar acá.
 import type { SubscriptionTier } from '@eva/tiers'
@@ -21,8 +23,9 @@ export interface CoachProfile {
   trialEndsAt: string | null
   maxClients: number
   /**
-   * `coaches.created_at` — ancla del grandfather de pricing v2 (P2): los límites por tier de este
-   * coach se resuelven con `tierMaxClientsFor(tier, createdAt)` (viejo: free 3 / pro 30 / elite 100).
+   * `coaches.created_at` — ancla del grandfather de pricing: los límites por tier de este coach se
+   * resuelven con `tierMaxClientsFor(tier, createdAt)`, que hoy tiene TRES peldaños (pre-v2: free 3
+   * · v2: free 2 · v3, desde 2026-08-21: free 1). El grandfather es por FECHA DE ALTA, no por uso.
    */
   createdAt: string | null
   hasCoachLogo?: boolean

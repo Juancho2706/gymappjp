@@ -3,14 +3,14 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowRight, Check, MailCheck } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import { getTierMaxClients } from '@eva/tiers'
+import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Card } from '../../components'
 
 // Espejo mobile de la web `(auth)/verify-email/page.tsx`: pantalla post-registro coach free.
-// El cupo se deriva del catálogo (QA pre-campaña 17-08: estaba hardcodeado en 3 y el real es 2).
+// El cupo se deriva del catálogo (histórico QA 17-08: 3 → pricing v2: 2 → pricing v3 2026-08-21: 1).
 const BENEFITS = [
-  `${getTierMaxClients('free')} alumnos sin costo`,
+  `${studentCountLabel(getTierMaxClients('free'))} sin costo, con tu marca`,
   'Planes de entrenamiento ilimitados',
   'Tu propia app para alumnos',
   'Upgrade cuando quieras',

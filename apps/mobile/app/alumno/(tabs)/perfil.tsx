@@ -55,6 +55,8 @@ import {
 } from '../../../components/ShareCard'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { EvaBadge } from '../../../components/brand/EvaBadge'
+import { showsEvaBadge, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPreference'
 import { MonthlySummaryShareCard } from '../../../components/alumno/MonthlySummaryShareCard'
@@ -458,7 +460,9 @@ export default function AlumnoPerfilScreen() {
   // del alumno. MISMA precedencia que el header del home y el login (`BrandLogoCircle` /
   // `login.tsx:161`): `logoUrlDark` en dark → `logoUrl` → null. Con null el `Avatar` cae solo
   // a las iniciales del alumno (fallback ya existente, también si la URL muere: `Avatar.tsx:52-56`),
-  // que es el caso de los coaches sin logo (tier Pro sanea el logo a null en el branding runtime).
+  // que es el caso de los coaches sin logo. Pricing v3 (owner 2026-08-21): el white-label está en
+  // todos los planes vendidos, así que un free TAMBIÉN trae su logo; el branding runtime solo lo
+  // sanea a null cuando `isBrandingAllowed` falla (tier inválido o el legacy starter).
   const coachLogoUri = (resolvedScheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
   const streakSubtitle = stats.streak > 0
     ? `${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} seguidos activo`
@@ -743,10 +747,14 @@ export default function AlumnoPerfilScreen() {
               </Pressable>
             </View>
 
-            {detail?.coachTier === 'free' && (
-              <Text className="font-sans text-muted" style={{ fontSize: 11, textAlign: 'center', letterSpacing: 1.2, paddingVertical: 8, marginTop: 12 }}>
-                Potenciado por EVA
-              </Text>
+            {/* Sello «Hecho con EVA» (Pricing v3, D3=A, owner 2026-08-21). Reemplaza al
+                «Potenciado por EVA» hardcodeado que comparaba el tier a mano contra 'free': ahora
+                el gate es `showsEvaBadge` de @eva/tiers (free/starter sí, pro/elite no) y el texto
+                + la URL con UTMs salen del paquete compartido. El tier del coach YA venía en el
+                mismo load (`detail.coachTier`) — cero queries nuevas. Superficie neutra, texto
+                muted del DS, sin CTA de pago (políticas de las tiendas). */}
+            {showsEvaBadge((detail?.coachTier ?? 'free') as SubscriptionTier) && (
+              <EvaBadge medium="student_app" testID="perfil-eva-badge" style={{ marginTop: 12 }} />
             )}
 
             <Text className="font-sans text-muted" style={{ fontSize: 10, textAlign: 'center', marginTop: 4 }}>

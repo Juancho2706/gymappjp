@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { CreateClientSchema } from '@eva/schemas'
+import type { SubscriptionTier } from '@eva/tiers'
 import { Input } from '../../../components'
 import { RefreshPlanButton } from '../RefreshPlanButton'
 import { FONT } from '../../../lib/typography'
@@ -114,6 +115,8 @@ export function CreateClientModal({
   onCreated,
   theme,
   maxClients,
+  currentTier,
+  activeCount,
   workspace,
 }: {
   visible: boolean
@@ -122,6 +125,13 @@ export function CreateClientModal({
   theme: any
   /** Cupo del plan; espeja `currentLimit` del 402 para el título del muro de límite. */
   maxClients?: number
+  /**
+   * Contexto del gate para `upgrade_gate_hit` (sin PII). `apiFetch` conserva mensaje y `code` del
+   * 402 pero descarta los campos extra del cuerpo, así que el tier y el conteo tienen que bajar
+   * por props desde la pantalla que ya los tiene cargados.
+   */
+  currentTier?: SubscriptionTier | null
+  activeCount?: number
   workspace: CreateWorkspace
 }) {
   const insets = useSafeAreaInsets()
@@ -198,7 +208,8 @@ export function CreateClientModal({
         // `apiFetch` conserva el mensaje/codigo del endpoint pero no campos extra.
         // El endpoint incluye el cupo en ambos; el prop sigue teniendo prioridad.
         const limitFromMessage = Number(e.message.match(/\d+/)?.[0])
-        setUpgradeLimit(typeof maxClients === 'number' && maxClients > 0 ? maxClients : Number.isFinite(limitFromMessage) ? limitFromMessage : undefined)
+        const resolvedLimit = typeof maxClients === 'number' && maxClients > 0 ? maxClients : Number.isFinite(limitFromMessage) ? limitFromMessage : undefined
+        setUpgradeLimit(resolvedLimit)
         setPhase('upgrade')
       } else {
         setError(e instanceof Error ? e.message : 'No se pudo crear el alumno.')

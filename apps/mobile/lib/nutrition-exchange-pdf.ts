@@ -12,6 +12,7 @@ import {
   EVA_EXPORT_BRAND,
   type NutritionExportBrand,
 } from './nutrition-day-export'
+import { EVA_BADGE_LABEL, getEvaBadgeUrl } from '@eva/tiers'
 import type { ExchangeTargetDraft } from './nutrition-exchanges.coach'
 
 /**
@@ -73,8 +74,14 @@ interface Palette {
   brandName: string
   generatedWithLabel: string
   logoUrl: string | null
+  /** Sello «Hecho con EVA» del pie (Pricing v3); null ⇒ el plan del coach no lo lleva. */
+  evaBadgeLabel: string | null
 }
+/** Texto del sello tal cual se pinta en el pie del PDF. Cadena del paquete + dominio legible. */
+const EVA_BADGE_PDF_LABEL = `${EVA_BADGE_LABEL} · eva-app.cl`
+
 function derivePalette(brand: NutritionExportBrand): Palette {
+  const evaBadgeLabel = brand.showsEvaBadge ? EVA_BADGE_PDF_LABEL : null
   if (brand.poweredByEva) {
     return {
       accent: EVA_ACCENT,
@@ -82,6 +89,7 @@ function derivePalette(brand: NutritionExportBrand): Palette {
       brandName: EVA_EXPORT_BRAND.brandName,
       generatedWithLabel: 'Generado con EVA Fitness',
       logoUrl: null,
+      evaBadgeLabel,
     }
   }
   const accent = hexToRgb(brand.primaryColor) ?? EVA_ACCENT
@@ -92,6 +100,7 @@ function derivePalette(brand: NutritionExportBrand): Palette {
     brandName: brand.brandName,
     generatedWithLabel: `Generado con ${brand.brandName}`,
     logoUrl: brand.logoUrl,
+    evaBadgeLabel,
   }
 }
 
@@ -237,6 +246,9 @@ function buildHtml(params: NutritionExchangePdfParams, brand: NutritionExportBra
     .eq-measure { text-align: right; color: rgb(71,85,105); font-weight: 700; width: 40%; }
     .footer { margin-top: 14px; padding: 8px 0 16px; border-top: 0.5px solid rgb(203,213,225); display: flex; justify-content: space-between; gap: 10px; }
     .footer span { font-size: 7px; color: rgb(148,163,184); }
+    /* Sello «Hecho con EVA» (Pricing v3): mismo gris muted del disclaimer, sin subrayado ni
+       color de marca — discreto pero visible, y nunca compite con el white-label del coach. */
+    .eva-badge { font-size: 7px; color: rgb(148,163,184); text-decoration: none; }
     @page { margin: 0 0 12mm; size: A4 portrait; }
   `
 
@@ -262,7 +274,9 @@ function buildHtml(params: NutritionExchangePdfParams, brand: NutritionExportBra
       ${totalsHtml}
       ${eqHtml}
       <div class="footer">
-        <span>${esc(p.generatedWithLabel)}. Uso personal. No reemplaza valoración clínica, dietética ni médica.</span>
+        <span>${esc(p.generatedWithLabel)}. Uso personal. No reemplaza valoración clínica, dietética ni médica.${
+          p.evaBadgeLabel ? ` <a class="eva-badge" href="${esc(getEvaBadgeUrl('rn_export'))}">${esc(p.evaBadgeLabel)}</a>` : ''
+        }</span>
         <span>${esc(now)}</span>
       </div>
     </div>

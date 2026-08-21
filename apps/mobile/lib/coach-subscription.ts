@@ -22,9 +22,16 @@ export interface CoachSubscriptionOverview {
 }
 
 /**
- * Cupo del plan gratuito de ESTE coach (grandfather pricing v2, P2): un coach creado antes del
- * corte conserva su 3; uno nuevo entra con 2. Fuente unica @eva/tiers — jamas hardcodear el numero
- * en la UI. Fecha desconocida ⇒ fail-safe generoso (limites viejos); el server revalida igual.
+ * Cupo del plan gratuito PROYECTADO por fecha de alta. Escalera de 3 peldanos (@eva/tiers,
+ * `tierMaxClientsFor`): creado antes del corte v2 ⇒ 3 · entre v2 y v3 ⇒ 2 · desde v3 (2026-08-21)
+ * ⇒ 1. Fuente unica — jamas hardcodear el numero en la UI. Fecha desconocida ⇒ fail-safe generoso
+ * (limites viejos); el server revalida igual.
+ *
+ * OJO: la COLUMNA GANA. En Pricing v3 el grandfather vive en `coaches.max_clients` (backfill por
+ * USO del dia D: bajaron a 1 solo los free con 0/1 alumnos, los de 2+ conservaron su fila), asi que
+ * esta escalera NO describe lo que el coach tiene hoy — solo lo que el write-path escribira al
+ * cambiar de tier. Todo consumidor debe leer `profile.maxClients` primero y caer aca solo si es
+ * null Y el coach YA esta en free (si viene de un plan pago, su columna es la del plan pago).
  */
 export function freeClientLimitFor(coachCreatedAt: string | Date | null | undefined): number {
   return tierMaxClientsFor('free', coachCreatedAt)
