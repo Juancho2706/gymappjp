@@ -30,15 +30,15 @@ Política operativa para `apps/mobile`. La configuración ejecutable prevalece:
 - 2026-08-19: `updates.fallbackToCacheTimeout` pasó de `0` a `6000`. Decisión del owner: en arranque en frío la app espera hasta 6 s a que baje el OTA disponible y lo lanza en el acto, en vez de servir el bundle embebido con bugs viejos y aplicar el update recién en el segundo arranque. Si el update no alcanza a bajar en esos 6 s, arranca con el bundle cacheado y el camino de siempre (`isUpdatePending` → aviso de reinicio en `lib/ota.ts`) sigue funcionando igual. Es configuración de binario: **no viaja por OTA**, entra recién con la build 57 (1.1.1) y posteriores.
 - 2026-08-20: `EXPO_PUBLIC_POSTHOG_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` viven en `eas.json` (perfiles `previewv2` y `production`) y `mobile-ota.yml` las lee de ahí. Son la project API key pública de PostHog (write-only de ingesta). El binario 1.1.2 (iOS 58 / Android 85) se compiló **sin** ellas: su bundle embebido no emite analítica de producto hasta que reciba un OTA publicado con la key, o hasta la próxima build.
 
-## Partición de runtimes vigente (2026-08-20)
+## Partición de runtimes vigente (2026-08-21)
 
 `runtimeVersion.policy = appVersion` significa que **un OTA alcanza solo a los binarios cuya `version` coincide con la del `app.json` del commit que se publica**. Hoy conviven tres runtimes en el canal `production`:
 
 | Runtime | Binario | Quién lo tiene | Cómo se le publica |
 |---|---|---|---|
-| `1.1.0` | 54 (iOS) / 81 (Android) | App Store y closed testing de Play — **el público** | Desde un tag `ota/1.1.0-<fecha>` creado sobre `4206f340` (último commit con `version: 1.1.0`) + cherry-picks solo-JS. Último: `ota/1.1.0-20260820` = `39e64ff8` (grupos `5d8e8110` / `bcfd1eb4`). |
-| `1.1.1` | 57 / 84 | En revisión de Apple + closed testing de Play | Desde `master` mientras `app.json` diga 1.1.1 (hasta `2fdecebd`), o un tag `ota/1.1.1-<fecha>`. Último: `ota/1.1.1-20260820` = `b4d958fa` (grupos `0f32fd7d` / `c18f92d8`). |
-| `1.1.2` | 58 / 85 | TestFlight + closed testing de Play | Desde `rnmobiledenuevo` (o un tag sobre ella): lleva Share Entreno, que necesita los módulos nativos de este binario. |
+| `1.1.0` | 54 (iOS) / 81 (Android) | App Store y closed testing de Play — **el público** | Desde un tag `ota/1.1.0-<fecha>` creado sobre `4206f340` (último commit con `version: 1.1.0`) + cherry-picks solo-JS. Último: `ota/1.1.0-20260821` = `c5501cc3` (Pricing v3; grupos `4b12bb78` android / `c095d5e1` ios). Anterior: `ota/1.1.0-20260820` = `39e64ff8`. |
+| `1.1.1` | 57 / 84 | App Store (aprobada 21-08) + closed testing de Play | Desde `master` mientras `app.json` diga 1.1.1 (hasta `2fdecebd`), o un tag `ota/1.1.1-<fecha>`. Último: `ota/1.1.1-20260821` = `fce4ceb8` (Pricing v3; grupos `c301b034` android / `0c7e5407` ios). Anterior: `ota/1.1.1-20260820` = `b4d958fa`. |
+| `1.1.2` | 58 / 85 | TestFlight + closed testing de Play | Desde `rnmobiledenuevo` (o un tag sobre ella): lleva Share Entreno, que necesita los módulos nativos de este binario. Último: `ota/1.1.2-20260821` = `2edea500` (Pricing v3; grupos `7c91756f` android / `d7237681` ios). |
 
 Reglas que salen de esto:
 
