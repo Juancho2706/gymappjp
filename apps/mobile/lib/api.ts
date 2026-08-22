@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/react-native'
+import { Platform } from 'react-native'
 import { router } from 'expo-router'
 import type { MobileStudentWorkspaceValidationResponse } from '@eva/schemas'
 import { supabase } from './supabase'
@@ -81,6 +82,10 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const exec = (token: string | null) => {
     const headers = new Headers(options.headers)
     headers.set('Content-Type', 'application/json')
+    // Plataforma DECLARADA (embudo W7): el servidor la prefiere al User-Agent en
+    // `resolveRegistrationPlatform` (apps/web/src/lib/posthog/registration.ts). Sin esto, el alta
+    // desde la app se infiere por UA y puede caer en `unknown` en PostHog.
+    headers.set('x-eva-platform', Platform.OS)
     if (options.authenticated && token) headers.set('Authorization', `Bearer ${token}`)
     return fetch(`${getApiBaseUrl()}${path}`, {
       ...options,
