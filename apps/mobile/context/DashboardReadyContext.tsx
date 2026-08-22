@@ -22,6 +22,13 @@ import {
  * Contratos:
  *  - **Un disparo por proceso JS** (`armed`): un proceso JS nuevo = un cold start. Ninguna
  *    navegacion posterior (deep link, login, cambio de tab) puede volver a armar el splash.
+ *  - **Relevo en dos tiempos** (video del owner 22-08: el logo del coach quedaba VACIO ~3
+ *    frames en el relevo): `beginSplashHandoff` monta el overlay INVISIBLE encima del gate;
+ *    el overlay avisa `markSplashHandoffPainted()` cuando su copia del logo ya esta pintada
+ *    (expo-image `onDisplay`; sin logo, al montar) y recien entonces se destapa y el gate
+ *    navega. Mientras tanto el gate sigue debajo, intacto: ningun frame queda descubierto ni
+ *    a medio pintar. `endSplashHandoff` tambien marca `painted` para que un gate esperando
+ *    nunca quede colgado si el overlay se retira antes (biometria encima, tope).
  *  - **Solo con sesion**: el unico emisor es el camino del gate que rutea a un dashboard.
  *    Sin sesion el gate llama `onAnonymous` y jamas toca este store — el flujo del selector
  *    y del login queda intacto.
@@ -57,9 +64,11 @@ export interface SplashHandoff {
 export interface SplashSnapshot {
   ready: boolean
   handoff: SplashHandoff | null
+  /** El overlay ya tiene su primer frame pintado (logo incluido): puede destaparse. */
+  painted: boolean
 }
 
-const IDLE: SplashSnapshot = { ready: false, handoff: null }
+const IDLE: SplashSnapshot = { ready: false, handoff: null, painted: false }
 
 let snapshot: SplashSnapshot = IDLE
 /** El overlay es de UN disparo por proceso JS = por cold start. */
@@ -95,6 +104,16 @@ export function beginSplashHandoff(handoff: SplashHandoff): void {
   emit()
 }
 
+/**
+ * El overlay ya pinto su primer frame completo. Idempotente; sin handoff no hay nada que
+ * marcar (un `onDisplay` tardio de otra Image no puede armar nada).
+ */
+export function markSplashHandoffPainted(): void {
+  if (!snapshot.handoff || snapshot.painted) return
+  snapshot = { ...snapshot, painted: true }
+  emit()
+}
+
 /** Primer load del dashboard resuelto (con datos O con error): el splash ya puede irse. */
 export function markDashboardReady(): void {
   if (snapshot.ready) return
@@ -105,7 +124,8 @@ export function markDashboardReady(): void {
 /** El overlay termino su fade-out y se desmonta. `armed` NO se limpia (un disparo). */
 export function endSplashHandoff(): void {
   if (!snapshot.handoff) return
-  snapshot = { ...snapshot, handoff: null }
+  // `painted: true` suelta a un gate que todavia esperara el relevo (overlay retirado antes).
+  snapshot = { ...snapshot, handoff: null, painted: true }
   emit()
 }
 
@@ -202,6 +222,16 @@ export function useSplashHandoff(): SplashHandoff | null {
     store.subscribe,
     () => store.getSnapshot().handoff,
     () => null,
+  )
+}
+
+/** El overlay ya esta pintado (o se retiro). Lo consume el gate para soltar el `replace`. */
+export function useSplashHandoffPainted(): boolean {
+  const store = useContext(DashboardReadyStoreContext)
+  return useSyncExternalStore(
+    store.subscribe,
+    () => store.getSnapshot().painted,
+    () => false,
   )
 }
 

@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   EVA_FIGURE_RATIO,
+  SPLASH_COACH_GREETING_LINE_HEIGHT,
+  SPLASH_COACH_GREETING_MARGIN_TOP,
+  SPLASH_COACH_NAME_LINE_HEIGHT,
+  SPLASH_COACH_NAME_MARGIN_TOP,
+  SPLASH_COACH_TILE,
   SPLASH_FIGURE_HEIGHT,
   SPLASH_FIGURE_SIZE,
   SPLASH_SIGNATURE_SLOT_OFFSET,
@@ -53,11 +58,26 @@ describe('geometria de la figura y la firma', () => {
 })
 
 describe('ancla de la luz del canal coach', () => {
-  it('apunta al centro optico del tile (h/2 − 31), no al de la figura EVA', () => {
-    // Bloque coach: tile 96 + nombre (19 + 22) + saludo (7 + 14) = 158 de alto, centrado
-    // como stack ⇒ centro del tile = h/2 − 158/2 + 48. Con el ancla en h/2 la fuente de luz
-    // quedaba 31 pt debajo del logo tras el crossfade (revision adversarial 19-08).
-    expect(splashCoachSourceCenterY(844)).toBe(422 - 31)
-    expect(splashCoachSourceCenterY(844) - splashFigureCenterY(844)).toBe(-31)
+  it('apunta al centro optico del tile (h/2 − 38), no al de la figura EVA', () => {
+    // Bloque coach: tile 144 + nombre (22 + 30) + saludo (8 + 16) = 220 de alto, centrado
+    // como stack ⇒ centro del tile = h/2 − 220/2 + 72. Con el ancla en h/2 la fuente de luz
+    // quedaba debajo del logo tras el crossfade (revision adversarial 19-08; eran 31 con el
+    // tile de 96).
+    const stack =
+      SPLASH_COACH_TILE +
+      SPLASH_COACH_NAME_MARGIN_TOP +
+      SPLASH_COACH_NAME_LINE_HEIGHT +
+      SPLASH_COACH_GREETING_MARGIN_TOP +
+      SPLASH_COACH_GREETING_LINE_HEIGHT
+    expect(stack).toBe(220)
+    expect(splashCoachSourceCenterY(844)).toBe(422 - 38)
+    expect(splashCoachSourceCenterY(844) - splashFigureCenterY(844)).toBe(-(stack / 2 - SPLASH_COACH_TILE / 2))
+  })
+
+  it('el tile del coach mide lo que la figura EVA nativa pinta de alto (~140 de 180), no la caja', () => {
+    // Owner 22-08 (video del cold start): «que este del tamaño del icono del splash».
+    expect(SPLASH_COACH_TILE).toBe(144)
+    expect(SPLASH_COACH_TILE).toBeLessThan(SPLASH_FIGURE_SIZE)
+    expect(SPLASH_COACH_TILE).toBeGreaterThan(SPLASH_FIGURE_HEIGHT * 0.85)
   })
 })

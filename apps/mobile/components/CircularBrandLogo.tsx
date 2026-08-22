@@ -10,6 +10,8 @@ export interface CircularBrandLogoProps {
   transition?: number
   accessibilityLabel?: string
   style?: StyleProp<ViewStyle>
+  /** expo-image `onDisplay`: la imagen YA esta pintada en la vista (no solo cargada). */
+  onDisplay?: () => void
 }
 
 /**
@@ -27,6 +29,7 @@ export function CircularBrandLogo({
   transition = 150,
   accessibilityLabel = 'Logo de la marca',
   style,
+  onDisplay,
 }: CircularBrandLogoProps) {
   const innerSize = Math.max(0, size - padding * 2)
 
@@ -52,6 +55,7 @@ export function CircularBrandLogo({
         contentFit={contentFit}
         transition={transition}
         cachePolicy="memory-disk"
+        onDisplay={onDisplay}
       />
     </View>
   )

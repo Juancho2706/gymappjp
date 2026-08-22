@@ -11,10 +11,12 @@ import Animated, {
 import { EASE } from '../../lib/motion'
 import { ENTRY_TOKENS } from '../../lib/theme'
 import {
+  markSplashHandoffPainted,
   resolveSplashOverlayPhase,
   useDashboardReady,
   useEndSplashHandoff,
   useSplashHandoff,
+  useSplashHandoffPainted,
   type SplashHandoff,
 } from '../../context/DashboardReadyContext'
 import { EntryGrain, EntrySource } from './EntryBackground'
@@ -49,12 +51,21 @@ import {
  *
  * Se retira cuando la home marca `ready` — su PRIMER load resuelto, con datos o con
  * error— o al vencer el tope de seguridad. El splash nunca puede tapar un estado terminal.
+ *
+ * RELEVO EN DOS TIEMPOS (video del owner 22-08: el logo quedaba vacio ~3 frames): monta
+ * INVISIBLE (`revealed` 0) encima del gate, que sigue pintando debajo; cuando su copia del
+ * logo ya esta en pantalla (`onDisplay`) —o al montar si no hay logo, o al vencer
+ * `PAINT_SAFETY_MS`— marca `painted`, se destapa (pixel-identico a lo que tapa) y recien
+ * entonces el gate navega. Remontar una `Image` de expo-image en Android cuesta 2-3
+ * frames aunque este en cache de memoria: por eso no alcanza con montar en el mismo commit.
  */
 
 /** Fade-out al soltar el dashboard. Misma curva que el crossfade de marca (§4 R2). */
 const FADE_OUT_MS = 280
 /** Tope de seguridad: pase lo que pase el splash se va. Espejo de `SLOW_GATE_MS`. */
 const SAFETY_MS = 5000
+/** Si el logo no avisa `onDisplay` (error de red, asset roto) el relevo sigue igual. */
+const PAINT_SAFETY_MS = 350
 
 export interface DashboardSplashOverlayProps {
   /**
@@ -80,8 +91,13 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
   // no estaban, aparecen con el MISMO umbral (§4 S4/S2) contado desde este montaje.
   const [slow, setSlow] = useState(handoff.slow)
   const [signature, setSignature] = useState(handoff.signature)
+  const painted = useSplashHandoffPainted()
   useEffect(() => {
     const timers = [setTimeout(() => setTimedOut(true), SAFETY_MS)]
+    // Sin logo remoto no hay nada que esperar: el primer commit YA es el frame completo.
+    // Con logo, `onDisplay` avisa; el tope cubre un asset roto o sin red.
+    if (!handoff.mark?.logoUri) markSplashHandoffPainted()
+    timers.push(setTimeout(markSplashHandoffPainted, PAINT_SAFETY_MS))
     if (!handoff.slow) timers.push(setTimeout(() => setSlow(true), SPLASH_SLOW_MS))
     // La firma EVA solo tiene sentido cuando la espera NO tiene marca de coach que mostrar.
     if (!handoff.mark && !handoff.signature) {
@@ -92,8 +108,14 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
 
   const phase = resolveSplashOverlayPhase({ handoff, ready, timedOut, suppressed })
 
+  // `revealed` vive en el MISMO estilo animado que el fade: un `opacity` estatico en el root
+  // lo pisaria la prop animada (Reanimated aplica sus props encima de los estilos planos).
+  const revealed = useSharedValue(0)
+  useEffect(() => {
+    if (painted) revealed.value = 1
+  }, [painted, revealed])
   const fade = useSharedValue(1)
-  const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }))
+  const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value * revealed.value }))
   useEffect(() => {
     if (phase !== 'dismissing') return
     // reduce-motion: corte limpio, sin fade (§4 R2).
@@ -154,7 +176,7 @@ function SplashOverlay({ handoff, suppressed }: { handoff: SplashHandoff; suppre
 
       <View pointerEvents="none" style={splashCenterStyle}>
         {mark ? (
-          <SplashCoachMark mark={mark} />
+          <SplashCoachMark mark={mark} onLogoDisplay={markSplashHandoffPainted} />
         ) : (
           <SplashEvaMark signature={signature} initialSignature={handoff.signature} reduced={reduced} />
         )}
