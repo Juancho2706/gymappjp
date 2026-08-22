@@ -49,9 +49,11 @@ vi.mock('@/app/coach/nutrition-v2/_lib/nutrition-pro', async (importOriginal) =>
 
 const savePlanTemplate = vi.fn()
 const updatePlanTemplateDraft = vi.fn()
+const deletePlanTemplate = vi.fn()
 vi.mock('@/services/nutrition-v2/plan-templates.service', () => ({
   savePlanTemplate: (...a: unknown[]) => savePlanTemplate(...a),
   updatePlanTemplateDraft: (...a: unknown[]) => updatePlanTemplateDraft(...a),
+  deletePlanTemplate: (...a: unknown[]) => deletePlanTemplate(...a),
 }))
 
 const persistAndPublishDraft = vi.fn()
@@ -151,6 +153,7 @@ beforeEach(() => {
     success: true,
     template: { id: TEMPLATE_ID, name: 'Plantilla' },
   })
+  deletePlanTemplate.mockResolvedValue({ success: true })
   mockBaseVersionRead({ data: baseVersionRow() })
 })
 
@@ -666,5 +669,62 @@ describe('POST coach/mutate · saveTemplate', () => {
       code: 'TEMPLATE_SAVE_FAILED',
       error: 'Alcanzaste el máximo de plantillas.',
     })
+  })
+})
+
+/**
+ * Baja de plantillas desde la biblioteca RN (feedback del coach en iOS, 22-08). Lo que se protege
+ * aca es lo mismo que en `saveTemplate`: el endpoint NO decide tenencia (delega en el RPC definer
+ * del servicio, que exige `auth.uid()` = dueno) y una plantilla que no es del coach no se
+ * distingue de una inexistente.
+ */
+describe('POST coach/mutate · deleteTemplate', () => {
+  it('sesion invalida => 401 sin tocar el servicio', async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: { message: 'bad' } })
+    const res = await POST(req({ action: 'deleteTemplate', workspace: SCOPE, templateId: TEMPLATE_ID }))
+    expect(res.status).toBe(401)
+    expect(deletePlanTemplate).not.toHaveBeenCalled()
+  })
+
+  it('id que no es uuid => INVALID_PAYLOAD sin tocar el servicio', async () => {
+    const res = await POST(req({ action: 'deleteTemplate', workspace: SCOPE, templateId: 'no-soy-uuid' }))
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ ok: false, code: 'INVALID_PAYLOAD' })
+    expect(deletePlanTemplate).not.toHaveBeenCalled()
+  })
+
+  it('borra con el cliente RLS del propio coach y responde ok', async () => {
+    const res = await POST(req({ action: 'deleteTemplate', workspace: SCOPE, templateId: TEMPLATE_ID }))
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toMatchObject({ ok: true })
+    expect(deletePlanTemplate).toHaveBeenCalledTimes(1)
+    // El primer argumento es el cliente del USUARIO (bearer del coach), jamas el service_role: es
+    // de ese JWT de donde el RPC definer saca el `auth.uid()` con el que valida la tenencia.
+    expect(deletePlanTemplate.mock.calls[0][0]).toBe(userClient)
+    expect(deletePlanTemplate.mock.calls[0][1]).toBe(TEMPLATE_ID)
+  })
+
+  it('plantilla AJENA (o ya borrada) => el rechazo del servicio llega sin revelar cual de los dos', async () => {
+    deletePlanTemplate.mockResolvedValue({ success: false, error: 'Esa plantilla ya no esta disponible.' })
+    const res = await POST(req({ action: 'deleteTemplate', workspace: SCOPE, templateId: TEMPLATE_ID }))
+    expect(res.status).toBe(422)
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      code: 'TEMPLATE_DELETE_FAILED',
+      error: 'Esa plantilla ya no esta disponible.',
+    })
+  })
+
+  it('workspace ajeno (team sin membresia) => 403 sin tocar el servicio', async () => {
+    admin({ coaches: { id: COACH }, teams: { id: TEAM_ID } })
+    const res = await POST(
+      req({
+        action: 'deleteTemplate',
+        workspace: { scopeType: 'team', teamId: TEAM_ID, orgId: null },
+        templateId: TEMPLATE_ID,
+      }),
+    )
+    expect(res.status).toBe(403)
+    expect(deletePlanTemplate).not.toHaveBeenCalled()
   })
 })

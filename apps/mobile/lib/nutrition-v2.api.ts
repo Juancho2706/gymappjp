@@ -582,6 +582,31 @@ export async function savePlanTemplateRN(input: {
   return { ok: true, templateId: res.data.template.id }
 }
 
+/**
+ * Da de baja una plantilla de la biblioteca del coach (feedback en iOS, 22-08: «si no me sirven
+ * quedan ahi para siempre»). Espejo de `deletePlanTemplateAction` de la web.
+ *
+ * Es SOFT-DELETE server-side: la fila queda para trazabilidad y los planes ya aplicados a alumnos
+ * NO cambian (cada alumno tiene su propia version publicada, no un puntero a la plantilla). La
+ * tenencia la decide el RPC definer detras del endpoint contra el `auth.uid()` del propio coach;
+ * aca no hay chequeo de dueño que valga, solo el mapeo del error a copy.
+ *
+ * Vive en este archivo —y no junto a las LECTURAS de `nutrition-v2-plan-templates.api.ts`— porque
+ * toda escritura del coach movil pasa por `coach/mutate` (NUT-005) y ese es el helper que vive aca.
+ */
+export async function deletePlanTemplateRN(input: {
+  scope: NutritionV2CoachScope
+  templateId: string
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await coachMutate<{ ok: true }>({
+    action: 'deleteTemplate',
+    workspace: input.scope,
+    templateId: input.templateId,
+  })
+  if (!res.ok) return { ok: false, error: res.error }
+  return { ok: true }
+}
+
 export type AssignNutritionPlanResult =
   | { ok: true; results: AssignClientResult[]; summary: AssignSummary }
   | { ok: false; code: string; error: string; feature?: NutritionProFeature }

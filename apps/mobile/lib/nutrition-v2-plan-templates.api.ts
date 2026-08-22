@@ -12,6 +12,10 @@ import type { BuilderFood } from './nutrition-v2-builder'
  * TODA lectura pasa por `/api/mobile/nutrition-v2/plan-templates`: la tabla es material interno del
  * coach y el gate de workspace + el bump de uso viven server-side. RN nunca la consulta directo.
  *
+ * Las ESCRITURAS (guardar y eliminar plantillas) no viven aca sino en `nutrition-v2.api.ts`
+ * (`savePlanTemplateRN` / `deletePlanTemplateRN`): todas pasan por `coach/mutate`, que es la unica
+ * puerta de escritura del coach movil (NUT-005).
+ *
  * El tipo de lista es LOCAL a proposito: `PlanTemplateListItem` vive en `apps/web/src/services` y
  * ese import cruzado (app ↔ app) no existe en este monorepo. Aca se declara lo minimo que la UI
  * consume; lo que SI es contrato compartido (`summary`, `draft`) se importa de `@eva/nutrition-v2`.

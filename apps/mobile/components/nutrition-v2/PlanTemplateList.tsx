@@ -1,7 +1,8 @@
 import { type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, Copy, Pencil, Star } from 'lucide-react-native'
+import { ChevronRight, Copy, Pencil, Star, Trash2 } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
+import { canDeletePlanTemplate } from '../../lib/nutrition-v2-plan-template-delete'
 import type { NutritionV2PlanTemplateListItem } from '../../lib/nutrition-v2-plan-templates.api'
 import { NutritionSkeleton, NutritionStatePanel } from './NutritionV2Kit'
 
@@ -12,7 +13,8 @@ import { NutritionSkeleton, NutritionStatePanel } from './NutritionV2Kit'
  * paridad de tablist (QA T3.v: la web manda y su segunda pestaña es "Plantillas") el hub necesita
  * la MISMA lista como cuerpo de pestaña, asi que se extrae aca tal cual y las dos superficies la
  * comparten. Extraccion ADITIVA: el picker sigue pasando su propio verbo (`onOpen` = "partir de
- * esta plantilla") y su lapiz; la pestaña pasa el suyo (`onOpen` = abrir en el editor).
+ * esta plantilla") y su lapiz; la pestaña pasa el suyo (`onOpen` = abrir en el editor) y, ademas,
+ * la BAJA (`onDelete`), que el picker no pasa: elegir una plantilla no es curar la biblioteca.
  *
  * Presentacion en tokens del DS (`bg-surface-*`, `border-*`, `text-*`): lo unico imperativo son
  * los colores de los glifos lucide, que exigen literal (no hay clase que tiña un SVG nativo).
@@ -51,6 +53,15 @@ export interface PlanTemplateListProps {
   /** Accion secundaria opcional (lapiz). Se omite y la fila queda con un solo verbo. */
   onEdit?: (template: NutritionV2PlanTemplateListItem) => void
   editAccessibilityLabel?: (name: string) => string
+  /**
+   * Baja de la plantilla (papelera + pulsacion larga en la fila). Se omite en el picker
+   * "Reutilizar": ahi el coach esta ELIGIENDO una plantilla, no curando su biblioteca, y una
+   * papelera al lado de la que quiere aplicar es un accidente esperando.
+   */
+  onDelete?: (template: NutritionV2PlanTemplateListItem) => void
+  deleteAccessibilityLabel?: (name: string) => string
+  /** Fila con la baja EN CURSO: se apaga entera para que no entren dos toques. */
+  deletingId?: string | null
   /** Segunda linea con la descripcion guardada, cuando la haya. */
   showDescription?: boolean
   emptyMessage: string
@@ -67,6 +78,9 @@ export function PlanTemplateList({
   openAccessibilityLabel,
   onEdit,
   editAccessibilityLabel,
+  onDelete,
+  deleteAccessibilityLabel,
+  deletingId = null,
   showDescription = false,
   emptyMessage,
   emptyAction,
@@ -111,7 +125,11 @@ export function PlanTemplateList({
   return (
     // `gap-2` es el `space-y-2` de la web: el mismo aire entre filas en las dos plataformas.
     <View className="gap-2">
-      {(templates ?? []).map((template) => (
+      {(templates ?? []).map((template) => {
+        // Baja EN CURSO en esta fila: la tarjeta entera se apaga y ningun verbo responde.
+        const deleting = deletingId === template.id
+        const deletable = onDelete != null && canDeletePlanTemplate(template)
+        return (
         /* La TARJETA es el CONTENEDOR de la fila, no el verbo (QA del dueño en device, 18-08).
          *
          * Antes el borde y el fondo vivian en el Pressable primario y el lapiz quedaba FUERA, suelto
@@ -121,25 +139,34 @@ export function PlanTemplateList({
          * verbos adentro (`PlanTemplatesLibrary.tsx:308-350`); aca se copia ese criterio en vez de
          * inventar uno nuevo.
          *
-         * Dos Pressable HERMANOS dentro de la tarjeta, NO anidados: anidarlos deja el reparto del
-         * toque al responder de RN, y con dos destinos distintos (aplicar vs. editar) esa es una
-         * loteria que no hace falta correr.
+         * Pressable HERMANOS dentro de la tarjeta, NO anidados: anidarlos deja el reparto del
+         * toque al responder de RN, y con destinos distintos (aplicar vs. editar vs. eliminar) esa
+         * es una loteria que no hace falta correr.
          *
          * `overflow-hidden` para que el resalte `active:` de la zona primaria —que llega hasta el
          * borde izquierdo— quede recortado por el radio de la tarjeta: RN no clipea a los hijos.
          *
-         * Ilegible ⇒ la opacidad baja va ahora en la TARJETA (antes en el Pressable, que ya no pinta
-         * fondo). Esas filas ademas nunca traen lapiz, asi que no queda nada al 100% al lado.
+         * Ilegible (o con la baja en curso) ⇒ la opacidad baja va en la TARJETA, no en el Pressable
+         * —que ya no pinta fondo—; asi ningun verbo queda al 100% al lado de una fila apagada.
          */
         <View
           key={template.id}
-          className={`flex-row items-center overflow-hidden rounded-control border border-default bg-surface-card ${template.readable ? '' : 'opacity-50'}`}
+          className={`flex-row items-center overflow-hidden rounded-control border border-default bg-surface-card ${template.readable && !deleting ? '' : 'opacity-50'}`}
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: !template.readable }}
+            accessibilityState={{ disabled: !template.readable || deleting, busy: deleting }}
             accessibilityLabel={openAccessibilityLabel(template.name)}
-            disabled={!template.readable}
+            // La pulsacion larga es el atajo de curacion (paridad con el gesto que el coach ya
+            // espera en una lista movil); NO es el unico camino, porque un gesto oculto no es
+            // accesible: la papelera de la derecha hace lo mismo y si tiene etiqueta.
+            {...(deletable
+              ? {
+                  onLongPress: () => onDelete?.(template),
+                  accessibilityHint: 'Mantén presionado para eliminar esta plantilla',
+                }
+              : {})}
+            disabled={!template.readable || deleting}
             onPress={() => onOpen(template)}
             // Gotcha del repo: `className` + `style` como FUNCION se descarta entero en css-interop,
             // asi que el estado `pressed` vive en la variante `active:` y jamas en un `style` callback.
@@ -172,13 +199,16 @@ export function PlanTemplateList({
           {onEdit && template.readable ? (
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ disabled: deleting }}
               accessibilityLabel={
                 editAccessibilityLabel?.(template.name) ?? `Editar la plantilla ${template.name}`
               }
+              disabled={deleting}
               onPress={() => onEdit(template)}
               // 44×44 de target real (regla del repo) con la caja VISIBLE de 36: el cuadrado lleno a
               // 44 se come la fila, y a 36 queda en la misma proporcion que la web (`p-2` sobre un
-              // glifo de 16). `mr-1` deja los 4 dp que faltan hasta el borde de la tarjeta.
+              // glifo de 16). `mr-1` deja los 4 dp que faltan hasta el borde de la tarjeta —y, con
+              // la papelera al lado, tambien el aire que separa los dos botones.
               className="mr-1 h-11 w-11 items-center justify-center active:opacity-70"
             >
               {/* El aro + la superficie hundida son lo que lo ancla como boton en vez de glifo suelto.
@@ -189,8 +219,29 @@ export function PlanTemplateList({
               </View>
             </Pressable>
           ) : null}
+          {/* Papelera. A diferencia del lapiz, SI aparece en las filas ilegibles: son justamente las
+              que el coach no puede abrir, ni editar, ni —hasta ahora— sacarse de encima (feedback en
+              iOS, 22-08). El aro `danger` es la unica tinta de la fila que no sale de la marca: es
+              estado de riesgo, no branding, y por eso no se tiñe con el color del coach. */}
+          {deletable ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: deleting, busy: deleting }}
+              accessibilityLabel={
+                deleteAccessibilityLabel?.(template.name) ?? `Eliminar la plantilla ${template.name}`
+              }
+              disabled={deleting}
+              onPress={() => onDelete?.(template)}
+              className="mr-1 h-11 w-11 items-center justify-center active:opacity-70"
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-control border border-danger-500/30 bg-danger-500/10">
+                <Trash2 color={theme.destructive} size={16} />
+              </View>
+            </Pressable>
+          ) : null}
         </View>
-      ))}
+        )
+      })}
     </View>
   )
 }

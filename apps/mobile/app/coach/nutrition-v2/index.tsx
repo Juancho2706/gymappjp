@@ -50,7 +50,8 @@ import {
   useTourController,
   type TourScrollHost,
 } from '../../../components/nutrition-v2/tour'
-import { Button, Sheet } from '../../../components'
+import { Button, NativeDialog, Sheet } from '../../../components'
+import { toast } from '../../../components/Toast'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import {
   reportCoachTabbarScroll,
@@ -67,6 +68,7 @@ import { supabase } from '../../../lib/supabase'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import {
+  deletePlanTemplateRN,
   getNutritionCoachHubV2,
   nutritionV2CoachScope,
   nutritionV2CoachScopeCacheKey,
@@ -79,6 +81,7 @@ import {
   fetchNutritionV2PlanTemplates,
   type NutritionV2PlanTemplateListItem,
 } from '../../../lib/nutrition-v2-plan-templates.api'
+import { planTemplateDeleteCopy } from '../../../lib/nutrition-v2-plan-template-delete'
 import {
   DEFAULT_NUTRITION_ROSTER_FILTERS,
   NUTRITION_ATTENTION_FILTER_OPTIONS,
@@ -1013,6 +1016,9 @@ function HubTemplatesTab({
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Plantilla con el diálogo de baja abierto (`null` = ninguno). */
+  const [deleteTarget, setDeleteTarget] = useState<NutritionV2PlanTemplateListItem | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -1026,6 +1032,41 @@ function HubTemplatesTab({
       setRefreshing(false)
     }
   }, [scope])
+
+  /**
+   * Baja de una plantilla (feedback del coach en iOS, 22-08: «si no me sirven quedan ahí para
+   * siempre»). Espejo de `PlanTemplatesLibrary.remove` de la web, con DOS diferencias deliberadas:
+   *
+   *  · La confirmación es un diálogo del DS, no los dos taps inline de la web ni un `Alert` nativo:
+   *    en una fila de 44 dp el segundo tap está a un pulgar de distancia del primero.
+   *  · No hay «Deshacer». La web lo consigue re-CREANDO la plantilla desde un caché del contenido;
+   *    acá ese camino no existe todavía, así que la confirmación es la única red y el copy lo dice.
+   *
+   * El DELETE viaja de inmediato y la fila sale de la lista con la RESPUESTA en la mano, no antes:
+   * sacarla primero no se ve —el backdrop del diálogo tapa la lista mientras el servidor responde—
+   * y a cambio habría que reinsertarla en su índice exacto si falla, en una biblioteca cuyo orden
+   * (favoritas → más usadas → más recientes) lo decide el servidor. Lo que NO se difiere nunca es
+   * la escritura: la web perdió bajas en LIVE justamente por mandar el DELETE recién al expirar el
+   * toast. Fuera ya, la fila desaparece sin esperar el refetch.
+   */
+  const confirmDelete = useCallback(async () => {
+    const target = deleteTarget
+    if (!target || deleting) return
+    setDeleting(true)
+    const result = await deletePlanTemplateRN({ scope, templateId: target.id })
+    setDeleting(false)
+    setDeleteTarget(null)
+
+    if (!result.ok) {
+      // La fila nunca se fue: solo hay que contar qué pasó.
+      toast.error(result.error)
+      return
+    }
+    setTemplates((prev) => (prev ? prev.filter((item) => item.id !== target.id) : prev))
+    toast.success('Plantilla eliminada', { description: target.name })
+    // Resincroniza con el orden del servidor (y con lo que haya hecho la web en paralelo).
+    void load()
+  }, [deleteTarget, deleting, scope, load])
 
   useEffect(() => {
     void load()
@@ -1098,12 +1139,70 @@ function HubTemplatesTab({
           openAccessibilityLabel={(name) => `Aplicar la plantilla ${name} a un alumno`}
           onEdit={(template) => router.push(nutritionV2TemplateEditorHref(template.id))}
           editAccessibilityLabel={(name) => `Editar la plantilla ${name}`}
+          onDelete={setDeleteTarget}
+          deleteAccessibilityLabel={(name) => `Eliminar la plantilla ${name}`}
+          deletingId={deleting ? (deleteTarget?.id ?? null) : null}
           showDescription
           emptyMessage="Todavía no tienes plantillas. Arma una desde cero y aplícala al alumno que quieras."
           emptyAction={newTemplateCta}
         />
       </View>
+      {/* Diálogo del DS, NO `Alert` nativo: el Alert no respeta ni el tema ni la marca, y el botón
+          destructivo no puede quedarse en «Eliminando…» mientras el servidor responde. */}
+      <PlanTemplateDeleteDialog
+        target={deleteTarget}
+        deleting={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmDelete()}
+      />
     </ScrollView>
+  )
+}
+
+/** Confirmación de baja de plantilla. Copy y decisión: `lib/nutrition-v2-plan-template-delete.ts`. */
+function PlanTemplateDeleteDialog({
+  target,
+  deleting,
+  onCancel,
+  onConfirm,
+}: {
+  target: NutritionV2PlanTemplateListItem | null
+  deleting: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  // Sin fila el diálogo está cerrado, pero `NativeDialog` sigue montado y necesita un `title`: el
+  // helper se llama igual con una fila vacía en vez de ramificar el render.
+  const copy = planTemplateDeleteCopy(target ?? { name: '', readable: true })
+  return (
+    <NativeDialog
+      open={target !== null}
+      title={copy.title}
+      onClose={() => {
+        if (!deleting) onCancel()
+      }}
+      closeDisabled={deleting}
+    >
+      {target ? (
+        <View className="gap-4">
+          <View className="gap-1.5">
+            <Text className="text-sm leading-5 text-body">{copy.body}</Text>
+            <Text className="text-xs text-muted">{copy.note}</Text>
+          </View>
+          <View className="gap-2.5">
+            <Button
+              label={deleting ? copy.busyLabel : copy.confirmLabel}
+              variant="danger"
+              onPress={onConfirm}
+              loading={deleting}
+              disabled={deleting}
+              full
+            />
+            <Button label="Cancelar" variant="ghost" onPress={onCancel} disabled={deleting} full />
+          </View>
+        </View>
+      ) : null}
+    </NativeDialog>
   )
 }
 
