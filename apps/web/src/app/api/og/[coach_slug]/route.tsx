@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { coachIdentifierColumn } from '@/lib/coach/invite-code'
-import { isBrandingAllowed, showsEvaBadge, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { BRAND_APP_ICON, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { COACH_OG_IMAGE_HEIGHT, COACH_OG_IMAGE_WIDTH } from '@/lib/coach-og-image'
 
@@ -12,8 +12,9 @@ import { COACH_OG_IMAGE_HEIGHT, COACH_OG_IMAGE_WIDTH } from '@/lib/coach-og-imag
  * muestra como preview cuando el coach manda el link de acceso; hasta el 22-08 era siempre el
  * logo de EVA (pedido del owner: «debería mostrar el logo del coach»).
  *
- * Reglas de marca = las del splash: Free no tiene white-label ⇒ figura y color de EVA; Pro+ con
- * logo ⇒ su logo y su color. Sin sesión ni usuario: la preview la pide el servidor de WhatsApp.
+ * Decisión del owner (22-08, tras ver el preview de Villegasfit): fondo NEGRO siempre, el logo del
+ * coach si lo tiene (la figura EVA solo cuando no subió ninguno), el color de marca como acento y
+ * SIN «Hecho con EVA» en la preview. Sin sesión ni usuario: la preview la pide el servidor de WhatsApp.
  * Si el logo remoto no se puede dibujar (formato que satori no soporta, URL caída) se renderiza
  * igual sin él: una preview sin logo es mejor que un 500 que deja a WhatsApp sin imagen.
  */
@@ -25,15 +26,6 @@ interface Params {
 
 function safeColor(c: string | null | undefined, fallback: string) {
     return c && /^#[0-9A-Fa-f]{6}$/.test(c) ? c : fallback
-}
-
-/** Texto claro u oscuro según la luminancia del fondo (misma regla que el tema del portal). */
-function onColor(hex: string): string {
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    return luminance > 0.62 ? '#0F172A' : '#FFFFFF'
 }
 
 const CACHE = { 'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400' }
@@ -51,15 +43,15 @@ export async function GET(request: NextRequest, { params }: Params) {
     const tier = (coach?.subscription_tier ?? 'free') as SubscriptionTier
     const brandingAllowed = isBrandingAllowed(tier)
     const brandName = (coach?.brand_name ?? '').trim() || 'EVA'
-    const bg = safeColor(brandingAllowed ? coach?.primary_color : SYSTEM_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR)
-    const fg = onColor(bg)
+    // Fondo negro fijo (owner 22-08); el color de marca vive en el acento del eyebrow.
+    const bg = '#0B0B0C'
+    const fg = '#FFFFFF'
+    const accent = safeColor(brandingAllowed ? coach?.primary_color : SYSTEM_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR)
     const customLogo = Boolean(brandingAllowed && coach?.logo_url)
     const logoUrl = customLogo ? (coach!.logo_url as string) : new URL(BRAND_APP_ICON, request.url).toString()
-    const badge = showsEvaBadge(tier)
-    // La figura EVA de fallback es blanca sobre transparente: sobre una baldosa blanca desaparece.
-    // Con logo propio la baldosa es blanca (el logo trae sus colores); sin él, la baldosa es un
-    // velo claro sobre el color de marca y la figura se lee.
-    const tileBg = customLogo ? '#FFFFFF' : 'rgba(255,255,255,0.18)'
+    // Con logo propio la baldosa es blanca (el logo trae sus colores). La figura EVA de fallback es
+    // blanca sobre transparente: va sobre una baldosa gris oscura para que se lea sobre el negro.
+    const tileBg = customLogo ? '#FFFFFF' : '#1C1D21'
 
     const render = (withLogo: boolean) =>
         new ImageResponse(
@@ -86,7 +78,7 @@ export async function GET(request: NextRequest, { params }: Params) {
                                 height: 300,
                                 borderRadius: 64,
                                 background: tileBg,
-                                boxShadow: customLogo ? '0 24px 60px rgba(0,0,0,0.25)' : 'none',
+                                boxShadow: customLogo ? '0 24px 60px rgba(0,0,0,0.45)' : 'none',
                                 flexShrink: 0,
                             }}
                         >
@@ -104,7 +96,7 @@ export async function GET(request: NextRequest, { params }: Params) {
                             minWidth: 0,
                         }}
                     >
-                        <div style={{ fontSize: 30, letterSpacing: 4, textTransform: 'uppercase', opacity: 0.78 }}>
+                        <div style={{ fontSize: 30, letterSpacing: 4, textTransform: 'uppercase', color: accent, display: 'flex' }}>
                             Tu app para entrenar
                         </div>
                         <div
@@ -119,12 +111,9 @@ export async function GET(request: NextRequest, { params }: Params) {
                         >
                             {brandName}
                         </div>
-                        <div style={{ fontSize: 30, marginTop: 26, opacity: 0.88, lineHeight: 1.3, display: 'flex' }}>
+                        <div style={{ fontSize: 30, marginTop: 26, opacity: 0.82, lineHeight: 1.3, display: 'flex' }}>
                             Rutinas, nutrición y seguimiento desde tu móvil.
                         </div>
-                        {badge ? (
-                            <div style={{ fontSize: 24, marginTop: 40, opacity: 0.7, display: 'flex' }}>Hecho con EVA</div>
-                        ) : null}
                     </div>
                 </div>
             ),
