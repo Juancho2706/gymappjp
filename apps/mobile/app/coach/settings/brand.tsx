@@ -44,6 +44,7 @@ import {
   type LoaderSymbol,
   type LoaderVariant,
 } from '../../../lib/brand-loaders'
+import { resolveLoaderIdentity } from '../../../lib/loader-identity'
 import {
   getCoachBrandSettings,
   updateCoachBrandSettings,
@@ -541,6 +542,8 @@ export default function MiMarcaScreen() {
                   loaderIconMode={loaderIconMode}
                   logoUrl={logoUrl}
                   logoUrlDark={logoUrlDark}
+                  brandName={brandName}
+                  primaryColor={effectivePrimary}
                   fallbackColor={effectivePrimary}
                   size="md"
                 />
@@ -854,6 +857,8 @@ export default function MiMarcaScreen() {
                           loaderIconMode={loaderIconMode}
                           logoUrl={logoUrl}
                           logoUrlDark={logoUrlDark}
+                          brandName={brandName}
+                          primaryColor={effectivePrimary}
                           fallbackColor={effectivePrimary}
                           size="md"
                         />
@@ -1144,10 +1149,17 @@ function ScreenTitle() {
  * loader_config > loader_variant > loader legacy (texto/ícono) > figura EVA.
  *
  * Antes el preview pintaba el wordmark con el degradado tricolor EVA mientras el render real lo
- * pintaba en color sólido: el coach elegía a ciegas.
+ * pintaba en color sólido.
  *
  * Límite conocido: las variantes leen `theme.primary` del contexto (la marca YA aplicada), así que
  * un cambio de tema/color sin guardar todavía no se refleja en el color de la animación.
+ *
+ * La decisión EVA-vs-marca NO se reimplementa acá: llama a `resolveLoaderIdentity`, el MISMO
+ * módulo puro que usa el orquestador (`components/loaders/BrandedLoader.tsx`). Antes el preview
+ * tenía su propia regla y mentía en tres cosas — decía siempre «EVA» aunque la cuenta tuviera
+ * marca (el runtime usa el NOMBRE de la marca), solo mostraba el logo con `loader_icon_mode`
+ * explícitamente en 'coach' (el runtime lo muestra salvo 'none' o EVA elegido a propósito) y
+ * nunca teñía la figura con el acento (`tintFigure`). O sea: el coach elegía a ciegas.
  */
 function LoaderPreview({
   config,
@@ -1157,6 +1169,8 @@ function LoaderPreview({
   loaderIconMode,
   logoUrl,
   logoUrlDark,
+  brandName,
+  primaryColor,
   fallbackColor,
   size = 'md',
 }: {
@@ -1167,36 +1181,65 @@ function LoaderPreview({
   loaderIconMode: 'eva' | 'coach' | 'none'
   logoUrl: string | null
   logoUrlDark: string | null
+  /** `coaches.brand_name` en vivo del editor — el wordmark de la rama de marca. */
+  brandName: string
+  /** Color EFECTIVO (preset ya materializado): decide si la cuenta tiene marca propia. */
+  primaryColor: string
   fallbackColor: string
   size?: LoaderVariantSize
 }) {
   const { theme, resolvedScheme } = useTheme()
   const reduceMotion = useReducedMotion()
-  const customText = loaderText.trim()
-  // Misma regla que el runtime: sin loader custom el wordmark es 'EVA'.
-  const word = useCustomLoader && customText ? customText.toUpperCase() : 'EVA'
-  const showIcon = loaderIconMode !== 'none'
-  // Logo por modo (el oscuro cae al claro), solo si el ícono es "Mi logo".
-  const logoUri =
-    loaderIconMode === 'coach'
-      ? (resolvedScheme === 'dark' ? logoUrlDark || logoUrl : logoUrl) || null
-      : null
+  // Estado SIN GUARDAR del editor con la forma del branding, para que la regla pura decida igual
+  // que en runtime. `loaderConfig` viaja como JSON porque `LoaderIdentitySource` habla el mismo
+  // dialecto que la fila de `coaches` (jsonb serializado).
+  const identity = useMemo(
+    () =>
+      resolveLoaderIdentity(
+        {
+          primaryColor,
+          displayName: brandName,
+          logoUrl,
+          logoUrlDark,
+          useCustomLoader,
+          loaderText,
+          loaderIconMode,
+          loaderVariant: variant,
+          loaderConfig: config ? JSON.stringify(config) : null,
+        },
+        resolvedScheme,
+      ),
+    [primaryColor, brandName, logoUrl, logoUrlDark, useCustomLoader, loaderText, loaderIconMode, variant, config, resolvedScheme],
+  )
+  const { word, logoUri, showIcon, tintFigure } = identity
 
   if (config) {
-    return <CompositeLoaderView config={config} brandName={word} logoUri={logoUri} showIcon={showIcon} size={size} reduceMotion={reduceMotion} />
+    return <CompositeLoaderView config={config} brandName={word} logoUri={logoUri} showIcon={showIcon} tintFigure={tintFigure} size={size} reduceMotion={reduceMotion} />
   }
   if (variant !== 'eva') {
-    return <LoaderVariantView variant={variant} brandName={word} logoUri={logoUri} showIcon={showIcon} size={size} reduceMotion={reduceMotion} />
+    return <LoaderVariantView variant={variant} brandName={word} logoUri={logoUri} showIcon={showIcon} tintFigure={tintFigure} size={size} reduceMotion={reduceMotion} />
   }
-  // Rama EVA legacy — espejo de EvaLegacyLoader, pero con el estado sin guardar del editor.
+  // Rama EVA legacy — espejo de EvaLegacyLoader con el estado sin guardar del editor: el wordmark
+  // solo aparece en la rama de MARCA (identidad EVA = figura sola, igual que el splash nativo).
   return (
     <View className="items-center justify-center" style={{ gap: 10 }}>
-      {logoUri ? (
-        <CircularBrandLogo uri={logoUri} size={44} backgroundColor={theme.card} padding={4} />
-      ) : showIcon ? (
-        <EvaFigure size={44} style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }} />
+      {showIcon ? (
+        logoUri ? (
+          <CircularBrandLogo uri={logoUri} size={44} backgroundColor={theme.card} padding={4} />
+        ) : (
+          <EvaFigure
+            size={44}
+            style={
+              tintFigure
+                ? { tintColor: theme.primary }
+                : resolvedScheme === 'dark'
+                  ? null
+                  : { tintColor: theme.foreground }
+            }
+          />
+        )
       ) : null}
-      {useCustomLoader && customText ? (
+      {identity.kind === 'brand' ? (
         // W-brand B4: el color del texto ya no es configurable — va en el color de marca efectivo.
         <Text style={{ fontSize: 24, lineHeight: 28, color: fallbackColor, fontFamily: FONT.displayBold, letterSpacing: -0.5 }}>
           {word}

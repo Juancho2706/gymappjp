@@ -13,9 +13,11 @@ import {
   LIGHT_SCHEME_VARS,
   resolveEffectiveCoachBrandTheme,
   resolveEffectiveCoachBrandPresentation,
+  type EffectiveCoachBrandTheme,
   type Theme,
 } from '../lib/theme'
 import { type CoachBranding, loadStoredBranding } from '../lib/branding'
+import { isOwnBrandColor } from '../lib/loader-identity'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -35,6 +37,53 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 const THEME_MODE_KEY = 'eva_theme_mode'
+
+/**
+ * ⚠️ BRAND_VARS_IDENTITY — el bug que dejó TODO el white-label de clases en azul EVA.
+ *
+ * `vars()` de NativeWind NO devuelve un objeto de estilo con los `--color-*` adentro: devuelve
+ * un objeto **vacío** y guarda el juego de variables en un `WeakMap` global (`opaqueStyles`)
+ * CLAVEADO POR LA IDENTIDAD de ese objeto (react-native-css-interop
+ * `runtime/native/api.ts` → `vars()`, leído por `getOpaqueStyles` en `runtime/native/styles.ts`).
+ *
+ * Consecuencia: `{ ...vars({...}) }` —que es lo que había acá desde el primer commit del
+ * ThemeContext— produce un objeto NUEVO, ausente del WeakMap, sin una sola propiedad. El
+ * intérprete lo trata como un estilo plano vacío y **ninguna** variable de marca se aplicaba.
+ * `bg-sport-*`, `text-sport-*`, `bg-cta-fill`, `bg-primary`… resolvían siempre al token
+ * estático de `global.css` (azul EVA), que es exactamente el síntoma del QA del owner:
+ * marca rosa y la app azul, mientras `theme.primary` (shim imperativo, otro camino) sí salía
+ * rosa. Lo mismo dejaba INERTE a `ForceScheme`: sus LIGHT/DARK_SCHEME_VARS tampoco llegaban.
+ *
+ * Regla: pasar el objeto de `vars()` TAL CUAL (como elemento de un array de `style`, que el
+ * intérprete recorre recursivamente). Nunca spreadearlo, clonarlo ni pasarlo por `StyleSheet`.
+ */
+const EMPTY_VARS = vars({})
+
+/**
+ * Vars de marca de un subárbol. `extra` son los vars de esquema de `ForceScheme` (van primero:
+ * las keys de marca los pisan).
+ *
+ * Sin color PROPIO no se emite override: mandan los tokens de `global.css`. La rampa derivada
+ * ancla el color del coach en el paso 500, así que emitirla para el azul de fábrica correría un
+ * escalón la rampa EVA entera (sport-500 pasaría de `#2680FF` a `#1462DC`) y desalinearía la app
+ * de la web sin que nadie lo haya pedido. `isOwnBrandColor` es la MISMA regla con la que
+ * `lib/loader-identity.ts` decide EVA vs marca, así que el loader y la paleta no pueden discrepar.
+ *
+ * Se emite `vars()` siempre (aunque sea vacío) para que la <View> sea proveedora de variables
+ * desde el PRIMER render: si empezara sin variables y las ganara al aterrizar la caché de marca,
+ * css-interop remonta el subárbol (`printUpgradeWarning`, `UpgradeState.SHOULD_UPGRADE`).
+ */
+function brandThemeVars(
+  effective: EffectiveCoachBrandTheme,
+  scheme: 'light' | 'dark',
+  extra?: Record<string, string>,
+): Record<string, any> {
+  const brand = isOwnBrandColor(effective.brandColor)
+    ? effectiveBrandVars(effective, scheme)
+    : null
+  if (!extra && !brand) return EMPTY_VARS
+  return vars({ ...extra, ...brand })
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme()
@@ -73,8 +122,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [resolvedScheme])
 
   // Live brand accent for Tailwind classes (bg-primary, text-accent…).
+  // NUNCA spreadear el resultado de `vars()` — ver BRAND_VARS_IDENTITY.
   const themeVars = useMemo(
-    () => ({ ...vars(effectiveBrandVars(effectiveBrand, resolvedScheme)) }),
+    () => brandThemeVars(effectiveBrand, resolvedScheme),
     [effectiveBrand, resolvedScheme],
   )
 
@@ -160,13 +210,10 @@ export function ForceScheme({
     () => applyEffectiveCoachBranding(scheme === 'dark' ? darkTheme : lightTheme, effectiveBrand),
     [scheme, effectiveBrand],
   )
+  // Sin spread: ver BRAND_VARS_IDENTITY arriba. Con el spread, estos vars de esquema jamas
+  // llegaron a aplicarse y el subarbol forzado seguia el esquema GLOBAL del SO.
   const themeVars = useMemo(
-    () => ({
-      ...vars({
-        ...(scheme === 'dark' ? DARK_SCHEME_VARS : LIGHT_SCHEME_VARS),
-        ...effectiveBrandVars(effectiveBrand, scheme),
-      }),
-    }),
+    () => brandThemeVars(effectiveBrand, scheme, scheme === 'dark' ? DARK_SCHEME_VARS : LIGHT_SCHEME_VARS),
     [scheme, effectiveBrand],
   )
   const value = useMemo<ThemeContextValue>(

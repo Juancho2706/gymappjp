@@ -49,6 +49,14 @@ const CANON: Record<BadgeTone, DesignTone> = {
 // flips to the saturated base in dark, applied at ~.18/.20 alpha).
 // fg/border: the -600/-700 soft foregrounds (already dark-aware in global.css).
 // solid: theme-constant saturated -500 (sport uses cta-fill = white-text-safe brand).
+//
+// WHITE-LABEL: el tono `sport` es la MARCA y ya la sigue sin tocar nada acá — `--color-sport-*`
+// y `--color-cta-fill` los reescribe `brandVars()` en runtime, así que un coach rosa tiene
+// badges rosas y `toneColor` sigue siendo solo la salida de emergencia para un color arbitrario
+// (zonas de cardio, etiquetas de datos). Cambiar estas clases por `theme.primary` rompería el
+// par soft/solid: el acento clampeado no trae ni el tint -100 ni el relleno seguro para texto
+// blanco. Si un badge sale azul EVA en una marca, el bug NO está acá — está en que el `vars()`
+// de marca no llegó al subárbol (ver BRAND_VARS_IDENTITY en `context/ThemeContext.tsx`).
 const PALETTE: Record<
   DesignTone,
   { softBg: string; fg: string; border: string; solid: string; dot: string }

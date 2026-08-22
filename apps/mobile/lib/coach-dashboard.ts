@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native'
 import { getCoachProfile, type CoachProfile } from './coach'
+import { loadStoredBranding } from './branding'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
 import { selectWithFallback } from './db-compat'
@@ -91,8 +92,21 @@ export type MobileChartPoint = {
   alumnos?: number
 }
 
+/**
+ * Coach del dashboard = `CoachProfile` + el logo OSCURO.
+ *
+ * `CoachProfile` (lib/coach.ts) ya trae `logoUrl` porque el camino DEGRADADO lo lee de Supabase
+ * directo; el endpoint `/api/mobile/coach/dashboard` históricamente servía solo `hasCoachLogo`
+ * (booleano), así que en el camino feliz el logo llegaba `undefined` y el avatar del saludo caía
+ * a la figura EVA aunque el coach tuviera logo. `logoUrlDark` nunca existió en este tipo.
+ */
+export type MobileDashboardCoach = CoachProfile & {
+  /** `coaches.logo_url_dark` — variante para tema oscuro. `null` ⇒ se usa `logoUrl`. */
+  logoUrlDark?: string | null
+}
+
 export type MobileDashboardData = {
-  coach: CoachProfile
+  coach: MobileDashboardCoach
   publicCode: { inviteCode: string; shouldConfirm: boolean } | null
   onboardingGuide: Record<string, unknown>
   activePlans: number
@@ -126,6 +140,52 @@ export type MobileDashboardData = {
   pendingCheckinsCount: number
   /** D-F1: true cuando el endpoint falló y se usó el cálculo local degradado (adherencia heurística, sin nutrición/peso/streak). */
   degraded?: boolean
+}
+
+function asRecord(raw: unknown): Record<string, unknown> | null {
+  return raw != null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : null
+}
+
+function asTrimmedString(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null
+}
+
+/**
+ * Normaliza el bloque `coach` del endpoint para que el logo de marca sobreviva al viaje.
+ *
+ * Acepta camelCase y snake_case (`logoUrl`/`logo_url`, `logoUrlDark`/`logo_url_dark`): el
+ * endpoint está agregando los campos hoy y un binario viejo contra un deploy nuevo —o al revés—
+ * tiene que seguir arrancando. Un string vacío se normaliza a `null` (una URL en blanco pintaría
+ * un avatar hueco en vez de caer al fallback).
+ *
+ * `fallback` es la CACHÉ DE MARCA (`branding` del ThemeContext, escrita por
+ * `bootstrapOwnCoachBranding` y por el Guardar de «Mi marca»): si el endpoint todavía no sirve
+ * los logos, el dashboard igual los tiene. La caché NO pisa lo que sí vino del server — ahí manda
+ * el server, que es la fuente fresca.
+ *
+ * `hasCoachLogo` NO se recalcula si el server lo mandó: responde «¿el coach subió un logo?» y va
+ * SIN gatear por tier a propósito, mientras que las URLs sí llegan gateadas. Solo se deriva cuando
+ * el payload no lo trae.
+ */
+export function parseMobileDashboardCoach(
+  raw: unknown,
+  fallback?: { logoUrl?: string | null; logoUrlDark?: string | null } | null,
+): MobileDashboardCoach {
+  const source = asRecord(raw) ?? {}
+  const logoUrl =
+    asTrimmedString(source.logoUrl) ?? asTrimmedString(source.logo_url) ?? asTrimmedString(fallback?.logoUrl)
+  const logoUrlDark =
+    asTrimmedString(source.logoUrlDark) ??
+    asTrimmedString(source.logo_url_dark) ??
+    asTrimmedString(fallback?.logoUrlDark)
+  return {
+    ...(raw as CoachProfile),
+    logoUrl,
+    logoUrlDark,
+    hasCoachLogo: typeof source.hasCoachLogo === 'boolean' ? source.hasCoachLogo : Boolean(logoUrl || logoUrlDark),
+  }
 }
 
 type ClientRow = {
@@ -362,7 +422,10 @@ function dropRowsWithInvalidClientId<T extends { clientId: string }>(
   return { rows: kept, dropped: list.length - kept.length }
 }
 
-function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardData {
+function mapApiDashboard(
+  payload: MobileDashboardApiResponse,
+  brandFallback?: { logoUrl?: string | null; logoUrlDark?: string | null } | null,
+): MobileDashboardData {
   const adherenceByClient = new Map(payload.dashboard.adherenceStats.map((stat) => [stat.clientId, stat]))
   const nutritionByClient = new Map(payload.dashboard.nutritionStats.map((stat) => [stat.clientId, stat]))
 
@@ -425,7 +488,7 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
   }
 
   return {
-    coach: payload.coach,
+    coach: parseMobileDashboardCoach(payload.coach, brandFallback),
     publicCode: payload.publicCode ?? null,
     onboardingGuide: payload.onboardingGuide ?? {},
     activePlans: payload.dashboard.activePlans ?? 0,
@@ -866,7 +929,9 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
   const capClients = await countCapClients(coach.id, workspace)
 
   return {
-    coach,
+    // Mismo normalizador que el camino feliz: `getCoachProfile()` no lee `logo_url_dark`, así que
+    // el logo oscuro solo puede venir de la caché de marca.
+    coach: parseMobileDashboardCoach(coach, await loadStoredBranding()),
     publicCode: coach.inviteCode ? { inviteCode: coach.inviteCode, shouldConfirm: false } : null,
     onboardingGuide: {},
     activePlans: activePlanCount,
@@ -912,7 +977,8 @@ export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData
         method: 'GET',
         authenticated: true,
       })
-      const mapped = mapApiDashboard(payload)
+      // Caché local (AsyncStorage, cero red): respaldo del logo si el endpoint todavía no lo sirve.
+      const mapped = mapApiDashboard(payload, await loadStoredBranding())
       // El endpoint sirve el KPI de alumnos ACTIVOS; el cupo se cuenta con el predicado del gate.
       // `countCapClients` no lanza, así que un conteo caído jamás dispara el reintento del bloque.
       const capClients = await countCapClients(mapped.coach.id, workspace ?? null)

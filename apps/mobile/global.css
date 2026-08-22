@@ -213,6 +213,17 @@
     --color-aqua-700: 111 211 234;          /* #6FD3EA */
     --color-aqua-600: 111 211 234;          /* #6FD3EA */
 
+    /* ⚠️ NO BORRAR la rampa sport de este bloque para "dejar que mande la marca".
+       Estos valores NO pisan a `brandVars(…, 'dark')`: en css-interop las vars de `:root`/
+       `.dark:root` son el CONTEXTO HEREDADO (el escalón más bajo de `getVar`), y el `vars()`
+       que planta `ThemeContext` en su <View> se mergea ENCIMA para todo su subárbol
+       (`{...heredadas, ...propias}` en `runtime/native/native-interop.ts`). Es decir: con marca
+       propia manda la marca; sin marca propia manda ESTA rampa, que es la identidad EVA en
+       oscuro (espejo de `DARK_SCHEME_VARS` en `lib/theme.ts` y de web `globals.css`).
+       Quitarla dejaría a una cuenta sin marca con la rampa CLARA de `:root` en modo oscuro.
+       El síntoma "marca rosa y app azul" que se le achacó a este bloque era otra cosa: el
+       `{ ...vars(...) }` del ThemeContext (ver BRAND_VARS_IDENTITY en context/ThemeContext.tsx). */
+
     /* Status soft tints — translucent on dark cards (apply /18..20) */
     --color-success-100: 31 184 119;        /* rgba(31,184,119,.18) */
     --color-warning-100: 245 165 36;        /* rgba(245,165,36,.18) */
