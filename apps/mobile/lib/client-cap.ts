@@ -95,6 +95,32 @@ export function freePlanBenefits(): string[] {
   ]
 }
 
+/**
+ * ¿El alta tiene que ABRIR directo en el muro, sin mostrar el formulario?
+ *
+ * QA del owner en Android (22-08): con el cupo lleno, «+ agregar alumno» abría el formulario
+ * completo y el muro aparecía recién al enviar — el coach escribía nombre, correo, teléfono y
+ * contraseña para que se los rechazaran. El muro tiene que llegar ANTES del primer campo.
+ *
+ * Es un PRE-CHECK optimista sobre el conteo que la pantalla ya tiene cargado, no una autorización:
+ * el 402 `UPGRADE_REQUIRED` del server sigue siendo la verdad y cubre el caso contrario (conteo
+ * local desactualizado ⇒ el formulario se abre igual y rebota al enviar). Por eso el default es
+ * PERMISIVO: cualquier dato ausente, no finito o sin cupo utilizable devuelve `false` y deja pasar
+ * al formulario — bloquear un alta legítima por una lectura incompleta es peor que un rebote.
+ */
+export function shouldOpenAtCapWall({
+  activeCount,
+  maxClients,
+}: {
+  activeCount?: number | null
+  maxClients?: number | null
+}): boolean {
+  if (typeof activeCount !== 'number' || !Number.isFinite(activeCount)) return false
+  if (typeof maxClients !== 'number' || !Number.isFinite(maxClients)) return false
+  if (maxClients <= 0) return false
+  return activeCount >= maxClients
+}
+
 export interface CapWallCopy {
   title: string
   body: string

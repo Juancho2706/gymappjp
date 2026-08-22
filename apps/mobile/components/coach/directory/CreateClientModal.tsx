@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { Archive, CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { CreateClientSchema } from '@eva/schemas'
@@ -12,7 +13,7 @@ import { RefreshPlanButton } from '../RefreshPlanButton'
 import { ArchiveToFreeSpaceSheet } from './ArchiveToFreeSpaceSheet'
 import { FONT } from '../../../lib/typography'
 import { ApiError, apiFetch } from '../../../lib/api'
-import { capWallCopy } from '../../../lib/client-cap'
+import { capWallCopy, shouldOpenAtCapWall } from '../../../lib/client-cap'
 import type { Theme } from '../../../lib/theme'
 import { DANGER, SUCCESS, WARNING } from './directory-shared'
 
@@ -105,11 +106,18 @@ function ModalButton({
  * CreateClientModal — bottom-sheet "Agregar Nuevo Alumno" (POST /api/mobile/coach/clients).
  * Espejo web `apps/web/src/app/coach/clients/CreateClientModal.tsx`: 3 estados excluyentes
  * en el mismo sheet: (A) formulario · (B) éxito + CTA WhatsApp (si el alumno trae teléfono) ·
- * (C) muro de cupo del plan (endpoint 402 UPGRADE_REQUIRED) — ESTADO + acciones REALES dentro del
- * producto: "Archivar un alumno" (libera cupo de verdad, reversible) y "Actualizar estado". Sin
+ * (C) muro de cupo del plan — ESTADO + acciones REALES dentro del
+ * producto: "Archivar un alumno" (libera cupo de verdad, reversible), "Actualizar estado" y
+ * "Ver mi plan" (pantalla interna de estado, no una superficie de pago). Sin
  * link-out a la página de pago (anti-steering Apple 3.1.1 / política de pagos de Google, ver
  * `docs/research/cta-pagos-externos-stores-2026-07-31.md`); el único texto de tienda es el caption
  * de Android que sirve `capWallCopy` (`lib/client-cap.ts`), nunca visible en iOS.
+ *
+ * El muro tiene DOS bocas: el pre-check al abrir (`shouldOpenAtCapWall`, QA owner 22-08 — con el
+ * cupo lleno el alta ni siquiera muestra el formulario) y el 402 `UPGRADE_REQUIRED` del server, que
+ * sigue siendo la autorización y cubre el conteo local desactualizado. Las dos emiten el mismo
+ * `upgrade_gate_hit`, distinguidas por `source`.
+ *
  * Modal RN nativo (sin @gorhom → sin
  * bomba -999). Los inputs usan el `Input` DS (borde de foco por style, sin re-clasificar el
  * subárbol → sin focus-hop Fabric 45798).
@@ -140,6 +148,7 @@ export function CreateClientModal({
   workspace: CreateWorkspace
 }) {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const [form, setForm] = useState<CreateForm>(EMPTY)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -166,6 +175,41 @@ export function CreateClientModal({
 
   function requestClose() {
     if (!loading) handleClose()
+  }
+
+  /**
+   * Cupo lleno ⇒ el muro llega ANTES del primer campo (QA owner Android 22-08: el alta abría el
+   * formulario entero y el rechazo aparecía recién al enviar, con los datos ya escritos).
+   *
+   * Corre al ABRIR (`visible` false→true), no en cada render: el conteo puede cambiar mientras el
+   * modal está en pantalla —el coach archiva desde el propio muro (`handleFreed` vuelve al
+   * formulario)— y re-evaluar ahí lo devolvería al muro justo después de haber liberado cupo.
+   *
+   * `shouldOpenAtCapWall` es un pre-check optimista sobre el conteo que la pantalla ya tenía; el
+   * 402 del server sigue siendo la autorización y cubre el conteo local desactualizado.
+   */
+  useEffect(() => {
+    if (!visible) return
+    if (!shouldOpenAtCapWall({ activeCount, maxClients })) return
+    setUpgradeLimit(typeof maxClients === 'number' && maxClients > 0 ? maxClients : undefined)
+    setFreedNotice(false)
+    setPhase('upgrade')
+    // Deps: solo `visible`. Con `activeCount`/`maxClients` acá, el refresco de la cartera que dispara
+    // `onCreated()` volvería a montar el muro sobre el formulario.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible])
+
+  /**
+   * «Ver mi plan» — pantalla INTERNA de estado (`/coach/(tabs)/subscription`): tier, cupo, activos,
+   * módulos y «Actualizar estado». No es una superficie de pago, así que existe en iOS y en Android
+   * por igual (el tono también es el permitido: «Ver mi plan», nunca «Mejorar mi plan»).
+   *
+   * Cierra el modal ANTES de navegar: la ventana nativa del sheet quedaría encima de la pantalla
+   * nueva y el coach vería el muro flotando sobre «Mi plan».
+   */
+  function goToPlan() {
+    handleClose()
+    router.push('/coach/(tabs)/subscription')
   }
 
   async function handleSubmit() {
@@ -325,6 +369,16 @@ export function CreateClientModal({
                   onPress={() => setShowArchive(true)}
                 />
                 <RefreshPlanButton full />
+                {/* Pantalla INTERNA de estado, no una superficie de pago: permitida en iOS y en
+                    Android. Ghost para que no compita con «Archivar un alumno», que es la acción
+                    que de verdad libera cupo. */}
+                <Button
+                  testID="create-client-limit-plan"
+                  label="Ver mi plan"
+                  variant="ghost"
+                  full
+                  onPress={goToPlan}
+                />
               </View>
               <TouchableOpacity testID="create-client-limit-dismiss" onPress={handleClose} hitSlop={8}>
                 <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Entendido</Text>
