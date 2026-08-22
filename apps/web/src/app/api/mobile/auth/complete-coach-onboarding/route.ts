@@ -6,6 +6,8 @@ import { isDisposableEmail, normalizePlatformEmail } from '@/lib/auth/platform-e
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { clientIpFromRequest, jsonRateLimited, rateLimitSignup } from '@/lib/rate-limit'
 import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
+import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
+import { resolveRegistrationPlatform } from '@/lib/posthog/registration'
 
 /**
  * Materializa la fila `coaches` del coach autenticado por OAuth (Google) que aún no tiene perfil.
@@ -187,6 +189,16 @@ export async function POST(request: NextRequest) {
         // Sin PII en el log: vive en Vercel sin retención acotada.
         console.warn('[complete-coach-onboarding] onboarding email failed')
     }
+
+    // W7.1: alta por Google DESDE LA APP — el camino de menor fricción y el más invisible. No hay
+    // navegador que emita `coach_registered`, y el hueco del 29 % de altas sin evento (21-08) vive
+    // justo acá. `method: 'google'` para poder separarlo del alta con contraseña.
+    await captureCoachRegisteredServer({
+        coachId: user.id,
+        tier: selectedTier,
+        method: 'google',
+        platform: resolveRegistrationPlatform(request.headers),
+    })
 
     return NextResponse.json({ ok: true, slug })
 }

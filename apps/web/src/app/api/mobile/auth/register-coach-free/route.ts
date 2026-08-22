@@ -15,6 +15,8 @@ import {
 } from '@/lib/rate-limit'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
+import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
+import { resolveRegistrationPlatform } from '@/lib/posthog/registration'
 
 const RESERVED_SLUGS = new Set([
     'admin', 'api', 'coach', 'coaches', 'register', 'login', 'logout', 'pricing',
@@ -181,6 +183,17 @@ export async function POST(request: NextRequest) {
             { status: 502 }
         )
     }
+
+    // W7.1: el alta desde la app no tiene navegador, así que `coach_registered` no puede salir del
+    // cliente — sin esta línea las altas móviles no existen en el embudo de PostHog y `platform`
+    // (el número que decide si algún día se justifica IAP) queda ciego. Va después del punto de
+    // rollback a propósito: solo se cuenta el alta que de verdad sobrevivió.
+    await captureCoachRegisteredServer({
+        coachId: authData.user.id,
+        tier: selectedTier,
+        method: 'email',
+        platform: resolveRegistrationPlatform(request.headers),
+    })
 
     // `uid` es la ÚNICA llave del reenvío del correo de confirmación desde la app
     // (`api/mobile/auth/resend-confirmation`): la app no tiene sesión hasta que el coach confirma,

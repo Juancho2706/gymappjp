@@ -12,6 +12,14 @@ import { NextRequest } from 'next/server'
 
 const USER_ID = '11111111-1111-4111-8111-111111111111'
 
+type CaptureInput = {
+    coachId: string
+    tier: string
+    method: string
+    platform: string
+    billingCycle?: string | null
+}
+
 const harness = vi.hoisted(() => {
     const state = {
         signupAllowed: true,
@@ -83,6 +91,12 @@ vi.mock('@/lib/auth/send-coach-email-confirmation', () => ({
     sendCoachSignupConfirmationEmail: harness.sendSignupMock,
 }))
 
+// W7.1: el alta desde la app no tiene navegador, así que `coach_registered` sale del servidor.
+const captureRegisteredMock = vi.hoisted(() => vi.fn<(input: CaptureInput) => Promise<void>>(async () => {}))
+vi.mock('@/lib/posthog/registration-events', () => ({
+    captureCoachRegisteredServer: captureRegisteredMock,
+}))
+
 import { POST } from './route'
 
 const BODY = {
@@ -94,10 +108,10 @@ const BODY = {
     acceptHealthData: true,
 }
 
-function req(body: unknown) {
+function req(body: unknown, extraHeaders: Record<string, string> = {}) {
     return new NextRequest('http://localhost/api/mobile/auth/register-coach-free', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...extraHeaders },
         body: JSON.stringify(body),
     })
 }
@@ -158,5 +172,44 @@ describe('POST /api/mobile/auth/register-coach-free', () => {
         expect(res.status).toBe(500)
         expect(deleteUserMock).toHaveBeenCalledWith(USER_ID)
         expect(sendSignupMock).not.toHaveBeenCalled()
+    })
+})
+
+/**
+ * W7.1 — `platform` en el alta. La app NO manda header de plataforma hoy (`apps/mobile/lib/api.ts`
+ * solo setea `Content-Type` y `Authorization`): el User-Agent es la fuente real.
+ */
+describe('POST /api/mobile/auth/register-coach-free — analítica del alta', () => {
+    it('Android (okhttp): emite `coach_registered` con la plataforma inferida', async () => {
+        await POST(req(BODY, { 'user-agent': 'okhttp/4.9.2' }))
+
+        expect(captureRegisteredMock).toHaveBeenCalledWith({
+            coachId: USER_ID,
+            tier: 'free',
+            method: 'email',
+            platform: 'android',
+        })
+    })
+
+    it('iOS (CFNetwork/Darwin): misma emisión con `platform: ios`', async () => {
+        await POST(req(BODY, { 'user-agent': 'EVA/85 CFNetwork/1568.100.1 Darwin/24.0.0' }))
+
+        expect(captureRegisteredMock).toHaveBeenCalledWith(expect.objectContaining({ platform: 'ios' }))
+    })
+
+    it('el header explícito gana cuando la app empiece a mandarlo', async () => {
+        await POST(req(BODY, { 'user-agent': 'okhttp/4.9.2', 'x-eva-platform': 'ios' }))
+
+        expect(captureRegisteredMock).toHaveBeenCalledWith(expect.objectContaining({ platform: 'ios' }))
+    })
+
+    // El alta se revierte entera si el correo de confirmación no sale: contar ese intento como
+    // alta dejaría el embudo mintiendo justo en el paso final.
+    it('si el alta hace rollback NO se emite nada', async () => {
+        state.emailSent = false
+
+        await POST(req(BODY, { 'user-agent': 'okhttp/4.9.2' }))
+
+        expect(captureRegisteredMock).not.toHaveBeenCalled()
     })
 })

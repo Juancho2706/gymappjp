@@ -16,6 +16,8 @@ import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
+import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
+import { SERVER_EMITTED_QUERY } from '@/lib/posthog/registration'
 
 export type CompleteOnboardingState = {
     error?: string
@@ -189,7 +191,23 @@ export async function completeOAuthOnboarding(
             // Sin PII en el log: vive en Vercel sin retención acotada.
             console.warn('[register] onboarding email failed')
         }
-        redirect(`/coach/dashboard?welcome=free&eid=${encodeURIComponent(metaEventId)}`)
+
+        // W7.1: hasta hoy este alta solo se contaba en PostHog desde el aterrizaje, o sea detrás
+        // del banner de cookies — quien no acepta se daba de alta sin dejar rastro (hallazgo 21-08:
+        // ~29 % de las altas nuevas sin `register_submitted`/`coach_registered`, concentrado en
+        // Google). El servidor sabe el hecho y no depende del consentimiento del visitante para un
+        // evento de negocio del propio coach (mismo criterio que `server-capture.ts`).
+        //
+        // `await` por la razón de siempre: el `redirect()` de abajo cierra la invocación.
+        // `SERVER_EMITTED_QUERY` en el destino apaga a `CoachRegisteredTracker`: el alta se cuenta
+        // UNA vez, y la que gana es la que trae `platform` y `method`.
+        await captureCoachRegisteredServer({
+            coachId: user.id,
+            tier: selectedTier,
+            method: 'google',
+            platform: 'web',
+        })
+        redirect(`/coach/dashboard?welcome=free&eid=${encodeURIComponent(metaEventId)}&${SERVER_EMITTED_QUERY}`)
     }
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()

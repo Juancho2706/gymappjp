@@ -11,6 +11,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * perfil». Lo demás (slug, cupón, ciclo) tiene su propia cobertura y no se toca acá.
  */
 
+type CaptureInput = {
+    coachId: string
+    tier: string
+    method: string
+    platform: string
+    billingCycle?: string | null
+}
+
 const harness = vi.hoisted(() => {
     const USER_ID = '11111111-1111-4111-8111-111111111111'
     const INVITE_CODE = 'X5UD9X44'
@@ -26,6 +34,9 @@ const harness = vi.hoisted(() => {
 
     const sendFreeCoachOnboardingEmailsMock = vi.fn(async () => {
         order.push('emails')
+    })
+    const captureRegisteredMock = vi.fn<(input: CaptureInput) => Promise<void>>(async () => {
+        order.push('posthog')
     })
     const generateUniqueInviteCodeMock = vi.fn(async () => INVITE_CODE)
     const queueMetaCapiEventMock = vi.fn(async () => undefined)
@@ -67,10 +78,12 @@ const harness = vi.hoisted(() => {
         queueMetaCapiEventMock,
         generateUniqueInviteCodeMock,
         sendFreeCoachOnboardingEmailsMock,
+        captureRegisteredMock,
     }
 })
 
-const { USER_ID, INVITE_CODE, state, inserts, order, adminStub, sendFreeCoachOnboardingEmailsMock } = harness
+const { USER_ID, INVITE_CODE, state, inserts, order, adminStub, sendFreeCoachOnboardingEmailsMock, captureRegisteredMock } =
+    harness
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => harness.serverStub }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
@@ -84,6 +97,9 @@ vi.mock('@/lib/meta/capi', () => ({
 }))
 vi.mock('@/lib/email/free-coach-onboarding', () => ({
     sendFreeCoachOnboardingEmails: harness.sendFreeCoachOnboardingEmailsMock,
+}))
+vi.mock('@/lib/posthog/registration-events', () => ({
+    captureCoachRegisteredServer: harness.captureRegisteredMock,
 }))
 
 import { completeOAuthOnboarding } from './complete.actions'
@@ -130,7 +146,7 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
     it('crea el coach y dispara bienvenida + drip con admin, coachId e invite_code', async () => {
         const { redirectedTo } = await run()
 
-        expect(redirectedTo).toBe('/coach/dashboard?welcome=free&eid=evt-1')
+        expect(redirectedTo).toBe('/coach/dashboard?welcome=free&eid=evt-1&ph=srv')
         expect(inserts[0]).toMatchObject({ id: USER_ID, subscription_status: 'active', invite_code: INVITE_CODE })
         expect(sendFreeCoachOnboardingEmailsMock).toHaveBeenCalledWith({
             // Service-role: el ledger de correos no se escribe con la sesión del coach.
@@ -149,7 +165,7 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
     // Resend muere con la invocación (misma trampa que ya se había comido el CAPI, 531cf7b6).
     it('los correos se esperan ANTES del redirect', async () => {
         await run()
-        expect(order).toEqual(['emails', 'redirect'])
+        expect(order).toEqual(['emails', 'posthog', 'redirect'])
     })
 
     it('si el helper RECHAZA igual redirige (el alta ya está escrita)', async () => {
@@ -158,7 +174,7 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
 
         const { redirectedTo, state: result } = await run()
 
-        expect(redirectedTo).toBe('/coach/dashboard?welcome=free&eid=evt-1')
+        expect(redirectedTo).toBe('/coach/dashboard?welcome=free&eid=evt-1&ph=srv')
         expect(result).toBeNull()
         expect(warn).toHaveBeenCalledWith('[register] onboarding email failed')
         expect(JSON.stringify(warn.mock.calls)).not.toContain('coach@example.com')
@@ -186,5 +202,46 @@ describe('completeOAuthOnboarding — cuándo NO se manda nada', () => {
         expect(result).toMatchObject({ code: 'oauth_brand_missing' })
         expect(inserts).toHaveLength(0)
         expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
+    })
+})
+
+/**
+ * W7.1 — el alta por Google en la web se contaba SOLO desde el aterrizaje, o sea detrás del banner
+ * de cookies: quien no aceptaba se daba de alta sin dejar rastro. Ahora la emite el servidor, y el
+ * flag `ph=srv` del destino apaga al tracker del navegador para que no se cuente dos veces.
+ */
+describe('completeOAuthOnboarding — analítica del alta', () => {
+    it('emite `coach_registered` con method google y platform web', async () => {
+        await run()
+
+        expect(captureRegisteredMock).toHaveBeenCalledWith({
+            coachId: USER_ID,
+            tier: 'free',
+            method: 'google',
+            platform: 'web',
+        })
+    })
+
+    // Un action que redirige no garantiza trabajo pendiente: sin `await`, el POST a PostHog muere
+    // con la invocación (misma trampa que ya se comió el CAPI en 531cf7b6).
+    it('el evento se espera ANTES del redirect', async () => {
+        await run()
+        expect(order.indexOf('posthog')).toBeLessThan(order.indexOf('redirect'))
+    })
+
+    it('el destino lleva el flag que apaga a CoachRegisteredTracker', async () => {
+        const { redirectedTo } = await run()
+        expect(redirectedTo).toContain('&ph=srv')
+    })
+
+    it('plan PAGO: no se emite acá (ese camino lo cubre checkout_started)', async () => {
+        await run(form({ subscription_tier: 'pro' }))
+        expect(captureRegisteredMock).not.toHaveBeenCalled()
+    })
+
+    it('insert fallido: cero eventos', async () => {
+        state.insertError = { message: 'duplicate key' }
+        await run()
+        expect(captureRegisteredMock).not.toHaveBeenCalled()
     })
 })

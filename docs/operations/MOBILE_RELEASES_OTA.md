@@ -30,6 +30,18 @@ Política operativa para `apps/mobile`. La configuración ejecutable prevalece:
 - 2026-08-19: `updates.fallbackToCacheTimeout` pasó de `0` a `6000`. Decisión del owner: en arranque en frío la app espera hasta 6 s a que baje el OTA disponible y lo lanza en el acto, en vez de servir el bundle embebido con bugs viejos y aplicar el update recién en el segundo arranque. Si el update no alcanza a bajar en esos 6 s, arranca con el bundle cacheado y el camino de siempre (`isUpdatePending` → aviso de reinicio en `lib/ota.ts`) sigue funcionando igual. Es configuración de binario: **no viaja por OTA**, entra recién con la build 57 (1.1.1) y posteriores.
 - 2026-08-20: `EXPO_PUBLIC_POSTHOG_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` viven en `eas.json` (perfiles `previewv2` y `production`) y `mobile-ota.yml` las lee de ahí. Son la project API key pública de PostHog (write-only de ingesta). El binario 1.1.2 (iOS 58 / Android 85) se compiló **sin** ellas: su bundle embebido no emite analítica de producto hasta que reciba un OTA publicado con la key, o hasta la próxima build.
 
+## Regla del piso (owner, 2026-08-22): OTA solo desde la versión aprobada por Apple hacia arriba
+
+Antes de publicar, **leer el estado real en App Store Connect** (workflow `ios-submit-review.yml` con `dry_run=true`
+imprime «Versiones iOS: x=ESTADO · …»; no asumir desde docs). Se publica a la versión `READY_FOR_SALE` vigente y a las
+superiores (en revisión / TestFlight); a runtimes anteriores **no** (el público real ya migró y cada runtime viejo cuesta
+un port manual). Android sigue la misma partición. Cuando Apple aprueba una versión nueva, el piso sube.
+Aplicado el 2026-08-22: piso 1.1.1 (READY_FOR_SALE) ⇒ OTA a 1.1.1 y 1.1.2; 1.1.0 descartado (tags
+`ota/1.1.1-20260822` = `e1d9cdcd`, `ota/1.1.2-20260822` = `a1c2f2f9`; lleva W4+W5+W6 del embudo Free→Pro).
+Grupos publicados el 22-08 05:1xZ, los 4 verdes: 1.1.1 android `d4df67f0` (run 32553706927) · 1.1.1 ios `b337b986`
+(32553708216) · 1.1.2 android `3974482f` (32553709725) · 1.1.2 ios `caa038a2` (32553711196). El port a 1.1.1 va sin
+`app.json` y sin la telemetría `upgrade_gate_hit` del muro (ese runtime no tiene `lib/analytics`).
+
 ## Partición de runtimes vigente (2026-08-21)
 
 `runtimeVersion.policy = appVersion` significa que **un OTA alcanza solo a los binarios cuya `version` coincide con la del `app.json` del commit que se publica**. Hoy conviven tres runtimes en el canal `production`:

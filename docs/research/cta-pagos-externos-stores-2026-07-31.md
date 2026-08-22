@@ -1,5 +1,9 @@
 # CTA de pago externo en la app movil: que exigen Apple y Google
 
+> **Histórico.** La regla vigente vive en `apps/mobile/AGENTS.md`
+> §«Pagos y tiendas — regla vigente» (W7 del embudo Free→Pro, 2026-08-22). Este documento se
+> conserva por la investigación que la sustenta; no se usa como instrucción.
+
 **Fecha:** 2026-07-31
 **Contexto:** preparacion del lanzamiento de EVA en App Store y Google Play.
 **Decision del CEO:** una sola build para iOS y Android, alineada al criterio mas estricto (iOS).

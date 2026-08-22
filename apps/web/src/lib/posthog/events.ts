@@ -3,6 +3,7 @@
 import { usePostHog } from 'posthog-js/react'
 import { useCallback } from 'react'
 import type { SubscriptionTier } from '@/lib/constants'
+import { PRICING_VERSION, type RegistrationMethod } from '@/lib/posthog/registration'
 
 /** Identify coach after login/registration (only when they opted in). */
 export function useIdentifyCoach() {
@@ -98,20 +99,28 @@ export function useCaptureModuleInterest() {
  * dispara desde /register: los dos Server Actions del wizard terminan en `redirect()`, asi que el
  * cliente jamas ve el exito — el disparo vive en los aterrizajes post-alta.
  *
- * `pricing_version: 'v3'` (owner 2026-08-21): sella con qué catálogo se dio de alta el coach. Sin
- * esta marca, las cohortes de altas quedan mezcladas con las de Pricing v2 (Free 2 alumnos, sin
+ * `pricing_version` (owner 2026-08-21): sella con qué catálogo se dio de alta el coach. Sin esta
+ * marca, las cohortes de altas quedan mezcladas con las de Pricing v2 (Free 2 alumnos, sin
  * white-label) y cualquier lectura de activación post-corte compara peras con manzanas. Es un
- * literal a propósito: cuando el catálogo cambie de nuevo, se sube acá y las cohortes se separan
- * solas — nunca derivar la versión de la fecha del evento.
+ * literal a propósito (`PRICING_VERSION`): cuando el catálogo cambie de nuevo, se sube en un solo
+ * lugar y las cohortes se separan solas — nunca derivar la versión de la fecha del evento.
+ *
+ * `platform: 'web'` (W7.1): este hook SOLO corre en el navegador, así que la constante no es una
+ * suposición. Las altas de la app las emite el servidor (`lib/posthog/registration-events.ts`) con
+ * `ios`/`android`; entre las dos fuentes la propiedad queda poblada en el 100 % de las altas.
+ * `source: 'client'` deja auditable de dónde salió cada fila si alguna vez hay duplicados.
  */
 export function useCaptureRegistration() {
     const ph = usePostHog()
     return useCallback(
-        (tier: SubscriptionTier, billingCycle?: string) =>
+        (tier: SubscriptionTier, method: RegistrationMethod, billingCycle?: string) =>
             ph?.capture('coach_registered', {
                 tier,
                 billing_cycle: billingCycle ?? null,
-                pricing_version: 'v3',
+                method,
+                platform: 'web',
+                pricing_version: PRICING_VERSION,
+                source: 'client',
             }),
         [ph]
     )
@@ -133,17 +142,23 @@ export function useCaptureRegistration() {
  *   method: 'email' | 'google' — el alta por Google usa otro Server Action (onboarding/complete).
  *
  * Precede una navegacion: send_instantly + sendBeacon, igual que los checkout_*.
+ *
+ * `platform`/`pricing_version` (W7.1): el wizard `/register` es web y solo web — el alta desde la
+ * app no pasa por acá, va directo a `api/mobile/auth/**`. Van las mismas dos propiedades que
+ * `coach_registered` para que los dos pasos del embudo se puedan cortar por el mismo eje.
  */
 export function useCaptureRegisterSubmitted() {
     const ph = usePostHog()
     return useCallback(
-        (props: { tier: SubscriptionTier; billingCycle: string; method: 'email' | 'google' }) => {
+        (props: { tier: SubscriptionTier; billingCycle: string; method: RegistrationMethod }) => {
             ph?.capture(
                 'register_submitted',
                 {
                     tier: props.tier,
                     billing_cycle: props.billingCycle,
                     method: props.method,
+                    platform: 'web',
+                    pricing_version: PRICING_VERSION,
                 },
                 { send_instantly: true, transport: 'sendBeacon' }
             )
@@ -170,7 +185,7 @@ export function useCaptureRegisterSubmitted() {
 export function useCaptureRegisterFailed() {
     const ph = usePostHog()
     return useCallback(
-        (props: { tier: SubscriptionTier; billingCycle: string; method: 'email' | 'google'; code: string }) => {
+        (props: { tier: SubscriptionTier; billingCycle: string; method: RegistrationMethod; code: string }) => {
             ph?.capture('register_failed', {
                 tier: props.tier,
                 billing_cycle: props.billingCycle,

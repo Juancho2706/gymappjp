@@ -63,12 +63,27 @@ vi.mock('@/lib/email/free-coach-onboarding', () => ({
     sendFreeCoachOnboardingEmails: harness.sendFreeCoachOnboardingEmailsMock,
 }))
 
+// W7.1: sin navegador no hay `coach_registered` posible desde el cliente — lo emite el endpoint.
+type CaptureInput = {
+    coachId: string
+    tier: string
+    method: string
+    platform: string
+    billingCycle?: string | null
+}
+const captureRegisteredMock = vi.hoisted(() => vi.fn<(input: CaptureInput) => Promise<void>>(async () => {}))
+vi.mock('@/lib/posthog/registration-events', () => ({
+    captureCoachRegisteredServer: captureRegisteredMock,
+}))
+
 import { POST } from './route'
 
-function req(body: unknown, auth: string | null = 'Bearer ok') {
+function req(body: unknown, auth: string | null = 'Bearer ok', extraHeaders: Record<string, string> = {}) {
     return new NextRequest('http://localhost/api/mobile/auth/complete-coach-onboarding', {
         method: 'POST',
-        headers: auth ? { authorization: auth, 'content-type': 'application/json' } : {},
+        headers: auth
+            ? { authorization: auth, 'content-type': 'application/json', ...extraHeaders }
+            : { ...extraHeaders },
         body: JSON.stringify(body),
     })
 }
@@ -154,5 +169,44 @@ describe('POST /api/mobile/auth/complete-coach-onboarding', () => {
 
         expect(res.status).toBe(400)
         expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
+    })
+})
+
+/**
+ * W7.1 — este es el camino de alta más invisible que existe: Google, desde la app, sin navegador
+ * que pueda emitir nada. Es el corazón del hueco del 29 % de altas sin evento (21-08).
+ */
+describe('POST /api/mobile/auth/complete-coach-onboarding — analítica del alta', () => {
+    it('emite `coach_registered` con method google y la plataforma del User-Agent', async () => {
+        await POST(req(BODY, 'Bearer ok', { 'user-agent': 'EVA/85 CFNetwork/1568.100.1 Darwin/24.0.0' }))
+
+        expect(captureRegisteredMock).toHaveBeenCalledWith({
+            coachId: USER_ID,
+            tier: 'free',
+            method: 'google',
+            platform: 'ios',
+        })
+    })
+
+    it('sin header ni User-Agent reconocible: `unknown`, nunca un `web` inventado', async () => {
+        await POST(req(BODY))
+
+        expect(captureRegisteredMock).toHaveBeenCalledWith(expect.objectContaining({ platform: 'unknown' }))
+    })
+
+    it('re-entrada (coach ya onboardeado): no vuelve a contar el alta', async () => {
+        state.existingCoach = { id: USER_ID, slug: 'studio-fuerza' }
+
+        await POST(req(BODY, 'Bearer ok', { 'user-agent': 'okhttp/4.9.2' }))
+
+        expect(captureRegisteredMock).not.toHaveBeenCalled()
+    })
+
+    it('insert fallido: cero eventos', async () => {
+        state.insertError = { message: 'duplicate key' }
+
+        await POST(req(BODY, 'Bearer ok', { 'user-agent': 'okhttp/4.9.2' }))
+
+        expect(captureRegisteredMock).not.toHaveBeenCalled()
     })
 })
