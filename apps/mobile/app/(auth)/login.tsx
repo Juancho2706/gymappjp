@@ -93,11 +93,12 @@ function withAlpha(hex: string, a: number): string {
 }
 
 export default function LoginScreen() {
-  const { role, switch: canSwitch } = useLocalSearchParams<{ role: 'coach' | 'alumno'; switch?: string }>()
+  const { role, switch: canSwitch, email: emailParam } = useLocalSearchParams<{ role: 'coach' | 'alumno'; switch?: string; email?: string }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { theme, branding, resolvedScheme } = useTheme()
-  const [email, setEmail] = useState('')
+  // `email` por param: viene de la pantalla de verificación cuando no pudo entrar sola.
+  const [email, setEmail] = useState(typeof emailParam === 'string' ? emailParam : '')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
   const [remember, setRemember] = useState(true)
@@ -112,10 +113,11 @@ export default function LoginScreen() {
   const showGoogle = !isAlumno && isGoogleSignInAvailable()
 
   useEffect(() => {
+    if (typeof emailParam === 'string' && emailParam) return
     AsyncStorage.getItem(REMEMBER_KEY).then((v) => {
       if (v) setEmail(v)
     })
-  }, [])
+  }, [emailParam])
 
   useEffect(() => {
     if (isAlumno && !branding?.coachId) {

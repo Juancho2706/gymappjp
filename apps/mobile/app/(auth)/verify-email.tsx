@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowRight, Check, MailCheck, Send } from 'lucide-react-native'
@@ -7,6 +8,9 @@ import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Card } from '../../components'
 import { ApiError, resendCoachConfirmation } from '../../lib/api'
+import { supabase } from '../../lib/supabase'
+import { clearPendingSignup, peekPendingSignup } from '../../lib/pending-signup'
+import { toast } from '../../components/Toast'
 import { freePlanBenefits, storePlanChangeCaption } from '../../lib/client-cap'
 import {
   isResendDisabled,
@@ -36,7 +40,67 @@ export default function VerifyEmailScreen() {
   // `uid` lo devuelve el alta (`registerCoachFree`) y viaja por la ruta, igual que el `?uid=` que el
   // registro web pone en `/verify-email`. No se persiste: si el coach mata la app, al reabrirla cae
   // en el login, no acá. Sin `uid` (server anterior a W4) la pantalla degrada al texto de siempre.
-  const { email, uid } = useLocalSearchParams<{ email?: string; uid?: string }>()
+  // `confirmed=1` lo pone `+native-intent` cuando `/auth/confirm` (web, Android) devolvió al coach a
+  // la app después de confirmar: acá se intenta entrar de una.
+  const { email, uid, confirmed } = useLocalSearchParams<{ email?: string; uid?: string; confirmed?: string }>()
+  const [signingIn, setSigningIn] = useState(false)
+  const signingInRef = useRef(false)
+
+  /**
+   * Entra al panel con las credenciales del alta (solo en memoria). QA del owner 22-08: «ya confirmé»
+   * lo dejaba en el login tipeando lo que acababa de escribir. Devuelve `true` si hay sesión.
+   * `silent`: el intento automático (volver a la app, `confirmed=1`) no muestra errores; el botón sí.
+   */
+  const tryAutoSignIn = useCallback(
+    async (silent: boolean): Promise<boolean> => {
+      if (signingInRef.current) return false
+      const pending = peekPendingSignup(email)
+      if (!pending) return false
+      signingInRef.current = true
+      setSigningIn(true)
+      try {
+        const { error } = await supabase.auth.signInWithPassword(pending)
+        if (error) {
+          if (!silent) {
+            const notConfirmed = /not confirmed/i.test(error.message)
+            toast.error(
+              notConfirmed ? 'Tu correo todavía no está confirmado' : 'No pudimos entrar',
+              { description: notConfirmed ? 'Abre el link del correo y vuelve acá.' : error.message },
+            )
+          }
+          return false
+        }
+        clearPendingSignup()
+        await AsyncStorage.setItem('eva_user_role', 'coach')
+        router.replace('/coach/home')
+        return true
+      } catch {
+        return false
+      } finally {
+        signingInRef.current = false
+        setSigningIn(false)
+      }
+    },
+    [email, router],
+  )
+
+  // Vuelta a la app (el coach confirmó en el navegador): intento silencioso al pasar a primer plano
+  // y, si venimos del intent de Android (`confirmed=1`), también al montar.
+  useEffect(() => {
+    if (confirmed === '1') void tryAutoSignIn(true)
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void tryAutoSignIn(true)
+    })
+    return () => sub.remove()
+  }, [confirmed, tryAutoSignIn])
+
+  async function handleContinue() {
+    if (await tryAutoSignIn(false)) return
+    // Sin credenciales en memoria (la app se reinició) o el correo sigue sin confirmar: login con el
+    // email puesto para que no lo tipee de nuevo.
+    const emailParam = email ? `&email=${encodeURIComponent(email)}` : ''
+    router.replace(`/(auth)/login?role=coach${emailParam}`)
+  }
 
   const [phase, setPhase] = useState<ResendPhase>('idle')
   const [cooldown, setCooldown] = useState(0)
@@ -160,7 +224,8 @@ export default function VerifyEmailScreen() {
             label="Ya confirmé · Ir al panel"
             variant="sport"
             rightIcon={ArrowRight}
-            onPress={() => router.replace('/(auth)/login?role=coach')}
+            loading={signingIn}
+            onPress={handleContinue}
             full
             size="lg"
             style={{ marginTop: 20 }}

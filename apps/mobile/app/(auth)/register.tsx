@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,7 +17,6 @@ import {
   ChevronLeft,
   Lock,
   Mail,
-  Sparkles,
   Store,
   User,
 } from 'lucide-react-native'
@@ -29,6 +27,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { AuthDivider, Button, Card, GoogleSignInButton, HapticPressable, Input } from '../../components'
 import { toast } from '../../components/Toast'
 import { ApiError, completeCoachOnboarding, registerCoachFree } from '../../lib/api'
+import { rememberPendingSignup } from '../../lib/pending-signup'
 import {
   GoogleSignInError,
   isGoogleSignInAvailable,
@@ -51,6 +50,8 @@ export default function RegisterScreen() {
   const [brandName, setBrandName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // Para subir la contraseña por encima del teclado al enfocarla (Android edge-to-edge).
+  const scrollRef = useRef<ScrollView>(null)
   const [acceptLegal, setAcceptLegal] = useState(false)
   const [acceptHealthData, setAcceptHealthData] = useState(false)
   const [acceptMarketing, setAcceptMarketing] = useState(false)
@@ -183,6 +184,8 @@ export default function RegisterScreen() {
       // sesion hasta que el coach confirma). Espejo del `?uid=` del registro web. Si el server es
       // anterior a W4 no viene y la pantalla degrada sola.
       const uidParam = created.uid ? `&uid=${encodeURIComponent(created.uid)}` : ''
+      // Solo en memoria: la pantalla siguiente entra sola al panel apenas el correo esté confirmado.
+      rememberPendingSignup(parsed.data.email, parsed.data.password)
       router.replace(`/(auth)/verify-email?email=${encodeURIComponent(parsed.data.email)}${uidParam}`)
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Intenta nuevamente en unos momentos.'
@@ -197,7 +200,9 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kav}>
+      {/* `padding` también en Android: con edge-to-edge (SDK 54) `adjustResize` ya no encoge la
+          ventana y el teclado tapaba la contraseña (QA del owner 22-08). */}
+      <KeyboardAvoidingView behavior="padding" style={styles.kav}>
         {/* Wizard header — back + "Paso X de 2" + barras de progreso */}
         <View style={styles.header}>
           <Pressable
@@ -233,6 +238,7 @@ export default function RegisterScreen() {
         </View>
 
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -261,12 +267,6 @@ export default function RegisterScreen() {
             {step === 1 ? (
               <View style={styles.form}>
                 <View style={styles.heading}>
-                  <View className="flex-row items-center self-start rounded-pill bg-sport-100" style={styles.pill}>
-                    <Sparkles size={12} color={theme.primary} strokeWidth={2.25} />
-                    <Text className="text-sport-600 font-display-bold" style={styles.pillText}>
-                      Cuenta coach
-                    </Text>
-                  </View>
                   <Text className="text-strong font-display-black" style={styles.title}>
                     Crea tu cuenta de coach
                   </Text>
@@ -331,6 +331,9 @@ export default function RegisterScreen() {
                         autoComplete="new-password"
                         editable={!loading}
                         testID="register-password-input"
+                        // Último campo del paso: al enfocarlo, el scroll lo sube por encima del
+                        // teclado (cinturón del KeyboardAvoidingView en Android).
+                        onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120)}
                       />
                       {password.length > 0 ? (
                         <View style={styles.pwdMeter}>
@@ -548,11 +551,9 @@ const styles = StyleSheet.create({
   stepName: { fontSize: 12 },
   progressRow: { flexDirection: 'row', gap: 4 },
   progressBar: { flex: 1, height: 4, borderRadius: 999 },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 32 },
+  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 160 },
   content: { gap: 16 },
   heading: { gap: 6 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 2 },
-  pillText: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 },
   title: { fontSize: 26, letterSpacing: -0.6, lineHeight: 30 },
   subtitle: { fontSize: 14, lineHeight: 20 },
   form: { gap: 16 },
