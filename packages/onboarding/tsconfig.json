@@ -17,5 +17,5 @@
       "@eva/schemas": ["../schemas/index.ts"]
     }
   },
-  "include": ["index.ts", "index.test.ts"]
+  "include": ["index.ts", "index.test.ts", "persona-progress.ts", "persona-progress.test.ts"]
 }

@@ -224,13 +224,27 @@ puro compartido, `isGuideActive` (`@eva/onboarding`), y llega a la UI web por co
 | # | Paso (común) | Variante por persona (paso 3) | Auto-tilde (señal real) |
 |---|---|---|---|
 | 1 | **Pon tu color y tu logo** (pre-tildado si ya hay marca) | — | `logo_url` o preset o `primary_color ≠ default` |
-| 2 | **Mira tu app con tu marca** (Vive tu app) | — | `vive_tu_app_opened` |
-| 3 | **Arma tu primer [artefacto] desde la plantilla** | strength: rutina de Matías · nutrition: pauta de Ana · rehab: screening de Pedro · endurance: zonas + semana de Javiera | programa / plan V2 / movement_assessment / perfil cardio del demo editado o 1 nuevo |
+| 2 | **Mira tu app con tu marca** (Vive tu app) | — | `vive_tu_app_opened` **en la especialidad vigente** |
+| 3 | **Arma tu primer [artefacto] desde la plantilla** | strength: rutina de Matías · nutrition: pauta de Ana · rehab: screening de Pedro · endurance: zonas + semana de Javiera | **solo el artefacto de la rama actual**: `workout_programs` (strength) · `nutrition_plans_v2` (nutrition) · `movement_assessments` (rehab) · perfil cardio en `clients` (endurance) — del demo editado o 1 nuevo |
 | 4 | **Invita a tu primer alumno** — link copiado + botón WhatsApp con mensaje redactado | vocabulario: alumno · paciente · paciente · atleta | `clients` real (no demo) ≥1 |
 | 5 | **Tu alumno completó su primer entreno / registró su primera comida** — el único confeti | nutrition: primera comida registrada · resto: primer set logueado | `workout_logs` / `nutrition_intake_entries` del alumno real |
 
 - Progreso visible (1/5 ya tildado). Se mueve al pie del dashboard cuando llega a 5/5 o al tocar «Ocultar»
   (persistido en `onboarding_guide.dismissed`, web **y RN**).
+- **Memoria por especialidad (22-08, QA del owner, W8.1.3).** Los pasos **2 y 3** son del *mundo* de la
+  persona: entrar como Matías no es entrar como Pedro, y una rutina no es un screening. Se archivan en
+  `coaches.onboarding_guide.progress[persona] = { vive_tu_app, first_artifact }`; los pasos **1, 4 y 5** son
+  globales del coach. Reglas:
+  - al cambiar de especialidad en «Mi panel», el servidor archiva lo hecho en la rama vieja y **restaura**
+    lo de la nueva en `onboarding_guide.completed` (vacío si nunca la usó, con `false` EXPLÍCITO para que
+    el `localStorage` del navegador no reviva el tilde). Volver a fuerza recupera lo de fuerza;
+  - la señal viva se acota además por `coaches.persona_set_at`: lo hecho en otra rama no tilda la actual
+    (`loadPersonaArtifactScope` = el más tardío entre `demo.seededAt + 2 min` y `persona_set_at`);
+  - `completed` sigue siendo la vista de la especialidad vigente: web y RN no cambian su lectura.
+- **Cambiar de especialidad mueve el alumno de ejemplo** (W8.1.3): se borra el de la rama vieja y se siembra
+  el de la nueva, con aviso al coach («Cambiamos tu alumno de ejemplo: ahora es Pedro»); a `other` solo se
+  borra; si el coach ya lo había borrado a mano no se resucita (para eso está «Volver a sembrar»). Si el
+  sembrado falla, la especialidad queda guardada igual y el error se informa con su camino de salida.
 - Sin tour automático al entrar. Tours existentes (marca, builder, nutrición) quedan como «?» contextual.
 - Modal de bienvenida Free: solo texto, 3 líneas, «Recordármelo después»; copy coherente con v3 (white-label
   incluido). Se unifican los 5 copys en **una** fuente (`@eva/onboarding` o `packages/coach-nav`).
@@ -263,6 +277,15 @@ puro compartido, `isGuideActive` (`@eva/onboarding`), y llega a la UI web por co
 - Misma pantalla de persona en RN (molde: `components/entry/RoleCards.tsx`), checklist v2 arriba del home y
   **persistido** (hoy `home.tsx` no pasa `onboardingGuide`), demo y plantillas vía la API mobile existente,
   invitación con share sheet nativo + WhatsApp. OTA-able salvo eventos PostHog (la key sigue muda en 1.1.2).
+- **Contrato de la memoria por especialidad (22-08, W8.1.3).** `GET /api/mobile/coach/dashboard` sirve el
+  MISMO estado que la web, resuelto en el servidor: `onboardingV2.signals.viveTuAppOpened` y
+  `.hasFirstArtifact` son de la especialidad ACTUAL y ya vienen sumadas con lo archivado;
+  `onboardingV2.guide.completed` sigue siendo la vista de la rama vigente (la app no cambia su lectura) y
+  `onboardingV2.personaProgress` (`{ vive_tu_app?, first_artifact? }`) expone lo archivado por si la app
+  quiere distinguir «ya lo había hecho» de «lo hizo hoy».
+- `POST /api/mobile/coach/persona` con `reorderPanel` (Mi panel de RN) hace lo mismo que la web —archiva la
+  guía y re-siembra el alumno de ejemplo— y devuelve `{ demo: { action, demoName, demoClientId, error }, notice }`
+  para el toast «Cambiamos tu alumno de ejemplo: ahora es Pedro».
 
 ### 10. Medición (definición de éxito)
 

@@ -159,6 +159,16 @@ export async function GET(request: NextRequest) {
          * `coaches.onboarding_guide` que la app necesita, parseado con el MISMO parser que la web
          * (`parseOnboardingGuide`); el jsonb crudo sigue viajando en `onboardingGuide` para lo
          * demás (`emitted`, `ahaMomentSent`, `invite_code_confirmed`, inventario del demo).
+         *
+         * Desde W8.1.3 la guía tiene MEMORIA POR ESPECIALIDAD y eso cambia dos cosas para la app:
+         *  - `signals.viveTuAppOpened` y `signals.hasFirstArtifact` son de la especialidad ACTUAL
+         *    (lo hecho como fuerza ya no tilda el screening de rehabilitación) y ya vienen sumadas
+         *    con lo archivado en `onboarding_guide.progress[persona]`.
+         *  - `guide.completed` sigue siendo la vista de la especialidad vigente: al cambiar de rama,
+         *    el servidor archiva los pasos 2 y 3 de la vieja y restaura los de la nueva, así que la
+         *    app NO tiene que hacer nada especial — solo seguir uniendo señales con `completed`.
+         *  - `personaProgress` (nuevo, `{ vive_tu_app?, first_artifact? }`) expone lo archivado de
+         *    la rama actual por si la app quiere distinguir «ya lo había hecho» de «lo hizo hoy».
          */
         onboardingV2: {
             ...onboardingV2Data,

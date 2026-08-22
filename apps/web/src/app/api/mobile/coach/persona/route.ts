@@ -13,6 +13,12 @@ import {
     writePersonaDomainPrefs,
 } from '@/services/coach/persona.service'
 import { loadPersonaGateStatus } from '@/services/onboarding/onboarding-v2.queries'
+import {
+    archivePersonaGuideProgress,
+    demoChangeNotice,
+    reseedDemoForPersonaChange,
+    type DemoChangeResult,
+} from '@/services/onboarding/persona-switch.service'
 import { resolveMobileClientMutationContext } from '@/app/api/mobile/coach/clients/_mutation-auth'
 
 /**
@@ -129,6 +135,19 @@ export async function POST(request: NextRequest) {
         const reorderPanel = parsed.data.reorderPanel === true
 
         const previous = await readCoachPersona(ctx.userDb, ctx.userId)
+        const personaChanged = previous.persona != null && previous.persona !== persona
+
+        // Memoria de la guía por especialidad (W8.1.3), ANTES de guardar: mide los pasos 2 y 3 con
+        // el `persona_set_at` viejo. Mismo servicio que usa la web: las dos «Mi panel» no pueden
+        // divergir en qué recuerda la guía.
+        const memory = await archivePersonaGuideProgress(ctx.userDb, {
+            coachId: ctx.userId,
+            from: previous.persona,
+            to: persona,
+        })
+        if (memory.error) {
+            console.error('[mi-panel/rn] no se pudo archivar el progreso de la guía', memory.error)
+        }
 
         const saved = await saveCoachPersona(ctx.userDb, ctx.userId, persona, alsoOther)
         if (!saved.ok) {
@@ -153,6 +172,11 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Cambió de rama ⇒ el alumno de ejemplo también (Matías → Pedro). Idéntico a la web.
+        const demo: DemoChangeResult = personaChanged
+            ? await reseedDemoForPersonaChange(ctx.admin, { coachId: ctx.userId, persona, surface: 'rn' })
+            : { action: 'kept', demoName: PERSONA_COPY[persona].demoName, demoClientId: null, error: null }
+
         await recordOnboardingEvent(ctx.admin, {
             coachId: ctx.userId,
             eventType: 'persona_selected',
@@ -163,15 +187,33 @@ export async function POST(request: NextRequest) {
                 source: 'mi_panel',
                 changed: previous.persona !== persona,
                 reordered: reorderPanel,
+                demo: demo.action,
             },
         })
         await capturePostHogServerEvent({
             event: 'persona_selected',
             distinctId: ctx.userId,
-            properties: { persona, also_other: alsoOther, surface: 'rn', source: 'mi_panel' },
+            properties: {
+                persona,
+                also_other: alsoOther,
+                surface: 'rn',
+                source: 'mi_panel',
+                changed: previous.persona !== persona,
+                demo: demo.action,
+            },
         })
 
-        return NextResponse.json({ ok: true, demoClientId: null, reordered: reorderPanel })
+        // 200 aunque el ejemplo falle: la especialidad YA quedó guardada y decirle a la app que
+        // todo falló la haría revertir la pantalla. El detalle viaja en `demo.error`.
+        return NextResponse.json({
+            ok: true,
+            demoClientId: demo.demoClientId,
+            reordered: reorderPanel,
+            /** `{ action, demoName, demoClientId, error }` — la app avisa «ahora es Pedro». */
+            demo,
+            /** Aviso listo para el toast (`null` si no hubo cambio de alumno de ejemplo). */
+            notice: demo.error ?? demoChangeNotice(demo),
+        })
     }
 
     const applied = await applyCoachPersona({

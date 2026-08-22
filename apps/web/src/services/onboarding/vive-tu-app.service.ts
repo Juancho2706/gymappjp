@@ -58,7 +58,7 @@ export async function createViveTuAppLink(
 
     const { data: coach } = await db
         .from('coaches')
-        .select('id, slug, invite_code')
+        .select('id, slug, invite_code, persona')
         .eq('id', coachId)
         .maybeSingle()
 
@@ -96,11 +96,16 @@ export async function createViveTuAppLink(
 
     // Señal del paso 2. Es medición: que falle no puede impedirle al coach ver su app, por eso
     // `recordOnboardingEvent` traga el error (solo lo advierte en el log).
+    //
+    // La `persona` viaja en el metadata desde W8.1.3: «entré como Matías» no es «entré como Pedro»,
+    // y el paso 2 se archiva por especialidad. La señal viva se acota por `persona_set_at`
+    // (`resolveViveTuAppOpened`), así que esto es para la MEDICIÓN — poder leer el funnel por rama
+    // sin cruzar contra el estado actual del coach, que cambia.
     await recordOnboardingEvent(admin, {
         coachId,
         stepKey: VIVE_TU_APP_STEP_KEY,
         eventType: 'vive_tu_app_opened',
-        metadata: { surface },
+        metadata: { surface, persona: coach?.persona ?? null },
     })
 
     return { ok: true, url, demoName: demo.full_name }

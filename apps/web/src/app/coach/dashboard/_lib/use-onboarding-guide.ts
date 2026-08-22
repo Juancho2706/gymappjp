@@ -282,6 +282,25 @@ export function useOnboardingGuide(input: {
     }
 }
 
+/**
+ * Paleta del confeti: la MARCA del coach primero (el layout /coach publica `--theme-primary` y
+ * `--theme-primary-rgb` por coach), después dos neutros de celebración. Antes la lista arrancaba
+ * con `#1462DC` fijo — azul EVA — así que la celebración de un coach con marca rosa salía azul
+ * (bug de white-label del QA 22-08). Sin CSS var resuelta (SSR/jsdom) cae al azul EVA de siempre.
+ */
+function confettiBrandColors(): string[] {
+    const fallback = '#1462DC'
+    let brand = fallback
+    try {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim()
+        // Solo hex: `--theme-primary` se emite siempre como hex resuelto por `resolveBrandTheme`.
+        if (/^#[0-9a-f]{3,8}$/i.test(raw)) brand = raw
+    } catch {
+        /* sin getComputedStyle (entornos de test): la celebración igual se dispara */
+    }
+    return [brand, brand, '#22c55e', '#34d399', '#f59e0b']
+}
+
 /** Confeti del aha: una sola vez por coach y respetando `prefers-reduced-motion`. */
 async function fireAhaConfetti(coachId: string): Promise<void> {
     if (typeof window === 'undefined') return
@@ -297,6 +316,6 @@ async function fireAhaConfetti(coachId: string): Promise<void> {
         particleCount: 130,
         spread: 72,
         origin: { y: 0.4 },
-        colors: ['#1462DC', '#38bdf8', '#22c55e', '#34d399', '#f59e0b'],
+        colors: confettiBrandColors(),
     })
 }

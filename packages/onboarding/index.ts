@@ -508,3 +508,23 @@ export function resolveRnRoute(
 // Vive en su propio archivo para que web y RN compartan la MISMA condición; se re-exporta acá
 // para que el paquete siga teniendo una sola puerta de entrada.
 export { isGuideActive, type GuideModeInput } from './guide-mode'
+
+// ── Memoria por especialidad (QA del owner 22-08, W8.1.3) ────────────────────────────────────
+// Los pasos 2 y 3 dependen del mundo de la persona: se archivan en
+// `onboarding_guide.progress[persona]` para que cambiar de especialidad no tilde lo que no se
+// hizo, y volver a la anterior recupere lo que sí. Misma puerta de entrada para web y RN.
+export {
+    GUIDE_PROGRESS_KEY,
+    PERSONA_SCOPED_STEP_KEYS,
+    applyPersonaSwitch,
+    isPersonaScopedStep,
+    mergePersonaProgress,
+    normalizePersonaProgress,
+    readPersonaProgress,
+    readProgressByPersona,
+    type PersonaScopedStepKey,
+    type PersonaStepProgress,
+    type PersonaSwitchInput,
+    type PersonaSwitchPatch,
+    type ProgressByPersona,
+} from './persona-progress'

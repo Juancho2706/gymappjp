@@ -1,6 +1,15 @@
-import type { OnboardingSignals } from '@eva/onboarding'
+import {
+    GUIDE_PROGRESS_KEY,
+    PERSONA_SCOPED_STEP_KEYS,
+    applyPersonaSwitch,
+    normalizePersonaProgress,
+    readPersonaProgress,
+    type OnboardingSignals,
+    type PersonaStepProgress,
+} from '@eva/onboarding'
 import { PERSONAS, type Persona } from '@eva/schemas'
 import type { DbClient } from '@/infrastructure/db/interfaces'
+import type { Json } from '@/lib/database.types'
 import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import { getDemoClientId } from '@/services/onboarding/demo-student.service'
@@ -107,26 +116,79 @@ export function artifactCutoff(seededAt: string | null | undefined): string | nu
     return new Date(t + SEED_SETTLE_MS).toISOString()
 }
 
+/** ISO válido o `null`. Un `persona_set_at` corrupto nunca puede recortar las señales. */
+function safeIso(raw: unknown): string | null {
+    if (typeof raw !== 'string' || raw === '') return null
+    return Number.isNaN(Date.parse(raw)) ? null : raw
+}
+
+/** El MÁS TARDÍO de los dos cortes (cualquiera puede faltar). */
+function laterIso(a: string | null, b: string | null): string | null {
+    if (a == null) return b
+    if (b == null) return a
+    return Date.parse(a) >= Date.parse(b) ? a : b
+}
+
 /**
- * ¿El coach ya creó su primer artefacto? La señal cambia por persona (SPEC §6, paso 3) porque un
- * nutricionista nunca podría tildar «crea tu primer programa» — ese era el drift del checklist v1.
+ * Corte de las señales que dependen de la especialidad (pasos 2 y 3).
  *
- * El alumno de ejemplo NO cuenta (auditoría 22-08, W8.1.1): el seed escribe justo estas filas y el
- * paso 3 nacía tildado, sin entrada a la tarea guiada. Regla de la SPEC, «del demo EDITADO o 1
- * nuevo»: solo cuentan filas con `updated_at` posterior al corte del seed (`artifactCutoff`); sin
- * demo sembrado se cuenta todo, como siempre.
+ * Son DOS cortes que se suman:
+ *  - el del alumno de ejemplo (`seededAt + 2 min`): lo que escribió el seed no es trabajo del coach;
+ *  - el de la ESPECIALIDAD (`coaches.persona_set_at`): lo hecho en otra rama no tilda la actual.
+ *    Ese es el bug del QA del owner 22-08 — la plantilla que aplicó como fuerza le tildaba «Haz el
+ *    screening de Pedro» al pasarse a rehabilitación. Lo hecho ANTES no desaparece: queda archivado
+ *    en `onboarding_guide.progress[persona]` y vuelve cuando el coach vuelve a esa rama.
+ *
+ * Coach sin demo y sin `persona_set_at` (los 48 con persona NULL, coaches viejos) ⇒ sin corte:
+ * se cuenta todo, exactamente como antes.
+ */
+export interface PersonaArtifactScope {
+    /** `updated_at` mínimo para que una fila cuente. `null` = cuenta todo. */
+    cutoff: string | null
+    /** Instante en que el coach entró a su especialidad actual (`coaches.persona_set_at`). */
+    personaEpoch: string | null
+    /** jsonb crudo de `coaches.onboarding_guide` (trae `demo` y `progress`). */
+    guide: unknown
+}
+
+export async function loadPersonaArtifactScope(db: DbClient, coachId: string): Promise<PersonaArtifactScope> {
+    const { data } = await db
+        .from('coaches')
+        .select('onboarding_guide, persona_set_at')
+        .eq('id', coachId)
+        .maybeSingle()
+    const guide = data?.onboarding_guide ?? null
+    const personaEpoch = safeIso(data?.persona_set_at)
+    return {
+        cutoff: laterIso(artifactCutoff(readDemoSeededAt(guide)), personaEpoch),
+        personaEpoch,
+        guide,
+    }
+}
+
+/**
+ * ¿El coach ya creó el primer artefacto DE SU ESPECIALIDAD? (SPEC §6, paso 3). Un nutricionista
+ * nunca podría tildar «crea tu primer programa» — ese era el drift del checklist v1.
+ *
+ * Cada rama mira SU tabla, y solo la suya (QA del owner 22-08): programa para fuerza, pauta V2
+ * para nutrición, screening para rehabilitación, perfil cardio para resistencia. Antes rehab y
+ * endurance aceptaban además cualquier `workout_programs`, y por eso la plantilla que el owner
+ * aplicó como fuerza le tildó «Haz el screening de 7 patrones de Pedro» al cambiarse de rama.
+ *
+ * El alumno de ejemplo NO cuenta (W8.1.1) y lo hecho en OTRA especialidad tampoco (W8.1.3): solo
+ * cuentan filas con `updated_at` posterior al corte de `loadPersonaArtifactScope` — el seed más
+ * la entrada a la rama actual. Sin corte (coach sin demo ni `persona_set_at`) se cuenta todo.
+ *
+ * `scope` es opcional: lo pasa quien ya leyó la fila del coach (`loadOnboardingSignals`) para no
+ * pagar la consulta dos veces.
  */
 export async function resolveFirstArtifact(
     supabase: DbClient,
     userId: string,
     persona: Persona | null,
+    scope?: PersonaArtifactScope,
 ): Promise<boolean> {
-    const { data: guideRow } = await supabase
-        .from('coaches')
-        .select('onboarding_guide')
-        .eq('id', userId)
-        .maybeSingle()
-    const cutoff = artifactCutoff(readDemoSeededAt(guideRow?.onboarding_guide))
+    const { cutoff } = scope ?? (await loadPersonaArtifactScope(supabase, userId))
 
     const programs = () => {
         let q = supabase.from('workout_programs').select('id', { count: 'exact', head: true }).eq('coach_id', userId)
@@ -149,35 +211,48 @@ export async function resolveFirstArtifact(
         if (cutoff) q = q.gt('updated_at', cutoff)
         return countOrZero(q)
     }
+    /**
+     * Resistencia: el perfil cardio vive en columnas de `clients` (`resting_hr`, `ref_5k_time_sec`,
+     * que escribe `coach/cardio/_actions`). Cuenta el de un alumno REAL o el del propio demo si el
+     * coach lo TOCÓ después del corte — «Revisa las zonas de Javiera» es justamente la tarea guiada,
+     * y sin esa rama el paso 3 de resistencia sería intildable haciendo lo que la guía pide.
+     */
+    const cardioProfiles = async () => {
+        const real = countOrZero(
+            supabase
+                .from('clients')
+                .select('id', { count: 'exact', head: true })
+                .eq('coach_id', userId)
+                .eq('is_archived', false)
+                .eq('is_demo', false)
+                .or('ref_5k_time_sec.not.is.null,resting_hr.not.is.null'),
+        )
+        if (cutoff == null) return (await real) > 0
+
+        const demoTouched = countOrZero(
+            supabase
+                .from('clients')
+                .select('id', { count: 'exact', head: true })
+                .eq('coach_id', userId)
+                .eq('is_archived', false)
+                .eq('is_demo', true)
+                .or('ref_5k_time_sec.not.is.null,resting_hr.not.is.null')
+                .gt('updated_at', cutoff),
+        )
+        const [realCount, touchedCount] = await Promise.all([real, demoTouched])
+        return realCount > 0 || touchedCount > 0
+    }
 
     switch (persona) {
         case 'nutrition':
             return (await nutritionPlans()) > 0
-        case 'rehab': {
-            // Screening nuevo/editado o la pauta domiciliaria (programa) que arma la tarea guiada.
-            const [assessmentCount, programCount] = await Promise.all([assessments(), programs()])
-            return assessmentCount > 0 || programCount > 0
-        }
-        case 'endurance': {
-            // Perfil cardio de un alumno REAL (el demo nace con FC de reposo y marca de 5K) o una
-            // semana ya armada.
-            const [withCardio, programCount] = await Promise.all([
-                countOrZero(
-                    supabase
-                        .from('clients')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('coach_id', userId)
-                        .eq('is_archived', false)
-                        .eq('is_demo', false)
-                        .or('ref_5k_time_sec.not.is.null,resting_hr.not.is.null'),
-                ),
-                programs(),
-            ])
-            return withCardio > 0 || programCount > 0
-        }
+        case 'rehab':
+            return (await assessments()) > 0
+        case 'endurance':
+            return cardioProfiles()
         case 'other':
         case null: {
-            // Panel completo: cuenta cualquiera de los dos artefactos.
+            // Panel completo: no hay «mundo» propio, cuenta cualquiera de los dos artefactos.
             const [programCount, planCount] = await Promise.all([programs(), nutritionPlans()])
             return programCount > 0 || planCount > 0
         }
@@ -185,6 +260,106 @@ export async function resolveFirstArtifact(
         default:
             return (await programs()) > 0
     }
+}
+
+/**
+ * Paso 2 («Mira tu app con tu marca») acotado a la especialidad vigente: el evento
+ * `vive_tu_app_opened` es «entré como Matías», y entrar como Matías no es entrar como Pedro. Lo
+ * hecho en la rama anterior no se pierde — vuelve por `onboarding_guide.progress[persona]`.
+ */
+export async function resolveViveTuAppOpened(
+    db: DbClient,
+    coachId: string,
+    personaEpoch: string | null,
+): Promise<boolean> {
+    let q = db
+        .from('coach_onboarding_events')
+        .select('id')
+        .eq('coach_id', coachId)
+        .eq('event_type', 'vive_tu_app_opened')
+        .limit(1)
+    if (personaEpoch) q = q.gte('created_at', personaEpoch)
+    const { data } = await q
+    return (data?.length ?? 0) > 0
+}
+
+/** `onboarding_guide.demo.persona`: la rama a la que pertenece el alumno de ejemplo vigente. */
+export function readDemoPersona(guide: unknown): Persona | null {
+    if (guide == null || typeof guide !== 'object') return null
+    const demo = (guide as { demo?: unknown }).demo
+    if (demo == null || typeof demo !== 'object') return null
+    return parsePersona((demo as { persona?: unknown }).persona as string | null | undefined)
+}
+
+/**
+ * BACKFILL de una sola vez para los coaches que ya se habían cambiado de especialidad ANTES de que
+ * existiera la memoria por rama (W8.1.3, incluido el propio owner: su `completed` global dice
+ * «primer artefacto hecho» por la rutina que armó como fuerza, y con eso la guía le tildaba el
+ * screening de rehabilitación).
+ *
+ * No hay SQL de por medio: la primera vez que la guía se carga sin `onboarding_guide.progress`, lo
+ * tildado se le atribuye a la rama del alumno de ejemplo vigente (`demo.persona` — el mundo en el
+ * que ese trabajo se hizo) y el `completed` global pasa a ser la vista de la rama actual. Después
+ * la clave `progress` existe y esto no vuelve a correr nunca.
+ *
+ * Conservador a propósito: sin persona actual, sin demo que atribuir o sin nada tildado NO se
+ * escribe nada (no se le puede quitar un tilde a alguien de quien no sabemos en qué rama lo ganó).
+ */
+async function ensurePersonaProgress(
+    db: DbClient,
+    coachId: string,
+    persona: Persona | null,
+    scope: PersonaArtifactScope,
+): Promise<PersonaStepProgress> {
+    const guide = scope.guide
+    const guideRecord = guide != null && typeof guide === 'object' && !Array.isArray(guide)
+        ? (guide as Record<string, unknown>)
+        : {}
+    const alreadyMigrated =
+        guideRecord[GUIDE_PROGRESS_KEY] != null && typeof guideRecord[GUIDE_PROGRESS_KEY] === 'object'
+    if (alreadyMigrated || persona == null) return readPersonaProgress(guide, persona)
+
+    const completed = normalizePersonaProgress(guideRecord.completed)
+    const hasSomething = PERSONA_SCOPED_STEP_KEYS.some((key) => completed[key] === true)
+    const demoPersona = readDemoPersona(guide)
+    if (!hasSomething || demoPersona == null) return {}
+
+    const patch = applyPersonaSwitch({ guide, from: demoPersona, to: persona, doneInFrom: completed })
+    const { error } = await db
+        .from('coaches')
+        .update({
+            onboarding_guide: {
+                ...guideRecord,
+                [GUIDE_PROGRESS_KEY]: patch.progress,
+                completed: { ...(guideRecord.completed as Record<string, unknown> | undefined), ...patch.completed },
+            } as Json,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', coachId)
+    if (error) {
+        // Que el backfill falle no puede tumbar la guía: las señales del servidor ya son correctas
+        // (la memoria vacía es el estado seguro) y el intento se repite en la próxima carga.
+        console.warn('[onboarding-v2] no se pudo migrar el progreso por especialidad:', error.message)
+    }
+    return patch.restored
+}
+
+/**
+ * Los DOS pasos que dependen de la especialidad, medidos EN VIVO (sin la memoria archivada). Lo
+ * usa el cambio de persona para saber qué guardar en la rama que se abandona.
+ */
+export async function loadPersonaScopedSignals(
+    db: DbClient,
+    coachId: string,
+    persona: Persona | null,
+    scope?: PersonaArtifactScope,
+): Promise<PersonaStepProgress> {
+    const resolved = scope ?? (await loadPersonaArtifactScope(db, coachId))
+    const [viveTuApp, firstArtifact] = await Promise.all([
+        resolveViveTuAppOpened(db, coachId, resolved.personaEpoch),
+        resolveFirstArtifact(db, coachId, persona, resolved),
+    ])
+    return { vive_tu_app: viveTuApp, first_artifact: firstArtifact }
 }
 
 // ── Señales de la guía ───────────────────────────────────────────────────────────────────────
@@ -203,14 +378,32 @@ export async function loadOnboardingSignals(
     persona: Persona | null,
     brand: BrandSignalRow,
 ): Promise<OnboardingSignals> {
-    const [viveTuAppRows, hasFirstArtifact, realClients, workoutActivity, intakeActivity] = await Promise.all([
-        db
-            .from('coach_onboarding_events')
-            .select('id')
-            .eq('coach_id', coachId)
-            .eq('event_type', 'vive_tu_app_opened')
-            .limit(1),
-        resolveFirstArtifact(db, coachId, persona),
+    return (await loadOnboardingSignalsDetailed(db, coachId, persona, brand)).signals
+}
+
+/** Lo mismo, más la memoria archivada de la especialidad: la API móvil la publica tal cual. */
+export interface OnboardingSignalsDetailed {
+    signals: OnboardingSignals
+    /** `onboarding_guide.progress[persona]`: lo que el coach ya hizo EN ESTA rama. */
+    personaProgress: PersonaStepProgress
+}
+
+export async function loadOnboardingSignalsDetailed(
+    db: DbClient,
+    coachId: string,
+    persona: Persona | null,
+    brand: BrandSignalRow,
+): Promise<OnboardingSignalsDetailed> {
+    // UNA lectura de `coaches` para los dos cortes (seed + especialidad) y para la memoria; antes
+    // la pagaba `resolveFirstArtifact` por dentro, así que no hay consulta de más.
+    const scope = await loadPersonaArtifactScope(db, coachId)
+    // Lee la memoria de la rama y, la PRIMERA vez, migra a los coaches que ya se habían cambiado de
+    // especialidad antes de que la memoria existiera (una escritura por coach, nunca más).
+    const memory = await ensurePersonaProgress(db, coachId, persona, scope)
+
+    const [viveTuAppOpened, hasFirstArtifact, realClients, workoutActivity, intakeActivity] = await Promise.all([
+        resolveViveTuAppOpened(db, coachId, scope.personaEpoch),
+        resolveFirstArtifact(db, coachId, persona, scope),
         countActiveStandaloneClients(db, coachId).catch(() => 0),
         // El aha pertenece al alumno REAL: el demo trae actividad sembrada y tildaría el paso 5
         // el día 1 (de ahí `clients.is_demo = false` en los dos joins).
@@ -231,11 +424,16 @@ export async function loadOnboardingSignals(
     ])
 
     return {
-        hasBrand: hasCustomBrand(brand),
-        viveTuAppOpened: (viveTuAppRows.data?.length ?? 0) > 0,
-        hasFirstArtifact,
-        realClients,
-        realStudentActivity: (workoutActivity.data?.length ?? 0) > 0 || (intakeActivity.data?.length ?? 0) > 0,
+        signals: {
+            hasBrand: hasCustomBrand(brand),
+            // Las dos señales de la especialidad se SUMAN a lo archivado: la señal viva mira la
+            // rama actual y la memoria devuelve lo que el coach ya había hecho en ella.
+            viveTuAppOpened: viveTuAppOpened || memory.vive_tu_app === true,
+            hasFirstArtifact: hasFirstArtifact || memory.first_artifact === true,
+            realClients,
+            realStudentActivity: (workoutActivity.data?.length ?? 0) > 0 || (intakeActivity.data?.length ?? 0) > 0,
+        },
+        personaProgress: memory,
     }
 }
 
@@ -309,6 +507,12 @@ export interface OnboardingV2ApiData extends PersonaGateStatus {
     /** Nombre REAL del alumno de ejemplo (el coach puede haberlo renombrado). */
     demoName: string | null
     signals: OnboardingSignals
+    /**
+     * Memoria de los pasos 2 y 3 EN LA ESPECIALIDAD ACTUAL (`onboarding_guide.progress[persona]`,
+     * W8.1.3). `signals` ya la trae sumada; viaja aparte para que la app pueda distinguir «lo hizo
+     * en esta rama» de «lo está haciendo ahora» sin re-derivarlo del jsonb crudo.
+     */
+    personaProgress: PersonaStepProgress
 }
 
 export async function loadOnboardingV2ApiData(
@@ -319,11 +523,12 @@ export async function loadOnboardingV2ApiData(
 ): Promise<OnboardingV2ApiData> {
     const persona = parsePersona(coach.persona)
 
-    const [gate, signals, demoClientId] = await Promise.all([
+    const [gate, detailed, demoClientId] = await Promise.all([
         loadPersonaGateStatus(db, coachId, coach),
-        loadOnboardingSignals(db, coachId, persona, brand),
+        loadOnboardingSignalsDetailed(db, coachId, persona, brand),
         getDemoClientId(db, coachId),
     ])
+    const { signals, personaProgress } = detailed
 
     let demoName: string | null = null
     if (demoClientId != null) {
@@ -331,5 +536,5 @@ export async function loadOnboardingV2ApiData(
         demoName = data?.full_name ?? null
     }
 
-    return { ...gate, demoClientId, demoName, signals }
+    return { ...gate, demoClientId, demoName, signals, personaProgress }
 }

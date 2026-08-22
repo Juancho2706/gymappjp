@@ -9,6 +9,12 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 import { deleteDemoStudent, seedDemoStudent } from '@/services/onboarding/demo-student.service'
 import {
+    archivePersonaGuideProgress,
+    demoChangeNotice,
+    reseedDemoForPersonaChange,
+    type DemoChangeResult,
+} from '@/services/onboarding/persona-switch.service'
+import {
     readCoachPersona,
     recordOnboardingEvent,
     saveCoachPersona,
@@ -25,12 +31,17 @@ import {
  *    manuales quedan exactamente como estaban.
  *  - Apagar/prender un dominio es una preferencia y SOLO ACHICA: nunca compra un módulo ni borra
  *    datos (el entitlement server-side sigue siendo el único gate de dinero).
+ *  - Cambiar de especialidad SÍ mueve el alumno de ejemplo y la memoria de la guía: el mundo de la
+ *    rama nueva es otro (Matías → Pedro) y los pasos 2 y 3 se archivan por especialidad
+ *    (`services/onboarding/persona-switch.service`, TASKS W8.1.3).
  *  - El alumno de ejemplo se siembra/borra con el cliente ADMIN porque el trigger
  *    `clients_guard_is_demo` solo deja marcar `is_demo` a `service_role`. La identidad del coach
  *    igual sale de la SESIÓN, nunca del input.
  */
 
-export type MiPanelResult = { ok: true; message: string } | { ok: false; error: string }
+export type MiPanelResult =
+    | { ok: true; message: string; demo?: DemoChangeResult }
+    | { ok: false; error: string; demo?: DemoChangeResult }
 
 const personaSchema = z.object({
     persona: PersonaSchema,
@@ -89,6 +100,19 @@ export async function saveMiPanelPersonaAction(input: SaveMiPanelPersonaInput): 
 
     const supabase = await createClient()
     const previous = await readCoachPersona(supabase, auth.coachId)
+    const personaChanged = previous.persona != null && previous.persona !== persona
+
+    // MEMORIA de la guía, ANTES de escribir la persona: `archivePersonaGuideProgress` mide los
+    // pasos 2 y 3 con el `persona_set_at` viejo y guarda lo hecho en la rama que se abandona. Que
+    // falle no aborta nada — la especialidad del coach pesa más que su checklist.
+    const memory = await archivePersonaGuideProgress(supabase, {
+        coachId: auth.coachId,
+        from: previous.persona,
+        to: persona,
+    })
+    if (memory.error) {
+        console.error('[mi-panel] no se pudo archivar el progreso de la guía', memory.error)
+    }
 
     const saved = await saveCoachPersona(supabase, auth.coachId, persona, alsoOther)
     if (!saved.ok) {
@@ -108,6 +132,13 @@ export async function saveMiPanelPersonaAction(input: SaveMiPanelPersonaInput): 
     }
 
     const admin = createServiceRoleClient()
+
+    // El mundo de la rama nueva es OTRO: Matías se va y llega Pedro. Solo cuando la especialidad
+    // cambió de verdad (guardar la misma no puede borrarle el ejemplo a nadie).
+    const demo: DemoChangeResult = personaChanged
+        ? await reseedDemoForPersonaChange(admin, { coachId: auth.coachId, persona, surface: 'web' })
+        : { action: 'kept', demoName: PERSONA_COPY[persona].demoName, demoClientId: null, error: null }
+
     await recordOnboardingEvent(admin, {
         coachId: auth.coachId,
         eventType: 'persona_selected',
@@ -118,19 +149,34 @@ export async function saveMiPanelPersonaAction(input: SaveMiPanelPersonaInput): 
             source: 'mi_panel',
             changed: previous.persona !== persona,
             reordered: reorderPanel,
+            demo: demo.action,
         },
     })
     await capturePostHogServerEvent({
         event: 'persona_selected',
         distinctId: auth.coachId,
-        properties: { persona, also_other: alsoOther, surface: 'web', source: 'mi_panel' },
+        properties: {
+            persona,
+            also_other: alsoOther,
+            surface: 'web',
+            source: 'mi_panel',
+            changed: previous.persona !== persona,
+            demo: demo.action,
+        },
     })
 
     revalidateCoachShell()
-    return {
-        ok: true,
-        message: reorderPanel ? 'Especialidad guardada y panel reordenado.' : 'Especialidad guardada.',
+    if (personaChanged) {
+        // La guía y el directorio cambiaron de alumno de ejemplo y de pasos tildados.
+        revalidatePath('/coach/guia')
+        revalidatePath('/coach/clients')
     }
+
+    if (demo.error) return { ok: false, error: demo.error, demo }
+
+    const base = reorderPanel ? 'Especialidad guardada y panel reordenado.' : 'Especialidad guardada.'
+    const notice = demoChangeNotice(demo)
+    return { ok: true, message: notice ? `${base} ${notice}` : base, demo }
 }
 
 /** Master switch de UN dominio. No toca la persona ni los otros dominios. */

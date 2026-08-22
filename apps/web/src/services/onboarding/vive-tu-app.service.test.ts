@@ -15,13 +15,13 @@ import { createViveTuAppLink } from './vive-tu-app.service'
 type DemoRow = { id: string; email: string; full_name: string } | null
 
 function setup(options: {
-    coach?: { id: string; slug: string | null; invite_code: string | null } | null
+    coach?: { id: string; slug: string | null; invite_code: string | null; persona?: string | null } | null
     demo?: DemoRow
     generateLink?: { data: unknown; error: { message: string } | null }
     insertError?: { message: string } | null
 } = {}) {
     const {
-        coach = { id: 'coach-1', slug: 'mi-marca', invite_code: 'EVA123' },
+        coach = { id: 'coach-1', slug: 'mi-marca', invite_code: 'EVA123', persona: 'strength' },
         demo = { id: 'demo-1', email: 'demo@evatest.cl', full_name: 'Matías Soto' },
         generateLink = { data: { properties: { hashed_token: 'HASH_SECRETO' } }, error: null },
         insertError = null,
@@ -82,7 +82,8 @@ describe('createViveTuAppLink', () => {
                 coach_id: 'coach-1',
                 step_key: 'vive_tu_app',
                 event_type: 'vive_tu_app_opened',
-                metadata: { surface: 'rn' },
+                // La `persona` viaja desde W8.1.3: el paso 2 se archiva por especialidad.
+                metadata: { surface: 'rn', persona: 'strength' },
             }),
         )
     })

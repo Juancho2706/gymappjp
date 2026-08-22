@@ -186,8 +186,9 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   (`readDemoSeededAt`) y solo cuenta filas con `updated_at > seededAt + 2 min` (`artifactCutoff`): un
   artefacto NUEVO (incluido uno para el propio demo, que es lo que crea la tarea guiada) o el sembrado
   EDITADO (las 3 tablas tienen trigger `set_updated_at` en LIVE, verificado). Sin inventario (other, demo
-  borrado, coach viejo) cuenta todo como antes. Rehab acepta también la pauta domiciliaria (programa);
-  resistencia excluye el perfil cardio del demo (`is_demo = false`). 9 tests nuevos
+  borrado, coach viejo) cuenta todo como antes. (Al 22-08 W8.1.3 endureció esto: cada rama mira SOLO su
+  tabla —rehab ya no acepta la pauta domiciliaria, resistencia ya no acepta programas— y el corte incluye
+  `persona_set_at`.) 9 tests nuevos
   (`onboarding-v2.queries.test.ts`) + 46 de consumidores verdes. LIVE limpiado tras el deploy: los 2 coaches
   con `completed.first_artifact = true` y 0 artefactos propios (`00109d66`, `7b1345a6` QA) vuelven a
   pendiente y se borra su `step_completed/first_artifact` del 22-08 (el índice único lo bloquearía al
@@ -197,8 +198,29 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   → `sin_demo`, solo toast) ni, para nutrition/rehab/endurance, abrir el paso 3 (`resolveTarget` → `null`).
   Depende de **D10**. Mientras: botón deshabilitado con explicación + «Volver a sembrar» en la misma tarjeta.
   [spec-web-01/EDGE-02/canvas-missed/EDGE-missed]
-- [ ] W8.1.3 Cambiar de persona en Mi panel: borrar + re-sembrar el demo de la persona nueva (con aviso);
-  hoy `saveMiPanelPersonaAction` no toca el demo y «Volver a sembrar» responde `alreadyExisted`. [EDGE-03]
+- [x] W8.1.3 🔴 **Cambiar de persona: memoria de la guía + demo de la rama nueva** — HECHO 22-08 (QA del
+  owner: hizo la guía como fuerza, se pasó a rehabilitación y le quedó tildado «Haz el screening de 7
+  patrones de Pedro» sin haberlo hecho, apuntando a un Pedro que no existía). Tres piezas:
+  1. **Memoria por especialidad**: `onboarding_guide.progress[persona] = { vive_tu_app, first_artifact }`
+     (`packages/onboarding/persona-progress.ts`, puro y compartido web↔RN). Al cambiar de rama,
+     `archivePersonaGuideProgress` (`services/onboarding/persona-switch.service.ts`) archiva lo hecho en la
+     vieja —unión de la señal VIVA y del `completed` ya persistido, por el debounce de 450 ms del
+     checklist— y restaura lo de la nueva en `completed` con `false` EXPLÍCITO (es lo único que le gana al
+     `localStorage`). Corre ANTES de `saveCoachPersona`: después, `persona_set_at` ya sería el nuevo.
+     Pasos 1, 4 y 5 siguen globales.
+  2. **Señal viva por rama**: `loadPersonaArtifactScope` corta por el MÁS TARDÍO entre `demo.seededAt + 2 min`
+     y `coaches.persona_set_at`, y `resolveFirstArtifact` mira SOLO la tabla de la rama (rehab dejó de
+     aceptar `workout_programs`; endurance dejó de aceptarlos y cuenta el perfil cardio de un alumno real o
+     el del demo TOCADO tras el corte, que es la tarea guiada «revisa las zonas de Javiera»).
+     `resolveViveTuAppOpened` filtra el evento por `created_at >= persona_set_at` y el evento se emite con
+     `metadata.persona`.
+  3. **Alumno de ejemplo**: `saveMiPanelPersonaAction` y `POST /api/mobile/coach/persona` (rama Mi panel)
+     llaman a `reseedDemoForPersonaChange` → borrar + sembrar con aviso («Cambiamos tu alumno de ejemplo:
+     ahora es Pedro»); `other` solo borra; sin demo no se resucita nada; si el sembrado falla la persona
+     queda guardada igual y el error dice «Volver a sembrar». RN recibe `demo` + `notice` en el POST y
+     `onboardingV2.personaProgress` en el dashboard. 30 tests nuevos (`persona-progress`,
+     `onboarding-v2.queries`, `persona-switch.service`, `mi-panel.actions`). Falta: aviso en la UI de Mi
+     panel web (hoy va dentro de `message`) y QA en device. [EDGE-03]
 - [ ] W8.1.4 El demo no se archiva ni se borra por el camino normal: la ficha bloquea archivar/borrar y
   ofrece solo «Borrar ejemplo»; `deleteClientHard` con rama `is_demo` → `deleteDemoStudent` (inventario +
   áreas). Archivarlo hoy dispara `deactivate_archived_client_assignments` sin inverso y deja «Borrar»
