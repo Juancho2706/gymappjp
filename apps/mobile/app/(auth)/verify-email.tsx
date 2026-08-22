@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowRight, Check, MailCheck, Send } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Card } from '../../components'
 import { ApiError, resendCoachConfirmation } from '../../lib/api'
+import { freePlanBenefits, storePlanChangeCaption } from '../../lib/client-cap'
 import {
   isResendDisabled,
   resendButtonLabel,
@@ -20,12 +20,15 @@ import {
 
 // Espejo mobile de la web `(auth)/verify-email/page.tsx`: pantalla post-registro coach free.
 // El cupo se deriva del catálogo (histórico QA 17-08: 3 → pricing v2: 2 → pricing v3 2026-08-21: 1).
-const BENEFITS = [
-  `${studentCountLabel(getTierMaxClients('free'))} sin costo, con tu marca`,
-  'Planes de entrenamiento ilimitados',
-  'Tu propia app para alumnos',
-  'Upgrade cuando quieras',
-]
+//
+// W6.6 (embudo Free→Pro): «Upgrade cuando quieras» era jerga de venta. La app dice el hecho —
+// puedes cambiar de plan — y ese beneficio es IDÉNTICO en las dos plataformas. El dónde (que solo
+// Android puede nombrar) NO se fusiona con el beneficio: baja como caption aparte, con el literal
+// canónico de `lib/client-cap.ts`, para que exista UNA sola línea de compliance en toda la app en
+// vez de una variante por pantalla. En iOS ese nodo no se monta (guideline 3.1.1: cero texto que
+// lleve a pagar). El split va por `Platform.OS`, jamás por storefront.
+const BENEFITS = freePlanBenefits()
+const STORE_CAPTION = storePlanChangeCaption(Platform.OS)
 
 export default function VerifyEmailScreen() {
   const { theme } = useTheme()
@@ -116,6 +119,14 @@ export default function VerifyEmailScreen() {
             </View>
           </Card>
 
+          {/* Android: única línea admitida sobre dónde se cambia el plan (texto plano, sin link,
+              sin `Linking`). En iOS `STORE_CAPTION` es undefined y este nodo no existe. */}
+          {STORE_CAPTION ? (
+            <Text testID="verify-email-store-note" className="text-subtle font-sans" style={styles.storeNote}>
+              {STORE_CAPTION}
+            </Text>
+          ) : null}
+
           {/* Sin esto, un correo caído en spam mataba la cuenta: el login rechaza hasta confirmar y
               el email ya está tomado para volver a registrarse (W4 del embudo Free→Pro). */}
           {/* El hint cambia solo (envio, 429, fallo) sin que nadie lo toque: sin live region,
@@ -173,5 +184,6 @@ const styles = StyleSheet.create({
   benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   benefitCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   benefitText: { flex: 1, fontSize: 13.5 },
+  storeNote: { fontSize: 12, lineHeight: 16, textAlign: 'center', marginTop: 10 },
   hint: { fontSize: 12.5, textAlign: 'center', marginTop: 18 },
 })

@@ -95,9 +95,12 @@ import { FONT } from '../../lib/typography'
 import { shadow } from '../../lib/shadows'
 import { useWorkspace } from '../../lib/workspace'
 import { WorkspaceSwitcherSheet } from './WorkspaceSwitcherSheet'
+import { ClientCapMeter } from './ClientCapMeter'
+// El ámbar del semáforo vive en UN solo lugar (lib/client-cap): el banner de cupo y el medidor
+// tienen que pintar el MISMO `--warning-500`; dos copias del hex divergen al primer ajuste del DS.
+import { capMeterLabel, capTone, WARNING_500 } from '../../lib/client-cap'
+import { isStoreSafeUrl } from '../../lib/store-compliance'
 import { AnimatedNumber } from '../AnimatedNumber'
-
-const WARNING_500 = '#F5A524' // --warning-500
 
 // Cupo del plan Free (catálogo de venta): el copy de onboarding lo interpola en dos listas y en el
 // primer paso. Con free = 1 (pricing v3) la concatenación a mano imprimía «1 alumnos activos», así
@@ -241,30 +244,39 @@ export function teamsBridgeThresholdFor(coach: CoachProfile): number {
   return Math.ceil(eliteClientLimitFor(coach) * 0.8)
 }
 
-export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachProfile; totalClients: number }) {
+/**
+ * `capClients` = alumnos que OCUPAN CUPO (`is_archived = false AND is_demo = false`, el predicado
+ * del gate del server), NO el KPI de alumnos activos: son números distintos y este banner tiene
+ * que decir lo mismo que el muro del alta. Lo sirve `lib/coach-dashboard.ts` (`data.capClients`).
+ */
+export function MobileTierUsageBanners({ coach, capClients }: { coach: CoachProfile; capClients: number }) {
   const freeLimit = Math.max(1, coach.maxClients ?? freeClientLimitFor(coach.createdAt))
   const eliteLimit = eliteClientLimitFor(coach)
   const teamsBridgeThreshold = teamsBridgeThresholdFor(coach)
   return (
     <View style={styles.tierStack}>
-      {coach.subscriptionTier === 'free' ? <MobileFreeTierBanner totalClients={totalClients} maxClients={freeLimit} /> : null}
-      {coach.subscriptionTier === 'elite' && totalClients >= teamsBridgeThreshold ? (
-        <MobileTeamsBridgeBanner totalClients={totalClients} maxClients={eliteLimit} />
+      {coach.subscriptionTier === 'free' ? <MobileFreeTierBanner capClients={capClients} maxClients={freeLimit} /> : null}
+      {coach.subscriptionTier === 'elite' && capClients >= teamsBridgeThreshold ? (
+        <MobileTeamsBridgeBanner capClients={capClients} maxClients={eliteLimit} />
       ) : null}
     </View>
   )
 }
 
-function MobileFreeTierBanner({ totalClients, maxClients }: { totalClients: number; maxClients: number }) {
+function MobileFreeTierBanner({ capClients, maxClients }: { capClients: number; maxClients: number }) {
   const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
   const max = maxClients
-  const used = Math.min(totalClients, max)
-  const pct = Math.round((used / max) * 100)
-  const full = used >= max
+  const used = Math.min(capClients, max)
+  // Mismo umbral/tono que el medidor (lib/client-cap): el banner y la barra no pueden discrepar.
+  const full = capTone(capClients, max) === 'full'
 
   return (
     <TouchableOpacity
+      accessibilityRole="button"
+      // El medidor de adentro va `accessible={false}`: sin esto el lector anuncia la fila tocable y
+      // después la barra como dos nodos, y el destino («Ver mi plan») quedaba sin nombrar.
+      accessibilityLabel={`${capMeterLabel(used, max)}. Ver mi plan`}
       activeOpacity={0.82}
       onPress={() => router.push('/coach/(tabs)/subscription')}
       style={[
@@ -279,20 +291,14 @@ function MobileFreeTierBanner({ totalClients, maxClients }: { totalClients: numb
       ]}
     >
       <View style={styles.tierMain}>
+        {/* El plural sale del catálogo (capMeterLabel): con Free = 1 el interpolado a mano decía
+            «1/1 alumnos». El medidor pinta la barra con el color de MARCA (<80 %) o ámbar. */}
         <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
-          {used}/{max} alumnos · Plan gratuito
+          {capMeterLabel(used, max)} · Plan gratuito
         </Text>
-        <View className="bg-track" style={styles.usageTrack}>
-          <View
-            style={[
-              styles.usageFill,
-              {
-                width: `${pct}%`,
-                backgroundColor: full ? WARNING_500 : theme.success,
-              },
-            ]}
-          />
-        </View>
+        {/* `used` (no `capClients`): el título y la etiqueta accesible del medidor tienen que
+            decir lo MISMO. Un coach por sobre su cupo se lee «lleno», nunca «3 de 1». */}
+        <ClientCapMeter active={used} max={max} variant="bar" compact accessible={false} />
       </View>
       <Text style={[styles.tierAction, { color: theme.primary, fontFamily: FONT.uiBold }]}>
         Ver mi plan →
@@ -304,11 +310,11 @@ function MobileFreeTierBanner({ totalClients, maxClients }: { totalClients: numb
 // Plan 04 (espejo del TeamsBridgeBanner web): el plan Growth salió de la venta.
 // Coach con cartera grande → puente a EVA Teams, NO upsell a un tier muerto.
 // Sin precios (pre-cierre Movida); CTA = mailto contacto@eva-app.cl. Muere el ?upgrade=growth.
-function MobileTeamsBridgeBanner({ totalClients, maxClients }: { totalClients: number; maxClients: number }) {
+function MobileTeamsBridgeBanner({ capClients, maxClients }: { capClients: number; maxClients: number }) {
   const { theme, resolvedScheme } = useTheme()
   // MISMO cupo real que dispara el banner (~80% de este número): umbral y copy no se contradicen.
   const max = maxClients
-  const pct = Math.round((Math.min(totalClients, max) / max) * 100)
+  const pct = Math.round((Math.min(capClients, max) / max) * 100)
 
   return (
     <TouchableOpacity
@@ -329,7 +335,7 @@ function MobileTeamsBridgeBanner({ totalClients, maxClients }: { totalClients: n
     >
       <View style={[styles.tierMain, { gap: 2 }]}>
         <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
-          {totalClients}/{max} alumnos · {pct}% de tu plan Elite
+          {capClients}/{max} alumnos · {pct}% de tu plan Elite
         </Text>
         <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           {/* `max` = cupo real de ESTE coach en vez de un número a mano: el corte hacia Teams ES
@@ -2108,7 +2114,12 @@ function NewsFeedRow({ item, onNavigate }: { item: CoachNewsItem; onNavigate: ()
             contentFit="cover"
           />
         ) : null}
-        {item.cta_url ? (
+        {/* El `cta_url` lo escribe el panel de admin, no el código: sin filtro, una novedad podía
+            mandar al coach a `/pricing` desde DENTRO de la app — exactamente el link-out a una
+            superficie de pago que Apple 3.1.1 prohíbe, y sin release de por medio. `isStoreSafeUrl`
+            (lib/store-compliance) es la allowlist; una URL fuera de ella no pinta CTA (el texto de
+            la novedad se muestra igual). */}
+        {item.cta_url && isStoreSafeUrl(item.cta_url) ? (
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => {
@@ -3666,16 +3677,6 @@ const styles = StyleSheet.create({
   tierAction: {
     flexShrink: 0,
     fontSize: 12,
-  },
-  usageTrack: {
-    height: 6,
-    width: '100%',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  usageFill: {
-    height: '100%',
-    borderRadius: 999,
   },
   quickActions: {
     flexDirection: 'row',

@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
+import { Archive, CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { CreateClientSchema } from '@eva/schemas'
-import { studentCountLabel, type SubscriptionTier } from '@eva/tiers'
-import { Input } from '../../../components'
+import { type SubscriptionTier } from '@eva/tiers'
+import { Button, Input } from '../../../components'
+import { toast } from '../../Toast'
 import { RefreshPlanButton } from '../RefreshPlanButton'
+import { ArchiveToFreeSpaceSheet } from './ArchiveToFreeSpaceSheet'
 import { FONT } from '../../../lib/typography'
 import { ApiError, apiFetch } from '../../../lib/api'
+import { capWallCopy } from '../../../lib/client-cap'
 import type { Theme } from '../../../lib/theme'
 import { DANGER, SUCCESS, WARNING } from './directory-shared'
 
@@ -102,9 +105,11 @@ function ModalButton({
  * CreateClientModal — bottom-sheet "Agregar Nuevo Alumno" (POST /api/mobile/coach/clients).
  * Espejo web `apps/web/src/app/coach/clients/CreateClientModal.tsx`: 3 estados excluyentes
  * en el mismo sheet: (A) formulario · (B) éxito + CTA WhatsApp (si el alumno trae teléfono) ·
- * (C) límite de alumnos del plan alcanzado (endpoint 402 UPGRADE_REQUIRED) — muro de ESTADO
- * + "Actualizar estado", sin link-out a la página de pago (anti-steering Apple 3.1.1 /
- * política de pagos de Google, ver `docs/research/cta-pagos-externos-stores-2026-07-31.md`).
+ * (C) muro de cupo del plan (endpoint 402 UPGRADE_REQUIRED) — ESTADO + acciones REALES dentro del
+ * producto: "Archivar un alumno" (libera cupo de verdad, reversible) y "Actualizar estado". Sin
+ * link-out a la página de pago (anti-steering Apple 3.1.1 / política de pagos de Google, ver
+ * `docs/research/cta-pagos-externos-stores-2026-07-31.md`); el único texto de tienda es el caption
+ * de Android que sirve `capWallCopy` (`lib/client-cap.ts`), nunca visible en iOS.
  * Modal RN nativo (sin @gorhom → sin
  * bomba -999). Los inputs usan el `Input` DS (borde de foco por style, sin re-clasificar el
  * subárbol → sin focus-hop Fabric 45798).
@@ -143,6 +148,8 @@ export function CreateClientModal({
   const [phase, setPhase] = useState<'form' | 'success' | 'upgrade'>('form')
   const [success, setSuccess] = useState<SuccessInfo | null>(null)
   const [upgradeLimit, setUpgradeLimit] = useState<number | undefined>(undefined)
+  const [showArchive, setShowArchive] = useState(false)
+  const [freedNotice, setFreedNotice] = useState(false)
 
   function handleClose() {
     setForm(EMPTY)
@@ -152,6 +159,8 @@ export function CreateClientModal({
     setPhase('form')
     setSuccess(null)
     setUpgradeLimit(undefined)
+    setShowArchive(false)
+    setFreedNotice(false)
     onClose()
   }
 
@@ -210,6 +219,10 @@ export function CreateClientModal({
         const limitFromMessage = Number(e.message.match(/\d+/)?.[0])
         const resolvedLimit = typeof maxClients === 'number' && maxClients > 0 ? maxClients : Number.isFinite(limitFromMessage) ? limitFromMessage : undefined
         setUpgradeLimit(resolvedLimit)
+        // El aviso «Cupo liberado» es de la vuelta ANTERIOR: si el alta vuelve a rebotar (el cupo
+        // que se liberó ya se ocupó, o el archivado no alcanzó), dejarlo prendido le diría al coach
+        // que tiene espacio justo mientras el muro le dice que no.
+        setFreedNotice(false)
         setPhase('upgrade')
       } else {
         setError(e instanceof Error ? e.message : 'No se pudo crear el alumno.')
@@ -226,6 +239,27 @@ export function CreateClientModal({
     Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`).catch(() => {})
     handleClose()
   }
+
+  /**
+   * El coach archivó al menos un alumno: hay cupo de verdad, así que el muro se desarma y el alta
+   * vuelve al formulario con los datos que ya había escrito (el 402 no los borra).
+   *
+   * Además del toast se pinta un aviso INLINE: el `<Toaster />` vive en el árbol de la pantalla
+   * (`app/_layout.tsx`) y este modal renderiza en su propia ventana nativa, así que el toast puede
+   * quedar por debajo. `onCreated` refresca la cartera de la pantalla de atrás para que el conteo
+   * y el cupo que bajan por props queden al día.
+   */
+  function handleFreed() {
+    setShowArchive(false)
+    setPhase('form')
+    setUpgradeLimit(undefined)
+    setFreedNotice(true)
+    toast.success('Cupo liberado')
+    onCreated()
+  }
+
+  // Split por `Platform.OS`, nunca por storefront (decisión cerrada del owner, SPEC embudo-free-pro).
+  const wallCopy = capWallCopy({ limit: upgradeLimit, platform: Platform.OS })
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose}>
@@ -272,25 +306,36 @@ export function CreateClientModal({
               <View style={{ height: 12 }} />
             </View>
           ) : phase === 'upgrade' ? (
-            // ─── (C) Límite de alumnos del plan ───────────────────────────────────
+            // ─── (C) Muro de cupo del plan ────────────────────────────────────────
+            // Copy + caption de tienda salen de `capWallCopy` (pura, testeada): el plural viene del
+            // catálogo compartido y la línea de Android JAMÁS se arma acá a mano.
             <View testID="create-client-limit" style={styles.stateWrap}>
               <View style={[styles.stateCircle, { backgroundColor: WARNING + '26' }]}>
                 <Lock size={32} color={WARNING} />
               </View>
-              <Text style={[styles.stateTitle, { color: theme.foreground }]}>
-                {/* Pricing v3: con free = 1 el interpolado a mano decía «1 alumnos». El plural sale
-                    del catálogo compartido (studentCountLabel), nunca de concatenar la 's'. */}
-                {upgradeLimit != null
-                  ? `Alcanzaste el límite de ${studentCountLabel(upgradeLimit)} de tu plan.`
-                  : 'Alcanzaste el límite de alumnos de tu plan.'}
-              </Text>
-              <Text style={[styles.stateBody, { color: theme.mutedForeground }]}>
-                Tus alumnos actuales no se ven afectados.
-              </Text>
-              <RefreshPlanButton full />
+              <Text style={[styles.stateTitle, { color: theme.foreground }]}>{wallCopy.title}</Text>
+              <Text style={[styles.stateBody, { color: theme.mutedForeground }]}>{wallCopy.body}</Text>
+              <View style={styles.stateActions}>
+                <Button
+                  testID="create-client-limit-archive"
+                  label="Archivar un alumno"
+                  variant="sport"
+                  leftIcon={Archive}
+                  full
+                  onPress={() => setShowArchive(true)}
+                />
+                <RefreshPlanButton full />
+              </View>
               <TouchableOpacity testID="create-client-limit-dismiss" onPress={handleClose} hitSlop={8}>
-                <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Cerrar</Text>
+                <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Entendido</Text>
               </TouchableOpacity>
+              {/* Android: UNA línea de texto plano, sin link ni subrayado. En iOS `caption` es
+                  undefined y este nodo no existe (guideline 3.1.1). */}
+              {wallCopy.caption ? (
+                <Text testID="create-client-limit-store-note" style={[styles.stateCaption, { color: theme.mutedForeground }]}>
+                  {wallCopy.caption}
+                </Text>
+              ) : null}
               <View style={{ height: 12 }} />
             </View>
           ) : (
@@ -315,6 +360,17 @@ export function CreateClientModal({
                   <X size={20} color={theme.mutedForeground} />
                 </TouchableOpacity>
               </View>
+
+              {/* Vuelta desde el selector de archivado: el toast puede quedar bajo la ventana del
+                  modal, así que el resultado de la acción también se dice acá. */}
+              {freedNotice ? (
+                <View style={[styles.freedBox, { backgroundColor: SUCCESS + '18', borderColor: SUCCESS + '40' }]}>
+                  <CheckCircle2 size={16} color={SUCCESS} />
+                  <Text style={[styles.freedText, { color: theme.foreground }]}>
+                    Cupo liberado. Ya puedes agregar a tu alumno.
+                  </Text>
+                </View>
+              ) : null}
 
               <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.formFields}>
@@ -429,6 +485,19 @@ export function CreateClientModal({
             </>
           )}
         </View>
+
+        {/* Selector de archivado del muro: overlay absoluto DENTRO de esta misma ventana nativa —
+            nunca un segundo `<Modal>` (ver el docblock de ArchiveToFreeSpaceSheet: dos ventanas
+            nativas anidadas = «pantalla gris» al volver de una Activity en Android).
+            Solo existe mientras el muro está en pantalla. */}
+        {phase === 'upgrade' ? (
+          <ArchiveToFreeSpaceSheet
+            open={showArchive}
+            onClose={() => setShowArchive(false)}
+            workspace={workspace}
+            onFreed={handleFreed}
+          />
+        ) : null}
       </KeyboardAvoidingView>
     </Modal>
   )
@@ -470,12 +539,17 @@ const styles = StyleSheet.create({
   },
   modalButtonDisabled: { opacity: 0.6 },
   modalButtonLabel: { fontSize: 14, fontFamily: FONT.uiBold },
-  // Estados B/C (éxito / límite del plan)
+  freedBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 1, padding: 12 },
+  freedText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: FONT.uiSemibold },
+  // Estados B/C (éxito / muro de cupo)
   stateWrap: { alignItems: 'center', gap: 20, paddingVertical: 16, paddingHorizontal: 4 },
   stateCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   stateTitle: { fontSize: 18, fontFamily: FONT.displayBold, textAlign: 'center' },
   stateBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', fontFamily: FONT.ui },
+  stateActions: { width: '100%', gap: 10 },
   stateLink: { fontSize: 14, fontFamily: FONT.uiSemibold },
+  // Caption Android-only: texto plano, sin subrayado ni color de link.
+  stateCaption: { fontSize: 12, lineHeight: 16, textAlign: 'center', fontFamily: FONT.ui, marginTop: -8 },
   waButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 12, width: '100%',

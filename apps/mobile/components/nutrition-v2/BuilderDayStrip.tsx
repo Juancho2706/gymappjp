@@ -411,8 +411,11 @@ export function BuilderDayStrip({
             <>
               <Pressable
                 accessibilityRole="button"
+                // W6 (ronda de revisión): el lector no nombra un tier ajeno — dice el estado del
+                // plan PROPIO. Nombrar «Nutrición Pro» acá es exactamente el catálogo de venta que
+                // la app no puede pronunciar (guideline 3.1.1).
                 accessibilityLabel={`Personalizar el ${selectedLongLabel.toLocaleLowerCase()}${
-                  personalizeLocked ? ': incluido en Nutrición Pro' : ''
+                  personalizeLocked ? ': no incluido en tu plan actual' : ''
                 }`}
                 onPress={() =>
                   personalizeLocked ? handlers.onPersonalizeLocked() : handlers.onPersonalize(selectedDayOfWeek)
@@ -478,17 +481,22 @@ export function BuilderDayStrip({
           servidor rechazará el publish con UPGRADE_REQUIRED. Se avisa acá, no al final. */}
       {personalizeLocked && ownDayCount > 0 ? (
         <View className="rounded-control border border-warning-500/30 bg-warning-500/10 px-3 py-2">
+          {/* Sin nombre de tier y sin «mejorar»: la app describe la capacidad que le falta a ESTE
+              plan, no vende el que la tiene. La acción real que queda dentro de la app es eliminar
+              los días propios; «revisar tu plan» es estado, y su destino no cambió. */}
           <Text className="text-xs leading-5 text-warning-700">
             Este plan tiene {ownDayCount} {ownDayCount === 1 ? 'día' : 'días'} con contenido propio y publicarlos
-            requiere Nutrición Pro. Puedes eliminarlos desde su menú, o mejorar tu plan.
+            requiere la nutrición personalizada por alumno, que tu plan actual no incluye. Puedes eliminarlos desde
+            su menú o revisar tu plan.
           </Text>
+          {/* Tono W6.6: estado del plan propio, no una oferta. El destino no cambia. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Mejorar mi plan"
+            accessibilityLabel="Ver mi plan"
             onPress={handlers.onUpgrade}
             className="mt-1 min-h-11 justify-center"
           >
-            <Text className="text-xs font-bold text-primary underline">Mejorar mi plan</Text>
+            <Text className="text-xs font-bold text-primary underline">Ver mi plan</Text>
           </Pressable>
         </View>
       ) : null}
