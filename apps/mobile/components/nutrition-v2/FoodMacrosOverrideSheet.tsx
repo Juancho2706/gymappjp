@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { RotateCcw } from 'lucide-react-native'
 import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { Sheet } from '../Sheet'
+import { KeyboardDoneBar, NUMERIC_KEYBOARD_ACCESSORY_ID } from '../KeyboardDoneBar'
 import { useTheme } from '../../context/ThemeContext'
 import {
   restoreNutritionV2FoodMacros,
@@ -181,6 +182,9 @@ export function FoodMacrosOverrideSheet({
       accessibilityLabel="Corregir macros del alimento"
     >
       <View className="gap-3">
+        {/* La hoja es un Modal nativo: la barra «Listo» del teclado numérico de iOS tiene que vivir
+            DENTRO de su ventana para que los campos la encuentren por `nativeID`. */}
+        <KeyboardDoneBar />
         {FIELDS.map((field) => (
           <View key={field.key} className="flex-row items-center gap-3">
             <Text className="w-28 shrink-0 text-sm text-muted">{field.label}</Text>
@@ -189,6 +193,8 @@ export function FoodMacrosOverrideSheet({
               value={values[field.key]}
               onChangeText={(value) => edit(() => setValues((prev) => ({ ...prev, [field.key]: value })))}
               keyboardType="decimal-pad"
+              inputAccessoryViewID={NUMERIC_KEYBOARD_ACCESSORY_ID}
+              returnKeyType="done"
               placeholderTextColor={theme.mutedForeground}
               className="min-h-11 flex-1 rounded-control border border-default bg-surface-card px-3 text-sm font-semibold text-strong"
             />
@@ -216,6 +222,8 @@ export function FoodMacrosOverrideSheet({
               onChangeText={(value) => edit(() => setHouseholdGrams(value))}
               placeholder="90"
               keyboardType="decimal-pad"
+              inputAccessoryViewID={NUMERIC_KEYBOARD_ACCESSORY_ID}
+              returnKeyType="done"
               placeholderTextColor={theme.mutedForeground}
               className="min-h-11 w-24 rounded-control border border-default bg-surface-card px-3 text-sm text-strong"
             />

@@ -2,6 +2,7 @@ import { Pressable, TextInput, View } from 'react-native'
 import type { TextStyle } from 'react-native'
 import { Minus, Plus } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { NUMERIC_KEYBOARD_ACCESSORY_ID } from '../../KeyboardDoneBar'
 
 /**
  * Stepper numerico tactil del quick-edit: input decimal tap-to-edit (selecciona el
@@ -94,6 +95,11 @@ export function QuantityStepper({
         onBlur={onCommit}
         editable={!disabled}
         keyboardType="decimal-pad"
+        // Cerrar el teclado (QA owner 22-08): iOS no trae tecla de retorno en el decimal-pad, así
+        // que el campo cuelga la barra «Listo» (`KeyboardDoneBar`, montada por la pantalla);
+        // Android usa su tecla ✓ (`done` ⇒ blur ⇒ onCommit).
+        inputAccessoryViewID={NUMERIC_KEYBOARD_ACCESSORY_ID}
+        returnKeyType="done"
         selectTextOnFocus
         className={`${QUANTITY_CONTROL_HEIGHT_CLASS} w-16 rounded-control border border-default bg-surface-card text-center text-base font-semibold text-strong`}
         // Centrado vertical del numero dentro de la caja de 44 pt (ver cabecera): sin esto

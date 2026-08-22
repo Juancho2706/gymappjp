@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { KeyboardDoneBar } from '../../KeyboardDoneBar'
 import NetInfo from '@react-native-community/netinfo'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -1560,6 +1561,11 @@ export function QuickEditMode({
           lleva Horizonte B; la barra superior y las cards sólidas sostienen la legibilidad. */}
       <AppBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+        {/* Barra «Listo» sobre el teclado numérico de iOS (QA owner 22-08: el decimal-pad no trae
+            tecla de retorno y, con casi todo el lienzo tocable, el teclado «no se bajaba»). La
+            cuelgan por `inputAccessoryViewID` el stepper de cantidad y los campos numéricos de la
+            cabecera. Android no la pinta: usa su tecla ✓. */}
+        <KeyboardDoneBar />
         {/* Barra fija del modo edición: salida + identidad del alumno + anclas por día. Vive
             FUERA del scroll a propósito — con los N días apilados, el único control de
             navegación no puede desaparecer al primer deslizamiento. */}
