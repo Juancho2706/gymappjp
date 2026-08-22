@@ -22,3 +22,12 @@ describe('redirectSystemPath', () => {
       .toBe('/alumno/codigo?identifier=%25E0%25A4%25A&auto=1')
   })
 })
+
+describe('redirectSystemPath — vuelta a la app tras confirmar el correo', () => {
+  it('eva://auth/confirmed aterriza en verify-email con confirmed=1 y el email', () => {
+    expect(redirectSystemPath({ path: 'eva://auth/confirmed?email=coach%40example.com', initial: true }))
+      .toBe('/(auth)/verify-email?confirmed=1&email=coach%40example.com')
+    expect(redirectSystemPath({ path: 'eva://auth/confirmed', initial: false }))
+      .toBe('/(auth)/verify-email?confirmed=1')
+  })
+})

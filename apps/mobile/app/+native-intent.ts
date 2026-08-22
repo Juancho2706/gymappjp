@@ -16,6 +16,16 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
       return `/alumno/codigo?identifier=${encodeURIComponent(identifier)}&auto=1`
     }
 
+    // `eva://auth/confirmed?email=…`: lo manda `/auth/confirm` (web) en Android cuando el alta salió
+    // de la app. Aterriza en la pantalla de verificación con `confirmed=1`, que entra sola al panel
+    // con las credenciales del alta (o, si la app murió, manda al login con el email puesto).
+    if (segments[0] === 'auth' && segments[1] === 'confirmed') {
+      const query = noProtocol.split('?')[1]?.split('#')[0] ?? ''
+      const email = new URLSearchParams(query).get('email')?.trim() ?? ''
+      const emailParam = email ? `&email=${encodeURIComponent(email)}` : ''
+      return `/(auth)/verify-email?confirmed=1${emailParam}`
+    }
+
     return path
   } catch {
     return '/'
