@@ -21,7 +21,6 @@ import * as ImagePicker from 'expo-image-picker'
 import { decode } from 'base64-arraybuffer'
 import { ArrowRight, Camera, Check, ChevronLeft, History, Lock, Minus, Plus, RefreshCw, ShieldAlert, WifiOff, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import { Confetti } from 'react-native-fast-confetti'
 import { supabase } from '../../../lib/supabase'
 import { apiFetch } from '../../../lib/api'
 import { clearAppBadge } from '../../../lib/badge'
@@ -33,9 +32,9 @@ import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { TYPE, FONT, textStyle } from '../../../lib/typography'
-import { SHADOWS } from '../../../lib/shadows'
 import { Button, Card, Slider, Textarea } from '../../../components'
 import { AppBackground } from '../../../components/AppBackground'
+import { SuccessOverlay } from '../../../components/SuccessOverlay'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 
 const MAX_BYTES = 5 * 1024 * 1024
@@ -373,42 +372,28 @@ export default function CheckInScreen() {
   }
 
   // ---- Pantalla de éxito (espejo web: wave + confetti + volver al inicio) ----
+  // El look vive en `SuccessOverlay` (extraído de acá para que el builder de
+  // programas confirme el guardado con la MISMA celebración). `durationMs={null}`
+  // = no se cierra sola: acá la cierra el alumno con el botón.
   if (done) {
     return (
-      <SafeAreaView style={styles.container} className="bg-surface-app">
-        <AppBackground />
-        {!motion.reduced ? (
-          <Confetti autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.cyan]} />
-        ) : null}
-        <View style={styles.successWrap}>
-          <MotiView
-            from={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', damping: 13, stiffness: 180 }}
-            className="bg-success-500"
-            style={[styles.successCircle, SHADOWS[resolvedScheme].lg]}
-          >
-            <Check size={44} color={ICON_WHITE} strokeWidth={2.5} />
-          </MotiView>
-          <Text className="text-strong" style={[TYPE.h2, styles.successTitle, { fontSize: 27, lineHeight: 32, fontFamily: FONT.displayBlack }]}>
-            ¡Check-in enviado!
-          </Text>
-          <Text className="text-muted" style={[TYPE.body, styles.successMsg]}>
-            Tu coach recibió tu actualización mensual. Ajustará tu plan según tu progreso.
-          </Text>
-          <Button
-            label="Volver al inicio"
-            variant="sport"
-            size="lg"
-            onPress={() => {
-              setDone(false)
-              router.push('/alumno/home')
-            }}
-            style={styles.successBtn}
-            testID="checkin-success-home"
-          />
-        </View>
-      </SafeAreaView>
+      <SuccessOverlay
+        title="¡Check-in enviado!"
+        subtitle="Tu coach recibió tu actualización mensual. Ajustará tu plan según tu progreso."
+        durationMs={null}
+      >
+        <Button
+          label="Volver al inicio"
+          variant="sport"
+          size="lg"
+          onPress={() => {
+            setDone(false)
+            router.push('/alumno/home')
+          }}
+          style={styles.successBtn}
+          testID="checkin-success-home"
+        />
+      </SuccessOverlay>
     )
   }
 
@@ -872,9 +857,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
   },
   navRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  successWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 48 },
-  successCircle: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  successTitle: { textAlign: 'center' },
-  successMsg: { textAlign: 'center', marginTop: 8, maxWidth: 300 },
   successBtn: { marginTop: 28, width: '100%', maxWidth: 300 },
 })

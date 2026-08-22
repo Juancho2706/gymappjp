@@ -31,6 +31,8 @@ import { ProgramConfigSheet } from '../../components/coach/ProgramConfigSheet'
 import { ProgramPhasesBar } from '../../components/coach/ProgramPhasesBar'
 import { BuilderOnboardingTour, type TourStep } from '../../components/coach/BuilderOnboardingTour'
 import { GuidedTaskBanner } from '../../components/coach/GuidedTaskBanner'
+import { SuccessOverlay } from '../../components/SuccessOverlay'
+import { programSavedOverlay } from '../../lib/success-overlay'
 import { useCoachOnboarding } from '../../lib/coach-dashboard'
 import { isGuidedEntry } from '../../lib/templates'
 import { openViveTuAppGuided } from '../../lib/vive-tu-app'
@@ -756,6 +758,10 @@ export default function ProgramBuilderScreen() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Confirmación del guardado (hallazgo QA del owner 22-08): antes el builder se
+  // limitaba a navegar y el coach quedaba sin saber si había guardado. La misma
+  // celebración verde del check-in del alumno; al terminar navega como siempre.
+  const [savedOverlay, setSavedOverlay] = useState<{ title: string; subtitle: string } | null>(null)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [actionWorkspace, setActionWorkspace] = useState<ClientActionWorkspace | null>(routeWorkspace)
@@ -1726,6 +1732,12 @@ export default function ProgramBuilderScreen() {
     setHydrationReloadKey((current) => current + 1)
   }
 
+  // Cierre de la celebración: navega EXACTAMENTE como navegaba el guardado antes.
+  const closeSavedOverlay = useCallback(() => {
+    setSavedOverlay(null)
+    router.back()
+  }, [router])
+
   async function handleSave(force = false) {
     if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre para el programa.'); return }
     const hasAny = days.some((d) => d.blocks.length > 0) || (abMode && otherDays.some((d) => d.blocks.length > 0))
@@ -1770,7 +1782,9 @@ export default function ProgramBuilderScreen() {
       hydratedRef.current = false
       activeDraftKeyRef.current = null
       if (draftKey) AsyncStorage.removeItem(draftKey).catch(() => {})
-      router.back()
+      // Éxito: celebración de pantalla completa; la vuelta a la lista la dispara
+      // su `onDone` (`closeSavedOverlay`). El error sigue siendo toast, como hoy.
+      setSavedOverlay(programSavedOverlay({ programName: name, clientName, isTemplate }))
     } catch (e: any) {
       if (e instanceof ProgramOptimisticConflictError) {
         let who = 'Otro coach'
@@ -2130,8 +2144,14 @@ export default function ProgramBuilderScreen() {
         transition={{ type: 'timing', duration: 180 }}
         style={styles.saveDock}
       >
+        {/* Guardando NO baja la opacidad: el spinner ya comunica el estado y una pill
+            semitransparente se lee como «deshabilitado/roto» (QA del owner 22-08). El
+            estado va por accesibilidad (`busy`), no por color. */}
         <TouchableOpacity ref={regTour('save-button')} onPress={() => { void handleSave() }} disabled={saving} activeOpacity={0.85}
-          style={[styles.saveBar, { backgroundColor: theme.primary, shadowColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
+          accessibilityRole="button"
+          accessibilityLabel={saving ? 'Guardando programa' : 'Guardar programa'}
+          accessibilityState={{ busy: saving, disabled: saving }}
+          style={[styles.saveBar, { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
           {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : <Check size={20} color={theme.primaryForeground} strokeWidth={2.5} />}
           <Text style={[styles.saveBarTxt, { color: theme.primaryForeground, fontFamily: FONT.uiBold }]}>{saving ? 'Guardando...' : 'Guardar'}</Text>
         </TouchableOpacity>
@@ -2145,6 +2165,15 @@ export default function ProgramBuilderScreen() {
         onClose={handleCloseTour}
         remeasureSignal={`${activeDayId}-${abMode}-${tourMode}`}
       />
+      {/* Celebración del guardado — encima de TODO (incluido el tour), ~1,4 s y afuera. */}
+      {savedOverlay ? (
+        <SuccessOverlay
+          title={savedOverlay.title}
+          subtitle={savedOverlay.subtitle}
+          onDone={closeSavedOverlay}
+          testID="program-builder-saved-overlay"
+        />
+      ) : null}
     </View>
   )
 }
