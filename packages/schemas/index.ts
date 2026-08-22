@@ -31,3 +31,6 @@ export * from './team'
 export * from './screening'
 export * from './bodycomp'
 export * from './nutrition-exchanges'
+
+// Onboarding v2: persona del coach y su copy (port 1.1.1 solo para `formatWhatsappInvite`).
+export * from './persona'

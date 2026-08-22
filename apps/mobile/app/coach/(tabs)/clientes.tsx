@@ -536,13 +536,17 @@ export default function ClientesScreen() {
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
   const portalUrl = workspace.teamId ? (teamSlug ? teamClientLoginUrl(teamSlug) : null) : (coachSlug ? clientLoginUrl(coachSlug) : null)
+  // Persona del coach (caché de sesión del gate de onboarding v2): elige la plantilla del mensaje.
+  // Sin caché todavía, `clientInviteMessage` cae a la plantilla neutra — nunca a un texto con «EVA».
+  // Runtime 1.1.1: sin gate de persona ⇒ plantilla neutra (`other`), que igual no nombra a EVA.
+  const invitePersona = null
   function handleWhatsApp(c: DirectoryClient) {
     if (!c.phone || !portalUrl) return
-    openWhatsApp(c.phone, c.fullName, portalUrl).catch(() => {})
+    openWhatsApp(c.phone, c.fullName, portalUrl, invitePersona).catch(() => {})
   }
   function handleShare(c: DirectoryClient) {
     if (!portalUrl) return
-    shareLogin(c.fullName, portalUrl).catch(() => {})
+    shareLogin(c.fullName, portalUrl, invitePersona).catch(() => {})
   }
   // Copiar el portal de alumnos al portapapeles (espejo web CoachWarRoom copiar-portal).
   function handleCopyPortal() {
