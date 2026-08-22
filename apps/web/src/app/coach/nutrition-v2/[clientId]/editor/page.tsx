@@ -39,6 +39,10 @@ import {
   type QuickEditState,
 } from '@eva/nutrition-v2'
 import type { EditorCreationInput } from '../_quick-edit/QuickEditProvider'
+import { getCoachOnboardingEmptyContext } from '@/app/coach/_data/onboarding-empty.queries'
+import { activePlanClashCopy } from '@/services/onboarding/templates'
+import { firstName, resolveNutritionPrimeraEntry } from '../../_lib/primera-pauta'
+import type { PrimeraPautaConfig } from './PrimeraPauta'
 import { EditorClient } from './EditorClient'
 
 /**
@@ -111,9 +115,35 @@ export default async function NutritionUnifiedEditorPage({
   // memoria manda el catalogo, como siempre.
   const rememberedQuantities = await fetchRememberedQuantities(clientId).catch(() => ({}))
 
+  // ── Entrada guiada «Arma su primera pauta» (W4 F4.3) ────────────────────────────────────
+  // `?primera=1` la enciende. La decision (editar la pauta vigente vs armar una nueva) es
+  // SERVER-SIDE: el indice `nutrition_plans_v2_active_root_per_client_uniq` hace que solo pueda
+  // haber una vigente, asi que aplicar una plantilla encima moriria con 23505 y el coach veria un
+  // error de Postgres por algo que no es un error.
+  const primeraEntry = resolveNutritionPrimeraEntry({
+    primera: query.primera === '1',
+    hasActivePlan: existing != null,
+    hasRequestedOrigin: origin != null,
+  })
+  let primera: Omit<PrimeraPautaConfig, 'onWantsViveTuApp'> | null = null
+  if (primeraEntry) {
+    const onboarding = await getCoachOnboardingEmptyContext()
+    const name = firstName(detail.client.fullName)
+    primera = {
+      coachId: user.id,
+      hasActivePlan: existing != null,
+      name,
+      notice: primeraEntry.notice === 'plan_activo' ? activePlanClashCopy(detail.client.fullName) : null,
+      // «Ver como Ana» abre el magic link del alumno de EJEMPLO: ofrecerlo sobre un alumno real
+      // seria mentir (ese link no existe para el).
+      isDemo: onboarding.demoClientId != null && onboarding.demoClientId === clientId,
+    }
+  }
+
   const sharedProps = {
     clientId,
     clientName: detail.client.fullName,
+    primera,
     planModel: detail.plan,
     today,
     hasNutritionPro: nutritionProEnabled,

@@ -18,7 +18,7 @@ import {
     Link as LinkIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { CreateClientModal } from './CreateClientModal'
+import { useAddStudentFlow } from './_components/add-student-flow-context'
 import { Button } from '@/components/ui/button'
 import { CountUpText } from '@/components/ui/count-up'
 import { IconButton } from '@/components/ui/icon-button'
@@ -188,8 +188,9 @@ export function CoachWarRoom({
 }: CoachWarRoomProps) {
     const router = useRouter()
     const { t } = useTranslation()
-    const [open, setOpen] = useState(false)
     const [copied, setCopied] = useState(false)
+    // Alta de alumno: el flujo del directorio decide stepper guiado (primer alta) vs modal.
+    const addStudentFlow = useAddStudentFlow()
     const [syncing, setSyncing] = useState(false)
     const [resumenOpen, setResumenOpen] = useState(true)
 
@@ -453,7 +454,7 @@ export function CoachWarRoom({
                     <Button
                         variant="sport"
                         size="lg"
-                        onClick={() => setOpen(true)}
+                        onClick={addStudentFlow.start}
                         className="w-full uppercase tracking-widest md:w-auto"
                     >
                         <UserPlus className="h-5 w-5" />
@@ -461,8 +462,6 @@ export function CoachWarRoom({
                     </Button>
                 </div>
             </div>
-
-            <CreateClientModal open={open} onClose={() => setOpen(false)} />
         </>
     )
 }

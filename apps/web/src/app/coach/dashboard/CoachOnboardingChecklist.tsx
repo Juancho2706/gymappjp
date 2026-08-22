@@ -132,12 +132,27 @@ export function CoachOnboardingChecklist({
                 <DemoStudentCard
                     demo={demo}
                     persona={vm.persona}
-                    openHref={resolveHref(vm.steps[2], { demoClientId })}
+                    openHref={withPrimeraFlag(resolveHref(vm.steps[2], { demoClientId }))}
                     onViveTuAppOpened={() => vm.markStepCompleted('vive_tu_app')}
                 />
             )}
         </div>
     )
+}
+
+/**
+ * Paso 3 («Arma tu primer …») en modo GUIADO: el destino recibe `?primera=1` y ahí decide qué
+ * mostrar — tarjetas embebidas, plantilla de arranque, aviso de «ya tiene una pauta» (W4 F4.3).
+ *
+ * El query param se agrega ACÁ y no en `@eva/onboarding` porque el paquete es la fuente compartida
+ * con RN, donde la ruta se resuelve distinto; y la decisión real (plan vigente vs nuevo, screening
+ * existente vs nuevo, perfil completo vs incompleto) es server-side, así que al link le alcanza con
+ * decir «vengo de la guía».
+ */
+export function withPrimeraFlag(href: string | null): string | null {
+    if (href == null) return null
+    if (href.includes('primera=')) return href
+    return href + (href.includes('?') ? '&' : '?') + 'primera=1'
 }
 
 function StepRow({
@@ -155,7 +170,9 @@ function StepRow({
     persona: Persona
     onViveTuAppOpened: () => void
 }) {
-    const href = resolveHref(step, { demoClientId })
+    // Solo el paso 3 abre una tarea guiada; el resto navega como siempre.
+    const resolved = resolveHref(step, { demoClientId })
+    const href = step.key === 'first_artifact' ? withPrimeraFlag(resolved) : resolved
 
     const body = (
         <>

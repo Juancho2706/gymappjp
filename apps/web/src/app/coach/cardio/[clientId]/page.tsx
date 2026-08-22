@@ -4,20 +4,32 @@ import Link from 'next/link'
 import { ArrowLeft, HeartPulse } from 'lucide-react'
 import { getCardioClientData } from '../_data/cardio.queries'
 import { CardioProfileForm } from '../_components/CardioProfileForm'
+import { PrimerasZonasCards } from '../_components/PrimerasZonasCards'
+import { resolvePrimerasZonasEntry } from '../_lib/primeras-zonas'
+import {
+    getCoachOnboardingEmptyContext,
+    templatesForSurface,
+} from '../../_data/onboarding-empty.queries'
 import { resolveClientZones } from '@eva/cardio'
 
 export const metadata: Metadata = { title: 'Perfil cardio | EVA' }
 
 interface Props {
     params: Promise<{ clientId: string }>
+    searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
 /**
  * Perfil cardio del alumno (vista del coach — ruta NUEVA, M4/F7).
  * El perfil del alumno general linkea acá ("Perfil cardio") — wiring central.
+ *
+ * `?primera=1` = se entró por la guía de inicio (paso 3 de la rama `endurance`, W4 F4.3): perfil →
+ * zonas → semana base, con las tarjetas embebidas arriba. Qué falta del perfil lo decide
+ * `resolvePrimerasZonasEntry` SERVER-SIDE, no la UI.
  */
-export default async function CardioClientPage({ params }: Props) {
+export default async function CardioClientPage({ params, searchParams }: Props) {
     const { clientId } = await params
+    const query = await searchParams
     const data = await getCardioClientData(clientId)
 
     if (data.status === 'unauthenticated') redirect('/login')
@@ -30,6 +42,15 @@ export default async function CardioClientPage({ params }: Props) {
         restingHr: client.resting_hr,
         maxHrOverride: client.max_hr_override,
     })
+
+    const entry = resolvePrimerasZonasEntry({
+        primera: query.primera === '1',
+        hasZones: zones != null,
+        hasRestingHr: client.resting_hr != null,
+        hasRef5k: client.ref_5k_time_sec != null,
+    })
+    const onboarding = entry ? await getCoachOnboardingEmptyContext() : null
+    const enduranceTemplate = templatesForSurface('cardio', onboarding?.persona ?? null)[0] ?? null
 
     return (
         <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6 md:px-6">
@@ -52,8 +73,21 @@ export default async function CardioClientPage({ params }: Props) {
                 </div>
             </header>
 
+            {entry && onboarding?.coachId && enduranceTemplate ? (
+                <PrimerasZonasCards
+                    coachId={onboarding.coachId}
+                    clientId={clientId}
+                    clientName={client.full_name?.trim().split(/\s+/)[0] ?? null}
+                    hasZones={entry.hasZones}
+                    missing={entry.missing}
+                    templateId={enduranceTemplate.id}
+                    templateLabel={enduranceTemplate.label}
+                />
+            ) : null}
+
             <section className="rounded-card border border-subtle bg-surface-card p-4 shadow-sm md:p-6">
                 <CardioProfileForm
+                    primera={entry != null}
                     client={{
                         id: client.id,
                         full_name: client.full_name,

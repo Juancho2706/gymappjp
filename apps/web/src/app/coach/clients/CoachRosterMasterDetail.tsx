@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
-import { CreateClientModal } from './CreateClientModal'
+import { useAddStudentFlow } from './_components/add-student-flow-context'
 import { CoachFichaPanel } from './CoachFichaPanel'
 import { DemoClientBadge } from './DemoClientBadge'
 import { withDemoLast } from './clientsDirectorySort'
@@ -89,7 +89,8 @@ export function CoachRosterMasterDetail({
 }: CoachRosterMasterDetailProps) {
     const [search, setSearch] = useState('')
     const [selectedId, setSelectedId] = useState<string | null>(null)
-    const [createOpen, setCreateOpen] = useState(false)
+    // Alta de alumno: el flujo del directorio decide stepper guiado (primer alta) vs modal.
+    const addStudentFlow = useAddStudentFlow()
     const [cache, setCache] = useState<Record<string, ClientFichaPanelBundle>>({})
     const [errorId, setErrorId] = useState<string | null>(null)
     const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -193,7 +194,7 @@ export function CoachRosterMasterDetail({
                         <div className="ml-auto flex gap-1.5">
                             <button
                                 type="button"
-                                onClick={() => setCreateOpen(true)}
+                                onClick={addStudentFlow.start}
                                 title="Nuevo alumno"
                                 aria-label="Nuevo alumno"
                                 className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] border border-transparent bg-[var(--cta-fill)] text-[var(--text-on-sport)] transition-[filter] hover:brightness-[1.06]"
@@ -321,8 +322,6 @@ export function CoachRosterMasterDetail({
                     )}
                 </div>
             </section>
-
-            <CreateClientModal open={createOpen} onClose={() => setCreateOpen(false)} />
         </div>
     )
 }

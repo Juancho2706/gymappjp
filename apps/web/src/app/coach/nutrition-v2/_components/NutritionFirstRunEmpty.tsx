@@ -38,7 +38,9 @@ export function NutritionFirstRunEmpty({
             escape={
                 demoClientId
                     ? {
-                          href: `/coach/nutrition-v2/${demoClientId}/editor`,
+                          // `primera=1`: misma tarea guiada del paso 3 (W4 F4.3). El editor decide
+                          // server-side si abre la pauta vigente o una nueva.
+                          href: `/coach/nutrition-v2/${demoClientId}/editor?primera=1`,
                           label: 'Empezar desde cero',
                       }
                     : undefined

@@ -15,7 +15,7 @@ import { CoachRosterMasterDetail } from './CoachRosterMasterDetail'
 import { DirRowCard } from './DirRowCard'
 import { DirTableMobile } from './DirTableMobile'
 import { ClientActionsSheet } from './ClientActionsSheet'
-import { CreateClientModal } from './CreateClientModal'
+import { useAddStudentFlow } from './_components/add-student-flow-context'
 import { EditClientDataModal } from './EditClientDataModal'
 import type {
     DirectoryRiskFilter,
@@ -133,7 +133,8 @@ export function ClientsDirectoryClient({
     const [visibleCount, setVisibleCount] = useState(48)
     const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)
     const [actionsClient, setActionsClient] = useState<any | null>(null)
-    const [createOpen, setCreateOpen] = useState(false)
+    // Alta de alumno: el flujo del directorio decide stepper guiado (primer alta) vs modal.
+    const addStudentFlow = useAddStudentFlow()
     // Selección múltiple (solo móvil): modo + set de ids de alumnos NO archivados.
     const [selectMode, setSelectMode] = useState(false)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -384,7 +385,7 @@ export function ClientsDirectoryClient({
             {!selectMode && (
                 <button
                     type="button"
-                    onClick={() => setCreateOpen(true)}
+                    onClick={addStudentFlow.start}
                     className="eva-press fixed right-5 z-40 inline-flex h-[50px] items-center gap-2 rounded-pill bg-[var(--cta-fill)] px-5 font-ui text-[15px] font-bold text-[var(--text-on-sport)] shadow-[var(--shadow-lg)] md:hidden"
                     style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
                 >
@@ -392,7 +393,6 @@ export function ClientsDirectoryClient({
                     Nuevo alumno
                 </button>
             )}
-            <CreateClientModal open={createOpen} onClose={() => setCreateOpen(false)} />
 
             {/* Barra flotante de selección múltiple (solo móvil) */}
             {selectedIds.size > 0 && (

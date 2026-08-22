@@ -14,6 +14,11 @@ import {
     getTeamEnabledModules,
 } from '@/services/entitlements.service'
 import { getCoachOnboardingEmptyContext } from '../_data/onboarding-empty.queries'
+import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { showsEvaBadge, type SubscriptionTier } from '@/lib/constants'
+import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
+import { countRealClients } from './_lib/add-student-invite'
+import type { AddStudentFlowConfig } from './_components/add-student-flow-context'
 
 export const metadata: Metadata = {
     title: 'Alumnos | EVA',
@@ -23,7 +28,9 @@ export default async function CoachClientsPage({
     searchParams,
 }: {
     // `?solicitudes=1` — lo pone el CTA «Ver solicitudes» del correo que avisa una solicitud nueva.
-    searchParams: Promise<{ solicitudes?: string }>
+    // `?invite=1` — destino del paso 4 de la guía (`@eva/onboarding`, WEB.invite): abre el alta
+    // guiada de 3 pasos. `?alta=1` es su alias.
+    searchParams: Promise<{ solicitudes?: string; invite?: string; alta?: string }>
 }) {
     const coachSession = await getCoach()
     if (!coachSession) redirect('/login')
@@ -70,6 +77,28 @@ export default async function CoachClientsPage({
 
     // Desktop = full-bleed (sin cap de ancho ni space-y: el master-detail/tabla llena la región).
     // Móvil conserva el cap + el espaciado war-room/directorio + margen inferior para la cápsula.
+    // Alta guiada «Sumar un {alumno} en 3 pasos» (onboarding v2 F4.1). Todo sale de datos que la
+    // página YA leyó: cero queries nuevas. El programa del alumno de ejemplo es «lo que ya tienes
+    // armado» que se le muestra al coach en la tercera columna.
+    const demoClient = clients.find((c) => c.is_demo === true)
+    const demoProgram =
+        demoClient?.workout_programs?.find((p) => p.is_active)?.name ??
+        demoClient?.workout_programs?.[0]?.name ??
+        null
+    const addStudentFlow: AddStudentFlowConfig = {
+        persona: onboarding.effectivePersona,
+        inviteCode: getCoachPublicIdentifier(coach),
+        brand: {
+            name: coachSession.brand_name || coachSession.full_name || 'Tu marca',
+            logoUrl: coachSession.logo_url ?? null,
+            primaryColor: coachSession.primary_color || BRAND_PRIMARY_COLOR,
+            showsEvaBadge: showsEvaBadge((coachSession.subscription_tier ?? 'free') as SubscriptionTier),
+        },
+        firstContent: { programName: demoProgram, demoName: onboarding.demoName },
+        realClientCount: countRealClients(clients),
+        autoOpenGuided: params.invite === '1' || params.alta === '1',
+    }
+
     return (
         <div className="mx-auto w-full min-w-0 animate-fade-in max-w-[1600px] space-y-12 mb-24 md:mb-0 md:max-w-none md:space-y-0">
             {/* Inbox de solicitudes: SOLO si hay pendientes — un bloque vacío permanente sobre el
@@ -90,6 +119,7 @@ export default async function CoachClientsPage({
                 pulse={pulse}
                 toolsEnabled={toolsEnabled}
                 demoLabel={onboarding.demoLabel}
+                addStudentFlow={addStudentFlow}
             />
         </div>
     )

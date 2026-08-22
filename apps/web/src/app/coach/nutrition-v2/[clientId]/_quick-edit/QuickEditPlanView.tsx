@@ -75,6 +75,7 @@ import { EditorDayRail } from './EditorDayRail'
 import { EditorRibbon, useRibbonViewport } from './EditorRibbon'
 import { DAY_MACRO_ROWS, type PublishBarDayTotals } from './PublishBar'
 import { MACRO_META } from '@/components/nutrition/macro-tokens'
+import { PrimeraPautaCards } from '../editor/PrimeraPauta'
 import { QE_COPY } from './microcopy'
 
 /**
@@ -352,6 +353,10 @@ export function QuickEditPlanView() {
             </div>
           </div>
         ) : null}
+
+        {/* Entrada guiada «primera pauta» (W4 F4.3): tarjetas EMBEBIDAS en el lienzo, no un tour.
+            Sin config (el caso normal) el componente devuelve null y esta linea no pinta nada. */}
+        <PrimeraPautaCards />
 
         {/* T3.2b: recordatorio permanente del modo plantilla (lo que confundio al coach JP,
             2026-08-11 — esta pantalla es casi identica a editar el plan de un alumno). */}

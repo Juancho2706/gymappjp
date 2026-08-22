@@ -14,7 +14,11 @@ vi.mock('../settings/_actions/settings.actions', () => ({
     createLogoUploadUrlAction: vi.fn(),
 }))
 
-import { CoachOnboardingChecklist, OnboardingGuideFooterStrip } from './CoachOnboardingChecklist'
+import {
+    CoachOnboardingChecklist,
+    OnboardingGuideFooterStrip,
+    withPrimeraFlag,
+} from './CoachOnboardingChecklist'
 import type { OnboardingGuideVm } from './_lib/use-onboarding-guide'
 import type { CoachBrandDraft, DemoStudentSnapshot } from './_data/dashboard.queries'
 
@@ -183,5 +187,23 @@ describe('OnboardingGuideFooterStrip — tira del pie', () => {
             <OnboardingGuideFooterStrip vm={makeVm({ atFoot: true, hidden: true })} hasDemo />
         )
         expect(container.innerHTML).toBe('')
+    })
+})
+
+describe('withPrimeraFlag — el paso 3 abre la tarea guiada (W4 F4.3)', () => {
+    it('agrega ?primera=1 cuando la ruta no tiene query', () => {
+        expect(withPrimeraFlag('/coach/movement/abc')).toBe('/coach/movement/abc?primera=1')
+    })
+
+    it('lo agrega con & cuando ya hay query', () => {
+        expect(withPrimeraFlag('/coach/settings?tour=1')).toBe('/coach/settings?tour=1&primera=1')
+    })
+
+    it('no lo duplica', () => {
+        expect(withPrimeraFlag('/coach/cardio/abc?primera=1')).toBe('/coach/cardio/abc?primera=1')
+    })
+
+    it('un paso que no navega sigue sin navegar', () => {
+        expect(withPrimeraFlag(null)).toBeNull()
     })
 })

@@ -68,3 +68,37 @@ export const DEMO_TEMPLATE_BY_PERSONA: Record<Persona, string | null> = {
 export function templateIdsForPersona(persona: Persona): string[] {
     return TEMPLATE_CATALOG[persona].map((template) => template.id)
 }
+
+// ── Choque «el alumno ya tiene una pauta activa» ──────────────────────────────────────────────
+
+/**
+ * Un alumno solo puede tener UNA pauta V2 vigente: el índice
+ * `nutrition_plans_v2_active_root_per_client_uniq` lo garantiza en la base, así que aplicar una
+ * plantilla de nutrición sobre alguien que ya tiene pauta falla con 23505 y `writeNutritionPlanV2`
+ * devuelve el mensaje crudo de Postgres.
+ *
+ * Ese mensaje no le sirve a nadie: la salida correcta no es un error sino EDITAR la pauta que ya
+ * existe. Estas dos funciones son la traducción — puras, sin dependencias nuevas, para que tanto la
+ * entrada guiada de la primera pauta (W4 F4.3) como cualquier otro consumidor digan lo mismo.
+ */
+const ACTIVE_PLAN_CLASH_MARKERS = [
+    'nutrition_plans_v2_active_root_per_client_uniq',
+    'duplicate key value violates unique constraint',
+] as const
+
+/** ¿El detalle del fallo es «ya tiene una pauta vigente» y no un error de verdad? */
+export function isActivePlanClash(detail: string | null | undefined): boolean {
+    if (detail == null) return false
+    const lower = detail.toLowerCase()
+    return ACTIVE_PLAN_CLASH_MARKERS.some((marker) => lower.includes(marker))
+}
+
+/**
+ * Copy amable del choque. `name` es el nombre del alumno (se usa el primer nombre: «Ana ya tiene
+ * una pauta»); sin nombre utilizable cae en un sujeto neutro y NUNCA queda un «undefined ya tiene».
+ */
+export function activePlanClashCopy(name: string | null | undefined): string {
+    const first = (name ?? '').trim().split(/\s+/)[0] ?? ''
+    const subject = first === '' ? 'Este alumno' : first
+    return `${subject} ya tiene una pauta: la editas aquí.`
+}

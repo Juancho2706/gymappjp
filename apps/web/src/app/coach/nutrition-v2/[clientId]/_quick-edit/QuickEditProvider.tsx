@@ -229,6 +229,7 @@ export function QuickEditProvider({
   template = null,
   foodsById,
   onExit,
+  afterPublish = null,
   children,
 }: {
   clientId: string
@@ -267,6 +268,13 @@ export function QuickEditProvider({
   template?: EditorTemplateInput | null
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
+  /**
+   * Reemplaza el `onExit()` que sigue a un publish EXITOSO del plan (no al guardado de
+   * plantillas, ni a salir/descartar). Lo usa la entrada guiada «primera pauta» (W4 F4.3): en vez
+   * de sacar al coach del editor, la superficie muestra el cierre («ver como Ana») y decide ella
+   * cuándo salir. Sin la prop, el comportamiento es el de siempre.
+   */
+  afterPublish?: (() => void) | null
   children: ReactNode
 }) {
   const router = useRouter()
@@ -544,6 +552,13 @@ export function QuickEditProvider({
     setConfirmOpen(false)
   }, [isPending])
 
+  // Qué pasa DESPUES de publicar bien: salir del editor (siempre, desde que existe) o cederle el
+  // cierre a la superficie que lo montó (entrada guiada «primera pauta», W4 F4.3).
+  const finishPublish = useCallback(() => {
+    if (afterPublish) afterPublish()
+    else onExit()
+  }, [afterPublish, onExit])
+
   // Publish del modo CREACION: `publishPlanAction` (mismo pipeline del wizard) con la fecha
   // de vigencia elegible; CAS solo si el alumno ya tenia plan (reemplazo). Mapeo de fallos al
   // MISMO vocabulario de la barra: fecha pasada y dia vacio marcan el campo culpable, no un
@@ -574,7 +589,7 @@ export function QuickEditProvider({
           setConfirmOpen(false)
           toast.success(QE_COPY.success(clientName))
           router.refresh()
-          onExit()
+          finishPublish()
           return
         }
         setConfirmOpen(false)
@@ -594,7 +609,7 @@ export function QuickEditProvider({
         setPublishError(res.error || QE_COPY.publishFailed)
       })
     },
-    [capturePublished, clientName, currentDraft, onExit, router, state.meta, today],
+    [capturePublished, clientName, currentDraft, finishPublish, router, state.meta, today],
   )
 
   // Guardado del modo PLANTILLA (T3.2b): sin CAS, sin idempotencia (paridad con el guardado
@@ -683,7 +698,7 @@ export function QuickEditProvider({
         setConfirmOpen(false)
         toast.success(QE_COPY.success(clientName))
         router.refresh()
-        onExit()
+        finishPublish()
         return
       }
       setConfirmOpen(false)
@@ -711,7 +726,7 @@ export function QuickEditProvider({
       // con reintento (el draft nunca se pierde y la clave de idempotencia se conserva).
       setPublishError(res.message ?? QE_COPY.publishFailed)
     })
-  }, [capturePublished, clientId, clientName, creation, currentDraft, draftKey, onExit, planModel.plan, router, runCreatePublish, runTemplateSave, substitutionsLoadFailed, template])
+  }, [capturePublished, clientId, clientName, creation, currentDraft, draftKey, finishPublish, planModel.plan, router, runCreatePublish, runTemplateSave, substitutionsLoadFailed, template])
 
   // Reintento de la lectura de reemplazos: refresca el RSC (vuelve a correr el data-loader)
   // sin desmontar el modo edicion, asi que las ediciones sin publicar se conservan.

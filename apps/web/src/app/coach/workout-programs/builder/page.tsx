@@ -18,6 +18,8 @@ export default async function TemplateBuilderPage(
             initialProgram={initialProgram}
             areas={areas}
             cardio={cardio}
+            /* Sin alumno no hay tarea guiada; el coachId solo namespacea la memoria de la guía. */
+            firstRoutine={{ coachId: user.id }}
         />
     )
 }

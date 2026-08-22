@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Copy, ExternalLink, Eye, Loader2, Smartphone } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -32,10 +32,16 @@ export function ViveTuAppButton({
     label,
     className,
     onOpened,
+    autoOpen = false,
 }: {
     label: string
     className?: string
     onOpened: () => void
+    /**
+     * Abre la hoja sola al montar (una vez). Lo usan los cierres de las tareas guiadas
+     * («Asignar y ver como …», «Publicar y ver como …»): el CTA ya fue el gesto del coach.
+     */
+    autoOpen?: boolean
 }) {
     const router = useRouter()
     const isDesktop = useSyncExternalStore(subscribeDesktop, readDesktop, () => false)
@@ -43,6 +49,15 @@ export function ViveTuAppButton({
     const [loading, setLoading] = useState(false)
     const [link, setLink] = useState<LinkState | null>(null)
     const [copied, setCopied] = useState(false)
+    const autoOpenedRef = useRef(false)
+
+    useEffect(() => {
+        if (!autoOpen || autoOpenedRef.current) return
+        autoOpenedRef.current = true
+        void openSheet()
+        // `openSheet` cambia de identidad en cada render; el efecto debe correr UNA vez por montaje.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoOpen])
 
     async function generate(): Promise<LinkState | null> {
         const result = await openViveTuAppAction()

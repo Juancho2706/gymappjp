@@ -322,9 +322,14 @@ export function WorkoutProgramsClient({
     const previewEdit = () => {
         if (!programToPreview) return
         const isTemplate = !programToPreview.client_id
+        // La rutina del alumno de EJEMPLO abre en modo «primera rutina» (W4 F4.2): tarjetas
+        // embebidas + vista del alumno + CTA «Asignar y ver como …». El demo solo existe mientras
+        // el coach está en el onboarding, así que no hay riesgo de mostrárselo a un coach veterano.
+        const isDemoProgram =
+            !isTemplate && firstRun?.demoClientId != null && firstRun.demoClientId === programToPreview.client_id
         const href = isTemplate
             ? `/coach/workout-programs/builder?programId=${programToPreview.id}`
-            : `/coach/builder/${programToPreview.client_id}?programId=${programToPreview.id}`
+            : `/coach/builder/${programToPreview.client_id}?programId=${programToPreview.id}${isDemoProgram ? '&primera=1' : ''}`
         setIsPreviewOpen(false)
         router.push(href)
     }

@@ -7,7 +7,7 @@
  * pipeline CAS. Salir navega de vuelta a la ficha (aca no hay "debajo": la ruta ES el editor).
  */
 
-import { useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import type {
@@ -23,6 +23,9 @@ import {
   RememberedQuantitiesContext,
   type RememberedQuantity,
 } from '../../_components/RememberedQuantitiesContext'
+import { postFirstArtifactCreated } from '@/app/coach/_components/guided/first-artifact-event'
+import { PrimeraPautaProvider, type PrimeraPautaConfig } from './PrimeraPauta'
+import { PrimeraPautaPublicada } from './PrimeraPautaPublicada'
 
 export function EditorClient({
   clientId,
@@ -39,6 +42,7 @@ export function EditorClient({
   creation,
   originUnavailable,
   rememberedQuantities,
+  primera = null,
 }: {
   clientId: string
   clientName: string
@@ -62,8 +66,33 @@ export function EditorClient({
   originUnavailable: boolean
   /** Porcion pegajosa (T2.6 F4): mapa foodId → ultima cantidad, resuelto server-side. */
   rememberedQuantities: Record<string, RememberedQuantity>
+  /**
+   * Entrada guiada «Arma su primera pauta» (W4 F4.3), resuelta SERVER-SIDE. `null` (el default) =
+   * editor de siempre: sin tarjetas, sin aviso y saliendo al publicar como hasta hoy.
+   */
+  primera?: Omit<PrimeraPautaConfig, 'onWantsViveTuApp'> | null
 }) {
   const router = useRouter()
+  // La CTA «Publicar y ver como {demo}» solo ANOTA la intencion; el publish viaja por el camino
+  // de siempre. Si sale bien, el cierre abre la hoja de «Vive tu app» en vez de irse en silencio.
+  const [wantsViveTuApp, setWantsViveTuApp] = useState(false)
+  const [published, setPublished] = useState(false)
+
+  const exitToClient = useCallback(() => {
+    router.push(`/coach/nutrition-v2/${clientId}`)
+  }, [router, clientId])
+
+  const afterPublish = useCallback(() => {
+    // El paso 3 de la guia se tilda con la señal real del servidor; este evento es la MEDICION
+    // (dedupe por indice unico parcial, ver `postFirstArtifactCreated`).
+    postFirstArtifactCreated('nutrition_plan')
+    setPublished(true)
+  }, [])
+
+  const primeraConfig = useMemo(
+    () => (primera ? { ...primera, onWantsViveTuApp: () => setWantsViveTuApp(true) } : null),
+    [primera],
+  )
 
   // Degradacion de origen AVISADA (leccion JP 2026-08-11: plantilla soft-deleted que abria el
   // plan vigente sin una palabra y el coach publicaba encima creyendo que era su plantilla).
@@ -106,12 +135,22 @@ export function EditorClient({
         hasNutritionPro={hasNutritionPro}
         editPlanMeta
         creation={creation}
-        onExit={() => router.push(`/coach/nutrition-v2/${clientId}`)}
+        onExit={exitToClient}
+        afterPublish={primera ? afterPublish : null}
       >
-        <RememberedQuantitiesContext.Provider value={rememberedQuantities}>
-          <QuickEditPlanView />
-        </RememberedQuantitiesContext.Provider>
+        <PrimeraPautaProvider value={primeraConfig}>
+          <RememberedQuantitiesContext.Provider value={rememberedQuantities}>
+            <QuickEditPlanView />
+          </RememberedQuantitiesContext.Provider>
+        </PrimeraPautaProvider>
       </QuickEditProvider>
+      {primera && published ? (
+        <PrimeraPautaPublicada
+          demoName={primera.isDemo ? primera.name : null}
+          autoOpenViveTuApp={primera.isDemo && wantsViveTuApp}
+          onClose={exitToClient}
+        />
+      ) : null}
     </FoodPickerPrefsProvider>
   )
 }

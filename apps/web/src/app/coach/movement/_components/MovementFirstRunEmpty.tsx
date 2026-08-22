@@ -35,7 +35,8 @@ export function MovementFirstRunEmpty({
         >
             {targetId ? (
                 <TemplateFirstCta
-                    href={`/coach/movement/${targetId}/new`}
+                    // `primera=1`: es la MISMA tarea guiada del paso 3 de la guía (W4 F4.3).
+                    href={`/coach/movement/${targetId}/new?primera=1`}
                     icon={<ClipboardList className="size-4" aria-hidden />}
                 >
                     {demoName ? `Evaluar a ${demoName}` : 'Evaluar al primero'}

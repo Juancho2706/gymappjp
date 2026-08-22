@@ -36,7 +36,8 @@ export function CardioFirstRunEmpty({
         >
             {targetId ? (
                 <TemplateFirstCta
-                    href={`/coach/cardio/${targetId}`}
+                    // `primera=1`: es la MISMA tarea guiada del paso 3 de la guía (W4 F4.3).
+                    href={`/coach/cardio/${targetId}?primera=1`}
                     icon={<HeartPulse className="size-4" aria-hidden />}
                 >
                     {demoName ? `Ver las zonas de ${demoName}` : 'Cargar el primer perfil'}

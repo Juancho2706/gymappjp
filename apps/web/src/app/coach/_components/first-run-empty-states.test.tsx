@@ -79,7 +79,7 @@ describe('Vacíos template-first (SPEC coach-onboarding-v2 §7, TASKS F3.6)', ()
             expect(screen.getByText('1800 kcal por porciones')).toBeInTheDocument()
             expect(screen.getByRole('link', { name: 'Empezar desde cero' })).toHaveAttribute(
                 'href',
-                `/coach/nutrition-v2/${DEMO_ID}/editor`,
+                `/coach/nutrition-v2/${DEMO_ID}/editor?primera=1`,
             )
         })
 
@@ -116,7 +116,7 @@ describe('Vacíos template-first (SPEC coach-onboarding-v2 §7, TASKS F3.6)', ()
             ).toBeInTheDocument()
             expect(screen.getByRole('link', { name: 'Evaluar a Pedro' })).toHaveAttribute(
                 'href',
-                `/coach/movement/${DEMO_ID}/new`,
+                `/coach/movement/${DEMO_ID}/new?primera=1`,
             )
         })
 
@@ -155,7 +155,7 @@ describe('Vacíos template-first (SPEC coach-onboarding-v2 §7, TASKS F3.6)', ()
             expect(screen.getByText('Empieza con Javiera, tu atleta de ejemplo')).toBeInTheDocument()
             expect(screen.getByRole('link', { name: 'Ver las zonas de Javiera' })).toHaveAttribute(
                 'href',
-                `/coach/cardio/${DEMO_ID}`,
+                `/coach/cardio/${DEMO_ID}?primera=1`,
             )
         })
 
@@ -173,7 +173,7 @@ describe('Vacíos template-first (SPEC coach-onboarding-v2 §7, TASKS F3.6)', ()
             expect(screen.queryByText(/Empieza con/)).not.toBeInTheDocument()
             expect(screen.getByRole('link', { name: 'Cargar el primer perfil' })).toHaveAttribute(
                 'href',
-                '/coach/cardio/00000000-0000-4000-8000-000000000009',
+                '/coach/cardio/00000000-0000-4000-8000-000000000009?primera=1',
             )
         })
     })

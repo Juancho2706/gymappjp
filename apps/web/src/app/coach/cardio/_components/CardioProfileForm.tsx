@@ -6,6 +6,7 @@ import { Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { useEffect } from 'react'
 import { updateCardioProfileAction, type CardioProfileState } from '../_actions/cardio.actions'
+import { postFirstArtifactCreated } from '@/app/coach/_components/guided/first-artifact-event'
 
 const initialState: CardioProfileState = {}
 
@@ -43,12 +44,25 @@ function SubmitButton() {
  * Perfil cardio del alumno (M4 — AC9): datos personales/salud, visibles solo por el
  * scope existente de clients. Zod en cliente vía atributos + Zod completo en el server action.
  */
-export function CardioProfileForm({ client }: { client: CardioProfileFormValues }) {
+export function CardioProfileForm({
+    client,
+    primera = false,
+}: {
+    client: CardioProfileFormValues
+    /**
+     * Se entró por la tarea guiada «Calcula sus zonas» (W4 F4.3). Guardar el perfil ES el primer
+     * artefacto de la rama `endurance` (ONBOARDING_STEPS.endurance), así que se mide; el dedupe
+     * («una sola vez») lo pone la base, no este componente.
+     */
+    primera?: boolean
+}) {
     const [state, formAction] = useActionState(updateCardioProfileAction, initialState)
 
     useEffect(() => {
-        if (state.success) toast.success('Perfil cardio guardado')
-    }, [state])
+        if (!state.success) return
+        toast.success('Perfil cardio guardado')
+        if (primera) postFirstArtifactCreated('cardio_zones')
+    }, [state, primera])
 
     return (
         <form action={formAction} className="space-y-5">

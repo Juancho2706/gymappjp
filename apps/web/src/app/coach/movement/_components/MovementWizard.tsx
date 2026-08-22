@@ -22,6 +22,8 @@ import {
     upsertDraftItemAction,
     type MovementActionState,
 } from '../_actions/movement.actions'
+import { postFirstArtifactCreated } from '@/app/coach/_components/guided/first-artifact-event'
+import { PrimerScreeningCards } from './PrimerScreeningCards'
 
 type ItemState = {
     score_left: number | null
@@ -192,6 +194,7 @@ export function MovementWizard({
     initialAssessmentId,
     initialItems,
     editedByOther,
+    primera = null,
 }: {
     clientId: string
     clientName: string | null
@@ -200,6 +203,11 @@ export function MovementWizard({
     initialAssessmentId: string | null
     initialItems: MovementAssessmentItem[]
     editedByOther: boolean
+    /**
+     * Entrada guiada «Haz su primer screening» (W4 F4.3), resuelta server-side. `null` = wizard de
+     * siempre: sin tarjetas y volviendo al reporte sin query params.
+     */
+    primera?: { coachId: string } | null
 }) {
     const { t } = useTranslation()
     const router = useRouter()
@@ -214,10 +222,12 @@ export function MovementWizard({
     )
 
     useEffect(() => {
-        if (finalizeState.success) {
-            router.push(`/coach/movement/${clientId}`)
-        }
-    }, [finalizeState.success, router, clientId])
+        if (!finalizeState.success) return
+        // Screening cerrado = el primer artefacto de la rama `rehab` (ONBOARDING_STEPS.rehab). El
+        // dedupe («una sola vez») lo pone la base, no este efecto.
+        if (primera) postFirstArtifactCreated('movement_screening')
+        router.push(`/coach/movement/${clientId}${primera ? '?primera=1' : ''}`)
+    }, [finalizeState.success, router, clientId, primera])
 
     const totalSteps = MOVEMENT_PATTERNS_V1.length
     const isReview = step >= totalSteps
@@ -238,6 +248,12 @@ export function MovementWizard({
     }, [items])
 
     const allComplete = MOVEMENT_PATTERNS_V1.every((d) => isComplete(d, items[d.slug]))
+    // Señales REALES para las tarjetas guiadas (no clics): cuántos patrones quedaron puntuados y
+    // si el coach ya usó el marcador de dolor / descarte, que es el que fuerza el 0.
+    const scoredPatterns = MOVEMENT_PATTERNS_V1.filter((d) => isComplete(d, items[d.slug])).length
+    const painMarked = MOVEMENT_PATTERNS_V1.some(
+        (d) => items[d.slug].pain || items[d.slug].clearing_positive === true
+    )
 
     const previewSummary: MovementSummary | null = useMemo(() => {
         if (!allComplete) return null
@@ -324,6 +340,16 @@ export function MovementWizard({
                         <Users className="size-3.5 shrink-0" aria-hidden />
                         {t('assessment.wizard.lastEditedBy')}: {t('assessment.wizard.resumedDraft')}
                     </p>
+                )}
+
+                {primera && (
+                    <PrimerScreeningCards
+                        coachId={primera.coachId}
+                        clientName={clientName?.trim().split(/\s+/)[0] ?? null}
+                        scoredPatterns={scoredPatterns}
+                        painMarked={painMarked}
+                        allComplete={allComplete}
+                    />
                 )}
 
                 {def && (

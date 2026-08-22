@@ -11,9 +11,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock } from 'lucide-react'
+import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { createClientAction, type CreateClientState } from './_actions/clients.actions'
+import { useAddStudentFlow } from './_components/add-student-flow-context'
 import { useCaptureUpgradeGate } from '@/lib/posthog/events'
 import { cn } from '@/lib/utils'
 
@@ -72,6 +73,9 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
     const ph = usePostHog()
     const captureUpgradeGate = useCaptureUpgradeGate()
     const gateHitStateRef = useRef<CreateClientState | null>(null)
+    // Onboarding v2 (F4.1): dentro del directorio el alta guiada de 3 pasos sigue a un toque de
+    // distancia. Fuera del directorio (dashboard) el flujo es inerte y este escape no se pinta.
+    const addStudentFlow = useAddStudentFlow()
 
     // `upgrade_gate_hit` del cupo de alumnos: hasta Pricing v3 este gate NO se emitía en ninguna
     // superficie (solo existían `upgrade_modal_dismissed` / `upgrade_initiated`), así que el embudo
@@ -217,6 +221,17 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                         deberá cambiarla en su primer ingreso.
                     </p>
                 </DialogHeader>
+
+                {addStudentFlow.guidedAvailable && (
+                    <button
+                        type="button"
+                        onClick={addStudentFlow.startGuided}
+                        className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md text-[13px] font-semibold text-primary transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                    >
+                        <Sparkles className="h-4 w-4" />
+                        Hazlo paso a paso
+                    </button>
+                )}
 
                 <form ref={formRef} action={formAction} className="space-y-4 mt-2">
                     {/* Full Name */}

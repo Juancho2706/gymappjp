@@ -34,6 +34,16 @@ import { MuscleBalancePanel } from './components/MuscleBalancePanel'
 import { PrintProgramDialog } from './components/PrintProgramDialog'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 
+import { postStepCompleted } from '../../dashboard/_lib/onboarding-telemetry.client'
+import { FirstRoutineCards } from './components/FirstRoutineCards'
+import { StudentLivePreview } from './components/StudentLivePreview'
+import { builderTourStorageKey } from './_lib/first-routine'
+// «Vive tu app» solo aparece tras guardar la rutina del alumno de EJEMPLO: entra por `dynamic`
+// para no meter el QR ni su server action en el bundle del builder de todos los días.
+const ViveTuAppButton = dynamic(
+    () => import('../../dashboard/_components/ViveTuAppButton').then((m) => ({ default: m.ViveTuAppButton })),
+    { loading: () => <Skeleton className="h-11 w-44 rounded-control" /> }
+)
 import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
 import { DayColumn } from './components/DayColumn'
 import { BlockEditSheet } from './components/BlockEditSheet'
@@ -72,7 +82,20 @@ function trackRecentExercise(exerciseId: string) {
     } catch { /* silently ignore storage errors */ }
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [], cardio }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext }) {
+/**
+ * Contexto de la tarea guiada «Primera rutina» (W4 F4.2, SPEC coach-onboarding-v2).
+ * Todo opcional: el builder de plantillas y la edición normal siguen igual que siempre.
+ */
+export interface FirstRoutineContext {
+    /** Namespace de la memoria en `localStorage` (antes era global para todos los coaches). */
+    coachId?: string | null
+    /** El alumno del builder es el de ejemplo ⇒ el CTA es «Asignar y ver como …». */
+    isDemoClient?: boolean
+    /** Llegó con `?primera=1` ⇒ se muestran las 3 tarjetas embebidas. */
+    primera?: boolean
+}
+
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [], cardio, firstRoutine }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext, firstRoutine?: FirstRoutineContext }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -236,6 +259,19 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [hasSeenShortTour, setHasSeenShortTour] = useState(true)
     const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null)
     const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
+    // ── «Primera rutina» (W4 F4.2) ───────────────────────────────────────────
+    /** Día que mira la vista del alumno en desktop. En móvil manda el carrusel. */
+    const [previewDayId, setPreviewDayId] = useState<number | null>(null)
+    /** La vista del alumno en <lg es plegable y arranca cerrada (el lienzo manda). */
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+    /** Post-guardado del alumno de ejemplo: barra con «Vive tu app». */
+    const [showViveTuApp, setShowViveTuApp] = useState(false)
+    /** `first_artifact` se emite una sola vez por montaje (la DB lo deduplica por coach). */
+    const firstArtifactEmittedRef = useRef(false)
+    const isDemoClient = firstRoutine?.isDemoClient === true && !!client
+    const studentFirstName = (client?.full_name ?? '').trim().split(/\s+/)[0] ?? ''
+    const showFirstRoutineCards = firstRoutine?.primera === true && !!client
+
     // Clamp del día activo en mobile cuando se achican los días (cycle→weekly o ciclo más corto):
     // sin esto activeMobileDayIndex apunta a un día inexistente → days[idx] undefined → rompe tap-to-add.
     useEffect(() => {
@@ -249,8 +285,12 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const boardScrollRef = useRef<HTMLDivElement>(null)
     const preTourShowConfigRef = useRef(false)
     const preTourCatalogOpenRef = useRef(false)
-    const onboardingShortKey = 'builder_onboarding_seen_short_v1'
-    const onboardingHelpKey = 'builder_onboarding_seen_help_v1'
+    // Memoria de la guía POR COACH (F4.2, deuda F2.8): las claves globales de antes hacían que
+    // el segundo coach que abriera el builder en el mismo navegador naciera con la guía «vista».
+    const coachId = firstRoutine?.coachId ?? null
+    const onboardingShortKey = builderTourStorageKey(coachId, 'short')
+    const onboardingHelpKey = builderTourStorageKey(coachId, 'help')
+    const configHintKey = builderTourStorageKey(coachId, 'config-hint')
 
     const scrollBoard = (dir: 'left' | 'right') => {
         const el = boardScrollRef.current
@@ -271,19 +311,20 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         checkMobile()
         window.addEventListener('resize', checkMobile)
 
-        // Onboarding de primera visita + hint de apoyo para usuarios previos.
+        // F4.2: el tour YA NO se abre solo. SPEC coach-onboarding-v2 §6 («sin tour automático al
+        // entrar; los tours existentes quedan como “?” contextual»): un overlay a pantalla completa
+        // al abrir el lienzo es justo lo que la investigación mide como peor (7 pasos ⇒ 16 % de
+        // completitud). Queda vivo detrás del «?» de la barra, que arranca en modo `short` mientras
+        // el coach no lo haya visto. Lo que enseña ahora el primer día son las 3 tarjetas embebidas.
         const seenShortTour = !!localStorage.getItem(onboardingShortKey)
         setHasSeenShortTour(seenShortTour)
-        if (!seenShortTour) {
-            openTour('short')
-        }
 
-        const hintKey = 'builder_config_hint_v1'
-        if (seenShortTour && !localStorage.getItem(hintKey)) {
+        // El hint de «Configurar» no compite con las tarjetas de la primera rutina.
+        if (seenShortTour && !firstRoutine?.primera && !localStorage.getItem(configHintKey)) {
             setShowBuilderHint(true)
             const t = setTimeout(() => {
                 setShowBuilderHint(false)
-                localStorage.setItem(hintKey, '1')
+                localStorage.setItem(configHintKey, '1')
             }, 9000)
             return () => {
                 clearTimeout(t)
@@ -292,7 +333,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         }
 
         return () => window.removeEventListener('resize', checkMobile)
-    }, [openTour])
+    }, [onboardingShortKey, configHintKey, firstRoutine?.primera])
 
     useEffect(() => {
         try {
@@ -539,8 +580,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
     const dismissBuilderHint = useCallback(() => {
         setShowBuilderHint(false)
-        try { localStorage.setItem('builder_config_hint_v1', '1') } catch (e) {}
-    }, [])
+        try { localStorage.setItem(configHintKey, '1') } catch (e) {}
+    }, [configHintKey])
 
     const shortTourSteps = useMemo<BuilderTourStep[]>(
         () => [
@@ -689,10 +730,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         ]
     }, [shortTourSteps, isMobile])
 
+    /**
+     * El «?» es la ÚNICA entrada al tour desde F4.2 (ya no se abre solo). Si el coach nunca vio la
+     * guía corta, el «?» se la da primero; si ya la vio, abre la completa.
+     */
     const handleOpenFullTour = useCallback(() => {
-        openTour('full')
+        openTour(hasSeenShortTour ? 'full' : 'short')
         try { localStorage.setItem(onboardingHelpKey, '1') } catch (e) {}
-    }, [openTour])
+    }, [openTour, hasSeenShortTour, onboardingHelpKey])
 
     const handleStepChange = useCallback((step: BuilderTourStep | null) => {
         setActiveTourStepId(step?.id ?? null)
@@ -734,13 +779,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             setShowBuilderHint(false)
             try {
                 localStorage.setItem(onboardingShortKey, '1')
-                localStorage.setItem('builder_config_hint_v1', '1')
+                localStorage.setItem(configHintKey, '1')
             } catch (e) {}
             if (completed) toast.success('Guía inicial completada')
         } else if (completed) {
             toast.success('Guía del builder completada')
         }
-    }, [tourMode, isMobile])
+    }, [tourMode, isMobile, onboardingShortKey, configHintKey])
 
     const handleToggleBlockOverride = useCallback((uid: string) => {
         toggleBlockOverride(uid)
@@ -913,7 +958,16 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 toast.success('Programa guardado exitosamente.')
                 try { localStorage.removeItem(`builder_draft_${initialProgram?.id || 'new'}`) } catch (e) {}
                 setHasUnsavedChanges(false)
-                if (client) {
+                // Paso 3 de la guía (SPEC §6): el artefacto existe de verdad. `step_completed` es
+                // el tipo que la DB deduplica por `(coach_id, step_key)` — se emite una vez y punto.
+                if (client && !firstArtifactEmittedRef.current) {
+                    firstArtifactEmittedRef.current = true
+                    void postStepCompleted('first_artifact', { surface: 'builder' })
+                }
+                if (isDemoClient) {
+                    // El demo NO manda al directorio: el premio es ver la app con la marca propia.
+                    setShowViveTuApp(true)
+                } else if (client) {
                     router.push(`/coach/clients/${client.id}?tab=entrenamiento`)
                 } else {
                     router.push('/coach/templates')
@@ -1196,7 +1250,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                            {isPending ? 'Guardando...' : client ? 'Guardar y enviar' : 'Guardar plantilla'}
+                            {isPending
+                                ? 'Guardando...'
+                                : isDemoClient
+                                    ? `Asignar y ver como ${studentFirstName || 'tu alumno'}`
+                                    : client ? 'Guardar y enviar' : 'Guardar plantilla'}
                         </Button>
                     </div>
                 </div>
@@ -1219,6 +1277,29 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
                 <ProgramPhasesBar phases={programPhases} />
             </header>
+
+            {showViveTuApp && (
+                <div className="mx-3 mt-2.5 flex flex-col gap-2.5 rounded-card border border-[var(--border-inverse)] bg-[var(--surface-inverse)] p-3.5 text-[var(--text-on-dark)] sm:flex-row sm:items-center md:mx-6">
+                    <div className="min-w-0 flex-1">
+                        <p className="font-display text-[15px] font-extrabold tracking-[-0.01em]">
+                            Listo: {studentFirstName || 'tu alumno'} ya tiene su rutina
+                        </p>
+                        <p className="mt-0.5 text-[12.5px] leading-snug text-[var(--text-on-dark-muted)]">
+                            Ábrela en tu celular y mírala como la ve él, con tu logo y tu color.
+                        </p>
+                    </div>
+                    <div className="shrink-0">
+                        {/* `autoOpen`: el CTA «Asignar y ver como …» ya fue el gesto del coach; la hoja
+                            (QR + «abrir aquí») se abre sola al montar. */}
+                        <ViveTuAppButton
+                            label={`Ver como ${studentFirstName || 'tu alumno'}`}
+                            className="border-white/25 bg-white/10 text-[var(--text-on-dark)] hover:bg-white/20"
+                            autoOpen
+                            onOpened={() => setShowViveTuApp(true)}
+                        />
+                    </div>
+                </div>
+            )}
 
             {showDraftBanner && (
                 <div className="mx-3 mt-2.5 animate-in slide-in-from-top-1 rounded-card border border-primary/25 bg-primary/10 p-3 md:mx-6 md:rounded-control">
@@ -1344,6 +1425,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             )}
                         </div>
 
+                        {/* Tarjetas embebidas de «Primera rutina» — dentro del lienzo, nunca encima. */}
+                        <FirstRoutineCards
+                            coachId={coachId}
+                            open={showFirstRoutineCards}
+                            onAllDismissed={() => setShowBuilderHint(false)}
+                        />
+
                         <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar" ref={boardScrollRef} data-tour-id="days-board">
                         {isMobile ? (
                             <div className="h-full flex flex-col">
@@ -1457,7 +1545,58 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             </div>
                         )}
                         </div>
+
+                        {/* Vista del alumno — <1024 px: plegable al pie del lienzo, cerrada por defecto.
+                            Solo con alumno: una plantilla global no tiene a quién mostrársela. */}
+                        {client && (
+                        <div className="shrink-0 border-t border-subtle bg-surface-app lg:hidden">
+                            <button
+                                type="button"
+                                onClick={() => setIsPreviewOpen(v => !v)}
+                                aria-expanded={isPreviewOpen}
+                                /* pr-[168px] cerrado: el FAB + «Guardar» flotan sobre esta esquina. */
+                                className={`flex min-h-11 w-full items-center gap-2 px-4 text-left text-[12.5px] font-bold text-strong ${isPreviewOpen ? 'pr-4' : 'pr-[168px]'}`}
+                            >
+                                <Eye className="h-4 w-4 shrink-0 text-muted" />
+                                <span className="truncate">
+                                    Así lo ve {studentFirstName || 'tu alumno'}
+                                </span>
+                                <ChevronRight className={`ml-auto h-4 w-4 shrink-0 text-muted transition-transform ${isPreviewOpen ? '-rotate-90' : 'rotate-90'}`} />
+                            </button>
+                            {isPreviewOpen && (
+                                <StudentLivePreview
+                                    studentName={client?.full_name ?? null}
+                                    days={days}
+                                    /* En móvil manda el carrusel; en tablet (768-1023) no hay
+                                       carrusel, así que manda la selección propia del panel. */
+                                    activeDayId={isMobile ? (days[activeMobileDayIndex]?.id ?? null) : previewDayId}
+                                    onSelectDay={(dayId) => {
+                                        setPreviewDayId(dayId)
+                                        const idx = days.findIndex(d => d.id === dayId)
+                                        if (idx >= 0) setActiveMobileDayIndex(idx)
+                                    }}
+                                    areas={areas}
+                                    variant={isABMode ? activeVariant : null}
+                                    floatingActionsBelow={isMobile}
+                                    className="max-h-[42dvh] border-t border-subtle"
+                                />
+                            )}
+                        </div>
+                        )}
                     </div>
+
+                    {/* Vista del alumno — panel fijo a la derecha en desktop (≥1024 px). */}
+                    {client && (
+                        <StudentLivePreview
+                            studentName={client.full_name ?? null}
+                            days={days}
+                            activeDayId={previewDayId}
+                            onSelectDay={setPreviewDayId}
+                            areas={areas}
+                            variant={isABMode ? activeVariant : null}
+                            className="hidden w-[330px] shrink-0 border-l border-subtle lg:flex xl:w-[360px]"
+                        />
+                    )}
 
                     {/* Catálogo — bottom-sheet completo (única entrada = FAB +) */}
                     {isMobile && isCatalogOpen && (

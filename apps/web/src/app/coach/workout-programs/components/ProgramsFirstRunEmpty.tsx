@@ -3,9 +3,9 @@
 import type { OnboardingTemplate } from '@eva/onboarding'
 import {
     TemplateFirstEmptyState,
-    TemplatePicker,
     type TemplatePickerClient,
 } from '../../_components/TemplatePicker'
+import { FirstRoutinePicker } from './FirstRoutinePicker'
 
 /**
  * Biblioteca de programas SIN nada todavía (SPEC coach-onboarding-v2 §7, TASKS F3.6).
@@ -37,7 +37,7 @@ export function ProgramsFirstRunEmpty({
             subject={demoName ? `Empieza con ${demoName}, tu ${demoLabel.toLowerCase()}` : null}
             escape={{ href: '/coach/workout-programs/builder', label: 'Empezar desde cero' }}
         >
-            <TemplatePicker
+            <FirstRoutinePicker
                 templates={templates}
                 clients={clients}
                 defaultClientId={demoClientId}

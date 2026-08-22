@@ -6,6 +6,10 @@ import { ClientsDirectoryClient } from './ClientsDirectoryClient'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { getCoachPublicIdentifier, type CoachPublicIdentifierSource } from '@/lib/coach/public-identifier'
 import { useRosterView } from '@/components/coach/RosterViewContext'
+import {
+    AddStudentFlowProvider,
+    type AddStudentFlowConfig,
+} from './_components/AddStudentFlowProvider'
 
 interface CoachClientsShellProps {
     clients: any[]
@@ -16,6 +20,11 @@ interface CoachClientsShellProps {
     toolsEnabled: boolean
     /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
     demoLabel?: string
+    /**
+     * Alta guiada «Sumar un {alumno} en 3 pasos» (onboarding v2 F4.1). `null` = sin datos para
+     * el modo guiado; el directorio cae al modal de siempre.
+     */
+    addStudentFlow?: AddStudentFlowConfig | null
 }
 
 export function CoachClientsShell({
@@ -25,6 +34,7 @@ export function CoachClientsShell({
     pulse,
     toolsEnabled,
     demoLabel = 'Alumno de ejemplo',
+    addStudentFlow = null,
 }: CoachClientsShellProps) {
     const [riskFilter, setRiskFilter] = useState<DirectoryRiskFilter>('all')
     // Vista de nivel superior (solo desktop): ficha (master-detail) | tabla. El estado vive en
@@ -45,7 +55,7 @@ export function CoachClientsShell({
     }, [pulse])
 
     return (
-        <div>
+        <AddStudentFlowProvider config={addStudentFlow}>
             {/* War room (pulso de riesgo): SOLO móvil. En desktop el diseño no muestra war
                 room sobre el directorio — Ficha prioriza riesgo en el rail del master-detail
                 y Tabla (DesktopRosterTable) ordena por estado por defecto (w3-table.png). */}
@@ -73,6 +83,6 @@ export function CoachClientsShell({
                 toolsEnabled={toolsEnabled}
                 demoLabel={demoLabel}
             />
-        </div>
+        </AddStudentFlowProvider>
     )
 }

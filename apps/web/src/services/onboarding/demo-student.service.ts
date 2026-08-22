@@ -486,6 +486,18 @@ export async function applyTemplate(
         return { ok: true, planId: plan.planId }
     }
 
+    // Un alumno tiene UN programa activo: la plantilla aplicada pasa a ser el vigente y los
+    // anteriores quedan inactivos (el demo de rehab/endurance ya trae uno sembrado; sin esto
+    // «Armar pauta domiciliaria» / «Armar semana base» dejaban dos activos).
+    const { error: deactivateError } = await admin
+        .from('workout_programs')
+        .update({ is_active: false })
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+    if (deactivateError) {
+        return { ok: false, reason: 'error', detail: `workout_programs: ${deactivateError.message}` }
+    }
+
     const written = await writeProgram(admin, {
         coachId,
         clientId,

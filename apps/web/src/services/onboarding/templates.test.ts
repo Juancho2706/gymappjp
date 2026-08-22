@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { PERSONAS, type Persona } from '@eva/schemas'
 import { TEMPLATE_CATALOG } from '@eva/onboarding'
 import {
+    activePlanClashCopy,
     DEMO_TEMPLATE_BY_PERSONA,
+    isActivePlanClash,
     resolveTemplateBlueprint,
     templateIdsForPersona,
     templateIdsWithContent,
@@ -95,5 +97,27 @@ describe('integridad de los blueprints', () => {
                 }
             }
         }
+    })
+})
+
+describe('choque «ya tiene una pauta activa» — copy amable (W4 F4.3)', () => {
+    it('reconoce el 23505 del índice de pauta vigente única', () => {
+        expect(
+            isActivePlanClash(
+                'duplicate key value violates unique constraint "nutrition_plans_v2_active_root_per_client_uniq"',
+            ),
+        ).toBe(true)
+    })
+
+    it('no confunde un error de verdad con un choque', () => {
+        expect(isActivePlanClash('permission denied for table nutrition_plans_v2')).toBe(false)
+        expect(isActivePlanClash(null)).toBe(false)
+        expect(isActivePlanClash(undefined)).toBe(false)
+    })
+
+    it('el copy usa el primer nombre y NUNCA dice «undefined»', () => {
+        expect(activePlanClashCopy('Ana Riquelme')).toBe('Ana ya tiene una pauta: la editas aquí.')
+        expect(activePlanClashCopy(null)).toBe('Este alumno ya tiene una pauta: la editas aquí.')
+        expect(activePlanClashCopy('   ')).toBe('Este alumno ya tiene una pauta: la editas aquí.')
     })
 })
