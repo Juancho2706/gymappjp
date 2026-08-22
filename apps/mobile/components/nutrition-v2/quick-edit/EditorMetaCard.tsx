@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { Check, ChevronDown, ChevronUp, ClipboardList, Info, Lock } from 'lucide-react-native'
+import { NUMERIC_KEYBOARD_ACCESSORY_ID } from '../../KeyboardDoneBar'
 import {
   PLAN_NAME_MAX,
   qeAllowedStrategies,
@@ -207,6 +208,8 @@ export function EditorMetaCard({
             editable={!disabled}
             maxLength={10}
             keyboardType="numbers-and-punctuation"
+            inputAccessoryViewID={NUMERIC_KEYBOARD_ACCESSORY_ID}
+            returnKeyType="done"
             placeholder="AAAA-MM-DD"
             placeholderTextColor={theme.mutedForeground}
             className="mt-1.5 min-h-12 rounded-control border border-default bg-surface-card px-3 py-2 text-base leading-6 text-strong"
@@ -264,6 +267,8 @@ export function EditorMetaCard({
             }
             editable={!disabled}
             keyboardType="number-pad"
+            inputAccessoryViewID={NUMERIC_KEYBOARD_ACCESSORY_ID}
+            returnKeyType="done"
             maxLength={3}
             placeholder="Sin tope"
             placeholderTextColor={theme.mutedForeground}
