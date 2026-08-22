@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
         brand_name: brandName,
         slug,
         invite_code: inviteCode,
-        primary_color: '#10B981',
+        primary_color: '#1462DC',
         subscription_status: 'pending_email',
         subscription_tier: selectedTier,
         billing_cycle: 'monthly',

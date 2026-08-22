@@ -221,7 +221,7 @@ export async function registerAction(
             brand_name: brandName,
             slug,
             invite_code: inviteCode,
-            primary_color: '#10B981',
+            primary_color: '#1462DC',
             // Free tier: 'pending_email' until the email-confirm link is clicked, which flips it
             // to 'active' AND fires the welcome + drip sequence (apps/web/src/app/auth/confirm/route.ts).
             // Mirrors the mobile free-signup path (api/mobile/auth/register-coach-free); inserting

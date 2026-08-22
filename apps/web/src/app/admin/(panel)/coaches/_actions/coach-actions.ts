@@ -86,7 +86,7 @@ export async function createCoachAction(
         full_name,
         brand_name,
         slug,
-        primary_color: '#10B981',
+        primary_color: '#1462DC',
         subscription_status: status,
         subscription_tier,
         billing_cycle,

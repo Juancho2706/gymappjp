@@ -122,7 +122,7 @@ export async function completeOAuthOnboarding(
         brand_name: brandName,
         slug,
         invite_code: inviteCode,
-        primary_color: '#10B981',
+        primary_color: '#1462DC',
         // Google accounts are already email-confirmed — free tier is active immediately
         subscription_status: isFreeTier ? 'active' : 'pending_payment',
         subscription_tier: selectedTier,

@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         brand_name: brandName,
         slug,
         invite_code: inviteCode,
-        primary_color: '#10B981',
+        primary_color: '#1462DC',
         // Cuenta Google ya viene con email confirmado — free-tier activo de inmediato.
         subscription_status: 'active',
         subscription_tier: selectedTier,
