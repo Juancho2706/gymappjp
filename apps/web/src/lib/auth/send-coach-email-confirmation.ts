@@ -45,7 +45,10 @@ async function deliverConfirmationLink(input: {
               })
 
     if (error) {
-        console.error('[coach-email-confirmation] generateLink:', error)
+        // Solo el mensaje: el objeto de GoTrue se serializa entero en los logs de Vercel y arrastra
+        // el `email` del request (y a veces el cuerpo de la respuesta). El caller ya decide qué
+        // hacer con el error; el log es traza, no volcado.
+        console.error('[coach-email-confirmation] generateLink:', error.message)
         return { ok: false, error: error.message }
     }
 
@@ -63,7 +66,9 @@ async function deliverConfirmationLink(input: {
 
     const sent = await sendTransactionalEmail({ to: input.email, subject, html })
     if (!sent.ok) {
-        console.error('[coach-email-confirmation] Resend:', sent.error)
+        // `sent.error` es `Resend ${status}: ${body}` y el cuerpo del 4xx repite la dirección de
+        // destino: al log va solo el encabezado. El error completo sigue viajando al caller.
+        console.error('[coach-email-confirmation] Resend:', sent.error.split(':')[0])
         return { ok: false, error: sent.error }
     }
 

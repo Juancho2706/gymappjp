@@ -3,6 +3,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
+import {
+    evaluateResendThrottle,
+    readConfirmationResendTimestamps,
+    recordConfirmationResend,
+    resolveCoachConfirmationTarget,
+} from '@/lib/auth/resend-confirmation'
 import { rateLimitAuth } from '@/lib/rate-limit'
 
 export type ResendConfirmationState = {
@@ -29,6 +35,20 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * sesión (el proxy manda acá al coach `pending_email` logueado) o el `uid` que el registro pone en
  * la URL → `getUserById` da el email AUTORITATIVO → sólo se envía si ese id es un coach en
  * `pending_email`. Sin id resoluble no se genera ningún link.
+ *
+ * Esos guards viven desde W4 en `lib/auth/resend-confirmation.ts`, compartidos con el endpoint
+ * móvil (`api/mobile/auth/resend-confirmation`). El limitador de Upstash por usuario sigue igual —
+ * es el techo de volumen de esta superficie— y encima se suma el ledger durable de
+ * `admin_audit_logs`, que la web LEE y ESCRIBE con las mismas reglas que el móvil:
+ *
+ * · Lee, porque el cupo es de la persona, no de la pantalla. Si la web solo escribiera, alguien
+ *   podría vaciar los 5 del día desde el navegador y dejar el botón de la app dando 429 sin que la
+ *   web misma se hubiera frenado nunca. Ahora las dos superficies comparten freno y ventana.
+ * · Escribe ANTES de enviar (reserva; ver `recordConfirmationResend`): el ledger cuenta intentos.
+ *
+ * El mensaje del throttle es deliberadamente romo («Espera un momento…»): no dice si frenó el
+ * cooldown de 60 s o el tope diario, ni cuánto falta. Acá el uid puede venir de la URL, así que
+ * cualquier detalle sería el mismo oráculo que el endpoint móvil se cuida de no ser.
  */
 export async function resendConfirmationAction(
     _prev: ResendConfirmationState,
@@ -55,28 +75,31 @@ export async function resendConfirmationAction(
 
     const admin = createServiceRoleClient()
 
-    const { data: authUser } = await admin.auth.admin.getUserById(userId)
-    const email = authUser?.user?.email
-    if (!email) {
+    const target = await resolveCoachConfirmationTarget(admin, userId)
+    if (target.status === 'not_found') {
         return { error: 'No encontramos la cuenta. Vuelve a registrarte o escríbenos a soporte.' }
     }
-
-    const { data: coach } = await admin
-        .from('coaches')
-        .select('full_name, subscription_status')
-        .eq('id', userId)
-        .maybeSingle()
-
-    if (!coach) {
-        return { error: 'No encontramos la cuenta. Vuelve a registrarte o escríbenos a soporte.' }
-    }
-    if (coach.subscription_status !== 'pending_email') {
+    if (target.status === 'already_confirmed') {
         return { error: 'Tu correo ya está confirmado. Puedes iniciar sesión directamente.' }
     }
 
+    const now = new Date()
+    const ledger = await readConfirmationResendTimestamps(admin, userId, now)
+    if (!ledger.ok) {
+        // Fail-CLOSED, igual que el móvil: sin ledger legible no hay forma de saber si este uid ya
+        // gastó sus 5, y un reenvío de más no vale saltarse el limitador. Log sin uid ni email.
+        console.error('[resend-confirmation] ledger read failed:', ledger.error)
+        return { error: 'Espera un momento antes de volver a reenviar.' }
+    }
+    if (!evaluateResendThrottle({ sentAtIso: ledger.sentAtIso, now }).allowed) {
+        return { error: 'Espera un momento antes de volver a reenviar.' }
+    }
+
+    await recordConfirmationResend(admin, userId, 'web')
+
     const sent = await resendCoachSignupConfirmationEmail({
-        email,
-        coachName: coach.full_name ?? '',
+        email: target.email,
+        coachName: target.coachName,
     })
     if (!sent.ok) {
         return { error: 'No pudimos reenviar el correo. Intenta de nuevo en un minuto.' }

@@ -182,8 +182,15 @@ export async function POST(request: NextRequest) {
         )
     }
 
+    // `uid` es la ÚNICA llave del reenvío del correo de confirmación desde la app
+    // (`api/mobile/auth/resend-confirmation`): la app no tiene sesión hasta que el coach confirma,
+    // así que sin este id la pantalla de "revisa tu email" no tenía forma de identificarse y un
+    // correo perdido en spam mataba la cuenta. Espejo del `?uid=` que el registro web ya pone en la
+    // URL de `/verify-email`. No es un secreto de sesión: no autoriza nada más que pedir que el
+    // mismo correo salga de nuevo hacia la dirección que ya está en `auth.users`.
     return NextResponse.json({
         ok: true,
+        uid: authData.user.id,
         email: emailSan,
         slug,
         message: 'Revisa tu correo para confirmar tu cuenta.',

@@ -14,6 +14,20 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-22 (W5 del embudo Free→Pro — la app deja de hablar de plata)**: el sello «Hecho con
+> EVA» aterriza en `/hecho-con-eva` (landing sin precios) en vez de la home con `PreciosSection`;
+> `lib/coach-tiers.ts` deja de re-exportar `TIER_CONFIG` y expone `getTierMaxClients`, con guard
+> nuevo `tests/mobile-no-prices.test.ts` que barre `apps/mobile/**` contra precios; el muro de cupo
+> de `CreateClientModal` y los tres copys de plan Free de `CoachDashboardSections` usan
+> `studentCountLabel` (se acabó el «1 alumnos»); `coach/(tabs)/perfil.tsx` toma `TIER_LABELS` de
+> `@eva/tiers` (el espejo local no tenía `free`). Requiere OTA a los runtimes vigentes junto con W6.
+
+> **2026-08-22**: reenvío de confirmación desde la app (uid + endpoint móvil con guards) — el alta
+> móvil devuelve el `uid`, `(auth)/verify-email` gana el botón «Reenviar correo» con cooldown de
+> 60 s, y `POST /api/mobile/auth/resend-confirmation` replica los 7 guards del reenvío web
+> (identidad por uid, nunca por email del body). Cierra el callejón sin salida del coach cuyo
+> correo de confirmación cae en spam. QA en device pendiente (W4.6 de `specs/embudo-free-pro`).
+
 > **2026-08-19 (saneo documental — qué QA en device existe de verdad)**: los bloques fechados de
 > abajo quedaron congelados en su día y varios dicen «QA device pendiente» sobre trabajo que el
 > owner ya probó. Estado real al 19-08: **3 rondas en device Android el 17-08** (cabina, tour,

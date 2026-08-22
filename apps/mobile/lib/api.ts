@@ -25,13 +25,32 @@ function isSessionDefinitivelyInvalid(error: unknown): boolean {
 export class ApiError extends Error {
   status: number
   code?: string
+  /**
+   * Solo en 429: segundos que el server pide esperar. Sin esto, la UI que reacciona a un rate-limit
+   * tiene que INVENTAR el numero, y el invento se equivoca por horas cuando el freno no es el
+   * cooldown corto sino un tope diario (caso del reenvio de confirmacion: `retryAfter` puede venir
+   * en 4 h). Se lee del body (`retryAfter`) y, si no viene, del header `Retry-After`.
+   */
+  retryAfterSeconds?: number
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, retryAfterSeconds?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.retryAfterSeconds = retryAfterSeconds
   }
+}
+
+/** `retryAfter` del body gana sobre el header; un `Retry-After` con fecha HTTP se descarta. */
+function parseRetryAfterSeconds(payload: unknown, headers: Headers): number | undefined {
+  const fromBody = (payload as { retryAfter?: unknown } | null)?.retryAfter
+  if (typeof fromBody === 'number' && Number.isFinite(fromBody) && fromBody > 0) {
+    return Math.ceil(fromBody)
+  }
+  const raw = headers.get('Retry-After')
+  const fromHeader = raw == null ? Number.NaN : Number(raw)
+  return Number.isFinite(fromHeader) && fromHeader > 0 ? Math.ceil(fromHeader) : undefined
 }
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
@@ -118,7 +137,8 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
         ? humanizeStudentWriteError(raw)
         : raw,
       res.status,
-      payload?.code
+      payload?.code,
+      res.status === 429 ? parseRetryAfterSeconds(payload, res.headers) : undefined
     )
   }
 
@@ -137,6 +157,13 @@ export interface RegisterCoachFreePayload {
 
 export interface RegisterCoachFreeResponse {
   ok: true
+  /**
+   * Id del usuario recien creado. UNICA llave del reenvio del correo de confirmacion: hasta que el
+   * coach confirma no hay sesion, asi que sin este id la pantalla "revisa tu email" no tiene forma
+   * de identificarse. Opcional a proposito — un binario/OTA nuevo puede correr contra un server
+   * anterior a W4, y ahi la pantalla simplemente no ofrece el boton.
+   */
+  uid?: string
   email: string
   slug: string
   message: string
@@ -146,6 +173,26 @@ export function registerCoachFree(payload: RegisterCoachFreePayload) {
   return apiFetch<RegisterCoachFreeResponse>('/api/mobile/auth/register-coach-free', {
     method: 'POST',
     body: payload,
+  })
+}
+
+/**
+ * Reenvia el correo de confirmacion del coach que acaba de registrarse desde la app.
+ *
+ * SIN sesion (el coach todavia no confirmo) y SIN email en el body: la identidad es el `uid` que
+ * devolvio el alta y el destino lo resuelve el server contra `auth.users`. Mandar un email tipeado
+ * convertiria el endpoint en un emisor de magic-links contra cuentas ajenas.
+ *
+ * Respuesta SIEMPRE `{ ok: true }` aunque el server decida no reenviar (uid desconocido, cuenta ya
+ * confirmada, Resend caido, o una excepcion cualquiera): la UI no puede distinguirlos y no debe
+ * intentarlo. Los unicos errores que llegan son 400 (body invalido, o sea un bug nuestro) y 429
+ * (`RATE_LIMIT`) por el cooldown de 60 s o el tope diario de 5 — ese 429 trae
+ * `retryAfterSeconds`, y la diferencia entre 45 s y 4 h es lo que la pantalla necesita saber.
+ */
+export function resendCoachConfirmation(uid: string) {
+  return apiFetch<{ ok: true }>('/api/mobile/auth/resend-confirmation', {
+    method: 'POST',
+    body: { uid },
   })
 }
 
