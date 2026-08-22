@@ -317,6 +317,9 @@ importers:
       '@eva/nutrition-v2':
         specifier: workspace:*
         version: link:../../packages/nutrition-v2
+      '@eva/onboarding':
+        specifier: workspace:*
+        version: link:../../packages/onboarding
       '@eva/plan-builder':
         specifier: workspace:*
         version: link:../../packages/plan-builder
@@ -609,6 +612,9 @@ importers:
       '@eva/coach-nav':
         specifier: workspace:*
         version: link:../../packages/coach-nav
+      '@eva/onboarding':
+        specifier: workspace:*
+        version: link:../../packages/onboarding
       '@eva/plan-builder':
         specifier: workspace:*
         version: link:../../packages/plan-builder
@@ -660,6 +666,8 @@ importers:
       '@eva/nutrition-engine':
         specifier: workspace:*
         version: link:../nutrition-engine
+
+  packages/onboarding: {}
 
   packages/plan-builder:
     dependencies:

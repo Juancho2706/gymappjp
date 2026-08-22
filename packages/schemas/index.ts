@@ -18,6 +18,9 @@ export * from './coach'
 export * from './workout'
 // Bridge mobile: notificación transaccional posterior a una asignación ya persistida.
 export * from './program-assignment-notification'
+// Onboarding v2: persona del coach («¿A qué te dedicas?»), su copy y su vocabulario
+// (alumno/paciente/atleta). También accesible por subpath (@eva/schemas/persona).
+export * from './persona'
 
 // SERVER-ONLY (web / Next.js server actions only)
 // OrgCreateCoachSchema, OrgInviteSchema, etc. reference org_id / coach_id from DB.

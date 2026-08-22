@@ -63,9 +63,16 @@ export type NavModule = {
      */
     entitlement?: ModuleKey
     /**
-     * Dominio de feature-prefs al que pertenece (ej. 'nutrition'). Si el coach apago el master
-     * switch `_enabled` de ese dominio, la entrada se oculta. Ortogonal a `entitlement` (billing):
-     * esto es PREFERENCIA, no capability.
+     * Dominio de feature-prefs al que pertenece. Valores validos = keys de `FEATURE_DOMAINS`
+     * (@eva/feature-prefs): 'nutrition' | 'training' | 'cardio' | 'movement' | 'bodycomp'. Se
+     * declara como `string` para no acoplar este registro a ese paquete (ambos son puros y no se
+     * importan entre si, patron de `ModuleKey` mas arriba).
+     *
+     * Si el coach apago el master switch `_enabled` de ese dominio, la entrada se oculta.
+     * Ortogonal a `entitlement` (billing): esto es PREFERENCIA, no capability — y las dos reglas
+     * COMPONEN (Cardio necesita el modulo comprado Y el dominio prendido). Onboarding v2: la
+     * persona del coach siembra ese `_enabled` por dominio, asi el panel se achica solo
+     * (SPEC coach-onboarding-v2 §2). Fail-open: dominio sin preferencia => visible.
      */
     featureDomain?: string
     /**
@@ -92,7 +99,7 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'dashboard', href: '/coach/dashboard', label: 'Dashboard', shortLabel: 'Inicio', icon: 'LayoutDashboard', contexts: ALL },
     { key: 'clients', href: '/coach/clients', label: 'Alumnos', icon: 'Users', contexts: ALL },
     { key: 'team', href: '/coach/team', label: 'Equipo', shortLabel: 'Team', icon: 'UsersRound', contexts: ['coach_team'] },
-    { key: 'programs', href: '/coach/workout-programs', label: 'Programas', shortLabel: 'Planes', icon: 'ClipboardList', contexts: ALL },
+    { key: 'programs', href: '/coach/workout-programs', label: 'Programas', shortLabel: 'Planes', icon: 'ClipboardList', contexts: ALL, featureDomain: 'training' },
     // Movida 2 (declutter IA): 'exercises' ya NO es entrada top-level (paso a un boton dentro de
     // Programas). La ruta /coach/exercises sigue VIVA (deep links / app alumno). Cero cambio de capability.
     { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: 'Apple', contexts: ALL, featureDomain: 'nutrition', activeAliases: ['/coach/nutrition-v2'] },
@@ -104,8 +111,8 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'settings_team', href: '/coach/settings', label: 'Opciones', shortLabel: 'Opcs.', icon: 'Settings', contexts: ['coach_team'] },
     { key: 'support', href: '/coach/support', label: 'Soporte', shortLabel: 'Ayuda', icon: 'LifeBuoy', contexts: ALL },
     // Modulos toggleables (compra-only): visibles solo con el entitlement ON; enterprise excluido en v1.
-    { key: 'cardio', href: '/coach/cardio', label: 'Cardio', shortLabel: 'Cardio', icon: 'HeartPulse', contexts: ['coach_standalone', 'coach_team'], entitlement: 'cardio' },
-    { key: 'movement', href: '/coach/movement', label: 'Movimiento', shortLabel: 'Movim.', icon: 'PersonStanding', contexts: ['coach_standalone', 'coach_team'], entitlement: 'movement_assessment' },
+    { key: 'cardio', href: '/coach/cardio', label: 'Cardio', shortLabel: 'Cardio', icon: 'HeartPulse', contexts: ['coach_standalone', 'coach_team'], entitlement: 'cardio', featureDomain: 'cardio' },
+    { key: 'movement', href: '/coach/movement', label: 'Movimiento', shortLabel: 'Movim.', icon: 'PersonStanding', contexts: ['coach_standalone', 'coach_team'], entitlement: 'movement_assessment', featureDomain: 'movement' },
 ]
 
 export const REACTIVATE_NAV_ITEM: NavModule = {
@@ -129,6 +136,11 @@ export type VisibleNavContext = {
     /**
      * Dominios de feature-prefs cuyo master switch `_enabled` el coach apago. Una entrada con
      * `featureDomain` en este set se oculta. Ausente/vacio => mostrar todo (fail-open, comportamiento de HOY).
+     *
+     * El filtro es GENERICO: sirve para cualquier dominio del registro, no solo 'nutrition'. Los
+     * consumidores que hoy solo resuelven nutricion (web `coach/layout.tsx`, RN
+     * `CoachMobileChrome`) siguen viendo Programas/Cardio/Movimiento porque esos dominios no
+     * llegan en el set. `disabledDomainsForPersona` (@eva/feature-prefs) arma el set completo.
      */
     disabledDomains?: ReadonlySet<string> | null
 }

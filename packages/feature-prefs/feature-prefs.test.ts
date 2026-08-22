@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import {
     DOMAIN_ENABLED_KEY,
+    FEATURE_DOMAINS,
+    FEATURE_DOMAIN_KEYS,
     NUTRITION_SECTIONS,
     PRESETS,
+    disabledDomainsForPersona,
     normalizePreset,
     resolveDomainEnabled,
+    resolvePersonaPrefs,
     resolveSections,
+    type FeatureDomain,
     type ModuleKey,
     type NutritionSectionKey,
 } from './index'
 // Fuente de verdad de las keys (la app es la duena; el paquete es puro y la espeja).
 import { MODULE_KEYS } from '@/services/entitlements.service'
+// Fuente de verdad de las personas (espejo del CHECK de `coaches.persona`).
+import { PERSONAS, type Persona } from '@eva/schemas'
 
 const ALL_ENTITLED: Partial<Record<ModuleKey, boolean>> = {
     cardio: true,
@@ -380,5 +387,154 @@ describe('@eva/feature-prefs — master switch del dominio (_enabled)', () => {
             useTeamBase: false,
         })
         expect(res[DOMAIN_ENABLED_KEY]).toBeUndefined()
+    })
+})
+
+describe('@eva/feature-prefs — dominios del onboarding v2 (SPEC §2)', () => {
+    it('el registro tiene los 5 dominios de la matriz', () => {
+        expect(Object.keys(FEATURE_DOMAINS).sort()).toEqual(
+            ['bodycomp', 'cardio', 'movement', 'nutrition', 'training'],
+        )
+        expect([...FEATURE_DOMAIN_KEYS].sort()).toEqual(Object.keys(FEATURE_DOMAINS).sort())
+    })
+
+    it('toda seccion core (de cualquier dominio) es gratis y esta en los 3 presets', () => {
+        for (const domain of FEATURE_DOMAIN_KEYS) {
+            for (const section of FEATURE_DOMAINS[domain]) {
+                if (!section.core) continue
+                expect(section.requiresModule).toBeNull()
+                expect(section.presets.basico).toBe(true)
+                expect(section.presets.intermedio).toBe(true)
+                expect(section.presets.profesional).toBe(true)
+            }
+        }
+    })
+
+    it('resolveSections funciona en TODOS los dominios (sin prefs: las core prendidas)', () => {
+        for (const domain of FEATURE_DOMAIN_KEYS) {
+            const res = resolveSections({
+                entitledByModule: NONE_ENTITLED,
+                preset: 'basico',
+                useTeamBase: false,
+                domain,
+            })
+            for (const section of FEATURE_DOMAINS[domain]) {
+                if (section.core) expect(res[section.key]).toBe(true)
+            }
+        }
+    })
+
+    it('el master switch apaga CUALQUIER dominio, incluidas sus core', () => {
+        for (const domain of FEATURE_DOMAIN_KEYS) {
+            const input = {
+                entitledByModule: ALL_ENTITLED,
+                preset: 'profesional' as const,
+                coachSections: { [DOMAIN_ENABLED_KEY]: false },
+                useTeamBase: false,
+                domain,
+            }
+            expect(resolveDomainEnabled(input)).toBe(false)
+            const res = resolveSections(input)
+            for (const section of FEATURE_DOMAINS[domain]) {
+                expect(res[section.key]).toBe(false)
+            }
+        }
+    })
+})
+
+describe('@eva/feature-prefs — resolvePersonaPrefs (matriz de SPEC §2)', () => {
+    // Matriz esperada: [dominios ON] por persona, con la segunda pregunta en NO.
+    const BASE_ON: Record<Persona, FeatureDomain[]> = {
+        strength: ['training'],
+        nutrition: ['nutrition', 'bodycomp'],
+        rehab: ['training', 'movement'],
+        endurance: ['training', 'cardio'],
+        other: ['nutrition', 'training', 'cardio', 'movement', 'bodycomp'],
+    }
+    // Lo que agrega la segunda pregunta ([Sí]): nutricion para 1/3/4, entrenamiento para el nutri.
+    const ALSO_OTHER_ADDS: Record<Persona, FeatureDomain[]> = {
+        strength: ['nutrition'],
+        nutrition: ['training'],
+        rehab: ['nutrition'],
+        endurance: ['nutrition'],
+        other: [],
+    }
+
+    const enabledDomains = (persona: Persona, alsoOther: boolean): FeatureDomain[] => {
+        const prefs = resolvePersonaPrefs(persona, alsoOther)
+        return FEATURE_DOMAIN_KEYS.filter((d) => prefs[d][DOMAIN_ENABLED_KEY])
+    }
+
+    it('siempre devuelve los 5 dominios con su `_enabled` explicito', () => {
+        for (const persona of PERSONAS) {
+            for (const alsoOther of [false, true]) {
+                const prefs = resolvePersonaPrefs(persona, alsoOther)
+                expect(Object.keys(prefs).sort()).toEqual([...FEATURE_DOMAIN_KEYS].sort())
+                for (const domain of FEATURE_DOMAIN_KEYS) {
+                    expect(typeof prefs[domain][DOMAIN_ENABLED_KEY]).toBe('boolean')
+                }
+            }
+        }
+    })
+
+    it('matriz completa: 5 personas x 2 valores de la segunda pregunta', () => {
+        for (const persona of PERSONAS) {
+            expect({ persona, on: enabledDomains(persona, false).sort() }).toEqual({
+                persona,
+                on: [...BASE_ON[persona]].sort(),
+            })
+            expect({ persona, on: enabledDomains(persona, true).sort() }).toEqual({
+                persona,
+                on: [...BASE_ON[persona], ...ALSO_OTHER_ADDS[persona]].sort(),
+            })
+        }
+    })
+
+    it('la segunda pregunta SOLO agrega (nunca apaga lo que ya estaba)', () => {
+        for (const persona of PERSONAS) {
+            const withoutIt = new Set(enabledDomains(persona, false))
+            const withIt = new Set(enabledDomains(persona, true))
+            for (const domain of withoutIt) expect(withIt.has(domain)).toBe(true)
+        }
+    })
+
+    it('`other` deja el panel completo con cualquier respuesta', () => {
+        for (const alsoOther of [false, true]) {
+            expect(enabledDomains('other', alsoOther)).toEqual([...FEATURE_DOMAIN_KEYS])
+        }
+    })
+
+    it('composicion corporal entra con nutricion y con nadie mas (salvo other)', () => {
+        expect(resolvePersonaPrefs('nutrition', false).bodycomp[DOMAIN_ENABLED_KEY]).toBe(true)
+        for (const persona of ['strength', 'rehab', 'endurance'] as const) {
+            expect(resolvePersonaPrefs(persona, true).bodycomp[DOMAIN_ENABLED_KEY]).toBe(false)
+        }
+    })
+
+    it('disabledDomainsForPersona es el complemento exacto (lo que consume el nav)', () => {
+        for (const persona of PERSONAS) {
+            for (const alsoOther of [false, true]) {
+                const on = new Set(enabledDomains(persona, alsoOther))
+                const off = disabledDomainsForPersona(persona, alsoOther)
+                expect(off.size + on.size).toBe(FEATURE_DOMAIN_KEYS.length)
+                for (const domain of off) expect(on.has(domain)).toBe(false)
+            }
+        }
+    })
+
+    it('la persona nunca prende una seccion que el entitlement no permite (solo achica)', () => {
+        // Con la segunda pregunta en [Si], `endurance` prende el dominio nutricion — pero sus
+        // secciones de PAGO siguen gateadas por el entitlement (la preferencia no compra nada).
+        const prefs = resolvePersonaPrefs('endurance', true)
+        expect(prefs.nutrition[DOMAIN_ENABLED_KEY]).toBe(true)
+        const res = resolveSections({
+            entitledByModule: NONE_ENTITLED,
+            preset: 'profesional',
+            coachSections: prefs.nutrition,
+            useTeamBase: false,
+            domain: 'nutrition',
+        })
+        expect(res.micros_advanced).toBe(false)
+        expect(res.goals_bodycomp).toBe(false)
     })
 })

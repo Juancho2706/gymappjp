@@ -38,8 +38,13 @@ export interface FeaturePrefsScope {
   teamId: string | null
 }
 
-const DOMAIN_LABELS: Record<FeatureDomain, string> = { nutrition: 'Nutrición' }
-const DOMAIN_KEYS = Object.keys(FEATURE_DOMAINS) as FeatureDomain[]
+// PARCIAL a proposito, y `DOMAIN_KEYS` se deriva de ACA (no de `FEATURE_DOMAINS`): el onboarding v2
+// sumo `training | cardio | movement | bodycomp` al registro puro (SPEC coach-onboarding-v2 §2) para
+// que la persona del coach pueda apagarlos, pero su area en este editor entra recien con «Mi panel»
+// (W5.3), junto con la de la web. Hasta entonces el editor movil muestra SOLO Nutricion, igual que
+// hoy y que la web — sumar la etiqueta es lo unico que hace falta para que aparezca.
+const DOMAIN_LABELS: Partial<Record<FeatureDomain, string>> = { nutrition: 'Nutrición' }
+const DOMAIN_KEYS = Object.keys(DOMAIN_LABELS) as FeatureDomain[]
 
 function asSections(v: unknown): SectionPrefs {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as SectionPrefs) : {}
@@ -86,7 +91,7 @@ export async function loadFeaturePrefs(ctx: FeaturePrefsScope): Promise<DomainPr
       } catch {
         /* defaults */
       }
-      return { domain, label: DOMAIN_LABELS[domain], sections, preset, sectionPrefs }
+      return { domain, label: DOMAIN_LABELS[domain] ?? domain, sections, preset, sectionPrefs }
     }),
   )
 }

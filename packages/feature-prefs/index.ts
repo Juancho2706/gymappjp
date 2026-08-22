@@ -19,6 +19,12 @@
  * app; el test cruza cada `requiresModule` contra `MODULE_KEYS` y falla si divergen.
  */
 
+// Import de TIPO puro (se borra al compilar, no llega ni al bundle de RN ni al de web). El
+// contrato de personas vive en @eva/schemas porque tambien lo validan los boundaries con zod;
+// cruzarlo aca evita una segunda lista que se desincronice del CHECK de `coaches.persona`.
+// Precedente de import entre paquetes: `@eva/brand-kit` -> `@eva/schemas`.
+import type { Persona } from '@eva/schemas'
+
 /**
  * Las keys de modulos de pago de EVA. Subconjunto/espejo de `MODULE_KEYS` (verificado en test).
  * Tipada localmente para mantener el paquete puro (no importa de la app).
@@ -197,12 +203,94 @@ export const NUTRITION_SECTIONS: readonly FeatureSection<NutritionSectionKey>[] 
     },
 ]
 
-/** Registro de dominios soportados → su config de secciones. */
+/**
+ * Config de secciones del dominio ENTRENAMIENTO (builder, programas, ejercicios).
+ * Una sola seccion `core`: el dominio no se corta por dentro, se prende o se apaga entero con el
+ * master switch `_enabled` (que es lo que escribe la persona del onboarding v2).
+ */
+export const TRAINING_SECTIONS: readonly FeatureSection<'programs'>[] = [
+    {
+        key: 'programs',
+        label: 'Programas',
+        tooltip: 'Rutinas, progresiones y ejercicios. Siempre visible dentro del dominio.',
+        core: true,
+        defaultOn: true,
+        requiresModule: null,
+        presets: CORE_PRESETS,
+    },
+]
+
+/**
+ * Config de secciones del dominio CARDIO (zonas de FC, ritmos, intervalos).
+ * `requiresModule` va en `null` a proposito: el gate de PAGO del modulo `cardio` lo aplican el
+ * entitlement server-side y `@eva/coach-nav` (`entitlement: 'cardio'`), no la preferencia. Aca
+ * solo vive el master switch (preferencia = solo achica).
+ */
+export const CARDIO_SECTIONS: readonly FeatureSection<'zones'>[] = [
+    {
+        key: 'zones',
+        label: 'Zonas y sesiones',
+        tooltip: 'Zonas de frecuencia cardiaca, ritmos e intervalos.',
+        core: true,
+        defaultOn: true,
+        requiresModule: null,
+        presets: CORE_PRESETS,
+    },
+]
+
+/** Config de secciones del dominio MOVIMIENTO (screening de 7 patrones + pauta domiciliaria). */
+export const MOVEMENT_SECTIONS: readonly FeatureSection<'screening'>[] = [
+    {
+        key: 'screening',
+        label: 'Screening de movimiento',
+        tooltip: 'Screening de 7 patrones con semaforo y su evolucion.',
+        core: true,
+        defaultOn: true,
+        requiresModule: null,
+        presets: CORE_PRESETS,
+    },
+]
+
+/** Config de secciones del dominio COMPOSICION CORPORAL (BIA / ISAK). */
+export const BODYCOMP_SECTIONS: readonly FeatureSection<'measurements'>[] = [
+    {
+        key: 'measurements',
+        label: 'Mediciones',
+        tooltip: 'Composicion corporal por BIA o antropometria ISAK.',
+        core: true,
+        defaultOn: true,
+        requiresModule: null,
+        presets: CORE_PRESETS,
+    },
+]
+
+/**
+ * Registro de dominios soportados → su config de secciones.
+ *
+ * Onboarding v2 (SPEC §2): la persona del coach escribe un `_enabled` por dominio en
+ * `coach_feature_prefs` (PK `(coach_id, domain)` con `domain text` libre ⇒ sin migracion de
+ * tabla). `nutrition` es el unico con secciones internas toggleables; los otros cuatro existen
+ * para que el master switch tenga un dominio al que apagar y para que `@eva/coach-nav` pueda
+ * ocultar su entrada del menu con la MISMA fuente en web y en RN.
+ */
 export const FEATURE_DOMAINS = {
     nutrition: NUTRITION_SECTIONS,
+    training: TRAINING_SECTIONS,
+    cardio: CARDIO_SECTIONS,
+    movement: MOVEMENT_SECTIONS,
+    bodycomp: BODYCOMP_SECTIONS,
 } as const
 
 export type FeatureDomain = keyof typeof FEATURE_DOMAINS
+
+/** Lista canonica de dominios (orden estable para iterar y para pintar Opciones › Mi panel). */
+export const FEATURE_DOMAIN_KEYS = [
+    'nutrition',
+    'training',
+    'cardio',
+    'movement',
+    'bodycomp',
+] as const satisfies readonly FeatureDomain[]
 
 /** Coacciona un preset desconocido/ausente a `'basico'` (deterministico, plan §4.4). */
 export function normalizePreset(preset: unknown): Preset {
@@ -320,4 +408,99 @@ export function resolveSections(
     }
 
     return result
+}
+
+/**
+ * MATRIZ DE PERSONA → dominios visibles (onboarding v2, SPEC §2).
+ *
+ * La pregunta «¿A qué te dedicas?» REDUCE lo que se muestra: cada rama deja prendidos los
+ * dominios de su mundo y apaga los demás, siempre reactivables desde Opciones › Mi panel. Lo que
+ * devuelve esta funcion es EXACTAMENTE lo que se persiste en `coach_feature_prefs` (una fila por
+ * dominio, `sections` = `{ _enabled: boolean }`), asi que web y RN siembran lo mismo.
+ *
+ * `alsoOther` es la segunda pregunta de la pantalla (`coaches.persona_also_other`): nutricion
+ * para strength/rehab/endurance, entrenamiento para nutrition. `other` deja el panel completo y
+ * la ignora.
+ *
+ * Invariante: esto es PREFERENCIA, no capability. Prender `cardio` aca NO compra el modulo — el
+ * entitlement server-side sigue siendo el unico gate de dinero (`@eva/coach-nav` filtra primero
+ * por `entitlement` y despues por dominio apagado).
+ */
+export function resolvePersonaPrefs(
+    persona: Persona,
+    alsoOther: boolean,
+): Record<FeatureDomain, { [DOMAIN_ENABLED_KEY]: boolean }> {
+    const prefs = (
+        enabled: Record<FeatureDomain, boolean>,
+    ): Record<FeatureDomain, { _enabled: boolean }> => ({
+        nutrition: { _enabled: enabled.nutrition },
+        training: { _enabled: enabled.training },
+        cardio: { _enabled: enabled.cardio },
+        movement: { _enabled: enabled.movement },
+        bodycomp: { _enabled: enabled.bodycomp },
+    })
+
+    switch (persona) {
+        case 'strength':
+            return prefs({
+                training: true,
+                nutrition: alsoOther,
+                cardio: false,
+                movement: false,
+                bodycomp: false,
+            })
+        case 'nutrition':
+            // Composicion corporal entra SIEMPRE con nutricion: la evaluacion corporal es parte
+            // del trabajo del nutricionista (SPEC §1, bajada de la tarjeta).
+            return prefs({
+                nutrition: true,
+                training: alsoOther,
+                bodycomp: true,
+                cardio: false,
+                movement: false,
+            })
+        case 'rehab':
+            return prefs({
+                training: true,
+                movement: true,
+                nutrition: alsoOther,
+                cardio: false,
+                bodycomp: false,
+            })
+        case 'endurance':
+            return prefs({
+                training: true,
+                cardio: true,
+                nutrition: alsoOther,
+                movement: false,
+                bodycomp: false,
+            })
+        case 'other':
+        default:
+            // El escape: panel completo, se ajusta despues desde Opciones › Mi panel.
+            return prefs({
+                nutrition: true,
+                training: true,
+                cardio: true,
+                movement: true,
+                bodycomp: true,
+            })
+    }
+}
+
+/**
+ * Dominios APAGADOS por la persona, en la forma que consume `getVisibleNavItems`
+ * (`disabledDomains`). Azucar sobre `resolvePersonaPrefs` para que el nav de web y RN no
+ * re-derive el set cada uno por su lado.
+ */
+export function disabledDomainsForPersona(
+    persona: Persona,
+    alsoOther: boolean,
+): Set<FeatureDomain> {
+    const prefs = resolvePersonaPrefs(persona, alsoOther)
+    const disabled = new Set<FeatureDomain>()
+    for (const domain of FEATURE_DOMAIN_KEYS) {
+        if (!prefs[domain][DOMAIN_ENABLED_KEY]) disabled.add(domain)
+    }
+    return disabled
 }

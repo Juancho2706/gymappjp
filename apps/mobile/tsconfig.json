@@ -10,6 +10,8 @@
       "@eva/calc": ["../../packages/calc/index.ts"],
       "@eva/profile-analytics": ["../../packages/profile-analytics/index.ts"],
       "@eva/schemas": ["../../packages/schemas/index.ts"],
+      "@eva/schemas/persona": ["../../packages/schemas/persona.ts"],
+      "@eva/onboarding": ["../../packages/onboarding/index.ts"],
       "@eva/brand-kit": ["../../packages/brand-kit/index.ts"],
       "@eva/tiers": ["../../packages/tiers/index.ts"],
       "@eva/nutrition-engine": ["../../packages/nutrition-engine/index.ts"],

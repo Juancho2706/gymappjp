@@ -31,11 +31,12 @@ import { hasModule } from '@/services/entitlements.service'
  * que decide si una seccion Pro se muestra DESBLOQUEADA o con CTA de compra.
  *
  * ── Estructura POR DOMINIO ──────────────────────────────────────────────────────
- * El editor se organiza en AREAS, una por dominio de `FEATURE_DOMAINS` (Nutricion hoy; Ejercicios,
- * Planes, etc. a futuro). Para CADA dominio se lee su fila `*_feature_prefs` propia (PK
+ * El editor se organiza en AREAS, una por dominio con metadata en `DOMAIN_META` (Nutricion hoy;
+ * Entrenamiento, Cardio, Movimiento y Composicion corporal ya existen en `FEATURE_DOMAINS` pero
+ * su area entra en W2.6). Para CADA dominio se lee su fila `*_feature_prefs` propia (PK
  * `(scope, domain)`, las write-actions ya persisten por dominio) y se computa su `entitledByModule`
- * acotado a los modulos que gatean ESE dominio. Agregar un dominio a `FEATURE_DOMAINS` (+ su
- * `DOMAIN_META`) lo hace aparecer automaticamente sin tocar este loader.
+ * acotado a los modulos que gatean ESE dominio. Agregar la entrada a `DOMAIN_META` lo hace
+ * aparecer automaticamente sin tocar este loader.
  */
 
 /** Metadata de presentacion por dominio (label + icono). Extensible: una entrada por FeatureDomain. */
@@ -44,12 +45,21 @@ export interface DomainMeta {
     icon: LucideIcon
 }
 
-export const DOMAIN_META: Record<FeatureDomain, DomainMeta> = {
+export const DOMAIN_META: Partial<Record<FeatureDomain, DomainMeta>> = {
     nutrition: { label: 'Nutrición', icon: Apple },
 }
 
-/** Lista canonica de dominios soportados (orden de presentacion). */
-const DOMAIN_KEYS = Object.keys(FEATURE_DOMAINS) as FeatureDomain[]
+/**
+ * Lista canonica de dominios que ESTE editor muestra (orden de presentacion) — se deriva de
+ * `DOMAIN_META`, no de `FEATURE_DOMAINS`.
+ *
+ * Onboarding v2 (SPEC coach-onboarding-v2 §2) sumo `training | cardio | movement | bodycomp` al
+ * registro puro para que la persona del coach pueda apagarlos, pero esos dominios todavia NO
+ * tienen area en esta zona: su UI (copy, icono, orden y QA) entra con «Opciones › Mi panel»
+ * (W2.6). Mientras tanto esta pagina sigue mostrando SOLO Nutricion, exactamente como hoy —
+ * sumar la entrada a `DOMAIN_META` es lo unico que hace falta para que aparezca.
+ */
+const DOMAIN_KEYS = Object.keys(DOMAIN_META) as FeatureDomain[]
 
 /** Modulos que gatean alguna seccion de un dominio dado (derivado del catalogo puro). */
 function gatingModulesFor(sections: readonly FeatureSection[]): ModuleKey[] {
@@ -119,7 +129,7 @@ async function resolveDomains(
             ])
             return {
                 domain,
-                label: DOMAIN_META[domain].label,
+                label: DOMAIN_META[domain]?.label ?? domain,
                 sections,
                 preset: normalizePreset(prefs?.preset),
                 sectionPrefs: asSections(prefs?.sections),

@@ -175,10 +175,10 @@ mismo flujo en web y en la app. Nada se gatea a Pro; la persona se cambia cuando
 
 | # | Paso (común) | Variante por persona (paso 3) | Auto-tilde (señal real) |
 |---|---|---|---|
-| 1 | **Poné tu color y tu logo** (pre-tildado si ya hay marca) | — | `logo_url` o preset o `primary_color ≠ default` |
-| 2 | **Mirá tu app con tu marca** (Vive tu app) | — | `vive_tu_app_opened` |
-| 3 | **Armá tu primer [artefacto] desde la plantilla** | strength: rutina de Matías · nutrition: pauta de Ana · rehab: screening de Pedro · endurance: zonas + semana de Javiera | programa / plan V2 / movement_assessment / perfil cardio del demo editado o 1 nuevo |
-| 4 | **Invitá a tu primer alumno** — link copiado + botón WhatsApp con mensaje redactado | vocabulario: alumno · paciente · paciente · atleta | `clients` real (no demo) ≥1 |
+| 1 | **Pon tu color y tu logo** (pre-tildado si ya hay marca) | — | `logo_url` o preset o `primary_color ≠ default` |
+| 2 | **Mira tu app con tu marca** (Vive tu app) | — | `vive_tu_app_opened` |
+| 3 | **Arma tu primer [artefacto] desde la plantilla** | strength: rutina de Matías · nutrition: pauta de Ana · rehab: screening de Pedro · endurance: zonas + semana de Javiera | programa / plan V2 / movement_assessment / perfil cardio del demo editado o 1 nuevo |
+| 4 | **Invita a tu primer alumno** — link copiado + botón WhatsApp con mensaje redactado | vocabulario: alumno · paciente · paciente · atleta | `clients` real (no demo) ≥1 |
 | 5 | **Tu alumno completó su primer entreno / registró su primera comida** — el único confeti | nutrition: primera comida registrada · resto: primer set logueado | `workout_logs` / `nutrition_intake_entries` del alumno real |
 
 - Progreso visible (1/5 ya tildado). Se mueve al pie del dashboard cuando llega a 5/5 o al tocar «Ocultar»

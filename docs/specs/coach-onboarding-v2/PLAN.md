@@ -33,7 +33,7 @@ Una sola celebración en el aha; nada de tours automáticos; nada gateado a Pro;
 | D5 | Guía | 5 verbos, ARRIBA del dashboard hasta 5/5 u «Ocultar»; luego tira al pie |
 | D6 | Correos | por comportamiento, sobre el ledger que construye la sesión BROCITO (embudo W2) |
 | D7 | `persona` | columna propia en `coaches` (+ `persona_also_other`, `persona_set_at`) |
-| D8 | Coaches existentes | 0 alumnos ⇒ ven la pantalla completa una vez; ≥1 alumno ⇒ tarjeta «Elegí tu especialidad» en el dashboard, sin gate |
+| D8 | Coaches existentes | 0 alumnos ⇒ ven la pantalla completa una vez; ≥1 alumno ⇒ tarjeta «Elige tu especialidad» en el dashboard, sin gate |
 
 ## Arquitectura (qué cambia y dónde)
 

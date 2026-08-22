@@ -122,6 +122,62 @@ describe('getVisibleNavItems — master switch de dominio (feature-prefs _enable
         expect(k).toEqual(['dashboard', 'clients', 'team', 'programs', 'settings_team', 'support'])
     })
 
+    it('el registro marca Programas/Cardio/Movimiento con su featureDomain (onboarding v2)', () => {
+        const byKey = new Map(NAV_MODULES.map((i) => [i.key, i]))
+        expect(byKey.get('programs')?.featureDomain).toBe('training')
+        expect(byKey.get('cardio')?.featureDomain).toBe('cardio')
+        expect(byKey.get('movement')?.featureDomain).toBe('movement')
+    })
+
+    it('el filtro por dominio es GENERICO: apaga training igual que nutrition', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            disabledDomains: new Set(['training']),
+        }))
+        expect(k).not.toContain('programs')
+        expect(k).toEqual(['dashboard', 'clients', 'nutrition', 'options', 'support'])
+    })
+
+    it('la persona nutricionista (training+cardio+movement apagados) deja el panel de nutricion', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            enabledModules: { cardio: true, movement_assessment: true },
+            disabledDomains: new Set(['training', 'cardio', 'movement']),
+        }))
+        expect(k).toEqual(['dashboard', 'clients', 'nutrition', 'options', 'support'])
+    })
+
+    it('entitlement y dominio COMPONEN: con el modulo comprado, el dominio apagado igual oculta', () => {
+        const ctx = {
+            activeWorkspaceType: 'coach_standalone' as const,
+            subscriptionStatus: 'active',
+            enabledModules: { cardio: true, movement_assessment: true },
+        }
+        expect(keys(getVisibleNavItems(ctx))).toContain('cardio')
+        expect(keys(getVisibleNavItems({ ...ctx, disabledDomains: new Set(['cardio']) }))).not.toContain('cardio')
+        // Y al reves: dominio prendido pero sin modulo comprado => sigue oculto (gate de plata).
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            disabledDomains: new Set(),
+        }))
+        expect(k).not.toContain('cardio')
+        expect(k).not.toContain('movement')
+    })
+
+    it('los consumidores de HOY (solo resuelven nutrition) no pierden ninguna entrada nueva', () => {
+        // Espejo exacto de lo que pasan web (coach/layout.tsx) y RN (CoachMobileChrome).
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            enabledModules: { cardio: true, movement_assessment: true },
+            disabledDomains: new Set(['nutrition']),
+        }))
+        expect(k).toEqual(['dashboard', 'clients', 'programs', 'options', 'support', 'cardio', 'movement'])
+    })
+
     it('un dominio desconocido en disabledDomains no afecta ninguna entrada', () => {
         const k = keys(getVisibleNavItems({
             activeWorkspaceType: 'coach_standalone',

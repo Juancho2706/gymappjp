@@ -12,6 +12,7 @@
   "dependencies": {
     "@eva/cardio": "workspace:*",
     "@eva/coach-nav": "workspace:*",
+    "@eva/onboarding": "workspace:*",
     "@eva/plan-builder": "workspace:*",
     "@eva/profile-analytics": "workspace:*",
     "@eva/workout-engine": "workspace:*",

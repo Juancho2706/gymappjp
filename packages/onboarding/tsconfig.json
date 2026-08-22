@@ -14,9 +14,8 @@
     "types": ["vitest/globals", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../../apps/web/src/*"],
       "@eva/schemas": ["../schemas/index.ts"]
     }
   },
-  "include": ["index.ts", "feature-prefs.test.ts"]
+  "include": ["index.ts", "index.test.ts"]
 }
