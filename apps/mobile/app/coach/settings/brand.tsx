@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Share, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useReducedMotion } from 'react-native-reanimated'
@@ -175,7 +175,16 @@ export default function MiMarcaScreen() {
         setBrandName(s.brandName)
         setColor(s.primaryColor)
         setUseBrandColors(s.useBrandColors)
-        setUseCustomLoader(s.useCustomLoader)
+        // El toggle abre la sección «Pantalla de carga» COMPLETA (animación + texto + ícono), así
+        // que arranca prendido si el coach tiene CUALQUIERA de las tres cosas propias. Con solo
+        // `use_custom_loader` una animación elegida en la web quedaba escondida tras un toggle
+        // apagado (y el resumen habría mentido). Lo que se PERSISTE en `use_custom_loader` no
+        // cambia: lo decide `savedUseCustomLoader` (toggle + texto), igual que antes.
+        setUseCustomLoader(
+          s.useCustomLoader ||
+            resolveLoaderVariant(s.loaderVariant) !== 'eva' ||
+            parseLoaderConfig(s.loaderConfig) != null,
+        )
         setLoaderText(s.loaderText ?? '')
         setLoaderIconMode((s.loaderIconMode as 'eva' | 'coach' | 'none') ?? 'eva')
         setWelcomeMessage(s.welcomeMessage ?? '')
@@ -234,6 +243,11 @@ export default function MiMarcaScreen() {
   const effectiveLoaderVariant = loaderVariant && loaderVariant !== 'eva' ? loaderVariant : (activePreset?.loaderVariant ?? 'eva')
   // Serialización estable del compositor — se compara y se persiste siempre por esta vía.
   const loaderConfigJson = useMemo(() => serializeLoaderConfig(loaderConfig), [loaderConfig])
+  // Valor REAL de `use_custom_loader` (paridad web 17-08: sin texto no hay loader custom). El
+  // toggle solo abre la sección; lo guardado lo decide el texto. Único punto de verdad para el
+  // payload, el baseline, el dirty y el puntaje — antes esa fórmula estaba copiada en save() y el
+  // dirty comparaba el toggle crudo (toggle prendido + texto vacío ⇒ «Sin guardar» eterno).
+  const savedUseCustomLoader = useCustomLoader && loaderText.trim().length > 0
   const brandScore = useMemo(() => {
     let s = 0
     if (logoUrl) s += 20
@@ -242,12 +256,12 @@ export default function MiMarcaScreen() {
     if (welcomeMessage.trim()) s += 10
     if (welcomeModalEnabled && welcomeModalContent.trim()) s += 10
     if (brandName.trim() && brandName.trim() !== fullName.trim()) s += 10
-    if (useCustomLoader && loaderText.trim()) s += 10
+    if (savedUseCustomLoader) s += 10
     if (effectiveFontKey) s += 10
     // Variante O compositor (1:1 con web: "loader variante/config 10").
     if (loaderConfigJson || effectiveLoaderVariant !== 'eva') s += 10
     return Math.min(100, s)
-  }, [logoUrl, activePreset, color, welcomeMessage, welcomeModalEnabled, welcomeModalContent, brandName, fullName, useCustomLoader, loaderText, effectiveFontKey, effectiveLoaderVariant, loaderConfigJson])
+  }, [logoUrl, activePreset, color, welcomeMessage, welcomeModalEnabled, welcomeModalContent, brandName, fullName, savedUseCustomLoader, effectiveFontKey, effectiveLoaderVariant, loaderConfigJson])
 
   // "Sin guardar" (dirty) — mirrors the web BrandSettingsForm indicator + drives
   // the unified save FAB. Logo is excluded: it persists immediately on upload.
@@ -258,7 +272,7 @@ export default function MiMarcaScreen() {
       brandName !== settings.brandName ||
       color.toLowerCase() !== settings.primaryColor.toLowerCase() ||
       useBrandColors !== settings.useBrandColors ||
-      useCustomLoader !== settings.useCustomLoader ||
+      savedUseCustomLoader !== settings.useCustomLoader ||
       (loaderText || '') !== (settings.loaderText || '') ||
       loaderIconMode !== ((settings.loaderIconMode as string) ?? 'eva') ||
       (welcomeMessage || '') !== (settings.welcomeMessage || '') ||
@@ -275,7 +289,45 @@ export default function MiMarcaScreen() {
       loaderConfigJson !== (settings.loaderConfig ?? '') ||
       executorTheme !== (settings.executorTheme === 'eva' ? 'eva' : 'coach')
     )
-  }, [settings, fullName, brandName, color, useBrandColors, useCustomLoader, loaderText, loaderIconMode, welcomeMessage, welcomeModalEnabled, welcomeModalType, welcomeModalContent, themePresetKey, loginLayoutKey, neutralTint, fontKey, loaderVariant, loaderConfigJson, executorTheme])
+  }, [settings, fullName, brandName, color, useBrandColors, savedUseCustomLoader, loaderText, loaderIconMode, welcomeMessage, welcomeModalEnabled, welcomeModalType, welcomeModalContent, themePresetKey, loginLayoutKey, neutralTint, fontKey, loaderVariant, loaderConfigJson, executorTheme])
+
+  // ── Pantalla de carga (sección unificada) ──────────────────────────────────────────────────
+  // Memoria de la animación previa: apagar el toggle vuelve a la de EVA, y volver a prenderlo
+  // devuelve lo que había (un tap accidental no borra la elección; nada se persiste hasta el FAB).
+  const prevLoaderRef = useRef<{ variant: string; config: LoaderComposite | null } | null>(null)
+
+  function toggleCustomLoader(next: boolean) {
+    setUseCustomLoader(next)
+    if (!next) {
+      prevLoaderRef.current = { variant: loaderVariant, config: loaderConfig }
+      // El resumen colapsado dice «Se usa la animación de EVA»: para que sea CIERTO, apagar
+      // también apaga la animación propia (loader_variant 'eva' + sin compositor).
+      setLoaderVariant('eva')
+      setLoaderConfig(null)
+    } else if (prevLoaderRef.current) {
+      setLoaderVariant(prevLoaderRef.current.variant)
+      setLoaderConfig(prevLoaderRef.current.config)
+      prevLoaderRef.current = null
+    }
+  }
+
+  // UN solo campo de texto para las dos rutas. Con el compositor activo la fuente de verdad del
+  // render es `loader_config.text` (precede al legacy en CompositeLoaderView), así que el campo
+  // muestra ese valor y cada tecla escribe en AMBOS: el legacy sigue alimentando
+  // `use_custom_loader` y el puntaje, tal como antes.
+  const loaderTextValue = loaderConfig ? (loaderConfig.text ?? '') : loaderText
+  function changeLoaderText(v: string) {
+    const up = v.toUpperCase().slice(0, LOADER_TEXT_MAX)
+    setLoaderText(up)
+    setLoaderConfig((prev) => (prev ? { ...prev, text: up.trim() ? up : undefined } : prev))
+  }
+
+  // Resumen de una línea con el toggle apagado. Un tema curado puede traer su propia animación
+  // (effectiveLoaderVariant): en ese caso decirlo, en vez de mentir con «la de EVA».
+  const loaderOffSummary =
+    effectiveLoaderVariant !== 'eva'
+      ? `Se usa la animación «${LOADER_VARIANTS[resolveLoaderVariant(effectiveLoaderVariant)].label}» de tu tema.`
+      : 'Se usa la animación de EVA.'
 
   async function pickLogo(variant: 'light' | 'dark' = 'light') {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
@@ -323,7 +375,7 @@ export default function MiMarcaScreen() {
       loaderText: loaderText || null,
       loaderIconMode,
       // Paridad web 17-08: sin texto no hay loader custom (web lo deriva del texto; el toggle solo no basta).
-      useCustomLoader: useCustomLoader && loaderText.trim().length > 0,
+      useCustomLoader: savedUseCustomLoader,
       welcomeMessage: welcomeMessage || null,
       welcomeModalEnabled,
       welcomeModalContent: welcomeModalContent || null,
@@ -349,7 +401,7 @@ export default function MiMarcaScreen() {
         brandName,
         primaryColor: color,
         useBrandColors,
-        useCustomLoader: useCustomLoader && loaderText.trim().length > 0,
+        useCustomLoader: savedUseCustomLoader,
         loaderText: loaderText || null,
         loaderIconMode,
         welcomeMessage: welcomeMessage || null,
@@ -393,7 +445,7 @@ export default function MiMarcaScreen() {
         loginLayoutKey,
         loaderVariant,
         loaderConfig: loaderConfigJson || null,
-        useCustomLoader: useCustomLoader && loaderText.trim().length > 0,
+        useCustomLoader: savedUseCustomLoader,
         loaderText: loaderText || null,
         loaderIconMode,
         // W-brand B4: idem — se limpia el color de texto legacy cacheado.
@@ -668,24 +720,106 @@ export default function MiMarcaScreen() {
                   reversible vía el chip "Personalizado". El toggle "usar mi marca en mi panel" se de-anidó
                   a su propia card, tras "Diseño del login" (1:1 con web). */}
 
-              {/* Loader animado */}
-              <SectionCard icon={Sparkles} title="Loader animado">
+              {/* Pantalla de carga — UNA sola sección (QA del owner 22-08). Antes el mismo ajuste
+                  estaba partido en dos menús: «Loader animado» acá arriba (toggle + texto + ícono)
+                  y la elección de animación enterrada dentro de «Branding avanzado», cada una con
+                  su propia vista previa a medias. Orden: (1) toggle, (2) animación, (3) texto e
+                  ícono, (4) UNA vista previa que refleja los tres a la vez.
+                  El contrato de guardado NO cambia: loaderText, loaderIconMode, loaderVariant,
+                  loaderConfig y useCustomLoader viajan exactamente igual que antes. */}
+              <SectionCard icon={Loader} title="Pantalla de carga">
+                <Text className="font-sans text-muted" style={{ fontSize: 12.5, lineHeight: 18, marginTop: -4 }}>
+                  Esto es lo que ve tu alumno mientras carga su app. También lo ves tú en tu panel.
+                </Text>
                 <ToggleRow
-                  label="Usar loader personalizado"
+                  label="Usar mi pantalla de carga"
                   value={useCustomLoader}
-                  onValueChange={setUseCustomLoader}
+                  onValueChange={toggleCustomLoader}
                   testID="mimarca-use-custom-loader"
                 />
-                {useCustomLoader ? (
+                {!useCustomLoader ? (
+                  <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }} testID="mimarca-loader-summary">
+                    {loaderOffSummary}
+                  </Text>
+                ) : (
                   <>
+                    {/* (2) Animación — dos rutas EXCLUYENTES (1:1 con BrandAdvancedSection de la
+                        web). `loader_config` PRECEDE a `loader_variant` en el render, acá y allá. */}
+                    <FieldLabel>Animación</FieldLabel>
+                    <View className="flex-row" style={{ gap: 8 }}>
+                      <LoaderRouteCard
+                        title="Elegir animación"
+                        note="Una de las animaciones listas de EVA"
+                        active={!loaderConfig}
+                        onPress={() => {
+                          // El texto vive en un solo campo: al salir del compositor se conserva.
+                          if (loaderConfig?.text && !loaderText.trim()) setLoaderText(loaderConfig.text)
+                          setLoaderConfig(null)
+                        }}
+                        testID="mimarca-loader-route-variant"
+                      />
+                      <LoaderRouteCard
+                        title="Crear el mío"
+                        note="Combina símbolo, animación y texto"
+                        active={!!loaderConfig}
+                        onPress={() =>
+                          setLoaderConfig((prev) =>
+                            prev ?? { ...DEFAULT_LOADER_COMPOSITE, text: loaderText.trim() ? loaderText.trim() : undefined },
+                          )
+                        }
+                        testID="mimarca-loader-route-composer"
+                      />
+                    </View>
+
+                    {loaderConfig ? (
+                      <LoaderComposer
+                        value={loaderConfig}
+                        onChange={(next) => {
+                          // El runtime solo pasa el logo del coach cuando `loader_icon_mode` es
+                          // 'coach' (BrandedLoader): elegir el símbolo «Mi logo» sin eso mostraba
+                          // la figura EVA y el coach no entendía por qué. Se sincroniza.
+                          if (next.symbol === 'logo' && logoUrl && loaderIconMode !== 'coach') setLoaderIconMode('coach')
+                          setLoaderConfig(next)
+                        }}
+                        logoUrl={logoUrl}
+                        brandName={brandName}
+                      />
+                    ) : (
+                      <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+                        {LOADER_VARIANT_TUPLE.map((v) => {
+                          const meta = LOADER_VARIANTS[v]
+                          const selected = resolveLoaderVariant(loaderVariant) === v
+                          return (
+                            <Pressable
+                              key={v}
+                              testID={`mimarca-loader-variant-${v}`}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected }}
+                              onPress={() => setLoaderVariant(v)}
+                              className={`rounded-xl border ${selected ? 'border-sport-500 bg-sport-100' : 'border-subtle'}`}
+                              style={{ width: '31%', padding: 9 }}
+                            >
+                              <Text className="font-sans-bold text-strong" style={{ fontSize: 11.5 }} numberOfLines={1}>{meta.label}</Text>
+                              <Text className="font-sans text-muted" style={{ fontSize: 9.5, lineHeight: 13 }} numberOfLines={2}>{meta.note}</Text>
+                            </Pressable>
+                          )
+                        })}
+                      </View>
+                    )}
+
+                    {/* (3) Texto e ícono — valen para las DOS rutas (el ícono decide `showIcon` y
+                        el logo también en el compositor, ver BrandedLoader). */}
                     <Input
-                      label="Texto del loader (máx 10)"
-                      value={loaderText}
-                      onChangeText={(v: string) => setLoaderText(v.toUpperCase().slice(0, 10))}
+                      label={`Texto (máx ${LOADER_TEXT_MAX})`}
+                      value={loaderTextValue}
+                      onChangeText={changeLoaderText}
                       placeholder="MI MARCA"
                       autoCapitalize="characters"
                       testID="mimarca-loader-text"
                     />
+                    <Text className="font-sans text-muted" style={{ fontSize: 10.5, lineHeight: 14, marginTop: -6 }}>
+                      Vacío = se muestra EVA.
+                    </Text>
 
                     <FieldLabel>Ícono</FieldLabel>
                     <SegmentedTabs
@@ -705,8 +839,28 @@ export default function MiMarcaScreen() {
                       El texto se pinta automáticamente con tu color de marca, calibrado para ser
                       legible en claro y oscuro.
                     </Text>
+
+                    {/* (4) Vista previa ÚNICA — los mismos componentes que corren en la app, con la
+                        precedencia real (config > variante > legacy): animación + texto + ícono
+                        juntos. Antes había una vista previa por ruta y ninguna mostraba el ícono
+                        elegido arriba. */}
+                    <AdvPreviewFrame label="Así se ve al cargar la app">
+                      <View className="items-center justify-center" style={{ minHeight: 130, overflow: 'hidden' }}>
+                        <LoaderPreview
+                          config={loaderConfig}
+                          variant={resolveLoaderVariant(loaderVariant)}
+                          useCustomLoader={useCustomLoader}
+                          loaderText={loaderText}
+                          loaderIconMode={loaderIconMode}
+                          logoUrl={logoUrl}
+                          logoUrlDark={logoUrlDark}
+                          fallbackColor={effectivePrimary}
+                          size="md"
+                        />
+                      </View>
+                    </AdvPreviewFrame>
                   </>
-                ) : null}
+                )}
               </SectionCard>
 
               {/* Diseño del login del alumno (4 variantes) — escribe login_layout_key (el login mobile del
@@ -786,8 +940,8 @@ export default function MiMarcaScreen() {
                 </View>
               </SectionCard>
 
-              {/* Branding avanzado — acordeón: color2 + fuente + tinte + acento por modo + variante de
-                  loader. Pricing v3 (owner 2026-08-21): el white-label está en todos los planes, así
+              {/* Branding avanzado — acordeón: par del tema + fuente + tinte (la pantalla de carga
+                  se mudó a su propia sección). Pricing v3 (owner 2026-08-21): el white-label está en todos los planes, así
                   que MURIÓ el badge "PRO" de este encabezado — decía que era pago y ya no lo es.
                   Previews en vivo con @eva/brand-kit. */}
               <Card variant="default" padding="md" style={{ gap: advancedOpen ? 16 : 0 }}>
@@ -806,7 +960,7 @@ export default function MiMarcaScreen() {
                     <View className="flex-row items-center" style={{ gap: 7 }}>
                       <Text className="font-sans-bold text-strong" style={{ fontSize: 14 }}>Branding avanzado</Text>
                     </View>
-                    <Text className="font-sans text-muted" style={{ fontSize: 11.5 }} numberOfLines={2}>Par de colores del tema, fuente, tinte y pantalla de carga.</Text>
+                    <Text className="font-sans text-muted" style={{ fontSize: 11.5 }} numberOfLines={2}>Par de colores del tema, fuente y tinte de los fondos.</Text>
                   </View>
                   <ChevronDown size={18} className="text-muted" style={{ transform: [{ rotate: advancedOpen ? '180deg' : '0deg' }] }} />
                 </Pressable>
@@ -892,79 +1046,8 @@ export default function MiMarcaScreen() {
                           calcula siempre desde el color principal (o lo trae el preset). */}
                     </View>
 
-                    {/* Pantalla de carga — unificada: elegir una animación lista O armar la tuya
-                        (rutas mutuamente excluyentes, 1:1 con BrandAdvancedSection de la web).
-                        `loader_config` PRECEDE a `loader_variant` en el render, acá y en la web. */}
-                    <View style={{ gap: 10 }}>
-                      <FieldLabel>Pantalla de carga</FieldLabel>
-                      <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }}>
-                        Esto es lo que ve tu alumno mientras carga su app. También lo ves tú en tu panel.
-                      </Text>
-                      <View className="flex-row" style={{ gap: 8 }}>
-                        <LoaderRouteCard
-                          title="Elegir animación"
-                          note="Una de las animaciones listas de EVA"
-                          active={!loaderConfig}
-                          onPress={() => setLoaderConfig(null)}
-                          testID="mimarca-loader-route-variant"
-                        />
-                        <LoaderRouteCard
-                          title="Crear el mío"
-                          note="Combina símbolo, animación y texto"
-                          active={!!loaderConfig}
-                          onPress={() => setLoaderConfig((prev) => prev ?? DEFAULT_LOADER_COMPOSITE)}
-                          testID="mimarca-loader-route-composer"
-                        />
-                      </View>
-
-                      {loaderConfig ? (
-                        <LoaderComposer
-                          value={loaderConfig}
-                          onChange={setLoaderConfig}
-                          logoUrl={logoUrl}
-                          brandName={brandName}
-                        />
-                      ) : (
-                        <>
-                          <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-                            {LOADER_VARIANT_TUPLE.map((v) => {
-                              const meta = LOADER_VARIANTS[v]
-                              const selected = resolveLoaderVariant(loaderVariant) === v
-                              return (
-                                <Pressable
-                                  key={v}
-                                  testID={`mimarca-loader-variant-${v}`}
-                                  accessibilityRole="button"
-                                  accessibilityState={{ selected }}
-                                  onPress={() => setLoaderVariant(v)}
-                                  className={`rounded-xl border ${selected ? 'border-sport-500 bg-sport-100' : 'border-subtle'}`}
-                                  style={{ width: '31%', padding: 9 }}
-                                >
-                                  <Text className="font-sans-bold text-strong" style={{ fontSize: 11.5 }} numberOfLines={1}>{meta.label}</Text>
-                                  <Text className="font-sans text-muted" style={{ fontSize: 9.5, lineHeight: 13 }} numberOfLines={2}>{meta.note}</Text>
-                                </Pressable>
-                              )
-                            })}
-                          </View>
-                          {/* Vista previa REAL: los mismos componentes que corren en la app. */}
-                          <AdvPreviewFrame label="Vista previa en vivo">
-                            <View className="items-center justify-center" style={{ minHeight: 130, overflow: 'hidden' }}>
-                              <LoaderPreview
-                                config={null}
-                                variant={resolveLoaderVariant(loaderVariant)}
-                                useCustomLoader={useCustomLoader}
-                                loaderText={loaderText}
-                                loaderIconMode={loaderIconMode}
-                                logoUrl={logoUrl}
-                                logoUrlDark={logoUrlDark}
-                                fallbackColor={effectivePrimary}
-                                size="md"
-                              />
-                            </View>
-                          </AdvPreviewFrame>
-                        </>
-                      )}
-                    </View>
+                    {/* QA del owner 22-08: la pantalla de carga SALIÓ de acá — vive completa en su
+                        propia sección «Pantalla de carga», junto al toggle, el texto y el ícono. */}
                   </View>
                 ) : null}
               </Card>
@@ -1142,17 +1225,19 @@ function LoaderRouteCard({ title, note, active, onPress, testID }: { title: stri
 
 /**
  * Compositor "Crear el mío" (`loader_config`) — espejo de `_components/LoaderComposer.tsx` de la web:
- * símbolo × animación × texto opcional. No es un editor libre: combina piezas parametrizadas.
- * La vista previa es el MISMO `CompositeLoaderView` que renderiza la app del alumno.
+ * símbolo × animación. No es un editor libre: combina piezas parametrizadas.
+ *
+ * QA del owner 22-08: el TEXTO y la vista previa ya no viven acá dentro. El texto es un solo campo
+ * de la sección «Pantalla de carga» (escribe `loader_config.text` y el legacy a la vez) y la vista
+ * previa es única para las dos rutas; tener dos campos de texto y dos previews era justamente el
+ * desdoble que el owner pidió eliminar.
  */
 function LoaderComposer({ value, onChange, logoUrl, brandName }: {
   value: LoaderComposite; onChange: (next: LoaderComposite) => void; logoUrl: string | null; brandName: string
 }) {
   const { theme } = useTheme()
-  const reduceMotion = useReducedMotion()
   const patch = (p: Partial<LoaderComposite>) => onChange({ ...value, ...p })
   const initial = (brandName.trim().charAt(0) || 'E').toUpperCase()
-  const word = (value.text?.trim() || brandName.trim() || 'EVA').toUpperCase()
 
   return (
     <View className="rounded-xl border border-subtle" style={{ padding: 12, gap: 12 }}>
@@ -1220,34 +1305,6 @@ function LoaderComposer({ value, onChange, logoUrl, brandName }: {
           })}
         </View>
       </View>
-
-      <Input
-        label={`Texto del loader (máx ${LOADER_TEXT_MAX})`}
-        value={value.text ?? ''}
-        onChangeText={(v: string) => {
-          const up = v.toUpperCase().slice(0, LOADER_TEXT_MAX)
-          patch({ text: up.trim() ? up : undefined })
-        }}
-        placeholder={(brandName.trim() || 'EVA').toUpperCase()}
-        autoCapitalize="characters"
-        testID="mimarca-loader-composite-text"
-      />
-      <Text className="font-sans text-muted" style={{ fontSize: 10.5, lineHeight: 14, marginTop: -4 }}>
-        Vacío = usa el nombre de tu marca.
-      </Text>
-
-      <AdvPreviewFrame label="Así se ve al cargar la app">
-        <View className="items-center justify-center" style={{ minHeight: 130, overflow: 'hidden' }}>
-          <CompositeLoaderView
-            config={value}
-            brandName={word}
-            logoUri={value.symbol === 'logo' ? logoUrl : null}
-            showIcon
-            size="md"
-            reduceMotion={reduceMotion}
-          />
-        </View>
-      </AdvPreviewFrame>
     </View>
   )
 }

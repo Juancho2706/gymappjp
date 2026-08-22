@@ -46,6 +46,7 @@ import {
   WARNING,
   hexToRgba,
 } from '../../../components/coach/directory/directory-shared'
+import { countCapClients } from '../../../lib/client-cap'
 import {
   buildStats,
   filterClients,
@@ -505,8 +506,18 @@ export default function ClientesScreen() {
     return vals.length ? Math.round(vals.reduce((a, p) => a + p.percentage, 0) / vals.length) : 0
   }, [pulseById])
   const archivedCount = useMemo(() => clients.filter((c) => c.isArchived).length, [clients])
-  // Alumnos que ocupan cupo (los archivados no cuentan): lo usan el alta y la importación.
-  const activeCount = useMemo(() => clients.filter((c) => !c.isArchived).length, [clients])
+  /**
+   * Alumnos que OCUPAN cupo — el predicado del gate del server, no «los no archivados»:
+   * `is_archived = false AND is_demo = false` (`countCapClients`, `lib/client-cap.ts`).
+   *
+   * El alumno de EJEMPLO del onboarding NO ocupa cupo. Contándolo, un coach Free (cupo 1) con solo
+   * el demo veía el muro «Alcanzaste el cupo de tu plan» al tocar «Nuevo alumno» o el paso 4 de la
+   * guía, y adentro del muro el selector de archivado le decía «Tus alumnos de ejemplo no ocupan
+   * cupo» — el mismo número contado de dos formas (QA del owner en Android, 22-08).
+   *
+   * Lo usan el alta (pre-check del muro en `CreateClientModal`) y la importación.
+   */
+  const activeCount = useMemo(() => countCapClients(clients), [clients])
   const archiveDisabledReason = !unarchiveCapacity
     ? 'Validando cupo…'
     : unarchiveCapacity.available

@@ -5,6 +5,10 @@ import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
  * (`components/coach/ClientCapMeter.tsx`), el banner del home y el muro de cupo del alta
  * (`components/coach/directory/CreateClientModal.tsx`).
  *
+ * Acá vive también el PREDICADO de quién ocupa cupo (`occupiesCap` / `countCapClients`): toda
+ * cuenta local que alimente un medidor o un pre-check pasa por él, para que ninguna pantalla
+ * vuelva a inventar su propio filtro.
+ *
  * Embudo Free→Pro (W6, SPEC `docs/specs/embudo-free-pro/SPEC.md`): la app dice la VERDAD de su
  * propio plan y la hace visible; nunca vende. Por eso acá no hay precios, ni tiers ajenos, ni
  * links: el único texto sensible es el caption de Android, que Google publica como aceptable para
@@ -93,6 +97,49 @@ export function freePlanBenefits(): string[] {
     'Tu propia app para alumnos',
     'Cambia de plan cuando quieras',
   ]
+}
+
+/**
+ * Forma MÍNIMA que necesita el conteo de cupo. Se tipa acá —y no con `DirectoryClient`— para que
+ * este módulo siga siendo puro: `lib/clients-directory.ts` importa `./supabase`, y con esa
+ * dependencia el helper dejaría de poder testearse sin react-native.
+ */
+export interface CapCountable {
+  isArchived: boolean
+  /**
+   * `clients.is_demo`. Ausente/`null` = lectura de una DB anterior a la columna (fallback de
+   * compatibilidad): se trata como NO demo, que es el comportamiento viejo.
+   */
+  isDemo?: boolean | null
+}
+
+/**
+ * ¿ESTE alumno ocupa cupo? Predicado ÚNICO del gate, espejo del server
+ * (`countActiveStandaloneClients`, `apps/web/src/services/billing/capacity.service.ts`):
+ * `is_archived = false AND is_demo = false`.
+ *
+ * El alumno de EJEMPLO del onboarding v2 no ocupa cupo. Con Free = 1 (pricing v3), contarlo hacía
+ * nacer lleno al coach nuevo: el pre-check local abría el muro «Alcanzaste el cupo de tu plan» en
+ * «Nuevo alumno» y en el paso 4 de la guía, mientras el selector de archivado —que sí lo excluía—
+ * le decía «Tus alumnos de ejemplo no ocupan cupo» (QA del owner en Android, 22-08). Dos verdades
+ * distintas del mismo número: por eso el predicado vive en UN solo lugar.
+ *
+ * NO usa `is_active`: un alumno pausado sigue ocupando cupo (igual que en el server).
+ */
+export function occupiesCap(client: CapCountable | null | undefined): boolean {
+  return !!client && client.isArchived !== true && client.isDemo !== true
+}
+
+/**
+ * Alumnos que OCUPAN CUPO en una cartera ya cargada. Es la ÚNICA cuenta local que puede alimentar
+ * un pre-check de cupo (`shouldOpenAtCapWall`, el medidor, la importación).
+ *
+ * Sigue siendo optimista, no una autorización: el 402 `UPGRADE_REQUIRED` del server es la verdad.
+ * Lista vacía/ausente ⇒ 0, que es el default PERMISIVO (deja pasar al formulario).
+ */
+export function countCapClients(clients: readonly CapCountable[] | null | undefined): number {
+  if (!clients) return 0
+  return clients.reduce((total, client) => (occupiesCap(client) ? total + 1 : total), 0)
 }
 
 /**
