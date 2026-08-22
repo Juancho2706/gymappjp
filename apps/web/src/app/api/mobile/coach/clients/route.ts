@@ -197,6 +197,8 @@ export async function POST(request: NextRequest) {
             .is('org_id', null)
             .is('team_id', null)
             .eq('is_archived', false)
+            // Onboarding v2: el alumno de ejemplo NO ocupa cupo (mismo predicado que el gate web).
+            .eq('is_demo', false)
         : { count: null, error: null }
 
     if (countError) {

@@ -39,7 +39,10 @@ export const getReactivatePageData = cache(async () => {
             .eq('coach_id', user.id)
             .is('org_id', null)
             .is('team_id', null)
-            .eq('is_archived', false),
+            .eq('is_archived', false)
+            // Onboarding v2: el alumno de ejemplo no ocupa cupo, así que tampoco entra en la
+            // cuenta que decide si el coach puede volver a Free ni en el «archiva N alumnos».
+            .eq('is_demo', false),
         // Alumnos STANDALONE activos (archivables) para el panel de salida del deadlock de cupo:
         // el coach bloqueado + sobre-cupo archiva desde aquí para bajar a Free. Mismo filtro que
         // el archivado (`org_id IS NULL`); tolerante a fallos → lista vacía = sin panel.
@@ -50,6 +53,8 @@ export const getReactivatePageData = cache(async () => {
             .is('org_id', null)
             .is('team_id', null)
             .eq('is_archived', false)
+            // El demo no ocupa cupo ⇒ archivarlo no libera nada: fuera del panel de salida.
+            .eq('is_demo', false)
             .order('full_name', { ascending: true }),
         // SELECT propio (RLS) — el client user-scoped solo ve las filas del coach.
         // tolerante a fallos: si la lectura falla, la reactivación sigue sin pre-marcado.

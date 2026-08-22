@@ -15,6 +15,11 @@ type DB = SupabaseClient<Database>
  * `is_archived = false` + `org_id IS NULL`. Usa `is_archived`, NO `is_active`, y excluye los
  * alumnos de org/team (scope standalone). `head: true` + `count: 'exact'` → no trae filas.
  *
+ * `is_demo = false` (onboarding v2): el alumno de ejemplo que siembra el onboarding NO ocupa cupo.
+ * Con Free = 1 alumno (pricing v3), si el demo contara, el coach nuevo nacería lleno y el
+ * onboarding sería un muro. Este conteo alimenta el banner de sobre-límite del layout /coach, el
+ * gate de downgrade y «volver a Free»: todos deben ver el MISMO número.
+ *
  * `db` puede ser cualquier cliente (la consulta queda acotada por RLS coach-scoped o por
  * service-role). Devuelve 0 si el count viene null y propaga errores de consulta para que los
  * callers de billing puedan fallar cerrado en vez de tratar una lectura rota como cupo libre.
@@ -28,6 +33,7 @@ export async function countActiveStandaloneClients(
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coachId)
         .eq('is_archived', false)
+        .eq('is_demo', false)
         .is('org_id', null)
         .is('team_id', null)
     if (error) throw error

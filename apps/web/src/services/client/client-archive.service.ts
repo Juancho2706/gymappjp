@@ -256,7 +256,13 @@ async function getWorkspaceCapacity(db: Db, actor: ClientArchiveActor): Promise<
 
 async function activeClientCount(db: Db, actor: ClientArchiveActor): Promise<number | null> {
   const query = applyArchiveScope(
-    db.from('clients').select('id', { count: 'exact', head: true }).eq('is_archived', false),
+    // `is_demo = false` (onboarding v2): el alumno de ejemplo no ocupa cupo, así que tampoco puede
+    // bloquear el DESARCHIVO de un alumno real — mismo predicado que el gate del alta.
+    db
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_archived', false)
+      .eq('is_demo', false),
     actor,
   )
   const { count, error } = await query

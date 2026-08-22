@@ -10,8 +10,9 @@ type Admin = SupabaseClient<Database>
  *
  * El hueco documentado: `joinViaInviteAction` insertaba alumnos SIN contar contra ningún
  * cupo. Este helper resuelve el límite APLICABLE por scope y cuenta los activos
- * (`is_archived = false`; un alumno pausado sigue ocupando cupo — mismas semánticas que
- * el alta manual en clients.actions y que getClientUnarchiveCapacity):
+ * (`is_archived = false` + `is_demo = false`; un alumno pausado sigue ocupando cupo, el alumno de
+ * ejemplo del onboarding v2 NUNCA — mismas semánticas que el alta manual en clients.actions y que
+ * getClientUnarchiveCapacity):
  *
  * - `standalone`: límite del COACH — la columna `coaches.max_clients` GANA cuando existe;
  *   el fallback es `tierMaxClientsFor(tier, created_at)` (grandfather P2: coach creado antes
@@ -65,6 +66,7 @@ export async function checkJoinCapacity(admin: Admin, invite: JoinCapacityScope)
             .from('clients')
             .select('id', { count: 'exact', head: true })
             .eq('is_archived', false)
+            .eq('is_demo', false)
             .eq('org_id', invite.orgId)
             .is('team_id', null)
         if (countError) return { ok: false, reason: 'check_failed' }
@@ -92,6 +94,7 @@ export async function checkJoinCapacity(admin: Admin, invite: JoinCapacityScope)
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('is_archived', false)
+        .eq('is_demo', false)
         .eq('coach_id', invite.coachId)
         .is('org_id', null)
         .is('team_id', null)

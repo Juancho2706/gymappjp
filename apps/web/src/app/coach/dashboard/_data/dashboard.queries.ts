@@ -340,6 +340,10 @@ async function getCoachDashboardDataInner(
         pulse,
         coachSubscription,
     ] = await Promise.all([
+        // KPI «Alumnos»: `countCoachClients` excluye al alumno de ejemplo (`is_demo`) del onboarding
+        // v2 — misma cuenta que el cupo. Las consultas de ACTIVIDAD de abajo (check-ins, logs,
+        // adherencia) NO lo excluyen a propósito: el demo trae contenido justamente para que el
+        // dashboard del día 1 no esté vacío, y en la UI va etiquetado como ejemplo (W3 F3.7).
         countCoachClients(supabase, userId, scope.orgId, scope.teamId),
         // workout_plans no tiene org_id/team_id: el scope y el filtro de archivado van por el alumno.
         applyJoinedClientScope(

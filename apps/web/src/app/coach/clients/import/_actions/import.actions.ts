@@ -91,6 +91,8 @@ export async function getImportContext(): Promise<ImportContext> {
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('is_archived', false)
+        // Onboarding v2: el alumno de ejemplo no ocupa cupo (mismo predicado que el gate del alta).
+        .eq('is_demo', false)
     if (orgId) countQuery.eq('org_id', orgId)
     else countQuery.eq('coach_id', coach.id)
     const { count: activeCount } = await countQuery
@@ -195,6 +197,8 @@ export async function importClientsAction(
             .select('id', { count: 'exact', head: true })
             .eq('coach_id', rawCoach.id)
             .eq('is_archived', false)
+            // Onboarding v2: el alumno de ejemplo no ocupa cupo (mismo predicado que el precheck).
+            .eq('is_demo', false)
 
         if ((activeCount ?? 0) + rows.length > maxClients) {
             // Correo de VENTA por el mismo evento que el rechazo (ver sales-emails.service).

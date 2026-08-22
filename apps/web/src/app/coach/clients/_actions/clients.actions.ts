@@ -115,6 +115,9 @@ export async function createClientAction(
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
+        // Onboarding v2: el alumno de ejemplo NO ocupa cupo (con Free = 1, contarlo dejaría al
+        // coach nuevo lleno antes de dar de alta a nadie).
+        .eq('is_demo', false)
     activeClientsQuery = applyCoachClientScope(activeClientsQuery, scope)
     const { count: activeClientsCount, error: countError } = await activeClientsQuery
 

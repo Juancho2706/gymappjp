@@ -433,6 +433,9 @@ export async function sendIndividualCoachEmailAction(
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coachId)
         .eq('is_archived', false)
+        // Espejo del cron trial-expiry: el alumno de ejemplo del onboarding v2 no ocupa cupo y no
+        // debe inflar la recomendación de plan que viaja en el correo.
+        .eq('is_demo', false)
 
     const activeCount = clientCount ?? 0
     // Pricing v2 (P2): recomendación y límite con el grandfather del coach (espejo del cron

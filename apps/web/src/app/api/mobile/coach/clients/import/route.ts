@@ -260,6 +260,8 @@ export async function POST(request: NextRequest) {
             .is('org_id', null)
             .is('team_id', null)
             .eq('is_archived', false)
+            // Onboarding v2: el alumno de ejemplo NO ocupa cupo (mismo predicado que el alta).
+            .eq('is_demo', false)
 
         if (countError) {
             return NextResponse.json({ error: 'No pudimos validar el límite de alumnos de tu plan.', code: 'CLIENT_LIMIT_CHECK_FAILED' }, { status: 500 })

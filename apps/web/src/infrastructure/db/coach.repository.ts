@@ -71,11 +71,18 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
     return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
 }
 
+/**
+ * Total de alumnos del coach — KPI «Alumnos» del dashboard.
+ *
+ * `is_demo = false` (onboarding v2): el alumno de ejemplo se VE en el directorio con su etiqueta,
+ * pero no infla el número que el coach lee como su cartera ni el que compara contra el cupo.
+ */
 export async function countCoachClients(db: DB, coachId: string, orgId?: string | null, teamId?: string | null): Promise<number> {
     let query = db
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('is_archived', false)
+        .eq('is_demo', false)
     if (teamId) {
         query = query.is('org_id', null).eq('team_id', teamId)
     } else {

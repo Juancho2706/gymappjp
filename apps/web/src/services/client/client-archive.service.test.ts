@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyArchiveScope,
+  getClientUnarchiveCapacity,
   hasClientUnarchiveCapacity,
   isDedicatedStudentAuthIdentity,
   isMissingAuthIdentityError,
@@ -77,5 +78,66 @@ describe('isMissingAuthIdentityError', () => {
   it('trata una ficha sin usuario Auth como un caso válido', () => {
     expect(isMissingAuthIdentityError({ status: 404, code: 'user_not_found', message: 'User not found' })).toBe(true)
     expect(isMissingAuthIdentityError({ status: 500, code: 'internal_error', message: 'Auth unavailable' })).toBe(false)
+  })
+})
+
+describe('getClientUnarchiveCapacity — el alumno de ejemplo no bloquea el desarchivo', () => {
+  /**
+   * Doble del cliente Supabase: `coaches` devuelve el cupo y `clients` graba los filtros del
+   * conteo antes de resolver con `count`. El desarchivo comparte predicado con el gate del alta
+   * (onboarding v2, W1 F1.3): un coach Free con cupo 1, 1 alumno real archivado y 1 demo activo
+   * DEBE poder recuperar al real.
+   */
+  function fakeDb({ maxClients, count }: { maxClients: number; count: number }) {
+    const clientFilters: Array<[string, string, unknown]> = []
+    const clientsQuery = {
+      select: () => clientsQuery,
+      eq(column: string, value: unknown) {
+        clientFilters.push(['eq', column, value])
+        return clientsQuery
+      },
+      is(column: string, value: null) {
+        clientFilters.push(['is', column, value])
+        return clientsQuery
+      },
+      then: (onFulfilled: (v: unknown) => unknown) =>
+        Promise.resolve({ count, error: null }).then(onFulfilled),
+    }
+    const coachesQuery = {
+      select: () => coachesQuery,
+      eq: () => coachesQuery,
+      maybeSingle: async () => ({
+        data: { max_clients: maxClients, subscription_tier: 'free', created_at: '2026-08-21T00:00:00Z' },
+      }),
+    }
+    const db = {
+      from: (table: string) => {
+        if (table === 'clients') return clientsQuery
+        if (table === 'coaches') return coachesQuery
+        throw new Error(`Unexpected table: ${table}`)
+      },
+    }
+    return { db: db as never, clientFilters }
+  }
+
+  const ACTOR = { coachId: 'coach-1', workspace: { type: 'standalone' as const } }
+
+  it('el conteo filtra is_archived=false + is_demo=false antes del scope', async () => {
+    const { db, clientFilters } = fakeDb({ maxClients: 1, count: 0 })
+    await getClientUnarchiveCapacity(db, ACTOR)
+    expect(clientFilters).toEqual([
+      ['eq', 'is_archived', false],
+      ['eq', 'is_demo', false],
+      ['eq', 'coach_id', 'coach-1'],
+      ['is', 'org_id', null],
+      ['is', 'team_id', null],
+    ])
+  })
+
+  it('Free 1: con el demo fuera del conteo queda cupo para desarchivar', async () => {
+    const { db } = fakeDb({ maxClients: 1, count: 0 })
+    const capacity = await getClientUnarchiveCapacity(db, ACTOR)
+    expect(capacity).toEqual({ ok: true, limit: 1, used: 0, label: 'tu plan actual' })
+    expect(hasClientUnarchiveCapacity(capacity as Extract<typeof capacity, { ok: true }>)).toBe(true)
   })
 })

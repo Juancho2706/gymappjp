@@ -2,8 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { countActiveStandaloneClients } from './capacity.service'
 
 // FUNDACION F3 (plan estrategia 06): countActiveStandaloneClients reusa el filtro canónico del cap
-// gate de alta de alumno — coach_id=coachId + is_archived=false + org_id IS NULL (NO is_active),
-// head:true + count:'exact'. Estos tests verifican el filtro EXACTO y el fallback count ?? 0.
+// gate de alta de alumno — coach_id=coachId + is_archived=false + is_demo=false + org_id IS NULL
+// (NO is_active), head:true + count:'exact'. Estos tests verifican el filtro EXACTO y el fallback
+// count ?? 0.
+//
+// `is_demo=false` (onboarding v2, W1 F1.3): este conteo alimenta el banner de sobre-límite del
+// layout /coach, el gate de downgrade y «volver a Free». Si el alumno de ejemplo contara, un coach
+// Free (cupo 1 desde pricing v3) nacería 1/1 y no podría dar de alta a nadie.
 
 // Builder encadenable que captura cada filtro aplicado y devuelve un count fijo al await.
 function makeDb(count: number | null) {
@@ -52,6 +57,12 @@ describe('countActiveStandaloneClients — filtro canónico standalone', () => {
         // scope standalone: org_id/team_id IS NULL
         expect(calls.iss).toContainEqual(['org_id', null])
         expect(calls.iss).toContainEqual(['team_id', null])
+    })
+
+    it('excluye al alumno de ejemplo del onboarding v2 (is_demo=false)', async () => {
+        const { db, calls } = makeDb(1)
+        await countActiveStandaloneClients(db, 'coach-1')
+        expect(calls.eqs).toContainEqual(['is_demo', false])
     })
 
     it('count null → 0 (fallback)', async () => {

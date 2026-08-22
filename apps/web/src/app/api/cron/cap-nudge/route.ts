@@ -154,8 +154,10 @@ class LedgerUnreadableError extends Error {
 
 /**
  * Cuenta alumnos ACTIVOS por coach con el predicado EXACTO del gate 402 del alta:
- * `is_archived = false`, `org_id IS NULL`, `team_id IS NULL` (workspace standalone). Cualquier
- * diferencia acá haría que el correo mienta sobre el cupo. Pagina de a 1000 y agrupa en memoria.
+ * `is_archived = false`, `is_demo = false`, `org_id IS NULL`, `team_id IS NULL` (workspace
+ * standalone). Cualquier diferencia acá haría que el correo mienta sobre el cupo — con el alumno
+ * de ejemplo del onboarding v2 contando, un coach 0/1 recibiría el correo de «llegaste al tope».
+ * Pagina de a 1000 y agrupa en memoria.
  */
 async function countActiveClients(
     admin: ReturnType<typeof createServiceRoleClient>,
@@ -172,6 +174,7 @@ async function countActiveClients(
                     .select('coach_id')
                     .in('coach_id', chunk)
                     .eq('is_archived', false)
+                    .eq('is_demo', false)
                     .is('org_id', null)
                     .is('team_id', null)
                     .order('id', { ascending: true })

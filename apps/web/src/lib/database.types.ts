@@ -738,6 +738,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_archived: boolean
+          is_demo: boolean
           max_hr_override: number | null
           onboarding_completed: boolean
           org_id: string | null
@@ -764,6 +765,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           is_archived?: boolean
+          is_demo?: boolean
           max_hr_override?: number | null
           onboarding_completed?: boolean
           org_id?: string | null
@@ -790,6 +792,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_archived?: boolean
+          is_demo?: boolean
           max_hr_override?: number | null
           onboarding_completed?: boolean
           org_id?: string | null
@@ -1306,6 +1309,9 @@ export type Database = {
           neutral_tint: boolean
           onboarding_guide: Json
           payment_provider: string
+          persona: string | null
+          persona_also_other: boolean
+          persona_set_at: string | null
           previous_slugs: string[] | null
           primary_color: string
           provider_customer_id: string | null
@@ -1371,6 +1377,9 @@ export type Database = {
           neutral_tint?: boolean
           onboarding_guide?: Json
           payment_provider?: string
+          persona?: string | null
+          persona_also_other?: boolean
+          persona_set_at?: string | null
           previous_slugs?: string[] | null
           primary_color?: string
           provider_customer_id?: string | null
@@ -1436,6 +1445,9 @@ export type Database = {
           neutral_tint?: boolean
           onboarding_guide?: Json
           payment_provider?: string
+          persona?: string | null
+          persona_also_other?: boolean
+          persona_set_at?: string | null
           previous_slugs?: string[] | null
           primary_color?: string
           provider_customer_id?: string | null

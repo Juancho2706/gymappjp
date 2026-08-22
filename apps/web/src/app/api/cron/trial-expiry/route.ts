@@ -86,6 +86,9 @@ export async function GET(req: Request) {
                         .select('id', { count: 'exact', head: true })
                         .eq('coach_id', coach.id)
                         .eq('is_archived', false)
+                        // El alumno de ejemplo del onboarding v2 no ocupa cupo: si contara, el
+                        // correo recomendaría un plan más caro del que el coach necesita.
+                        .eq('is_demo', false)
 
                     const activeCount = clientCount ?? 0
                     // Pricing v2 (P2): recomendación y límite con el grandfather del coach — un
@@ -158,6 +161,8 @@ export async function GET(req: Request) {
                 .select('id', { count: 'exact', head: true })
                 .eq('coach_id', coach.id)
                 .eq('is_archived', false)
+                // Mismo criterio que el bloque de expirados: el demo no cuenta.
+                .eq('is_demo', false)
 
             const activeCount = clientCount ?? 0
             // Pricing v2 (P2): misma recomendación grandfather-aware que el bloque de expirados.

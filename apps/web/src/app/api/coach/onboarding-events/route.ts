@@ -5,13 +5,42 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { jsonRateLimited, rateLimitCoachOnboardingEvents } from '@/lib/rate-limit'
 
 const schema = z.object({
-    stepKey: z.enum(['profile_branding', 'first_client', 'first_plan', 'first_checkin']),
-    eventType: z.enum(['step_completed', 'step_reopened', 'aha_moment', 'guide_engagement']),
+    // Pasos v2 (`vive_tu_app`, `first_artifact`, `aha`) + los legacy `first_plan`/`first_checkin`,
+    // que siguen vivos en las filas históricas y en el checklist viejo hasta que W2 lo reemplace.
+    stepKey: z.enum([
+        'profile_branding',
+        'vive_tu_app',
+        'first_artifact',
+        'first_client',
+        'aha',
+        'first_plan',
+        'first_checkin',
+    ]),
+    // Espejo EXACTO del CHECK de `coach_onboarding_events` (migración
+    // 20260822002122_onboarding_v2_persona_demo.sql). Si acá entra un tipo que la DB no admite, el
+    // insert muere en 500: los dos listados se mueven juntos.
+    eventType: z.enum([
+        'step_completed',
+        'step_reopened',
+        'aha_moment',
+        'guide_engagement',
+        'persona_selected',
+        'demo_seeded',
+        'demo_deleted',
+        'vive_tu_app_opened',
+        'invite_link_copied',
+        'invite_whatsapp_opened',
+        'onboarding_dismissed',
+        'first_module_opened',
+    ]),
     metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 })
 
 /** FK violation: coach_id no existe en coaches */
 const PG_FOREIGN_KEY_VIOLATION = '23503'
+
+/** Unique violation: el índice parcial `coach_onboarding_events_step_completed_once` ya tiene el paso. */
+const PG_UNIQUE_VIOLATION = '23505'
 
 /** No insertar duplicados del mismo triple si ocurrió hace menos de esto (re-renders React / Strict Mode). */
 const DEDUPE_WINDOW_MS = 5000
@@ -79,6 +108,14 @@ export async function POST(request: Request) {
     if (error) {
         if (error.code === PG_FOREIGN_KEY_VIOLATION) {
             return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
+        }
+        // Dedupe DURO de `step_completed`: un paso se completa una sola vez por coach y el índice
+        // único parcial lo garantiza en la DB (el dedupe por ventana de 5 s de arriba solo tapa
+        // re-renders del mismo render pass; el re-emit que dejó 2.293 filas venía de sesiones
+        // distintas). Rechazarlo con 500 haría ruido en Sentry por el camino ESPERADO, así que se
+        // responde igual que el dedupe por ventana.
+        if (error.code === PG_UNIQUE_VIOLATION) {
+            return NextResponse.json({ ok: true, deduped: true })
         }
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

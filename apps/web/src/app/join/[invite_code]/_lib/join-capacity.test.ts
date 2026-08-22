@@ -119,12 +119,14 @@ describe('checkJoinCapacity — standalone (C-KILL apagado hoy; el cerco queda c
         })
     })
 
-    it('el conteo espeja applyArchiveScope: coach_id + org_id null + team_id null + is_archived false', async () => {
+    it('el conteo espeja applyArchiveScope: coach_id + org_id null + team_id null + is_archived false + is_demo false', async () => {
         const coachRow = { max_clients: 10, subscription_tier: 'starter', created_at: '2026-01-10T00:00:00Z' }
         const { admin, countFilters } = fakeAdmin({ coachRow, count: 0 })
         await checkJoinCapacity(admin, STANDALONE)
         expect(countFilters).toEqual([
             ['eq', 'is_archived', false],
+            // Onboarding v2 (W1 F1.3): el alumno de ejemplo no ocupa cupo, tampoco en el /join.
+            ['eq', 'is_demo', false],
             ['eq', 'coach_id', 'coach-1'],
             ['is', 'org_id', null],
             ['is', 'team_id', null],
@@ -162,6 +164,7 @@ describe('checkJoinCapacity — enterprise (cupo de la ORG, no del coach)', () =
         await checkJoinCapacity(admin, ENTERPRISE)
         expect(countFilters).toEqual([
             ['eq', 'is_archived', false],
+            ['eq', 'is_demo', false],
             ['eq', 'org_id', 'org-1'],
             ['is', 'team_id', null],
         ])

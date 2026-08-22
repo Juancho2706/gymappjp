@@ -459,11 +459,14 @@ describe('GET /api/cron/cap-nudge — predicados de la query', () => {
         })
     })
 
-    it('conteo de alumnos: mismo predicado que el gate 402 (no archivados, sin org ni team)', async () => {
+    it('conteo de alumnos: mismo predicado que el gate 402 (no archivados, sin demo, sin org ni team)', async () => {
         coaches = [freeCoach()]
         clientRows = [{ coach_id: 'c1' }]
         await GET(authedReq())
         expect(clientFilters).toContainEqual({ method: 'eq', column: 'is_archived', value: false })
+        // Onboarding v2 (W1 F1.3): el alumno de ejemplo no ocupa cupo. Sin este filtro, un coach
+        // Free 0/1 con demo sembrado se vería 1/1 y recibiría el correo de «llegaste al tope».
+        expect(clientFilters).toContainEqual({ method: 'eq', column: 'is_demo', value: false })
         expect(clientFilters).toContainEqual({ method: 'is', column: 'org_id', value: null })
         expect(clientFilters).toContainEqual({ method: 'is', column: 'team_id', value: null })
         expect(clientFilters).toContainEqual({ method: 'in', column: 'coach_id', value: ['c1'] })
