@@ -1,4 +1,6 @@
-import { formatNutritionCalories } from '@eva/nutrition-v2'
+import Link from 'next/link'
+import { ListChecks } from 'lucide-react'
+import { formatNutritionCalories, formatNutritionWeekPlanLinkLabel } from '@eva/nutrition-v2'
 import {
   MacroChipRow,
   MacroProgress,
@@ -25,12 +27,18 @@ export function PastDaySummary({
   cell,
   backHref,
   backLabel,
+  planHref = null,
 }: {
   cell: StudentNutritionWeekCell
   /** URL de retorno (canónica de hoy, sin `?date=`; o del historial cuando se abre desde ahí). */
   backHref: string
   /** Copy del link de vuelta (default "Volver a hoy"; el historial pasa "Volver al historial"). */
   backLabel?: string
+  /**
+   * Tab Plan abierto en ESE día (`?view=plan&dow=N`). Opcional: el detalle de un día del
+   * historial no lo pasa, porque su semana ya no es la vigente y el Plan solo conoce la actual.
+   */
+  planHref?: string | null
 }) {
   const legacy = cell.legacy
   const legacyOnly = cell.isLegacy === true && legacy?.legacyOnly === true
@@ -65,6 +73,19 @@ export function PastDaySummary({
           debajo del consumo real, nunca en vez de él. */}
       {cell.isLegacy === true && !legacyOnly && legacy != null ? (
         <LegacyTrailCard legacy={legacy} />
+      ) : null}
+
+      {/* Puente al tab Plan (22-08). Este resumen muestra el RESULTADO congelado del día; la
+          prescripción de esa jornada no se puede proyectar sin mentir (el plan pudo cambiar de
+          versión). "¿Qué alimentos tengo el lunes?" la contesta el patrón semanal VIGENTE. */}
+      {planHref ? (
+        <Link
+          className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-subtle bg-surface-card px-4 text-sm font-semibold text-primary hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          href={planHref}
+        >
+          <ListChecks aria-hidden="true" className="h-4 w-4 shrink-0" />
+          {formatNutritionWeekPlanLinkLabel(cell)}
+        </Link>
       ) : null}
     </>
   )

@@ -52,6 +52,14 @@ describe('resolveWeekIsoFromDateParam', () => {
     expect(resolveWeekIsoFromDateParam(WEEK, DOMINGO, HOY)).toBe(DOMINGO)
   })
 
+  // SPEC §«Regla cerrada 2026-08-22 — futuro visible, solo lectura»: el `?date=` de un día que
+  // todavía no llegó NO se recorta a hoy. Es la única puerta de la web al día futuro; cerrarla
+  // deja al alumno sin poder mirar qué le toca el sábado (feedback de alumno, 22-08).
+  it('acepta un día FUTURO de la semana en curso (no lo recorta a hoy)', () => {
+    expect(resolveWeekIsoFromDateParam(WEEK, SABADO, HOY)).toBe(SABADO)
+    expect(resolveWeekIsoFromDateParam(WEEK, '2026-07-30', HOY)).toBe('2026-07-30')
+  })
+
   it('cae a hoy con otra semana o fecha inválida (jamás se pide un día suelto al backend)', () => {
     expect(resolveWeekIsoFromDateParam(WEEK, '2026-07-20', HOY)).toBe(HOY)
     expect(resolveWeekIsoFromDateParam(WEEK, '2026-02-30', HOY)).toBe(HOY)

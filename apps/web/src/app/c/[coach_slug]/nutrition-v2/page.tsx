@@ -385,11 +385,19 @@ async function TodayView({
       </>
     )
   } else if (selectedCell != null) {
+    // `cells` va de lunes a domingo, así que la posición +1 ES el `?dow=` del tab Plan.
+    const selectedDow = cells.findIndex((cell) => cell.isoDate === selectedCell.isoDate) + 1
     body =
       selectedCell.state === 'future' ? (
         <FutureDayPreview backHref={homeHref} cell={selectedCell} />
       ) : (
-        <PastDaySummary backHref={homeHref} cell={selectedCell} />
+        <PastDaySummary
+          backHref={homeHref}
+          cell={selectedCell}
+          // Puente al plan de ESE día (22-08): el pasado muestra el resultado, no la
+          // prescripción, y "qué alimentos tengo el lunes" vive en el patrón semanal vigente.
+          planHref={selectedDow > 0 ? `${homeHref}?view=plan&dow=${selectedDow}` : null}
+        />
       )
   }
 

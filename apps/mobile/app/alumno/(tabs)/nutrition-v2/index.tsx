@@ -72,6 +72,7 @@ import {
   NutritionHistoryPageReadModelSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
+  alignNutritionIsoToWeekOf,
   buildNutritionDayShareText,
   buildNutritionWeek,
   bulkMarkCtaLabel,
@@ -85,6 +86,7 @@ import {
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
+  formatNutritionWeekPlanLinkLabel,
   computeSubstitutionEquivalence,
   nutritionWeekStartIso,
   resolveNutritionDayVariantForDate,
@@ -196,6 +198,11 @@ const EMPTY_DAY_VARIANTS: PlanVariant[] = []
  *  - un día pasado ⇒ resumen de solo lectura con los resultados congelados del historial;
  *  - un día futuro ⇒ vista previa del plan proyectado, sin ningún control de registro.
  *
+ * Los 7 días de la semana son SELECCIONABLES, futuro incluido (regla «futuro visible, solo
+ * lectura», SPEC 2026-08-22). El día pasado muestra el RESULTADO, no la prescripción, así que
+ * lleva además un puente de un toque al tab Plan (`onOpenPlanDay`) para contestar "¿qué alimentos
+ * tengo el lunes?" sin que el alumno tenga que descubrir la pestaña.
+ *
  * El día elegido vive en el contenedor (no acá) por dos razones: cambiar de tab remonta este
  * componente, y el tab Historial abre un día concreto en modo lectura.
  *
@@ -207,6 +214,7 @@ function TodayTab({
   chrome,
   selectedDay,
   onSelectDay,
+  onOpenPlanDay,
   focusSlotCode,
 }: {
   /** Título + tabs del módulo: scrollean con el contenido (ver `NutritionChrome`). */
@@ -214,6 +222,8 @@ function TodayTab({
   /** Fecha `YYYY-MM-DD` que se está mirando; `null` = hoy. */
   selectedDay: string | null
   onSelectDay: (isoDate: string | null) => void
+  /** Abre ese mismo día en el tab Plan (prescripción vigente, solo lectura). */
+  onOpenPlanDay: (isoDate: string) => void
   /** Franja a resaltar al entrar (deep-link desde la card de Nutrición del Home). */
   focusSlotCode?: string | null
 }) {
@@ -1489,6 +1499,24 @@ function TodayTab({
             onBackToToday={() => onSelectDay(null)}
           />
           {body}
+          {/* Puente al tab Plan (22-08). Solo en el PASADO: el futuro ya pinta la prescripción
+              proyectada acá arriba, mientras que un día pasado muestra el resultado congelado del
+              historial — y la prescripción de ese día NO se puede proyectar sin mentir (el plan
+              pudo cambiar de versión, regla 2 de `buildNutritionWeek`). La pregunta "¿qué
+              alimentos tengo el lunes?" la contesta el patrón semanal VIGENTE del tab Plan. */}
+          {selectedCell != null && !isFuture ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={formatNutritionWeekPlanLinkLabel(selectedCell)}
+              onPress={() => onOpenPlanDay(selectedCell.isoDate)}
+              className="min-h-11 flex-row items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-3 active:opacity-70"
+            >
+              <ListChecks color={theme.primary} size={16} />
+              <Text className="text-sm font-semibold text-primary">
+                {formatNutritionWeekPlanLinkLabel(selectedCell)}
+              </Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </View>
     )
@@ -2765,9 +2793,22 @@ export default function StudentNutritionV2Screen() {
   // dentro de `TodayTab`, por dos razones: cambiar de tab REMONTA el tab (MotiView con `key`), y
   // el historial abre un día concreto en modo lectura.
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  // Día con el que ABRE el tab Plan cuando se llega desde el puente "Ver el plan del lunes"
+  // (22-08). `null` = el Plan abre en hoy, como siempre. Vive acá porque el tab remonta al
+  // cambiar (`MotiView key={tab}`), así que se consume como estado inicial de `PlanTab`.
+  const [planDay, setPlanDay] = useState<string | null>(null)
   const openDayFromHistory = useCallback((isoDate: string) => {
     setSelectedDay(isoDate)
     setTab('today')
+  }, [])
+  const openPlanDay = useCallback((isoDate: string) => {
+    setPlanDay(isoDate)
+    setTab('plan')
+  }, [])
+  // Elegir un tab a mano SIEMPRE lo abre en su día natural: el ancla del puente es de un viaje.
+  const changeTab = useCallback((next: NutritionV2Tab) => {
+    setPlanDay(null)
+    setTab(next)
   }, [])
 
   // Volver a la pantalla de Nutrición SIEMPRE aterriza en hoy: el día elegido sobrevive a cambiar
@@ -2776,6 +2817,7 @@ export default function StudentNutritionV2Screen() {
   useFocusEffect(
     useCallback(() => {
       setSelectedDay(null)
+      setPlanDay(null)
     }, []),
   )
 
@@ -2815,7 +2857,7 @@ export default function StudentNutritionV2Screen() {
 
   // El chrome (título + tabs) ya NO es fijo: viaja DENTRO del scroll de cada tab
   // para que al bajar se vaya de pantalla y quede pegada SOLO la tira de días.
-  const chrome = <NutritionChrome value={tab} onChange={setTab} />
+  const chrome = <NutritionChrome value={tab} onChange={changeTab} />
 
   return (
     // `paddingTop` del notch en el shell (no en el contenido) para que la tira de
@@ -2833,10 +2875,11 @@ export default function StudentNutritionV2Screen() {
             chrome={chrome}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
+            onOpenPlanDay={openPlanDay}
             focusSlotCode={focusSlotCode}
           />
         ) : null}
-        {tab === 'plan' ? <PlanTab chrome={chrome} /> : null}
+        {tab === 'plan' ? <PlanTab chrome={chrome} initialIso={planDay} /> : null}
         {tab === 'history' ? <HistoryTab chrome={chrome} onOpenDay={openDayFromHistory} /> : null}
       </MotiView>
     </View>
@@ -2927,7 +2970,18 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
 // Plan tab
 // ---------------------------------------------------------------------------
 
-function PlanTab({ chrome }: { chrome: ReactNode }) {
+function PlanTab({
+  chrome,
+  initialIso = null,
+}: {
+  chrome: ReactNode
+  /**
+   * Día `YYYY-MM-DD` con el que abre el tab (puente "Ver el plan del lunes", 22-08). `null` =
+   * hoy. Se lee UNA vez, como estado inicial: el tab remonta al cambiar de pestaña, así que no
+   * hace falta sincronizarlo después — y hacerlo pisaría el día que el alumno acaba de tocar.
+   */
+  initialIso?: string | null
+}) {
   // 4A-01: clearance de la cápsula + minimizado por scroll (ver TodayTab).
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
@@ -2941,8 +2995,13 @@ function PlanTab({ chrome }: { chrome: ReactNode }) {
   const [date] = useLocalDay(TZ)
   // Día de la semana que se está mirando; `null` = hoy (SPEC nutrition-week-view). Local al tab:
   // el Plan siempre muestra la semana ACTUAL — no navega a semanas viejas, porque el plan que
-  // tenemos en memoria es el vigente y proyectarlo hacia atrás sería mentir.
-  const [selectedIso, setSelectedIso] = useState<string | null>(null)
+  // tenemos en memoria es el vigente y proyectarlo hacia atrás sería mentir. Los 7 días de esa
+  // semana son seleccionables, futuro incluido: el tab Plan es solo lectura por construcción.
+  // `initialIso` puede venir de un día abierto desde el Historial (otra semana): se traslada al
+  // día equivalente de ESTA semana, que es la única que el Plan conoce.
+  const [selectedIso, setSelectedIso] = useState<string | null>(() =>
+    alignNutritionIsoToWeekOf(initialIso, date),
+  )
   const viewIso = selectedIso ?? date
 
   const mountedRef = useRef(true)
