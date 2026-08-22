@@ -1,8 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
-import { BadgeCheck, PartyPopper, Users } from 'lucide-react-native'
+import { Check } from 'lucide-react-native'
 import { Dialog } from '../Dialog'
 import { Button } from '../Button'
+import { EvaFigure } from '../entry/EvaFigure'
 import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
 import { hexToRgba } from '../../lib/theme'
@@ -18,7 +19,12 @@ import type { PlanChange } from '../../lib/plan-change'
  * encontró un `tier_up`/`cap_up`. Por eso es idéntica en iOS y Android: es estado, no venta
  * (`docs/specs/embudo-free-pro/SPEC.md` §«Experiencia RN»).
  *
- * Motion: escala + fade sobre el ícono y las líneas, con las duraciones del DS (`useEvaMotion`,
+ * QA del owner (22-08, Android): los íconos de lucide (cotillón, personas, sello) se veían sueltos
+ * y las líneas de texto no aparecían — el `body` centraba a sus hijos y las filas con `flex: 1`
+ * colapsaban a ancho cero. Ahora el hero es la figura EVA sobre el color de marca con un check
+ * grande encima, y las líneas son solo texto, centradas y a todo el ancho.
+ *
+ * Motion: escala + fade sobre el hero y las líneas, con las duraciones del DS (`useEvaMotion`,
  * token `slow` = 320 ms + escalonado ⇒ ≤600 ms de punta a punta). El hook central es el que respeta
  * «reducir movimiento» del SO en toda la app: con reduce-motion el contenido entra ya montado
  * (duración 0, sin transform) — la celebración no puede costarle un mareo a nadie.
@@ -33,24 +39,31 @@ interface PlanUpgradeCelebrationProps {
   onClose: () => void
 }
 
+const HERO_SIZE = 96
+const CHECK_SIZE = 40
+
 /** Entrada escalonada: cada hijo entra `index * 70 ms` después, tope 600 ms de punta a punta. */
 function Reveal({
   index,
   reduced,
   duration,
   children,
+  stretch,
 }: {
   index: number
   reduced: boolean
   /** Ya viene resuelta por `useEvaMotion` (0 con reduce-motion). */
   duration: number
   children: React.ReactNode
+  /** Las líneas de texto ocupan todo el ancho del diálogo; el hero no. */
+  stretch?: boolean
 }) {
   return (
     <MotiView
       from={reduced ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: 'timing', duration, delay: reduced ? 0 : index * 70 }}
+      style={stretch ? styles.stretch : undefined}
     >
       {children}
     </MotiView>
@@ -81,14 +94,24 @@ export function PlanUpgradeCelebration({ open, change, tier, onClose }: PlanUpgr
     >
       <View style={styles.body}>
         <Reveal index={0} reduced={reduced} duration={revealDuration}>
-          {/* Halo desde `theme.primary`: en white-label el ícono tiene que salir con la marca DEL
-              COACH, y `bg-sport-100` es la rampa fija de EVA. */}
-          <View style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
-            <PartyPopper size={30} strokeWidth={2} color={theme.primary} />
+          {/* Figura EVA sobre el color de marca (en white-label, el del coach) con el check encima:
+              el hero dice «listo» sin un solo ícono genérico. */}
+          <View style={styles.hero}>
+            <View style={[styles.heroCircle, { backgroundColor: theme.primary }]}>
+              <EvaFigure size={Math.round(HERO_SIZE * 0.56)} />
+            </View>
+            <View
+              style={[
+                styles.check,
+                { backgroundColor: theme.success, borderColor: theme.card, shadowColor: hexToRgba(theme.success, 0.6) },
+              ]}
+            >
+              <Check size={CHECK_SIZE * 0.6} strokeWidth={3} color="#FFFFFF" />
+            </View>
           </View>
         </Reveal>
 
-        <Reveal index={1} reduced={reduced} duration={revealDuration}>
+        <Reveal index={1} reduced={reduced} duration={revealDuration} stretch>
           <Text
             style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' }), styles.center]}
             className="text-strong"
@@ -97,23 +120,17 @@ export function PlanUpgradeCelebration({ open, change, tier, onClose }: PlanUpgr
           </Text>
         </Reveal>
 
-        <Reveal index={2} reduced={reduced} duration={revealDuration}>
-          <View style={styles.line}>
-            <Users size={17} strokeWidth={2.2} color={theme.primary} />
-            <Text style={[textStyle('sm', FONT.uiBold), styles.flex1]} className="text-strong">
-              {capLine}
-            </Text>
-          </View>
+        <Reveal index={2} reduced={reduced} duration={revealDuration} stretch>
+          <Text style={[textStyle('md', FONT.uiBold), styles.center]} className="text-strong">
+            {capLine}
+          </Text>
         </Reveal>
 
         {badgeLine ? (
-          <Reveal index={3} reduced={reduced} duration={revealDuration}>
-            <View style={styles.line}>
-              <BadgeCheck size={17} strokeWidth={2.2} color={theme.success} />
-              <Text style={[TYPE.caption, styles.flex1]} className="text-muted">
-                {badgeLine}
-              </Text>
-            </View>
+          <Reveal index={3} reduced={reduced} duration={revealDuration} stretch>
+            <Text style={[TYPE.caption, styles.center]} className="text-muted">
+              {badgeLine}
+            </Text>
           </Reveal>
         ) : null}
       </View>
@@ -122,9 +139,30 @@ export function PlanUpgradeCelebration({ open, change, tier, onClose }: PlanUpgr
 }
 
 const styles = StyleSheet.create({
-  body: { alignItems: 'center', gap: 12, paddingTop: 8 },
-  badge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  body: { alignItems: 'center', gap: 12, paddingTop: 8, paddingHorizontal: 8 },
+  stretch: { alignSelf: 'stretch' },
+  hero: { width: HERO_SIZE + 8, height: HERO_SIZE + 8, alignItems: 'flex-start', justifyContent: 'flex-start' },
+  heroCircle: {
+    width: HERO_SIZE,
+    height: HERO_SIZE,
+    borderRadius: HERO_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  check: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: CHECK_SIZE,
+    height: CHECK_SIZE,
+    borderRadius: CHECK_SIZE / 2,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
   center: { textAlign: 'center' },
-  line: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, paddingHorizontal: 4 },
-  flex1: { flex: 1, minWidth: 0 },
 })

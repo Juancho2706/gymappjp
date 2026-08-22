@@ -2,16 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
-import {
-  Activity,
-  Check,
-  HeartPulse,
-  LockKeyhole,
-  RotateCcw,
-  Ruler,
-  Utensils,
-  type LucideIcon,
-} from 'lucide-react-native'
+import { Activity, Check, Globe, HeartPulse, LockKeyhole, RotateCcw, Ruler, Utensils, type LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, Card, EmptyState } from '../../../components'
 import type { BadgeTone } from '../../../components/Badge'
@@ -20,6 +11,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import { toast } from '../../../components/Toast'
 import { RefreshPlanButton, refreshCoachPlan } from '../../../components/coach/RefreshPlanButton'
 import { ClientCapMeter } from '../../../components/coach/ClientCapMeter'
+import { hexToRgba } from '../../../lib/theme'
 import { PlanUpgradeCelebration } from '../../../components/coach/PlanUpgradeCelebration'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useWorkspace } from '../../../lib/workspace'
@@ -340,7 +332,14 @@ export default function SubscriptionScreen() {
                       <ClientCapMeter active={activeClientCount} max={coach.maxClients} variant="ring" onDark />
                     </View>
                   ) : null}
-                  <Text style={[TYPE.caption, styles.flex1]} className="text-on-dark-muted">
+                  {/* Una sola línea (QA owner 22-08: «1 de / 25» partido): si no cabe, se achica. */}
+                  <Text
+                    style={[TYPE.caption, styles.flex1]}
+                    className="text-on-dark-muted"
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
                     {clientsLabel}
                   </Text>
                 </View>
@@ -354,9 +353,20 @@ export default function SubscriptionScreen() {
 
         {/* Android: única línea admitida sobre dónde se cambia el plan (texto plano, sin link). */}
         {platformPlanCaption ? (
-          <Text style={[TYPE.caption, styles.note, styles.captionTight]} className="text-subtle">
-            {platformPlanCaption}
-          </Text>
+          // Callout en vez de una línea gris (QA owner 22-08): más visible, pero sigue siendo texto
+          // plano sin link ni botón — el literal sale de `lib/client-cap.ts`, única fuente.
+          <View
+            accessibilityRole="text"
+            style={[
+              styles.storeCallout,
+              { backgroundColor: hexToRgba(theme.primary, 0.12), borderColor: hexToRgba(theme.primary, 0.35) },
+            ]}
+          >
+            <Globe size={18} strokeWidth={2.2} color={theme.primary} />
+            <Text style={[textStyle('sm', FONT.uiBold), styles.flex1]} className="text-strong">
+              {platformPlanCaption}
+            </Text>
+          </View>
         ) : null}
 
         {/* Revalida entitlements: un cambio de plan hecho fuera del teléfono se refleja al toque. */}
@@ -472,7 +482,7 @@ const styles = StyleSheet.create({
   gap10: { gap: 10 },
   meterRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   refreshBlock: { gap: 6 },
-  captionTight: { marginTop: -6 },
+  storeCallout: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
   planRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   planRight: { alignItems: 'flex-end', gap: 8 },
   iconRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
