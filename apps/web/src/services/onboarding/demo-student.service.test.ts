@@ -281,11 +281,12 @@ describe('seedDemoStudent', () => {
 
         const assessment = opsFor(state, 'movement_assessments', 'insert')[0]?.payload as Record<string, unknown>
         expect(assessment.status).toBe('final')
-        // Dos patrones con dolor ⇒ banda alta; compuesto 7/21 con los crudos del blueprint.
+        // Dos patrones con dolor ⇒ banda alta; compuesto 14/21 con los crudos del blueprint
+        // (3+3+3+3+min(2,3)+0+0), y asimetría por la elevación de pierna recta.
         expect(assessment.has_pain).toBe(true)
         expect(assessment.has_asymmetry).toBe(true)
         expect(assessment.risk_band).toBe('high')
-        expect(assessment.composite_score).toBe(7)
+        expect(assessment.composite_score).toBe(14)
         expect(assessment.consent_confirmed_at).toEqual(expect.any(String))
 
         const items = opsFor(state, 'movement_assessment_items', 'insert')[0]?.payload as Record<string, unknown>[]

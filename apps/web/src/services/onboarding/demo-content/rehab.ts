@@ -10,6 +10,8 @@
  * Los puntajes del screening son crudos a propósito: el compuesto, la asimetría y la banda de
  * prioridad las calcula `summarizeAssessment` de `@eva/calc` en el momento de sembrar. Escribir
  * un `composite_score` a mano acá sería exactamente el drift que ese paquete existe para evitar.
+ * Los crudos están calibrados para dar compuesto 14/21 (el número que fijó el canvas de diseño),
+ * dolor = sí, asimetría = sí (pierna recta) y banda ALTA por el dolor.
  *
  * Los ejercicios salen del catálogo de rehabilitación del sistema (`scripts/seed-rehab-exercises.mjs`);
  * cada referencia lleva alternativa del catálogo de movilidad/core que ya existe, para que la pauta
@@ -31,8 +33,13 @@ export const REHAB_AREAS = [
 
 /**
  * Screening de ingreso de Pedro: dos patrones con dolor (flexión de tronco y estabilidad
- * rotatoria) y asimetría en estocada y elevación de pierna. Con estos crudos, `@eva/calc` da
- * compuesto 7/21, dolor = sí, asimetría = sí y banda de prioridad ALTA.
+ * rotatoria) y asimetría en la elevación de pierna recta. Con estos crudos, `@eva/calc` da
+ * compuesto 14/21 (el número que fijó el canvas de diseño), dolor = sí, asimetría = sí (pierna
+ * recta) y banda ALTA por el dolor.
+ *
+ * Con dos patrones con dolor —que puntúan 0— llegar a 14 obliga a que los otros cinco sumen
+ * 3+3+3+3+2, por eso el perfil es «buena movilidad general, dolor bajo carga en flexión y
+ * rotación, leve asimetría posterior». Suma: 3+3+3+3+min(2,3)+0+0 = 14.
  */
 export const PEDRO_ASSESSMENT: MovementAssessmentBlueprint = {
     notes: 'Screening de ingreso. Lumbalgia inespecífica de 6 meses, sin irradiación ni banderas rojas. Trabajo de oficina, 8 h sentado. Duele al flexionar el tronco bajo carga y en la estabilidad rotatoria.',
@@ -40,46 +47,46 @@ export const PEDRO_ASSESSMENT: MovementAssessmentBlueprint = {
         {
             pattern: 'deep_squat',
             isPerSide: false,
-            scoreSingle: 1,
+            scoreSingle: 3,
             pain: false,
             clearingPositive: null,
-            comment: 'Talones se despegan y la lumbar se redondea antes de la mitad del recorrido.',
+            comment: 'Sentadilla completa y simétrica, talones apoyados. Sin dolor.',
         },
         {
             pattern: 'hurdle_step',
             isPerSide: true,
-            scoreLeft: 2,
-            scoreRight: 2,
+            scoreLeft: 3,
+            scoreRight: 3,
             pain: false,
             clearingPositive: null,
-            comment: 'Pierde la vertical de la pelvis, pero sin compensación mayor.',
+            comment: 'Pelvis estable a ambos lados, sin compensación.',
         },
         {
             pattern: 'inline_lunge',
             isPerSide: true,
-            scoreLeft: 2,
-            scoreRight: 1,
+            scoreLeft: 3,
+            scoreRight: 3,
             pain: false,
             clearingPositive: null,
-            comment: 'Marcada diferencia a la derecha: pierde el equilibrio y busca apoyo.',
+            comment: 'Equilibrio y alineación correctos a ambos lados.',
         },
         {
             pattern: 'shoulder_mobility',
             isPerSide: true,
-            scoreLeft: 2,
-            scoreRight: 2,
+            scoreLeft: 3,
+            scoreRight: 3,
             pain: false,
             clearingPositive: false,
-            comment: 'Prueba de descarte negativa. Rango simétrico, algo rígido.',
+            comment: 'Prueba de descarte negativa. Rango completo y simétrico.',
         },
         {
             pattern: 'active_straight_leg_raise',
             isPerSide: true,
-            scoreLeft: 1,
-            scoreRight: 2,
+            scoreLeft: 2,
+            scoreRight: 3,
             pain: false,
             clearingPositive: null,
-            comment: 'Cadena posterior izquierda muy corta.',
+            comment: 'Cadena posterior izquierda algo más corta (8 h sentado).',
         },
         {
             pattern: 'trunk_stability_pushup',
