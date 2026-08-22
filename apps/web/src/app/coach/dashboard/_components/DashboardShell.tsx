@@ -17,23 +17,41 @@ import { DesktopBento } from './DesktopBento'
 import { InviteCodePill } from './invite/InviteCodePill'
 import { ClientStatsSheet } from './sheets/ClientStatsSheet'
 import { WorkspaceSwitchSheet } from './sheets/WorkspaceSwitchSheet'
-import { CoachOnboardingChecklist } from '../CoachOnboardingChecklist'
+import { CoachOnboardingChecklist, OnboardingGuideFooterStrip } from '../CoachOnboardingChecklist'
 import { todayLabel } from '../_lib/dashboard-design'
+import { useOnboardingGuide } from '../_lib/use-onboarding-guide'
 import type { DashboardV2Data } from '../_data/types'
+import type { CoachOnboardingV2Data } from '../_data/dashboard.queries'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
 import { tierMaxClientsFor } from '@/lib/constants'
+import { showsEvaBadge } from '@eva/tiers'
+import type { OnboardingSignals } from '@eva/onboarding'
 import { cn } from '@/lib/utils'
+
+/** Referencia estable: sin esto el hook vería un objeto nuevo por render con la guía apagada. */
+const DORMANT_SIGNALS: OnboardingSignals = {
+    hasBrand: false,
+    viveTuAppOpened: false,
+    hasFirstArtifact: false,
+    realClients: 0,
+    realStudentActivity: false,
+}
 
 interface Props {
     data: DashboardV2Data
     coachId: string
     coachName: string
+    /** Reservado: lo consumía el checklist v1; la guía v2 arma sus links con `@eva/onboarding`. */
     coachSlug: string
     coachInviteCode?: string | null
     initialOnboardingGuide: Json
     subscriptionTier: SubscriptionTier
+    /**
+     * Reservado: la señal de marca del onboarding v2 la calcula el servidor (`hasCustomBrand`:
+     * logo O preset O color no sembrado), no este booleano de «tiene logo visible».
+     */
     hasCoachLogo: boolean
     /** Logo de marca del coach — usado como tile del avatar del header móvil (fallback iniciales). */
     coachLogoUrl?: string | null
@@ -44,25 +62,37 @@ interface Props {
     /** `coaches.created_at`: ancla del grandfather de pricing v2 si faltara la columna. */
     coachCreatedAt?: string | null
     workspaces: WorkspaceSummary[]
+    /**
+     * Onboarding v2 — señales del día 1. `null` = el coach apagó la guía y el RSC ni siquiera
+     * consultó (ver `DashboardContent`): no se pinta nada del onboarding.
+     */
+    onboarding: CoachOnboardingV2Data | null
 }
 
 export function DashboardShell({
     data,
     coachId,
     coachName,
-    coachSlug,
     coachInviteCode,
     initialOnboardingGuide,
     subscriptionTier,
-    hasCoachLogo,
     coachLogoUrl,
     activeClientCount,
     coachMaxClients,
     coachCreatedAt,
     workspaces,
+    onboarding,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
     const [wsSheetOpen, setWsSheetOpen] = useState(false)
+    // Un solo dueño del estado de la guía para sus DOS posiciones (cabecera y pie).
+    const guide = useOnboardingGuide({
+        coachId,
+        persona: onboarding?.persona ?? null,
+        initialGuide: initialOnboardingGuide,
+        signals: onboarding?.signals ?? DORMANT_SIGNALS,
+        enabled: onboarding !== null,
+    })
     const firstName = coachName?.split(' ')[0] || 'Coach'
     const openInsights = () => setStatsSheetOpen(true)
     // Multi-workspace ⇒ el avatar abre el switcher de espacio (bottom-sheet). Con un solo
@@ -85,7 +115,7 @@ export function DashboardShell({
     return (
         <>
             <Suspense>
-                <FreeWelcomeModal />
+                <FreeWelcomeModal coachId={coachId} persona={onboarding?.persona ?? null} />
             </Suspense>
 
             {/* Sin px propio: el gutter lateral lo da CoachMainWrapper (px-4/md:px-8) — evita el
@@ -129,6 +159,24 @@ export function DashboardShell({
                         />
                     )}
                 </div>
+
+                {/* Guía de inicio v2 — CABECERA del dashboard (SPEC coach-onboarding-v2 §6, D5=A).
+                    Antes vivía al final, bajo KPIs vacíos que felicitaban al coach nuevo («Todo al
+                    día, buen trabajo») cuando todavía no había hecho nada. Se pinta una sola vez,
+                    arriba de todo, con el MISMO orden en móvil y desktop; cuando llega a 5/5 o el
+                    coach la oculta, baja a la tira del pie. */}
+                {onboarding && (
+                    <div className="mb-4 empty:hidden">
+                        <CoachOnboardingChecklist
+                            vm={guide}
+                            persona={onboarding.persona}
+                            demo={onboarding.demo}
+                            brand={onboarding.brand}
+                            needsBrand={onboarding.needsBrand}
+                            showsEvaBadge={showsEvaBadge(subscriptionTier)}
+                        />
+                    </div>
+                )}
 
                 {/* ───────── Mobile (eva-app structure, <md) ───────── */}
                 <div className="md:hidden">
@@ -229,20 +277,12 @@ export function DashboardShell({
                     />
                 </div>
 
-                {/* Guía de inicio — onboarding engine (real signals + server actions) */}
-                <div className="mt-5">
-                    <CoachOnboardingChecklist
-                        coachId={coachId}
-                        coachSlug={coachSlug}
-                        coachInviteCode={coachInviteCode}
-                        initialOnboardingGuide={initialOnboardingGuide}
-                        totalClients={data.kpi.totalClients}
-                        activePlans={data.activePlans}
-                        hasStudentSignal30d={data.hasStudentSignal30d}
-                        subscriptionTier={subscriptionTier}
-                        hasCoachLogo={hasCoachLogo}
-                    />
-                </div>
+                {/* Tira de la guía al PIE: solo cuando llegó a 5/5 o el coach la ocultó. */}
+                {onboarding && (
+                    <div className="mt-5 empty:hidden">
+                        <OnboardingGuideFooterStrip vm={guide} hasDemo={onboarding.demo !== null} />
+                    </div>
+                )}
             </div>
 
             <DashboardFab />

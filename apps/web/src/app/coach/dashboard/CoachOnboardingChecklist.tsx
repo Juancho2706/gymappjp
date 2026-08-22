@@ -1,488 +1,276 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, PartyPopper, Rocket, X } from 'lucide-react'
+import { Check, PartyPopper, Rocket, Trash2, X } from 'lucide-react'
+import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import confetti from 'canvas-confetti'
+import { useRouter } from 'next/navigation'
+import { resolveHref, type OnboardingStep } from '@eva/onboarding'
+import type { Persona } from '@eva/schemas'
 import { cn } from '@/lib/utils'
-import type { Json } from '@/lib/database.types'
-import { type SubscriptionTier } from '@/lib/constants'
-import { brandTourSeenStorageKey, BRAND_TOUR_SEEN_CHANGED_EVENT } from '@/lib/coach-brand-tour'
-import { persistOnboardingGuideAction } from './_actions/onboarding-guide.actions'
+import { BrandQuickCard } from './_components/BrandQuickCard'
+import { DemoStudentCard } from './_components/DemoStudentCard'
+import { PersonaNudgeCard } from './_components/PersonaNudgeCard'
+import { ViveTuAppButton } from './_components/ViveTuAppButton'
+import { deleteDemoStudentAction } from './_actions/demo-student.actions'
 import { postGuideEngagement } from './_lib/onboarding-telemetry.client'
+import type { OnboardingGuideVm } from './_lib/use-onboarding-guide'
+import type { CoachBrandDraft, DemoStudentSnapshot } from './_data/dashboard.queries'
 
-type StepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_checkin'
+/**
+ * Guía de inicio v2 — 5 verbos por persona, ARRIBA del dashboard (SPEC coach-onboarding-v2 §6,
+ * decisión D5=A).
+ *
+ * Qué cambió respecto del checklist v1:
+ *  - Los pasos salen de `@eva/onboarding` (fuente ÚNICA web + RN), no de un array local: el paso 3
+ *    es el que cambia de verdad entre ramas, así que un nutricionista ya no ve «crea tu primer
+ *    programa», que nunca podría tildar.
+ *  - Vive ARRIBA (antes del hero) hasta 5/5 u «Ocultar»; después baja a una tira al pie. En v1
+ *    vivía al FINAL, debajo de KPIs vacíos que además felicitaban al coach nuevo.
+ *  - Los pasos se tildan SOLOS con señales reales del servidor. No hay «marcar visto».
+ *  - El paso 1 no manda a un paywall: se resuelve inline con «Tu marca en 60 segundos».
+ *
+ * El estado (progreso, posición, telemetría) lo administra `useOnboardingGuide` en el shell —
+ * este archivo solo pinta y delega.
+ */
 
-type PersistedState = {
-    completed: Partial<Record<StepKey, boolean>>
-    ahaMomentSent?: boolean
-    dismissed?: boolean
-}
-
-/** Por coach: evita que dismiss/completado de otra cuenta en el mismo browser oculte la guía aquí. */
-function onboardingGuideStorageKey(coachId: string) {
-    return `eva:coach-onboarding:v1:${coachId}`
-}
-
-/** Evita doble confetti (p. ej. Strict Mode dev) en la misma sesión de navegador. */
-function confetti100SessionKey(coachId: string) {
-    return `eva:coach-onboarding-100-confetti-fired:${coachId}`
-}
-
-function readPersistedState(coachId: string): PersistedState {
-    try {
-        const raw = localStorage.getItem(onboardingGuideStorageKey(coachId))
-        if (!raw) return { completed: {} }
-        return JSON.parse(raw) as PersistedState
-    } catch {
-        return { completed: {} }
-    }
-}
-
-function writePersistedState(coachId: string, state: PersistedState) {
-    localStorage.setItem(onboardingGuideStorageKey(coachId), JSON.stringify(state))
-}
-
-function normalizeGuideFromJson(raw: Json | undefined | null): PersistedState {
-    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-        return { completed: {} }
-    }
-    const o = raw as Record<string, unknown>
-    const completed: Partial<Record<StepKey, boolean>> = {}
-    const cr = o.completed
-    if (cr && typeof cr === 'object' && !Array.isArray(cr)) {
-        const keys: StepKey[] = ['profile_branding', 'first_client', 'first_plan', 'first_checkin']
-        for (const k of keys) {
-            const v = (cr as Record<string, unknown>)[k]
-            if (typeof v === 'boolean') {
-                completed[k] = v
-            }
-        }
-    }
-    return {
-        completed,
-        dismissed: o.dismissed === true,
-        ahaMomentSent: o.ahaMomentSent === true,
-    }
-}
-
-function persistedStateHasActivity(p: PersistedState): boolean {
-    if (p.dismissed) return true
-    if (p.ahaMomentSent) return true
-    return Object.keys(p.completed).length > 0
-}
-
-async function emitOnboardingEvent(
-    stepKey: StepKey,
-    eventType: 'step_completed' | 'step_reopened' | 'aha_moment',
-    metadata?: Record<string, string | number | boolean>
-) {
-    await fetch('/api/coach/onboarding-events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stepKey, eventType, metadata }),
-    })
+interface GuideBlockProps {
+    vm: OnboardingGuideVm
+    /** `null` = el coach no eligió especialidad: se pinta la tarjeta que lo invita a elegirla. */
+    persona: Persona | null
+    demo: DemoStudentSnapshot | null
+    brand: CoachBrandDraft
+    needsBrand: boolean
+    showsEvaBadge: boolean
 }
 
 export function CoachOnboardingChecklist({
-    coachId,
-    initialOnboardingGuide,
-    totalClients,
-    activePlans,
-    hasStudentSignal30d,
-    hasCoachLogo,
-}: {
-    coachId: string
-    coachSlug: string
-    coachInviteCode?: string | null
-    initialOnboardingGuide: Json
-    totalClients: number
-    activePlans: number
-    hasStudentSignal30d: boolean
-    subscriptionTier: SubscriptionTier
-    hasCoachLogo: boolean
-}) {
-    const [ready, setReady] = useState(false)
-    const [dismissed, setDismissed] = useState(false)
-    const [manualCompleted, setManualCompleted] = useState<Partial<Record<StepKey, boolean>>>({})
-    const [brandTourSeen, setBrandTourSeen] = useState(false)
-    const [guideOpenOverride, setGuideOpenOverride] = useState<boolean | null>(null)
-    const previousStateRef = useRef<Partial<Record<StepKey, boolean>>>({})
-    const ahaRef = useRef(false)
-    const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    /** Evita re-hidratar el checklist en cada re-render del padre con el mismo JSON por referencia distinta. */
-    const initialOnboardingGuideKey = useMemo(
-        () => JSON.stringify(initialOnboardingGuide ?? null),
-        [initialOnboardingGuide]
-    )
-
-    useEffect(() => {
-        const fromServer = normalizeGuideFromJson(initialOnboardingGuide)
-        const ls = readPersistedState(coachId)
-
-        if (persistedStateHasActivity(fromServer)) {
-            const mergedDismissed = fromServer.dismissed === true || ls.dismissed === true
-            const merged: PersistedState = {
-                completed: fromServer.completed ?? {},
-                dismissed: mergedDismissed,
-                ahaMomentSent: fromServer.ahaMomentSent === true,
-            }
-            setManualCompleted(merged.completed ?? {})
-            setDismissed(mergedDismissed)
-            ahaRef.current = Boolean(merged.ahaMomentSent)
-            writePersistedState(coachId, merged)
-            setReady(true)
-            return
-        }
-
-        setManualCompleted(ls.completed ?? {})
-        setDismissed(Boolean(ls.dismissed))
-        ahaRef.current = Boolean(ls.ahaMomentSent)
-        setReady(true)
-
-        const lsSnapshot: PersistedState = {
-            completed: ls.completed ?? {},
-            dismissed: Boolean(ls.dismissed),
-            ahaMomentSent: Boolean(ls.ahaMomentSent),
-        }
-        if (persistedStateHasActivity(lsSnapshot)) {
-            void persistOnboardingGuideAction(lsSnapshot).then((r) => {
-                if (!r.ok) {
-                    toast.error('No se pudo guardar la guía en tu cuenta', { description: r.error })
-                }
-            })
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- initialOnboardingGuideKey serializa la guía (evita `{}` nuevo cada render)
-    }, [coachId, initialOnboardingGuideKey])
-
-    const schedulePersistToServer = useCallback((snapshot: PersistedState) => {
-        writePersistedState(coachId, snapshot)
-        if (persistTimerRef.current) {
-            clearTimeout(persistTimerRef.current)
-        }
-        persistTimerRef.current = setTimeout(() => {
-            persistTimerRef.current = null
-            void persistOnboardingGuideAction({
-                dismissed: snapshot.dismissed,
-                completed: snapshot.completed,
-                ahaMomentSent: snapshot.ahaMomentSent,
-            }).then((r) => {
-                if (!r.ok) {
-                    toast.error('No se pudo sincronizar la guía', { description: r.error })
-                }
-            })
-        }, 450)
-    }, [coachId])
-
-    useEffect(() => {
-        return () => {
-            if (persistTimerRef.current) {
-                clearTimeout(persistTimerRef.current)
-            }
-        }
-    }, [])
-
-    useEffect(() => {
-        const tourKey = brandTourSeenStorageKey(coachId)
-        const readTourSeen = () => {
-            try {
-                setBrandTourSeen(localStorage.getItem(tourKey) === 'true')
-            } catch {
-                setBrandTourSeen(false)
-            }
-        }
-        readTourSeen()
-        const onStorage = (e: StorageEvent) => {
-            if (e.key === tourKey && e.newValue === 'true') {
-                readTourSeen()
-            }
-        }
-        const onTourSeenSameTab = () => {
-            readTourSeen()
-        }
-        window.addEventListener('storage', onStorage)
-        window.addEventListener(BRAND_TOUR_SEEN_CHANGED_EVENT, onTourSeenSameTab)
-        return () => {
-            window.removeEventListener('storage', onStorage)
-            window.removeEventListener(BRAND_TOUR_SEEN_CHANGED_EVENT, onTourSeenSameTab)
-        }
-    }, [coachId])
-
-    const autoCompleted = useMemo(
-        () => ({
-            profile_branding: hasCoachLogo || brandTourSeen,
-            first_client: totalClients > 0,
-            first_plan: activePlans > 0,
-            first_checkin: hasStudentSignal30d,
-        }),
-        [activePlans, brandTourSeen, hasCoachLogo, hasStudentSignal30d, totalClients]
-    )
-
-    const completed: Record<StepKey, boolean> = useMemo(
-        () => ({
-            /** `false` explícito = “Desmarcar” aunque haya logo/tour (auto). */
-            profile_branding:
-                manualCompleted.profile_branding === false
-                    ? false
-                    : autoCompleted.profile_branding || manualCompleted.profile_branding === true,
-            first_client: autoCompleted.first_client || Boolean(manualCompleted.first_client),
-            first_plan: autoCompleted.first_plan || Boolean(manualCompleted.first_plan),
-            first_checkin: autoCompleted.first_checkin || Boolean(manualCompleted.first_checkin),
-        }),
-        [autoCompleted, manualCompleted]
-    )
-
-    const completedCount = (Object.values(completed).filter(Boolean) || []).length
-    const progressPct = Math.round((completedCount / 4) * 100)
-    const allDone = completedCount === 4
-
-    useEffect(() => {
-        if (!ready) return
-
-        const previous = previousStateRef.current
-        const entries = Object.entries(completed) as Array<[StepKey, boolean]>
-        for (const [key, nowDone] of entries) {
-            const beforeDone = Boolean(previous[key])
-            if (!beforeDone && nowDone) {
-                void emitOnboardingEvent(key, 'step_completed', { progressPct })
-            } else if (beforeDone && !nowDone) {
-                void emitOnboardingEvent(key, 'step_reopened', { progressPct })
-            }
-        }
-
-        if (allDone && !ahaRef.current) {
-            if (typeof window !== 'undefined') {
-                const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-                if (
-                    !prefersReduced &&
-                    !sessionStorage.getItem(confetti100SessionKey(coachId))
-                ) {
-                    sessionStorage.setItem(confetti100SessionKey(coachId), '1')
-                    confetti({
-                        particleCount: 130,
-                        spread: 72,
-                        origin: { y: 0.4 },
-                        colors: ['#10B981', '#007AFF', '#22c55e', '#38bdf8', '#34d399'],
-                    })
-                }
-            }
-            void emitOnboardingEvent('first_checkin', 'aha_moment', { progressPct: 100 })
-            ahaRef.current = true
-        }
-
-        previousStateRef.current = completed
-        schedulePersistToServer({
-            completed: manualCompleted,
-            ahaMomentSent: ahaRef.current,
-            dismissed,
-        })
-    }, [allDone, coachId, completed, dismissed, manualCompleted, progressPct, ready, schedulePersistToServer])
-
-    function toggleProfileStep() {
-        setManualCompleted((prev) => {
-            const autoBranding = hasCoachLogo || brandTourSeen
-            const currentlyDone =
-                prev.profile_branding === false
-                    ? false
-                    : autoBranding || prev.profile_branding === true
-            if (currentlyDone) {
-                return { ...prev, profile_branding: false }
-            }
-            return { ...prev, profile_branding: true }
-        })
-    }
-
-    function dismiss() {
-        void postGuideEngagement('profile_branding', {
-            widget: 'onboarding_checklist',
-            action: 'dismiss_confirm',
-            progress_pct: progressPct,
-            all_done: allDone,
-        })
-        setDismissed(true)
-        toast('Guía ocultada. Puedes retomarla desde el dashboard.', { duration: 3000 })
-    }
-
-    function resumeGuide() {
-        setDismissed(false)
-    }
-
-    if (!ready) {
+    vm,
+    persona,
+    demo,
+    brand,
+    needsBrand,
+    showsEvaBadge,
+}: GuideBlockProps) {
+    if (!vm.ready) {
         return (
             <div
-                className="h-[42px] animate-pulse rounded-control border border-subtle bg-surface-sunken"
+                className="h-[136px] animate-pulse rounded-card border border-subtle bg-surface-sunken"
                 aria-hidden
             />
         )
     }
 
-    if (dismissed && allDone) {
-        return null
-    }
+    // 5/5 o «Ocultar»: la guía se fue al pie (`OnboardingGuideFooterStrip`).
+    if (vm.atFoot) return null
 
-    if (dismissed && !allDone) {
-        return (
-            <div className="flex items-center gap-[11px] rounded-control border border-[var(--sport-200)] bg-[var(--sport-100)] px-[13px] py-1">
-                <span className="flex shrink-0 text-[var(--sport-600)]">
-                    <Rocket className="size-4" />
-                </span>
-                <span className="flex-1 text-[13px] font-bold text-[var(--sport-700)]">
-                    Sigues con pasos pendientes en tu guía de inicio.
-                </span>
-                <button
-                    type="button"
-                    onClick={resumeGuide}
-                    className="min-h-11 shrink-0 touch-manipulation px-1 text-[12.5px] font-extrabold text-[var(--sport-700)]"
-                >
-                    Continuar guía
-                </button>
-            </div>
-        )
-    }
-
-    if (allDone) {
-        return (
-            <div className="flex items-center gap-[11px] rounded-card border border-[var(--success-500)]/30 bg-[var(--success-100)] p-4">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--success-500)] text-white">
-                    <PartyPopper className="size-[18px]" />
-                </span>
-                <div className="flex-1">
-                    <div className="text-[14.5px] font-extrabold text-[var(--success-700)]">
-                        ¡Activación lista!
-                    </div>
-                    <div className="text-[12.5px] text-[var(--success-700)] opacity-85">
-                        Tu cuenta está configurada. A entrenar.
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={dismiss}
-                    aria-label="Cerrar"
-                    className="flex size-11 shrink-0 touch-manipulation items-center justify-center text-[var(--success-700)]"
-                >
-                    <X className="size-[18px]" />
-                </button>
-            </div>
-        )
-    }
-
-    const guideOpen = guideOpenOverride ?? completedCount === 0
-
-    const steps: Array<{ key: StepKey; label: string; href: string }> = [
-        {
-            key: 'profile_branding',
-            label: 'Personaliza tu marca',
-            // Pricing v3 (owner 2026-08-21): el white-label está en TODOS los planes — el Free va a
-            // Mi Marca, no a la página de precios. Drift detectado 21-08: 37 `upgrade_gate_hit`
-            // (16 coaches) eran este paso 1 mandando al Free a un paywall.
-            href: '/coach/settings?tour=1',
-        },
-        { key: 'first_client', label: 'Suma tu primer alumno', href: '/coach/clients' },
-        { key: 'first_plan', label: 'Crea tu primer plan', href: '/coach/workout-programs' },
-        { key: 'first_checkin', label: 'Recibe el primer check-in', href: '/coach/clients' },
-    ]
+    const demoClientId = demo?.clientId ?? null
 
     return (
-        <div>
-            <button
-                type="button"
-                onClick={() => setGuideOpenOverride(!guideOpen)}
-                aria-expanded={guideOpen}
-                className={cn(
-                    'flex w-full items-center gap-[11px] border border-[var(--sport-200)] bg-[var(--sport-100)] px-[13px] py-[11px] text-left',
-                    guideOpen ? 'rounded-t-control border-b-0' : 'rounded-control'
-                )}
-            >
-                <span className="flex shrink-0 text-[var(--sport-600)]">
-                    <Rocket className="size-4" />
-                </span>
-                <span className="flex-1 text-[13px] font-bold text-[var(--sport-700)]">
-                    Guía de inicio
-                </span>
-                <span className="flex gap-1">
-                    {steps.map((s) => (
-                        <span
-                            key={s.key}
-                            className="size-[7px] rounded-full"
-                            style={{
-                                background: completed[s.key]
-                                    ? 'var(--sport-500)'
-                                    : 'var(--sport-300)',
-                                opacity: completed[s.key] ? 1 : 0.5,
-                            }}
+        <div className="flex flex-col gap-3">
+            {persona === null && <PersonaNudgeCard />}
+
+            <section aria-label="Guía de inicio" className="rounded-card border border-subtle bg-surface-card p-4">
+                <div className="flex items-center gap-2.5">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-[var(--sport-100)] text-[var(--sport-600)]">
+                        <Rocket className="size-4" />
+                    </span>
+                    <h2 className="flex-1 text-[14.5px] font-extrabold text-[var(--text-strong)]">
+                        Guía de inicio
+                    </h2>
+                    <span className="text-[12.5px] font-extrabold text-[var(--text-muted)]">
+                        {vm.done}/{vm.total}
+                    </span>
+                </div>
+
+                <div
+                    className="mt-2.5 h-1.5 w-full overflow-hidden rounded-pill bg-[var(--track)]"
+                    role="progressbar"
+                    aria-valuenow={vm.done}
+                    aria-valuemin={0}
+                    aria-valuemax={vm.total}
+                    aria-label="Progreso de la guía de inicio"
+                >
+                    <div
+                        className="h-full rounded-pill bg-[var(--sport-500)] transition-[width] duration-300"
+                        style={{ width: `${Math.round((vm.done / vm.total) * 100)}%` }}
+                    />
+                </div>
+
+                <ol className="mt-3 flex flex-col gap-1">
+                    {vm.steps.map((step, index) => (
+                        <StepRow
+                            key={step.key}
+                            step={step}
+                            index={index}
+                            done={vm.completed[step.key]}
+                            demoClientId={demoClientId}
+                            persona={vm.persona}
+                            onViveTuAppOpened={() => vm.markStepCompleted('vive_tu_app')}
                         />
                     ))}
-                </span>
-                <span className="min-w-[26px] text-right text-[12.5px] font-extrabold text-[var(--sport-700)]">
-                    {completedCount}/4
-                </span>
-                <span
-                    className={cn(
-                        'flex shrink-0 text-[var(--sport-600)] transition-transform duration-200',
-                        guideOpen && 'rotate-180'
-                    )}
+                </ol>
+
+                <button
+                    type="button"
+                    onClick={vm.sendToFoot}
+                    className="mt-1 min-h-11 touch-manipulation pr-2 text-left text-[12px] font-bold text-[var(--text-muted)] hover:text-[var(--text-strong)]"
                 >
-                    <ChevronDown className="size-4" />
-                </span>
-            </button>
-            {guideOpen && (
-                <div className="rounded-b-control border border-t-0 border-[var(--sport-200)] bg-[var(--sport-100)] px-[13px] pb-[13px] pt-1">
-                    <div className="flex flex-col gap-[7px]">
-                        {steps.map((s) => {
-                            const done = completed[s.key]
-                            return (
-                                <div key={s.key} className="flex items-center gap-[9px]">
-                                    <span
-                                        className={cn(
-                                            'flex size-5 shrink-0 items-center justify-center rounded-full text-white',
-                                            done
-                                                ? 'bg-[var(--sport-500)]'
-                                                : 'border-2 border-[var(--sport-300)]'
-                                        )}
-                                    >
-                                        {done && <Check className="size-3" />}
-                                    </span>
-                                    <Link
-                                        href={s.href}
-                                        className={cn(
-                                            'flex-1 py-0.5 text-[13.5px] font-semibold',
-                                            done
-                                                ? 'text-[var(--sport-600)] line-through opacity-70'
-                                                : 'text-[var(--sport-700)]'
-                                        )}
-                                    >
-                                        {s.label}
-                                    </Link>
-                                    {s.key === 'profile_branding' && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault()
-                                                e.stopPropagation()
-                                                toggleProfileStep()
-                                            }}
-                                            className="-my-2 min-h-11 shrink-0 touch-manipulation px-1 text-[12px] font-extrabold text-[var(--sport-700)]"
-                                        >
-                                            {done ? 'Desmarcar' : 'Marcar visto'}
-                                        </button>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                    {/* Se retiró el upsell "Suma planes de nutrición con Pro": la nutrición V2 ya
-                        viene incluida en todos los planes, Free incluido. */}
-                    <button
-                        type="button"
-                        onClick={dismiss}
-                        className="mt-1 min-h-11 touch-manipulation pr-2 text-left text-xs font-bold text-[var(--sport-600)]"
-                    >
-                        Saltar guía
-                    </button>
-                </div>
+                    Ocultar
+                </button>
+            </section>
+
+            {needsBrand && (
+                <BrandQuickCard
+                    brand={brand}
+                    showsEvaBadge={showsEvaBadge}
+                    onSaved={() => vm.markStepCompleted('profile_branding')}
+                />
             )}
+
+            {demo && (
+                <DemoStudentCard
+                    demo={demo}
+                    persona={vm.persona}
+                    openHref={resolveHref(vm.steps[2], { demoClientId })}
+                    onViveTuAppOpened={() => vm.markStepCompleted('vive_tu_app')}
+                />
+            )}
+        </div>
+    )
+}
+
+function StepRow({
+    step,
+    index,
+    done,
+    demoClientId,
+    persona,
+    onViveTuAppOpened,
+}: {
+    step: OnboardingStep
+    index: number
+    done: boolean
+    demoClientId: string | null
+    persona: Persona
+    onViveTuAppOpened: () => void
+}) {
+    const href = resolveHref(step, { demoClientId })
+
+    const body = (
+        <>
+            <span className="block text-[13.5px] font-bold leading-snug">{step.label}</span>
+            <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
+                {step.description}
+            </span>
+        </>
+    )
+
+    return (
+        <li className="flex items-start gap-2.5 py-1">
+            <span
+                aria-hidden
+                className={cn(
+                    'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black',
+                    done
+                        ? 'bg-[var(--sport-500)] text-white'
+                        : 'border-2 border-[var(--border-subtle)] text-[var(--text-muted)]'
+                )}
+            >
+                {done ? <Check className="size-3" /> : index + 1}
+            </span>
+            <div className={cn('min-w-0 flex-1', done && 'opacity-65')}>
+                {href ? (
+                    <Link
+                        href={href}
+                        onClick={() =>
+                            void postGuideEngagement(step.key, {
+                                widget: 'onboarding_checklist',
+                                action: 'step_open',
+                                step: step.key,
+                                persona,
+                            })
+                        }
+                        className="block text-[var(--text-strong)] hover:underline"
+                    >
+                        {body}
+                    </Link>
+                ) : (
+                    <div className="text-[var(--text-strong)]">{body}</div>
+                )}
+                {/* El paso 2 no navega: lo dispara una acción (magic link del alumno de ejemplo). */}
+                {step.key === 'vive_tu_app' && !done && (
+                    <ViveTuAppButton
+                        label="Ver mi app"
+                        className="mt-1.5 h-9 px-3 text-[12.5px]"
+                        onOpened={onViveTuAppOpened}
+                    />
+                )}
+            </div>
+        </li>
+    )
+}
+
+/**
+ * Tira de una línea al PIE del dashboard: aparece cuando la guía llegó a 5/5 o el coach la ocultó.
+ * Mantiene a mano lo único que sigue siendo útil después: borrar el alumno de ejemplo.
+ */
+export function OnboardingGuideFooterStrip({
+    vm,
+    hasDemo,
+}: {
+    vm: OnboardingGuideVm
+    hasDemo: boolean
+}) {
+    const router = useRouter()
+    const [deleting, startDelete] = useTransition()
+    const [demoGone, setDemoGone] = useState(false)
+
+    if (!vm.ready || !vm.atFoot || vm.hidden) return null
+
+    function removeDemo() {
+        startDelete(async () => {
+            const result = await deleteDemoStudentAction()
+            if (!result.ok) {
+                toast.error(result.error)
+                return
+            }
+            setDemoGone(true)
+            toast.success('Borramos el alumno de ejemplo.')
+            router.refresh()
+        })
+    }
+
+    return (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-[var(--success-500)]/30 bg-[var(--success-100)] px-3.5 py-2">
+            <span className="flex shrink-0 text-[var(--success-600)]">
+                {vm.allDone ? <PartyPopper className="size-4" /> : <Rocket className="size-4" />}
+            </span>
+            <span className="flex-1 text-[12.5px] font-bold text-[var(--success-700)]">
+                {vm.allDone
+                    ? `Guía de inicio completada ${vm.done}/${vm.total}`
+                    : `Guía de inicio ${vm.done}/${vm.total}`}
+            </span>
+            {hasDemo && !demoGone && (
+                <button
+                    type="button"
+                    onClick={removeDemo}
+                    disabled={deleting}
+                    className="inline-flex min-h-11 shrink-0 touch-manipulation items-center gap-1.5 px-1 text-[12px] font-extrabold text-[var(--success-700)] disabled:opacity-60"
+                >
+                    <Trash2 className="size-3.5" />
+                    {deleting ? 'Borrando…' : 'Borrar ejemplo'}
+                </button>
+            )}
+            <button
+                type="button"
+                onClick={vm.hide}
+                aria-label="Ocultar la guía de inicio"
+                className="inline-flex min-h-11 shrink-0 touch-manipulation items-center gap-1 px-1 text-[12px] font-extrabold text-[var(--success-700)]"
+            >
+                <X className="size-3.5" />
+                Ocultar
+            </button>
         </div>
     )
 }

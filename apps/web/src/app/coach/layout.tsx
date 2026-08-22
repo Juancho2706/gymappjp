@@ -30,7 +30,7 @@ import {
     getTeamEnabledModules,
     type EnabledModules,
 } from '@/services/entitlements.service'
-import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
+import { disabledDomainsFromPrefs, readCoachDomainPrefs } from '@/services/coach/persona.service'
 
 export const metadata: Metadata = {
     title: {
@@ -65,6 +65,13 @@ export default async function CoachLayout({
     if (!coach) {
         redirect('/login')
     }
+
+    // Onboarding v2 — dónde vive el gate de «¿A qué te dedicas?» (decisión D8): en `proxy.ts`,
+    // NO acá. Un layout de Next no recibe el pathname, así que este archivo no puede distinguir
+    // «/coach/dashboard» de «/coach/onboarding/persona» y el redirect se dispararía también sobre
+    // la propia pantalla de persona (loop infinito). El proxy sí conoce la ruta, ya trae la fila
+    // de `coaches` que necesita y corre antes del render. Resolver puro y testeado:
+    // `shouldRedirectToPersona` en services/coach/persona.service.ts.
 
     const onboardingGuide =
         coach.onboarding_guide != null &&
@@ -101,14 +108,21 @@ export default async function CoachLayout({
         return applyOperatorKillSwitch(raw)
     }
 
-    // Master switch de dominios (feature-prefs `_enabled`): si el coach apagó un dominio
-    // (ej. Nutrición), su entrada del nav se oculta. Fail-OPEN: cualquier error o flag OFF ⇒
-    // NINGÚN dominio apagado (mostrar todo = comportamiento de HOY). Para la vista PROPIA del
-    // coach se resuelve con su coachId de sesión (sin clientId/team-base override).
+    // Master switch de dominios (feature-prefs `_enabled`): si el coach apagó un dominio, su
+    // entrada del nav se oculta. Onboarding v2 (SPEC coach-onboarding-v2 §2): la persona del coach
+    // siembra ese `_enabled` para los CINCO dominios (nutrition · training · cardio · movement ·
+    // bodycomp), así que acá se leen TODOS en una sola query en vez de resolver solo nutrición.
+    //
+    // Fail-OPEN, igual que antes: error de lectura, dominio sin fila o fila sin la key ⇒ dominio
+    // VISIBLE. Un coach sin preferencias ve exactamente el menú de hoy.
+    //
+    // Nota deliberada: esta lectura NO pasa por el flag transicional `FEATURE_PREFS_ENABLED` que
+    // usa `resolveFeaturePrefs`. Ese flag existe para no quitarle superficies a quien todavía no
+    // tiene filas; acá la fila es una elección EXPLÍCITA del coach (la pantalla de persona o
+    // Opciones › Mi panel) y honrarla es justamente el producto.
     const resolveDisabledDomains = async (): Promise<string[]> => {
         try {
-            const nutritionEnabled = await resolveNutritionDomainEnabled({ coachId: coach.id })
-            return nutritionEnabled ? [] : ['nutrition']
+            return disabledDomainsFromPrefs(await readCoachDomainPrefs(supabase, coach.id))
         } catch {
             return []
         }

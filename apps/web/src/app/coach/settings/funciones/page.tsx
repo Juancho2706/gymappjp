@@ -2,28 +2,32 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, SlidersHorizontal } from 'lucide-react'
 import type { Metadata } from 'next'
-import { getFuncionesContext } from './_data/funciones.queries'
+import { domainsWithSectionEditor, getFuncionesContext } from './_data/funciones.queries'
+import { MiPanelPane } from './_components/MiPanelPane'
 import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
 
-export const metadata: Metadata = { title: 'Funciones | EVA' }
+export const metadata: Metadata = { title: 'Mi panel | EVA' }
 
 /**
- * Settings > Funciones (plan §9 Fase C) — el coach/owner elige QUE superficies de Nutricion
- * se muestran (capa ENABLED del modelo `visible = ENTITLED AND ENABLED`).
+ * Settings > «Mi panel» (onboarding v2 W2.6; antes «Funciones») — el coach elige su especialidad,
+ * qué dominios se ven en su panel y qué hace con el alumno de ejemplo. La RUTA sigue siendo
+ * `/coach/settings/funciones` a propósito: hay links vivos (hub móvil, rail de desktop, correos)
+ * y renombrarla no aporta nada al coach.
  *
- * Contexto derivado del workspace activo (separacion de flujos): standalone edita sus prefs;
- * en team solo el gestor llega (la query lo resuelve y la RLS es el gate real). Enterprise
- * redirige (no hay zona Funciones en v1).
+ * Contexto derivado del workspace activo (separacion de flujos): standalone edita sus prefs y su
+ * persona; en team solo el gestor llega y ve el editor de secciones del pool (la persona es
+ * PERSONAL, no del equipo: ahí no se muestra). Enterprise redirige (no hay zona en v1).
  */
-export default async function CoachFuncionesPage() {
+export default async function CoachMiPanelPage() {
     const { coachId, orgManaged, ctx } = await getFuncionesContext()
     if (!coachId) redirect('/login')
     if (orgManaged) redirect('/coach/dashboard')
     // Sin ctx => miembro de team sin gestion (o sin contexto valido): no hay editor que mostrar.
     if (!ctx) redirect(orgManaged ? '/coach/dashboard' : '/coach/team')
 
-    const backHref = ctx.scope === 'team' ? '/coach/team' : '/coach/settings'
-    const backLabel = ctx.scope === 'team' ? 'Mi Equipo' : 'Opciones'
+    const isTeam = ctx.scope === 'team'
+    const backHref = isTeam ? '/coach/team' : '/coach/settings'
+    const backLabel = isTeam ? 'Mi Equipo' : 'Opciones'
 
     return (
         <div className="mx-auto max-w-2xl animate-fade-in px-4 py-8 sm:px-6">
@@ -39,19 +43,22 @@ export default async function CoachFuncionesPage() {
                     <SlidersHorizontal className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                    <h1 className="font-display text-2xl font-black tracking-tight text-strong">Funciones</h1>
+                    <h1 className="font-display text-2xl font-black tracking-tight text-strong">
+                        {isTeam ? 'Funciones del equipo' : 'Mi panel'}
+                    </h1>
                     <p className="mt-1 text-sm text-muted">
-                        {ctx.scope === 'team'
+                        {isTeam
                             ? `Equipo "${ctx.teamName}" — elige qué se muestra de la nutrición.`
-                            : 'Elige qué tan a fondo trabajas la nutrición y qué secciones ven tú y tus alumnos.'}
+                            : 'Tu especialidad, qué módulos ves en el menú y tu alumno de ejemplo.'}
                     </p>
                 </div>
             </div>
 
-            {ctx.scope === 'team' ? (
-                <FeaturePrefsPanel scope="team" teamId={ctx.teamId!} domains={ctx.domains} />
+            {isTeam ? (
+                // El equipo no tiene persona ni alumno de ejemplo: solo el editor de secciones.
+                <FeaturePrefsPanel scope="team" teamId={ctx.teamId!} domains={domainsWithSectionEditor(ctx.domains)} />
             ) : (
-                <FeaturePrefsPanel scope="coach" domains={ctx.domains} />
+                <MiPanelPane domains={ctx.domains} />
             )}
         </div>
     )

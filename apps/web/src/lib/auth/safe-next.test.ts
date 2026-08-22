@@ -227,6 +227,10 @@ describe('buildCoachLoginNext', () => {
         expect(buildCoachLoginNext('/coach/onboarding/complete', CAP_EMAIL_QUERY)).toBeNull()
     })
 
+    it('no arma next a la pregunta de persona: el layout manda ahí solo mientras falte', () => {
+        expect(buildCoachLoginNext('/coach/onboarding/persona', '')).toBeNull()
+    })
+
     it('saca el `_rsc` de las navegaciones RSC', () => {
         expect(buildCoachLoginNext('/coach/subscription', '?_rsc=1a2b&utm_source=x')).toBe(
             '/coach/subscription?utm_source=x'
@@ -312,6 +316,7 @@ describe('isCoachDefaultLanding', () => {
         expect(isCoachDefaultLanding('/coach/dashboard?tab=hoy')).toBe(true)
         expect(isCoachDefaultLanding('/coach/dashboard#planes')).toBe(true)
         expect(isCoachDefaultLanding('/coach/onboarding/complete')).toBe(true)
+        expect(isCoachDefaultLanding('/coach/onboarding/persona')).toBe(true)
     })
 
     it('un destino de verdad no es el default', () => {

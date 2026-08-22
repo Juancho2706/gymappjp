@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from 'react'
 import { ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
 import { Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, LifeBuoy, type LucideIcon } from 'lucide-react'
 import { SupportPane } from './_components/SupportPane'
+import type { Persona } from '@eva/schemas'
 import { SubscriptionContent } from '../subscription/_components/SubscriptionContent'
 import { DangerZone } from './_components/DangerZone'
 import { CoachSignOutCard } from './_components/CoachSignOut'
@@ -15,7 +16,8 @@ import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
 import { CoachBrandAvatar, EvaBrandFallback } from '@/components/coach/CoachBrandAvatar'
 import { AreasManager } from './areas/_components/AreasManager'
 import { getModulesContext } from './modules/_data/modules.queries'
-import { getFuncionesContext } from './funciones/_data/funciones.queries'
+import { domainsWithSectionEditor, getFuncionesContext } from './funciones/_data/funciones.queries'
+import { MiPanelPane } from './funciones/_components/MiPanelPane'
 import { getAreasContext } from './areas/_data/areas.queries'
 import { CoachSettingsDesktop, type SettingsSectionId } from './_components/CoachSettingsDesktop'
 import type { Metadata } from 'next'
@@ -297,7 +299,7 @@ export default async function CoachSettingsPage() {
         ),
         soporte: (
             <PaneBody>
-                <SupportPane />
+                <SupportPane persona={(coach.persona as Persona | null) ?? null} />
             </PaneBody>
         ),
         eliminar: (
@@ -320,15 +322,23 @@ export default async function CoachSettingsPage() {
         )
     }
     if (funcionesRes.ctx) {
-        sections.funciones = (
-            <PaneBody desc="Elige qué tan a fondo trabajas la nutrición y qué secciones ven tus alumnos y tú.">
-                {funcionesRes.ctx.scope === 'team' ? (
-                    <FeaturePrefsPanel scope="team" teamId={funcionesRes.ctx.teamId!} domains={funcionesRes.ctx.domains} />
-                ) : (
-                    <FeaturePrefsPanel scope="coach" domains={funcionesRes.ctx.domains} />
-                )}
-            </PaneBody>
-        )
+        // Onboarding v2 (W2.6): en standalone esta zona pasó a ser «Mi panel» (especialidad +
+        // dominios visibles + alumno de ejemplo, con el detalle de nutrición al pie). En team
+        // sigue siendo el editor de secciones del pool: la persona es PERSONAL, no del equipo.
+        sections.funciones =
+            funcionesRes.ctx.scope === 'team' ? (
+                <PaneBody desc="Elige qué tan a fondo trabaja la nutrición tu equipo y qué secciones ven sus alumnos.">
+                    <FeaturePrefsPanel
+                        scope="team"
+                        teamId={funcionesRes.ctx.teamId!}
+                        domains={domainsWithSectionEditor(funcionesRes.ctx.domains)}
+                    />
+                </PaneBody>
+            ) : (
+                <PaneBody desc="Tu especialidad, qué módulos ves en el menú y tu alumno de ejemplo.">
+                    <MiPanelPane domains={funcionesRes.ctx.domains} />
+                </PaneBody>
+            )
     }
     if (areasRes.ctx) {
         sections.areas = (
@@ -399,8 +409,8 @@ export default async function CoachSettingsPage() {
                     <HubCard
                         href="/coach/settings/funciones"
                         icon={SlidersHorizontal}
-                        title="Funciones de nutrición"
-                        desc="Qué tan a fondo trabajas la nutrición y qué ven los alumnos"
+                        title="Mi panel"
+                        desc="Tu especialidad, qué módulos ves y tu alumno de ejemplo"
                     />
                     <HubCard
                         href="/coach/settings/areas"

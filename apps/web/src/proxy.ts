@@ -7,6 +7,12 @@ import type { EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import {
+    isCoachCreatedAfterPersonaLaunch,
+    personaGateApplies,
+    shouldRedirectToPersona,
+    PERSONA_ROUTE,
+} from '@/services/coach/persona.service'
+import {
     STUDENT_ACCESS_STATE_HEADER,
     STUDENT_ACCESS_GRACE_UNTIL_HEADER,
 } from '@/lib/student-access'
@@ -453,13 +459,15 @@ async function proxyInner(request: NextRequest) {
         }
 
         // Verify the user has a coaches record
+        // `persona` (onboarding v2): viaja en ESTE select, que ya corría, para que el gate de la
+        // pantalla «¿A qué te dedicas?» no cueste una query extra (ver más abajo).
         const { data: coachData } = await supabase
             .from('coaches')
-            .select('id, subscription_status, subscription_tier, current_period_end, max_clients, created_at')
+            .select('id, subscription_status, subscription_tier, current_period_end, max_clients, created_at, persona')
             .eq('id', user.id)
             .maybeSingle()
 
-        const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end' | 'max_clients' | 'created_at'> & { subscription_tier?: string } | null
+        const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end' | 'max_clients' | 'created_at' | 'persona'> & { subscription_tier?: string } | null
 
         if (!coach) {
             // User is logged in but isn't a coach → send to OAuth onboarding
@@ -576,6 +584,52 @@ async function proxyInner(request: NextRequest) {
                 redirectUrl.searchParams.set('reason', 'subscription_blocked')
             }
             return NextResponse.redirect(redirectUrl)
+        }
+
+        // ── Onboarding v2: gate de la pantalla «¿A qué te dedicas?» (SPEC coach-onboarding-v2 §1,
+        // decisión D8). Va ACÁ y no en app/coach/layout.tsx porque un layout de Next NO recibe el
+        // pathname: desde ahí el redirect se dispararía también sobre la propia ruta de persona y
+        // sería un loop infinito. Después del gate de suscripción a propósito — primero se paga,
+        // después se elige especialidad.
+        //
+        // Costo: CERO queries extra en el caso normal. `persona` ya viene en el select de arriba y
+        // los chequeos baratos (ruta exenta / persona elegida / coach managed) cortan antes de
+        // tocar la base. Solo el coach VIEJO sin persona paga un count, y una sola vez por request
+        // hasta que conteste.
+        if (
+            personaGateApplies({
+                pathname,
+                persona: coach.persona ?? null,
+                subscriptionStatus: coach.subscription_status,
+                workspaceType: activeWorkspace?.type ?? null,
+            })
+        ) {
+            let realClientCount = activeStandaloneClientCount
+            if (realClientCount == null && !isCoachCreatedAfterPersonaLaunch(coach.created_at)) {
+                try {
+                    realClientCount = await countActiveStandaloneClients(supabase, user.id)
+                } catch (error) {
+                    // Fail-open: una lectura caída no puede secuestrar el panel de un coach que
+                    // ya trabaja (`shouldRedirectToPersona` con `null` no redirige).
+                    console.error('[proxy] persona gate: conteo de alumnos no disponible:', error)
+                    realClientCount = null
+                }
+            }
+            if (
+                shouldRedirectToPersona({
+                    pathname,
+                    persona: coach.persona ?? null,
+                    subscriptionStatus: coach.subscription_status,
+                    workspaceType: activeWorkspace?.type ?? null,
+                    coachCreatedAt: coach.created_at ?? null,
+                    realClientCount,
+                })
+            ) {
+                const redirectUrl = request.nextUrl.clone()
+                redirectUrl.pathname = PERSONA_ROUTE
+                redirectUrl.search = ''
+                return NextResponse.redirect(redirectUrl)
+            }
         }
 
         // Debounced in DB (no-op if <5min since last update), so await is safe.

@@ -9,7 +9,7 @@ import {
     type Preset,
     type SectionPrefs,
 } from '@eva/feature-prefs'
-import { Apple } from 'lucide-react'
+import { Apple, Dumbbell, HeartPulse, PersonStanding, Ruler } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
@@ -39,25 +39,57 @@ import { hasModule } from '@/services/entitlements.service'
  * aparecer automaticamente sin tocar este loader.
  */
 
-/** Metadata de presentacion por dominio (label + icono). Extensible: una entrada por FeatureDomain. */
+/**
+ * Metadata de presentacion por dominio (label + icono + descripcion). Una entrada por
+ * `FeatureDomain`.
+ *
+ * `description` la consume «Opciones › Mi panel» (onboarding v2 W2.6): explica en una linea QUE se
+ * apaga, para que el master switch no sea una palabra suelta. El icono es un componente de
+ * `lucide-react` — este archivo importa service-role, asi que NUNCA se importa desde un client
+ * component: la pagina baja `label`/`description` como props (strings) y el cliente resuelve su
+ * propio icono por key.
+ */
 export interface DomainMeta {
     label: string
     icon: LucideIcon
+    description: string
 }
 
-export const DOMAIN_META: Partial<Record<FeatureDomain, DomainMeta>> = {
-    nutrition: { label: 'Nutrición', icon: Apple },
+export const DOMAIN_META: Record<FeatureDomain, DomainMeta> = {
+    nutrition: {
+        label: 'Nutrición',
+        icon: Apple,
+        description: 'Pautas, porciones e intercambios, y lo que ve tu alumno de su alimentación.',
+    },
+    training: {
+        label: 'Entrenamiento',
+        icon: Dumbbell,
+        description: 'Rutinas, programas y ejercicios del planificador.',
+    },
+    cardio: {
+        label: 'Cardio',
+        icon: HeartPulse,
+        description: 'Zonas de frecuencia cardíaca, ritmos e intervalos.',
+    },
+    movement: {
+        label: 'Movimiento',
+        icon: PersonStanding,
+        description: 'Screening de 7 patrones y la pauta de ejercicios para la casa.',
+    },
+    bodycomp: {
+        label: 'Composición corporal',
+        icon: Ruler,
+        description: 'Mediciones por BIA o antropometría ISAK y su evolución.',
+    },
 }
 
 /**
- * Lista canonica de dominios que ESTE editor muestra (orden de presentacion) — se deriva de
+ * Lista canonica de dominios que este loader resuelve (orden de presentacion) — se deriva de
  * `DOMAIN_META`, no de `FEATURE_DOMAINS`.
  *
- * Onboarding v2 (SPEC coach-onboarding-v2 §2) sumo `training | cardio | movement | bodycomp` al
- * registro puro para que la persona del coach pueda apagarlos, pero esos dominios todavia NO
- * tienen area en esta zona: su UI (copy, icono, orden y QA) entra con «Opciones › Mi panel»
- * (W2.6). Mientras tanto esta pagina sigue mostrando SOLO Nutricion, exactamente como hoy —
- * sumar la entrada a `DOMAIN_META` es lo unico que hace falta para que aparezca.
+ * Onboarding v2 (SPEC coach-onboarding-v2 §2): los cinco dominios entran acá porque la persona
+ * del coach escribe el master switch `_enabled` de TODOS, y «Mi panel» los pinta todos. Ojo: no
+ * todos tienen secciones internas que ajustar — para eso está `domainsWithSectionEditor`.
  */
 const DOMAIN_KEYS = Object.keys(DOMAIN_META) as FeatureDomain[]
 
@@ -76,6 +108,8 @@ export type FuncionesScope = 'coach' | 'team'
 export interface DomainFuncionesConfig {
     domain: FeatureDomain
     label: string
+    /** Una linea: que se apaga con el master switch. La baja «Mi panel» como prop al cliente. */
+    description: string
     sections: readonly FeatureSection[]
     /** Preset guardado de ese dominio (coercionado a un Preset valido). Default `'basico'`. */
     preset: Preset
@@ -130,6 +164,7 @@ async function resolveDomains(
             return {
                 domain,
                 label: DOMAIN_META[domain]?.label ?? domain,
+                description: DOMAIN_META[domain]?.description ?? '',
                 sections,
                 preset: normalizePreset(prefs?.preset),
                 sectionPrefs: asSections(prefs?.sections),
@@ -230,6 +265,21 @@ async function resolveEntitlement(
         }),
     )
     return out
+}
+
+/**
+ * Dominios con SECCIONES internas ajustables — los unicos que tienen algo que mostrar en el
+ * editor fino (`FeaturePrefsPanel`: preset + expander «Ajustar secciones»). Hoy es solo
+ * Nutricion; los otros cuatro son master-switch puro y viven en «Mi panel».
+ *
+ * Sin este filtro, sumar los 4 dominios nuevos a `DOMAIN_META` haria que el panel de secciones
+ * pintara cuatro areas con la pregunta de preset («¿Qué tan a fondo trabajas entrenamiento?») y
+ * cero toggles adentro.
+ */
+export function domainsWithSectionEditor(
+    domains: DomainFuncionesConfig[],
+): DomainFuncionesConfig[] {
+    return domains.filter((d) => d.sections.some((section) => !section.core))
 }
 
 /** Re-export tipado para el panel (evita re-importar del paquete en el client component). */

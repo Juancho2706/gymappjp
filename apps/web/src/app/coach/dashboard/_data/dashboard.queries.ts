@@ -16,6 +16,12 @@ import type { WorkspaceSummary } from '@/domain/auth/types'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveCheckinPhotoUrl } from '@/lib/storage/checkin-photos'
 import type { DbClient } from '@/infrastructure/db/interfaces'
+import { PERSONAS, type Persona } from '@eva/schemas'
+import type { OnboardingSignals } from '@eva/onboarding'
+import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
+import { getDemoClientId } from '@/services/onboarding/demo-student.service'
+import { parseLoaderConfig, serializeLoaderConfig } from '@/lib/brand-composer'
+import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
     SIN_CHECKIN_1M: 'Adherencia critica · sin check-in en 1 mes',
@@ -687,5 +693,455 @@ function buildClientPaymentSummary(
     }).sort((a, b) => {
         if (a.hasRecentPayment === b.hasRecentPayment) return 0
         return a.hasRecentPayment ? 1 : -1
+    })
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// Onboarding v2 — DATOS DEL «DÍA 1» (docs/specs/coach-onboarding-v2/SPEC.md §3-§6, W2 F2.3/F2.4)
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Todo lo que la guía v2, la tarjeta «Tu marca en 60 s» y la tarjeta del alumno de ejemplo
+// necesitan sale de UNA sola función que corre sus consultas en un único `Promise.all`. La UI no
+// vuelve a preguntar nada: recibe SEÑALES ya resueltas server-side (`resolveAutoCompleted` de
+// `@eva/onboarding` las mapea a pasos tildados) y las pinta. Cero N+1, cero autorización en
+// cliente.
+
+/** `coaches.persona` es `text` con CHECK: se valida contra la tupla del paquete antes de usarla. */
+export function parsePersona(raw: string | null | undefined): Persona | null {
+    if (raw == null) return null
+    return (PERSONAS as readonly string[]).includes(raw) ? (raw as Persona) : null
+}
+
+/**
+ * Colores que NO cuentan como «marca elegida»: el verde `#10B981` que los caminos de alta siembran
+ * (drift «todo coach nuevo nace verde») y el azul EVA por defecto. Si el coach sigue en uno de los
+ * dos, el paso 1 de la guía queda pendiente aunque la columna tenga un hex.
+ */
+const SEEDED_BRAND_COLORS = new Set(['#10b981', BRAND_PRIMARY_COLOR.toLowerCase()])
+
+/** Verde sembrado en el alta — la tarjeta de marca preselecciona el azul EVA cuando lo ve. */
+export const SEEDED_GREEN = '#10B981'
+
+export interface BrandSignalRow {
+    logo_url: string | null
+    theme_preset_key: string | null
+    primary_color: string | null
+}
+
+/**
+ * ¿El coach ya tocó su marca? (SPEC §6, paso 1). Puro: logo, preset o un color que NO sea uno de
+ * los dos sembrados. Exportado para poder testearlo sin base.
+ */
+export function hasCustomBrand(row: BrandSignalRow): boolean {
+    if ((row.logo_url ?? '').trim() !== '') return true
+    if ((row.theme_preset_key ?? '').trim() !== '') return true
+    const color = (row.primary_color ?? '').trim().toLowerCase()
+    return color !== '' && !SEEDED_BRAND_COLORS.has(color)
+}
+
+/**
+ * Valores actuales de marca del coach. La tarjeta «Tu marca en 60 s» reusa
+ * `updateBrandSettingsAction` (la MISMA acción de Mi Marca), que persiste el formulario COMPLETO:
+ * si la tarjeta posteara solo 3 campos, borraría el resto. Por eso el server manda el estado
+ * actual y la tarjeta lo reenvía intacto salvo lo que el coach cambió.
+ */
+export interface CoachBrandDraft {
+    fullName: string
+    brandName: string
+    instagramHandle: string
+    primaryColor: string
+    useBrandColorsCoach: boolean
+    welcomeMessage: string
+    loaderText: string
+    useCustomLoader: boolean
+    loaderIconMode: string
+    neutralTint: boolean
+    brandFontKey: string
+    loaderVariant: string
+    welcomeModalEnabled: boolean
+    welcomeModalContent: string
+    welcomeModalType: string
+    executorTheme: string
+    themePresetKey: string
+    loginLayoutKey: string
+    /** `loader_config` ya serializado (round-trip por `parseLoaderConfig`, fail-closed). */
+    loaderConfig: string
+    logoUrl: string | null
+}
+
+/** Un mini-KPI del alumno de ejemplo. `value === null` ⇒ todavía no hay dato (placeholder honesto). */
+export interface DemoKpi {
+    label: string
+    value: string | null
+}
+
+export interface DemoStudentSnapshot {
+    clientId: string
+    fullName: string
+    kpis: DemoKpi[]
+}
+
+/** Conteos crudos del demo. `buildDemoKpis` los traduce a las 3 tarjetas de la persona. */
+export interface DemoStatsRaw {
+    programCount: number
+    programName: string | null
+    workoutLogCount: number
+    bestWeightKg: number | null
+    movementAssessmentCount: number
+    nutritionPlanCount: number
+    intakeEntryCount: number
+    bodyFatPercent: number | null
+    restingHr: number | null
+    ref5kTimeSec: number | null
+}
+
+export const EMPTY_DEMO_STATS: DemoStatsRaw = {
+    programCount: 0,
+    programName: null,
+    workoutLogCount: 0,
+    bestWeightKg: null,
+    movementAssessmentCount: 0,
+    nutritionPlanCount: 0,
+    intakeEntryCount: 0,
+    bodyFatPercent: null,
+    restingHr: null,
+    ref5kTimeSec: null,
+}
+
+/**
+ * 3 mini-KPIs por persona (SPEC §4). Cuando el dato todavía no existe devuelve `null` en vez de un
+ * cero mentiroso: la tarjeta pinta «se carga al abrir». Puro → testeable sin base.
+ */
+export function buildDemoKpis(persona: Persona, s: DemoStatsRaw): DemoKpi[] {
+    const count = (n: number) => (n > 0 ? String(n) : null)
+    switch (persona) {
+        case 'nutrition':
+            return [
+                { label: 'Pauta', value: s.nutritionPlanCount > 0 ? 'Activa' : null },
+                { label: 'Comidas', value: count(s.intakeEntryCount) },
+                { label: 'Grasa', value: s.bodyFatPercent != null ? `${Math.round(s.bodyFatPercent)}%` : null },
+            ]
+        case 'rehab':
+            return [
+                { label: 'Screening', value: s.movementAssessmentCount > 0 ? 'Hecho' : null },
+                { label: 'Pauta en casa', value: s.programName },
+                {
+                    label: 'Reevaluación',
+                    value: s.movementAssessmentCount > 1 ? String(s.movementAssessmentCount - 1) : null,
+                },
+            ]
+        case 'endurance':
+            return [
+                {
+                    label: 'Zonas',
+                    value: s.restingHr != null && s.ref5kTimeSec != null ? 'Calculadas' : null,
+                },
+                { label: 'Semana', value: s.programName },
+                { label: 'Sesiones', value: count(s.workoutLogCount) },
+            ]
+        case 'strength':
+        case 'other':
+        default:
+            return [
+                { label: 'Programa', value: s.programName },
+                { label: 'Sesiones', value: count(s.workoutLogCount) },
+                { label: 'Mejor carga', value: s.bestWeightKg != null ? `${s.bestWeightKg} kg` : null },
+            ]
+    }
+}
+
+export interface CoachOnboardingV2Data {
+    persona: Persona | null
+    personaAlsoOther: boolean
+    /** Señales YA resueltas: `resolveAutoCompleted` las convierte en pasos tildados. */
+    signals: OnboardingSignals
+    /** `null` cuando el coach no tiene alumno de ejemplo (rama `other`, demo borrado o W3 sin correr). */
+    demo: DemoStudentSnapshot | null
+    brand: CoachBrandDraft
+    /** `false` cuando el coach ya tiene marca: la tarjeta «Tu marca en 60 s» deja de mostrarse. */
+    needsBrand: boolean
+}
+
+/** Cliente mínimo para tablas que `database.types.ts` todavía no tipa (`nutrition_plans_v2`). */
+type UntypedCountQuery = PromiseLike<{ count: number | null }> & {
+    eq(column: string, value: string): UntypedCountQuery
+}
+type UntypedCountClient = {
+    from(table: string): {
+        select(columns: string, options: { count: 'exact'; head: true }): UntypedCountQuery
+    }
+}
+
+async function countOrZero(q: PromiseLike<{ count: number | null }>): Promise<number> {
+    const { count } = await q
+    return count ?? 0
+}
+
+/**
+ * ¿El coach ya creó su primer artefacto? La señal cambia por persona (SPEC §6, paso 3) porque un
+ * nutricionista nunca podría tildar «crea tu primer programa» — ese era el drift del checklist v1.
+ */
+async function resolveFirstArtifact(
+    supabase: DbClient,
+    userId: string,
+    persona: Persona | null,
+): Promise<boolean> {
+    const programs = () =>
+        countOrZero(
+            supabase.from('workout_programs').select('id', { count: 'exact', head: true }).eq('coach_id', userId),
+        )
+    const nutritionPlans = () =>
+        countOrZero(
+            (supabase as unknown as UntypedCountClient)
+                .from('nutrition_plans_v2')
+                .select('id', { count: 'exact', head: true })
+                .eq('coach_id', userId),
+        )
+
+    switch (persona) {
+        case 'nutrition':
+            return (await nutritionPlans()) > 0
+        case 'rehab':
+            return (
+                (await countOrZero(
+                    supabase
+                        .from('movement_assessments')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('coach_id', userId),
+                )) > 0
+            )
+        case 'endurance': {
+            // Perfil cardio del alumno (FC de reposo / marca de 5K) o una semana ya armada.
+            const [withCardio, programCount] = await Promise.all([
+                countOrZero(
+                    supabase
+                        .from('clients')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('coach_id', userId)
+                        .eq('is_archived', false)
+                        .or('ref_5k_time_sec.not.is.null,resting_hr.not.is.null'),
+                ),
+                programs(),
+            ])
+            return withCardio > 0 || programCount > 0
+        }
+        case 'other':
+        case null: {
+            // Panel completo: cuenta cualquiera de los dos artefactos.
+            const [programCount, planCount] = await Promise.all([programs(), nutritionPlans()])
+            return programCount > 0 || planCount > 0
+        }
+        case 'strength':
+        default:
+            return (await programs()) > 0
+    }
+}
+
+/** Stats del alumno de ejemplo: solo las consultas que la persona necesita para sus 3 KPIs. */
+async function loadDemoStats(
+    supabase: DbClient,
+    demoClientId: string,
+    persona: Persona,
+): Promise<DemoStatsRaw> {
+    const needsProgram = persona !== 'nutrition'
+    const needsLogs = persona === 'strength' || persona === 'other' || persona === 'endurance'
+    const needsBestWeight = persona === 'strength' || persona === 'other'
+    const needsMovement = persona === 'rehab'
+    const needsNutrition = persona === 'nutrition'
+
+    const [program, logCount, bestWeight, movementCount, planCount, intakeCount, bodyComp] = await Promise.all([
+        needsProgram
+            ? supabase
+                  .from('workout_programs')
+                  .select('name', { count: 'exact' })
+                  .eq('client_id', demoClientId)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+            : Promise.resolve({ data: null, count: 0 } as { data: { name: string }[] | null; count: number | null }),
+        needsLogs
+            ? countOrZero(
+                  supabase.from('workout_logs').select('id', { count: 'exact', head: true }).eq('client_id', demoClientId),
+              )
+            : Promise.resolve(0),
+        needsBestWeight
+            ? supabase
+                  .from('workout_logs')
+                  .select('weight_kg')
+                  .eq('client_id', demoClientId)
+                  .not('weight_kg', 'is', null)
+                  .order('weight_kg', { ascending: false })
+                  .limit(1)
+            : Promise.resolve({ data: null } as { data: { weight_kg: number | null }[] | null }),
+        needsMovement
+            ? countOrZero(
+                  supabase
+                      .from('movement_assessments')
+                      .select('id', { count: 'exact', head: true })
+                      .eq('client_id', demoClientId),
+              )
+            : Promise.resolve(0),
+        needsNutrition
+            ? countOrZero(
+                  (supabase as unknown as UntypedCountClient)
+                      .from('nutrition_plans_v2')
+                      .select('id', { count: 'exact', head: true })
+                      .eq('client_id', demoClientId),
+              )
+            : Promise.resolve(0),
+        needsNutrition
+            ? countOrZero(
+                  supabase
+                      .from('nutrition_intake_entries')
+                      .select('id', { count: 'exact', head: true })
+                      .eq('client_id', demoClientId),
+              )
+            : Promise.resolve(0),
+        needsNutrition
+            ? supabase
+                  .from('body_composition_measurements')
+                  .select('metrics')
+                  .eq('client_id', demoClientId)
+                  .is('deleted_at', null)
+                  .order('measured_at', { ascending: false })
+                  .limit(1)
+            : Promise.resolve({ data: null } as { data: { metrics: unknown }[] | null }),
+    ])
+
+    const metrics = bodyComp.data?.[0]?.metrics
+    const rawFat =
+        metrics != null && typeof metrics === 'object' && !Array.isArray(metrics)
+            ? (metrics as Record<string, unknown>).bodyFatPercent
+            : null
+
+    return {
+        programCount: program.count ?? 0,
+        programName: program.data?.[0]?.name ?? null,
+        workoutLogCount: logCount,
+        bestWeightKg: bestWeight.data?.[0]?.weight_kg ?? null,
+        movementAssessmentCount: movementCount,
+        nutritionPlanCount: planCount,
+        intakeEntryCount: intakeCount,
+        bodyFatPercent: typeof rawFat === 'number' ? rawFat : null,
+        restingHr: null,
+        ref5kTimeSec: null,
+    }
+}
+
+/**
+ * Datos del dashboard «día 1». Se resuelve EN PARALELO con `getCoachDashboardDataV2` (mismo load
+ * del RSC), nunca encadenado: la guía no puede costarle un segundo al dashboard.
+ */
+export async function getCoachOnboardingV2Data(userId: string): Promise<CoachOnboardingV2Data> {
+    return measureServer('getCoachOnboardingV2Data', async () => {
+        const supabase = await createClient()
+
+        const { data: coachRow } = await supabase
+            .from('coaches')
+            .select(
+                'persona, persona_also_other, full_name, brand_name, instagram_handle, primary_color, use_brand_colors_coach, welcome_message, loader_text, use_custom_loader, loader_icon_mode, neutral_tint, brand_font_key, loader_variant, welcome_modal_enabled, welcome_modal_content, welcome_modal_type, executor_theme, theme_preset_key, login_layout_key, loader_config, logo_url',
+            )
+            .eq('id', userId)
+            .maybeSingle()
+
+        const persona = parsePersona(coachRow?.persona)
+
+        const [demoClientId, viveTuAppRows, hasFirstArtifact, realClients, workoutActivity, intakeActivity] =
+            await Promise.all([
+                getDemoClientId(supabase, userId),
+                supabase
+                    .from('coach_onboarding_events')
+                    .select('id')
+                    .eq('coach_id', userId)
+                    .eq('event_type', 'vive_tu_app_opened')
+                    .limit(1),
+                resolveFirstArtifact(supabase, userId, persona),
+                countActiveStandaloneClients(supabase, userId).catch(() => 0),
+                // El aha pertenece al alumno REAL: el demo trae actividad sembrada y tildaría el
+                // paso 5 el día 1 (de ahí `clients.is_demo = false` en los dos joins).
+                supabase
+                    .from('workout_logs')
+                    .select('id, clients!inner(coach_id, is_demo, is_archived)')
+                    .eq('clients.coach_id', userId)
+                    .eq('clients.is_demo', false)
+                    .eq('clients.is_archived', false)
+                    .limit(1),
+                supabase
+                    .from('nutrition_intake_entries')
+                    .select('id, clients!inner(coach_id, is_demo, is_archived)')
+                    .eq('clients.coach_id', userId)
+                    .eq('clients.is_demo', false)
+                    .eq('clients.is_archived', false)
+                    .limit(1),
+            ])
+
+        let demo: DemoStudentSnapshot | null = null
+        if (demoClientId) {
+            const demoPersona = persona ?? 'other'
+            const [demoRowRes, stats] = await Promise.all([
+                supabase
+                    .from('clients')
+                    .select('id, full_name, resting_hr, ref_5k_time_sec')
+                    .eq('id', demoClientId)
+                    .maybeSingle(),
+                loadDemoStats(supabase, demoClientId, demoPersona),
+            ])
+            const demoRow = demoRowRes.data
+            if (demoRow) {
+                demo = {
+                    clientId: demoRow.id,
+                    fullName: demoRow.full_name,
+                    kpis: buildDemoKpis(demoPersona, {
+                        ...stats,
+                        restingHr: demoRow.resting_hr,
+                        ref5kTimeSec: demoRow.ref_5k_time_sec,
+                    }),
+                }
+            }
+        }
+
+        const brand: CoachBrandDraft = {
+            fullName: coachRow?.full_name ?? '',
+            brandName: coachRow?.brand_name ?? '',
+            instagramHandle: coachRow?.instagram_handle ?? '',
+            primaryColor: coachRow?.primary_color ?? BRAND_PRIMARY_COLOR,
+            useBrandColorsCoach: coachRow?.use_brand_colors_coach !== false,
+            welcomeMessage: coachRow?.welcome_message ?? '',
+            loaderText: coachRow?.loader_text ?? '',
+            useCustomLoader: coachRow?.use_custom_loader === true,
+            loaderIconMode: coachRow?.loader_icon_mode ?? 'eva',
+            neutralTint: coachRow?.neutral_tint === true,
+            brandFontKey: coachRow?.brand_font_key ?? '',
+            loaderVariant: coachRow?.loader_variant ?? 'eva',
+            welcomeModalEnabled: coachRow?.welcome_modal_enabled === true,
+            welcomeModalContent: coachRow?.welcome_modal_content ?? '',
+            welcomeModalType: coachRow?.welcome_modal_type ?? 'text',
+            executorTheme: coachRow?.executor_theme ?? 'coach',
+            themePresetKey: coachRow?.theme_preset_key ?? '',
+            loginLayoutKey: coachRow?.login_layout_key ?? '',
+            loaderConfig: serializeLoaderConfig(parseLoaderConfig(coachRow?.loader_config ?? '')),
+            logoUrl: coachRow?.logo_url ?? null,
+        }
+
+        const hasBrand = hasCustomBrand({
+            logo_url: coachRow?.logo_url ?? null,
+            theme_preset_key: coachRow?.theme_preset_key ?? null,
+            primary_color: coachRow?.primary_color ?? null,
+        })
+
+        return {
+            persona,
+            personaAlsoOther: coachRow?.persona_also_other === true,
+            signals: {
+                hasBrand,
+                viveTuAppOpened: (viveTuAppRows.data?.length ?? 0) > 0,
+                hasFirstArtifact,
+                realClients,
+                realStudentActivity:
+                    (workoutActivity.data?.length ?? 0) > 0 || (intakeActivity.data?.length ?? 0) > 0,
+            },
+            demo,
+            brand,
+            needsBrand: !hasBrand,
+        }
     })
 }

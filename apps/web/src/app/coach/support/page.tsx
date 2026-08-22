@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
 import { SupportForm } from './SupportForm'
 import { HelpCenter } from './_components/HelpCenter'
+import { getPersonaScreenContext } from '../onboarding/persona/_data/persona.queries'
 import { Card } from '@/components/ui/card'
 import { LifeBuoy, Mail, ChevronRight } from 'lucide-react'
 
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 
 const SUPPORT_EMAIL = 'contacto@eva-app.cl'
 
-export default function CoachSupportPage() {
+export default async function CoachSupportPage() {
+  // «Primeros pasos» del Centro de ayuda sigue la persona del coach (onboarding v2).
+  const { persona } = await getPersonaScreenContext()
   return (
     <div className="mx-auto max-w-2xl animate-fade-in px-5 pb-6 md:px-8">
       {/* Inverse hero */}
@@ -56,7 +59,7 @@ export default function CoachSupportPage() {
         Centro de ayuda
       </h2>
       <div className="mb-[18px]">
-        <HelpCenter />
+        <HelpCenter persona={persona} />
       </div>
 
       {/* Enviar un mensaje */}

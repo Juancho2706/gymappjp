@@ -61,7 +61,7 @@ const CATS: Cat[] = [
     { id: 'marca', label: 'Mi Marca', icon: Palette, group: 'Cuenta' },
     { id: 'suscripcion', label: 'Suscripción', icon: CreditCard, group: 'Cuenta' },
     { id: 'modulos', label: 'Módulos', icon: LayoutGrid, group: 'Entrenamiento' },
-    { id: 'funciones', label: 'Funciones', icon: SlidersHorizontal, group: 'Entrenamiento' },
+    { id: 'funciones', label: 'Mi panel', icon: SlidersHorizontal, group: 'Entrenamiento' },
     { id: 'areas', label: 'Áreas del builder', icon: LayoutList, group: 'Entrenamiento' },
     { id: 'importar', label: 'Importar alumnos', icon: Upload, group: 'Entrenamiento', local: true },
     { id: 'apariencia', label: 'Apariencia', icon: Moon, group: 'Preferencias' },

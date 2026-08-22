@@ -2,6 +2,7 @@ import { SupportForm } from '../../support/SupportForm'
 import { HelpCenter } from '../../support/_components/HelpCenter'
 import { Card } from '@/components/ui/card'
 import { LifeBuoy, Mail, ChevronRight } from 'lucide-react'
+import type { Persona } from '@eva/schemas'
 
 const SUPPORT_EMAIL = 'contacto@eva-app.cl'
 
@@ -10,7 +11,7 @@ const SUPPORT_EMAIL = 'contacto@eva-app.cl'
  * screens, embedded WITHOUT onBack" — sin doble back). Mismo contenido que la página
  * /coach/support (que sigue viva como ruta directa para el hub mobile).
  */
-export function SupportPane() {
+export function SupportPane({ persona = null }: { persona?: Persona | null } = {}) {
     return (
         <div className="space-y-[18px]">
             {/* Inverse hero */}
@@ -58,7 +59,7 @@ export function SupportPane() {
                 <h3 className="mb-2.5 font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
                     Centro de ayuda
                 </h3>
-                <HelpCenter />
+                <HelpCenter persona={persona} />
             </div>
 
             {/* Enviar un mensaje */}

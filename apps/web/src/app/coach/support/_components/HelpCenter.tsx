@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
+import { ONBOARDING_STEPS } from '@eva/onboarding'
+import type { Persona } from '@eva/schemas'
 import { Card } from '@/components/ui/card'
 import { BookOpen, ChevronDown, Search } from 'lucide-react'
 
@@ -15,15 +17,20 @@ import { BookOpen, ChevronDown, Search } from 'lucide-react'
 type Guide = { title: string; steps: string[] }
 type Faq = { q: string; a: string }
 
-const GUIDES: Guide[] = [
-    {
+/**
+ * «Primeros pasos» = LOS MISMOS 5 verbos de la guía del dashboard, leídos de `@eva/onboarding`
+ * (onboarding v2, SPEC §6). Antes acá vivía un cuarto copy distinto de los mismos pasos: cinco
+ * redacciones del mismo trabajo (modal, checklist, viñetas, ayuda, correo D+0) que se contradecían
+ * entre sí. Ahora si el copy cambia, cambia en un solo archivo.
+ */
+function firstStepsGuide(persona: Persona | null): Guide {
+    return {
         title: 'Primeros pasos',
-        steps: [
-            'Crea tu cuenta en eva-app.cl y confirma tu correo (plan gratis) o completa el pago (plan pagado).',
-            'Personaliza tu marca en Opciones › Mi Marca: logo, colores y nombre.',
-            'Crea tu primer alumno en Alumnos › Nuevo Alumno y envíale el acceso por WhatsApp o con tu código de invitación.',
-        ],
-    },
+        steps: ONBOARDING_STEPS[persona ?? 'other'].map((step) => `${step.label}. ${step.description}`),
+    }
+}
+
+const GUIDES: Guide[] = [
     {
         title: 'Invitar y gestionar alumnos',
         steps: [
@@ -166,13 +173,22 @@ function matches(q: string, ...fields: string[]) {
     return fields.some((f) => f.toLowerCase().includes(needle))
 }
 
-export function HelpCenter() {
+export function HelpCenter({
+    persona = null,
+}: {
+    /** `coaches.persona`. `null` (o sin pasar) = pasos del panel completo (`other`). */
+    persona?: Persona | null
+} = {}) {
     const [open, setOpen] = useState(false)
     const [tab, setTab] = useState<'guias' | 'faq'>('guias')
     const [query, setQuery] = useState('')
     const [openFaq, setOpenFaq] = useState<number | null>(null)
 
-    const guides = useMemo(() => GUIDES.filter((g) => matches(query, g.title, ...g.steps)), [query])
+    const allGuides = useMemo<Guide[]>(() => [firstStepsGuide(persona), ...GUIDES], [persona])
+    const guides = useMemo(
+        () => allGuides.filter((g) => matches(query, g.title, ...g.steps)),
+        [allGuides, query]
+    )
     const faqs = useMemo(() => FAQS.filter((f) => matches(query, f.q, f.a)), [query])
 
     return (

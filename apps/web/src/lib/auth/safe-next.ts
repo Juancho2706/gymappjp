@@ -108,8 +108,17 @@ export function safeNext(raw: unknown, allowedPrefix: NextPrefix | readonly Next
  * `/coach/onboarding/complete` va en la lista por otro motivo: el proxy la deja pasar sin gates
  * (es el alta OAuth de quien todavía no tiene fila `coaches`). Un `next` apuntando ahí dejaría a
  * un coach existente encerrado en el formulario de alta — callejón sin salida.
+ *
+ * `/coach/onboarding/persona` es la pregunta del primer ingreso (onboarding v2): el layout del coach
+ * manda ahí solo mientras `coaches.persona` es null. Un `next` apuntando ahí devolvería a un coach
+ * que ya respondió a una pantalla que el gate ya no le muestra.
  */
-const COACH_LOGIN_DEFAULT_PATHS = new Set(['/coach', '/coach/dashboard', '/coach/onboarding/complete'])
+const COACH_LOGIN_DEFAULT_PATHS = new Set([
+    '/coach',
+    '/coach/dashboard',
+    '/coach/onboarding/complete',
+    '/coach/onboarding/persona',
+])
 
 /**
  * Saca el `_rsc` que Next pega en las navegaciones RSC: no significa nada al volver del login y
