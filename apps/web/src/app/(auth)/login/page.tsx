@@ -5,11 +5,12 @@ import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { readFailCount, CAPTCHA_THRESHOLD } from '@/lib/auth/fail-counter'
 import { getTurnstileSiteKey } from '@/lib/auth/turnstile'
 import { getAuthErrorMessage } from '@/lib/auth/error-messages'
+import { safeNext } from '@/lib/auth/safe-next'
 import { CoachLoginForm } from './_components/CoachLoginForm'
 import { StudentEntryCard } from '../_components/StudentEntryCard'
 
 interface CoachLoginPageProps {
-    searchParams: Promise<{ error?: string }>
+    searchParams: Promise<{ error?: string; next?: string }>
 }
 
 export default async function CoachLoginPage({ searchParams }: CoachLoginPageProps) {
@@ -18,6 +19,9 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
     const showCaptcha = failCount >= CAPTCHA_THRESHOLD
     const turnstileSiteKey = getTurnstileSiteKey()
     const urlError = getAuthErrorMessage(params.error, 'coach')
+    // Destino pedido por el proxy cuando el coach venía de un link a /coach/** sin sesión
+    // (correo de cupo → /coach/subscription?utm_...). La server action lo revalida igual.
+    const next = safeNext(params.next, '/coach')
 
     return (
         <>
@@ -48,6 +52,7 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
                             urlError={urlError}
                             showCaptcha={showCaptcha}
                             turnstileSiteKey={turnstileSiteKey}
+                            next={next}
                         />
                     </Suspense>
                 </div>

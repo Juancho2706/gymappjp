@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { isAllowedAdminEmail, isAdminMfaEnforced } from '@/lib/admin/admin-gate'
 import { redirect } from 'next/navigation'
 import { LoginSchema } from '@eva/schemas'
+import { safeNext } from '@/lib/auth/safe-next'
 
 export type AdminLoginState = {
     error?: string
@@ -14,13 +15,6 @@ export type AdminLoginState = {
 // distintos permitian enumerar que cuentas existen desde la pantalla del panel (F4 08-05).
 const GENERIC_ERROR = 'Credenciales incorrectas o cuenta sin acceso.'
 
-/** Solo paths internos del panel — un ?next= externo o con esquema es open redirect. */
-function safeNext(raw: FormDataEntryValue | null): string | null {
-    if (typeof raw !== 'string' || !raw.startsWith('/admin')) return null
-    if (raw.startsWith('//') || raw.includes('://')) return null
-    return raw
-}
-
 export async function adminLoginAction(
     _prevState: AdminLoginState,
     formData: FormData
@@ -29,7 +23,8 @@ export async function adminLoginAction(
         email: formData.get('email') as string,
         password: formData.get('password') as string,
     }
-    const next = safeNext(formData.get('next'))
+    // Solo paths internos del panel — un ?next= externo o con esquema es open redirect.
+    const next = safeNext(formData.get('next'), '/admin')
 
     const parsed = LoginSchema.safeParse(raw)
     if (!parsed.success) {

@@ -13,6 +13,12 @@ import {
 
 interface GoogleSignInButtonProps {
     intent: 'login' | 'register'
+    /**
+     * Destino interno ya validado (`safeNext`) para el intent `login`: el coach que llega
+     * desde el correo de cupo tiene que aterrizar en `/coach/subscription?utm_...`, no en el
+     * dashboard. En `register` se ignora (el alta tiene su propio camino).
+     */
+    next?: string | null
 }
 
 type Mode = 'gis' | 'fallback' | 'exchanging'
@@ -35,9 +41,10 @@ function GoogleLogo() {
     )
 }
 
-function FallbackButton({ intent }: GoogleSignInButtonProps) {
+function FallbackButton({ intent, next }: GoogleSignInButtonProps) {
     const label = intent === 'register' ? 'Registrarse con Google' : 'Continuar con Google'
-    const onClick = intent === 'register' ? startCoachGoogleRegistration : startCoachGoogleLogin
+    const onClick =
+        intent === 'register' ? startCoachGoogleRegistration : () => startCoachGoogleLogin(next)
 
     return (
         <button
@@ -52,16 +59,16 @@ function FallbackButton({ intent }: GoogleSignInButtonProps) {
     )
 }
 
-export function GoogleSignInButton({ intent }: GoogleSignInButtonProps) {
+export function GoogleSignInButton({ intent, next }: GoogleSignInButtonProps) {
     // No client id → straight to the legacy redirect flow (safe deploy before env is set).
     if (!clientId) {
-        return <FallbackButton intent={intent} />
+        return <FallbackButton intent={intent} next={next} />
     }
 
-    return <GisButton intent={intent} clientId={clientId} />
+    return <GisButton intent={intent} next={next} clientId={clientId} />
 }
 
-function GisButton({ intent, clientId }: GoogleSignInButtonProps & { clientId: string }) {
+function GisButton({ intent, next, clientId }: GoogleSignInButtonProps & { clientId: string }) {
     const [mode, setMode] = useState<Mode>('gis')
     const [error, setError] = useState<string | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
@@ -97,7 +104,7 @@ function GisButton({ intent, clientId }: GoogleSignInButtonProps & { clientId: s
                 supabase,
                 userId: data.user.id,
                 intent,
-                next: intent === 'login' ? '/coach/dashboard' : null,
+                next: intent === 'login' ? (next ?? '/coach/dashboard') : null,
             })
             window.location.replace(url)
         }
@@ -148,10 +155,10 @@ function GisButton({ intent, clientId }: GoogleSignInButtonProps & { clientId: s
         return () => {
             cancelled = true
         }
-    }, [intent, clientId])
+    }, [intent, next, clientId])
 
     if (mode === 'fallback') {
-        return <FallbackButton intent={intent} />
+        return <FallbackButton intent={intent} next={next} />
     }
 
     // The GIS container must stay mounted while exchanging: renderButton drew into

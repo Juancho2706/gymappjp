@@ -12,6 +12,7 @@ import {
 } from '@/lib/student-access'
 import { isStudentAccessGateEnabled, resolveStudentAccessForCoach } from '@/lib/student-access.server'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
+import { buildCoachLoginNext, pickUtmParams, safeNext } from '@/lib/auth/safe-next'
 import { listUserWorkspaces, pickPreferredWorkspace } from '@/services/auth/workspace.service'
 import { findWorkspacePreference } from '@/infrastructure/db/workspace.repository'
 import { canAccessWorkspacePath, defaultWorkspaceHome } from '@/services/auth/workspace-route-guard.service'
@@ -424,9 +425,25 @@ async function proxyInner(request: NextRequest) {
     // 1. PROTECT /coach/* routes (only for coaches)
     // ============================================================
     if (pathname.startsWith('/coach')) {
+        // Sin sesión: se conserva el DESTINO en ?next= (mismo patrón que /admin arriba).
+        // El correo de cupo manda a /coach/subscription?utm_source=cap_email&...; hasta W3 el
+        // login siempre aterrizaba en el dashboard y el coach nunca veía el checkout. El query
+        // original viaja DENTRO del next (`/coach/subscription?utm_...`), así que los utm_*
+        // reaparecen en la URL final y los toma el $pageview del aterrizaje.
+        // Validado de ida y de vuelta por safeNext: nunca un destino fuera de /coach.
         if (!user) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/login'
+            redirectUrl.search = ''
+            const nextParam = buildCoachLoginNext(pathname, request.nextUrl.search)
+            if (nextParam) redirectUrl.searchParams.set('next', nextParam)
+            // El `next` lleva el query completo para el ATERRIZAJE; estos `utm_*` duplicados a
+            // nivel top son para el `$pageview` del LOGIN, que solo ve su propia URL. Sin ellos,
+            // el coach que abre el correo, mira el login y se va queda sin atribución en PostHog
+            // (abandono medible).
+            for (const [key, value] of pickUtmParams(request.nextUrl.search)) {
+                redirectUrl.searchParams.set(key, value)
+            }
             return NextResponse.redirect(redirectUrl)
         }
 
@@ -1248,6 +1265,16 @@ async function proxyInner(request: NextRequest) {
         const coach = coachData as Pick<Coach, 'id'> | null
 
         if (coach) {
+            // Coach que ya tenía sesión y aterriza en /login?next=/coach/... (p. ej. volviendo
+            // atrás después del correo de cupo): manda el destino pedido. Sin esto el ?next=
+            // quedaba pegado como query del dashboard y el destino se perdía igual.
+            const requestedNext = pathname.startsWith('/login')
+                ? safeNext(request.nextUrl.searchParams.get('next'), '/coach')
+                : null
+            if (requestedNext) {
+                return NextResponse.redirect(new URL(requestedNext, request.url))
+            }
+
             const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = redirectPath

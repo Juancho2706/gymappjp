@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { Shield } from 'lucide-react'
 import { isAllowedAdminEmail } from '@/lib/admin/admin-gate'
+import { safeNext } from '@/lib/auth/safe-next'
 import { AdminLoginForm } from './AdminLoginForm'
 import { getAdminLoginUser } from './_data/login.queries'
 
@@ -15,10 +16,11 @@ interface Props {
 
 export default async function AdminLoginPage({ searchParams }: Props) {
     const [user, sp] = await Promise.all([getAdminLoginUser(), searchParams])
+    const next = safeNext(sp.next, '/admin')
 
     // Already logged in and is admin → el proxy decide si falta MFA.
     if (user?.email && (await isAllowedAdminEmail(user.email))) {
-        redirect(sp.next?.startsWith('/admin') ? sp.next : '/admin/dashboard')
+        redirect(next ?? '/admin/dashboard')
     }
 
     return (
@@ -33,7 +35,7 @@ export default async function AdminLoginPage({ searchParams }: Props) {
                         Acceso restringido a administradores de EVA.
                     </p>
                 </div>
-                <AdminLoginForm next={sp.next} />
+                <AdminLoginForm next={next ?? undefined} />
             </div>
         </div>
     )

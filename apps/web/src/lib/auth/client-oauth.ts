@@ -2,12 +2,17 @@
 
 import { createClient } from '@/lib/supabase/client'
 
-export async function startCoachGoogleLogin() {
+/**
+ * @param next destino interno ya validado (`safeNext`) — p. ej. `/coach/subscription?utm_...`
+ *             cuando el coach llegó desde el correo de cupo. Sin `next`, el dashboard.
+ */
+export async function startCoachGoogleLogin(next?: string | null) {
     const supabase = createClient()
     const origin = window.location.origin
+    const target = next ?? '/coach/dashboard'
     await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${origin}/auth/callback?next=/coach/dashboard` },
+        options: { redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(target)}` },
     })
 }
 

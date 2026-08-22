@@ -19,11 +19,13 @@ interface CoachLoginFormProps {
     urlError?: string | null
     showCaptcha: boolean
     turnstileSiteKey: string | null
+    /** Destino interno ya validado (`safeNext`) que pidió el proxy; null = flujo normal. */
+    next?: string | null
 }
 
 const initialState: LoginState = {}
 
-export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: CoachLoginFormProps) {
+export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey, next }: CoachLoginFormProps) {
     // isPending: el submit va por handleSubmit + startTransition(formAction), sin
     // `<form action>`, asi que useFormStatus dentro del boton nunca se entera del
     // envio; el pending real vive en esta transicion (React 19, 3er valor).
@@ -43,6 +45,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
         fd.set('email', data.email)
         fd.set('password', data.password)
         if (data.captchaToken) fd.set('cf-turnstile-response', data.captchaToken)
+        if (next) fd.set('next', next)
         React.startTransition(() => formAction(fd))
     }
 
@@ -111,7 +114,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
                 <div className="flex-1 h-px bg-border-subtle" />
             </div>
 
-            <GoogleSignInButton intent="login" />
+            <GoogleSignInButton intent="login" next={next} />
 
             <div className="pt-6 text-center text-sm text-text-muted">
                 ¿No tienes cuenta?{' '}

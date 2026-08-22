@@ -51,11 +51,32 @@ vi.mock('@/lib/auth/post-login-redirect.server', () => ({
 
 import { loginAction } from './_actions/login.actions'
 
-function buildFormData(email: string, password: string) {
+function buildFormData(email: string, password: string, next?: string) {
   const formData = new FormData()
   formData.set('email', email)
   formData.set('password', password)
+  if (next !== undefined) formData.set('next', next)
   return formData
+}
+
+function buildCoachSupabase() {
+  const coachQuery = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'u1' } }),
+  }
+
+  return {
+    auth: {
+      signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
+    },
+    from: vi.fn((table: string) => {
+      if (table === 'coaches') return coachQuery
+      throw new Error(`Unexpected table: ${table}`)
+    }),
+  }
 }
 
 describe('loginAction', () => {
@@ -135,5 +156,39 @@ describe('loginAction', () => {
     expect(revalidatePathMock).toHaveBeenCalledWith('/coach/dashboard')
     expect(redirectMock).toHaveBeenCalledWith('/coach/dashboard')
     expect(clearFailCountMock).toHaveBeenCalledWith('coach')
+  })
+
+  // W3: el correo de cupo manda a /coach/subscription?utm_...; el proxy lo guarda en ?next=
+  // y el login tiene que aterrizar ahí, con los utm_* intactos.
+  it('honors a safe ?next= with its utm_* query', async () => {
+    createClientMock.mockResolvedValue(buildCoachSupabase())
+
+    const next = '/coach/subscription?utm_source=cap_email&utm_medium=email&utm_campaign=sweep'
+
+    await expect(
+      loginAction({}, buildFormData('coach@example.com', 'secret123', next))
+    ).rejects.toThrow(`REDIRECT:${next}`)
+
+    expect(redirectMock).toHaveBeenCalledWith(next)
+    // revalidatePath quiere la ruta sola, sin query.
+    expect(revalidatePathMock).toHaveBeenCalledWith('/coach/subscription')
+    expect(resolvePostLoginRedirectMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['absoluta', 'https://evil.tld'],
+    ['protocol-relative', '//evil.tld'],
+    ['fuera del arbol /coach', '/admin/dashboard'],
+    ['prefijo solo parecido', '/coachx/subscription'],
+    ['traversal codificado', '/coach/..%2Fadmin'],
+  ])('ignores a malicious ?next= (%s) and falls back to the default redirect', async (_label, next) => {
+    createClientMock.mockResolvedValue(buildCoachSupabase())
+
+    await expect(
+      loginAction({}, buildFormData('coach@example.com', 'secret123', next))
+    ).rejects.toThrow('REDIRECT:/coach/dashboard')
+
+    expect(redirectMock).toHaveBeenCalledWith('/coach/dashboard')
+    expect(resolvePostLoginRedirectMock).toHaveBeenCalledTimes(1)
   })
 })

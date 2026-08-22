@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
 import { type NextRequest } from 'next/server'
+import { AUTH_CALLBACK_NEXT_PREFIXES, safeNext } from '@/lib/auth/safe-next'
 
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
     // Password-recovery links set next=/reset-password; forward it so the exchange lands
-    // the user on the reset form instead of treating it as a plain login.
-    const next = searchParams.get('next')
+    // the user on the reset form instead of treating it as a plain login. El coach que llega
+    // del correo de cupo trae `/coach/...` por el mismo camino (W3).
+    //
+    // Se valida acá, ANTES de las dos ramas: lo que se reenvía al exchange es exactamente lo que
+    // el exchange puede consumir. Antes la rama con `?code=` reenviaba el valor crudo y la
+    // validación quedaba solo del otro lado.
+    const next = safeNext(searchParams.get('next'), AUTH_CALLBACK_NEXT_PREFIXES)
 
     if (code) {
         const exchangeUrl = new URL(`${origin}/auth/exchange`)
@@ -31,9 +37,8 @@ export async function GET(request: NextRequest) {
     // El fragmento SOBREVIVE a los redirects (el navegador lo reengancha cuando el `Location` no
     // trae uno propio), asi que alcanza con mandar al destino real: ahi `detectSessionInUrl` del
     // cliente lo levanta, persiste la sesion en cookies y el server action de reset la encuentra.
-    // `next` ya viene acotado a rutas internas por quien lo emite; se revalida igual.
-    const isSafeNext = Boolean(next && next.startsWith('/') && !next.startsWith('//'))
-    if (isSafeNext) {
+    // `next` ya viene acotado a rutas internas por quien lo emite; se revalidó arriba igual.
+    if (next) {
         const target = new URL(`${origin}${next}`)
         // Camino `token_hash` (plantillas migradas a `{{ .TokenHash }}`): se reenvia para que el
         // destino pueda canjearlo con `verifyOtp` sin depender del fragmento.

@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { CoachLoginSchema } from '@eva/schemas'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
+import { safeNext } from '@/lib/auth/safe-next'
 import { jitter } from '@/lib/auth/timing'
 import { readFailCount, incrementFailCount, clearFailCount, CAPTCHA_THRESHOLD } from '@/lib/auth/fail-counter'
 import { verifyTurnstile } from '@/lib/auth/turnstile'
@@ -26,6 +27,10 @@ export async function loginAction(
         password: formData.get('password') as string,
         captchaToken: (formData.get('cf-turnstile-response') as string) || undefined,
     }
+
+    // Destino pedido (proxy → /login?next=/coach/subscription?utm_...). Se revalida acá:
+    // el campo llega del cliente, así que nunca se confía en la validación de la page.
+    const next = safeNext(formData.get('next'), '/coach')
 
     const parsed = CoachLoginSchema.safeParse(raw)
     if (!parsed.success) {
@@ -79,8 +84,9 @@ export async function loginAction(
 
     await clearFailCount('coach')
 
-    const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
+    const redirectPath = next ?? (await resolvePostLoginRedirect(supabase, user.id))
 
-    revalidatePath(redirectPath)
+    // revalidatePath quiere la ruta sola: el next puede traer query (`?utm_source=cap_email`).
+    revalidatePath(redirectPath.split(/[?#]/)[0])
     redirect(redirectPath)
 }
