@@ -310,7 +310,9 @@ export async function POST(request: NextRequest) {
     })
     if (!identity.ok) console.error('createClientIdentity (non-fatal, mobile):', identity.error)
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
+    // Sin barra final: el valor de Vercel puede traerla y el link le llegaba al alumno como
+    // `https://www.eva-app.cl//c/<code>/login` (reporte del owner 22-08).
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL)?.replace(/\/+$/, '')
     const publicIdentifier = getCoachPublicIdentifier(coach)
     const loginPath = workspace.type === 'coach_team' ? `/t/${workspace.teamSlug}/login` : `/c/${publicIdentifier}/login`
     const loginUrl = appUrl ? `${appUrl}${loginPath}` : `https://app.tu-dominio.com${loginPath}`

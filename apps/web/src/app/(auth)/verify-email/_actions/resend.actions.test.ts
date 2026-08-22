@@ -108,7 +108,7 @@ const { state, steps, auditInserts, getUserByIdMock, coachLookupMock, rateLimitA
     harness
 
 const healMock = vi.hoisted(() =>
-    vi.fn(async () => ({ activated: false, reason: 'not_pending' }) as { activated: boolean; reason?: string })
+    vi.fn(async (_input: { userId: string }) => ({ activated: false, reason: 'not_pending' }) as { activated: boolean; reason?: string })
 )
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => harness.supabaseStub }))

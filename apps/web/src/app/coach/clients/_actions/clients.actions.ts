@@ -230,7 +230,9 @@ export async function createClientAction(
         }
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
+    // Sin barra final: el valor de Vercel puede traerla y el link le llegaba al alumno como
+    // `https://www.eva-app.cl//c/<code>/login` (reporte del owner 22-08).
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL)?.replace(/\/+$/, '')
     // Contexto team: el alumno entra por /t/[team]/login con la marca del TEAM (no la personal).
     let loginPath: string
     let emailBrandName = coach.brand_name

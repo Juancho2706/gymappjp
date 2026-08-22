@@ -80,7 +80,7 @@ const harness = vi.hoisted(() => {
 const { state, auditInserts, getUserByIdMock, coachLookupMock, resendMock } = harness
 
 const healMock = vi.hoisted(() =>
-    vi.fn(async () => ({ activated: false, reason: 'not_pending' }) as { activated: boolean; reason?: string })
+    vi.fn(async (_input: { userId: string }) => ({ activated: false, reason: 'not_pending' }) as { activated: boolean; reason?: string })
 )
 
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
