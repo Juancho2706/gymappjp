@@ -1,4 +1,5 @@
-import { Linking } from 'react-native'
+import { Alert, Linking } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ApiError, apiFetch } from './api'
 import { isStoreSafeUrl } from './store-compliance'
 
@@ -71,6 +72,141 @@ export async function openViveTuApp(): Promise<ViveTuAppOutcome> {
     }
 
     return { ok: true, demoName: response.demoName }
+}
+
+// ── «Así la ve tu alumno»: explicar UNA vez antes de saltar al navegador ─────────────────────
+
+/**
+ * Hallazgo 4 del QA del owner (2026-08-22): «"Ver mi app" manda a una versión web de un alumno de
+ * prueba, no sé si está bien». Estaba bien —es la decisión documentada en el SPEC §5 y en TASKS
+ * F5.2— pero la app no lo decía: el coach tocaba un botón dentro de la app y aterrizaba de golpe
+ * en el navegador, logueado como otra persona. Eso se lee como un bug.
+ *
+ * Así que antes del salto se explica, y se explica UNA vez por coach: qué se abre, por qué en el
+ * navegador y cómo volver. Después el botón abre directo — un aviso que se repite deja de leerse.
+ *
+ * Se recuerda con AsyncStorage y no en el servidor a propósito: es una preferencia de esta app en
+ * este teléfono, no un hecho del onboarding. Si el coach reinstala, vuelve a ver el aviso una vez;
+ * eso es correcto, porque también es la primera vez que hace el salto en ese teléfono.
+ */
+const VIVE_TU_APP_EXPLAINED_PREFIX = 'eva.vive-tu-app.explained.v1:'
+
+/** Clave por coach. Con prefijo versionado: si el copy cambia de fondo, se sube la v y se re-explica. */
+export function viveTuAppExplainedKey(coachId: string): string {
+    return `${VIVE_TU_APP_EXPLAINED_PREFIX}${coachId}`
+}
+
+/** ¿Toca explicar? Solo el sello exacto apaga el aviso: cualquier otra cosa (null, basura de una
+ * versión vieja, un error de lectura que degradó a null) se trata como «todavía no lo vio». */
+export function shouldExplainViveTuApp(stored: string | null | undefined): boolean {
+    return stored !== 'true'
+}
+
+export type ViveTuAppExplainer = {
+    title: string
+    message: string
+    cancelLabel: string
+    confirmLabel: string
+}
+
+/**
+ * Copy del aviso. Puro y exportado para poder pinnearlo: las tres cosas que el coach necesita
+ * saber (se abre en el navegador · con SU marca · su sesión de coach no se pierde) tienen que
+ * estar sí o sí, y el nombre del demo va tanto en el título como en el botón para que el salto no
+ * sorprenda.
+ */
+export function viveTuAppExplainer(input: { demoName: string; noun: string }): ViveTuAppExplainer {
+    const demoName = input.demoName.trim() === '' ? 'tu alumno de ejemplo' : input.demoName.trim()
+    const noun = input.noun.trim() === '' ? 'alumno' : input.noun.trim()
+    return {
+        title: `Así la ve ${demoName}`,
+        message:
+            `Se abre en el navegador de tu teléfono con tu logo y tu color, tal como la vería tu ${noun}. ` +
+            'Tu sesión de coach sigue acá en la app: cuando termines, vuelve con el botón atrás.',
+        cancelLabel: 'Cancelar',
+        confirmLabel: `Abrir como ${demoName}`,
+    }
+}
+
+export type ViveTuAppFlowOutcome =
+    | { status: 'opened'; demoName: string }
+    | { status: 'cancelled' }
+    | { status: 'error'; error: string }
+
+/** Almacén del sello. Inyectable para poder probar el flujo sin AsyncStorage. */
+export type ViveTuAppExplainedStore = {
+    getItem: (key: string) => Promise<string | null>
+    setItem: (key: string, value: string) => Promise<void>
+}
+
+const asyncStorageStore: ViveTuAppExplainedStore = {
+    getItem: (key) => AsyncStorage.getItem(key),
+    setItem: async (key, value) => {
+        await AsyncStorage.setItem(key, value)
+    },
+}
+
+/** Confirmación por defecto: un Alert nativo. Se resuelve `false` si el coach lo descarta. */
+function alertConfirm(explainer: ViveTuAppExplainer): Promise<boolean> {
+    return new Promise((resolve) => {
+        Alert.alert(
+            explainer.title,
+            explainer.message,
+            [
+                { text: explainer.cancelLabel, style: 'cancel', onPress: () => resolve(false) },
+                { text: explainer.confirmLabel, onPress: () => resolve(true) },
+            ],
+            // Android deja descartar el diálogo tocando afuera: sin `onDismiss` la promesa queda
+            // colgada y el botón se quedaría en «Abriendo…» para siempre.
+            { cancelable: true, onDismiss: () => resolve(false) },
+        )
+    })
+}
+
+/**
+ * El camino completo del botón «Ver como {demo}»: explicar (la primera vez) y abrir.
+ *
+ * Lo usa la guía (`app/coach/guia.tsx`) y lo va a usar el builder cuando tenga su propia entrada:
+ * el aviso y el sello viven acá para que las dos superficies cuenten lo mismo y compartan el
+ * «una sola vez».
+ *
+ * Sin `coachId` (foto del panel todavía sin cargar) se explica igual pero no se sella: mejor
+ * repetir el aviso que sellarlo contra una clave que no identifica a nadie.
+ */
+export async function openViveTuAppGuided(input: {
+    coachId: string | null
+    demoName: string
+    noun: string
+    confirm?: (explainer: ViveTuAppExplainer) => Promise<boolean>
+    store?: ViveTuAppExplainedStore
+}): Promise<ViveTuAppFlowOutcome> {
+    const store = input.store ?? asyncStorageStore
+    const confirm = input.confirm ?? alertConfirm
+    const key = input.coachId == null ? null : viveTuAppExplainedKey(input.coachId)
+
+    let stored: string | null = null
+    if (key != null) {
+        try {
+            stored = await store.getItem(key)
+        } catch {
+            stored = null
+        }
+    }
+
+    if (shouldExplainViveTuApp(stored)) {
+        const accepted = await confirm(viveTuAppExplainer({ demoName: input.demoName, noun: input.noun }))
+        if (!accepted) return { status: 'cancelled' }
+        if (key != null) {
+            try {
+                await store.setItem(key, 'true')
+            } catch {
+                // Que no se pueda sellar no puede impedir el salto: peor caso, se explica de nuevo.
+            }
+        }
+    }
+
+    const result = await openViveTuApp()
+    return result.ok ? { status: 'opened', demoName: result.demoName } : { status: 'error', error: result.error }
 }
 
 /** Borra el alumno de ejemplo y todo lo que se sembró con él. Idempotente en el servidor. */

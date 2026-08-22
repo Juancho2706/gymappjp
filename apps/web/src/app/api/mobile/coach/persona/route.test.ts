@@ -65,10 +65,25 @@ vi.mock('@/services/billing/capacity.service', () => ({
 }))
 
 const applyCoachPersona = vi.fn(async (..._a: unknown[]) => ({ ok: true, demoClientId: 'demo-1' }) as unknown)
+const saveCoachPersonaMock = vi.fn(async (..._a: unknown[]) => ({ ok: true }) as unknown)
+const writePersonaDomainPrefs = vi.fn(async (..._a: unknown[]) => ({ ok: true }) as unknown)
+const recordOnboardingEvent = vi.fn(async (..._a: unknown[]) => undefined)
+const readCoachPersonaMock = vi.fn(
+    async (..._a: unknown[]) => ({ persona: 'strength', alsoOther: false, personaSetAt: null }) as unknown,
+)
 vi.mock('@/services/coach/persona.service', async (importOriginal) => ({
     // Los resolvers PUROS del gate se usan de verdad: lo que se aísla es la escritura.
     ...(await importOriginal<typeof import('@/services/coach/persona.service')>()),
     applyCoachPersona: (...a: unknown[]) => applyCoachPersona(...a),
+    saveCoachPersona: (...a: unknown[]) => saveCoachPersonaMock(...a),
+    writePersonaDomainPrefs: (...a: unknown[]) => writePersonaDomainPrefs(...a),
+    recordOnboardingEvent: (...a: unknown[]) => recordOnboardingEvent(...a),
+    readCoachPersona: (...a: unknown[]) => readCoachPersonaMock(...a),
+}))
+
+const capturePostHogServerEvent = vi.fn(async (..._a: unknown[]) => undefined)
+vi.mock('@/lib/posthog/server-capture', () => ({
+    capturePostHogServerEvent: (...a: unknown[]) => capturePostHogServerEvent(...a),
 }))
 
 let mutationCtx: unknown = null
@@ -111,6 +126,9 @@ beforeEach(() => {
         created_at: NEW_COACH_CREATED_AT,
     }
     applyCoachPersona.mockResolvedValue({ ok: true, demoClientId: 'demo-1' })
+    saveCoachPersonaMock.mockResolvedValue({ ok: true })
+    writePersonaDomainPrefs.mockResolvedValue({ ok: true })
+    readCoachPersonaMock.mockResolvedValue({ persona: 'strength', alsoOther: false, personaSetAt: null })
     mutationCtx = { admin: ADMIN, userDb: USER_DB, userId: COACH_ID, scope: { type: 'standalone' } }
 })
 
@@ -260,5 +278,85 @@ describe('POST /api/mobile/coach/persona', () => {
             error: 'No pudimos guardar tu elección. Inténtalo de nuevo.',
             code: 'PERSONA_SAVE_FAILED',
         })
+    })
+})
+
+/**
+ * Camino «Opciones › Mi panel» de RN (W8.2.2). Lo distingue la PRESENCIA de `reorderPanel`:
+ * ahí la especialidad es reversible y el panel NO se reordena salvo que el coach lo pida.
+ */
+describe('POST /api/mobile/coach/persona — camino «Mi panel»', () => {
+    it('reorderPanel:false guarda la persona y NO re-siembra los dominios', async () => {
+        const res = await POST(postReq({ persona: 'nutrition', alsoOther: true, reorderPanel: false }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true, demoClientId: null, reordered: false })
+        expect(saveCoachPersonaMock).toHaveBeenCalledWith(USER_DB, COACH_ID, 'nutrition', true)
+        expect(writePersonaDomainPrefs).not.toHaveBeenCalled()
+        // «Mi panel» NO siembra ni toca el alumno de ejemplo: eso es otra acción, con otro botón.
+        expect(applyCoachPersona).not.toHaveBeenCalled()
+    })
+
+    it('reorderPanel:true re-siembra los 5 dominios con la matriz de la persona', async () => {
+        const res = await POST(postReq({ persona: 'endurance', reorderPanel: true }))
+        expect(await res.json()).toEqual({ ok: true, demoClientId: null, reordered: true })
+        expect(writePersonaDomainPrefs).toHaveBeenCalledWith(USER_DB, COACH_ID, 'endurance', false)
+    })
+
+    it('`other` no tiene segunda pregunta: alsoOther se normaliza a false', async () => {
+        await POST(postReq({ persona: 'other', alsoOther: true, reorderPanel: false }))
+        expect(saveCoachPersonaMock).toHaveBeenCalledWith(USER_DB, COACH_ID, 'other', false)
+    })
+
+    it('sigue rechazando a un coach administrado por org/team', async () => {
+        mutationCtx = { admin: ADMIN, userDb: USER_DB, userId: COACH_ID, scope: { type: 'team', teamId: 't-1' } }
+        const res = await POST(postReq({ persona: 'strength', reorderPanel: false }))
+        expect(res.status).toBe(403)
+        expect(saveCoachPersonaMock).not.toHaveBeenCalled()
+    })
+
+    it('emite persona_selected con surface rn, source mi_panel y si hubo cambio', async () => {
+        await POST(postReq({ persona: 'rehab', reorderPanel: true }))
+        expect(recordOnboardingEvent).toHaveBeenCalledWith(ADMIN, {
+            coachId: COACH_ID,
+            eventType: 'persona_selected',
+            metadata: {
+                persona: 'rehab',
+                alsoOther: false,
+                surface: 'rn',
+                source: 'mi_panel',
+                changed: true,
+                reordered: true,
+            },
+        })
+        expect(capturePostHogServerEvent).toHaveBeenCalledWith({
+            event: 'persona_selected',
+            distinctId: COACH_ID,
+            properties: { persona: 'rehab', also_other: false, surface: 'rn', source: 'mi_panel' },
+        })
+    })
+
+    it('500 si la persona no se pudo guardar', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        saveCoachPersonaMock.mockResolvedValue({ ok: false, error: 'rls' })
+        const res = await POST(postReq({ persona: 'strength', reorderPanel: false }))
+        expect(res.status).toBe(500)
+        expect((await res.json()).code).toBe('PERSONA_SAVE_FAILED')
+    })
+
+    it('500 propio si la persona quedó pero el reorden falló (el copy lo dice)', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        writePersonaDomainPrefs.mockResolvedValue({ ok: false, error: 'rls' })
+        const res = await POST(postReq({ persona: 'strength', reorderPanel: true }))
+        expect(res.status).toBe(500)
+        expect(await res.json()).toEqual({
+            error: 'Guardamos tu especialidad, pero no pudimos reordenar el panel. Inténtalo de nuevo.',
+            code: 'PERSONA_REORDER_FAILED',
+        })
+    })
+
+    it('sin `reorderPanel` sigue siendo el primer ingreso (núcleo completo)', async () => {
+        await POST(postReq({ persona: 'strength' }))
+        expect(applyCoachPersona).toHaveBeenCalledTimes(1)
+        expect(saveCoachPersonaMock).not.toHaveBeenCalled()
     })
 })

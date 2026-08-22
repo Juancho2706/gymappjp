@@ -5,6 +5,8 @@ import {
     ONBOARDING_STEPS,
     ONBOARDING_STEP_KEYS,
     ONBOARDING_TOTAL_STEPS,
+    RN_FIRST_STEP_PARAM,
+    RN_FIRST_STEP_QUERY,
     TEMPLATE_CATALOG,
     isOnboardingComplete,
     nextStep,
@@ -176,12 +178,41 @@ describe('@eva/onboarding — resolveHref / resolveRnRoute', () => {
         expect(resolveRnRoute(brand, { demoClientId: null })).toBe('/coach/settings/brand')
         const invite = ONBOARDING_STEPS.strength[3]
         expect(resolveHref(invite, { demoClientId: null })).toBe('/coach/clients?invite=1')
-        expect(resolveRnRoute(invite, { demoClientId: null })).toBe('/coach/(tabs)/clientes')
+        expect(resolveRnRoute(invite, { demoClientId: null })).toBe('/coach/(tabs)/clientes?invite=1')
     })
 
     it('el id del demo viaja codificado', () => {
         const step = ONBOARDING_STEPS.rehab[2]
         expect(resolveHref(step, { demoClientId: 'a b' })).toBe('/coach/movement/a%20b')
+    })
+
+    it('el paso 3 llega a RN marcado como entrada guiada (?primera=1) y la web NO cambia', () => {
+        for (const persona of PERSONAS) {
+            const step = ONBOARDING_STEPS[persona][2]
+            expect({ persona, marked: (step.rnRoute ?? '').includes(RN_FIRST_STEP_QUERY) }).toEqual({
+                persona,
+                marked: true,
+            })
+            // La web resuelve el template-first con su propio vacío: su href no lleva la marca.
+            expect(step.webHref ?? '').not.toContain(RN_FIRST_STEP_PARAM)
+        }
+    })
+
+    it('resolveRnRoute conserva la marca al resolver el demo', () => {
+        const resolved = resolveRnRoute(ONBOARDING_STEPS.nutrition[2], { demoClientId: 'demo-1' })
+        expect(resolved).toBe(`/coach/nutrition-v2/editor/demo-1${RN_FIRST_STEP_QUERY}`)
+        expect(resolveRnRoute(ONBOARDING_STEPS.strength[2], { demoClientId: null })).toBe(
+            `/coach/(tabs)/builder${RN_FIRST_STEP_QUERY}`,
+        )
+    })
+
+    it('ningún paso que NO sea el 3 arrastra la marca de entrada guiada', () => {
+        for (const persona of PERSONAS) {
+            ONBOARDING_STEPS[persona].forEach((step, index) => {
+                if (index === 2) return
+                expect(step.rnRoute ?? '').not.toContain(RN_FIRST_STEP_PARAM)
+            })
+        }
     })
 
     it('el demo vacío se trata como ausente', () => {

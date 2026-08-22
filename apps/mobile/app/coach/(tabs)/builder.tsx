@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDownUp, CalendarClock, Dumbbell, LayoutGrid, LayoutTemplate, List, Plus, Search, SearchX } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
@@ -21,6 +21,9 @@ import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChr
 import { themedIcon, type ThemedIcon } from '../../../components/coach/programs/themed-icon'
 import { ProgramRow } from '../../../components/coach/programs/ProgramRow'
 import { ProgramPreviewCard } from '../../../components/coach/programs/ProgramPreviewCard'
+import { FirstTemplateSheet } from '../../../components/coach/FirstTemplateSheet'
+import { postCoachOnboardingEvent, useCoachOnboarding } from '../../../lib/coach-dashboard'
+import { builderParamsAfterTemplate, resolveGuidedEntry } from '../../../lib/templates'
 import { AssignTemplateForm } from '../../../components/coach/programs/AssignTemplateForm'
 import { DuplicateForm } from '../../../components/coach/programs/DuplicateForm'
 import {
@@ -70,6 +73,15 @@ export default function BuilderScreen() {
   const { resolvedScheme } = useTheme()
   const router = useRouter()
   const workspace = useWorkspace()
+  // Paso 3 de la guía: la ruta llega marcada con `?primera=1` (`RN_FIRST_STEP_PARAM` de
+  // @eva/onboarding; el literal se repite acá porque Expo Router tipa los params por nombre).
+  const { primera } = useLocalSearchParams<{ primera?: string }>()
+  const onboarding = useCoachOnboarding()
+  const demoClientId = onboarding?.onboardingV2.demoClientId ?? null
+  const demoName = onboarding?.onboardingV2.demoName ?? null
+  const [firstTemplateOpen, setFirstTemplateOpen] = useState(false)
+  // La marca se consume UNA vez: sin esto, volver al tab desde el builder reabriría la sheet.
+  const guidedConsumedRef = useRef(false)
   const [programs, setPrograms] = useState<ProgramItem[]>([])
   const [clients, setClients] = useState<ClientLite[]>([])
   const [loading, setLoading] = useState(true)
@@ -160,8 +172,44 @@ export default function BuilderScreen() {
     )
   }, [programs, search, filterType, filterStatus, filterStructure, filterPhases, sortKey])
 
+  /**
+   * Entrada guiada del paso 3 (`?primera=1`), hallazgo 5 del QA del owner 22-08: hasta ahora la
+   * guía dejaba al coach en la biblioteca sin decirle qué hacer. Con la marca en la ruta y el
+   * alumno de ejemplo sembrado se abre la sheet «Tu primera rutina para {demo}».
+   *
+   * Sin demo (rama `other`, o el coach lo borró) NO se abre nada y el tab se comporta como
+   * siempre: la sheet arma sobre alguien, y el paso 3 sin alumno no tiene sujeto.
+   *
+   * El parámetro se limpia apenas se consume para que volver desde el lienzo no lo reabra — pero
+   * NO antes de que la foto del panel esté publicada: en un arranque en frío o por deep link el
+   * primer render llega sin snapshot, y consumir ahí quemaba el paso 3 en silencio (la sheet ya no
+   * podía abrir cuando llegaba el `demoClientId`). La decisión vive en `resolveGuidedEntry`.
+   */
+  useEffect(() => {
+    const decision = resolveGuidedEntry({
+      raw: primera,
+      snapshotReady: onboarding != null,
+      hasDemo: demoClientId != null,
+      alreadyConsumed: guidedConsumedRef.current,
+    })
+    if (!decision.consume) return
+    guidedConsumedRef.current = true
+    router.setParams({ primera: '' })
+    if (decision.openSheet) setFirstTemplateOpen(true)
+  }, [primera, onboarding, demoClientId, router])
+
   function openNewTemplate() {
     router.push({ pathname: '/coach/program-builder', params: { mode: 'template' } })
+  }
+
+  /** Lienzo del paso 3: el alumno de ejemplo, la marca guiada y (si se sembró) el programa. */
+  function openGuidedBuilder(programId: string | null) {
+    if (demoClientId == null) return
+    setFirstTemplateOpen(false)
+    router.push({
+      pathname: '/coach/program-builder',
+      params: builderParamsAfterTemplate({ clientId: demoClientId, clientName: demoName, programId }),
+    })
   }
 
   function editProgram(program: ProgramItem) {
@@ -392,6 +440,30 @@ export default function BuilderScreen() {
           )}
         />
       </SafeAreaView>
+
+      {/* Paso 3 de la guía. `demoClientId` no puede ser null acá: el efecto solo abre con demo. */}
+      {demoClientId != null ? (
+        <FirstTemplateSheet
+          open={firstTemplateOpen}
+          demoName={demoName}
+          demoClientId={demoClientId}
+          onClose={() => setFirstTemplateOpen(false)}
+          onApplied={({ templateId, programId }) => {
+            // Telemetría del funnel. El `stepKey` REAL viaja en `metadata.step`: la firma de
+            // `postCoachOnboardingEvent` fija la columna en un valor de la guía v1 (ver
+            // `lib/coach-dashboard.ts`, GUIDE_EVENT_STEP_KEY) aunque el endpoint ya acepta los
+            // step keys v2 — deuda anotada, no se toca desde acá.
+            void postCoachOnboardingEvent('step_completed', {
+              step: 'first_artifact',
+              surface: 'builder',
+              templateId,
+              seeded: programId != null,
+            })
+            openGuidedBuilder(programId)
+          }}
+          onSkip={() => openGuidedBuilder(null)}
+        />
+      ) : null}
 
       <NativeDialog open={!!preview} title={preview?.name ?? 'Vista previa'} onClose={() => setPreview(null)} maxWidth={520}>
         {preview ? (

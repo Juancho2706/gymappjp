@@ -120,13 +120,29 @@ const WEB = {
     invite: '/coach/clients?invite=1',
 } as const
 
+/**
+ * Marca de «entrada guiada» del paso 3 en RN (`?primera=1`).
+ *
+ * La web resuelve el template-first con una PÁGINA propia (el vacío de programas monta
+ * `FirstRoutinePicker` y el builder recibe `?programId=…&primera=1`). RN no tiene ese vacío: el
+ * paso 3 aterriza directo en la pantalla de trabajo, y sin una marca en la URL esa pantalla no
+ * puede saber que el coach viene de la guía — que es exactamente el hallazgo 5 del QA del owner
+ * («me manda al área pero no me guía a hacer otra cosa»).
+ *
+ * Va en la RUTA y no en un estado global a propósito: sobrevive al deep link, al back y al
+ * arranque en frío, y la pantalla puede consumirla y limpiarla sin tocar a nadie más.
+ */
+export const RN_FIRST_STEP_PARAM = 'primera' as const
+export const RN_FIRST_STEP_QUERY = `?${RN_FIRST_STEP_PARAM}=1` as const
+
 const RN = {
     brand: '/coach/settings/brand',
-    programs: '/coach/(tabs)/builder',
-    nutritionEditor: `/coach/nutrition-v2/editor/${DEMO_CLIENT_TOKEN}`,
-    movement: `/coach/movement/${DEMO_CLIENT_TOKEN}`,
-    cardio: `/coach/cardio/${DEMO_CLIENT_TOKEN}`,
-    invite: '/coach/(tabs)/clientes',
+    programs: `/coach/(tabs)/builder${RN_FIRST_STEP_QUERY}`,
+    nutritionEditor: `/coach/nutrition-v2/editor/${DEMO_CLIENT_TOKEN}${RN_FIRST_STEP_QUERY}`,
+    movement: `/coach/movement/${DEMO_CLIENT_TOKEN}${RN_FIRST_STEP_QUERY}`,
+    cardio: `/coach/cardio/${DEMO_CLIENT_TOKEN}${RN_FIRST_STEP_QUERY}`,
+    // Paridad con `WEB.invite`: el directorio RN abre el alta guiada de 3 pasos al ver `?invite=1`.
+    invite: '/coach/(tabs)/clientes?invite=1',
 } as const
 
 /** Paso 1: idéntico en las 5 ramas salvo el sustantivo de la persona. */
@@ -198,7 +214,7 @@ export const ONBOARDING_STEPS: Record<Persona, readonly OnboardingStep[]> = {
         {
             key: 'first_artifact',
             label: 'Arma la pauta de Ana desde una plantilla',
-            description: 'Porciones e intercambios ya cargados: ajustás lo que haga falta y publicás.',
+            description: 'Porciones e intercambios ya cargados: ajusta lo que haga falta y publica.',
             webHref: WEB.nutritionEditor,
             rnRoute: RN.nutritionEditor,
             autoSignal: 'first_artifact',
@@ -250,7 +266,7 @@ export const ONBOARDING_STEPS: Record<Persona, readonly OnboardingStep[]> = {
         {
             key: 'first_artifact',
             label: 'Arma tu primer plan (rutina o pauta)',
-            description: 'Empezá por donde te sirva: una rutina de entrenamiento o una pauta de alimentación.',
+            description: 'Empieza por donde te sirva: una rutina de entrenamiento o una pauta de alimentación.',
             webHref: WEB.programs,
             rnRoute: RN.programs,
             autoSignal: 'first_artifact',

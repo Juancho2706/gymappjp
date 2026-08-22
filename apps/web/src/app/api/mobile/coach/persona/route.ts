@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { PersonaSchema } from '@eva/schemas'
+import { PERSONA_COPY, PersonaSchema } from '@eva/schemas'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 import { verifyMobileBearer } from '@/lib/mobile-auth'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
-import { applyCoachPersona } from '@/services/coach/persona.service'
+import {
+    applyCoachPersona,
+    readCoachPersona,
+    recordOnboardingEvent,
+    saveCoachPersona,
+    writePersonaDomainPrefs,
+} from '@/services/coach/persona.service'
 import { loadPersonaGateStatus } from '@/services/onboarding/onboarding-v2.queries'
 import { resolveMobileClientMutationContext } from '@/app/api/mobile/coach/clients/_mutation-auth'
 
@@ -16,9 +23,13 @@ import { resolveMobileClientMutationContext } from '@/app/api/mobile/coach/clien
  *        puede decidirlo sola (necesita `created_at`, el conteo de alumnos REALES y el workspace),
  *        y la decisión tiene que ser la MISMA que toma `proxy.ts` en la web — por eso las dos
  *        superficies comparten los resolvers de `services/coach/persona.service`.
- * POST → guarda la respuesta con `applyCoachPersona`, el MISMO núcleo del server action web
- *        (persona + 5 filas de dominio + evento + alumno de ejemplo + PostHog), y devuelve
- *        `{ ok, demoClientId }`.
+ * POST → guarda la respuesta. Tiene DOS caminos, y los separa la presencia de `reorderPanel`:
+ *        · sin `reorderPanel` (primer ingreso) → `applyCoachPersona`, el MISMO núcleo del server
+ *          action web: persona + 5 filas de dominio + evento + alumno de ejemplo + PostHog.
+ *          Devuelve `{ ok, demoClientId }`.
+ *        · con `reorderPanel` (Opciones › Mi panel, TASKS W8.2.2) → espejo de
+ *          `saveMiPanelPersonaAction`: persona + reorden SOLO si el coach lo pidió, sin tocar el
+ *          alumno de ejemplo. Devuelve `{ ok, demoClientId: null, reordered }`.
  *
  * Autenticación: idéntica al resto de `api/mobile/coach/*`. El GET es read-only y verifica el JWT
  * localmente (`verifyMobileBearer`, con degradación a GoTrue); el POST es una MUTACIÓN de cuenta y
@@ -75,6 +86,12 @@ const bodySchema = z.object({
     persona: PersonaSchema,
     /** Segunda pregunta inline. Ausente ⇒ «No» (el default de la pantalla). */
     alsoOther: z.boolean().optional(),
+    /**
+     * PRESENTE ⇒ la llamada viene de «Opciones › Mi panel» (RN, TASKS W8.2.2), no del primer
+     * ingreso. El valor dice si además hay que re-sembrar los 5 dominios con la matriz de la
+     * persona. AUSENTE ⇒ primer ingreso: sigue el camino completo de `applyCoachPersona`.
+     */
+    reorderPanel: z.boolean().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -96,6 +113,65 @@ export async function POST(request: NextRequest) {
             { error: 'Tu panel lo administra tu organización o tu equipo.', code: 'WORKSPACE_ACTION_NOT_ALLOWED' },
             { status: 403 },
         )
+    }
+
+    // ── Camino «Mi panel»: cambiar de especialidad SIN reordenar por sorpresa ────────────────
+    //
+    // Espejo exacto de `saveMiPanelPersonaAction` (web): guarda la persona, re-ejecuta la matriz
+    // de dominios SOLO si el coach lo pidió, y deja el alumno de ejemplo en paz (esa es otra
+    // acción, con su propio botón). No pasa por `applyCoachPersona` justamente porque ese núcleo
+    // reordena y siembra siempre — que es lo correcto en el primer ingreso y lo INCORRECTO acá:
+    // un coach que ya ajustó sus módulos a mano no puede perderlos por corregir una etiqueta.
+    if (parsed.data.reorderPanel !== undefined) {
+        const persona = parsed.data.persona
+        const alsoOther =
+            PERSONA_COPY[persona].secondQuestion == null ? false : parsed.data.alsoOther === true
+        const reorderPanel = parsed.data.reorderPanel === true
+
+        const previous = await readCoachPersona(ctx.userDb, ctx.userId)
+
+        const saved = await saveCoachPersona(ctx.userDb, ctx.userId, persona, alsoOther)
+        if (!saved.ok) {
+            console.error('[mi-panel/rn] no se pudo guardar la persona', saved.error)
+            return NextResponse.json(
+                { error: 'No pudimos guardar tu especialidad. Inténtalo de nuevo.', code: 'PERSONA_SAVE_FAILED' },
+                { status: 500 },
+            )
+        }
+
+        if (reorderPanel) {
+            const prefs = await writePersonaDomainPrefs(ctx.userDb, ctx.userId, persona, alsoOther)
+            if (!prefs.ok) {
+                console.error('[mi-panel/rn] no se pudieron reordenar los dominios', prefs.error)
+                return NextResponse.json(
+                    {
+                        error: 'Guardamos tu especialidad, pero no pudimos reordenar el panel. Inténtalo de nuevo.',
+                        code: 'PERSONA_REORDER_FAILED',
+                    },
+                    { status: 500 },
+                )
+            }
+        }
+
+        await recordOnboardingEvent(ctx.admin, {
+            coachId: ctx.userId,
+            eventType: 'persona_selected',
+            metadata: {
+                persona,
+                alsoOther,
+                surface: 'rn',
+                source: 'mi_panel',
+                changed: previous.persona !== persona,
+                reordered: reorderPanel,
+            },
+        })
+        await capturePostHogServerEvent({
+            event: 'persona_selected',
+            distinctId: ctx.userId,
+            properties: { persona, also_other: alsoOther, surface: 'rn', source: 'mi_panel' },
+        })
+
+        return NextResponse.json({ ok: true, demoClientId: null, reordered: reorderPanel })
     }
 
     const applied = await applyCoachPersona({

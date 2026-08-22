@@ -42,6 +42,18 @@ export function resolveStepViews(
 }
 
 /**
+ * Ancla DOM de la tarjeta de un paso. Es el contrato entre la banda de bienvenida (que manda el
+ * foco al paso siguiente) y la lista de tarjetas: vive acá, en el módulo puro, para que las dos
+ * puntas no puedan desincronizarse con un template string suelto.
+ *
+ * Hallazgo 1 del QA del owner (22-08): elegir persona devolvía al coach al INICIO de la guía en
+ * vez de dejarlo parado en el paso que sigue.
+ */
+export function stepAnchorId(key: OnboardingStepKey): string {
+    return `paso-${key}`
+}
+
+/**
  * Paso 3 («Arma tu primer …») en modo GUIADO: el destino recibe `?primera=1` y ahí decide qué
  * mostrar — tarjetas embebidas, plantilla de arranque, aviso de «ya tiene una pauta» (W4 F4.3).
  *

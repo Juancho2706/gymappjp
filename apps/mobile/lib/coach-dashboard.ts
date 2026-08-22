@@ -309,13 +309,32 @@ export function useCoachOnboarding(): CoachOnboardingSnapshot | null {
 /**
  * `step_key` con el que la app emite la telemetría de la guía.
  *
- * ⚠️ El endpoint valida `stepKey` contra CUATRO valores de la guía v1
- * (`api/mobile/coach/dashboard/route.ts`: profile_branding | first_client | first_plan |
- * first_checkin) y rechaza con 400 los de la v2 (`vive_tu_app`, `first_artifact`, `aha`). Hasta que
- * esa lista se amplíe, el paso REAL viaja en `metadata.step` y la columna lleva un valor aceptado
- * —el mismo truco que ya usaba el chip viejo—, así no se pierde ni un evento por un 400.
+ * Fallback cuando el emisor no dice de qué paso habla (p. ej. la píldora): el endpoint
+ * (`api/mobile/coach/dashboard/route.ts`, `MOBILE_EVENT_STEP_KEYS`) acepta desde W5 los cinco pasos
+ * v2 + `persona`, así que los emisores que SÍ saben el paso lo mandan real — por el tercer
+ * parámetro o, para no tocar llamadores, por `metadata.stepKey` / `metadata.step`. (Auditoría 22-08,
+ * spec-rn missed: el `stepKey` fijo para todo era un workaround ya obsoleto que ensuciaba la tabla.)
  */
 const GUIDE_EVENT_STEP_KEY = 'profile_branding'
+
+/** Step keys que el endpoint móvil acepta en la columna `step_key`. */
+const MOBILE_EVENT_STEP_KEYS: ReadonlySet<string> = new Set([
+  ...ONBOARDING_STEP_KEYS,
+  'first_plan',
+  'first_checkin',
+  'persona',
+])
+
+/** Resuelve el `step_key` real: parámetro explícito > `metadata.stepKey` > `metadata.step` > fallback. */
+export function resolveOnboardingEventStepKey(
+  metadata: Record<string, string | number | boolean> | undefined,
+  explicit?: string,
+): string {
+  for (const candidate of [explicit, metadata?.stepKey, metadata?.step]) {
+    if (typeof candidate === 'string' && MOBILE_EVENT_STEP_KEYS.has(candidate)) return candidate
+  }
+  return GUIDE_EVENT_STEP_KEY
+}
 
 /**
  * Persiste un parche del jsonb `coaches.onboarding_guide`. El servidor hace MERGE con lo que ya
@@ -340,12 +359,18 @@ export async function persistCoachOnboardingGuide(patch: Record<string, unknown>
 export async function postCoachOnboardingEvent(
   eventType: 'step_completed' | 'step_reopened' | 'aha_moment' | 'guide_engagement',
   metadata?: Record<string, string | number | boolean>,
+  stepKey?: string,
 ): Promise<void> {
   try {
     await apiFetch<{ ok: true }>('/api/mobile/coach/dashboard', {
       method: 'POST',
       authenticated: true,
-      body: { action: 'onboarding_event', stepKey: GUIDE_EVENT_STEP_KEY, eventType, metadata },
+      body: {
+        action: 'onboarding_event',
+        stepKey: resolveOnboardingEventStepKey(metadata, stepKey),
+        eventType,
+        metadata,
+      },
     })
   } catch {
     // Ídem: medir no puede romper la pantalla.

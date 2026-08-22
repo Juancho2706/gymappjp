@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { parsePlanBuilderOrigin, type NutritionClientDetailReadModel } from '@eva/nutrition-v2'
 import { EvaLoaderScreen } from '../../../../components/EvaLoader'
@@ -12,6 +12,9 @@ import {
   type QuickEditEditorInput,
 } from '../../../../components/nutrition-v2/quick-edit'
 import { toast } from '../../../../components/Toast'
+import { GuidedTaskBanner } from '../../../../components/coach/GuidedTaskBanner'
+import { useCoachOnboarding } from '../../../../lib/coach-dashboard'
+import { isGuidedEntry } from '../../../../lib/templates'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import { isUuid, reportInvalidRouteUuid } from '../../../../lib/safe-uuid'
@@ -39,13 +42,19 @@ import { supabase } from '../../../../lib/supabase'
  */
 export default function NutritionUnifiedEditorScreen() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ clientId?: string; from?: string }>()
+  const params = useLocalSearchParams<{ clientId?: string; from?: string; primera?: string }>()
   const clientId = typeof params.clientId === 'string' ? params.clientId : ''
+  // Paso 3 de la guía: la ruta llega marcada con `?primera=1` (@eva/onboarding).
+  const guidedFirst = isGuidedEntry(params.primera)
+  const onboarding = useCoachOnboarding()
   const origin = useMemo(
     () => parsePlanBuilderOrigin(typeof params.from === 'string' ? params.from : null),
     [params.from],
   )
   const insets = useSafeAreaInsets()
+  // ¿La banda guiada está OCUPANDO el inset superior ahora mismo? Arranca en `false` (la banda lee
+  // AsyncStorage antes de pintarse) y vuelve a `false` cuando el coach la cierra con la «×».
+  const [guidedBannerVisible, setGuidedBannerVisible] = useState(false)
   const entitlements = useEntitlements()
   const {
     ready: workspaceReady,
@@ -159,7 +168,7 @@ export default function NutritionUnifiedEditorScreen() {
     return <EvaLoaderScreen subtitle={EDITOR_COPY.loading} />
   }
 
-  return (
+  const editor = (
     <QuickEditMode
       clientId={clientId}
       clientName={detail.client.fullName}
@@ -175,5 +184,38 @@ export default function NutritionUnifiedEditorScreen() {
       }}
       onStaleReload={reload}
     />
+  )
+
+  if (!guidedFirst) return editor
+
+  // Entrada guiada del paso 3 (hallazgo 5 del QA del owner 22-08): la banda va ARRIBA del lienzo,
+  // que es donde la web pone sus `GuidedTaskCards`. El nombre sale del demo del panel y cae al del
+  // alumno de la ficha si la foto todavía no cargó.
+  const demoName = onboarding?.onboardingV2.demoName?.trim() || detail.client.fullName
+  return (
+    <View className="flex-1 bg-surface-app">
+      <GuidedTaskBanner
+        coachId={onboarding?.coachId ?? null}
+        surface="nutrition-editor"
+        withTopInset
+        onVisibilityChange={setGuidedBannerVisible}
+        title={`Tu primera pauta para ${demoName}`}
+        bullets={[
+          'Cambia un alimento por otro que sí coma.',
+          'Ajusta una porción y mira cómo se mueven los macros.',
+          `Publica y mírala como ${demoName}.`,
+        ]}
+      />
+      {/* Cuando la banda está pintada ella consume el inset superior. `QuickEditMode` pinta su barra
+          con `paddingTop: insets.top + 8`, así que en ese caso se le entrega `top: 0` para que no
+          quede un hueco del alto del status bar entre la banda y el editor (se hace acá, sin tocar
+          `QuickEditMode`, que es de otra unidad de trabajo; el resto de los bordes viaja intacto).
+          El `top` sigue al estado REAL de la banda —que arranca invisible mientras lee su memoria y
+          desaparece con la «×»—: forzarlo a 0 incondicionalmente metía la barra «Editando» bajo la
+          hora y la batería en el primer frame y para siempre después de cerrarla. */}
+      <SafeAreaInsetsContext.Provider value={{ ...insets, top: guidedBannerVisible ? 0 : insets.top }}>
+        <View className="flex-1">{editor}</View>
+      </SafeAreaInsetsContext.Provider>
+    </View>
   )
 }

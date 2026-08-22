@@ -30,6 +30,11 @@ import { BuilderBlockCard } from '../../components/coach/BuilderBlockCard'
 import { ProgramConfigSheet } from '../../components/coach/ProgramConfigSheet'
 import { ProgramPhasesBar } from '../../components/coach/ProgramPhasesBar'
 import { BuilderOnboardingTour, type TourStep } from '../../components/coach/BuilderOnboardingTour'
+import { GuidedTaskBanner } from '../../components/coach/GuidedTaskBanner'
+import { useCoachOnboarding } from '../../lib/coach-dashboard'
+import { isGuidedEntry } from '../../lib/templates'
+import { openViveTuAppGuided } from '../../lib/vive-tu-app'
+import { personaNoun } from '@eva/schemas'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import { listBuilderExercisesForWorkspace, type ExerciseRow } from '../../lib/exercises'
 import { exportProgramPdf } from '../../lib/program-pdf'
@@ -718,10 +723,10 @@ async function persistProgram(opts: {
 export default function ProgramBuilderScreen() {
   const {
     clientId, clientName, templateId, programId: programIdParam, mode,
-    workspaceKind, teamId, orgId,
+    workspaceKind, teamId, orgId, primera,
   } = useLocalSearchParams<{
     clientId?: string; clientName?: string; templateId?: string; programId?: string; mode?: string
-    workspaceKind?: string; teamId?: string; orgId?: string
+    workspaceKind?: string; teamId?: string; orgId?: string; primera?: string
   }>()
   // Template mode = build/edit a reusable program with client_id null (no client).
   const isTemplate = mode === 'template' || !!templateId
@@ -737,6 +742,17 @@ export default function ProgramBuilderScreen() {
     [workspaceKind, teamId, orgId],
   )
   const clientWorkspaceRef = useRef<ClientActionWorkspace | null>(routeWorkspace)
+
+  // ── Paso 3 de la guía (`?primera=1`) ───────────────────────────────────────────────────────
+  // El coach llegó acá desde «Arma tu primera rutina», no navegando por su cuenta: sobre el
+  // lienzo va una banda con las 3 cosas que puede hacer (hallazgo 5 del QA del owner 22-08).
+  // NO toca el tour: el tour es un overlay con su propio disparador y la banda convive con el
+  // lienzo — pueden aparecer los dos sin pisarse.
+  const guidedFirst = isGuidedEntry(primera)
+  const onboarding = useCoachOnboarding()
+  const guidedDemoName = onboarding?.onboardingV2.demoName?.trim() || (clientName ?? '').trim() || 'tu alumno'
+  const guidedNoun = personaNoun(onboarding?.onboardingV2.persona ?? 'strength')
+  const [viveBusy, setViveBusy] = useState(false)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1875,6 +1891,38 @@ export default function ProgramBuilderScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {/* Tarea guiada del paso 3 — sobre el lienzo, bajo los chips de día. Se cierra con la × y
+          no vuelve (memoria por coach + superficie en AsyncStorage). */}
+      {guidedFirst ? (
+        <GuidedTaskBanner
+          coachId={onboarding?.coachId ?? null}
+          surface="builder"
+          title="Tu primera rutina, en 3 toques"
+          bullets={[
+            'Cambia un ejercicio por otro que te guste más.',
+            'Reordena un día: arrastra los bloques.',
+            'Guarda y asígnala cuando esté lista.',
+          ]}
+          action={{
+            label: `Ver como ${guidedDemoName}`,
+            busy: viveBusy,
+            onPress: () => {
+              if (viveBusy) return
+              setViveBusy(true)
+              void openViveTuAppGuided({
+                coachId: onboarding?.coachId ?? null,
+                demoName: guidedDemoName,
+                noun: guidedNoun,
+              })
+                .then((outcome) => {
+                  if (outcome.status === 'error') toast.error(outcome.error)
+                })
+                .finally(() => setViveBusy(false))
+            },
+          }}
+        />
+      ) : null}
 
       {pendingDraft ? (
         <View style={[styles.draftBanner, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '14' }]}>

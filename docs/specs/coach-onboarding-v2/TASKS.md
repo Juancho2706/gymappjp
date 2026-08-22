@@ -172,6 +172,15 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   scrollear (`useCoachTabbarMinimized`); reserva el espacio del FAB. Espejo web (`GuidePill.tsx` +
   `use-tabbar-minimized.ts`, compartido con `CoachSidebar`). Tests web 20/20; tsc ×2; expo export.
 
+- [x] W8.0.2 QA del owner en device (tarde del 22-08, Android + OTA f), 5 hallazgos de la guía + «Cambiar en
+  Opciones» sin destino — HECHO web + RN: tras «Armar mi panel» la guía aterriza en el paso siguiente (botón
+  «Empezar: {paso}» en la bienvenida + scroll a la tarjeta «Empieza por aquí»); banda de bienvenida legible en
+  dark (superficie de tarjeta + filete de marca, tokens de texto); iconos de los pasos = marca EVA (figura blanca
+  sobre el color de marca; hecho = check); «Ver mi app» en RN explica una vez (Alert: se abre en el navegador con
+  tu marca, tu sesión sigue en la app) antes de abrir; pasos 3 y 4 con tarea guiada en RN (W8.2.7 / W8.2.4);
+  «Mi panel» en RN (W8.2.2); ⋮ de la fila del alumno visible en dark (`DirRowCard` token `text-muted`). Voseo
+  residual del paquete corregido. Pendiente de QA del owner en device (dark + marca custom).
+
 ### W8.1 — Web: lo roto hoy (1 Opus, 1,0 d)
 - [x] W8.1.1 🔴 **Paso 3 nace tildado** — HECHO 22-08: `resolveFirstArtifact` lee `onboarding_guide.demo.seededAt`
   (`readDemoSeededAt`) y solo cuenta filas con `updated_at > seededAt + 2 min` (`artifactCutoff`): un
@@ -222,24 +231,34 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
 ### W8.2 — App: W5 es más grande de lo declarado (1 Opus, 1,0 d, OTA)
 - [ ] W8.2.1 Tour del builder RN gateado con `tourAutoStartEligible` + clave por coach
   (`program-builder.tsx:1422-1436`, `builder_onboarding_seen_short_v1` sin coachId). [tasks-truth-01/spec-rn-04/17]
-- [ ] W8.2.2 «Mi panel» en Opciones RN (persona + pregunta 2 + «Ver mi guía» + re-sembrar/borrar) y «Abrir la
-  guía» en Soporte: apagar la guía desde la app hoy la deja irrecuperable en la app (único push a `/coach/guia`
-  es la píldora) y `persona.tsx:302` promete «Opciones › Mi panel», que no existe. API móvil de re-seed (hoy
-  `demo-student` solo DELETE). [spec-rn-03/08/13]
+- [x] W8.2.2 HECHO 22-08 (QA del owner en device): pantalla `/coach/settings/mi-panel` (especialidad + pregunta 2 +
+  «Ordenar mi panel», 5 switches por dominio, «Ver mi guía de inicio» + «Volver a mostrar la guía», «Borrar» /
+  «Volver a sembrar» el alumno de ejemplo), entrada «Mi panel» en el hub de Opciones (solo standalone), el chip de
+  la guía apunta ahí; `POST api/mobile/coach/demo-student` (re-seed) y `reorderPanel` en `POST …/persona`.
+  Pendiente: «Abrir la guía» en Soporte RN. ⚠ El copy de los switches dice la verdad de hoy («por ahora también
+  lo oculta en la app de tus alumnos»): D9 = No sigue sin implementar (clave aparte). [spec-rn-03/08/13]
 - [ ] W8.2.3 = F5.3 Nav RN por dominio con los 5 dominios sin pasar por `FEATURE_PREFS_ENABLED`
   (`CoachMobileChrome.tsx:95-104`, `api/mobile/config/route.ts:112-113`); dashboard sin «Todo al día. Buen
   trabajo.» con 0 alumnos (`CoachDashboardSections.tsx:1749-1761`); copy «pool» fuera. [spec-rn-02/12/19]
-- [ ] W8.2.4 = F5.4 (BROCITO, acordado 22-08): `QuickCreateClientForm` con muro de cupo + `UPGRADE_REQUIRED` +
-  `upgrade_gate_hit`; `lib/client-actions.ts:29-40` deja de decir «la app de EVA» (white-label) y usa
-  `formatWhatsappInvite(persona)`. [spec-rn-07/tasks-truth-07]
-- [ ] W8.2.5 Telemetría RN: `stepKey` real (el server ya acepta los 5 pasos v2: `MOBILE_EVENT_STEP_KEYS`),
-  `step_completed`/`aha_moment` + `captureAppEvent`; endpoint móvil traduce 23505 → `{ok, deduped}`, rate limit y
-  schema `.strict()` para `persist_onboarding_guide` (hoy mergea jsonb crudo con admin). [spec-rn-09/10, db-live-03/missed]
+- [x] W8.2.4 HECHO 22-08: BROCITO (`443aa350`) muro de cupo en el alta corta + WhatsApp por persona sin «EVA»;
+  onboarding v2: **alta guiada de 3 pasos en RN** (`(tabs)/clientes?invite=1` → `CreateClientModal guided`:
+  datos → cómo le llega (WhatsApp/Compartir/Copiar link) → «Así la ve {nombre}» con logo/color/sello;
+  `step_completed/first_client` + `invite_sent`), paridad con `AddStudentStepper` web salvo QR (sin dep nativa) y
+  correo (lo manda el servidor). [spec-rn-07/tasks-truth-07, QA owner 22-08 hallazgo 5]
+- [~] W8.2.5 Telemetría RN — PARCIAL 22-08: `postCoachOnboardingEvent` manda el `stepKey` REAL (parámetro o
+  `metadata.step`/`stepKey`, `resolveOnboardingEventStepKey`); RN emite `step_completed/first_artifact` (plantilla
+  aplicada) y `first_client` (alta guiada) + `invite_sent`. **Pendiente:** `aha_moment` desde RN; endpoint móvil
+  traduce 23505 → `{ok, deduped}`, rate limit y schema `.strict()` para `persist_onboarding_guide`.
+  [spec-rn-09/10, db-live-03/missed]
 - [ ] W8.2.6 Etiqueta del demo en directorio, ficha y selectores RN (`isDemo` ya viaja en
   `clients-directory.ts:220`); redirect de primera entrada a la guía (`guideSeenAt` sin consumidor de ruta);
   píldora RN mira `isManaged` como el provider. [spec-rn-06/11/missed]
-- [ ] W8.2.7 = F5.5 + plantillas: catálogo vía API móvil + vacíos template-first + tarjetas del builder +
-  DemoCard con KPIs (el payload `onboardingV2` no trae `buildDemoKpis`). [spec-rn-05/canvas-08/09]
+- [~] W8.2.7 = F5.5 + plantillas — PARCIAL 22-08: `GET/POST api/mobile/coach/templates` (catálogo por persona y
+  superficie + `applyTemplate`), las rutas RN del paso 3 llevan `?primera=1`, el tab del builder abre
+  `FirstTemplateSheet` («Tu primera rutina para {demo}» → aplica → `program-builder` con `GuidedTaskBanner` «en 3
+  toques» + «Ver como {demo}»), banners equivalentes en el editor de nutrición V2, movimiento (reporte) y cardio.
+  **Pendiente:** vacíos template-first fuera del flujo guiado, tarjetas embebidas en el lienzo del builder,
+  DemoCard con KPIs, y sin demo (`other`/borrado) el tab no ofrece nada. [spec-rn-05/canvas-08/09]
 - [ ] W8.2.8 QA device F5.7 incluye: back de hardware en persona, rebote del 302 de `/vive-tu-app` a `/c/*`
   (app-link `autoVerify`), píldora vs cápsula minimizada, white-label. [spec-rn-14/18, EDGE-12]
 

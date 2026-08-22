@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Clipboard from 'expo-clipboard'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Apple,
   ArrowUpDown,
@@ -328,6 +328,8 @@ export default function ClientesScreen() {
   const [showSortSheet, setShowSortSheet] = useState(false)
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  /** El alta abierta EN MODO GUIADO (paso 4 de la guía v2). El «+ Nuevo alumno» de siempre no lo usa. */
+  const [guidedCreate, setGuidedCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importBlocking, setImportBlocking] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -354,6 +356,48 @@ export default function ClientesScreen() {
   const [resetError, setResetError] = useState<string | null>(null)
   const [actionsClient, setActionsClient] = useState<DirectoryClient | null>(null)
   const [unarchiveCapacity, setUnarchiveCapacity] = useState<ClientUnarchiveCapacity | null>(null)
+  /**
+   * Paso 4 de la guía del onboarding v2 («Invita a tu primer {alumno}») — QA del owner 22-08,
+   * hallazgo 5: el paso aterrizaba en el directorio y ahí terminaba el acompañamiento.
+   *
+   * `?invite=1` es el MISMO contrato que ya usa la web (`/coach/clients?invite=1`, `WEB.invite` de
+   * `@eva/onboarding`): el destino abre el alta GUIADA en vez de dejar al coach mirando su lista.
+   * También se acepta `?primera=1`, la marca genérica de «entrada guiada» que usan los demás pasos
+   * de RN (`RN_FIRST_STEP_PARAM`), para que la pantalla funcione con cualquiera de las dos formas
+   * y el destino del paso 4 se pueda escribir como el resto sin romper este aterrizaje.
+   *
+   * El parámetro se consume UNA vez y se limpia (`setParams`) para que volver a esta pestaña —o
+   * un re-render del stack— no reabra el alta sola. El ref se rearma cuando el parámetro deja de
+   * valer `1`, así el paso se puede repetir si el coach vuelve a tocarlo desde la guía.
+   *
+   * Con el cupo lleno no hay caso especial de ESTA pantalla: `CreateClientModal` ya hace su propio
+   * pre-check y abre DIRECTO en el muro (`shouldOpenAtCapWall`), guiado o no. Pero ese pre-check
+   * lee el conteo y el cupo QUE ESTA PANTALLA YA TENGA: abrir al montar —con `loading` en true y
+   * `maxClients` en 0— lo deja sin datos y `shouldOpenAtCapWall` devuelve false, así que el coach
+   * Free con su único lugar ocupado veía el FORMULARIO y chocaba recién con el 402. Por eso la
+   * entrada guiada ESPERA a que la cartera y el perfil estén cargados; el «+» de siempre no tiene
+   * el problema (se toca después de la carga).
+   */
+  const { invite: inviteParam, primera: primeraParam } = useLocalSearchParams<{ invite?: string; primera?: string }>()
+  const guidedEntry = inviteParam === '1' || primeraParam === '1'
+  const inviteConsumedRef = useRef(false)
+  useEffect(() => {
+    if (!guidedEntry) {
+      inviteConsumedRef.current = false
+      return
+    }
+    if (inviteConsumedRef.current) return
+    // Esperar los dos insumos del pre-check de cupo: la cartera (`activeCount`) y el perfil
+    // (`maxClients`). Sin ellos el modal no puede saber si corresponde el muro.
+    if (loading || !profileReady) return
+    inviteConsumedRef.current = true
+    setGuidedCreate(true)
+    setShowCreate(true)
+    // Cadena vacía y no `undefined`: `setParams` tipa los valores como string y un string vacío
+    // deja el destino re-entrable (el efecto rearma el ref en la próxima corrida).
+    router.setParams({ invite: '', primera: '' })
+  }, [guidedEntry, loading, profileReady, router])
+
   const lastActionsClientRef = useRef<DirectoryClient | null>(null)
   if (actionsClient) lastActionsClientRef.current = actionsClient
   const actionsSubject = actionsClient ?? lastActionsClientRef.current
@@ -790,7 +834,7 @@ export default function ClientesScreen() {
         Crea un alumno y recibirá su acceso, o importa tu cartera completa desde Excel/CSV.
       </Text>
       <View style={styles.emptyCtas}>
-        <Button label="Crear alumno" variant="sport" size="lg" full leftIcon={UserPlus} onPress={() => setShowCreate(true)} />
+        <Button label="Crear alumno" variant="sport" size="lg" full leftIcon={UserPlus} onPress={() => { setGuidedCreate(false); setShowCreate(true) }} />
         <Button label="Importar cartera" variant="secondary" size="lg" full leftIcon={FileUp} onPress={() => setShowImport(true)} />
       </View>
     </View>
@@ -920,7 +964,7 @@ export default function ClientesScreen() {
         <TouchableOpacity
           testID="directory-fab-new-client"
           style={[styles.fab, { backgroundColor: theme.primary }, GLOWS.sport]}
-          onPress={() => setShowCreate(true)}
+          onPress={() => { setGuidedCreate(false); setShowCreate(true) }}
           activeOpacity={0.9}
         >
           <UserPlus size={19} color="#fff" />
@@ -952,7 +996,8 @@ export default function ClientesScreen() {
       />
       <CreateClientModal
         visible={showCreate}
-        onClose={() => setShowCreate(false)}
+        guided={guidedCreate}
+        onClose={() => { setShowCreate(false); setGuidedCreate(false) }}
         onCreated={() => { fetchDirectoryData().catch(() => {}) }}
         theme={theme}
         maxClients={maxClients}

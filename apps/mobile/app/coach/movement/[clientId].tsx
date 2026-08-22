@@ -25,6 +25,9 @@ import {
 } from '@eva/calc'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
+import { GuidedTaskBanner } from '../../../components/coach/GuidedTaskBanner'
+import { useCoachOnboarding } from '../../../lib/coach-dashboard'
+import { isGuidedEntry } from '../../../lib/templates'
 import { useEntitlements } from '../../../lib/entitlements'
 import {
   deleteMovementAssessment,
@@ -71,7 +74,14 @@ import {
 type ScreenMode = 'report' | 'wizard'
 
 export default function MovementClientScreen() {
-  const { clientId, start } = useLocalSearchParams<{ clientId: string; start?: string }>()
+  const { clientId, start, primera } = useLocalSearchParams<{
+    clientId: string
+    start?: string
+    primera?: string
+  }>()
+  // Paso 3 de la guía (rama rehab): la ruta llega marcada con `?primera=1` (@eva/onboarding).
+  const guidedFirst = isGuidedEntry(primera)
+  const onboarding = useCoachOnboarding()
   const { theme } = useTheme()
   const router = useRouter()
   const { hasModule, ready } = useEntitlements()
@@ -139,6 +149,20 @@ export default function MovementClientScreen() {
         onBack={() => router.back()}
         showBadge
       />
+      {/* Tarea guiada del paso 3 (hallazgo 5 del QA del owner 22-08). Solo en el REPORTE: el
+          wizard es pantalla completa con su propio paso a paso y no necesita otra ayuda encima. */}
+      {guidedFirst && enabled ? (
+        <GuidedTaskBanner
+          coachId={onboarding?.coachId ?? null}
+          surface="movement"
+          title={`El screening de ${onboarding?.onboardingV2.demoName?.trim() || clientName || 'tu paciente'}`}
+          bullets={[
+            'Puntúa los 7 patrones: uno por pantalla, con video de referencia.',
+            'Mira el semáforo por patrón — ahí se ve qué limita.',
+            'De ese puntaje sale su pauta para la casa.',
+          ]}
+        />
+      ) : null}
       {!ready || (enabled && loading) ? (
         <EvaLoaderScreen subtitle="Cargando reporte…" />
       ) : !enabled ? (

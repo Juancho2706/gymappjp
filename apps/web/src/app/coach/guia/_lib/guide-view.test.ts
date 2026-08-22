@@ -4,6 +4,7 @@ import { PERSONAS } from '@eva/schemas'
 import {
     PERSONA_CHIP_LABEL,
     resolveStepViews,
+    stepAnchorId,
     welcomeLines,
     withPrimeraFlag,
 } from './guide-view'
@@ -91,3 +92,18 @@ describe('PERSONA_CHIP_LABEL', () => {
         }
     })
 })
+
+describe('stepAnchorId', () => {
+    it('da un ancla estable y única por paso (la banda apunta ahí el foco)', () => {
+        const ids = ONBOARDING_STEPS.strength.map((step) => stepAnchorId(step.key))
+        expect(ids).toEqual([
+            'paso-profile_branding',
+            'paso-vive_tu_app',
+            'paso-first_artifact',
+            'paso-first_client',
+            'paso-aha',
+        ])
+        expect(new Set(ids).size).toBe(ids.length)
+    })
+})
+

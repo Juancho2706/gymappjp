@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS, type OnboardingSignals } from '@eva/onboarding'
+import {
+    ONBOARDING_STEPS,
+    ONBOARDING_TOTAL_STEPS,
+    type OnboardingSignals,
+    type OnboardingStepKey,
+} from '@eva/onboarding'
 import type { Persona } from '@eva/schemas'
 
 /**
@@ -138,12 +143,33 @@ function renderScreen(props: Partial<GuideScreenProps> = {}, vm: Partial<Onboard
     )
 }
 
+/** Ids de las tarjetas a las que la pantalla hizo scroll, en orden. jsdom no trae
+ *  `scrollIntoView`, así que lo instalamos nosotros y de paso registramos el ancla. */
+const scrolledIds: string[] = []
+
+function completedWith(
+    over: Partial<Record<OnboardingStepKey, boolean>> = {},
+): Record<OnboardingStepKey, boolean> {
+    return {
+        profile_branding: false,
+        vive_tu_app: false,
+        first_artifact: false,
+        first_client: false,
+        aha: false,
+        ...over,
+    }
+}
+
 beforeEach(() => {
     persistMock.mockClear()
     deleteDemoMock.mockClear()
     telemetryMock.mockClear()
     refreshMock.mockClear()
     restoreLocalMock.mockClear()
+    scrolledIds.length = 0
+    Element.prototype.scrollIntoView = function scrollIntoViewStub(this: Element) {
+        scrolledIds.push(this.id)
+    }
 })
 
 describe('GuideScreen', () => {
@@ -173,6 +199,16 @@ describe('GuideScreen', () => {
         const band = screen.getByLabelText('Bienvenida')
         expect(band.textContent).toContain('Te damos la bienvenida, Ana.')
         expect(band.textContent).toContain('paciente de ejemplo')
+    })
+
+    it('la banda se lee sobre la superficie de tarjeta, no sobre el tinte de marca', () => {
+        // QA del owner 22-08 (hallazgo 2): `bg-sport-100` + `text-sport-700` en dark = azul sobre
+        // azul. El acento de marca quedó reducido a la barra de la izquierda.
+        renderScreen({ welcome: true })
+        const band = screen.getByLabelText('Bienvenida')
+        expect(band.className).toContain('bg-surface-card')
+        expect(band.className).not.toContain('sport-100')
+        expect(band.innerHTML).not.toContain('text-[var(--sport-700)]')
     })
 
     it('sin «?bienvenida=1» no hay banda', () => {
@@ -277,3 +313,101 @@ describe('sello de la primera visita', () => {
         expect(persistMock).not.toHaveBeenCalled()
     })
 })
+
+describe('el aterrizaje es el paso que sigue, no el inicio de la guía', () => {
+    it('con «?bienvenida=1» centra la tarjeta del paso siguiente al montar', async () => {
+        renderScreen({ welcome: true })
+        await waitFor(() => {
+            expect(scrolledIds).toContain('paso-profile_branding')
+        })
+    })
+
+    it('si el coach vuelve con pasos hechos, el foco es el PRIMER pendiente', async () => {
+        renderScreen(
+            { welcome: true },
+            { done: 1, completed: completedWith({ profile_branding: true }) },
+        )
+        await waitFor(() => {
+            expect(scrolledIds).toContain('paso-vive_tu_app')
+        })
+        expect(scrolledIds).not.toContain('paso-profile_branding')
+    })
+
+    it('sin «?bienvenida=1» no mueve la pantalla sola', async () => {
+        renderScreen()
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        expect(scrolledIds).toEqual([])
+    })
+
+    it('la banda ofrece «Empezar: <paso siguiente>» y lleva el foco a esa tarjeta', () => {
+        renderScreen({ welcome: true })
+        const cta = screen.getByRole('button', { name: /Empezar: Pon tu color y tu logo/ })
+        fireEvent.click(cta)
+        expect(document.activeElement?.id).toBe('paso-profile_branding')
+        expect(telemetryMock).toHaveBeenCalledWith(
+            'profile_branding',
+            expect.objectContaining({ action: 'welcome_start', step: 'profile_branding' }),
+        )
+    })
+
+    it('el botón nombra el paso pendiente, no siempre el primero', () => {
+        renderScreen(
+            { welcome: true },
+            { done: 1, completed: completedWith({ profile_branding: true }) },
+        )
+        expect(screen.getByRole('button', { name: /Empezar: Mira tu app con tu marca/ })).toBeTruthy()
+    })
+
+    it('con 5/5 la banda no ofrece «Empezar»: no queda paso que empezar', () => {
+        renderScreen(
+            { welcome: true },
+            {
+                done: 5,
+                allDone: true,
+                atFoot: true,
+                completed: completedWith({
+                    profile_branding: true,
+                    vive_tu_app: true,
+                    first_artifact: true,
+                    first_client: true,
+                    aha: true,
+                }),
+            },
+        )
+        expect(screen.queryByRole('button', { name: /^Empezar:/ })).toBeNull()
+    })
+
+    it('sin banda no hay botón «Empezar»', () => {
+        renderScreen()
+        expect(screen.queryByRole('button', { name: /^Empezar:/ })).toBeNull()
+    })
+})
+
+describe('los pasos llevan la marca EVA, no iconos genéricos', () => {
+    it('cada paso pendiente muestra el monito de EVA', () => {
+        const { container } = renderScreen()
+        const logos = Array.from(container.querySelectorAll('li img')).filter((img) =>
+            (img.getAttribute('src') ?? '').includes('eva-icon-white'),
+        )
+        expect(logos).toHaveLength(5)
+    })
+
+    it('el paso hecho muestra el tilde, no el logo', () => {
+        const { container } = renderScreen(
+            {},
+            { done: 1, completed: completedWith({ profile_branding: true }) },
+        )
+        const first = container.querySelector('#paso-profile_branding')
+        expect(first?.querySelector('img')).toBeNull()
+        const logos = Array.from(container.querySelectorAll('li img')).filter((img) =>
+            (img.getAttribute('src') ?? '').includes('eva-icon-white'),
+        )
+        expect(logos).toHaveLength(4)
+    })
+
+    it('el paso siguiente se rotula «Empieza por aquí»', () => {
+        renderScreen()
+        expect(screen.getAllByText('Empieza por aquí')).toHaveLength(1)
+    })
+})
+

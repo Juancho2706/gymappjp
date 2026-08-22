@@ -1,19 +1,38 @@
-import { useEffect, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { Archive, CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
+import * as Clipboard from 'expo-clipboard'
+import { Archive, CheckCircle2, ChevronDown, ChevronRight, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
-import { CreateClientSchema } from '@eva/schemas'
+import { CreateClientSchema, personaNoun, type Persona } from '@eva/schemas'
 import { type SubscriptionTier } from '@eva/tiers'
 import { Button, Input } from '../../../components'
 import { toast } from '../../Toast'
 import { RefreshPlanButton } from '../RefreshPlanButton'
 import { ArchiveToFreeSpaceSheet } from './ArchiveToFreeSpaceSheet'
+import { GuidedChannelPicker, GuidedLoginPreview, GuidedPreviewCopy, GuidedStepBar } from './GuidedInviteSteps'
+import {
+  generateGuidedTempPassword,
+  guidedCapNote,
+  guidedFormHint,
+  guidedTitle,
+  hasShareableLink,
+  isSubscriptionTier,
+  nextGuidedStep,
+  shouldEmitInviteSent,
+  type GuidedInviteChannel,
+  type GuidedStep,
+} from './guided-invite'
+import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { ApiError, apiFetch } from '../../../lib/api'
+import { openWhatsApp, shareLogin } from '../../../lib/client-actions'
 import { capWallCopy, shouldOpenAtCapWall } from '../../../lib/client-cap'
+import { postCoachOnboardingEvent, useCoachOnboarding } from '../../../lib/coach-dashboard'
+import { getCachedCoachPersonaStatus } from '../../../lib/coach-persona'
+import { showsEvaBadge } from '../../../lib/coach-tiers'
 import { captureAppEvent } from '../../../lib/analytics'
 import type { Theme } from '../../../lib/theme'
 import { DANGER, SUCCESS, WARNING } from './directory-shared'
@@ -46,6 +65,17 @@ type CreateWorkspace = {
 }
 
 type CreateClientResponse = { ok: true; clientName: string; newClientPhone: string | null; loginUrl: string | null }
+
+/**
+ * Los 3 pasos del alta guiada mapeados a las fases del sheet: el orden lo decide `nextGuidedStep`
+ * (puro, testeado en `tests/mobile/guided-invite.test.ts`) y acá solo se traduce a la fase que
+ * pinta este modal. La fase `upgrade` no participa: el muro de cupo no es un paso del alta.
+ */
+const GUIDED_PHASE: Record<GuidedStep, 'form' | 'success' | 'preview'> = {
+  1: 'form',
+  2: 'success',
+  3: 'preview',
+}
 
 function isValidIsoDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
@@ -122,6 +152,14 @@ function ModalButton({
  * Modal RN nativo (sin @gorhom → sin
  * bomba -999). Los inputs usan el `Input` DS (borde de foco por style, sin re-clasificar el
  * subárbol → sin focus-hop Fabric 45798).
+ *
+ * ── Modo GUIADO (`guided`, paso 4 de la guía del onboarding v2) ──
+ * Con `guided` el mismo sheet se convierte en el alta de 3 pasos —datos mínimos → cómo le llega →
+ * así la ve— espejo del `AddStudentStepper` de la web, y aparece una cuarta fase, `preview`. Es
+ * envase, no un camino de escritura nuevo: escribe por el MISMO endpoint, choca contra el MISMO
+ * muro de cupo y no persiste nada extra (el paso se tilda por la señal `realClients`). El copy y el
+ * orden de los pasos viven en `guided-invite.ts` (puro, testeado); las piezas visuales, en
+ * `GuidedInviteSteps.tsx`. Sin `guided`, el alta se comporta exactamente como siempre.
  */
 export function CreateClientModal({
   visible,
@@ -133,11 +171,23 @@ export function CreateClientModal({
   activeCount,
   workspace,
   openAtCapWall = false,
+  guided = false,
 }: {
   visible: boolean
   onClose: () => void
   onCreated: () => void
   theme: any
+  /**
+   * Alta GUIADA — el paso 4 de la guía del onboarding v2 («Invita a tu primer {alumno}»), que en
+   * RN llega por `/coach/(tabs)/clientes?invite=1`. Espejo semántico del `AddStudentStepper` web:
+   * los mismos 3 pasos (datos mínimos → cómo le llega → así la ve) montados ENCIMA de este modal,
+   * que ya tiene el muro de cupo y el share nativo. `false` ⇒ el alta de siempre, sin un solo
+   * cambio de comportamiento.
+   *
+   * No persiste NADA nuevo en el servidor: el paso 4 de la guía se tilda solo por la señal
+   * `realClients` que ya computa el backend.
+   */
+  guided?: boolean
   /**
    * El caller YA decidió que el alta arranca en el muro de cupo (el alta corta del home rebotó con
    * 402, o su pre-check vio el cupo lleno) y YA emitió su `upgrade_gate_hit`: acá no se re-evalúa
@@ -157,16 +207,50 @@ export function CreateClientModal({
 }) {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  // El branding resuelto del coach: lo necesita la vista previa del paso 3 (lo que ve el ALUMNO,
+  // con el color y el logo del coach). El `theme` sigue llegando por prop, como siempre.
+  const { branding } = useTheme()
+  const onboarding = useCoachOnboarding()
   const [form, setForm] = useState<CreateForm>(EMPTY)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [showPw, setShowPw] = useState(true)
-  const [phase, setPhase] = useState<'form' | 'success' | 'upgrade'>('form')
+  const [phase, setPhase] = useState<'form' | 'success' | 'upgrade' | 'preview'>('form')
   const [success, setSuccess] = useState<SuccessInfo | null>(null)
   const [upgradeLimit, setUpgradeLimit] = useState<number | undefined>(undefined)
   const [showArchive, setShowArchive] = useState(false)
   const [freedNotice, setFreedNotice] = useState(false)
+  // ── Estado exclusivo del modo guiado ──────────────────────────────────────────────────────
+  const [showOptional, setShowOptional] = useState(false)
+  const [channel, setChannel] = useState<GuidedInviteChannel | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
+  /**
+   * Clave temporal del alta guiada. Se genera UNA vez por apertura (`visible` false→true): en modo
+   * guiado el coach no inventa contraseñas —el formulario largo se la pedía— y el alumno la cambia
+   * en su primer ingreso (`force_password_change`).
+   */
+  const [guidedPassword, setGuidedPassword] = useState<string>(() => generateGuidedTempPassword())
+  /**
+   * Canales por los que YA se emitió `invite_sent` en esta alta. La métrica es «por dónde eligió
+   * mandarlo», no «cuántas veces tocó la tarjeta»: sin esto, copiar el link tres veces mandaba tres
+   * eventos y la comparación por canal contra la web quedaba inflada. Se limpia por apertura.
+   */
+  const sentChannelsRef = useRef<GuidedInviteChannel[]>([])
+
+  /**
+   * Persona del coach. Manda la foto del onboarding (la sirve el dashboard); la caché de sesión del
+   * gate es el respaldo cuando todavía nadie cargó el panel. Sin ninguna de las dos, el mensaje cae
+   * a la plantilla neutra de `clientInviteMessage` — nunca a un texto con «EVA» adentro.
+   */
+  const persona: Persona | null =
+    onboarding?.onboardingV2.persona ?? getCachedCoachPersonaStatus()?.persona ?? null
+  const demoName = onboarding?.onboardingV2.demoName ?? null
+  const noun = personaNoun(persona ?? 'other')
+  const capNote = useMemo(
+    () => (guided ? guidedCapNote({ tier: currentTier, maxClients, persona, demoName }) : null),
+    [guided, currentTier, maxClients, persona, demoName],
+  )
 
   function handleClose() {
     setForm(EMPTY)
@@ -178,6 +262,10 @@ export function CreateClientModal({
     setUpgradeLimit(undefined)
     setShowArchive(false)
     setFreedNotice(false)
+    setShowOptional(false)
+    setChannel(null)
+    setLinkCopied(false)
+    sentChannelsRef.current = []
     onClose()
   }
 
@@ -198,6 +286,10 @@ export function CreateClientModal({
    */
   useEffect(() => {
     if (!visible) return
+    // Clave nueva por apertura: dos altas seguidas no pueden compartir la misma contraseña.
+    if (guided) setGuidedPassword(generateGuidedTempPassword())
+    // Cada alta cuenta sus propios canales elegidos.
+    sentChannelsRef.current = []
     if (openAtCapWall) {
       setUpgradeLimit(typeof maxClients === 'number' && maxClients > 0 ? maxClients : undefined)
       setFreedNotice(false)
@@ -247,11 +339,26 @@ export function CreateClientModal({
       email: form.email.trim(),
       phone: form.phone.trim(),
       subscription_start_date: form.subscriptionStartDate.trim(),
-      temp_password: form.tempPassword,
+      // Guiado: la clave la pone la app (el coach no ve ni escribe ese campo).
+      temp_password: guided ? guidedPassword : form.tempPassword,
       age_confirmed: form.ageConfirmed ? 'on' : '',
     })
     if (!parsed.success) {
-      setFieldErrors(parsed.error.flatten().fieldErrors as FieldErrors)
+      const flat = parsed.error.flatten().fieldErrors as FieldErrors
+      const passwordError = flat.temp_password?.[0]
+      if (guided && passwordError) {
+        // En guiado el campo de contraseña NO se pinta (la clave la genera la app), así que un
+        // error de `temp_password` no tendría dónde mostrarse: el coach vería un botón que no hace
+        // nada. Se regenera la clave para el próximo intento y el motivo se dice en el error
+        // general del sheet, que sí es visible.
+        setGuidedPassword(generateGuidedTempPassword())
+        const visible: FieldErrors = { ...flat }
+        delete visible.temp_password
+        setFieldErrors(visible)
+        setError(passwordError)
+        return
+      }
+      setFieldErrors(flat)
       return
     }
     setFieldErrors({})
@@ -273,7 +380,22 @@ export function CreateClientModal({
       })
       // Alumno creado: refrescar la cartera por debajo.
       onCreated()
-      if (res.newClientPhone) {
+      if (guided) {
+        // En guiado el paso 2 llega SIEMPRE, con teléfono o sin él: sin teléfono el canal sigue
+        // existiendo (la hoja de compartir y el link copiado no lo necesitan, y `wa.me` sin número
+        // abre el selector de contactos).
+        setSuccess({ clientName: res.clientName, phone: res.newClientPhone ?? '', loginUrl: res.loginUrl })
+        setPhase(GUIDED_PHASE[nextGuidedStep(1, 'created')])
+        // Ledger del onboarding (dedupe duro server-side). El `stepKey` REAL viaja en la metadata
+        // porque el endpoint todavía valida la lista de la guía v1 — ver el docblock de
+        // `postCoachOnboardingEvent`. Best-effort: medir no puede romper el alta.
+        void postCoachOnboardingEvent('step_completed', {
+          step: 'first_client',
+          stepKey: 'first_client',
+          persona: persona ?? 'unknown',
+          surface: 'rn_guided_invite',
+        })
+      } else if (res.newClientPhone) {
         setSuccess({ clientName: res.clientName, phone: res.newClientPhone, loginUrl: res.loginUrl })
         setPhase('success')
       } else {
@@ -311,12 +433,63 @@ export function CreateClientModal({
     }
   }
 
+  /**
+   * Alta de siempre: el CTA de WhatsApp del estado de éxito. El TEXTO ya no se arma acá — sale de
+   * `clientInviteMessage` vía `openWhatsApp` (plantilla por persona de `@eva/schemas`), igual que
+   * el WhatsApp de la ficha y del directorio. Antes decía «Soy tu coach… tu link para acceder a tu
+   * plan», un quinto copy suelto que ignoraba la persona del coach.
+   */
   function sendWhatsApp() {
     if (!success) return
-    const digits = success.phone.replace(/\D/g, '')
-    const message = `Hola ${success.clientName}! Soy tu coach. Aquí está tu link para acceder a tu plan: ${success.loginUrl}`
-    Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`).catch(() => {})
+    openWhatsApp(success.phone, success.clientName, success.loginUrl ?? '', persona).catch(() => {})
     handleClose()
+  }
+
+  /**
+   * Paso 2 del alta guiada: elegir canal ES mandarlo. En un teléfono, separar «elegir» de «enviar»
+   * agrega un toque sin agregar información.
+   *
+   * WhatsApp y la hoja de compartir sacan al coach de la app, así que el modal queda ya en el paso
+   * 3 para cuando vuelva; copiar el link es instantáneo y se queda en el paso 2 con su acuse
+   * INLINE (el `<Toaster />` vive en el árbol de la pantalla y puede quedar bajo esta ventana
+   * nativa, mismo motivo que el aviso de «Cupo liberado»).
+   */
+  function handleChannel(picked: GuidedInviteChannel) {
+    if (!success) return
+    const loginUrl = success.loginUrl
+    if (!hasShareableLink(loginUrl)) return
+    setChannel(picked)
+    setLinkCopied(false)
+    /**
+     * Dónde eligió mandar la invitación: es LA métrica que compara conversión por canal (misma
+     * prop `channel` que emite el stepper de la web). Sin PII.
+     *
+     * Una sola vez por canal (`shouldEmitInviteSent`) y —en el link— DESPUÉS de que el
+     * portapapeles confirme: un copiado que falla no es una invitación mandada.
+     */
+    const emitPicked = () => {
+      if (!shouldEmitInviteSent(sentChannelsRef.current, picked)) return
+      sentChannelsRef.current = [...sentChannelsRef.current, picked]
+      captureAppEvent('invite_sent', { channel: picked, persona: persona ?? null, surface: 'rn_guided_invite' })
+    }
+    if (picked === 'whatsapp') {
+      emitPicked()
+      openWhatsApp(success.phone, success.clientName, loginUrl, persona).catch(() => {})
+      setPhase(GUIDED_PHASE[nextGuidedStep(2, 'channel_chosen')])
+      return
+    }
+    if (picked === 'share') {
+      emitPicked()
+      shareLogin(success.clientName, loginUrl, persona).catch(() => {})
+      setPhase(GUIDED_PHASE[nextGuidedStep(2, 'channel_chosen')])
+      return
+    }
+    Clipboard.setStringAsync(loginUrl)
+      .then(() => {
+        setLinkCopied(true)
+        emitPicked()
+      })
+      .catch(() => {})
   }
 
   /**
@@ -340,6 +513,27 @@ export function CreateClientModal({
   // Split por `Platform.OS`, nunca por storefront (decisión cerrada del owner, SPEC embudo-free-pro).
   const wallCopy = capWallCopy({ limit: upgradeLimit, platform: Platform.OS })
 
+  // ── Modo guiado: paso visible y marca del coach ────────────────────────────────────────────
+  // El muro de cupo NO es un paso del alta: mientras está en pantalla no hay indicador.
+  const guidedStep: GuidedStep | null = !guided || phase === 'upgrade'
+    ? null
+    : phase === 'form' ? 1 : phase === 'success' ? 2 : 3
+  // Lo que ve el ALUMNO: el color y el logo del branding del coach, no el `theme.primary` de su
+  // panel (que puede ir neutro si apagó `use_brand_colors_coach`). Sin branding cargado se cae al
+  // primario del tema, nunca a un hex escrito acá.
+  const brandColor = branding?.primaryColor?.trim() || theme.primary
+  const brandName = branding?.displayName?.trim() || ''
+  const brandLogo = (theme.scheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
+  // Sello «Hecho con EVA»: mismo gate FAIL-OPEN que las superficies del alumno (free/starter sí).
+  // El tier del branding llega como `string | null` del servidor ⇒ pasa por la guarda de tipo
+  // (`isSubscriptionTier`) en vez de un `as`: un valor desconocido cae a `free` y el sello se
+  // pinta, que es el lado seguro (regalar atribución antes que regalar el beneficio pago).
+  const brandingTier = branding?.subscriptionTier
+  const previewTier: SubscriptionTier =
+    currentTier ?? (isSubscriptionTier(brandingTier) ? brandingTier : 'free')
+  const previewShowsBadge = showsEvaBadge(previewTier)
+  const firstName = form.fullName.trim().split(/\s+/)[0] ?? ''
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -356,7 +550,78 @@ export function CreateClientModal({
         >
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
 
-          {phase === 'success' && success ? (
+          {guidedStep ? <GuidedStepBar step={guidedStep} theme={theme} /> : null}
+
+          {phase === 'preview' && success ? (
+            // ─── (D) Guiado · paso 3 «Así la ve» ──────────────────────────────────
+            <ScrollView
+              style={styles.formScroll}
+              contentContainerStyle={styles.stateWrap}
+              showsVerticalScrollIndicator={false}
+            >
+              <GuidedPreviewCopy theme={theme} persona={persona} clientName={success.clientName} />
+              <GuidedLoginPreview
+                theme={theme}
+                brandName={brandName}
+                brandColor={brandColor}
+                logoUrl={brandLogo}
+                showEvaBadge={previewShowsBadge}
+              />
+              <Button testID="create-client-guided-done" label="Listo" variant="sport" full onPress={handleClose} />
+            </ScrollView>
+          ) : phase === 'success' && success && guided ? (
+            // ─── (B') Guiado · paso 2 «Cómo le llega» ─────────────────────────────
+            // Misma semántica que la columna 2 del stepper web: el alta ya mandó el correo, acá se
+            // elige el canal por el que el coach de verdad le habla.
+            <ScrollView
+              style={styles.formScroll}
+              contentContainerStyle={styles.stateWrap}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={[styles.stateCircle, { backgroundColor: SUCCESS + '26' }]}>
+                <CheckCircle2 size={32} color={SUCCESS} />
+              </View>
+              <Text style={[styles.stateTitle, { color: theme.foreground }]}>
+                {success.clientName} ya tiene su cuenta
+              </Text>
+              <Text style={[styles.stateBody, { color: theme.mutedForeground }]}>
+                {hasShareableLink(success.loginUrl)
+                  ? 'Su acceso ya salió por correo. Ahora avísale por donde de verdad te lee.'
+                  : 'Su acceso ya salió por correo, con la clave temporal para su primer ingreso.'}
+              </Text>
+              {hasShareableLink(success.loginUrl) ? (
+                <GuidedChannelPicker persona={persona} theme={theme} selected={channel} onPick={handleChannel} />
+              ) : null}
+              {linkCopied ? (
+                <View
+                  testID="create-client-guided-copied"
+                  accessibilityLiveRegion="polite"
+                  style={[styles.freedBox, { backgroundColor: SUCCESS + '18', borderColor: SUCCESS + '40' }]}
+                >
+                  <CheckCircle2 size={16} color={SUCCESS} />
+                  <Text style={[styles.freedText, { color: theme.foreground }]}>
+                    Link copiado. Pégalo donde quieras.
+                  </Text>
+                </View>
+              ) : null}
+              {/* La clave se puede seleccionar y copiar: hay coaches que la dictan por teléfono. */}
+              <Text selectable style={[styles.guidedNote, { color: theme.mutedForeground }]}>
+                Clave temporal: {guidedPassword} — la cambia al entrar.
+              </Text>
+              <Button
+                testID="create-client-guided-next"
+                label="Continuar"
+                variant="sport"
+                full
+                onPress={() => setPhase(GUIDED_PHASE[nextGuidedStep(2, 'channel_chosen')])}
+              />
+              <TouchableOpacity testID="create-client-skip" onPress={handleClose} hitSlop={8}>
+                <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Omitir por ahora</Text>
+              </TouchableOpacity>
+              <View style={{ height: 12 }} />
+            </ScrollView>
+          ) : phase === 'success' && success ? (
             // ─── (B) Éxito + CTA WhatsApp ─────────────────────────────────────────
             <View style={styles.stateWrap}>
               <View style={[styles.stateCircle, { backgroundColor: SUCCESS + '26' }]}>
@@ -432,9 +697,13 @@ export function CreateClientModal({
             <>
               <View style={styles.header}>
                 <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={[styles.title, { color: theme.foreground }]}>Agregar Nuevo Alumno</Text>
+                  <Text style={[styles.title, { color: theme.foreground }]}>
+                    {guided ? guidedTitle(persona) : 'Agregar Nuevo Alumno'}
+                  </Text>
                   <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>
-                    Se creará una cuenta con contraseña temporal. El alumno deberá cambiarla en su primer ingreso.
+                    {guided
+                      ? guidedFormHint(persona)
+                      : 'Se creará una cuenta con contraseña temporal. El alumno deberá cambiarla en su primer ingreso.'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -484,41 +753,82 @@ export function CreateClientModal({
                     autoCorrect={false}
                     error={fieldErrors.email?.[0]}
                   />
-                  <Input
-                    testID="create-client-phone"
-                    label="Teléfono (WhatsApp)"
-                    value={form.phone}
-                    onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))}
-                    placeholder="+56xxxxxxxxx"
-                    keyboardType="phone-pad"
-                    autoCorrect={false}
-                  />
-                  <Input
-                    testID="create-client-startDate"
-                    label="Inicio de mensualidad"
-                    value={form.subscriptionStartDate}
-                    onChangeText={(v) => setForm((f) => ({ ...f, subscriptionStartDate: v }))}
-                    placeholder="AAAA-MM-DD"
-                    maxLength={10}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    error={fieldErrors.subscription_start_date?.[0]}
-                  />
-                  <Input
-                    testID="create-client-tempPassword"
-                    label="Contraseña temporal"
-                    value={form.tempPassword}
-                    onChangeText={(v) => setForm((f) => ({ ...f, tempPassword: v }))}
-                    placeholder="Mín. 8 caracteres"
-                    secureTextEntry={!showPw}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    rightIcon={showPw ? EyeOff : Eye}
-                    onRightIconPress={() => setShowPw((v) => !v)}
-                    rightIconLabel={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                    hint="Comparte esta clave con tu alumno. Se le pedirá cambiarla al entrar."
-                    error={fieldErrors.temp_password?.[0]}
-                  />
+                  {/* Nota de cupo del plan Free: el alumno de ejemplo NO gasta el único lugar, y
+                      el coach nuevo no tiene cómo saberlo. Solo aparece cuando hay demo sembrado
+                      (`guidedCapNote` devuelve null en cualquier otro caso). */}
+                  {capNote ? (
+                    <View
+                      testID="create-client-guided-cap-note"
+                      style={[styles.guidedNoteBox, { backgroundColor: theme.muted, borderColor: theme.border }]}
+                    >
+                      <Text style={[styles.guidedNoteText, { color: theme.mutedForeground }]}>{capNote}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Guiado: teléfono y fecha viven detrás de «Opcional» (espejo del `<details>` de
+                      la web) y la contraseña temporal la genera la app. Sin guiar, el formulario
+                      completo de siempre. */}
+                  {guided ? (
+                    <TouchableOpacity
+                      testID="create-client-guided-optional"
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: showOptional }}
+                      accessibilityLabel="Datos opcionales"
+                      activeOpacity={0.82}
+                      onPress={() => setShowOptional((v) => !v)}
+                      style={[styles.optionalToggle, { borderColor: theme.borderDefault }]}
+                    >
+                      <Text style={[styles.optionalLabel, { color: theme.mutedForeground }]}>Opcional</Text>
+                      {showOptional ? (
+                        <ChevronDown size={16} color={theme.mutedForeground} />
+                      ) : (
+                        <ChevronRight size={16} color={theme.mutedForeground} />
+                      )}
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {!guided || showOptional ? (
+                    <>
+                      <Input
+                        testID="create-client-phone"
+                        label="Teléfono (WhatsApp)"
+                        value={form.phone}
+                        onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))}
+                        placeholder="+56xxxxxxxxx"
+                        keyboardType="phone-pad"
+                        autoCorrect={false}
+                      />
+                      <Input
+                        testID="create-client-startDate"
+                        label="Inicio de mensualidad"
+                        value={form.subscriptionStartDate}
+                        onChangeText={(v) => setForm((f) => ({ ...f, subscriptionStartDate: v }))}
+                        placeholder="AAAA-MM-DD"
+                        maxLength={10}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        error={fieldErrors.subscription_start_date?.[0]}
+                      />
+                    </>
+                  ) : null}
+
+                  {guided ? null : (
+                    <Input
+                      testID="create-client-tempPassword"
+                      label="Contraseña temporal"
+                      value={form.tempPassword}
+                      onChangeText={(v) => setForm((f) => ({ ...f, tempPassword: v }))}
+                      placeholder="Mín. 8 caracteres"
+                      secureTextEntry={!showPw}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      rightIcon={showPw ? EyeOff : Eye}
+                      onRightIconPress={() => setShowPw((v) => !v)}
+                      rightIconLabel={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                      hint="Comparte esta clave con tu alumno. Se le pedirá cambiarla al entrar."
+                      error={fieldErrors.temp_password?.[0]}
+                    />
+                  )}
 
                   {/* Confirmación de edad — Ley 21.719 */}
                   <TouchableOpacity
@@ -561,7 +871,15 @@ export function CreateClientModal({
                 />
                 <ModalButton
                   testID="create-client-submit"
-                  label={loading ? 'Creando alumno...' : 'Crear Alumno'}
+                  label={
+                    loading
+                      ? guided ? 'Creando la cuenta…' : 'Creando alumno...'
+                      : guided
+                        ? firstName
+                          ? `Invitar a ${firstName}`
+                          : `Invitar a mi ${noun}`
+                        : 'Crear Alumno'
+                  }
                   theme={theme}
                   variant="sport"
                   leftIcon={UserPlus}
@@ -639,6 +957,20 @@ const styles = StyleSheet.create({
   stateLink: { fontSize: 14, fontFamily: FONT.uiSemibold },
   // Caption Android-only: texto plano, sin subrayado ni color de link.
   stateCaption: { fontSize: 12, lineHeight: 16, textAlign: 'center', fontFamily: FONT.ui, marginTop: -8 },
+  // Alta guiada (paso 4 de la guía v2)
+  guidedNote: { fontSize: 12, lineHeight: 17, textAlign: 'center', fontFamily: FONT.ui },
+  guidedNoteBox: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  guidedNoteText: { fontSize: 12, lineHeight: 17, fontFamily: FONT.ui },
+  optionalToggle: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+  },
+  optionalLabel: { fontSize: 13, fontFamily: FONT.uiSemibold },
   waButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 12, width: '100%',

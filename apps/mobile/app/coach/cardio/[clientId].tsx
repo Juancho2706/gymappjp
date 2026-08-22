@@ -18,6 +18,9 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
 import { toast } from '../../../components/Toast'
 import { CardioHeader, CardioZoneList } from '../../../components/coach/CardioShared'
+import { GuidedTaskBanner } from '../../../components/coach/GuidedTaskBanner'
+import { useCoachOnboarding } from '../../../lib/coach-dashboard'
+import { isGuidedEntry } from '../../../lib/templates'
 
 /**
  * Perfil cardio del alumno (vista del coach — E6-03), espejo de
@@ -31,7 +34,10 @@ import { CardioHeader, CardioZoneList } from '../../../components/coach/CardioSh
 type Errors = Partial<Record<'birth_date' | 'resting_hr' | 'max_hr_override' | 'ref_5k_time_sec', string>>
 
 export default function CardioClientScreen() {
-  const { clientId } = useLocalSearchParams<{ clientId: string }>()
+  const { clientId, primera } = useLocalSearchParams<{ clientId: string; primera?: string }>()
+  // Paso 3 de la guía (rama endurance): la ruta llega marcada con `?primera=1` (@eva/onboarding).
+  const guidedFirst = isGuidedEntry(primera)
+  const onboarding = useCoachOnboarding()
   const { theme } = useTheme()
   const router = useRouter()
   const { hasModule, ready } = useEntitlements()
@@ -129,6 +135,21 @@ export default function CardioClientScreen() {
         <ModuleOffNotice moduleKey="cardio" />
       ) : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/* Tarea guiada del paso 3 (hallazgo 5 del QA del owner 22-08). `inset="none"`: el
+              ScrollView ya trae los 16 px de gutter. */}
+          {guidedFirst ? (
+            <GuidedTaskBanner
+              coachId={onboarding?.coachId ?? null}
+              surface="cardio"
+              inset="none"
+              title={`Las zonas de ${onboarding?.onboardingV2.demoName?.trim() || client?.full_name || 'tu atleta'}`}
+              bullets={[
+                'Carga su FC de reposo y su marca de 5K.',
+                'Revisa las zonas Z1–Z5 que salen de ahí.',
+                'Con esas zonas se prescribe su semana base.',
+              ]}
+            />
+          ) : null}
           <Card padding="md" style={{ gap: 16 }}>
             {/* QA2-B5: campo segmentado Día/Mes/Año (100% JS, OTA-safe) en vez del
                 TextInput crudo "AAAA-MM-DD". Emite el ISO que el backend ya espera. */}

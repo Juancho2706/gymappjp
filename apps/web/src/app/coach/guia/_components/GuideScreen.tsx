@@ -3,24 +3,14 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-    Activity,
-    ArrowRight,
-    ClipboardList,
-    Dumbbell,
-    HeartPulse,
-    PartyPopper,
-    Palette,
-    RotateCcw,
-    Salad,
-    Smartphone,
-    Sparkles,
-    Trash2,
-    UserPlus,
-    type LucideIcon,
-} from 'lucide-react'
+import { ArrowRight, PartyPopper, RotateCcw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { resolveHref, type OnboardingSignals, type OnboardingStepKey } from '@eva/onboarding'
+import {
+    nextStep,
+    resolveHref,
+    type OnboardingSignals,
+    type OnboardingStepKey,
+} from '@eva/onboarding'
 import type { Persona } from '@eva/schemas'
 import type { Json } from '@/lib/database.types'
 import { cn } from '@/lib/utils'
@@ -38,6 +28,7 @@ import { guidePillRestorePayload, restoreGuidePillLocally } from '../_lib/guide-
 import {
     PERSONA_CHIP_LABEL,
     resolveStepViews,
+    stepAnchorId,
     welcomeLines,
     withPrimeraFlag,
 } from '../_lib/guide-view'
@@ -57,23 +48,6 @@ import { GuideStepCard } from './GuideStepCard'
  * telemetría, confeti del aha) lo administra el MISMO `useOnboardingGuide` de siempre — server
  * gana, `emitted` evita re-emitir, escritura con debounce.
  */
-
-/** Iconos por paso. El 3 cambia por persona: es el único paso que cambia de verdad entre ramas. */
-const STEP_ICON: Record<OnboardingStepKey, LucideIcon> = {
-    profile_branding: Palette,
-    vive_tu_app: Smartphone,
-    first_artifact: ClipboardList,
-    first_client: UserPlus,
-    aha: Sparkles,
-}
-
-const FIRST_ARTIFACT_ICON: Record<Persona, LucideIcon> = {
-    strength: Dumbbell,
-    nutrition: Salad,
-    rehab: Activity,
-    endurance: HeartPulse,
-    other: ClipboardList,
-}
 
 /** Verbo del CTA por paso: el coach tiene que saber qué pasa al tocarlo. */
 const STEP_CTA: Record<OnboardingStepKey, string> = {
@@ -123,20 +97,58 @@ export function GuideScreen({
 
     const [line1, line2] = welcomeLines(persona, firstName)
     const views = resolveStepViews(vm.steps, vm.completed)
+    const next = vm.ready ? nextStep(vm.persona, vm.completed) : null
+
+    useWelcomeStepFocus(welcome, next?.key ?? null)
 
     return (
         <div className="mx-auto w-full max-w-[1100px] pb-14">
             {welcome && (
+                /* Superficie de tarjeta + una barra de marca a la izquierda. Antes era
+                   `bg-[var(--sport-100)]` con `text-[var(--sport-700)]`: en dark eso es un azul
+                   translúcido con texto celeste encima y el owner no lo pudo leer (QA 22-08,
+                   hallazgo 2). El acento de marca ahora es SOLO la barra; el texto usa los tokens
+                   de siempre, que ya tienen contraste AA en los dos temas. La barra es un
+                   elemento propio (no `border-l-*`) para no depender del orden en que Tailwind
+                   emita `border-color` y `border-left-color`. */
                 <section
                     aria-label="Bienvenida"
-                    className="mb-6 rounded-card border border-[var(--sport-200)] bg-[var(--sport-100)] px-4 py-3.5 sm:px-5"
+                    className="relative mb-6 overflow-hidden rounded-card border border-subtle bg-surface-card py-4 pl-5 pr-4 shadow-[var(--shadow-xs)] sm:pl-6 sm:pr-5"
                 >
-                    <p className="font-display text-[16px] font-extrabold tracking-[-0.02em] text-[var(--sport-700)]">
+                    <span
+                        aria-hidden="true"
+                        className="absolute inset-y-0 left-0 w-1 bg-[var(--sport-500)]"
+                    />
+                    <p className="font-display text-[16px] font-extrabold tracking-[-0.02em] text-[var(--text-strong)]">
                         {line1}
                     </p>
-                    <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--sport-700)] opacity-90">
+                    <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--text-muted)]">
                         {line2}
                     </p>
+                    {next != null && (
+                        /* El puente al trabajo: sin esto, elegir persona dejaba al coach mirando
+                           una banda y cinco tarjetas iguales, sin saber por cuál empezar. */
+                        <button
+                            type="button"
+                            onClick={() => {
+                                focusStepCard(next.key, { focus: true })
+                                void postGuideEngagement(next.key, {
+                                    widget: 'guide_screen',
+                                    action: 'welcome_start',
+                                    step: next.key,
+                                    persona: persona ?? 'sin_persona',
+                                })
+                            }}
+                            className={cn(
+                                'mt-3.5 inline-flex h-11 w-full touch-manipulation items-center justify-center gap-1.5 rounded-control px-4 text-[13.5px] font-bold sm:w-auto',
+                                'bg-[var(--cta-fill)] text-[var(--text-on-sport)] motion-safe:transition-colors hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
+                                'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]'
+                            )}
+                        >
+                            <span className="min-w-0 truncate">Empezar: {next.label}</span>
+                            <ArrowRight className="size-4 shrink-0" aria-hidden="true" />
+                        </button>
+                    )}
                 </section>
             )}
 
@@ -196,17 +208,12 @@ export function GuideScreen({
                                 const resolved = resolveHref(step, { demoClientId })
                                 const href =
                                     step.key === 'first_artifact' ? withPrimeraFlag(resolved) : resolved
-                                const icon =
-                                    step.key === 'first_artifact'
-                                        ? FIRST_ARTIFACT_ICON[vm.persona]
-                                        : STEP_ICON[step.key]
 
                                 return (
                                     <GuideStepCard
                                         key={step.key}
                                         view={view}
                                         href={href}
-                                        icon={icon}
                                         ctaLabel={STEP_CTA[step.key]}
                                         hint={
                                             step.key === 'aha'
@@ -293,6 +300,51 @@ export function GuideScreen({
             </div>
         </div>
     )
+}
+
+/**
+ * Lleva la vista (y opcionalmente el foco) a la tarjeta de un paso.
+ *
+ * Hallazgo 1 del QA del owner (22-08): «elegí persona, me arma las cosas y me devuelve al INICIO
+ * de la guía, no me lleva al siguiente paso». El aterrizaje ahora es EL PASO QUE SIGUE, no el
+ * encabezado.
+ *
+ * `prefers-reduced-motion` manda: con la preferencia activa el salto es instantáneo (`auto`), sin
+ * scroll animado. `scrollIntoView` no existe en jsdom, así que se comprueba antes de llamarlo.
+ */
+function focusStepCard(key: OnboardingStepKey, { focus }: { focus: boolean }): void {
+    if (typeof document === 'undefined') return
+    const el = document.getElementById(stepAnchorId(key))
+    if (el == null) return
+
+    const reduced =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' })
+    }
+    if (focus) el.focus({ preventScroll: true })
+}
+
+/**
+ * Primera entrada con `?bienvenida=1`: apenas la guía hidrata, la tarjeta del paso siguiente
+ * queda centrada en pantalla. Solo SCROLL, no foco — robar el foco al montar le arruina la
+ * lectura a quien usa lector de pantalla; el foco lo mueve el botón «Empezar», que es un gesto
+ * del coach.
+ *
+ * Corre UNA sola vez por montaje (`doneRef`): si el auto-tildado adelanta el paso siguiente
+ * mientras el coach lee, la pantalla no se le mueve debajo.
+ */
+function useWelcomeStepFocus(welcome: boolean, nextKey: OnboardingStepKey | null): void {
+    const doneRef = useRef(false)
+
+    useEffect(() => {
+        if (!welcome || nextKey == null || doneRef.current) return
+        doneRef.current = true
+        focusStepCard(nextKey, { focus: false })
+    }, [welcome, nextKey])
 }
 
 /**

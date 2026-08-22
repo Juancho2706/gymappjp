@@ -1,10 +1,11 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Check, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { GuideStepView } from '../_lib/guide-view'
+import { stepAnchorId, type GuideStepView } from '../_lib/guide-view'
 
 /**
  * Una de las 5 tarjetas de la guía. Grande y con aire: en su casa nueva
@@ -12,8 +13,13 @@ import type { GuideStepView } from '../_lib/guide-view'
  * dashboard y es la pantalla entera, así que cada paso se lee de un vistazo.
  *
  * Tres estados visuales (`resolveStepViews`): `done` (tildado, apagado), `next` (el ÚNICO
- * destacado, con borde y CTA sólido) y `pending` (visible pero en segundo plano). Nunca hay dos
- * pasos compitiendo por la atención.
+ * destacado, con anillo de marca, rótulo «Empieza por aquí» y CTA sólido) y `pending` (visible
+ * pero en segundo plano). Nunca hay dos pasos compitiendo por la atención.
+ *
+ * Iconos: NO hay iconografía por paso. El QA del owner (22-08, hallazgo 3) fue explícito —los
+ * lucide genéricos (paleta, celular, portapapeles…) no decían nada— así que el avatar de cada
+ * paso pendiente es el monito de EVA sobre el color de marca, el MISMO recurso que la píldora
+ * flotante (`components/coach/GuidePill.tsx`). El paso hecho muestra el tilde sobre verde.
  *
  * `children` es el hueco para lo que no es un link: la tarjeta «Tu marca en 60 segundos» del paso
  * 1 y el botón «Vive tu app» del paso 2.
@@ -21,7 +27,6 @@ import type { GuideStepView } from '../_lib/guide-view'
 export function GuideStepCard({
     view,
     href,
-    icon: Icon,
     ctaLabel,
     hint,
     onOpen,
@@ -31,7 +36,6 @@ export function GuideStepCard({
     view: GuideStepView
     /** Destino ya resuelto (`resolveHref` + `?primera=1` donde corresponde). `null` = no navega. */
     href: string | null
-    icon: LucideIcon
     ctaLabel: string
     /** Línea extra para los pasos que NO dispara el coach (el aha lo completa su alumno). */
     hint?: string
@@ -47,11 +51,17 @@ export function GuideStepCard({
 
     return (
         <li
+            // Ancla + `tabIndex={-1}`: la banda de bienvenida manda el scroll y el foco acá, así
+            // el coach que acaba de elegir persona aterriza EN el paso que sigue y no arriba de
+            // todo. `scroll-mt-*` deja aire para la cabecera pegajosa del panel.
+            id={stepAnchorId(step.key)}
+            tabIndex={-1}
             className={cn(
-                'rounded-card border bg-surface-card p-4 sm:p-5',
+                'scroll-mt-24 rounded-card border bg-surface-card p-4 sm:p-5',
                 'motion-safe:transition-[border-color,box-shadow] motion-safe:duration-[var(--dur-base)]',
+                'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]',
                 isNext
-                    ? 'border-[var(--sport-500)]/45 shadow-[var(--shadow-md)]'
+                    ? 'border-[var(--sport-500)] shadow-[var(--shadow-md)] ring-2 ring-[var(--sport-500)]/25'
                     : 'border-subtle shadow-[var(--shadow-xs)]',
                 done && 'opacity-80'
             )}
@@ -61,14 +71,23 @@ export function GuideStepCard({
                     aria-hidden="true"
                     className={cn(
                         'flex size-11 shrink-0 items-center justify-center rounded-control',
-                        done
-                            ? 'bg-[var(--success-100)] text-[var(--success-600)]'
-                            : isNext
-                              ? 'bg-[var(--sport-500)] text-[var(--text-on-sport)]'
-                              : 'bg-surface-sunken text-[var(--text-muted)]'
+                        done ? 'bg-[var(--success-100)] text-[var(--success-600)]' : 'bg-[var(--sport-500)]',
+                        // Un solo paso compite por la atención: los pendientes llevan la marca atenuada.
+                        !done && !isNext && 'opacity-60'
                     )}
                 >
-                    {done ? <Check className="size-[22px]" /> : <Icon className="size-[22px]" />}
+                    {done ? (
+                        <Check className="size-[22px]" />
+                    ) : (
+                        <Image
+                            src="/LOGOS/eva-icon-white.png"
+                            alt=""
+                            width={24}
+                            height={24}
+                            className="size-6 object-contain"
+                            priority={false}
+                        />
+                    )}
                 </span>
 
                 <div className="min-w-0 flex-1">
@@ -81,9 +100,11 @@ export function GuideStepCard({
                                 Hecho
                             </span>
                         )}
+                        {/* Chip sobre `--cta-fill` (opaco también en dark) y no `--sport-500` (70 % de
+                            alpha en dark): `--text-on-sport` se calcula contra la marca plena. */}
                         {isNext && (
-                            <span className="rounded-pill bg-[var(--sport-100)] px-2 py-0.5 text-[10.5px] font-extrabold uppercase tracking-[0.04em] text-[var(--sport-700)]">
-                                Sigue aquí
+                            <span className="rounded-pill bg-[var(--cta-fill)] px-2 py-0.5 text-[10.5px] font-extrabold uppercase tracking-[0.04em] text-[var(--text-on-sport)]">
+                                Empieza por aquí
                             </span>
                         )}
                     </div>

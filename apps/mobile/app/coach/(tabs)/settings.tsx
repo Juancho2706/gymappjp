@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import {
+  Compass,
   CreditCard,
   LayoutGrid,
   LifeBuoy,
@@ -45,13 +46,14 @@ import { requestAccountDeletion } from '../../../lib/account-deletion'
  *  · Mi Marca    → /coach/settings/brand    (el brand studio de E3, mudado bajo el hub)
  *  · Mi plan     → /coach/subscription      (tab existente, solo estado del plan)
  *  · Módulos     → /coach/modules           (catálogo E6-12)
+ *  · Mi panel    → /coach/settings/mi-panel  (persona, módulos del panel, guía y alumno de ejemplo)
  *  · Funciones   → /coach/settings/features  (completo: presets + master switch + secciones)
  *  · Áreas       → /coach/settings/areas     (completo: CRUD de áreas del builder)
  *  · Equipo      → /coach/team                (solo si kind es team_*)
  */
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver perfil.tsx).
-for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, LogOut, Moon, Package, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
+for (const Icon of [Compass, CreditCard, LayoutGrid, LifeBuoy, LogOut, Moon, Package, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
@@ -432,6 +434,21 @@ export default function CoachSettingsHubScreen() {
           <View>
             <SectionTitle>Configuración</SectionTitle>
             <Card padding="none">
+              {/* «Mi panel» — SOLO coach standalone: a un coach de team/org el panel se lo define su
+                  tenant, y el endpoint lo rechaza igual (espejo de `requireStandaloneCoach` web). */}
+              {!managed && !isTeam ? (
+                <>
+                  <ListRow
+                    testID="hub-mi-panel"
+                    leading={<IconTile Icon={Compass} tone="sport" />}
+                    title="Mi panel"
+                    subtitle="Tu especialidad, qué módulos ves y tu guía de inicio"
+                    showChevron
+                    onPress={() => router.push('/coach/settings/mi-panel')}
+                  />
+                  <RowDivider />
+                </>
+              ) : null}
               <ListRow
                 testID="hub-features"
                 leading={<IconTile Icon={SlidersHorizontal} />}
