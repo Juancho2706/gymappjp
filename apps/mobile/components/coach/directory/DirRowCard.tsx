@@ -135,17 +135,28 @@ export const DirRowCard = memo(function DirRowCard({
           </View>
         </View>
 
+        {/*
+          Botón real de 44×44 (`hit-min` del DS), no un ícono suelto: el ⋮ dibujado con la tinta
+          apagada seguía casi invisible en dark sobre la card (QA owner 22-08, segunda pasada). Lo
+          que lo hace visible no es subirle el contraste al trazo, es DARLE CUERPO — una superficie
+          hundida (`theme.muted` = surface-sunken) con el radio de control del DS y el ícono en la
+          tinta fuerte (`theme.foreground`).
+
+          Ambos colores salen de tokens del tema, así que el contraste se sostiene en los dos
+          esquemas: claro, tinta #0B0E13 sobre #F4F6F8 (la card es blanca, el botón se lee como un
+          hueco); oscuro, tinta #F4F6F8 sobre #1F262F (la card es #161B22, el botón se lee como un
+          relieve). Nada de hex sueltos ni de blanco a mano — white-label no toca esta rampa.
+        */}
         <TouchableOpacity
           testID={`directory-row-menu-${item.id}`}
           accessibilityRole="button"
-          accessibilityLabel={`Acciones de ${item.fullName}`}
+          accessibilityLabel={`Más opciones de ${item.fullName}`}
           hitSlop={8}
+          activeOpacity={0.7}
           onPress={(event) => { event.stopPropagation(); setMenu(true) }}
-          style={styles.menuBtn}
+          style={[styles.menuBtn, { backgroundColor: theme.muted, borderRadius: theme.radius.control }]}
         >
-          {/* `text-muted` (token semántico): `ink-700` es tinta oscura fija y en dark desaparecía
-              sobre la card (QA owner 22-08). */}
-          <MoreVertical size={18} className="text-muted" />
+          <MoreVertical size={18} color={theme.foreground} />
         </TouchableOpacity>
       </TouchableOpacity>
 
@@ -194,5 +205,6 @@ const styles = StyleSheet.create({
   dotSep: { fontSize: 12 },
   statusPill: { paddingHorizontal: 6, paddingVertical: 1 },
   statusText: { fontSize: 10.5, fontFamily: FONT.uiBold },
-  menuBtn: { width: 36, height: 36, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  // 44×44 = el `hit-min` del DS. El color y el radio llegan por tokens del tema en el JSX.
+  menuBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
 })

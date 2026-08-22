@@ -10,6 +10,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { TYPE, textStyle, FONT } from '../../../lib/typography'
 import { archiveClient, type ClientActionWorkspace } from '../../../lib/client-actions'
+import { occupiesCap } from '../../../lib/client-cap'
 import { getCoachDirectoryClients, type DirectoryClient } from '../../../lib/clients-directory'
 import { lastInfo } from './directory-shared'
 
@@ -70,7 +71,10 @@ export function ArchiveToFreeSpaceSheet({ open, onClose, workspace, onFreed }: P
         teamId: workspace.teamId,
       })
       const live = all.filter((c) => !c.isArchived)
-      const occupying = live.filter((c) => !c.isDemo)
+      // MISMO predicado que el conteo del pre-check (`countCapClients`): la lista de «qué puedo
+      // archivar para liberar cupo» y el número que abrió el muro tienen que salir de la misma
+      // regla, o el coach ve un muro por N alumnos y una lista de N-1.
+      const occupying = live.filter(occupiesCap)
       setRows(occupying)
       setDemoOnly(occupying.length === 0 && live.length > 0)
     } catch {

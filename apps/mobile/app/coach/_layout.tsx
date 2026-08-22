@@ -8,7 +8,14 @@ import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { AppBackground } from '../../components/AppBackground'
 import { Button } from '../../components/Button'
 import { refreshCoachAccess, useCoachAccess } from '../../lib/coach-access'
-import { getCachedCoachPersonaStatus, PERSONA_ROUTE, resolveCoachPersonaGate } from '../../lib/coach-persona'
+import {
+  getCachedCoachPersonaStatus,
+  isPersonaJustApplied,
+  PERSONA_ROUTE,
+  resolveCoachPersonaGate,
+  resolveGateNeedsPersona,
+  shouldGateToPersona,
+} from '../../lib/coach-persona'
 import { OnboardingModeProvider } from '../../lib/onboarding-mode'
 
 /** Unica ruta del arbol coach que un coach SIN acceso efectivo puede ver (es su salida). */
@@ -98,8 +105,24 @@ export default function CoachLayout() {
     }
   }, [ready, blocked, segmentKey])
 
+  // El REDIRECT no puede depender solo del estado de React: cuando el coach contesta, el `replace`
+  // a la guia cambia el pathname (y con el `personaExempt`) en el MISMO commit en que este efecto
+  // corre, mientras el efecto de arriba todavia esta resolviendo su promesa. Con el estado viejo
+  // (`needsPersona === true`) eso mandaba de vuelta a la pantalla de especialidad, y recien al
+  // segundo intento aterrizaba en la guia (QA device 2026-08-22). Por eso la decision lee la cache
+  // de modulo —que se escribe sincronicamente al contestar— y respeta la ventana de gracia.
   useEffect(() => {
-    if (ready && !blocked && needsPersona === true && !personaExempt) router.replace(PERSONA_ROUTE)
+    if (
+      shouldGateToPersona({
+        ready,
+        blocked,
+        needsPersona: resolveGateNeedsPersona(needsPersona),
+        exempt: personaExempt,
+        justApplied: isPersonaJustApplied(),
+      })
+    ) {
+      router.replace(PERSONA_ROUTE)
+    }
   }, [ready, blocked, needsPersona, personaExempt, router])
 
   // Bloqueado y todavia fuera del muro: no renderizar el arbol coach ni un frame (antes se veia el

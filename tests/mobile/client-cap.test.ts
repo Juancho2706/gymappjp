@@ -10,9 +10,12 @@ import {
   capRatio,
   capTone,
   capWallCopy,
+  countCapClients,
   freePlanBenefits,
+  occupiesCap,
   shouldOpenAtCapWall,
   storePlanChangeCaption,
+  type CapCountable,
 } from '../../apps/mobile/lib/client-cap'
 
 describe('client-cap: capRatio', () => {
@@ -77,6 +80,66 @@ describe('client-cap: capMeterLabel', () => {
   it('conteos imposibles no rompen la etiqueta', () => {
     expect(capMeterLabel(-2, 25)).toBe('0 de 25 alumnos activos')
     expect(capMeterLabel(Number.NaN, 25)).toBe('0 de 25 alumnos activos')
+  })
+})
+
+describe('client-cap: countCapClients (quién OCUPA cupo)', () => {
+  const real = (over: Partial<CapCountable> = {}): CapCountable => ({ isArchived: false, isDemo: false, ...over })
+
+  it('el alumno de EJEMPLO no cuenta', () => {
+    // Regresión del QA del owner en Android (22-08): coach Free con cupo 1 y SOLO el demo veía el
+    // muro «Alcanzaste el cupo de tu plan» al tocar «Nuevo alumno» y en el paso 4 de la guía.
+    expect(countCapClients([real({ isDemo: true })])).toBe(0)
+    expect(occupiesCap(real({ isDemo: true }))).toBe(false)
+  })
+
+  it('el archivado no cuenta', () => {
+    expect(countCapClients([real({ isArchived: true })])).toBe(0)
+    expect(occupiesCap(real({ isArchived: true }))).toBe(false)
+  })
+
+  it('mezcla: solo los activos reales ocupan cupo', () => {
+    const cartera: CapCountable[] = [
+      real(),                                     // cuenta
+      real(),                                     // cuenta
+      real({ isDemo: true }),                     // ejemplo del onboarding
+      real({ isArchived: true }),                 // archivado
+      real({ isArchived: true, isDemo: true }),   // ejemplo archivado
+    ]
+    expect(countCapClients(cartera)).toBe(2)
+  })
+
+  it('un alumno PAUSADO sigue ocupando cupo (el predicado no mira `is_active`)', () => {
+    // Espejo exacto del server (`countActiveStandaloneClients`): el gate filtra por `is_archived`,
+    // nunca por `is_active`. Contar distinto acá haría discrepar el pre-check con el 402.
+    expect(countCapClients([real()])).toBe(1)
+  })
+
+  it('sin la columna `is_demo` (DB vieja) el alumno cuenta, como antes', () => {
+    expect(countCapClients([{ isArchived: false }])).toBe(1)
+    expect(countCapClients([{ isArchived: false, isDemo: null }])).toBe(1)
+  })
+
+  it('cartera vacía o ausente ⇒ 0 (default PERMISIVO: deja pasar al formulario)', () => {
+    expect(countCapClients([])).toBe(0)
+    expect(countCapClients(null)).toBe(0)
+    expect(countCapClients(undefined)).toBe(0)
+    expect(occupiesCap(null)).toBe(false)
+    expect(occupiesCap(undefined)).toBe(false)
+  })
+
+  it('con solo el demo, el medidor Free dice «0 de 1» y NO se lee lleno', () => {
+    // Las dos bocas del mismo número: el medidor del home y el pre-check del alta.
+    const active = countCapClients([real({ isDemo: true })])
+    expect(capMeterLabel(active, 1)).toBe('0 de 1 alumno activo')
+    expect(capTone(active, 1)).toBe('brand')
+    expect(shouldOpenAtCapWall({ activeCount: active, maxClients: 1 })).toBe(false)
+  })
+
+  it('con un alumno REAL, el coach Free sí choca contra el muro', () => {
+    const active = countCapClients([real(), real({ isDemo: true })])
+    expect(active).toBe(1)
+    expect(shouldOpenAtCapWall({ activeCount: active, maxClients: 1 })).toBe(true)
   })
 })
 

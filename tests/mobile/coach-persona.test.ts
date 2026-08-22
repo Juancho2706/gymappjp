@@ -238,3 +238,131 @@ describe('resolveCoachPersonaGate', () => {
         }
     })
 })
+
+// ── Decisión del gate del layout (bug de QA en device, 2026-08-22) ────────────────────────────
+//
+// El coach elegía «fuerza», la app lo mandaba de vuelta a la MISMA pantalla y recién al segundo
+// intento aterrizaba en la guía. Causa: el layout decidía con su estado de React (`needsPersona`),
+// que se actualiza por un efecto asincrónico, mientras el `replace` a la guía ya había cambiado el
+// pathname (y con él `personaExempt`) en el mismo commit. Lo que se pinnea acá:
+//  - `shouldGateToPersona` es pura y `justApplied` gana sobre un `needsPersona` viejo;
+//  - contestar deja la caché de módulo en `false` SINCRÓNICAMENTE, así el layout no espera a nadie;
+//  - una consulta que ya estaba en vuelo no puede aterrizar después y volver a decir «pregúntale».
+
+describe('shouldGateToPersona', () => {
+    const base = {
+        ready: true,
+        blocked: false,
+        needsPersona: true as boolean | null,
+        exempt: false,
+        justApplied: false,
+    }
+
+    it('redirige solo con veredicto resuelto, acceso vigente y ruta no exenta', async () => {
+        const { shouldGateToPersona } = await loadModule()
+        expect(shouldGateToPersona(base)).toBe(true)
+    })
+
+    it('sin veredicto todavia (null) no redirige a nadie', async () => {
+        const { shouldGateToPersona } = await loadModule()
+        expect(shouldGateToPersona({ ...base, needsPersona: null })).toBe(false)
+        expect(shouldGateToPersona({ ...base, needsPersona: false })).toBe(false)
+    })
+
+    it('acceso sin resolver o vencido: primero el plan, despues la especialidad', async () => {
+        const { shouldGateToPersona } = await loadModule()
+        expect(shouldGateToPersona({ ...base, ready: false })).toBe(false)
+        expect(shouldGateToPersona({ ...base, blocked: true })).toBe(false)
+    })
+
+    it('la ruta exenta jamas se intercepta (la pantalla misma seria un loop)', async () => {
+        const { shouldGateToPersona } = await loadModule()
+        expect(shouldGateToPersona({ ...base, exempt: true })).toBe(false)
+    })
+
+    it('recien contestada NO se vuelve a pedir aunque el estado de React siga en true', async () => {
+        const { shouldGateToPersona } = await loadModule()
+        expect(shouldGateToPersona({ ...base, justApplied: true })).toBe(false)
+    })
+})
+
+describe('ventana de gracia al contestar', () => {
+    it('contestar y saltar a la guia no vuelve a pedir la especialidad', async () => {
+        apiFetchImpl = async () => ({ ok: true, demoClientId: null })
+        const mod = await loadModule()
+        await mod.saveCoachPersona({ persona: 'strength' })
+
+        // Lo que ve el layout en el commit del `replace`: su estado de React sigue en `true`.
+        expect(mod.isPersonaJustApplied()).toBe(true)
+        expect(mod.resolveGateNeedsPersona(true)).toBe(false)
+        expect(
+            mod.shouldGateToPersona({
+                ready: true,
+                blocked: false,
+                needsPersona: true,
+                exempt: false,
+                justApplied: mod.isPersonaJustApplied(),
+            }),
+        ).toBe(false)
+    })
+
+    it('la gracia caduca, no es un apagon permanente del gate', async () => {
+        apiFetchImpl = async () => ({ ok: true, demoClientId: null })
+        const mod = await loadModule()
+        await mod.saveCoachPersona({ persona: 'strength' })
+        expect(mod.isPersonaJustApplied(Date.now() + mod.PERSONA_APPLIED_GRACE_MS + 1)).toBe(false)
+    })
+
+    it('sin nada contestado no hay gracia que valga', async () => {
+        const mod = await loadModule()
+        expect(mod.isPersonaJustApplied()).toBe(false)
+        expect(mod.resolveGateNeedsPersona(true)).toBe(true)
+        expect(mod.resolveGateNeedsPersona(null)).toBeNull()
+    })
+
+    it('resetear la cache olvida tambien la ventana de gracia', async () => {
+        apiFetchImpl = async () => ({ ok: true, demoClientId: null })
+        const mod = await loadModule()
+        await mod.saveCoachPersona({ persona: 'strength' })
+        mod.resetCoachPersonaCache()
+        expect(mod.isPersonaJustApplied()).toBe(false)
+        expect(mod.getCachedCoachPersonaStatus()).toBeNull()
+    })
+
+    it('un veredicto EN VUELO no puede pisar la respuesta recien dada', async () => {
+        let landLateGet: (value: unknown) => void = () => {}
+        apiFetchImpl = (_path, options) =>
+            options.method === 'POST'
+                ? Promise.resolve({ ok: true, demoClientId: null })
+                : new Promise((resolve) => {
+                      landLateGet = resolve
+                  })
+
+        const mod = await loadModule()
+        const pending = mod.resolveCoachPersonaGate()
+        // Dejar que el GET salga de verdad antes de contestar.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        await mod.saveCoachPersona({ persona: 'strength' })
+        landLateGet({ persona: null, alsoOther: false, needsPersona: true })
+        await pending
+
+        expect(mod.getCachedCoachPersonaStatus()).toEqual({
+            persona: 'strength',
+            alsoOther: false,
+            needsPersona: false,
+        })
+    })
+
+    it('contestar con el sello de cuenta todavia en vuelo igual apaga el gate', async () => {
+        const mod = await loadModule()
+        // `markPersonaAnsweredSync` es lo que corre ANTES de cualquier await: la llave por cuenta
+        // sigue vacia. Sin la adopcion, el gate tiraria el veredicto fresco y volveria a preguntar
+        // justo en el salto a la guia.
+        mod.markPersonaAnsweredSync('nutrition', true)
+
+        const status = await mod.resolveCoachPersonaGate()
+        expect(status).toEqual({ persona: 'nutrition', alsoOther: true, needsPersona: false })
+        expect(calls.filter((c) => c.options.method === 'GET')).toHaveLength(0)
+    })
+})
