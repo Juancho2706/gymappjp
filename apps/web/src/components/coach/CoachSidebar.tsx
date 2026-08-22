@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 import { NavPendingFeedback } from '@/components/navigation/NavPendingFeedback'
 import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
 import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
+import { useTabbarMinimized } from '@/components/coach/use-tabbar-minimized'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { getVisibleNavItems, splitForSidebar, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
@@ -137,9 +138,9 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     // `collapsed = mode === 'compact' || (mode === 'wide' && sidebarCollapsed)`.
     const [isWide, setIsWide] = useState(true)
     // Cápsula móvil: hide-on-scroll-down / reveal-on-scroll-up → colapsa a pill icon-only
-    // (TabBar.jsx `minimized`: insets 14→72, labels fade). El scroll vive en <main>
-    // (overflow-y-auto), no en window.
-    const [tabbarMinimized, setTabbarMinimized] = useState(false)
+    // (TabBar.jsx `minimized`: insets 14→72, labels fade). La regla vive en
+    // `useTabbarMinimized` para que la píldora de la guía siga el mismo ritmo que la cápsula.
+    const tabbarMinimized = useTabbarMinimized(pathname)
     // Pildora + pulso OPTIMISTAS del tap (espejo de ClientNav): feedback INMEDIATO en el ítem
     // tocado mientras el server stremea la ruta. `isNavigating` (href tocado) MANDA sobre
     // `pathname` para resolver el activo — la píldora salta al TAP, no al commit.
@@ -172,29 +173,6 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     }, [])
 
     const isCollapsed = !isWide || manualCollapsed
-
-    useEffect(() => {
-        // El scroll móvil ocurre en el documento (window), no en <main> (su alto no está
-        // constreñido → el body crece y scrollea). Listener en window.
-        let lastY = window.scrollY
-        let ticking = false
-        const onScroll = () => {
-            if (ticking) return
-            ticking = true
-            requestAnimationFrame(() => {
-                const y = window.scrollY
-                const dy = y - lastY
-                if (Math.abs(dy) > 6) {
-                    // baja + más allá de 80px → minimiza; sube o cerca del top → revela
-                    setTabbarMinimized(dy > 0 && y > 80)
-                    lastY = y
-                }
-                ticking = false
-            })
-        }
-        window.addEventListener('scroll', onScroll, { passive: true })
-        return () => window.removeEventListener('scroll', onScroll)
-    }, [pathname])
 
     const toggleSidebar = () => {
         const newState = !manualCollapsed

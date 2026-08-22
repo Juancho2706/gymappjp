@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { Json } from '@/lib/database.types'
 
 /**
@@ -18,7 +18,7 @@ vi.mock('@/app/coach/dashboard/_lib/onboarding-telemetry.client', () => ({
     postGuideEngagement: telemetryMock,
 }))
 
-import { GuidePill } from './GuidePill'
+import { GuidePill, REOPEN_MS, TEASER_MS } from './GuidePill'
 
 const STORAGE_KEY = 'eva.guide-pill.v1:coach-1'
 
@@ -170,5 +170,90 @@ describe('GuidePill — minimizar y maximizar', () => {
             (call) => (call[1] as { action?: string }).action === 'pill_collapse'
         )
         expect(collapses).toHaveLength(1)
+    })
+})
+
+describe('GuidePill — teaser: aparece, se desliza al botón y no bloquea el nav (owner 22-08)', () => {
+    const TEASE_KEY = 'eva:guide-pill-teased:coach-1'
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('a los ~3 s se cierra sola, sin recordarlo como «minimizada» y midiéndolo como automático', () => {
+        vi.useFakeTimers()
+        renderPill()
+        const toggle = screen.getByRole('button', { name: 'Guía de inicio, 0 de 5' })
+        expect(toggle.getAttribute('aria-expanded')).toBe('true')
+        expect(sessionStorage.getItem(TEASE_KEY)).toBe('1')
+
+        act(() => {
+            vi.advanceTimersByTime(TEASER_MS + 50)
+        })
+        expect(toggle.getAttribute('aria-expanded')).toBe('false')
+        // El teaser NO es una decisión del coach: en la próxima sesión vuelve a aparecer.
+        expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+        expect(telemetryMock).toHaveBeenCalledWith(
+            'profile_branding',
+            expect.objectContaining({ action: 'pill_collapse', auto: true })
+        )
+    })
+
+    it('el teaser es una vez por sesión: la segunda carga arranca minimizada', () => {
+        sessionStorage.setItem(TEASE_KEY, '1')
+        renderPill()
+        expect(
+            screen.getByRole('button', { name: 'Guía de inicio, 0 de 5' }).getAttribute('aria-expanded')
+        ).toBe('false')
+    })
+
+    it('abierta a mano, espera más (6 s) antes de cerrarse sola', () => {
+        sessionStorage.setItem(TEASE_KEY, '1')
+        vi.useFakeTimers()
+        renderPill()
+        const toggle = screen.getByRole('button', { name: 'Guía de inicio, 0 de 5' })
+        fireEvent.click(toggle)
+        expect(toggle.getAttribute('aria-expanded')).toBe('true')
+
+        act(() => {
+            vi.advanceTimersByTime(TEASER_MS + 50)
+        })
+        expect(toggle.getAttribute('aria-expanded')).toBe('true')
+        act(() => {
+            vi.advanceTimersByTime(REOPEN_MS)
+        })
+        expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('minimizar a mano cancela el reloj y sí se recuerda', () => {
+        vi.useFakeTimers()
+        renderPill()
+        fireEvent.click(screen.getByRole('button', { name: 'Minimizar la guía' }))
+        expect(localStorage.getItem(STORAGE_KEY)).toBe('collapsed')
+        act(() => {
+            vi.advanceTimersByTime(TEASER_MS + 50)
+        })
+        const autos = telemetryMock.mock.calls.filter((call) => (call[1] as { auto?: boolean }).auto === true)
+        expect(autos).toHaveLength(0)
+    })
+
+    it('cuando la cápsula del nav se esconde al scrollear, la píldora se cierra y se apaga con ella', () => {
+        vi.useFakeTimers()
+        renderPill()
+        const toggle = screen.getByRole('button', { name: 'Guía de inicio, 0 de 5' })
+        expect(toggle.getAttribute('aria-expanded')).toBe('true')
+
+        // Misma regla que la cápsula: delta > 6 px, bajando, más allá de 80 px.
+        Object.defineProperty(window, 'scrollY', { value: 0, configurable: true, writable: true })
+        act(() => {
+            window.scrollY = 200
+            window.dispatchEvent(new Event('scroll'))
+            vi.advanceTimersByTime(20)
+        })
+
+        expect(toggle.getAttribute('aria-expanded')).toBe('false')
+        const root = toggle.closest('[data-tabbar-minimized]')
+        expect(root).not.toBeNull()
+        expect(root?.className).toContain('max-md:opacity-0')
     })
 })
