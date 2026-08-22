@@ -6,6 +6,11 @@ type SendCoachEmailConfirmationInput = {
     email: string
     coachName: string
     password?: string
+    /**
+     * `'app'` cuando el alta (o el reenvío) salió de la app: el link de confirmación lleva `src=app`
+     * y `/auth/confirm`, en Android, devuelve al coach a la app en vez de dejarlo en la web.
+     */
+    source?: 'app'
 }
 
 export type SendCoachEmailConfirmationResult =
@@ -21,6 +26,7 @@ async function deliverConfirmationLink(input: {
     coachName: string
     linkType: 'signup' | 'magiclink'
     password?: string
+    source?: 'app'
 }): Promise<SendCoachEmailConfirmationResult> {
     const admin = createServiceRoleClient()
     const appUrl = appBaseUrl()
@@ -58,7 +64,8 @@ async function deliverConfirmationLink(input: {
     }
 
     const otpType = input.linkType === 'signup' ? 'email' : 'magiclink'
-    const confirmUrl = `${appUrl}/auth/confirm?token_hash=${encodeURIComponent(hashedToken)}&type=${otpType}`
+    const srcParam = input.source === 'app' ? '&src=app' : ''
+    const confirmUrl = `${appUrl}/auth/confirm?token_hash=${encodeURIComponent(hashedToken)}&type=${otpType}${srcParam}`
     const { subject, html } = buildCoachEmailConfirmationEmail({
         coachName: input.coachName,
         confirmUrl,
@@ -87,6 +94,7 @@ export async function sendCoachSignupConfirmationEmail(
         coachName: input.coachName,
         password: input.password,
         linkType: 'signup',
+        source: input.source,
     })
 }
 
@@ -98,5 +106,6 @@ export async function resendCoachSignupConfirmationEmail(
         email: input.email,
         coachName: input.coachName,
         linkType: 'magiclink',
+        source: input.source,
     })
 }

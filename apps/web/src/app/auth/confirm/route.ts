@@ -3,6 +3,23 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { NextResponse, type NextRequest } from 'next/server'
 import { activateConfirmedFreeCoach } from '@/lib/auth/activate-confirmed-coach'
 
+/** Paquete Android de la app (`apps/mobile/app.json` → `android.package`). */
+const ANDROID_PACKAGE = 'cl.evaapp.eva'
+
+/**
+ * URL `intent://` de Chrome Android: abre la app si está instalada (scheme `eva`, paquete fijo) y,
+ * si no, navega a `fallback`. Es lo único que «detecta si tienes la app» desde una web sin binario
+ * nuevo: los App Links verificados no cubren `/auth/confirm` y iOS ignora universal links en
+ * redirects, así que iOS sigue aterrizando en la web.
+ */
+function androidAppIntent(appPath: string, fallback: string): string {
+    return `intent://${appPath}#Intent;scheme=eva;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(fallback)};end`
+}
+
+function isAndroid(request: NextRequest): boolean {
+    return /\bandroid\b/i.test(request.headers.get('user-agent') ?? '')
+}
+
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const token_hash = searchParams.get('token_hash')
@@ -44,10 +61,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}${dest}`)
     }
 
-    if (activation.activated) {
-        return NextResponse.redirect(`${origin}/coach/dashboard?welcome=free`)
+    const dashboard = activation.activated
+        ? `${origin}/coach/dashboard?welcome=free`
+        : `${origin}/coach/dashboard`
+
+    // Alta hecha DESDE LA APP (`src=app`, lo pone el link del alta y del reenvío móvil): en Android
+    // el coach vuelve a la app, que con las credenciales del alta todavía en memoria entra sola al
+    // panel (QA del owner 22-08: «debería llevarme a la app, no a la versión responsive»). Sin la
+    // app instalada, Chrome sigue al `browser_fallback_url` = el panel web de siempre.
+    if (searchParams.get('src') === 'app' && isAndroid(request)) {
+        const email = data.user.email ? `?email=${encodeURIComponent(data.user.email)}` : ''
+        return NextResponse.redirect(androidAppIntent(`auth/confirmed${email}`, dashboard))
     }
 
-    // Default: just redirect to dashboard (coach ya activo / otros tipos de confirmación)
-    return NextResponse.redirect(`${origin}/coach/dashboard`)
+    // Default: panel web (coach ya activo / otros tipos de confirmación / iOS / escritorio)
+    return NextResponse.redirect(dashboard)
 }

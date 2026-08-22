@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
         const sent = await resendCoachSignupConfirmationEmail({
             email: target.email,
             coachName: target.coachName,
+            source: 'app',
         })
         if (!sent.ok) {
             // 200 igual: el error de Resend no puede convertirse en "ese uid existe".

@@ -70,9 +70,15 @@ const PENDING_FREE_COACH = {
     invite_code: 'X5UD9X44',
 }
 
-function req(type = 'email', token = 'tok') {
-    return new NextRequest(`https://www.eva-app.cl/auth/confirm?token_hash=${token}&type=${type}`)
+function req(type = 'email', token = 'tok', extra: { src?: string; ua?: string } = {}) {
+    const src = extra.src ? `&src=${extra.src}` : ''
+    return new NextRequest(`https://www.eva-app.cl/auth/confirm?token_hash=${token}&type=${type}${src}`, {
+        headers: extra.ua ? { 'user-agent': extra.ua } : undefined,
+    })
 }
+
+const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/128 Mobile Safari/537.36'
+const IOS_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'
 
 /** Promesa que resuelve cuando el test lo decide: así se observa si la ruta espera de verdad. */
 function deferred() {
@@ -207,5 +213,39 @@ describe('GET /auth/confirm — la puerta (cuándo NO se manda nada)', () => {
         const res = await GET(new NextRequest('https://www.eva-app.cl/auth/confirm'))
         expect(res.headers.get('location')).toContain('/login?error=invalid_confirmation_link')
         expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
+    })
+})
+
+describe('GET /auth/confirm — vuelta a la app tras confirmar (alta desde la app)', () => {
+    it('src=app + Android → intent:// a la app con el panel web como fallback, y la cuenta igual se activa', async () => {
+        const res = await GET(req('email', 'tok', { src: 'app', ua: ANDROID_UA }))
+
+        const location = res.headers.get('location') ?? ''
+        expect(location.startsWith('intent://auth/confirmed?email=coach%40example.com#Intent;scheme=eva;package=cl.evaapp.eva;')).toBe(true)
+        expect(location).toContain(`S.browser_fallback_url=${encodeURIComponent('https://www.eva-app.cl/coach/dashboard?welcome=free')};end`)
+        expect(updates).toEqual([{ subscription_status: 'active' }])
+        expect(sendFreeCoachOnboardingEmailsMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('src=app en iOS → panel web (iOS no abre universal links desde un redirect)', async () => {
+        const res = await GET(req('email', 'tok', { src: 'app', ua: IOS_UA }))
+        expect(res.headers.get('location')).toBe('https://www.eva-app.cl/coach/dashboard?welcome=free')
+    })
+
+    it('Android SIN src=app (alta web) → panel web', async () => {
+        const res = await GET(req('email', 'tok', { ua: ANDROID_UA }))
+        expect(res.headers.get('location')).toBe('https://www.eva-app.cl/coach/dashboard?welcome=free')
+    })
+
+    it('src=app + Android con coach ya activo → intent:// con el panel sin `welcome`', async () => {
+        state.coach = { ...PENDING_FREE_COACH, subscription_status: 'active' }
+        const res = await GET(req('email', 'tok', { src: 'app', ua: ANDROID_UA }))
+        expect(res.headers.get('location')).toContain(encodeURIComponent('https://www.eva-app.cl/coach/dashboard'))
+        expect(res.headers.get('location')).not.toContain('welcome')
+    })
+
+    it('recovery con src=app → al reset, nunca a la app', async () => {
+        const res = await GET(req('recovery', 'tok', { src: 'app', ua: ANDROID_UA }))
+        expect(res.headers.get('location')).toBe('https://www.eva-app.cl/reset-password')
     })
 })

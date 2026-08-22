@@ -174,6 +174,8 @@ export async function POST(request: NextRequest) {
         email: emailSan,
         password,
         coachName: fullName,
+        // El link vuelve a la app en Android tras confirmar (ver `/auth/confirm`).
+        source: 'app',
     })
     if (!emailSent.ok) {
         await adminDb.from('coaches').delete().eq('id', authData.user.id)

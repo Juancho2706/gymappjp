@@ -142,7 +142,7 @@ describe('POST /api/mobile/auth/resend-confirmation', () => {
         expect(res.status).toBe(200)
         expect(await res.json()).toEqual({ ok: true })
         expect(resendMock).toHaveBeenCalledTimes(1)
-        expect(resendMock).toHaveBeenCalledWith({ email: 'coach@example.com', coachName: 'Josefa Díaz' })
+        expect(resendMock).toHaveBeenCalledWith({ email: 'coach@example.com', coachName: 'Josefa Díaz', source: 'app' })
         expect(auditInserts).toEqual([
             {
                 admin_email: 'system',
@@ -157,7 +157,7 @@ describe('POST /api/mobile/auth/resend-confirmation', () => {
     it('el email del body es DECORADO: el destino sale siempre de auth.users', async () => {
         await POST(req({ uid: UID, email: 'atacante@evil.com' }))
 
-        expect(resendMock).toHaveBeenCalledWith({ email: 'coach@example.com', coachName: 'Josefa Díaz' })
+        expect(resendMock).toHaveBeenCalledWith({ email: 'coach@example.com', coachName: 'Josefa Díaz', source: 'app' })
         expect(JSON.stringify(resendMock.mock.calls)).not.toContain('evil.com')
     })
 
