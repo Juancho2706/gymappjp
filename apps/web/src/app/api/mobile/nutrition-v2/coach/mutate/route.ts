@@ -42,6 +42,7 @@ import {
 } from '@eva/schemas/nutrition-exchanges'
 import { setOwnFoodExchangeEquivalence } from '@/services/nutrition-exchanges/exchange-lists.service'
 import {
+  deletePlanTemplate,
   savePlanTemplate,
   updatePlanTemplateDraft,
 } from '@/services/nutrition-v2/plan-templates.service'
@@ -153,6 +154,27 @@ const SaveTemplateSchema = z.object({
   description: z.string().trim().max(2000).nullish(),
   /** Draft del contrato; el servicio lo valida entero. */
   draft: NutritionPlanDraftSchema,
+})
+
+/**
+ * Dar de baja una PLANTILLA desde la biblioteca RN (feedback del coach en iOS, 22-08: «¿No puedo
+ * eliminar plantillas ya creadas? Si no me sirven quedan ahí para siempre»). La web ya lo tenía
+ * (`deletePlanTemplateAction`); la app solo sabía abrir y editar.
+ *
+ * Es un SOFT-DELETE: la fila queda para trazabilidad y los planes YA aplicados a alumnos no se
+ * tocan (son versiones propias, no punteros a la plantilla). Por eso no lleva CAS ni idempotencia:
+ * repetir la baja sobre la misma fila es no-op del lado de la base.
+ *
+ * La TENENCIA no se decide aquí: el servicio va por el RPC definer
+ * `soft_delete_nutrition_plan_template_v2`, cuyo WHERE exige `coach_id = auth.uid()` (o equipo
+ * gestionado / org admin) sobre el JWT del propio coach — el mismo techo que la RLS de la tabla.
+ * Una plantilla ajena o ya borrada no matchea ninguna fila y vuelve como "ya no está disponible",
+ * sin distinguir un caso del otro (no hay enumeración posible).
+ */
+const DeleteTemplateSchema = z.object({
+  action: z.literal('deleteTemplate'),
+  workspace: WorkspaceSchema,
+  templateId: z.string().uuid(),
 })
 
 const ROUTE = 'mobile.nutrition-v2.coach.mutate'
@@ -312,6 +334,8 @@ export async function POST(request: NextRequest) {
       return handleSetFoodEquivalence(gate, db, raw, startedAt)
     case 'saveTemplate':
       return handleSaveTemplate(gate, raw, startedAt)
+    case 'deleteTemplate':
+      return handleDeleteTemplate(gate, raw, startedAt)
     default:
       return failure(startedAt, 'INVALID_ACTION', 'Acción inválida.', {})
   }
@@ -747,4 +771,35 @@ async function handleSaveTemplate(
   }
   logNutritionV2Api({ route: ROUTE, startedAt, status: 200 })
   return jsonNoStore({ ok: true, template: { id: result.template.id, name: result.template.name } })
+}
+
+async function handleDeleteTemplate(
+  gate: NutritionV2ApiGate,
+  raw: Record<string, unknown>,
+  startedAt: number,
+) {
+  const parsed = DeleteTemplateSchema.safeParse(raw)
+  if (!parsed.success) {
+    return failure(startedAt, 'INVALID_PAYLOAD', 'Esa plantilla no es válida.', {
+      fields: zodFields(parsed.error),
+    })
+  }
+
+  // Cliente RLS del propio coach (jamás service_role): es de su JWT de donde el RPC definer saca
+  // el `auth.uid()` con el que decide si esa plantilla es suya.
+  const result = await deletePlanTemplate(
+    gate.rpc as unknown as SupabaseClient<Database>,
+    parsed.data.templateId,
+  )
+  if (!result.success) {
+    // UN solo código para "ajena", "inexistente" y "ya borrada": el servicio no los distingue a
+    // propósito, y separarlos por status convertiría el endpoint en un oráculo de ids.
+    return failure(
+      startedAt,
+      'TEMPLATE_DELETE_FAILED',
+      result.error ?? 'No se pudo eliminar la plantilla.',
+    )
+  }
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200 })
+  return jsonNoStore({ ok: true })
 }

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { NutritionHistoryDay, NutritionPlanReadModel } from './read-models'
 import {
   addNutritionDays,
+  alignNutritionIsoToWeekOf,
   buildNutritionWeek,
   buildNutritionWeekDates,
   formatNutritionWeekDayAccessibilityLabel,
+  formatNutritionWeekPlanLinkLabel,
   nutritionWeekStartIso,
   type NutritionWeekHistoryDayLike,
   type NutritionWeekVariantLike,
@@ -493,5 +495,92 @@ describe('buildNutritionWeek — rangeDot por rango de energia', () => {
     expect(week[2].rangeDot).toBe('logged')
     // El martes sin fila de historial: pasado sin registro.
     expect(week[1].rangeDot).toBe('none')
+  })
+})
+
+// SPEC nutrition-week-view §«Regla cerrada 2026-08-22 — futuro visible, solo lectura».
+// Origen: un alumno no podia ver que le tocaba comer el resto de la semana. La tira es el unico
+// navegador de la semana, asi que el contrato es que las 7 celdas existan, esten pintadas y
+// NINGUNA traiga superficie de escritura salvo hoy.
+describe('futuro visible, solo lectura (22-08)', () => {
+  it('las 7 celdas son seleccionables: fecha valida y etiquetas en todas, futuro incluido', () => {
+    const week = buildNutritionWeek({ variants, weekStartIso: LUNES, todayIso: MARTES })
+    expect(week).toHaveLength(7)
+    for (const cell of week) {
+      expect(cell.isoDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(cell.shortLabel.length).toBeGreaterThan(0)
+      expect(cell.longLabel.length).toBeGreaterThan(0)
+    }
+    // Nada en la celda apaga un dia: el unico eje es `state`, y "future" es un modo de lectura.
+    expect(week.filter((cell) => cell.state === 'future')).toHaveLength(5)
+  })
+
+  it('un dia futuro trae el plan PROYECTADO para poder mostrarlo en lectura', () => {
+    const week = buildNutritionWeek({ variants, weekStartIso: LUNES, todayIso: LUNES })
+    const sabadoCell = week[5]
+    expect(sabadoCell.state).toBe('future')
+    // La variante del sabado (match exacto de dow) y sus metas: es lo que la vista previa pinta.
+    expect(sabadoCell.variant?.id).toBe('sa')
+    expect(sabadoCell.targets?.calories).toBe(2600)
+    expect(sabadoCell.targetsSource).toBe('projected')
+    // Los demas dias futuros caen a la variante base, no quedan mudos.
+    expect(week[4].variant?.id).toBe('base')
+    expect(week[4].targetsSource).toBe('projected')
+  })
+
+  it('el futuro nunca trae superficie de escritura: sin consumo, sin snapshot y sin punto juzgado', () => {
+    const week = buildNutritionWeek({
+      variants,
+      // Una fila "de manana" no deberia existir, pero si el cursor la trae NO se usa: mirar el
+      // futuro jamas materializa ni muestra un registro (get_nutrition_today_v2 es volatile).
+      history: [historyDay(SABADO, { activeEntryCount: 4, consumed: consumed(2400, 4) })],
+      weekStartIso: LUNES,
+      todayIso: MARTES,
+    })
+    for (const cell of week.slice(2)) {
+      expect(cell.state).toBe('future')
+      expect(cell.consumed).toBeNull()
+      expect(cell.rangeDot).toBe('none')
+      expect(cell.isLegacy).toBeUndefined()
+    }
+    // Lo que SI sobrevive de esa fila son las metas: `ensure_day_snapshot` puede materializar
+    // hoy+1, y si ese snapshot existe es el que el alumno tendra (regla 2, "el snapshot gana").
+    // El resto de los dias futuros, sin fila, sigue siendo proyeccion del plan vigente.
+    expect(week[4].targetsSource).toBe('projected')
+    expect(week[6].targetsSource).toBe('projected')
+  })
+
+  it('un plan que no prescribe ese dia no inventa la default ni en el futuro', () => {
+    const soloSabado: Variant[] = [sabado]
+    const week = buildNutritionWeek({ variants: soloSabado, weekStartIso: LUNES, todayIso: LUNES })
+    expect(week[5].variant?.id).toBe('sa')
+    expect(week[3].state).toBe('future')
+    expect(week[3].variant).toBeNull()
+    expect(week[3].targetsSource).toBe('none')
+  })
+})
+
+// Puente "Ver el plan del lunes" (22-08): el dia PASADO muestra el resultado congelado, no la
+// prescripcion, asi que se ofrece un salto al patron semanal vigente (tab Plan).
+describe('puente al plan del dia', () => {
+  it('nombra el dia en minuscula, con tilde', () => {
+    const week = buildNutritionWeek({ variants, weekStartIso: LUNES, todayIso: DOMINGO })
+    expect(formatNutritionWeekPlanLinkLabel(week[0])).toBe('Ver el plan del lunes')
+    expect(formatNutritionWeekPlanLinkLabel(week[2])).toBe('Ver el plan del miércoles')
+    expect(formatNutritionWeekPlanLinkLabel(week[5])).toBe('Ver el plan del sábado')
+  })
+
+  it('traslada un dia de otra semana al equivalente de la semana vigente', () => {
+    // El tab Historial puede abrir un lunes de hace tres semanas; el Plan solo conoce la actual.
+    expect(alignNutritionIsoToWeekOf('2026-07-06', MIERCOLES)).toBe(LUNES)
+    expect(alignNutritionIsoToWeekOf('2026-07-12', MIERCOLES)).toBe(DOMINGO)
+    // Un dia que ya esta en la semana ancla se devuelve tal cual.
+    expect(alignNutritionIsoToWeekOf(VIERNES, MIERCOLES)).toBe(VIERNES)
+  })
+
+  it('sin fecha valida no inventa un dia', () => {
+    expect(alignNutritionIsoToWeekOf(null, MIERCOLES)).toBeNull()
+    expect(alignNutritionIsoToWeekOf('2026-13-40', MIERCOLES)).toBeNull()
+    expect(alignNutritionIsoToWeekOf(LUNES, 'ayer')).toBeNull()
   })
 })

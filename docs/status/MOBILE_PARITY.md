@@ -14,6 +14,23 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-22 (Nutrición V2 · «eliminar plantilla» EN PARIDAD)**: feedback del coach en iOS
+> («¿No puedo eliminar plantillas ya creadas? Si no me sirven quedan ahí para siempre») — la
+> biblioteca RN solo sabía abrir y editar. Ahora la pestaña **Plantillas** del hub tiene la baja:
+> papelera con `accessibilityLabel` junto al lápiz **y** pulsación larga en la fila, confirmación
+> con el diálogo del DS (`NativeDialog`, nunca `Alert` nativo) — «¿Eliminar «X»? Los alumnos que ya
+> la tienen aplicada no cambian.» + «Esta acción no se puede deshacer.» —, botón destructivo en
+> «Eliminando…» mientras responde el servidor, toast «Plantilla eliminada» y la fila fuera de la
+> lista sin esperar el refetch. Camino de escritura: acción **`deleteTemplate`** de
+> `POST /api/mobile/nutrition-v2/coach/mutate` (la única puerta de escritura del coach móvil,
+> NUT-005) → `deletePlanTemplate` → RPC definer `soft_delete_nutrition_plan_template_v2`, que exige
+> `auth.uid()` = dueño; una plantilla ajena y una inexistente responden lo MISMO. Es soft-delete:
+> los planes ya aplicados son versiones propias del alumno, no punteros, así que no cambian. **Sin
+> paridad**: el «Deshacer» del toast web (re-crea la plantilla desde un caché del contenido) no
+> existe en RN — por eso el diálogo lo dice. El picker «Nuevo plan → Reutilizar» comparte la lista
+> pero NO recibe `onDelete`. Pinneado en `tests/mobile/nutrition-v2-plan-template-delete.test.ts`
+> (predicado y copy) y en el `route.test.ts` del endpoint. Requiere OTA + QA device.
+
 > **2026-08-19 (saneo documental — qué QA en device existe de verdad)**: los bloques fechados de
 > abajo quedaron congelados en su día y varios dicen «QA device pendiente» sobre trabajo que el
 > owner ya probó. Estado real al 19-08: **3 rondas en device Android el 17-08** (cabina, tour,

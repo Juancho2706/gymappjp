@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -804,6 +804,8 @@ export default function CoachNutritionV2ClientScreen() {
           sourcePlanName={detail.plan.plan?.name ?? 'este plan'}
           sourceVersionId={activePlan?.versionId ?? ''}
           today={date}
+          safeTop={insets.top}
+          safeBottom={insets.bottom}
         />
       ) : null}
 
@@ -1248,6 +1250,8 @@ function AssignPlanModal({
   sourcePlanName,
   sourceVersionId,
   today,
+  safeTop,
+  safeBottom,
 }: {
   visible: boolean
   onClose: () => void
@@ -1257,6 +1261,9 @@ function AssignPlanModal({
   /** Versión vigente que la ficha mostró: CAS anti-stale que el servidor valida tras releer la fuente. */
   sourceVersionId: string
   today: string
+  /** Insets medidos por la PANTALLA (fuera del `<Modal>`); ver el comentario del contenedor. */
+  safeTop: number
+  safeBottom: number
 }) {
   const { theme } = useTheme()
   const [roster, setRoster] = useState<AssignRosterEntry[]>([])
@@ -1441,14 +1448,23 @@ function AssignPlanModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
-        <View className="flex-row items-center gap-2 border-b border-subtle px-4 py-3">
+      {/* Insets por PROP, medidos FUERA del Modal (queja del coach 22-08: «la X está muy arriba»).
+          El `SafeAreaView` de `react-native-safe-area-context` mide su propia ventana nativa; dentro
+          de un `<Modal>` de RN esa ventana es otra y en iOS devuelve inset 0, así que el header
+          quedaba bajo la Dynamic Island / el notch y la X era inalcanzable. El hook del root sí
+          conoce el inset real, por eso la pantalla lo baja y acá solo se aplica como padding. */}
+      <View
+        className="flex-1 bg-surface-app"
+        style={{ paddingTop: Math.max(safeTop, 12), paddingBottom: Math.max(safeBottom, 12) }}
+      >
+        <View className="min-h-11 flex-row items-center gap-2 border-b border-subtle px-4 py-3">
           <Text className="min-w-0 flex-1 font-display text-lg font-semibold text-strong">
             Asignar plan a otros alumnos
           </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cerrar"
+            hitSlop={12}
             onPress={onClose}
             className="min-h-11 min-w-11 items-center justify-center rounded-control"
           >
@@ -1658,7 +1674,7 @@ function AssignPlanModal({
             )}
           </ScrollView>
         )}
-      </SafeAreaView>
+      </View>
     </Modal>
   )
 }

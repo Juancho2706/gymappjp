@@ -33,6 +33,22 @@ Estado: `[ ]` pendiente · `[x]` hecho · ejecución por workers Opus con juicio
 - [x] T4.2 Juicio Fable de estilo por superficie (checklist PLAN §Craft).
 - [x] T4.3 Actualizar `docs/status/CURRENT.md` + `docs/status/MOBILE_PARITY.md`.
 
+## W5 — «Futuro visible, solo lectura» (2026-08-22, feedback de alumno)
+
+- [x] T5.1 Verificado contra el código: los 7 chips ya eran seleccionables (futuro incluido) y el
+      futuro ya renderizaba en solo lectura en web y RN. No había guard que quitar; la hipótesis
+      inicial (`WeekDayNav.tsx` `hasLoggedIntake`) era el punto de estado, no la selección.
+- [x] T5.2 Regla escrita en el SPEC (§«Regla cerrada 2026-08-22») para que ningún guard futuro la
+      reabra.
+- [x] T5.3 Puente al plan del día desde el resumen del día PASADO ("Ver el plan del lunes"):
+      helper compartido `formatNutritionWeekPlanLinkLabel` + `alignNutritionIsoToWeekOf`,
+      `PastDaySummary` web (`?view=plan&dow=N`) y tab Hoy de RN (`onOpenPlanDay` → `PlanTab`).
+- [x] T5.4 Tests del contrato en `week-view.test.ts` (futuro seleccionable, cero escritura) y en
+      `week-nav.logic.test.ts` (la web acepta un `?date=` futuro de la semana).
+- [ ] T5.5 QA en device: tocar sábado/domingo desde Hoy y desde Plan, verificar cero 4xx en
+      consola y cero controles de registro.
+- [ ] Idea anotada (NO implementada): **lista de compras** de la semana.
+
 ## QA (agregado el 2026-08-19)
 
 Esta spec cerró **sin una sola tarea de QA**: tener todo en `[x]` prueba código, no comportamiento.

@@ -25,6 +25,32 @@ los datos que YA viajan al cliente. Cero migraciones, cero endpoints nuevos.
   (se muestra igual); la ventana de 30 días del historial del coach base se respeta tal cual.
 - Vista "Mi semana" tipo agenda y grid desktop del coach: fase posterior (no en este alcance).
 
+## Regla cerrada 2026-08-22 — «futuro visible, solo lectura»
+
+Origen: feedback de un alumno vía su coach — *«Si soy alumno no me deja ver mi dieta de la semana.
+Quiero saber qué alimentos tengo el lunes para ir al supermercado»*.
+
+- **Los 7 días de la semana son seleccionables en las 4 superficies, futuro incluido.** No existe
+  ni debe agregarse ningún guard que apague el chip de un día futuro: la tira es el único
+  navegador de la semana y un día no tocable es, para el alumno, un día que "no lo deja ver".
+- **El futuro se muestra en SOLO LECTURA**: metas y franjas proyectadas del plan vigente, sin
+  botones de registrar / agregar / escanear, sin steppers, sin bulk y sin anillo de consumo (no
+  hay nada consumido que anillar). Va con aviso arriba que ubica: *"Estás viendo el {día}"* +
+  *"Vista previa de tu plan: vas a poder registrar cuando llegue el día"*, y salida "Volver a hoy".
+- **Mirar un día NUNCA escribe.** Se mantiene la prohibición dura: cero `get_nutrition_today_v2`
+  con fecha ≠ hoy (es `volatile`, materializa snapshots y revienta con fecha > hoy+1) y cero fetch
+  por celda. Todo sale del plan ya descargado + UNA página del historial de la semana.
+- **El día PASADO sigue mostrando el resultado congelado, no la prescripción** (regla 2: el
+  snapshot gana; proyectar la prescripción de un día viejo con el plan de hoy sería mentir cuando
+  el coach republicó). Para que la pregunta real del alumno igual se conteste, el resumen del día
+  pasado lleva un **puente de un toque al tab Plan en ese mismo día** ("Ver el plan del lunes"):
+  RN cambia de tab con el día precargado, web enlaza `?view=plan&dow=N`. Si el día viene de otra
+  semana (abierto desde Historial), se traslada al día equivalente de la semana vigente
+  (`alignNutritionIsoToWeekOf`) — el Plan solo conoce la semana actual.
+- Sigue **fuera de alcance** navegar a otras semanas (la siguiente incluida): "qué me toca el
+  lunes" se contesta con el patrón semanal del tab Plan, que es el mismo que aplicará.
+- Lista de compras: **idea anotada, no implementada**.
+
 ## Alcance
 1. **Helper puro compartido** `packages/nutrition-v2/week-view.ts`: `buildNutritionWeek()` +
    tipo `NutritionWeekDayState` (`past-logged | past-empty | today | future`) + tests.

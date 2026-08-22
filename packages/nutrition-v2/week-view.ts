@@ -234,11 +234,52 @@ export function buildNutritionWeekDates(isoDate: string | null | undefined): str
   return dates
 }
 
+/**
+ * Traslada una fecha al día EQUIVALENTE (mismo día de semana) de la semana que contiene
+ * `anchorIso`. `null` si alguna de las dos no es fecha válida.
+ *
+ * Lo necesita el puente "Ver el plan del lunes" (22-08): el tab Hoy puede estar mostrando un día
+ * abierto desde el Historial —de hace tres semanas— y el tab Plan solo conoce la semana ACTUAL
+ * (el plan que viaja al cliente es el vigente; proyectarlo hacia atrás sería mentir). Traducir
+ * "ese lunes" a "el lunes de esta semana" contesta la pregunta real del alumno ("¿qué me toca
+ * comer los lunes?") sin inventar un plan viejo.
+ */
+export function alignNutritionIsoToWeekOf(
+  isoDate: string | null | undefined,
+  anchorIso: string | null | undefined,
+): string | null {
+  const dayOfWeek = nutritionDayOfWeekFromIso(isoDate)
+  const weekStart = nutritionWeekStartIso(anchorIso)
+  if (dayOfWeek == null || weekStart == null) return null
+  // La semana se recorre Lu→Do (`NUTRITION_WEEK_ORDER`): el domingo (0) la cierra.
+  return addNutritionDays(weekStart, dayOfWeek === 0 ? 6 : dayOfWeek - 1)
+}
+
 /** "Lunes, con registro" — mismo texto en web y RN, sin duplicar diccionarios por superficie. */
 export function formatNutritionWeekDayAccessibilityLabel(
   cell: Pick<NutritionWeekCell, 'longLabel' | 'state'>,
 ): string {
   return `${cell.longLabel}, ${NUTRITION_WEEK_STATE_LABELS[cell.state]}`
+}
+
+/**
+ * "Ver el plan del lunes" — puente desde un día de la semana en SOLO LECTURA hacia el tab Plan
+ * (2026-08-22, pedido de un alumno: "quiero saber qué alimentos tengo el lunes para ir al
+ * supermercado").
+ *
+ * Existe porque un día PASADO muestra el resultado congelado del historial, no la prescripción:
+ * el plan pudo cambiar de versión y pintar franjas que ese día nunca existieron sería mentir
+ * (regla 2 de `buildNutritionWeek`). La pregunta "¿qué me toca comer los lunes?" la contesta el
+ * tab Plan, que es el patrón semanal VIGENTE y solo lectura por construcción — este link lleva
+ * ahí en un toque, en vez de dejar al alumno buscando la pestaña.
+ *
+ * `toLowerCase()` sin locale a propósito: los 7 nombres son ASCII + "é"/"á" y Hermes (RN) no
+ * garantiza `toLocaleLowerCase` con etiqueta de idioma.
+ */
+export function formatNutritionWeekPlanLinkLabel(
+  cell: Pick<NutritionWeekCell, 'longLabel'>,
+): string {
+  return `Ver el plan del ${cell.longLabel.toLowerCase()}`
 }
 
 /**

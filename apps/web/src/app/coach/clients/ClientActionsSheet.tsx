@@ -232,13 +232,22 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
                 <div className="mb-3.5 mt-1 text-[13px] text-muted">
                     Compartila con {name.split(' ')[0]}. Deberá cambiarla al ingresar.
                 </div>
+                {/* «Copiar» EXPLÍCITO (paridad con el diálogo de RN, queja del coach 22-08): con
+                    solo el ícono, la pastilla se lee como una etiqueta y nadie descubre que copia. */}
                 <button
                     type="button"
                     onClick={copyTemp}
-                    className="mb-4 inline-flex items-center gap-2.5 rounded-[var(--radius-md)] border-[1.5px] border-default bg-surface-sunken px-[18px] py-3 font-mono text-[17px] font-bold text-strong"
+                    aria-label={copied ? 'Clave copiada' : 'Copiar la clave temporal'}
+                    className="mb-4 inline-flex items-center gap-3 rounded-[var(--radius-md)] border-[1.5px] border-default bg-surface-sunken px-[18px] py-3 text-strong"
                 >
-                    {tempPassword}
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    <span className="font-mono text-[17px] font-bold">{tempPassword}</span>
+                    <span
+                        aria-live="polite"
+                        className="inline-flex shrink-0 items-center gap-1.5 text-xs font-bold text-primary"
+                    >
+                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copied ? 'Copiado' : 'Copiar'}
+                    </span>
                 </button>
                 <Button variant="sport" size="lg" className="w-full" onClick={onClose}>
                     Listo

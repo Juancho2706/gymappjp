@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Check, Undo2, X } from 'lucide-react-native'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
@@ -51,6 +51,10 @@ export function ExerciseListV3({
   reducedMotion?: boolean
 }) {
   const s = exec.surface
+  // Insets leídos FUERA del `<Modal>` (el ejecutor monta esta hoja en su propio árbol): dentro de la
+  // ventana nativa del Modal el `SafeAreaView` de safe-area-context mide 0 en iOS y la X del header
+  // termina bajo la Dynamic Island / el notch.
+  const insets = useSafeAreaInsets()
 
   return (
     <Modal
@@ -60,10 +64,10 @@ export function ExerciseListV3({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: s.appBg }}>
+      <View style={{ flex: 1, backgroundColor: s.appBg, paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 12) }}>
         {/* Cabecera */}
         <View
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: s.borderSubtle }}
+          style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: s.borderSubtle }}
         >
           <Text style={{ fontFamily: FONT.displayBlack, fontSize: 20, letterSpacing: -0.4, color: s.text }}>
             Plan completo <Text style={{ color: s.textMuted }}>· {items.length}</Text>
@@ -71,7 +75,7 @@ export function ExerciseListV3({
           <Pressable
             testID="btn-exercise-list-close"
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={12}
             style={{ height: 36, width: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: s.surface, borderWidth: 1.5, borderColor: s.borderStrong }}
             accessibilityRole="button"
             accessibilityLabel="Cerrar la lista de ejercicios"
@@ -175,7 +179,7 @@ export function ExerciseListV3({
             accessibilityLabel="Volver al ejercicio actual"
           />
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   )
 }
