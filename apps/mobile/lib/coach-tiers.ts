@@ -3,15 +3,18 @@
 // mobile ya consumía (canUseNutrition/... ); cero catálogo duplicado, cero drift posible.
 // Patrón ya probado en mobile: @eva/schemas / @eva/brand-kit (AGENTS.md, "Shared logic anti-drift").
 //
-// LEGACY: TIER_CONFIG conserva growth/scale para DISPLAY de cuentas grandfathered (el catálogo del
-// paquete los mantiene); elite.maxClients = 100 (techo subido — F0-a) vive en el paquete. NO borrar.
+// 🚫 TIER_CONFIG NO se re-exporta (embudo-free-pro W5.5). El catálogo entero arrastra el precio
+// mensual, el label y las features de tiers ajenos hasta el bundle de RN, y basta con que una
+// pantalla lea el precio del catálogo «para informar» para que la app iOS muestre un precio
+// —guideline 3.1.1—. Mobile solo necesita el CUPO: `getTierMaxClients(tier)`. El guard vive en
+// `tests/mobile-no-prices.test.ts`.
 
 import {
   EVA_BADGE_LABEL,
-  TIER_CONFIG,
   getEvaBadgeUrl,
   getRecommendedTier,
   getTierCapabilities,
+  getTierMaxClients,
   isBrandingAllowed,
   showsEvaBadge,
   studentCountLabel,
@@ -24,10 +27,12 @@ import {
 // el plural de alumnos salen del MISMO paquete que usa la web — cero copia del texto ni del link.
 export {
   EVA_BADGE_LABEL,
-  TIER_CONFIG,
   getEvaBadgeUrl,
   getRecommendedTier,
   getTierCapabilities,
+  // Cupo de VENTA por tier (catálogo). Con un coach concreto a mano manda `profile.maxClients`
+  // (columna) — esto es para el copy del plan Free en onboarding, donde no hay coach todavía.
+  getTierMaxClients,
   isBrandingAllowed,
   showsEvaBadge,
   studentCountLabel,

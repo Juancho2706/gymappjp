@@ -71,7 +71,7 @@ import type {
 } from '../../lib/coach-dashboard'
 import type { CoachProfile } from '../../lib/coach'
 import { isUuid } from '../../lib/safe-uuid'
-import { TIER_CONFIG } from '../../lib/coach-tiers'
+import { getTierMaxClients, studentCountLabel } from '../../lib/coach-tiers'
 // Cupo por coach CONCRETO, nunca el catálogo. `freeClientLimitFor` es el helper nombrado del móvil
 // (ya lo usa /coach/reactivate) y `tierMaxClientsFor` cubre el resto de los tiers. Ambos son solo
 // el FALLBACK: en Pricing v3 el grandfather vive en la columna `coaches.max_clients`, que gana.
@@ -98,6 +98,12 @@ import { WorkspaceSwitcherSheet } from './WorkspaceSwitcherSheet'
 import { AnimatedNumber } from '../AnimatedNumber'
 
 const WARNING_500 = '#F5A524' // --warning-500
+
+// Cupo del plan Free (catálogo de venta): el copy de onboarding lo interpola en dos listas y en el
+// primer paso. Con free = 1 (pricing v3) la concatenación a mano imprimía «1 alumnos activos», así
+// que el plural sale de `studentCountLabel` y el adjetivo concuerda con él.
+const FREE_MAX_CLIENTS = getTierMaxClients('free')
+const FREE_ACTIVE_CLIENTS_LABEL = `${studentCountLabel(FREE_MAX_CLIENTS)} ${FREE_MAX_CLIENTS === 1 ? 'activo' : 'activos'}`
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -551,7 +557,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             PRIMEROS PASOS
           </Text>
-          <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle={`Hasta ${TIER_CONFIG.free.maxClients} alumnos en el plan Free`} />
+          <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle={`Hasta ${studentCountLabel(FREE_MAX_CLIENTS)} en el plan Free`} />
           <WelcomeStep icon={Zap} color={ember700} backgroundColor={ember100} title="Crea tu primera rutina" subtitle="Constructor de programas sin límites" />
           <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu marca" subtitle="Logo y colores propios · no incluido en tu plan" />
         </View>
@@ -562,7 +568,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           </Text>
           <View style={styles.freePlanGrid}>
             {[
-              { ok: true, text: `${TIER_CONFIG.free.maxClients} alumnos activos` },
+              { ok: true, text: FREE_ACTIVE_CLIENTS_LABEL },
               { ok: true, text: 'Entrenos ilimitados' },
               { ok: true, text: 'App para tus alumnos' },
               { ok: true, text: 'Check-ins' },
@@ -967,7 +973,7 @@ export function MobileOnboardingChecklist({
 function MobileOnboardingFreePlan() {
   const { theme } = useTheme()
   const items = [
-    { ok: true, text: `${TIER_CONFIG.free.maxClients} alumnos activos` },
+    { ok: true, text: FREE_ACTIVE_CLIENTS_LABEL },
     { ok: true, text: 'Entrenos ilimitados' },
     { ok: true, text: 'App para tus alumnos' },
     { ok: true, text: 'Check-ins' },
