@@ -1,13 +1,13 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-21"
+last_verified: "2026-08-22"
 canonical: false
 ---
 
 # TASKS — Onboarding del coach v2 (megaplan)
 
-Borrador 2026-08-21. Modelo sugerido entre paréntesis. Nada de W1+ ejecutado; lo marcado [x] salió el 21-08 en `5c160158`.
+Modelo sugerido entre paréntesis. Estado al 2026-08-22: W1–W4.7 y W5 F5.1/F5.2 en `master` (último `8cf7b886`, OTA 1.1.2 `17fa6905`/`93834df2`); W5 F5.3–F5.7, W6 y W7 pendientes; **W8 (auditoría 22-08) abajo** reúne los huecos confirmados que ninguna wave declaraba. Informe: artifact «Qué falta del onboarding v2» `821a05d0`; hallazgos crudos en `D:/tmp/audit-onb-20260822/`.
 
 ## Ya hecho (21-08, fuera de wave)
 - [x] Checklist web y RN: el Free ya no va a suscripción; modal Free RN dice «Marca personalizada ✓».
@@ -24,7 +24,7 @@ Borrador 2026-08-21. Modelo sugerido entre paréntesis. Nada de W1+ ejecutado; l
 ## W1 — Contratos y datos (Opus ×2)
 - [x] F1.1 Migración aditiva `20260822002122_onboarding_v2_persona_demo.sql`: `coaches.persona` (CHECK) + `persona_also_other` + `persona_set_at`, `grant update` por columna a `authenticated`; `database.types.ts` a mano. Validada en tx-rollback contra LIVE (21-08 23:53Z) y **APLICADA en LIVE el 22-08 00:21Z** (versión `20260822002122`, archivo renombrado a esa versión).
 - [x] F1.2 `clients.is_demo boolean not null default false` + índice parcial `clients_coach_demo_idx`; SIN grant de update + trigger `trg_clients_guard_is_demo` (solo `service_role` marca demo: cierra el hueco «insertar demos por PostgREST para esquivar el cupo» detectado en la revisión). Pendiente aparte: `get_admin_coaches_paginated` (panel admin) sigue contando demos.
-- [x] F1.3 `is_demo = false` en 15 consumidores con test cada uno: `capacity.service.ts:36` (hub de cupo: banner, activate-free, get-coach, downgrade, subscription-status web+RN), `clients.actions.ts:120`, `import.actions.ts:95/201`, `api/mobile/coach/clients/route.ts:201`, `api/mobile/coach/clients/import/route.ts:264`, `join-capacity.ts:69/97`, `reactivate.queries.ts:45/57`, `client-archive.service.ts:265` (desarchivo), `coach.repository.ts:85` (KPI alumnos web+RN), `cap-nudge/route.ts:177`, `trial-expiry/route.ts:91/165`, `admin coach-actions.ts:438`, RPC `get_platform_clients_count` (migración). Decisión: la ACTIVIDAD del dashboard (check-ins, logs, adherencia) SÍ incluye al demo a propósito (trae contenido al día 1; etiquetado en W3 F3.7). `OverLimitBanner` y `effective-limit.ts` no necesitaron cambio (consumen la fila 1 / son puros).
+- [x] F1.3 `is_demo = false` en 15 consumidores con test cada uno: `capacity.service.ts:36` (hub de cupo: banner, activate-free, get-coach, downgrade, subscription-status web+RN), `clients.actions.ts:120`, `import.actions.ts:95/201`, `api/mobile/coach/clients/route.ts:201`, `api/mobile/coach/clients/import/route.ts:264`, `join-capacity.ts:69/97`, `reactivate.queries.ts:45/57`, `client-archive.service.ts:265` (desarchivo), `coach.repository.ts:87` (KPI alumnos web+RN), `cap-nudge/route.ts:177`, `trial-expiry/route.ts:91/165`, `admin coach-actions.ts:438`, RPC `get_platform_clients_count` (migración). Decisión: la ACTIVIDAD del dashboard (check-ins, logs, adherencia) SÍ incluye al demo a propósito (trae contenido al día 1; etiquetado en W3 F3.7). `OverLimitBanner` y `effective-limit.ts` no necesitaron cambio (consumen la fila 1 / son puros).
 - [x] F1.4 `coach_onboarding_events`: CHECK ampliado (12 tipos) + índice único parcial `coach_onboarding_events_step_completed_once (coach_id, step_key) where event_type='step_completed' and created_at >= 2026-08-22` (no toca las 2.293 filas históricas); route acepta pasos v2 + legacy y responde `{ ok, deduped }` ante 23505; 13 tests nuevos. El fin del re-emit del cliente queda para la reescritura del checklist (W2 F2.3).
 - [x] F1.5 `@eva/feature-prefs`: `FEATURE_DOMAINS` = nutrition · training · cardio · movement · bodycomp (sección `core` por dominio nuevo), `resolvePersonaPrefs(persona, alsoOther)`, `disabledDomainsForPersona()`; matriz 5×2 testeada. Consumidores adaptados a `Partial<Record<…>>` sin cambio de comportamiento: web `settings/funciones/_data/funciones.queries.ts`, RN `lib/feature-prefs.queries.ts` (W2.6/W5.3 agregan los dominios nuevos a `DOMAIN_META`/`DOMAIN_LABELS`).
 - [x] F1.6 `@eva/coach-nav`: `featureDomain` en `programs` (training), `cardio`, `movement`; composición entitlement × dominio testeada; no hay entrada de nav para bodycomp (vive en la ficha del alumno) — se gatea por dominio en W2/W5.
@@ -34,13 +34,13 @@ Borrador 2026-08-21. Modelo sugerido entre paréntesis. Nada de W1+ ejecutado; l
 ## W2 — Web: primer login y dashboard día 1 (Opus ×2)
 - [x] F2.1 Ruta `/coach/onboarding/persona` (`_components/PersonaPicker.tsx`: 5 tiles + pregunta 2 inline, radiogroup accesible, sin «saltar»); action `setCoachPersonaAction` (persona + 5 prefs por dominio + evento `persona_selected` + `seedDemoStudent` + PostHog). El gate vive en `proxy.ts` (no en el layout: un layout de Next no conoce el pathname y loopearía) con resolvers puros en `services/coach/persona.service.ts`: `persona IS NULL && !managed && ruta no exenta && (created_at ≥ 2026-08-22 || 0 alumnos reales)`; `/coach/onboarding/persona` sumada a `COACH_LOGIN_DEFAULT_PATHS` (safe-next). Pendiente: la pantalla renderiza como overlay `fixed inset-0` sobre el shell (Next no deja saltar el layout padre); alternativa = route group `(fullscreen)`.
 - [x] F2.2 Interstitial «Armando tu panel» (`_components/BuildingPanel.tsx`: 3 líneas que se tildan + skeleton de los 3 bloques, mínimo 1,2 s, sin spinner, respeta `prefers-reduced-motion`).
-- [x] F2.3 Guía v2 (`CoachOnboardingChecklist` reescrito + `OnboardingGuideFooterStrip`): pasos desde `@eva/onboarding`, progreso n/5, señales en `getCoachOnboardingV2Data` (marca, `vive_tu_app_opened`, artefacto por persona, alumno real, actividad real) en un solo `Promise.all`; ARRIBA del dashboard (primer bloque del contenido, antes del saludo) hasta 5/5 u «Ocultar», tira al pie después; estado único en `_lib/use-onboarding-guide.ts` (server gana, `emitted` evita re-emitir eventos). Confeti solo en el aha.
-- [~] F2.4 Tarjeta «Tu marca en 60 s» (`_components/BrandQuickCard.tsx`: nombre, 5 presets de `@eva/brand-kit` + picker, logo vía `createLogoUploadUrlAction`/`updateLogoAction`, vista previa del login con sello; guarda con `updateBrandSettingsAction`; si el color es el verde sembrado preselecciona `#1462DC` sin guardarlo). **Pendiente:** default `#1462DC` en los 6 caminos de alta (archivos de la sesión embudo: `register.actions`, `complete.actions`, `register-coach-free`) — después de su W4.
+- [x] F2.3 **(superado por W4.5: `CoachOnboardingChecklist` y `OnboardingGuideFooterStrip` se borraron; la guía vive en `/coach/guia`)** Guía v2 (`CoachOnboardingChecklist` reescrito + `OnboardingGuideFooterStrip`): pasos desde `@eva/onboarding`, progreso n/5, señales en `getCoachOnboardingV2Data` (marca, `vive_tu_app_opened`, artefacto por persona, alumno real, actividad real) en un solo `Promise.all`; ARRIBA del dashboard (primer bloque del contenido, antes del saludo) hasta 5/5 u «Ocultar», tira al pie después; estado único en `_lib/use-onboarding-guide.ts` (server gana, `emitted` evita re-emitir eventos). Confeti solo en el aha.
+- [x] F2.4 Tarjeta «Tu marca en 60 s» (`_components/BrandQuickCard.tsx`: nombre, 5 presets de `@eva/brand-kit` + picker, logo vía `createLogoUploadUrlAction`/`updateLogoAction`, vista previa del login con sello; guarda con `updateBrandSettingsAction`; si el color es el verde sembrado preselecciona `#1462DC` sin guardarlo). Default `#1462DC` en los 6 caminos de alta HECHO en `b58b2b74` (21-08).
 - [x] F2.5 «Vive tu app»: `openViveTuAppAction` genera el magic link del demo (`generateLink` → `hashed_token`) hacia la ruta propia `GET /vive-tu-app?t=&c=` (verifica con `verifyOtp`, exige `clients.is_demo`, cae en `/c/<id>/dashboard`; NO usa `/auth/confirm`, que manda al alta del coach) + evento `vive_tu_app_opened`. UI = hoja con QR primero (las cookies de Supabase son del host: abrirlo en el mismo navegador reemplaza la sesión del panel) + «Copiar» + «Abrir en este navegador» con aviso.
 - [x] F2.6 Nav por dominio: `coach/layout.tsx` lee los 5 dominios en una query (`readCoachDomainPrefs`) y los pasa a `getVisibleNavItems` (sin pasar por el flag `FEATURE_PREFS_ENABLED`: 1 coach en LIVE tenía nutrición apagada desde «Funciones» y ahora la ve oculta de verdad). `Opciones › Mi panel` (`settings/funciones`, `MiPanelPane`): persona + pregunta 2, 5 switches por dominio, «Ordenar mi panel según mi especialidad», re-sembrar/borrar demo; rail desktop y card móvil renombrados.
-- [~] F2.7 `FreeWelcomeModal` solo texto + «Recordármelo después» (24 h, clave por coach); HelpCenter «Primeros pasos» desde `ONBOARDING_STEPS[persona]` (cableado en `/coach/support` y en `SupportPane`); los 5 componentes muertos borrados (entraron en el commit `0e42d480` de la sesión embudo por un `git rm` staged). **Pendiente:** correo D+0 por persona (W6, vía `scheduleCoachEmail`); deps huérfanas de `package.json` sin revisar.
-- [~] F2.8 `nextBestAction.rules.ts` por persona; `/coach/programs` → `/coach/workout-programs`; claves de localStorage por coach en la guía y en `FreeWelcomeModal`. **Pendiente:** `WeeklyPlanBuilder.tsx:252` (clave global del builder) — entra con F4.2.
-- [~] F2.9 Tests unitarios: `persona.service.test` (gate D8 + prefs + nav), `persona.actions.test`, `onboarding-signals.test`, `onboarding-guide-state.test`, `use-onboarding-guide.test`, `nextBestAction.rules.test`, `vive-tu-app.actions.test` + `vive-tu-app/route.test`, `demo-student.actions.test`, `CoachOnboardingChecklist.test`, `HelpCenter.test`, `safe-next.test`. **Pendiente:** Playwright smoke × 5 personas; `tests/coach-onboarding-dashboard.spec.ts` quedó obsoleto (referencia `OnboardingThreeSlot`) — reescribir en W7.
+- [~] F2.7 **(`FreeWelcomeModal` se borró en W4.7: la guía es la bienvenida)** `FreeWelcomeModal` solo texto + «Recordármelo después» (24 h, clave por coach); HelpCenter «Primeros pasos» desde `ONBOARDING_STEPS[persona]` (cableado en `/coach/support` y en `SupportPane`); los 5 componentes muertos borrados (entraron en el commit `0e42d480` de la sesión embudo por un `git rm` staged). **Pendiente:** correo D+0 por persona (W6, vía `scheduleCoachEmail`); deps huérfanas de `package.json` sin revisar.
+- [x] F2.8 `nextBestAction.rules.ts` por persona; `/coach/programs` → `/coach/workout-programs`; claves de localStorage por coach en la guía y en `FreeWelcomeModal`. Las claves del tour del builder ya son por coach (`builderTourStorageKey`, F4.2). Quedan para W8: `builder_draft_new`/`builder_recent_exercises` globales y el fallback `/coach/programs` de `ExpiringPrograms.tsx:32`.
+- [~] F2.9 Tests unitarios: `persona.service.test` (gate D8 + prefs + nav), `persona.actions.test`, `onboarding-signals.test`, `onboarding-guide-state.test`, `use-onboarding-guide.test`, `nextBestAction.rules.test`, `vive-tu-app.actions.test` + `vive-tu-app/route.test`, `demo-student.actions.test`, `HelpCenter.test`, `safe-next.test` (`CoachOnboardingChecklist.test` murió con el componente en W4.5). **Pendiente:** Playwright smoke × 5 personas; `tests/coach-onboarding-dashboard.spec.ts` quedó obsoleto (referencia `OnboardingThreeSlot`) — reescribir en W7.
 
 ## W3 — Demos, plantillas y estados vacíos (Opus ×2 + revisores D4)
 - [x] F3.1 `seedDemoStudent(coachId, persona)` implementado en `apps/web/src/services/onboarding/` (service + `demo-writers.ts`): alumno `is_demo` con auth user `demo-<coachId>@evatest.cl`, cuenta, membresía standalone e intake; contenido por persona; inventario de ids en `onboarding_guide.demo` (MERGE del jsonb, nunca replace); `deleteDemoStudent` reversible e idempotente; `applyTemplate`. Escribe nutrición **V2** DIRECTO con el cliente admin —no por `persist_and_publish_nutrition_plan_v2`, que exige `auth.uid()` y aborta bajo `service_role`— con la misma forma de filas y los `snapshot_*` congelados por `computeItemMacros`. Validado contra LIVE con `qa-free-v3@evatest.cl` en las 4 personas (seed → verificación de filas → delete → 0 filas, `onboarding_guide` conservado); la cuenta QA quedó limpia. Pendiente: pruebas en tx-rollback SQL (la validación fue por ciclo real seed→delete).
@@ -133,8 +133,9 @@ onboarding por área».
 - [x] F4.7.6 Tests: `guide-mode.test.ts`, `OnboardingModeContext.test.tsx` (default/provider),
   `tour-engine.test.tsx` (no auto-arranca con guía activa · el «?» lo abre igual · la memoria queda
   intacta). Verde también `hub-tour-mount.test.tsx` (fuera del provider ⇒ auto-arranca como antes).
-- [ ] F4.7.7 Pendiente: espejo RN de la regla (W5 — la pantalla de guía RN y sus tours/modales de
-  módulo consumen el mismo `isGuideActive`) y QA visual del owner.
+- [~] F4.7.7 Espejo RN de la regla HECHO en W5 (`lib/onboarding-mode.tsx` + `OnboardingModeProvider` en
+  `app/coach/_layout.tsx`, consumido por el tour de nutrición). **Pendiente:** el tour del builder RN
+  (`program-builder.tsx:1429-1436`) sigue auto-arrancando y marcando «visto» → W8.2; QA visual del owner.
 
 ## W5 — RN paridad (Opus)
 - [x] F5.1 Pantalla de persona RN `app/coach/onboarding/persona.tsx` (molde RoleCards, 5 tiles, pregunta 2, «Armar mi panel», interstitial ≥ 1,2 s) + gate en `app/coach/_layout.tsx` (`needsPersona` fail-open, caché por sesión) vía `lib/coach-persona.ts`; API: `api/mobile/coach/persona` (GET/POST) sobre el núcleo compartido `applyCoachPersona` de `services/coach/persona.service.ts` (la action web lo usa también); `api/mobile/coach/dashboard` devuelve `onboardingV2` (persona, needsPersona, demo, guide, señales) desde `services/onboarding/onboarding-v2.queries.ts`; `/api/coach/onboarding-events` acepta `stepKey: 'persona'`. Tests: 16 + 8 + 18.
@@ -156,6 +157,145 @@ onboarding por área».
 - [ ] F7.3 QA del owner: web desktop + PWA + app (Xiaomi/iPhone) × 5 personas con `qa-free-v3` (cambio de persona desde Mi panel); evidencia.
 - [ ] F7.4 Backfill D8: coaches existentes con `persona IS NULL` — 0 alumnos ⇒ pantalla completa una vez; ≥1 ⇒ tarjeta «Elige tu especialidad».
 - [ ] F7.5 Gates completos; merge a master; Vercel; OTA a 3 runtimes por `mobile-ota.yml`; aviso opcional a los Free sin alumno.
+
+## W8 — Auditoría 22-08: huecos confirmados que ninguna wave declaraba
+
+Auditoría del megaplan (22-08, 8 auditores + 8 verificadores adversariales, 101 hallazgos confirmados / 27
+parciales / 4 refutados; informe artifact `821a05d0`, crudos en `D:/tmp/audit-onb-20260822/`). Cada ítem
+lleva el id del hallazgo. Orden = daño al objetivo (que el coach nuevo llegue al aha). Las decisiones
+del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
+
+### W8.0 — Hotfix del QA del owner (22-08, HECHO)
+- [x] W8.0.1 Píldora RN: quedaba abierta tapando el panel y el FAB «+», y no seguía a la cápsula del nav.
+  Ahora: teaser abierto ~3,2 s → se desliza HACIA el círculo azul y queda solo el botón (una vez por
+  sesión y por coach; minimizada a mano ⇒ arranca cerrada); se esconde junto con la cápsula al
+  scrollear (`useCoachTabbarMinimized`); reserva el espacio del FAB. Espejo web (`GuidePill.tsx` +
+  `use-tabbar-minimized.ts`, compartido con `CoachSidebar`). Tests web 20/20; tsc ×2; expo export.
+
+### W8.1 — Web: lo roto hoy (1 Opus, 1,0 d)
+- [ ] W8.1.1 🔴 **Paso 3 nace tildado**: `resolveFirstArtifact` (`services/onboarding/onboarding-v2.queries.ts:88-126`)
+  cuenta programas / pautas V2 / screenings / perfiles cardio sin excluir `is_demo`, y el seed escribe
+  justo eso. Contar solo artefactos de alumnos reales o del demo EDITADO (`updated_at > created_at + 60 s`).
+  Test por persona. En LIVE los 2 coaches con persona ya tienen `first_artifact:true` persistido (limpiar
+  `onboarding_guide.completed.first_artifact` de esos coaches al desplegar). [EDGE-01/spec-rn-01]
+- [ ] W8.1.2 🔴 **Sin demo no hay paso 2 ni paso 3**: `other` (`DEMO_PROFILES.other = null`), los 48 coaches
+  con persona NULL y quien tocó «Borrar ejemplo» no pueden tildar «Ver mi app» (`vive-tu-app.service.ts:70-77`
+  → `sin_demo`, solo toast) ni, para nutrition/rehab/endurance, abrir el paso 3 (`resolveTarget` → `null`).
+  Depende de **D10**. Mientras: botón deshabilitado con explicación + «Volver a sembrar» en la misma tarjeta.
+  [spec-web-01/EDGE-02/canvas-missed/EDGE-missed]
+- [ ] W8.1.3 Cambiar de persona en Mi panel: borrar + re-sembrar el demo de la persona nueva (con aviso);
+  hoy `saveMiPanelPersonaAction` no toca el demo y «Volver a sembrar» responde `alreadyExisted`. [EDGE-03]
+- [ ] W8.1.4 El demo no se archiva ni se borra por el camino normal: la ficha bloquea archivar/borrar y
+  ofrece solo «Borrar ejemplo»; `deleteClientHard` con rama `is_demo` → `deleteDemoStudent` (inventario +
+  áreas). Archivarlo hoy dispara `deactivate_archived_client_assignments` sin inverso y deja «Borrar»
+  deshabilitado y el re-seed chocando con el auth user. [EDGE-07/EDGE-08/EDGE-missed]
+- [ ] W8.1.5 `bodycomp` no gatea nada: o entra en la nav/ficha por dominio (matriz SPEC §2) o se quita el
+  switch de Mi panel. Hoy `featureDomain 'bodycomp'` no existe en `@eva/coach-nav` y la ficha decide por
+  `enabled_modules.body_composition`. [spec-web-02/canvas-03]
+- [ ] W8.1.6 Actividad del demo etiquetada en feed, AreaChart y pulso del dashboard
+  (`dashboard.queries.ts:416-433` sin `is_demo`; F1.3 lo delegó a F3.7 y no se hizo). [spec-web-04]
+- [ ] W8.1.7 Riel de plantillas por persona con entrada PROPIA (no solo en el vacío first-run, que el demo
+  apaga) y Movimiento/Cardio pintando sus 3 plantillas (hoy `templatesForSurface(...)[0]`). [canvas-01/02]
+- [ ] W8.1.8 `program-assignment-notification.repository.ts:66-72` y los crons `checkin-reminder` /
+  `nutrition-reminder` filtran `is_demo` (hoy un programa asignado al demo manda correo a
+  `demo-<coachId>@evatest.cl` ⇒ rebote). [spec-web-05/db-live-09]
+- [ ] W8.1.9 Panel admin: `admin/(panel)/clients/_actions/client-actions.ts:82-89`, `coach-detail.queries.ts:143-148`,
+  `sistema.queries.ts:91` con `is_demo = false` + migración aditiva que reescribe `get_admin_coaches_paginated`
+  (`cl.is_demo = false`). Caso LIVE `00109d66`: Free con demo = cupo 1/1, 0 reales. [db-live-01/02, tasks-truth-06]
+- [ ] W8.1.10 Bienvenida Free y D+1 apuntan a `/coach/guia` con copy por persona (`PERSONA_COPY`) y sin
+  pitch de nutrición a quien la apagó; cancelar `day2_pro`/`day14_last_call` al primer alumno real (hook
+  declarado en embudo W2.10). Acordado con BROCITO: mismas `template_key`. [w6-w7-03/04/19]
+- [ ] W8.1.11 Bajos con evidencia: buscador global sin etiqueta demo (`coach-search.service.ts:74`) · FAB del
+  dashboard ignora dominios (`DashboardFab.tsx:28-30`) · azul `#1462DC` elegido a mano no tilda el paso 1
+  (`hasCustomBrand`) · el gate descarta `?next=` (`proxy.ts:628-641`) · `/vive-tu-app` no ata `c=` al coach ·
+  4 escritores read-modify-write de `onboarding_guide` sin lock · voseo en `packages/onboarding/index.ts:201,253` ·
+  `alsoOther` (tabla) vs `also_other` (PostHog) · `persona_selected` desde Mi panel sin `changed` en PostHog ·
+  `ExpiringPrograms.tsx:32` → `/coach/programs` (404) · `builder_draft_new`/`builder_recent_exercises` globales ·
+  `PersonaNudgeCard` solo en la guía (el comentario D8 de `persona.service.ts:38-41` promete dashboard).
+
+### W8.2 — App: W5 es más grande de lo declarado (1 Opus, 1,0 d, OTA)
+- [ ] W8.2.1 Tour del builder RN gateado con `tourAutoStartEligible` + clave por coach
+  (`program-builder.tsx:1422-1436`, `builder_onboarding_seen_short_v1` sin coachId). [tasks-truth-01/spec-rn-04/17]
+- [ ] W8.2.2 «Mi panel» en Opciones RN (persona + pregunta 2 + «Ver mi guía» + re-sembrar/borrar) y «Abrir la
+  guía» en Soporte: apagar la guía desde la app hoy la deja irrecuperable en la app (único push a `/coach/guia`
+  es la píldora) y `persona.tsx:302` promete «Opciones › Mi panel», que no existe. API móvil de re-seed (hoy
+  `demo-student` solo DELETE). [spec-rn-03/08/13]
+- [ ] W8.2.3 = F5.3 Nav RN por dominio con los 5 dominios sin pasar por `FEATURE_PREFS_ENABLED`
+  (`CoachMobileChrome.tsx:95-104`, `api/mobile/config/route.ts:112-113`); dashboard sin «Todo al día. Buen
+  trabajo.» con 0 alumnos (`CoachDashboardSections.tsx:1749-1761`); copy «pool» fuera. [spec-rn-02/12/19]
+- [ ] W8.2.4 = F5.4 (BROCITO, acordado 22-08): `QuickCreateClientForm` con muro de cupo + `UPGRADE_REQUIRED` +
+  `upgrade_gate_hit`; `lib/client-actions.ts:29-40` deja de decir «la app de EVA» (white-label) y usa
+  `formatWhatsappInvite(persona)`. [spec-rn-07/tasks-truth-07]
+- [ ] W8.2.5 Telemetría RN: `stepKey` real (el server ya acepta los 5 pasos v2: `MOBILE_EVENT_STEP_KEYS`),
+  `step_completed`/`aha_moment` + `captureAppEvent`; endpoint móvil traduce 23505 → `{ok, deduped}`, rate limit y
+  schema `.strict()` para `persist_onboarding_guide` (hoy mergea jsonb crudo con admin). [spec-rn-09/10, db-live-03/missed]
+- [ ] W8.2.6 Etiqueta del demo en directorio, ficha y selectores RN (`isDemo` ya viaja en
+  `clients-directory.ts:220`); redirect de primera entrada a la guía (`guideSeenAt` sin consumidor de ruta);
+  píldora RN mira `isManaged` como el provider. [spec-rn-06/11/missed]
+- [ ] W8.2.7 = F5.5 + plantillas: catálogo vía API móvil + vacíos template-first + tarjetas del builder +
+  DemoCard con KPIs (el payload `onboardingV2` no trae `buildDemoKpis`). [spec-rn-05/canvas-08/09]
+- [ ] W8.2.8 QA device F5.7 incluye: back de hardware en persona, rebote del 302 de `/vive-tu-app` a `/c/*`
+  (app-link `autoVerify`), píldora vs cápsula minimizada, white-label. [spec-rn-14/18, EDGE-12]
+
+### W8.3 — Datos y backfill D8 (jefe + SQL, 0,3 d)
+- [ ] W8.3.1 Backfill D8 vía `applyCoachPersona` (nunca `UPDATE coaches SET persona`): el coach `0c7e265b`
+  (qa-embudo, persona por SQL) quedó sin prefs, sin demo y sin evento. Hoy 48/51 sin persona (24 con 0
+  alumnos activos ⇒ gate; 24 con alumnos ⇒ píldora; 5 con guía cerrada ⇒ solo Mi panel). Depende de **D9**.
+  [db-live-04/05, w6-w7-18]
+- [ ] W8.3.2 Los demos comparten dominio `@evatest.cl` con las cuentas QA: documentar en `MANUAL_TASKS` que
+  la purga de QA va por lista de correos, nunca por dominio. [EDGE-13]
+
+### W8.4 — Precondiciones de W6 (decisiones + 0,5 d)
+- [ ] W8.4.1 **D11** drip por calendario: apagar `scheduleFreeCoachDripSequence` (D6 decía reemplazar) o
+  definir convivencia; hoy el D+1 y el trigger «+2 h sin alumno» son el mismo correo con keys distintas.
+  [w6-w7-05]
+- [ ] W8.4.2 **D12** reloj: cron horario (`vercel.json` solo tiene diarios/semanales ⇒ «+2 h» = «hasta +26 h»)
+  + trigger de DB para el aha (hoy solo se calcula cuando el coach abre la guía). [w6-w7-08/10]
+- [ ] W8.4.3 Señal de login del alumno (`clients` no tiene ninguna; solo `auth.users.last_sign_in_at`):
+  columna aditiva `clients.last_login_at` escrita por el login del alumno, o lectura con service_role en el
+  barrido. Sin esto no existe «+48 h el alumno no entró». [w6-w7-09]
+- [ ] W8.4.4 Rama «sin persona» en todas las plantillas (48/51), exclusión de cuentas de prueba con bypass
+  explícito para `qa-free-v3` (F6.3), criterio del corte a 90 d (`created_at` vs `persona_set_at`), WhatsApp
+  del owner (**D13**). [w6-w7-12/13/20]
+
+### W8.5 — Precondiciones de W7 (medición, 0,5 d)
+- [ ] W8.5.1 Tabla de equivalencias SPEC §10 ↔ código (`onboarding_step_completed`→`step_completed`,
+  `demo_student_seeded`→`demo_seeded`, `student_first_workout|intake`→`student_workout_completed`/
+  `student_nutrition_intake`, aha viejo `aha_moment/first_checkin` vs nuevo `step_completed/aha`). [w6-w7-16/22]
+- [ ] W8.5.2 Espejo a PostHog desde `recordOnboardingEvent` (un punto, web y app) + `$set { persona }` en el
+  identify: hoy PostHog solo conoce `persona_selected`, no existe ningún insight de activación y nada se
+  desglosa por especialidad. [w6-w7-01/02/07]
+- [ ] W8.5.3 Cablear o quitar los tipos sin emisor (`invite_link_copied`, `first_module_opened`,
+  `invite_whatsapp_opened` → tabla); contrato de `guide_engagement` (0 filas en toda la historia; server
+  «sin dedupe» vs cliente «1 por sesión»; `step_key` distinto web/RN). [db-live-06, w6-w7-14/15/23, missed]
+- [ ] W8.5.4 Todo insight sobre `coach_onboarding_events` con `created_at >= 2026-08-22` (8.124 filas
+  históricas de `step_completed`). [db-live-08, w6-w7-17]
+
+### W8.6 — Docs, deuda y QA automática (0,5 d)
+- [ ] W8.6.1 `RESEARCH.md`: archivar los 6 informes del job (`audit-web`, `audit-rn`, `data`, `research-saas`,
+  `research-competitors`, `research-personas`) en `docs/research/onboarding-coach-v2-2026-08-21/` + índice de
+  `docs/research/README.md` al día; `check-docs.mjs` valida rutas entre backticks. [debt-docs-05/16]
+- [ ] W8.6.2 SPEC §5 (RN abre `/vive-tu-app` en el navegador, no `eva://`), §9 (guía en pantalla propia +
+  píldora, no «arriba del home»), tabla §2 (nutrición `also_other` también para rehab/endurance); PLAN con
+  el cambio 22-08 y las waves W4.6/W4.7/W8. [debt-docs-03/04, spec-rn-16, spec-web-12]
+- [ ] W8.6.3 Canónicos: `PRODUCT_OVERVIEW` (persona, guía, demo, `is_demo` fuera del cupo), `MANUAL_TASKS`
+  (D4, QA ×5, D8, purga), `FLOWS_AND_COMPONENTS` (`/coach/guia`, gate, `/vive-tu-app`), `TEST_STATUS` +
+  alias `check:guia-visual` en `package.json`, `REDESIGN_FEATURE_MATRIX` y pricing-v3 F4.5 (citan archivos
+  borrados). [debt-docs-02/08/09/10/13/15]
+- [ ] W8.6.4 E2E: retirar/reescribir `tests/coach-onboarding-dashboard.spec.ts`; Playwright ×5 personas + 4
+  tareas guiadas; Maestro base de coach (`testID` en persona/guía/píldora). [debt-docs-01/06, tasks-truth-05]
+- [ ] W8.6.5 Deuda: la guía sigue en `dashboard/_lib` (5 imports `../../dashboard`); clave de localStorage
+  duplicada en `guide-pill-restore.ts` sin test de contrato; `PERSONA_CHIP_LABEL` duplicado web/RN →
+  `@eva/schemas`. [debt-docs-14/missed, spec-rn-20]
+
+### Decisiones del owner que destraban W8
+| # | Decisión | Opciones | Recomendación |
+|---|---|---|---|
+| D9 | ¿La persona apaga módulos también para los alumnos? (`nutrition._enabled` gobierna la app del alumno vía `resolveNutritionDomainEnabled`; latente mientras `FEATURE_PREFS_ENABLED` esté OFF; «reordenar mi panel» en coaches con alumnos los deja sin Nutrición) | A) No: clave aparte solo para el panel del coach · B) Sí, con aviso | **A** |
+| D10 | ¿Qué ve `other` (y el coach sin persona) en el paso 2? | A) demo neutro · B) vista previa del login con su marca, tilde al abrirla · C) guía de 4 pasos | **B** |
+| D11 | ¿El drip por calendario muere o convive con los triggers? | A) muere (D6) · B) convive con cancelación cruzada | **A** (+ D+14 como último toque) |
+| D12 | Reloj de W6 | A) cron horario · B) disparo en línea | **A + B para el aha** |
+| D13 | Insumos humanos: WhatsApp del owner (+7 d), revisión D4 (socio), revisor de pautas/rehab | — | sin el número no hay plantilla 5 |
 
 ## Deuda declarada (fuera de v1)
 - [ ] Vocabulario global por persona (`personaNoun()` en nav y fichas, web+RN).

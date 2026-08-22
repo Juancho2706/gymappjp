@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-21"
+last_verified: "2026-08-22"
 canonical: false
 ---
 
@@ -58,7 +58,14 @@ Una sola celebración en el aha; nada de tours automáticos; nada gateado a Pro;
 | **W6** | Correos por comportamiento sobre el ledger del embudo: motor de triggers + cron; plantillas por persona; dedupe; corte 90 d; exclusión de cuentas de prueba | 1 Opus | tests de templates/servicio; envío real a `qa-free-v3@evatest.cl` | 1,0 | BROCITO W2 (ledger), W1 (`persona`) |
 | **W7** | Medición, QA y salida: insights + dashboard PostHog; docs canónicos (`CURRENT`, `PRODUCT_OVERVIEW`, `MOBILE_PARITY`); QA del owner ×5 personas con `qa-free-v3`; gates completos; merge; OTA a 3 runtimes; backfill D8; aviso opcional a los Free sin alumno | jefe + owner + 1 Opus (insights/docs) | evidencia de QA; vitest completo; build; tsc ×2; lint; docs/tokens/boundaries | 1,0 | todas |
 
-**Total ≈ 10,5 días-agente.** Calendario estimado **8-10 días hábiles**: W1 (día 1) → W2 ‖ W3 ‖ W5 (días 2-4) → W4 (días 4-6) → W6 cuando BROCITO entregue el ledger → W7 (días 7-8) + QA del owner. El jefe (Fable) juzga cada wave antes de abrir la siguiente; lo deficiente vuelve al mismo worker con feedback.
+**Actualización 22-08.** (1) Decisión del owner: la guía dejó de vivir «arriba del dashboard» y pasó a
+`/coach/guia` + píldora flotante, en web y en RN (SPEC § «Cambio 22-08»); W5 sigue esa casa, no «home día 1
+con la guía arriba». (2) Waves ejecutadas fuera de la tabla: W4.5 (guía en pantalla propia), W4.6 (fixes del QA
++ gate visual), W4.7 («un solo onboarding por área»). (3) La auditoría del 22-08 (TASKS § W8) encontró ≈ 2,5
+días-agente sin declarar: W8.1 web hotfix 1,0 · W8.2 app 1,0 · W8.3–W8.6 precondiciones de W6/W7 y docs 1,3.
+W6 y W7 no arrancan sin las decisiones D9–D13 de TASKS.
+
+**Total ≈ 10,5 días-agente** (+ ≈ 3,3 de W8, ver arriba). Calendario estimado **8-10 días hábiles**: W1 (día 1) → W2 ‖ W3 ‖ W5 (días 2-4) → W4 (días 4-6) → W6 cuando BROCITO entregue el ledger → W7 (días 7-8) + QA del owner. El jefe (Fable) juzga cada wave antes de abrir la siguiente; lo deficiente vuelve al mismo worker con feedback.
 
 ## Coordinación con la sesión BROCITO (embudo Free→Pro)
 

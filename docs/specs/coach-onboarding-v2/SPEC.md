@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-21"
+last_verified: "2026-08-22"
 canonical: false
 ---
 
@@ -214,7 +214,9 @@ puro compartido, `isGuideActive` (`@eva/onboarding`), y llega a la UI web por co
 ### 5. «Vive tu app» — invitarme a mí mismo
 
 - Botón en el paso 2 del checklist: abre la app del alumno **con la marca del coach** (web: `/c/[slug]/login`
-  con magic link del alumno demo vía `auth.admin.generateLink`; RN: deep link `eva://` al mismo login). Es el
+  con magic link del alumno demo vía `auth.admin.generateLink`; RN: abre `/vive-tu-app` en el navegador del
+  sistema con `Linking.openURL` — no `eva://`: la sesión del navegador es OTRA que la de la app, así no pisa
+  la sesión del coach, y no exige módulo nativo nuevo — decisión W5 F5.2). Es el
   único momento en que el Free ve el white-label funcionando: el «wow» que justifica Free = 1 alumno con marca.
 
 ### 6. Checklist v2: 5 verbos por persona, arriba del dashboard hasta completarse
@@ -256,6 +258,8 @@ puro compartido, `isGuideActive` (`@eva/onboarding`), y llega a la UI web por co
 
 ### 9. Paridad móvil (no negociable)
 
+- **(Superado por el «Cambio 22-08»: en RN la guía también vive en pantalla propia `app/coach/guia.tsx` +
+  píldora flotante sobre la tab bar, no «arriba del home». Lo demás de este punto sigue vigente.)**
 - Misma pantalla de persona en RN (molde: `components/entry/RoleCards.tsx`), checklist v2 arriba del home y
   **persistido** (hoy `home.tsx` no pasa `onboardingGuide`), demo y plantillas vía la API mobile existente,
   invitación con share sheet nativo + WhatsApp. OTA-able salvo eventos PostHog (la key sigue muda en 1.1.2).
