@@ -62,6 +62,13 @@ export interface DirectoryClient {
   phone: string | null
   isActive: boolean
   isArchived: boolean
+  /**
+   * Alumno de EJEMPLO sembrado por el onboarding (`clients.is_demo`). NO ocupa cupo: el gate del
+   * server lo excluye (`api/mobile/coach/clients/route.ts:201` y
+   * `services/billing/capacity.service.ts`), así que archivarlo no libera nada.
+   * En una DB sin la columna (fallback de compatibilidad) llega `false`.
+   */
+  isDemo: boolean
   forcePwChange: boolean
   createdAt: string
   activeProgramName: string | null
@@ -136,10 +143,15 @@ export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Pro
   const legacyOrgContext = scope ? null : await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
   const orgId = scope?.orgId ?? legacyOrgContext?.orgId ?? null
   const teamId = scope?.teamId ?? null
-  const clientsSelect = 'id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)'
+  const clientsBaseSelect = 'id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)'
+  // `is_demo` (onboarding v2) decide quién OCUPA CUPO: el alumno de ejemplo no cuenta para el gate
+  // del server, así que el selector de archivado no puede ofrecerlo como forma de liberar espacio.
+  // Va en el select rico y NO en el mínimo: en una DB anterior a la columna, la lectura degrada al
+  // comportamiento viejo (todos `isDemo: false`) en vez de romper el directorio entero.
+  const clientsSelect = `${clientsBaseSelect}, is_demo`
 
-  const scopedClientsQuery = () => {
-    let q = supabase.from('clients').select(clientsSelect)
+  const scopedClientsQuery = (select: string) => () => {
+    let q = supabase.from('clients').select(select)
     if (orgId) return q.eq('coach_id', coach.id).eq('org_id', orgId).is('team_id', null).order('full_name')
     if (teamId) return q.is('org_id', null).eq('team_id', teamId).order('full_name')
     return q.eq('coach_id', coach.id).is('org_id', null).is('team_id', null).order('full_name')
@@ -147,9 +159,9 @@ export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Pro
 
   const [clientsRes, workoutLogsRes, checkInsRes] = await Promise.all([
     selectWithFallback<any>(
-      scopedClientsQuery,
+      scopedClientsQuery(clientsSelect),
       // Compatibilidad de columnas antiguas sin abrir el fallback a todos los pools.
-      scopedClientsQuery,
+      scopedClientsQuery(clientsBaseSelect),
     ),
     supabase
       .from('workout_logs')
@@ -205,6 +217,7 @@ export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Pro
       phone: c.phone ?? null,
       isActive: c.is_active !== false,
       isArchived: c.is_archived === true,
+      isDemo: c.is_demo === true,
       forcePwChange: c.force_password_change === true,
       createdAt: c.created_at,
       activeProgramName: activeProgram?.name ?? null,

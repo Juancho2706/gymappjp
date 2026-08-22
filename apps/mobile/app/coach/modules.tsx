@@ -27,9 +27,10 @@ import { Card } from '../../components'
  * E6-12 · Catálogo de Módulos (coach) — espejo RN read-only del web
  * `apps/web/src/app/coach/settings/modules/_components/ModulesForm.tsx`.
  *
- * Decisión CEO 2026-07-17: los 4 módulos vienen INCLUIDOS con cualquier plan pago; ya no se
+ * Decisión CEO 2026-07-17 + Pricing v2 P3: los 4 módulos vienen INCLUIDOS para todo coach con
+ * suscripción VIGENTE — free incluido (`hasPaidModuleAccess` ya no mira el tier); ya no se
  * compran, activan ni desactivan por separado. Esta pantalla dejó de ser superficie de venta:
- * sin precios ni CTA de compra. Coach pago => "Incluido en tu plan"; coach Free => solo ESTADO
+ * sin precios ni CTA de compra. Con acceso => "Incluido en tu plan"; sin acceso => solo ESTADO
  * ("No está incluido en tu plan actual") + "Actualizar estado", que revalida entitlements. Sin
  * link-out a la página de pago (anti-steering Apple 3.1.1 / política de pagos de Google, ver
  * `docs/research/cta-pagos-externos-stores-2026-07-31.md`).
@@ -199,15 +200,18 @@ export default function CoachModulesScreen() {
             ))}
           </View>
 
+          {/* W6.1: el pie decía «En el plan Free los módulos no están disponibles» de forma
+              INCONDICIONAL — falso desde Pricing v2 (todo coach vigente los recibe, free incluido)
+              y encima se lo comía un Pro. Ahora solo hay copy cuando de verdad falta alguno, y es
+              de ESTADO: qué significa el candado y cómo revalidarlo. */}
           {anyLocked ? (
-            <View style={{ alignItems: 'center', marginTop: 16 }}>
+            <View style={{ alignItems: 'center', gap: 10, marginTop: 16 }}>
+              <Text className="font-sans text-subtle" style={{ fontSize: 11.5, textAlign: 'center', lineHeight: 17 }}>
+                Los módulos vienen incluidos mientras tu suscripción está vigente. Si algo cambió recién, actualiza el estado.
+              </Text>
               <RefreshPlanButton size="sm" />
             </View>
           ) : null}
-
-          <Text className="font-sans text-subtle" style={{ fontSize: 11.5, textAlign: 'center', lineHeight: 17, marginTop: 16 }}>
-            En el plan Free los módulos no están disponibles.
-          </Text>
         </ScrollView>
       </SafeAreaView>
     </View>

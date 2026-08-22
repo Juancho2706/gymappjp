@@ -121,10 +121,13 @@ export default function CoachHomeScreen() {
   // Umbral del puente a Teams = MISMA fuente que el banner interno (~80% del cupo REAL del coach,
   // grandfather de pricing v2). Antes era un 80 escrito a mano acá y otro adentro: con Elite en 60
   // ninguno de los dos se alcanzaba nunca.
+  // `capClients` (no `kpi.totalClients`): el cupo se mide con el predicado del GATE del server
+  // (`is_archived = false AND is_demo = false`), no con el KPI de alumnos activos — el alumno de
+  // ejemplo no ocupa cupo y uno pausado sí. Ver `lib/coach-dashboard.ts`.
   const showTierBanners =
     data.coach.subscriptionTier === 'free' ||
     (data.coach.subscriptionTier === 'elite' &&
-      data.kpi.totalClients >= teamsBridgeThresholdFor(data.coach))
+      data.capClients >= teamsBridgeThresholdFor(data.coach))
 
   return (
     <View style={{ flex: 1 }}>
@@ -140,7 +143,7 @@ export default function CoachHomeScreen() {
       >
         <MobileBillingBanners coach={data.coach} activeClientCount={data.kpi.totalClients} />
         {showTierBanners ? (
-          <MobileTierUsageBanners coach={data.coach} totalClients={data.kpi.totalClients} />
+          <MobileTierUsageBanners coach={data.coach} capClients={data.capClients} />
         ) : null}
 
         {/* Header — fecha + "Hola, {nombre}" + acciones (Insights / Notificaciones / avatar) */}

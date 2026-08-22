@@ -30,6 +30,7 @@ import { useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Check, CheckCircle2, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './CouponRedeemCard'
+import { OpenInAppCard } from './OpenInAppCard'
 
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
     pro:    { label: 'Más popular', cls: 'bg-violet-500/15 text-violet-400' },
@@ -136,6 +137,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // Motivo visible cuando el coach clickea una card de plan bloqueada (cupo / nutrición).
     const [blockedMsg, setBlockedMsg] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
+    // W6.7 (embudo Free→Pro): pago YA confirmado en esta vuelta ⇒ puente web→app («Abre EVA en el
+    // teléfono»). Se enciende solo en el retorno del checkout, no cada vez que se abre la pantalla.
+    const [justChangedPlan, setJustChangedPlan] = useState(false)
     const [reason, setReason] = useState('')
     // Panel de cancelación (diseño: ghost danger al pie que revela el motivo). Conserva handleCancel.
     const [showCancelPanel, setShowCancelPanel] = useState(false)
@@ -249,6 +253,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         if (upgrade === 'success') {
             setError(null)
             setSuccessMessage('Plan actualizado.')
+            // El cambio ya está cobrado y aplicado: la app del teléfono es lo único que puede
+            // seguir mostrando el plan viejo hasta que revalide entitlements (W6.7).
+            setJustChangedPlan(true)
             void refreshStatus()
         } else if (upgrade === 'pending') {
             setSuccessMessage(null)
@@ -534,6 +541,10 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     </button>
                 </div>
             ) : null}
+
+            {/* Puente web→app tras un cambio de plan YA cobrado (W6.7). Legal en ambas tiendas: lo
+                prohibido es el sentido contrario (app→web hacia pago). */}
+            {justChangedPlan ? <OpenInAppCard /> : null}
 
             {loading ? (
                 <p role="status" aria-live="polite" className="mb-4 text-sm text-muted">Cargando estado de suscripción...</p>

@@ -833,7 +833,9 @@ function CompositionSection({ clientId, hasModule, entitlementsReady, inlineAllo
             </View>
             <Text style={[styles.teaserTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>Composición corporal</Text>
             <Text style={[styles.teaserCopy, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>%Grasa, masa muscular y antropometría (protocolo ISAK). Parte del módulo Composición corporal, no incluido en tu plan actual.</Text>
-            <Button label="Mejorar mi plan" variant="sport" onPress={() => router.push('/coach/modules')} style={{ marginTop: 2 }} />
+            {/* Tono W6.6: la app no vende, muestra el estado del plan propio. El destino sigue
+                siendo /coach/modules (módulos incluidos), no una superficie de pago. */}
+            <Button label="Ver mi plan" variant="sport" onPress={() => router.push('/coach/modules')} style={{ marginTop: 2 }} />
           </View>
         </View>
       </StatCard>

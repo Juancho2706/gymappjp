@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-19 @ ce601562"
+last_verified: "2026-08-21 @ b58b2b74"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -13,6 +13,32 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
 ## Resumen ejecutivo
+
+> **2026-08-22 (W6.2/W6.3/W6.6 del embudo Free→Pro — cupo visible y acción real, sin vender)**: el
+> muro de cupo de `CreateClientModal` pasa a ESTADO + acciones reales (**[Archivar un alumno]** →
+> `ArchiveToFreeSpaceSheet` nuevo sobre el `Sheet` DS, con confirmación inline y archivado
+> reversible · **[Actualizar estado]** · «Entendido»), con copy y caption servidos por
+> `lib/client-cap.ts` (`capWallCopy`): la línea «Los cambios de plan se hacen en eva-app.cl» existe
+> SOLO en Android, texto plano y sin `Linking`, y en iOS ni se monta; medidor de cupo nuevo
+> `components/coach/ClientCapMeter.tsx` (barra/anillo, marca <80 % · ámbar ≥80 % · «Cupo completo»
+> al 100 %, `accessibilityRole="progressbar"`) reemplaza la barra inline del banner Free del home;
+> el tono «Mejorar mi plan» muere en `ProgresoTab` y `BuilderDayStrip` («Ver mi plan», mismo
+> destino) y `verify-email` deja de decir «Upgrade cuando quieras». Lógica pura pinneada en
+> `tests/mobile/client-cap.test.ts`. **QA device del owner pendiente** (W6.8) y requiere el
+> mismo OTA de W5.
+>
+> **Ronda de revisión adversarial (W6.9, mismo día)**: el sheet de archivado deja de ser un
+> `<Modal>` dentro de otro `<Modal>` (overlay en la MISMA ventana, patrón `ImportWatchSheet`: dos
+> ventanas nativas anidadas son el precedente del «pantalla gris» de Android) y EXCLUYE a los
+> alumnos de ejemplo, que no ocupan cupo; el banner Free del home pasa a medir con `capClients`
+> —el predicado del gate del server (`is_archived = false AND is_demo = false`), no el KPI de
+> activos—; `verify-email` deja de fusionar el «dónde» dentro de un beneficio y baja la línea
+> canónica de Android como caption aparte (guard de árbol `tests/mobile/store-copy.test.ts`);
+> el CTA de Novedades pasa por la allowlist nueva `lib/store-compliance.ts` (`isStoreSafeUrl`) para
+> que una URL escrita en el panel de admin no pueda mandar a `/pricing` desde dentro de la app; y
+> `BuilderDayStrip` deja de nombrar el tier ajeno. En la web, `OpenInAppCard` pierde el botón: la
+> ruta `/coach/subscription` no estaba cubierta por el universal link / app link (ambos quedaron
+> preparados, pero el `intentFilter` exige BINARIO nuevo, no OTA).
 
 > **2026-08-22 (W5 del embudo Free→Pro — la app deja de hablar de plata)**: el sello «Hecho con
 > EVA» aterriza en `/hecho-con-eva` (landing sin precios) en vez de la home con `PreciosSection`;

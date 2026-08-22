@@ -103,6 +103,21 @@ export type MobileDashboardData = {
   areaData: MobileChartPoint[]
   barData: MobileChartPoint[]
   kpi: MobileKpiSummary
+  /**
+   * Alumnos que OCUPAN CUPO — el predicado del gate del server, NO el del KPI.
+   *
+   * `kpi.totalClients` cuenta `is_archived = false AND is_active = true` (alumnos activos, que es
+   * lo que el coach ve como métrica) y el gate cuenta `is_archived = false AND is_demo = false`
+   * (`services/billing/capacity.service.ts` → `countActiveStandaloneClients`, espejado por
+   * `api/mobile/coach/clients/route.ts:201`). Los dos números divergen en los dos sentidos: un
+   * alumno pausado ocupa cupo y no aparece en el KPI, y el alumno de ejemplo del onboarding
+   * aparece en el KPI sin ocupar cupo. El banner de cupo del home tiene que decir lo MISMO que el
+   * muro del alta, así que consume este campo y no el KPI.
+   *
+   * Si el conteo falla (columna ausente, red caída) degrada a `kpi.totalClients`: mejor el número
+   * viejo que ningún banner.
+   */
+  capClients: number
   topRiskClients: MobileRiskAlertItem[]
   agenda: MobileAgendaItem[]
   expiringPrograms: MobileExpiringProgramItem[]
@@ -421,6 +436,9 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
     areaData: payload.dashboard.areaData ?? [],
     barData: payload.dashboard.barData ?? [],
     kpi: payload.dashboard.kpi,
+    // El endpoint no sirve el conteo del gate; lo resuelve `getCoachDashboardDataMobile` con una
+    // consulta propia y lo pisa. Acá arranca en el KPI para que el tipo nunca quede a medias.
+    capClients: payload.dashboard.kpi.totalClients,
     topRiskClients: topRisk.rows,
     agenda: agenda.rows,
     expiringPrograms: payload.dashboard.expiringPrograms,
@@ -468,6 +486,40 @@ function buildBarData(clients: ClientRow[]): MobileChartPoint[] {
     }
   }
   return Array.from(countByMonth.values()).map(({ label, count }) => ({ name: label, alumnos: count }))
+}
+
+/**
+ * Alumnos que ocupan cupo, con el MISMO predicado que el gate del server:
+ * `is_archived = false AND is_demo = false` — sin `is_active` (un alumno pausado sigue ocupando
+ * cupo) y sin contar al alumno de ejemplo del onboarding (`is_demo`, que el gate excluye).
+ * Espejo de `countActiveStandaloneClients` (`apps/web/src/services/billing/capacity.service.ts`),
+ * que es la fuente que decide el 402 `UPGRADE_REQUIRED` del alta.
+ *
+ * `head: true` + `count: 'exact'`: no trae filas. NUNCA lanza — devuelve `null` y el llamador
+ * degrada al conteo del KPI: un banner con el número viejo es mejor que un dashboard que se cae
+ * (y este conteo corre dentro del try que reintenta el endpoint entero).
+ */
+async function countCapClients(
+  coachId: string,
+  workspace: { orgId: string | null; teamId: string | null } | null,
+): Promise<number | null> {
+  try {
+    let query: any = supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('coach_id', coachId)
+      .eq('is_archived', false)
+      .eq('is_demo', false)
+    if (workspace?.orgId) query = query.eq('org_id', workspace.orgId).is('team_id', null)
+    else if (workspace?.teamId) query = query.is('org_id', null).eq('team_id', workspace.teamId)
+    else query = query.is('org_id', null).is('team_id', null)
+
+    const { count, error } = await query
+    if (error) return null
+    return typeof count === 'number' ? count : null
+  } catch {
+    return null
+  }
 }
 
 async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData | null> {
@@ -809,6 +861,10 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
 
   activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
+  // El conteo del gate NO se deriva de `clients`: esa lectura filtra `is_active = true` y el gate
+  // no lo hace. Consulta aparte con el predicado del server; si falla, degrada al KPI.
+  const capClients = await countCapClients(coach.id, workspace)
+
   return {
     coach,
     publicCode: coach.inviteCode ? { inviteCode: coach.inviteCode, shouldConfirm: false } : null,
@@ -829,6 +885,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       avgAdherence,
       avgNutrition,
     },
+    capClients: capClients ?? clients.length,
     topRiskClients,
     agenda,
     expiringPrograms,
@@ -855,7 +912,11 @@ export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData
         method: 'GET',
         authenticated: true,
       })
-      return mapApiDashboard(payload)
+      const mapped = mapApiDashboard(payload)
+      // El endpoint sirve el KPI de alumnos ACTIVOS; el cupo se cuenta con el predicado del gate.
+      // `countCapClients` no lanza, así que un conteo caído jamás dispara el reintento del bloque.
+      const capClients = await countCapClients(mapped.coach.id, workspace ?? null)
+      return capClients == null ? mapped : { ...mapped, capClients }
     } catch {
       // sigue al siguiente intento; si se agotan, cae al fallback degradado
     }

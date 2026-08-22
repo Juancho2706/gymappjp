@@ -1,0 +1,175 @@
+// Lógica PURA del cupo de alumnos en mobile (embudo Free→Pro, W6.2/W6.3). El módulo bajo test no
+// importa react-native/expo, así que corre con el runner del repo aunque viva en apps/mobile.
+import { describe, expect, it } from 'vitest'
+import {
+  CAP_FULL_LABEL,
+  CAP_WARNING_RATIO,
+  STORE_PLAN_CHANGE_CAPTION,
+  WARNING_500,
+  capMeterLabel,
+  capRatio,
+  capTone,
+  capWallCopy,
+  freePlanBenefits,
+  storePlanChangeCaption,
+} from '../../apps/mobile/lib/client-cap'
+
+describe('client-cap: capRatio', () => {
+  it('clampa a [0,1] y tolera basura', () => {
+    expect(capRatio(0, 25)).toBe(0)
+    expect(capRatio(5, 25)).toBe(0.2)
+    expect(capRatio(30, 25)).toBe(1)
+    expect(capRatio(-4, 25)).toBe(0)
+    expect(capRatio(Number.NaN, 25)).toBe(0)
+  })
+
+  it('cupo no positivo o no finito se lee LLENO, nunca vacío', () => {
+    expect(capRatio(0, 0)).toBe(1)
+    expect(capRatio(0, -1)).toBe(1)
+    expect(capRatio(0, Number.NaN)).toBe(1)
+  })
+})
+
+describe('client-cap: capTone', () => {
+  it('marca bajo el 80 %, ámbar desde el 80 %, lleno al 100 %', () => {
+    expect(CAP_WARNING_RATIO).toBe(0.8)
+    expect(capTone(0, 25)).toBe('brand')
+    expect(capTone(19, 25)).toBe('brand') // 76 %
+    expect(capTone(20, 25)).toBe('warning') // 80 % exacto
+    expect(capTone(24, 25)).toBe('warning')
+    expect(capTone(25, 25)).toBe('full')
+    expect(capTone(26, 25)).toBe('full') // grandfather por encima del cupo
+  })
+
+  it('Free = 1: vacío es marca y el único alumno ya deja el medidor lleno', () => {
+    expect(capTone(0, 1)).toBe('brand')
+    expect(capTone(1, 1)).toBe('full')
+  })
+
+  it('sin cupo utilizable el tono es LLENO aunque no haya ni un alumno', () => {
+    // Cupo 0 (columna en cero, lectura rota) no puede leerse «vacío, todo bien».
+    expect(capTone(0, 0)).toBe('full')
+    expect(capTone(0, -5)).toBe('full')
+    expect(capTone(0, Number.NaN)).toBe('full')
+  })
+
+  it('el borde del ámbar cae exactamente en el 80 %, no en el 79', () => {
+    expect(capTone(79, 100)).toBe('brand')
+    expect(capTone(80, 100)).toBe('warning')
+    expect(capTone(99, 100)).toBe('warning')
+    expect(capTone(100, 100)).toBe('full')
+  })
+
+  it('la etiqueta de lleno es estado, no una oferta', () => {
+    expect(CAP_FULL_LABEL).toBe('Cupo completo')
+  })
+})
+
+describe('client-cap: capMeterLabel', () => {
+  it('el adjetivo concuerda con el sustantivo del catálogo (no se concatena la «s»)', () => {
+    expect(capMeterLabel(1, 1)).toBe('1 de 1 alumno activo')
+    expect(capMeterLabel(0, 1)).toBe('0 de 1 alumno activo')
+    expect(capMeterLabel(3, 25)).toBe('3 de 25 alumnos activos')
+    expect(capMeterLabel(60, 60)).toBe('60 de 60 alumnos activos')
+  })
+
+  it('conteos imposibles no rompen la etiqueta', () => {
+    expect(capMeterLabel(-2, 25)).toBe('0 de 25 alumnos activos')
+    expect(capMeterLabel(Number.NaN, 25)).toBe('0 de 25 alumnos activos')
+  })
+})
+
+describe('client-cap: capWallCopy (muro de cupo del alta)', () => {
+  it('título fijo y cuerpo con el cupo real, en plural correcto', () => {
+    const free = capWallCopy({ limit: 1, platform: 'ios' })
+    expect(free.title).toBe('Alcanzaste el cupo de tu plan')
+    expect(free.body).toBe(
+      'Tu plan actual permite 1 alumno activo. Para dejar espacio puedes archivar un alumno: su historial se mantiene intacto.',
+    )
+
+    const paid = capWallCopy({ limit: 25, platform: 'ios' })
+    expect(paid.body).toContain('permite 25 alumnos activos.')
+  })
+
+  it('sin cupo conocido el cuerpo degrada sin inventar un número', () => {
+    for (const limit of [undefined, null, 0, -3, Number.NaN]) {
+      const copy = capWallCopy({ limit, platform: 'android' })
+      expect(copy.body).toContain('Tu plan actual no permite sumar más alumnos activos.')
+      expect(copy.body).toContain('archivar un alumno')
+    }
+  })
+
+  // ── Compliance de tiendas (decisión cerrada del owner 21-08) ─────────────────────────────
+  it('iOS NO lleva caption: cero texto que lleve a pagar (guideline 3.1.1)', () => {
+    for (const limit of [1, 2, 25, 60]) {
+      expect(capWallCopy({ limit, platform: 'ios' }).caption).toBeUndefined()
+    }
+    // Cualquier plataforma que no sea android se trata como iOS (fail-closed).
+    expect(capWallCopy({ limit: 1, platform: 'web' }).caption).toBeUndefined()
+    expect(capWallCopy({ limit: 1, platform: 'macos' }).caption).toBeUndefined()
+  })
+
+  it('Android lleva UNA línea de texto plano, sin link', () => {
+    const copy = capWallCopy({ limit: 1, platform: 'android' })
+    expect(copy.caption).toBe(STORE_PLAN_CHANGE_CAPTION)
+    expect(copy.caption).toBe('Los cambios de plan se hacen en eva-app.cl')
+    expect(copy.caption).not.toMatch(/https?:\/\//)
+  })
+
+  it('ningún texto del muro habla de plata ni de tiers ajenos', () => {
+    for (const platform of ['ios', 'android']) {
+      for (const limit of [undefined, 1, 25, 60]) {
+        const copy = capWallCopy({ limit, platform })
+        const text = [copy.title, copy.body, copy.caption ?? ''].join(' ')
+        expect(text).not.toContain('$')
+        expect(text).not.toContain('/mes')
+        expect(text).not.toContain('Pro')
+        expect(text).not.toContain('Elite')
+        expect(text).not.toMatch(/\bpagar\b|\bcomprar\b|\bprecio\b/i)
+      }
+    }
+  })
+})
+
+describe('client-cap: storePlanChangeCaption (única línea de tienda)', () => {
+  it('Android recibe el literal canónico; nadie más', () => {
+    expect(storePlanChangeCaption('android')).toBe(STORE_PLAN_CHANGE_CAPTION)
+    for (const platform of ['ios', 'web', 'macos', 'windows', '']) {
+      expect(storePlanChangeCaption(platform)).toBeUndefined()
+    }
+  })
+
+  it('el muro de cupo usa ESTA decisión, no una copia', () => {
+    expect(capWallCopy({ limit: 1, platform: 'android' }).caption).toBe(storePlanChangeCaption('android'))
+    expect(capWallCopy({ limit: 1, platform: 'ios' }).caption).toBe(storePlanChangeCaption('ios'))
+  })
+})
+
+describe('client-cap: freePlanBenefits (pantalla de confirmación de correo)', () => {
+  const BENEFITS = freePlanBenefits()
+
+  it('el beneficio de cambiar de plan es IDÉNTICO en las dos plataformas', () => {
+    // Regresión de W6: en Android decía «…desde eva-app.cl» — una segunda línea de compliance,
+    // distinta de la canónica, escondida dentro de un beneficio. El dónde va aparte, como caption.
+    expect(BENEFITS).toContain('Cambia de plan cuando quieras')
+    expect(BENEFITS.join(' ')).not.toContain('eva-app.cl')
+  })
+
+  it('el cupo Free sale del catálogo con el plural y el adjetivo concordados', () => {
+    expect(BENEFITS[0]).toBe('1 alumno sin costo, con tu marca')
+  })
+
+  it('ningún beneficio habla de plata ni de tiers ajenos', () => {
+    const text = BENEFITS.join(' ')
+    expect(text).not.toContain('$')
+    expect(text).not.toContain('/mes')
+    expect(text).not.toMatch(/\bPro\b|\bElite\b/)
+    expect(text).not.toMatch(/\bpagar\b|\bcomprar\b|\bprecio\b|\bupgrade\b/i)
+  })
+})
+
+describe('client-cap: WARNING_500 es el ámbar del DS, una sola vez', () => {
+  it('el hex es el de --warning-500', () => {
+    expect(WARNING_500).toBe('#F5A524')
+  })
+})
