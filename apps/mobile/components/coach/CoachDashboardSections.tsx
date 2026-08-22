@@ -46,6 +46,7 @@ import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { deriveSportTokens } from '@eva/brand-kit'
 import { EvaBlur } from '../EvaBlur'
+import { EvaFigure } from '../entry/EvaFigure'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
@@ -74,7 +75,7 @@ import { Badge } from '../Badge'
 import { ListRow } from '../ListRow'
 import { SegmentedTabs } from '../SegmentedTabs'
 import { NavIconRN } from '../NavIconRN'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, apiFetch, getApiBaseUrl } from '../../lib/api'
 import { shouldOpenAtCapWall } from '../../lib/client-cap'
 import { captureAppEvent } from '../../lib/analytics'
@@ -699,6 +700,11 @@ export function MobileQuickActionsFab({
   const [sheet, setSheet] = useState(false)
   const [modal, setModal] = useState<null | 'client' | 'payment'>(null)
   const wall = useQuickClientWall(cap, onClientCreated)
+  // Relleno de marca white-safe + su texto legible (mismo motor que alimenta `--cta-fill`).
+  const { ctaFill: brandFill, textOnSport: onBrandFill } = useMemo(
+    () => deriveSportTokens(theme.primary),
+    [theme.primary],
+  )
 
   const actions: Array<{ label: string; icon: LucideIcon; on: () => void }> = [
     {
@@ -718,10 +724,14 @@ export function MobileQuickActionsFab({
   return (
     <>
       {wall.wall}
+      {/* QA del owner 22-08: el FAB salía azul EVA en una marca rosa. `bg-cta-fill` es un token de
+          CSS-var y `theme.shadowGlowBlue` es un halo con `#2680FF` CLAVADO (lib/shadows.ts GLOWS.sport,
+          la sombra de RN necesita un color literal) ⇒ ninguno de los dos seguía al coach. Ahora el
+          relleno es el cta-fill DERIVADO de la marca (paso ~600, seguro para texto blanco por AA) y el
+          halo reusa la geometría del DS con el color de marca. */}
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Acciones rápidas"
-        className="bg-cta-fill"
         activeOpacity={0.85}
         onPress={() => setSheet(true)}
         style={[
@@ -734,11 +744,13 @@ export function MobileQuickActionsFab({
             borderRadius: 28,
             alignItems: 'center',
             justifyContent: 'center',
+            backgroundColor: brandFill,
           },
           theme.shadowGlowBlue,
+          { shadowColor: theme.primary },
         ]}
       >
-        <Plus size={26} color="#FFFFFF" strokeWidth={2.4} />
+        <Plus size={26} color={onBrandFill} strokeWidth={2.4} />
       </TouchableOpacity>
 
       <NativeDialog open={sheet} title="Acción rápida" onClose={() => setSheet(false)}>
@@ -752,7 +764,12 @@ export function MobileQuickActionsFab({
                 onPress={a.on}
                 className="flex-row items-center gap-3.5 py-3"
               >
-                <View className="h-10 w-10 items-center justify-center rounded-control bg-surface-inverse">
+                {/* Acciones rápidas: tile teñido con la marca (antes `bg-surface-inverse`, un neutro que
+                    en dark deja el icono de marca casi ilegible sobre superficie clara). */}
+                <View
+                  className="h-10 w-10 items-center justify-center rounded-control"
+                  style={{ backgroundColor: hexToRgba(theme.primary, 0.14) }}
+                >
                   <Icon size={19} color={theme.primary} />
                 </View>
                 <Text className="font-sans-bold text-[15.5px] text-strong">{a.label}</Text>
@@ -1203,11 +1220,25 @@ export function MobileGreetingHeader({
   /** Pendientes accionables de hoy (riesgo + programas por vencer + check-ins por revisar). */
   pendingCount?: number
 }) {
-  const { theme } = useTheme()
+  const { theme, branding, resolvedScheme } = useTheme()
   const { workspaces } = useWorkspace()
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const hasMultipleWorkspaces = (workspaces?.length ?? 0) > 1
   const firstName = coachName?.split(' ')[0] || 'Coach'
+  /**
+   * QA del owner 22-08: el avatar salía SIEMPRE con la figura EVA aunque el coach tuviera logo.
+   * Causa: `/api/mobile/coach/dashboard` NO sirve `logoUrl` — solo `hasCoachLogo` (booleano) —, así
+   * que el prop `logoUrl` llega `undefined` en el camino feliz (solo trae valor el fallback local,
+   * que sí lee `coaches.logo_url` por Supabase directo). La fuente correcta es la CACHÉ DE MARCA de
+   * ThemeContext: la escribe `bootstrapOwnCoachBranding()` al entrar al panel y la reescribe «Mi
+   * marca» al guardar (`mergeStoredBranding` + `setBranding`), así que el logo nuevo aparece al
+   * volver al inicio sin reiniciar la app. En dark se prefiere `logo_url_dark` si el coach lo subió.
+   * El prop queda como respaldo del dashboard degradado.
+   */
+  const brandLogoUrl =
+    (resolvedScheme === 'dark' ? branding?.logoUrlDark?.trim() || branding?.logoUrl?.trim() : branding?.logoUrl?.trim()) ||
+    logoUrl?.trim() ||
+    null
   const now = new Date()
   const dateStr = new Intl.DateTimeFormat('es-ES', {
     timeZone: 'America/Santiago',
@@ -1254,7 +1285,30 @@ export function MobileGreetingHeader({
           testID="coach-avatar-workspace"
           style={{ position: 'relative' }}
         >
-          <Avatar src={logoUrl} name={coachName} size={40} fallback="eva" />
+          {brandLogoUrl ? (
+            /* `contain` (un LOGO no se recorta, igual que el hero de Opciones) dentro de un aro de
+               marca dibujado ACÁ: el `ring="sport"` del DS es `bg-sport-500`, que en dark es azul EVA. */
+            <View style={{ padding: 2, borderRadius: 20, backgroundColor: theme.primary }}>
+              <Avatar src={brandLogoUrl} name={coachName} size={36} fit="contain" />
+            </View>
+          ) : (
+            /* Sin logo se conserva la figura EVA, pero TEÑIDA y enmarcada con la marca: blanca sobre
+               negro era EVA puro en la app de un coach con marca propia. */
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: hexToRgba(theme.primary, 0.14),
+                borderWidth: 1.5,
+                borderColor: hexToRgba(theme.primary, 0.42),
+              }}
+            >
+              <EvaFigure size={20} style={{ tintColor: theme.primary }} />
+            </View>
+          )}
           {hasMultipleWorkspaces ? (
             <View
               pointerEvents="none"

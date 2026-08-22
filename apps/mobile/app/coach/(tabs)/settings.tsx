@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
@@ -21,11 +21,13 @@ import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { MODULE_CATALOG_KEYS } from '@eva/module-catalog'
+import { deriveSportTokens } from '@eva/brand-kit'
 import { Avatar, Badge, Button, Card, Dialog } from '../../../components'
 import { ListRow } from '../../../components/ListRow'
 import { AppBackground } from '../../../components/AppBackground'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { useTheme } from '../../../context/ThemeContext'
+import { hexToRgba } from '../../../lib/theme'
 import { SHADOWS } from '../../../lib/shadows'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile, type CoachProfile } from '../../../lib/coach'
@@ -66,15 +68,33 @@ const TIER_LABEL: Record<string, string> = {
   scale: 'Scale',
 }
 
-type Tone = 'neutral' | 'sport'
-const TILE_BG: Record<Tone, string> = { neutral: 'bg-surface-sunken', sport: 'bg-sport-100' }
-const TILE_FG: Record<Tone, string> = { neutral: 'text-ink-700', sport: 'text-sport-600' }
+/**
+ * QA del owner 22-08 (marca ROSA en dark): el tono destacado ERA `sport` (`bg-sport-100` +
+ * `text-sport-600`) y salía azul EVA. La rampa `--color-sport-*` se re-tiñe por `brandVars()`,
+ * pero el bloque `.dark` de `global.css` la vuelve a declarar con los canales EVA, así que en
+ * modo oscuro cualquier `bg-sport-*`/`text-sport-*` cae al azul de fábrica. El ÚNICO color de
+ * marca fiable en runtime es el JS `theme.primary` (ThemeContext lo brandea con @eva/brand-kit y
+ * no pasa por el cascade de CSS-vars) — mismo patrón que ya usan `MobilePublicCodeRequiredModal`
+ * y la píldora del código. Por eso el tono destacado se llama `brand` y se pinta por `style`.
+ */
+type Tone = 'neutral' | 'brand'
 
 /** 46px rounded tile hosting a HubCard icon (1:1 con el HubCard web: 46×46 rounded-control, icono 22). */
 function IconTile({ Icon, tone = 'neutral' }: { Icon: LucideIcon; tone?: Tone }) {
+  const { theme } = useTheme()
+  const brand = tone === 'brand'
   return (
-    <View className={`items-center justify-center rounded-control ${TILE_BG[tone]}`} style={{ width: 46, height: 46 }}>
-      <Icon size={22} strokeWidth={2} className={TILE_FG[tone]} />
+    <View
+      className={`items-center justify-center rounded-control ${brand ? '' : 'bg-surface-sunken'}`}
+      style={[{ width: 46, height: 46 }, brand ? { backgroundColor: hexToRgba(theme.primary, 0.14) } : null]}
+    >
+      {/* Ramas separadas a propósito: `className` y `color` compiten por la misma prop vía
+          `cssInterop`, así que cada tono usa UNA sola vía (marca = `color` imperativo). */}
+      {brand ? (
+        <Icon size={22} strokeWidth={2} color={theme.primary} />
+      ) : (
+        <Icon size={22} strokeWidth={2} className="text-ink-700" />
+      )}
     </View>
   )
 }
@@ -254,9 +274,11 @@ function DangerZone() {
 
 /** Section eyebrow — accent bar + uppercase 11px extrabold (1:1 con el SectionTitle de perfil/web). */
 function SectionTitle({ children }: { children: string }) {
+  const { theme } = useTheme()
   return (
     <View className="mx-0.5 mb-2.5 mt-5 flex-row items-center gap-2">
-      <View className="h-3 w-[3px] rounded-sm bg-sport-500" />
+      {/* Barra de acento = marca del coach (antes `bg-sport-500` = azul EVA fijo en dark). */}
+      <View className="h-3 w-[3px] rounded-sm" style={{ backgroundColor: theme.primary }} />
       <Text className="font-sans-extra text-subtle" style={{ fontSize: 11, letterSpacing: 0.77, textTransform: 'uppercase' }}>
         {children}
       </Text>
@@ -273,8 +295,14 @@ export default function CoachSettingsHubScreen() {
   const { onScroll } = useCoachTabbarScroll()
   const router = useRouter()
   const ws = useWorkspace()
+  // `branding` es la presentación EFECTIVA (preset + gate de tier ya resueltos en ThemeContext) y
+  // la MISMA caché que reescribe «Mi marca» al guardar ⇒ el hub refleja el logo nuevo sin reiniciar.
+  const { theme, branding, resolvedScheme } = useTheme()
   const [profile, setProfile] = useState<CoachProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  // Fill de marca SEGURO para texto blanco (paso ~600 clampeado a AA por @eva/brand-kit): es lo que
+  // el token `--cta-fill` significa, resuelto en JS para que no lo pise el `.dark` de global.css.
+  const brandCtaFill = useMemo(() => deriveSportTokens(theme.primary).ctaFill, [theme.primary])
 
   useEffect(() => {
     getCoachProfile()
@@ -292,9 +320,14 @@ export default function CoachSettingsHubScreen() {
   const brandingOk = canUseBranding(tier)
   const displayName = profile?.brandName?.trim() || profile?.fullName?.trim() || 'Coach'
   // QA2-B2: el hero pinta el LOGO de la marca cuando existe (`coaches.logo_url`, la misma
-  // columna que edita `coach/settings/brand.tsx`); sin logo cae a las iniciales del DS.
+  // columna que edita `coach/settings/brand.tsx`); sin logo cae a la figura EVA del DS.
   // v3: se pinta para TODO tier — un free ya tiene su logo propio.
-  const heroLogoUrl = profile?.logoUrl?.trim() || null
+  // QA owner 22-08: la caché de marca MANDA sobre el perfil (la reescribe «Mi marca» al guardar, así
+  // que el logo nuevo aparece al volver) y en dark se prefiere `logo_url_dark` si el coach lo subió.
+  const heroLogoUrl =
+    (resolvedScheme === 'dark' ? branding?.logoUrlDark?.trim() || branding?.logoUrl?.trim() : branding?.logoUrl?.trim()) ||
+    profile?.logoUrl?.trim() ||
+    null
 
   const roleBadge = isTeam
     ? ws.kind === 'team_owner'
@@ -345,7 +378,16 @@ export default function CoachSettingsHubScreen() {
             <Card variant="inverse" padding="lg" style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
               {/* QA2-B2: con logo de marca el círculo muestra el LOGO (contain sobre fondo
                   neutro); sin logo — o si la imagen falla — cae a las iniciales del DS. */}
-              <Avatar name={displayName} src={heroLogoUrl} fit="contain" size="xl" ring="sport" fallback="eva" />
+              {/* El anillo del DS es `bg-sport-500` (azul EVA fijo en dark): se pisa por `style` con la marca. */}
+              <Avatar
+                name={displayName}
+                src={heroLogoUrl}
+                fit="contain"
+                size="xl"
+                ring="sport"
+                fallback="eva"
+                style={{ backgroundColor: theme.primary }}
+              />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text className="font-display-black text-on-dark" style={{ fontSize: 20, letterSpacing: -0.4 }} numberOfLines={1}>
                   {displayName}
@@ -354,7 +396,7 @@ export default function CoachSettingsHubScreen() {
                   {heroSubtitle}
                 </Text>
                 <View style={{ marginTop: 8, alignSelf: 'flex-start' }}>
-                  <Badge tone="sport" variant="solid" size="md" label={roleBadge} />
+                  <Badge tone="sport" variant="solid" size="md" label={roleBadge} toneColor={brandCtaFill} />
                 </View>
               </View>
             </Card>
@@ -373,10 +415,10 @@ export default function CoachSettingsHubScreen() {
               <Card padding="none">
                 <ListRow
                   testID="hub-brand"
-                  leading={<IconTile Icon={Palette} tone="sport" />}
+                  leading={<IconTile Icon={Palette} tone="brand" />}
                   title="Mi Marca"
                   subtitle="Logo, colores y mensajes de la app del alumno"
-                  trailing={brandingOk ? undefined : <Badge tone="sport" variant="soft" label="Pro" />}
+                  trailing={brandingOk ? undefined : <Badge tone="sport" variant="soft" label="Pro" toneColor={theme.primary} />}
                   showChevron
                   onPress={() => router.push('/coach/settings/brand')}
                 />
@@ -391,7 +433,7 @@ export default function CoachSettingsHubScreen() {
               <Card padding="none">
                 <ListRow
                   testID="hub-team"
-                  leading={<IconTile Icon={Users} tone="sport" />}
+                  leading={<IconTile Icon={Users} tone="brand" />}
                   title="Mi Equipo"
                   subtitle="Marca del pool, miembros y accesos"
                   showChevron
@@ -420,10 +462,10 @@ export default function CoachSettingsHubScreen() {
               ) : null}
               <ListRow
                 testID="hub-modules"
-                leading={<IconTile Icon={Package} tone="sport" />}
+                leading={<IconTile Icon={Package} tone="brand" />}
                 title={managed ? 'Módulos del equipo' : 'Módulos'}
                 subtitle="Catálogo de módulos disponibles"
-                trailing={<Badge tone="sport" variant="soft" label={`${MODULE_CATALOG_KEYS.length} módulos`} />}
+                trailing={<Badge tone="sport" variant="soft" label={`${MODULE_CATALOG_KEYS.length} módulos`} toneColor={theme.primary} />}
                 showChevron
                 onPress={() => router.push('/coach/modules')}
               />
@@ -440,7 +482,7 @@ export default function CoachSettingsHubScreen() {
                 <>
                   <ListRow
                     testID="hub-mi-panel"
-                    leading={<IconTile Icon={Compass} tone="sport" />}
+                    leading={<IconTile Icon={Compass} tone="brand" />}
                     title="Mi panel"
                     subtitle="Tu especialidad, qué módulos ves y tu guía de inicio"
                     showChevron
