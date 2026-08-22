@@ -10,7 +10,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated'
-import { ENTRY_TOKENS, isCoachBrandingPresentationAllowed } from '../../lib/theme'
+import { ENTRY_TOKENS, isCoachBrandingPresentationAllowed, resolveEffectiveCoachBrandTheme } from '../../lib/theme'
 import { useTheme } from '../../context/ThemeContext'
 import { EASE } from '../../lib/motion'
 import { loadStoredBranding, type CoachBranding } from '../../lib/branding'
@@ -73,6 +73,14 @@ import {
  * Cero red en el arranque: `loadStoredBranding()` lee AsyncStorage. Cache frio o tier sin
  * white-label (`isCoachBrandingPresentationAllowed`, gate real fuera de la UI) → capa EVA
  * y listo; el crossfade es una mejora, jamas un requisito para navegar.
+ *
+ * QUIEN LLENA ESA CACHE (importa para leer el sintoma "no me cambia a mi marca"):
+ * `bootstrapOwnCoachBranding` cuando el COACH entra a su panel, `refreshClientCoachBranding`
+ * cuando el ALUMNO entra al suyo, y el Guardar de Mi Marca. Consecuencia por diseño: el
+ * PRIMER arranque despues de instalar o de cambiar de cuenta todavia no tiene nada guardado
+ * ⇒ splash EVA puro. Desde el segundo cold start ya cruza a la marca. Tampoco cruza si el
+ * coach apago «usar mis colores en mi panel» (`use_brand_colors_coach = false`: el bootstrap
+ * limpia la cache a proposito) ni si la marca cacheada es de OTRO coach de este device.
  *
  * QA-5 — el gate ya NO es el ultimo frame de marca: con sesion viva publica su estado visual
  * exacto (`beginSplashHandoff`) ANTES del `router.replace`, y el `DashboardSplashOverlay` de
@@ -241,9 +249,15 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
 
         if (allowed && currentBranding) {
           const metadata = session.user.user_metadata as { full_name?: string; name?: string } | undefined
+          // El acento se resuelve con el MISMO motor que el tema de la app
+          // (`resolveEffectiveCoachBrandTheme`): materializa el tema PRESET antes de leer el
+          // color. Leer `primaryColor` crudo de la cache era un bug de white-label — el editor
+          // de Mi Marca guarda el preset en `theme_preset_key` y deja `primary_color` como
+          // estaba, asi que una marca rosa entraba al splash pintada de azul EVA.
+          const effective = resolveEffectiveCoachBrandTheme(currentBranding)
           const mark: SplashBrandMark = {
             // Orden de resolucion del ACENTO (§2.4): accentDark → primaryColor → azul EVA.
-            accent: entrySolidHex(currentBranding.accentDark ?? currentBranding.primaryColor, ENTRY_ACCENT),
+            accent: entrySolidHex(effective.accentDark ?? effective.brandColor, ENTRY_ACCENT),
             displayName: currentBranding.displayName,
             greetingName: firstName(metadata?.full_name ?? metadata?.name ?? null),
             // Orden de resolucion de la MARCA (§2.4): logoUrlDark → logoUrl → tile de iniciales.

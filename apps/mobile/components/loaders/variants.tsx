@@ -56,6 +56,8 @@ export type LoaderVariantProps = {
   logoUri?: string | null
   /** `loader_icon_mode !== 'none'`. */
   showIcon?: boolean
+  /** Marca sin logo: la figura EVA se tiñe con `theme.primary` en vez de ir blanca. */
+  tintFigure?: boolean
   subtitle?: string
   size?: LoaderVariantSize
   /** Ajuste del SO ya leido por el orquestador (una sola lectura por arbol). */
@@ -100,14 +102,16 @@ function Spin({
 
 const ABS_CENTER: ViewStyle = { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' }
 
-function LoaderIcon({ logoUri, px, reduceMotion }: { logoUri?: string | null; px: number; reduceMotion: boolean }) {
+function LoaderIcon({ logoUri, px, reduceMotion, tint = false }: { logoUri?: string | null; px: number; reduceMotion: boolean; tint?: boolean }) {
   const { resolvedScheme, theme } = useTheme()
   const height = logoUri ? px : evaFigureHeight(px)
+  // El asset EVA es blanco puro: con marca sin logo se tiñe con el acento (`theme.primary`,
+  // clampeado WCAG por esquema) y, sin marca, con la tinta del tema solo sobre claro.
+  const tintColor = tint ? theme.primary : resolvedScheme === 'dark' ? null : theme.foreground
   const content = logoUri ? (
     <CircularBrandLogo uri={logoUri} size={px} backgroundColor={theme.card} padding={Math.round(px * 0.08)} />
   ) : (
-    // El asset EVA es blanco puro: sobre tema claro se tiñe con la tinta del tema.
-    <EvaFigure size={px} style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }} />
+    <EvaFigure size={px} style={tintColor ? { tintColor } : null} />
   )
   const box: ViewStyle = { width: px, height, alignItems: 'center', justifyContent: 'center' }
   if (reduceMotion) return <View style={box}>{content}</View>
@@ -125,7 +129,11 @@ function LoaderIcon({ logoUri, px, reduceMotion }: { logoUri?: string | null; px
 
 function Wordmark({ text, size }: { text?: string; size: LoaderVariantSize }) {
   const { theme } = useTheme()
-  const fs = WORD[size]
+  const word = (text?.trim() || 'EVA').toUpperCase()
+  // El wordmark ya no es siempre "EVA": con marca es el nombre del coach, y un nombre largo
+  // en una sola linea se sale de pantalla. Se achica de forma continua a partir de 6
+  // caracteres, con piso en el 58% del cuerpo base.
+  const fs = Math.round(WORD[size] * Math.max(0.58, Math.min(1, 6 / Math.max(word.length, 1))) * 10) / 10
   return (
     <Text
       numberOfLines={1}
@@ -136,9 +144,10 @@ function Wordmark({ text, size }: { text?: string; size: LoaderVariantSize }) {
         // Slot display: `lib/brand-fonts.ts` lo re-mapea a la fuente de marca en el arranque.
         fontFamily: 'Archivo_800ExtraBold',
         letterSpacing: -fs * 0.04,
+        maxWidth: 300,
       }}
     >
-      {(text?.trim() || 'EVA').toUpperCase()}
+      {word}
     </Text>
   )
 }
@@ -184,7 +193,7 @@ function Box({ size, children }: { size: LoaderVariantSize; children: ReactNode 
 }
 
 /* ── 01 · progreso ──────────────────────────────────────────────────────────── */
-function ProgresoLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
+function ProgresoLoader({ brandName, logoUri, showIcon, tintFigure = false, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
   const { theme } = useTheme()
   const b = BOX[size]
   return (
@@ -195,7 +204,7 @@ function ProgresoLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', r
             <Circle cx={60} cy={60} r={54} fill="none" stroke={alpha(theme.primary, 0.18)} strokeWidth={1.5} strokeDasharray="2 7" strokeLinecap="round" />
           </Svg>
         </Spin>
-        {showIcon ? <LoaderIcon logoUri={logoUri} px={ICON[size]} reduceMotion={reduceMotion} /> : null}
+        {showIcon ? <LoaderIcon logoUri={logoUri} px={ICON[size]} reduceMotion={reduceMotion} tint={tintFigure} /> : null}
       </Box>
       <View style={{ alignItems: 'center', gap: 12 }}>
         <Wordmark text={brandName} size={size} />
@@ -207,7 +216,7 @@ function ProgresoLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', r
 }
 
 /* ── 02 · anillo ────────────────────────────────────────────────────────────── */
-function AnilloLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
+function AnilloLoader({ brandName, logoUri, showIcon, tintFigure = false, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
   const { theme } = useTheme()
   const b = BOX[size]
   const offset = useSharedValue(360)
@@ -246,7 +255,7 @@ function AnilloLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', red
             />
           </Svg>
         </Spin>
-        {showIcon ? <LoaderIcon logoUri={logoUri} px={ICON[size]} reduceMotion={reduceMotion} /> : null}
+        {showIcon ? <LoaderIcon logoUri={logoUri} px={ICON[size]} reduceMotion={reduceMotion} tint={tintFigure} /> : null}
       </Box>
       <Wordmark text={brandName} size={size} />
       <Caption subtitle={subtitle} />
@@ -256,7 +265,7 @@ function AnilloLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', red
 
 /* ── 03 · radar ─────────────────────────────────────────────────────────────── */
 const PING_DELAYS = [0, 730, 1460]
-function RadarLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
+function RadarLoader({ brandName, logoUri, showIcon, tintFigure = false, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
   const { theme } = useTheme()
   const b = BOX[size]
   const core = CORE[size]
@@ -290,7 +299,7 @@ function RadarLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', redu
             borderColor: alpha(theme.primary, 0.4),
           }}
         >
-          {showIcon ? <LoaderIcon logoUri={logoUri} px={CORE_ICON[size]} reduceMotion={reduceMotion} /> : null}
+          {showIcon ? <LoaderIcon logoUri={logoUri} px={CORE_ICON[size]} reduceMotion={reduceMotion} tint={tintFigure} /> : null}
         </View>
       </Box>
       <Wordmark text={brandName} size={size} />
@@ -306,7 +315,7 @@ const COMET_R = 57
 const COMET_C = 2 * Math.PI * COMET_R
 const COMET_SEG = COMET_C / 6
 const COMET_OPACITY = [1, 0.72, 0.5, 0.32, 0.18, 0.07]
-function CometaLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
+function CometaLoader({ brandName, logoUri, showIcon, tintFigure = false, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
   const { theme } = useTheme()
   const b = BOX[size]
   return (
@@ -330,7 +339,7 @@ function CometaLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', red
             ))}
           </Svg>
         </Spin>
-        {showIcon ? <LoaderIcon logoUri={logoUri} px={ICON[size]} reduceMotion={reduceMotion} /> : null}
+        {showIcon ? <LoaderIcon logoUri={logoUri} px={ICON[size]} reduceMotion={reduceMotion} tint={tintFigure} /> : null}
       </Box>
       <Wordmark text={brandName} size={size} />
       <Caption subtitle={subtitle} />
@@ -372,7 +381,7 @@ function RitmoLoader({ brandName, subtitle, size = 'lg', reduceMotion = false }:
 }
 
 /* ── 06 · orbitas ───────────────────────────────────────────────────────────── */
-function OrbitasLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
+function OrbitasLoader({ brandName, logoUri, showIcon, tintFigure = false, subtitle, size = 'lg', reduceMotion = false }: LoaderVariantProps) {
   const { theme } = useTheme()
   const b = BOX[size]
   return (
@@ -388,7 +397,7 @@ function OrbitasLoader({ brandName, logoUri, showIcon, subtitle, size = 'lg', re
             <Circle cx={60} cy={60} r={40} fill="none" stroke={alpha(theme.primary, 0.45)} strokeWidth={3.5} strokeLinecap="round" strokeDasharray="63 188" />
           </Svg>
         </Spin>
-        {showIcon ? <LoaderIcon logoUri={logoUri} px={ORBIT_ICON[size]} reduceMotion={reduceMotion} /> : null}
+        {showIcon ? <LoaderIcon logoUri={logoUri} px={ORBIT_ICON[size]} reduceMotion={reduceMotion} tint={tintFigure} /> : null}
       </Box>
       <Wordmark text={brandName} size={size} />
       <Caption subtitle={subtitle} />
@@ -426,6 +435,7 @@ function CompositeSymbol({
   symbol,
   logoUri,
   evaFallback,
+  tintFigure = false,
   initial,
   px,
   color,
@@ -434,6 +444,8 @@ function CompositeSymbol({
   logoUri?: string | null
   /** `loader_icon_mode !== 'none'`: 'logo' sin logo del coach cae al icono EVA (paridad web). */
   evaFallback: boolean
+  /** Marca sin logo: la figura EVA va teñida con el acento de marca. */
+  tintFigure?: boolean
   initial: string
   px: number
   color: string
@@ -443,7 +455,8 @@ function CompositeSymbol({
     return <CircularBrandLogo uri={logoUri} size={px} backgroundColor={theme.card} padding={Math.round(px * 0.08)} />
   }
   if (symbol === 'logo' && evaFallback) {
-    return <EvaFigure size={px} style={resolvedScheme === 'dark' ? null : { tintColor: theme.foreground }} />
+    const tintColor = tintFigure ? theme.primary : resolvedScheme === 'dark' ? null : theme.foreground
+    return <EvaFigure size={px} style={tintColor ? { tintColor } : null} />
   }
   // Sin icono disponible, 'logo' cae a la inicial de la marca.
   if (symbol === 'initial' || symbol === 'logo') {
@@ -476,13 +489,15 @@ export type CompositeLoaderProps = {
   brandName?: string
   logoUri?: string | null
   showIcon?: boolean
+  /** Marca sin logo: la figura EVA se tiñe con `theme.primary` en vez de ir blanca. */
+  tintFigure?: boolean
   subtitle?: string
   size?: LoaderVariantSize
   reduceMotion?: boolean
 }
 
 /** Loader compuesto por el coach (loader_config). PRECEDE a `loader_variant`. */
-export function CompositeLoaderView({ config, brandName, logoUri, showIcon = true, subtitle, size = 'lg', reduceMotion = false }: CompositeLoaderProps) {
+export function CompositeLoaderView({ config, brandName, logoUri, showIcon = true, tintFigure = false, subtitle, size = 'lg', reduceMotion = false }: CompositeLoaderProps) {
   const { theme } = useTheme()
   const word = (config.text?.trim() || brandName?.trim() || 'EVA').toUpperCase()
   const px = SYMBOL_PX[size]
@@ -492,6 +507,7 @@ export function CompositeLoaderView({ config, brandName, logoUri, showIcon = tru
       symbol={config.symbol}
       logoUri={logoUri}
       evaFallback={showIcon}
+      tintFigure={tintFigure}
       initial={word.charAt(0)}
       px={px}
       color={theme.primary}
