@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -11,6 +11,7 @@ import {
     HeartPulse,
     PartyPopper,
     Palette,
+    RotateCcw,
     Salad,
     Smartphone,
     Sparkles,
@@ -33,6 +34,7 @@ import { postGuideEngagement } from '../../dashboard/_lib/onboarding-telemetry.c
 import { useOnboardingGuide } from '../../dashboard/_lib/use-onboarding-guide'
 import type { CoachBrandDraft, DemoStudentSnapshot } from '../../dashboard/_data/dashboard.queries'
 import { GUIDE_SEEN_AT_KEY } from '../_lib/guide-first-entry'
+import { guidePillRestorePayload, restoreGuidePillLocally } from '../_lib/guide-pill-restore'
 import {
     PERSONA_CHIP_LABEL,
     resolveStepViews,
@@ -117,6 +119,7 @@ export function GuideScreen({
     const demoClientId = demo?.clientId ?? null
 
     useGuideSeenStamp(guideSeenAt)
+    const { guideOff, restoring, restorePill } = useGuidePillRestore(vm, coachId, persona)
 
     const [line1, line2] = welcomeLines(persona, firstName)
     const views = resolveStepViews(vm.steps, vm.completed)
@@ -150,10 +153,13 @@ export function GuideScreen({
                     {persona !== null && (
                         <Link
                             href="/coach/settings/funciones"
-                            className="mt-2.5 inline-flex min-h-9 touch-manipulation items-center gap-1.5 rounded-pill border border-subtle bg-surface-card px-3 text-[12px] font-bold text-[var(--text-muted)] transition-colors hover:bg-surface-sunken hover:text-[var(--text-strong)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                            // `flex-wrap` + `max-w-full`: a 390 px «Fuerza y acondicionamiento ·
+                            // Cambiar en Mi panel» no entra en una línea y sin esto empujaba el
+                            // ancho del documento (scroll horizontal). `min-h-11` = tap target.
+                            className="mt-2.5 inline-flex min-h-11 max-w-full touch-manipulation flex-wrap items-center gap-x-1.5 rounded-pill border border-subtle bg-surface-card px-3 py-1.5 text-[12px] font-bold text-[var(--text-muted)] transition-colors hover:bg-surface-sunken hover:text-[var(--text-strong)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
                         >
-                            {PERSONA_CHIP_LABEL[persona]}
-                            <span className="text-[var(--text-subtle)]">· Cambiar en Mi panel</span>
+                            <span className="min-w-0">{PERSONA_CHIP_LABEL[persona]}</span>
+                            <span className="min-w-0 text-[var(--text-subtle)]">· Cambiar en Mi panel</span>
                         </Link>
                     )}
                 </div>
@@ -165,7 +171,12 @@ export function GuideScreen({
                 </div>
             )}
 
-            <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start">
+            {/* Dos columnas recién en `xl` (1280), no en `lg` (1024): a 1024 con el menú
+                expandido (248 px) la columna izquierda caía a ~360 px y la tarjeta «Tu marca en
+                60 segundos» —que ya reparte su propio ancho en `md:grid-cols-[1fr_220px]`— se
+                quedaba con ~55 px para el nombre y los colores. Con el riel debajo, a 1024 la
+                guía usa el ancho completo y nada se aprieta. */}
+            <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start">
                 <div className="min-w-0">
                     {vm.ready && vm.allDone && <GuideClosingCard hasDemo={demo !== null} />}
 
@@ -232,7 +243,7 @@ export function GuideScreen({
                         </ol>
                     )}
 
-                    {vm.ready && !vm.hidden && (
+                    {vm.ready && (
                         <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
                             <Link
                                 href="/coach/dashboard"
@@ -241,21 +252,36 @@ export function GuideScreen({
                                 Ir a mi panel
                                 <ArrowRight className="size-4" />
                             </Link>
-                            {/* Único camino para apagar la píldora del panel: sin esto un coach que
-                                nunca termina la guía se queda con ella para siempre. */}
-                            <button
-                                type="button"
-                                onClick={vm.hide}
-                                className="min-h-11 touch-manipulation text-left text-[12.5px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                            >
-                                No mostrar la guía en mi panel
-                            </button>
+                            {guideOff ? (
+                                /* La pantalla sigue siendo accesible por URL con la guía apagada
+                                   (QA del owner 22-08) y acá está el camino de vuelta: sin él,
+                                   «No mostrar» era de ida sola. */
+                                <button
+                                    type="button"
+                                    onClick={restorePill}
+                                    disabled={restoring}
+                                    className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 text-left text-[12.5px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)] disabled:opacity-60"
+                                >
+                                    <RotateCcw className="size-4 shrink-0" aria-hidden="true" />
+                                    {restoring ? 'Activando…' : 'Volver a mostrar la píldora'}
+                                </button>
+                            ) : (
+                                /* Único camino para apagar la píldora del panel: sin esto un coach
+                                   que nunca termina la guía se queda con ella para siempre. */
+                                <button
+                                    type="button"
+                                    onClick={vm.hide}
+                                    className="min-h-11 touch-manipulation text-left text-[12.5px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                                >
+                                    No mostrar la guía en mi panel
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
 
                 {demo && (
-                    <aside className="min-w-0 lg:sticky lg:top-4">
+                    <aside className="min-w-0 xl:sticky xl:top-4">
                         <DemoStudentCard
                             demo={demo}
                             persona={vm.persona}
@@ -288,6 +314,54 @@ function useGuideSeenStamp(guideSeenAt: string | null): void {
         stampedRef.current = true
         void persistOnboardingGuideAction({ [GUIDE_SEEN_AT_KEY]: new Date().toISOString() })
     }, [guideSeenAt])
+}
+
+/**
+ * «Volver a mostrar la píldora» — el reverso de «No mostrar la guía en mi panel».
+ *
+ * `useOnboardingGuide` sabe apagar la guía pero no prenderla: es el dueño del estado del
+ * DASHBOARD y ahí nunca hizo falta. Como el estado apagado vive en dos lados (el jsonb del
+ * servidor y el espejo de `localStorage`), acá se limpian los dos y se pide un `refresh()` para
+ * que el layout —que es quien monta la píldora— vuelva a leer la fila del coach.
+ *
+ * `restored` es optimista y local a esta pantalla: el hook conserva su `hidden` hasta que el
+ * refresh traiga el jsonb nuevo, y sin esto el botón se quedaría diciendo «Volver a mostrar»
+ * después de haberlo hecho.
+ */
+function useGuidePillRestore(
+    vm: ReturnType<typeof useOnboardingGuide>,
+    coachId: string,
+    persona: Persona | null,
+): { guideOff: boolean; restoring: boolean; restorePill: () => void } {
+    const router = useRouter()
+    const [restored, setRestored] = useState(false)
+    const [restoring, startRestore] = useTransition()
+
+    // `atFoot` es `allDone || dismissed`: con 5/5 la guía no está APAGADA, está terminada, y
+    // ofrecer «volver a mostrar la píldora» ahí sería mentir (la píldora se apaga sola al
+    // completarse y no hay nada que reactivar).
+    const guideOff = !restored && (vm.hidden || (vm.atFoot && !vm.allDone))
+
+    const restorePill = useCallback(() => {
+        startRestore(async () => {
+            const result = await persistOnboardingGuideAction(guidePillRestorePayload())
+            if (!result.ok) {
+                toast.error('No pudimos reactivar la guía', { description: result.error })
+                return
+            }
+            restoreGuidePillLocally(coachId)
+            setRestored(true)
+            void postGuideEngagement('profile_branding', {
+                widget: 'guide_screen',
+                action: 'pill_restore',
+                persona: persona ?? 'sin_persona',
+            })
+            toast.success('Listo: la guía vuelve a tu panel.')
+            router.refresh()
+        })
+    }, [coachId, persona, router])
+
+    return { guideOff, restoring, restorePill }
 }
 
 /** Cierre de la guía: 5/5. El confeti ya lo lanzó el aha (uno solo, en `useOnboardingGuide`). */

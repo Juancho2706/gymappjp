@@ -14,6 +14,36 @@ export function isValidInviteCode(value: string | null | undefined): value is st
 }
 
 /**
+ * Fecha desde la que TODO coach nace con código público (migraciones `023a1c65` 2026-05-20 y
+ * `7d5ef960` 2026-05-22). El modal «Tu link de alumnos cambió» existe para avisarle a quien YA
+ * repartía `/c/<slug>` que ahora su link es `/c/<código>`: un coach creado después nunca tuvo el
+ * link viejo y no hay nada que confirmar (bug visto en el QA del 22-08: le salía a todo coach nuevo).
+ */
+export const PUBLIC_CODE_CUTOVER = new Date('2026-05-23T00:00:00Z')
+
+/**
+ * ¿Hay que pedirle al coach que confirme su código público (modal de web y de la app)?
+ *
+ * - `generated`: el código se acaba de crear porque no tenía uno válido ⇒ sí, siempre.
+ * - Coach anterior al corte sin `invite_code_confirmed` ⇒ sí (todavía puede tener el link viejo).
+ * - Coach posterior al corte ⇒ no: nació con código, nunca conoció `/c/<slug>`.
+ */
+export function needsPublicCodeConfirmation(input: {
+    inviteCode: string | null | undefined
+    generated: boolean
+    inviteCodeConfirmed: boolean
+    createdAt: string | Date | null | undefined
+}): boolean {
+    if (!isValidInviteCode(input.inviteCode)) return false
+    if (input.generated) return true
+    if (input.inviteCodeConfirmed) return false
+    if (input.createdAt == null) return true
+    const created = input.createdAt instanceof Date ? input.createdAt : new Date(input.createdAt)
+    if (Number.isNaN(created.getTime())) return true
+    return created < PUBLIC_CODE_CUTOVER
+}
+
+/**
  * Canonical mapping of a public coach identifier to the column to match on.
  * Generated codes (e.g. "AB3KP") resolve via `invite_code` (primary), everything
  * else via the legacy `slug`. Use this everywhere a `/c/[identifier]` URL is

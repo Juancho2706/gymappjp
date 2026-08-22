@@ -1,11 +1,13 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 import { ONBOARDING_STEPS } from '@eva/onboarding'
 import type { Persona } from '@eva/schemas'
 import { Card } from '@/components/ui/card'
-import { BookOpen, ChevronDown, Search } from 'lucide-react'
+import { ArrowRight, BookOpen, ChevronDown, Search } from 'lucide-react'
+import { GUIDE_ROUTE } from '@/app/coach/guia/_lib/guide-first-entry'
 
 /**
  * Centro de ayuda — sección colapsable con Guías (cards apiladas paso-a-paso) y FAQ
@@ -14,7 +16,12 @@ import { BookOpen, ChevronDown, Search } from 'lucide-react'
  * sin navegación a otra página. Contenido verificado contra el comportamiento real del panel.
  */
 
-type Guide = { title: string; steps: string[] }
+type Guide = {
+    title: string
+    steps: string[]
+    /** CTA opcional al pie de la tarjeta: hoy solo «Primeros pasos» tiene a dónde mandar. */
+    cta?: { href: string; label: string }
+}
 type Faq = { q: string; a: string }
 
 /**
@@ -22,11 +29,16 @@ type Faq = { q: string; a: string }
  * (onboarding v2, SPEC §6). Antes acá vivía un cuarto copy distinto de los mismos pasos: cinco
  * redacciones del mismo trabajo (modal, checklist, viñetas, ayuda, correo D+0) que se contradecían
  * entre sí. Ahora si el copy cambia, cambia en un solo archivo.
+ *
+ * Desde el 22-08 la guía además tiene casa propia (`/coach/guia`) y su píldora se apaga sola al
+ * completarse o al cerrarse: el CTA de abajo es uno de los dos caminos de vuelta que quedan (el
+ * otro es Opciones › Mi panel). Sin él, leer los pasos acá era un callejón sin salida.
  */
 function firstStepsGuide(persona: Persona | null): Guide {
     return {
         title: 'Primeros pasos',
         steps: ONBOARDING_STEPS[persona ?? 'other'].map((step) => `${step.label}. ${step.description}`),
+        cta: { href: GUIDE_ROUTE, label: 'Abrir la guía' },
     }
 }
 
@@ -268,6 +280,15 @@ export function HelpCenter({
                                                         </li>
                                                     ))}
                                                 </ol>
+                                                {g.cta ? (
+                                                    <Link
+                                                        href={g.cta.href}
+                                                        className="mt-3 inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-control bg-[var(--cta-fill)] px-3.5 text-[13px] font-bold text-[var(--text-on-sport)] transition-colors hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                                                    >
+                                                        {g.cta.label}
+                                                        <ArrowRight className="size-4 shrink-0" aria-hidden />
+                                                    </Link>
+                                                ) : null}
                                             </div>
                                         ))}
                                     </div>

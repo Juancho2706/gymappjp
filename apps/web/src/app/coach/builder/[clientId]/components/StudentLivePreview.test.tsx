@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { StudentLivePreview, blockObjectiveLabel, buildStudentPreviewGroups } from './StudentLivePreview'
 import type { BuilderBlock, DayState } from '../types'
 
@@ -112,5 +112,37 @@ describe('blockObjectiveLabel', () => {
         )
         expect(label).toContain('20min')
         expect(label).toContain('Z2')
+    })
+})
+
+/**
+ * Cierre de la vista en <1024 px (QA del owner 22-08). El toggle se mudó a la CABECERA del builder
+ * porque al pie lo tapaban el FAB «+» y el pill «Guardar»; el «✕» de esta cabecera es el camino de
+ * vuelta y solo existe en el modo plegable (el panel fijo de escritorio no se cierra).
+ */
+describe('StudentLivePreview — cierre del modo plegable', () => {
+    const days = [day([block({ uid: 'b1' })])]
+
+    it('sin `onClose` no hay botón de cierre (panel fijo de escritorio)', () => {
+        render(<StudentLivePreview studentName="Matías Soto" days={days} />)
+        expect(screen.queryByRole('button', { name: 'Cerrar la vista del alumno' })).toBeNull()
+    })
+
+    it('con `onClose` pinta el «✕» y lo dispara', () => {
+        const onClose = vi.fn()
+        render(<StudentLivePreview studentName="Matías Soto" days={days} onClose={onClose} />)
+        const close = screen.getByRole('button', { name: 'Cerrar la vista del alumno' })
+        // Tap target del kit: 44 px.
+        expect(close.className).toContain('size-11')
+        fireEvent.click(close)
+        expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('`floatingActionsBelow` reserva la altura REAL del stack flotante, safe-area incluida', () => {
+        const { container } = render(
+            <StudentLivePreview studentName="Matías" days={days} floatingActionsBelow />,
+        )
+        const scroller = container.querySelector('.overflow-y-auto') as HTMLElement
+        expect(scroller.className).toContain('pb-[calc(env(safe-area-inset-bottom,0px)+96px)]')
     })
 })

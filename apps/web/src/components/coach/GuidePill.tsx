@@ -215,15 +215,25 @@ export function GuidePill({ coachId, persona, onboardingGuide, managed }: GuideP
                     className={cn(
                         'overflow-hidden',
                         'motion-safe:transition-[max-width,opacity] motion-safe:duration-[220ms] motion-safe:ease-[var(--ease-out)]',
-                        expanded ? 'max-w-[280px] opacity-100' : 'max-w-0 opacity-0'
+                        // `100vw - 104px` descuenta la geometría fija de la píldora (16 de
+                        // gutter + 6 de padding + 48 del círculo + 10 de gap + 8 de padding
+                        // derecho) más 16 px de aire contra el borde derecho: a 390 px la píldora
+                        // abierta mide 368 y no toca el borde del viewport.
+                        expanded
+                            ? 'max-w-[min(280px,calc(100vw_-_104px))] opacity-100'
+                            : 'max-w-0 opacity-0'
                     )}
                 >
-                    <div className="flex items-center gap-2.5 whitespace-nowrap pl-0.5">
-                        <div className="min-w-0">
-                            <div className="text-[12px] font-extrabold text-[var(--text-strong)]">
+                    {/* `w` DEFINIDO (no solo `max-w`) + `shrink-0` en los botones: con el ancho
+                        indefinido el contenido medía ~286 px, el `overflow-hidden` del contenedor
+                        recortaba el borde del botón «–» y el tap target quedaba mordido. Ahora el
+                        que cede es el texto, que trunca. */}
+                    <div className="flex w-[min(280px,calc(100vw_-_104px))] items-center gap-2.5 whitespace-nowrap pl-0.5">
+                        <div className="min-w-0 flex-1">
+                            <div className="truncate text-[12px] font-extrabold text-[var(--text-strong)]">
                                 Tu guía · {done}/{total}
                             </div>
-                            <div className="max-w-[160px] truncate text-[11.5px] font-semibold text-[var(--text-muted)]">
+                            <div className="truncate text-[11.5px] font-semibold text-[var(--text-muted)]">
                                 Siguiente: {nextLabel}
                             </div>
                         </div>
@@ -231,7 +241,9 @@ export function GuidePill({ coachId, persona, onboardingGuide, managed }: GuideP
                             href={nextHref}
                             onClick={() => track('pill_open')}
                             className={cn(
-                                'inline-flex h-9 shrink-0 touch-manipulation items-center gap-1 rounded-pill px-3 text-[12.5px] font-bold',
+                                // 44 px de alto (no 36): la píldora mide 60 con su padding, así
+                                // que el tap target mínimo entra sin agrandarla.
+                                'inline-flex h-11 shrink-0 touch-manipulation items-center gap-1 rounded-pill px-3 text-[12.5px] font-bold',
                                 'bg-[var(--cta-fill)] text-[var(--text-on-sport)] motion-safe:transition-colors hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
                                 'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]'
                             )}
@@ -243,7 +255,7 @@ export function GuidePill({ coachId, persona, onboardingGuide, managed }: GuideP
                             type="button"
                             onClick={() => setOpen(false)}
                             aria-label="Minimizar la guía"
-                            className="inline-flex size-9 shrink-0 touch-manipulation items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-surface-sunken hover:text-[var(--text-strong)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                            className="inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-surface-sunken hover:text-[var(--text-strong)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
                         >
                             <Minus className="size-4" />
                         </button>

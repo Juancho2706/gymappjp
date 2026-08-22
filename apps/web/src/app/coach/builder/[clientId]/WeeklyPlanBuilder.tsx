@@ -1186,6 +1186,30 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             </DropdownMenu>
                         </div>
 
+                        {/* Vista del alumno — toggle en la CABECERA (<1024 px, solo con alumno).
+                            Antes era una barra al pie del lienzo, exactamente donde flotan el FAB
+                            «+» y el pill «Guardar» (`fixed`, esquina inferior derecha): los botones
+                            la tapaban y el coach no podía abrirla (QA del owner 22-08). Acá nada
+                            flota encima. El único camino de vuelta es el «✕» de la propia vista. */}
+                        {client && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsPreviewOpen(v => !v)}
+                                aria-expanded={isPreviewOpen}
+                                aria-controls="student-live-preview"
+                                aria-label={`Así lo ve ${studentFirstName || 'tu alumno'}`}
+                                title={`Así lo ve ${studentFirstName || 'tu alumno'}`}
+                                className={`eva-press h-8 w-8 shrink-0 rounded-pill px-0 lg:hidden md:h-10 md:w-10 ${
+                                    isPreviewOpen
+                                        ? 'border-primary/60 bg-primary/10 text-primary'
+                                        : 'border-subtle text-muted hover:text-strong'
+                                }`}
+                            >
+                                <Eye className="w-4 h-4" />
+                            </Button>
+                        )}
+
                         {/* Mobile overflow menu — hidden on md+ */}
                         <button
                             type="button"
@@ -1546,42 +1570,30 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         )}
                         </div>
 
-                        {/* Vista del alumno — <1024 px: plegable al pie del lienzo, cerrada por defecto.
+                        {/* Vista del alumno — <1024 px: panel plegable al pie del lienzo, cerrado
+                            por defecto y abierto SOLO desde el ojo de la cabecera. Ya no queda una
+                            barra-toggle debajo del lienzo: ese renglón caía justo bajo el FAB «+»
+                            y el pill «Guardar» y era intocable (QA del owner 22-08).
                             Solo con alumno: una plantilla global no tiene a quién mostrársela. */}
-                        {client && (
-                        <div className="shrink-0 border-t border-subtle bg-surface-app lg:hidden">
-                            <button
-                                type="button"
-                                onClick={() => setIsPreviewOpen(v => !v)}
-                                aria-expanded={isPreviewOpen}
-                                /* pr-[168px] cerrado: el FAB + «Guardar» flotan sobre esta esquina. */
-                                className={`flex min-h-11 w-full items-center gap-2 px-4 text-left text-[12.5px] font-bold text-strong ${isPreviewOpen ? 'pr-4' : 'pr-[168px]'}`}
-                            >
-                                <Eye className="h-4 w-4 shrink-0 text-muted" />
-                                <span className="truncate">
-                                    Así lo ve {studentFirstName || 'tu alumno'}
-                                </span>
-                                <ChevronRight className={`ml-auto h-4 w-4 shrink-0 text-muted transition-transform ${isPreviewOpen ? '-rotate-90' : 'rotate-90'}`} />
-                            </button>
-                            {isPreviewOpen && (
-                                <StudentLivePreview
-                                    studentName={client?.full_name ?? null}
-                                    days={days}
-                                    /* En móvil manda el carrusel; en tablet (768-1023) no hay
-                                       carrusel, así que manda la selección propia del panel. */
-                                    activeDayId={isMobile ? (days[activeMobileDayIndex]?.id ?? null) : previewDayId}
-                                    onSelectDay={(dayId) => {
-                                        setPreviewDayId(dayId)
-                                        const idx = days.findIndex(d => d.id === dayId)
-                                        if (idx >= 0) setActiveMobileDayIndex(idx)
-                                    }}
-                                    areas={areas}
-                                    variant={isABMode ? activeVariant : null}
-                                    floatingActionsBelow={isMobile}
-                                    className="max-h-[42dvh] border-t border-subtle"
-                                />
-                            )}
-                        </div>
+                        {client && isPreviewOpen && (
+                            <StudentLivePreview
+                                id="student-live-preview"
+                                studentName={client.full_name ?? null}
+                                days={days}
+                                /* En móvil manda el carrusel; en tablet (768-1023) no hay
+                                   carrusel, así que manda la selección propia del panel. */
+                                activeDayId={isMobile ? (days[activeMobileDayIndex]?.id ?? null) : previewDayId}
+                                onSelectDay={(dayId) => {
+                                    setPreviewDayId(dayId)
+                                    const idx = days.findIndex(d => d.id === dayId)
+                                    if (idx >= 0) setActiveMobileDayIndex(idx)
+                                }}
+                                areas={areas}
+                                variant={isABMode ? activeVariant : null}
+                                floatingActionsBelow={isMobile}
+                                onClose={() => setIsPreviewOpen(false)}
+                                className="max-h-[42dvh] shrink-0 border-t border-subtle lg:hidden"
+                            />
                         )}
                     </div>
 

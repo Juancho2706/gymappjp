@@ -65,7 +65,6 @@ export function BrandQuickCard({
 }) {
     const router = useRouter()
     const fileRef = useRef<HTMLInputElement>(null)
-    const colorRef = useRef<HTMLInputElement>(null)
 
     const seededGreen = brand.primaryColor.trim().toLowerCase() === SEEDED_GREEN
     // Verde sembrado ⇒ el azul EVA queda PRESELECCIONADO visualmente, pero no se guarda hasta que
@@ -240,24 +239,8 @@ export function BrandQuickCard({
                                     </button>
                                 )
                             })}
-                            <button
-                                type="button"
-                                onClick={() => colorRef.current?.click()}
-                                className="h-11 touch-manipulation rounded-control border border-subtle px-3 text-[12.5px] font-bold text-[var(--text-strong)] hover:bg-surface-sunken"
-                            >
-                                Otro color
-                            </button>
-                            <input
-                                ref={colorRef}
-                                type="color"
-                                value={color}
-                                aria-label="Elegir otro color"
-                                onChange={(e) => {
-                                    setColor(e.target.value)
-                                    setPresetKey('')
-                                }}
-                                className="sr-only"
-                            />
+                            {/* Sin «otro color»: decisión del owner 22-08 — en la guía solo presets curados,
+                                nada de editores HEX. El picker completo sigue en Opciones › Mi Marca. */}
                         </div>
                         {seededGreen && (
                             <p className="text-[11.5px] text-[var(--text-muted)]">

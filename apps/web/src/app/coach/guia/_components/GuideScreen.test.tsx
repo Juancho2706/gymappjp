@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS, type OnboardingSignals } from '@eva/onboarding'
 import type { Persona } from '@eva/schemas'
 
@@ -11,15 +11,21 @@ import type { Persona } from '@eva/schemas'
  * tiene su propia suite en `dashboard/_lib/use-onboarding-guide.test.ts`).
  */
 
-const { vmRef, persistMock, deleteDemoMock, telemetryMock } = vi.hoisted(() => ({
+const { vmRef, persistMock, deleteDemoMock, telemetryMock, refreshMock, restoreLocalMock } = vi.hoisted(() => ({
     vmRef: { current: null as unknown },
     persistMock: vi.fn().mockResolvedValue({ ok: true }),
     deleteDemoMock: vi.fn().mockResolvedValue({ ok: true }),
     telemetryMock: vi.fn().mockResolvedValue(undefined),
+    refreshMock: vi.fn(),
+    restoreLocalMock: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
-    useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
+    useRouter: () => ({ refresh: refreshMock, replace: vi.fn(), push: vi.fn() }),
+}))
+vi.mock('../_lib/guide-pill-restore', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../_lib/guide-pill-restore')>()),
+    restoreGuidePillLocally: restoreLocalMock,
 }))
 vi.mock('sonner', () => ({
     toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
@@ -136,6 +142,8 @@ beforeEach(() => {
     persistMock.mockClear()
     deleteDemoMock.mockClear()
     telemetryMock.mockClear()
+    refreshMock.mockClear()
+    restoreLocalMock.mockClear()
 })
 
 describe('GuideScreen', () => {
@@ -205,6 +213,50 @@ describe('GuideScreen', () => {
         // pintando completa (si no, el coach que la descartó entraría a una pantalla vacía).
         renderScreen({}, { atFoot: true, done: 2 })
         expect(screen.getAllByRole('listitem')).toHaveLength(5)
+    })
+})
+
+describe('la guía apagada sigue siendo una pantalla completa', () => {
+    it('con `hidden` se pinta igual: los 5 pasos y el camino al panel siguen ahí', () => {
+        // Antes, `hidden` borraba el pie entero: el coach que cerró la guía entraba por URL y no
+        // tenía ni «Ir a mi panel» ni forma de volver a prenderla.
+        renderScreen({}, { hidden: true, atFoot: true, done: 2 })
+        expect(screen.getAllByRole('listitem')).toHaveLength(5)
+        expect(screen.getByRole('link', { name: /Ir a mi panel/ })).toBeTruthy()
+    })
+
+    it('con `hidden` ofrece «Volver a mostrar la píldora» en vez de «No mostrar»', () => {
+        renderScreen({}, { hidden: true, atFoot: true, done: 2 })
+        expect(screen.getByRole('button', { name: /Volver a mostrar la píldora/ })).toBeTruthy()
+        expect(screen.queryByRole('button', { name: /No mostrar la guía/ })).toBeNull()
+    })
+
+    it('descartada (al pie, sin 5/5) también ofrece reactivarla', () => {
+        renderScreen({}, { atFoot: true, done: 2 })
+        expect(screen.getByRole('button', { name: /Volver a mostrar la píldora/ })).toBeTruthy()
+    })
+
+    it('con 5/5 NO ofrece reactivar: la píldora se apaga sola al terminar, no está apagada', () => {
+        renderScreen({}, { done: 5, allDone: true, atFoot: true })
+        expect(screen.queryByRole('button', { name: /Volver a mostrar la píldora/ })).toBeNull()
+    })
+
+    it('reactivar limpia las dos banderas en el servidor y el espejo local, y refresca', async () => {
+        renderScreen({}, { hidden: true, atFoot: true, done: 2 })
+        fireEvent.click(screen.getByRole('button', { name: /Volver a mostrar la píldora/ }))
+        await waitFor(() => {
+            expect(persistMock).toHaveBeenCalledWith({ dismissed: false, hidden: false })
+        })
+        expect(restoreLocalMock).toHaveBeenCalledWith('coach-1')
+        expect(refreshMock).toHaveBeenCalled()
+    })
+
+    it('tras reactivar, el botón vuelve a ser «No mostrar» sin esperar al servidor', async () => {
+        renderScreen({}, { hidden: true, atFoot: true, done: 2 })
+        fireEvent.click(screen.getByRole('button', { name: /Volver a mostrar la píldora/ }))
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /No mostrar la guía/ })).toBeTruthy()
+        })
     })
 })
 

@@ -43,7 +43,12 @@ export function PautaDomiciliariaCta({
         startTransition(async () => {
             const result = await applyTemplateAction({ templateId, clientId })
             if (result.ok) {
-                router.push(`/coach/builder/${clientId}`)
+                // Sin `programId` el builder abría en blanco aunque la plantilla ya estaba aplicada
+                // (QA del owner 22-08): se abre SOBRE el programa recién creado, en modo guiado.
+                const query = result.programId
+                    ? `?programId=${encodeURIComponent(result.programId)}&primera=1`
+                    : '?primera=1'
+                router.push(`/coach/builder/${clientId}${query}`)
                 return
             }
             // `not_implemented` no es culpa del coach: se dice y la pantalla sigue en pie.

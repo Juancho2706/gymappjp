@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Dumbbell, Moon, Smartphone, Timer } from 'lucide-react'
+import { Dumbbell, Moon, Smartphone, Timer, X } from 'lucide-react'
 import {
     executionAreaGroupsFor,
     groupContiguousSupersetRuns,
@@ -125,6 +125,8 @@ function ExercisePreviewCard({ block, index }: { block: BuilderBlock; index: num
 }
 
 export interface StudentLivePreviewProps {
+    /** `id` del `<aside>`: lo apunta el `aria-controls` del ojo de la cabecera del builder. */
+    id?: string
     /** Nombre del alumno del builder («Matías»). Vacío ⇒ copy genérico. */
     studentName?: string | null
     days: readonly DayState[]
@@ -137,12 +139,23 @@ export interface StudentLivePreviewProps {
     /**
      * Reserva al pie de la lista. En móvil el FAB «+» y el pill «Guardar» flotan sobre la esquina
      * inferior derecha: sin esta reserva taparían la última tarjeta de la vista previa.
+     *
+     * La reserva es la geometría REAL de ese stack (`bottom: safe-area + 20px`, alto 56 px) más
+     * 20 px de aire, no un `pb-24` a ojo: con `env(safe-area-inset-bottom)` grande (iPhone con
+     * barra de gestos) 96 px se quedaban cortos y el FAB volvía a comerse la última tarjeta.
      */
     floatingActionsBelow?: boolean
+    /**
+     * Cierra la vista previa. Solo lo pasa el modo plegable de <1024 px: el panel fijo de desktop
+     * no se cierra. Cuando viene, la cabecera pinta su «✕» — es el único camino de vuelta ahora
+     * que el toggle vive en la cabecera del builder y no en una barra al pie.
+     */
+    onClose?: () => void
     className?: string
 }
 
 export function StudentLivePreview({
+    id,
     studentName,
     days,
     activeDayId = null,
@@ -150,6 +163,7 @@ export function StudentLivePreview({
     areas = [],
     variant = null,
     floatingActionsBelow = false,
+    onClose,
     className,
 }: StudentLivePreviewProps) {
     const firstName = studentName?.trim().split(/\s+/)[0] ?? ''
@@ -167,23 +181,36 @@ export function StudentLivePreview({
 
     return (
         <aside
+            id={id}
             aria-label={firstName ? `Vista de ${firstName}` : 'Vista del alumno'}
             className={cn('flex min-h-0 flex-col bg-surface-app', className)}
         >
-            <header className="shrink-0 border-b border-subtle px-3.5 py-3">
-                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
-                    <Smartphone className="size-3.5" aria-hidden />
-                    Así lo ve {firstName || 'tu alumno'}
-                </p>
-                <h2 className="mt-1 truncate font-display text-[16px] font-extrabold tracking-[-0.02em] text-strong">
-                    {day ? day.title?.trim() || day.name : 'Sin días'}
-                </h2>
-                <p className="mt-0.5 text-[11.5px] text-muted">
-                    {day?.is_rest
-                        ? 'Día de descanso'
-                        : `${day?.blocks.length ?? 0} ejercicios · ${totalSets} series`}
-                    {variant ? ` · Semana ${variant}` : ''}
-                </p>
+            <header className="flex shrink-0 items-start gap-2 border-b border-subtle px-3.5 py-3">
+                <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+                        <Smartphone className="size-3.5 shrink-0" aria-hidden />
+                        <span className="truncate">Así lo ve {firstName || 'tu alumno'}</span>
+                    </p>
+                    <h2 className="mt-1 truncate font-display text-[16px] font-extrabold tracking-[-0.02em] text-strong">
+                        {day ? day.title?.trim() || day.name : 'Sin días'}
+                    </h2>
+                    <p className="mt-0.5 text-[11.5px] text-muted">
+                        {day?.is_rest
+                            ? 'Día de descanso'
+                            : `${day?.blocks.length ?? 0} ejercicios · ${totalSets} series`}
+                        {variant ? ` · Semana ${variant}` : ''}
+                    </p>
+                </div>
+                {onClose && (
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Cerrar la vista del alumno"
+                        className="-mr-1.5 -mt-1 flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                    >
+                        <X className="size-4" aria-hidden />
+                    </button>
+                )}
             </header>
 
             {days.length > 1 && (
@@ -212,7 +239,13 @@ export function StudentLivePreview({
                 </div>
             )}
 
-            <div className={cn('min-h-0 flex-1 overflow-y-auto px-3.5 py-3', floatingActionsBelow && 'pb-24')}>
+            <div
+                className={cn(
+                    'min-h-0 flex-1 overflow-y-auto px-3.5 py-3',
+                    // FAB «+» y «Guardar»: `bottom: safe-area + 20px`, alto 56 px ⇒ 76 px + 20 de aire.
+                    floatingActionsBelow && 'pb-[calc(env(safe-area-inset-bottom,0px)+96px)]',
+                )}
+            >
                 {day == null || day.is_rest ? (
                     <p className="flex items-center gap-2 rounded-control border border-subtle bg-surface-card p-3 text-[12.5px] font-semibold text-muted">
                         <Moon className="size-4 shrink-0" aria-hidden />

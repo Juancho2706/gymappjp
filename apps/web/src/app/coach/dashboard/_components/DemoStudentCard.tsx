@@ -98,9 +98,13 @@ export function DemoStudentCard({
                 </div>
             </div>
 
-            <dl className="mt-3.5 grid grid-cols-3 gap-2">
+            {/* `minmax(0,1fr)` y no `grid-cols-3`: las columnas de grid tienen piso `min-content`,
+                así que con el `grid-cols-3` pelado un rótulo largo («Adherencia») ensanchaba su
+                columna, el `truncate` de adentro no truncaba nada y la tarjeta se derramaba a
+                390 px. Con el piso en 0 el que cede es el texto, que es lo que se quería. */}
+            <dl className="mt-3.5 grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
                 {demo.kpis.map((kpi) => (
-                    <div key={kpi.label} className="rounded-control bg-surface-sunken px-2.5 py-2">
+                    <div key={kpi.label} className="min-w-0 rounded-control bg-surface-sunken px-2.5 py-2">
                         <dt className="truncate text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--text-muted)]">
                             {kpi.label}
                         </dt>

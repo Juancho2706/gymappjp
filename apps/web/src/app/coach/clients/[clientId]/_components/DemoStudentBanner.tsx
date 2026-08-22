@@ -21,6 +21,11 @@ import { deleteDemoStudentAction } from '../../_actions/demo.actions'
  *
  * Dice qué es (no cuenta cupo, no recibe correos) y ofrece la única acción propia del demo:
  * borrarlo de un toque. La autorización vive en `deleteDemoStudentAction`: acá solo se confirma.
+ *
+ * Forma (QA del owner 22-08): en ≤480 px la fila de tres piezas (chip · párrafo · botón) exprimía
+ * el texto contra una columna de ~110 px y lo dejaba en ocho renglones. Ahora en móvil apila —
+ * chip, texto a ancho completo, botón a ancho completo— y recién desde `md` vuelve a ser la fila
+ * de una línea que tiene sentido cuando hay ancho.
  */
 export function DemoStudentBanner({ label, name }: { label: string; name: string }) {
     const [error, setError] = useState<string | null>(null)
@@ -37,19 +42,19 @@ export function DemoStudentBanner({ label, name }: { label: string; name: string
     }
 
     return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-subtle bg-surface-sunken px-3.5 py-3 print:hidden">
-            <span className="inline-flex items-center gap-1.5 rounded-pill bg-[var(--info-100)] px-2.5 py-1 text-[12px] font-bold text-[var(--info-700)]">
-                <Sparkles className="size-3.5" aria-hidden />
+        <div className="flex flex-col items-stretch gap-2.5 rounded-card border border-subtle bg-surface-sunken px-3.5 py-3 print:hidden md:flex-row md:flex-wrap md:items-center md:gap-x-3 md:gap-y-2">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-pill bg-[var(--info-100)] px-2.5 py-1 text-[12px] font-bold text-[var(--info-700)]">
+                <Sparkles className="size-3.5 shrink-0" aria-hidden />
                 {label}
             </span>
-            <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-muted">
+            <p className="min-w-0 text-[12.5px] leading-snug text-muted md:flex-1">
                 {name} no ocupa cupo de tu plan, no recibe correos y no cuenta en tus métricas.
                 Está para que pruebes todo antes de invitar a alguien real.
             </p>
             <AlertDialog>
-                <AlertDialogTrigger>
-                    <span className="eva-press inline-flex min-h-11 items-center gap-1.5 rounded-control border-[1.5px] border-default bg-surface-card px-3.5 text-[13px] font-bold text-strong transition-colors hover:bg-surface-card/80">
-                        <Trash2 className="size-4" aria-hidden />
+                <AlertDialogTrigger className="w-full md:w-auto">
+                    <span className="eva-press inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border-[1.5px] border-default bg-surface-card px-3.5 text-[13px] font-bold text-strong transition-colors hover:bg-surface-card/80 md:w-auto">
+                        <Trash2 className="size-4 shrink-0" aria-hidden />
                         Borrar ejemplo
                     </span>
                 </AlertDialogTrigger>
