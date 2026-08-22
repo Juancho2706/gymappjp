@@ -67,7 +67,11 @@ export function createProgramAssignmentNotificationRepository(
         db
           .from('clients')
           .select('id, full_name, email, coach_id, team_id, org_id')
-          .in('id', clientIds),
+          .in('id', clientIds)
+          // El alumno de ejemplo del onboarding (W8.1.8) no recibe correo ni push: su buzón
+          // `demo-<coachId>@evatest.cl` no existe y rebotaría en Resend. Sin la fila, el servicio
+          // salta el programa como `program_not_eligible` (best-effort, igual que un cliente ajeno).
+          .eq('is_demo', false),
         userId,
         scope,
       )

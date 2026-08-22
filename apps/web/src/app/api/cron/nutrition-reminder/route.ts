@@ -150,6 +150,8 @@ export async function GET(req: Request) {
       `
         )
         .in('id', candidateIds)
+        // El alumno de ejemplo del onboarding (W8.1.8) nunca recibe push.
+        .eq('is_demo', false)
         .eq('nutrition_plans.is_active', true),
       v2
         .from('nutrition_plans_v2')
@@ -227,6 +229,7 @@ export async function GET(req: Request) {
         .from('clients')
         .select('id, org_id, team_id, coaches!inner ( slug, brand_name, logo_url, subscription_tier )')
         .in('id', v2OnlyIds)
+        .eq('is_demo', false)
 
       if (brandError) {
         console.error('[cron/nutrition-reminder] v2 clients query error:', brandError)

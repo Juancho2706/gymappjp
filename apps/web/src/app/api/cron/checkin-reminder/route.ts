@@ -66,6 +66,9 @@ export async function GET(req: Request) {
       .select('id, org_id, team_id, is_active, coaches!inner ( slug, brand_name, logo_url, subscription_tier )')
       .in('id', candidateIds)
       .eq('is_active', true)
+      // El alumno de ejemplo del onboarding (W8.1.8) nunca recibe push: su cuenta la abre el propio
+      // coach desde «Vive tu app».
+      .eq('is_demo', false)
     if (clientsError) {
       console.error('[cron/checkin-reminder] clients query error:', clientsError)
       return NextResponse.json({ ok: false, error: 'DB query failed' }, { status: 500 })

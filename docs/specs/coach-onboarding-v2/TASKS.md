@@ -201,9 +201,10 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   (`dashboard.queries.ts:416-433` sin `is_demo`; F1.3 lo delegó a F3.7 y no se hizo). [spec-web-04]
 - [ ] W8.1.7 Riel de plantillas por persona con entrada PROPIA (no solo en el vacío first-run, que el demo
   apaga) y Movimiento/Cardio pintando sus 3 plantillas (hoy `templatesForSurface(...)[0]`). [canvas-01/02]
-- [ ] W8.1.8 `program-assignment-notification.repository.ts:66-72` y los crons `checkin-reminder` /
-  `nutrition-reminder` filtran `is_demo` (hoy un programa asignado al demo manda correo a
-  `demo-<coachId>@evatest.cl` ⇒ rebote). [spec-web-05/db-live-09]
+- [x] W8.1.8 HECHO 22-08: `program-assignment-notification.repository.ts` (el demo no entra en la lista de
+  destinatarios ⇒ el servicio salta el programa como `program_not_eligible`, sin correo ni push) y los
+  crons `checkin-reminder` / `nutrition-reminder` (3 consultas de `clients`) filtran `is_demo = false`.
+  Tests del servicio, de la ruta móvil y de candidatos V2 verdes (22). [spec-web-05/db-live-09]
 - [ ] W8.1.9 Panel admin: `admin/(panel)/clients/_actions/client-actions.ts:82-89`, `coach-detail.queries.ts:143-148`,
   `sistema.queries.ts:91` con `is_demo = false` + migración aditiva que reescribe `get_admin_coaches_paginated`
   (`cl.is_demo = false`). Caso LIVE `00109d66`: Free con demo = cupo 1/1, 0 reales. [db-live-01/02, tasks-truth-06]
