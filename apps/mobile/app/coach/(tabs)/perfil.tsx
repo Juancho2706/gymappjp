@@ -9,6 +9,11 @@ import { supabase } from '../../../lib/supabase'
 import { signOutAndRedirectHome } from '../../../lib/auth-actions'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
+// El espejo local no tenía `free`: un coach del plan gratuito veía «free» crudo en «Plan».
+// La etiqueta sale del catálogo compartido (@eva/tiers vía coach-subscription), como en
+// subscription.tsx y reactivate.tsx.
+import { TIER_LABELS } from '../../../lib/coach-subscription'
+import type { SubscriptionTier } from '../../../lib/coach-tiers'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, InfoRow, Section } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -25,12 +30,6 @@ const STATUS_LABELS: Record<string, string> = {
   past_due: 'Pago pendiente',
   canceled: 'Cancelado',
   inactive: 'Inactivo',
-}
-
-const TIER_LABELS: Record<string, string> = {
-  starter: 'Starter',
-  pro: 'Pro',
-  elite: 'Elite',
 }
 
 function formatDate(iso: string | null): string | null {
@@ -181,7 +180,10 @@ export default function CoachPerfilScreen() {
               valueColor={coach.subscriptionStatus === 'active' ? theme.success : undefined}
             />
             {subscriptionDetails?.tier ? (
-              <InfoRow label="Plan" value={TIER_LABELS[subscriptionDetails.tier] ?? subscriptionDetails.tier} />
+              <InfoRow
+                label="Plan"
+                value={TIER_LABELS[subscriptionDetails.tier as SubscriptionTier] ?? subscriptionDetails.tier}
+              />
             ) : null}
             {subscriptionDetails?.trialEndsAt ? (
               <InfoRow label="Prueba hasta" value={formatDate(subscriptionDetails.trialEndsAt) ?? '-'} />

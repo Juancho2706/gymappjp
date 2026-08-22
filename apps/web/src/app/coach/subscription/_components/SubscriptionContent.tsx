@@ -7,6 +7,7 @@ import {
     ADDON_CONFIG,
     ADDON_MODULE_KEYS,
     BILLING_CYCLE_CONFIG,
+    BILLING_CYCLE_PRICE_SUFFIX,
     comparePlanDirection,
     FLOW_ENABLED,
     getDefaultBillingCycleForTier,
@@ -718,7 +719,11 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
 
                 <div className="flex flex-col gap-2.5">
                     {tierOptions.map((tier) => {
-                        const price = getTierPriceClp(tier, isBillingCycleAllowedForTier(tier, selectedCycle) ? selectedCycle : getDefaultBillingCycleForTier(tier))
+                        // El ciclo REAL de esta card (free no admite ciclos → cae al default). El
+                        // sufijo del precio sale del MISMO ciclo: `getTierPriceClp` devuelve el total
+                        // del período, así que con Anual el «/mes» hardcodeado mentía ($287.904 /mes).
+                        const priceCycle = isBillingCycleAllowedForTier(tier, selectedCycle) ? selectedCycle : getDefaultBillingCycleForTier(tier)
+                        const price = getTierPriceClp(tier, priceCycle)
                         const isSelected = selectedTier === tier
                         const current = tier === coachTier
                         const badge = TIER_BADGE[tier]
@@ -788,7 +793,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                     </div>
                                     <div className="shrink-0 text-right">
                                         <span className="eva-metric text-[18px] text-strong">${price.toLocaleString('es-CL')}</span>
-                                        <span className="text-[11px] text-muted"> /mes</span>
+                                        <span className="text-[11px] text-muted"> {BILLING_CYCLE_PRICE_SUFFIX[priceCycle]}</span>
                                     </div>
                                 </div>
                                 <p className={`mt-1 text-[12.5px] ${isBlocked ? 'font-medium text-red-600 dark:text-red-400' : 'text-muted'}`}>

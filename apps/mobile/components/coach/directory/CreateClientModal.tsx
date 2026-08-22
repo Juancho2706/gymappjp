@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { CreateClientSchema } from '@eva/schemas'
-import type { SubscriptionTier } from '@eva/tiers'
+import { studentCountLabel, type SubscriptionTier } from '@eva/tiers'
 import { Input } from '../../../components'
 import { RefreshPlanButton } from '../RefreshPlanButton'
 import { FONT } from '../../../lib/typography'
@@ -288,8 +288,10 @@ export function CreateClientModal({
                 <Lock size={32} color={WARNING} />
               </View>
               <Text style={[styles.stateTitle, { color: theme.foreground }]}>
+                {/* Pricing v3: con free = 1 el interpolado a mano decía «1 alumnos». El plural sale
+                    del catálogo compartido (studentCountLabel), nunca de concatenar la 's'. */}
                 {upgradeLimit != null
-                  ? `Alcanzaste el límite de ${upgradeLimit} alumnos de tu plan.`
+                  ? `Alcanzaste el límite de ${studentCountLabel(upgradeLimit)} de tu plan.`
                   : 'Alcanzaste el límite de alumnos de tu plan.'}
               </Text>
               <Text style={[styles.stateBody, { color: theme.mutedForeground }]}>

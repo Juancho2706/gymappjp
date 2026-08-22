@@ -425,9 +425,17 @@ export type EvaBadgeMedium =
     | 'student_email'
     | 'rn_export'
 
+/**
+ * Ruta de aterrizaje del sello. NO es la home: la home monta `PreciosSection` («Elegir Pro»,
+ * precios por ciclo) y el sello se pinta DENTRO de la app del alumno, iOS incluido — un toque
+ * llevaría a comprar fuera de la tienda (guideline 3.1.1). `/hecho-con-eva` cuenta la misma
+ * historia SIN precios ni planes; la venta sigue viviendo en correo y web (embudo-free-pro W5.1).
+ */
+export const EVA_BADGE_PATH = '/hecho-con-eva'
+
 /** URL del sello con UTMs por superficie (campaña única `free_badge`). */
 export function getEvaBadgeUrl(medium: EvaBadgeMedium = 'student_app'): string {
-    return `https://www.eva-app.cl/?utm_source=badge&utm_medium=${medium}&utm_campaign=free_badge`
+    return `https://www.eva-app.cl${EVA_BADGE_PATH}?utm_source=badge&utm_medium=${medium}&utm_campaign=free_badge`
 }
 
 // ── Ciclos de cobro ───────────────────────────────────────────────────────────
@@ -439,6 +447,19 @@ export const BILLING_CYCLE_CONFIG: Record<
     monthly: { months: 1, label: 'Mensual', discountPercent: 0 },
     quarterly: { months: 3, label: 'Trimestral', discountPercent: 10 },
     annual: { months: 12, label: 'Anual', discountPercent: 20 },
+}
+
+/**
+ * Sufijo del precio que devuelve `getTierPriceClp`, por ciclo.
+ *
+ * `getTierPriceClp` devuelve el TOTAL del período (mensual ×3 −10 % / ×12 −20 %), NO el mensual
+ * equivalente. Cualquier UI que lo pinte con «/mes» miente: con Anual la card de Pro mostraba
+ * «$287.904 /mes» (embudo-free-pro W5.4). Fuente única del sufijo para no volver a hardcodearlo.
+ */
+export const BILLING_CYCLE_PRICE_SUFFIX: Record<BillingCycle, string> = {
+    monthly: '/mes',
+    quarterly: '/trimestre',
+    annual: '/año',
 }
 
 export const TIER_ALLOWED_BILLING_CYCLES: Record<SubscriptionTier, BillingCycle[]> = {

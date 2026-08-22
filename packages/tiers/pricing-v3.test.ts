@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+    BILLING_CYCLE_CONFIG,
+    BILLING_CYCLE_PRICE_SUFFIX,
     EVA_BADGE_LABEL,
     PRICING_V3_CUTOVER,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     getEvaBadgeUrl,
+    getTierPriceClp,
     getRecommendedTier,
     getRecommendedTierFor,
     getTierCapabilities,
@@ -85,14 +88,51 @@ describe('sello «Hecho con EVA» — texto y link únicos', () => {
         ]
         for (const medium of MEDIOS) {
             expect(getEvaBadgeUrl(medium)).toBe(
-                `https://www.eva-app.cl/?utm_source=badge&utm_medium=${medium}&utm_campaign=free_badge`
+                `https://www.eva-app.cl/hecho-con-eva?utm_source=badge&utm_medium=${medium}&utm_campaign=free_badge`
             )
+        }
+    })
+
+    /**
+     * W5.1 del embudo Free→Pro: el sello vive DENTRO de la app del alumno (iOS incluido). Si aterriza
+     * en la home, un toque del alumno abre `PreciosSection` con «Elegir Pro» — exactamente el
+     * comportamiento que la guideline 3.1.1 castiga. `/hecho-con-eva` es la landing sin precios.
+     */
+    it('el sello NUNCA aterriza en la home (tiene precios): va a /hecho-con-eva', () => {
+        for (const url of [getEvaBadgeUrl(), getEvaBadgeUrl('student_login'), getEvaBadgeUrl('rn_export')]) {
+            expect(new URL(url).pathname).toBe('/hecho-con-eva')
         }
     })
 
     it('el medio por defecto es la app del alumno', () => {
         expect(getEvaBadgeUrl()).toBe(getEvaBadgeUrl('student_app'))
         expect(getEvaBadgeUrl()).toContain('utm_medium=student_app')
+    })
+})
+
+/**
+ * W5.4: la card de «Cambiar plan» pintaba el total del ciclo con el sufijo «/mes» hardcodeado —
+ * con Anual seleccionado leía «$287.904 /mes» (el total del año). El sufijo deja de ser literal.
+ */
+describe('BILLING_CYCLE_PRICE_SUFFIX — el sufijo describe lo que getTierPriceClp devuelve', () => {
+    it('un sufijo por ciclo, y anual NO dice «/mes»', () => {
+        expect(BILLING_CYCLE_PRICE_SUFFIX).toEqual({
+            monthly: '/mes',
+            quarterly: '/trimestre',
+            annual: '/año',
+        })
+    })
+
+    it('cubre exactamente los ciclos del catálogo', () => {
+        expect(Object.keys(BILLING_CYCLE_PRICE_SUFFIX).sort()).toEqual(
+            Object.keys(BILLING_CYCLE_CONFIG).sort()
+        )
+    })
+
+    it('el precio anual de pro es el TOTAL del año, no el mensual (por eso el sufijo importa)', () => {
+        const mensual = getTierPriceClp('pro', 'monthly')
+        expect(getTierPriceClp('pro', 'annual')).toBeGreaterThan(mensual * 9)
+        expect(BILLING_CYCLE_PRICE_SUFFIX.annual).not.toBe(BILLING_CYCLE_PRICE_SUFFIX.monthly)
     })
 })
 

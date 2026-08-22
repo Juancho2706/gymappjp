@@ -8,6 +8,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/`, lastModified: now, changeFrequency: 'weekly', priority: 1 },
         { url: `${baseUrl}/pricing`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
         { url: `${baseUrl}/register`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
+        // Destino del sello «Hecho con EVA» (landing sin precios). Indexable a propósito.
+        { url: `${baseUrl}/hecho-con-eva`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
         { url: `${baseUrl}/legal`, lastModified: now, changeFrequency: 'monthly', priority: 0.4 },
         { url: `${baseUrl}/privacidad`, lastModified: now, changeFrequency: 'monthly', priority: 0.4 },
     ]

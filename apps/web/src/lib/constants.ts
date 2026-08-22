@@ -92,6 +92,8 @@ export {
     getRecommendedTierFor,
     getTierCapabilities,
     BILLING_CYCLE_CONFIG,
+    // El sufijo del precio por ciclo: getTierPriceClp devuelve el TOTAL del período, nunca el mensual.
+    BILLING_CYCLE_PRICE_SUFFIX,
     TIER_ALLOWED_BILLING_CYCLES,
     getTierAllowedBillingCycles,
     isBillingCycleAllowedForTier,

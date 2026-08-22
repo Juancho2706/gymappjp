@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { Geist_Mono } from 'next/font/google'
 import { SALES_EMAIL } from '@/lib/brand-assets'
-import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+// El conteo de ejercicios lo comparten `/` y `/hecho-con-eva` (landing del sello, sin precios).
+import { getPublicExerciseCount } from './_data/landing.queries'
 import { resolveMetadataBase } from '@/lib/site-url'
 import '../components/landing-v2/landing-v2.css'
 import { LandingBrandProvider } from '@/components/landing-v2/_brand-provider'
@@ -43,21 +44,8 @@ export const metadata: Metadata = {
     },
 }
 
-async function getExerciseCount(): Promise<number> {
-    try {
-        const supabase = createServiceRoleClient()
-        const { count } = await supabase
-            .from('exercises')
-            .select('id', { count: 'exact', head: true })
-            .is('coach_id', null)
-        return count ?? 129
-    } catch {
-        return 129
-    }
-}
-
 export default async function LandingPage() {
-    const exerciseCount = await getExerciseCount()
+    const exerciseCount = await getPublicExerciseCount()
 
     const metadataBase = resolveMetadataBase()
     const homeUrl = new URL('/', metadataBase).href

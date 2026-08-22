@@ -4,8 +4,10 @@ import { useActionState, useEffect, useMemo, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import Script from 'next/script'
-import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles, ChevronLeft, ArrowRight, Check, Minus, CreditCard } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Store, CheckCircle2, ChevronLeft, ArrowRight, Check, CreditCard } from 'lucide-react'
 import { registerAction, type RegisterState } from './_actions/register.actions'
+import { PlanStep } from './_components/PlanStep'
+import { SummaryStep } from './_components/SummaryStep'
 import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coach/onboarding/complete/_actions/complete.actions'
 import { cn } from '@/lib/utils'
 import { getCurrentOAuthUserProfile } from '@/lib/auth/client-oauth'
@@ -14,26 +16,15 @@ import { useCaptureRegisterFailed, useCaptureRegisterSubmitted } from '@/lib/pos
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
-    getTierAllowedBillingCycles,
-    getTierCapabilities,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
     isSaleTier,
-    SALE_TIERS,
-    TIER_CONFIG,
     type BillingCycle,
     type SaleTier,
 } from '@/lib/constants'
 
 const initialState: RegisterState = {}
 const googleInitialState: CompleteOnboardingState = {}
-// Solo se ofrecen tiers a la venta (free/pro/elite — pricing v2). starter salió de venta;
-// growth/scale siguen fuera de venta (grandfathered, ver plan 04).
-const tierOptions = SALE_TIERS.map((tier) => [tier, TIER_CONFIG[tier]] as const)
-const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
-    BillingCycle,
-    (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
-][]
 
 function SubmitButton({
     isFreeTier,
@@ -122,25 +113,24 @@ export default function RegisterPage() {
     // CTA genéricos dicen «gratis»—, así que abrir en un plan de pago rompe la promesa y manda a un
     // checkout que nadie pidió. Los CTA de pago mandan su tier explícito.
     const [tier, setTier] = useState<SaleTier>('free')
+    // `?tier=free` EXPLÍCITO en la URL — distinto del default. El sello «Hecho con EVA» de la app
+    // del alumno abre `/hecho-con-eva` y su único CTA es `/register?tier=free`: con la grilla de
+    // planes en el paso 2, el sello quedaba a dos toques de una vitrina de precios, que es
+    // exactamente lo que la guideline 3.1.1 de App Review no perdona en la app iOS. Con la bandera
+    // en true el alta no muestra ni la grilla ni una cifra; el `subscription_tier=free` que viaja
+    // al server action es el mismo de siempre. Sin `?tier=free` (o con otro tier) no cambia nada.
+    const [freeOnly, setFreeOnly] = useState(false)
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     // Código de descuento (REGISTER-CODE): manual (campo colapsado) o auto-aplicado desde ?codigo=.
     // Solo se threadea a /processing (el canje + disclosure SERNAC + consentimiento ocurren allá).
     const [couponCode, setCouponCode] = useState('')
     const [couponFieldOpen, setCouponFieldOpen] = useState(false)
     const [couponAutoApplied, setCouponAutoApplied] = useState(false)
-    const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     // Total en vivo = solo el plan: los módulos vienen INCLUIDOS en los planes pagos
     // (decisión CEO 2026-07-17) y ya no se compran como add-ons en el signup.
     const liveTotal = selectedPrice
-    const allowedCycles = useMemo(() => getTierAllowedBillingCycles(tier), [tier])
-    const allowedCycleOptions = useMemo(
-        () => cycleOptions.filter(([key]) => allowedCycles.includes(key)),
-        [allowedCycles]
-    )
     const isFreeTier = tier === 'free'
-    // Radiogroup del selector de plan (paso 2): navegación por flechas con roving tabindex.
-    const tierGroupRef = useRef<HTMLDivElement>(null)
     const captureRegisterFailed = useCaptureRegisterFailed()
 
     useEffect(() => {
@@ -174,6 +164,9 @@ export default function RegisterPage() {
                 ? rawTier
                 : 'free'
         setTier(nextTier)
+        // Sin precios SOLO cuando el link pidió el gratuito de forma explícita: el default (llegar
+        // sin `?tier`) sigue mostrando la grilla, que es la vitrina del alta web.
+        setFreeOnly(rawTier === 'free')
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) {
             const candidateCycle = queryCycle as BillingCycle
             setBillingCycle(
@@ -254,34 +247,6 @@ export default function RegisterPage() {
             if (node) node.scrollTo({ top: 0 })
             window.scrollTo({ top: 0 })
         })
-    }
-
-    // Navegación por teclado del radiogroup de planes (patrón WAI-ARIA: flechas mueven
-    // la selección + el foco; Home/End a los extremos). Space/Enter selecciona vía onClick.
-    function handleTierKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
-        let next = index
-        switch (event.key) {
-            case 'ArrowDown':
-            case 'ArrowRight':
-                next = (index + 1) % tierOptions.length
-                break
-            case 'ArrowUp':
-            case 'ArrowLeft':
-                next = (index - 1 + tierOptions.length) % tierOptions.length
-                break
-            case 'Home':
-                next = 0
-                break
-            case 'End':
-                next = tierOptions.length - 1
-                break
-            default:
-                return
-        }
-        event.preventDefault()
-        setTier(tierOptions[next][0])
-        const radios = tierGroupRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
-        radios?.[next]?.focus()
     }
 
     return (
@@ -527,279 +492,27 @@ export default function RegisterPage() {
                     ) : null}
 
                     {step === 2 ? (
-                        <>
-                            <div>
-                                <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
-                                    Elige tu plan
-                                </h1>
-                                <p className="mt-1 text-[13.5px] text-text-muted">Cambia o cancela cuando quieras. Empieza gratis si quieres probar.</p>
-                            </div>
-                            <section className="space-y-2">
-                                <div
-                                    ref={tierGroupRef}
-                                    role="radiogroup"
-                                    aria-label="Elige tu plan"
-                                    className="grid gap-2.5"
-                                >
-                                    {tierOptions.map(([key, option], index) => {
-                                        const caps = getTierCapabilities(key)
-                                        const defaultCycleForKey = getDefaultBillingCycleForTier(key)
-                                        const displayPrice = getTierPriceClp(key, defaultCycleForKey)
-                                        const cycleLabel = BILLING_CYCLE_CONFIG[defaultCycleForKey].label.toLowerCase()
-                                        const isFree = key === 'free'
-                                        // Paridad con /pricing: pro es el plan destacado ("Más popular").
-                                        const isPopular = key === 'pro'
-                                        const selected = tier === key
-                                        // Features clave por tarjeta — strings EXACTOS de @eva/tiers (no se inventan).
-                                        // La fila "no incluida" (dash) muestra la escalera de upgrade.
-                                        const features = [
-                                            { label: option.maxClients === 1 ? '1 alumno' : `Hasta ${option.maxClients} alumnos`, included: true },
-                                            // Nutrición base (V2) no tiene gate de tier: incluida en todos los
-                                            // planes, Free incluido. `caps.canUseNutrition` solo gatea la compra
-                                            // del add-on en billing, por eso esta fila no lo consulta.
-                                            { label: 'Planes de nutrición', included: true },
-                                            // Pricing v2 (P3): los 4 módulos van incluidos en TODOS los planes,
-                                            // Free incluido — el gate server ya los libera (hasPaidModuleAccess).
-                                            { label: '4 módulos profesionales incluidos', included: true },
-                                            { label: 'Branding personalizado', included: caps.canUseBranding },
-                                        ]
-                                        return (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                role="radio"
-                                                aria-checked={selected}
-                                                aria-label={option.label}
-                                                tabIndex={selected ? 0 : -1}
-                                                onClick={() => setTier(key)}
-                                                onKeyDown={(event) => handleTierKeyDown(event, index)}
-                                                className={cn(
-                                                    'group relative w-full rounded-card border-[1.5px] p-4 text-left transition-all duration-200',
-                                                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
-                                                    selected
-                                                        ? 'border-sport-500 bg-sport-100 shadow-[var(--glow-sport)]'
-                                                        : isPopular
-                                                            ? 'border-sport-500/50 hover:border-sport-500/70 hover:bg-surface-sunken/40'
-                                                            : 'border-border-subtle hover:border-sport-500/40 hover:bg-surface-sunken/40'
-                                                )}
-                                            >
-                                                <div className="flex items-start gap-3">
-                                                    {/* Indicador de radio — refuerzo visual de la semántica role=radio */}
-                                                    <span
-                                                        aria-hidden="true"
-                                                        className={cn(
-                                                            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                                                            selected
-                                                                ? 'border-sport-500 bg-sport-500'
-                                                                : 'border-border-default group-hover:border-sport-500/60'
-                                                        )}
-                                                    >
-                                                        <span
-                                                            className={cn(
-                                                                'h-2 w-2 rounded-full bg-[var(--text-on-sport)] transition-transform duration-200',
-                                                                selected ? 'scale-100' : 'scale-0'
-                                                            )}
-                                                        />
-                                                    </span>
-
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex flex-wrap items-center gap-1.5">
-                                                            <span className="font-display text-[15px] font-black tracking-[-0.01em] text-text-strong">
-                                                                {option.label}
-                                                            </span>
-                                                            {isFree && (
-                                                                <span className="rounded-pill bg-[var(--success-100)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--success-600)]">
-                                                                    Gratis para siempre
-                                                                </span>
-                                                            )}
-                                                            {isPopular && (
-                                                                <span className="rounded-pill bg-sport-500 px-1.5 py-0.5 text-[10px] font-bold text-[var(--text-on-sport)]">
-                                                                    Más popular
-                                                                </span>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="mt-1 flex items-baseline gap-1">
-                                                            {isFree ? (
-                                                                <>
-                                                                    <span className="font-display text-xl font-black text-[var(--success-600)]">$0</span>
-                                                                    <span className="text-xs font-semibold text-text-muted">· Sin tarjeta</span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <span className="font-display text-xl font-black text-text-strong">
-                                                                        ${displayPrice.toLocaleString('es-CL')}
-                                                                    </span>
-                                                                    <span className="text-xs font-medium text-text-muted">CLP / {cycleLabel}</span>
-                                                                </>
-                                                            )}
-                                                        </div>
-
-                                                        <ul className="mt-2.5 space-y-1">
-                                                            {features.map((feature) => (
-                                                                <li
-                                                                    key={feature.label}
-                                                                    className={cn(
-                                                                        'flex items-center gap-1.5 text-[12.5px]',
-                                                                        feature.included ? 'text-text-body' : 'text-text-subtle'
-                                                                    )}
-                                                                >
-                                                                    {feature.included ? (
-                                                                        <Check className="h-3.5 w-3.5 shrink-0 text-sport-600" aria-hidden="true" />
-                                                                    ) : (
-                                                                        <Minus className="h-3.5 w-3.5 shrink-0 text-text-subtle" aria-hidden="true" />
-                                                                    )}
-                                                                    <span className={cn(!feature.included && 'line-through decoration-1')}>
-                                                                        {feature.label}
-                                                                    </span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-                            </section>
-
-                            {allowedCycleOptions.length > 1 && (
-                                <section className="space-y-2">
-                                    <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
-                                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                                        {allowedCycleOptions.map(([key, option]) => (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                onClick={() => setBillingCycle(key)}
-                                                className={cn(
-                                                    'rounded-card border-[1.5px] p-3 text-left transition',
-                                                    billingCycle === key
-                                                        ? 'border-sport-500 bg-sport-100'
-                                                        : 'border-border-subtle hover:border-sport-500/40'
-                                                )}
-                                            >
-                                                <p className="font-semibold text-text-strong text-sm">{option.label}</p>
-                                                <p className="text-xs text-text-muted">
-                                                    {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
-                                                </p>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-
-                            {/* Módulos: incluidos en TODOS los planes, Free incluido (pricing v2 P3 —
-                                el gate server ya los libera). Ya no se compran como add-ons en el signup. */}
-                            <section className="space-y-2">
-                                <div className="rounded-control border border-border-subtle bg-surface-sunken p-3">
-                                    <p className="text-sm font-semibold text-text-strong">Módulos profesionales incluidos</p>
-                                    <p className="mt-0.5 text-xs text-text-muted">
-                                        Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen con todos los planes — Free incluido, sin costo extra.
-                                    </p>
-                                </div>
-                                {/* REGISTER-CODE: código de descuento colapsado (camino primario = link
-                                    auto-aplicado ?codigo=). Solo aplica a planes pagos. */}
-                                {!isFreeTier && (
-                                    <div className="rounded-control border border-border-subtle bg-surface-sunken/60 p-3">
-                                        {!couponFieldOpen ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => setCouponFieldOpen(true)}
-                                                className="text-sm font-semibold text-sport-600 hover:underline"
-                                            >
-                                                ¿Tienes un código de descuento?
-                                            </button>
-                                        ) : couponAutoApplied && couponCode ? (
-                                            <p className="text-sm text-[var(--success-600)]">
-                                                Código <span className="font-mono font-semibold">{couponCode}</span> aplicado. Verás el descuento con su detalle antes de pagar.
-                                            </p>
-                                        ) : (
-                                            <div>
-                                                <label className="block text-xs font-semibold text-text-muted mb-1">Código de descuento</label>
-                                                <input
-                                                    value={couponCode}
-                                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/[\s-]+/g, ''))}
-                                                    placeholder="PARTNER20"
-                                                    className="w-full h-11 rounded-control border-[1.5px] border-border-default bg-surface-card px-3 text-sm font-mono uppercase text-text-strong focus:outline-none focus:border-sport-600 focus:shadow-[var(--ring-focus)]"
-                                                />
-                                                <p className="mt-1 text-[11px] text-text-muted">El descuento se confirma con su detalle antes del primer cobro.</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </section>
-                        </>
+                        <PlanStep
+                            tier={tier}
+                            setTier={setTier}
+                            billingCycle={billingCycle}
+                            setBillingCycle={setBillingCycle}
+                            couponCode={couponCode}
+                            setCouponCode={setCouponCode}
+                            couponFieldOpen={couponFieldOpen}
+                            setCouponFieldOpen={setCouponFieldOpen}
+                            couponAutoApplied={couponAutoApplied}
+                            freeOnly={freeOnly}
+                        />
                     ) : null}
 
                     {step === 3 ? (
-                        <>
-                        <div>
-                            <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
-                                {isFreeTier ? 'Tu plan gratuito' : 'Resumen antes de pagar'}
-                            </h1>
-                            <p className="mt-1 text-[13.5px] text-text-muted">
-                                Revisa y confirma. {isFreeTier ? 'Sin tarjeta de crédito.' : 'El cobro ocurre en el checkout seguro.'}
-                            </p>
-                        </div>
-                        <section className="rounded-card border border-border-subtle bg-surface-card p-4 space-y-3">
-                            <div className="space-y-1.5 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-text-muted">Plan</span>
-                                    <span className="font-semibold text-text-strong">{selectedTier.label}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-text-muted">Alumnos</span>
-                                    <span className="font-semibold text-text-strong">Hasta {selectedTier.maxClients}</span>
-                                </div>
-                                {!isFreeTier && (
-                                    <div className="flex justify-between">
-                                        <span className="text-text-muted">Facturación</span>
-                                        <span className="font-semibold text-text-strong">{BILLING_CYCLE_CONFIG[billingCycle].label}</span>
-                                    </div>
-                                )}
-                                {/* Nutrición base (V2) incluida en todos los planes, Free incluido. */}
-                                <div className="flex justify-between">
-                                    <span className="text-text-muted">Nutrición</span>
-                                    <span className="font-semibold text-[var(--success-600)]">Incluida</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-text-muted">Tu marca (white-label)</span>
-                                    <span className={cn('font-semibold', getTierCapabilities(tier).canUseBranding ? 'text-[var(--success-600)]' : 'text-[var(--warning-700)]')}>
-                                        {getTierCapabilities(tier).canUseBranding ? 'Incluida' : 'No incluida'}
-                                    </span>
-                                </div>
-                                {/* Pricing v2 (P3): los 4 módulos van incluidos en TODOS los planes,
-                                    Free incluido — el gate server ya los libera. */}
-                                <div className="flex justify-between">
-                                    <span className="text-text-muted">Módulos profesionales (4)</span>
-                                    <span className="font-semibold text-[var(--success-600)]">Incluidos</span>
-                                </div>
-                                <div className="flex justify-between border-t border-border-default pt-2 mt-2">
-                                    <span className="text-text-muted">{isFreeTier ? 'Costo' : 'Total a pagar'}</span>
-                                    <span className="text-lg font-black text-text-strong">
-                                        {isFreeTier ? (
-                                            <span className="text-[var(--success-600)]">$0 — Gratis</span>
-                                        ) : (
-                                            `$${liveTotal.toLocaleString('es-CL')} CLP`
-                                        )}
-                                    </span>
-                                </div>
-                            </div>
-                            {isFreeTier ? (
-                                <div className="flex items-start gap-2 pt-1 text-xs text-text-muted">
-                                    <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[var(--success-500)]" />
-                                    <span>
-                                        Sin tarjeta de crédito. Acceso inmediato. Puedes hacer upgrade cuando quieras desde tu dashboard.
-                                    </span>
-                                </div>
-                            ) : (
-                                <p className="text-xs text-text-muted pt-1">
-                                    Al crear tu cuenta, te llevaremos directamente al checkout de MercadoPago para completar el pago.
-                                </p>
-                            )}
-                        </section>
-                        </>
+                        <SummaryStep
+                            tier={tier}
+                            billingCycle={billingCycle}
+                            totalClp={liveTotal}
+                            freeOnly={freeOnly}
+                        />
                     ) : null}
 
                     {/* Cloudflare Turnstile — montado desde el paso 1 (el token viaja en el submit),
