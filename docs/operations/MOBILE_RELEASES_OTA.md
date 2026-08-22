@@ -41,6 +41,12 @@ Aplicado el 2026-08-22: piso 1.1.1 (READY_FOR_SALE) ⇒ OTA a 1.1.1 y 1.1.2; 1.1
 Grupos publicados el 22-08 05:1xZ, los 4 verdes: 1.1.1 android `d4df67f0` (run 32553706927) · 1.1.1 ios `b337b986`
 (32553708216) · 1.1.2 android `3974482f` (32553709725) · 1.1.2 ios `caa038a2` (32553711196). El port a 1.1.1 va sin
 `app.json` y sin la telemetría `upgrade_gate_hit` del muro (ese runtime no tiene `lib/analytics`).
+Segunda aplicación el mismo 2026-08-22 (14:45Z; ASC releído a las 14:38Z: 1.1.2 seguía `WAITING_FOR_REVIEW`, piso 1.1.1): `ota/1.1.2-20260822b` = `8cf7b886`
+(master: onboarding v2 RN de DOMINGO + fixes W6.10 del embudo + header `x-eva-platform`) → android `17fa6905` (run 32579444509) / ios `93834df2`
+(32579446106); `ota/1.1.1-20260822b` = `abbd7f87` (port MÍNIMO: solo W6.10 + header, sin onboarding v2 — ese runtime no tiene `@eva/onboarding` ni
+`persona.ts`, y 1.1.2 trae deps nativas nuevas, así que no se mergea) → android `230bd40b` (32579595187) / ios `65033c6d` (32579596832). Los 4 verdes.
+Regla aprendida: cuando el bundle nuevo consume rutas web nuevas (`api/mobile/coach/persona`), el OTA se dispara DESPUÉS de ver el deploy de
+master en prod (sonda: la ruta deja de dar 404), nunca antes.
 
 ## Partición de runtimes vigente (2026-08-21)
 
@@ -49,8 +55,8 @@ Grupos publicados el 22-08 05:1xZ, los 4 verdes: 1.1.1 android `d4df67f0` (run 3
 | Runtime | Binario | Quién lo tiene | Cómo se le publica |
 |---|---|---|---|
 | `1.1.0` | 54 (iOS) / 81 (Android) | App Store y closed testing de Play — **el público** | Desde un tag `ota/1.1.0-<fecha>` creado sobre `4206f340` (último commit con `version: 1.1.0`) + cherry-picks solo-JS. Último: `ota/1.1.0-20260821` = `c5501cc3` (Pricing v3; grupos `4b12bb78` android / `c095d5e1` ios). Anterior: `ota/1.1.0-20260820` = `39e64ff8`. |
-| `1.1.1` | 57 / 84 | App Store (aprobada 21-08) + closed testing de Play | Desde `master` mientras `app.json` diga 1.1.1 (hasta `2fdecebd`), o un tag `ota/1.1.1-<fecha>`. Último: `ota/1.1.1-20260821` = `fce4ceb8` (Pricing v3; grupos `c301b034` android / `0c7e5407` ios). Anterior: `ota/1.1.1-20260820` = `b4d958fa`. |
-| `1.1.2` | 58 / 85 | TestFlight + closed testing de Play | Desde `rnmobiledenuevo` (o un tag sobre ella): lleva Share Entreno, que necesita los módulos nativos de este binario. Último: `ota/1.1.2-20260821` = `2edea500` (Pricing v3; grupos `7c91756f` android / `d7237681` ios). |
+| `1.1.1` | 57 / 84 | App Store (aprobada 21-08) + closed testing de Play | Desde `master` mientras `app.json` diga 1.1.1 (hasta `2fdecebd`), o un tag `ota/1.1.1-<fecha>`. Último: `ota/1.1.1-20260822b` = `abbd7f87` (embudo W6.10 + header `x-eva-platform`, port mínimo sin onboarding v2; grupos `230bd40b` android / `65033c6d` ios). Anteriores: `ota/1.1.1-20260822` = `e1d9cdcd` (W4+W5+W6), `ota/1.1.1-20260821` = `fce4ceb8` (Pricing v3), `ota/1.1.1-20260820` = `b4d958fa`. |
+| `1.1.2` | 58 / 85 | TestFlight + closed testing de Play | Desde `rnmobiledenuevo` (o un tag sobre ella): lleva Share Entreno, que necesita los módulos nativos de este binario. Último: `ota/1.1.2-20260822b` = `8cf7b886` (onboarding v2 RN + embudo W6.10 + header `x-eva-platform`; grupos `17fa6905` android / `93834df2` ios). Anteriores: `ota/1.1.2-20260822` = `a1c2f2f9` (W4+W5+W6), `ota/1.1.2-20260821` = `2edea500` (Pricing v3). |
 
 Reglas que salen de esto:
 
