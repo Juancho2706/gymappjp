@@ -105,7 +105,14 @@ export function guidedTitle(persona: Persona | null | undefined): string {
  * un alumno de ejemplo sembrado. El demo no ocupa cupo y el coach nuevo no tiene cómo saberlo:
  * sin esta línea cree que ya gastó su único lugar.
  *
- * `null` = no hay nota (otro plan, sin demo o sin cupo utilizable). Nunca se inventa un número.
+ * QA del owner 22-08: la línea decía «…; Matías no ocupa ese cupo» y el owner leyó un nombre
+ * suelto («¿siempre es Matías?»). Regla que queda para TODO copy de cupo/plan: el sujeto es
+ * **«tu {alumno} de ejemplo»** (el concepto, con el sustantivo de la persona), y el nombre real va
+ * entre paréntesis como apoyo para reconocerlo en la lista. Distinto de los pasos de la guía
+ * («Entra como Pedro», «Arma la rutina de Matías»), donde el nombre ES la instrucción.
+ *
+ * `null` = no hay nota (otro plan, sin demo o sin cupo utilizable). Nunca se inventa un número:
+ * sin demo sembrado no existe «tu alumno de ejemplo» y la nota no se escribe.
  */
 export function guidedCapNote(input: {
     tier?: string | null
@@ -121,7 +128,9 @@ export function guidedCapNote(input: {
     const persona = input.persona ?? DEFAULT_INVITE_PERSONA
     const noun = personaNoun(persona, max !== 1)
     const adjective = max === 1 ? 'real' : 'reales'
-    return `Tu plan incluye ${max} ${noun} ${adjective} con tu marca; ${demo} no ocupa ese cupo.`
+    // Singular siempre: el demo es UNO, aunque el cupo del plan sea de varios.
+    const demoNoun = personaNoun(persona)
+    return `Tu plan incluye ${max} ${noun} ${adjective} con tu marca; tu ${demoNoun} de ejemplo (${demo}) no ocupa ese cupo.`
 }
 
 /**

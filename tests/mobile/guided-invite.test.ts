@@ -73,17 +73,39 @@ describe('mensaje de la invitación', () => {
 describe('nota de cupo del paso 1', () => {
   it('en Free con demo dice que el alumno de ejemplo no ocupa cupo', () => {
     const note = guidedCapNote({ tier: 'free', maxClients: 1, persona: 'strength', demoName: 'Matías' })
-    expect(note).toBe('Tu plan incluye 1 alumno real con tu marca; Matías no ocupa ese cupo.')
+    expect(note).toBe(
+      'Tu plan incluye 1 alumno real con tu marca; tu alumno de ejemplo (Matías) no ocupa ese cupo.',
+    )
   })
 
-  it('concuerda el plural con el cupo y con la persona', () => {
+  it('el sujeto es «tu {alumno} de ejemplo», nunca el nombre suelto (QA del owner 22-08)', () => {
+    // El owner leyó «…; Matías no ocupa ese cupo» y preguntó «¿siempre es Matías?». La nota habla
+    // del CONCEPTO; el nombre queda entre paréntesis, como apoyo para reconocerlo en la lista.
+    for (const persona of PERSONAS) {
+      const note = guidedCapNote({ tier: 'free', maxClients: 1, persona, demoName: 'Matías' })
+      expect(note).toContain(`tu ${personaNoun(persona)} de ejemplo (Matías)`)
+      expect(note).not.toMatch(/;\s*Matías\b/)
+    }
+  })
+
+  it('concuerda el plural con el cupo y con la persona, pero el demo siempre es UNO', () => {
     expect(guidedCapNote({ tier: 'free', maxClients: 2, persona: 'nutrition', demoName: 'Ana' })).toBe(
-      'Tu plan incluye 2 pacientes reales con tu marca; Ana no ocupa ese cupo.',
+      'Tu plan incluye 2 pacientes reales con tu marca; tu paciente de ejemplo (Ana) no ocupa ese cupo.',
+    )
+  })
+
+  it('la persona «other» cae al vocabulario neutro sin romper la frase', () => {
+    expect(guidedCapNote({ tier: 'free', maxClients: 1, persona: 'other', demoName: 'Pedro' })).toBe(
+      'Tu plan incluye 1 alumno real con tu marca; tu alumno de ejemplo (Pedro) no ocupa ese cupo.',
     )
   })
 
   it('no inventa nada: sin demo, fuera de Free o sin cupo utilizable no hay nota', () => {
+    // Sin demo sembrado no existe «tu alumno de ejemplo»: la nota entera se calla, no se degrada
+    // a una frase genérica sobre un alumno que el coach no tiene.
     expect(guidedCapNote({ tier: 'free', maxClients: 1, persona: 'strength', demoName: null })).toBeNull()
+    expect(guidedCapNote({ tier: 'free', maxClients: 1, persona: 'strength', demoName: '   ' })).toBeNull()
+    expect(guidedCapNote({ tier: 'free', maxClients: 1, persona: 'other', demoName: null })).toBeNull()
     expect(guidedCapNote({ tier: 'pro', maxClients: 25, persona: 'strength', demoName: 'Matías' })).toBeNull()
     expect(guidedCapNote({ tier: 'free', maxClients: 0, persona: 'strength', demoName: 'Matías' })).toBeNull()
     expect(guidedCapNote({ tier: null, maxClients: null, persona: null, demoName: 'Matías' })).toBeNull()

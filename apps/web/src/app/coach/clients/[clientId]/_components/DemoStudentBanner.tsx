@@ -47,9 +47,14 @@ export function DemoStudentBanner({ label, name }: { label: string; name: string
                 <Sparkles className="size-3.5 shrink-0" aria-hidden />
                 {label}
             </span>
+            {/* Sujeto GENÉRICO, no el nombre (regla de copy de cupo/plan, QA del owner 22-08): el
+                coach leía «Ana Riquelme no ocupa cupo» y se preguntaba si la regla era de ella o de
+                los ejemplos en general. `label` ya viene con el sustantivo de la persona
+                («Alumno/Paciente de ejemplo»), así que no hace falta un vocabulario propio acá. El
+                nombre sigue donde ES el sujeto: el título del diálogo de borrado. */}
             <p className="min-w-0 text-[12.5px] leading-snug text-muted md:flex-1">
-                {name} no ocupa cupo de tu plan, no recibe correos y no cuenta en tus métricas.
-                Está para que pruebes todo antes de invitar a alguien real.
+                Tu {label.toLowerCase()} no ocupa cupo de tu plan, no recibe correos y no cuenta
+                en tus métricas. Está para que pruebes todo antes de invitar a alguien real.
             </p>
             <AlertDialog>
                 <AlertDialogTrigger className="w-full md:w-auto">

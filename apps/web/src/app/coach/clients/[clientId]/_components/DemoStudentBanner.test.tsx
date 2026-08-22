@@ -25,9 +25,18 @@ describe('DemoStudentBanner', () => {
         renderBanner()
         expect(screen.getByText('Alumno de ejemplo')).toBeTruthy()
         expect(
-            screen.getByText(/Ana Riquelme no ocupa cupo de tu plan, no recibe correos/),
+            screen.getByText(/Tu alumno de ejemplo no ocupa cupo de tu plan, no recibe correos/),
         ).toBeTruthy()
         expect(screen.getByText('Borrar ejemplo')).toBeTruthy()
+    })
+
+    it('la regla del cupo se enuncia en genérico, no a nombre del demo (QA del owner 22-08)', () => {
+        // «Ana Riquelme no ocupa cupo» se leía como una excepción de ESA persona. El sujeto es el
+        // concepto; el nombre queda para el diálogo de borrado, donde sí es el sujeto.
+        renderBanner()
+        const paragraph = screen.getByText(/no ocupa cupo de tu plan/)
+        expect(paragraph.textContent).not.toContain('Ana Riquelme')
+        expect(paragraph.textContent).toContain('Tu alumno de ejemplo')
     })
 
     it('en móvil apila (columna) y recién desde `md` vuelve a ser fila', () => {
