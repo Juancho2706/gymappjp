@@ -45,23 +45,37 @@ export function splashFigureCenterY(screenHeight: number): number {
  */
 export const SPLASH_SIGNATURE_SLOT_OFFSET = SPLASH_FIGURE_HEIGHT / 2 + SPLASH_HAIRLINE_MARGIN_TOP // 97
 
-/** Medidas del bloque de marca del coach (§3.6): tile + nombre + saludo, en flujo centrado. */
-const COACH_TILE = 96
-const COACH_NAME_MARGIN_TOP = 19
-const COACH_NAME_LINE_HEIGHT = 22
-const COACH_GREETING_MARGIN_TOP = 7
-const COACH_GREETING_LINE_HEIGHT = 14
+/**
+ * Medidas del bloque de marca del coach (§3.6): tile + nombre + saludo, en flujo centrado.
+ * `SplashBrand` consume ESTAS constantes (no las duplica) para que el ancla de la luz y el
+ * bloque pintado no puedan desalinearse.
+ *
+ * TILE 144 (owner 22-08, video del cold start: «que este del tamaño del icono del splash»):
+ * la figura EVA nativa pinta ~140 pt de alto dentro de su caja de 180 y el circulo de 96
+ * se leia a la mitad. 144 = el alto visible de la figura; 180 (la caja) se veria MAS grande
+ * que el icono al que reemplaza.
+ */
+export const SPLASH_COACH_TILE = 144
+export const SPLASH_COACH_NAME_MARGIN_TOP = 22
+export const SPLASH_COACH_NAME_LINE_HEIGHT = 30
+export const SPLASH_COACH_GREETING_MARGIN_TOP = 8
+export const SPLASH_COACH_GREETING_LINE_HEIGHT = 16
 const COACH_STACK_HEIGHT =
-  COACH_TILE + COACH_NAME_MARGIN_TOP + COACH_NAME_LINE_HEIGHT + COACH_GREETING_MARGIN_TOP + COACH_GREETING_LINE_HEIGHT // 158
+  SPLASH_COACH_TILE +
+  SPLASH_COACH_NAME_MARGIN_TOP +
+  SPLASH_COACH_NAME_LINE_HEIGHT +
+  SPLASH_COACH_GREETING_MARGIN_TOP +
+  SPLASH_COACH_GREETING_LINE_HEIGHT // 220
 
 /**
  * Centro OPTICO del logo/tile del coach en el retorno branded: el bloque (tile + nombre +
  * saludo) se centra como stack, asi que el tile queda ARRIBA del centro de pantalla. La
  * fuente de luz del canal coach ancla ACA y no en `splashFigureCenterY`: con el ancla en
  * h/2 la luz quedaba ~31 pt debajo del logo durante y despues del crossfade (hallazgo de la
- * revision adversarial 19-08). Sin saludo (greetingName null) el bloque mide 21 pt menos y
- * el centro real sube ~10 pt — irrelevante para una fuente difusa de 460 pt.
+ * revision adversarial 19-08; con el tile de 144 son 38). Sin saludo (greetingName null) el
+ * bloque mide 24 pt menos y el centro real sube ~12 pt — irrelevante para una fuente difusa
+ * de 460 pt.
  */
 export function splashCoachSourceCenterY(screenHeight: number): number {
-  return screenHeight / 2 - COACH_STACK_HEIGHT / 2 + COACH_TILE / 2 // h/2 - 31
+  return screenHeight / 2 - COACH_STACK_HEIGHT / 2 + SPLASH_COACH_TILE / 2 // h/2 - 38
 }

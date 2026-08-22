@@ -16,7 +16,11 @@ import { EASE } from '../../lib/motion'
 import { loadStoredBranding, type CoachBranding } from '../../lib/branding'
 import { supabase } from '../../lib/supabase'
 import { getCoachProfile } from '../../lib/coach'
-import { beginSplashHandoff, type SplashBrandMark } from '../../context/DashboardReadyContext'
+import {
+  beginSplashHandoff,
+  useSplashHandoffPainted,
+  type SplashBrandMark,
+} from '../../context/DashboardReadyContext'
 import { splashClockNow } from './splash-clock'
 import { ENTRY_ACCENT, EntryGrain, EntrySource, entrySolidHex } from './EntryBackground'
 import { ENTRY_LIGHT, LightLayer } from './LightLayer'
@@ -98,6 +102,12 @@ import {
  * la raiz continua la MISMA composicion hasta que la home termina de cargar. La marca deja de
  * desmontarse en la navegacion (era lo que descubria el skeleton intermedio). El flujo SIN
  * sesion no cambia en nada: `onAnonymous` jamas toca el handoff.
+ *
+ * RELEVO EN DOS TIEMPOS (video del owner 22-08): el overlay monta invisible encima y avisa
+ * `painted` cuando su logo ya esta en pantalla; el `replace` sale un frame DESPUES de eso
+ * (`HANDOFF_PAINT_TIMEOUT_MS` de tope). Remontar el logo costaba 2-3 frames en Android y el
+ * circulo quedaba vacio ~100 ms en el relevo. Y la firma EVA del umbral lento ya no se monta
+ * cuando hay marca en cache: destellaba «EVA» 130 ms antes del crossfade a la marca.
  */
 
 /** Hold de continuidad antes del crossfade (§2.3 / §4 R1). */
@@ -108,6 +118,8 @@ const XFADE_MS = 260
 const XFADE_REDUCED_MS = 160
 /** El indicador de progreso solo se monta si el gate supera este umbral (§4 S4). */
 const SLOW_GATE_MS = SPLASH_SLOW_MS
+/** Tope de espera al `painted` del overlay: pase lo que pase, se navega. */
+const HANDOFF_PAINT_TIMEOUT_MS = 500
 
 export interface SplashGateResult {
   /** Branding cacheado leido por el gate (AsyncStorage). El padre decide que hacer con el. */
@@ -138,6 +150,7 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   const reduced = useReducedMotion()
   const { width, height } = useWindowDimensions()
   const { setBranding } = useTheme()
+  const painted = useSplashHandoffPainted()
 
   const [branded, setBranded] = useState<SplashBrandMark | null>(null)
   const [target, setTarget] = useState<GateTarget | null>(null)
@@ -151,6 +164,8 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   const decided = useRef(false)
   /** Hay una marca de coach programada (hold de continuidad en curso): navegar la esperaria. */
   const pendingMark = useRef(false)
+  /** Habia marca en AsyncStorage: la espera PROBABLEMENTE termina en marca, no en firma EVA. */
+  const cachedBrand = useRef(false)
 
   // El contenido se centra sobre el centro de la PANTALLA, no del body (§3.1): el splash
   // nativo centra en la ventana completa y la diferencia de ~8 pt se ve en el handoff.
@@ -197,8 +212,10 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
         if (!active) return
         setSlow(true)
         // Sin veredicto a los 600 ms la espera se quedo sin marca que mostrar: recien ahi
-        // aparece la firma EVA. En el camino branded NUNCA se monta.
-        if (!decided.current) setEvaSignature(true)
+        // aparece la firma EVA. Con marca en cache NO: lo probable es que el veredicto sea
+        // marca y la firma destellaba 100-200 ms antes del crossfade (video 22-08). Si el
+        // veredicto termina en EVA igual, la rama de abajo la monta en ese momento.
+        if (!decided.current && !cachedBrand.current) setEvaSignature(true)
       }, SLOW_GATE_MS),
     )
 
@@ -224,6 +241,7 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
           loadStoredBranding(),
         ])
         if (!active || routed.current) return
+        cachedBrand.current = Boolean(storedBranding)
 
         const session = sessionResult.data.session
         if (!session || forceSelector) {
@@ -343,10 +361,13 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   // tambien: navegar antes la perderia para siempre (el overlay raiz hereda `mark: null`).
   // Sin marca decidida no hay nada que esperar y se sale en el acto.
   //
-  // QA-5 — el handoff sale en la MISMA tanda que el `replace`: el overlay raiz monta con la
-  // identidad de este frame (marca, firma, morphbar y la opacidad viva del halo) antes de que
-  // el desmontaje del gate descubra nada. `beginSplashHandoff` es de un disparo, asi que
-  // re-ejecutar este efecto (p.ej. cuando `slow` cambia) no lo repite.
+  // QA-5 — el handoff sale ANTES del `replace`: el overlay raiz monta (invisible) con la
+  // identidad de este frame (marca, firma, morphbar y la opacidad viva del halo), avisa
+  // `painted` cuando su logo ya esta en pantalla, y recien un frame despues sale el
+  // `replace`: el desmontaje del gate ocurre debajo de un overlay ya pintado.
+  // `beginSplashHandoff` es de un disparo, asi que re-ejecutar este efecto (p.ej. cuando
+  // `slow` cambia) no lo repite. Tope `HANDOFF_PAINT_TIMEOUT_MS`: la navegacion nunca
+  // queda rehen de un `onDisplay` que no llega.
   useEffect(() => {
     if (!target) return
     if (pendingMark.current) return
@@ -357,8 +378,13 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
       slow,
       halo: halo.value,
     })
-    navigateRef.current(target)
-  }, [branded, evaSignature, halo, slow, target, xfadeDone])
+    if (painted) {
+      const frame = requestAnimationFrame(() => navigateRef.current(target))
+      return () => cancelAnimationFrame(frame)
+    }
+    const timer = setTimeout(() => navigateRef.current(target), HANDOFF_PAINT_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [branded, evaSignature, halo, painted, slow, target, xfadeDone])
 
   const evaStyle = useAnimatedStyle(() => ({ opacity: 1 - xfade.value }))
   const coachStyle = useAnimatedStyle(() => ({ opacity: xfade.value }))

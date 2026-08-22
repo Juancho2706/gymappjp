@@ -18,6 +18,11 @@ import type { SplashBrandMark } from '../../context/DashboardReadyContext'
 import { entryDarken, entryLighten } from './EntryBackground'
 import { EvaFigure } from './EvaFigure'
 import {
+  SPLASH_COACH_GREETING_LINE_HEIGHT,
+  SPLASH_COACH_GREETING_MARGIN_TOP,
+  SPLASH_COACH_NAME_LINE_HEIGHT,
+  SPLASH_COACH_NAME_MARGIN_TOP,
+  SPLASH_COACH_TILE,
   SPLASH_FIGURE_HEIGHT,
   SPLASH_FIGURE_SIZE,
   SPLASH_SIGNATURE_SLOT_OFFSET,
@@ -119,14 +124,33 @@ export function SplashEvaMark({
 
 /**
  * Marca del coach (§2.3 capa 4). Misma pieza para coach y alumno: solo cambia el origen de
- * los datos (el alumno ve la marca de SU coach). El logo va con `cachePolicy="memory-disk"`
- * y `transition={0}` — remontarla en el overlay lee del cache de memoria, sin flash.
+ * los datos (el alumno ve la marca de SU coach). Tile de `SPLASH_COACH_TILE` (144, el alto
+ * visible de la figura EVA nativa) — ver `splash-geometry`.
+ *
+ * `onLogoDisplay` (video del owner 22-08): remontar el logo en el overlay raiz NO es
+ * gratis aunque este en cache — expo-image en Android tarda 2-3 frames en volver a
+ * pintarlo y el circulo quedaba VACIO ~100 ms en el relevo gate → overlay. El overlay
+ * avisa por aca cuando su copia ya esta pintada, y recien ahi se destapa y el gate navega.
  */
-export function SplashCoachMark({ mark }: { mark: SplashBrandMark }) {
+export function SplashCoachMark({
+  mark,
+  onLogoDisplay,
+}: {
+  mark: SplashBrandMark
+  /** expo-image `onDisplay` del logo: ya esta pintado en ESTA vista. */
+  onLogoDisplay?: () => void
+}) {
   return (
     <>
       {mark.logoUri ? (
-        <CircularBrandLogo uri={mark.logoUri} size={96} backgroundColor="#0B0E13" padding={8} transition={0} />
+        <CircularBrandLogo
+          uri={mark.logoUri}
+          size={SPLASH_COACH_TILE}
+          backgroundColor="#0B0E13"
+          padding={12}
+          transition={0}
+          onDisplay={onLogoDisplay}
+        />
       ) : (
         <CoachInitialsTile accent={mark.accent} name={mark.displayName} />
       )}
@@ -263,9 +287,9 @@ const styles = StyleSheet.create({
     color: 'rgba(244,246,248,0.55)',
   },
   coachTile: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: SPLASH_COACH_TILE,
+    height: SPLASH_COACH_TILE,
+    borderRadius: SPLASH_COACH_TILE / 2,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -280,30 +304,32 @@ const styles = StyleSheet.create({
   },
   coachTileBorder: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 48,
+    borderRadius: SPLASH_COACH_TILE / 2,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
   },
   coachInitials: {
     fontFamily: FONT.displayBlack,
-    fontSize: 35,
-    letterSpacing: -1.575,
+    // Escala con el tile (96 → 35 era 0.365 del lado; 144 → 52).
+    fontSize: 52,
+    letterSpacing: -2.34,
     color: '#FFFFFF',
   },
   coachName: {
-    marginTop: 19,
+    marginTop: SPLASH_COACH_NAME_MARGIN_TOP,
     fontFamily: FONT.displayBlack,
-    fontSize: 19,
-    lineHeight: 22,
-    letterSpacing: -0.38,
+    fontSize: 26,
+    lineHeight: SPLASH_COACH_NAME_LINE_HEIGHT,
+    letterSpacing: -0.52,
     color: '#F4F6F8',
+    maxWidth: '84%',
   },
   coachGreeting: {
-    marginTop: 7,
+    marginTop: SPLASH_COACH_GREETING_MARGIN_TOP,
     fontFamily: FONT.uiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 1.65,
+    fontSize: 12,
+    lineHeight: SPLASH_COACH_GREETING_LINE_HEIGHT,
+    letterSpacing: 1.8,
     textTransform: 'uppercase',
     color: ENTRY_TOKENS.textFaint,
   },

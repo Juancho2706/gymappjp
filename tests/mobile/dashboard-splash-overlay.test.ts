@@ -4,6 +4,7 @@ import {
   endSplashHandoff,
   getDashboardReadySnapshot,
   markDashboardReady,
+  markSplashHandoffPainted,
   resetDashboardReadyStore,
   resolveSplashOverlayPhase,
   subscribeDashboardReady,
@@ -86,6 +87,34 @@ describe('store del handoff', () => {
     const { handoff, ready } = getDashboardReadySnapshot()
     expect(handoff).toBeNull()
     expect(resolveSplashOverlayPhase({ handoff, ready, timedOut: false, suppressed: false })).toBe('hidden')
+  })
+
+  it('painted: arranca en false y sin handoff no se puede marcar (un onDisplay tardio no arma nada)', () => {
+    expect(getDashboardReadySnapshot().painted).toBe(false)
+    markSplashHandoffPainted()
+    expect(getDashboardReadySnapshot().painted).toBe(false)
+  })
+
+  it('painted: el overlay avisa una sola vez que su primer frame esta pintado', () => {
+    beginSplashHandoff(BRANDED)
+    let notifications = 0
+    const unsubscribe = subscribeDashboardReady(() => {
+      notifications += 1
+    })
+    markSplashHandoffPainted()
+    markSplashHandoffPainted()
+    unsubscribe()
+    expect(notifications).toBe(1)
+    expect(getDashboardReadySnapshot().painted).toBe(true)
+    expect(getDashboardReadySnapshot().handoff).toBe(BRANDED)
+  })
+
+  it('painted: cerrar el overlay antes de pintar suelta igual al gate (nunca queda colgado)', () => {
+    beginSplashHandoff(EVA)
+    expect(getDashboardReadySnapshot().painted).toBe(false)
+    endSplashHandoff()
+    expect(getDashboardReadySnapshot().painted).toBe(true)
+    expect(getDashboardReadySnapshot().handoff).toBeNull()
   })
 
   it('el snapshot es estable por referencia entre mutaciones (no re-renderiza de gratis)', () => {
