@@ -227,9 +227,53 @@ describe('GET /auth/confirm — vuelta a la app tras confirmar (alta desde la ap
         expect(sendFreeCoachOnboardingEmailsMock).toHaveBeenCalledTimes(1)
     })
 
-    it('src=app en iOS → panel web (iOS no abre universal links desde un redirect)', async () => {
+    /**
+     * iOS (22-08). Antes de esto el coach de iPhone aterrizaba en el panel web responsive teniendo
+     * la app instalada: Safari ignora los universal links disparados desde un `Location:`, así que
+     * el redirect no puede abrir la app. La escala `/auth/abrir-app` sí puede (salto `eva://` desde
+     * el documento + botón con gesto), y se lleva el panel como `next` para la segunda salida.
+     */
+    it('src=app + iOS → /auth/abrir-app con el email y el panel como `next`, y la cuenta igual se activa', async () => {
         const res = await GET(req('email', 'tok', { src: 'app', ua: IOS_UA }))
+
+        expect([302, 307]).toContain(res.status)
+        const location = new URL(res.headers.get('location') ?? '')
+        expect(location.origin + location.pathname).toBe('https://www.eva-app.cl/auth/abrir-app')
+        expect(location.searchParams.get('email')).toBe('coach@example.com')
+        expect(location.searchParams.get('next')).toBe('/coach/dashboard?welcome=free')
+        // Nada del panel se cuela sin codificar: `?welcome=free` no puede partir el query de la escala.
+        expect(res.headers.get('location')).toContain('next=%2Fcoach%2Fdashboard%3Fwelcome%3Dfree')
+        expect(updates).toEqual([{ subscription_status: 'active' }])
+        expect(sendFreeCoachOnboardingEmailsMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('src=app + iOS con coach ya activo → la escala con el panel SIN `welcome`', async () => {
+        state.coach = { ...PENDING_FREE_COACH, subscription_status: 'active' }
+        const res = await GET(req('email', 'tok', { src: 'app', ua: IOS_UA }))
+
+        const location = new URL(res.headers.get('location') ?? '')
+        expect(location.pathname).toBe('/auth/abrir-app')
+        expect(location.searchParams.get('next')).toBe('/coach/dashboard')
+        expect(res.headers.get('location')).not.toContain('welcome')
+    })
+
+    it('src=app + iOS sin email en la sesión → la escala sin `email=` (la app cae al login vacío)', async () => {
+        state.verified = { user: { id: USER_ID, email: '' } }
+        const res = await GET(req('email', 'tok', { src: 'app', ua: IOS_UA }))
+
+        const location = res.headers.get('location') ?? ''
+        expect(location).toContain('/auth/abrir-app?')
+        expect(location).not.toContain('email=')
+    })
+
+    it('iOS SIN src=app (alta web) → panel web, nunca la escala', async () => {
+        const res = await GET(req('email', 'tok', { ua: IOS_UA }))
         expect(res.headers.get('location')).toBe('https://www.eva-app.cl/coach/dashboard?welcome=free')
+    })
+
+    it('recovery con src=app en iOS → al reset, nunca a la escala', async () => {
+        const res = await GET(req('recovery', 'tok', { src: 'app', ua: IOS_UA }))
+        expect(res.headers.get('location')).toBe('https://www.eva-app.cl/reset-password')
     })
 
     it('Android SIN src=app (alta web) → panel web', async () => {

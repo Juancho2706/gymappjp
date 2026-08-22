@@ -9,8 +9,7 @@ const ANDROID_PACKAGE = 'cl.evaapp.eva'
 /**
  * URL `intent://` de Chrome Android: abre la app si está instalada (scheme `eva`, paquete fijo) y,
  * si no, navega a `fallback`. Es lo único que «detecta si tienes la app» desde una web sin binario
- * nuevo: los App Links verificados no cubren `/auth/confirm` y iOS ignora universal links en
- * redirects, así que iOS sigue aterrizando en la web.
+ * nuevo: los App Links verificados no cubren `/auth/confirm`.
  */
 function androidAppIntent(appPath: string, fallback: string): string {
     return `intent://${appPath}#Intent;scheme=eva;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(fallback)};end`
@@ -18,6 +17,14 @@ function androidAppIntent(appPath: string, fallback: string): string {
 
 function isAndroid(request: NextRequest): boolean {
     return /\bandroid\b/i.test(request.headers.get('user-agent') ?? '')
+}
+
+/**
+ * iPhone/iPad/iPod. El iPad con «Solicitar sitio de escritorio» se anuncia como Macintosh y cae al
+ * panel web: es el default de siempre, no una regresión.
+ */
+function isIOS(request: NextRequest): boolean {
+    return /\b(iphone|ipad|ipod)\b/i.test(request.headers.get('user-agent') ?? '')
 }
 
 export async function GET(request: NextRequest) {
@@ -61,19 +68,34 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}${dest}`)
     }
 
-    const dashboard = activation.activated
-        ? `${origin}/coach/dashboard?welcome=free`
-        : `${origin}/coach/dashboard`
+    const dashboardPath = activation.activated ? '/coach/dashboard?welcome=free' : '/coach/dashboard'
+    const dashboard = `${origin}${dashboardPath}`
 
-    // Alta hecha DESDE LA APP (`src=app`, lo pone el link del alta y del reenvío móvil): en Android
-    // el coach vuelve a la app, que con las credenciales del alta todavía en memoria entra sola al
-    // panel (QA del owner 22-08: «debería llevarme a la app, no a la versión responsive»). Sin la
-    // app instalada, Chrome sigue al `browser_fallback_url` = el panel web de siempre.
-    if (searchParams.get('src') === 'app' && isAndroid(request)) {
+    // Alta hecha DESDE LA APP (`src=app`, lo pone el link del alta y del reenvío móvil): el coach
+    // vuelve a la app, que con las credenciales del alta todavía en memoria entra sola al panel
+    // (QA del owner 22-08: «debería llevarme a la app, no a la versión responsive»).
+    const fromApp = searchParams.get('src') === 'app'
+
+    // Android: `intent://` en el propio redirect. Sin la app instalada, Chrome sigue al
+    // `browser_fallback_url` = el panel web de siempre.
+    if (fromApp && isAndroid(request)) {
         const email = data.user.email ? `?email=${encodeURIComponent(data.user.email)}` : ''
         return NextResponse.redirect(androidAppIntent(`auth/confirmed${email}`, dashboard))
     }
 
-    // Default: panel web (coach ya activo / otros tipos de confirmación / iOS / escritorio)
+    // iOS no tiene equivalente del `intent://`: Safari ignora los universal links cuando el salto
+    // viene de un `Location:` (y más aún si la navegación no cambia de dominio), así que desde acá
+    // NO se puede abrir la app. Se manda a una página intermedia, `/auth/abrir-app`, que hace el
+    // salto a `eva://auth/confirmed` desde el documento ya cargado y deja el botón «Abrir EVA» para
+    // que lo haga el gesto del coach —el camino que iOS respeta siempre— con el panel web como
+    // segunda salida. `next` viaja validado del otro lado (`safeNext`).
+    if (fromApp && isIOS(request)) {
+        const params = new URLSearchParams()
+        if (data.user.email) params.set('email', data.user.email)
+        params.set('next', dashboardPath)
+        return NextResponse.redirect(`${origin}/auth/abrir-app?${params.toString()}`)
+    }
+
+    // Default: panel web (coach ya activo / otros tipos de confirmación / escritorio)
     return NextResponse.redirect(dashboard)
 }
