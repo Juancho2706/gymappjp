@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router'
 import { AlertTriangle, BookOpen, CalendarClock, Check, Copy, CopyCheck, History, Lock, Minus, MoreVertical, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
@@ -3614,6 +3614,9 @@ function FoodSearchModal({
   onSelect: (food: FoodCatalogItem) => void
 }) {
   const { theme } = useTheme()
+  // Insets leídos ACÁ, fuera del `<Modal>`: dentro de la ventana nativa del Modal el `SafeAreaView`
+  // de safe-area-context mide 0 en iOS y la X del header queda bajo la Dynamic Island.
+  const insets = useSafeAreaInsets()
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<FoodCatalogItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -3666,9 +3669,12 @@ function FoodSearchModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
+      <View
+        className="flex-1 bg-surface-app"
+        style={{ paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 12) }}
+      >
         <View className="gap-2 border-b border-subtle px-4 py-3">
-          <View className="flex-row items-center gap-2">
+          <View className="min-h-11 flex-row items-center gap-2">
             <Text
               accessibilityRole="header"
               className="min-w-0 flex-1 font-display text-base font-semibold text-strong"
@@ -3677,9 +3683,10 @@ function FoodSearchModal({
               {title}
             </Text>
             <Pressable
-              accessibilityLabel="Cerrar búsqueda"
+              accessibilityLabel="Cerrar"
               accessibilityRole="button"
               className="h-11 w-11 items-center justify-center rounded-control"
+              hitSlop={12}
               onPress={onClose}
             >
               <X color={theme.foreground} size={20} />
@@ -3736,7 +3743,7 @@ function FoodSearchModal({
             ))
           )}
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </Modal>
   )
 }

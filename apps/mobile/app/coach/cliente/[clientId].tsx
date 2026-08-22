@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Animated, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Animated, Linking, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useReducedMotion } from 'react-native-reanimated'
-import { ArchiveRestore, User } from 'lucide-react-native'
+import { ArchiveRestore, Copy, MessageCircle, Share2, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -45,6 +45,8 @@ import {
   type ClientActionWorkspace,
 } from '../../../lib/client-actions'
 import { clientActionWorkspaceQuery } from '../../../lib/client-action-workspace'
+import { tempPasswordFirstName, tempPasswordMessage, tempPasswordWhatsappUrl } from '../../../lib/temp-password-copy'
+import { FONT } from '../../../lib/typography'
 import { getWorkspaceEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile } from '../../../lib/coach'
@@ -807,13 +809,12 @@ export default function ClientDetailScreen() {
 
       <NativeDialog open={resetOpen} title={resetPassword ? 'Clave temporal lista' : 'Resetear contraseña'} onClose={() => { if (!resetting) setResetOpen(false) }} closeDisabled={resetting} unmountOnClose>
         {resetPassword ? (
-          <View style={{ gap: 14 }}>
-            <Text style={{ color: theme.mutedForeground, fontSize: 13.5 }}>
-              Compartila con {client.full_name.split(' ')[0]}. Deberá cambiarla al ingresar.
-            </Text>
-            <Button label={resetPassword} variant="secondary" onPress={() => Clipboard.setStringAsync(resetPassword)} full />
-            <Button label="Listo" variant="sport" onPress={() => setResetOpen(false)} full />
-          </View>
+          <TempPasswordPanel
+            password={resetPassword}
+            clientName={client.full_name}
+            phone={client.phone}
+            onDone={() => setResetOpen(false)}
+          />
         ) : (
           <View style={{ gap: 14 }}>
             <Text style={{ color: theme.mutedForeground, fontSize: 13.5, lineHeight: 19 }}>
@@ -844,6 +845,111 @@ export default function ClientDetailScreen() {
       </NativeDialog>
 
       <PhotoLightbox photos={lightbox?.photos ?? []} index={lightbox?.index ?? 0} visible={!!lightbox} onClose={() => setLightbox(null)} />
+    </View>
+  )
+}
+
+/**
+ * Cuerpo del diálogo «Clave temporal lista» (queja del coach 22-08: «no me deja copiar el código»).
+ *
+ * Antes la clave era el LABEL de un `Button` secundario cuyo `onPress` copiaba en silencio: nadie
+ * entendía que ese texto era un botón y, al tocarlo, no pasaba nada visible. Ahora sigue el patrón
+ * del DS que ya usa `MobilePublicCodeRequiredModal`: pastilla `surface-sunken` + `radius.control` +
+ * mono seleccionable, con un «Copiar» explícito que pasa a «Copiado ✓» y vuelve solo a los 2 s.
+ *
+ * El envío directo es lo que el coach realmente quiere hacer con la clave: WhatsApp cuando el
+ * alumno tiene teléfono, hoja de compartir del sistema cuando no. El texto vive en
+ * `lib/temp-password-copy.ts` (puro, testeado) y NO nombra a EVA: white-label.
+ */
+function TempPasswordPanel({ password, clientName, phone, onDone }: { password: string; clientName: string; phone: string | null; onDone: () => void }) {
+  const { theme } = useTheme()
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const whatsappUrl = tempPasswordWhatsappUrl({ phone, clientName, password })
+
+  // El «Copiado ✓» vuelve a «Copiar» solo: un botón que se queda en su estado de éxito ya no dice
+  // si el segundo toque hizo algo. El timer se limpia al desmontar (`unmountOnClose` del diálogo).
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(id)
+  }, [copied])
+
+  async function copyPassword() {
+    setError(null)
+    setCopied(false)
+    try {
+      await Clipboard.setStringAsync(password)
+      setCopied(true)
+    } catch {
+      setError('No se pudo copiar la clave. Mantené presionada la clave para seleccionarla.')
+    }
+  }
+
+  async function sendPassword() {
+    setError(null)
+    try {
+      if (whatsappUrl) await Linking.openURL(whatsappUrl)
+      else await Share.share({ message: tempPasswordMessage({ clientName, password }) })
+    } catch {
+      setError('No se pudo abrir WhatsApp. Copiá la clave y mandala por tu canal de siempre.')
+    }
+  }
+
+  return (
+    <View style={{ gap: 14 }}>
+      <Text style={{ color: theme.mutedForeground, fontSize: 13.5, lineHeight: 19, fontFamily: theme.fontSans }}>
+        Compartila con {tempPasswordFirstName(clientName)}. Deberá cambiarla al ingresar.
+      </Text>
+
+      {/* Pastilla del DS: superficie hundida + `radius.control` + mono. `selectable` deja copiar a
+          mano (mantener presionado) si el portapapeles falla o el coach prefiere el gesto nativo. */}
+      <View style={[styles.tempPassBox, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius.control }]}>
+        <Text style={[styles.tempPassLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
+          CLAVE TEMPORAL
+        </Text>
+        <View style={styles.tempPassRow}>
+          <Text
+            selectable
+            accessibilityLabel={`Clave temporal: ${password}`}
+            style={[styles.tempPassValue, { color: theme.foreground, fontFamily: FONT.monoMedium }]}
+            numberOfLines={1}
+          >
+            {password}
+          </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={copied ? 'Clave copiada' : 'Copiar la clave temporal'}
+            activeOpacity={0.78}
+            hitSlop={12}
+            onPress={copyPassword}
+            style={styles.tempPassCopy}
+          >
+            {/* Copiado: el ✓ va en el texto, así que el ícono se retira (dos checks es ruido). */}
+            {copied ? null : <Copy size={14} color={theme.primary} />}
+            <Text style={[styles.tempPassCopyText, { color: theme.primary, fontFamily: FONT.uiBold }]}>
+              {copied ? 'Copiado ✓' : 'Copiar'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {error ? (
+        <Text accessibilityLiveRegion="polite" style={{ color: theme.destructive, fontSize: 12, lineHeight: 16, fontFamily: theme.fontSans }}>
+          {error}
+        </Text>
+      ) : null}
+
+      <View style={{ gap: 10 }}>
+        <Button
+          label={whatsappUrl ? 'Enviar por WhatsApp' : 'Compartir clave'}
+          variant="secondary"
+          onPress={() => { void sendPassword() }}
+          leftIcon={whatsappUrl ? MessageCircle : Share2}
+          full
+        />
+        <Button label="Listo" variant="sport" onPress={onDone} full />
+      </View>
     </View>
   )
 }
@@ -905,4 +1011,12 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 120, gap: 14 },
   tabContent: { gap: 14, paddingTop: 14 },
   formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  // Pastilla de la clave temporal — mismo gesto que `MobilePublicCodeRequiredModal` en el home.
+  tempPassBox: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, gap: 8 },
+  tempPassLabel: { fontSize: 10, lineHeight: 13, letterSpacing: 1.2, textTransform: 'uppercase' },
+  tempPassRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  tempPassValue: { flex: 1, minWidth: 0, fontSize: 17, lineHeight: 22 },
+  // Área táctil mínima aun sin el ícono (el `hitSlop` de 12 la termina de completar).
+  tempPassCopy: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 28, flexShrink: 0 },
+  tempPassCopyText: { fontSize: 12 },
 })
