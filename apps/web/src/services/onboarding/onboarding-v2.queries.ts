@@ -64,6 +64,7 @@ export function hasCustomBrand(row: BrandSignalRow): boolean {
 /** Cliente mínimo para tablas que `database.types.ts` todavía no tipa (`nutrition_plans_v2`). */
 type UntypedCountQuery = PromiseLike<{ count: number | null }> & {
     eq(column: string, value: string): UntypedCountQuery
+    gt(column: string, value: string): UntypedCountQuery
 }
 export type UntypedCountClient = {
     from(table: string): {
@@ -76,41 +77,90 @@ export async function countOrZero(q: PromiseLike<{ count: number | null }>): Pro
     return count ?? 0
 }
 
+/** Margen tras el seed: todo lo que escribe el sembrador cae adentro (tarda segundos, no minutos). */
+const SEED_SETTLE_MS = 120_000
+
+/**
+ * `onboarding_guide.demo.seededAt` (inventario del alumno de ejemplo, `DemoInventory`), o `null` si
+ * el coach no tiene demo sembrado (rama `other`, demo borrado, coach viejo). Puro y tolerante: un
+ * jsonb raro nunca rompe la guía.
+ */
+export function readDemoSeededAt(guide: unknown): string | null {
+    if (guide == null || typeof guide !== 'object') return null
+    const demo = (guide as { demo?: unknown }).demo
+    if (demo == null || typeof demo !== 'object') return null
+    const seededAt = (demo as { seededAt?: unknown }).seededAt
+    if (typeof seededAt !== 'string') return null
+    return Number.isNaN(Date.parse(seededAt)) ? null : seededAt
+}
+
+/**
+ * Corte temporal para «artefacto del coach»: lo que el seed escribió queda ANTES de `seededAt + 2 min`;
+ * cualquier fila con `updated_at` posterior es obra del coach — un artefacto nuevo (incluido uno para
+ * el propio demo, que es lo que crea la tarea guiada «primera rutina/pauta/semana») o el sembrado
+ * editado (las tres tablas tienen trigger `set_updated_at`). Sin seed no hay corte: se cuenta todo.
+ */
+export function artifactCutoff(seededAt: string | null | undefined): string | null {
+    if (!seededAt) return null
+    const t = Date.parse(seededAt)
+    if (Number.isNaN(t)) return null
+    return new Date(t + SEED_SETTLE_MS).toISOString()
+}
+
 /**
  * ¿El coach ya creó su primer artefacto? La señal cambia por persona (SPEC §6, paso 3) porque un
  * nutricionista nunca podría tildar «crea tu primer programa» — ese era el drift del checklist v1.
+ *
+ * El alumno de ejemplo NO cuenta (auditoría 22-08, W8.1.1): el seed escribe justo estas filas y el
+ * paso 3 nacía tildado, sin entrada a la tarea guiada. Regla de la SPEC, «del demo EDITADO o 1
+ * nuevo»: solo cuentan filas con `updated_at` posterior al corte del seed (`artifactCutoff`); sin
+ * demo sembrado se cuenta todo, como siempre.
  */
 export async function resolveFirstArtifact(
     supabase: DbClient,
     userId: string,
     persona: Persona | null,
 ): Promise<boolean> {
-    const programs = () =>
-        countOrZero(
-            supabase.from('workout_programs').select('id', { count: 'exact', head: true }).eq('coach_id', userId),
-        )
-    const nutritionPlans = () =>
-        countOrZero(
-            (supabase as unknown as UntypedCountClient)
-                .from('nutrition_plans_v2')
-                .select('id', { count: 'exact', head: true })
-                .eq('coach_id', userId),
-        )
+    const { data: guideRow } = await supabase
+        .from('coaches')
+        .select('onboarding_guide')
+        .eq('id', userId)
+        .maybeSingle()
+    const cutoff = artifactCutoff(readDemoSeededAt(guideRow?.onboarding_guide))
+
+    const programs = () => {
+        let q = supabase.from('workout_programs').select('id', { count: 'exact', head: true }).eq('coach_id', userId)
+        if (cutoff) q = q.gt('updated_at', cutoff)
+        return countOrZero(q)
+    }
+    const nutritionPlans = () => {
+        let q = (supabase as unknown as UntypedCountClient)
+            .from('nutrition_plans_v2')
+            .select('id', { count: 'exact', head: true })
+            .eq('coach_id', userId)
+        if (cutoff) q = q.gt('updated_at', cutoff)
+        return countOrZero(q)
+    }
+    const assessments = () => {
+        let q = supabase
+            .from('movement_assessments')
+            .select('id', { count: 'exact', head: true })
+            .eq('coach_id', userId)
+        if (cutoff) q = q.gt('updated_at', cutoff)
+        return countOrZero(q)
+    }
 
     switch (persona) {
         case 'nutrition':
             return (await nutritionPlans()) > 0
-        case 'rehab':
-            return (
-                (await countOrZero(
-                    supabase
-                        .from('movement_assessments')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('coach_id', userId),
-                )) > 0
-            )
+        case 'rehab': {
+            // Screening nuevo/editado o la pauta domiciliaria (programa) que arma la tarea guiada.
+            const [assessmentCount, programCount] = await Promise.all([assessments(), programs()])
+            return assessmentCount > 0 || programCount > 0
+        }
         case 'endurance': {
-            // Perfil cardio del alumno (FC de reposo / marca de 5K) o una semana ya armada.
+            // Perfil cardio de un alumno REAL (el demo nace con FC de reposo y marca de 5K) o una
+            // semana ya armada.
             const [withCardio, programCount] = await Promise.all([
                 countOrZero(
                     supabase
@@ -118,6 +168,7 @@ export async function resolveFirstArtifact(
                         .select('id', { count: 'exact', head: true })
                         .eq('coach_id', userId)
                         .eq('is_archived', false)
+                        .eq('is_demo', false)
                         .or('ref_5k_time_sec.not.is.null,resting_hr.not.is.null'),
                 ),
                 programs(),

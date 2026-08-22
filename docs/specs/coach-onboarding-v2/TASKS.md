@@ -173,11 +173,16 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   `use-tabbar-minimized.ts`, compartido con `CoachSidebar`). Tests web 20/20; tsc ×2; expo export.
 
 ### W8.1 — Web: lo roto hoy (1 Opus, 1,0 d)
-- [ ] W8.1.1 🔴 **Paso 3 nace tildado**: `resolveFirstArtifact` (`services/onboarding/onboarding-v2.queries.ts:88-126`)
-  cuenta programas / pautas V2 / screenings / perfiles cardio sin excluir `is_demo`, y el seed escribe
-  justo eso. Contar solo artefactos de alumnos reales o del demo EDITADO (`updated_at > created_at + 60 s`).
-  Test por persona. En LIVE los 2 coaches con persona ya tienen `first_artifact:true` persistido (limpiar
-  `onboarding_guide.completed.first_artifact` de esos coaches al desplegar). [EDGE-01/spec-rn-01]
+- [x] W8.1.1 🔴 **Paso 3 nace tildado** — HECHO 22-08: `resolveFirstArtifact` lee `onboarding_guide.demo.seededAt`
+  (`readDemoSeededAt`) y solo cuenta filas con `updated_at > seededAt + 2 min` (`artifactCutoff`): un
+  artefacto NUEVO (incluido uno para el propio demo, que es lo que crea la tarea guiada) o el sembrado
+  EDITADO (las 3 tablas tienen trigger `set_updated_at` en LIVE, verificado). Sin inventario (other, demo
+  borrado, coach viejo) cuenta todo como antes. Rehab acepta también la pauta domiciliaria (programa);
+  resistencia excluye el perfil cardio del demo (`is_demo = false`). 9 tests nuevos
+  (`onboarding-v2.queries.test.ts`) + 46 de consumidores verdes. LIVE limpiado tras el deploy: los 2 coaches
+  con `completed.first_artifact = true` y 0 artefactos propios (`00109d66`, `7b1345a6` QA) vuelven a
+  pendiente y se borra su `step_completed/first_artifact` del 22-08 (el índice único lo bloquearía al
+  completarlo de verdad). [EDGE-01/spec-rn-01]
 - [ ] W8.1.2 🔴 **Sin demo no hay paso 2 ni paso 3**: `other` (`DEMO_PROFILES.other = null`), los 48 coaches
   con persona NULL y quien tocó «Borrar ejemplo» no pueden tildar «Ver mi app» (`vive-tu-app.service.ts:70-77`
   → `sin_demo`, solo toast) ni, para nutrition/rehab/endurance, abrir el paso 3 (`resolveTarget` → `null`).
@@ -288,14 +293,14 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   duplicada en `guide-pill-restore.ts` sin test de contrato; `PERSONA_CHIP_LABEL` duplicado web/RN →
   `@eva/schemas`. [debt-docs-14/missed, spec-rn-20]
 
-### Decisiones del owner que destraban W8
-| # | Decisión | Opciones | Recomendación |
+### Decisiones del owner que destraban W8 — **decididas el 2026-08-22** («confío en tus decisiones» para el resto)
+| # | Decisión | Opciones | Decisión |
 |---|---|---|---|
-| D9 | ¿La persona apaga módulos también para los alumnos? (`nutrition._enabled` gobierna la app del alumno vía `resolveNutritionDomainEnabled`; latente mientras `FEATURE_PREFS_ENABLED` esté OFF; «reordenar mi panel» en coaches con alumnos los deja sin Nutrición) | A) No: clave aparte solo para el panel del coach · B) Sí, con aviso | **A** |
-| D10 | ¿Qué ve `other` (y el coach sin persona) en el paso 2? | A) demo neutro · B) vista previa del login con su marca, tilde al abrirla · C) guía de 4 pasos | **B** |
-| D11 | ¿El drip por calendario muere o convive con los triggers? | A) muere (D6) · B) convive con cancelación cruzada | **A** (+ D+14 como último toque) |
-| D12 | Reloj de W6 | A) cron horario · B) disparo en línea | **A + B para el aha** |
-| D13 | Insumos humanos: WhatsApp del owner (+7 d), revisión D4 (socio), revisor de pautas/rehab | — | sin el número no hay plantilla 5 |
+| D9 | ¿La persona apaga módulos también para los alumnos? (`nutrition._enabled` gobierna la app del alumno vía `resolveNutritionDomainEnabled`; latente mientras `FEATURE_PREFS_ENABLED` esté OFF; «reordenar mi panel» en coaches con alumnos los deja sin Nutrición) | A) No: clave aparte solo para el panel del coach · B) Sí, con aviso | **A — No** (owner 22-08) |
+| D10 | ¿Qué ve `other` (y el coach sin persona) en el paso 2? | A) demo neutro · B) vista previa del login con su marca, tilde al abrirla · C) guía de 4 pasos | **B** (owner 22-08) |
+| D11 | ¿El drip por calendario muere o convive con los triggers? | A) muere (D6) · B) convive con cancelación cruzada | **A — muere** (owner 22-08; D+14 como último toque queda a criterio del jefe) |
+| D12 | Reloj de W6 | A) cron horario · B) disparo en línea | **A + B** (owner 22-08) |
+| D13 | Insumos humanos: WhatsApp del owner (+7 d), revisión D4 (socio), revisor de pautas/rehab | — | a criterio del jefe; el número se pide cuando la plantilla 5 esté lista |
 
 ## Deuda declarada (fuera de v1)
 - [ ] Vocabulario global por persona (`personaNoun()` en nav y fichas, web+RN).
