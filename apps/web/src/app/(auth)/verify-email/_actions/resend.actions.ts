@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
+import { activateConfirmedFreeCoach } from '@/lib/auth/activate-confirmed-coach'
 import {
     evaluateResendThrottle,
     readConfirmationResendTimestamps,
@@ -14,6 +15,8 @@ import { rateLimitAuth } from '@/lib/rate-limit'
 export type ResendConfirmationState = {
     ok?: boolean
     error?: string
+    /** Buena noticia que no es un reenvío: la cuenta quedó activa al pedirlo (sanación). */
+    message?: string
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -80,6 +83,17 @@ export async function resendConfirmationAction(
         return { error: 'No encontramos la cuenta. Vuelve a registrarte o escríbenos a soporte.' }
     }
     if (target.status === 'already_confirmed') {
+        // SANACIÓN (22-08): si GoTrue ya confirmó el email pero `coaches` quedó en `pending_email`
+        // (link de recuperación, Google con el mismo correo), el coach está encerrado entre el
+        // proxy y este mensaje. Se cierra acá la transición por el MISMO helper de `/auth/confirm`.
+        const healed = await activateConfirmedFreeCoach({
+            admin,
+            userId,
+            appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl',
+        })
+        if (healed.activated) {
+            return { message: 'Tu cuenta ya está activa. Inicia sesión para entrar al panel.' }
+        }
         return { error: 'Tu correo ya está confirmado. Puedes iniciar sesión directamente.' }
     }
 

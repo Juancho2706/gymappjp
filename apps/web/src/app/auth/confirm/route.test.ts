@@ -35,12 +35,16 @@ const harness = vi.hoisted(() => {
         __marker: 'admin',
         from: () => ({
             select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: state.coach }) }) }),
-            update: (patch: Record<string, unknown>) => ({
-                eq: async () => {
-                    updates.push(patch)
-                    return { error: null }
-                },
-            }),
+            // UPDATE condicional (`eq('id').eq('subscription_status','pending_email').select('id')`):
+            // el helper necesita las filas tocadas para saber si ganó la carrera.
+            update: (patch: Record<string, unknown>) => {
+                updates.push(patch)
+                const chain = {
+                    eq: () => chain,
+                    select: async () => ({ data: [{ id: USER_ID }], error: null }),
+                }
+                return chain
+            },
         }),
     }
 
@@ -146,7 +150,7 @@ describe('GET /auth/confirm — activación del coach Free', () => {
 
         expect(res.headers.get('location')).toBe('https://www.eva-app.cl/coach/dashboard?welcome=free')
         expect(updates).toEqual([{ subscription_status: 'active' }])
-        expect(warn).toHaveBeenCalledWith('[auth/confirm] onboarding email failed')
+        expect(warn).toHaveBeenCalledWith('[activate-confirmed-coach] onboarding email failed')
         // Sin PII en el log.
         expect(JSON.stringify(warn.mock.calls)).not.toContain('coach@example.com')
     })
@@ -174,9 +178,20 @@ describe('GET /auth/confirm — la puerta (cuándo NO se manda nada)', () => {
         expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
     })
 
-    it('type=recovery → va al reset y ni siquiera mira la fila del coach', async () => {
+    it('type=recovery con coach pending → ACTIVA (GoTrue confirma el email al verificar la recuperación) y va al reset', async () => {
+        // 22-08: un coach que abrió «olvidé mi contraseña» en vez del link de confirmación quedó
+        // con auth confirmado y `coaches` en `pending_email`, sin bienvenida ni drip.
         const res = await GET(req('recovery'))
         expect(res.headers.get('location')).toBe('https://www.eva-app.cl/reset-password')
+        expect(updates).toEqual([{ subscription_status: 'active' }])
+        expect(sendFreeCoachOnboardingEmailsMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('type=recovery con coach ya activo → va al reset y cero correos', async () => {
+        state.coach = { ...PENDING_FREE_COACH, subscription_status: 'active' }
+        const res = await GET(req('recovery'))
+        expect(res.headers.get('location')).toBe('https://www.eva-app.cl/reset-password')
+        expect(updates).toEqual([])
         expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
     })
 

@@ -79,7 +79,12 @@ const harness = vi.hoisted(() => {
 
 const { state, auditInserts, getUserByIdMock, coachLookupMock, resendMock } = harness
 
+const healMock = vi.hoisted(() =>
+    vi.fn(async () => ({ activated: false, reason: 'not_pending' }) as { activated: boolean; reason?: string })
+)
+
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
+vi.mock('@/lib/auth/activate-confirmed-coach', () => ({ activateConfirmedFreeCoach: healMock }))
 
 vi.mock('@/lib/rate-limit', () => ({
     clientIpFromRequest: () => '203.0.113.7',
@@ -373,5 +378,35 @@ describe('POST /api/mobile/auth/resend-confirmation', () => {
         expect(logged).not.toContain(UID)
         expect(logged).not.toContain('coach@example.com')
         expect(logged).not.toContain('@')
+    })
+})
+
+describe('POST /api/mobile/auth/resend-confirmation — sanación del coach ya confirmado en GoTrue', () => {
+    it('`email_confirmed_at` seteado ⇒ intenta cerrar la transición por el MISMO helper de /auth/confirm, sin reenviar', async () => {
+        state.authUser = { id: UID, email: 'coach@example.com', email_confirmed_at: '2026-08-22T13:22:42Z' }
+        state.coach = { full_name: 'Josefa Díaz', subscription_status: 'pending_email' }
+        healMock.mockResolvedValueOnce({ activated: true })
+
+        const res = await POST(req({ uid: UID }))
+
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true })
+        expect(healMock).toHaveBeenCalledTimes(1)
+        expect(healMock.mock.calls[0]![0]).toMatchObject({ userId: UID })
+        // Nada de reenvío ni de ledger: la cuenta ya está confirmada, lo que faltaba era activarla.
+        expect(resendMock).not.toHaveBeenCalled()
+        expect(auditInserts).toEqual([])
+    })
+
+    it('coach pending SIN confirmar en GoTrue ⇒ no se intenta sanar: reenvía como siempre', async () => {
+        await POST(req({ uid: UID }))
+        expect(healMock).not.toHaveBeenCalled()
+        expect(resendMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('uid inexistente ⇒ tampoco se intenta sanar (sin identidad no hay nada que cerrar)', async () => {
+        state.authUser = null
+        await POST(req({ uid: UID }))
+        expect(healMock).not.toHaveBeenCalled()
     })
 })

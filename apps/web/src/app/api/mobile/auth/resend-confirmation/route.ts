@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { clientIpFromRequest, rateLimitAuth } from '@/lib/rate-limit'
 import { resendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
+import { activateConfirmedFreeCoach } from '@/lib/auth/activate-confirmed-coach'
 import {
     CONFIRMATION_RESEND_COOLDOWN_SECONDS,
     evaluateResendThrottle,
@@ -134,7 +135,21 @@ export async function POST(request: NextRequest) {
 
         const target = await resolveCoachConfirmationTarget(admin, uid)
         if (target.status !== 'ok') {
-            console.warn('[mobile-resend-confirmation] skipped:', target.status)
+            if (target.status === 'already_confirmed') {
+                // SANACIÓN (22-08): «ya confirmado» en GoTrue con `coaches` todavía en `pending_email`
+                // era un callejón —el proxy lo manda a /verify-email y este endpoint le decía que no
+                // había nada que reenviar—. Si la fila quedó atrás, se cierra acá la transición por el
+                // MISMO helper de `/auth/confirm` (idempotente; manda bienvenida + drip una sola vez).
+                // La respuesta sigue siendo neutra: sanar o no sanar no puede leerse desde afuera.
+                const healed = await activateConfirmedFreeCoach({
+                    admin,
+                    userId: uid,
+                    appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin,
+                })
+                console.warn('[mobile-resend-confirmation] already_confirmed:', healed.activated ? 'healed' : healed.reason)
+            } else {
+                console.warn('[mobile-resend-confirmation] skipped:', target.status)
+            }
             return neutralOk()
         }
 

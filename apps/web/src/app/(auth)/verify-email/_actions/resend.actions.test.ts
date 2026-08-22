@@ -107,7 +107,12 @@ const harness = vi.hoisted(() => {
 const { state, steps, auditInserts, getUserByIdMock, coachLookupMock, rateLimitAuthMock, resendMock } =
     harness
 
+const healMock = vi.hoisted(() =>
+    vi.fn(async () => ({ activated: false, reason: 'not_pending' }) as { activated: boolean; reason?: string })
+)
+
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => harness.supabaseStub }))
+vi.mock('@/lib/auth/activate-confirmed-coach', () => ({ activateConfirmedFreeCoach: healMock }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
 vi.mock('@/lib/rate-limit', () => ({ rateLimitAuth: harness.rateLimitAuthMock }))
 vi.mock('@/lib/auth/send-coach-email-confirmation', () => ({
@@ -296,5 +301,29 @@ describe('resendConfirmationAction — el ledger compartido con el móvil', () =
         expect(result).toEqual({ error: 'No pudimos reenviar el correo. Intenta de nuevo en un minuto.' })
         expect(auditInserts).toHaveLength(1)
         expect(steps).toEqual(['auth:getUser', 'coaches', 'ledger:read', 'ledger:write'])
+    })
+})
+
+describe('resendConfirmationAction — sanación del coach ya confirmado en GoTrue', () => {
+    it('coach «ya confirmado» con la fila atrás ⇒ el helper lo activa y el mensaje es una buena noticia', async () => {
+        state.coach = { full_name: 'Josefa Díaz', subscription_status: 'active' }
+        healMock.mockResolvedValueOnce({ activated: true })
+
+        const result = await resendConfirmationAction({}, form(UID))
+
+        expect(result).toEqual({ message: 'Tu cuenta ya está activa. Inicia sesión para entrar al panel.' })
+        expect(healMock).toHaveBeenCalledTimes(1)
+        expect(healMock.mock.calls[0]![0]).toMatchObject({ userId: UID })
+        expect(resendMock).not.toHaveBeenCalled()
+        expect(auditInserts).toEqual([])
+    })
+
+    it('coach «ya confirmado» y el helper no tiene nada que cerrar ⇒ el mensaje de siempre', async () => {
+        state.coach = { full_name: 'Josefa Díaz', subscription_status: 'active' }
+
+        const result = await resendConfirmationAction({}, form(UID))
+
+        expect(result).toEqual({ error: 'Tu correo ya está confirmado. Puedes iniciar sesión directamente.' })
+        expect(healMock).toHaveBeenCalledTimes(1)
     })
 })
