@@ -31,6 +31,7 @@ Leer primero [CURRENT.md](status/CURRENT.md). Este es el único índice manual d
 - [Releases OTA móvil](operations/MOBILE_RELEASES_OTA.md)
 - [Checklist DB de paridad RN](operations/RN-PARITY-DB-CHECKLIST.md)
 - [Notas seguras para revisión de stores](operations/APP_REVIEW_NOTES.md)
+- [QA con Playwright contra producción (modo suave)](operations/QA_PLAYWRIGHT.md)
 
 ## Evidencia e historia
 
