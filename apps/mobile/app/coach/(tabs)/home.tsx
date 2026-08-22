@@ -14,6 +14,7 @@ import {
   MobilePublicCodeRequiredModal,
   MobilePulseHero,
   MobileQuickActionsFab,
+  quickClientCapFor,
   MobileTierUsageBanners,
   MobileTodayAgenda,
   teamsBridgeThresholdFor,
@@ -215,6 +216,7 @@ export default function CoachHomeScreen() {
         clients={data.clientList}
         onClientCreated={() => load('refresh')}
         onPaymentCreated={() => load('refresh')}
+        cap={quickClientCapFor(data.coach, data.capClients)}
       />
     </View>
   )

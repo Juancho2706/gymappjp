@@ -62,7 +62,7 @@ import { isUuid } from '../../lib/safe-uuid'
 // Cupo por coach CONCRETO, nunca el catálogo. `freeClientLimitFor` es el helper nombrado del móvil
 // (ya lo usa /coach/reactivate) y `tierMaxClientsFor` cubre el resto de los tiers. Ambos son solo
 // el FALLBACK: en Pricing v3 el grandfather vive en la columna `coaches.max_clients`, que gana.
-import { tierMaxClientsFor } from '@eva/tiers'
+import { tierMaxClientsFor, type SubscriptionTier } from '@eva/tiers'
 import { freeClientLimitFor } from '../../lib/coach-subscription'
 import { NativeDialog } from '../NativeDialog'
 import { Sheet } from '../Sheet'
@@ -75,7 +75,10 @@ import { ListRow } from '../ListRow'
 import { SegmentedTabs } from '../SegmentedTabs'
 import { NavIconRN } from '../NavIconRN'
 import { useCallback, useEffect, useState } from 'react'
-import { apiFetch, getApiBaseUrl } from '../../lib/api'
+import { ApiError, apiFetch, getApiBaseUrl } from '../../lib/api'
+import { shouldOpenAtCapWall } from '../../lib/client-cap'
+import { captureAppEvent } from '../../lib/analytics'
+import { CreateClientModal } from './directory/CreateClientModal'
 import { getCoachNews, markCoachNewsRead, type CoachNewsItem } from '../../lib/coach-news'
 import { FONT } from '../../lib/typography'
 import { shadow } from '../../lib/shadows'
@@ -541,22 +544,99 @@ export function MobilePublicCodeRequiredModal({
 
 type QuickActionClient = { id: string; name: string }
 
+/**
+ * Contexto de cupo que el home baja a las acciones rápidas. Con él, el alta CORTA (chips «+ Alumno»
+ * y FAB) comparte el MURO del alta completa (`CreateClientModal`: «Archivar un alumno», «Actualizar
+ * estado», «Ver mi plan») en vez de pintar el `err.message` crudo del 402 como hacía hasta el 22-08
+ * (auditoría onboarding v2). Sin este prop el form se comporta como antes — degradación, no bug.
+ */
+export type QuickClientCap = {
+  /** Alumnos que OCUPAN cupo (`is_archived = false AND is_demo = false`), ver `lib/coach-dashboard.ts`. */
+  capClients: number
+  maxClients: number
+  tier: SubscriptionTier | null
+  workspace: { kind: 'standalone' | 'team_owner' | 'team_member' | 'enterprise'; teamId: string | null; orgId: string | null }
+}
+
+/** Cupo REAL del coach (`max_clients` gana; la escalera por fecha es solo el fallback), como el banner. */
+export function quickClientCapFor(coach: CoachProfile, capClients: number): QuickClientCap {
+  const fallback =
+    coach.subscriptionTier === 'free'
+      ? freeClientLimitFor(coach.createdAt)
+      : tierMaxClientsFor(coach.subscriptionTier, coach.createdAt)
+  const maxClients = Math.max(1, coach.maxClients > 0 ? coach.maxClients : fallback)
+  // El alta corta del home siempre crea en el espacio personal del coach.
+  return { capClients, maxClients, tier: coach.subscriptionTier, workspace: { kind: 'standalone', teamId: null, orgId: null } }
+}
+
+type QuickWallSource = 'quick_action_precheck' | 'quick_form_402'
+
+/**
+ * El muro de cupo de las acciones rápidas: un `CreateClientModal` que abre DIRECTO en el muro
+ * (`openAtCapWall`). Dos bocas, como en el alta completa: el pre-check al tocar «+ Alumno» y el 402
+ * del alta corta (conteo local desactualizado). El evento `upgrade_gate_hit` se emite acá, una vez
+ * por boca; el modal no lo repite.
+ */
+function useQuickClientWall(cap: QuickClientCap | undefined, onClientCreated: () => void) {
+  const { theme } = useTheme()
+  const [wallOpen, setWallOpen] = useState(false)
+  const atCap = cap ? shouldOpenAtCapWall({ activeCount: cap.capClients, maxClients: cap.maxClients }) : false
+
+  function openWall(source: QuickWallSource, limitFrom402?: number) {
+    captureAppEvent('upgrade_gate_hit', {
+      gate: 'client_limit',
+      current_tier: cap?.tier ?? null,
+      current_limit: cap?.maxClients ?? limitFrom402 ?? null,
+      active: cap?.capClients ?? null,
+      source,
+    })
+    setWallOpen(true)
+  }
+
+  const wall = cap ? (
+    <CreateClientModal
+      visible={wallOpen}
+      onClose={() => setWallOpen(false)}
+      onCreated={onClientCreated}
+      theme={theme}
+      maxClients={cap.maxClients}
+      currentTier={cap.tier}
+      activeCount={cap.capClients}
+      workspace={cap.workspace}
+      openAtCapWall
+    />
+  ) : null
+
+  return { atCap, openWall, wall }
+}
+
+/** Cierra el diálogo nativo del alta corta y recién después abre el muro: dos `Modal` a la vez = «pantalla gris» (QA-5). */
+const QUICK_DIALOG_CLOSE_MS = 300
+
 export function MobileQuickActionsBar({
   clients,
   onPaymentCreated,
   onClientCreated,
+  cap,
 }: {
   clients: QuickActionClient[]
   onPaymentCreated: () => void
   onClientCreated: () => void
+  cap?: QuickClientCap
 }) {
   const router = useRouter()
   const [modal, setModal] = useState<null | 'client' | 'payment'>(null)
+  const wall = useQuickClientWall(cap, onClientCreated)
 
   return (
     <>
+      {wall.wall}
       <View style={styles.quickActions}>
-        <QuickActionButton icon={UserPlus} label="+ Alumno" onPress={() => setModal('client')} />
+        <QuickActionButton
+          icon={UserPlus}
+          label="+ Alumno"
+          onPress={() => (wall.atCap ? wall.openWall('quick_action_precheck') : setModal('client'))}
+        />
         <QuickActionButton icon={Layers} label="+ Programa" onPress={() => router.push('/coach/(tabs)/builder')} />
         <QuickActionButton icon={Utensils} label="+ Nutricion" onPress={() => router.push('/coach/(tabs)/nutricion')} />
         <QuickActionButton icon={Receipt} label="+ Pago" onPress={() => setModal('payment')} />
@@ -583,6 +663,14 @@ export function MobileQuickActionsBar({
               onClientCreated()
             }}
             onCancel={() => setModal(null)}
+            onCapWall={
+              cap
+                ? (limit) => {
+                    setModal(null)
+                    setTimeout(() => wall.openWall('quick_form_402', limit), QUICK_DIALOG_CLOSE_MS)
+                  }
+                : undefined
+            }
           />
         )}
       </NativeDialog>
@@ -598,25 +686,38 @@ export function MobileQuickActionsFab({
   clients,
   onClientCreated,
   onPaymentCreated,
+  cap,
 }: {
   clients: QuickActionClient[]
   onClientCreated: () => void
   onPaymentCreated: () => void
+  cap?: QuickClientCap
 }) {
   const router = useRouter()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   const [sheet, setSheet] = useState(false)
   const [modal, setModal] = useState<null | 'client' | 'payment'>(null)
+  const wall = useQuickClientWall(cap, onClientCreated)
 
   const actions: Array<{ label: string; icon: LucideIcon; on: () => void }> = [
-    { label: 'Crear alumno', icon: UserPlus, on: () => { setSheet(false); setModal('client') } },
+    {
+      label: 'Crear alumno',
+      icon: UserPlus,
+      on: () => {
+        setSheet(false)
+        // Cupo lleno ⇒ el muro llega ANTES del primer campo (mismo pre-check que el alta completa).
+        if (wall.atCap) setTimeout(() => wall.openWall('quick_action_precheck'), QUICK_DIALOG_CLOSE_MS)
+        else setModal('client')
+      },
+    },
     { label: 'Importar', icon: Upload, on: () => { setSheet(false); router.push('/coach/(tabs)/clientes') } },
     { label: 'Programa', icon: Dumbbell, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } },
   ]
 
   return (
     <>
+      {wall.wall}
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Acciones rápidas"
@@ -676,6 +777,14 @@ export function MobileQuickActionsFab({
           <QuickCreateClientForm
             onDone={() => { setModal(null); onClientCreated() }}
             onCancel={() => setModal(null)}
+            onCapWall={
+              cap
+                ? (limit) => {
+                    setModal(null)
+                    setTimeout(() => wall.openWall('quick_form_402', limit), QUICK_DIALOG_CLOSE_MS)
+                  }
+                : undefined
+            }
           />
         )}
       </NativeDialog>
@@ -715,9 +824,16 @@ function whatsappUrl(phone: string, message: string) {
 function QuickCreateClientForm({
   onDone,
   onCancel,
+  onCapWall,
 }: {
   onDone: () => void
   onCancel: () => void
+  /**
+   * 402 `UPGRADE_REQUIRED` ⇒ el dueño del form abre el muro de cupo compartido con el alta completa
+   * (recibe el cupo que el endpoint imprime en el mensaje, si lo trae). Sin este prop el rechazo se
+   * muestra como texto, igual que antes del 22-08.
+   */
+  onCapWall?: (limit?: number) => void
 }) {
   const { theme } = useTheme()
   const [fullName, setFullName] = useState('')
@@ -769,6 +885,13 @@ function QuickCreateClientForm({
       })
       setCreated(result)
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'UPGRADE_REQUIRED' && onCapWall) {
+        // `apiFetch` conserva mensaje y `code` del 402 pero no los campos extra; el cupo viene en
+        // el texto («… límite de N alumno(s) …»). El muro es del dueño del form: acá solo se avisa.
+        const limitFromMessage = Number(err.message.match(/\d+/)?.[0])
+        onCapWall(Number.isFinite(limitFromMessage) ? limitFromMessage : undefined)
+        return
+      }
       const message = err instanceof Error ? err.message : 'No se pudo crear el alumno.'
       setError(message)
     } finally {

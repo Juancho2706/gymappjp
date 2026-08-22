@@ -132,11 +132,18 @@ export function CreateClientModal({
   currentTier,
   activeCount,
   workspace,
+  openAtCapWall = false,
 }: {
   visible: boolean
   onClose: () => void
   onCreated: () => void
   theme: any
+  /**
+   * El caller YA decidió que el alta arranca en el muro de cupo (el alta corta del home rebotó con
+   * 402, o su pre-check vio el cupo lleno) y YA emitió su `upgrade_gate_hit`: acá no se re-evalúa
+   * ni se vuelve a contar. Tras «Archivar un alumno» el muro se desarma igual que siempre.
+   */
+  openAtCapWall?: boolean
   /** Cupo del plan; espeja `currentLimit` del 402 para el título del muro de límite. */
   maxClients?: number
   /**
@@ -191,6 +198,12 @@ export function CreateClientModal({
    */
   useEffect(() => {
     if (!visible) return
+    if (openAtCapWall) {
+      setUpgradeLimit(typeof maxClients === 'number' && maxClients > 0 ? maxClients : undefined)
+      setFreedNotice(false)
+      setPhase('upgrade')
+      return
+    }
     if (!shouldOpenAtCapWall({ activeCount, maxClients })) return
     setUpgradeLimit(typeof maxClients === 'number' && maxClients > 0 ? maxClients : undefined)
     setFreedNotice(false)

@@ -1,5 +1,7 @@
 import { Linking, Share } from 'react-native'
+import type { Persona } from '@eva/schemas'
 import { apiFetch, getApiBaseUrl } from './api'
+import { clientInviteMessage } from './client-invite-copy'
 
 export type ClientActionWorkspace = {
   kind: 'standalone' | 'team_owner' | 'team_member' | 'enterprise'
@@ -26,18 +28,20 @@ export function teamClientLoginUrl(slug: string): string {
   return `${getApiBaseUrl()}/t/${slug}/login`
 }
 
-export function whatsappUrl(phone: string, name: string, loginUrl: string): string {
+// El texto sale de `clientInviteMessage` (plantilla por persona de `@eva/schemas`): habla de «mi
+// app», nunca de EVA — un coach con marca propia le escribe a su alumno en SU nombre (white-label).
+export function whatsappUrl(phone: string, name: string, loginUrl: string, persona?: Persona | null): string {
   const digits = phone.replace(/\D/g, '')
-  const text = encodeURIComponent(`Hola ${name}, aquí tienes tu acceso a la app de EVA: ${loginUrl}`)
+  const text = encodeURIComponent(clientInviteMessage({ persona, clientName: name, loginUrl }))
   return `https://wa.me/${digits}?text=${text}`
 }
 
-export async function openWhatsApp(phone: string, name: string, loginUrl: string): Promise<void> {
-  await Linking.openURL(whatsappUrl(phone, name, loginUrl))
+export async function openWhatsApp(phone: string, name: string, loginUrl: string, persona?: Persona | null): Promise<void> {
+  await Linking.openURL(whatsappUrl(phone, name, loginUrl, persona))
 }
 
-export async function shareLogin(name: string, loginUrl: string): Promise<void> {
-  await Share.share({ message: `Hola ${name}, tu acceso a la app de EVA: ${loginUrl}` })
+export async function shareLogin(name: string, loginUrl: string, persona?: Persona | null): Promise<void> {
+  await Share.share({ message: clientInviteMessage({ persona, clientName: name, loginUrl }) })
 }
 
 export async function deleteClient(clientId: string, workspace?: ClientActionWorkspace): Promise<void> {

@@ -77,6 +77,7 @@ import { getCoachProfile } from '../../../lib/coach'
 import { canImportClients, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getCoachOrgContext, type CoachOrgContext } from '../../../lib/org'
 import { useWorkspace } from '../../../lib/workspace'
+import { getCachedCoachPersonaStatus } from '../../../lib/coach-persona'
 import { FONT } from '../../../lib/typography'
 import { GLOWS, shadow } from '../../../lib/shadows'
 import { supabase } from '../../../lib/supabase'
@@ -536,13 +537,16 @@ export default function ClientesScreen() {
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
   const portalUrl = workspace.teamId ? (teamSlug ? teamClientLoginUrl(teamSlug) : null) : (coachSlug ? clientLoginUrl(coachSlug) : null)
+  // Persona del coach (caché de sesión del gate de onboarding v2): elige la plantilla del mensaje.
+  // Sin caché todavía, `clientInviteMessage` cae a la plantilla neutra — nunca a un texto con «EVA».
+  const invitePersona = getCachedCoachPersonaStatus()?.persona ?? null
   function handleWhatsApp(c: DirectoryClient) {
     if (!c.phone || !portalUrl) return
-    openWhatsApp(c.phone, c.fullName, portalUrl).catch(() => {})
+    openWhatsApp(c.phone, c.fullName, portalUrl, invitePersona).catch(() => {})
   }
   function handleShare(c: DirectoryClient) {
     if (!portalUrl) return
-    shareLogin(c.fullName, portalUrl).catch(() => {})
+    shareLogin(c.fullName, portalUrl, invitePersona).catch(() => {})
   }
   // Copiar el portal de alumnos al portapapeles (espejo web CoachWarRoom copiar-portal).
   function handleCopyPortal() {
