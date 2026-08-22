@@ -143,7 +143,9 @@ export const DirRowCard = memo(function DirRowCard({
           onPress={(event) => { event.stopPropagation(); setMenu(true) }}
           style={styles.menuBtn}
         >
-          <MoreVertical size={18} className="text-ink-700" />
+          {/* `text-muted` (token semántico): `ink-700` es tinta oscura fija y en dark desaparecía
+              sobre la card (QA owner 22-08). */}
+          <MoreVertical size={18} className="text-muted" />
         </TouchableOpacity>
       </TouchableOpacity>
 
