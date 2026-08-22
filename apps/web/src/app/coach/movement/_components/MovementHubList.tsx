@@ -10,7 +10,26 @@ import { PriorityBadge } from '@/components/movement/PriorityBadge'
 import { MovementDisclaimer } from '@/components/movement/MovementDisclaimer'
 
 /** Hub del modulo: alumnos del workspace ACTIVO con su ultimo semaforo y CTA evaluar. */
-export function MovementHubList({ data }: { data: MovementHubData }) {
+export function MovementHubList({
+    data,
+    demoClientId = null,
+    demoLabel = 'Alumno de ejemplo',
+    suppressEmptyCard = false,
+}: {
+    data: MovementHubData
+    /**
+     * Alumno de ejemplo del onboarding v2: se rotula en la lista (su razon de ser es que el
+     * coach pueda evaluar el dia 1), nunca se oculta.
+     */
+    demoClientId?: string | null
+    demoLabel?: string
+    /**
+     * El vacio template-first del primer uso ya explica que hacer (SPEC §7): con el arriba, la
+     * tarjeta generica «sin alumnos» de este hub seria ruido duplicado. El disclaimer medico
+     * sigue montandose igual.
+     */
+    suppressEmptyCard?: boolean
+}) {
     const { t, language } = useTranslation()
     const locale = language === 'es' ? 'es-CL' : 'en-US'
 
@@ -29,9 +48,11 @@ export function MovementHubList({ data }: { data: MovementHubData }) {
             </header>
 
             {data.clients.length === 0 ? (
-                <Card padding="lg" className="text-center text-sm text-muted">
-                    {t('assessment.hub.empty')}
-                </Card>
+                suppressEmptyCard ? null : (
+                    <Card padding="lg" className="text-center text-sm text-muted">
+                        {t('assessment.hub.empty')}
+                    </Card>
+                )
             ) : (
                 <>
                 {/* Pista de uso — espejo del info strip del kit (MovementHub) */}
@@ -55,8 +76,15 @@ export function MovementHubList({ data }: { data: MovementHubData }) {
                                     {(c.full_name ?? '—').charAt(0).toUpperCase()}
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-[15px] font-bold text-strong">
-                                        {c.full_name ?? '—'}
+                                    <p className="flex min-w-0 items-center gap-1.5">
+                                        <span className="truncate text-[15px] font-bold text-strong">
+                                            {c.full_name ?? '—'}
+                                        </span>
+                                        {c.client_id === demoClientId && (
+                                            <Badge tone="info" variant="soft" size="sm" className="shrink-0">
+                                                {demoLabel}
+                                            </Badge>
+                                        )}
                                     </p>
                                     <span className="mt-0.5 flex flex-wrap items-center gap-2">
                                         {c.latest_final?.risk_band ? (

@@ -6,6 +6,20 @@ export function defaultSortDir(key: DirectorySortKey): 'asc' | 'desc' {
     return 'desc'
 }
 
+/**
+ * El alumno de EJEMPLO (`clients.is_demo`, onboarding v2) va siempre al final del directorio,
+ * gane el orden que gane: es contenido de demostracion, no un alumno que el coach deba atender.
+ * Estable: conserva el orden relativo dentro de cada grupo (Array.prototype.filter no reordena).
+ */
+export function withDemoLast<T extends { is_demo?: boolean | null }>(clients: T[]): T[]
+export function withDemoLast<T>(clients: T[], isDemo: (item: T) => boolean): T[]
+export function withDemoLast<T>(clients: T[], isDemo?: (item: T) => boolean): T[] {
+    const pick = isDemo ?? ((item: T) => (item as { is_demo?: boolean | null }).is_demo === true)
+    const demo = clients.filter((item) => pick(item))
+    if (demo.length === 0) return clients
+    return [...clients.filter((item) => !pick(item)), ...demo]
+}
+
 export function sortClientsByKey(
     clients: any[],
     pulseByClientId: Record<string, DirectoryPulseRow>,
@@ -14,7 +28,7 @@ export function sortClientsByKey(
 ): any[] {
     const p = (id: string) => pulseByClientId[id]
 
-    return [...clients].sort((a, b) => {
+    return withDemoLast([...clients].sort((a, b) => {
         let cmp = 0
         switch (sortKey) {
             case 'attention_score':
@@ -55,5 +69,5 @@ export function sortClientsByKey(
         }
         if (dir === 'desc') cmp = -cmp
         return cmp
-    })
+    }))
 }

@@ -65,9 +65,13 @@ import {
     matchesProgramFilters,
 } from './libraryStats'
 import type { WorkoutArea } from '@/domain/workout/types'
+import type { OnboardingTemplate } from '@eva/onboarding'
+import { ProgramsFirstRunEmpty } from './components/ProgramsFirstRunEmpty'
 interface Client {
     id: string
     full_name: string
+    /** Alumno de ejemplo del onboarding v2: se ROTULA en el selector, nunca se filtra. */
+    is_demo?: boolean | null
     workout_programs?: {
         id: string
         name: string
@@ -75,11 +79,24 @@ interface Client {
     }[] | null
 }
 
+/**
+ * Contexto del vacio template-first de la biblioteca (SPEC coach-onboarding-v2 §7): plantillas
+ * de la rama del coach + su alumno de ejemplo. Lo resuelve el servidor; la UI solo lo pinta.
+ */
+export interface ProgramsFirstRunContext {
+    templates: readonly OnboardingTemplate[]
+    demoClientId: string | null
+    demoName: string | null
+    demoLabel: string
+    noun: string
+}
+
 interface WorkoutProgramsClientProps {
     initialPrograms: ProgramListModel[]
     availableClients: Client[]
     /** Areas visibles del workspace activo — el preview titula bloques en areas custom/extra. */
     areas?: WorkoutArea[]
+    firstRun?: ProgramsFirstRunContext
 }
 
 const libraryEmptyCardClass =
@@ -194,6 +211,7 @@ export function WorkoutProgramsClient({
     initialPrograms,
     availableClients,
     areas = [],
+    firstRun,
 }: WorkoutProgramsClientProps) {
     const router = useRouter()
     const reduceMotion = useReducedMotion()
@@ -268,6 +286,28 @@ export function WorkoutProgramsClient({
     const filtering = search.trim().length > 0
 
     const listMotionKey = `${search}|${filterType}|${sort}`
+
+    /**
+     * Biblioteca en CERO y sin busqueda ⇒ vacio template-first (SPEC coach-onboarding-v2 §7):
+     * el coach nuevo ve las plantillas de su rama y a su alumno de ejemplo, no una ilustracion
+     * con un boton generico. Con programas ya creados manda el vacio contextual de siempre
+     * (sin resultados / sin plantillas / nada en curso).
+     */
+    const firstRunEmpty =
+        firstRun && programs.length === 0 && !filtering ? (
+            <ProgramsFirstRunEmpty
+                templates={firstRun.templates}
+                clients={availableClients.map((c) => ({
+                    id: c.id,
+                    name: c.full_name,
+                    isDemo: c.is_demo === true,
+                }))}
+                demoClientId={firstRun.demoClientId}
+                demoName={firstRun.demoName}
+                demoLabel={firstRun.demoLabel}
+                noun={firstRun.noun}
+            />
+        ) : null
 
     const openPreview = (program: ProgramListModel) => {
         setProgramToPreview(program)
@@ -531,6 +571,11 @@ export function WorkoutProgramsClient({
                                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-strong">
                                         {client.full_name}
                                     </span>
+                                    {client.is_demo === true && (
+                                        <Badge tone="info" variant="soft" size="sm" className="shrink-0">
+                                            {firstRun?.demoLabel ?? 'Alumno de ejemplo'}
+                                        </Badge>
+                                    )}
                                     {hasPlan && (
                                         <Badge tone="warning" variant="soft" size="sm" className="shrink-0">
                                             Con plan
@@ -900,6 +945,7 @@ export function WorkoutProgramsClient({
 
                 {/* Lista */}
                 {filtered.length === 0 ? (
+                    firstRunEmpty ?? (
                     <LibraryEmptyState
                         hasPrograms={programs.length > 0}
                         filterType={filterType}
@@ -908,6 +954,7 @@ export function WorkoutProgramsClient({
                         onClearSearch={() => setSearch('')}
                         onShowTemplates={() => setFilterType('templates')}
                     />
+                    )
                 ) : (
                     <motion.div
                         key={`m-${listMotionKey}`}
@@ -988,6 +1035,7 @@ export function WorkoutProgramsClient({
 
                 {/* Grid de tarjetas — .dt-prog-grid (auto-fill minmax 240px) */}
                 {filtered.length === 0 ? (
+                    firstRunEmpty ?? (
                     <LibraryEmptyState
                         hasPrograms={programs.length > 0}
                         filterType={filterType}
@@ -996,6 +1044,7 @@ export function WorkoutProgramsClient({
                         onClearSearch={() => setSearch('')}
                         onShowTemplates={() => setFilterType('templates')}
                     />
+                    )
                 ) : (
                     <motion.div
                         key={`d-${listMotionKey}`}

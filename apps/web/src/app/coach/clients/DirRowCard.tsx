@@ -8,6 +8,7 @@ import { AlertOctagon, AlertTriangle, Check, Apple, MoreVertical } from 'lucide-
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { IconButton } from '@/components/ui/icon-button'
 import { cn } from '@/lib/utils'
+import { DemoClientBadge } from './DemoClientBadge'
 
 // ===== severidad / estado helpers (espejo del diseño coach-directory.jsx) =====
 function severityMeta(score: number) {
@@ -66,6 +67,8 @@ interface DirRowCardProps {
     selectMode?: boolean
     selected?: boolean
     onToggleSelect?: () => void
+    /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
+    demoLabel?: string
 }
 
 export function DirRowCard({
@@ -75,6 +78,7 @@ export function DirRowCard({
     selectMode = false,
     selected = false,
     onToggleSelect,
+    demoLabel = 'Alumno de ejemplo',
 }: DirRowCardProps) {
     const router = useRouter()
     const score = pulse?.attentionScore ?? 0
@@ -167,6 +171,7 @@ export function DirRowCard({
                     <span className="truncate font-display text-[15.5px] font-black tracking-tight text-strong">
                         {client.full_name}
                     </span>
+                    {client.is_demo === true ? <DemoClientBadge label={demoLabel} /> : null}
                     {pulse ? (
                         <span
                             className={cn(

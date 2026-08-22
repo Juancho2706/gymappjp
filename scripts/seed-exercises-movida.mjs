@@ -31,21 +31,22 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 config({ path: resolve(__dirname, '../apps/web/.env.local') })
 config({ path: resolve(__dirname, '../.env.local'), override: false })
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+// `SUPABASE_URL`, no `URL`: sombrear el global rompía `new URL(...)` de arriba en Node 24 (TDZ).
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-if (!URL || !KEY) {
+if (!SUPABASE_URL || !KEY) {
     console.error('Faltan NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY en el env.')
     process.exit(1)
 }
 
 // Gate de seguridad para apuntar a un Supabase remoto/prod.
-const isLocal = URL.includes('127.0.0.1') || URL.includes('localhost')
+const isLocal = SUPABASE_URL.includes('127.0.0.1') || SUPABASE_URL.includes('localhost')
 const allowRemote = process.argv.includes('--allow-remote')
 if (!isLocal && (!allowRemote || process.env.SEED_CONFIRM !== 'yes')) {
-    console.error(`URL remota detectada (${URL}). Para escribir en remoto: --allow-remote + SEED_CONFIRM=yes.`)
+    console.error(`URL remota detectada (${SUPABASE_URL}). Para escribir en remoto: --allow-remote + SEED_CONFIRM=yes.`)
     process.exit(1)
 }
-console.log(`[seed-exercises-movida] objetivo: ${URL} (${isLocal ? 'local' : 'REMOTO'})`)
+console.log(`[seed-exercises-movida] objetivo: ${SUPABASE_URL} (${isLocal ? 'local' : 'REMOTO'})`)
 
 // id determinístico: namespace 0f80 (= F8) + índice. Postgres uuid acepta cualquier valor de 128 bits.
 const oid = (n) => `00000000-0000-0000-0f80-${String(n).padStart(12, '0')}`
@@ -234,7 +235,7 @@ const EXERCISES = [
 ]
 
 async function main() {
-    const admin = createClient(URL, KEY, { auth: { persistSession: false } })
+    const admin = createClient(SUPABASE_URL, KEY, { auth: { persistSession: false } })
     const rows = EXERCISES.map((e) => ({ ...COMMON, ...e }))
     const { error } = await admin.from('exercises').upsert(rows, { onConflict: 'id' })
     if (error) {

@@ -73,6 +73,10 @@ const STATUS_TONE: Record<ClientStatusLevel, 'danger' | 'warning' | 'success'> =
 
 type ClientProfileHeroProps = {
     clientId: string
+    /** `clients.is_demo` — alumno de ejemplo del onboarding v2 (SPEC §4). */
+    isDemo?: boolean
+    /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach. */
+    demoLabel?: string
     client: {
         full_name: string
         email: string
@@ -111,6 +115,8 @@ type ClientProfileHeroProps = {
 
 export function ClientProfileHero({
     clientId,
+    isDemo = false,
+    demoLabel = 'Alumno de ejemplo',
     client,
     coachSlug,
     compliance,
@@ -229,9 +235,16 @@ export function ClientProfileHero({
                     <div className="truncate text-[10px] font-bold tracking-widest text-muted uppercase">
                         {eyebrow}
                     </div>
-                    <h1 className="font-display max-w-full text-2xl font-black tracking-tighter text-strong break-words md:text-3xl">
-                        {client.full_name}
-                    </h1>
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                        <h1 className="font-display max-w-full text-2xl font-black tracking-tighter text-strong break-words md:text-3xl">
+                            {client.full_name}
+                        </h1>
+                        {isDemo ? (
+                            <Badge tone="info" variant="soft" size="sm" className="shrink-0">
+                                {demoLabel}
+                            </Badge>
+                        ) : null}
+                    </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5 print:hidden">
                     <button

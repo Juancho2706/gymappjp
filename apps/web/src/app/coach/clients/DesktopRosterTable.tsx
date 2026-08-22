@@ -29,6 +29,8 @@ import {
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { bulkArchiveClientsAction } from './_actions/clients.actions'
+import { DemoClientBadge } from './DemoClientBadge'
+import { withDemoLast } from './clientsDirectorySort'
 import type { StatusDirectoryFilter } from './directory-types'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 
@@ -111,6 +113,8 @@ interface RosterRow {
     last: string | null
     phone: string | null
     archived: boolean
+    /** Alumno de ejemplo del onboarding v2: se rotula y baja al final de la tabla. */
+    isDemo: boolean
     /** Cliente crudo: lo necesita el sheet de acciones (email, teléfono, flags). */
     raw: any
 }
@@ -126,6 +130,8 @@ interface DesktopRosterTableProps {
     statusFilter?: StatusDirectoryFilter
     onStatusFilterChange?: (v: StatusDirectoryFilter) => void
     archivedCount?: number
+    /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
+    demoLabel?: string
 }
 
 /** StatusBadge (Badge tone=… dot size=sm) — transcripción del DS Badge. */
@@ -189,6 +195,7 @@ export function DesktopRosterTable({
     statusFilter = 'any',
     onStatusFilterChange,
     archivedCount = 0,
+    demoLabel = 'Alumno de ejemplo',
 }: DesktopRosterTableProps) {
     const router = useRouter()
     const [q, setQ] = useState('')
@@ -222,6 +229,7 @@ export function DesktopRosterTable({
                     last: pulse?.lastWorkoutDate ?? null,
                     phone: c.phone ?? null,
                     archived: c.is_archived === true,
+                    isDemo: c.is_demo === true,
                     raw: c,
                 }
             })
@@ -237,12 +245,16 @@ export function DesktopRosterTable({
                 status: (a: RosterRow, b: RosterRow) =>
                     STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.adherence - b.adherence,
             }[sortKey] || (() => 0)
-        return enriched
-            .filter(
-                (s) => s.name.toLowerCase().includes(ql) || s.email.toLowerCase().includes(ql)
-            )
-            .slice()
-            .sort((a, b) => cmp(a, b) * dir)
+        // El alumno de ejemplo va al final gane el orden que gane (onboarding v2 F3.7).
+        return withDemoLast(
+            enriched
+                .filter(
+                    (s) => s.name.toLowerCase().includes(ql) || s.email.toLowerCase().includes(ql)
+                )
+                .slice()
+                .sort((a, b) => cmp(a, b) * dir),
+            (row) => row.isDemo,
+        )
     }, [enriched, ql, sortKey, dir])
 
     // La selección solo cuenta sobre filas VISIBLES: al cambiar de búsqueda o al pasar a
@@ -478,8 +490,11 @@ export function DesktopRosterTable({
                                                     </span>
                                                 </span>
                                                 <div className="min-w-0">
-                                                    <div className="truncate text-[14px] font-bold text-strong">
-                                                        {s.name}
+                                                    <div className="flex min-w-0 items-center gap-1.5">
+                                                        <span className="truncate text-[14px] font-bold text-strong">
+                                                            {s.name}
+                                                        </span>
+                                                        {s.isDemo ? <DemoClientBadge label={demoLabel} /> : null}
                                                     </div>
                                                     <div className="truncate text-[12px] text-subtle">
                                                         {s.goal}

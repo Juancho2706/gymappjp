@@ -13,6 +13,7 @@ import {
     getCoachEnabledModules,
     getTeamEnabledModules,
 } from '@/services/entitlements.service'
+import { getCoachOnboardingEmptyContext } from '../_data/onboarding-empty.queries'
 
 export const metadata: Metadata = {
     title: 'Alumnos | EVA',
@@ -49,7 +50,7 @@ export default async function CoachClientsPage({
         )
     }
 
-    const [clients, headersList, pulse, toolsEnabled, leads, params] = await Promise.all([
+    const [clients, headersList, pulse, toolsEnabled, leads, params, onboarding] = await Promise.all([
         getCoachClientsWithPrograms(coachSession.id, { orgId, activeTeamId }),
         headers(),
         getCoachClientsPulse(coachSession.id, { orgId, activeTeamId }),
@@ -57,6 +58,9 @@ export default async function CoachClientsPage({
         // Solicitudes del `/join` standalone (coach_leads). Lectura RLS con el cliente del usuario.
         getCoachLeads(coachSession.id),
         searchParams,
+        // Persona del coach: da el sustantivo de la etiqueta del alumno de ejemplo
+        // («Alumno/Paciente/Atleta de ejemplo», onboarding v2 F3.7). Memoizado por request.
+        getCoachOnboardingEmptyContext(),
     ])
 
     const coach = { slug: coachSession.slug, invite_code: coachSession.invite_code }
@@ -79,7 +83,14 @@ export default async function CoachClientsPage({
                     />
                 </div>
             ) : null}
-            <CoachClientsShell clients={clients} coach={coach} appUrl={appUrl} pulse={pulse} toolsEnabled={toolsEnabled} />
+            <CoachClientsShell
+                clients={clients}
+                coach={coach}
+                appUrl={appUrl}
+                pulse={pulse}
+                toolsEnabled={toolsEnabled}
+                demoLabel={onboarding.demoLabel}
+            />
         </div>
     )
 }

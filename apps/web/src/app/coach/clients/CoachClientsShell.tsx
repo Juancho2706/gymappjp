@@ -14,9 +14,18 @@ interface CoachClientsShellProps {
     pulse: DirectoryPulseRow[]
     /** ≥1 módulo del hub activo (cardio/movimiento/composición) → habilita el acceso a Herramientas. */
     toolsEnabled: boolean
+    /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
+    demoLabel?: string
 }
 
-export function CoachClientsShell({ clients, coach, appUrl, pulse, toolsEnabled }: CoachClientsShellProps) {
+export function CoachClientsShell({
+    clients,
+    coach,
+    appUrl,
+    pulse,
+    toolsEnabled,
+    demoLabel = 'Alumno de ejemplo',
+}: CoachClientsShellProps) {
     const [riskFilter, setRiskFilter] = useState<DirectoryRiskFilter>('all')
     // Vista de nivel superior (solo desktop): ficha (master-detail) | tabla. El estado vive en
     // el RosterViewProvider del layout para que el toggle del topbar lo controle. Encendemos
@@ -62,6 +71,7 @@ export function CoachClientsShell({ clients, coach, appUrl, pulse, toolsEnabled 
                 rosterMode={rosterMode}
                 onRosterModeChange={setRosterMode}
                 toolsEnabled={toolsEnabled}
+                demoLabel={demoLabel}
             />
         </div>
     )

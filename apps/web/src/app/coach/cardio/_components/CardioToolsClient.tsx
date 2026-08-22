@@ -84,7 +84,15 @@ function ZoneRow({ zone, range, first }: { zone: number; range: string; first: b
 }
 
 /** Tool · Zonas de frecuencia cardiaca (Tanaka + Karvonen, perfil real del alumno). */
-function CardioZonesTool({ clients }: { clients: CardioClientVM[] }) {
+function CardioZonesTool({
+    clients,
+    demoClientId = null,
+    demoLabel = 'Alumno de ejemplo',
+}: {
+    clients: CardioClientVM[]
+    demoClientId?: string | null
+    demoLabel?: string
+}) {
     const [selectedId, setSelectedId] = useState<string>('')
     const [manualAge, setManualAge] = useState('40')
     const [manualResting, setManualResting] = useState('')
@@ -140,7 +148,11 @@ function CardioZonesTool({ clients }: { clients: CardioClientVM[] }) {
                             <option value="">Cálculo manual</option>
                             {clients.map((c) => (
                                 <option key={c.id} value={c.id}>
-                                    {c.full_name ?? 'Sin nombre'}
+                                    {/* El alumno de ejemplo se rotula en el propio selector: es su
+                                        razon de ser en cardio (trae zonas reales el dia 1). */}
+                                    {c.id === demoClientId
+                                        ? `${c.full_name ?? 'Sin nombre'} · ${demoLabel}`
+                                        : (c.full_name ?? 'Sin nombre')}
                                 </option>
                             ))}
                         </select>
@@ -358,13 +370,24 @@ function CardioTemplatesTool() {
     )
 }
 
-export function CardioToolsClient({ clients }: { clients: CardioClientVM[] }) {
+export function CardioToolsClient({
+    clients,
+    demoClientId = null,
+    demoLabel = 'Alumno de ejemplo',
+}: {
+    clients: CardioClientVM[]
+    /** Alumno de ejemplo del onboarding v2: se rotula en el selector, no se esconde. */
+    demoClientId?: string | null
+    demoLabel?: string
+}) {
     const [tool, setTool] = useState<string>('Zonas')
 
     return (
         <div className="space-y-4">
             <SegmentedControl options={['Zonas', 'Pace', 'Plantillas']} value={tool} onChange={setTool} />
-            {tool === 'Zonas' && <CardioZonesTool clients={clients} />}
+            {tool === 'Zonas' && (
+                <CardioZonesTool clients={clients} demoClientId={demoClientId} demoLabel={demoLabel} />
+            )}
             {tool === 'Pace' && <CardioPaceTool />}
             {tool === 'Plantillas' && <CardioTemplatesTool />}
         </div>

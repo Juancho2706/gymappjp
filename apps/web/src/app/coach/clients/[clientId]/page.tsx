@@ -12,6 +12,8 @@ import {
 } from '@/services/entitlements-render-cache'
 import { applyNutritionAttentionScore } from '@/services/dashboard.service'
 import { resolveNutritionTabV2 } from './_data/nutrition-tab-v2.data'
+import { DemoStudentBanner } from './_components/DemoStudentBanner'
+import { getCoachOnboardingEmptyContext } from '../../_data/onboarding-empty.queries'
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
     const { clientId } = await params
@@ -60,7 +62,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
 
     // Módulos (cardio/movimiento/composición) para el hero + el resumen del tab Nutrición
     // (SIEMPRE V2 desde la poda 2026-07-29; ver `_data/nutrition-tab-v2.data.ts`).
-    const [enabledModules, nutritionTabV2View] = await Promise.all([
+    const [enabledModules, nutritionTabV2View, onboarding] = await Promise.all([
         isOrgScoped
             ? Promise.resolve({})
             : getEnabledModulesForRender(
@@ -68,6 +70,9 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                   nutritionClient.coach_id ?? null
               ),
         resolveNutritionTabV2(clientId),
+        // Persona del coach: da el sustantivo de la etiqueta del alumno de ejemplo
+        // («Alumno/Paciente/Atleta de ejemplo», onboarding v2 F3.7). Memoizado por request.
+        getCoachOnboardingEmptyContext(),
     ])
     const cardioModule = hasModuleFromMap(enabledModules, 'cardio')
     const movementModule = hasModuleFromMap(enabledModules, 'movement_assessment')
@@ -97,10 +102,19 @@ async function ProfileContent({ clientId }: { clientId: string }) {
               ? coachesRel[0]?.slug
               : coachesRel.slug
 
+    // `clients.is_demo` (migración 20260822002122): el alumno de ejemplo se identifica SIEMPRE,
+    // en la cabecera y en el directorio, para que nadie lo confunda con un alumno real.
+    const isDemo = (client as { is_demo?: boolean | null }).is_demo === true
+
     return (
         <div id="coach-client-profile-print" className="space-y-8 print:space-y-4">
+            {isDemo ? (
+                <DemoStudentBanner label={onboarding.demoLabel} name={client.full_name} />
+            ) : null}
             <ClientProfileHero
                 clientId={clientId}
+                isDemo={isDemo}
+                demoLabel={onboarding.demoLabel}
                 client={{
                     full_name: client.full_name,
                     email: client.email,

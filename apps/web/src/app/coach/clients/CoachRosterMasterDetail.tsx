@@ -9,6 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { CreateClientModal } from './CreateClientModal'
 import { CoachFichaPanel } from './CoachFichaPanel'
+import { DemoClientBadge } from './DemoClientBadge'
+import { withDemoLast } from './clientsDirectorySort'
 import { getClientFichaPanel } from './[clientId]/_actions/client-detail.actions'
 import type { ClientFichaPanelBundle } from './[clientId]/_data/ficha-panel.data'
 
@@ -75,12 +77,15 @@ interface CoachRosterMasterDetailProps {
     pulseByClientId: Record<string, DirectoryPulseRow>
     /** Muestra el acceso a Herramientas en la cabecera del rail (≥1 módulo del hub activo). */
     showTools?: boolean
+    /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
+    demoLabel?: string
 }
 
 export function CoachRosterMasterDetail({
     clients,
     pulseByClientId,
     showTools = false,
+    demoLabel = 'Alumno de ejemplo',
 }: CoachRosterMasterDetailProps) {
     const [search, setSearch] = useState('')
     const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -97,7 +102,10 @@ export function CoachRosterMasterDetail({
 
     const list = useMemo(() => {
         const q = search.trim().toLowerCase()
-        return activeClients
+        // El alumno de ejemplo cierra el rail (onboarding v2 F3.7): es contenido de
+        // demostración, nunca el primero al que el coach tiene que atender.
+        return withDemoLast(
+            activeClients
             .filter((c) => {
                 if (!q) return true
                 const name = (c.full_name ?? '').toLowerCase()
@@ -112,7 +120,9 @@ export function CoachRosterMasterDetail({
                 const adhB = pulseByClientId[b.client.id]?.percentage ?? 0
                 if (adhA !== adhB) return adhA - adhB
                 return (a.client.full_name ?? '').localeCompare(b.client.full_name ?? '')
-            })
+            }),
+            (row) => row.client.is_demo === true,
+        )
     }, [activeClients, search, pulseByClientId])
 
     const loadFicha = (id: string) => {
@@ -251,8 +261,13 @@ export function CoachRosterMasterDetail({
                                         </span>
                                     </span>
                                     <span className="flex min-w-0 flex-1 flex-col gap-px">
-                                        <span className="truncate text-[14px] font-bold text-strong">
-                                            {client.full_name}
+                                        <span className="flex min-w-0 items-center gap-1.5">
+                                            <span className="truncate text-[14px] font-bold text-strong">
+                                                {client.full_name}
+                                            </span>
+                                            {client.is_demo === true ? (
+                                                <DemoClientBadge label={demoLabel} />
+                                            ) : null}
                                         </span>
                                         <span className="hidden truncate text-[11.5px] text-subtle min-[860px]:block">
                                             {sub}

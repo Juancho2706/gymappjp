@@ -76,6 +76,8 @@ interface DirTableMobileProps {
     selectMode?: boolean
     selectedIds?: Set<string>
     onToggleSelect?: (clientId: string) => void
+    /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
+    demoLabel?: string
 }
 
 export function DirTableMobile({
@@ -89,6 +91,7 @@ export function DirTableMobile({
     selectMode = false,
     selectedIds,
     onToggleSelect,
+    demoLabel = 'Alumno de ejemplo',
 }: DirTableMobileProps) {
     const cellCls = (c: ColDef, body: boolean, selected = false) =>
         cn(
@@ -192,7 +195,9 @@ export function DirTableMobile({
                                                 {client.full_name}
                                             </div>
                                             <div className="truncate text-[10.5px] text-subtle">
-                                                {client.email ?? '—'}
+                                                {client.is_demo === true
+                                                    ? demoLabel
+                                                    : (client.email ?? '—')}
                                             </div>
                                         </div>
                                     </div>

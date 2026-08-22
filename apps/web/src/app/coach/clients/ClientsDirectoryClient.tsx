@@ -40,6 +40,8 @@ interface ClientsDirectoryClientProps {
     onRosterModeChange: (m: 'ficha' | 'tabla') => void
     /** Acceso a Herramientas (≥1 módulo del hub activo): gatea el botón del rail Ficha. */
     toolsEnabled?: boolean
+    /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
+    demoLabel?: string
 }
 
 function matchesRiskFilter(
@@ -117,6 +119,7 @@ export function ClientsDirectoryClient({
     rosterMode,
     onRosterModeChange,
     toolsEnabled = false,
+    demoLabel = 'Alumno de ejemplo',
 }: ClientsDirectoryClientProps) {
     const router = useRouter()
     const [search, setSearch] = useState('')
@@ -277,6 +280,7 @@ export function ClientsDirectoryClient({
                         clients={clients}
                         pulseByClientId={pulseByClientId}
                         showTools={toolsEnabled}
+                        demoLabel={demoLabel}
                     />
                 </div>
             )}
@@ -295,6 +299,7 @@ export function ClientsDirectoryClient({
                     statusFilter={statusFilter}
                     onStatusFilterChange={setStatusFilter}
                     archivedCount={archivedCount}
+                    demoLabel={demoLabel}
                 />
             </div>
 
@@ -342,6 +347,7 @@ export function ClientsDirectoryClient({
                 <div className="pb-24">
                     <DirTableMobile
                         clients={visibleClients}
+                        demoLabel={demoLabel}
                         pulseByClientId={pulseByClientId}
                         sortKey={sortKey}
                         sortDir={sortDir}
@@ -361,6 +367,7 @@ export function ClientsDirectoryClient({
                         <DirRowCard
                             key={client.id}
                             client={client}
+                            demoLabel={demoLabel}
                             pulse={pulseByClientId[client.id]}
                             onActions={() => setActionsClient(client)}
                             selectMode={selectMode}

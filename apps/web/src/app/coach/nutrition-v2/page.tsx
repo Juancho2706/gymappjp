@@ -8,6 +8,7 @@ import {
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { NutritionHubTabs } from './_components/NutritionHubTabs'
+import { NutritionFirstRunEmpty } from './_components/NutritionFirstRunEmpty'
 import { HubTourGuide } from './_components/HubTourGuide'
 import { HubRoster } from './_components/HubRoster'
 import { NewPlanPickerButton, type NewPlanPickerEntry } from './_components/NewPlanPickerButton'
@@ -18,6 +19,10 @@ import {
   parseRosterFilters,
   serverSortFor,
 } from './_lib/hub-roster'
+import {
+  getCoachOnboardingEmptyContext,
+  templatesForSurface,
+} from '../_data/onboarding-empty.queries'
 
 const COACH_TIMEZONE = 'America/Santiago'
 
@@ -72,6 +77,20 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
   const todayLocalDate = localDateOf(new Date().toISOString(), COACH_TIMEZONE) ?? ''
   const metrics = mapHubMetrics(hub.items, { todayLocalDate, timeZone: COACH_TIMEZONE })
 
+  // Primer uso del Centro: NINGUN alumno tiene plan todavia (y el coach no esta filtrando).
+  // El vacio va arriba del roster con las plantillas de pauta, no una ilustracion
+  // (SPEC coach-onboarding-v2 §7, TASKS F3.6).
+  const onboarding = await getCoachOnboardingEmptyContext()
+  const firstRun =
+    initialFilters.search.trim() === '' &&
+    initialFilters.attention === 'all' &&
+    hub.items.every((item) => item.planId == null)
+  const pickerClients = pickerRoster.map((entry) => ({
+    id: entry.clientId,
+    name: entry.clientName,
+    isDemo: entry.clientId === onboarding.demoClientId,
+  }))
+
   return (
     // Header compacto del shell (backHref): [flecha al dashboard][titulo+desc][CTA primaria].
     // Una sola CTA visible ("Nuevo plan"); V1 es legacy saliente y vive como link discreto
@@ -91,6 +110,18 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
         </>
       }
     >
+      {firstRun ? (
+        <div className="mb-4">
+          <NutritionFirstRunEmpty
+            templates={templatesForSurface('nutrition', onboarding.persona)}
+            clients={pickerClients}
+            demoClientId={onboarding.demoClientId}
+            demoName={onboarding.demoName}
+            demoLabel={onboarding.demoLabel}
+            noun={onboarding.noun}
+          />
+        </div>
+      ) : null}
       <NutritionHubTabs
         coachId={user.id}
         roster={

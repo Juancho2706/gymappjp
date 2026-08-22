@@ -17,7 +17,9 @@ export const getWorkoutProgramsWithClients = cache(async (coachId: string, scope
 
     let clientsQuery = supabase
         .from('clients')
-        .select('id, full_name, workout_programs(id, name, is_active)')
+        // `is_demo` viaja para poder ROTULAR al alumno de ejemplo en el selector de asignacion
+        // (onboarding v2 F3.7). Nunca lo filtra: el demo existe justamente para asignarle cosas.
+        .select('id, full_name, is_demo, workout_programs(id, name, is_active)')
         .eq('is_active', true)
         .eq('is_archived', false)
         .order('full_name')
