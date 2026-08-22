@@ -170,13 +170,25 @@ export async function completeOAuthOnboarding(
         // La cuenta de Google ya viene confirmada: el coach nace `active` y jamás pasa por
         // `/auth/confirm`, que era el único lugar que mandaba bienvenida + drip.
         // `await` por la misma razón que el CAPI de arriba: el `redirect()` de la línea siguiente
-        // cierra la invocación y Vercel se lleva puesto todo lo pendiente. El helper no lanza.
-        await sendFreeCoachOnboardingEmails({
-            email,
-            coachName: fullName,
-            brandName,
-            appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl',
-        })
+        // cierra la invocación y Vercel se lleva puesto todo lo pendiente. El helper no lanza; el
+        // try/catch es el cinturón (mismo patrón que los otros dos call sites): la fila `coaches`
+        // ya está escrita, así que un fallo de correo no puede devolver «Error al crear tu perfil»
+        // y mandar al coach a registrarse de nuevo. Envuelve SOLO el correo: el `redirect()` de
+        // abajo lanza por diseño y no puede quedar dentro del catch.
+        try {
+            await sendFreeCoachOnboardingEmails({
+                admin: adminDb,
+                coachId: user.id,
+                email,
+                coachName: fullName,
+                brandName,
+                inviteCode,
+                appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl',
+            })
+        } catch {
+            // Sin PII en el log: vive en Vercel sin retención acotada.
+            console.warn('[register] onboarding email failed')
+        }
         redirect(`/coach/dashboard?welcome=free&eid=${encodeURIComponent(metaEventId)}`)
     }
 

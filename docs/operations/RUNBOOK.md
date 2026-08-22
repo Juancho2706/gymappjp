@@ -163,6 +163,58 @@ Esos tiers están fuera de venta pero siguen soportados en runtime para suscript
 - Un cambio excepcional se realiza desde administración y requiere revisar también el preapproval/plan del proveedor.
 - Para reactivación normal, migrar a una oferta vigente; conservar legacy solo con decisión explícita del dueño.
 
+## Ledger de correos y webhook de Resend
+
+`public.coach_email_ledger` (migración `20260822004243_coach_email_ledger.sql`) es el libro mayor de los correos que EVA le manda a un coach: una fila por correo, con su `template_key`, su `trigger` (`attempt` | `sweep` | `drip` | `transactional` | `behavior`), su estado y el `provider_message_id` que devolvió Resend.
+
+Sirve para tres cosas: **deduplicar** (un mismo `template_key` se manda una vez por coach), **cancelar** lo agendado cuando dejó de tener sentido (el coach subió de plan y el D+2 «precio y link» sigue en cola) y **auditar** qué recibió cada coach. Los correos que no pasan por `scheduleCoachEmail` (bienvenidas, recibos de add-on, dunning) no dejan fila: es esperado.
+
+- Escritura: solo `service_role`, desde `services/email/coach-email-ledger.service.ts` y el webhook. La tabla no tiene grants de insert/update/delete; el coach solo puede leer sus filas bajo RLS.
+- Dedupe: índice único parcial `coach_email_ledger_dedupe_uidx` (migración `20260822005701`) sobre `(coach_id, template_key) where status <> 'failed'`. `failed` es el ÚNICO estado reintentable: un correo que nunca salió se puede volver a intentar, pero a una dirección que rebotó o se quejó no se le vuelve a escribir con esa key, y lo que cancelamos nosotros no se re-agenda. La lista vive en `ACTIVE_LEDGER_STATUSES` y tiene que decir lo mismo que el índice.
+- Cancelación: `POST https://api.resend.com/emails/:id/cancel` con la misma `RESEND_API_KEY` del envío. Solo aplica a filas `scheduled` con `scheduled_at` futuro. Un `404`/`422` significa que el correo ya salió: la fila se cierra como `sent` con `payload.cancel_not_possible` y cuenta como `alreadySent`, no como fallo. Máximo 50 filas por llamada (el resto queda para la siguiente).
+- Fail-open deliberado: si la lectura del ledger falla, el correo se manda igual. Es la elección opuesta al cron `cap-nudge` (fail-closed) porque acá el disparo es puntual y el peor caso es un correo repetido, no un barrido diario.
+
+### Webhook
+
+| Campo | Valor |
+|---|---|
+| URL | `https://www.eva-app.cl/api/webhooks/resend` |
+| Secreto | `RESEND_WEBHOOK_SECRET` en Vercel (formato `whsec_…`, lo entrega Resend al crear el webhook) |
+| Firma | Svix: headers `svix-id`, `svix-timestamp`, `svix-signature`; HMAC-SHA256 sobre `${id}.${timestamp}.${body-crudo}`; tolerancia ±5 min |
+| Eventos suscritos | `email.sent`, `email.delivered`, `email.bounced`, `email.complained`, `email.delivery_delayed`, `email.failed`, `email.suppressed` (7) |
+
+Respuestas: `503` sin secreto en el entorno (fail-closed, el endpoint no escribe nada), `401` con firma inválida o vencida, `500` si la DB falla (Svix reintenta; el reintento es idempotente), `200` en todo lo demás — incluidos los eventos no suscritos y los `email_id` que no están en el ledger.
+
+El alta del webhook en el dashboard de Resend es manual: ver `MANUAL_TASKS.md` (`OPS-RESEND-01`).
+
+Diagnóstico:
+
+- 401 en cadena tras rotar el secreto en Resend → el valor de Vercel quedó viejo; redeploy tras actualizarlo.
+- Filas que se quedan en `sent` y nunca pasan a `delivered` → el webhook no está registrado o `email.delivered` no está suscrito.
+- Un correo agendado que llegó igual después de un cambio de plan → revisar si su fila tenía `provider_message_id`; sin ese id no hay nada que cancelar.
+- Un coach que no recibe un correo que debería recibir → buscar su fila: si está `bounced`, `complained` o `cancelled`, el dedupe lo está bloqueando A PROPÓSITO. Para reenviar de verdad hay que usar otra `template_key` (la opción `force` del service saltea la lectura, pero NO el índice único).
+- `email.failed` / `email.suppressed` dejan la fila en `failed` ⇒ vuelve a ser reintentable. Si el motivo no se resolvió, el reintento va a fallar igual: mirar `payload.error` / `payload.suppressed`.
+
+Auditar por coach:
+
+```sql
+select template_key, trigger, status, scheduled_at, sent_at, delivered_at, created_at
+from public.coach_email_ledger
+where coach_id = '<uuid>'
+order by created_at desc;
+```
+
+Rebotes y quejas de los últimos 30 días:
+
+```sql
+select c.slug, l.template_key, l.status, l.created_at
+from public.coach_email_ledger l
+join public.coaches c on c.id = l.coach_id
+where l.status in ('bounced', 'complained')
+  and l.created_at > now() - interval '30 days'
+order by l.created_at desc;
+```
+
 ## Incidente de seguridad
 
 1. Revocar/rotar el secreto afectado en el proveedor.

@@ -217,6 +217,15 @@ vi.mock('@/lib/email/send-email', () => ({
     sendTransactionalEmail: (...a: unknown[]) => sendTransactionalEmail(...a),
 }))
 
+// ── W2.10 (embudo Free→Pro): al confirmarse un plan pago, el pipeline mata el drip de venta
+//    agendado en Resend. Se mockea el service (su propia suite cubre el fetch y el ledger); acá
+//    solo importa QUE se llame, con QUÉ keys, y que un fallo suyo no tumbe el webhook de pago. ──
+const cancelCoachEmails = vi.fn(async () => ({ cancelled: 0, failed: 0 }))
+vi.mock('@/services/email/coach-email-ledger.service', () => ({
+    cancelCoachEmails: (...a: unknown[]) => cancelCoachEmails(...(a as [])),
+    DRIP_SALES_KEYS: ['day2_pro', 'day14_last_call'],
+}))
+
 import { POST } from './route'
 
 function makeRequest(): Request {
@@ -266,6 +275,7 @@ beforeEach(() => {
     resolveActiveDiscountDetail.mockResolvedValue(null)
     decrementCouponCycleForCharge.mockResolvedValue({ expired: false })
     revertActiveCouponForCoach.mockResolvedValue({ reverted: false })
+    cancelCoachEmails.mockResolvedValue({ cancelled: 0, failed: 0 })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────────────
@@ -397,6 +407,74 @@ describe('POST /api/payments/webhook — primer pago sin order.id escribe el tie
         const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
         expect(patch).toBeTruthy()
         expect(patch!.max_clients).toBe(30)
+    })
+
+    // ── W2.10: el coach pagó ⇒ el D+2 «precio y link» y el D+14 «última llamada» que están
+    //    agendados en Resend tienen que morir. Sin esto le llegan igual a alguien que ya es Pro. ──
+    it('coach free → pro activo: cancela el drip de venta con las dos keys', async () => {
+        coachRow = { ...FREE_PENDING_COACH }
+        processWebhook.mockResolvedValue(firstPaymentNoOrderId())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(cancelCoachEmails).toHaveBeenCalledWith(expect.anything(), 'coach-1', [
+            'day2_pro',
+            'day14_last_call',
+        ])
+    })
+
+    it('el pago NO deja al coach en un plan pago (pending) → NO cancela nada', async () => {
+        coachRow = { ...FREE_PENDING_COACH }
+        processWebhook.mockResolvedValue({ ...firstPaymentNoOrderId(), providerStatus: 'pending' })
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(cancelCoachEmails).not.toHaveBeenCalled()
+    })
+
+    /**
+     * M-10 — la OTRA mitad del guard: `finalStatus` paid-like **Y** `finalTier !== 'free'`. Un coach
+     * que sigue en free después del pago es todavía el destinatario de la serie; matarle el D+2 y el
+     * D+14 lo dejaría sin nurture sin haber comprado nada.
+     *
+     * Nota verificada acá: `finalTier === 'free' && finalStatus === 'active'` es INALCANZABLE por
+     * este camino — `TIER_ALLOWED_BILLING_CYCLES.free` está vacío (`packages/tiers/index.ts:445`),
+     * así que un `approved` que resuelve a free cae a `pending_payment`. El par free + paid-like que
+     * sí existe es `trialing`, y es el que prueba el segundo caso.
+     */
+    it('pago aprobado que resuelve a FREE → queda pending_payment y NO cancela el drip', async () => {
+        coachRow = { ...FREE_PENDING_COACH }
+        processWebhook.mockResolvedValue({ ...firstPaymentNoOrderId(), subscriptionTier: 'free' })
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => 'subscription_status' in p)
+        expect(patch!.subscription_status).toBe('pending_payment')
+        expect(cancelCoachEmails).not.toHaveBeenCalled()
+    })
+
+    it('status paid-like (trialing) pero tier FREE → NO cancela (el guard mira el tier, no solo el estado)', async () => {
+        coachRow = { ...FREE_PENDING_COACH }
+        processWebhook.mockResolvedValue({
+            ...firstPaymentNoOrderId(),
+            providerStatus: 'trialing',
+            providerCheckoutId: 'preapproval-aef',
+            subscriptionTier: undefined,
+            billingCycle: undefined,
+        })
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => 'subscription_tier' in p)
+        expect(patch!.subscription_tier).toBe('free')
+        expect(patch!.subscription_status).toBe('trialing')
+        expect(cancelCoachEmails).not.toHaveBeenCalled()
+    })
+
+    it('si la cancelación explota, el webhook de pago igual responde 200 (el cobro manda)', async () => {
+        coachRow = { ...FREE_PENDING_COACH }
+        cancelCoachEmails.mockRejectedValue(new Error('resend caído'))
+        processWebhook.mockResolvedValue(firstPaymentNoOrderId())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
+        expect(patch!.subscription_status).toBe('active')
     })
 })
 

@@ -5,6 +5,7 @@ import {
     buildPlanExpiringSoonEmail,
     formatSalesEmailDate,
 } from './sales-templates'
+import { assertNoPrices, countLinks } from './__tests__/no-prices'
 
 /**
  * Tests de RENDER puro (sin red, sin DB) de los correos de VENTA que reemplazan a los CTA de pago
@@ -18,17 +19,8 @@ import {
 
 const SUBSCRIPTION_URL = 'https://www.eva-app.cl/coach/subscription'
 
-/** Cuenta los <a> del HTML: el contrato es exactamente un CTA por correo. */
-function countLinks(html: string): number {
-    return (html.match(/<a\s/g) ?? []).length
-}
-
-/** Ningún correo de venta puede llevar precios embebidos (formato CLP $19.990 / 19990). */
-function assertNoPrices(html: string) {
-    expect(html).not.toMatch(/\$\s?\d/)
-    expect(html).not.toMatch(/\b\d{2}\.\d{3}\b/)
-    expect(html.toLowerCase()).not.toContain('/mes')
-}
+// `countLinks` y `assertNoPrices` viven en `./__tests__/no-prices` desde W2.3 del embudo Free→Pro:
+// el mismo contrato lo comparten el drip y los transaccionales.
 
 describe('formatSalesEmailDate', () => {
     it('formatea es-CL día + mes + año (espejo del dunning)', () => {

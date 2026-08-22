@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientLimitReachedEmail } from '@/lib/email/sales-templates'
+import { buildSubscriptionUrl } from '@/lib/email/subscription-url'
 import { getTierRank, TIER_LABELS, type SubscriptionTier } from '@/lib/constants'
 
 /**
@@ -290,20 +291,14 @@ export async function sendClientLimitReachedEmail(
 }
 
 /**
- * CTA de los correos de venta. En email SÍ es legal (la restricción anti-steering es in-app).
+ * CTA de los correos de venta. Vive en `lib/email/subscription-url.ts` desde W2.12: el drip lo
+ * necesita y una plantilla pura de correo no puede importar este service (arrastra `send-email`, el
+ * ledger de `admin_audit_logs` y medio módulo de pagos a cada test de render).
  *
- * SIN argumentos devuelve la URL desnuda de siempre (la usa el cron `paid-expiry`). Con `utmSource`
- * agrega el trío de atribución (`utm_source`/`utm_medium=email`/`utm_campaign`) para poder medir en
- * PostHog qué correo trajo el checkout.
+ * Se re-exporta desde acá a propósito: `api/cron/paid-expiry/route.ts` y esta misma suite lo
+ * importan por esta ruta desde antes, y moverlos no aporta nada.
  */
-export function buildSubscriptionUrl(opts?: { utmSource?: string; utmCampaign?: string }): string {
-    const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl'
-    const url = `${base}/coach/subscription`
-    if (!opts?.utmSource) return url
-    const params = new URLSearchParams({ utm_source: opts.utmSource, utm_medium: 'email' })
-    if (opts.utmCampaign) params.set('utm_campaign', opts.utmCampaign)
-    return `${url}?${params.toString()}`
-}
+export { buildSubscriptionUrl }
 
 /** Correo del coach desde GoTrue (la tabla `coaches` no tiene columna email). Nunca lanza. */
 export async function resolveCoachEmail(admin: Db, coachId: string): Promise<string | null> {

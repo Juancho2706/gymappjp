@@ -60,8 +60,11 @@ CAPA 4  · RETORNO   el correo aterriza logueado en el checkout (?next=) ->
 4. **Variante de copy por gatillo**: `attempt` (el coach intentó y fue rechazado: copy actual) y `sweep`
    (barrido: «ya tienes tu cupo ocupado; el próximo alumno que quieras sumar no va a entrar»). Jamás decir
    «intentaste agregar» a quien no intentó.
-5. **Sin precios embebidos en ningún correo** (venta, drip, transaccional): el precio vive en la página de
-   checkout. Gate `assertNoPrices` extendido a drip y transaccionales (W2).
+5. **Precios en correos: solo catálogo-driven, nunca literales.** Los correos de VENTA por evento (`sales-templates`)
+   y los transaccionales no llevan precio (`assertNoPrices`); los únicos correos que lo muestran son los que
+   venden explícitamente (drip `day2_pro`/`day14_last_call`, avisos de fin de trial) y SIEMPRE desde
+   `TIER_CONFIG.<tier>.monthlyPriceClp` formateado es-CL, pinneado por test (`assertOnlyCatalogPrice`). Un precio
+   escrito a mano en cualquier plantilla es un bug. Cupos siempre vía `studentCountLabel`.
 6. **Fail-open por coach, fail-closed del ledger**: un 500 de Resend o una excepción en un coach no abortan la
    corrida (`try/catch` por coach, `failed`/`errors` en el resumen). Pero si el ledger `admin_audit_logs` **no se
    puede leer, el barrido aborta sin enviar nada** (500 + resumen con `ledger_unreadable: true`): con el mapa vacío

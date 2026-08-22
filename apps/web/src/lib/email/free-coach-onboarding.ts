@@ -1,6 +1,12 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
-import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
+import {
+    DRIP_SCHEDULE,
+    scheduleFreeCoachDripSequence,
+    type DripSequenceSummary,
+} from '@/lib/email/send-drip-sequence'
 
 /**
  * Bienvenida + secuencia drip del coach Free, en un solo lugar.
@@ -25,9 +31,14 @@ import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
  * más allá de sus dos requests. La función JAMÁS lanza; un rechazo solo deja un warn sin PII.
  */
 export async function sendFreeCoachOnboardingEmails(params: {
+    /** Service-role client: el ledger de correos (`coach_email_ledger`) se escribe con service_role. */
+    admin: SupabaseClient<Database>
+    coachId: string
     email: string
     coachName: string
     brandName: string
+    /** Código de invitación del coach: el D+1 del drip se lo deja listo para copiar. */
+    inviteCode?: string | null
     appUrl: string
 }): Promise<void> {
     const { subject, html } = buildFreeCoachWelcomeEmail({
@@ -41,9 +52,12 @@ export async function sendFreeCoachOnboardingEmails(params: {
     const [welcome, drip] = await Promise.allSettled([
         sendTransactionalEmail({ to: params.email, subject, html }),
         scheduleFreeCoachDripSequence({
+            admin: params.admin,
+            coachId: params.coachId,
             email: params.email,
             coachName: params.coachName,
             brandName: params.brandName,
+            inviteCode: params.inviteCode ?? null,
         }),
     ])
 
@@ -52,4 +66,17 @@ export async function sendFreeCoachOnboardingEmails(params: {
     // devuelve `{ ok: false }`. Mirar solo el `rejected` dejaría mudo el modo de fallo más probable.
     if (welcome.status === 'rejected' || !welcome.value.ok) console.warn('[onboarding-email] fallo', 'welcome')
     if (drip.status === 'rejected') console.warn('[onboarding-email] fallo', 'drip')
+
+    // I-4: la serie ya no devuelve `void`. Sin esto, las cuatro podían fallar dentro del
+    // `allSettled` (el ledger no lanza: devuelve `{ ok: false }`) y el alta se veía perfecta.
+    // Una línea SIEMPRE, para poder contar en los logs cuántos drips salen de verdad; `error`
+    // cuando hay al menos un correo caído, que es lo que hay que ir a mirar.
+    const summary: DripSequenceSummary =
+        drip.status === 'fulfilled'
+            ? drip.value
+            : { scheduled: 0, deduped: 0, failed: DRIP_SCHEDULE.length, failures: [{ key: 'all', error: 'rejected' }] }
+
+    const line = { coachId: params.coachId, ...summary }
+    console.warn('[onboarding-emails] drip', line)
+    if (summary.failed > 0) console.error('[onboarding-emails] drip', line)
 }

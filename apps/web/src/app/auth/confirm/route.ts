@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const adminDb = createServiceRoleClient()
     const { data: coach } = await adminDb
         .from('coaches')
-        .select('id, subscription_status, full_name, brand_name, subscription_tier')
+        .select('id, subscription_status, full_name, brand_name, subscription_tier, invite_code')
         .eq('id', data.user.id)
         .maybeSingle()
 
@@ -46,15 +46,27 @@ export async function GET(request: NextRequest) {
 
         // Bienvenida + drip ahora que el email está confirmado. Helper compartido con el alta por
         // Google (`completeOAuthOnboarding`), que nace `active` y nunca pasa por acá.
+        //
         // `await` obligatorio: al devolver el redirect Vercel congela la función y mata cualquier
-        // request pendiente — el 19-08 así se perdieron 2 de 5 bienvenidas de este camino. El
-        // helper nunca lanza (allSettled adentro), así que esto no puede romper la confirmación.
-        await sendFreeCoachOnboardingEmails({
-            email: data.user.email!,
-            coachName: coach.full_name ?? '',
-            brandName: coach.brand_name ?? '',
-            appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? origin,
-        })
+        // request pendiente — el 19-08 así se perdieron 2 de 5 bienvenidas de este camino.
+        //
+        // El try/catch es el cinturón, igual que en los otros dos call sites: el helper no lanza
+        // (allSettled adentro), pero la cuenta YA quedó activa y un fallo de correo no puede
+        // devolverle un 500 a alguien que acaba de confirmar su email.
+        try {
+            await sendFreeCoachOnboardingEmails({
+                admin: adminDb,
+                coachId: coach.id,
+                email: data.user.email!,
+                coachName: coach.full_name ?? '',
+                brandName: coach.brand_name ?? '',
+                inviteCode: coach.invite_code,
+                appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? origin,
+            })
+        } catch {
+            // Sin PII en el log: vive en Vercel sin retención acotada.
+            console.warn('[auth/confirm] onboarding email failed')
+        }
 
         return NextResponse.redirect(`${origin}/coach/dashboard?welcome=free`)
     }

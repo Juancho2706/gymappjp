@@ -1,3 +1,4 @@
+import { TIER_CONFIG, studentCountLabel } from '@eva/tiers'
 import { wrapEmailLayout, ctaButton, ghostButton, divider, featureRow, badge, brandCtaColors } from './base-layout'
 
 // ── Client Welcome ──────────────────────────────────────────────────────────
@@ -194,22 +195,36 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú
   <tr>
     <td>
       <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
-        <strong>¿Quieres crecer sin techo?</strong> Cuando llegues al límite de alumnos, pasarte a <strong>Pro</strong> tarda menos de 2 minutos: hasta 25 alumnos y tu app sin el sello «Hecho con EVA».
+        <strong>¿Quieres crecer sin techo?</strong> Cuando llegues al límite de alumnos, <strong>Pro</strong> te sube el cupo a ${studentCountLabel(TIER_CONFIG.pro.maxClients)} y te saca el sello «Hecho con EVA» de lo que ve tu alumno.
       </p>
     </td>
   </tr>
 </table>
 
-<div style="margin-bottom:12px;">
+<div style="margin-bottom:20px;">
   ${ctaButton('Ir a mi dashboard →', ctx.dashboardUrl)}
 </div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#111827;">Cómo funciona EVA</p>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
+        Tu cuenta, tu plan y tu facturación se administran desde
+        <a href="${ctx.subscriptionUrl}" target="_blank" style="color:#10B981;font-weight:600;text-decoration:none;">eva-app.cl</a>
+        con tu mismo correo y contraseña. Desde la app del teléfono ves tu estado; los cambios de plan
+        se hacen en la web.
+      </p>
+    </td>
+  </tr>
+</table>
 
 <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
   Si tienes dudas o quieres que te demos una mano arrancando, responde este correo y con gusto te ayudamos.
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: `Tu cuenta EVA está lista. Empieza gratis con tus primeros alumnos.`,
+        previewText: `Tu cuenta EVA está lista. Empieza gratis con tu primer alumno.`,
         headerTitle: 'Bienvenido a EVA',
     })
 

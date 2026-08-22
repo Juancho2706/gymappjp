@@ -26,6 +26,7 @@ import {
 import { resolveActiveDiscountSpec, resolveActiveDiscountDetail, buildAmountPutIdempotencyKey } from '@/services/billing/discount.service'
 import { decrementCouponCycleForCharge, revertActiveCouponForCoach } from '@/services/billing/coupons.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { cancelCoachEmails, DRIP_SALES_KEYS } from '@/services/email/coach-email-ledger.service'
 import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
 import { buildPaymentFailedEmail, buildPaymentRecoveredEmail } from '@/lib/email/payment-dunning-templates'
 import {
@@ -1277,6 +1278,25 @@ export async function runWebhookPipeline(
     // correcto. Para MP `subRef === coachMpId`, así que el fallback es no-op (cero regresión).
     const finalMpId =
         (coachUpdate.subscription_mp_id as string | undefined) ?? checkoutId ?? coachMpId ?? subRef
+
+    // ── W2.10 (embudo Free→Pro): el coach quedó en un plan PAGO ⇒ matar el drip de venta ──────────
+    // El D+2 «precio y link» y el D+14 «última llamada» viven agendados en Resend 2 y 14 días. Sin
+    // esta cancelación le llegan igual a alguien que ya pagó: el peor correo posible. `finalStatus`
+    // (no `statusForUpdate`) porque las ramas terminal/past-due de arriba pisan el status del patch.
+    // `cancelCoachEmails` no lanza por diseño; el try/catch es el cinturón: un correo NUNCA puede
+    // tumbar un webhook de pago (MP no reintentaría y el cobro quedaría sin aplicar).
+    const finalStatus = (coachUpdate.subscription_status as string | undefined) ?? statusForUpdate
+    if ((finalStatus === 'active' || finalStatus === 'trialing') && finalTier !== 'free') {
+        try {
+            await cancelCoachEmails(admin, coach.id, DRIP_SALES_KEYS)
+        } catch (cancelErr) {
+            console.warn('[payments.webhook] no se pudo cancelar el drip de venta', {
+                traceId,
+                coachId: coach.id,
+                message: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+            })
+        }
+    }
 
     try {
         // (a) TERMINAL expire → cancelar DURO todos los add-ons (trigger D1 apaga módulos).

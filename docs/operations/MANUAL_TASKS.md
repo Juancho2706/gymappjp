@@ -52,6 +52,18 @@ Aviso «Tu plan Free ahora incluye tu marca» ([spec](../specs/pricing-v3/SPEC.m
 - [ ] Confirmar el envío real y anotar `sent / failed / skipped`; el botón deduplica contra `admin_audit_logs` (`coach.pricing_v3_notice`), así que un reintento tras un corte no reescribe a quien ya recibió.
 - [ ] Revisar los `failed` en Auditoría y decidir uno por uno (rebote, casilla inexistente) antes de reintentar.
 
+### OPS-RESEND-01 — Crear el webhook de Resend y pegar el secreto en Vercel
+
+El endpoint `POST /api/webhooks/resend` ya existe en el código, pero está **fail-closed**: sin `RESEND_WEBHOOK_SECRET` responde 503 y el ledger de correos (`coach_email_ledger`) nunca sabe si un correo se entregó o rebotó. Solo el dueño de la cuenta de Resend puede crearlo.
+
+- [ ] Resend → Webhooks → **Add Webhook** con endpoint `https://www.eva-app.cl/api/webhooks/resend`.
+- [ ] Suscribir exactamente siete eventos: `email.sent`, `email.delivered`, `email.bounced`, `email.complained`, `email.delivery_delayed`, `email.failed`, `email.suppressed`.
+- [ ] Copiar el **signing secret** (formato `whsec_…`) y guardarlo en Vercel como `RESEND_WEBHOOK_SECRET` en Production (y Preview si se va a probar ahí). Redeploy para que la variable exista en runtime.
+- [ ] Verificar con el botón de prueba de Resend: la respuesta debe ser 200 (o 200 con `ignored: true` si el `email_id` de prueba no está en el ledger). Un 503 significa que la variable no llegó al runtime; un 401, que el secreto quedó mal pegado.
+- [ ] No pegar el valor del secreto en este archivo, en un PR ni en un ticket.
+
+Detalle operativo y consultas de auditoría: [RUNBOOK.md](RUNBOOK.md#ledger-de-correos-y-webhook-de-resend).
+
 ## P2 — Gates bajo demanda
 
 ### LEGAL-01 — Revisar identidad y textos legales antes de publicar

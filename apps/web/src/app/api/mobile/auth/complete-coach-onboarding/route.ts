@@ -5,6 +5,7 @@ import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { isDisposableEmail, normalizePlatformEmail } from '@/lib/auth/platform-email'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { clientIpFromRequest, jsonRateLimited, rateLimitSignup } from '@/lib/rate-limit'
+import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 
 /**
  * Materializa la fila `coaches` del coach autenticado por OAuth (Google) que aún no tiene perfil.
@@ -162,6 +163,29 @@ export async function POST(request: NextRequest) {
             { error: coachError.message || 'Error al configurar el perfil de coach.', code: 'COACH_CREATE_FAILED' },
             { status: 500 }
         )
+    }
+
+    // Alta por Google DESDE LA APP: nace `active`, nunca pasa por `/auth/confirm` y hasta hoy era el
+    // ÚNICO camino de alta sin bienvenida ni serie de correos (W2.8 del embudo Free→Pro: causa (4),
+    // la que seguía abierta). Mismo helper y mismos argumentos que la rama free de
+    // `coach/onboarding/complete/_actions/complete.actions.ts`.
+    //
+    // `await` por la razón de siempre: Vercel congela la invocación al devolver la respuesta y se
+    // lleva puesto cualquier POST a Resend pendiente. El helper no lanza (allSettled adentro); el
+    // try/catch es el cinturón: un fallo de correo JAMÁS puede convertir un alta exitosa en 500.
+    try {
+        await sendFreeCoachOnboardingEmails({
+            admin: adminDb,
+            coachId: user.id,
+            email,
+            coachName: fullName,
+            brandName,
+            inviteCode,
+            appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl',
+        })
+    } catch {
+        // Sin PII en el log: vive en Vercel sin retención acotada.
+        console.warn('[complete-coach-onboarding] onboarding email failed')
     }
 
     return NextResponse.json({ ok: true, slug })

@@ -1,0 +1,231 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
+import type { DripTemplate } from './drip-templates'
+
+type BuildDripTemplates = typeof import('./drip-templates').buildDripTemplates
+type DripContext = Parameters<BuildDripTemplates>[0]
+
+const { scheduleCoachEmailMock, addResendAudienceContactMock, buildDripTemplatesMock, real } = vi.hoisted(() => ({
+    scheduleCoachEmailMock: vi.fn(),
+    addResendAudienceContactMock: vi.fn(),
+    buildDripTemplatesMock: vi.fn(),
+    // Holder del módulo REAL: el mock delega en él salvo cuando el test quiere una lista incompleta.
+    real: { build: null as null | ((ctx: unknown) => DripTemplate[]) },
+}))
+
+vi.mock('@/services/email/coach-email-ledger.service', () => ({
+    scheduleCoachEmail: scheduleCoachEmailMock,
+}))
+
+vi.mock('./send-email', () => ({
+    addResendAudienceContact: addResendAudienceContactMock,
+}))
+
+vi.mock('./drip-templates', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('./drip-templates')>()
+    real.build = actual.buildDripTemplates as (ctx: unknown) => DripTemplate[]
+    return { ...actual, buildDripTemplates: buildDripTemplatesMock }
+})
+
+import { scheduleFreeCoachDripSequence, DRIP_SCHEDULE } from './send-drip-sequence'
+
+const admin = {} as SupabaseClient<Database>
+
+const INPUT = {
+    admin,
+    coachId: '11111111-1111-4111-8111-111111111111',
+    email: 'coach@example.com',
+    coachName: 'Josefa Díaz',
+    brandName: 'Studio Fuerza',
+    inviteCode: 'X5UD9X44',
+}
+
+describe('scheduleFreeCoachDripSequence', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        buildDripTemplatesMock.mockImplementation((ctx: DripContext) => real.build!(ctx))
+        scheduleCoachEmailMock.mockResolvedValue({ ok: true, ledgerId: 'led', providerMessageId: 'msg', deduped: false })
+        addResendAudienceContactMock.mockResolvedValue(undefined)
+        vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
+        vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', '')
+    })
+
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.restoreAllMocks()
+    })
+
+    it('agenda las 4 con trigger drip, keys nuevas y subject/html no vacíos', async () => {
+        await scheduleFreeCoachDripSequence(INPUT)
+
+        expect(scheduleCoachEmailMock).toHaveBeenCalledTimes(4)
+        const keys = scheduleCoachEmailMock.mock.calls.map(([, arg]) => arg.templateKey)
+        expect(keys).toEqual(['day1_value', 'day2_pro', 'day7_nutrition', 'day14_last_call'])
+
+        for (const [client, arg] of scheduleCoachEmailMock.mock.calls) {
+            expect(client).toBe(admin)
+            expect(arg.coachId).toBe(INPUT.coachId)
+            expect(arg.to).toBe(INPUT.email)
+            expect(arg.trigger).toBe('drip')
+            expect(arg.subject.length).toBeGreaterThan(0)
+            expect(arg.html.length).toBeGreaterThan(0)
+        }
+    })
+
+    it('los scheduledAt son +1 / +2 / +7 / +14 días y el payload lleva el día', async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-08-21T12:00:00.000Z'))
+        try {
+            await scheduleFreeCoachDripSequence(INPUT)
+        } finally {
+            vi.useRealTimers()
+        }
+
+        const scheduled = scheduleCoachEmailMock.mock.calls.map(([, arg]) => [arg.payload.day, arg.scheduledAt])
+        expect(scheduled).toEqual([
+            [1, '2026-08-22T12:00:00.000Z'],
+            [2, '2026-08-23T12:00:00.000Z'],
+            [7, '2026-08-28T12:00:00.000Z'],
+            [14, '2026-09-04T12:00:00.000Z'],
+        ])
+        expect(DRIP_SCHEDULE.map((s) => s.day)).toEqual([1, 2, 7, 14])
+    })
+
+    it('threadea el invite_code a las plantillas (el D+1 lo necesita)', async () => {
+        await scheduleFreeCoachDripSequence(INPUT)
+
+        expect(buildDripTemplatesMock).toHaveBeenCalledWith({
+            coachName: 'Josefa Díaz',
+            brandName: 'Studio Fuerza',
+            baseUrl: 'https://www.eva-app.cl',
+            inviteCode: 'X5UD9X44',
+        })
+        const day1 = scheduleCoachEmailMock.mock.calls.find(([, arg]) => arg.templateKey === 'day1_value')![1]
+        expect(day1.html).toContain('https://www.eva-app.cl/join/X5UD9X44')
+    })
+
+    // Colisión C3 del SPEC: `templateByKey` devolvía `{ subject: '', html: '' }` en silencio, así que
+    // un typo en la key mandaba un correo VACÍO a todos los coaches nuevos sin que nada fallara.
+    it('LANZA «drip template missing: <key>» si buildDripTemplates deja de devolver una key', async () => {
+        buildDripTemplatesMock.mockImplementation((ctx: DripContext) =>
+            real.build!(ctx).filter((t) => t.key !== 'day2_pro')
+        )
+
+        await expect(scheduleFreeCoachDripSequence(INPUT)).rejects.toThrow('drip template missing: day2_pro')
+        expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+
+    it('sin RESEND_FREE_COACH_AUDIENCE_ID no toca la audiencia; con id la agrega', async () => {
+        await scheduleFreeCoachDripSequence(INPUT)
+        expect(addResendAudienceContactMock).not.toHaveBeenCalled()
+
+        vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', 'aud_123')
+        await scheduleFreeCoachDripSequence(INPUT)
+        expect(addResendAudienceContactMock).toHaveBeenCalledWith(
+            expect.objectContaining({ audienceId: 'aud_123', email: INPUT.email, firstName: 'Josefa', lastName: 'Díaz' })
+        )
+    })
+
+    // El ledger es fail-open por contrato: nunca lanza. Igual blindamos que un rechazo suelto de la
+    // audiencia no tumbe el alta.
+    it('un rechazo de la audiencia no rompe la función ni ensucia el resumen', async () => {
+        vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', 'aud_123')
+        addResendAudienceContactMock.mockRejectedValue(new Error('resend 500'))
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        // La audiencia NO es un correo de la serie: se loguea aparte y no suma a `failed`.
+        await expect(scheduleFreeCoachDripSequence(INPUT)).resolves.toEqual({
+            scheduled: 4,
+            deduped: 0,
+            failed: 0,
+            failures: [],
+        })
+        expect(scheduleCoachEmailMock).toHaveBeenCalledTimes(4)
+    })
+
+    // M-5: el fallback viejo era `http://localhost:3000`. Un D+14 agendado con links a localhost es
+    // un correo perdido, y salía exactamente así si la env no llegaba al runtime.
+    it('sin NEXT_PUBLIC_SITE_URL los links caen a PRODUCCIÓN, nunca a localhost', async () => {
+        vi.stubEnv('NEXT_PUBLIC_SITE_URL', undefined)
+        await scheduleFreeCoachDripSequence(INPUT)
+
+        expect(buildDripTemplatesMock).toHaveBeenCalledWith(
+            expect.objectContaining({ baseUrl: 'https://www.eva-app.cl' })
+        )
+        for (const [, arg] of scheduleCoachEmailMock.mock.calls) {
+            expect(arg.html).not.toContain('localhost')
+        }
+    })
+})
+
+/**
+ * I-4 — la función devolvía `void`: las cuatro podían fallar (el ledger no lanza, devuelve
+ * `{ ok: false }`) y el caller no tenía forma de enterarse ni de loguearlo. El resumen es lo que
+ * hace visible ese modo de fallo, y va SIN PII: solo la key y el motivo.
+ */
+describe('scheduleFreeCoachDripSequence — resumen', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        buildDripTemplatesMock.mockImplementation((ctx: DripContext) => real.build!(ctx))
+        addResendAudienceContactMock.mockResolvedValue(undefined)
+        vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
+        vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', '')
+    })
+
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.restoreAllMocks()
+    })
+
+    it('las 4 agendadas → scheduled: 4 y ninguna falla', async () => {
+        scheduleCoachEmailMock.mockResolvedValue({ ok: true, deduped: false, ledgerId: 'led', providerMessageId: 'msg' })
+        await expect(scheduleFreeCoachDripSequence(INPUT)).resolves.toEqual({
+            scheduled: 4,
+            deduped: 0,
+            failed: 0,
+            failures: [],
+        })
+    })
+
+    // M-11: el modo de fallo REAL (Resend 4xx/5xx, sin API key) no rechaza — resuelve `ok: false`.
+    it('las 4 rechazadas por Resend → failed: 4 con la key de cada una y sin PII', async () => {
+        scheduleCoachEmailMock.mockResolvedValue({ ok: false, reason: 'send_failed' })
+        const summary = await scheduleFreeCoachDripSequence(INPUT)
+
+        expect(summary).toEqual({
+            scheduled: 0,
+            deduped: 0,
+            failed: 4,
+            failures: [
+                { key: 'day1_value', error: 'send_failed' },
+                { key: 'day2_pro', error: 'send_failed' },
+                { key: 'day7_nutrition', error: 'send_failed' },
+                { key: 'day14_last_call', error: 'send_failed' },
+            ],
+        })
+        const serialized = JSON.stringify(summary)
+        expect(serialized).not.toContain(INPUT.email)
+        expect(serialized).not.toContain(INPUT.coachName)
+    })
+
+    it('una deduplicada y el resto agendadas → cada una a su contador', async () => {
+        scheduleCoachEmailMock
+            .mockResolvedValueOnce({ ok: true, deduped: true, ledgerId: 'previa', providerMessageId: null })
+            .mockResolvedValue({ ok: true, deduped: false, ledgerId: 'led', providerMessageId: 'msg' })
+
+        await expect(scheduleFreeCoachDripSequence(INPUT)).resolves.toMatchObject({
+            scheduled: 3,
+            deduped: 1,
+            failed: 0,
+        })
+    })
+
+    it('si `scheduleCoachEmail` LANZA (no debería: no lanza por contrato) cuenta como fallo', async () => {
+        scheduleCoachEmailMock.mockRejectedValue(new Error('boom'))
+        await expect(scheduleFreeCoachDripSequence(INPUT)).resolves.toMatchObject({
+            failed: 4,
+            failures: expect.arrayContaining([{ key: 'day1_value', error: 'boom' }]),
+        })
+    })
+})
