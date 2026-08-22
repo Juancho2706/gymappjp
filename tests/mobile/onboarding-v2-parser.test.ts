@@ -28,6 +28,9 @@ async function loadModule(): Promise<Parser> {
     vi.doMock(mobileDep('@sentry/react-native'), () => ({ addBreadcrumb: vi.fn(), captureException: vi.fn() }))
     vi.doMock(mobileLib('supabase.ts'), () => ({ supabase: {} }))
     vi.doMock(mobileLib('coach.ts'), () => ({ getCoachProfile: vi.fn() }))
+    // `branding.ts` entra por el respaldo de logo del coach (`parseMobileDashboardCoach`) y arrastra
+    // AsyncStorage, que no resuelve fuera de Metro.
+    vi.doMock(mobileLib('branding.ts'), () => ({ loadStoredBranding: vi.fn(async () => null) }))
     vi.doMock(mobileLib('api.ts'), () => ({ apiFetch: vi.fn(), getApiBaseUrl: () => 'https://www.eva-app.cl' }))
     vi.doMock(mobileLib('workspace.ts'), () => ({ getActiveCoachWorkspace: vi.fn() }))
     return (await import(mobileLib('coach-dashboard.ts'))) as Parser
