@@ -170,7 +170,7 @@ export default function RegisterScreen() {
     setError(null)
     setLoading(true)
     try {
-      await registerCoachFree({
+      const created = await registerCoachFree({
         fullName: parsed.data.full_name,
         brandName: parsed.data.brand_name,
         email: parsed.data.email,
@@ -179,7 +179,11 @@ export default function RegisterScreen() {
         acceptHealthData: true,
         acceptMarketing,
       })
-      router.replace(`/(auth)/verify-email?email=${encodeURIComponent(parsed.data.email)}`)
+      // El `uid` es la llave del reenvio del correo de confirmacion en la pantalla siguiente (no hay
+      // sesion hasta que el coach confirma). Espejo del `?uid=` del registro web. Si el server es
+      // anterior a W4 no viene y la pantalla degrada sola.
+      const uidParam = created.uid ? `&uid=${encodeURIComponent(created.uid)}` : ''
+      router.replace(`/(auth)/verify-email?email=${encodeURIComponent(parsed.data.email)}${uidParam}`)
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Intenta nuevamente en unos momentos.'
       setError(message)
