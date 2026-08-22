@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import { CoachTopBar } from '@/components/coach/CoachTopBar'
+import { GuidePill } from '@/components/coach/GuidePill'
 import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { RosterViewProvider } from '@/components/coach/RosterViewContext'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
@@ -31,6 +32,7 @@ import {
     type EnabledModules,
 } from '@/services/entitlements.service'
 import { disabledDomainsFromPrefs, readCoachDomainPrefs } from '@/services/coach/persona.service'
+import { getPersonaScreenContext } from './onboarding/persona/_data/persona.queries'
 
 export const metadata: Metadata = {
     title: {
@@ -128,13 +130,19 @@ export default async function CoachLayout({
         }
     }
 
-    const [enterpriseContext, teamContext, enabledModules, disabledDomains, activeStandaloneCount] = await Promise.all([
-        getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
-        getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
-        resolveEnabledModules(),
-        resolveDisabledDomains(),
-        isStandalone ? getActiveStandaloneClientCount(coach.id) : Promise.resolve<number | null>(null),
-    ])
+    const [enterpriseContext, teamContext, enabledModules, disabledDomains, activeStandaloneCount, personaContext] =
+        await Promise.all([
+            getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
+            getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
+            resolveEnabledModules(),
+            resolveDisabledDomains(),
+            isStandalone ? getActiveStandaloneClientCount(coach.id) : Promise.resolve<number | null>(null),
+            // Píldora de la guía (decisión del owner 22-08): necesita la persona, que `getCoach()`
+            // no trae. `getPersonaScreenContext` es `React.cache`: la MISMA lectura la reusan
+            // `/coach/dashboard` (para su redirect de primera entrada) y la pantalla de persona
+            // dentro del mismo request — una sola query por request, no una por consumidor.
+            getPersonaScreenContext(),
+        ])
     // Sobre-límite: alumnos activos > cupo efectivo (override manual `max_clients` o, si falta, el
     // del tier PARA ESTE COACH — grandfather de pricing v2, no el catálogo de venta).
     const overLimitTier = normalizeCoachTier(coach.subscription_tier)
@@ -368,6 +376,17 @@ export default async function CoachLayout({
                     </RosterViewProvider>
                 </div>
                 <CoachSuccessAnimationLazy />
+                {/* Guía de inicio v2, casa nueva (decisión del owner 22-08): la guía completa vive
+                    en `/coach/guia` y en el panel queda esta píldora flotante, que se minimiza al
+                    monito de EVA. Se monta en el layout —y no en el dashboard— para que acompañe al
+                    coach por todo el panel; ella misma decide dónde NO pintarse (la guía, el primer
+                    ingreso, los builders) y se apaga sola cuando la guía está completa o descartada. */}
+                <GuidePill
+                    coachId={coach.id}
+                    persona={personaContext.persona}
+                    onboardingGuide={coach.onboarding_guide ?? {}}
+                    managed={!isStandalone || personaContext.managed}
+                />
                 {shouldConfirmPublicCode && <PublicCodeRequiredModal inviteCode={publicCode.inviteCode} />}
             </NewsFeedProvider>
         </div>

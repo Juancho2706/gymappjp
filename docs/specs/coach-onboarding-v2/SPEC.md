@@ -97,6 +97,42 @@ primera sesión: (1) el panel con los módulos de esa persona y sin los demás, 
 mundo ya cargado, (3) plantillas de su mundo, (4) un checklist de 5 verbos en el orden de su trabajo, (5) el
 mismo flujo en web y en la app. Nada se gatea a Pro; la persona se cambia cuando quiera sin perder datos.
 
+### Cambio 22-08: la guía se muda a pantalla propia + píldora flotante
+
+**Decisión del owner (2026-08-22). MANDA sobre §3 («tarjeta inline arriba del dashboard»), §6
+(«checklist arriba del dashboard hasta 5/5, después tira al pie») y sobre la decisión D5=A.**
+Motivo: el dashboard del día 1 **se ve LLENO** (hero, KPIs, prioridad, agenda, novedades), y la
+guía metida arriba competía con todo eso en vez de destacar.
+
+- **`/coach/guia` — «Tus primeros pasos»**: pantalla propia dentro del shell del panel. Cabecera
+  con anillo de progreso n/5 + chip de persona (link a `Opciones › Mi panel`), los 5 pasos como
+  **tarjetas grandes** (icono por paso, estado hecho/siguiente/pendiente, CTA al href real), el
+  paso 1 con «Tu marca en 60 segundos» embebida hasta que hay marca, el paso 2 con «Vive tu app»,
+  y el alumno de ejemplo en un riel a la derecha (debajo en móvil ≤760). Con 5/5, estado de cierre
+  con «Ir a mi panel» y «Borrar ejemplo»; el confeti sigue siendo uno solo, el del aha.
+- **Primera entrada = la guía, para TODOS los planes** (regla dura del owner: Free, Pro, Elite o el
+  que sea). La pantalla de persona ahora redirige a `/coach/guia?bienvenida=1` (banda de bienvenida
+  de dos líneas, sin modal), y `/coach/dashboard` redirige a la guía mientras el coach no la haya
+  visto. Ocurre **una sola vez**: la pantalla estampa `onboarding_guide.guide_seen_at`. Coach con
+  `persona IS NULL` (viejo, con alumnos) **no** se redirige — lo invita la píldora. Managed (org o
+  team): nunca.
+- **El dashboard queda limpio**: deja de montar checklist, marca inline, alumno de ejemplo, nudge
+  de persona y tira del pie, y deja de pagar `getCoachOnboardingV2Data` en cada carga (esa consulta
+  se mudó con la guía). Sobrevive «Tu próximo paso» (`nextBestAction`).
+- **Píldora flotante** (`components/coach/GuidePill.tsx`, montada en el layout `/coach`): abajo a
+  la izquierda, sobre la cápsula del nav en móvil y junto al sidebar en desktop (mide `#coach-main`,
+  así el colapso del menú la reacomoda). Minimizada = círculo de 48 px con el monito blanco de EVA
+  sobre el color de marca y anillo de progreso; maximizada = «Tu guía · n/5» + «Siguiente: {paso}»
+  + «Abrir» + «–». Estado por coach en `localStorage` (`eva.guide-pill.v1:{coachId}`), primera vez
+  expandida, Escape minimiza. Se apaga sola con la guía completa, descartada u oculta, y no se
+  pinta sobre la guía, el primer ingreso ni los builders. Telemetría `guide_engagement`
+  (`pill_open` · `pill_expand` · `pill_collapse`), una vez por acción y sesión.
+- **Lo que NO cambia**: los 5 pasos y su copy siguen viniendo de `@eva/onboarding`; el estado
+  (auto-tildado por señales reales, `emitted`, dismissed, confeti) sigue siendo el único
+  `useOnboardingGuide`; la guía sigue siendo UNA sola aunque haya cambiado de casa.
+- **Paridad RN (W5)**: la guía de RN debe seguir a esta casa (pantalla propia + acceso flotante),
+  no al diseño de «guía arriba del home».
+
 ### 1. Pantalla «¿A qué te dedicas?» (web + RN, primer login, una sola vez)
 
 - Aparece antes que cualquier modal de bienvenida, pantalla completa, sin «Saltar» arriba. Cinco tarjetas:

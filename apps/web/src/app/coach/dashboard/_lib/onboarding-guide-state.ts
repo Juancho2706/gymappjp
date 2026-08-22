@@ -24,6 +24,13 @@ export interface OnboardingGuideState {
     emitted: OnboardingStepKey[]
     /** El confeti del aha ya se lanzó (una sola vez por coach). */
     ahaMomentSent: boolean
+    /**
+     * Instante ISO en que el coach vio `/coach/guia` por primera vez. Lo estampa la propia
+     * pantalla al montarse y es lo que hace que el redirect de primera entrada
+     * (`guia/_lib/guide-first-entry`, decisión del owner 22-08) ocurra UNA sola vez.
+     * `null` = todavía no la vio.
+     */
+    guideSeenAt: string | null
 }
 
 export const EMPTY_GUIDE_STATE: OnboardingGuideState = {
@@ -32,6 +39,7 @@ export const EMPTY_GUIDE_STATE: OnboardingGuideState = {
     hidden: false,
     emitted: [],
     ahaMomentSent: false,
+    guideSeenAt: null,
 }
 
 /** Claves legacy del checklist v1. Se leen (para no perder historia) y no se vuelven a escribir. */
@@ -64,12 +72,20 @@ export function parseOnboardingGuide(raw: Json | unknown): OnboardingGuideState 
         }
     }
 
+    // La clave viaja en snake_case porque es la MISMA que se escribe en el jsonb del servidor
+    // (`guide_seen_at`), igual que `brand_tour_seen` o `invite_code_confirmed`. Se acepta también
+    // la forma camelCase porque este mismo estado se serializa tal cual a `localStorage` (donde
+    // el campo se llama `guideSeenAt`) y el round-trip tiene que devolver lo mismo que entró.
+    const rawSeenAt = raw.guide_seen_at ?? raw.guideSeenAt
+    const guideSeenAt = typeof rawSeenAt === 'string' && rawSeenAt !== '' ? rawSeenAt : null
+
     return {
         completed,
         dismissed: raw.dismissed === true,
         hidden: raw.hidden === true,
         emitted,
         ahaMomentSent: raw.ahaMomentSent === true,
+        guideSeenAt,
     }
 }
 

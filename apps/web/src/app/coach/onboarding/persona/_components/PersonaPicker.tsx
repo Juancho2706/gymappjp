@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Apple, Dumbbell, HeartPulse, PersonStanding, Sparkles } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { PERSONA_COPY, PERSONA_TILE_ORDER, type Persona } from '@eva/schemas'
@@ -50,6 +51,10 @@ export function PersonaPicker() {
     const [error, setError] = useState<string | null>(null)
     const [building, setBuilding] = useState(false)
     const [, startTransition] = useTransition()
+    // `?welcome=free&eid=`: espejo del alta por Google que el gate de persona trajo hasta acá;
+    // la action lo reenvía a la guía, donde se dispara (RegistrationMirror).
+    const searchParams = useSearchParams()
+    const registrationEid = searchParams.get('welcome') === 'free' ? searchParams.get('eid') : null
     const tileRefs = useRef<Array<HTMLButtonElement | null>>([])
 
     const selectedIndex = selected ? PERSONA_TILE_ORDER.indexOf(selected) : -1
@@ -93,7 +98,11 @@ export function PersonaPicker() {
         setBuilding(true)
         startTransition(async () => {
             const [result] = await Promise.all([
-                setCoachPersonaAction({ persona: selected, alsoOther }),
+                setCoachPersonaAction({
+                    persona: selected,
+                    alsoOther,
+                    registration: registrationEid ? { welcome: 'free', eid: registrationEid } : undefined,
+                }),
                 sleep(MIN_BUILD_MS),
             ])
             // En éxito la action redirige (Next navega y este valor llega `undefined`): solo se

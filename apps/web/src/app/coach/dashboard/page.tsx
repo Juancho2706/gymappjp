@@ -5,13 +5,12 @@ import { DashboardContent } from './_components/DashboardContent'
 import { getCoach, getActiveStandaloneClientCount } from '@/lib/coach/get-coach'
 import { BrandCoachLoadingShell } from '../_components/BrandCoachLoadingShell'
 import type { SubscriptionTier } from '@/lib/constants'
-import type { Json } from '@/lib/database.types'
 import { isBrandingAllowed } from '@eva/tiers'
+import { getPersonaScreenContext } from '../onboarding/persona/_data/persona.queries'
+import { GUIDE_ROUTE, shouldRedirectToGuide } from '../guia/_lib/guide-first-entry'
+import { parseOnboardingGuide } from './_lib/onboarding-guide-state'
 
 export const metadata: Metadata = { title: 'Dashboard' }
-
-/** Misma referencia entre renders RSC para no disparar efectos del checklist con `{}` nuevo cada vez. */
-const DEFAULT_COACH_ONBOARDING_GUIDE: Json = {}
 
 function normalizeCoachSubscriptionTier(raw: string | null | undefined): SubscriptionTier {
     const v = String(raw ?? 'free').toLowerCase()
@@ -24,6 +23,23 @@ function normalizeCoachSubscriptionTier(raw: string | null | undefined): Subscri
 export default async function CoachDashboardPage() {
     const coach = await getCoach()
     if (!coach) redirect('/login')
+
+    // PRIMERA ENTRADA = LA GUÍA, para todos los planes (decisión del owner 22-08). El coach que
+    // ya eligió especialidad y todavía no vio «Tus primeros pasos» aterriza ahí, no en el panel
+    // vacío. Pasa UNA sola vez: la pantalla de la guía estampa `onboarding_guide.guide_seen_at`.
+    // El resolver es puro y está testeado (`guia/_lib/guide-first-entry`); acá solo se le dan los
+    // tres datos. `getPersonaScreenContext` es `React.cache` y el layout ya la resolvió en este
+    // mismo request: no agrega una query.
+    const personaContext = await getPersonaScreenContext()
+    if (
+        shouldRedirectToGuide({
+            persona: personaContext.persona,
+            guide: parseOnboardingGuide(coach.onboarding_guide),
+            managed: personaContext.managed,
+        })
+    ) {
+        redirect(GUIDE_ROUTE)
+    }
 
     const subscriptionTier = normalizeCoachSubscriptionTier(coach.subscription_tier)
     const coachBrandingVisible = isBrandingAllowed(subscriptionTier) && coach.use_brand_colors_coach !== false
@@ -40,7 +56,7 @@ export default async function CoachDashboardPage() {
                 coachName={coach.full_name ?? coach.brand_name ?? 'Coach'}
                 coachSlug={coach.slug}
                 coachInviteCode={coach.invite_code}
-                initialOnboardingGuide={coach.onboarding_guide ?? DEFAULT_COACH_ONBOARDING_GUIDE}
+                persona={personaContext.persona}
                 subscriptionTier={subscriptionTier}
                 hasCoachLogo={coachBrandingVisible && Boolean(coach.logo_url?.trim())}
                 coachLogoUrl={coachBrandingVisible ? coach.logo_url : null}

@@ -57,9 +57,48 @@ Borrador 2026-08-21. Modelo sugerido entre paréntesis. Nada de W1+ ejecutado; l
 - [x] F4.3 Equivalentes con `?primera=1` y tarjetas embebidas (`coach/_components/guided/GuidedTaskCards.tsx`, memoria por coach y superficie): nutrición (`resolveNutritionPrimeraEntry`: pauta vigente ⇒ editarla con aviso; sin pauta ⇒ nueva; CTA «Publicar y ver como {demo}» → `PrimeraPautaPublicada` con `ViveTuAppButton autoOpen`), movimiento (`resolvePrimerScreeningEntry`: sin screening ⇒ wizard guiado; con screening ⇒ semáforo + «Armar pauta domiciliaria» → `applyTemplateAction('lumbalgia-f1')` → builder), cardio (`resolvePrimerasZonasEntry`: qué falta del perfil → zonas → «Armar semana base» → `base-10k-4` → builder). `applyTemplate` deja UN programa activo por alumno (desactiva los anteriores). Eventos `step_completed/first_artifact` solo en modo guiado. **Pendiente:** el tilde de «cambié un alimento / ajusté una porción» usa `changeCount` como proxy.
 - [~] F4.4 Unit: `add-student-invite.test` (23), `AddStudentStepper.test` (14), `AddStudentFlowProvider.test` (5), `first-routine.test`, `StudentLivePreview.test`, `FirstRoutinePicker.test`, `guided-cards-memory.test`, `GuidedTaskCards.test`, `primera-pauta.test`, `primer-screening.test`, `primeras-zonas.test`, `templates.test`; tsc y lint verdes. **Pendiente:** Playwright smoke de las 4 tareas (W7) y QA visual del owner.
 
+## W4.5 — La guía se muda: pantalla propia + píldora (Opus; decisión del owner 22-08)
+
+Cambio de diseño del owner que MANDA sobre SPEC §3, §6 y la decisión D5=A: el dashboard del día 1
+se ve LLENO, así que la guía sale de ahí. Ver SPEC § «Cambio 22-08».
+
+- [x] F4.5.1 `/coach/guia` («Tus primeros pasos»): `page.tsx` server que reusa
+  `getCoachOnboardingV2Data` (sin duplicar señales) + `loading.tsx` con la geometría real;
+  `_components/GuideScreen.tsx` (cabecera con anillo n/5 + chip de persona a `Opciones › Mi panel`,
+  5 tarjetas grandes, riel del alumno de ejemplo a la derecha / debajo en móvil, banda de
+  bienvenida con `?bienvenida=1`, cierre 5/5 con «Ir a mi panel» y «Borrar ejemplo»),
+  `GuideStepCard.tsx` (estados hecho/siguiente/pendiente) y `GuideProgressRing.tsx`. Reusa
+  `useOnboardingGuide`, `BrandQuickCard`, `DemoStudentCard`, `PersonaNudgeCard` y `ViveTuAppButton`
+  tal cual: la guía sigue siendo UNA sola.
+- [x] F4.5.2 Primera entrada = la guía para TODOS los planes: `persona.actions` redirige a
+  `/coach/guia?bienvenida=1`; `coach/dashboard/page.tsx` aplica el resolver puro
+  `shouldRedirectToGuide` (`guia/_lib/guide-first-entry.ts`). Una sola vez: `GuideScreen` estampa
+  `onboarding_guide.guide_seen_at` al montar (clave nueva en el parser y en el schema del action,
+  ambos con test). Persona `null` ⇒ no se redirige; managed ⇒ nunca.
+- [x] F4.5.3 Dashboard limpio: `DashboardShell` deja de montar checklist, marca inline, demo, nudge
+  y tira del pie; `DashboardContent` deja de pedir `getCoachOnboardingV2Data` (ahorro real en cada
+  carga del panel). `FreeWelcomeModal` queda solo para el `?welcome=free` legado y recibe la persona
+  desde el RSC. `CoachOnboardingChecklist.tsx` + su test quedaron SIN importadores y se borraron;
+  `withPrimeraFlag` se mudó a `guia/_lib/guide-view.ts` (con su test).
+- [x] F4.5.4 `components/coach/GuidePill.tsx`: círculo de 48 px con `eva-icon-white.png` sobre
+  `--sport-500` + anillo de progreso; maximizada «Tu guía · n/5» + «Siguiente: {paso}» + «Abrir» +
+  «–»; `localStorage` por coach (`eva.guide-pill.v1:{coachId}`), `aria-expanded` + `aria-label`
+  «Guía de inicio, n de 5», Escape minimiza, `motion-safe` 220 ms. Posición: `fixed` abajo a la
+  izquierda, sobre la cápsula del nav en móvil (safe-area + 97 px) y midiendo `#coach-main` en
+  desktop (sin hardcodear el ancho del sidebar). Montada en `coach/layout.tsx`, que lee la persona
+  con `getPersonaScreenContext` (`React.cache`, compartida con el dashboard).
+- [x] F4.5.5 Tests: `guide-first-entry.test.ts` (redirect ×6 casos + visibilidad de la píldora),
+  `guide-view.test.ts`, `GuideScreen.test.tsx`, `GuidePill.test.tsx`, `persona.actions.test`
+  actualizado, `onboarding-guide-state.test` con `guide_seen_at`. **NO ejecutados: el owner pidió
+  no correr gates pesados (CPU ocupada) — quedan para la pasada de gates de W7.**
+- [ ] F4.5.6 Pendiente: QA visual del owner (desktop, PWA 390 px, dark, white-label) y decidir si
+  RN copia esta casa en W5 (la SPEC ya lo pide).
+
 ## W5 — RN paridad (Opus)
 - [ ] F5.1 Pantalla de persona (`RoleCards`) + gate en `app/coach/_layout.tsx`; persona vía `api/mobile/coach/dashboard` (merge) o endpoint propio; «Armando tu panel».
-- [ ] F5.2 Home día 1: guía v2 arriba (`home.tsx:186-191` → cabecera), persistida (`data.onboardingGuide`), `dismissed` cruzado con web; tarjeta marca compacta; demo con «Ver como…».
+- [ ] F5.2 Home día 1: **ojo, cambió el destino** (owner 22-08, ver W4.5): la guía RN sigue a la web
+  a una pantalla propia + acceso flotante, NO «arriba del home». Persistida (`data.onboardingGuide`),
+  `dismissed` y `guide_seen_at` cruzados con web; tarjeta marca compacta; demo con «Ver como…».
 - [ ] F5.3 Nav móvil por dominio (mismo paquete); dashboard vacío deja de felicitar; copy interno («scope/pools») fuera.
 - [ ] F5.4 Alta: stepper compacto + share sheet + `wa.me`; `QuickCreateClientForm` maneja `UPGRADE_REQUIRED` y emite `upgrade_gate_hit`.
 - [ ] F5.5 Tarjetas embebidas del builder RN (molde `BuilderOnboardingTour` → tarjetas); vista del alumno.

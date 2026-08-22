@@ -627,7 +627,16 @@ async function proxyInner(request: NextRequest) {
             ) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = PERSONA_ROUTE
-                redirectUrl.search = ''
+                // Solo viajan `welcome` y `eid`: el espejo browser del alta por Google (Meta
+                // CompleteRegistration + PostHog coach_registered) llega a /coach/dashboard con
+                // ellos y este gate lo intercepta ANTES de que se dispare. La pantalla de persona
+                // los reenvía a /coach/guia, donde se consumen (RegistrationMirror).
+                const carried = new URLSearchParams()
+                for (const key of ['welcome', 'eid']) {
+                    const value = request.nextUrl.searchParams.get(key)
+                    if (value) carried.set(key, value)
+                }
+                redirectUrl.search = carried.size > 0 ? `?${carried.toString()}` : ''
                 return NextResponse.redirect(redirectUrl)
             }
         }

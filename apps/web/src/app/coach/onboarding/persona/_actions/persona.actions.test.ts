@@ -104,7 +104,7 @@ describe('setCoachPersonaAction', () => {
         expect(redirectMock).not.toHaveBeenCalled()
     })
 
-    it('guarda persona + las 5 preferencias por dominio, deja el evento y redirige al día 1', async () => {
+    it('guarda persona + las 5 preferencias por dominio, deja el evento y redirige a la guía', async () => {
         const { coachUpdate, prefsUpsert, events, admin } = setupClients()
 
         await setCoachPersonaAction({ persona: 'endurance', alsoOther: true })
@@ -144,9 +144,9 @@ describe('setCoachPersonaAction', () => {
             expect.objectContaining({ event: 'persona_selected', distinctId: COACH_ID }),
         )
 
-        // 4. Nav revalidado + destino.
+        // 4. Nav revalidado + destino: la GUÍA, no el dashboard (decisión del owner 22-08).
         expect(revalidatePathMock).toHaveBeenCalledWith('/coach/dashboard', 'layout')
-        expect(redirectMock).toHaveBeenCalledWith('/coach/dashboard?bienvenida=1')
+        expect(redirectMock).toHaveBeenCalledWith('/coach/guia?bienvenida=1')
     })
 
     it('el escape («other») ignora la segunda pregunta y deja el panel completo', async () => {
@@ -171,7 +171,7 @@ describe('setCoachPersonaAction', () => {
         })
         const eventTypes = events.insert.mock.calls.map((call: unknown[]) => (call[0] as { event_type: string }).event_type)
         expect(eventTypes).toEqual(['persona_selected'])
-        expect(redirectMock).toHaveBeenCalledWith('/coach/dashboard?bienvenida=1')
+        expect(redirectMock).toHaveBeenCalledWith('/coach/guia?bienvenida=1')
     })
 
     it('cuando W3 siembra de verdad, queda el evento `demo_seeded`', async () => {

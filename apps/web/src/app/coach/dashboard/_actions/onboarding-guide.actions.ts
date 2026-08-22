@@ -38,6 +38,21 @@ const onboardingGuideSchema = z.object({
      */
     emitted: z.array(z.enum(ONBOARDING_STEP_KEYS)).max(ONBOARDING_STEP_KEYS.length).optional(),
     ahaMomentSent: z.boolean().optional(),
+    /**
+     * Sello de la PRIMERA visita a `/coach/guia` (decisión del owner 22-08: la guía es una
+     * pantalla propia y todo coach la ve una vez antes que el dashboard). Lo escribe la pantalla
+     * al montarse y es lo único que apaga ese redirect, así que la clave viaja en snake_case:
+     * el merge de abajo la deja tal cual en el jsonb (`onboarding_guide.guide_seen_at`).
+     *
+     * Fecha ISO validada por `Date.parse` en vez de `z.string().datetime()`: mismo efecto sin
+     * atarse a la API de una versión concreta de zod.
+     */
+    guide_seen_at: z
+        .string()
+        .min(1)
+        .max(64)
+        .refine((value) => !Number.isNaN(Date.parse(value)), 'Fecha inválida')
+        .optional(),
 })
 
 export type OnboardingGuidePayload = z.infer<typeof onboardingGuideSchema>

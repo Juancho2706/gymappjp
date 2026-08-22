@@ -13,6 +13,7 @@ describe('parseOnboardingGuide', () => {
             hidden: false,
             emitted: [],
             ahaMomentSent: false,
+            guideSeenAt: null,
         })
         expect(parseOnboardingGuide(null).completed).toEqual({})
         expect(parseOnboardingGuide('nope').completed).toEqual({})
@@ -34,6 +35,15 @@ describe('parseOnboardingGuide', () => {
     it('`emitted` solo conserva claves de paso válidas', () => {
         const state = parseOnboardingGuide({ emitted: ['aha', 'first_client', 'inventado'] })
         expect(state.emitted.sort()).toEqual(['aha', 'first_client'])
+    })
+
+    it('lee `guide_seen_at` (sello de la primera visita a /coach/guia) y descarta basura', () => {
+        expect(parseOnboardingGuide({ guide_seen_at: '2026-08-22T10:00:00.000Z' }).guideSeenAt).toBe(
+            '2026-08-22T10:00:00.000Z',
+        )
+        expect(parseOnboardingGuide({ guide_seen_at: '' }).guideSeenAt).toBeNull()
+        expect(parseOnboardingGuide({ guide_seen_at: 12345 }).guideSeenAt).toBeNull()
+        expect(parseOnboardingGuide({}).guideSeenAt).toBeNull()
     })
 
     it('ignora tipos que no son booleanos (jsonb escrito a mano)', () => {
@@ -61,6 +71,7 @@ describe('guideStateHasActivity — decide si el servidor le gana a localStorage
                 hidden: false,
                 emitted: [],
                 ahaMomentSent: false,
+                guideSeenAt: null,
             })
         ).toBe(false)
     })
@@ -72,6 +83,7 @@ describe('guideStateHasActivity — decide si el servidor le gana a localStorage
             hidden: false,
             emitted: [],
             ahaMomentSent: false,
+            guideSeenAt: null,
         }
         expect(guideStateHasActivity({ ...base, dismissed: true })).toBe(true)
         expect(guideStateHasActivity({ ...base, hidden: true })).toBe(true)

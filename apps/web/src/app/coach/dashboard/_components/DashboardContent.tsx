@@ -1,16 +1,15 @@
-import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
-import { getCoachDashboardDataV2, getCoachOnboardingV2Data } from '../_data/dashboard.queries'
+import type { Persona } from '@eva/schemas'
+import { getCoachDashboardDataV2 } from '../_data/dashboard.queries'
 import { listUserWorkspacesForRender } from '@/services/auth/workspace-render-cache'
 import { DashboardShell } from './DashboardShell'
-import { isOnboardingGuideHidden } from '../_lib/onboarding-guide-state'
 
 export async function DashboardContent({
     userId,
     coachName,
     coachSlug,
     coachInviteCode,
-    initialOnboardingGuide,
+    persona,
     subscriptionTier,
     hasCoachLogo,
     coachLogoUrl,
@@ -22,9 +21,11 @@ export async function DashboardContent({
     coachName: string
     coachSlug: string
     coachInviteCode?: string | null
-    initialOnboardingGuide: Json
+    /** `coaches.persona` — vocabulario del modal de bienvenida legado (`?welcome=free`). */
+    persona: Persona | null
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean
+    /** Logo de marca del coach — usado como tile del avatar del header móvil (fallback iniciales). */
     coachLogoUrl?: string | null
     activeClientCount?: number | null
     /** `coaches.max_clients` — cupo efectivo del coach (override manual / grandfather). */
@@ -32,17 +33,17 @@ export async function DashboardContent({
     /** `coaches.created_at` — ancla del grandfather de pricing v2 si falta la columna. */
     coachCreatedAt?: string | null
 }) {
-    // Onboarding v2: la guía y sus tarjetas mueren del todo cuando el coach las apagó
-    // (`onboarding_guide.hidden`). Sin este corte, un coach con 40 alumnos y la guía cerrada
-    // pagaría las consultas del día 1 en CADA carga del dashboard.
-    const wantsOnboardingV2 = !isOnboardingGuideHidden(initialOnboardingGuide)
+    // Onboarding v2 — la guía del día 1 (checklist, «Tu marca en 60 s», alumno de ejemplo, tira
+    // del pie) YA NO VIVE ACÁ: se mudó a `/coach/guia` (decisión del owner 22-08, el dashboard del
+    // día 1 se ve LLENO). Con ella se fue `getCoachOnboardingV2Data`, que corría en CADA carga del
+    // dashboard —marca, «vive tu app», artefacto por persona, alumno real, actividad real— y hoy
+    // solo se paga al abrir la guía. El rastro en el panel es la píldora flotante del layout.
 
     // workspaces: React.cache-memoizado por userId (ya lo resuelve el layout en el mismo
     // request → dedup, sin costo extra de DB). Habilita el switcher de espacio del header móvil.
-    const [data, workspaces, onboarding] = await Promise.all([
+    const [data, workspaces] = await Promise.all([
         getCoachDashboardDataV2(userId),
         listUserWorkspacesForRender(userId),
-        wantsOnboardingV2 ? getCoachOnboardingV2Data(userId) : Promise.resolve(null),
     ])
     return (
         <DashboardShell
@@ -51,7 +52,7 @@ export async function DashboardContent({
             coachName={coachName}
             coachSlug={coachSlug}
             coachInviteCode={coachInviteCode}
-            initialOnboardingGuide={initialOnboardingGuide}
+            persona={persona}
             subscriptionTier={subscriptionTier}
             hasCoachLogo={hasCoachLogo}
             coachLogoUrl={coachLogoUrl}
@@ -59,7 +60,6 @@ export async function DashboardContent({
             coachMaxClients={coachMaxClients}
             coachCreatedAt={coachCreatedAt}
             workspaces={workspaces}
-            onboarding={onboarding}
         />
     )
 }

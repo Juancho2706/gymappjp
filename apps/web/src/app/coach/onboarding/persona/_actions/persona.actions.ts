@@ -26,22 +26,37 @@ import {
  *     que el panel se achique de verdad. Si esto falla NO se aborta: la persona ya quedó y el
  *     menú completo es un estado seguro (fail-open).
  *  5. Telemetría `persona_selected` (tabla + PostHog) y alumno de ejemplo, ambos best-effort.
- *  6. `redirect('/coach/dashboard?bienvenida=1')`.
+ *  6. `redirect('/coach/guia?bienvenida=1')`.
  *
  * El sembrador vive en `services/onboarding/demo-student.service` (W3 lo implementa). Hasta
  * entonces devuelve `{ ok: false, reason: 'not_implemented' }` y acá se tolera en silencio: el
  * onboarding tiene que funcionar igual sin demo.
  */
 
-/** Destino del primer ingreso: el dashboard día 1. El `bienvenida=1` lo consume W2-B. */
-const DASHBOARD_AFTER_PERSONA = '/coach/dashboard?bienvenida=1'
+/**
+ * Destino del primer ingreso: «Tus primeros pasos», NO el dashboard (decisión del owner 22-08 —
+ * el panel del día 1 se ve lleno y la guía se mudó a su pantalla propia). `bienvenida=1` pinta
+ * ahí la banda de bienvenida de dos líneas, en vez del modal que había antes.
+ */
+const GUIA_AFTER_PERSONA = '/coach/guia?bienvenida=1'
 
 export type PersonaActionResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * `?welcome=free&eid=` del alta Free por Google: el espejo browser de Meta/PostHog que antes se
+ * disparaba en el dashboard. El gate de persona lo trae hasta acá y la action lo reenvía a la
+ * guía. Solo se acepta la forma exacta (`welcome=free` + id opaco corto): nada más viaja.
+ */
+const registrationMirrorSchema = z.object({
+    welcome: z.literal('free'),
+    eid: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/),
+})
 
 const personaInputSchema = z.object({
     persona: PersonaSchema,
     /** Segunda pregunta inline. Ausente ⇒ «No» (el default de la pantalla). */
     alsoOther: z.boolean().optional(),
+    registration: registrationMirrorSchema.optional(),
 })
 
 export type SetCoachPersonaInput = z.input<typeof personaInputSchema>
@@ -123,11 +138,16 @@ async function persistPersona(input: SetCoachPersonaInput): Promise<PersonaActio
 }
 
 /**
- * Guarda la persona del coach y lo manda al dashboard día 1. En éxito NO retorna (redirige);
+ * Guarda la persona del coach y lo manda a su guía de inicio. En éxito NO retorna (redirige);
  * el `PersonaActionResult` solo viaja al cliente cuando algo falló y hay que reintentar.
  */
 export async function setCoachPersonaAction(input: SetCoachPersonaInput): Promise<PersonaActionResult> {
     const result = await persistPersona(input)
     if (!result.ok) return result
-    redirect(DASHBOARD_AFTER_PERSONA)
+    const mirror = registrationMirrorSchema.safeParse(input.registration)
+    redirect(
+        mirror.success
+            ? `${GUIA_AFTER_PERSONA}&welcome=free&eid=${encodeURIComponent(mirror.data.eid)}`
+            : GUIA_AFTER_PERSONA
+    )
 }
