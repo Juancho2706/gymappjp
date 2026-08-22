@@ -28,7 +28,10 @@ export function NextBestAction({ action }: { action: NBAType }) {
                 <p className="flex-1 text-sm text-[var(--text-muted)]">{action.description}</p>
                 <Link
                     href={action.ctaHref}
-                    className="inline-flex w-fit items-center gap-2 rounded-control bg-sport-500 px-4 py-2.5 text-sm font-bold text-[var(--text-on-sport)] shadow-[var(--glow-sport)] [transition:transform_var(--dur-fast)_var(--ease-out)] hover:-translate-y-0.5"
+                    // `bg-[var(--cta-fill)]` + halo derivado del mismo fill: `bg-sport-500` es
+                    // translúcido en dark y `--glow-sport` sigue congelado en azul EVA (globals.css),
+                    // así que el CTA de un coach con marca rosa salía lavado y con aureola azul.
+                    className="inline-flex w-fit items-center gap-2 rounded-control bg-[var(--cta-fill)] px-4 py-2.5 text-sm font-bold text-[var(--text-on-sport)] [box-shadow:0_6px_20px_color-mix(in_srgb,var(--cta-fill)_42%,transparent)] [transition:transform_var(--dur-fast)_var(--ease-out)] hover:-translate-y-0.5"
                 >
                     {action.ctaLabel}
                     <ArrowRight className="size-4" />

@@ -13,6 +13,7 @@ export async function DashboardContent({
     subscriptionTier,
     hasCoachLogo,
     coachLogoUrl,
+    coachLogoDarkUrl,
     activeClientCount,
     coachMaxClients,
     coachCreatedAt,
@@ -31,6 +32,8 @@ export async function DashboardContent({
     hasCoachLogo: boolean
     /** Logo de marca del coach — usado como tile del avatar del header móvil (fallback iniciales). */
     coachLogoUrl?: string | null
+    /** Variante DARK del logo (`coaches.logo_url_dark`); ausente ⇒ ThemedLogo cae al claro. */
+    coachLogoDarkUrl?: string | null
     activeClientCount?: number | null
     /** `coaches.max_clients` — cupo efectivo del coach (override manual / grandfather). */
     coachMaxClients?: number | null
@@ -60,6 +63,7 @@ export async function DashboardContent({
             subscriptionTier={subscriptionTier}
             hasCoachLogo={hasCoachLogo}
             coachLogoUrl={coachLogoUrl}
+            coachLogoDarkUrl={coachLogoDarkUrl}
             activeClientCount={activeClientCount}
             coachMaxClients={coachMaxClients}
             coachCreatedAt={coachCreatedAt}

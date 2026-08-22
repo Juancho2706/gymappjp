@@ -48,6 +48,12 @@ interface Props {
     hasCoachLogo: boolean
     /** Logo de marca del coach — usado como tile del avatar del header móvil (fallback iniciales). */
     coachLogoUrl?: string | null
+    /**
+     * Variante DARK del logo (`coaches.logo_url_dark`). Sin ella el header móvil pintaba SIEMPRE
+     * el logo claro: un logo pensado para fondo blanco quedaba ilegible con el panel en oscuro
+     * (bug de white-label del QA 22-08). `ThemedLogo` cae al claro cuando el coach no subió dark.
+     */
+    coachLogoDarkUrl?: string | null
     /** Alumnos activos standalone reales (is_archived=false) para el banner del plan gratuito. */
     activeClientCount?: number | null
     /** `coaches.max_clients`: cupo efectivo del coach (override manual / grandfather). GANA. */
@@ -63,6 +69,7 @@ export function DashboardShell({
     coachInviteCode,
     subscriptionTier,
     coachLogoUrl,
+    coachLogoDarkUrl,
     activeClientCount,
     coachMaxClients,
     coachCreatedAt,
@@ -184,7 +191,7 @@ export function DashboardShell({
                                     aria-label="Cambiar de espacio"
                                     className="relative shrink-0"
                                 >
-                                    <HeaderBrandTile logoUrl={coachLogoUrl} name={coachName} />
+                                    <HeaderBrandTile logoUrl={coachLogoUrl} logoDarkUrl={coachLogoDarkUrl} name={coachName} />
                                     <span className="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-[var(--surface-app)] bg-surface-card text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
                                         <ChevronDown className="size-3" />
                                     </span>
@@ -195,7 +202,7 @@ export function DashboardShell({
                                     aria-label="Tu cuenta"
                                     className="relative shrink-0"
                                 >
-                                    <HeaderBrandTile logoUrl={coachLogoUrl} name={coachName} />
+                                    <HeaderBrandTile logoUrl={coachLogoUrl} logoDarkUrl={coachLogoDarkUrl} name={coachName} />
                                 </Link>
                             )}
                         </div>
@@ -295,13 +302,22 @@ function LegacyRegistrationMirror() {
  * (blanco en light / superficie hundida en dark); si no, cae a las iniciales con anillo sport.
  * Tamaño `md` (40px) para igualar la huella del avatar previo del header.
  */
-function HeaderBrandTile({ logoUrl, name }: { logoUrl?: string | null; name: string }) {
+function HeaderBrandTile({
+    logoUrl,
+    logoDarkUrl,
+    name,
+}: {
+    logoUrl?: string | null
+    logoDarkUrl?: string | null
+    name: string
+}) {
     // Contrato compartido con el topbar/sidebar: logo custom cuando corresponde y EVA cuando
     // el white-label no está disponible. El fallback conserva el anillo sport del header.
     return (
         <CoachBrandAvatar
             name={name}
             logoUrl={logoUrl}
+            logoDarkUrl={logoDarkUrl}
             size="md"
             fallback={<EvaBrandFallback size="md" className="ring-2 ring-[var(--sport-500)]/40" />}
         />

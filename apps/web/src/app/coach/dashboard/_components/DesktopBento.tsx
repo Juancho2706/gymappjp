@@ -164,7 +164,9 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
                     <button
                         type="button"
                         onClick={() => setCreateOpen(true)}
-                        className="eva-press inline-flex h-12 items-center justify-center gap-2 rounded-control border-[1.5px] border-transparent bg-[var(--cta-fill)] px-[18px] font-ui text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)]"
+                        // Halo derivado de `--cta-fill`: `--glow-sport` sigue congelado en azul EVA
+                        // (globals.css) y le ponía aureola azul al CTA de marca.
+                        className="eva-press inline-flex h-12 items-center justify-center gap-2 rounded-control border-[1.5px] border-transparent bg-[var(--cta-fill)] px-[18px] font-ui text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-on-sport)] [box-shadow:0_6px_20px_color-mix(in_srgb,var(--cta-fill)_42%,transparent)]"
                     >
                         <Plus className="size-[17px]" /> Nuevo alumno
                     </button>

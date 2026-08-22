@@ -14,7 +14,10 @@ type Action = { label: string; icon: LucideIcon; run: () => void }
  * bento exposes the same actions in its header). Wires to real routes/modals.
  *
  * El botón usa `--cta-fill` (fill SÓLIDO derivado de la marca) en vez de `bg-sport-500`
- * (translúcido al 70% en dark → el FAB se veía transparente sobre el contenido). El sheet
+ * (translúcido al 70% en dark → el FAB se veía transparente sobre el contenido). El halo TAMBIÉN
+ * sale de `--cta-fill`: `--glow-sport` está congelado en azul EVA (globals.css `rgba(38,128,255,…)`,
+ * el único token de la rampa que el layout /coach NO reescribe), así que un FAB rosa quedaba con
+ * aureola azul — el síntoma que reportó el owner en el QA del 22-08. El sheet
  * de acciones se monta con el componente `Sheet` (portal a `document.body`, z-[71]) para
  * que SIEMPRE quede por encima de la cápsula de navegación flotante (z-50) — antes el
  * `<div fixed>` propio quedaba atrapado en el stacking context del <main> y la barra lo tapaba.
@@ -39,7 +42,8 @@ export function DashboardFab() {
                 className="fixed right-5 z-40 flex size-14 items-center justify-center rounded-full bg-[var(--cta-fill)] text-[var(--text-on-sport)] transition-transform hover:-translate-y-0.5 active:scale-95 md:hidden"
                 style={{
                     bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
-                    boxShadow: 'var(--glow-sport), 0 8px 22px rgba(13,18,28,0.28)',
+                    boxShadow:
+                        '0 6px 20px color-mix(in srgb, var(--cta-fill) 42%, transparent), 0 8px 22px rgba(13,18,28,0.28)',
                 }}
             >
                 <Plus className="size-7" />

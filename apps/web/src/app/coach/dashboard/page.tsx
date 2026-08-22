@@ -60,6 +60,7 @@ export default async function CoachDashboardPage() {
                 subscriptionTier={subscriptionTier}
                 hasCoachLogo={coachBrandingVisible && Boolean(coach.logo_url?.trim())}
                 coachLogoUrl={coachBrandingVisible ? coach.logo_url : null}
+                coachLogoDarkUrl={coachBrandingVisible ? coach.logo_url_dark : null}
                 activeClientCount={activeClientCount}
                 coachMaxClients={coach.max_clients}
                 coachCreatedAt={coach.created_at ?? null}

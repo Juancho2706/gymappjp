@@ -7,7 +7,6 @@ import {
     Apple,
     ArrowRight,
     ChevronRight,
-    CirclePlay,
     ClipboardList,
     HeartPulse,
     Info,
@@ -89,10 +88,16 @@ const PLAN_TOOL: ToolDef = {
     href: '/coach/nutrition-plans',
 }
 
+// Halo derivado de `--cta-fill`: `--glow-sport` sigue congelado en azul EVA (globals.css) y le
+// ponía aureola azul a los CTA de un coach con marca rosa (QA del owner 22-08).
 const CTA_SPORT =
-    'flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] px-[18px] text-[15px] font-bold text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all hover:opacity-90 active:scale-[0.97]'
-const CTA_SECONDARY =
-    'flex min-h-12 w-full items-center justify-center gap-2 rounded-control border-[1.5px] border-default bg-surface-card px-[18px] text-[15px] font-bold text-strong transition-colors hover:bg-surface-sunken active:scale-[0.97]'
+    'flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] px-[18px] text-[15px] font-bold text-[var(--text-on-sport)] [box-shadow:0_6px_20px_color-mix(in_srgb,var(--cta-fill)_42%,transparent)] transition-all hover:opacity-90 active:scale-[0.97]'
+
+/** Chrome de la fila tocable del hub — mismo patrón que las cards de «Opciones» (HubCard). */
+const ROW_BASE =
+    'group flex w-full items-start gap-[13px] rounded-card border border-subtle bg-surface-card p-4 text-left transition-all'
+const ROW_INTERACTIVE =
+    'hover:border-[var(--sport-300)] hover:shadow-[var(--shadow-sm)] active:scale-[0.995]'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
     return (
@@ -102,7 +107,16 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     )
 }
 
-/** Tarjeta de módulo en el hub — alcance + estado + acción según entitlement (kit ModuleHubCard). */
+/**
+ * Fila de módulo del hub — alcance + estado + acción según entitlement.
+ *
+ * QA del owner 22-08: la versión previa era una card con un botón «Usar» SÓLIDO a todo el ancho
+ * por módulo; tres apilados leían como un muro de botones y no como un launcher. Ahora la FILA
+ * ENTERA es el destino tocable (mismo patrón que las cards de «Opciones»: tile teñido + título +
+ * descripción + chips + chevron), con la acción escrita al costado en vez de un bloque de color.
+ * El tile y el chevron se tiñen con `--sport-*`, que el layout /coach reescribe con la marca del
+ * coach — con marca rosa el hub es rosa, no azul EVA.
+ */
 function ModuleHubCard({
     tool,
     active,
@@ -116,72 +130,96 @@ function ModuleHubCard({
 }) {
     const Icon = tool.icon
     const isPlan = tool.scope === 'plan'
-    return (
-        <Card padding="md" className="gap-[13px]">
-            <div className="flex items-start gap-[13px]">
-                <span
-                    className={cn(
-                        'flex size-12 shrink-0 items-center justify-center rounded-[14px]',
-                        active ? 'bg-sport-100 text-sport-600' : 'bg-surface-sunken text-subtle'
-                    )}
-                >
-                    <Icon className="size-[23px]" />
-                </span>
-                <div className="min-w-0 flex-1">
-                    <p className="font-display text-[16.5px] font-extrabold tracking-[-0.01em] text-strong">
-                        {tool.label}
-                    </p>
-                    <p className="mt-0.5 text-[12.5px] leading-snug text-muted">{tool.value}</p>
-                </div>
-            </div>
+    // Sin entitlement Y gestionado por un equipo NO hay destino: la fila queda informativa.
+    const locked = !active
+    const inert = locked && managed
+    const actionLabel = active ? (isPlan ? 'Abrir en un plan' : 'Usar') : 'Mejorar plan'
 
-            {/* Alcance + estado (honestidad de alcance: el coach sabe qué hace antes de entrar) */}
-            <div className="flex flex-wrap items-center gap-[7px]">
-                <span className="inline-flex h-6 items-center gap-[5px] rounded-pill bg-surface-sunken px-[9px] text-[11px] font-bold text-muted">
-                    {isPlan ? <ClipboardList className="size-3" aria-hidden /> : <UserRound className="size-3" aria-hidden />}
-                    {isPlan ? 'Se configura en el plan' : 'Se usa con un alumno'}
-                </span>
-                {active ? (
-                    <Badge tone="success" variant="soft" size="sm" dot>
-                        Activo
-                    </Badge>
-                ) : (
-                    <Badge tone="neutral" variant="soft" size="sm">
-                        Con plan pago
-                    </Badge>
+    const body = (
+        <>
+            <span
+                className={cn(
+                    'flex size-12 shrink-0 items-center justify-center rounded-[14px]',
+                    active ? 'bg-[var(--sport-100)] text-[var(--sport-600)]' : 'bg-surface-sunken text-subtle'
                 )}
+            >
+                <Icon className="size-[23px]" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+                <p className="font-display text-[16.5px] font-extrabold tracking-[-0.01em] text-strong">
+                    {tool.label}
+                </p>
+                <p className="mt-0.5 text-[12.5px] leading-snug text-muted">{tool.value}</p>
+
+                {/* Alcance + estado (honestidad de alcance: el coach sabe qué hace antes de entrar) */}
+                <div className="mt-2.5 flex flex-wrap items-center gap-[7px]">
+                    <span className="inline-flex h-6 items-center gap-[5px] rounded-pill bg-surface-sunken px-[9px] text-[11px] font-bold text-muted">
+                        {isPlan ? <ClipboardList className="size-3" aria-hidden /> : <UserRound className="size-3" aria-hidden />}
+                        {isPlan ? 'Se configura en el plan' : 'Se usa con un alumno'}
+                    </span>
+                    {active ? (
+                        <Badge tone="success" variant="soft" size="sm" dot>
+                            Activo
+                        </Badge>
+                    ) : (
+                        <Badge tone="neutral" variant="soft" size="sm" icon={<Lock aria-hidden />}>
+                            Con plan pago
+                        </Badge>
+                    )}
+                    {inert && (
+                        <span className="text-[11.5px] font-semibold text-subtle">
+                            Pídelo al owner de tu equipo
+                        </span>
+                    )}
+                </div>
             </div>
 
-            {/* Acción primaria según estado */}
-            {active ? (
-                tool.picker ? (
-                    <button type="button" onClick={onUse} className={CTA_SPORT}>
-                        <CirclePlay className="size-[18px]" aria-hidden />
-                        Usar
-                    </button>
-                ) : (
-                    <Link href={tool.href ?? '/coach/settings/modules'} className={CTA_SPORT}>
-                        {isPlan ? (
-                            <ArrowRight className="size-[18px]" aria-hidden />
-                        ) : (
-                            <CirclePlay className="size-[18px]" aria-hidden />
+            {!inert && (
+                <span className="flex shrink-0 items-center gap-1 self-center pl-1">
+                    {/* aria-hidden: el nombre accesible del enlace ya lo pone el `sr-only` de abajo
+                        (si no, en ≥sm el lector leía la acción dos veces). */}
+                    <span
+                        aria-hidden
+                        className={cn(
+                            'hidden text-[12.5px] font-bold sm:inline',
+                            active ? 'text-[var(--sport-600)]' : 'text-muted'
                         )}
-                        {isPlan ? 'Abrir en un plan' : 'Usar'}
-                    </Link>
-                )
-            ) : managed ? (
-                <div className="flex items-center gap-2 rounded-control bg-surface-sunken px-3.5 py-[11px] text-muted">
-                    <Lock className="size-[15px] shrink-0 text-subtle" aria-hidden />
-                    <span className="text-[12.5px] font-semibold leading-snug">Pídelo al owner de tu equipo</span>
-                </div>
-            ) : (
-                // Incluido en los planes pagos (CEO 2026-07-17): el CTA lleva al upgrade de plan.
-                <Link href="/coach/subscription" className={CTA_SECONDARY}>
-                    <Lock className="size-4" aria-hidden />
-                    Incluido en los planes pagos · Mejorar plan
-                </Link>
+                    >
+                        {actionLabel}
+                    </span>
+                    <ChevronRight
+                        className={cn(
+                            'size-[18px] transition-transform group-hover:translate-x-0.5',
+                            active ? 'text-[var(--sport-600)]' : 'text-[var(--ink-300)]'
+                        )}
+                        aria-hidden
+                    />
+                </span>
             )}
-        </Card>
+        </>
+    )
+
+    // Composición (picker) abre el selector de alumno; el resto navega. Sin entitlement la fila
+    // lleva al upgrade de plan (los módulos vienen incluidos en los pagos, CEO 2026-07-17).
+    if (inert) {
+        return <div className={ROW_BASE}>{body}</div>
+    }
+    if (active && tool.picker) {
+        return (
+            <button type="button" onClick={onUse} className={cn(ROW_BASE, ROW_INTERACTIVE)}>
+                {body}
+                <span className="sr-only">{actionLabel}</span>
+            </button>
+        )
+    }
+    return (
+        <Link
+            href={active ? (tool.href ?? '/coach/settings/modules') : '/coach/subscription'}
+            className={cn(ROW_BASE, ROW_INTERACTIVE)}
+        >
+            {body}
+            <span className="sr-only">{actionLabel}</span>
+        </Link>
     )
 }
 
