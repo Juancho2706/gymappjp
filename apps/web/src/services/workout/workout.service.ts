@@ -1,3 +1,4 @@
+import { publicAppUrl } from '@/lib/site-url'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import type { Json } from '@/lib/database.types'
@@ -989,7 +990,7 @@ export async function assignProgramToClientsAction(
             logoUrl: coachBrand.data?.logo_url,
             primaryColor: coachBrand.data?.primary_color,
         })
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
+        const appUrl = publicAppUrl()
 
         // Iterar por cada cliente
         for (const clientId of validClientIds) {

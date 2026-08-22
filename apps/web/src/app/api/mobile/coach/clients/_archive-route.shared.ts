@@ -1,3 +1,4 @@
+import { publicAppUrl } from '@/lib/site-url'
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
@@ -59,7 +60,7 @@ export async function sendArchiveLifecycleEmail(input: {
   ])
   if (!coach) return
 
-  const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+  const appUrl = publicAppUrl()
   const team = teamResult.data
   const publicPath = team ? `/t/${team.slug}` : `/c/${getCoachPublicIdentifier(coach)}`
   const emailBrand = resolveStudentEmailBranding({

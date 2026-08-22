@@ -1,3 +1,4 @@
+import { publicAppUrl } from '@/lib/site-url'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import {
@@ -122,11 +123,9 @@ export async function createClientInternal(
     })
     if (!identity.ok) console.error('createClientIdentity (non-fatal, internal):', identity.error)
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
     const loginPath = coach.loginPath ?? `/c/${coach.slug}/login`
-    const loginUrl = appUrl
-        ? `${appUrl}${loginPath}`
-        : `https://app.tu-dominio.com${loginPath}`
+    // Base pública sin barra final (ver `publicAppUrl`): importar alumnos armaba el mismo link.
+    const loginUrl = `${publicAppUrl()}${loginPath}`
 
     if (options.sendEmail !== false) {
         // White-label (W2): en imports por team/org la marca es del pool (brand_name ya viene con

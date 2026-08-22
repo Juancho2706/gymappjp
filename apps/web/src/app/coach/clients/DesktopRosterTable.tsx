@@ -295,7 +295,7 @@ export function DesktopRosterTable({
     const handleMensaje = () => {
         for (const r of selectedRows) {
             if (!r.phone) continue
-            const msg = `Hola ${r.name}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
+            const msg = `Hola ${r.name}! Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
             window.open(
                 `https://wa.me/${r.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`,
                 '_blank',

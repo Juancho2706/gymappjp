@@ -1,3 +1,4 @@
+import { publicAppUrl } from '@/lib/site-url'
 import { NextRequest, NextResponse } from 'next/server'
 import { MobileProgramAssignmentNotificationRequestSchema } from '@eva/schemas'
 import { resolveMobileClientMutationContext } from '@/app/api/mobile/coach/clients/_mutation-auth'
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
       userId: context.userId,
       programIds: parsed.data.programIds,
       scope: context.scope,
-      appUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || null,
+      appUrl: publicAppUrl(),
       repository: createProgramAssignmentNotificationRepository(context.admin),
       emailSender: resendIdempotentEmailSender,
       pushSender: notifyProgramAssigned,

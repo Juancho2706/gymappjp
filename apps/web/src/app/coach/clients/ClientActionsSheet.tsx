@@ -116,7 +116,7 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
     const paused = client.is_active === false
     const archived = client.is_archived === true
 
-    const waMessage = `Hola ${name}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
+    const waMessage = `Hola ${name}! Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
     const whatsappLink =
         client.phone && loginUrl
             ? `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waMessage)}`

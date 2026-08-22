@@ -1,5 +1,6 @@
 'use server'
 
+import { publicAppUrl } from '@/lib/site-url'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
@@ -230,9 +231,8 @@ export async function createClientAction(
         }
     }
 
-    // Sin barra final: el valor de Vercel puede traerla y el link le llegaba al alumno como
-    // `https://www.eva-app.cl//c/<code>/login` (reporte del owner 22-08).
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL)?.replace(/\/+$/, '')
+    // Base pública sin barra final (reporte del owner 22-08: `//c/<code>/login`), ver `publicAppUrl`.
+    const appUrl = publicAppUrl()
     // Contexto team: el alumno entra por /t/[team]/login con la marca del TEAM (no la personal).
     let loginPath: string
     let emailBrandName = coach.brand_name
@@ -247,7 +247,7 @@ export async function createClientAction(
     } else {
         loginPath = `/c/${getCoachPublicIdentifier(coach)}/login`
     }
-    const loginUrl = appUrl ? `${appUrl}${loginPath}` : `https://app.tu-dominio.com${loginPath}`
+    const loginUrl = `${appUrl}${loginPath}`
     // White-label (W2): el header/CTA del email usan la marca del coach solo si es standalone Pro+
     // (team/org tienen su propia marca, no threadeada acá → fallback EVA).
     const emailBrand = resolveStudentEmailBranding({

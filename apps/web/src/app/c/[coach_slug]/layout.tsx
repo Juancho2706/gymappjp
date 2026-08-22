@@ -6,12 +6,10 @@ import type { Metadata, Viewport } from 'next'
 import {
     BRAND_APP_ICON,
     SYSTEM_PRIMARY_COLOR,
-    BRAND_OG_IMAGE,
-    BRAND_OG_IMAGE_HEIGHT,
-    BRAND_OG_IMAGE_WIDTH,
     BRAND_PRIMARY_COLOR,
 } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
+import { COACH_OG_IMAGE_HEIGHT, COACH_OG_IMAGE_WIDTH } from '@/lib/coach-og-image'
 import { ClientNavGates } from './_components/ClientNavGates'
 import { ClientNavFallback } from './_components/ClientNavFallback'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
@@ -72,7 +70,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const logoUrl = headersList.get('x-coach-logo-url') || null
 
     const metadataBase = resolveMetadataBase()
-    const openGraphImageAbsoluteUrl = new URL(BRAND_OG_IMAGE, metadataBase).href
+    // OG por coach (22-08, pedido del owner): la preview de WhatsApp del link de acceso mostraba
+    // el logo de EVA para cualquier coach. `api/og/[coach_slug]` dibuja logo + color + nombre de
+    // la marca (Free cae a EVA, como el splash). 1200×630 = el tamaño que WhatsApp/Meta recortan
+    // menos; la imagen estática 1920×1080 queda como fallback del resto del sitio.
+    const openGraphImageAbsoluteUrl = new URL(`/api/og/${coach_slug}`, metadataBase).href
     const coachPath = `/c/${coach_slug}`
     const pageUrl = new URL(coachPath, metadataBase).href
 
@@ -113,8 +115,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             images: [
                 {
                     url: openGraphImageAbsoluteUrl,
-                    width: BRAND_OG_IMAGE_WIDTH,
-                    height: BRAND_OG_IMAGE_HEIGHT,
+                    width: COACH_OG_IMAGE_WIDTH,
+                    height: COACH_OG_IMAGE_HEIGHT,
                     alt: brandName,
                     type: 'image/png',
                 },

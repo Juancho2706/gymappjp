@@ -1,3 +1,4 @@
+import { publicAppUrl } from '@/lib/site-url'
 import { NextRequest, NextResponse } from 'next/server'
 import { CreateClientSchema } from '@eva/schemas'
 import { z } from 'zod'
@@ -310,12 +311,11 @@ export async function POST(request: NextRequest) {
     })
     if (!identity.ok) console.error('createClientIdentity (non-fatal, mobile):', identity.error)
 
-    // Sin barra final: el valor de Vercel puede traerla y el link le llegaba al alumno como
-    // `https://www.eva-app.cl//c/<code>/login` (reporte del owner 22-08).
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL)?.replace(/\/+$/, '')
+    // Base pública sin barra final (reporte del owner 22-08: `//c/<code>/login`), ver `publicAppUrl`.
+    const appUrl = publicAppUrl()
     const publicIdentifier = getCoachPublicIdentifier(coach)
     const loginPath = workspace.type === 'coach_team' ? `/t/${workspace.teamSlug}/login` : `/c/${publicIdentifier}/login`
-    const loginUrl = appUrl ? `${appUrl}${loginPath}` : `https://app.tu-dominio.com${loginPath}`
+    const loginUrl = `${appUrl}${loginPath}`
     // White-label (W2): marca del coach en el header/CTA solo si es standalone Pro+ (org → EVA).
     const emailBrand = resolveStudentEmailBranding({
         isStandalone: workspace.type === 'coach_standalone',

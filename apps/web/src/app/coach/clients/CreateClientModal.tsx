@@ -116,7 +116,7 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
     // WhatsApp CTA step
     if (state.success && state.newClientPhone) {
         const digits = state.newClientPhone.replace(/\D/g, '')
-        const message = `Hola ${state.clientName}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${state.loginUrl}`
+        const message = `Hola ${state.clientName}! Soy tu coach. Aquí está tu link para acceder a tu plan: ${state.loginUrl}`
         const waUrl = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
 
         return (
