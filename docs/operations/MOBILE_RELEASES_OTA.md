@@ -52,7 +52,10 @@ cápsula del nav; grupos `4818b015` android / `f9790a83` ios, runs 32581116703/3
 del home abre el muro de cupo + acceso por WhatsApp con la plantilla por persona sin EVA; grupos `d8af5381` android (32581397130) /
 `4bd9dfd2` ios (32581398959)) · `ota/1.1.1-20260822c` = `101ac299` (port de 443aa350 sin analytics ni gate de persona; se llevó
 `packages/schemas/persona.ts` al worktree porque `formatWhatsappInvite` lo necesita; grupos `b7c249d3` android (32581492198) / `0404b8be` ios
-(32581494202)). Los 4 verdes. El worktree del port sigue en `$CLAUDE_JOB_DIR/tmp/wt-ota-1.1.1` (HEAD `101ac299`).
+(32581494202)). Los 4 verdes.
+Quinta tanda (16:4xZ): `ota/1.1.2-20260822e` = `4a914dc0` (mensajes de WhatsApp sin 👋 — WhatsApp Desktop Windows lo rompe; grupos `e3267430`
+android (32582226693) / `c2bfd97c` ios (32582228383)) · `ota/1.1.1-20260822d` = `e240d15d` (mismo port; grupos `4c163825` android (32582232091) /
+`4956af62` ios (32582233803)). Los 4 verdes. El worktree del port sigue en `$CLAUDE_JOB_DIR/tmp/wt-ota-1.1.1` (HEAD `e240d15d`).
 
 ## Partición de runtimes vigente (2026-08-21)
 
@@ -61,8 +64,8 @@ del home abre el muro de cupo + acceso por WhatsApp con la plantilla por persona
 | Runtime | Binario | Quién lo tiene | Cómo se le publica |
 |---|---|---|---|
 | `1.1.0` | 54 (iOS) / 81 (Android) | App Store y closed testing de Play — **el público** | Desde un tag `ota/1.1.0-<fecha>` creado sobre `4206f340` (último commit con `version: 1.1.0`) + cherry-picks solo-JS. Último: `ota/1.1.0-20260821` = `c5501cc3` (Pricing v3; grupos `4b12bb78` android / `c095d5e1` ios). Anterior: `ota/1.1.0-20260820` = `39e64ff8`. |
-| `1.1.1` | 57 / 84 | App Store (aprobada 21-08) + closed testing de Play | Desde `master` mientras `app.json` diga 1.1.1 (hasta `2fdecebd`), o un tag `ota/1.1.1-<fecha>`. Último: `ota/1.1.1-20260822c` = `101ac299` (muro en el alta corta + invite sin EVA; grupos `b7c249d3` android / `0404b8be` ios). Anteriores: `ota/1.1.1-20260822b` = `abbd7f87` (W6.10 + header `x-eva-platform`; `230bd40b` / `65033c6d`), `ota/1.1.1-20260822` = `e1d9cdcd` (W4+W5+W6), `ota/1.1.1-20260821` = `fce4ceb8` (Pricing v3), `ota/1.1.1-20260820` = `b4d958fa`. |
-| `1.1.2` | 58 / 85 | TestFlight + closed testing de Play | Desde `rnmobiledenuevo` (o un tag sobre ella): lleva Share Entreno, que necesita los módulos nativos de este binario. Último: `ota/1.1.2-20260822d` = `443aa350` (muro en el alta corta + invite por persona; grupos `d8af5381` android / `4bd9dfd2` ios). Anteriores: `ota/1.1.2-20260822c` = `1937ede7` (píldora de la guía; `4818b015` / `f9790a83`), `ota/1.1.2-20260822b` = `8cf7b886` (onboarding v2 RN + W6.10 + header; `17fa6905` / `93834df2`), `ota/1.1.2-20260822` = `a1c2f2f9` (W4+W5+W6), `ota/1.1.2-20260821` = `2edea500` (Pricing v3). |
+| `1.1.1` | 57 / 84 | App Store (aprobada 21-08) + closed testing de Play | Desde `master` mientras `app.json` diga 1.1.1 (hasta `2fdecebd`), o un tag `ota/1.1.1-<fecha>`. Último: `ota/1.1.1-20260822d` = `e240d15d` (WhatsApp sin emoji; grupos `4c163825` android / `4956af62` ios). Anteriores: `ota/1.1.1-20260822c` = `101ac299` (muro en el alta corta + invite sin EVA; `b7c249d3` / `0404b8be`), `ota/1.1.1-20260822b` = `abbd7f87` (W6.10 + header `x-eva-platform`; `230bd40b` / `65033c6d`), `ota/1.1.1-20260822` = `e1d9cdcd` (W4+W5+W6), `ota/1.1.1-20260821` = `fce4ceb8` (Pricing v3), `ota/1.1.1-20260820` = `b4d958fa`. |
+| `1.1.2` | 58 / 85 | TestFlight + closed testing de Play | Desde `rnmobiledenuevo` (o un tag sobre ella): lleva Share Entreno, que necesita los módulos nativos de este binario. Último: `ota/1.1.2-20260822e` = `4a914dc0` (WhatsApp sin emoji; grupos `e3267430` android / `c2bfd97c` ios). Anteriores: `ota/1.1.2-20260822d` = `443aa350` (muro en el alta corta + invite por persona; `d8af5381` / `4bd9dfd2`), `ota/1.1.2-20260822c` = `1937ede7` (píldora de la guía; `4818b015` / `f9790a83`), `ota/1.1.2-20260822b` = `8cf7b886` (onboarding v2 RN + W6.10 + header; `17fa6905` / `93834df2`), `ota/1.1.2-20260822` = `a1c2f2f9` (W4+W5+W6), `ota/1.1.2-20260821` = `2edea500` (Pricing v3). |
 
 Reglas que salen de esto:
 

@@ -53,9 +53,13 @@ export async function GET(request: NextRequest, { params }: Params) {
     const brandName = (coach?.brand_name ?? '').trim() || 'EVA'
     const bg = safeColor(brandingAllowed ? coach?.primary_color : SYSTEM_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR)
     const fg = onColor(bg)
-    const logoUrl =
-        brandingAllowed && coach?.logo_url ? coach.logo_url : new URL(BRAND_APP_ICON, request.url).toString()
+    const customLogo = Boolean(brandingAllowed && coach?.logo_url)
+    const logoUrl = customLogo ? (coach!.logo_url as string) : new URL(BRAND_APP_ICON, request.url).toString()
     const badge = showsEvaBadge(tier)
+    // La figura EVA de fallback es blanca sobre transparente: sobre una baldosa blanca desaparece.
+    // Con logo propio la baldosa es blanca (el logo trae sus colores); sin él, la baldosa es un
+    // velo claro sobre el color de marca y la figura se lee.
+    const tileBg = customLogo ? '#FFFFFF' : 'rgba(255,255,255,0.18)'
 
     const render = (withLogo: boolean) =>
         new ImageResponse(
@@ -81,8 +85,8 @@ export async function GET(request: NextRequest, { params }: Params) {
                                 width: 300,
                                 height: 300,
                                 borderRadius: 64,
-                                background: '#FFFFFF',
-                                boxShadow: '0 24px 60px rgba(0,0,0,0.25)',
+                                background: tileBg,
+                                boxShadow: customLogo ? '0 24px 60px rgba(0,0,0,0.25)' : 'none',
                                 flexShrink: 0,
                             }}
                         >
