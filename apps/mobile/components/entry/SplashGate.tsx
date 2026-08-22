@@ -50,9 +50,20 @@ import {
  *
  * Timeline del retorno branded (§2.3, t0 = montaje de la replica):
  *   t0 hold de continuidad 120 ms · t0+120 crossfade 260 ms simultaneo (luz + marca)
- *   · el `router.replace` sale cuando el gate tiene target Y el crossfade cerro. Si el
- *   target ya estaba resuelto antes de t0+120 se salta el crossfade y se navega directo:
- *   la animacion jamas retiene la navegacion.
+ *   · el `router.replace` sale cuando el gate tiene target Y el crossfade cerro. Marca y
+ *   destino se deciden en la MISMA continuacion (las dos esperan `getCoachProfile()`), asi
+ *   que con marca permitida el cruce corre siempre: son ≤ 380 ms y es justo lo que el
+ *   owner espera ver («EVA y luego mi marca»). Sin marca el destino navega en el acto.
+ *
+ * BUG 22-08 (owner: «el splash sigue siendo el de EVA» con marca cacheada y valida): el
+ * hold de 120 ms se media desde t0, pero la marca recien se decide DESPUES de la red
+ * (`getCoachProfile`, 200-800 ms) ⇒ la espera restante era siempre 0 y la marca entraba por
+ * un `setTimeout(0)` mientras `setTarget` salia sincrono en la misma continuacion. React
+ * pintaba primero el render con destino-y-sin-marca, el efecto de navegacion disparaba el
+ * handoff con `mark: null` y marcaba `routed` — el timer llegaba tarde y se descartaba. El
+ * crossfade nunca corria; el overlay del dashboard continuaba la firma EVA. Ahora: hold ya
+ * vencido ⇒ `setBranded` SINCRONO (mismo batch que `setTarget`); hold pendiente ⇒ el efecto
+ * de navegacion espera la marca (`pendingMark`) antes de salir.
  *
  * UNA sola identidad despues del splash nativo (QA-3 del owner: "veo 3 splashes"). La
  * firma EVA (hairline + wordmark) NO se monta por defecto: solo aparece cuando el veredicto
@@ -138,6 +149,8 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   const t0 = useRef(splashClockNow())
   /** El gate ya sabe si habra marca de coach (aunque todavia no sepa el destino). */
   const decided = useRef(false)
+  /** Hay una marca de coach programada (hold de continuidad en curso): navegar la esperaria. */
+  const pendingMark = useRef(false)
 
   // El contenido se centra sobre el centro de la PANTALLA, no del body (§3.1): el splash
   // nativo centra en la ventana completa y la diferencia de ~8 pt se ve en el handoff.
@@ -263,16 +276,23 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
             // Orden de resolucion de la MARCA (§2.4): logoUrlDark → logoUrl → tile de iniciales.
             logoUri: currentBranding.logoUrlDark ?? currentBranding.logoUrl ?? null,
           }
-          // El hold de continuidad se respeta aunque AsyncStorage conteste en 40 ms (§4 R1):
-          // el crossfade nunca arranca antes de t0+120.
-          timers.push(
-            setTimeout(
-              () => {
+          // El hold de continuidad se respeta aunque todo conteste en 40 ms (§4 R1): el
+          // crossfade nunca arranca antes de t0+120. Pero si el hold YA vencio (lo normal:
+          // la red tardo mas que eso) la marca entra SINCRONA, en el mismo batch que el
+          // `setTarget` de abajo — un `setTimeout(0)` aqui perdia la carrera contra el render
+          // que navega (ver cabecera, BUG 22-08).
+          const holdLeft = Math.max(0, HOLD_MS - (splashClockNow() - t0.current))
+          if (holdLeft === 0) {
+            setBranded(mark)
+          } else {
+            pendingMark.current = true
+            timers.push(
+              setTimeout(() => {
+                pendingMark.current = false
                 if (active && !routed.current) setBranded(mark)
-              },
-              Math.max(0, HOLD_MS - (Date.now() - t0.current)),
-            ),
-          )
+              }, holdLeft),
+            )
+          }
         } else {
           // No hay marca de coach que mostrar: la espera es de EVA y lo dice.
           setEvaSignature(true)
@@ -318,9 +338,10 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
     return () => cancelAnimation(halo)
   }, [halo, reduced])
 
-  // Navegar = tener destino. El crossfade solo puede RETENER lo que ya empezo (cortarlo a la
-  // mitad se lee como parpadeo de marca); si el destino llega antes de que hubiera marca, no
-  // hay nada que esperar y se corta.
+  // Navegar = tener destino. El crossfade RETIENE la salida mientras corre (cortarlo a la
+  // mitad se lee como parpadeo de marca) y una marca programada (hold pendiente, ≤ 120 ms)
+  // tambien: navegar antes la perderia para siempre (el overlay raiz hereda `mark: null`).
+  // Sin marca decidida no hay nada que esperar y se sale en el acto.
   //
   // QA-5 — el handoff sale en la MISMA tanda que el `replace`: el overlay raiz monta con la
   // identidad de este frame (marca, firma, morphbar y la opacidad viva del halo) antes de que
@@ -328,6 +349,7 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
   // re-ejecutar este efecto (p.ej. cuando `slow` cambia) no lo repite.
   useEffect(() => {
     if (!target) return
+    if (pendingMark.current) return
     if (branded && !xfadeDone) return
     beginSplashHandoff({
       mark: branded,
