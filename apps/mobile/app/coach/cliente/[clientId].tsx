@@ -359,7 +359,7 @@ export default function ClientDetailScreen() {
     if (!client?.phone || !client || !loginUrl) return
     const digits = client.phone.replace(/\D/g, '')
     if (!digits) return
-    const message = `Hola ${client.full_name}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
+    const message = `Hola ${client.full_name}! Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
     Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`).catch(() => {})
   }
 

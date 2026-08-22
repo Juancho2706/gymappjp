@@ -292,7 +292,7 @@ export function CreateClientModal({
   function sendWhatsApp() {
     if (!success) return
     const digits = success.phone.replace(/\D/g, '')
-    const message = `Hola ${success.clientName}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${success.loginUrl}`
+    const message = `Hola ${success.clientName}! Soy tu coach. Aquí está tu link para acceder a tu plan: ${success.loginUrl}`
     Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`).catch(() => {})
     handleClose()
   }
