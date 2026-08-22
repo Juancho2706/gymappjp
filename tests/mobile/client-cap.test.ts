@@ -11,6 +11,7 @@ import {
   capTone,
   capWallCopy,
   freePlanBenefits,
+  shouldOpenAtCapWall,
   storePlanChangeCaption,
 } from '../../apps/mobile/lib/client-cap'
 
@@ -76,6 +77,39 @@ describe('client-cap: capMeterLabel', () => {
   it('conteos imposibles no rompen la etiqueta', () => {
     expect(capMeterLabel(-2, 25)).toBe('0 de 25 alumnos activos')
     expect(capMeterLabel(Number.NaN, 25)).toBe('0 de 25 alumnos activos')
+  })
+})
+
+describe('client-cap: shouldOpenAtCapWall (el alta abre en el muro, no en el formulario)', () => {
+  it('con cupo lleno o excedido el alta arranca en el muro', () => {
+    // QA owner Android 22-08: «+ agregar alumno» con el cupo lleno abría el formulario entero y el
+    // muro llegaba recién al enviar, con los datos ya escritos.
+    expect(shouldOpenAtCapWall({ activeCount: 1, maxClients: 1 })).toBe(true)
+    expect(shouldOpenAtCapWall({ activeCount: 2, maxClients: 1 })).toBe(true) // grandfather
+    expect(shouldOpenAtCapWall({ activeCount: 25, maxClients: 25 })).toBe(true)
+  })
+
+  it('con cupo disponible el formulario se abre normal', () => {
+    expect(shouldOpenAtCapWall({ activeCount: 0, maxClients: 1 })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: 24, maxClients: 25 })).toBe(false)
+  })
+
+  it('dato ausente o basura NO bloquea el alta: el 402 del server sigue siendo la autorización', () => {
+    // Fail-OPEN deliberado (al revés que el medidor, que ante cupo 0 se lee lleno): impedir un alta
+    // legítima por una lectura incompleta es peor que un rebote del server.
+    expect(shouldOpenAtCapWall({})).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: undefined, maxClients: undefined })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: 5, maxClients: undefined })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: undefined, maxClients: 1 })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: null, maxClients: null })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: Number.NaN, maxClients: 1 })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: 5, maxClients: Number.NaN })).toBe(false)
+  })
+
+  it('cupo no positivo (columna en cero o rota) deja pasar al formulario', () => {
+    expect(shouldOpenAtCapWall({ activeCount: 0, maxClients: 0 })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: 3, maxClients: 0 })).toBe(false)
+    expect(shouldOpenAtCapWall({ activeCount: 3, maxClients: -5 })).toBe(false)
   })
 })
 

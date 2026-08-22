@@ -98,7 +98,7 @@ import { WorkspaceSwitcherSheet } from './WorkspaceSwitcherSheet'
 import { ClientCapMeter } from './ClientCapMeter'
 // El ámbar del semáforo vive en UN solo lugar (lib/client-cap): el banner de cupo y el medidor
 // tienen que pintar el MISMO `--warning-500`; dos copias del hex divergen al primer ajuste del DS.
-import { capMeterLabel, capTone, WARNING_500 } from '../../lib/client-cap'
+import { CAP_FULL_LABEL, capMeterLabel, capTone, WARNING_500 } from '../../lib/client-cap'
 import { isStoreSafeUrl } from '../../lib/store-compliance'
 import { AnimatedNumber } from '../AnimatedNumber'
 
@@ -275,8 +275,10 @@ function MobileFreeTierBanner({ capClients, maxClients }: { capClients: number; 
     <TouchableOpacity
       accessibilityRole="button"
       // El medidor de adentro va `accessible={false}`: sin esto el lector anuncia la fila tocable y
-      // después la barra como dos nodos, y el destino («Ver mi plan») quedaba sin nombrar.
-      accessibilityLabel={`${capMeterLabel(used, max)}. Ver mi plan`}
+      // después la barra como dos nodos, y el destino («Ver mi plan») quedaba sin nombrar. Con el
+      // medidor sin etiqueta visible, el estado «Cupo completo» tiene que decirlo ESTA etiqueta:
+      // el color ámbar del fondo y de la barra no existen para el lector.
+      accessibilityLabel={`${capMeterLabel(used, max)}${full ? `. ${CAP_FULL_LABEL}` : ''}. Ver mi plan`}
       activeOpacity={0.82}
       onPress={() => router.push('/coach/(tabs)/subscription')}
       style={[
@@ -297,8 +299,12 @@ function MobileFreeTierBanner({ capClients, maxClients }: { capClients: number; 
           {capMeterLabel(used, max)} · Plan gratuito
         </Text>
         {/* `used` (no `capClients`): el título y la etiqueta accesible del medidor tienen que
-            decir lo MISMO. Un coach por sobre su cupo se lee «lleno», nunca «3 de 1». */}
-        <ClientCapMeter active={used} max={max} variant="bar" compact accessible={false} />
+            decir lo MISMO. Un coach por sobre su cupo se lee «lleno», nunca «3 de 1».
+            `showLabel={false}`: el título de arriba YA imprime `capMeterLabel(...)`; con el default
+            del medidor (`true` en `bar`) el banner decía «0 de 1 alumno activo» dos veces seguidas
+            (QA owner Android 22-08). La etiqueta ACCESIBLE no se pierde: el `TouchableOpacity` de
+            afuera la anuncia y el medidor va `accessible={false}` justamente para no duplicarla. */}
+        <ClientCapMeter active={used} max={max} variant="bar" compact showLabel={false} accessible={false} />
       </View>
       <Text style={[styles.tierAction, { color: theme.primary, fontFamily: FONT.uiBold }]}>
         Ver mi plan →
@@ -412,6 +418,18 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d`
 }
 
+/**
+ * «Tu link de alumnos cambió» — acuse de recibo de un cambio que YA ocurrió (el acceso de los
+ * alumnos pasó al código público). NO es venta ni onboarding: es estado, y por eso el único camino
+ * de salida es «Entendido» (el POST `confirm_public_code` que lo apaga para siempre).
+ *
+ * Rediseño 22-08 (QA owner Android): el modal caía en medio del home con el título sin tilde, un
+ * cuerpo con «movil»/«seguira» y un slug crudo dentro de una caja con radio de card. Ahora sigue el
+ * patrón del DS que ya usa `PlanUpgradeCelebration`: halo de marca (`hexToRgba(theme.primary, .12)`,
+ * white-label — nunca `bg-sport-*`, que es la rampa fija de EVA), el link como PASTILLA
+ * (surface-sunken + `radius.control` + fuente mono, que es como el DS pinta un identificador
+ * copiable) y las dos acciones en una fila. El contrato no cambia: mismos props, mismo POST.
+ */
 export function MobilePublicCodeRequiredModal({
   inviteCode,
   visible,
@@ -428,6 +446,14 @@ export function MobilePublicCodeRequiredModal({
   const studentPath = `/c/${inviteCode}/login`
   const studentUrl = `${getApiBaseUrl()}${studentPath}`
 
+  // El «Copiado ✓» vuelve a «Copiar» solo: un botón que se queda en su estado de éxito ya no dice
+  // si el segundo toque hizo algo. El timer se limpia al desmontar (el modal vive en el home).
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(id)
+  }, [copied])
+
   async function confirm() {
     setPending(true)
     setError(null)
@@ -439,7 +465,7 @@ export function MobilePublicCodeRequiredModal({
       })
       onConfirmed()
     } catch {
-      setError('No se pudo confirmar el codigo. Intenta de nuevo.')
+      setError('No se pudo confirmar el código. Intenta de nuevo.')
     } finally {
       setPending(false)
     }
@@ -459,43 +485,69 @@ export function MobilePublicCodeRequiredModal({
   }
 
   return (
-    <NativeDialog open={visible} onClose={() => {}} title="Tu link de alumnos cambio" showClose={false}>
+    <NativeDialog open={visible} onClose={() => {}} title="Tu link de alumnos cambió" showClose={false}>
       <View style={styles.publicCodeModal}>
         <View style={styles.publicCodeIntro}>
-          <View style={[styles.publicCodeIcon, { backgroundColor: theme.primary + '1A' }]}>
-            <LockKeyhole size={22} color={theme.primary} />
+          {/* Halo desde `theme.primary`: en white-label el ícono sale con la marca DEL COACH. */}
+          <View style={[styles.publicCodeIcon, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
+            <LockKeyhole size={22} strokeWidth={2} color={theme.primary} />
           </View>
-          <Text style={[styles.placeholderText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Este cambio mejora el acceso movil y evita errores al compartir links. Tu slug anterior seguira funcionando como respaldo.
+          <Text style={[styles.publicCodeBody, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Este cambio mejora el acceso móvil y evita errores al compartir links. Tu link anterior
+            seguirá funcionando como respaldo.
           </Text>
         </View>
 
-        <View style={[styles.publicCodeBox, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.xl }]}>
+        {/* Pastilla del DS: superficie hundida + `radius.control` + mono. La mono es deliberada —
+            es un identificador que el coach va a leer letra por letra antes de pegarlo. */}
+        <View
+          style={[
+            styles.publicCodeBox,
+            { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius.control },
+          ]}
+        >
           <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             NUEVO ACCESO ALUMNOS
           </Text>
           <View style={styles.publicCodeRow}>
-            <Text style={[styles.publicCodeValue, { color: theme.foreground, fontFamily: FONT.uiSemibold }]} numberOfLines={1}>
+            <Text
+              accessibilityLabel={`Nuevo acceso de alumnos: ${studentPath}`}
+              style={[styles.publicCodeValue, { color: theme.foreground, fontFamily: FONT.monoMedium }]}
+              numberOfLines={1}
+            >
               {studentPath}
             </Text>
-            <TouchableOpacity activeOpacity={0.78} onPress={copyLink} style={styles.publicCodeCopy}>
-              <Copy size={14} color={theme.primary} />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={copied ? 'Link copiado' : 'Copiar link de alumnos'}
+              activeOpacity={0.78}
+              hitSlop={8}
+              onPress={copyLink}
+              style={styles.publicCodeCopy}
+            >
+              {/* Copiado: el ✓ va en el texto, así que el ícono se retira (dos checks es ruido). */}
+              {copied ? null : <Copy size={14} color={theme.primary} />}
               <Text style={[styles.publicCodeCopyText, { color: theme.primary, fontFamily: FONT.uiBold }]}>
-                {copied ? 'Copiado' : 'Copiar'}
+                {copied ? 'Copiado ✓' : 'Copiar'}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {error ? (
-          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}
+          >
             {error}
           </Text>
         ) : null}
 
         <View style={styles.publicCodeActions}>
-          <Button label="Compartir link" variant="secondary" onPress={shareLink} style={styles.formButton} />
-          <Button label={pending ? 'Confirmando...' : 'Entendido'} onPress={confirm} disabled={pending} style={styles.formButton} />
+          <Button label="Compartir link" variant="secondary" onPress={shareLink} disabled={pending} style={styles.formButton} />
+          {/* `loading` del DS = spinner + `accessibilityState.busy`: el lector dice «ocupado» en vez
+              de leer un label que cambia solo. */}
+          <Button label="Entendido" variant="primary" loading={pending} onPress={confirm} style={styles.formButton} />
         </View>
       </View>
     </NativeDialog>
@@ -3712,24 +3764,32 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   publicCodeModal: {
-    gap: 15,
+    gap: 16,
   },
   publicCodeIntro: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
   },
+  // Halo circular (el mismo gesto que `PlanUpgradeCelebration`), no un cuadrado redondeado.
   publicCodeIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  publicCodeBody: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    lineHeight: 20,
+  },
   publicCodeBox: {
     borderWidth: 1,
-    padding: 12,
-    gap: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 8,
   },
   publicCodeRow: {
     flexDirection: 'row',
@@ -3740,12 +3800,16 @@ const styles = StyleSheet.create({
   publicCodeValue: {
     flex: 1,
     minWidth: 0,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
   },
   publicCodeCopy: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    // Área táctil mínima aun sin el ícono (el `hitSlop` la termina de completar).
+    minHeight: 28,
+    flexShrink: 0,
   },
   publicCodeCopyText: {
     fontSize: 12,

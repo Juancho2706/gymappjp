@@ -14,6 +14,15 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-22 QA owner Android (W6.10 del embudo Free→Pro)**: el banner Free del home deja de
+> imprimir «0 de 1 alumno activo» dos veces (`ClientCapMeter` con `showLabel={false}`, el estado
+> «Cupo completo» pasa al `accessibilityLabel` de la fila); `MobilePublicCodeRequiredModal` se
+> rediseña con el DS («Tu link de alumnos cambió» con tilde, halo `theme.primary`, el link como
+> pastilla mono con «Copiado ✓», acciones en fila); y el alta con cupo lleno abre DIRECTO en el
+> muro (`shouldOpenAtCapWall` en `lib/client-cap.ts`) en vez de dejar escribir el formulario para
+> rechazarlo al enviar, con «Ver mi plan» nueva en el muro y `upgrade_gate_hit` etiquetado por
+> `source`.
+
 > **2026-08-22 (W6.2/W6.3/W6.6 del embudo Free→Pro — cupo visible y acción real, sin vender)**: el
 > muro de cupo de `CreateClientModal` pasa a ESTADO + acciones reales (**[Archivar un alumno]** →
 > `ArchiveToFreeSpaceSheet` nuevo sobre el `Sheet` DS, con confirmación inline y archivado
