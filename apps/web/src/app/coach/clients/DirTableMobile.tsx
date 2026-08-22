@@ -310,7 +310,11 @@ export function DirTableMobile({
                                                 onActions(client)
                                             }}
                                             onKeyDown={(e) => e.stopPropagation()}
-                                            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[var(--radius-xs)] text-subtle"
+                                            // QA del owner (22-08, port del ⋮ de RN): el glifo suelto en
+                                            // `text-subtle` sobre `surface-card` se leía como decoración y en
+                                            // dark casi desaparecía. Pasa a botón con fondo sutil (surface-sunken)
+                                            // e ícono en tinta fuerte — ambos tokens flipean con el tema, sin hex.
+                                            className="eva-press inline-flex h-9 w-9 items-center justify-center rounded-control bg-surface-sunken text-[var(--ink-700)] transition-colors hover:text-strong"
                                         >
                                             <MoreVertical className="h-4 w-4" />
                                         </button>

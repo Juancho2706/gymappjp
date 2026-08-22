@@ -38,6 +38,7 @@ import { postStepCompleted } from '../../dashboard/_lib/onboarding-telemetry.cli
 import { FirstRoutineCards } from './components/FirstRoutineCards'
 import { StudentLivePreview } from './components/StudentLivePreview'
 import { builderTourStorageKey } from './_lib/first-routine'
+import { savedProgramToast } from './_lib/save-feedback'
 // «Vive tu app» solo aparece tras guardar la rutina del alumno de EJEMPLO: entra por `dynamic`
 // para no meter el QR ni su server action en el bundle del builder de todos los días.
 const ViveTuAppButton = dynamic(
@@ -955,7 +956,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             } else if (result?.error) {
                 toast.error(result.error)
             } else {
-                toast.success('Programa guardado exitosamente.')
+                // La confirmación nombra lo guardado (QA del owner 22-08): «guardado exitosamente»
+                // no dice QUÉ quedó guardado, y el coach que acaba de renombrar el plan no tiene
+                // forma de saber si el guardado tomó el nombre nuevo. En web basta el toast — el
+                // editor sigue en pantalla, no hay pantalla completa de celebración.
+                toast.success(savedProgramToast({ programName, hasClient: Boolean(client) }))
                 try { localStorage.removeItem(`builder_draft_${initialProgram?.id || 'new'}`) } catch (e) {}
                 setHasUnsavedChanges(false)
                 // Paso 3 de la guía (SPEC §6): el artefacto existe de verdad. `step_completed` es
@@ -1265,12 +1270,18 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         </div>
 
                         {/* Save — desktop (en móvil vive en la save-bar inferior) */}
+                        {/* GUARDANDO ≠ DESHABILITADO (QA del owner 22-08, port de RN): el botón se
+                            bloquea en ambos casos, pero atenuarlo mientras guarda hace que la única
+                            señal de que el guardado está en curso se vea apagada. Con nombre en
+                            blanco sigue atenuándose (ahí sí «no puedes»); mientras guarda queda
+                            SÓLIDO y lo dice por `aria-busy`. */}
                         <Button
                             onClick={() => handleSave()}
                             disabled={isPending || !programName.trim()}
+                            aria-busy={isPending}
                             data-tour-id={isMobile ? undefined : 'save-button'}
                             size="sm"
-                            className="eva-press hidden h-10 min-h-10 shrink-0 rounded-pill text-[13px] font-bold bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 md:flex md:px-6"
+                            className={`eva-press hidden h-10 min-h-10 shrink-0 rounded-pill text-[13px] font-bold bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 md:flex md:px-6 ${isPending ? 'opacity-100' : 'disabled:opacity-50'}`}
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
@@ -1661,9 +1672,12 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 type="button"
                                 onClick={() => handleSave()}
                                 disabled={isPending || !programName.trim()}
+                                aria-busy={isPending}
                                 data-tour-id="save-button"
                                 aria-label={client ? 'Guardar y enviar' : 'Guardar plantilla'}
-                                className="eva-press flex h-14 items-center gap-2 rounded-full px-5 text-[14px] font-bold text-primary-foreground shadow-xl transition-transform active:scale-95 disabled:opacity-50 disabled:shadow-none"
+                                // Mismo criterio que el botón de desktop: guardando = SÓLIDO (con su
+                                // sombra), deshabilitado por falta de nombre = atenuado.
+                                className={`eva-press flex h-14 items-center gap-2 rounded-full px-5 text-[14px] font-bold text-primary-foreground shadow-xl transition-transform active:scale-95 ${isPending ? 'opacity-100' : 'disabled:opacity-50 disabled:shadow-none'}`}
                                 style={{
                                     backgroundColor: 'var(--theme-primary, #007AFF)',
                                     boxShadow: '0 6px 20px rgba(var(--theme-primary-rgb, 0, 122, 255), 0.42)',

@@ -79,10 +79,17 @@ export async function createClientAction(
 
     if (coachErr || !coach) return { error: 'Coach no encontrado' }
 
+    // MISMO predicado de cupo que el gate del coach (`coach/clients/_actions/clients.actions.ts`
+    // y `services/billing/capacity.service.ts`): activos = `is_archived = false` +
+    // `is_demo = false`. Sin estos dos filtros el panel contaba archivados (que la UI del coach
+    // promete que «liberan cupo») y al alumno de EJEMPLO del onboarding v2 — con Free = 1, el
+    // demo solo dejaba al coach lleno antes de tener un alumno real y el alta desde admin rebotaba.
     const { count } = await adminClient
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coach_id)
+        .eq('is_archived', false)
+        .eq('is_demo', false)
 
     if ((count ?? 0) >= (coach.max_clients ?? 0)) {
         return { error: `El coach alcanzó su límite de ${coach.max_clients} alumnos` }

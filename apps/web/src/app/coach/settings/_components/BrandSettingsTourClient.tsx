@@ -35,9 +35,13 @@ const TOUR_STEPS: BrandTourStep[] = [
         description: 'Elige el color principal. Se aplica automáticamente a botones, elementos activos, gráficos y brillos de tu app. Generamos variantes más claras y oscuras por ti.',
     },
     {
-        id: 'brand-loader',
-        title: 'Loader animado',
-        description: 'Personaliza la animación que aparece cuando tus alumnos cargan la app o navegan entre páginas. Puedes usar tu propio texto y color.',
+        // La pantalla de carga vive DENTRO de «Branding avanzado» y es UNA sola sección
+        // (animación lista o compositor + texto + ícono + vista previa). El paso apuntaba a un
+        // `brand-loader` que ya no existe como ancla: el tour lo saltaba de largo. Y el color del
+        // texto murió con W-brand B4 (se deriva del primario), así que tampoco se promete.
+        id: 'brand-advanced',
+        title: 'Pantalla de carga',
+        description: 'Dentro de «Branding avanzado» eliges qué ven tus alumnos mientras carga la app: una animación lista o la tuya, con tu texto y tu ícono. Ahí mismo ajustas la fuente y el tinte de marca.',
     },
     {
         id: 'brand-welcome-modal',
