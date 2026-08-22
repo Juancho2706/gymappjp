@@ -8,6 +8,7 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { verifyMobileBearer } from '@/lib/mobile-auth'
 import { resolveMobileCoachDataScope } from '@/app/api/mobile/coach/clients/_mutation-auth'
 import { ONBOARDING_STEP_KEYS } from '@eva/onboarding'
+import { isBrandingAllowed } from '@eva/tiers'
 import { loadOnboardingV2ApiData } from '@/services/onboarding/onboarding-v2.queries'
 import { parseOnboardingGuide } from '@/app/coach/dashboard/_lib/onboarding-guide-state'
 
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     const { data: coach, error: coachError } = await admin
         .from('coaches')
-        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients, onboarding_guide, persona, persona_also_other, theme_preset_key, created_at')
+        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, logo_url_dark, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients, onboarding_guide, persona, persona_also_other, theme_preset_key, created_at')
         .eq('id', userId)
         .maybeSingle()
 
@@ -130,6 +131,14 @@ export async function GET(request: NextRequest) {
         createdAt: coach.created_at,
     })
 
+    // El logo del coach viaja como URL, no solo como booleano: la app lo pinta en su panel
+    // («Mi panel», perfil, loader de marca) y hasta ahora solo sabía QUE existía — por eso el
+    // coach con Mi marca seguía viendo la figura EVA en su propia app. Gate FAIL-CLOSED por tier,
+    // el MISMO de `mapCoachRow` en `apps/mobile/lib/coach.ts` (pricing v3: la marca es de todos
+    // los planes vendidos; solo caen el starter legacy y un tier corrupto).
+    const tier = normalizeSubscriptionTier(coach.subscription_tier)
+    const brandingAllowed = isBrandingAllowed(tier)
+
     return NextResponse.json({
         coach: {
             id: coach.id,
@@ -138,11 +147,16 @@ export async function GET(request: NextRequest) {
             slug: coach.slug,
             primaryColor: coach.primary_color,
             subscriptionStatus: coach.subscription_status,
-            subscriptionTier: normalizeSubscriptionTier(coach.subscription_tier),
+            subscriptionTier: tier,
             currentPeriodEnd: coach.current_period_end,
             trialEndsAt: coach.trial_ends_at,
             maxClients: coach.max_clients,
+            // Se mantiene tal cual (contrato viejo, sin gate de tier): quien solo pregunta «¿tiene
+            // logo?» no cambia de respuesta. Las URLs sí van gateadas.
             hasCoachLogo: Boolean(coach.logo_url?.trim()),
+            logoUrl: brandingAllowed ? coach.logo_url?.trim() || null : null,
+            /** Variante para tema oscuro; `null` ⇒ la app cae al claro (regla de `ThemedLogo`). */
+            logoUrlDark: brandingAllowed ? coach.logo_url_dark?.trim() || null : null,
         },
         workspace: {
             type: preferredWorkspace?.type ?? (dataScope.type === 'enterprise' ? 'enterprise_coach' : dataScope.type === 'team' ? 'coach_team' : 'coach_standalone'),

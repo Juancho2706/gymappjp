@@ -617,8 +617,19 @@ html[data-nav-pending] main {
   --shadow-sheet: 0 -8px 40px rgba(13, 18, 28, 0.16);
   --shadow-inset: inset 0 1px 2px rgba(13, 18, 28, 0.08);
 
-  /* Energy glows */
-  --glow-sport: 0 6px 20px rgba(38, 128, 255, 0.42);
+  /* Energy glows.
+     `--glow-sport` sale del PRIMARIO RESUELTO del coach: era el único token de la familia
+     congelado en el azul EVA y lo consumen ~30 call sites (botón `default`, GuidePill, stepper
+     de alta, ModulesForm…), así que una marca rosa/verde igual brillaba azul.
+     GOTCHAS de white-label acá:
+      - `--theme-primary-rgb` es lista con COMAS ("r, g, b") ⇒ SIEMPRE `rgba(var(--x), a)`;
+        `rgb(var(--x) / a)` muere en silencio.
+      - la sustitución de var() ocurre en el elemento donde se DECLARA el custom property (acá
+        `:root`), no donde se usa: retiñe con los `:root { --theme-primary-rgb }` que emiten los
+        layouts /coach y /c, NO con el `style` inline de sus contenedores.
+      - ningún layout redefine `--theme-primary-rgb` en `.dark` ⇒ en oscuro el glow conserva los
+        canales del accent CLARO (mismo comportamiento que tenía el azul fijo). */
+  --glow-sport: 0 6px 20px rgba(var(--theme-primary-rgb), 0.42);
   --glow-ember: 0 6px 20px rgba(255, 106, 61, 0.40);
 
   /* Ring for focus / selection */

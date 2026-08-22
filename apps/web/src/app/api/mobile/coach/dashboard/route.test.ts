@@ -114,6 +114,7 @@ beforeEach(() => {
         invite_code: 'X5UD9X44',
         primary_color: '#1462DC',
         logo_url: null,
+        logo_url_dark: null,
         subscription_status: 'active',
         subscription_tier: 'free',
         current_period_end: null,
@@ -197,6 +198,47 @@ describe('GET /api/mobile/coach/dashboard — bloque onboardingV2', () => {
             hidden: false,
             guideSeenAt: null,
         })
+    })
+})
+
+describe('GET /api/mobile/coach/dashboard — logo del coach', () => {
+    it('manda las URLs del logo (claro + oscuro) junto al hasCoachLogo de siempre', async () => {
+        coachRow = {
+            ...(coachRow as Record<string, unknown>),
+            logo_url: '  https://cdn.eva/logo-claro.png  ',
+            logo_url_dark: 'https://cdn.eva/logo-oscuro.png',
+        }
+        const body = await (await GET(getReq())).json()
+        expect(body.coach.hasCoachLogo).toBe(true)
+        expect(body.coach.logoUrl).toBe('https://cdn.eva/logo-claro.png')
+        expect(body.coach.logoUrlDark).toBe('https://cdn.eva/logo-oscuro.png')
+    })
+
+    it('sin logo oscuro manda null (la app cae al claro), no undefined', async () => {
+        coachRow = { ...(coachRow as Record<string, unknown>), logo_url: 'https://cdn.eva/logo.png', logo_url_dark: null }
+        const body = await (await GET(getReq())).json()
+        expect(body.coach.logoUrl).toBe('https://cdn.eva/logo.png')
+        expect(body.coach.logoUrlDark).toBeNull()
+    })
+
+    it('sin logo: las dos URLs son null y hasCoachLogo sigue en false', async () => {
+        const body = await (await GET(getReq())).json()
+        expect(body.coach).toMatchObject({ hasCoachLogo: false, logoUrl: null, logoUrlDark: null })
+    })
+
+    it('tier sin white-label (starter legacy): URLs gateadas, hasCoachLogo intacto', async () => {
+        coachRow = {
+            ...(coachRow as Record<string, unknown>),
+            subscription_tier: 'starter',
+            logo_url: 'https://cdn.eva/logo.png',
+            logo_url_dark: 'https://cdn.eva/logo-oscuro.png',
+        }
+        const body = await (await GET(getReq())).json()
+        expect(body.coach.subscriptionTier).toBe('starter')
+        // El booleano es contrato viejo y NO cambia de semántica; lo que se gatea es la URL.
+        expect(body.coach.hasCoachLogo).toBe(true)
+        expect(body.coach.logoUrl).toBeNull()
+        expect(body.coach.logoUrlDark).toBeNull()
     })
 })
 
