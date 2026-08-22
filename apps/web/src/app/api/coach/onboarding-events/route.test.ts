@@ -97,7 +97,7 @@ describe('POST /api/coach/onboarding-events — contrato de eventos v2', () => {
         expect(inserts).toHaveLength(types.length)
     })
 
-    it('acepta los pasos v2 y los legacy', async () => {
+    it('acepta los pasos v2, los legacy y `persona`', async () => {
         const steps = [
             'profile_branding',
             'vive_tu_app',
@@ -106,6 +106,10 @@ describe('POST /api/coach/onboarding-events — contrato de eventos v2', () => {
             'aha',
             'first_plan',
             'first_checkin',
+            // `persona` no es un paso de la guía: es el step_key de los eventos que no le
+            // pertenecen a ninguno (`PERSONA_EVENT_STEP_KEY`). Sin él, `persona_selected` emitido
+            // desde el cliente moría en 400 mientras el servidor sí lo escribía.
+            'persona',
         ]
         for (const stepKey of steps) {
             const res = await POST(req({ stepKey, eventType: 'step_completed' }))
@@ -129,7 +133,7 @@ describe('POST /api/coach/onboarding-events — contrato de eventos v2', () => {
     it('persona_selected viaja con su metadata {persona, also_other, surface}', async () => {
         const res = await POST(
             req({
-                stepKey: 'profile_branding',
+                stepKey: 'persona',
                 eventType: 'persona_selected',
                 metadata: { persona: 'rehab', also_other: true, surface: 'web' },
             })

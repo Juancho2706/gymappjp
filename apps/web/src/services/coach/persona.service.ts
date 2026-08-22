@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
-import type { Persona } from '@eva/schemas'
+import { PERSONA_COPY, type Persona } from '@eva/schemas'
 import {
     DOMAIN_ENABLED_KEY,
     FEATURE_DOMAIN_KEYS,
@@ -128,6 +128,23 @@ export function shouldRedirectToPersona(input: PersonaGateInput): boolean {
     if (!personaGateApplies(input)) return false
     if (isCoachCreatedAfterPersonaLaunch(input.coachCreatedAt)) return true
     return input.realClientCount === 0
+}
+
+/**
+ * Ruta con la que se evalúa el gate en superficies SIN pathname web (la app RN pregunta por
+ * `/api/mobile/coach/persona`). Tiene que ser una ruta de `/coach` NO exenta: la app no está
+ * sirviendo una URL, así que el chequeo de ruta no aplica y no puede convertirse en un falso
+ * negativo.
+ */
+const MOBILE_GATE_PATHNAME = '/coach/dashboard'
+
+/**
+ * Gemelo de `shouldRedirectToPersona` para la app: MISMA decisión (D8), sin el eje de ruta. Lo
+ * usan `/api/mobile/coach/persona` (GET) y el bloque `onboardingV2` del dashboard móvil, así que
+ * web y RN no pueden divergir en a quién se le pregunta.
+ */
+export function shouldAskPersonaOnMobile(input: Omit<PersonaGateInput, 'pathname'>): boolean {
+    return shouldRedirectToPersona({ ...input, pathname: MOBILE_GATE_PATHNAME })
 }
 
 // ── Persona del coach (tabla `coaches`) ──────────────────────────────────────────────────────
@@ -369,4 +386,91 @@ export async function recordOnboardingEvent(admin: DB, input: OnboardingEventInp
     } catch (error) {
         console.warn('[persona] no se pudo registrar el evento', input.eventType, error)
     }
+}
+
+// ── Núcleo compartido web + app ──────────────────────────────────────────────────────────────
+
+export interface ApplyCoachPersonaInput {
+    /** Cliente del USUARIO (cookies en web, Bearer en la app): RLS + column-grants son el gate. */
+    supabase: DB
+    /** Cliente service-role: telemetría y sembrador del demo (el trigger `is_demo` exige ese rol). */
+    admin: DB
+    /** Resuelto SIEMPRE desde la sesión/token por el caller, nunca del body. */
+    coachId: string
+    persona: Persona
+    /** Respuesta a la segunda pregunta. Se normaliza a `false` en las personas que no la tienen. */
+    alsoOther: boolean
+    /** De dónde vino la respuesta. Viaja al evento y a PostHog para medir web vs app. */
+    surface: 'web' | 'rn'
+}
+
+export type ApplyCoachPersonaResult =
+    | { ok: true; demoClientId: string | null }
+    | { ok: false; error: string }
+
+/**
+ * TODO lo que pasa cuando un coach contesta «¿A qué te dedicas?» — la MISMA secuencia en web y en
+ * la app (SPEC coach-onboarding-v2 §1 y §2, W5 F5.1):
+ *
+ *  1. `coaches.persona*` con el cliente del usuario (hay column-grant + RLS). Si esto falla se
+ *     aborta: sin persona no hay nada que aplicar.
+ *  2. Las 5 filas de `coach_feature_prefs` — es lo que achica el panel de verdad. Si falla NO se
+ *     aborta: la persona ya quedó y el menú completo es un estado seguro (fail-open).
+ *  3. Telemetría `persona_selected` (tabla) — best-effort.
+ *  4. Alumno de ejemplo, tolerante: `not_implemented` / `persona_sin_demo` son caminos esperados y
+ *     el onboarding tiene que funcionar igual sin demo.
+ *  5. PostHog server-side.
+ *
+ * Lo que NO hace (y es del caller): validar el body, resolver la sesión, rechazar coaches managed,
+ * revalidar rutas y decidir el destino. Acá no hay Next.js.
+ *
+ * `seedDemoStudent` y la captura de PostHog entran por `import()` DINÁMICO a propósito: este
+ * módulo también lo importa `proxy.ts` (por los resolvers puros del gate) y el sembrador arrastra
+ * todo el contenido de los demos — no puede terminar en el bundle del middleware.
+ */
+export async function applyCoachPersona(input: ApplyCoachPersonaInput): Promise<ApplyCoachPersonaResult> {
+    const { supabase, admin, coachId, persona, surface } = input
+    // La segunda pregunta no existe para `other` (deja el panel completo): se normaliza a false
+    // para no guardar ruido en una columna que segmenta correos y funnel.
+    const alsoOther = PERSONA_COPY[persona].secondQuestion == null ? false : input.alsoOther === true
+
+    const saved = await saveCoachPersona(supabase, coachId, persona, alsoOther)
+    if (!saved.ok) {
+        console.error('[persona] no se pudo guardar la persona', saved.error)
+        return { ok: false, error: 'No pudimos guardar tu elección. Inténtalo de nuevo.' }
+    }
+
+    const prefs = await writePersonaDomainPrefs(supabase, coachId, persona, alsoOther)
+    if (!prefs.ok) {
+        console.error('[persona] no se pudieron sembrar las preferencias por dominio', prefs.error)
+    }
+
+    await recordOnboardingEvent(admin, {
+        coachId,
+        eventType: 'persona_selected',
+        metadata: { persona, alsoOther, surface },
+    })
+
+    let demoClientId: string | null = null
+    const { seedDemoStudent } = await import('@/services/onboarding/demo-student.service')
+    const seed = await seedDemoStudent(admin, { coachId, persona })
+    if (seed.ok) {
+        demoClientId = seed.demoClientId
+        await recordOnboardingEvent(admin, {
+            coachId,
+            eventType: 'demo_seeded',
+            metadata: { persona, demoClientId: seed.demoClientId, alreadyExisted: seed.alreadyExisted, surface },
+        })
+    } else if (seed.reason !== 'not_implemented' && seed.reason !== 'persona_sin_demo') {
+        console.error('[persona] el alumno de ejemplo no se pudo sembrar', seed.reason, seed.detail)
+    }
+
+    const { capturePostHogServerEvent } = await import('@/lib/posthog/server-capture')
+    await capturePostHogServerEvent({
+        event: 'persona_selected',
+        distinctId: coachId,
+        properties: { persona, also_other: alsoOther, surface },
+    })
+
+    return { ok: true, demoClientId }
 }

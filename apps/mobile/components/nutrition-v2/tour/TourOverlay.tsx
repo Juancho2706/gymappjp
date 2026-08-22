@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 
 import { useTheme } from '../../../context/ThemeContext'
 import { EASE, useEvaMotion } from '../../../lib/motion'
+import { tourAutoStartEligible, useOnboardingMode } from '../../../lib/onboarding-mode'
 import { hasSeenTour, markTourSeen } from './tour-flags'
 import { computeTourHole, panesFor, type TourFrame } from './tour-geometry'
 import { useTourTargets, type TourRect } from './TourTargets'
@@ -474,12 +475,22 @@ export function useTourController({
   autoStart = false,
   autoStartReady = true,
 }: TourControllerOptions): TourController {
+  // Guía v2 del coach ACTIVA ⇒ ningún tour se dispara solo (decisión del owner 22-08: «no podemos
+  // tener varios onboardings en una sola área»). El «?» sigue abriéndolo a pedido y ese camino NO
+  // marca el tour como visto, así que el auto-arranque queda intacto para cuando la guía termine.
+  const { guideActive } = useOnboardingMode()
+
   const [active, setActive] = useState(false)
-  const eligibleOnMount = useRef(autoStart)
+  // Elegibilidad congelada al montar, igual que antes: se le suma el modo de onboarding para que la
+  // guía no encienda un tour a mitad de pantalla si la foto del panel llega tarde.
+  const eligibleOnMount = useRef(tourAutoStartEligible({ autoStart, guideActive }))
   const autoStartDone = useRef(false)
 
   useEffect(() => {
     if (!eligibleOnMount.current || autoStartDone.current || !autoStartReady) return
+    // Segunda lectura, esta sí en vivo: entre el montaje y el `autoStartReady` puede llegar la foto
+    // del panel. Sin marcar `autoStartDone`: la próxima entrada vuelve a decidir con datos frescos.
+    if (guideActive) return
     autoStartDone.current = true
     let cancelled = false
     // `hasSeenTour` es fail-closed si el storage falla (ver `tour-flags`).
@@ -489,7 +500,7 @@ export function useTourController({
     return () => {
       cancelled = true
     }
-  }, [tourId, coachId, autoStartReady])
+  }, [tourId, coachId, autoStartReady, guideActive])
 
   const start = useCallback(() => setActive(true), [])
 

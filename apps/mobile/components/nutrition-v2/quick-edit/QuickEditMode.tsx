@@ -435,7 +435,8 @@ export function QuickEditMode({
     tourId: 'editor',
     coachId: tourCoachId,
     // Jamás en creación ni en plantilla (invariante de la SPEC): un tour sobre un plan vacío enseña
-    // menos, y el auto-arranque espera a la próxima entrada en edición normal.
+    // menos, y el auto-arranque espera a la próxima entrada en edición normal. Con la guía v2 del
+    // coach activa tampoco arranca: lo gatea `useTourController` (decisión del owner 22-08).
     autoStart: editorMode && creation === null && template === null,
     // La identidad del coach llega del branding guardado, que puede hidratar un tick después del
     // primer render. Sin ella el flag se marcaría bajo el cajón `anon` y la guía volvería a saltar.

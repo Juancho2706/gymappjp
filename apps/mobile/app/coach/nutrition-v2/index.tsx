@@ -464,7 +464,9 @@ export default function CoachNutritionV2Screen() {
   const clearFilters = useCallback(() => setFilters(DEFAULT_NUTRITION_ROSTER_FILTERS), [])
 
   /* ── Guía Viva (SPEC `nutrition-onboarding-tour`) ────────────────────────────────────────────
-   * El tour del hub: 6 pasos, auto-arranque UNA vez por coach y «?» a demanda para siempre. */
+   * El tour del hub: 6 pasos, auto-arranque UNA vez por coach y «?» a demanda para siempre.
+   * El auto-arranque queda gateado por la guía v2 (`useTourController` lee `useOnboardingMode`):
+   * con la guía activa este `autoStart: true` NO dispara nada y el tour vive solo en el «?». */
   const tourCoachId = branding?.coachId ?? null
   const tour = useTourController({
     tourId: 'hub',

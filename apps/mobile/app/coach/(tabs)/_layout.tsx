@@ -3,6 +3,7 @@ import { View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { CoachMobileTabBar } from '../../../components/coach/CoachMobileChrome'
 import { CoachTabbarScrollProvider } from '../../../components/coach/CoachTabbarScroll'
+import { GuidePill } from '../../../components/coach/GuidePill'
 
 export default function CoachTabsLayout() {
   const { theme } = useTheme()
@@ -39,6 +40,15 @@ export default function CoachTabsLayout() {
           <Tabs.Screen name="check-ins" options={{ title: 'Check-ins' }} />
           <Tabs.Screen name="perfil" options={{ title: 'Mi cuenta' }} />
         </Tabs>
+
+        {/* Guía de inicio — acceso flotante, montado UNA vez para todo el grupo de tabs y por
+            encima de la cápsula del nav. Vive acá y no en cada pantalla porque su estado
+            (expandida/minimizada) no puede reiniciarse al cambiar de tab. Se pinta sola solo
+            cuando corresponde: lee la foto publicada por el dashboard y la guía, y se apaga con la
+            guía completa, descartada, oculta o en un workspace administrado. Las pantallas de
+            stack (`/coach/guia`, builders, `/coach/onboarding/*`) tapan este layout, así que ahí
+            no aparece. */}
+        <GuidePill />
       </View>
     </CoachTabbarScrollProvider>
   )

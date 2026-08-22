@@ -2,12 +2,13 @@
 
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Sparkles, ChevronDown } from 'lucide-react'
 import { CoachBrandAvatar, EvaBrandFallback } from '@/components/coach/CoachBrandAvatar'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { AmbientBrandGlow } from '@/components/coach/AmbientBrandGlow'
 import { BillingBanners } from './banners/BillingBanners'
-import { FreeWelcomeModal } from './FreeWelcomeModal'
+import { RegistrationMirror } from '../../_components/RegistrationMirror'
 import { PulseHero } from './PulseHero'
 import { PriorityCard } from './PriorityCard'
 import { AgendaCard } from './AgendaCard'
@@ -27,12 +28,17 @@ import { cn } from '@/lib/utils'
 
 interface Props {
     data: DashboardV2Data
+    /** Reservado: lo consumía el modal de bienvenida Free (borrado el 22-08). */
     coachId: string
     coachName: string
     /** Reservado: lo consumía el checklist v1; la guía v2 arma sus links con `@eva/onboarding`. */
     coachSlug: string
     coachInviteCode?: string | null
-    /** `coaches.persona` — solo para el vocabulario del modal de bienvenida legado. */
+    /**
+     * Reservado: lo consumía el modal de bienvenida Free (`?welcome=free`), borrado el 22-08 —
+     * la guía (`/coach/guia`) ES la bienvenida (owner: «un solo onboarding por área»). La prop
+     * sigue en el contrato porque el RSC ya la resuelve y la guía la usará si vuelve a hacer falta.
+     */
     persona: Persona | null
     subscriptionTier: SubscriptionTier
     /**
@@ -53,10 +59,8 @@ interface Props {
 
 export function DashboardShell({
     data,
-    coachId,
     coachName,
     coachInviteCode,
-    persona,
     subscriptionTier,
     coachLogoUrl,
     activeClientCount,
@@ -87,8 +91,14 @@ export function DashboardShell({
 
     return (
         <>
+            {/* El modal de bienvenida Free (`?welcome=free`) ya no existe: la guía es la bienvenida
+                (owner 22-08). Lo único que ese modal hacía además de saludar era espejar la
+                conversión del alta por Google (Meta `CompleteRegistration` + PostHog
+                `coach_registered`), y eso NO se pierde: el coach nuevo la dispara en `/coach/guia`
+                y el legado que todavía aterrice acá con `?welcome=free&eid=` la dispara desde este
+                mismo espejo. */}
             <Suspense>
-                <FreeWelcomeModal coachId={coachId} persona={persona} />
+                <LegacyRegistrationMirror />
             </Suspense>
 
             {/* Sin px propio: el gutter lateral lo da CoachMainWrapper (px-4/md:px-8) — evita el
@@ -257,6 +267,26 @@ export function DashboardShell({
             )}
         </>
     )
+}
+
+/** `eid` del alta: id de evento opaco, mismo patrón que valida `/coach/guia`. */
+const REGISTRATION_EID_PATTERN = /^[A-Za-z0-9_-]{8,80}$/
+
+/**
+ * Espejo de conversión del alta Free por Google para el aterrizaje LEGADO
+ * `/coach/dashboard?welcome=free&eid=…`.
+ *
+ * Hoy ese link lo emite el camino viejo (correos y sesiones abiertas antes del onboarding v2): el
+ * coach nuevo pasa por «¿A qué te dedicas?» y cae en `/coach/guia`, que monta el mismo
+ * `RegistrationMirror`. Sin esto, borrar el modal se habría llevado la conversión de quien todavía
+ * llega por acá. `RegistrationMirror` limpia los params de la URL, así que no se re-emite.
+ */
+function LegacyRegistrationMirror() {
+    const searchParams = useSearchParams()
+    if (searchParams.get('welcome') !== 'free') return null
+    const eid = searchParams.get('eid')
+    if (eid == null || !REGISTRATION_EID_PATTERN.test(eid)) return null
+    return <RegistrationMirror eid={eid} />
 }
 
 /**

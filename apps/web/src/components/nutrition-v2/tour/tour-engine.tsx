@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useOnboardingMode } from '@/components/coach/OnboardingModeContext'
 import { hasSeenTour, markTourSeen } from './tour-flags'
 import {
   TOUR_CARD_WIDTH,
@@ -657,11 +658,21 @@ export function useTourController({
   autoStart = false,
 }: TourControllerOptions): TourController {
   const [active, setActive] = React.useState(false)
+  // «Un solo onboarding por área» (owner 22-08): con la guía del coach ACTIVA, este tour no se
+  // auto-arranca. Fuera del panel del coach (harness, tests) el contexto cae en `false` y todo se
+  // comporta como antes. Se congela al montar, igual que `autoStart`: que el coach termine la guía
+  // mientras mira esta pantalla no le tira un spotlight encima sin haberlo pedido.
+  const { guideActive } = useOnboardingMode()
   const autoStartOnMount = React.useRef(autoStart)
+  const guideActiveOnMount = React.useRef(guideActive)
   const autoStartDone = React.useRef(false)
 
   React.useEffect(() => {
     if (!autoStartOnMount.current || autoStartDone.current) return
+    // OJO: sale ANTES de tocar la memoria del tour. El «?» sigue abriéndolo y, cuando la guía
+    // termine o se descarte, la próxima entrada a la superficie lo auto-arrancará como siempre —
+    // marcar «visto» acá se lo habría comido para siempre sin haberlo mostrado nunca.
+    if (guideActiveOnMount.current) return
     autoStartDone.current = true
     // `hasSeenTour` es fail-closed fuera del navegador y con storage bloqueado (ver `tour-flags`).
     if (hasSeenTour(tourId, coachId)) return

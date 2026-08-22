@@ -21,7 +21,11 @@ export async function DashboardContent({
     coachName: string
     coachSlug: string
     coachInviteCode?: string | null
-    /** `coaches.persona` — vocabulario del modal de bienvenida legado (`?welcome=free`). */
+    /**
+     * `coaches.persona`. Reservado: lo consumía el modal de bienvenida Free (`?welcome=free`),
+     * borrado el 22-08 — la guía (`/coach/guia`) ES la bienvenida. Sigue viajando al shell porque
+     * el RSC ya lo resuelve y el contrato no cambia.
+     */
     persona: Persona | null
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean

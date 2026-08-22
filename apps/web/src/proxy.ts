@@ -632,7 +632,8 @@ async function proxyInner(request: NextRequest) {
                 // ellos y este gate lo intercepta ANTES de que se dispare. La pantalla de persona
                 // los reenvía a /coach/guia, donde se consumen (RegistrationMirror).
                 const carried = new URLSearchParams()
-                for (const key of ['welcome', 'eid']) {
+                // `ph=srv` (embudo W7): el server ya emitió coach_registered; el tracker browser se apaga al verlo.
+                for (const key of ['welcome', 'eid', 'ph']) {
                     const value = request.nextUrl.searchParams.get(key)
                     if (value) carried.set(key, value)
                 }

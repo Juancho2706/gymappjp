@@ -14,6 +14,17 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-22 (W4.7-rn de coach-onboarding-v2 — un solo onboarding por área)**: mueren en la app
+> el modal de bienvenida Free (`MobileFreeWelcomeModal`) y el checklist de 4 pasos
+> (`MobileOnboardingChecklist` + sus 6 bloques, ~650 líneas) — la guía v2 (`/coach/guia` + píldora)
+> ES la bienvenida, en todos los planes; y `lib/onboarding-mode.tsx` (`OnboardingModeProvider`
+> montado en `app/coach/_layout.tsx`, `isGuideActive` de `@eva/onboarding` sobre la foto que ya
+> publica el dashboard) apaga el AUTO-arranque de los tours de módulo mientras la guía está activa
+> —el «?» los sigue abriendo y no marca nada como visto—. Cubre el tour del hub de Nutrición y el
+> del editor (`useTourController`); `settings/brand.tsx` no auto-lanza nada, así que no se tocó.
+> Pinneado en `tests/mobile/onboarding-mode.test.tsx` y `tests/mobile/tour-autostart-guide.test.tsx`.
+> Requiere OTA + QA device.
+
 > **2026-08-22 QA owner Android (W6.10 del embudo Free→Pro)**: el banner Free del home deja de
 > imprimir «0 de 1 alumno activo» dos veces (`ClientCapMeter` con `showLabel={false}`, el estado
 > «Cupo completo» pasa al `accessibilityLabel` de la fila); `MobilePublicCodeRequiredModal` se

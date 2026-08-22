@@ -20,9 +20,10 @@ export function RegistrationMirror({ eid }: { eid: string }) {
 
     useEffect(() => {
         const params = new URLSearchParams(searchParams.toString())
-        if (!params.has('welcome') && !params.has('eid')) return
+        if (!params.has('welcome') && !params.has('eid') && !params.has('ph')) return
         params.delete('welcome')
         params.delete('eid')
+        params.delete('ph')
         router.replace(params.size > 0 ? `${pathname}?${params.toString()}` : pathname)
     }, [pathname, router, searchParams])
 

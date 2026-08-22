@@ -11,6 +11,7 @@ import {
     type BrandTourSeenChangedDetail,
 } from '@/lib/coach-brand-tour'
 import { markBrandTourSeenAction } from '@/app/coach/dashboard/_actions/onboarding-guide.actions'
+import { useOnboardingMode } from '@/components/coach/OnboardingModeContext'
 
 const TOUR_STEPS: BrandTourStep[] = [
     {
@@ -70,13 +71,20 @@ export function BrandSettingsTourClient({
     const [tourOpen, setTourOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
     const key = brandTourSeenStorageKey(coachId)
+    // «Un solo onboarding por área» (owner 22-08): con la guía del coach ACTIVA, este tour NO se
+    // abre solo — ni por el `?tour=1` con el que llegaba el paso 1 de la guía, ni por el temporizador
+    // de primera visita. El «?» de la esquina lo sigue abriendo, y no se marca como visto: cuando la
+    // guía termine, la próxima entrada a Mi Marca lo mostrará como siempre.
+    const { guideActive } = useOnboardingMode()
 
     useEffect(() => {
         setMounted(true)
         try {
             const params = new URLSearchParams(window.location.search)
             if (params.get('tour') === '1') {
-                setTourOpen(true)
+                // El param se limpia IGUAL (aunque no se abra nada): si no, queda pegado en la URL
+                // y un refresh más tarde —ya sin guía— dispararía el tour por sorpresa.
+                if (!guideActive) setTourOpen(true)
                 const u = new URL(window.location.href)
                 u.searchParams.delete('tour')
                 const next = u.pathname + (u.search ? u.search : '')
@@ -93,11 +101,16 @@ export function BrandSettingsTourClient({
                 }
                 return
             }
+            if (guideActive) return
             const timer = setTimeout(() => setTourOpen(true), 600)
             return () => clearTimeout(timer)
         } catch {
             // localStorage / URL no disponible
         }
+        // `guideActive` a propósito FUERA de las deps: el modo se congela en el primer montaje
+        // (mismo criterio que `useTourController`). Si el coach cierra la guía sin salir de esta
+        // pantalla, el tour no le salta encima; lo verá la próxima vez que entre.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key, brandTourSeenServer])
 
     useEffect(() => {

@@ -83,8 +83,14 @@ export interface OnboardingStep {
 export const DEMO_CLIENT_TOKEN = '{demoClientId}'
 
 // ── Rutas verificadas contra el árbol (21-08) ────────────────────────────────────────────────
-// WEB:  /coach/settings?tour=1                  -> hub Opciones; `tour=1` lo lee
-//                                                  settings/_components/BrandSettingsTourClient.tsx:78
+// WEB:  /coach/settings/brand                   -> app/coach/settings/brand/page.tsx (pantalla
+//                                                  «Mi Marca» completa, misma ruta en desktop y
+//                                                  móvil). Antes era `/coach/settings?tour=1`, que
+//                                                  no abría nada: el `tour=1` solo lo lee
+//                                                  BrandSettingsTourClient, montado en /brand y no
+//                                                  en el hub. Y desde la decisión del owner 22-08
+//                                                  («un solo onboarding por área») ese tour ya no
+//                                                  auto-arranca con la guía activa.
 //       /coach/workout-programs                 -> app/coach/workout-programs
 //       /coach/nutrition-v2/{id}/editor         -> EDITOR ÚNICO. El wizard viejo
 //                                                  (`{id}/builder`) hoy REDIRIGE acá
@@ -106,7 +112,7 @@ export const DEMO_CLIENT_TOKEN = '{demoClientId}'
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 const WEB = {
-    brand: '/coach/settings?tour=1',
+    brand: '/coach/settings/brand',
     programs: '/coach/workout-programs',
     nutritionEditor: `/coach/nutrition-v2/${DEMO_CLIENT_TOKEN}/editor`,
     movement: `/coach/movement/${DEMO_CLIENT_TOKEN}`,
@@ -481,3 +487,8 @@ export function resolveRnRoute(
 ): string | null {
     return resolveTarget(step.rnRoute, ctx.demoClientId)
 }
+
+// ── Modo guía (owner 22-08: «un solo onboarding por área») ───────────────────────────────────
+// Vive en su propio archivo para que web y RN compartan la MISMA condición; se re-exporta acá
+// para que el paquete siga teniendo una sola puerta de entrada.
+export { isGuideActive, type GuideModeInput } from './guide-mode'

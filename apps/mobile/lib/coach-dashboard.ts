@@ -1,4 +1,11 @@
+import { useSyncExternalStore } from 'react'
 import * as Sentry from '@sentry/react-native'
+import {
+  ONBOARDING_STEP_KEYS,
+  type OnboardingSignals,
+  type OnboardingStepKey,
+} from '@eva/onboarding'
+import { PERSONAS, type Persona } from '@eva/schemas'
 import { getCoachProfile, type CoachProfile } from './coach'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
@@ -126,6 +133,223 @@ export type MobileDashboardData = {
   pendingCheckinsCount: number
   /** D-F1: true cuando el endpoint falló y se usó el cálculo local degradado (adherencia heurística, sin nutrición/peso/streak). */
   degraded?: boolean
+  /**
+   * Onboarding v2 (SPEC coach-onboarding-v2): persona, alumno de ejemplo, guía y señales reales.
+   * SIEMPRE presente — el parser degrada solo cuando el endpoint todavía no lo sirve.
+   */
+  onboardingV2: MobileOnboardingV2
+}
+
+// ── Onboarding v2 ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Estado PERSISTIDO de la guía (`coaches.onboarding_guide`), la misma foto que lee la web.
+ * Es lo que hace que ocultar la guía en el panel la oculte también en el teléfono.
+ */
+export type MobileOnboardingGuideState = {
+  /** Pasos tildados y persistidos. Los que no aparecen se resuelven por señal. */
+  completed: Partial<Record<OnboardingStepKey, boolean>>
+  /** El coach mandó la guía al pie / la descartó. */
+  dismissed: boolean
+  /** El coach la apagó del todo («No mostrar la guía»). */
+  hidden: boolean
+  /** Instante ISO de la primera visita a la guía. `null` = todavía no la vio. */
+  guideSeenAt: string | null
+}
+
+/**
+ * Contrato del objeto `onboardingV2` del endpoint `/api/mobile/coach/dashboard`.
+ *
+ * Lo SIRVE el gate de persona de RN (W5-A, TASKS F5.1) con los mismos datos que
+ * `getCoachOnboardingV2Data` le da a la web: persona, demo, guía y señales YA computadas
+ * server-side. Acá no se decide nada — la app refleja.
+ */
+export type MobileOnboardingV2 = {
+  /** `coaches.persona`. `null` = coach viejo que nunca contestó «¿A qué te dedicas?». */
+  persona: Persona | null
+  /** `coaches.persona_also_other` (nutrición para 1/3/4, entrenamiento para 2). */
+  alsoOther: boolean
+  /** El server pide pasar por la pantalla de persona antes de seguir. */
+  needsPersona: boolean
+  demoClientId: string | null
+  demoName: string | null
+  guide: MobileOnboardingGuideState
+  signals: OnboardingSignals
+}
+
+/** Clave del jsonb con el sello de «ya vio la guía». Idéntica a la de la web. */
+export const GUIDE_SEEN_AT_KEY = 'guide_seen_at'
+
+function asRecord(raw: unknown): Record<string, unknown> | null {
+  return raw != null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : null
+}
+
+function asPersona(raw: unknown): Persona | null {
+  return typeof raw === 'string' && (PERSONAS as readonly string[]).includes(raw)
+    ? (raw as Persona)
+    : null
+}
+
+function asTrimmedString(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null
+}
+
+/**
+ * Parser del estado de la guía dentro de `coaches.onboarding_guide` (o del bloque `guide` que
+ * sirve el endpoint). Solo reconoce las 5 claves de `@eva/onboarding`: un jsonb con basura o con
+ * claves viejas (`first_plan`, `first_checkin` de la guía v1) no ensucia el progreso.
+ */
+export function parseMobileOnboardingGuide(raw: unknown): MobileOnboardingGuideState {
+  const source = asRecord(raw) ?? {}
+  const completedRaw = asRecord(source.completed) ?? {}
+  const completed: Partial<Record<OnboardingStepKey, boolean>> = {}
+  for (const key of ONBOARDING_STEP_KEYS) {
+    if (completedRaw[key] === true) completed[key] = true
+  }
+  return {
+    completed,
+    dismissed: source.dismissed === true,
+    hidden: source.hidden === true,
+    // El endpoint lo sirve camelCase dentro de `guide`; el jsonb crudo, snake_case.
+    guideSeenAt: asTrimmedString(source.guideSeenAt) ?? asTrimmedString(source[GUIDE_SEEN_AT_KEY]),
+  }
+}
+
+/**
+ * Parser TOLERANTE del objeto `onboardingV2`. A mano y no con Zod a propósito: el caso que hay que
+ * sobrevivir no es «un campo con el tipo equivocado» sino «el endpoint todavía no sirve el objeto»
+ * (binario nuevo contra un deploy viejo, y al revés). Un `safeParse` fallido devolvería `null` y
+ * la guía se caería entera; acá cada campo degrada por separado y la pantalla sigue en pie.
+ *
+ * `legacyGuide` es el `onboardingGuide` crudo que el endpoint ya devolvía antes de W5: mientras el
+ * bloque `guide` no exista, el progreso, el `dismissed` y el sello salen de ahí — que es la MISMA
+ * fila de la base, así que el cruce web ↔ app funciona igual.
+ */
+export function parseMobileOnboardingV2(raw: unknown, legacyGuide?: unknown): MobileOnboardingV2 {
+  const source = asRecord(raw)
+  const signalsRaw = asRecord(source?.signals) ?? {}
+  const realClients = signalsRaw.realClients
+  const demo = asRecord(source?.demo)
+
+  return {
+    persona: asPersona(source?.persona),
+    alsoOther: source?.alsoOther === true,
+    needsPersona: source?.needsPersona === true,
+    // El demo puede venir plano (`demoClientId`) o anidado (`demo: { clientId, fullName }`), que es
+    // la forma que ya usa la web (`DemoStudentSnapshot`). Se aceptan las dos.
+    demoClientId: asTrimmedString(source?.demoClientId) ?? asTrimmedString(demo?.clientId),
+    demoName: asTrimmedString(source?.demoName) ?? asTrimmedString(demo?.fullName),
+    guide: parseMobileOnboardingGuide(source?.guide ?? legacyGuide),
+    signals: {
+      hasBrand: signalsRaw.hasBrand === true,
+      viveTuAppOpened: signalsRaw.viveTuAppOpened === true,
+      hasFirstArtifact: signalsRaw.hasFirstArtifact === true,
+      realClients: typeof realClients === 'number' && Number.isFinite(realClients) ? realClients : 0,
+      realStudentActivity: signalsRaw.realStudentActivity === true,
+    },
+  }
+}
+
+// ── Store de la guía (para la píldora flotante) ──────────────────────────────────────────────
+
+/**
+ * Foto compartida del onboarding v2, para que la píldora flotante
+ * (`components/coach/GuidePill.tsx`) NO tenga que pedir nada al servidor.
+ *
+ * La píldora se monta en el layout de los tabs, donde no hay datos: en vez de duplicar la consulta
+ * más cara de la app, las dos pantallas que YA la pagan (el dashboard y la guía) publican su
+ * resultado acá y la píldora lo lee. Store de módulo + `useSyncExternalStore`, el mismo patrón que
+ * `lib/workspace.ts` y `lib/entitlements.ts`: estado app-wide sin envolver el árbol en un Provider.
+ *
+ * Es CACHE DE PRESENTACIÓN, no autoridad: quien decide qué está hecho es el servidor.
+ */
+export type CoachOnboardingSnapshot = { coachId: string; onboardingV2: MobileOnboardingV2 }
+
+let onboardingSnapshot: CoachOnboardingSnapshot | null = null
+const onboardingListeners = new Set<() => void>()
+
+/** Publica la foto más fresca. La llaman el dashboard y la guía después de cada carga. */
+export function publishCoachOnboarding(snapshot: CoachOnboardingSnapshot): void {
+  onboardingSnapshot = snapshot
+  for (const listener of onboardingListeners) listener()
+}
+
+/** Limpia la foto (cambio de cuenta): la píldora del coach anterior no debe sobrevivir. */
+export function clearCoachOnboarding(): void {
+  if (onboardingSnapshot == null) return
+  onboardingSnapshot = null
+  for (const listener of onboardingListeners) listener()
+}
+
+function subscribeCoachOnboarding(listener: () => void): () => void {
+  onboardingListeners.add(listener)
+  return () => {
+    onboardingListeners.delete(listener)
+  }
+}
+
+/** Foto actual sin hook (para código que no está dentro de un render). */
+export function getCoachOnboardingSnapshot(): CoachOnboardingSnapshot | null {
+  return onboardingSnapshot
+}
+
+function readCoachOnboarding(): CoachOnboardingSnapshot | null {
+  return onboardingSnapshot
+}
+
+/** Foto actual del onboarding v2. `null` = todavía nadie cargó el panel en esta sesión. */
+export function useCoachOnboarding(): CoachOnboardingSnapshot | null {
+  return useSyncExternalStore(subscribeCoachOnboarding, readCoachOnboarding, readCoachOnboarding)
+}
+
+// ── Escrituras de la guía (mismo endpoint que el dashboard) ──────────────────────────────────
+
+/**
+ * `step_key` con el que la app emite la telemetría de la guía.
+ *
+ * ⚠️ El endpoint valida `stepKey` contra CUATRO valores de la guía v1
+ * (`api/mobile/coach/dashboard/route.ts`: profile_branding | first_client | first_plan |
+ * first_checkin) y rechaza con 400 los de la v2 (`vive_tu_app`, `first_artifact`, `aha`). Hasta que
+ * esa lista se amplíe, el paso REAL viaja en `metadata.step` y la columna lleva un valor aceptado
+ * —el mismo truco que ya usaba el chip viejo—, así no se pierde ni un evento por un 400.
+ */
+const GUIDE_EVENT_STEP_KEY = 'profile_branding'
+
+/**
+ * Persiste un parche del jsonb `coaches.onboarding_guide`. El servidor hace MERGE con lo que ya
+ * había, así que dos superficies (web y app) no se pisan: cada una manda solo lo que cambió.
+ *
+ * Best-effort: la guía es una foto del trabajo real, no un formulario. Si la escritura falla, el
+ * próximo `GET` vuelve a traer el estado del server y no se pierde nada que el coach haya hecho.
+ */
+export async function persistCoachOnboardingGuide(patch: Record<string, unknown>): Promise<void> {
+  try {
+    await apiFetch<{ ok: true }>('/api/mobile/coach/dashboard', {
+      method: 'POST',
+      authenticated: true,
+      body: { action: 'persist_onboarding_guide', guide: patch },
+    })
+  } catch {
+    // Telemetría/estado, nunca el camino crítico del coach.
+  }
+}
+
+/** Emite un evento del funnel de onboarding (`coach_onboarding_events`). Best-effort. */
+export async function postCoachOnboardingEvent(
+  eventType: 'step_completed' | 'step_reopened' | 'aha_moment' | 'guide_engagement',
+  metadata?: Record<string, string | number | boolean>,
+): Promise<void> {
+  try {
+    await apiFetch<{ ok: true }>('/api/mobile/coach/dashboard', {
+      method: 'POST',
+      authenticated: true,
+      body: { action: 'onboarding_event', stepKey: GUIDE_EVENT_STEP_KEY, eventType, metadata },
+    })
+  } catch {
+    // Ídem: medir no puede romper la pantalla.
+  }
 }
 
 type ClientRow = {
@@ -319,6 +543,12 @@ type MobileDashboardApiResponse = {
   coach: CoachProfile
   publicCode?: { inviteCode: string; shouldConfirm: boolean }
   onboardingGuide?: Record<string, unknown>
+  /**
+   * Onboarding v2. `unknown` a propósito: lo sirve el gate de persona (W5-A) y un binario viejo
+   * contra un deploy nuevo —o al revés— tiene que seguir arrancando. Lo normaliza
+   * `parseMobileOnboardingV2`.
+   */
+  onboardingV2?: unknown
   dashboard: {
     kpi: MobileKpiSummary
     activePlans: number
@@ -428,6 +658,7 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
     coach: payload.coach,
     publicCode: payload.publicCode ?? null,
     onboardingGuide: payload.onboardingGuide ?? {},
+    onboardingV2: parseMobileOnboardingV2(payload.onboardingV2, payload.onboardingGuide),
     activePlans: payload.dashboard.activePlans ?? 0,
     hasStudentSignal30d: Boolean(payload.dashboard.hasStudentSignal30d),
     clientList: payload.dashboard.clientList,
@@ -869,6 +1100,9 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     coach,
     publicCode: coach.inviteCode ? { inviteCode: coach.inviteCode, shouldConfirm: false } : null,
     onboardingGuide: {},
+    // Camino degradado (endpoint caído): la guía no inventa progreso. Sin señales del server, la
+    // pantalla muestra los 5 pasos pendientes en vez de tildar cosas que no puede comprobar.
+    onboardingV2: parseMobileOnboardingV2(null),
     activePlans: activePlanCount,
     hasStudentSignal30d: checkIns.length > 0 || workoutLogs.length > 0,
     clientList: clients.map((client) => ({ id: client.id, name: client.full_name })),

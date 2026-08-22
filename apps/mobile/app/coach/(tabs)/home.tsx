@@ -8,11 +8,9 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import {
   MobileBillingBanners,
   MobileClientStatsSheet,
-  MobileFreeWelcomeModal,
   MobileFocusList,
   MobileGreetingHeader,
   MobileNovedades,
-  MobileOnboardingGuideChip,
   MobilePublicCodeRequiredModal,
   MobilePulseHero,
   MobileQuickActionsFab,
@@ -23,7 +21,11 @@ import {
 import { InviteCodePill } from '../../../components/coach/InviteStudent'
 import { useTheme } from '../../../context/ThemeContext'
 import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
-import { getCoachDashboardDataMobile, type MobileDashboardData } from '../../../lib/coach-dashboard'
+import {
+  getCoachDashboardDataMobile,
+  publishCoachOnboarding,
+  type MobileDashboardData,
+} from '../../../lib/coach-dashboard'
 
 export default function CoachHomeScreen() {
   const { theme } = useTheme()
@@ -45,6 +47,9 @@ export default function CoachHomeScreen() {
       const next = await getCoachDashboardDataMobile()
       setData(next)
       dataRef.current = next
+      // La píldora de la guía se monta en el layout de tabs, donde no hay datos: en vez de pagar
+      // otra vez la consulta más cara de la app, el dashboard publica su foto y ella la lee.
+      if (next) publishCoachOnboarding({ coachId: next.coach.id, onboardingV2: next.onboardingV2 })
       if (!next) setError('No se pudo cargar tu perfil de coach.')
     } catch {
       setError('No se pudo cargar el dashboard.')
@@ -185,13 +190,10 @@ export default function CoachHomeScreen() {
           pendingCheckins={data.pendingCheckinsCount}
         />
 
-        {/* P3 — Guia de inicio como chip expandible */}
-        <MobileOnboardingGuideChip
-          coach={data.coach}
-          totalClients={data.kpi.totalClients}
-          activePlans={data.activePlans}
-          hasStudentSignal30d={data.hasStudentSignal30d}
-        />
+        {/* La guía de inicio YA NO vive acá (decisión del owner 22-08, paridad con la web): se
+            mudó a su pantalla propia `/coach/guia` y en el panel queda la píldora flotante, montada
+            una sola vez en `(tabs)/_layout.tsx`. El chip de 4 pasos que estaba en este punto —bajo
+            el fold, después de novedades— es justamente lo que nadie veía. */}
 
         {/* Sheets / modales */}
         <MobileClientStatsSheet
@@ -199,7 +201,8 @@ export default function CoachHomeScreen() {
           onClose={() => setStatsOpen(false)}
           clientStats={data.clientStats}
         />
-        <MobileFreeWelcomeModal enabled={data.coach.subscriptionTier === 'free'} />
+        {/* El modal de bienvenida Free ya no existe: la guía v2 (`/coach/guia`) ES la bienvenida,
+            para todos los planes (decisión del owner 22-08, «un solo onboarding por área»). */}
         <MobilePublicCodeRequiredModal
           visible={Boolean(data.publicCode?.shouldConfirm && data.publicCode.inviteCode)}
           inviteCode={data.publicCode?.inviteCode ?? ''}

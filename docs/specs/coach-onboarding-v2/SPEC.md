@@ -133,6 +133,16 @@ guía metida arriba competía con todo eso en vez de destacar.
 - **Paridad RN (W5)**: la guía de RN debe seguir a esta casa (pantalla propia + acceso flotante),
   no al diseño de «guía arriba del home».
 
+### Un solo onboarding por área (owner 22-08)
+
+Mientras la guía v2 está **activa** (ni completa, ni descartada, ni oculta; coach standalone),
+**ningún tour ni modal de módulo se dispara solo** — quedan a pedido, detrás del «?» — y el
+auto-arranque apagado **no** marca el tour como visto: cuando la guía termina, vuelve a estar ahí.
+Los onboardings viejos mueren (modal de bienvenida Free, checklist de 4 pasos): **la guía
+(`/coach/guia` en web, la pantalla de guía en RN) ES la bienvenida**. La condición es un helper
+puro compartido, `isGuideActive` (`@eva/onboarding`), y llega a la UI web por contexto
+(`OnboardingModeProvider`, montado en el layout `/coach`).
+
 ### 1. Pantalla «¿A qué te dedicas?» (web + RN, primer login, una sola vez)
 
 - Aparece antes que cualquier modal de bienvenida, pantalla completa, sin «Saltar» arriba. Cinco tarjetas:

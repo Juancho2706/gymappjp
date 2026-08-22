@@ -2,12 +2,13 @@ import { redirect } from 'next/navigation'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import { CoachTopBar } from '@/components/coach/CoachTopBar'
 import { GuidePill } from '@/components/coach/GuidePill'
+import { OnboardingModeProvider } from '@/components/coach/OnboardingModeContext'
 import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { RosterViewProvider } from '@/components/coach/RosterViewContext'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
 import { NewsFeedProvider } from '@/components/coach/NewsFeedProvider'
 import { getCoach, getActiveStandaloneClientCount } from '@/lib/coach/get-coach'
-import { isValidInviteCode } from '@/lib/coach/invite-code'
+import { needsPublicCodeConfirmation } from '@/lib/coach/invite-code'
 import { PwaRegister } from '@/components/PwaRegister'
 import { IdentifyOnMount } from '@/components/analytics/IdentifyOnMount'
 import { OverLimitBanner } from './_components/OverLimitBanner'
@@ -33,6 +34,8 @@ import {
 } from '@/services/entitlements.service'
 import { disabledDomainsFromPrefs, readCoachDomainPrefs } from '@/services/coach/persona.service'
 import { getPersonaScreenContext } from './onboarding/persona/_data/persona.queries'
+import { isGuideActive } from '@eva/onboarding'
+import { parseOnboardingGuide } from './dashboard/_lib/onboarding-guide-state'
 
 export const metadata: Metadata = {
     title: {
@@ -245,10 +248,28 @@ export default async function CoachLayout({
     const coachPanelLogoUrl = isManaged || standaloneBrandOn ? coach.logo_url : null
     const coachPanelLogoDarkUrl = isManaged || standaloneBrandOn ? coach.logo_url_dark : null
 
+    // «Un solo onboarding por área» (decisión del owner 22-08). Mientras la guía v2 está ACTIVA
+    // —guía ni completa, ni descartada, ni oculta, y coach standalone— ningún tour ni modal de
+    // módulo se auto-arranca dentro del panel: la guía ES la bienvenida y el resto queda a pedido
+    // (el «?»). Se resuelve acá, en el servidor, con los MISMOS datos que recibe `GuidePill`, y
+    // viaja como un booleano por contexto (`useOnboardingMode`).
+    const guideState = parseOnboardingGuide(coach.onboarding_guide)
+    const guideActive = isGuideActive({
+        completed: guideState.completed,
+        dismissed: guideState.dismissed,
+        hidden: guideState.hidden,
+        managed: !isStandalone || personaContext.managed,
+    })
+
     const publicCode = await publicCodePromise
-    const shouldConfirmPublicCode =
-        isValidInviteCode(publicCode.inviteCode) &&
-        (publicCode.generated || onboardingGuide.invite_code_confirmed !== true)
+    // Solo a quien pudo repartir el link viejo `/c/<slug>` (coach anterior al corte de códigos
+    // públicos) o a quien recién recibió código: el coach nuevo nace con código y no confirma nada.
+    const shouldConfirmPublicCode = needsPublicCodeConfirmation({
+        inviteCode: publicCode.inviteCode,
+        generated: publicCode.generated,
+        inviteCodeConfirmed: onboardingGuide.invite_code_confirmed === true,
+        createdAt: coach.created_at,
+    })
 
     return (
         <>
@@ -311,6 +332,7 @@ export default async function CoachLayout({
                 --cta-fill: ${sportTokens.ctaFill};
             }
         ` }} />
+        <OnboardingModeProvider guideActive={guideActive}>
         <div
             className="coach-layout-container flex min-h-[100dvh] min-w-0 flex-col bg-[var(--surface-app)] transition-colors selection:bg-primary/30 selection:text-primary md:h-dvh md:max-h-dvh md:flex-row md:overflow-hidden has-[.coach-builder-shell]:h-dvh has-[.coach-builder-shell]:max-h-dvh has-[.coach-builder-shell]:min-h-0 has-[.coach-builder-shell]:overflow-hidden"
             style={{ '--theme-primary': palette.primary, '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
@@ -390,6 +412,7 @@ export default async function CoachLayout({
                 {shouldConfirmPublicCode && <PublicCodeRequiredModal inviteCode={publicCode.inviteCode} />}
             </NewsFeedProvider>
         </div>
+        </OnboardingModeProvider>
         <PwaRegister />
         {/* Identidad de analítica (PostHog identify + user/tags de Sentry). `overLimitTier` ya es
             `normalizeCoachTier(coach.subscription_tier)`; solo viaja el UUID del coach, sin PII. */}

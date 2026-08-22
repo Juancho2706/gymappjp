@@ -55,6 +55,7 @@ export function PersonaPicker() {
     // la action lo reenvía a la guía, donde se dispara (RegistrationMirror).
     const searchParams = useSearchParams()
     const registrationEid = searchParams.get('welcome') === 'free' ? searchParams.get('eid') : null
+    const registrationPh = searchParams.get('ph') === 'srv' ? ('srv' as const) : undefined
     const tileRefs = useRef<Array<HTMLButtonElement | null>>([])
 
     const selectedIndex = selected ? PERSONA_TILE_ORDER.indexOf(selected) : -1
@@ -101,7 +102,9 @@ export function PersonaPicker() {
                 setCoachPersonaAction({
                     persona: selected,
                     alsoOther,
-                    registration: registrationEid ? { welcome: 'free', eid: registrationEid } : undefined,
+                    registration: registrationEid
+                        ? { welcome: 'free', eid: registrationEid, ph: registrationPh }
+                        : undefined,
                 }),
                 sleep(MIN_BUILD_MS),
             ])

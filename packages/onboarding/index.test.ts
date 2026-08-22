@@ -167,9 +167,12 @@ describe('@eva/onboarding — resolveHref / resolveRnRoute', () => {
         }
     })
 
-    it('la marca conserva su query (?tour=1) y el alta su ?invite=1', () => {
+    it('la marca apunta a la pantalla Mi Marca en las dos superficies y el alta conserva su ?invite=1', () => {
         const brand = ONBOARDING_STEPS.strength[0]
-        expect(resolveHref(brand, { demoClientId: null })).toBe('/coach/settings?tour=1')
+        // Owner 22-08 («un solo onboarding por área»): el paso 1 ya no arrastra `?tour=1`. Esa
+        // query no abría nada en el hub (el tour vive en /brand) y el tour de marca dejó de
+        // auto-arrancar mientras la guía está activa.
+        expect(resolveHref(brand, { demoClientId: null })).toBe('/coach/settings/brand')
         expect(resolveRnRoute(brand, { demoClientId: null })).toBe('/coach/settings/brand')
         const invite = ONBOARDING_STEPS.strength[3]
         expect(resolveHref(invite, { demoClientId: null })).toBe('/coach/clients?invite=1')

@@ -6,7 +6,11 @@ import { jsonRateLimited, rateLimitCoachOnboardingEvents } from '@/lib/rate-limi
 
 const schema = z.object({
     // Pasos v2 (`vive_tu_app`, `first_artifact`, `aha`) + los legacy `first_plan`/`first_checkin`,
-    // que siguen vivos en las filas históricas y en el checklist viejo hasta que W2 lo reemplace.
+    // que siguen vivos en las filas históricas. `persona` NO es un paso de la guía: es el
+    // `step_key` de los eventos que no le pertenecen a ningún paso (`persona_selected`,
+    // `demo_seeded`, `demo_deleted`, ver `PERSONA_EVENT_STEP_KEY` en services/coach/persona.service).
+    // La columna es `text NOT NULL` sin CHECK y el índice único parcial solo aplica a
+    // `event_type = 'step_completed'`, así que no colisiona con la guía.
     stepKey: z.enum([
         'profile_branding',
         'vive_tu_app',
@@ -15,6 +19,7 @@ const schema = z.object({
         'aha',
         'first_plan',
         'first_checkin',
+        'persona',
     ]),
     // Espejo EXACTO del CHECK de `coach_onboarding_events` (migración
     // 20260822002122_onboarding_v2_persona_demo.sql). Si acá entra un tipo que la DB no admite, el

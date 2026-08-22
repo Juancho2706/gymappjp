@@ -94,16 +94,56 @@ se ve LLENO, así que la guía sale de ahí. Ver SPEC § «Cambio 22-08».
 - [ ] F4.5.6 Pendiente: QA visual del owner (desktop, PWA 390 px, dark, white-label) y decidir si
   RN copia esta casa en W5 (la SPEC ya lo pide).
 
+## W4.6 — Fixes del QA del owner + responsividad (22-08)
+- [x] F4.6.1 «Otro color» fuera de la tarjeta de marca de la guía (sin editores HEX; el picker completo sigue en Opciones › Mi Marca).
+- [x] F4.6.2 Movimiento y cardio abrían el builder EN BLANCO tras aplicar la plantilla (faltaba `?programId=`): ahora abren sobre el programa recién creado con `&primera=1`.
+- [x] F4.6.3 Builder móvil: el toggle «Así lo ve {nombre}» pasa a un botón ojo en la barra superior (`aria-controls`), el panel trae su «✕» y el lienzo reserva `safe-area + 96px` para Guardar/«+».
+- [x] F4.6.4 `DemoStudentBanner` apilado en móvil (chip → texto → botón a ancho completo), fila en ≥ md.
+- [x] F4.6.5 Volver a la guía siempre: «Ver mi guía de inicio» en Opciones › Mi panel, «Abrir la guía» en el Centro de ayuda, `/coach/guia` idéntica con `hidden`/`dismissed` + «Volver a mostrar la píldora» (limpia server + localStorage).
+- [x] F4.6.6 Responsividad: chip de persona con `flex-wrap`, grid de la guía `xl:`, KPIs del demo con `minmax(0,1fr)`, píldora con ancho acotado a `min(280px, 100vw − 104px)` y tap targets ≥ 44 px.
+- [x] F4.6.7 Gate visual reproducible: `apps/web/src/app/dev-harness/guia` (fixtures, solo `NODE_ENV=development`) + `scripts/guia-visual-check.mjs` (Playwright headless, 5 anchos × light/dark × 2 personas; asserts bloqueantes: sin scroll-x, sin texto recortado, píldora ⊆ viewport y sin intersectar la cápsula del nav, tap targets). Corrido: **159 aserciones, 0 fallidas**.
+- [x] F4.6.8 Bug preexistente (QA de BROCITO en Android): el modal «Tu link de alumnos cambió» salía a TODO coach nuevo. `needsPublicCodeConfirmation` + `PUBLIC_CODE_CUTOVER = 2026-05-23` en `lib/coach/invite-code.ts`, usado por `coach/layout.tsx` y por `api/mobile/coach/dashboard` (`created_at` sumado al repositorio del coach). 8 tests.
+- [ ] F4.6.9 Pendiente: el fix del builder (F4.6.3) no tiene gate visual propio (sin harness del builder); QA del owner en 390/430 px.
+
+## W4.7 — Un solo onboarding por área (Opus; decisión del owner 22-08)
+
+Regla del owner: «no podemos tener varios onboardings en una sola área». Ver SPEC § «Un solo
+onboarding por área».
+
+- [x] F4.7.1 Helper puro compartido web/RN `packages/onboarding/guide-mode.ts` (`isGuideActive({
+  completed, dismissed, hidden, managed })`, misma semántica que `shouldShowGuidePill` sin la parte
+  de rutas), re-exportado desde el barrel del paquete. Test propio (`guide-mode.test.ts`, 7 casos).
+- [x] F4.7.2 Web: `components/coach/OnboardingModeContext.tsx` (`OnboardingModeProvider` +
+  `useOnboardingMode() → { guideActive }`, default `false` fuera del provider). `coach/layout.tsx`
+  resuelve `guideActive` en el servidor con los MISMOS datos que le pasa a `GuidePill` y envuelve el
+  shell.
+- [x] F4.7.3 Tours que dejan de auto-arrancar con la guía activa: `nutrition-v2/tour/tour-engine.tsx`
+  (`useTourController` — cubre hub y editor de una, así que `HubTourGuide` y `QuickEditPlanView` no
+  se tocaron) y `settings/_components/BrandSettingsTourClient.tsx` (el `?tour=1` y el temporizador de
+  600 ms; el param se limpia igual). En los dos casos el «?» sigue abriendo el tour y **no** se marca
+  la memoria de «visto». `WeeklyPlanBuilder` ya no auto-arrancaba desde F4.2 (verificado: el único
+  `openTour(` cuelga del «?», no de un `useEffect` de montaje).
+- [x] F4.7.4 Muere el onboarding viejo del dashboard: `FreeWelcomeModal.tsx` borrado (la guía es la
+  bienvenida). La conversión NO se pierde: el aterrizaje legado `/coach/dashboard?welcome=free&eid=`
+  monta `RegistrationMirror` desde `DashboardShell` (Meta `CompleteRegistration` + PostHog
+  `coach_registered`, con la misma validación del `eid` que `/coach/guia`).
+- [x] F4.7.5 `@eva/onboarding` WEB.brand pasa de `/coach/settings?tour=1` a `/coach/settings/brand`:
+  el `tour=1` no abría nada en el hub (`BrandSettingsTourClient` se monta en `/brand`, no en
+  `/coach/settings`) y ese tour ya no auto-arranca. Test del paquete ajustado.
+- [x] F4.7.6 Tests: `guide-mode.test.ts`, `OnboardingModeContext.test.tsx` (default/provider),
+  `tour-engine.test.tsx` (no auto-arranca con guía activa · el «?» lo abre igual · la memoria queda
+  intacta). Verde también `hub-tour-mount.test.tsx` (fuera del provider ⇒ auto-arranca como antes).
+- [ ] F4.7.7 Pendiente: espejo RN de la regla (W5 — la pantalla de guía RN y sus tours/modales de
+  módulo consumen el mismo `isGuideActive`) y QA visual del owner.
+
 ## W5 — RN paridad (Opus)
-- [ ] F5.1 Pantalla de persona (`RoleCards`) + gate en `app/coach/_layout.tsx`; persona vía `api/mobile/coach/dashboard` (merge) o endpoint propio; «Armando tu panel».
-- [ ] F5.2 Home día 1: **ojo, cambió el destino** (owner 22-08, ver W4.5): la guía RN sigue a la web
-  a una pantalla propia + acceso flotante, NO «arriba del home». Persistida (`data.onboardingGuide`),
-  `dismissed` y `guide_seen_at` cruzados con web; tarjeta marca compacta; demo con «Ver como…».
-- [ ] F5.3 Nav móvil por dominio (mismo paquete); dashboard vacío deja de felicitar; copy interno («scope/pools») fuera.
+- [x] F5.1 Pantalla de persona RN `app/coach/onboarding/persona.tsx` (molde RoleCards, 5 tiles, pregunta 2, «Armar mi panel», interstitial ≥ 1,2 s) + gate en `app/coach/_layout.tsx` (`needsPersona` fail-open, caché por sesión) vía `lib/coach-persona.ts`; API: `api/mobile/coach/persona` (GET/POST) sobre el núcleo compartido `applyCoachPersona` de `services/coach/persona.service.ts` (la action web lo usa también); `api/mobile/coach/dashboard` devuelve `onboardingV2` (persona, needsPersona, demo, guide, señales) desde `services/onboarding/onboarding-v2.queries.ts`; `/api/coach/onboarding-events` acepta `stepKey: 'persona'`. Tests: 16 + 8 + 18.
+- [x] F5.2 Guía RN en pantalla propia `app/coach/guia.tsx` (anillo n/5, 5 tarjetas desde `ONBOARDING_STEPS` + `resolveRnRoute`, marca compacta, alumno de ejemplo con «Ver como…» / «Borrar ejemplo», bienvenida, cierre 5/5, «No mostrar la guía», `guide_seen_at` al montar) + píldora flotante `components/coach/GuidePill.tsx` (Reanimated, anillo SVG, sobre la tab bar, AsyncStorage por coach) montada en `(tabs)/_layout.tsx`; home sin el slot viejo; parser `onboardingV2` + store en `lib/coach-dashboard.ts`. «Ver como…» abre `/vive-tu-app` en el navegador del sistema (`Linking.openURL`; `expo-web-browser` no está instalado ⇒ sin binario nuevo) vía `api/mobile/coach/vive-tu-app` sobre `services/onboarding/vive-tu-app.service.ts`; `api/mobile/coach/demo-student` DELETE. OTA-able (`expo export` verde).
+- [ ] F5.3 Nav móvil por dominio (mismo paquete); dashboard vacío deja de felicitar; copy interno («scope/pools») fuera. **Pendiente.**
 - [ ] F5.4 Alta: stepper compacto + share sheet + `wa.me`; `QuickCreateClientForm` maneja `UPGRADE_REQUIRED` y emite `upgrade_gate_hit`.
 - [ ] F5.5 Tarjetas embebidas del builder RN (molde `BuilderOnboardingTour` → tarjetas); vista del alumno.
-- [ ] F5.6 `captureAppEvent` de los eventos nuevos; borrar `MobileOnboardingChecklist` y bloques (`:708-1143`) o reciclarlos.
-- [ ] F5.7 QA visual en emulador por persona (light/dark, white-label, safe areas); confirmar OTA-able (sin assets/módulos nuevos). Coordinar con BROCITO W6 antes de tocar `CoachDashboardSections.tsx`.
+- [~] F5.6 `MobileOnboardingChecklist`, `MobileFreeWelcomeModal` y bloques viejos BORRADOS (W4.7-rn, −1.348 líneas). **Pendiente:** RN emite solo `guide_engagement` (con `stepKey` fijo `profile_branding` + `metadata.step`); `step_completed`/`aha_moment` desde RN y `captureAppEvent` de los eventos nuevos.
+- [ ] F5.7 QA visual en device/emulador por persona (light/dark, white-label, safe areas, back de hardware en la pantalla de persona, píldora vs cápsula). OTA-able confirmado (`expo export` verde, sin deps nativas nuevas). **Pendiente del owner.**
 
 ## W6 — Correos por comportamiento (Opus; tras ledger de BROCITO)
 - [ ] F6.1 Motor de triggers sobre el ledger del embudo: +2 h sin alumno real · +24 h sin volver · +48 h alumno invitado no entró · aha · +7 d (ayuda humana) · corte 90 d; dedupe; exclusión de cuentas de prueba; cron.

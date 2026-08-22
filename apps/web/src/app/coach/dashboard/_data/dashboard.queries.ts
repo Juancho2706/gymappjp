@@ -16,10 +16,15 @@ import type { WorkspaceSummary } from '@/domain/auth/types'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveCheckinPhotoUrl } from '@/lib/storage/checkin-photos'
 import type { DbClient } from '@/infrastructure/db/interfaces'
-import { PERSONAS, type Persona } from '@eva/schemas'
+import type { Persona } from '@eva/schemas'
 import type { OnboardingSignals } from '@eva/onboarding'
-import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import { getDemoClientId } from '@/services/onboarding/demo-student.service'
+import {
+    countOrZero,
+    loadOnboardingSignals,
+    parsePersona,
+    type UntypedCountClient,
+} from '@/services/onboarding/onboarding-v2.queries'
 import { parseLoaderConfig, serializeLoaderConfig } from '@/lib/brand-composer'
 import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 
@@ -706,38 +711,10 @@ function buildClientPaymentSummary(
 // `@eva/onboarding` las mapea a pasos tildados) y las pinta. Cero N+1, cero autorización en
 // cliente.
 
-/** `coaches.persona` es `text` con CHECK: se valida contra la tupla del paquete antes de usarla. */
-export function parsePersona(raw: string | null | undefined): Persona | null {
-    if (raw == null) return null
-    return (PERSONAS as readonly string[]).includes(raw) ? (raw as Persona) : null
-}
-
-/**
- * Colores que NO cuentan como «marca elegida»: el verde `#10B981` que los caminos de alta siembran
- * (drift «todo coach nuevo nace verde») y el azul EVA por defecto. Si el coach sigue en uno de los
- * dos, el paso 1 de la guía queda pendiente aunque la columna tenga un hex.
- */
-const SEEDED_BRAND_COLORS = new Set(['#10b981', BRAND_PRIMARY_COLOR.toLowerCase()])
-
-/** Verde sembrado en el alta — la tarjeta de marca preselecciona el azul EVA cuando lo ve. */
-export const SEEDED_GREEN = '#10B981'
-
-export interface BrandSignalRow {
-    logo_url: string | null
-    theme_preset_key: string | null
-    primary_color: string | null
-}
-
-/**
- * ¿El coach ya tocó su marca? (SPEC §6, paso 1). Puro: logo, preset o un color que NO sea uno de
- * los dos sembrados. Exportado para poder testearlo sin base.
- */
-export function hasCustomBrand(row: BrandSignalRow): boolean {
-    if ((row.logo_url ?? '').trim() !== '') return true
-    if ((row.theme_preset_key ?? '').trim() !== '') return true
-    const color = (row.primary_color ?? '').trim().toLowerCase()
-    return color !== '' && !SEEDED_BRAND_COLORS.has(color)
-}
+// `parsePersona`, `hasCustomBrand` y `SEEDED_GREEN` viven en el servicio compartido con la app
+// (`services/onboarding/onboarding-v2.queries`): la misma señal la calculan la guía web y el
+// endpoint `/api/mobile/coach/dashboard`. Se re-exportan para no mover a sus consumidores.
+export { hasCustomBrand, parsePersona, SEEDED_GREEN, type BrandSignalRow } from '@/services/onboarding/onboarding-v2.queries'
 
 /**
  * Valores actuales de marca del coach. La tarjeta «Tu marca en 60 s» reusa
@@ -862,80 +839,6 @@ export interface CoachOnboardingV2Data {
     needsBrand: boolean
 }
 
-/** Cliente mínimo para tablas que `database.types.ts` todavía no tipa (`nutrition_plans_v2`). */
-type UntypedCountQuery = PromiseLike<{ count: number | null }> & {
-    eq(column: string, value: string): UntypedCountQuery
-}
-type UntypedCountClient = {
-    from(table: string): {
-        select(columns: string, options: { count: 'exact'; head: true }): UntypedCountQuery
-    }
-}
-
-async function countOrZero(q: PromiseLike<{ count: number | null }>): Promise<number> {
-    const { count } = await q
-    return count ?? 0
-}
-
-/**
- * ¿El coach ya creó su primer artefacto? La señal cambia por persona (SPEC §6, paso 3) porque un
- * nutricionista nunca podría tildar «crea tu primer programa» — ese era el drift del checklist v1.
- */
-async function resolveFirstArtifact(
-    supabase: DbClient,
-    userId: string,
-    persona: Persona | null,
-): Promise<boolean> {
-    const programs = () =>
-        countOrZero(
-            supabase.from('workout_programs').select('id', { count: 'exact', head: true }).eq('coach_id', userId),
-        )
-    const nutritionPlans = () =>
-        countOrZero(
-            (supabase as unknown as UntypedCountClient)
-                .from('nutrition_plans_v2')
-                .select('id', { count: 'exact', head: true })
-                .eq('coach_id', userId),
-        )
-
-    switch (persona) {
-        case 'nutrition':
-            return (await nutritionPlans()) > 0
-        case 'rehab':
-            return (
-                (await countOrZero(
-                    supabase
-                        .from('movement_assessments')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('coach_id', userId),
-                )) > 0
-            )
-        case 'endurance': {
-            // Perfil cardio del alumno (FC de reposo / marca de 5K) o una semana ya armada.
-            const [withCardio, programCount] = await Promise.all([
-                countOrZero(
-                    supabase
-                        .from('clients')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('coach_id', userId)
-                        .eq('is_archived', false)
-                        .or('ref_5k_time_sec.not.is.null,resting_hr.not.is.null'),
-                ),
-                programs(),
-            ])
-            return withCardio > 0 || programCount > 0
-        }
-        case 'other':
-        case null: {
-            // Panel completo: cuenta cualquiera de los dos artefactos.
-            const [programCount, planCount] = await Promise.all([programs(), nutritionPlans()])
-            return programCount > 0 || planCount > 0
-        }
-        case 'strength':
-        default:
-            return (await programs()) > 0
-    }
-}
 
 /** Stats del alumno de ejemplo: solo las consultas que la persona necesita para sus 3 KPIs. */
 async function loadDemoStats(
@@ -1045,34 +948,18 @@ export async function getCoachOnboardingV2Data(userId: string): Promise<CoachOnb
 
         const persona = parsePersona(coachRow?.persona)
 
-        const [demoClientId, viveTuAppRows, hasFirstArtifact, realClients, workoutActivity, intakeActivity] =
-            await Promise.all([
-                getDemoClientId(supabase, userId),
-                supabase
-                    .from('coach_onboarding_events')
-                    .select('id')
-                    .eq('coach_id', userId)
-                    .eq('event_type', 'vive_tu_app_opened')
-                    .limit(1),
-                resolveFirstArtifact(supabase, userId, persona),
-                countActiveStandaloneClients(supabase, userId).catch(() => 0),
-                // El aha pertenece al alumno REAL: el demo trae actividad sembrada y tildaría el
-                // paso 5 el día 1 (de ahí `clients.is_demo = false` en los dos joins).
-                supabase
-                    .from('workout_logs')
-                    .select('id, clients!inner(coach_id, is_demo, is_archived)')
-                    .eq('clients.coach_id', userId)
-                    .eq('clients.is_demo', false)
-                    .eq('clients.is_archived', false)
-                    .limit(1),
-                supabase
-                    .from('nutrition_intake_entries')
-                    .select('id, clients!inner(coach_id, is_demo, is_archived)')
-                    .eq('clients.coach_id', userId)
-                    .eq('clients.is_demo', false)
-                    .eq('clients.is_archived', false)
-                    .limit(1),
-            ])
+        const brandRow = {
+            logo_url: coachRow?.logo_url ?? null,
+            theme_preset_key: coachRow?.theme_preset_key ?? null,
+            primary_color: coachRow?.primary_color ?? null,
+        }
+
+        // Las señales son las MISMAS que sirve `/api/mobile/coach/dashboard` a la app: una sola
+        // implementación en `services/onboarding/onboarding-v2.queries`, dos superficies.
+        const [signals, demoClientId] = await Promise.all([
+            loadOnboardingSignals(supabase, userId, persona, brandRow),
+            getDemoClientId(supabase, userId),
+        ])
 
         let demo: DemoStudentSnapshot | null = null
         if (demoClientId) {
@@ -1122,26 +1009,13 @@ export async function getCoachOnboardingV2Data(userId: string): Promise<CoachOnb
             logoUrl: coachRow?.logo_url ?? null,
         }
 
-        const hasBrand = hasCustomBrand({
-            logo_url: coachRow?.logo_url ?? null,
-            theme_preset_key: coachRow?.theme_preset_key ?? null,
-            primary_color: coachRow?.primary_color ?? null,
-        })
-
         return {
             persona,
             personaAlsoOther: coachRow?.persona_also_other === true,
-            signals: {
-                hasBrand,
-                viveTuAppOpened: (viveTuAppRows.data?.length ?? 0) > 0,
-                hasFirstArtifact,
-                realClients,
-                realStudentActivity:
-                    (workoutActivity.data?.length ?? 0) > 0 || (intakeActivity.data?.length ?? 0) > 0,
-            },
+            signals,
             demo,
             brand,
-            needsBrand: !hasBrand,
+            needsBrand: !signals.hasBrand,
         }
     })
 }
