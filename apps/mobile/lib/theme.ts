@@ -558,9 +558,13 @@ export function applyEffectiveCoachBranding(base: Theme, effective: EffectiveCoa
 }
 
 /**
- * NativeWind CSS-var overrides for the brand accent (per scheme). Spread the
- * result onto a wrapping <View style={...}> so Tailwind classes (bg-primary,
- * text-primary, border-accent…) pick up the live brand color.
+ * NativeWind CSS-var overrides for the brand accent (per scheme). Pass the
+ * result to `vars()` and put THAT object (by identity, never `{ ...vars() }`)
+ * on a wrapping <View style={...}> so Tailwind classes (bg-primary,
+ * text-primary, border-accent…) pick up the live brand color. css-interop keys
+ * its variables by the identity of the object `vars()` returns: spreading it
+ * silently drops every variable (bug vivo hasta el 22-08-2026, ver
+ * context/ThemeContext `BRAND_VARS_IDENTITY`).
  */
 export function brandVars(primaryColor: string | null | undefined, scheme: 'light' | 'dark'): Record<string, string> {
   const brand = primaryColor || DEFAULT_BRAND
@@ -621,7 +625,8 @@ export function effectiveBrandVars(
 
 /**
  * Valores LIGHT (canales "r g b") de EXACTAMENTE los CSS-vars que el bloque
- * `.dark` de `global.css` sobreescribe. Se spreadean con `vars()` en la <View>
+ * `.dark` de `global.css` sobreescribe. Se pasan a `vars()` POR IDENTIDAD (nunca
+ * spread, ver `BRAND_VARS_IDENTITY` en ThemeContext) en la <View>
  * de `ForceScheme scheme="light"` (context/ThemeContext, alias `ForceLightTheme`)
  * para SCOPEAR el tema claro a un subarbol: el var mas cercano gana sobre el
  * `.dark` del root, asi que
@@ -707,7 +712,8 @@ export const LIGHT_SCHEME_VARS: Record<string, string> = {
 
 /**
  * Espejo DARK de `LIGHT_SCHEME_VARS`: MISMO juego de keys, con los valores del
- * bloque `.dark:root, .dark { … }` de `global.css`. Lo spreadea `vars()` en la
+ * bloque `.dark:root, .dark { … }` de `global.css`. Va a `vars()` por identidad
+ * (nunca spread, ver `BRAND_VARS_IDENTITY` en ThemeContext) en la
  * <View> de `ForceScheme scheme="dark"` para SCOPEAR el tema oscuro a un subarbol
  * aunque el SO (y por tanto el colorScheme global de NativeWind) este en claro —
  * es el mecanismo que hace dark la familia de entrada sin tocar el lever app-wide.
