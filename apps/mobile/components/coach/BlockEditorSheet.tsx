@@ -1,6 +1,8 @@
-import { forwardRef, useEffect, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import type { ScrollView } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { useSheetKeyboardInset } from '../../lib/use-sheet-keyboard-inset'
 import { Image } from 'expo-image'
 import { Check, ChevronDown, Dumbbell, History, Info, Link2, Lock, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
@@ -76,6 +78,8 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
   ref
 ) {
   const { theme } = useTheme()
+  const scrollRef = useRef<ScrollView>(null)
+  const { keyboardInset, onScroll } = useSheetKeyboardInset(scrollRef)
   const [draft, setDraft] = useState<BuilderBlock | null>(block)
   const [history, setHistory] = useState<{ date: string; sets: number; maxKg: number } | null>(null)
   const [areaOpen, setAreaOpen] = useState(false)
@@ -149,12 +153,14 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
       backgroundStyle={{ backgroundColor: theme.card }}
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
-      {/* automaticallyAdjustKeyboardInsets (iOS): evita que el teclado tape Notas/Instrucciones
-          al pie del form; Android resuelve con adjustResize. */}
+      {/* Teclado: inset manual + scroll correctivo (useSheetKeyboardInset). adjustResize es
+          NO-OP con edge-to-edge en Android y automaticallyAdjustKeyboardInsets es iOS-only y
+          no siguió al caret en QA — un solo mecanismo para ambas plataformas. */}
       <BottomSheetScrollView
-        contentContainerStyle={styles.body}
+        ref={scrollRef}
+        contentContainerStyle={[styles.body, keyboardInset ? { paddingBottom: 40 + keyboardInset } : null]}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
+        onScroll={onScroll}
       >
         {(() => {
           const muscle = getMuscleColor(draft.muscle_group)

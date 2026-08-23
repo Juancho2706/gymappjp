@@ -1,6 +1,8 @@
-import { forwardRef, useEffect, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import type { ScrollView } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { useSheetKeyboardInset } from '../../lib/use-sheet-keyboard-inset'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { ImagePlus, Trash2, X } from 'lucide-react-native'
@@ -58,6 +60,8 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
 ) {
   const { theme } = useTheme()
   const editing = !!exercise
+  const scrollRef = useRef<ScrollView>(null)
+  const { keyboardInset, onScroll } = useSheetKeyboardInset(scrollRef)
 
   const [name, setName] = useState('')
   const [muscle, setMuscle] = useState('')
@@ -185,13 +189,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       backgroundStyle={{ backgroundColor: theme.card }}
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
-      {/* automaticallyAdjustKeyboardInsets (iOS): sin esto el teclado tapa el textarea de
-          instrucciones al final del form — el scroll no sigue al caret. Android ya resuelve
-          con adjustResize. */}
+      {/* Teclado: inset manual + scroll correctivo (useSheetKeyboardInset). adjustResize es
+          NO-OP con edge-to-edge en Android y automaticallyAdjustKeyboardInsets es iOS-only y
+          no siguió al caret en QA — un solo mecanismo para ambas plataformas. */}
       <BottomSheetScrollView
-        contentContainerStyle={styles.body}
+        ref={scrollRef}
+        contentContainerStyle={[styles.body, keyboardInset ? { paddingBottom: 48 + keyboardInset } : null]}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
+        onScroll={onScroll}
       >
         <View style={styles.header}>
           <Text className="text-strong font-display" style={styles.title}>
