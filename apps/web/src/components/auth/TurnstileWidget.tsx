@@ -165,8 +165,10 @@ export function TurnstileWidget({
         const boot = () => {
             const api = window.turnstile
             if (!api) return false
-            if (typeof api.ready === 'function') api.ready(renderWidget)
-            else renderWidget()
+            // NUNCA `api.ready()` acá (Sentry EVA-NEXTJS-1K): con el script async (next/script),
+            // Cloudflare LANZA «Remove async/defer … before using turnstile.ready()». Si
+            // `window.turnstile` ya existe, api.js terminó de evaluarse y `render()` es seguro.
+            renderWidget()
             return true
         }
 
