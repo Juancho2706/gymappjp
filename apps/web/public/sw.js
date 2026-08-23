@@ -25,7 +25,13 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(SHELL_CACHE)
-      .then((cache) => cache.addAll(PRECACHE).catch(() => {}))
+      // El fallo del precache no puede tumbar el install, pero tampoco puede desaparecer: cuando
+      // esto falla, el fallback offline y el icono NO existen y el SW arranca sin red de contención.
+      .then((cache) =>
+        cache.addAll(PRECACHE).catch((err) => {
+          console.warn('[sw] precache falló; sin fallback offline en este arranque', err);
+        })
+      )
       .then(() => self.skipWaiting())
   );
 });
@@ -93,10 +99,15 @@ self.addEventListener('fetch', (event) => {
     url.origin === self.location.origin &&
     (event.request.destination === 'image' || event.request.destination === 'font')
   ) {
+    // `caches.match()` resuelve a `undefined` cuando no hay hit, y `respondWith(Promise<undefined>)`
+    // es lo que el navegador reporta como «FetchEvent.respondWith received an error» (Sentry
+    // EVA-NEXTJS-1G). El fallback del icono NO está garantizado: si el precache del install falló
+    // (sin red o con presión de cuota, típico en iOS) nunca existió. Acá siempre sale un Response.
     event.respondWith(
-      cacheFirst(STATIC_CACHE, event.request).catch(() =>
-        caches.match('/LOGOS/eva-icon.png', { cacheName: SHELL_CACHE })
-      )
+      cacheFirst(STATIC_CACHE, event.request)
+        .catch(() => caches.match('/LOGOS/eva-icon.png', { cacheName: SHELL_CACHE }))
+        .then((res) => res || fetch(event.request))
+        .catch(() => Response.error())
     );
     return;
   }

@@ -3,9 +3,13 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
-import Script from 'next/script'
-import { Loader2, User, Mail, Lock, Store, CheckCircle2, ChevronLeft, ArrowRight, Check, CreditCard } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Store, CheckCircle2, ChevronLeft, ArrowRight, Check, CreditCard, RefreshCw, ExternalLink } from 'lucide-react'
 import { registerAction, type RegisterState } from './_actions/register.actions'
+import {
+    TurnstileWidget,
+    type CaptchaState,
+    type TurnstileHandle,
+} from '@/components/auth/TurnstileWidget'
 import { PlanStep } from './_components/PlanStep'
 import { SummaryStep } from './_components/SummaryStep'
 import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coach/onboarding/complete/_actions/complete.actions'
@@ -26,16 +30,45 @@ import {
 const initialState: RegisterState = {}
 const googleInitialState: CompleteOnboardingState = {}
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+
+/**
+ * Avisos del captcha. El submit no sale y el formulario queda intacto en ambos casos, pero la causa
+ * es distinta y el copy tiene que decirlo: `pending` es «todavía no terminó» (esperar sirve),
+ * `error` es «el challenge falló» (ahí sí hay que reintentar o salir de la WebView).
+ */
+const CAPTCHA_PENDING_NOTICE = 'Estamos verificando tu navegador, espera unos segundos e intenta de nuevo.'
+const CAPTCHA_ERROR_NOTICE = 'No pudimos verificar tu navegador. Reintenta o abre esta página en Chrome/Safari.'
+
+type CaptchaNotice = { kind: 'pending' | 'error'; message: string }
+
+/** Códigos del server action que son culpa del captcha, no del formulario. */
+function isCaptchaCode(code: string | undefined): boolean {
+    return code === 'turnstile_missing' || code === 'turnstile_failed'
+}
+
+/**
+ * Lee el token del input oculto que planta Turnstile. Es EXACTAMENTE el valor que el server action
+ * saca del FormData (`cf-turnstile-response`), así que si acá está vacío el alta ya está muerta.
+ */
+function readCaptchaToken(): string {
+    const input = document.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')
+    return input?.value.trim() ?? ''
+}
+
 function SubmitButton({
     isFreeTier,
     tier,
     billingCycle,
     method,
+    shouldBlockSubmit,
 }: {
     isFreeTier: boolean
     tier: SaleTier
     billingCycle: BillingCycle
     method: 'email' | 'google'
+    /** Devuelve true si el alta NO debe salir (captcha sin token). Corre en el click. */
+    shouldBlockSubmit: () => boolean
 }) {
     const { pending } = useFormStatus()
     const captureRegisterSubmitted = useCaptureRegisterSubmitted()
@@ -56,6 +89,13 @@ function SubmitButton({
         <button
             type="submit"
             disabled={pending}
+            // El freno del captcha va en el CLICK y no en un `onSubmit` del <form action={...}>:
+            // ver el comentario de arriba — engancharse al submit del action de React 19 es la
+            // clase de cosa que rompe el alta sin avisar. `preventDefault` en el click del botón
+            // submit cancela el envío del form y no toca el camino del action.
+            onClick={(event) => {
+                if (shouldBlockSubmit()) event.preventDefault()
+            }}
             className={cn(
                 'w-full h-14 flex items-center justify-center gap-2 text-[17px] font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
                 'bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
@@ -126,6 +166,16 @@ export default function RegisterPage() {
     const [couponCode, setCouponCode] = useState('')
     const [couponFieldOpen, setCouponFieldOpen] = useState(false)
     const [couponAutoApplied, setCouponAutoApplied] = useState(false)
+    // Captcha: `captchaState` lo alimentan los callbacks del widget; `captchaNotice` es el aviso
+    // inline junto al widget (freno client-side o rechazo del server por turnstile_*).
+    const [captchaState, setCaptchaState] = useState<CaptchaState>('pending')
+    const [captchaNotice, setCaptchaNotice] = useState<CaptchaNotice | null>(null)
+    // La WebView de Instagram/Facebook es de donde viene el grueso de los 600010 (tráfico de ads):
+    // ahí el escape real es abrir la página en el navegador del sistema.
+    const [isMetaWebView, setIsMetaWebView] = useState(false)
+    const [isAndroid, setIsAndroid] = useState(false)
+    const [browserEscapeHref, setBrowserEscapeHref] = useState('')
+    const turnstileRef = useRef<TurnstileHandle>(null)
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     // Total en vivo = solo el plan: los módulos vienen INCLUIDOS en los planes pagos
     // (decisión CEO 2026-07-17) y ya no se compran como add-ons en el signup.
@@ -135,6 +185,23 @@ export default function RegisterPage() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
+
+        // UA sniffing acotado a los navegadores in-app de Meta: `Instagram` (Android e iOS),
+        // `FBAN`/`FBAV` (Facebook). Sólo decide si se ofrece el escape «Abrir en el navegador».
+        const userAgent = navigator.userAgent
+        const onAndroid = /Android/i.test(userAgent)
+        setIsMetaWebView(/Instagram|FBAN|FBAV/.test(userAgent))
+        setIsAndroid(onAndroid)
+        // Android: `intent://` con `scheme=https` y SIN `package=` — así el sistema abre el
+        // navegador POR DEFECTO del teléfono. Un `target="_blank"` desde la WebView de Instagram
+        // Android se queda adentro de la propia WebView, que es no hacer nada.
+        // iOS no tiene equivalente (Safari ignora el salto), así que allá va el `_blank` y, debajo,
+        // la instrucción del menú «···».
+        setBrowserEscapeHref(
+            onAndroid
+                ? `intent://${window.location.host}${window.location.pathname}${window.location.search}#Intent;scheme=https;end`
+                : window.location.href
+        )
 
         if (params.get('from') === 'google') {
             setFromGoogle(true)
@@ -211,6 +278,58 @@ export default function RegisterPage() {
         captureRegisterFailed({ tier, billingCycle, method: 'google', code: googleState.code ?? 'unknown' })
     }, [googleState, tier, billingCycle, captureRegisterFailed])
 
+    // CUALQUIER rechazo del action quema el token: `siteverify` corre PRIMERO en register.actions.ts
+    // (línea 89) y recién después se validan marca, correo, plan, etc. Un `brand_unavailable` o un
+    // `auth_email_taken` ya consumieron el token —Turnstile es de un solo uso—, así que el submit
+    // siguiente saldría con el token viejo del input y volvería como `turnstile_failed` en bucle,
+    // culpando al captcha de un error que no era del captcha. Por eso el reset es incondicional y
+    // el AVISO sólo aparece cuando el rechazo fue de verdad del captcha.
+    //
+    // Mismo guardia de identidad que los efectos de arriba: `useActionState` devuelve un objeto
+    // nuevo por resultado, así que dos rechazos seguidos vuelven a entrar y dos re-runs por cambio
+    // de tier no.
+    const reportedCaptchaStateRef = useRef<RegisterState>(initialState)
+    useEffect(() => {
+        if (reportedCaptchaStateRef.current === state) return
+        reportedCaptchaStateRef.current = state
+        if (!state?.error) return
+        setCaptchaState('pending')
+        turnstileRef.current?.reset()
+        if (!isCaptchaCode(state.code)) return
+        // Rechazo del captcha: INLINE junto al widget con «Reintentar», no como error genérico que
+        // pide recargar la página (recargar vacía el formulario, que es lo que hacía perder el alta).
+        setCaptchaNotice({ kind: 'error', message: state.error ?? CAPTCHA_ERROR_NOTICE })
+    }, [state])
+
+    /** Freno del submit: sin token (o con el challenge en error) el alta no sale. */
+    function shouldBlockSubmit(): boolean {
+        // Sin site key no hay widget montado ni verificación server-side: no hay nada que frenar.
+        if (!TURNSTILE_SITE_KEY) return false
+        // El alta por Google la resuelve `completeOAuthOnboarding`, que NO verifica Turnstile.
+        // Frenar acá sería inventar un requisito que el server nunca pidió y romper un camino que
+        // hoy funciona.
+        if (fromGoogle) return false
+        if (captchaState !== 'error' && readCaptchaToken() !== '') return false
+        setCaptchaNotice(
+            captchaState === 'error'
+                ? { kind: 'error', message: CAPTCHA_ERROR_NOTICE }
+                : { kind: 'pending', message: CAPTCHA_PENDING_NOTICE }
+        )
+        return true
+    }
+
+    function retryCaptcha() {
+        setCaptchaNotice(null)
+        setCaptchaState('pending')
+        turnstileRef.current?.reset()
+    }
+
+    // El error del captcha ya se muestra inline; sacarlo del banner genérico evita el doble aviso
+    // (y el «Recarga la página» que contradice al botón «Reintentar»).
+    const actionError = fromGoogle ? googleState?.error : state?.error
+    const genericError =
+        clientError ?? (!fromGoogle && isCaptchaCode(state?.code) ? undefined : actionError)
+
     function nextStep() {
         if (step === 1) {
             if (fromGoogle) {
@@ -251,9 +370,6 @@ export default function RegisterPage() {
 
     return (
         <>
-        {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
-            <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" />
-        )}
         <div className="w-full max-w-md mx-auto animate-slide-up">
             {/* Header sticky del wizard — back-chevron + "Paso X de N" + barras de progreso */}
             {/* SIN -mt-14: el margen negativo + sticky en el panel con pt-14 re-anclaba el header
@@ -337,9 +453,9 @@ export default function RegisterPage() {
                         </>
                     )}
 
-                    {(clientError || state?.error || googleState?.error) && (
+                    {genericError && (
                         <div className="animate-fade-in rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
-                            {clientError ?? (fromGoogle ? googleState?.error : state?.error)}
+                            {genericError}
                         </div>
                     )}
 
@@ -516,14 +632,61 @@ export default function RegisterPage() {
                     ) : null}
 
                     {/* Cloudflare Turnstile — montado desde el paso 1 (el token viaja en el submit),
-                       visible solo en Confirmar */}
-                    {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+                       visible solo en Confirmar.
+                       NO se monta en el alta por Google: ese submit va a `completeOAuthOnboarding`,
+                       que no lee `cf-turnstile-response` ni llama a `siteverify`. Montarlo sería
+                       gastar un challenge (y arriesgar un 600010) por un token que nadie consume. */}
+                    {TURNSTILE_SITE_KEY && !fromGoogle && (
                         <div className={step === 3 ? undefined : 'hidden'}>
-                            <div
-                                className="cf-turnstile"
-                                data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-                                data-appearance="interaction-only"
+                            <TurnstileWidget
+                                ref={turnstileRef}
+                                siteKey={TURNSTILE_SITE_KEY}
+                                appearance="interaction-only"
+                                onStateChange={(next) => {
+                                    setCaptchaState(next)
+                                    // Un token bueno cierra el aviso solo: el reintento automático
+                                    // de Turnstile pudo haberlo resuelto sin que el coach tocara nada.
+                                    if (next === 'ok') setCaptchaNotice(null)
+                                }}
                             />
+                            {step === 3 && captchaNotice && (
+                                <div
+                                    role="alert"
+                                    className="animate-fade-in mt-2 rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm text-[var(--danger-600)]"
+                                >
+                                    <p className="font-semibold">{captchaNotice.message}</p>
+                                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={retryCaptcha}
+                                            className="inline-flex items-center gap-1.5 rounded-control bg-surface-card px-3 py-1.5 text-[13px] font-bold text-text-strong transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                                        >
+                                            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                                            Reintentar
+                                        </button>
+                                        {/* Salir de la WebView sólo tiene sentido cuando el challenge
+                                            YA falló: si sigue corriendo, esperar alcanza. */}
+                                        {captchaNotice.kind === 'error' && isMetaWebView && browserEscapeHref && (
+                                            <a
+                                                href={browserEscapeHref}
+                                                // El `intent://` de Android lo resuelve el sistema:
+                                                // un `_blank` ahí sólo abriría otra pestaña interna.
+                                                target={isAndroid ? undefined : '_blank'}
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 rounded-control bg-surface-card px-3 py-1.5 text-[13px] font-bold text-text-strong transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                                                Abrir en el navegador
+                                            </a>
+                                        )}
+                                    </div>
+                                    {captchaNotice.kind === 'error' && isMetaWebView && !isAndroid && (
+                                        <p className="mt-2 text-[12px] leading-[1.45] opacity-90">
+                                            En iPhone: toca ··· arriba a la derecha y elige «Abrir en Safari».
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -585,6 +748,7 @@ export default function RegisterPage() {
                                 tier={tier}
                                 billingCycle={billingCycle}
                                 method={fromGoogle ? 'google' : 'email'}
+                                shouldBlockSubmit={shouldBlockSubmit}
                             />
                         )}
                     </div>
