@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useState } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
-import { Check, ChevronDown, Dumbbell, History, Link2, Lock, Minus, Plus, Trash2 } from 'lucide-react-native'
+import { Check, ChevronDown, Dumbbell, History, Info, Link2, Lock, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 import { FONT } from '../../lib/typography'
@@ -143,10 +143,19 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
       enableDynamicSizing={false}
       enablePanDownToClose
       onDismiss={onClose}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
       backgroundStyle={{ backgroundColor: theme.card }}
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
-      <BottomSheetScrollView contentContainerStyle={styles.body}>
+      {/* automaticallyAdjustKeyboardInsets (iOS): evita que el teclado tape Notas/Instrucciones
+          al pie del form; Android resuelve con adjustResize. */}
+      <BottomSheetScrollView
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         {(() => {
           const muscle = getMuscleColor(draft.muscle_group)
           const thumb = exerciseThumb({ gif_url: draft.gif_url ?? null, image_url: null, video_url: draft.video_url ?? null })
@@ -240,18 +249,18 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
         {draftType === 'strength' ? (
           <>
             <View style={styles.row2}>
-              <StepperField theme={theme} label="Series *" value={draft.sets ?? 0} onChange={(n: number) => patch({ sets: n || undefined })} />
-              <Field theme={theme} label="Repeticiones *" value={draft.reps ?? ''} onChangeText={(v: string) => patch({ reps: v })} placeholder="8-10" />
+              <StepperField theme={theme} label="Series *" help="Cuántas rondas del ejercicio hace el alumno." value={draft.sets ?? 0} onChange={(n: number) => patch({ sets: n || undefined })} />
+              <Field theme={theme} label="Repeticiones *" help="Reps por serie. Acepta rangos (8-10) o esquemas (10x10)." value={draft.reps ?? ''} onChangeText={(v: string) => patch({ reps: v })} placeholder="8-10" />
             </View>
             <View style={styles.row2}>
-              <Field theme={theme} label="Peso objetivo (kg)" value={draft.target_weight_kg ?? ''} keyboardType="decimal-pad" onChangeText={(v: string) => patch({ target_weight_kg: v })} placeholder="opcional" />
-              <Field theme={theme} label="Recuperación" value={draft.rest_time ?? ''} onChangeText={(v: string) => patch({ rest_time: v })} placeholder="90s" />
+              <Field theme={theme} label="Peso objetivo (kg)" help="Peso sugerido. El alumno lo ve como referencia y registra el real." value={draft.target_weight_kg ?? ''} keyboardType="decimal-pad" onChangeText={(v: string) => patch({ target_weight_kg: v })} placeholder="opcional" />
+              <Field theme={theme} label="Recuperación" help="Descanso entre series. Ej: 90s o 2min. El timer del alumno lo usa." value={draft.rest_time ?? ''} onChangeText={(v: string) => patch({ rest_time: v })} placeholder="90s" />
             </View>
             <View style={styles.row2}>
-              <Field theme={theme} label="Tempo" value={draft.tempo ?? ''} onChangeText={(v: string) => patch({ tempo: v })} placeholder="3-0-1-0" />
-              <Field theme={theme} label="RIR / RPE" value={draft.rir ?? ''} onChangeText={(v: string) => patch({ rir: v })} placeholder="2" />
+              <Field theme={theme} label="Tempo" help="Ritmo en 4 tiempos: bajada-pausa abajo-subida-pausa arriba. 3-0-1-0 = baja en 3s y sube en 1s." value={draft.tempo ?? ''} onChangeText={(v: string) => patch({ tempo: v })} placeholder="3-0-1-0" />
+              <Field theme={theme} label="RIR / RPE" help="RIR: reps que quedan en reserva al terminar la serie (0 = al fallo). RPE: esfuerzo percibido del 1 al 10." value={draft.rir ?? ''} onChangeText={(v: string) => patch({ rir: v })} placeholder="2" />
             </View>
-            <Field theme={theme} label="Descanso calentamiento" value={draft.warmup_rest_time ?? ''} onChangeText={(v: string) => patch({ warmup_rest_time: v })} placeholder="opcional — vacío = mismo descanso" />
+            <Field theme={theme} label="Descanso calentamiento" help="Descanso entre series de calentamiento (aproximación). Vacío = usa la misma recuperación de arriba." value={draft.warmup_rest_time ?? ''} onChangeText={(v: string) => patch({ warmup_rest_time: v })} placeholder="opcional — vacío = mismo descanso" />
 
             {/* Ejes adicionales (farmer carry: distancia + carga + lado) */}
             <View style={[styles.groupBox, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
@@ -431,6 +440,23 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
           </>
         ) : null}
 
+        {/* CTA de cierre explícita: los cambios ya se aplican en vivo (patch → onChange), pero sin
+            este botón el coach no ve cómo "guardar" — el pill Guardar del builder queda tapado por
+            el sheet al 90% y pan-down no comunica que nada se pierde. */}
+        <TouchableOpacity
+          onPress={() => (ref as React.RefObject<BottomSheetModal>).current?.dismiss()}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Listo, cerrar editor"
+          style={[styles.doneBtn, { backgroundColor: theme.primary }]}
+        >
+          <Check size={17} color={theme.primaryForeground} />
+          <Text style={[styles.doneText, { color: theme.primaryForeground, fontFamily: FONT.display }]}>Listo</Text>
+        </TouchableOpacity>
+        <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 10.5, lineHeight: 14, textAlign: 'center' }}>
+          Los cambios ya quedaron en el ejercicio. Al cerrar, usa «Guardar» para publicar el programa.
+        </Text>
+
         <TouchableOpacity onPress={() => onRemove(draft.uid)} activeOpacity={0.8} style={[styles.removeBtn, { borderColor: theme.destructive + '55' }]}>
           <Trash2 size={16} color={theme.destructive} />
           <Text style={[styles.removeText, { color: theme.destructive, fontFamily: FONT.display }]}>Quitar ejercicio</Text>
@@ -444,10 +470,38 @@ function Label({ children, theme }: { children: React.ReactNode; theme: any }) {
   return <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{children}</Text>
 }
 
-function Field({ theme, label, multiline, ...rest }: any) {
+/** Label de campo con (i) opcional: tap despliega una explicación humana del input.
+ * Sin `help` rinde exactamente el label de siempre — cero impacto en el resto del sheet. */
+function FieldLabel({ theme, label, help }: { theme: any; label: string; help?: string }) {
+  const [open, setOpen] = useState(false)
+  if (!help) {
+    return <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+  }
+  return (
+    <View style={{ gap: 4 }}>
+      <TouchableOpacity
+        onPress={() => setOpen((v) => !v)}
+        activeOpacity={0.7}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Qué es ${label}`}
+        accessibilityState={{ expanded: open }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+      >
+        <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+        <Info size={12} color={open ? theme.primary : theme.mutedForeground} />
+      </TouchableOpacity>
+      {open ? (
+        <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 10.5, lineHeight: 14 }}>{help}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+function Field({ theme, label, help, multiline, ...rest }: any) {
   return (
     <View style={{ flex: 1, gap: 6 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <FieldLabel theme={theme} label={label} help={help} />
       <TextInput placeholderTextColor={theme.mutedForeground} multiline={multiline}
         style={[styles.input, multiline && { height: 76, textAlignVertical: 'top', paddingTop: 10 }, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} {...rest} />
     </View>
@@ -455,12 +509,12 @@ function Field({ theme, label, multiline, ...rest }: any) {
 }
 
 /** Input entero opcional (commit number|null al escribir). */
-function IntField({ theme, label, value, onCommit, placeholder }: { theme: any; label: string; value: number | null; onCommit: (n: number | null) => void; placeholder?: string }) {
+function IntField({ theme, label, help, value, onCommit, placeholder }: { theme: any; label: string; help?: string; value: number | null; onCommit: (n: number | null) => void; placeholder?: string }) {
   const [str, setStr] = useState(value == null ? '' : String(value))
   useEffect(() => { setStr(value == null ? '' : String(value)) }, [value])
   return (
     <View style={{ flex: 1, gap: 6 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <FieldLabel theme={theme} label={label} help={help} />
       <TextInput
         value={str}
         keyboardType="numeric"
@@ -628,12 +682,12 @@ function Segmented({ theme, options, value, onChange }: { theme: any; options: {
 }
 
 /** Stepper tactil de series (paridad SeriesStepper web): botones ±44px + valor central. */
-function StepperField({ theme, label, value, onChange, min = 1, max = 20 }: { theme: any; label: string; value: number; onChange: (n: number) => void; min?: number; max?: number }) {
+function StepperField({ theme, label, help, value, onChange, min = 1, max = 20 }: { theme: any; label: string; help?: string; value: number; onChange: (n: number) => void; min?: number; max?: number }) {
   const dec = () => onChange(Math.max(min, (value || min) - 1))
   const inc = () => onChange(Math.min(max, (value || min - 1) + 1))
   return (
     <View style={{ flex: 1, gap: 6 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <FieldLabel theme={theme} label={label} help={help} />
       <View style={[styles.stepper, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
         <TouchableOpacity testID="series-stepper-decrement" onPress={dec} activeOpacity={0.7} hitSlop={4} style={styles.stepBtn}>
           <Minus size={17} color={theme.foreground} />
@@ -691,6 +745,8 @@ const styles = StyleSheet.create({
   stepVal: { fontSize: 17, minWidth: 28, textAlign: 'center' },
   moveRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   moveChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
+  doneBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 14, marginTop: 8 },
+  doneText: { fontSize: 15 },
   removeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 13, marginTop: 8 },
   removeText: { fontSize: 14 },
 })

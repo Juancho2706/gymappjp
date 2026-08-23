@@ -180,11 +180,19 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       enablePanDownToClose
       onDismiss={onClose}
       keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
       backgroundStyle={{ backgroundColor: theme.card }}
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
-      <BottomSheetScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      {/* automaticallyAdjustKeyboardInsets (iOS): sin esto el teclado tapa el textarea de
+          instrucciones al final del form — el scroll no sigue al caret. Android ya resuelve
+          con adjustResize. */}
+      <BottomSheetScrollView
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         <View style={styles.header}>
           <Text className="text-strong font-display" style={styles.title}>
             {editing ? 'Editar ejercicio' : 'Nuevo ejercicio'}
