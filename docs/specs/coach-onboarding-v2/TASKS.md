@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-22"
+last_verified: "2026-08-23"
 canonical: false
 ---
 
@@ -193,7 +193,7 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   con `completed.first_artifact = true` y 0 artefactos propios (`00109d66`, `7b1345a6` QA) vuelven a
   pendiente y se borra su `step_completed/first_artifact` del 22-08 (el índice único lo bloquearía al
   completarlo de verdad). [EDGE-01/spec-rn-01]
-- [ ] W8.1.2 🔴 **Sin demo no hay paso 2 ni paso 3**: `other` (`DEMO_PROFILES.other = null`), los 48 coaches
+- [ ] W8.1.2 🔴 **Sin demo no hay paso 2 ni paso 3** *(relacionada: [vive-tu-app-directo](../vive-tu-app-directo/SPEC.md) arregla el paso 2 para quien SÍ tiene demo; el «sin demo» sigue dependiendo de D10)*: `other` (`DEMO_PROFILES.other = null`), los 48 coaches
   con persona NULL y quien tocó «Borrar ejemplo» no pueden tildar «Ver mi app» (`vive-tu-app.service.ts:70-77`
   → `sin_demo`, solo toast) ni, para nutrition/rehab/endurance, abrir el paso 3 (`resolveTarget` → `null`).
   Depende de **D10**. Mientras: botón deshabilitado con explicación + «Volver a sembrar» en la misma tarjeta.
@@ -236,7 +236,7 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   destinatarios ⇒ el servicio salta el programa como `program_not_eligible`, sin correo ni push) y los
   crons `checkin-reminder` / `nutrition-reminder` (3 consultas de `clients`) filtran `is_demo = false`.
   Tests del servicio, de la ruta móvil y de candidatos V2 verdes (22). [spec-web-05/db-live-09]
-- [ ] W8.1.9 Panel admin: `admin/(panel)/clients/_actions/client-actions.ts:82-89`, `coach-detail.queries.ts:143-148`,
+- [ ] W8.1.9 **(absorbida por [vive-tu-app-directo](../vive-tu-app-directo/TASKS.md) W4 — se ejecuta allá)** Panel admin: `admin/(panel)/clients/_actions/client-actions.ts:82-89`, `coach-detail.queries.ts:143-148`,
   `sistema.queries.ts:91` con `is_demo = false` + migración aditiva que reescribe `get_admin_coaches_paginated`
   (`cl.is_demo = false`). Caso LIVE `00109d66`: Free con demo = cupo 1/1, 0 reales. [db-live-01/02, tasks-truth-06]
 - [ ] W8.1.10 Bienvenida Free y D+1 apuntan a `/coach/guia` con copy por persona (`PERSONA_COPY`) y sin
@@ -322,7 +322,7 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
 - [ ] W8.6.1 `RESEARCH.md`: archivar los 6 informes del job (`audit-web`, `audit-rn`, `data`, `research-saas`,
   `research-competitors`, `research-personas`) en `docs/research/onboarding-coach-v2-2026-08-21/` + índice de
   `docs/research/README.md` al día; `check-docs.mjs` valida rutas entre backticks. [debt-docs-05/16]
-- [ ] W8.6.2 SPEC §5 (RN abre `/vive-tu-app` en el navegador, no `eva://`), §9 (guía en pantalla propia +
+- [~] W8.6.2 **(§5: absorbido por [vive-tu-app-directo](../vive-tu-app-directo/SPEC.md), bloque «Cambio 23-08» ya en la SPEC; quedan §9 y tabla §2)** SPEC §5 (RN abre `/vive-tu-app` en el navegador, no `eva://`), §9 (guía en pantalla propia +
   píldora, no «arriba del home»), tabla §2 (nutrición `also_other` también para rehab/endurance); PLAN con
   el cambio 22-08 y las waves W4.6/W4.7/W8. [debt-docs-03/04, spec-rn-16, spec-web-12]
 - [ ] W8.6.3 Canónicos: `PRODUCT_OVERVIEW` (persona, guía, demo, `is_demo` fuera del cupo), `MANUAL_TASKS`

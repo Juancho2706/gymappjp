@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-22"
+last_verified: "2026-08-23"
 canonical: false
 ---
 
@@ -96,6 +96,24 @@ paywall). El onboarding actual es uno solo, de 4 pasos de entrenador de fuerza, 
 primera sesión: (1) el panel con los módulos de esa persona y sin los demás, (2) un alumno de ejemplo de su
 mundo ya cargado, (3) plantillas de su mundo, (4) un checklist de 5 verbos en el orden de su trabajo, (5) el
 mismo flujo en web y en la app. Nada se gatea a Pro; la persona se cambia cuando quiera sin perder datos.
+
+### Cambio 23-08: «Vive tu app» entra directo en móvil y vuelve solo
+
+**Propuesta del 2026-08-23 (pendiente de «go» del owner), especificada en
+[vive-tu-app-directo](../vive-tu-app-directo/SPEC.md). MANDA sobre §5 y sobre la fila 2 de §6 en cuanto el
+owner la apruebe.** Motivo: de los 7 coaches reales con alumno de ejemplo desde el 20-08, 6 abrieron la
+hoja del QR y solo 2 entraron (los dos desde desktop); el paso 2 se tildaba al **emitir** el link, no al
+entrar; y el caso Job Palacios (23-08) mostró el callejón completo (QR en el mismo celular → se agrega a
+sí mismo → login de alumno con cuenta de coach → abandona).
+
+- En móvil web, un toque = entra en la misma pestaña (sin hoja, sin QR). Desktop conserva la hoja.
+- El paso 2 se tilda con un evento nuevo `vive_tu_app_entered` escrito por `/vive-tu-app` al verificar el
+  magic link; `vive_tu_app_opened` pasa a significar «pidió el link» y los tildes anteriores se respetan.
+- Banner «Estás viendo tu app como {Nombre} · Volver a mi panel» en el árbol del alumno cuando la sesión
+  es el demo; la vuelta restaura la sesión del coach con un magic link propio guardado en cookie httpOnly
+  (web) o abre `eva://coach/guia` (RN).
+- El login de alumno reconoce a un coach y lo manda a su panel; el alta avisa que probar no gasta cupo.
+- Absorbe W8.1.9 (admin sin `is_demo`), W8.6.2 (este §5) y referencia W8.1.2 / W8.2.8.
 
 ### Cambio 22-08: la guía se muda a pantalla propia + píldora flotante
 
@@ -213,6 +231,9 @@ puro compartido, `isGuideActive` (`@eva/onboarding`), y llega a la UI web por co
 
 ### 5. «Vive tu app» — invitarme a mí mismo
 
+- **(Superado por el «Cambio 23-08» en cuanto el owner lo apruebe: la implementación real es la ruta propia
+  `GET /vive-tu-app?t=&c=` (no `/c/[slug]/login`), en móvil web entra directo sin hoja ni QR, y el tilde del
+  paso viene de `vive_tu_app_entered`, no de abrir la hoja. Ver [vive-tu-app-directo](../vive-tu-app-directo/SPEC.md).)**
 - Botón en el paso 2 del checklist: abre la app del alumno **con la marca del coach** (web: `/c/[slug]/login`
   con magic link del alumno demo vía `auth.admin.generateLink`; RN: abre `/vive-tu-app` en el navegador del
   sistema con `Linking.openURL` — no `eva://`: la sesión del navegador es OTRA que la de la app, así no pisa
