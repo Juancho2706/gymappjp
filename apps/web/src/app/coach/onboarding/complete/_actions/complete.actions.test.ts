@@ -27,8 +27,18 @@ const harness = vi.hoisted(() => {
         existingTrial: null as { id: string } | null,
         existingSlug: null as { id: string } | null,
         insertError: null as { message: string } | null,
+        /**
+         * Identidades de GoTrue del usuario que entra. El alta por Google normal trae SOLO
+         * `google`; el caso del pre-account takeover (W3.13) es el que además trae `email`, o sea
+         * alguien que ya había creado ese usuario con contraseña.
+         */
+        identities: ['google'] as string[],
     }
     const inserts: Array<Record<string, unknown>> = []
+    /** Filas escritas en tablas que NO son `coaches` (hoy: el rastro de auditoría de W3.13). */
+    const events: Array<{ table: string; row: Record<string, unknown> }> = []
+    /** Contraseñas rotadas por `auth.admin.updateUserById` (W3.13). */
+    const rotations: Array<{ id: string; password?: string }> = []
     /** Orden real de los efectos: es lo que prueba que el correo se espera ANTES del redirect. */
     const order: string[] = []
 
@@ -48,7 +58,7 @@ const harness = vi.hoisted(() => {
 
     const adminStub = {
         __marker: 'admin',
-        from: () => ({
+        from: (table: string) => ({
             select: () => ({
                 eq: (col: string) => ({
                     maybeSingle: async () =>
@@ -58,19 +68,43 @@ const harness = vi.hoisted(() => {
                 }),
             }),
             insert: async (row: Record<string, unknown>) => {
+                if (table !== 'coaches') {
+                    events.push({ table, row })
+                    return { error: null }
+                }
                 inserts.push(row)
                 return { error: state.insertError }
             },
+            // W3.13 sella `email_verified_at` tras rotar; el `.is(null)` mantiene el primer sello.
+            update: (patch: Record<string, unknown>) => ({
+                eq: () => ({ is: async () => ({ error: null, patch }) }),
+            }),
         }),
+        auth: {
+            admin: {
+                getUserById: async (id: string) => ({
+                    data: { user: { id, identities: state.identities.map((provider) => ({ provider })) } },
+                    error: null,
+                }),
+                updateUserById: async (id: string, attrs: { password?: string }) => {
+                    rotations.push({ id, password: attrs.password })
+                    return { data: { user: { id } }, error: null }
+                },
+            },
+        },
     }
 
     const serverStub = { auth: { getUser: async () => ({ data: { user: state.user } }) } }
+
+    const capturePostHogServerEventMock = vi.fn(async () => undefined)
 
     return {
         USER_ID,
         INVITE_CODE,
         state,
         inserts,
+        events,
+        rotations,
         order,
         adminStub,
         serverStub,
@@ -79,11 +113,23 @@ const harness = vi.hoisted(() => {
         generateUniqueInviteCodeMock,
         sendFreeCoachOnboardingEmailsMock,
         captureRegisteredMock,
+        capturePostHogServerEventMock,
     }
 })
 
-const { USER_ID, INVITE_CODE, state, inserts, order, adminStub, sendFreeCoachOnboardingEmailsMock, captureRegisteredMock } =
-    harness
+const {
+    USER_ID,
+    INVITE_CODE,
+    state,
+    inserts,
+    events,
+    rotations,
+    order,
+    adminStub,
+    sendFreeCoachOnboardingEmailsMock,
+    captureRegisteredMock,
+    capturePostHogServerEventMock,
+} = harness
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => harness.serverStub }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
@@ -100,6 +146,11 @@ vi.mock('@/lib/email/free-coach-onboarding', () => ({
 }))
 vi.mock('@/lib/posthog/registration-events', () => ({
     captureCoachRegisteredServer: harness.captureRegisteredMock,
+}))
+// W3.13: la rotación NO se mockea (es lo que se está probando); lo que se mockea es su salida a
+// PostHog, que es red.
+vi.mock('@/lib/posthog/server-capture', () => ({
+    capturePostHogServerEvent: harness.capturePostHogServerEventMock,
 }))
 
 import { completeOAuthOnboarding } from './complete.actions'
@@ -131,11 +182,14 @@ async function run(fd = form()): Promise<{ redirectedTo: string | null; state: u
 beforeEach(() => {
     vi.clearAllMocks()
     inserts.length = 0
+    events.length = 0
+    rotations.length = 0
     order.length = 0
     state.user = { id: USER_ID, email: 'coach@example.com' }
     state.existingTrial = null
     state.existingSlug = null
     state.insertError = null
+    state.identities = ['google']
     sendFreeCoachOnboardingEmailsMock.mockImplementation(async () => {
         order.push('emails')
     })
@@ -185,6 +239,87 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
         expect(result).toBeNull()
         expect(warn).toHaveBeenCalledWith('[register] onboarding email failed')
         expect(JSON.stringify(warn.mock.calls)).not.toContain('coach@example.com')
+    })
+})
+
+/**
+ * W3.0(c) + W3.9 — lo que el alta por Google escribe además del perfil.
+ */
+describe('completeOAuthOnboarding — señal de correo y atribución', () => {
+    it('W3.0(c): nace con `email_verified_at` sellado (el correo lo probó Google)', async () => {
+        await run()
+
+        // Único de los tres caminos de alta que nace verificado: el free por correo y el pago
+        // nacen NULL y ven el banner de W3.11 hasta que confirmen.
+        expect(typeof inserts[0].email_verified_at).toBe('string')
+        expect(inserts[0].email_verified_at).toBe(inserts[0].health_data_consent_at)
+    })
+
+    it('W3.9: los UTM del formulario llegan saneados a la fila (y el vacío queda NULL)', async () => {
+        await run(form({ utm_source: '  meta \n ads  ', utm_campaign: '' }))
+
+        expect(inserts[0]).toMatchObject({ utm_source: 'meta ads', utm_campaign: null })
+    })
+
+    it('W3.9: sin UTM en el formulario, ambas columnas quedan en NULL explícito', async () => {
+        await run()
+
+        expect(inserts[0]).toMatchObject({ utm_source: null, utm_campaign: null })
+    })
+})
+
+/**
+ * W3.13 — pre-account takeover. Primer call site: el auth user YA EXISTÍA (alguien lo creó con
+ * correo + contraseña) y la fila `coaches` no. Con W3.1 esa identidad `email` nace confirmada y
+ * Supabase ya no la borra al enlazar Google, así que sin esto el intruso conservaría su contraseña
+ * sobre la cuenta ajena.
+ */
+describe('completeOAuthOnboarding — rotación anti-takeover (W3.13)', () => {
+    it('con identidad `email` previa: rota la contraseña, sella el correo y deja rastro', async () => {
+        state.identities = ['email', 'google']
+
+        await run()
+
+        expect(rotations).toHaveLength(1)
+        expect(rotations[0].id).toBe(USER_ID)
+        // 32 bytes en hex. No más: GoTrue hashea con bcrypt y rechaza > 72 caracteres.
+        expect(rotations[0].password).toMatch(/^[0-9a-f]{64}$/)
+        expect(capturePostHogServerEventMock).toHaveBeenCalledWith({
+            event: 'google_link_rotated_password',
+            distinctId: USER_ID,
+            properties: { context: 'oauth_onboarding' },
+        })
+        // El rastro va DESPUÉS del insert de `coaches`: la tabla tiene FK a `coaches.id`.
+        expect(events).toEqual([
+            {
+                table: 'coach_onboarding_events',
+                row: {
+                    coach_id: USER_ID,
+                    step_key: 'security',
+                    event_type: 'google_link_rotated_password',
+                    metadata: { context: 'oauth_onboarding' },
+                },
+            },
+        ])
+    })
+
+    it('alta por Google normal (sin identidad `email`): NO rota nada', async () => {
+        // El 99 % de los casos. Rotar acá le rompería la contraseña a nadie —no hay— pero sí
+        // ensuciaría la auditoría y dispararía una escritura de más en el camino crítico del alta.
+        await run()
+
+        expect(rotations).toHaveLength(0)
+        expect(events).toHaveLength(0)
+        expect(capturePostHogServerEventMock).not.toHaveBeenCalled()
+    })
+
+    it('el insert del coach falla: no se rota (no hay cuenta que proteger)', async () => {
+        state.identities = ['email', 'google']
+        state.insertError = { message: 'duplicate key' }
+
+        await run()
+
+        expect(rotations).toHaveLength(0)
     })
 })
 

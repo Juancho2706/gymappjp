@@ -46,6 +46,41 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/login?error=confirmation_expired`)
     }
 
+    const admin = createServiceRoleClient()
+
+    // ── W3.0(c) — la señal de correo verificado, escrita ACÁ y en ningún otro lado de este camino ──
+    //
+    // POR QUÉ EXISTE LA COLUMNA: con D1 = A (W3.1) el alta free nace con `email_confirm: true`, o
+    // sea que `auth.users.email_confirmed_at` queda sellada EN LA CREACIÓN para todo el mundo y
+    // deja de distinguir a nadie. La prueba real de que alguien abrió su casilla pasa a ser
+    // `coaches.email_verified_at`, que es lo que leen la higiene del drip (W3.8), el banner de
+    // verificación blanda (W3.11) y el guardarraíl «`active` sin verificar a 7 días ≤ 15 %».
+    //
+    // POR QUÉ ACÁ Y NO DENTRO DE `activate-confirmed-coach.ts`: ese helper corta con `not_pending`
+    // cuando el coach no está en `pending_email` (`lib/auth/activate-confirmed-coach.ts:90`), y bajo
+    // D1 = A el coach free ya nace `active` ⇒ metido ahí adentro NUNCA escribiría. Prohibido
+    // moverlo.
+    //
+    // CUBRE `email`, `magiclink` Y `recovery`, decisión declarada del TASKS: va tras el `verifyOtp`
+    // exitoso, y GoTrue marca `email_confirmed_at` en CUALQUIER verificación exitosa (lo dice el
+    // comentario de abajo, escrito el 22-08 por el mismo motivo). Abrir un link de recuperación
+    // también prueba que la casilla es suya. Que nadie lo «arregle» a solo dos tipos.
+    //
+    // `.is('email_verified_at', null)`: la columna dice CUÁNDO se probó la casilla la primera vez,
+    // no cuándo se miró por última vez. Un alumno o un usuario sin fila `coaches` (los links de
+    // recuperación también pasan por acá) simplemente actualiza cero filas.
+    const { error: verifiedError } = await admin
+        .from('coaches')
+        .update({ email_verified_at: new Date().toISOString() })
+        .eq('id', data.user.id)
+        .is('email_verified_at', null)
+
+    if (verifiedError) {
+        // Sin PII (el mensaje de PostgREST puede repetir el filtro): solo la traza. No se aborta —
+        // el coach acaba de confirmar y merece entrar aunque el sello falle.
+        console.error('[auth/confirm] email_verified_at no se pudo sellar:', verifiedError.message)
+    }
+
     // Activación del coach Free pendiente — para TODOS los tipos, la recuperación de contraseña
     // incluida: GoTrue confirma el email en cualquier `verifyOtp` exitoso (`recoverVerify` también
     // marca `email_confirmed_at`). Hasta el 22-08 la rama `recovery` redirigía al reset ANTES de
@@ -53,7 +88,7 @@ export async function GET(request: NextRequest) {
     // con auth confirmado, `coaches` en `pending_email` y sin bienvenida ni drip. El helper es
     // idempotente y espera los correos (Vercel congela la función al devolver el redirect).
     const activation = await activateConfirmedFreeCoach({
-        admin: createServiceRoleClient(),
+        admin,
         userId: data.user.id,
         authUser: data.user,
         confirmedNow: true,

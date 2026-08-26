@@ -100,6 +100,13 @@ function GisButton({ intent, next, clientId }: GoogleSignInButtonProps & { clien
                 return
             }
 
+            // W3.13 (flujo-coach-nuevo): gemelo del de `AuthExchangeClient`. Este es el otro
+            // camino post-Google real (GIS + `signInWithIdToken`), y la rotación anti-takeover
+            // tiene que cubrir los dos: `post-google-auth.ts` es `'use client'` y no puede rotar,
+            // así que el endpoint con `service_role` lo hace por nosotros. `.catch` para que un
+            // fallo de red nunca deje al coach varado en la pantalla de login.
+            await fetch('/api/auth/google-link', { method: 'POST' }).catch(() => {})
+
             const url = await resolvePostGoogleAuthUrl({
                 supabase,
                 userId: data.user.id,

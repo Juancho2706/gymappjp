@@ -18,6 +18,8 @@ import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
 import { SERVER_EMITTED_QUERY } from '@/lib/posthog/registration'
+import { resolveRegistrationUtm } from '@/lib/auth/registration-utm'
+import { rotatePasswordOnGoogleLink } from '@/lib/auth/google-link-rotation'
 
 export type CompleteOnboardingState = {
     error?: string
@@ -64,6 +66,20 @@ export async function completeOAuthOnboarding(
     const acceptLegal = formData.get('accept_legal')
     const acceptHealthData = formData.get('accept_health_data')
     const acceptMarketing = formData.get('accept_marketing') === 'on'
+    // W3.9 (atribución del alta) — pendiente heredado que cierra este diff: el alta por Google
+    // ignoraba los UTM y quedaba fuera de la única medición de campaña que existe. Se sanean igual
+    // que en el alta por correo (mismo helper compartido: el valor llega del cliente).
+    //
+    // ⚠ DECLARADO: hoy este formulario (`_components/CompleteOnboardingForm.tsx`) NO planta los
+    // hidden inputs —los planta `(auth)/register/page.tsx`, que es OTRO formulario— y los query
+    // params del anuncio además se pierden en el ida y vuelta de OAuth. O sea: esto escribe NULL
+    // hasta que alguien acarree los UTM a través del redirect de Google (dos archivos fuera del
+    // alcance de esta tarea). Se deja escrito igual para que el día que lleguen no haya que tocar
+    // el servidor, y para que el `insert` sea el MISMO objeto en los tres caminos de alta.
+    const { utmSource, utmCampaign } = resolveRegistrationUtm({
+        utmSource: formData.get('utm_source'),
+        utmCampaign: formData.get('utm_campaign'),
+    })
 
     if (!brandName || brandName.length < 2) return reject('oauth_brand_missing', 'El nombre de tu marca es obligatorio (mínimo 2 caracteres).')
     if (!fullName || fullName.length < 2) return reject('oauth_name_missing', 'Tu nombre completo es obligatorio.')
@@ -149,6 +165,15 @@ export async function completeOAuthOnboarding(
         // escribir su marca, y el splash RN borra la caché de marca cuando el valor es `false`
         // (`apps/mobile/lib/branding.ts:257-261`).
         use_brand_colors_coach: true,
+        // W3.0(c): el correo lo verificó GOOGLE, así que acá la casilla SÍ está probada y la
+        // columna nace sellada. Es el único de los tres caminos de alta que nace verificado: el
+        // free por correo y el pago nacen NULL a propósito (el pago prueba identidad, no la
+        // casilla) y ven el banner de W3.11 hasta que confirmen.
+        email_verified_at: now,
+        // W3.9: atribución, escrita solo por el servidor (la columna no tiene grant a
+        // `authenticated`/`anon`). `null` explícito cuando el alta no trajo UTM.
+        utm_source: utmSource,
+        utm_campaign: utmCampaign,
         // Google accounts are already email-confirmed — free tier is active immediately
         subscription_status: isFreeTier ? 'active' : 'pending_payment',
         subscription_tier: selectedTier,
@@ -169,6 +194,28 @@ export async function completeOAuthOnboarding(
     if (insertError) {
         return reject('oauth_coach_insert_failed', 'Error al crear tu perfil. Intenta de nuevo o contacta soporte.')
     }
+
+    // ── W3.13: rotación anti-takeover, primer call site ──────────────────────────────────────────
+    //
+    // CASO QUE CUBRE ESTE: el auth user YA EXISTÍA (alguien lo creó con correo + contraseña) y la
+    // fila `coaches` no. Con W3.1, esa identidad `email` nace confirmada y Supabase ya no la borra
+    // al enlazar Google ⇒ sin esto, quien haya registrado primero el correo conserva su contraseña
+    // sobre la cuenta que acaba de crear la persona que entró con Google.
+    //
+    // VA DESPUÉS DEL INSERT por la FK de `coach_onboarding_events` (el rastro de auditoría no puede
+    // escribirse antes de que exista la fila del coach), y por eso el estado de verificación se
+    // pasa EXPLÍCITO: el insert de arriba ya dejó `email_verified_at = now`, así que si el helper
+    // leyera la columna vería «ya verificado» y no rotaría nunca justo en el caso que lo motiva.
+    // Antes de este request no había fila ni casilla probada: `null`.
+    //
+    // No se revierte nada si falla (el helper nunca lanza y devuelve el motivo): la cuenta ya está
+    // creada y mandar al coach a registrarse de nuevo sería peor que el riesgo que se mitiga.
+    await rotatePasswordOnGoogleLink({
+        admin: adminDb,
+        userId: user.id,
+        verification: { source: 'known', emailVerifiedAt: null },
+        context: 'oauth_onboarding',
+    })
 
     // QA pre-campaña 17-08: este camino no emitía NINGUNA conversión a Meta ni disparaba la
     // bienvenida — y es el de menor fricción, el que más elige el tráfico frío del anuncio.

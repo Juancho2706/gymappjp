@@ -28,6 +28,15 @@ function ExchangeInner() {
                 return
             }
 
+            // W3.13 (flujo-coach-nuevo): rotación anti-takeover. Con el alta free naciendo
+            // confirmada (W3.1), quien registró primero el correo de la víctima conserva su
+            // contraseña cuando ella entra por Google. El servidor decide y rota; desde acá solo
+            // se avisa que hubo un login con Google, porque `service_role` no existe en el
+            // navegador. `await` para que la clave del intruso muera ANTES de mandar a la víctima
+            // a su panel; `.catch` porque una auditoría caída no puede dejar a nadie fuera de su
+            // cuenta. Idempotente y sin detalle en la respuesta.
+            await fetch('/api/auth/google-link', { method: 'POST' }).catch(() => {})
+
             // Password recovery (or any explicit internal next): the session is now set,
             // so send the user straight to that page (e.g. /reset-password) instead of the
             // default post-login redirect. resolvePostGoogleAuthUrl guards against open

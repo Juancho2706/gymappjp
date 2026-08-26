@@ -21,8 +21,11 @@ const harness = vi.hoisted(() => {
             | { user: null },
         verifyError: null as { message: string } | null,
         coach: null as Record<string, unknown> | null,
+        verifiedStampError: null as { message: string } | null,
     }
     const updates: Array<Record<string, unknown>> = []
+    /** W3.0(c): sellos de `coaches.email_verified_at`, separados del UPDATE de activación. */
+    const verifiedStamps: Array<Record<string, unknown>> = []
     const sendFreeCoachOnboardingEmailsMock = vi.fn(async () => undefined)
 
     // Cliente de sesión: solo se usa para `verifyOtp`.
@@ -38,9 +41,14 @@ const harness = vi.hoisted(() => {
             // UPDATE condicional (`eq('id').eq('subscription_status','pending_email').select('id')`):
             // el helper necesita las filas tocadas para saber si ganó la carrera.
             update: (patch: Record<string, unknown>) => {
-                updates.push(patch)
+                // W3.0(c) escribe `email_verified_at` con `.eq().is()`; la activación del coach usa
+                // `.eq().eq().select()`. Se separan por el contenido del patch para que cada test
+                // siga leyendo su propia lista.
+                if ('email_verified_at' in patch) verifiedStamps.push(patch)
+                else updates.push(patch)
                 const chain = {
                     eq: () => chain,
+                    is: async () => ({ error: state.verifiedStampError }),
                     select: async () => ({ data: [{ id: USER_ID }], error: null }),
                 }
                 return chain
@@ -48,10 +56,10 @@ const harness = vi.hoisted(() => {
         }),
     }
 
-    return { USER_ID, state, updates, adminStub, serverStub, sendFreeCoachOnboardingEmailsMock }
+    return { USER_ID, state, updates, verifiedStamps, adminStub, serverStub, sendFreeCoachOnboardingEmailsMock }
 })
 
-const { USER_ID, state, updates, adminStub, sendFreeCoachOnboardingEmailsMock } = harness
+const { USER_ID, state, updates, verifiedStamps, adminStub, sendFreeCoachOnboardingEmailsMock } = harness
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => harness.serverStub }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
@@ -94,9 +102,11 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 beforeEach(() => {
     vi.clearAllMocks()
     updates.length = 0
+    verifiedStamps.length = 0
     state.verified = { user: { id: USER_ID, email: 'coach@example.com' } }
     state.verifyError = null
     state.coach = { ...PENDING_FREE_COACH }
+    state.verifiedStampError = null
     sendFreeCoachOnboardingEmailsMock.mockResolvedValue(undefined)
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
 })
@@ -159,6 +169,62 @@ describe('GET /auth/confirm — activación del coach Free', () => {
         expect(warn).toHaveBeenCalledWith('[activate-confirmed-coach] onboarding email failed')
         // Sin PII en el log.
         expect(JSON.stringify(warn.mock.calls)).not.toContain('coach@example.com')
+    })
+})
+
+/**
+ * W3.0(c) — la SEÑAL de correo verificado.
+ *
+ * Con D1 = A (W3.1) el alta free nace con `email_confirm: true`, o sea que
+ * `auth.users.email_confirmed_at` queda sellada en la creación para todo el mundo y deja de
+ * distinguir a nadie. La prueba real de que alguien abrió su casilla pasa a ser
+ * `coaches.email_verified_at`, y este es el único lugar del camino web que la escribe.
+ */
+describe('GET /auth/confirm — sello de `coaches.email_verified_at` (W3.0 c)', () => {
+    it('sella la columna tras un verifyOtp exitoso', async () => {
+        await GET(req())
+
+        expect(verifiedStamps).toHaveLength(1)
+        expect(typeof verifiedStamps[0].email_verified_at).toBe('string')
+    })
+
+    // Decisión declarada del TASKS: va tras el `verifyOtp` OK, así que cubre los TRES tipos —
+    // GoTrue marca `email_confirmed_at` en cualquier verificación exitosa y abrir un link de
+    // recuperación también prueba que la casilla es suya. Que nadie lo «arregle» a dos tipos.
+    it.each(['email', 'magiclink', 'recovery'])('cubre type=%s', async (type) => {
+        await GET(req(type))
+
+        expect(verifiedStamps).toHaveLength(1)
+    })
+
+    it('el coach YA activo también sella (el sello es del correo, no del estado de la cuenta)', async () => {
+        state.coach = { ...PENDING_FREE_COACH, subscription_status: 'active' }
+
+        await GET(req())
+
+        expect(verifiedStamps).toHaveLength(1)
+        // Y no se manda ningún correo: el sello no reabre la bienvenida.
+        expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
+    })
+
+    it('token inválido → cero sellos', async () => {
+        state.verifyError = { message: 'expired' }
+        state.verified = { user: null }
+
+        await GET(req())
+
+        expect(verifiedStamps).toHaveLength(0)
+    })
+
+    it('si el sello falla, el coach igual entra (nunca un 500 por la señal)', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        state.verifiedStampError = { message: 'permission denied' }
+
+        const res = await GET(req())
+
+        expect(res.headers.get('location')).toBe('https://www.eva-app.cl/coach/dashboard?welcome=free')
+        expect(error).toHaveBeenCalled()
+        expect(JSON.stringify(error.mock.calls)).not.toContain('coach@example.com')
     })
 })
 

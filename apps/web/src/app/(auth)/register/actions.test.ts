@@ -25,6 +25,13 @@ vi.mock('@/lib/auth/send-coach-email-confirmation', () => ({
   resendCoachSignupConfirmationEmail: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
+// W3.1 (f): la bienvenida + el drip pasaron a dispararse DENTRO del alta free. Se mockea el helper
+// entero (no sus dependencias) porque acá lo que se pinnea es el contrato de la llamada; el
+// contenido de los correos y el ledger tienen su propia suite en `lib/email`.
+vi.mock('@/lib/email/free-coach-onboarding', () => ({
+  sendFreeCoachOnboardingEmails: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }))
@@ -33,6 +40,11 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers({ 'x-forwarded-for': '203.0.113.10' })),
 }))
 
+import {
+  resendCoachSignupConfirmationEmail,
+  sendCoachSignupConfirmationEmail,
+} from '@/lib/auth/send-coach-email-confirmation'
+import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 import { registerAction } from './_actions/register.actions'
 
 function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
@@ -357,7 +369,10 @@ describe('registerAction', () => {
     expect(insertQuery.insert).toHaveBeenCalledOnce()
   })
 
-  it('A1: el alta FREE no escribe intent de compra (no hay nada que comprar)', async () => {
+  // ── W3.1 (flujo-coach-nuevo, D1 = A autorizada por el owner el 26-08) ────────────────────────
+  // El alta FREE ya no tiene muro de correo: nace confirmada y `active`, entra sola al panel y el
+  // correo pasa a ser un recordatorio que no bloquea ni revierte nada.
+  function freeHappyPathMocks() {
     const ipLimitQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -369,23 +384,30 @@ describe('registerAction', () => {
       maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     }
     const insertQuery = { insert: vi.fn().mockResolvedValue({ error: null }) }
+    const deleteQuery = { delete: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) }
     const inviteCodeQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     }
     const intentUpsert = vi.fn().mockResolvedValue({ error: null })
+
     let coachesCallCount = 0
-    createRawAdminClientMock.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === 'subscription_events') return { upsert: intentUpsert }
-        if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
-        coachesCallCount += 1
-        if (coachesCallCount === 1) return ipLimitQuery
-        if (coachesCallCount === 2) return slugQuery
-        if (coachesCallCount === 3) return inviteCodeQuery
-        return insertQuery
-      }),
+    const fromMock = vi.fn((table: string) => {
+      if (table === 'subscription_events') return { upsert: intentUpsert }
+      if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
+      coachesCallCount += 1
+      if (coachesCallCount === 1) return ipLimitQuery
+      if (coachesCallCount === 2) return slugQuery
+      if (coachesCallCount === 3) return inviteCodeQuery
+      if (coachesCallCount === 4) return insertQuery
+      // Quinta llamada en adelante: SOLO puede ser el borrado que W3.1 (c) sacó del camino free.
+      // Si alguien lo devuelve, este stub lo deja visible en vez de romper con "Unexpected table".
+      return deleteQuery
+    })
+
+    const adminDb = {
+      from: fromMock,
       rpc: vi.fn().mockResolvedValue({
         data: { exists_in_auth: false, is_coach: false, is_client: false, orphan_client_email: false },
         error: null,
@@ -396,74 +418,40 @@ describe('registerAction', () => {
           deleteUser: vi.fn(),
         },
       },
-    })
+    }
 
-    await expect(
-      registerAction({}, buildRegisterFormData({ subscription_tier: 'free', billing_cycle: 'monthly' }))
-    ).rejects.toThrow(/^REDIRECT:\/verify-email/)
+    const userSupabase = { auth: { signInWithPassword: vi.fn().mockResolvedValue({ error: null }) } }
+
+    createRawAdminClientMock.mockReturnValue(adminDb)
+    createClientMock.mockResolvedValue(userSupabase)
+
+    return { adminDb, userSupabase, insertQuery, deleteQuery, intentUpsert }
+  }
+
+  const freeForm = () => buildRegisterFormData({ subscription_tier: 'free', billing_cycle: 'monthly' })
+
+  it('A1: el alta FREE no escribe intent de compra (no hay nada que comprar)', async () => {
+    const { intentUpsert } = freeHappyPathMocks()
+
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/dashboard/)
 
     expect(intentUpsert).not.toHaveBeenCalled()
   })
 
-  it('creates free account pending email confirmation', async () => {
-    const ipLimitQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockResolvedValue({ count: 0 }),
-    }
-    const slugQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-    }
-    const insertQuery = {
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    }
-    const inviteCodeQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-    }
+  it('W3.1: el alta free nace confirmada y ACTIVA, y entra al panel sin abrir el correo', async () => {
+    const { adminDb, userSupabase, insertQuery } = freeHappyPathMocks()
 
-    let coachesCallCount = 0
-    const fromMock = vi.fn((table: string) => {
-      if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
-      coachesCallCount += 1
-      if (coachesCallCount === 1) return ipLimitQuery
-      if (coachesCallCount === 2) return slugQuery
-      if (coachesCallCount === 3) return inviteCodeQuery
-      return insertQuery
-    })
+    // El destino ya NO es /verify-email: esa pantalla queda solo para las filas `pending_email`
+    // viejas, que siguen su camino por el proxy (nada retroactivo).
+    await expect(registerAction({}, freeForm())).rejects.toThrow(
+      /^REDIRECT:\/coach\/dashboard\?welcome=free&eid=.+/
+    )
 
-    const adminDb = {
-      from: fromMock,
-      rpc: vi.fn().mockResolvedValue({
-        data: {
-          exists_in_auth: false,
-          is_coach: false,
-          is_client: false,
-          orphan_client_email: false,
-        },
-        error: null,
-      }),
-      auth: {
-        admin: {
-          createUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-free' } }, error: null }),
-          deleteUser: vi.fn(),
-        },
-      },
-    }
-
-    createRawAdminClientMock.mockReturnValue(adminDb)
-
-    await expect(
-      registerAction({}, buildRegisterFormData({ subscription_tier: 'free', billing_cycle: 'monthly' }))
-    ).rejects.toThrow(/REDIRECT:\/verify-email\?email=coach%40example\.com&eid=/)
-
+    // (a) el muro del correo: `email_confirm` pasa a `true` TAMBIÉN en free.
     expect(adminDb.auth.admin.createUser).toHaveBeenCalledWith({
       email: 'coach@example.com',
       password: 'super-secret-123',
-      email_confirm: false,
+      email_confirm: true,
     })
     expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
       id: 'u-free',
@@ -471,25 +459,80 @@ describe('registerAction', () => {
       // W3.3: la marca nace PRENDIDA. Se pinnea el VALOR escrito, no el DEFAULT de la columna —
       // que sigue en `false` a propósito, para que esto sea testeable sin la base.
       use_brand_colors_coach: true,
-      // PR #28 (drip fix): web free signup nace 'pending_email' hasta confirmar el correo (no 'active').
-      subscription_status: 'pending_email',
+      // (b) W3.1: ya no nace 'pending_email' — la transición que activaba al coach dejó de existir.
+      subscription_status: 'active',
       payment_provider: 'admin',
       // Pricing v3 (owner 2026-08-21): registro nuevo = catálogo nuevo (free 1, con white-label).
-      // Los free existentes conservan su cupo en la columna coaches.max_clients (backfill del
-      // 21-08 + escalera tierMaxClientsFor); acá siempre es un coach recién creado.
       max_clients: 1,
       trial_used_email: 'coach@example.com',
     }))
-    expect(createClientMock).not.toHaveBeenCalled()
+    // La señal de «abrió su casilla» NO se escribe acá: nace NULL y la llena `/auth/confirm`
+    // (W3.0 c). Si esto naciera lleno, el banner de W3.11 y la higiene del drip quedarían ciegos.
+    const inserted = insertQuery.insert.mock.calls[0][0] as Record<string, unknown>
+    expect(inserted).not.toHaveProperty('email_verified_at')
+    // (e) sesión inmediata con las credenciales del alta.
+    expect(userSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
+      email: 'coach@example.com',
+      password: 'super-secret-123',
+    })
     // W3.9: sin campaña en la URL, la atribución queda en NULL explícito (nunca '').
     expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
       utm_source: null,
       utm_campaign: null,
     }))
-    // El `eid` (event_id de dedup Meta CAPI/pixel, commit 7df9aa6c) es aleatorio por registro.
-    expect(redirectMock).toHaveBeenCalledWith(
-      expect.stringMatching(/^\/verify-email\?email=coach%40example\.com&eid=.+/)
-    )
+  })
+
+  it('W3.1 (d): el correo es un RECORDATORIO magiclink, no el link de signup', async () => {
+    freeHappyPathMocks()
+
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:/)
+
+    // `signup` (e `invite`) los rechaza GoTrue para un usuario que ya existe, y con
+    // `email_confirm: true` el usuario existe SIEMPRE: el camino viejo fallaría en el 100 % de las
+    // altas.
+    expect(sendCoachSignupConfirmationEmail).not.toHaveBeenCalled()
+    expect(resendCoachSignupConfirmationEmail).toHaveBeenCalledWith({
+      email: 'coach@example.com',
+      coachName: 'Coach Test',
+    })
+  })
+
+  it('W3.1 (c): si el recordatorio falla, el alta NO se borra ni se revierte', async () => {
+    const { adminDb, deleteQuery } = freeHappyPathMocks()
+    vi.mocked(resendCoachSignupConfirmationEmail).mockResolvedValueOnce({ ok: false, error: 'resend caído' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // Este es EL renglón que evita que D1 = A se coma todas las altas free.
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/dashboard/)
+
+    expect(deleteQuery.delete).not.toHaveBeenCalled()
+    expect(adminDb.auth.admin.deleteUser).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('[register] recordatorio de confirmación no salió')
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('coach@example.com')
+  })
+
+  it('W3.1 (f): bienvenida + drip se disparan en el alta (ya nadie los dispara al confirmar)', async () => {
+    freeHappyPathMocks()
+
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:/)
+
+    // Se llamó ANTES del redirect por construcción: el redirect lanza y corta el action.
+    expect(sendFreeCoachOnboardingEmails).toHaveBeenCalledWith(expect.objectContaining({
+      coachId: 'u-free',
+      email: 'coach@example.com',
+      coachName: 'Coach Test',
+      brandName: 'Antigravity Pro',
+    }))
+  })
+
+  it('W3.1 (f): un fallo de los correos no rompe el alta ya escrita', async () => {
+    freeHappyPathMocks()
+    vi.mocked(sendFreeCoachOnboardingEmails).mockRejectedValueOnce(new Error('resend caído'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/dashboard/)
+
+    expect(warn).toHaveBeenCalledWith('[register] onboarding email failed')
   })
 
   // ── W3.3 (flujo-coach-nuevo): marca prendida al nacer ───────────────────────────────────────

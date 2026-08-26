@@ -23,7 +23,8 @@ import {
 } from '@/lib/auth/platform-email'
 import { clientIpFromRequest } from '@/lib/rate-limit'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
-import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
+import { resendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
+import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
@@ -199,11 +200,26 @@ export async function registerAction(
         )
     }
 
-    // Free tier requires email verification; paid tiers are auto-confirmed (payment = identity proof)
+    // ── W3.1 (D1 = A, autorizada por el owner el 26-08): el alta free ya no tiene muro de correo ──
+    //
+    // Antes era `email_confirm: !isFreeTier`: el tier pago auto-confirmaba (el pago prueba
+    // identidad) y el free tenía que abrir el link para poder entrar. Ese muro es el que se retira:
+    // el coach que llega del anuncio entra a su panel en el mismo minuto.
+    //
+    // CONSECUENCIA QUE NO SE PUEDE IGNORAR: este flag sella `auth.users.email_confirmed_at` EN LA
+    // CREACIÓN, así que desde este deploy esa columna deja de distinguir a nadie. La señal de «esta
+    // persona abrió su casilla» pasa a ser `coaches.email_verified_at` (W3.0), que este camino deja
+    // NULL a propósito —nadie probó nada todavía— y llena `/auth/confirm` cuando el coach abre el
+    // recordatorio. La higiene del drip (W3.8), el banner (W3.11) y el guardarraíl leen ESA columna.
+    //
+    // SEGUNDA CONSECUENCIA, cubierta por W3.13 en este mismo diff: con la identidad `email` naciendo
+    // confirmada, Supabase ya no la borra al enlazar Google ⇒ quien registre primero el correo de
+    // otra persona conservaría su contraseña sobre esa cuenta. La rotación anti-takeover
+    // (`lib/auth/google-link-rotation.ts`) cierra eso y NO es opcional: viaja en el mismo tren.
     const { data: authData, error: authError } = await adminDb.auth.admin.createUser({
         email: emailSan,
         password,
-        email_confirm: !isFreeTier,
+        email_confirm: true,
     })
 
     if (authError || !authData.user) {
@@ -262,12 +278,16 @@ export async function registerAction(
             // leyendo tier|ciclo del `external_reference` del preapproval. Nadie recibe un plan pago
             // sin pagarlo, y nadie pierde el producto por abandonar el checkout.
             //
-            // Lo único que sigue distinguiendo free de pago acá es el CORREO: el tier pago
-            // auto-confirma el email (`email_confirm: true`, arriba) y entra directo al checkout, así
-            // que nace 'active'; el free nace 'pending_email' hasta que hace click en el link, y ese
-            // click es el que dispara bienvenida + drip (apps/web/src/app/auth/confirm/route.ts).
-            // Insertar 'active' en la rama free saltearía welcome/drip para todo coach free web.
-            subscription_status: isFreeTier ? 'pending_email' : 'active',
+            // W3.1 (b): TODA alta nace `active`. Hasta hoy el free nacía 'pending_email' y el click
+            // en el correo era lo que lo activaba y disparaba bienvenida + drip
+            // (`auth/confirm/route.ts`). Con D1 = A ese click deja de ser un requisito para entrar,
+            // así que la transición `pending_email → active` YA NO EXISTE en las altas nuevas y los
+            // correos se disparan más abajo, en este mismo action (W3.1 f).
+            //
+            // `proxy.ts:541` (el desvío a /verify-email de un `pending_email` free) NO se toca: las
+            // filas que ya existen en LIVE con ese estado siguen su camino viejo. Nada retroactivo
+            // — condición del owner del 26-08.
+            subscription_status: 'active',
             subscription_tier: 'free',
             billing_cycle: 'monthly',
             // 'admin' (no el gateway): un alta sin cobro NO es una conversión. La RPC
@@ -315,25 +335,73 @@ export async function registerAction(
         }).catch(() => { /* nunca romper el registro por analytics */ })
 
     if (isFreeTier) {
-        // admin.createUser does not trigger Supabase auth emails — send manually via Resend.
-        const emailSent = await sendCoachSignupConfirmationEmail({
+        // ── W3.1 (c) + (d): el correo pasa a RECORDATORIO NO BLOQUEANTE y el rollback SE VA ──────
+        //
+        // Dos cosas cambian juntas y ninguna es opcional:
+        //  (c) SIN `delete` de `coaches` + `deleteUser`. El bloque viejo borraba la cuenta entera
+        //      cuando el correo no salía. Combinado con (d) —y con `email_confirm: true`— ese
+        //      rollback borraría TODAS las altas free: GoTrue rechaza `signup` (e `invite`) para un
+        //      usuario que YA existe (`lib/auth/send-coach-email-confirmation.ts:34-38`), y con el
+        //      email auto-confirmado el usuario existe siempre. Este renglón es el que evita que
+        //      D1 = A se coma el alta free entera.
+        //  (d) `linkType: 'magiclink'` (o sea `resendCoachSignupConfirmationEmail`, no
+        //      `sendCoachSignupConfirmationEmail`): es la única rama que GoTrue acepta para un
+        //      usuario existente. Verificar ese magiclink confirma el correo igual y `/auth/confirm`
+        //      llena `coaches.email_verified_at`, que es la señal de W3.8 / W3.11.
+        // Su fallo NO revierte nada: la cuenta ya nació `active` y el coach entra igual. Espejo
+        // exacto de lo que la ruta RN (`api/mobile/auth/register-coach-free`) ya hace en prod.
+        const reminderSent = await resendCoachSignupConfirmationEmail({
             email: emailSan,
-            password,
             coachName: fullName,
         })
-        if (!emailSent.ok) {
-            await adminDb.from('coaches').delete().eq('id', authData.user.id)
-            await adminDb.auth.admin.deleteUser(authData.user.id)
-            return reject('confirmation_email_failed', 'No pudimos enviar el correo de confirmación. Revisa el email e intenta de nuevo.')
+        if (!reminderSent.ok) {
+            // Solo la traza: el error de Resend/GoTrue repite la dirección de destino y estos logs
+            // no tienen la retención acotada de un sistema de datos personales.
+            console.warn('[register] recordatorio de confirmación no salió')
         }
-        // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
+
+        // ── W3.1 (f): bienvenida + drip se disparan ACÁ ──────────────────────────────────────────
+        //
+        // Antes los disparaba `/auth/confirm` en la transición `pending_email → active`; con el alta
+        // naciendo `active` esa transición no existe (`activateConfirmedFreeCoach` corta con
+        // `not_pending`, `lib/auth/activate-confirmed-coach.ts:90`) y sin esta llamada el coach free
+        // de la web se quedaría sin bienvenida, sin drip y fuera de la audiencia de Resend.
+        //
+        // UNA SOLA BIENVENIDA aunque pase por los dos caminos: ese mismo corte en `not_pending` es
+        // la idempotencia que se reusa — cuando el coach abra el recordatorio, `/auth/confirm`
+        // sellará `email_verified_at` pero NO volverá a mandar nada. El drip además deduplica por el
+        // ledger de correos.
+        //
+        // `await` porque el `redirect()` de abajo congela la invocación en Vercel y se lleva puesto
+        // todo POST pendiente (medido el 19-08: 2 de 5 bienvenidas perdidas). `try/catch` como
+        // cinturón: la fila ya está escrita, un fallo de correo no puede devolver «error» a alguien
+        // que ya tiene cuenta y mandarlo a registrarse de nuevo.
+        try {
+            await sendFreeCoachOnboardingEmails({
+                admin: adminDb,
+                coachId: authData.user.id,
+                email: emailSan,
+                coachName: fullName,
+                brandName,
+                inviteCode,
+                appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.eva-app.cl',
+            })
+        } catch {
+            console.warn('[register] onboarding email failed')
+        }
+
         await queueMetaRegistration()
-        // `uid` alimenta el botón «reenviar correo» de esa pantalla: sin sesión (el alta free no
-        // loguea hasta confirmar) es el único modo de resolver la cuenta sin aceptar un email
-        // suelto del formulario, que crearía `auth.users` huérfanos vía generateLink.
-        redirect(
-            `/verify-email?email=${encodeURIComponent(emailSan)}&eid=${encodeURIComponent(metaEventId)}&uid=${encodeURIComponent(authData.user.id)}`
-        )
+
+        // ── W3.1 (e): sesión inmediata y al panel, sin pasar por /verify-email ───────────────────
+        //
+        // La atribución de Meta NO se toca: el `eid` viaja igual y el proxy arrastra `welcome`/`eid`
+        // hasta la pantalla de persona y de ahí a `/coach/guia`, donde `RegistrationMirror` dispara
+        // el espejo del pixel (`CompleteRegistration`, mismo id que el CAPI) y `coach_registered`.
+        // Es el MISMO par de eventos que hasta hoy emitía `/verify-email`, en el nuevo aterrizaje.
+        const supabase = await createClient()
+        await supabase.auth.signInWithPassword({ email: emailSan, password })
+
+        redirect(`/coach/dashboard?welcome=free&eid=${encodeURIComponent(metaEventId)}`)
     }
 
     // Paid tier: email auto-confirmed; sign in immediately and proceed to payment
