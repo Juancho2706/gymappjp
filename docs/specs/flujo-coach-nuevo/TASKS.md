@@ -410,12 +410,18 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
   call sites ya capturan explícito y espejarlo duplicaría el único evento en uso; en cambio esos
   captures ganaron `$set { persona }` (los 2 que no lo tenían). `demo_deleted` del dashboard web
   ruteado por el helper. Tests 24/24 + vecinos 151/152 (1 timeout ajeno).
-  **Pendiente (por eso `[~]`):** (1) los DOS insert directos restantes —`api/coach/onboarding-events/route.ts:106`
-  (por ahí entra TODO `step_completed`: sin esto el insight de activación sigue cojo) y
-  `api/mobile/coach/dashboard/route.ts:261`— **los toma el jefe de VTA post-merge de VTA W1** (su V1.15
-  está sobre esos tests ahora; acordado 26-08). Ojo route 1: su manejo de FK 404/23505 lee el `error`
-  del insert ⇒ capture aparte tras insert exitoso, no swap ciego. (2) El evento real visible en PostHog
-  desde preview (no hubo deploy en esta tanda).
+  **Los DOS insert directos restantes: HECHOS 26-08** (worker `telemetry` de VTA). Ninguno de los dos
+  endpoints cambió de forma: conservan su insert —su contrato HTTP depende de LEER el `error` (23503 ⇒
+  404, 23505 ⇒ `deduped`, resto ⇒ 500) y `recordOnboardingEvent` se lo traga— y llaman al espejo
+  APARTE, awaiteado, solo con la fila ya escrita. El espejo vive en
+  `apps/web/src/lib/posthog/onboarding-event-mirror.ts` (nuevo, `server-only` + import estático de
+  `server-capture`, patrón `registration-events.ts`): mismo contrato que la copia inline de
+  `persona.service` —que NO puede importarlo porque a ese módulo lo carga `proxy.ts`— con el mismo
+  `POSTHOG_MIRROR_SKIP` de `persona_selected`. Auditado que ningún evento queda espejado dos veces:
+  los emisores reales son 4 tipos por la web y 4 por la app, y ninguno tiene captura client-side
+  homónima (`invite_whatsapp_opened` sí la tiene, pero nunca llega a la tabla).
+  **Pendiente (por eso sigue `[~]`):** el evento real visible en PostHog desde preview (no hubo deploy
+  en esta tanda).
 - [x] **W0.6** · **MIDE** (jefe, 0,5 h) Anotar en el TASKS de onboarding-v2 que W8.4.3 **cambia de nombre**: la señal es
   `first_login_at` (primer login), no `last_login_at`. Una columna de último login **no puede** responder
   «activado dentro de 72 h». **Aceptación:** la nota vive en ese archivo, no acá. **Gate:** `pnpm docs:check`.
@@ -470,7 +476,13 @@ rutas sin declarar siguen siendo las mismas (`weekly-report-email`, `weekly-snap
 firma, así que W1.5 es cambiar la ENTRADA y el label, no los llamadores. (5) El baseline trae **tres**
 policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) — dato, por si W1.1 mira RLS.
 
-- [ ] **W1.1** · **MIDE** (DB · Opus, 1,5 h) Migración **aditiva** `<ts>_clients_first_login_at.sql`:
+- [x] **W1.1** · **MIDE** (DB · Opus, 1,5 h) — **Hecha 26-08.** Migración `20260826044738_clients_first_login_at.sql`
+  escrita por la hermana y **aplicada en LIVE por el jefe de VTA** (protocolo BEGIN/ROLLBACK → apply →
+  advisors; verificó en la misma transacción: 111 filas, 0 grants UPDATE para authenticated/anon sobre la
+  columna). **Índice: NO se creó**, con evidencia en el header (111 filas; `idx_clients_coach_id` +
+  `idx_clients_coach_id_created_at` + `idx_clients_coach_archived` ya cubren todo acceso; se revisa si la
+  tabla crece 2 órdenes). `database.types.ts` regenerado (incluye `demo_client_count` del RPC admin, deuda
+  declarada de VTA W4). Texto original de la tarea ↓ como referencia. Migración **aditiva** `<ts>_clients_first_login_at.sql`:
   `ALTER TABLE public.clients ADD COLUMN first_login_at timestamptz`. **Sin default. Sin
   `GRANT UPDATE(first_login_at) TO authenticated`** — `clients` tiene tres políticas de auto-UPDATE del propio
   alumno (`supabase/migrations/00000000000001_baseline.sql:2493`, `:2856`, `:2893`), así que un grant haría la
@@ -489,7 +501,13 @@ policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) —
   → `get_advisors`. **Aceptación:** advisors limpio; `select ... from clients` con la anon key **no** permite
   actualizar la columna; `pnpm typecheck` verde con los tipos regenerados.
   **Gate:** evidencia de las tres corridas pegada en esta tarea.
-- [ ] **W1.2** · **MIDE** (web · Opus, 2 h) `apps/web/src/services/client/student-login-signal.service.ts` (NUEVO):
+- [x] **W1.2** · **MIDE** (web · Opus, 2 h) — **Hecha 26-08** (test 8 casos verdes; returning con
+  `.is('first_login_at', null)` + `.select(...)` en un solo round-trip; todo lo de red —`getUserById` para
+  `self_invited` y el capture— dentro del `after()`, así la respuesta solo paga el UPDATE por PK;
+  `self_invited: null` cuando el correo del coach no se pudo resolver, nunca `false` falso. **Riesgo
+  declarado:** `after()` tiene un antecedente en contra en el repo (`lib/meta/capi.ts:233-239`, camino con
+  `redirect()`); estos call sites DEVUELVEN (caso soportado) y la cura está en el docblock — verificar
+  `student_first_login` en PostHog al primer deploy.) `apps/web/src/services/client/student-login-signal.service.ts` (NUEVO):
   `recordStudentFirstLogin(admin, clientId): Promise<boolean>` con `UPDATE clients SET first_login_at = now()
   WHERE id = $1 AND first_login_at IS NULL`, `service_role`, **nunca lanza**. Si escribió, emite
   `student_first_login` a PostHog con `distinctId = coach_id` y `properties: { seconds_since_created,
@@ -497,7 +515,10 @@ policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) —
   **Clean Architecture:** el servicio no importa nada de `app/`.
   **Aceptación:** dos llamadas seguidas escriben **una sola vez** y emiten **un solo** evento.
   **Gate:** test nuevo `student-login-signal.service.test.ts` con el `admin` mockeado.
-- [ ] **W1.3** · **MIDE** (RN/API · Opus, 0,5 h) Call site del camino RN:
+- [x] **W1.3** · **MIDE** (RN/API · Opus, 0,5 h) — **Hecha 26-08** (route tests 64/64 verdes; el `clientId`
+  sale de `validateMobileStudentWorkspace`, cuya variante `{ ok: true }` ganó `clientId: client.id` — la
+  fuente correcta con identidades divididas, donde `clients.id !== auth.uid()`; la respuesta HTTP no cambia
+  de forma y el id nunca sale al cliente). Call site del camino RN:
   `apps/web/src/app/api/mobile/auth/validate-student-workspace/route.ts`, en la rama `result.ok` (hoy
   devuelve `{ ok: true, forcePasswordChange }`, `:46-51`). Llamada **esperada** — el servicio nunca lanza y es
   un `UPDATE` por PK — y el capture de PostHog por `after()` de `next/server`.
@@ -512,7 +533,15 @@ policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) —
   diff** (queda escrito en el brief de esa wave), o W1.4 espera al merge de VTA W3. **Nunca** los dos a la vez.
   **Aceptación:** un login real de alumno en preview escribe la columna; el segundo login no la toca.
   **Gate:** `npx vitest run apps/web/src/app/c` (el test `login.actions.test.ts` que crea VTA V3.6).
-- [ ] **W1.5** · **ARREGLA** (web + RN · Opus, 2 h) El chip pasa a leer `first_login_at`, y **recién acá** el copy dice
+- [~] **W1.5** · **ARREGLA** (web + RN · Opus, 2 h) — **Hecha 26-08 en código, con UN pendiente del cierre:**
+  labels «Entró hace N min / Entró hoy / Entró hace N d» (key nueva `entered`, atraviesa los gates de chip
+  existentes sin tocarlos) y regla de filas viejas: `first_login_at` NULL **jamás** dice «Todavía no entró»
+  salvo que la fila haya nacido después de `FIRST_LOGIN_SIGNAL_CUTOVER` — constante duplicada web/RN a
+  propósito (split por runtime), que nace en `'2100-01-01T00:00:00Z'`. **Pendiente del jefe de la ola: fijar
+  ambas al ISO del deploy web** (mismo patrón que `VIVE_TU_APP_ENTERED_CUTOVER`); hasta entonces la rama
+  «Todavía no entró» está dormida (degradación honesta). RN: `first_login_at` viaja en el select rico de
+  `selectWithFallback` (server viejo no rompe). Tests: 19 web + 17 RN nuevos; corrida limpia 111 archivos /
+  1531 verdes. QA device pendiente (regla de la wave). El chip pasa a leer `first_login_at`, y **recién acá** el copy dice
   «entró»; `force_password_change` queda como fallback para las filas viejas, con su propio label («Todavía no
   cambió su clave»). Entrada: la función pura de W0.2/W0.3 y los selects que alimentan el roster
   (`apps/mobile/lib/clients-directory.ts:215-228` ya parsea `forcePwChange`; sumar `firstLoginAt`).
@@ -524,7 +553,7 @@ policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) —
   muestra «Entró hace X» tras un login real.
   **Gate:** gates base + `tsc` mobile + `npx vitest run tests/mobile`.
 
-- [ ] **W1.6** · **MIDE** (web · Opus, 2 h) **«Calculado solo» deja de ser una promesa.** [SPEC §2.2](SPEC.md) fija la
+- [~] **W1.6** · **MIDE** (web · Opus, 2 h) **«Calculado solo» deja de ser una promesa.** [SPEC §2.2](SPEC.md) fija la
   North Star «calculada sola» a 30 días, pero W0.1 es una consulta que alguien corre a mano y ninguna tarea la
   automatizaba: sin esto, «solo» significa «el jefe se acuerda el martes».
   Endpoint nuevo `apps/web/src/app/api/cron/north-star-weekly/route.ts`: corre la consulta de W0.1 con
@@ -547,10 +576,34 @@ policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) —
   guardarraíl; con `n` bajo el mínimo la celda dice «sin lectura».
   **Gate:** ejecución manual del endpoint en preview (`curl` con el `Authorization: Bearer`) + `pnpm
   typecheck`; el correo recibido pegado como evidencia acá.
+  **Hecho 26-08 (parcial — por eso `[~]`).** `services/metrics/north-star-weekly.service.ts` +
+  `api/cron/north-star-weekly/route.ts` + tests (20/20 verdes) + **cron declarado en el `vercel.json` de
+  la raíz** (13º, `0 13 * * 1`). Réplica TS de la consulta de W0.1 (PostgREST no corre SQL crudo ni ve
+  `auth` ⇒ `auth.admin.getUserById` por id; cohorte chica). Purga con `isTestCoachEmail` canónico;
+  autoinvitado = normalización + `SELF_INVITES_MANUAL` (caso #28, con test de que la normalización sola
+  no lo captura). Ventana = semana ISO UTC anterior completa, corte de datos = now. Route: molde
+  endurecido de `checkout-abandoned` (timingSafeEqual fail-closed, `?dry=1`, maxDuration 60); sin
+  `NORTH_STAR_REPORT_TO` ⇒ 200 `{skipped}` + warn (env que falta ≠ envío roto, que sí devuelve 500).
+  **Pendiente:** `curl` en preview + correo real como evidencia (requiere deploy, cierre de ola) ·
+  **`NORTH_STAR_REPORT_TO` no existe en ningún entorno: la setea el owner en Vercel** · cuando W1.5
+  aterrice, `loadClients` puede leer `first_login_at` en vez de pegarle a GoTrue por alumno (deuda
+  anotada en el docblock del servicio) · con W3.0, la señal de verificación cambia de columna (comentario
+  en el punto exacto).
 
 **Gate de salida de W1:** migración aplicada y verificada · un login de alumno en preview escribe la columna
 una sola vez · `student_first_login` visible en PostHog con `coach_id` · **el cron semanal declarado en
 `vercel.json` y con un correo real recibido** · gates base.
+**Estado 26-08:** migración aplicada+verificada ✅ · cron declarado ✅ · typecheck web ✅ · tsc mobile ✅ ·
+vitest (señal 64/64 · cron 20/20 · roster 111 arch/1531 · services/client 51/51) ✅ · expo export android ✅.
+**Quedan del cierre de ola (deploy/preview):** login real en preview escribe una vez · `student_first_login`
+visible en PostHog · correo real del cron · fijar los DOS `FIRST_LOGIN_SIGNAL_CUTOVER` (web y RN) al ISO del
+deploy · `NORTH_STAR_REPORT_TO` en Vercel (owner) · W1.4 bloqueada por regla V3.13.
+**Nota colateral de la regen de tipos (26-08):** el `database.types.ts` regenerado destapó drift real de
+LIVE — columnas hoy nullable (`nutrition_meal_logs.meal_id`, `workout_set_logs.block_id`,
+`daily_nutrition_logs.plan_id/client_id`) que los tipos viejos declaraban NOT NULL. 12 errores de typecheck
+en 8 archivos de nutrición/workout/org corregidos con null-guards en el borde (filtrar filas sin match
+posible; cero cambio de comportamiento runtime); 19 tablas nuevas tipadas (familia `nutrition_*_v2`,
+`coach_email_ledger`, etc.) sin tabla removida.
 
 ---
 
