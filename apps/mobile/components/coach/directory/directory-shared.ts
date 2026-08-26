@@ -44,7 +44,7 @@ export function severityMeta(score: number): { label: string; tone: 'danger' | '
  * módulo en `packages/*` viajaría en el bundle RN y crearía split por runtime — el binario de la
  * tienda no se redeploya junto con la web, así que cada plataforma fija su propio corte.
  */
-export const FIRST_LOGIN_SIGNAL_CUTOVER = '2100-01-01T00:00:00Z'
+export const FIRST_LOGIN_SIGNAL_CUTOVER = '2026-08-26T06:00:00Z'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
