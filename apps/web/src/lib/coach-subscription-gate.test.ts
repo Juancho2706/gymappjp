@@ -15,11 +15,24 @@ describe('resolveCoachSubscriptionRedirect', () => {
         expect(resolveCoachSubscriptionRedirect('/coach/subscription/processing', 'pending_payment')).toBeNull()
     })
 
-    it('sends active coaches away from gate pages', () => {
+    it('sends active coaches away from reactivate (la pantalla del bloqueo)', () => {
         expect(resolveCoachSubscriptionRedirect('/coach/reactivate', 'active')).toBe('/coach/dashboard')
+    })
+
+    // A1 (ola checkout 25-08): /coach/subscription/processing es TRANSACCIONAL, no es la pantalla del
+    // bloqueo. Desde A1 el alta con tier pago nace free+active y el registro la manda derecho ahí a
+    // arrancar su checkout; rebotarla al dashboard mataba el checkout antes de empezar. La vuelta de
+    // MercadoPago (back_url) también aterriza ahí, con el coach todavía free+active.
+    it('deja a un coach CON acceso entrar a /coach/subscription/processing', () => {
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/processing', 'active')).toBeNull()
         expect(
             resolveCoachSubscriptionRedirect('/coach/subscription/processing', 'trialing', periodEndFuture)
-        ).toBe('/coach/dashboard')
+        ).toBeNull()
+    })
+
+    it('un coach BLOQUEADO sigue pudiendo entrar a las dos pantallas del gate', () => {
+        expect(resolveCoachSubscriptionRedirect('/coach/reactivate', 'expired')).toBeNull()
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/processing', 'expired')).toBeNull()
     })
 
     it('does not redirect active coaches on normal pages', () => {

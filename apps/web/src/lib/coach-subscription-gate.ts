@@ -90,7 +90,20 @@ export function resolveCoachSubscriptionRedirect(
     if (isBlocked && !isSubscriptionGatePage) {
         return '/coach/reactivate'
     }
-    if (!isBlocked && isSubscriptionGatePage) {
+    // ── A1 (ola checkout 25-08): expulsar del gate SOLO desde /coach/reactivate ──────────────────
+    // `/coach/reactivate` es la pantalla del BLOQUEO: un coach CON acceso no tiene nada que hacer
+    // ahí, y devolverlo al dashboard sigue siendo lo correcto.
+    //
+    // `/coach/subscription/processing` NO es eso: es la pantalla TRANSACCIONAL del checkout, y desde
+    // A1 la usan coaches CON acceso. El alta con tier pago ya no nace en `pending_payment` — nace
+    // free+active — y el registro la manda derecho a `?from=register&tier=pro`; con la regla vieja,
+    // el gate la rebotaba al dashboard y el checkout no llegaba a empezar NUNCA. El mismo rebote ya
+    // rompía en silencio la VUELTA de MercadoPago del coach free que compra (back_url =
+    // /coach/subscription/processing): aterrizaba en el dashboard, `confirm-subscription` no corría
+    // y el alta quedaba colgada del webhook. Un coach con acceso que entra sin checkout en curso ve
+    // la pantalla resolver sola (la propia página navega al dashboard al confirmar), así que no hace
+    // falta que el gate lo eche.
+    if (!isBlocked && isReactivatePage) {
         return '/coach/dashboard'
     }
     return null

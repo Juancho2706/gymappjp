@@ -1255,6 +1255,45 @@ export async function runWebhookPipeline(
         delete coachUpdate.current_period_end
     }
 
+    // ── A1 (ola checkout 25-08): un evento NO paid-like JAMÁS puede bloquear a un coach FREE ────────
+    // La OTRA mitad del trapdoor, y la que create-preference no podía cerrar sola. Mercado Pago emite
+    // `subscription_preapproval / created` con `status: 'pending'` ~2 s después de crear el
+    // preapproval — está en los logs de prod de los dos abandonos de la campaña
+    // (`internalStatus: 'pending_payment'`). `mapProviderStatus('pending')` colapsa eso a
+    // `pending_payment`, que es bloqueo DURO sin gracia en `lib/coach-subscription-gate.ts`. O sea:
+    // un coach FREE que apenas EMPEZABA a pagar quedaba fuera del producto por el mero hecho de haber
+    // apretado el botón, deshaciendo en dos segundos la protección `isFreeTierCoach` del checkout.
+    // El mismo agujero lo abría el guard de ciclo de más arriba (`isBillingCycleAllowedForTier`):
+    // `TIER_ALLOWED_BILLING_CYCLES.free` está vacío, así que un evento paid-like que resuelve a free
+    // (external_reference ausente o no parseable) también caía a `pending_payment`.
+    //
+    // Regla: si la fila del coach dice `free`, este webhook no tiene ninguna suscripción paga que
+    // degradar — lo único que puede hacer un evento no paid-like es sacarle el producto. Se conserva
+    // su estado (no se “sana” nada: un free ya bloqueado sigue igual, eso es un arreglo de datos) y el
+    // resto del pipeline sigue normal (event row, hooks). Es el espejo no-terminal de `ignore-free`
+    // de `resolveTerminalEvent`, que ya hacía exactamente esto para expired/canceled.
+    //
+    // Cuando el pago SÍ se confirma el evento es paid-like ('active'/'trialing') → este guard no
+    // corre, y el bloque `isPaidLike && (checkoutId || hasResolvedPlan)` de arriba sube tier, ciclo y
+    // max_clients desde el external_reference. Subir de plan nunca dependió de `pending_payment`.
+    const coachIsFreeTier = (coach.subscription_tier ?? 'free') === 'free'
+    const patchedStatus = coachUpdate.subscription_status as string | undefined
+    if (
+        coachIsFreeTier &&
+        patchedStatus != null &&
+        patchedStatus !== 'active' &&
+        patchedStatus !== 'trialing'
+    ) {
+        console.info('[payments.webhook] evento no paid-like sobre coach free — se conserva su acceso', {
+            traceId,
+            coachId: coach.id,
+            providerStatus: result.providerStatus ?? null,
+            wouldHaveSet: patchedStatus,
+        })
+        delete coachUpdate.subscription_status
+        delete coachUpdate.current_period_end
+    }
+
     const { error: coachUpdateError } = await admin.from('coaches').update(coachUpdate).eq('id', coach.id)
 
     if (coachUpdateError) {

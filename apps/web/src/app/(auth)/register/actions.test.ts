@@ -220,7 +220,12 @@ describe('registerAction', () => {
     expect(adminDb.auth.admin.deleteUser).toHaveBeenCalledWith('u123')
   })
 
-  it('creates account and redirects on happy path', async () => {
+  // ── A1 (ola checkout 25-08) — el alta con tier PAGO ya no nace bloqueada ─────────────────────
+  // Antes insertaba `subscription_status='pending_payment'` + el tier pago + su cupo ANTES de
+  // cobrar un peso, y ese estado es bloqueo DURO (`lib/coach-subscription-gate.ts`): abandonar el
+  // checkout dejaba al coach sin producto. Ahora la fila nace exactamente como un alta free y la
+  // intención de compra viaja en el intent durable de `subscription_events`.
+  function paidHappyPathMocks() {
     const slugQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -234,9 +239,12 @@ describe('registerAction', () => {
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     }
+    const intentUpsert = vi.fn().mockResolvedValue({ error: null })
 
     let coachesCallCount = 0
     const fromMock = vi.fn((table: string) => {
+      // A1: el intent de compra (tier/ciclo/add-ons/cupón) vive acá, no en la fila del coach.
+      if (table === 'subscription_events') return { upsert: intentUpsert }
       if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
       coachesCallCount += 1
       if (coachesCallCount === 1) return slugQuery
@@ -272,6 +280,12 @@ describe('registerAction', () => {
     createRawAdminClientMock.mockReturnValue(adminDb)
     createClientMock.mockResolvedValue(userSupabase)
 
+    return { adminDb, userSupabase, insertQuery, intentUpsert }
+  }
+
+  it('creates account and redirects on happy path', async () => {
+    const { adminDb, userSupabase } = paidHappyPathMocks()
+
     await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(
       'REDIRECT:/coach/subscription/processing?from=register&tier=pro&cycle=monthly&plan=mensual'
     )
@@ -284,6 +298,111 @@ describe('registerAction', () => {
       p_email: 'coach@example.com',
     })
     expect(redirectMock).toHaveBeenCalledWith('/coach/subscription/processing?from=register&tier=pro&cycle=monthly&plan=mensual')
+  })
+
+  it('A1: el alta con tier PAGO nace free + active (nunca pending_payment) y con el cupo free', async () => {
+    const { insertQuery } = paidHappyPathMocks()
+
+    await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(/^REDIRECT:/)
+
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'u123',
+      // El trapdoor que este fix mata: pending_payment = bloqueo duro sin gracia.
+      subscription_status: 'active',
+      subscription_tier: 'free',
+      billing_cycle: 'monthly',
+      // 'admin' y no el gateway: un alta sin cobro no es una conversión
+      // (get_platform_trial_conversion_rate cuenta 'active' + provider != admin/beta/internal).
+      payment_provider: 'admin',
+      max_clients: 1,
+    }))
+    const inserted = insertQuery.insert.mock.calls[0][0] as Record<string, unknown>
+    expect(inserted.subscription_status).not.toBe('pending_payment')
+    expect(inserted.subscription_tier).not.toBe('pro')
+  })
+
+  it('A1: la intención de compra (tier/ciclo/add-ons/cupón) se persiste en el intent durable', async () => {
+    const { intentUpsert } = paidHappyPathMocks()
+    const formData = buildRegisterFormData({ billing_cycle: 'quarterly' })
+    formData.set('addons', 'cardio,no_existe')
+    formData.set('coupon_code', 'DIEGO25')
+
+    await expect(registerAction({}, formData)).rejects.toThrow(/^REDIRECT:/)
+
+    expect(intentUpsert).toHaveBeenCalledTimes(1)
+    const [row, opts] = intentUpsert.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>]
+    expect(row.coach_id).toBe('u123')
+    // Canal propio: no pisa ni es pisado por el intent del checkout (flow_/mercadopago_).
+    expect(row.provider_event_id).toBe('signup_checkout_intent:u123')
+    // ⚠️ nunca 'pending': ese estado lo usa el cron checkout-abandoned para detectar un checkout muerto.
+    expect(row.provider_status).toBe('signup_checkout_intent')
+    expect(row.payload).toMatchObject({
+      tier: 'pro',
+      cycle: 'quarterly',
+      // add-on inexistente filtrado por la whitelist MODULE_KEYS.
+      addons: ['cardio'],
+      coupon: 'DIEGO25',
+    })
+    expect(opts).toMatchObject({ onConflict: 'provider_event_id' })
+  })
+
+  it('A1: si el intent falla, el alta NO se rompe (best-effort — el cobro no depende de esa fila)', async () => {
+    const { intentUpsert, insertQuery } = paidHappyPathMocks()
+    intentUpsert.mockResolvedValue({ error: { message: 'boom' } })
+
+    await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(
+      'REDIRECT:/coach/subscription/processing?from=register&tier=pro&cycle=monthly&plan=mensual'
+    )
+    // La cuenta quedó creada igual: el rastro perdido no puede costar un alta.
+    expect(insertQuery.insert).toHaveBeenCalledOnce()
+  })
+
+  it('A1: el alta FREE no escribe intent de compra (no hay nada que comprar)', async () => {
+    const ipLimitQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+    const slugQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
+    const insertQuery = { insert: vi.fn().mockResolvedValue({ error: null }) }
+    const inviteCodeQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
+    const intentUpsert = vi.fn().mockResolvedValue({ error: null })
+    let coachesCallCount = 0
+    createRawAdminClientMock.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === 'subscription_events') return { upsert: intentUpsert }
+        if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
+        coachesCallCount += 1
+        if (coachesCallCount === 1) return ipLimitQuery
+        if (coachesCallCount === 2) return slugQuery
+        if (coachesCallCount === 3) return inviteCodeQuery
+        return insertQuery
+      }),
+      rpc: vi.fn().mockResolvedValue({
+        data: { exists_in_auth: false, is_coach: false, is_client: false, orphan_client_email: false },
+        error: null,
+      }),
+      auth: {
+        admin: {
+          createUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-free' } }, error: null }),
+          deleteUser: vi.fn(),
+        },
+      },
+    })
+
+    await expect(
+      registerAction({}, buildRegisterFormData({ subscription_tier: 'free', billing_cycle: 'monthly' }))
+    ).rejects.toThrow(/^REDIRECT:\/verify-email/)
+
+    expect(intentUpsert).not.toHaveBeenCalled()
   })
 
   it('creates free account pending email confirmation', async () => {

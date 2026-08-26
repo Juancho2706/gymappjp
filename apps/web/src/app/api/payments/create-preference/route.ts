@@ -18,6 +18,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
 import { buildTierUpgradeExternalReference } from '@/lib/payments/providers/mercadopago'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
@@ -185,6 +186,18 @@ export async function POST(request: Request) {
 
         // Free coaches must NOT be set to pending_payment — they would lose access if they
         // abandon the checkout. The webhook will upgrade them when payment is confirmed.
+        //
+        // ── A1 (ola checkout 25-08): esta rama ahora cubre TAMBIÉN el alta paga del registro ────────
+        // Un alta con tier pago ya no nace 'pro'+'pending_payment': nace free+active
+        // (`register/_actions/register.actions.ts`) y su intención de compra vive en el intent
+        // durable. Por eso el coach que llega acá desde /register cae por ESTA rama y conserva su
+        // producto si abandona la pasarela — que era el trapdoor #1 del informe de checkout.
+        //
+        // El guard se mide por TIER y NO por status a propósito: la rama NO-free de este mismo
+        // UPDATE escribe `subscription_tier`/`max_clients` del tier PEDIDO. Dejar ahí
+        // `subscription_status='active'` (p. ej. para un coach pago 'active' con período ya vencido)
+        // le regalaría el plan nuevo sin haberlo pagado. En la rama free, en cambio, tier y cupo NO
+        // se tocan: los sube el webhook al confirmar el cobro, así que no hay nada que regalar.
         const isFreeTierCoach = currentCoach?.subscription_tier === 'free'
 
         const isActiveUpgrade =
@@ -515,7 +528,13 @@ export async function POST(request: Request) {
                   (checkoutAddons.length > 0
                       ? `&addons=${encodeURIComponent(checkoutAddons.join(','))}`
                       : '')
-                : `${appUrl}/coach/subscription/processing`
+                : // A5: tier|ciclo TAMBIÉN en el back_url de MercadoPago. MP le agrega su
+                  // `preapproval_id` a esta URL, y la pantalla de vuelta ya lee `tier`/`cycle` del
+                  // query para `checkout_confirmed` (processing/page.tsx). Sin ellos, el PRIMER
+                  // `checkout_confirmed` real de la historia llegaría con tier y ciclo en null y ese
+                  // dato se pierde para siempre — hay que ponerlo ANTES de la primera venta. Mismo
+                  // par que ya viaja en el failureUrl/pendingUrl (`retryQuery`).
+                  `${appUrl}/coach/subscription/processing?${retryQuery}`
 
         const checkout = await provider.createCheckout({
             coachId: user.id,
@@ -574,23 +593,38 @@ export async function POST(request: Request) {
         // asi que confirm-enrollment (Fase 2) no puede releerlos del coach row (seguiria 'free' → composite
         // 0 → 400 terminal o sub cobrando solo add-ons). Persistimos un INTENT server-side (service-role)
         // con el tier/cycle/addons de ESTE checkout; la Fase 2 lo lee como fuente de verdad. Un checkout
-        // nuevo PISA el anterior (onConflict provider_event_id: un intent por coach) — el ultimo gesto manda.
-        // Solo para Flow (MP escribe tier/cycle en el coach y no lo necesita). Falla dura: sin intent la
-        // Fase 2 no puede completar el alta.
-        if (gateway === 'flow') {
-            const { error: intentError } = await admin.from('subscription_events').upsert(
-                {
-                    coach_id: user.id,
-                    provider: 'flow',
-                    provider_event_id: `flow_checkout_intent:${user.id}`,
-                    provider_status: 'flow_checkout_intent',
-                    payload: { tier, cycle: billingCycle, addons: checkoutAddons },
-                },
-                { onConflict: 'provider_event_id' }
-            )
-            if (intentError) {
-                return NextResponse.json({ error: intentError.message }, { status: 500 })
+        // nuevo PISA el anterior (onConflict provider_event_id: un intent por canal y coach) — el ultimo
+        // gesto manda.
+        //
+        // ── A1 (ola checkout 25-08): el intent se escribe TAMBIÉN para MercadoPago ───────────────────
+        // Antes solo lo necesitaba Flow, porque MP escribía tier/cycle en la fila del coach. Desde A1
+        // ya NO: el alta paga nace free (register.actions) y esta misma request cae por la rama
+        // `isFreeTierCoach`, que a propósito no toca tier ni cupo. Resultado: sin este intent, un
+        // checkout MP abandonado no deja NADA en nuestra base que diga qué plan quería el coach — el
+        // único rastro sería el `external_reference` del preapproval, que vive en MercadoPago. El
+        // canal (`mercadopago_checkout_intent:` vs `flow_checkout_intent:`) mantiene las dos filas
+        // separadas, así que la Fase 2 de Flow lee exactamente lo mismo que leía antes.
+        //
+        // Política de fallo, distinta por gateway:
+        //  - Flow → DURA (500). Sin intent la Fase 2 no puede completar el alta.
+        //  - MP   → BEST-EFFORT. El preapproval YA existe en el gateway y su external_reference
+        //           (`coachId|tier|cycle`) es la fuente de verdad del cobro para webhook y
+        //           confirm-subscription. Tumbar acá un checkout ya creado dejaría al coach con un
+        //           preapproval huérfano y sin pantalla de pago: peor que perder un rastro.
+        const intentPersisted = await persistCheckoutIntent(admin, {
+            coachId: user.id,
+            channel: gateway,
+            provider: provider.name,
+            intent: { tier, cycle: billingCycle, addons: checkoutAddons },
+        })
+        if (!intentPersisted.ok) {
+            if (gateway === 'flow') {
+                return NextResponse.json({ error: intentPersisted.error }, { status: 500 })
             }
+            console.error('[create-preference] checkout intent persist failed (best-effort, MP)', {
+                coachId: user.id,
+                message: intentPersisted.error,
+            })
         }
 
         // Free coaches: only store the MP subscription ID and provider.
@@ -741,6 +775,21 @@ export async function POST(request: Request) {
                 gatewayError.code ?? String(gatewayError.status ?? 'unknown'),
             ],
         })
+        // MercadoPago rechaza la CREACION del preapproval cuando el email del pagador resuelve a una
+        // cuenta MP de otro site (pais) distinto al del cobrador (MLC/Chile): 400 `guest_site_mismatch`.
+        // Sin este mapeo el coach recibia un 500 con `error` = el JSON crudo del gateway (x-request-id
+        // incluido) y el banner lo pintaba literal — el caso real de jesus-coach el 25-08. Mismo patron
+        // que GATEWAY_EMAIL_REJECTED de abajo: el server emite el CODIGO canonico y el copy humano lo
+        // resuelve `lib/payments/checkout-errors` (que acepta ambos, el canonico y el crudo del gateway).
+        if (gatewayError.code === 'guest_site_mismatch') {
+            return NextResponse.json(
+                {
+                    code: 'GATEWAY_PAYER_SITE_MISMATCH',
+                    error: 'MercadoPago no pudo procesar tu suscripción porque tu cuenta de MP está asociada a otro país.',
+                },
+                { status: 400 }
+            )
+        }
         // Flow VALIDA la entregabilidad real del email del pagador (no solo el formato) en
         // customer/create — confirmado en QA E2E: un buzon no entregable devuelve
         // `code=501 "email is not valid"`. Sin este mapeo el coach ve un 500 opaco; con el, un

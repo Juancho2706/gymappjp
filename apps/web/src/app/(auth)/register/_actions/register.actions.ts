@@ -26,6 +26,7 @@ import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
 import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
+import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
 
 export type RegisterState = {
     error?: string
@@ -222,15 +223,38 @@ export async function registerAction(
             slug,
             invite_code: inviteCode,
             primary_color: '#1462DC',
-            // Free tier: 'pending_email' until the email-confirm link is clicked, which flips it
-            // to 'active' AND fires the welcome + drip sequence (apps/web/src/app/auth/confirm/route.ts).
-            // Mirrors the mobile free-signup path (api/mobile/auth/register-coach-free); inserting
-            // 'active' here silently skipped welcome/drip for every web free coach.
-            subscription_status: isFreeTier ? 'pending_email' : 'pending_payment',
-            subscription_tier: selectedTier,
-            billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
-            payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
-            max_clients: getTierMaxClients(selectedTier),
+            // ── A1 (ola checkout 25-08): NINGUNA alta nace bloqueada ni con un plan que no pagó ──────
+            // Antes, un alta con tier pago se insertaba con `subscription_status='pending_payment'` +
+            // el tier pago + su cupo, ANTES de cobrar un peso. `pending_payment` es bloqueo DURO sin
+            // gracia (`lib/coach-subscription-gate.ts`): quien dudaba 30 s en MercadoPago y cerraba la
+            // pestaña se quedaba SIN producto — ni panel, ni builder, nada. Medido en prod: ljfitness
+            // (24-08) quedó lockeado y no volvió nunca; nexo-performance (25-08) volvió a los 55 s,
+            // chocó con el gate y se AUTODEGRADÓ a Free para poder entrar. Elegir el plan pago era la
+            // peor decisión que podía tomar un coach nuevo.
+            //
+            // Ahora TODA alta nace con la fila de un alta FREE (tier free, cupo free, provider
+            // 'admin') y la INTENCIÓN de compra viaja aparte, en el intent durable de
+            // `subscription_events` (ver `persistCheckoutIntent` más abajo) — el mismo mecanismo que
+            // la Fase 1 de Flow ya usaba porque su rama free tampoco podía apoyarse en esta fila.
+            // El tier pago lo escriben el webhook / confirm-subscription al CONFIRMAR el pago,
+            // leyendo tier|ciclo del `external_reference` del preapproval. Nadie recibe un plan pago
+            // sin pagarlo, y nadie pierde el producto por abandonar el checkout.
+            //
+            // Lo único que sigue distinguiendo free de pago acá es el CORREO: el tier pago
+            // auto-confirma el email (`email_confirm: true`, arriba) y entra directo al checkout, así
+            // que nace 'active'; el free nace 'pending_email' hasta que hace click en el link, y ese
+            // click es el que dispara bienvenida + drip (apps/web/src/app/auth/confirm/route.ts).
+            // Insertar 'active' en la rama free saltearía welcome/drip para todo coach free web.
+            subscription_status: isFreeTier ? 'pending_email' : 'active',
+            subscription_tier: 'free',
+            billing_cycle: 'monthly',
+            // 'admin' (no el gateway): un alta sin cobro NO es una conversión. La RPC
+            // `get_platform_trial_conversion_rate` cuenta como convertido a todo coach 'active' con
+            // `payment_provider NOT IN ('beta','internal','admin')`; escribir 'mercadopago' acá haría
+            // que cada registro pago ABANDONADO se leyera como venta. Lo pisa create-preference con
+            // el gateway real cuando el coach efectivamente abre un checkout.
+            payment_provider: 'admin',
+            max_clients: getTierMaxClients('free'),
             health_data_consent_at: now,
             marketing_consent: acceptMarketing,
             // New coaches already know their invite code — skip the one-shot migration modal
@@ -239,6 +263,11 @@ export async function registerAction(
                 invite_code_confirmed: true,
                 invite_code_confirmed_at: now,
             },
+            // Anti-abuso del alta FREE (marca de trial usado + IP). Siguen atados a `isFreeTier`, es
+            // decir al plan que el coach ELIGIÓ, no al tier con que nace la fila desde A1: el alta
+            // paga es un lead de compra, no un trial gratuito, y meterla en el conteo de IP podría
+            // rebotar a coaches legítimos de un mismo gimnasio comprando el mismo día. Consecuencia
+            // conocida y aceptada: elegir un plan pago sigue esquivando el tope de 3 free por IP.
             ...(isFreeTier && { trial_used_email: emailNorm }),
             ...(registrationIp && { registration_ip: registrationIp }),
         })
@@ -307,6 +336,34 @@ export async function registerAction(
     // (el canje + disclosure SERNAC + consentimiento ocurren en /processing, antes del primer cobro).
     const couponCode = normalizeCouponCode((formData.get('coupon_code') as string | null) ?? '')
     const couponParam = couponCode ? `&coupon=${encodeURIComponent(couponCode)}` : ''
+
+    // ── A1: la INTENCIÓN de compra, ahora que la fila del coach nace free ────────────────────────
+    // La fila `coaches` ya no dice qué vino a comprar este coach (nace free+active, arriba). Sin
+    // este intent, un alta paga abandonada queda indistinguible de un alta free: no sabríamos qué
+    // ofrecerle en la recuperación ni contra qué plan medir el embudo. Mismo mecanismo/tabla que la
+    // Fase 1 de Flow, en su propio canal (`signup_checkout_intent:<coachId>`), así que no pisa ni
+    // es pisado por el intent del checkout.
+    //
+    // BEST-EFFORT a propósito: el cobro NO depende de esta fila. El tier/ciclo viajan en el query
+    // hacia /processing y, sobre todo, el `external_reference` del preapproval (`coachId|tier|cycle`)
+    // es la fuente de verdad que leen webhook y confirm-subscription. Un fallo acá sería un rastro
+    // perdido, jamás una cuenta a medio crear: por eso NO se hace rollback del alta.
+    const intentPersisted = await persistCheckoutIntent(adminDb, {
+        coachId: authData.user.id,
+        channel: 'signup',
+        provider: process.env.PAYMENT_PROVIDER ?? 'mercadopago',
+        intent: {
+            tier: selectedTier,
+            cycle: selectedBillingCycle,
+            addons: sanitizedAddons,
+            coupon: couponCode || null,
+        },
+    })
+    if (!intentPersisted.ok) {
+        // Solo el código, nunca datos del coach (misma regla que `reject`): estos logs no tienen la
+        // retención acotada de un sistema de datos personales.
+        console.error('[register] checkout_intent_persist_failed', intentPersisted.error)
+    }
 
     // Tier pago: la cuenta ya existe → CompleteRegistration igual. No hay espejo en el browser
     // (el redirect va a /coach/subscription/processing), asi que este evento entra solo por CAPI.

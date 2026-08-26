@@ -439,14 +439,18 @@ describe('POST /api/payments/webhook — primer pago sin order.id escribe el tie
      * este camino — `TIER_ALLOWED_BILLING_CYCLES.free` está vacío (`packages/tiers/index.ts:445`),
      * así que un `approved` que resuelve a free cae a `pending_payment`. El par free + paid-like que
      * sí existe es `trialing`, y es el que prueba el segundo caso.
+     *
+     * A1 (ola checkout 25-08): ese `pending_payment` ya NO se escribe sobre un coach free — era
+     * exactamente el trapdoor (bloqueo duro por un evento que no le dio nada). Lo que se conserva
+     * es la otra mitad del guard: sin plan pago no se mata el drip de venta.
      */
-    it('pago aprobado que resuelve a FREE → queda pending_payment y NO cancela el drip', async () => {
+    it('pago aprobado que resuelve a FREE → NO bloquea al coach (A1) y NO cancela el drip', async () => {
         coachRow = { ...FREE_PENDING_COACH }
         processWebhook.mockResolvedValue({ ...firstPaymentNoOrderId(), subscriptionTier: 'free' })
         const res = await POST(makeRequest())
         expect(res.status).toBe(200)
-        const patch = coachUpdates.find((p) => 'subscription_status' in p)
-        expect(patch!.subscription_status).toBe('pending_payment')
+        // El patch ya no lleva subscription_status: el coach free conserva el estado que tenía.
+        expect(coachUpdates.find((p) => 'subscription_status' in p)).toBeUndefined()
         expect(cancelCoachEmails).not.toHaveBeenCalled()
     })
 
@@ -897,6 +901,80 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
 // El match exacto (checkoutId===coachMpId, ambos non-null) es requisito para aplicar el terminal; el
 // primer pago aprobado sin order.id SIGUE aplicando canonicamente (regresion cubierta arriba).
 // ─────────────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────────────
+// A1 (ola checkout 25-08) — la OTRA mitad del trapdoor del alta paga, la que create-preference no
+// podía cerrar sola. Mercado Pago emite `subscription_preapproval / created` con status 'pending'
+// ~2 s después de crear el preapproval (está en los logs de prod de los dos abandonos de la
+// campaña). `mapProviderStatus('pending')` lo colapsa a 'pending_payment' = bloqueo DURO: un coach
+// FREE que apenas EMPEZABA a pagar quedaba fuera del producto por haber apretado el botón.
+// Contrato nuevo: ningún evento no paid-like puede escribir estado sobre un coach free; el
+// paid-like SÍ lo sube de plan, leyendo tier|cycle del external_reference (nunca del estado previo).
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — A1: un evento no paid-like no bloquea a un coach free', () => {
+    const FREE_ACTIVE_COACH = {
+        id: 'coach-1',
+        created_at: '2026-09-01T00:00:00.000Z',
+        // Desde A1 así nace TODA alta, incluida la que eligió un plan pago en /register.
+        subscription_status: 'active',
+        subscription_tier: 'free',
+        billing_cycle: 'monthly',
+        current_period_end: null,
+        subscription_mp_id: 'preapproval-new',
+        superseded_mp_preapproval_id: null,
+    }
+
+    function preapprovalCreatedPending() {
+        return {
+            accepted: true,
+            coachId: 'coach-1',
+            eventKind: 'preapproval' as const,
+            // Lo que MP manda 2 s después de crear el preapproval, antes de que nadie pague.
+            providerStatus: 'pending',
+            providerCheckoutId: 'preapproval-new',
+        }
+    }
+
+    it('preapproval `pending` sobre coach free+active: NO escribe subscription_status (conserva el producto)', async () => {
+        coachRow = { ...FREE_ACTIVE_COACH }
+        processWebhook.mockResolvedValue(preapprovalCreatedPending())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(coachUpdates.find((p) => p.subscription_status === 'pending_payment')).toBeFalsy()
+        expect(coachUpdates.find((p) => 'subscription_status' in p)).toBeUndefined()
+        // Tampoco le nulea el período (mismo tratamiento que `ignore-free`).
+        expect(coachUpdates.find((p) => 'current_period_end' in p)).toBeUndefined()
+    })
+
+    it('cuando el pago SÍ se confirma, el mismo coach free sube a pro leyendo el external_reference', async () => {
+        coachRow = { ...FREE_ACTIVE_COACH }
+        processWebhook.mockResolvedValue({
+            ...preapprovalCreatedPending(),
+            providerStatus: 'authorized',
+            // tier|cycle del external_reference (`coachId|tier|cycle`), no del estado del coach.
+            subscriptionTier: 'pro' as const,
+            billingCycle: 'monthly' as const,
+            currentPeriodEnd: '2026-09-24T00:00:00.000Z',
+        })
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
+        expect(patch).toBeTruthy()
+        expect(patch!.subscription_status).toBe('active')
+        expect(patch!.billing_cycle).toBe('monthly')
+        expect(patch!.max_clients).toBe(25)
+        expect(patch!.subscription_mp_id).toBe('preapproval-new')
+    })
+
+    it('sin regresión: el mismo evento `pending` sobre un coach PAGO sí escribe pending_payment', async () => {
+        coachRow = { ...PAID_COACH, subscription_mp_id: 'preapproval-new' }
+        processWebhook.mockResolvedValue(preapprovalCreatedPending())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => 'subscription_status' in p)
+        expect(patch!.subscription_status).toBe('pending_payment')
+    })
+})
+
 describe('POST /api/payments/webhook — U1b/U5: eventos MP sobre coach Flow / mp_id nulo', () => {
     function preapprovalCancelled(checkoutId: string) {
         return {

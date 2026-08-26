@@ -162,6 +162,9 @@ beforeEach(() => {
     listLive.mockResolvedValue([])
     countActiveStandaloneClients.mockResolvedValue(0)
     cancelCheckoutAtProvider.mockResolvedValue(undefined)
+    // `vi.clearAllMocks()` limpia llamadas, NO implementaciones: sin este reset, un test que fuerza
+    // el upsert del intent a error (A1) se lo deja roto a todos los siguientes.
+    adminUpsert.mockResolvedValue({ error: null })
     claimUpgradeInFlight.mockResolvedValue(true)
     clearUpgradeInFlight.mockResolvedValue(undefined)
     createCheckout.mockResolvedValue({
@@ -826,14 +829,49 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         expect(intentRow![1]).toMatchObject({ onConflict: 'provider_event_id' })
     })
 
-    it('F2: MercadoPago NO escribe intent (solo Flow lo necesita)', async () => {
+    // A1 (ola checkout 25-08): MP también escribe intent, en SU canal. Antes no lo necesitaba porque
+    // escribía tier/cycle en la fila del coach; desde A1 el alta paga nace free y esta request cae por
+    // la rama `isFreeTierCoach`, que a propósito no toca tier ni cupo → sin intent no queda NADA en
+    // nuestra base diciendo qué plan quería el coach. El canal separado deja intacto lo que lee la
+    // Fase 2 de Flow (`flow_checkout_intent:`).
+    it('A1: MercadoPago escribe su PROPIO intent y jamás el de Flow', async () => {
         currentCoachMaybeSingle.mockResolvedValue({ data: FREE_COACH, error: null })
         const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
         expect(res.status).toBe(200)
-        const intentRow = adminUpsert.mock.calls.find(
+        const flowIntent = adminUpsert.mock.calls.find(
             (c) => String((c[0] as Record<string, unknown>)?.provider_event_id ?? '').startsWith('flow_checkout_intent:')
         )
-        expect(intentRow).toBeFalsy()
+        expect(flowIntent).toBeFalsy()
+        const mpIntent = adminUpsert.mock.calls.find(
+            (c) =>
+                String((c[0] as Record<string, unknown>)?.provider_event_id ?? '').startsWith(
+                    'mercadopago_checkout_intent:'
+                )
+        )
+        expect(mpIntent).toBeTruthy()
+        const row = mpIntent![0] as Record<string, unknown>
+        expect(row.provider_event_id).toBe('mercadopago_checkout_intent:coach-1')
+        expect(row.provider).toBe('mercadopago')
+        // ⚠️ nunca 'pending': ese estado lo usa el cron checkout-abandoned como señal de checkout muerto.
+        expect(row.provider_status).toBe('mercadopago_checkout_intent')
+        expect(row.payload).toMatchObject({ tier: 'pro', cycle: 'monthly', addons: [] })
+        expect(mpIntent![1]).toMatchObject({ onConflict: 'provider_event_id' })
+    })
+
+    it('A1: si el intent MP falla, el checkout NO se tumba (el preapproval ya existe en el gateway)', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: FREE_COACH, error: null })
+        adminUpsert.mockResolvedValue({ error: { message: 'boom' } })
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        expect((await res.json()).checkoutUrl).toBe('https://mp/checkout')
+    })
+
+    it('F2: si el intent de FLOW falla, SÍ es falla dura (la Fase 2 no puede completar el alta)', async () => {
+        flowFlag.enabled = true
+        currentCoachMaybeSingle.mockResolvedValue({ data: FREE_COACH, error: null })
+        adminUpsert.mockResolvedValue({ error: { message: 'boom' } })
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly', gateway: 'flow' }))
+        expect(res.status).toBe(500)
     })
 
     it('F8: reactivación por Flow (canceled → pro) con preapproval MP viejo cuyo cancel FALLA: persiste superseded en la rama flow no-free', async () => {
@@ -980,5 +1018,57 @@ describe('POST /api/payments/create-preference — U2 checkout MP sobre sub Flow
         // status terminal → nada que cancelar en Flow.
         expect(cancelCheckoutAtProvider).not.toHaveBeenCalled()
         expect(createCheckout).toHaveBeenCalledOnce()
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// A1 (ola checkout 25-08) — el alta con tier PAGO del registro llega acá como coach free+active
+// (register.actions ya no la inserta en 'pending_payment'). Esta puerta NO puede volver a
+// degradarla: `pending_payment` es bloqueo duro sin gracia y le sacaría el producto si abandona la
+// pasarela. Y el UPDATE tampoco puede adelantarle tier/cupo: eso lo hace el webhook al confirmar el
+// cobro, leyendo tier|cycle del external_reference.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — A1 alta paga del registro (coach free + active)', () => {
+    beforeEach(() => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: FREE_COACH, error: null })
+    })
+
+    it('NO degrada a pending_payment ni adelanta tier/cupo: solo guarda el ref del checkout', async () => {
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        const payload = lastUpdatePayload()
+        expect(payload).toBeTruthy()
+        // El trapdoor que este fix cierra.
+        expect(payload).not.toHaveProperty('subscription_status')
+        // Nada de entitlements antes del pago.
+        expect(payload).not.toHaveProperty('subscription_tier')
+        expect(payload).not.toHaveProperty('max_clients')
+        expect(payload).not.toHaveProperty('billing_cycle')
+        expect(payload).toHaveProperty('subscription_mp_id', 'preapproval-NEW')
+    })
+
+    it('sin regresión: un coach PAGO no-activo (reactivación canceled) SÍ sigue yendo a pending_payment', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: { ...FREE_COACH, subscription_tier: 'pro', subscription_status: 'canceled' },
+            error: null,
+        })
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        const payload = lastUpdatePayload()
+        // Ya estaba bloqueado antes del click: pending_payment no le quita nada, y esta misma
+        // UPDATE le escribe el tier pedido — dejarlo 'active' le regalaría el plan.
+        expect(payload).toHaveProperty('subscription_status', 'pending_payment')
+        expect(payload).toHaveProperty('subscription_tier', 'pro')
+    })
+
+    // A5: sin tier/cycle en el back_url, el PRIMER checkout_confirmed real de la historia llega con
+    // ambos en null (processing/page.tsx los lee del query) y ese dato se pierde para siempre.
+    it('A5: el back_url de MercadoPago lleva tier y ciclo', async () => {
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'annual' }))
+        expect(res.status).toBe(200)
+        const arg = createCheckout.mock.calls[0][0] as { successUrl: string }
+        expect(arg.successUrl).toContain('/coach/subscription/processing')
+        expect(arg.successUrl).toContain('tier=pro')
+        expect(arg.successUrl).toContain('cycle=annual')
     })
 })
