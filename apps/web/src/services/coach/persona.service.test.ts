@@ -1,12 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getVisibleNavItems } from '@eva/coach-nav'
 import { DOMAIN_ENABLED_KEY } from '@eva/feature-prefs'
+
+type CaptureInput = {
+    event: string
+    distinctId: string
+    properties?: Record<string, string | number | boolean | null>
+    set?: Record<string, string | number | boolean | null>
+}
+const captureMock = vi.hoisted(() => vi.fn<(input: CaptureInput) => Promise<void>>(async () => {}))
+vi.mock('@/lib/posthog/server-capture', () => ({ capturePostHogServerEvent: captureMock }))
+
 import {
     buildPersonaPrefsUpsert,
     disabledDomainsFromPrefs,
     isCoachCreatedAfterPersonaLaunch,
     isPersonaGateExemptPath,
     personaGateApplies,
+    recordOnboardingEvent,
     shouldRedirectToPersona,
     type CoachDomainPrefsRow,
     type PersonaGateInput,
@@ -219,5 +230,117 @@ describe('disabledDomainsFromPrefs → nav por dominio', () => {
         expect(items.map((item) => item.key)).toEqual(
             expect.arrayContaining(['dashboard', 'clients', 'programs', 'nutrition', 'cardio', 'movement']),
         )
+    })
+})
+
+/**
+ * W8.5.2 (= W0.5 de flujo-coach-nuevo): el espejo a PostHog. Lo que se pinnea acá es el CONTRATO —
+ * una fila en PostHog por fila en la tabla, `distinct_id` = coach, `$set { persona }` cuando el
+ * evento la trae, y best-effort de verdad (nada de esto puede romper la acción que lo dispara).
+ */
+describe('recordOnboardingEvent → espejo a PostHog', () => {
+    function fakeAdmin(error: { message: string } | null = null) {
+        const insert = vi.fn(async () => ({ error }))
+        const from = vi.fn(() => ({ insert }))
+        return {
+            db: { from } as unknown as Parameters<typeof recordOnboardingEvent>[0],
+            from,
+            insert,
+        }
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it('espeja con el mismo nombre de evento, sus propiedades y `$set { persona }`', async () => {
+        const admin = fakeAdmin()
+        await recordOnboardingEvent(admin.db, {
+            coachId: 'coach-1',
+            eventType: 'demo_seeded',
+            metadata: { persona: 'strength', demoClientId: 'demo-1', surface: 'web' },
+        })
+
+        expect(admin.from).toHaveBeenCalledWith('coach_onboarding_events')
+        expect(captureMock).toHaveBeenCalledWith({
+            event: 'demo_seeded',
+            distinctId: 'coach-1',
+            properties: {
+                persona: 'strength',
+                demoClientId: 'demo-1',
+                surface: 'web',
+                step_key: 'persona',
+            },
+            set: { persona: 'strength' },
+        })
+    })
+
+    it('el `step_key` de la propiedad es el que quedó en la fila', async () => {
+        const admin = fakeAdmin()
+        await recordOnboardingEvent(admin.db, {
+            coachId: 'coach-1',
+            stepKey: 'vive_tu_app',
+            eventType: 'vive_tu_app_opened',
+            metadata: { surface: 'rn', persona: 'rehab', device: 'mobile' },
+        })
+
+        expect(admin.insert).toHaveBeenCalledWith(
+            expect.objectContaining({ step_key: 'vive_tu_app', event_type: 'vive_tu_app_opened' }),
+        )
+        expect(captureMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: 'vive_tu_app_opened',
+                properties: expect.objectContaining({ step_key: 'vive_tu_app', device: 'mobile' }),
+            }),
+        )
+    })
+
+    it('evento sin `persona` en el metadata: se espeja igual, pero sin `$set`', async () => {
+        const admin = fakeAdmin()
+        await recordOnboardingEvent(admin.db, {
+            coachId: 'coach-1',
+            eventType: 'demo_deleted',
+            metadata: { source: 'mi_panel', deleted: true },
+        })
+
+        expect(captureMock).toHaveBeenCalledWith(
+            expect.objectContaining({ event: 'demo_deleted', set: undefined }),
+        )
+    })
+
+    it('`persona_selected` NO se espeja: ya sale por el capture propio de cada call site', async () => {
+        const admin = fakeAdmin()
+        await recordOnboardingEvent(admin.db, {
+            coachId: 'coach-1',
+            eventType: 'persona_selected',
+            metadata: { persona: 'nutrition', alsoOther: false, surface: 'web' },
+        })
+
+        expect(admin.insert).toHaveBeenCalledTimes(1)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('insert rechazado por la base: no se espeja (la tabla manda)', async () => {
+        const admin = fakeAdmin({ message: 'duplicate key value violates unique constraint' })
+        await recordOnboardingEvent(admin.db, {
+            coachId: 'coach-1',
+            eventType: 'demo_seeded',
+            metadata: { persona: 'strength' },
+        })
+
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('la captura que explota no rompe la acción que la dispara', async () => {
+        captureMock.mockRejectedValueOnce(new Error('posthog caído'))
+        const admin = fakeAdmin()
+
+        await expect(
+            recordOnboardingEvent(admin.db, {
+                coachId: 'coach-1',
+                eventType: 'demo_seeded',
+                metadata: { persona: 'strength' },
+            }),
+        ).resolves.toBeUndefined()
     })
 })

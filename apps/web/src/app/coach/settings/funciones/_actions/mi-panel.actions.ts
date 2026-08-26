@@ -163,6 +163,9 @@ export async function saveMiPanelPersonaAction(input: SaveMiPanelPersonaInput): 
             changed: previous.persona !== persona,
             demo: demo.action,
         },
+        // Sin esto, cambiar de especialidad desde «Mi panel» dejaría el perfil de PostHog con la
+        // persona vieja hasta el próximo demo_seeded (W8.5.2).
+        set: { persona },
     })
 
     revalidateCoachShell()

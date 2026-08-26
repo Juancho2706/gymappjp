@@ -201,6 +201,9 @@ export async function POST(request: NextRequest) {
                 changed: previous.persona !== persona,
                 demo: demo.action,
             },
+            // Sin esto, cambiar de especialidad desde la app dejaría el perfil de PostHog con la
+            // persona vieja hasta el próximo demo_seeded (W8.5.2).
+            set: { persona },
         })
 
         // 200 aunque el ejemplo falle: la especialidad YA quedó guardada y decirle a la app que

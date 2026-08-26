@@ -368,24 +368,90 @@ export interface OnboardingEventInput {
 }
 
 /**
+ * Eventos que NO se espejan a PostHog porque los tres call sites que los emiten YA capturan el
+ * evento por su cuenta, con su propio payload (`also_other` en snake_case): `applyCoachPersona`
+ * acá abajo, `coach/settings/funciones/_actions/mi-panel.actions.ts` y
+ * `api/mobile/coach/persona/route.ts`. Espejarlos duplicaría un evento que ya está en uso.
+ *
+ * Si algún día un call site inserta `persona_selected` SIN capturarlo, se saca de acá (o se le
+ * agrega la captura al call site): la regla es una fila en PostHog por fila en la tabla.
+ */
+const POSTHOG_MIRROR_SKIP: ReadonlySet<string> = new Set(['persona_selected'])
+
+/**
+ * La `persona` que trae el evento, si la trae. Es lo ÚNICO que este punto sabe de la especialidad
+ * del coach: `recordOnboardingEvent` recibe `coachId` y metadata, no el estado de `coaches`. No se
+ * consulta la base para completarla — sería una query extra en el camino crítico de una acción de
+ * usuario, dentro de un helper que existe justamente para ser barato y best-effort.
+ */
+function personaFromEventMetadata(metadata: OnboardingEventInput['metadata']): string | null {
+    const value = metadata?.persona
+    return typeof value === 'string' && value !== '' ? value : null
+}
+
+/**
+ * Espejo del evento a PostHog (W8.5.2 de coach-onboarding-v2 = W0.5 de flujo-coach-nuevo): mismo
+ * nombre de evento, mismas propiedades, `distinct_id` = `coach_id`. Sin esto PostHog solo conoce
+ * `persona_selected` y no hay forma de armar un insight de activación.
+ *
+ * `$set { persona }` cuando el evento la trae: pega la especialidad al PERFIL del coach y con eso
+ * cualquier insight (no solo estos eventos) se desglosa por rama.
+ *
+ * `import()` DINÁMICO a propósito, por lo mismo que en `applyCoachPersona`: `proxy.ts` importa este
+ * módulo por los resolvers puros del gate y `server-capture` es `server-only`.
+ */
+async function mirrorOnboardingEventToPostHog(input: OnboardingEventInput, stepKey: string): Promise<void> {
+    if (POSTHOG_MIRROR_SKIP.has(input.eventType)) return
+    try {
+        const { capturePostHogServerEvent } = await import('@/lib/posthog/server-capture')
+        const persona = personaFromEventMetadata(input.metadata)
+        // `capturePostHogServerEvent` nunca lanza y corta a 1,5 s: se puede esperar sin arriesgar
+        // la acción. El `await` es obligatorio — Vercel congela la invocación al responder y un
+        // fire-and-forget se lleva puesto el POST.
+        await capturePostHogServerEvent({
+            event: input.eventType,
+            distinctId: input.coachId,
+            // `step_key` DESPUÉS del metadata: la propiedad tiene que ser la que quedó en la fila.
+            properties: { ...(input.metadata ?? {}), step_key: stepKey },
+            set: persona ? { persona } : undefined,
+        })
+    } catch (error) {
+        // Solo el `import()` podría llegar acá; la captura ya se traga lo suyo.
+        console.warn('[persona] no se pudo espejar el evento a PostHog', input.eventType, error)
+    }
+}
+
+/**
  * Inserta un evento en `coach_onboarding_events` con el cliente ADMIN (la tabla no tiene grants de
  * INSERT para `authenticated`: el endpoint `/api/coach/onboarding-events` también escribe con
- * service-role). Best-effort: la telemetría NUNCA rompe la acción que la dispara.
+ * service-role) y lo espeja a PostHog. Best-effort de punta a punta: la telemetría NUNCA rompe ni
+ * demora indefinidamente la acción que la dispara.
+ *
+ * El espejo va DESPUÉS del insert y solo si el insert quedó: la tabla es la fuente de verdad y hay
+ * un índice único parcial (`coach_onboarding_events_step_completed_once`) que deduplica los
+ * `step_completed`. Espejar un insert rechazado metería en PostHog filas que la tabla no tiene.
  */
 export async function recordOnboardingEvent(admin: DB, input: OnboardingEventInput): Promise<void> {
+    const stepKey = input.stepKey ?? PERSONA_EVENT_STEP_KEY
     try {
         const { error } = await admin.from('coach_onboarding_events').insert({
             coach_id: input.coachId,
-            step_key: input.stepKey ?? PERSONA_EVENT_STEP_KEY,
+            step_key: stepKey,
             event_type: input.eventType,
             metadata: (input.metadata ?? null) as Json | null,
         })
         // supabase-js NO lanza: el error viaja en la respuesta. El try/catch cubre lo otro
         // (red caída, cliente mal construido).
-        if (error) console.warn('[persona] evento rechazado', input.eventType, error.message)
+        if (error) {
+            console.warn('[persona] evento rechazado', input.eventType, error.message)
+            return
+        }
     } catch (error) {
         console.warn('[persona] no se pudo registrar el evento', input.eventType, error)
+        return
     }
+
+    await mirrorOnboardingEventToPostHog(input, stepKey)
 }
 
 // ── Núcleo compartido web + app ──────────────────────────────────────────────────────────────
@@ -465,11 +531,15 @@ export async function applyCoachPersona(input: ApplyCoachPersonaInput): Promise<
         console.error('[persona] el alumno de ejemplo no se pudo sembrar', seed.reason, seed.detail)
     }
 
+    // `persona_selected` sale por acá y NO por el espejo de `recordOnboardingEvent`
+    // (`POSTHOG_MIRROR_SKIP`): este payload ya está en uso, con `also_other` en snake_case.
+    // El `$set` lo pone este punto justamente porque acá sí se conoce la persona (W8.5.2).
     const { capturePostHogServerEvent } = await import('@/lib/posthog/server-capture')
     await capturePostHogServerEvent({
         event: 'persona_selected',
         distinctId: coachId,
         properties: { persona, also_other: alsoOther, surface },
+        set: { persona },
     })
 
     return { ok: true, demoClientId }

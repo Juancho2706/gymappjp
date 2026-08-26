@@ -38,6 +38,13 @@ export type PostHogServerEvent = {
     /** Persona a la que se le atribuye el evento (en EVA: el `coach_id`). */
     distinctId: string
     properties?: PostHogServerEventProps
+    /**
+     * Propiedades del PERFIL de la persona (`$set` de PostHog), no del evento: quedan pegadas al
+     * `distinct_id` y con eso cualquier insight se puede desglosar por ellas aunque el evento que
+     * se está mirando no las traiga. Se usa para la `persona` del coach (W8.5.2 de
+     * coach-onboarding-v2). Mismo criterio de consentimiento que arriba: nada de PII acá tampoco.
+     */
+    set?: PostHogServerEventProps
 }
 
 function readToken(): string | undefined {
@@ -71,7 +78,11 @@ export async function capturePostHogServerEvent(input: PostHogServerEvent): Prom
                 api_key: token,
                 event: input.event,
                 distinct_id: input.distinctId,
-                properties: { ...input.properties, $lib: 'eva-web-server' },
+                properties: {
+                    ...input.properties,
+                    ...(input.set ? { $set: input.set } : {}),
+                    $lib: 'eva-web-server',
+                },
                 timestamp: new Date().toISOString(),
             }),
             cache: 'no-store',

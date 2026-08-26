@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { recordOnboardingEvent } from '@/services/coach/persona.service'
 import { deleteDemoStudent } from '@/services/onboarding/demo-student.service'
 
 /**
@@ -40,15 +41,14 @@ export async function deleteDemoStudentAction(): Promise<DeleteDemoStudentResult
     }
 
     // Señal de medición del funnel (`demo_deleted`): si falla, el borrado igual valió.
-    const { error: eventError } = await admin.from('coach_onboarding_events').insert({
-        coach_id: user.id,
-        step_key: 'vive_tu_app',
-        event_type: 'demo_deleted',
+    // Va por `recordOnboardingEvent` (y no por un insert directo) para que el espejo a PostHog
+    // de W8.5.2 cubra también este camino; el helper nunca lanza y loguea lo suyo.
+    await recordOnboardingEvent(admin, {
+        coachId: user.id,
+        stepKey: 'vive_tu_app',
+        eventType: 'demo_deleted',
         metadata: { surface: 'web' },
     })
-    if (eventError) {
-        console.error('[demo-student] evento demo_deleted no registrado:', eventError.message)
-    }
 
     revalidatePath('/coach/dashboard')
     revalidatePath('/coach/clients')

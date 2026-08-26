@@ -387,6 +387,8 @@ describe('POST /api/mobile/coach/persona — camino «Mi panel»', () => {
                 changed: true,
                 demo: 'kept',
             },
+            // El $set mantiene la persona del perfil de PostHog al día también desde la app (W8.5.2).
+            set: { persona: 'rehab' },
         })
     })
 
