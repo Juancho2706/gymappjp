@@ -1271,6 +1271,15 @@ main:has(.login-brand) [data-eva-seal] {
   display: none;
 }
 
+/* «Vive tu app» (docs/specs/vive-tu-app-directo §3): el banner de la vista de ejemplo se monta en
+   el layout del alumno, así que también aparecería DENTRO del ejecutor de rutina — una pantalla de
+   pantalla completa que ya apaga el resto del shell. Mismo apagado ESTRUCTURAL que el sello de
+   arriba (por el árbol DOM, nunca por pathname): `.is-workout-page` la pone el wrapper del
+   ejecutor y este layout ya la usa para `has-[.is-workout-page]:pb-0`. */
+main:has(.is-workout-page) [data-demo-banner] {
+  display: none;
+}
+
 /* D2 (con la REVERSA del dueño 2026-08-17): el editor SÍ lleva el sello completo, así
    que mientras [data-qe-overlay] (opaco, fixed z-60) está montado se apagan los blobs
    del shell de ABAJO — no se ven y no queman batería. El overlay monta su PROPIO

@@ -20,6 +20,8 @@ import {
     type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { submitVolverAlPanel } from '@/lib/client/volver-al-panel'
+import type { VtaMode } from '@/lib/auth/vive-tu-app-cookies'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -48,6 +50,12 @@ interface Props {
     showMovement: boolean
     showBodyComposition: boolean
     monthlyRecap: { sessions: number; volumeKg: number; monthLabel: string }
+    /**
+     * «Vive tu app» (docs/specs/vive-tu-app-directo §3): espejo del nav. En sesión de ejemplo
+     * «Cerrar sesión» quemaría el camino de vuelta del coach, así que se reetiqueta y, en modo
+     * `return`, hace `POST /volver-al-panel`. `null` = alumno real.
+     */
+    demoMode?: VtaMode | null
 }
 
 /** Plantillas de share-card que el alumno puede compartir desde el perfil. */
@@ -196,6 +204,7 @@ export function ProfileClient({
     showMovement,
     showBodyComposition,
     monthlyRecap,
+    demoMode = null,
 }: Props) {
     const router = useRouter()
     // Alarma de descanso (sonido del timer de rutina) — preferencia local (localStorage), movida
@@ -230,6 +239,22 @@ export function ProfileClient({
         await supabase.auth.signOut()
         router.push(`${base}/login`)
         router.refresh()
+    }
+
+    // Espejo exacto del nav del alumno: en sesión de ejemplo el gesto obvio no puede quemar el
+    // camino de vuelta del coach (docs/specs/vive-tu-app-directo §3).
+    const exitLabel = demoMode
+        ? demoMode === 'return'
+            ? 'Volver a mi panel'
+            : 'Salir de la vista de ejemplo'
+        : 'Cerrar sesión'
+
+    function handleExit() {
+        if (demoMode === 'return') {
+            submitVolverAlPanel()
+            return
+        }
+        void handleSignOut()
     }
 
     return (
@@ -372,7 +397,7 @@ export function ProfileClient({
                 <div className="mx-3.5 h-px bg-border-subtle" />
                 <Row leadingIcon={CircleHelp} title="Ayuda" href={`mailto:${SALES_EMAIL}?subject=Ayuda`} />
                 <div className="mx-3.5 h-px bg-border-subtle" />
-                <Row leadingIcon={LogOut} title="Cerrar sesión" onClick={handleSignOut} />
+                <Row leadingIcon={LogOut} title={exitLabel} onClick={handleExit} />
             </div>
 
             {/* Zona de peligro */}

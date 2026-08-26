@@ -21,6 +21,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { submitVolverAlPanel } from '@/lib/client/volver-al-panel'
+import type { VtaMode } from '@/lib/auth/vive-tu-app-cookies'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
 import { NavIcon, type NavConcept } from './NavIcon'
@@ -48,13 +50,22 @@ interface Props {
      * (fail-OPEN, espejo de `resolveNutritionDomainEnabled` con flag OFF).
      */
     showNutrition?: boolean
+    /**
+     * «Vive tu app» (docs/specs/vive-tu-app-directo §3): modo del viaje cuando la sesión es el
+     * alumno de EJEMPLO, o sea el propio coach mirando su app. `null` = alumno real.
+     *
+     * Con la sesión demo puesta, «Cerrar sesión» es el gesto obvio para salir — y en modo `return`
+     * QUEMA el camino de vuelta (borra la sesión sin consumir el magic link del coach). Por eso el
+     * mismo botón se reetiqueta y hace lo correcto.
+     */
+    demoMode?: VtaMode | null
 }
 
 // `concept` cablea la silueta propia del CEO (NavIcon, tinte via currentColor).
 // Si falta, se renderiza el `icon` de lucide de siempre (ej. "Aprender").
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; concept?: NavConcept }
 
-export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coachLogoDarkUrl, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coachLogoDarkUrl, showMovement = false, showBodyComposition = false, showNutrition = true, demoMode = null }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
@@ -173,6 +184,23 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
         await supabase.auth.signOut()
         router.push(`${base}/login`)
         router.refresh()
+    }
+
+    // Vista de ejemplo: el mismo botón, otra promesa. `return` = el coach tiene su panel a un POST
+    // de distancia; los otros dos modos solo pueden ofrecerle salir (la vuelta la resuelve la app o
+    // el login de coach).
+    const exitLabel = demoMode
+        ? demoMode === 'return'
+            ? 'Volver a mi panel'
+            : 'Salir de la vista de ejemplo'
+        : 'Cerrar sesión'
+
+    function handleExit() {
+        if (demoMode === 'return') {
+            submitVolverAlPanel()
+            return
+        }
+        void handleSignOut()
     }
 
     // Don't show nav on login, register, onboarding, etc, or during workout execution
@@ -387,15 +415,15 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
                         <ThemeToggle />
                     )}
                     <button
-                        onClick={handleSignOut}
-                        title={isCollapsed ? 'Cerrar sesión' : undefined}
+                        onClick={handleExit}
+                        title={isCollapsed ? exitLabel : undefined}
                         className={cn(
                             'group flex items-center rounded-control text-sm font-medium text-muted transition-all duration-200 hover:bg-destructive/10 hover:text-destructive',
                             isCollapsed ? 'h-10 w-10 justify-center p-0' : 'w-full gap-3 px-3 py-2.5'
                         )}
                     >
                         <NavIcon concept="cerrar-sesion" className="h-4 w-4 flex-shrink-0" />
-                        {!isCollapsed && <span>Cerrar sesión</span>}
+                        {!isCollapsed && <span>{exitLabel}</span>}
                     </button>
                 </div>
             </aside>
@@ -499,12 +527,12 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
                                 signOut del sidebar desktop (Supabase → login del coach). */}
                             <button
                                 type="button"
-                                onClick={handleSignOut}
-                                aria-label="Cerrar sesión"
+                                onClick={handleExit}
+                                aria-label={exitLabel}
                                 className="flex min-h-[44px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
                             >
                                 <NavIcon concept="cerrar-sesion" className="h-5 w-5 flex-shrink-0" />
-                                <span className="truncate">Cerrar sesión</span>
+                                <span className="truncate">{exitLabel}</span>
                             </button>
                         </motion.div>
                     </>

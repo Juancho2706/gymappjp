@@ -26,6 +26,8 @@ import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { buildSealCssVars } from '@/lib/seal-vars'
 import { AppSeal } from '@/components/AppSeal'
 import { STUDENT_ACCESS_COPY, STUDENT_ACCESS_STATE_HEADER } from '@/lib/student-access'
+import { parseVtaMode, VTA_CLIENT_IS_DEMO_HEADER, VTA_MODE_HEADER } from '@/lib/auth/vive-tu-app-cookies'
+import { DemoViewerBanner } from './_components/DemoViewerBanner'
 import { IdentifyStudentOnMount } from '@/components/analytics/IdentifyStudentOnMount'
 import { getClientRootUser } from './_data/client-root.queries'
 
@@ -203,6 +205,12 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const isOrphan = headersList.get('x-workspace-orphan') === 'true'
     const orphanOrgName = decodeBrandHeaderValue(headersList.get('x-orphan-org-name')) ?? ''
     const coachId = headersList.get('x-coach-id') ?? ''
+    // Sesión del alumno de EJEMPLO = el coach mirando su propia app (docs/specs/vive-tu-app-directo
+    // §3). El proxy setea estos headers SIEMPRE en la rama `/c` (vacíos cuando no aplica), así que
+    // nadie los puede falsificar mandándolos a mano. El nav usa el modo para reetiquetar «Cerrar
+    // sesión»: el gesto obvio no puede quemar el camino de vuelta.
+    const isDemoViewer = headersList.get(VTA_CLIENT_IS_DEMO_HEADER) === '1'
+    const demoMode = isDemoViewer ? parseVtaMode(headersList.get(VTA_MODE_HEADER)) : null
     // Ejecutor V3 (E0.7) — preferencia de tema del ejecutor del alumno. Se EXPONE en el árbol /c
     // (data-executor-theme) para que la Ola 2 lo lea; hoy nada lo consume visualmente. No gateado
     // por tier (es una preferencia, no branding). Fail-safe: valor desconocido/ausente => 'coach'.
@@ -409,6 +417,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                             coachBrand={brandName}
                             coachLogoUrl={logoUrl}
                             coachLogoDarkUrl={logoUrlDark || undefined}
+                            demoMode={demoMode}
                         />
                     </Suspense>
                     {/* InstallPrompt se renderiza una sola vez global (root app/layout.tsx) y se
@@ -428,6 +437,14 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                             estructuralmente en globals.css (`main:has(.login-brand)` — D2
                             pre-auth intacto, sin pathname). */}
                         <AppSeal />
+                        {/* Vista de ejemplo: estado visible + salida de un toque. Bajo <Suspense>
+                            por la misma razón que los gates del nav — resuelve el vocabulario de la
+                            persona del coach y ningún await suyo debe frenar a `children`. Se oculta
+                            solo en el ejecutor de rutina (regla `main:has(.is-workout-page)` de
+                            globals.css): esa pantalla es de pantalla completa. */}
+                        <Suspense fallback={null}>
+                            <DemoViewerBanner identifier={coach_slug} />
+                        </Suspense>
                         {isStudentGrace && (
                             <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
                                 {/* info-* = rampa DS fija (nunca white-label): banner discreto, tono

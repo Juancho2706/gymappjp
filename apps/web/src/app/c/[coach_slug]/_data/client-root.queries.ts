@@ -4,6 +4,7 @@ import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { coachIdentifierColumn } from '@/lib/coach/invite-code'
+import { PERSONAS, type Persona } from '@eva/schemas/persona'
 import { isStudentMovementEnabled } from '@/services/assessment/movement-assessment.service'
 import { isStudentBodyCompositionEnabled } from '@/services/bodycomp/body-composition.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
@@ -162,6 +163,33 @@ export const getStudentNutritionNavEnabled = cache(async (): Promise<boolean> =>
         })
     } catch {
         return true
+    }
+})
+
+/**
+ * Persona del coach dueño de la marca que se está viendo, SOLO para el vocabulario del banner de la
+ * vista de ejemplo (docs/specs/vive-tu-app-directo §3): «Así se ve tu app para tus {alumnos}» dice
+ * «pacientes» o «atletas» según la rama del coach (regla de producto 8, `personaNoun`).
+ *
+ * Service-role porque quien pregunta es la sesión del alumno DEMO y `coaches.persona` no está en su
+ * lectura RLS. Se llama ÚNICAMENTE cuando el proxy marcó `x-client-is-demo`, o sea cuando el que
+ * mira es el propio coach: ningún alumno real paga esta lectura. `cache()` la dedupea por request.
+ *
+ * Fail-quiet: sin fila, sin persona o con error devuelve `null` y el banner cae al vocabulario
+ * neutro de `other` («alumnos»), que es exactamente el default del catálogo.
+ */
+export const getDemoViewerPersona = cache(async (coachId: string): Promise<Persona | null> => {
+    if (!coachId) return null
+    try {
+        const { data } = await createServiceRoleClient()
+            .from('coaches')
+            .select('persona')
+            .eq('id', coachId)
+            .maybeSingle()
+        const persona = data?.persona
+        return PERSONAS.includes(persona as Persona) ? (persona as Persona) : null
+    } catch {
+        return null
     }
 })
 

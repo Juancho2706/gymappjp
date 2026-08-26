@@ -1,4 +1,5 @@
 import { ClientNav } from '@/components/client/ClientNav'
+import type { VtaMode } from '@/lib/auth/vive-tu-app-cookies'
 import {
     getStudentMovementNavEnabled,
     getStudentBodyCompositionNavEnabled,
@@ -11,6 +12,11 @@ interface Props {
     coachBrand: string
     coachLogoUrl: string
     coachLogoDarkUrl?: string
+    /**
+     * Modo del viaje «Vive tu app» cuando la sesión es el alumno de EJEMPLO (o sea: el coach
+     * mirando su app). `null` = alumno real, nav de siempre.
+     */
+    demoMode?: VtaMode | null
 }
 
 /**
@@ -31,6 +37,7 @@ export async function ClientNavGates({
     coachBrand,
     coachLogoUrl,
     coachLogoDarkUrl,
+    demoMode = null,
 }: Props) {
     // Espejo de los modulos movement_assessment + body_composition con el contexto del PROPIO
     // alumno (pool => su team; standalone => su coach) — mismo gate que la page.
@@ -52,6 +59,7 @@ export async function ClientNavGates({
             showMovement={showMovement}
             showBodyComposition={showBodyComposition}
             showNutrition={showNutrition}
+            demoMode={demoMode}
         />
     )
 }

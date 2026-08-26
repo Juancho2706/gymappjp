@@ -36,6 +36,14 @@ import {
 } from '@/lib/rate-limit'
 import { getEnterpriseDomain } from '@/lib/enterprise/domain'
 import { encodeBrandHeaderValue } from '@/lib/brand-header-codec'
+import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import {
+    parseVtaMode,
+    VTA_MODE_COOKIE,
+    VTA_CLIENT_IS_DEMO_HEADER,
+    VTA_CLIENT_DISPLAY_NAME_HEADER,
+    VTA_MODE_HEADER,
+} from '@/lib/auth/vive-tu-app-cookies'
 import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 
 type Coach = Tables<'coaches'>
@@ -161,6 +169,16 @@ async function proxyInner(request: NextRequest) {
             const rl = await rateLimitAuth(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
         }
+        // «Volver a mi panel» (docs/specs/vive-tu-app-directo §3): consume un magic link del coach,
+        // así que va throttleado como cualquier POST de auth. NO responde el JSON de
+        // `jsonRateLimited`: el request viene de un `<form>` y el coach vería el objeto crudo en la
+        // cara. 303 al login de coach con el código que ese login sabe explicar.
+        if (pathname === '/volver-al-panel') {
+            const rl = await rateLimitAuth(ip)
+            if (!rl.ok) {
+                return NextResponse.redirect(new URL('/login?error=vive_tu_app_volver', request.url), 303)
+            }
+        }
         // Tighter per-IP limit for account creation (5/hour) — prevents free-tier abuse
         if (pathname === '/register') {
             const rl = await rateLimitSignup(ip)
@@ -178,6 +196,16 @@ async function proxyInner(request: NextRequest) {
             const rl = await rateLimitAdmin(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
         }
+    }
+
+    // «Vive tu app»: estas dos rutas ESCRIBEN la sesión ellas mismas (`verifyOtp`) y son las únicas
+    // del app que cambian de identidad a mitad del request. Si el proxy corre su `createServerClient`
+    // antes, su `setAll` reconstruye la respuesta con la sesión REFRESCADA de quien venía en las
+    // cookies, y Next mergea ese `Set-Cookie` con el que escribe el handler: mismo nombre de cookie,
+    // gana el último y el coach termina logueado como quien no debía. Mismo patrón que
+    // `/api/payments/webhook` de arriba; el rate limit del POST ya corrió.
+    if (pathname === '/vive-tu-app' || pathname === '/volver-al-panel') {
+        return NextResponse.next({ request })
     }
 
     // API routes authenticate themselves (own getUser / Bearer token / CRON_SECRET) and return JSON,
@@ -470,6 +498,39 @@ async function proxyInner(request: NextRequest) {
         const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end' | 'max_clients' | 'created_at' | 'persona'> & { subscription_tier?: string } | null
 
         if (!coach) {
+            // «Vive tu app» (docs/specs/vive-tu-app-directo §3, callejón 6): con la sesión del
+            // alumno DEMO puesta, «atrás» es el gesto #1 en móvil y aterrizaba acá — en un
+            // formulario de alta de coach que INSERTA una fila `coaches` SOBRE el usuario demo.
+            // Cualquier sesión que sea un `clients` (demo o alumno real) vuelve a SU app, nunca al
+            // alta. La lectura vive dentro de este `if`: un coach real tiene fila en `coaches` y
+            // jamás llega hasta acá, así que no cuesta un round-trip en el camino caliente.
+            const proxyAdmin = createServiceRoleClient()
+            const { data: sessionClient } = await proxyAdmin
+                .from('clients')
+                .select('id, coach_id, is_demo')
+                .eq('id', user.id)
+                .maybeSingle()
+
+            if (sessionClient) {
+                let studentIdentifier = ''
+                if (sessionClient.coach_id) {
+                    const { data: clientCoach } = await proxyAdmin
+                        .from('coaches')
+                        .select('id, slug, invite_code')
+                        .eq('id', sessionClient.coach_id)
+                        .maybeSingle()
+                    studentIdentifier = getCoachPublicIdentifier(clientCoach)
+                }
+                const redirectUrl = request.nextUrl.clone()
+                redirectUrl.search = ''
+                // Sin identificador público (coach sin slug ni código: no existe hoy) preferimos el
+                // login antes que el alta: el alta es exactamente el bug que este bloque cierra.
+                redirectUrl.pathname = studentIdentifier
+                    ? `/c/${encodeURIComponent(studentIdentifier)}/dashboard`
+                    : '/login'
+                return NextResponse.redirect(redirectUrl, 303)
+            }
+
             // User is logged in but isn't a coach → send to OAuth onboarding
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/coach/onboarding/complete'
@@ -701,6 +762,11 @@ async function proxyInner(request: NextRequest) {
         // client app builds links under /e/[org_slug].
         const eStr = (v: unknown) => (typeof v === 'string' ? v : '')
         const eRequestHeaders = new Headers(request.headers)
+        // Mismo cinturón anti-spoof que `/c` y `/t`: los headers de la vista de ejemplo se setean
+        // SIEMPRE en vacío, aunque este árbol todavía no monte el banner.
+        eRequestHeaders.set(VTA_CLIENT_IS_DEMO_HEADER, '')
+        eRequestHeaders.set(VTA_CLIENT_DISPLAY_NAME_HEADER, '')
+        eRequestHeaders.set(VTA_MODE_HEADER, '')
         eRequestHeaders.set('x-coach-id', eStr(eCtx.coach_id) || eStr(eCtx.org_id))
         eRequestHeaders.set('x-coach-slug', eStr(eCtx.coach_slug))
         eRequestHeaders.set('x-coach-brand-name', encodeBrandHeaderValue(eStr(eCtx.name) || 'EVA'))
@@ -801,6 +867,13 @@ async function proxyInner(request: NextRequest) {
 
         const tStr = (v: unknown) => (typeof v === 'string' ? v : '')
         const tRequestHeaders = new Headers(request.headers)
+        // El alumno de POOL nunca es un alumno de ejemplo (el demo es del panel personal del coach),
+        // pero este branch REESCRIBE a `/c/**` y comparte layout: sin poner los tres headers en
+        // vacío, el visitante los podría mandar a mano y verse un banner de vista de ejemplo
+        // falsificado. Mismo cinturón que la rama `/c`.
+        tRequestHeaders.set(VTA_CLIENT_IS_DEMO_HEADER, '')
+        tRequestHeaders.set(VTA_CLIENT_DISPLAY_NAME_HEADER, '')
+        tRequestHeaders.set(VTA_MODE_HEADER, '')
         tRequestHeaders.set('x-coach-id', tStr(tCtx.coach_id) || tStr(tCtx.team_id))
         tRequestHeaders.set('x-coach-slug', tStr(tCtx.coach_slug))
         tRequestHeaders.set('x-coach-brand-name', encodeBrandHeaderValue(tStr(tCtx.name) || 'EVA'))
@@ -1030,6 +1103,15 @@ async function proxyInner(request: NextRequest) {
         const requestHeaders = new Headers(request.headers)
         applyBrandHeaders(requestHeaders)
 
+        // «Vive tu app» (docs/specs/vive-tu-app-directo §3): los tres headers del banner de la vista
+        // de ejemplo se setean SIEMPRE, acá, en vacío. `new Headers(request.headers)` copia lo que
+        // mandó el visitante: si solo los escribiéramos cuando la sesión es el demo, cualquiera
+        // podría mandar `x-client-is-demo: 1` a mano y el layout le pintaría el banner con el
+        // nombre que él eligiera. Los valores reales los pisa la rama autenticada de abajo.
+        requestHeaders.set(VTA_CLIENT_IS_DEMO_HEADER, '')
+        requestHeaders.set(VTA_CLIENT_DISPLAY_NAME_HEADER, '')
+        requestHeaders.set(VTA_MODE_HEADER, '')
+
         const buildClientRouteResponse = () => {
             const response = NextResponse.next({ request: { headers: requestHeaders } })
 
@@ -1098,9 +1180,12 @@ async function proxyInner(request: NextRequest) {
                 .catch(() => null)
 
             // Verify the user is a client belonging to this coach (direct or via org membership)
+            // `is_demo, full_name` (docs/specs/vive-tu-app-directo §3): el banner «Estás viendo tu
+            // app como {Nombre}» sale de ESTE select, que ya corría en cada request no-prefetch de
+            // `/c` — datos a costo cero, sin una query nueva por página.
             const { data: rawClientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, org_id, team_id, force_password_change, onboarding_completed, is_active, is_archived')
+                .select('id, coach_id, org_id, team_id, force_password_change, onboarding_completed, is_active, is_archived, is_demo, full_name')
                 .eq('id', user.id)
                 .maybeSingle()
 
@@ -1186,6 +1271,18 @@ async function proxyInner(request: NextRequest) {
             // se mantiene fijo en 'true' para los lectores existentes.
             requestHeaders.set('x-client-use-brand-colors', 'true')
 
+            // Sesión del alumno de EJEMPLO = el coach mirando su propia app. El layout monta el
+            // banner «Estás viendo tu app como {Nombre}» con su salida de un toque. El modo lo fija
+            // `/vive-tu-app` en la cookie `eva_vta_mode` (httpOnly): ausente o basura ⇒ `remote`,
+            // que es el modo que solo ofrece salir por el login y nunca promete un regreso que no
+            // puede cumplir. El nombre pasa por el codec de headers o «María Pérez» llega como
+            // `Mar%C3%ADa%20P%C3%A9rez` (y un emoji tumbaría el middleware entero, incidente 05-08).
+            if (client.is_demo === true) {
+                requestHeaders.set(VTA_CLIENT_IS_DEMO_HEADER, '1')
+                requestHeaders.set(VTA_CLIENT_DISPLAY_NAME_HEADER, encodeBrandHeaderValue(client.full_name ?? ''))
+                requestHeaders.set(VTA_MODE_HEADER, parseVtaMode(request.cookies.get(VTA_MODE_COOKIE)?.value))
+            }
+
             // Gate de suscripcion del COACH (politica CEO 2026-07-18). Un alumno accede si su coach
             // tiene acceso efectivo O esta dentro de la gracia (7 dias desde el fin del periodo
             // pagado, ancla coalesce(paid_access_ended_at, current_period_end)). Post-gracia →
@@ -1234,8 +1331,6 @@ async function proxyInner(request: NextRequest) {
                     if (access.graceEndsAt) requestHeaders.set(STUDENT_ACCESS_GRACE_UNTIL_HEADER, access.graceEndsAt)
                 }
             }
-
-            const response = buildClientRouteResponse()
 
             // Suspend access if archived or inactive
             const isBlocked = client.is_archived === true || client.is_active === false

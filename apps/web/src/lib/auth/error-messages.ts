@@ -27,6 +27,13 @@ const MESSAGES: Record<string, AuthErrorMessage> = {
         coach: 'No pudimos verificar el captcha. Reintenta.',
         enterprise: 'No pudimos verificar el captcha. Reintenta.',
     },
+    // «Vive tu app» (docs/specs/vive-tu-app-directo §3): el coach entró a su app de alumno y el
+    // camino de vuelta ya no sirve — no había cookie de retorno, o `/volver-al-panel` se throttleó.
+    // Solo lo emite ese handler y solo lo renderiza ESTE login (el del coach); el login del alumno
+    // tiene su propio código (`vive_tu_app_expirado`).
+    vive_tu_app_volver: {
+        coach: 'Tu sesión de ejemplo terminó. Entra de nuevo a tu panel.',
+    },
 }
 
 const FALLBACK: AuthErrorMessage = {
@@ -49,4 +56,5 @@ export const AUTH_ERROR_CODES = {
     NO_GOOGLE_ACCOUNT: 'no_google_account',
     SESSION_EXPIRED: 'session_expired',
     CAPTCHA_FAILED: 'captcha_failed',
+    VIVE_TU_APP_VOLVER: 'vive_tu_app_volver',
 } as const

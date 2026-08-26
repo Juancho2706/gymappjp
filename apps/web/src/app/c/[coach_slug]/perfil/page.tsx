@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
+import { parseVtaMode, VTA_CLIENT_IS_DEMO_HEADER, VTA_MODE_HEADER } from '@/lib/auth/vive-tu-app-cookies'
 import type { Metadata } from 'next'
 
 import { getClientBasePath } from '@/lib/client/base-path'
@@ -48,6 +49,12 @@ export default async function ProfilePage({ params }: Props) {
     const coachRow = client.coaches
     const coachBranding = Array.isArray(coachRow) ? coachRow[0] : coachRow
     const brandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name')) || coachBranding?.brand_name || 'tu coach'
+    // Vista de ejemplo (docs/specs/vive-tu-app-directo §3): headers del proxy, siempre seteados en
+    // la rama `/c` — nadie los falsifica mandándolos a mano.
+    const demoMode =
+        headersList.get(VTA_CLIENT_IS_DEMO_HEADER) === '1'
+            ? parseVtaMode(headersList.get(VTA_MODE_HEADER))
+            : null
 
     return (
         <ProfileClient
@@ -61,6 +68,7 @@ export default async function ProfilePage({ params }: Props) {
             showMovement={showMovement}
             showBodyComposition={showBodyComposition}
             monthlyRecap={monthlyRecap}
+            demoMode={demoMode}
         />
     )
 }

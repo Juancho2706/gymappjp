@@ -3,6 +3,7 @@ import { Pause, MessageCircle } from 'lucide-react'
 import { getSuspendedCoachData } from '../_data/client-root.queries'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
+import { SuspendedSignOutButton } from './_components/SuspendedSignOutButton'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -84,14 +85,10 @@ export default async function SuspendedPage({ params, searchParams }: Props) {
                         </a>
                     )}
 
-                    <form action="/auth/signout" method="post">
-                        <button
-                            type="submit"
-                            className="text-text-subtle text-sm font-semibold tracking-wide hover:text-text-muted transition-colors border-b border-subtle pb-0.5"
-                        >
-                            Cerrar sesión
-                        </button>
-                    </form>
+                    <SuspendedSignOutButton
+                        base={base}
+                        className="text-text-subtle text-sm font-semibold tracking-wide hover:text-text-muted transition-colors border-b border-subtle pb-0.5 disabled:opacity-60"
+                    />
                 </div>
             </div>
         )
@@ -140,11 +137,10 @@ export default async function SuspendedPage({ params, searchParams }: Props) {
                     </a>
                 )}
 
-                <form action="/auth/signout" method="post" className="w-full">
-                    <button type="submit" className="w-full py-3 rounded-control text-text-muted font-bold tracking-[-0.01em] hover:bg-surface-sunken hover:text-text-strong transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-                        Cerrar sesión
-                    </button>
-                </form>
+                <SuspendedSignOutButton
+                    base={base}
+                    className="w-full py-3 rounded-control text-text-muted font-bold tracking-[-0.01em] hover:bg-surface-sunken hover:text-text-strong transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60"
+                />
             </div>
         </div>
     )

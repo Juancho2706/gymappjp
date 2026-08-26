@@ -86,6 +86,24 @@ export async function completeOAuthOnboarding(
 
     const adminDb = createServiceRoleClient()
 
+    // Cinturón «Vive tu app» (docs/specs/vive-tu-app-directo §3, callejón 6): con la sesión del
+    // alumno de EJEMPLO puesta en el navegador, «atrás» aterrizaba en este formulario y el insert de
+    // abajo creaba una fila `coaches` CON EL ID DEL DEMO — un usuario que es alumno y coach a la vez,
+    // imposible de deshacer desde el producto. El proxy ya devuelve esas sesiones a su app; esto es
+    // el cinturón del servidor, que es el que escribe.
+    const { data: sessionIsClient } = await adminDb
+        .from('clients')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    if (sessionIsClient) {
+        return reject(
+            'oauth_session_is_client',
+            'Esta sesión es la de tu app de alumno, no la de tu panel. Vuelve a tu panel para seguir.',
+        )
+    }
+
     // Prevent free trial abuse via email normalization
     const { data: existingTrial } = await adminDb
         .from('coaches')
