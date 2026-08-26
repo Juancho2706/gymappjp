@@ -145,15 +145,55 @@ export function selfInviteNote(noun: string, options: { showsCupo: boolean }): s
  */
 export const NAME_PLACEHOLDER = '[nombre]'
 
-/** Mensaje de WhatsApp de ESA persona, con el nombre y el link ya puestos (`@eva/schemas`). */
+/**
+ * Mensaje de WhatsApp de ESA persona, con el nombre y el link ya puestos (`@eva/schemas`).
+ *
+ * `email` y `tempPassword` son OPCIONALES a propósito: con los dos presentes sale la variante que
+ * lleva el acceso adentro; sin alguno, la que manda al alumno a buscar la clave en su correo. Este
+ * builder **no** decide cuál corresponde — lo decide quien sabe si hay teléfono
+ * (`buildWhatsappUrl`, o la pantalla cuando pinta la vista previa).
+ */
 export function buildInviteMessage(
     persona: Persona,
-    vars: { name: string; link: string },
+    vars: { name: string; link: string; email?: string | null; tempPassword?: string | null },
 ): string {
     return formatWhatsappInvite(persona, {
         nombre: vars.name.trim() || NAME_PLACEHOLDER,
         link: vars.link,
+        correo: vars.email,
+        clave: vars.tempPassword,
     })
+}
+
+/**
+ * Dígitos del teléfono del alumno, o `''` si no dio ninguno. Es el destinatario del `wa.me`.
+ *
+ * Existe como export para que la pantalla y `buildWhatsappUrl` decidan la variante del mensaje con
+ * la MISMA cuenta: si la vista previa mostrara la clave y el link enviado no la llevara (o al
+ * revés), el coach mandaría algo distinto de lo que leyó.
+ */
+/**
+ * Umbral espejo del RN (`MIN_PHONE_DIGITS` en `temp-password-copy.ts` / `guided-invite.ts`): menos
+ * de 10 dígitos no es un número marcable — es un tipeo a medias, y `wa.me/<basura>` abriría un chat
+ * inválido CON la credencial en la URL. Un número corto degrada al selector sin clave, igual que
+ * ningún número.
+ */
+const MIN_PHONE_DIGITS = 10
+
+export function whatsappRecipientDigits(phone?: string | null): string {
+    const digits = (phone ?? '').replace(/\D/g, '')
+    return digits.length >= MIN_PHONE_DIGITS ? digits : ''
+}
+
+/**
+ * **Regla dura (SPEC §5, regla 4):** una credencial nunca viaja a un destinatario sin nombre.
+ *
+ * Con teléfono el mensaje va a `wa.me/<digits>`: un chat concreto. Sin teléfono va a
+ * `wa.me/?text=`, que abre el **selector de contactos**, y un toque equivocado entrega acceso a
+ * datos de salud de un tercero (Ley 21.719). Ahí el mensaje sale sin credencial.
+ */
+export function canSendCredentialByWhatsapp(phone?: string | null): boolean {
+    return whatsappRecipientDigits(phone).length > 0
 }
 
 /**
@@ -161,16 +201,31 @@ export function buildInviteMessage(
  *
  * Sin teléfono se abre el selector de contactos de WhatsApp (`wa.me/?text=`), que es el mismo
  * patrón de `InviteStudentSheet`: el teléfono es opcional en el alta y no queremos bloquear el
- * canal más usado por un campo que el alumno todavía no dio.
+ * canal más usado por un campo que el alumno todavía no dio. Lo que SÍ cambia sin teléfono es el
+ * contenido: la credencial se cae del mensaje (regla 4), y por eso el filtro vive acá y no en el
+ * call site — que se olviden de aplicarlo es exactamente la fuga que la regla prohíbe.
+ *
+ * **Regla dura (SPEC §5, regla 10):** el resultado de esta función NO se renderiza como `href`.
+ * La pantalla del alta guiada se graba en PostHog cuando el coach aceptó cookies, y el default
+ * enmascara *inputs*, no `href`s: se arma en el handler del click y se abre ahí mismo.
  */
 export function buildWhatsappUrl(input: {
     persona: Persona
     name: string
     link: string
     phone?: string | null
+    email?: string | null
+    tempPassword?: string | null
 }): string {
-    const digits = (input.phone ?? '').replace(/\D/g, '')
-    const text = encodeURIComponent(buildInviteMessage(input.persona, { name: input.name, link: input.link }))
+    const digits = whatsappRecipientDigits(input.phone)
+    const text = encodeURIComponent(
+        buildInviteMessage(input.persona, {
+            name: input.name,
+            link: input.link,
+            email: digits ? input.email : null,
+            tempPassword: digits ? input.tempPassword : null,
+        })
+    )
     return digits ? `https://wa.me/${digits}?text=${text}` : `https://wa.me/?text=${text}`
 }
 

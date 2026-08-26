@@ -37,6 +37,7 @@ import { createClientAction, type CreateClientState } from '../_actions/clients.
 import {
     buildInviteMessage,
     buildWhatsappUrl,
+    canSendCredentialByWhatsapp,
     DEFAULT_INVITE_CHANNEL,
     firstContentCopy,
     inviteBlockReason,
@@ -308,8 +309,34 @@ export function AddStudentStepper({
     // del coach y el servidor los deja pasar (deuda declarada), así que se avisa sin apagar el CTA.
     const ownInbox = isCoachOwnInbox(email, coachEmail)
     const firstNameOnly = fullName.trim().split(/\s+/)[0] ?? ''
-    const inviteMessage = buildInviteMessage(persona, { name: firstNameOnly, link: loginUrl })
-    const whatsappUrl = buildWhatsappUrl({ persona, name: firstNameOnly, link: loginUrl, phone })
+    // Regla 4 de la SPEC: la credencial viaja SOLO a un destinatario con nombre (`wa.me/<digits>`).
+    // Sin teléfono el link abre el selector de contactos y un toque equivocado entrega acceso a
+    // datos de salud de un tercero. La vista previa usa la MISMA cuenta que `buildWhatsappUrl`
+    // para que el coach lea exactamente lo que va a mandar.
+    const sendsCredential = canSendCredentialByWhatsapp(phone)
+    const inviteMessage = buildInviteMessage(persona, {
+        name: firstNameOnly,
+        link: loginUrl,
+        email: sendsCredential ? email : null,
+        tempPassword: sendsCredential ? tempPassword : null,
+    })
+    // Regla 10 de la SPEC: la URL con la credencial NO se renderiza como `href` — esta pantalla se
+    // graba en PostHog cuando el coach aceptó cookies, y el default enmascara *inputs*, no `href`s
+    // ni texto del DOM. Se arma en el handler del click (`openWhatsapp`), no acá.
+    const openWhatsapp = () => {
+        ph?.capture('invite_whatsapp_opened', { persona, source: 'add_student_stepper' })
+        const url = buildWhatsappUrl({
+            persona,
+            name: firstNameOnly,
+            link: loginUrl,
+            phone,
+            email,
+            tempPassword,
+        })
+        // Si el navegador bloquea la ventana, el CTA no puede quedar muerto: el alta ya ocurrió y
+        // este es el único camino al alumno.
+        if (!window.open(url, '_blank', 'noopener,noreferrer')) window.location.href = url
+    }
 
     // `upgrade_gate_hit` del cupo: mismo dedupe por IDENTIDAD del state que el modal — un segundo
     // intento sí cuenta como segundo choque, los re-renders del mismo rechazo no.
@@ -444,19 +471,19 @@ export function AddStudentStepper({
                         {channel === 'whatsapp' && (
                             <>
                                 <h3 className="text-[14px] font-black text-strong">Mándaselo por WhatsApp</h3>
-                                <p className="mt-1.5 rounded-control bg-surface-sunken p-3 text-[12.5px] leading-relaxed text-body">
+                                {/* `ph-no-capture`: el mensaje lleva la clave temporal del alumno
+                                    cuando hay teléfono, y esta pantalla se graba (regla 10). */}
+                                <p className="ph-no-capture mt-1.5 rounded-control bg-surface-sunken p-3 text-[12.5px] leading-relaxed text-body">
                                     {inviteMessage}
                                 </p>
-                                <a
-                                    href={whatsappUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => ph?.capture('invite_whatsapp_opened', { persona, source: 'add_student_stepper' })}
-                                    className="eva-press mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-control bg-[#25D366] font-ui text-[15px] font-bold text-white"
+                                <button
+                                    type="button"
+                                    onClick={openWhatsapp}
+                                    className="eva-press ph-no-capture mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-control bg-[#25D366] font-ui text-[15px] font-bold text-white"
                                 >
                                     <MessageCircle className="size-5" />
                                     Abrir WhatsApp
-                                </a>
+                                </button>
                             </>
                         )}
                         {channel === 'email' && (
@@ -466,7 +493,10 @@ export function AddStudentStepper({
                                     Enviado a <span className="font-semibold text-strong">{email.trim()}</span> con su
                                     link de acceso y la clave temporal. La cambia al entrar.
                                 </p>
-                                <div className="mt-3 flex items-center gap-2">
+                                {/* La clave se pinta para dictarla, pero NO puede quedar en la
+                                    grabación de sesión (regla 10 de la SPEC): la cuenta maneja
+                                    datos de salud de un tercero (Ley 21.719). */}
+                                <div className="ph-no-capture mt-3 flex items-center gap-2">
                                     <span className="eva-mono flex-1 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-[14px] font-bold text-strong">
                                         {tempPassword}
                                     </span>
@@ -736,12 +766,14 @@ export function AddStudentStepper({
                         </fieldset>
 
                         {channel === 'whatsapp' && (
-                            <p className="mt-3 rounded-control bg-surface-sunken p-3 text-[12px] leading-relaxed text-body">
+                            // Con teléfono la vista previa ya trae usuario y clave: `ph-no-capture`
+                            // (regla 10) igual que el bloque de la vista de éxito.
+                            <p className="ph-no-capture mt-3 rounded-control bg-surface-sunken p-3 text-[12px] leading-relaxed text-body">
                                 {inviteMessage}
                             </p>
                         )}
                         {channel === 'email' && (
-                            <p className="mt-3 text-[12px] leading-snug text-muted">
+                            <p className="ph-no-capture mt-3 text-[12px] leading-snug text-muted">
                                 Clave temporal:{' '}
                                 <span className="eva-mono font-bold text-strong">{tempPassword}</span> — la cambia al
                                 entrar.

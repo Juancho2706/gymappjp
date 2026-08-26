@@ -148,17 +148,35 @@ describe('AddStudentStepper — el coach no se agrega a sí mismo (SPEC «Vive t
 })
 
 describe('AddStudentStepper — canal elegido', () => {
-    it('WhatsApp viene elegido y muestra el mensaje de ESA persona', () => {
+    it('WhatsApp viene elegido y, SIN teléfono, muestra el mensaje sin credencial', () => {
         renderStepper({ persona: 'endurance' })
         fillMinimum('Javiera Soto', 'javi@correo.com')
         const [whatsapp] = screen.getAllByRole('radio')
         expect(whatsapp).toBeChecked()
-        const expected = PERSONA_COPY.endurance.whatsappInvite
+        // Regla 4 de la SPEC: sin teléfono el `wa.me` abre el selector de contactos, así que la
+        // clave NO viaja — y la vista previa dice exactamente lo que se va a mandar.
+        // El mensaje es multilínea: `getByText` normaliza los saltos del DOM a espacios, así que
+        // el esperado se normaliza igual.
+        const expected = PERSONA_COPY.endurance.whatsappInviteSinClave
             .split('{nombre}')
             .join('Javiera')
             .split('{link}')
             .join('https://www.eva-app.cl/c/AB3KP/login')
+            .replace(/\s+/g, ' ')
         expect(screen.getByText(expected)).toBeInTheDocument()
+    })
+
+    it('con teléfono la vista previa suma el usuario y la clave, sin capturarla', () => {
+        renderStepper({ persona: 'endurance' })
+        fillMinimum('Javiera Soto', 'javi@correo.com')
+        fireEvent.change(screen.getByLabelText('Teléfono (WhatsApp)'), {
+            target: { value: '+56 9 1234 5678' },
+        })
+        const preview = screen.getByText(/Tu usuario: javi@correo\.com/)
+        expect(preview).toBeInTheDocument()
+        expect(preview.textContent).toContain('Tu clave temporal:')
+        // Regla 10: el bloque que pinta la credencial queda fuera de la grabación de sesión.
+        expect(preview).toHaveClass('ph-no-capture')
     })
 
     it('elegir «Por correo» cambia el canal y muestra la clave temporal', () => {

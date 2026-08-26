@@ -4,6 +4,7 @@ import {
     artifactNoun,
     buildInviteMessage,
     buildWhatsappUrl,
+    canSendCredentialByWhatsapp,
     countRealClients,
     DEFAULT_INVITE_CHANNEL,
     firstContentCopy,
@@ -17,6 +18,7 @@ import {
     selfInviteNote,
     shouldUseGuidedStepper,
     stepperTitle,
+    whatsappRecipientDigits,
 } from './add-student-invite'
 
 const LINK = 'https://www.eva-app.cl/c/AB3KP/login'
@@ -128,13 +130,31 @@ describe('el coach que se agrega a sí mismo (SPEC «Vive tu app» directo §5)'
 
 describe('mensaje de WhatsApp por persona (@eva/schemas)', () => {
     it.each(PERSONAS)('la rama %s usa SU plantilla, con nombre y link resueltos', (persona: Persona) => {
+        // Sin credencial pasada: la variante honesta («te mandé tu clave al correo»).
         const msg = buildInviteMessage(persona, { name: 'Ana', link: LINK })
         expect(msg).toBe(
-            PERSONA_COPY[persona].whatsappInvite.split('{nombre}').join('Ana').split('{link}').join(LINK)
+            PERSONA_COPY[persona].whatsappInviteSinClave.split('{nombre}').join('Ana').split('{link}').join(LINK)
         )
         expect(msg).not.toContain('{nombre}')
         expect(msg).not.toContain('{link}')
         expect(msg).toContain(LINK)
+    })
+
+    it.each(PERSONAS)('la rama %s con correo y clave arma la variante con credencial', (persona: Persona) => {
+        const msg = buildInviteMessage(persona, {
+            name: 'Ana',
+            link: LINK,
+            email: 'ana@correo.com',
+            tempPassword: 'Ru7-mesa',
+        })
+        expect(msg).toBe(
+            PERSONA_COPY[persona].whatsappInvite
+                .split('{nombre}').join('Ana')
+                .split('{link}').join(LINK)
+                .split('{correo}').join('ana@correo.com')
+                .split('{clave}').join('Ru7-mesa')
+        )
+        expect(msg).not.toMatch(/\{[a-zA-Z]+\}/)
     })
 
     it('las cuatro personas con demo NO comparten el mismo mensaje', () => {
@@ -152,6 +172,8 @@ describe('mensaje de WhatsApp por persona (@eva/schemas)', () => {
 })
 
 describe('buildWhatsappUrl', () => {
+    const CREDENTIALS = { email: 'ana@correo.com', tempPassword: 'Ru7-mesa' }
+
     it('con teléfono arma wa.me/<digits> y codifica el mensaje', () => {
         const url = buildWhatsappUrl({ persona: 'strength', name: 'Ana', link: LINK, phone: '+56 9 1234 5678' })
         expect(url.startsWith('https://wa.me/56912345678?text=')).toBe(true)
@@ -161,6 +183,64 @@ describe('buildWhatsappUrl', () => {
     it('sin teléfono abre el selector de contactos (wa.me/?text=)', () => {
         expect(buildWhatsappUrl({ persona: 'nutrition', name: 'Ana', link: LINK }).startsWith('https://wa.me/?text=')).toBe(true)
         expect(buildWhatsappUrl({ persona: 'nutrition', name: 'Ana', link: LINK, phone: '' }).startsWith('https://wa.me/?text=')).toBe(true)
+    })
+
+    // Callejón 4: el `{link}` es `/c/{código}/login`, que pide correo Y contraseña. Sin la clave en
+    // el mismo chat, el alumno tenía que ir a buscarla a su casilla — el salto de app que mató a
+    // 3 de 8 invitados.
+    it('con teléfono lleva usuario y clave', () => {
+        const url = buildWhatsappUrl({
+            persona: 'strength',
+            name: 'Ana',
+            link: LINK,
+            phone: '+56 9 1234 5678',
+            ...CREDENTIALS,
+        })
+        expect(url.startsWith('https://wa.me/56912345678?text=')).toBe(true)
+        const text = decodeURIComponent(url.split('?text=')[1])
+        expect(text).toContain(LINK)
+        expect(text).toContain('Tu usuario: ana@correo.com')
+        expect(text).toContain('Tu clave temporal: Ru7-mesa')
+    })
+
+    // Regla 4 de SPEC §5: `wa.me/?text=` abre el selector de contactos y un toque equivocado
+    // entrega acceso a datos de salud de un tercero (Ley 21.719). Ni el filtro ni el copy son
+    // opcionales: sin teléfono la credencial NO se arma, aunque el call site la haya pasado.
+    it('sin teléfono no lleva credencial y menciona el correo', () => {
+        for (const phone of [undefined, null, '', '   ', 'sin numero']) {
+            const url = buildWhatsappUrl({ persona: 'strength', name: 'Ana', link: LINK, phone, ...CREDENTIALS })
+            expect(url.startsWith('https://wa.me/?text=')).toBe(true)
+            const text = decodeURIComponent(url.split('?text=')[1])
+            expect(text).toContain(LINK)
+            expect(text).not.toContain('Ru7-mesa')
+            expect(text).not.toContain('ana@correo.com')
+            expect(text).not.toContain('clave temporal')
+            expect(text).toContain('te mandé tu clave al correo')
+        }
+    })
+
+    it('el predicado de la regla 4 es el mismo que aplica la URL', () => {
+        expect(canSendCredentialByWhatsapp('+56 9 1234 5678')).toBe(true)
+        expect(canSendCredentialByWhatsapp('')).toBe(false)
+        expect(canSendCredentialByWhatsapp(null)).toBe(false)
+        expect(canSendCredentialByWhatsapp(undefined)).toBe(false)
+        expect(canSendCredentialByWhatsapp('  +  ')).toBe(false)
+        expect(whatsappRecipientDigits('+56 9 1234 5678')).toBe('56912345678')
+    })
+
+    // Umbral espejo del RN (MIN_PHONE_DIGITS = 10): un número a medias no es un destinatario —
+    // `wa.me/<basura>` abriría un chat inválido CON la clave en la URL. Degrada al selector SIN
+    // credencial, igual que la app.
+    it('un teléfono de menos de 10 dígitos degrada al selector sin credencial', () => {
+        for (const phone of ['123', '+56 9 123', '569123456']) {
+            expect(canSendCredentialByWhatsapp(phone)).toBe(false)
+            const url = buildWhatsappUrl({ persona: 'strength', name: 'Ana', link: LINK, phone, ...CREDENTIALS })
+            expect(url.startsWith('https://wa.me/?text=')).toBe(true)
+            const text = decodeURIComponent(url.split('?text=')[1])
+            expect(text).not.toContain('Ru7-mesa')
+            expect(text).toContain('te mandé tu clave al correo')
+        }
+        expect(canSendCredentialByWhatsapp('5691234567')).toBe(true)
     })
 })
 
