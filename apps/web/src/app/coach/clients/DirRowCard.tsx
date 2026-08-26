@@ -9,6 +9,7 @@ import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { IconButton } from '@/components/ui/icon-button'
 import { cn } from '@/lib/utils'
 import { DemoClientBadge } from './DemoClientBadge'
+import { clientStatusInputFromRow, getClientStatusMeta } from './_lib/client-status'
 
 // ===== severidad / estado helpers (espejo del diseño coach-directory.jsx) =====
 function severityMeta(score: number) {
@@ -50,16 +51,6 @@ function lastLabel(days: number | null) {
     return `Hace ${days}d`
 }
 
-function statusMeta(client: any) {
-    if (client.is_archived === true)
-        return { key: 'archived', label: 'Archivado', cls: 'bg-surface-sunken text-subtle' }
-    if (client.is_active === false)
-        return { key: 'paused', label: 'Pausado', cls: 'bg-[var(--ink-100)] text-[var(--ink-600)]' }
-    if (client.force_password_change)
-        return { key: 'pending_sync', label: 'Pend. sync', cls: 'bg-[var(--info-100)] text-[var(--info-700)]' }
-    return { key: 'active', label: 'Activo', cls: 'bg-[var(--success-100)] text-[var(--success-700)]' }
-}
-
 interface DirRowCardProps {
     client: any
     pulse: DirectoryPulseRow | null | undefined
@@ -95,7 +86,7 @@ export function DirRowCard({
         (pulse?.attentionFlags ?? []).includes('NUTRICION_RIESGO') || nutritionPct < 60
     const hasNutritionData = nutritionPct > 0
 
-    const st = statusMeta(client)
+    const st = getClientStatusMeta(clientStatusInputFromRow(client))
 
     const profileHref = `/coach/clients/${client.id}`
     const archived = client.is_archived === true
@@ -198,7 +189,12 @@ export function DirRowCard({
                         </>
                     ) : null}
                     {st.key !== 'active' ? (
-                        <span className={cn('rounded-pill px-1.5 py-px text-[10.5px] font-bold', st.cls)}>
+                        <span
+                            className={cn(
+                                'whitespace-nowrap rounded-pill px-1.5 py-px text-[10.5px] font-bold',
+                                st.cls
+                            )}
+                        >
                             {st.label}
                         </span>
                     ) : null}

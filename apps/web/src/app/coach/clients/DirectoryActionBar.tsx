@@ -157,13 +157,13 @@ export function DirectoryActionBar({
         review: 'En riesgo',
         on_track: 'On track',
         expired_program: 'Programa vencido',
-        password_reset: 'Pendiente sync',
+        password_reset: 'Todavía no cambió su clave',
         nutrition_low: 'Nutrición baja',
     }
     const statusLabels: Partial<Record<StatusDirectoryFilter, string>> = {
         active: 'Activo',
         paused: 'Pausado',
-        pending_sync: 'Pendiente sync',
+        pending_sync: 'Todavía no cambió su clave',
         archived: 'Archivados',
     }
     const programLabels: Partial<Record<ProgramDirectoryFilter, string>> = {
@@ -292,7 +292,7 @@ export function DirectoryActionBar({
                             [
                                 { v: 'active', l: 'Activo' },
                                 { v: 'paused', l: 'Pausado' },
-                                { v: 'pending_sync', l: 'Pendiente sync' },
+                                { v: 'pending_sync', l: 'Todavía no cambió su clave' },
                                 { v: 'archived', l: 'Archivados', badge: archivedCount },
                             ] as { v: StatusDirectoryFilter; l: string; badge?: number }[]
                         ).map((it) => (

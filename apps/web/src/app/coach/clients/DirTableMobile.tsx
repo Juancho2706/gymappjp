@@ -5,6 +5,7 @@ import { Apple, Check, ChevronDown, ChevronUp, MoreVertical } from 'lucide-react
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectorySortKey } from './directory-types'
 import { cn } from '@/lib/utils'
+import { clientStatusInputFromRow, getClientStatusMeta } from './_lib/client-status'
 
 // ===== DirTable · vista tabla densa (9 columnas, scroll horizontal, Alumno fija) =====
 // Transcripción del DirTable del diseño coach-directory.jsx (L496-579).
@@ -20,7 +21,10 @@ interface ColDef {
 
 const COLS: ColDef[] = [
     { id: 'name', label: 'Alumno', w: 150, sort: 'name_asc', sticky: true, align: 'left' },
-    { id: 'status', label: 'Estado', w: 84, align: 'left' },
+    // El chip honesto («Todavía no cambió su clave», SPEC flujo-coach-nuevo §6) no entra en los
+    // 84 px que alcanzaban para la abreviatura anterior: con la celda fija, el pill se montaba
+    // sobre Score. La tabla ya scrollea horizontal, así que la columna crece en vez de recortar.
+    { id: 'status', label: 'Estado', w: 188, align: 'left' },
     { id: 'score', label: 'Score', w: 64, sort: 'attention_score', align: 'center' },
     { id: 'adh', label: 'Adh.', w: 96, sort: 'adherence_desc', align: 'left' },
     { id: 'weight', label: 'Peso', w: 92, sort: 'weight_delta', align: 'left' },
@@ -40,16 +44,6 @@ function severityCls(score: number) {
     if (score >= 50) return 'bg-[var(--danger-100)] text-[var(--danger-700)]'
     if (score >= 25) return 'bg-[var(--warning-100)] text-[var(--warning-700)]'
     return 'bg-[var(--success-100)] text-[var(--success-700)]'
-}
-
-function statusMeta(client: any) {
-    if (client.is_archived === true)
-        return { label: 'Archivado', cls: 'bg-surface-sunken text-subtle' }
-    if (client.is_active === false)
-        return { label: 'Pausado', cls: 'bg-[var(--ink-100)] text-[var(--ink-600)]' }
-    if (client.force_password_change)
-        return { label: 'Pend. sync', cls: 'bg-[var(--info-100)] text-[var(--info-600)]' }
-    return { label: 'Activo', cls: 'bg-[var(--success-100)] text-[var(--success-700)]' }
 }
 
 function lastDot(days: number) {
@@ -138,7 +132,7 @@ export function DirTableMobile({
                         const p = pulseByClientId[client.id]
                         const score = p?.attentionScore ?? 0
                         const adherence = p?.percentage ?? 0
-                        const st = statusMeta(client)
+                        const st = getClientStatusMeta(clientStatusInputFromRow(client))
                         const nutritionPct = p?.nutritionPercentage ?? 0
                         const nutriRisk =
                             (p?.attentionFlags ?? []).includes('NUTRICION_RIESGO') ||
