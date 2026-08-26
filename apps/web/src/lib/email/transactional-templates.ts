@@ -223,7 +223,7 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú
 </table>
 
 <div style="margin-bottom:20px;">
-  ${ctaButton('Ir a mi dashboard →', ctx.dashboardUrl)}
+  ${ctaButton('Ir a mi guía →', ctx.dashboardUrl)}
 </div>
 
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
