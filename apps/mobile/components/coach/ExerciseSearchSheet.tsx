@@ -1,13 +1,16 @@
 import { forwardRef, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import BottomSheet, { BottomSheetFlatList, type BottomSheetModal } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import { MotiView } from 'moti'
-import { Activity, Check, ChevronUp, Clock, Dumbbell, Eye, Play, Plus, Search, X } from 'lucide-react-native'
+import { Activity, Check, ChevronUp, Clock, Dumbbell, Eye, Plus, Search, X } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme } from '../../context/ThemeContext'
-import { exerciseThumb, filterExercises, youtubeId, MUSCLE_GROUPS, type ExerciseRow } from '../../lib/exercises'
+import { exerciseThumb, filterExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
+import { VideoPlayer } from '../VideoPlayer'
+import { execMediaKind } from '../alumno/workout/v3/ExecMediaV3'
+import { ExerciseFormSheet, type CreatedExercise } from './ExerciseFormSheet'
 import type { BuilderBlock } from '../../lib/plan-builder/types'
 
 const RECENTS_KEY = 'builder_recent_exercises'
@@ -32,7 +35,12 @@ type Ex = Pick<
   | 'equipment'
   | 'cardio_modality'
   | 'exercise_type'
->
+> & {
+  // Recorte del coach: el preview reproduce el MISMO tramo que verá el alumno. Opcionales porque
+  // los "usados recientemente" persistidos en AsyncStorage pueden venir de una versión anterior.
+  video_start_time?: number | null
+  video_end_time?: number | null
+}
 
 function hexToRgba(hex: string, a: number): string {
   const c = hex.replace('#', '')
@@ -65,6 +73,10 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
     const [preview, setPreview] = useState<Ex | null>(null)
     const [addedFlash, setAddedFlash] = useState<Record<string, boolean>>({})
     const snapPoints = useMemo(() => ['12%', '42%', '85%'], [])
+    // Alta guiada desde el vacío: "Crear «término»" abre el formulario con el nombre precargado.
+    // `createName` se congela al abrir para que seguir escribiendo en el buscador no lo pise.
+    const formRef = useRef<BottomSheetModal | null>(null)
+    const [createName, setCreateName] = useState('')
 
     const setRefs = useCallback((r: BottomSheet | null) => {
       localRef.current = r
@@ -152,9 +164,43 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
       )
     }
 
+    /** Abre el formulario de alta con el término buscado ya escrito en el nombre. */
+    function openCreate() {
+      setCreateName(query.trim())
+      formRef.current?.present()
+    }
+
+    /**
+     * El ejercicio recién creado entra DIRECTO al día en curso (misma ruta que elegirlo del
+     * catálogo) y el buscador se limpia: el ejercicio nuevo todavía no está en `exercises` (el
+     * builder recarga el catálogo aparte), así que dejar el término puesto mostraría "sin
+     * resultados" sobre un ejercicio que sí existe. En "Usados recientemente" queda a mano.
+     */
+    function handleCreated(created: CreatedExercise | null) {
+      if (!created) return
+      handleSelect({
+        id: created.id,
+        name: created.name,
+        muscle_group: created.muscle_group,
+        gif_url: created.gif_url ?? null,
+        image_url: created.image_url ?? null,
+        video_url: created.video_url ?? null,
+        video_start_time: created.video_start_time ?? null,
+        video_end_time: created.video_end_time ?? null,
+        secondary_muscles: created.secondary_muscles ?? null,
+        body_part: created.body_part ?? null,
+        equipment: created.equipment ?? null,
+        cardio_modality: created.cardio_modality ?? null,
+        exercise_type: created.exercise_type ?? null,
+      })
+      setQuery('')
+      setCreateName('')
+    }
+
     const pthumb = preview ? exerciseThumb(preview) : null
-    const pyt = preview ? youtubeId(preview.video_url) : null
-    const pIsYt = !!preview && !preview.gif_url && !preview.image_url && !!pyt
+    // Precedencia idéntica a la app del alumno: gif → video directo → YouTube → imagen.
+    const pKind = preview ? execMediaKind(preview) : 'none'
+    const pPlayable = !!preview?.video_url && (pKind === 'video' || pKind === 'youtube')
 
     // Handle custom: grabber + (colapsado) label "Añadir ejercicio · N en {día}".
     const renderHandle = () => (
@@ -247,7 +293,28 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
             </View>
           }
           ListEmptyComponent={
-            <Text className="text-muted font-sans" style={styles.empty}>Sin resultados</Text>
+            <View style={styles.emptyWrap}>
+              <Text className="text-muted font-sans" style={styles.empty}>
+                {query.trim().length >= 2 ? 'Sin resultados en tu catálogo.' : 'Sin resultados'}
+              </Text>
+              {/* Salida del vacío: crear el ejercicio buscado sin abandonar el builder. Al guardar
+                  entra solo al día en curso. */}
+              {query.trim().length >= 2 ? (
+                <TouchableOpacity
+                  onPress={openCreate}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Crear el ejercicio ${query.trim()}`}
+                  className="flex-row items-center justify-center bg-sport-500 rounded-control"
+                  style={styles.emptyBtn}
+                >
+                  <Plus size={16} color={theme.primaryForeground} />
+                  <Text className="text-on-sport font-sans-bold" style={styles.emptyBtnTxt} numberOfLines={1}>
+                    Crear &quot;{query.trim()}&quot;
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           }
         />
 
@@ -260,19 +327,35 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
                 <TouchableOpacity onPress={() => setPreview(null)} hitSlop={8}><X size={20} color={theme.mutedForeground} /></TouchableOpacity>
               </View>
               <Text className="text-sport-600 font-sans-bold" style={styles.pvMuscle}>{preview?.muscle_group}</Text>
-              <View className="bg-surface-sunken" style={styles.pvMedia}>
-                {pthumb ? <Image source={{ uri: pthumb }} style={styles.pvImg} contentFit={pIsYt ? 'cover' : 'contain'} transition={150} /> : <Dumbbell size={40} color={theme.mutedForeground} />}
-                {pIsYt ? <View style={styles.pvPlay} pointerEvents="none"><Play size={20} color="#fff" fill="#fff" /></View> : null}
-              </View>
-              {pIsYt ? (
-                <TouchableOpacity onPress={() => preview?.video_url && Linking.openURL(preview.video_url)} className="flex-row items-center justify-center border border-subtle rounded-control" style={styles.pvYt}>
-                  <Play size={14} color={theme.primary} fill={theme.primary} />
-                  <Text className="text-strong font-sans-bold" style={styles.pvYtTxt}>Ver en YouTube</Text>
-                </TouchableOpacity>
-              ) : null}
+              {/* El video se reproduce ACÁ dentro (`VideoPlayer` resuelve YouTube y mp4/Storage). Antes
+                  el botón "Ver en YouTube" hacía `Linking.openURL` y sacaba al coach de la app en medio
+                  del armado del día. Sin `autoPlay`: póster + play, no pide red hasta el tap. */}
+              {preview && pPlayable ? (
+                <VideoPlayer
+                  url={preview.video_url!}
+                  start={pKind === 'youtube' ? preview.video_start_time ?? null : null}
+                  end={pKind === 'youtube' ? preview.video_end_time ?? null : null}
+                  title={preview.name}
+                  style={styles.pvVideo}
+                />
+              ) : (
+                <View className="bg-surface-sunken" style={styles.pvMedia}>
+                  {pthumb ? <Image source={{ uri: pthumb }} style={styles.pvImg} contentFit="contain" transition={150} /> : <Dumbbell size={40} color={theme.mutedForeground} />}
+                </View>
+              )}
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* Alta guiada de ejercicio desde el vacío del buscador. Se monta con `exercise={null}`
+            (modo creación) y el nombre precargado; al guardar, el ejercicio entra al día. */}
+        <ExerciseFormSheet
+          ref={formRef}
+          exercise={null}
+          initialName={createName}
+          onSaved={handleCreated}
+          onClose={() => setCreateName('')}
+        />
       </BottomSheet>
     )
   }
@@ -295,7 +378,10 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
   recentHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 },
   recentLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
+  emptyWrap: { alignItems: 'center', gap: 12, paddingHorizontal: 8 },
   empty: { textAlign: 'center', fontSize: 14, marginTop: 24 },
+  emptyBtn: { gap: 8, height: 46, paddingHorizontal: 18, maxWidth: '100%' },
+  emptyBtnTxt: { fontSize: 14, flexShrink: 1 },
   row: { gap: 10, paddingHorizontal: 10, paddingVertical: 9 },
   thumb: { width: 40, height: 40, borderRadius: 9, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   thumbImg: { width: 40, height: 40 },
@@ -312,7 +398,7 @@ const styles = StyleSheet.create({
   pvMuscle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginTop: -4 },
   pvMedia: { width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   pvImg: { width: '100%', height: '100%' },
-  pvPlay: { position: 'absolute', width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
-  pvYt: { gap: 8, paddingVertical: 11, marginTop: 4 },
-  pvYtTxt: { fontSize: 14 },
+  // Marco del VideoPlayer: SIN `alignItems:'center'` — ese estilo colapsa el WebView a ancho 0
+  // (gotcha documentado en VideoPlayer.tsx: "el video se escuchaba pero no se veía").
+  pvVideo: { width: '100%', height: 200, marginTop: 4 },
 })

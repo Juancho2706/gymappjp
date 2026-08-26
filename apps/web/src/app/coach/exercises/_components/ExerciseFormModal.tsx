@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState, useTransition } from 'react'
+import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
 import {
     Dialog,
     DialogContent,
@@ -31,6 +31,7 @@ import {
     type ExerciseActionState,
 } from '../_actions/exercises.actions'
 import type { ExerciseCatalogRow } from '../_data/exercises.queries'
+import { createClient } from '@/lib/supabase/client'
 import { ExerciseMediaPicker, type MediaValue } from './ExerciseMediaPicker'
 
 /** Segundos → "m:ss" para los inputs de recorte de video (vacío si null). */
@@ -79,6 +80,17 @@ interface Props {
     open: boolean
     onClose: () => void
     exercise?: ExerciseCatalogRow
+    /**
+     * Nombre precargado al CREAR (se ignora al editar). Lo usan los CTA «Crear "{término}"»
+     * de los empty states de búsqueda: el coach ya escribió el nombre, no lo escribe dos veces.
+     * Debe ser estable mientras el modal esté abierto (congelar el término al abrir).
+     */
+    initialName?: string
+    /**
+     * Tras crear, entrega la fila recién insertada para que el llamador la ponga donde estaba
+     * el coach (el día del builder, el catálogo en curso). Solo se dispara en modo crear.
+     */
+    onCreated?: (exercise: ExerciseCatalogRow) => void
 }
 
 const initialState: ExerciseActionState = {}
@@ -137,10 +149,10 @@ function Field({
     )
 }
 
-export function ExerciseFormModal({ open, onClose, exercise }: Props) {
+export function ExerciseFormModal({ open, onClose, exercise, initialName, onCreated }: Props) {
     const [isPending, startTransition] = useTransition()
     const [media, setMedia] = useState<MediaValue>(() => initialMedia(exercise))
-    const [name, setName] = useState(exercise?.name ?? '')
+    const [name, setName] = useState(exercise?.name ?? initialName ?? '')
     const [secondaryMuscles, setSecondaryMuscles] = useState(exercise?.secondary_muscles?.join(', ') ?? '')
     const [instructions, setInstructions] = useState(exercise?.instructions?.join('\n') ?? '')
     const [videoStart, setVideoStart] = useState(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
@@ -157,7 +169,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
     useEffect(() => {
         setMedia(initialMedia(exercise))
-        setName(exercise?.name ?? '')
+        setName(exercise?.name ?? initialName ?? '')
         setSecondaryMuscles(exercise?.secondary_muscles?.join(', ') ?? '')
         setInstructions(exercise?.instructions?.join('\n') ?? '')
         setVideoStart(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
@@ -165,7 +177,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
         setExerciseType((exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength')
         setCardioModality(((exercise as Record<string, unknown> | undefined)?.cardio_modality as string | null) ?? '')
         setDifficulty(exercise?.difficulty ?? '')
-    }, [exercise])
+    }, [exercise, initialName])
 
     const action = exercise
         ? updateExerciseAction.bind(null, exercise.id)
@@ -194,11 +206,28 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
         })
     }
 
+    // Un solo aviso por creación: `state.success` sigue en true tras el cierre y el callback del
+    // padre puede cambiar de identidad en cada render (insertaría el ejercicio dos veces).
+    const createdNotified = useRef(false)
+
     useEffect(() => {
-        if (state.success) {
-            onClose()
+        if (!state.success) return
+        if (!exercise && state.exerciseId && onCreated && !createdNotified.current) {
+            createdNotified.current = true
+            // La action solo devuelve el id; la fila completa es lo que necesita el builder para
+            // armar el bloque del día sin esperar un refresh del servidor.
+            const supabase = createClient()
+            void supabase
+                .from('exercises')
+                .select('*')
+                .eq('id', state.exerciseId)
+                .single()
+                .then(({ data }) => {
+                    if (data) onCreated(data)
+                })
         }
-    }, [state.success, onClose])
+        onClose()
+    }, [state.success, state.exerciseId, exercise, onCreated, onClose])
 
     const isCardio = exerciseType === 'cardio'
     // Preview de las cajas que verá el alumno: derivado del MOTOR (cardioAxesFor), nunca de una

@@ -12,6 +12,7 @@ import { filterExercises, cn } from '@/lib/utils'
 import { exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { Tables } from '@/lib/database.types'
+import { ExerciseFormModal } from '@/app/coach/exercises/_components/ExerciseFormModal'
 import { getMuscleColor } from './muscle-colors'
 
 type Exercise = Tables<'exercises'>
@@ -146,6 +147,11 @@ export function DraggableExerciseCatalog({
     }
     const [previewExercise, setPreviewExercise] = useState<Exercise | null>(null)
     const [recentIds, setRecentIds] = useState<string[]>([])
+    // Término congelado al abrir el CTA «Crear "…"» del empty state (null = modal cerrado).
+    const [createName, setCreateName] = useState<string | null>(null)
+    // Ejercicios creados desde acá: el builder no recarga sus props a mitad de sesión, así que
+    // el recién creado se muestra en el catálogo en curso hasta el próximo refresh del servidor.
+    const [createdExercises, setCreatedExercises] = useState<Exercise[]>([])
 
     useEffect(() => {
         const loadRecent = () => {
@@ -163,13 +169,21 @@ export function DraggableExerciseCatalog({
         }
     }, [])
 
+    const catalogExercises = useMemo(() => {
+        if (createdExercises.length === 0) return exercises
+        const known = new Set(exercises.map(e => e.id))
+        return [...createdExercises.filter(e => !known.has(e.id)), ...exercises]
+    }, [exercises, createdExercises])
+
     const recentExercises = useMemo(() => {
-        return recentIds.map(id => exercises.find(e => e.id === id)).filter(Boolean) as Exercise[]
-    }, [recentIds, exercises])
+        return recentIds.map(id => catalogExercises.find(e => e.id === id)).filter(Boolean) as Exercise[]
+    }, [recentIds, catalogExercises])
 
     const filteredExercises = useMemo(() => {
-        return filterExercises(exercises, search, selectedMuscle)
-    }, [exercises, search, selectedMuscle])
+        return filterExercises(catalogExercises, search, selectedMuscle)
+    }, [catalogExercises, search, selectedMuscle])
+
+    const trimmedSearch = search.trim()
 
     // ── Flat list for virtualizer ──────────────────────────────────────────
     const listItems = useMemo((): ListItem[] => {
@@ -251,9 +265,28 @@ export function DraggableExerciseCatalog({
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
                 {listItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center opacity-40 text-foreground">
-                        <Search className="w-8 h-8 mb-2" />
-                        <p className="text-xs font-medium">No se encontraron<br />ejercicios</p>
+                    <div className="flex flex-col items-center justify-center py-12 text-center text-foreground">
+                        <Search className="w-8 h-8 mb-2 opacity-40" />
+                        {trimmedSearch ? (
+                            <>
+                                <p className="max-w-full truncate px-2 text-xs font-medium opacity-60">
+                                    No encontramos “{trimmedSearch}”
+                                </p>
+                                {/* El instante exacto de la necesidad: armando la rutina. Crear acá
+                                    evita abandonar el programa para ir a la biblioteca y volver. */}
+                                <button
+                                    type="button"
+                                    onClick={() => setCreateName(trimmedSearch)}
+                                    className="eva-press mt-3 inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-control px-3.5 text-xs font-bold text-primary-foreground shadow-sm transition-transform active:scale-95"
+                                    style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                                >
+                                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="min-w-0 truncate">Crear “{trimmedSearch}”</span>
+                                </button>
+                            </>
+                        ) : (
+                            <p className="text-xs font-medium opacity-40">No se encontraron<br />ejercicios</p>
+                        )}
                     </div>
                 ) : (
                     <div className="min-w-0 max-w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
@@ -300,6 +333,21 @@ export function DraggableExerciseCatalog({
                     Arrastra un ejercicio al día deseado
                 </p>
             </div>
+
+            {/* Crear ejercicio sin salir del builder (CTA del empty state) */}
+            {createName !== null && (
+                <ExerciseFormModal
+                    open
+                    initialName={createName}
+                    onClose={() => setCreateName(null)}
+                    onCreated={(created) => {
+                        setCreatedExercises(prev => [created, ...prev])
+                        // En el sheet móvil el catálogo es "añadir al día": el recién creado entra
+                        // directo donde el coach estaba. En desktop queda listo para arrastrar.
+                        onTapAdd?.(created)
+                    }}
+                />
+            )}
 
             {/* Preview Modal */}
             <Dialog open={!!previewExercise} onOpenChange={() => setPreviewExercise(null)}>

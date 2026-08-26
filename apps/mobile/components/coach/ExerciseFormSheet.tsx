@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ScrollView } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { useSheetKeyboardInset } from '../../lib/use-sheet-keyboard-inset'
@@ -9,6 +9,7 @@ import { ImagePlus, Trash2, X } from 'lucide-react-native'
 import { CARDIO_MODALITY_OPTIONS, EXERCISE_TYPE_OPTIONS, cardioAxisLabels } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, SegmentedTabs, Textarea, VideoPlayer } from '../index'
+import { execMediaKind } from '../alumno/workout/v3/ExecMediaV3'
 import {
   DIFFICULTY_OPTIONS,
   EQUIPMENT_OPTIONS,
@@ -18,6 +19,7 @@ import {
   updateExercise,
   uploadExerciseImage,
   youtubeId,
+  type ExerciseInput,
   type ExerciseRow,
 } from '../../lib/exercises'
 
@@ -47,15 +49,44 @@ function mmssToSeconds(str: string): number | null {
 /** Campo señalado por la validación local (el mensaje se pinta EN el campo, no solo arriba). */
 type FieldError = { field: 'name' | 'muscle' | 'video'; message: string }
 
+/**
+ * Ejercicio recién CREADO. El sheet lo entrega por `onSaved` para que quien lo abrió pueda usarlo
+ * sin esperar una relectura del catálogo — el builder lo inserta directo en el día en curso.
+ * En modo edición `onSaved` recibe `null` (nada que insertar).
+ */
+export type CreatedExercise = ExerciseInput & { id: string }
+
+/** Fuente de la demostración visual. Las tres son EXCLUYENTES (1:1 web `ExerciseMediaPicker`). */
+type MediaTab = 'youtube' | 'gif' | 'image'
+
+const MEDIA_TABS: { value: MediaTab; label: string }[] = [
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'gif', label: 'GIF' },
+  { value: 'image', label: 'Imagen' },
+]
+
+/**
+ * Pestaña inicial: la que GANA en la app del alumno (`execMediaKind`: gif > video > imagen), para
+ * que el coach vea de entrada la fuente que realmente se muestra y no una que quedó tapada.
+ */
+function initialMediaTab(exercise: ExerciseRow | null): MediaTab {
+  if (exercise?.gif_url) return 'gif'
+  if (exercise?.video_url) return 'youtube'
+  if (exercise?.image_url) return 'image'
+  return 'youtube'
+}
+
 interface Props {
   /** Exercise being edited; null = create mode. */
   exercise: ExerciseRow | null
-  onSaved: () => void
+  /** Nombre precargado en modo creación (el catálogo del builder abre "Crear «término»"). */
+  initialName?: string
+  onSaved: (created: CreatedExercise | null) => void
   onClose: () => void
 }
 
 export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function ExerciseFormSheet(
-  { exercise, onSaved, onClose },
+  { exercise, initialName, onSaved, onClose },
   ref
 ) {
   const { theme } = useTheme()
@@ -77,6 +108,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   const [videoEnd, setVideoEnd] = useState('')
   const [gifUrl, setGifUrl] = useState('')
   const [imageUrl, setImageUrl] = useState('')
+  const [mediaTab, setMediaTab] = useState<MediaTab>('youtube')
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -101,7 +133,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setError(null)
     setFieldError(null)
     setSaving(false)
-    setName(exercise?.name ?? '')
+    setName(exercise?.name ?? initialName ?? '')
     setMuscle(exercise?.muscle_group ?? '')
     setExerciseType(exercise?.exercise_type ?? 'strength')
     setCardioModality(exercise?.cardio_modality ?? '')
@@ -114,12 +146,40 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setVideoEnd(secondsToMmss(exercise?.video_end_time))
     setGifUrl(exercise?.gif_url ?? '')
     setImageUrl(exercise?.image_url ?? '')
-  }, [exercise])
+    setMediaTab(initialMediaTab(exercise))
+  }, [exercise, initialName])
 
   /** Salir de cardio limpia la modalidad (la lib también la anula: acá solo espejamos la UI). */
   function changeType(next: string) {
     setExerciseType(next)
     if (next !== 'cardio') setCardioModality('')
+  }
+
+  /**
+   * Cambiar de pestaña LIMPIA las otras dos fuentes (1:1 web `ExerciseMediaPicker:46-55`). Antes las
+   * tres coexistían y la precedencia del alumno (gif > video) decidía en silencio cuál se mostraba.
+   * Como en la web, si la pestaña actual ya tenía algo cargado se pide confirmación antes de botarlo.
+   */
+  function changeMediaTab(next: MediaTab) {
+    if (next === mediaTab) return
+    const loaded = mediaTab === 'youtube' ? videoUrl.trim() : mediaTab === 'gif' ? gifUrl.trim() : imageUrl.trim()
+    const apply = () => {
+      setMediaTab(next)
+      setVideoUrl('')
+      setVideoStart('')
+      setVideoEnd('')
+      setGifUrl('')
+      setImageUrl('')
+    }
+    if (!loaded) { setMediaTab(next); return }
+    Alert.alert(
+      'Cambiar el tipo de medio',
+      'Se descartará lo que ya cargaste en esta pestaña. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Continuar', style: 'destructive', onPress: apply },
+      ]
+    )
   }
 
   async function save() {
@@ -153,10 +213,19 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       video_start_time: startSec,
       video_end_time: endSec,
     }
-    const res = editing ? await updateExercise(exercise!.id, input) : await createExercise(input)
-    setSaving(false)
-    if (!res.ok) { setError(res.error ?? 'No se pudo guardar.'); return }
-    onSaved()
+    if (editing) {
+      const res = await updateExercise(exercise!.id, input)
+      setSaving(false)
+      if (!res.ok) { setError(res.error ?? 'No se pudo guardar.'); return }
+      onSaved(null)
+    } else {
+      const res = await createExercise(input)
+      setSaving(false)
+      if (!res.ok) { setError(res.error ?? 'No se pudo guardar.'); return }
+      // El ejercicio recién creado viaja de vuelta: el catálogo del builder lo inserta en el día
+      // sin esperar a que se recargue el catálogo completo.
+      onSaved(res.id ? { id: res.id, ...input } : null)
+    }
     ;(ref as React.RefObject<BottomSheetModal>).current?.dismiss()
   }
 
@@ -166,11 +235,18 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     const res = await deleteExercise(exercise.id)
     setSaving(false)
     if (!res.ok) { setError(res.error ?? 'No se pudo eliminar.'); return }
-    onSaved()
+    onSaved(null)
     ;(ref as React.RefObject<BottomSheetModal>).current?.dismiss()
   }
 
   const isCardio = exerciseType === 'cardio'
+  const trimmedVideo = videoUrl.trim()
+  const ytId = youtubeId(trimmedVideo)
+  // Clasificación del video con la MISMA precedencia que la app del alumno: 'youtube' o 'video'
+  // (mp4/mov/webm/Storage) son las dos ramas que `VideoPlayer` reproduce; cualquier otra cosa es
+  // una URL que no se va a ver y hay que avisarlo ANTES de guardar (1:1 web `MediaPicker:146`).
+  const videoKind = execMediaKind({ gif_url: null, video_url: trimmedVideo || null })
+  const videoPlayable = videoKind === 'youtube' || videoKind === 'video'
   // Preview de las cajas que verá el alumno: derivado del MOTOR (cardioAxesFor), nunca de una lista
   // local — si el mapa de ejes cambia, estos chips cambian solos.
   const cardioAxisPreview = cardioAxisLabels(cardioModality || null)
@@ -328,69 +404,106 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
           description="Video, GIF o imagen. Es lo primero que ve el alumno antes de ejecutar."
         />
 
-        <Input label="Video (YouTube)" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
+        {/* P1.4 — las tres fuentes son EXCLUYENTES (1:1 web `ExerciseMediaPicker`): solo se edita la
+            pestaña activa y cambiar de pestaña limpia las otras. Antes coexistían y el alumno veía
+            la que ganara por precedencia (gif > video), sin que el coach entendiera por qué. */}
+        <SegmentedTabs items={MEDIA_TABS} value={mediaTab} onChange={changeMediaTab} />
 
-        {/* E5-09: recorte start/end del video (solo YouTube válido). El player loopea [start,end]. */}
-        {youtubeId(videoUrl) ? (
+        {mediaTab === 'youtube' ? (
           <>
-            <View style={styles.trimRow}>
-              <View style={styles.trimCol}>
-                <Input label="Empieza en (m:ss)" value={videoStart} onChangeText={setVideoStart} placeholder="0:20" keyboardType="numbers-and-punctuation" />
-              </View>
-              <View style={styles.trimCol}>
-                <Input
-                  label="Termina en (opcional)"
-                  value={videoEnd}
-                  onChangeText={setVideoEnd}
-                  placeholder="1:30"
-                  keyboardType="numbers-and-punctuation"
-                  error={fieldError?.field === 'video' ? fieldError.message : null}
-                />
-              </View>
-            </View>
-            <Text className="text-muted font-sans" style={styles.hint}>El video loopea ese tramo (salta intro/charla). Vacío = video completo.</Text>
-            <VideoPlayer
-              url={videoUrl}
-              start={mmssToSeconds(videoStart)}
-              end={mmssToSeconds(videoEnd)}
-              title={name || 'Preview del video'}
-              style={styles.trimPreview}
-            />
+            <Input label="Video" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
+            <Text className="text-muted font-sans" style={styles.hint}>
+              Pega el link. El video debe ser Unlisted o Público en YouTube.
+            </Text>
+
+            {/* E5-09: recorte start/end del video (solo YouTube válido). El player loopea [start,end].
+                Un archivo directo (mp4/Storage) se reproduce completo, igual que en la app del alumno. */}
+            {ytId ? (
+              <>
+                <View style={styles.trimRow}>
+                  <View style={styles.trimCol}>
+                    <Input label="Empieza en (m:ss)" value={videoStart} onChangeText={setVideoStart} placeholder="0:20" keyboardType="numbers-and-punctuation" />
+                  </View>
+                  <View style={styles.trimCol}>
+                    <Input
+                      label="Termina en (opcional)"
+                      value={videoEnd}
+                      onChangeText={setVideoEnd}
+                      placeholder="1:30"
+                      keyboardType="numbers-and-punctuation"
+                      error={fieldError?.field === 'video' ? fieldError.message : null}
+                    />
+                  </View>
+                </View>
+                <Text className="text-muted font-sans" style={styles.hint}>El video loopea ese tramo (salta intro/charla). Vacío = video completo.</Text>
+              </>
+            ) : null}
+
+            {/* P1.1 — preview de CUALQUIER video reproducible, no solo YouTube: `VideoPlayer` resuelve
+                las dos ramas (WebView nocookie / expo-video). Sin `autoPlay`: póster + play, no pide
+                red hasta el tap. */}
+            {videoPlayable ? (
+              <VideoPlayer
+                url={trimmedVideo}
+                start={ytId ? mmssToSeconds(videoStart) : null}
+                end={ytId ? mmssToSeconds(videoEnd) : null}
+                title={name || 'Preview del video'}
+                style={styles.trimPreview}
+              />
+            ) : trimmedVideo ? (
+              <Text className="text-warning-600 font-sans" style={styles.hint}>
+                URL inválida. Usa un link de youtube.com / youtu.be o un archivo de video (.mp4).
+              </Text>
+            ) : null}
           </>
         ) : null}
 
-        <Input label="GIF (URL)" value={gifUrl} onChangeText={setGifUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" />
+        {mediaTab === 'gif' ? (
+          <>
+            <Input label="GIF (URL)" value={gifUrl} onChangeText={setGifUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" />
+            {/* P1.2 — preview del GIF: `expo-image` anima GIF/WebP en nativo, no hace falta player. */}
+            {gifUrl.trim() ? (
+              <View className="bg-surface-sunken border border-subtle rounded-control overflow-hidden" style={styles.mediaFrame}>
+                <Image source={{ uri: gifUrl.trim() }} style={{ flex: 1 }} contentFit="contain" transition={150} />
+              </View>
+            ) : null}
+          </>
+        ) : null}
 
-        {/* E-F1: imagen desde el device */}
-        <Label>Imagen del ejercicio</Label>
-        <View style={styles.imgRow}>
-          {imageUrl ? (
-            <View>
-              <Image source={{ uri: imageUrl }} style={[styles.imgThumb, { borderColor: theme.border }]} contentFit="cover" transition={150} />
+        {mediaTab === 'image' ? (
+          <>
+            {/* E-F1: imagen desde el device */}
+            <Label>Imagen del ejercicio</Label>
+            <View style={styles.imgRow}>
+              {imageUrl ? (
+                <View>
+                  <Image source={{ uri: imageUrl }} style={[styles.imgThumb, { borderColor: theme.border }]} contentFit="cover" transition={150} />
+                  <TouchableOpacity
+                    onPress={() => setImageUrl('')}
+                    className="bg-cta-danger items-center justify-center"
+                    style={styles.imgClear}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel="Quitar imagen"
+                  >
+                    <X size={12} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               <TouchableOpacity
-                onPress={() => setImageUrl('')}
-                className="bg-cta-danger items-center justify-center"
-                style={styles.imgClear}
-                hitSlop={6}
+                onPress={pickImage}
+                disabled={uploading}
+                activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Quitar imagen"
+                className="flex-1 flex-row items-center justify-center border border-sport-500/40 bg-sport-100 dark:bg-sport-100/20 rounded-control"
+                style={styles.imgBtn}
               >
-                <X size={12} color="#fff" />
+                {uploading ? <ActivityIndicator size="small" color={theme.primary} /> : <ImagePlus size={18} color={theme.primary} />}
+                <Text className="text-sport-700 font-sans-semibold" style={styles.imgBtnText}>{uploading ? 'Subiendo…' : imageUrl ? 'Cambiar imagen' : 'Subir imagen'}</Text>
               </TouchableOpacity>
             </View>
-          ) : null}
-          <TouchableOpacity
-            onPress={pickImage}
-            disabled={uploading}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            className="flex-1 flex-row items-center justify-center border border-sport-500/40 bg-sport-100 dark:bg-sport-100/20 rounded-control"
-            style={styles.imgBtn}
-          >
-            {uploading ? <ActivityIndicator size="small" color={theme.primary} /> : <ImagePlus size={18} color={theme.primary} />}
-            <Text className="text-sport-700 font-sans-semibold" style={styles.imgBtnText}>{uploading ? 'Subiendo…' : imageUrl ? 'Cambiar imagen' : 'Subir imagen'}</Text>
-          </TouchableOpacity>
-        </View>
+          </>
+        ) : null}
 
         <SectionHeader
           title="Instrucciones"
@@ -491,6 +604,8 @@ const styles = StyleSheet.create({
   trimRow: { flexDirection: 'row', gap: 12 },
   trimCol: { flex: 1 },
   trimPreview: { marginTop: 4 },
+  // Marco 16:9 del preview de GIF — mismo encuadre que el medio de `ExercisePreviewSheet`.
+  mediaFrame: { width: '100%', aspectRatio: 16 / 9, marginTop: 4 },
   imgRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   imgThumb: { width: 64, height: 64, borderRadius: 14, borderWidth: 1 },
   imgClear: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10 },

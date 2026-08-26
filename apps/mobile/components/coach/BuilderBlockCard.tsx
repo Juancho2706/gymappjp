@@ -1,13 +1,14 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Check, ChevronDown, ChevronUp, CircleHelp, GripVertical, Link2, Minus, Plus, Trash2 } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronUp, CircleHelp, GripVertical, Link2, Minus, Play, Plus, Trash2 } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { effectiveExerciseType, typedBlockSummary } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
 import { FONT } from '../../lib/typography'
-import { exerciseThumb } from '../../lib/exercises'
+import { exerciseThumb, type ExerciseRow } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
+import { ExerciseMediaLightbox, isExerciseMediaPlayable, type ExerciseMediaSource } from './ExerciseMediaLightbox'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../lib/exercise-type-meta'
 import { buildMobileAreaVMs, type MobileAreaVM } from '../../lib/builder-area-vm'
 import type { BuilderBlock } from '../../lib/plan-builder/types'
@@ -42,10 +43,11 @@ interface Props {
   onMoveDown?: () => void
   canMoveUp?: boolean
   canMoveDown?: boolean
-  /** Fallback de media desde el catálogo (por exercise_id) cuando el bloque no la trae. */
-  catGif?: string | null
-  catImage?: string | null
-  catVideo?: string | null
+  /**
+   * Fila del catálogo del ejercicio (`catById` del builder). Cubre lo que el bloque no trae:
+   * `image_url` y el recorte `[start,end]` del coach, además de servir de respaldo de gif/video.
+   */
+  catalogRow?: ExerciseRow | null
 }
 
 /** Card de ejercicio 1:1 con la web (ExerciseBlock en `narrowLayout`): borde por músculo,
@@ -53,17 +55,28 @@ interface Props {
  *  con quick-edit / "Incompleto", descanso, superserie, progresión, músculo, selector de área
  *  y ayuda — todo en la MISMA fila envolvente — y una mini-fila inferior con SS (izquierda) y
  *  el tacho de eliminar (derecha). */
-function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, areaVMs, currentAreaId, onSetArea, onToggleSuperset, onTapSuperset, supersetEnabled = false, onMoveUp, onMoveDown, canMoveUp, canMoveDown, catGif, catImage, catVideo }: Props) {
+function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, areaVMs, currentAreaId, onSetArea, onToggleSuperset, onTapSuperset, supersetEnabled = false, onMoveUp, onMoveDown, canMoveUp, canMoveDown, catalogRow }: Props) {
   const { theme } = useTheme()
   const [editing, setEditing] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [areaOpen, setAreaOpen] = useState(false)
+  const [mediaOpen, setMediaOpen] = useState(false)
   const [qs, setQs] = useState(block.sets ?? 3)
   const [qr, setQr] = useState(block.reps ?? '8-10')
   useEffect(() => { setQs(block.sets ?? 3); setQr(block.reps ?? '8-10') }, [block.uid])
 
   const muscle = getMuscleColor(block.muscle_group)
-  const thumb = exerciseThumb({ gif_url: block.gif_url ?? catGif ?? null, image_url: catImage ?? null, video_url: block.video_url ?? catVideo ?? null })
+  // Media del ejercicio: lo que trae el bloque + lo que solo vive en el catálogo (`image_url` y el
+  // recorte del coach). Misma resolución que el editor de bloque y que la app del alumno.
+  const media: ExerciseMediaSource = {
+    gif_url: block.gif_url ?? catalogRow?.gif_url ?? null,
+    image_url: catalogRow?.image_url ?? null,
+    video_url: block.video_url ?? catalogRow?.video_url ?? null,
+    start: catalogRow?.video_start_time ?? null,
+    end: catalogRow?.video_end_time ?? null,
+  }
+  const thumb = exerciseThumb(media)
+  const mediaPlayable = isExerciseMediaPlayable(media)
   const complete = (block.sets ?? 0) > 0 && !!block.reps
 
   // Área efectiva → badge de color (main hereda la marca vía theme.primary).
@@ -91,13 +104,27 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
           <GripVertical size={16} color={theme.mutedForeground} />
         </TouchableOpacity>
 
-        <View style={[styles.thumb, { backgroundColor: hexToRgba(muscle, 0.15) }]}>
+        {/* P2.3: la miniatura abre el MISMO lightbox que el editor de bloque. El medio solo se monta
+            al abrirlo, así que la lista de un día con 12 ejercicios no monta ningún WebView. */}
+        <TouchableOpacity
+          onPress={() => setMediaOpen(true)}
+          disabled={!thumb}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver multimedia de ${block.exercise_name}`}
+          style={[styles.thumb, { backgroundColor: hexToRgba(muscle, 0.15) }]}
+        >
           {thumb ? (
             <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" cachePolicy="memory-disk" recyclingKey={block.uid} />
           ) : (
             <View style={{ width: '100%', height: '100%', backgroundColor: hexToRgba(muscle, 0.22) }} />
           )}
-        </View>
+          {mediaPlayable ? (
+            <View style={styles.thumbPlay} pointerEvents="none">
+              <Play size={11} color="#fff" fill="#fff" />
+            </View>
+          ) : null}
+        </TouchableOpacity>
 
         <View style={styles.body}>
           <TouchableOpacity activeOpacity={0.8} onPress={() => onEdit(block.uid)}>
@@ -230,6 +257,13 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
           </Pressable>
         </Modal>
 
+        <ExerciseMediaLightbox
+          visible={mediaOpen}
+          media={media}
+          title={block.exercise_name}
+          onClose={() => setMediaOpen(false)}
+        />
+
       </View>
     </ScaleDecorator>
   )
@@ -242,9 +276,8 @@ export const BuilderBlockCard = memo(
   (a, b) =>
     a.block === b.block &&
     a.isActive === b.isActive &&
-    a.catGif === b.catGif &&
-    a.catImage === b.catImage &&
-    a.catVideo === b.catVideo &&
+    // Identidad estable: `catById` del builder está memoizado sobre el catálogo.
+    a.catalogRow === b.catalogRow &&
     a.currentAreaId === b.currentAreaId &&
     a.areaVMs === b.areaVMs &&
     a.canMoveUp === b.canMoveUp &&
@@ -260,8 +293,10 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingLeft: 10 },
   body: { flex: 1, minWidth: 0, gap: 6, paddingRight: 10, paddingVertical: 10 },
   grip: { paddingTop: 12 },
-  thumb: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden', marginTop: 10 },
+  thumb: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden', marginTop: 10, alignItems: 'center', justifyContent: 'center' },
   thumbImg: { width: 40, height: 40 },
+  // Badge de play sobre la miniatura: solo cuando el medio se reproduce (gif/video/YouTube).
+  thumbPlay: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 14.5, lineHeight: 18 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
   badge: { borderWidth: 1, borderColor: 'transparent', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },

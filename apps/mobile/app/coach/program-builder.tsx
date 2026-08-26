@@ -1365,9 +1365,7 @@ export default function ProgramBuilderScreen() {
             onMoveDown={() => move(1)}
             canMoveUp={pos > 0}
             canMoveDown={pos < areaBlocks.length - 1}
-            catGif={cat?.gif_url}
-            catImage={cat?.image_url}
-            catVideo={cat?.video_url}
+            catalogRow={cat ?? null}
           />
           {!isLastInArea ? (
             linkedToNext ? (

@@ -115,6 +115,24 @@ export function youtubeThumb(id: string): string {
 }
 
 /**
+ * ¿La URL es un archivo de video reproducible directo (mp4/mov/webm o media de Supabase Storage)?
+ *
+ * MISMO criterio que `execMediaKind` (`components/alumno/workout/v3/ExecMediaV3.tsx`), que es la
+ * fuente de verdad de la precedencia en runtime; el predicado se repite acá porque `lib/` no puede
+ * depender de un componente. Si uno cambia, el otro también.
+ */
+export function isDirectVideoUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  const u = url.toLowerCase()
+  return (
+    u.includes('.mp4') ||
+    u.includes('.mov') ||
+    u.includes('.webm') ||
+    (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
+  )
+}
+
+/**
  * URL de miniatura/preview de un ejercicio: gif → imagen → thumb de YouTube.
  * Muchos ejercicios del sistema traen solo `video_url` (YouTube) → derivamos la
  * miniatura para que la fila no caiga al ícono placeholder.
@@ -262,9 +280,15 @@ export async function listCoachExercises(): Promise<{ exercises: ExerciseRow[]; 
   return { exercises, coachId }
 }
 
-// E-F2: validación de URLs de media (video = YouTube válido; gif/imagen = http(s)).
+// E-F2: validación de URLs de media (video = YouTube o archivo directo; gif/imagen = http(s)).
 function validateExerciseMedia(input: ExerciseInput): string | null {
-  if (input.video_url && !youtubeId(input.video_url)) return 'El video debe ser un enlace de YouTube válido.'
+  // El video acepta YouTube O un archivo reproducible directo (mp4/mov/webm/Storage): son las dos
+  // ramas que `VideoPlayer` sabe reproducir y las dos que el formulario previsualiza. Antes solo
+  // pasaba YouTube, así que "Duplicar a mis ejercicios" fallaba con TODO el catálogo mp4 de
+  // ExerciseDB y un ejercicio propio con mp4 no se podía ni renombrar.
+  if (input.video_url && !youtubeId(input.video_url) && !isDirectVideoUrl(input.video_url)) {
+    return 'El video debe ser un enlace de YouTube o un archivo de video (.mp4).'
+  }
   if (input.gif_url && !/^https?:\/\//i.test(input.gif_url)) return 'La URL del GIF debe empezar con http.'
   if (input.image_url && !/^https?:\/\//i.test(input.image_url)) return 'La URL de la imagen debe empezar con http.'
   const s = input.video_start_time

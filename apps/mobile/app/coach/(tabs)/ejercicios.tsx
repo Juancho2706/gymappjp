@@ -9,7 +9,7 @@ import { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { ChevronRight, Dumbbell, Lock, Plus, Search, Video, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
-import { ScreenHeader, Badge, EmptyState, Card, Input } from '../../../components'
+import { ScreenHeader, Badge, Button, EmptyState, Card, Input } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { toast } from '../../../components/Toast'
@@ -58,6 +58,8 @@ export default function EjerciciosScreen() {
   const [canCreate, setCanCreate] = useState(true)
   const [editTarget, setEditTarget] = useState<ExerciseRow | null>(null)
   const [previewTarget, setPreviewTarget] = useState<ExerciseRow | null>(null)
+  // Nombre precargado al crear desde el empty state («Crear "{término}"»). '' = alta en blanco.
+  const [createName, setCreateName] = useState('')
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'initial') setLoading(true)
@@ -83,6 +85,10 @@ export default function EjerciciosScreen() {
       if (incoming != null && incoming.length > 0) setQuery(incoming)
     }, [params.q])
   )
+
+  // Término del CTA de creación: recortado para que la etiqueta del botón no se parta en dos.
+  const searchTerm = query.trim()
+  const shortTerm = searchTerm.length > 24 ? `${searchTerm.slice(0, 24)}…` : searchTerm
 
   const customCount = useMemo(() => exercises.filter((e) => e.isOwn).length, [exercises])
   const systemCount = exercises.length - customCount
@@ -124,12 +130,13 @@ export default function EjerciciosScreen() {
     return out
   }, [filtered])
 
-  function openCreate() {
+  function openCreate(prefill = '') {
     if (!canCreate) {
       Alert.alert('Sin permiso', 'Tu rol en la organización no permite crear ejercicios. Pide acceso a un administrador.')
       return
     }
     setEditTarget(null)
+    setCreateName(prefill)
     formRef.current?.present()
   }
 
@@ -174,13 +181,22 @@ export default function EjerciciosScreen() {
         title="Ejercicios"
         subtitle={`${exercises.length} en biblioteca · ${customCount} propios`}
         trailing={
+          // Icon-only era invisible para lector de pantalla y ambiguo para el resto: la única
+          // entrada al creador lleva etiqueta visible + rol/label de accesibilidad.
           <TouchableOpacity
-            onPress={openCreate}
+            onPress={() => openCreate()}
             activeOpacity={0.85}
-            className={`items-center justify-center rounded-control ${canCreate ? 'bg-sport-500' : 'bg-surface-sunken'}`}
+            accessibilityRole="button"
+            accessibilityLabel="Crear ejercicio"
+            accessibilityHint={canCreate ? undefined : 'Tu rol en la organización no permite crear ejercicios'}
+            accessibilityState={{ disabled: !canCreate }}
+            className={`flex-row items-center justify-center rounded-control ${canCreate ? 'bg-sport-500' : 'bg-surface-sunken'}`}
             style={styles.headerBtn}
           >
-            {canCreate ? <Plus size={20} color={theme.primaryForeground} /> : <Lock size={16} color={theme.mutedForeground} />}
+            {canCreate ? <Plus size={18} color={theme.primaryForeground} /> : <Lock size={16} color={theme.mutedForeground} />}
+            <Text className={`${canCreate ? 'text-on-sport' : 'text-muted'} font-sans-bold`} style={styles.headerBtnText}>
+              Crear
+            </Text>
           </TouchableOpacity>
         }
       />
@@ -253,7 +269,30 @@ export default function EjerciciosScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={theme.primary} />}
           ListEmptyComponent={
             <View style={{ paddingTop: 48 }}>
-              <EmptyState icon={Dumbbell} title="Sin ejercicios" subtitle={query || muscle || source !== 'all' || videoOnly ? 'Prueba otro filtro o búsqueda.' : 'Crea tu primer ejercicio personalizado.'} />
+              {/* Con término buscado el empty ofrece crearlo con el nombre ya cargado (mismo
+                  patrón que FoodSearchSheet en alimentos). Sin término queda el texto de siempre. */}
+              <EmptyState
+                icon={Dumbbell}
+                title={searchTerm ? `No encontramos "${shortTerm}"` : 'Sin ejercicios'}
+                subtitle={
+                  searchTerm
+                    ? 'Créalo con tu propio video de YouTube, o prueba otro filtro.'
+                    : muscle || source !== 'all' || videoOnly
+                      ? 'Prueba otro filtro o búsqueda.'
+                      : 'Crea tu primer ejercicio personalizado.'
+                }
+                action={
+                  searchTerm && canCreate ? (
+                    <Button
+                      label={`Crear "${shortTerm}"`}
+                      variant="sport"
+                      size="md"
+                      leftIcon={Plus}
+                      onPress={() => openCreate(searchTerm)}
+                    />
+                  ) : undefined
+                }
+              />
             </View>
           }
         />
@@ -266,7 +305,13 @@ export default function EjerciciosScreen() {
         onClone={handleCloneFromPreview}
         onClose={() => setPreviewTarget(null)}
       />
-      <ExerciseFormSheet ref={formRef} exercise={editTarget} onSaved={() => load('refresh')} onClose={() => setEditTarget(null)} />
+      <ExerciseFormSheet
+        ref={formRef}
+        exercise={editTarget}
+        initialName={createName}
+        onSaved={() => load('refresh')}
+        onClose={() => setEditTarget(null)}
+      />
     </SafeAreaView>
   )
 }
@@ -349,7 +394,8 @@ const ExerciseCard = memo(function ExerciseCard({ row, onOpen }: { row: Exercise
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  headerBtn: { width: 40, height: 40 },
+  headerBtn: { height: 40, paddingHorizontal: 12, gap: 6 },
+  headerBtnText: { fontSize: 13 },
   tabsWrap: { paddingHorizontal: 16, paddingBottom: 10 },
   tabs: { padding: 3, gap: 3 },
   tab: { paddingVertical: 7, borderRadius: 11 },

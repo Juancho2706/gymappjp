@@ -4,13 +4,14 @@ import type { ScrollView } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { useSheetKeyboardInset } from '../../lib/use-sheet-keyboard-inset'
 import { Image } from 'expo-image'
-import { Check, ChevronDown, Dumbbell, History, Info, Link2, Lock, Minus, Plus, Trash2 } from 'lucide-react-native'
+import { Check, ChevronDown, Dumbbell, History, Info, Link2, Lock, Minus, Play, Plus, Trash2 } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 import { FONT } from '../../lib/typography'
 import { Switch } from '../Switch'
-import { exerciseThumb } from '../../lib/exercises'
+import { exerciseThumb, type ExerciseRow } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
+import { ExerciseMediaLightbox, isExerciseMediaPlayable, type ExerciseMediaSource } from './ExerciseMediaLightbox'
 import {
   EXERCISE_TYPES,
   INTERVAL_TEMPLATES,
@@ -56,6 +57,12 @@ interface Props {
   onMoveToDay?: (uid: string, targetDayId: number) => void
   /** Si hay alumno, muestra el historial del ejercicio (última sesión, solo fuerza). */
   clientId?: string
+  /**
+   * Fila del catálogo del ejercicio (`catById` del builder). El `BuilderBlock` solo transporta
+   * `gif_url`/`video_url`, así que de acá salen `image_url` y el recorte `[start,end]` del coach
+   * para que el coach vea EXACTAMENTE el medio que verá el alumno.
+   */
+  catalogRow?: ExerciseRow | null
 }
 
 const PROGRESSIONS: { value: 'none' | 'weight' | 'reps'; label: string }[] = [
@@ -74,7 +81,7 @@ const SIDE_MODE_OPTS: { value: 'bilateral' | 'per_side' | 'alternating' | null; 
 ]
 
 export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function BlockEditorSheet(
-  { block, onChange, onRemove, onToggleOverride, onToggleSuperset, onClose, areaVMs, onSetArea, cardioEnabled, days, currentDayId, onMoveToDay, clientId },
+  { block, onChange, onRemove, onToggleOverride, onToggleSuperset, onClose, areaVMs, onSetArea, cardioEnabled, days, currentDayId, onMoveToDay, clientId, catalogRow },
   ref
 ) {
   const { theme } = useTheme()
@@ -83,8 +90,10 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
   const [draft, setDraft] = useState<BuilderBlock | null>(block)
   const [history, setHistory] = useState<{ date: string; sets: number; maxKg: number } | null>(null)
   const [areaOpen, setAreaOpen] = useState(false)
+  const [mediaOpen, setMediaOpen] = useState(false)
 
-  useEffect(() => { setDraft(block) }, [block])
+  // El lightbox no sobrevive al cambio de bloque (el estado persiste entre aperturas del sheet).
+  useEffect(() => { setDraft(block); setMediaOpen(false) }, [block])
 
   const draftType: ExerciseType = draft
     ? effectiveExerciseType(draft, { exercise_type: draft.exercise_type })
@@ -135,6 +144,18 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
   }
 
   const progression = draft.progression_type ?? 'none'
+  // Multimedia del ejercicio: el catálogo manda (trae `image_url` y el recorte del coach, que el
+  // `BuilderBlock` no transporta) y el bloque queda de respaldo. Antes `image_url` iba hardcodeado
+  // en null, así que un ejercicio con SOLO imagen caía al icono de mancuerna.
+  const media: ExerciseMediaSource = {
+    gif_url: catalogRow?.gif_url ?? draft.gif_url ?? null,
+    image_url: catalogRow?.image_url ?? null,
+    video_url: catalogRow?.video_url ?? draft.video_url ?? null,
+    start: catalogRow?.video_start_time ?? null,
+    end: catalogRow?.video_end_time ?? null,
+  }
+  const thumb = exerciseThumb(media)
+  const mediaPlayable = isExerciseMediaPlayable(media)
   const vms = areaVMs && areaVMs.length ? areaVMs : buildMobileAreaVMs([])
   const currentArea: MobileAreaVM | undefined =
     vms.find((v) => v.id === (draft.section_template_id ?? null)) ?? vms.find((v) => v.slug === 'main') ?? vms[0]
@@ -164,13 +185,27 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
       >
         {(() => {
           const muscle = getMuscleColor(draft.muscle_group)
-          const thumb = exerciseThumb({ gif_url: draft.gif_url ?? null, image_url: null, video_url: draft.video_url ?? null })
           return (
             <View style={styles.header}>
-              <View style={[styles.thumb, { backgroundColor: hexToRgba(muscle, 0.15) }]}>
+              {/* P2.1: la miniatura ABRE el medio a pantalla completa (lightbox). Se prefiere el tap
+                  explícito a un marco 16:9 permanente porque este sheet ya scrollea y un marco fijo
+                  montaría un WebView de YouTube cada vez que el coach toca un bloque del día. */}
+              <TouchableOpacity
+                onPress={() => setMediaOpen(true)}
+                disabled={!thumb}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Ver multimedia de ${draft.exercise_name}`}
+                style={[styles.thumb, { backgroundColor: hexToRgba(muscle, 0.15) }]}
+              >
                 {thumb ? <Image source={{ uri: thumb }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={120} />
                   : <Dumbbell size={22} color={muscle} />}
-              </View>
+                {mediaPlayable ? (
+                  <View style={styles.thumbPlay} pointerEvents="none">
+                    <Play size={12} color="#fff" fill="#fff" />
+                  </View>
+                ) : null}
+              </TouchableOpacity>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={[styles.name, { color: theme.foreground, fontFamily: FONT.display }]} numberOfLines={2}>{draft.exercise_name}</Text>
                 <View style={styles.muscleRow}>
@@ -181,6 +216,13 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
             </View>
           )
         })()}
+
+        <ExerciseMediaLightbox
+          visible={mediaOpen}
+          media={media}
+          title={draft.exercise_name}
+          onClose={() => setMediaOpen(false)}
+        />
 
         {history ? (
           <View style={[styles.histRow, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
@@ -711,6 +753,8 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingBottom: 40, gap: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   thumb: { width: 52, height: 52, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  // Badge de play sobre la miniatura: solo cuando el medio se reproduce (gif/video/YouTube).
+  thumbPlay: { position: 'absolute', width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 17, lineHeight: 21 },
   muscleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mDot: { width: 8, height: 8, borderRadius: 4 },

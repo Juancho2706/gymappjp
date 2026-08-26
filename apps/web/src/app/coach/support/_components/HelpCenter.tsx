@@ -22,7 +22,12 @@ type Guide = {
     /** CTA opcional al pie de la tarjeta: hoy solo «Primeros pasos» tiene a dónde mandar. */
     cta?: { href: string; label: string }
 }
-type Faq = { q: string; a: string }
+type Faq = {
+    q: string
+    a: string
+    /** CTA opcional al pie de la respuesta: cuando la respuesta tiene un lugar concreto a dónde ir. */
+    cta?: { href: string; label: string }
+}
 
 /**
  * «Primeros pasos» = LOS MISMOS 5 verbos de la guía del dashboard, leídos de `@eva/onboarding`
@@ -135,6 +140,13 @@ const FAQS: Faq[] = [
     {
         q: '¿Qué es una superserie y cómo la armo?',
         a: 'Es un grupo de ejercicios que se ejecutan seguidos. En el builder, usa el botón "Superserie" entre dos bloques de la misma área para enlazarlos.',
+    },
+    {
+        q: '¿Puedo crear un ejercicio con mi propio video?',
+        // G4 del mapa del creador de ejercicios: YouTube está soportado end-to-end desde siempre
+        // (URL + recorte + embed en la app del alumno); lo que faltaba era decirlo en algún lado.
+        a: 'Sí. En Programas › "Lista de ejercicios" toca "Crear ejercicio", pon el nombre y el grupo muscular, y pega el link de YouTube (sirve un video Público o No listado). Puedes recortar el tramo que se repite en bucle. Y si buscas un ejercicio que no existe —en tu biblioteca o en el builder— el propio buscador te ofrece crearlo con ese nombre.',
+        cta: { href: '/coach/exercises', label: 'Ir a mis ejercicios' },
     },
     {
         q: '¿Cómo funciona la adherencia?',
@@ -318,7 +330,18 @@ export function HelpCenter({
                                                     />
                                                 </button>
                                                 {isOpen ? (
-                                                    <p className="px-3.5 pb-3.5 text-[13px] leading-relaxed text-muted">{f.a}</p>
+                                                    <div className="px-3.5 pb-3.5">
+                                                        <p className="text-[13px] leading-relaxed text-muted">{f.a}</p>
+                                                        {f.cta ? (
+                                                            <Link
+                                                                href={f.cta.href}
+                                                                className="mt-1 inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-control text-[13px] font-bold text-[var(--sport-600)] hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                                                            >
+                                                                {f.cta.label}
+                                                                <ArrowRight className="size-4 shrink-0" aria-hidden />
+                                                            </Link>
+                                                        ) : null}
+                                                    </div>
                                                 ) : null}
                                             </div>
                                         )

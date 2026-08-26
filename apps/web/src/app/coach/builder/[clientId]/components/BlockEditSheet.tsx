@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { Lock, Minus, Plus } from 'lucide-react'
+import { Lock, Minus, Play, Plus } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Input } from '@/components/ui/input'
 import { ClampedIntInput } from '@/components/ui/clamped-int-input'
@@ -12,7 +14,7 @@ import { getExerciseHistoryAction } from '../_actions/builder.actions'
 import type { BuilderBlock, BuilderCardioContext } from '../types'
 import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
-import { exerciseThumbnailUrl } from '@/lib/youtube'
+import { exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import { INTERVAL_TEMPLATES, repsUnitForModality, cardioRepsUnitShort } from '@eva/workout-engine'
 import { HR_ZONES } from '@eva/cardio'
 
@@ -479,6 +481,10 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
     const { t } = useTranslation()
     const [history, setHistory] = useState<ExerciseHistory[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
+    // Lightbox del medio del ejercicio (tap en la miniatura). No sobrevive al cambio de bloque.
+    const [mediaOpen, setMediaOpen] = useState(false)
+
+    useEffect(() => { setMediaOpen(false) }, [block?.uid])
 
     const effectiveType: ExerciseType = block
         ? effectiveExerciseType(block, { exercise_type: block.exercise_type })
@@ -525,6 +531,20 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
     // next.config remotePatterns; `unoptimized` para servir gif/mp4 externos tal cual (igual que antes).
     const thumb = exerciseThumbnailUrl(block)
 
+    // Ver y REPRODUCIR el medio desde el editor de bloque (paridad con el builder RN): la miniatura
+    // abre un lightbox. Precedencia idéntica a la app del alumno y a `execMediaKind` en mobile:
+    // gif → archivo de video directo → YouTube → miniatura estática.
+    // Nota: `BuilderBlock` (packages/plan-builder/types.ts) no transporta `image_url` ni el recorte
+    // [start,end] del coach, así que el lightbox web reproduce el video completo. En RN esos datos
+    // llegan desde la fila del catálogo (`catById`); acá haría falta bajarlos por props desde
+    // `WeeklyPlanBuilder`.
+    const mediaYoutubeId = block.video_url ? extractYoutubeVideoId(block.video_url) : null
+    const mediaDirectVideo =
+        !mediaYoutubeId && block.video_url && /\.(mp4|mov|webm)(\?|$)/i.test(block.video_url)
+            ? block.video_url
+            : null
+    const mediaPlayable = !!(block.gif_url || mediaDirectVideo || mediaYoutubeId)
+
     const blockIsValid = (() => {
         if (effectiveType === 'cardio') {
             return (block.duration_sec ?? 0) > 0 || hasDistance || !!block.interval_config
@@ -544,6 +564,7 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
     }
 
     return (
+        <>
         <Sheet open={!!block} onOpenChange={onClose}>
             <SheetContent
                 side={isMobile ? 'bottom' : 'right'}
@@ -558,7 +579,13 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                     ? 'border-b border-border bg-muted/20 px-5 pb-4 pt-1 pr-14'
                     : 'border-b border-border bg-muted/20 pb-6 pl-6 pr-14 pt-[max(1.5rem,env(safe-area-inset-top))]'}>
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-control bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 relative">
+                        <button
+                            type="button"
+                            onClick={() => setMediaOpen(true)}
+                            disabled={!thumb}
+                            aria-label={`Ver multimedia de ${block.exercise_name}`}
+                            className="w-16 h-16 rounded-control bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 relative transition-opacity enabled:hover:opacity-90 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                        >
                             {thumb ? (
                                 <Image
                                     src={thumb}
@@ -573,7 +600,14 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                     {block.exercise_name.charAt(0)}
                                 </span>
                             )}
-                        </div>
+                            {mediaPlayable && (
+                                <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/50">
+                                        <Play className="h-3.5 w-3.5 text-white fill-white" />
+                                    </span>
+                                </span>
+                            )}
+                        </button>
                         <div className="min-w-0 flex-1">
                             <SheetTitle className="text-lg font-display font-extrabold normal-case tracking-[-0.02em] text-foreground leading-tight break-words">
                                 {block.exercise_name}
@@ -1180,5 +1214,49 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                 </div>
             </SheetContent>
         </Sheet>
+
+        {/* Lightbox del medio del ejercicio — el coach ve y REPRODUCE lo que verá el alumno sin
+            salir del editor. Misma precedencia que la app del alumno: gif → video directo →
+            YouTube → miniatura estática. El contenido se monta sólo con el diálogo abierto, así
+            que abrir un bloque no carga ningún iframe. */}
+        <Dialog open={mediaOpen} onOpenChange={setMediaOpen}>
+            <DialogContent className="max-w-3xl overflow-hidden border-border bg-black p-0">
+                <DialogTitle className="sr-only">{block.exercise_name}</DialogTitle>
+                {block.gif_url ? (
+                    <Image
+                        src={block.gif_url}
+                        alt={block.exercise_name}
+                        width={1280}
+                        height={720}
+                        unoptimized
+                        className="h-auto max-h-[70vh] w-full object-contain"
+                    />
+                ) : mediaDirectVideo ? (
+                    <video
+                        src={mediaDirectVideo}
+                        className="h-auto max-h-[70vh] w-full bg-black object-contain"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        controls
+                    />
+                ) : mediaYoutubeId ? (
+                    <div className="aspect-video w-full bg-black">
+                        <ExerciseVideo videoId={mediaYoutubeId} className="h-full w-full" title={block.exercise_name} />
+                    </div>
+                ) : thumb ? (
+                    <Image
+                        src={thumb}
+                        alt={block.exercise_name}
+                        width={1280}
+                        height={720}
+                        unoptimized
+                        className="h-auto max-h-[70vh] w-full object-contain"
+                    />
+                ) : null}
+            </DialogContent>
+        </Dialog>
+        </>
     )
 }

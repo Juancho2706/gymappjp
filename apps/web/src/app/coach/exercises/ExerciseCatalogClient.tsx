@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import {
     Dialog,
@@ -10,10 +10,11 @@ import {
     DialogTitle,
     DialogClose,
 } from '@/components/ui/dialog'
-import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter, X, Copy, ChevronDown, ChevronUp } from 'lucide-react'
+import { Dumbbell, Globe, User, ExternalLink, Play, Plus, Zap, Target, Wrench, Search, Filter, X, Copy, ChevronDown, ChevronUp } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { filterExercises, cn } from '@/lib/utils'
@@ -21,6 +22,7 @@ import { extractYoutubeVideoId, exerciseThumbnailUrl } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
+import { ExerciseFormModal } from './_components/ExerciseFormModal'
 
 type Exercise = Tables<'exercises'>
 
@@ -34,7 +36,10 @@ interface ExerciseCatalogClientProps {
 export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle, canCreateExercises = false }: ExerciseCatalogClientProps) {
     // Deep-link ?q= desde la búsqueda global del topbar: pre-carga el filtro del catálogo.
     const searchParams = useSearchParams()
+    const router = useRouter()
     const [selected, setSelected] = useState<Exercise | null>(null)
+    // Término congelado al abrir el CTA «Crear "…"» del empty state (null = modal cerrado).
+    const [createName, setCreateName] = useState<string | null>(null)
     const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
     const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
     const [customOnly, setCustomOnly] = useState(false)
@@ -49,6 +54,8 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
     }
 
     const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
+
+    const trimmedSearch = search.trim()
 
     const filteredExercises = useMemo(() => {
         const base = customOnly ? customExercises : allExercises
@@ -207,18 +214,47 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         )
                     })
                 ) : (
-                    <div className="py-20 text-center bg-surface-card border border-dashed border-default rounded-card">
+                    <div className="py-20 px-4 text-center bg-surface-card border border-dashed border-default rounded-card">
                         <Dumbbell className="w-12 h-12 text-[var(--ink-300)] mx-auto mb-4" />
-                        <p className="text-muted font-medium">No se encontraron ejercicios</p>
+                        <p className="text-muted font-medium">
+                            {trimmedSearch ? <>No encontramos “{trimmedSearch}”</> : 'No se encontraron ejercicios'}
+                        </p>
+                        {/* El coach ya escribió el nombre: el catálogo le ofrece crearlo en vez de
+                            mandarlo a buscar el botón de arriba (patrón de FoodSearchSheet). */}
+                        {canCreateExercises && trimmedSearch && (
+                            <Button
+                                type="button"
+                                // `sport` (con glow) ya lo usa el botón «Crear ejercicio» del header:
+                                // el DS pide un solo hero por pantalla, así que acá va el sólido.
+                                variant="default"
+                                onClick={() => setCreateName(trimmedSearch)}
+                                className="mt-4 max-w-full"
+                            >
+                                <Plus className="h-4 w-4 shrink-0" />
+                                <span className="min-w-0 truncate">Crear “{trimmedSearch}”</span>
+                            </Button>
+                        )}
                         <button
                             onClick={() => { setSearch(''); setMuscleFilter('Todos'); setCustomOnly(false); setWithVideoOnly(false); }}
-                            className="mt-4 text-xs text-[var(--sport-600)] hover:underline font-bold"
+                            className="mt-4 block mx-auto text-xs text-[var(--sport-600)] hover:underline font-bold"
                         >
                             Limpiar filtros
                         </button>
                     </div>
                 )}
             </div>
+
+            {/* Crear desde el empty state, con el término buscado ya cargado en el nombre */}
+            {createName !== null && (
+                <ExerciseFormModal
+                    open
+                    initialName={createName}
+                    onClose={() => setCreateName(null)}
+                    // El catálogo llega por props del servidor: sin refresh el recién creado no
+                    // aparecería y el coach seguiría viendo "no encontramos".
+                    onCreated={() => router.refresh()}
+                />
+            )}
 
             {/* Exercise Preview Modal */}
             <ExercisePreviewModal

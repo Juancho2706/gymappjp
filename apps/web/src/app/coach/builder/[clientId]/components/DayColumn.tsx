@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { Search, Copy, Moon, Sun, Link2, Unlink, Dumbbell } from 'lucide-react'
+import { Search, Copy, Moon, Sun, Link2, Plus, Unlink, Dumbbell } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { getMuscleColor } from '../muscle-colors'
 import { cn, filterExercises } from '@/lib/utils'
 import { ExerciseBlock } from './ExerciseBlock'
+import { ExerciseFormModal } from '@/app/coach/exercises/_components/ExerciseFormModal'
 import { DAYS_OF_WEEK } from '../hooks/usePlanBuilder'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
 import { effectiveAreaKey, groupContiguousSupersetRuns } from '@eva/workout-engine'
@@ -125,6 +126,8 @@ function DayColumnInner({
 
     const [search, setSearch] = useState('')
     const [isSearchOpen, setIsSearchOpen] = useState(false)
+    // Término congelado al abrir el CTA «Crear "…"» del buscador (null = modal cerrado).
+    const [createName, setCreateName] = useState<string | null>(null)
     const [selectedDaysToCopy, setSelectedDaysToCopy] = useState<number[]>([])
     const [copySheetOpen, setCopySheetOpen] = useState(false)
 
@@ -387,8 +390,24 @@ function DayColumnInner({
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="p-4 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                                            No se encontraron ejercicios
+                                        <div className="p-4 text-center">
+                                            <p className="truncate text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                                No encontramos “{search.trim()}”
+                                            </p>
+                                            {/* Crear sin salir del día: al guardar, el ejercicio
+                                                entra en este mismo día (patrón de FoodSearchSheet). */}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCreateName(search.trim())
+                                                    setIsSearchOpen(false)
+                                                }}
+                                                className="eva-press mt-3 inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-control px-3.5 text-xs font-bold text-primary-foreground transition-transform active:scale-95"
+                                                style={{ backgroundColor: 'var(--theme-primary, #2680FF)' }}
+                                            >
+                                                <Plus className="h-3.5 w-3.5 shrink-0" />
+                                                <span className="min-w-0 truncate">Crear “{search.trim()}”</span>
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -664,6 +683,19 @@ function DayColumnInner({
                         </div>
                     </SheetContent>
                 </Sheet>
+            )}
+
+            {/* Crear el ejercicio que faltaba, sin abandonar el programa */}
+            {createName !== null && (
+                <ExerciseFormModal
+                    open
+                    initialName={createName}
+                    onClose={() => setCreateName(null)}
+                    onCreated={(created) => {
+                        onAddExercise(dayId, created)
+                        setSearch('')
+                    }}
+                />
             )}
         </div>
     )
