@@ -6,6 +6,7 @@ import { showsEvaBadge, type SubscriptionTier } from '@eva/tiers'
 import { getCoachOnboardingV2Data } from '../dashboard/_data/dashboard.queries'
 import { parseOnboardingGuide } from '../dashboard/_lib/onboarding-guide-state'
 import { GuideScreen } from './_components/GuideScreen'
+import { PanelListoModal } from './_components/PanelListoModal'
 import { RegistrationMirror } from '../_components/RegistrationMirror'
 
 export const metadata: Metadata = { title: 'Tus primeros pasos' }
@@ -41,8 +42,10 @@ export default async function CoachGuiaPage({
      * `?bienvenida=1` — lo pone la pantalla de persona: banda de bienvenida en vez de modal.
      * `?welcome=free&eid=` — espejo browser del alta por Google (Meta + PostHog), reenviado por la
      * pantalla de persona; se dispara una vez y se limpia de la URL.
+     * `?panel_listo=1` — one-shot del modal «Tu panel quedó listo 💪»: lo pone la pantalla de
+     * persona SOLO cuando la elección apagó dominios, y el propio modal lo limpia al cerrarse.
      */
-    searchParams: Promise<{ bienvenida?: string; welcome?: string; eid?: string }>
+    searchParams: Promise<{ bienvenida?: string; welcome?: string; eid?: string; panel_listo?: string }>
 }) {
     const [coach, params] = await Promise.all([getCoach(), searchParams])
     if (!coach) redirect('/login')
@@ -65,6 +68,12 @@ export default async function CoachGuiaPage({
     return (
         <>
             {registrationEid ? <RegistrationMirror eid={registrationEid} /> : null}
+            {/* El modal del panel achicado solo aparece con el param que pone la pantalla de
+                persona y con una persona ya elegida (el coach viejo sin persona no eligió nada que
+                explicar). Si la elección no apagó ningún dominio, el propio modal se borra solo. */}
+            {params.panel_listo === '1' && onboarding.persona !== null ? (
+                <PanelListoModal persona={onboarding.persona} alsoOther={onboarding.personaAlsoOther} />
+            ) : null}
         <GuideScreen
             coachId={coach.id}
             firstName={(coach.full_name ?? coach.brand_name ?? 'Coach').split(' ')[0] || 'Coach'}

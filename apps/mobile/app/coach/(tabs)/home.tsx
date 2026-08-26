@@ -20,6 +20,7 @@ import {
   teamsBridgeThresholdFor,
 } from '../../../components/coach/CoachDashboardSections'
 import { InviteCodePill } from '../../../components/coach/InviteStudent'
+import { VerifyEmailBanner } from '../../../components/coach/VerifyEmailBanner'
 import { useTheme } from '../../../context/ThemeContext'
 import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
 import {
@@ -147,6 +148,13 @@ export default function CoachHomeScreen() {
           />
         }
       >
+        {/* W3.11 — «Verifica tu correo para poder recuperar tu clave.» Va PRIMERO, arriba de los
+            banners de plan: bajo D1 = A un correo mal tipeado deja la cuenta viva e irrecuperable, y
+            este es el único lugar de la app donde se lo decimos. Se lee su propia señal
+            (`coaches.email_verified_at`) y se borra solo cuando el coach verifica o cuando no se
+            puede saber. No bloquea nada. */}
+        <VerifyEmailBanner />
+
         <MobileBillingBanners coach={data.coach} activeClientCount={data.kpi.totalClients} />
         {showTierBanners ? (
           <MobileTierUsageBanners coach={data.coach} capClients={data.capClients} />

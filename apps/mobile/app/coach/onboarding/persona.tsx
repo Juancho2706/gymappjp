@@ -8,11 +8,13 @@ import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useReducedMotion } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { disabledDomainsForPersona } from '@eva/feature-prefs'
 import { PERSONA_COPY, PERSONA_TILE_ORDER, type Persona } from '@eva/schemas'
 import { AppBackground } from '../../../components/AppBackground'
 import { Button } from '../../../components/Button'
 import { SegmentedTabs } from '../../../components/SegmentedTabs'
 import { resolvePostPersonaRoute, saveCoachPersona } from '../../../lib/coach-persona'
+import { refreshEntitlements } from '../../../lib/entitlements'
 
 /**
  * «¿A qué te dedicas?» — primer ingreso del coach en la app (SPEC coach-onboarding-v2 §1 y §9,
@@ -48,6 +50,25 @@ const PERSONA_ICONS: Record<Persona, LucideIcon> = {
 
 /** Mínimo que se muestra el interstitial. Corre EN PARALELO con el guardado, no lo demora. */
 const MIN_BUILD_MS = 1200
+
+/**
+ * Params one-shot del destino post-persona: la hoja «Tu panel quedó listo 💪» (gemela de
+ * `?panel_listo=1` de la web). Viajan por la navegación y mueren con ella — no hay estado que
+ * limpiar ni bandera que persista.
+ *
+ * `persona`/`also_other` viajan con el param a propósito: la hoja tiene que pintar los chips EN EL
+ * MISMO FRAME en que el coach aterriza, y el destino recién está pidiendo su foto del onboarding al
+ * servidor. Esperar esa respuesta convertiría un acuse de recibo instantáneo en un modal que
+ * aparece tarde, encima de una pantalla que el coach ya empezó a leer.
+ *
+ * Solo se manda cuando la elección APAGÓ algún dominio: con `other` (panel completo) no hay nada
+ * que avisar y la hoja sería ruido. La decisión sale de la MISMA matriz que el servidor acaba de
+ * persistir (`@eva/feature-prefs`), nunca de una lista paralela.
+ */
+function postPersonaRoute(persona: Persona, alsoOther: boolean, route: string): string {
+  if (disabledDomainsForPersona(persona, alsoOther).size === 0) return route
+  return `${route}?panel_listo=1&persona=${persona}&also_other=${alsoOther ? '1' : '0'}`
+}
 
 const BUILD_STEPS = [
   { key: 'domains', label: 'Eligiendo tus módulos', atMs: 350 },
@@ -205,7 +226,10 @@ export default function CoachPersonaScreen() {
       setBuilding(false)
       return
     }
-    router.replace(resolvePostPersonaRoute())
+    // Guardar la persona siembra los módulos del panel: la barra de tabs lee el store de
+    // entitlements, así que sin revalidar aquí el coach aterriza en la barra de ANTES de contestar.
+    await refreshEntitlements().catch(() => {})
+    router.replace(postPersonaRoute(selected, alsoOther, resolvePostPersonaRoute()))
   }
 
   return (

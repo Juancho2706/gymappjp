@@ -145,8 +145,10 @@ describe('setCoachPersonaAction', () => {
         )
 
         // 4. Nav revalidado + destino: la GUÍA, no el dashboard (decisión del owner 22-08).
+        //    `endurance` apaga movimiento y composición corporal ⇒ viaja `panel_listo=1`, el
+        //    one-shot del modal «Tu panel quedó listo 💪».
         expect(revalidatePathMock).toHaveBeenCalledWith('/coach/dashboard', 'layout')
-        expect(redirectMock).toHaveBeenCalledWith('/coach/guia?bienvenida=1')
+        expect(redirectMock).toHaveBeenCalledWith('/coach/guia?bienvenida=1&panel_listo=1')
     })
 
     it('el escape («other») ignora la segunda pregunta y deja el panel completo', async () => {
@@ -157,6 +159,9 @@ describe('setCoachPersonaAction', () => {
         expect(coachUpdate.update.mock.calls[0][0].persona_also_other).toBe(false)
         const rows = prefsUpsert.upsert.mock.calls[0][0] as Array<{ sections: Record<string, boolean> }>
         expect(rows.every((row) => row.sections._enabled === true)).toBe(true)
+        // Panel completo ⇒ no hay nada apagado que avisar: el modal «Tu panel quedó listo 💪» NO
+        // se pide (sin `panel_listo=1` en el destino).
+        expect(redirectMock).toHaveBeenCalledWith('/coach/guia?bienvenida=1')
     })
 
     it('el sembrador todavía en stub (`not_implemented`) no rompe el alta', async () => {
@@ -171,7 +176,7 @@ describe('setCoachPersonaAction', () => {
         })
         const eventTypes = events.insert.mock.calls.map((call: unknown[]) => (call[0] as { event_type: string }).event_type)
         expect(eventTypes).toEqual(['persona_selected'])
-        expect(redirectMock).toHaveBeenCalledWith('/coach/guia?bienvenida=1')
+        expect(redirectMock).toHaveBeenCalledWith('/coach/guia?bienvenida=1&panel_listo=1')
     })
 
     it('cuando W3 siembra de verdad, queda el evento `demo_seeded`', async () => {

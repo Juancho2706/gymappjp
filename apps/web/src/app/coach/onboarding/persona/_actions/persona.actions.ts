@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { PersonaSchema, type Persona } from '@eva/schemas'
+import { disabledDomainsForPersona } from '@eva/feature-prefs'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { applyCoachPersona } from '@/services/coach/persona.service'
@@ -19,7 +20,8 @@ import { applyCoachPersona } from '@/services/coach/persona.service'
  *     las 5 filas de `coach_feature_prefs`, telemetría `persona_selected`, alumno de ejemplo y
  *     PostHog. Ese núcleo es el MISMO que consume `/api/mobile/coach/persona` (W5 F5.1): la app y
  *     la web no pueden divergir en lo que pasa cuando alguien contesta la pregunta.
- *  4. `revalidatePath` del layout (el nav se achica) y `redirect('/coach/guia?bienvenida=1')`.
+ *  4. `revalidatePath` del layout (el nav se achica) y `redirect('/coach/guia?bienvenida=1')`, con
+ *     `&panel_listo=1` si la elección dejó dominios apagados (el modal «Tu panel quedó listo 💪»).
  */
 
 /**
@@ -28,6 +30,24 @@ import { applyCoachPersona } from '@/services/coach/persona.service'
  * ahí la banda de bienvenida de dos líneas, en vez del modal que había antes.
  */
 const GUIA_AFTER_PERSONA = '/coach/guia?bienvenida=1'
+
+/**
+ * `?panel_listo=1` — one-shot: la guía pinta el modal «Tu panel quedó listo 💪» al ATERRIZAR,
+ * o sea inmediatamente después de que el coach contestó «¿A qué te dedicas?» (pedido literal del
+ * owner: el aviso va cuando pasa la cosa, no al terminar la guía). La propia pantalla lo limpia
+ * de la URL al cerrarlo.
+ *
+ * Solo viaja cuando la elección APAGÓ algún dominio: con `other` (panel completo) no hay nada
+ * que avisar y el modal sería ruido. La decisión sale de la MISMA matriz que se acaba de
+ * persistir (`@eva/feature-prefs`), nunca de una lista paralela.
+ */
+const PANEL_LISTO_PARAM = 'panel_listo'
+
+/** URL de la guía post-persona: bienvenida + (si corresponde) el aviso del panel achicado. */
+function guideUrlAfterPersona(persona: Persona, alsoOther: boolean): string {
+    const turnedOff = disabledDomainsForPersona(persona, alsoOther).size > 0
+    return turnedOff ? `${GUIA_AFTER_PERSONA}&${PANEL_LISTO_PARAM}=1` : GUIA_AFTER_PERSONA
+}
 
 export type PersonaActionResult = { ok: true } | { ok: false; error: string }
 
@@ -104,10 +124,19 @@ async function persistPersona(input: SetCoachPersonaInput): Promise<PersonaActio
 export async function setCoachPersonaAction(input: SetCoachPersonaInput): Promise<PersonaActionResult> {
     const result = await persistPersona(input)
     if (!result.ok) return result
+
+    // Re-parseo (barato) en vez de ensanchar `PersonaActionResult`: el destino necesita la
+    // persona y la segunda pregunta ya validadas para preguntarle a la matriz si apagó algo.
+    // Si `persistPersona` dijo `ok`, esto no puede fallar.
+    const parsed = personaInputSchema.safeParse(input)
+    const base = parsed.success
+        ? guideUrlAfterPersona(parsed.data.persona, parsed.data.alsoOther === true)
+        : GUIA_AFTER_PERSONA
+
     const mirror = registrationMirrorSchema.safeParse(input.registration)
     redirect(
         mirror.success
-            ? `${GUIA_AFTER_PERSONA}&welcome=free&eid=${encodeURIComponent(mirror.data.eid)}${mirror.data.ph ? '&ph=srv' : ''}`
-            : GUIA_AFTER_PERSONA
+            ? `${base}&welcome=free&eid=${encodeURIComponent(mirror.data.eid)}${mirror.data.ph ? '&ph=srv' : ''}`
+            : base
     )
 }

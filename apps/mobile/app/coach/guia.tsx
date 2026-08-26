@@ -26,9 +26,10 @@ import {
   type OnboardingStep,
   type OnboardingStepKey,
 } from '@eva/onboarding'
-import { PERSONA_COPY, type Persona } from '@eva/schemas'
+import { PERSONA_COPY, PERSONAS, type Persona } from '@eva/schemas'
 import { AppBackground } from '../../components/AppBackground'
 import { Card } from '../../components'
+import { PanelReadySheet } from '../../components/coach/PanelReadySheet'
 import { EvaFigure } from '../../components/entry/EvaFigure'
 import { toast } from '../../components/Toast'
 import { useTheme } from '../../context/ThemeContext'
@@ -144,7 +145,12 @@ export default function CoachGuiaScreen() {
   const insets = useSafeAreaInsets()
   const { theme, branding } = useTheme()
   const motion = useEvaMotion()
-  const params = useLocalSearchParams<{ bienvenida?: string }>()
+  const params = useLocalSearchParams<{
+    bienvenida?: string
+    panel_listo?: string
+    persona?: string
+    also_other?: string
+  }>()
 
   const [data, setData] = useState<MobileDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -391,6 +397,31 @@ export default function CoachGuiaScreen() {
     router.replace('/coach/home')
   }, [data, done, router])
 
+  /**
+   * «Tu panel quedó listo 💪» — one-shot del salto desde «¿A qué te dedicas?»
+   * (`?panel_listo=1&persona=…`, gemelo del `?panel_listo=1` de la web).
+   *
+   * Se abre por EFECTO y no por estado inicial: el destino post-persona llega por `router.replace`,
+   * y si esta pantalla ya estaba montada en el stack el primer render habría ocurrido antes del
+   * param. `openedRef` lo deja en una sola vez por montaje — reabrirlo al volver de «Vive tu app» o
+   * de un foreground sería el mismo aviso dos veces.
+   *
+   * La persona sale del PARAM, no de `v2`: la hoja tiene que pintar en el mismo frame del aterrizaje
+   * y `v2` recién está llegando del servidor. Se valida contra la lista canónica, así que un param
+   * escrito a mano no puede meter una persona inventada.
+   */
+  const panelListoPersona =
+    params.panel_listo === '1' && PERSONAS.includes(params.persona as Persona)
+      ? (params.persona as Persona)
+      : null
+  const [panelListoOpen, setPanelListoOpen] = useState(false)
+  const panelListoOpenedRef = useRef(false)
+  useEffect(() => {
+    if (panelListoPersona == null || panelListoOpenedRef.current) return
+    panelListoOpenedRef.current = true
+    setPanelListoOpen(true)
+  }, [panelListoPersona])
+
   const firstName = (data?.coach.fullName ?? '').trim().split(' ')[0] || 'coach'
   // El coach puede haber renombrado al demo: se usa el nombre REAL, y de pila (el CTA «Ver como
   // Matías Soto Fernández» no entra en una fila de 390 px).
@@ -557,6 +588,22 @@ export default function CoachGuiaScreen() {
           </ScrollView>
         )}
       </SafeAreaView>
+
+      {/* Acuse de recibo de la elección de especialidad, INMEDIATAMENTE después de contestarla
+          (pedido literal del owner). Se borra solo si la elección no apagó ningún dominio. */}
+      {panelListoPersona == null ? null : (
+        <PanelReadySheet
+          open={panelListoOpen}
+          persona={panelListoPersona}
+          alsoOther={params.also_other === '1'}
+          onClose={() => setPanelListoOpen(false)}
+          onGoMiPanel={() => {
+            setPanelListoOpen(false)
+            // Mismo literal que el chip de persona de arriba: Opciones › Mi panel (W8.2.2).
+            router.push('/coach/settings/mi-panel')
+          }}
+        />
+      )}
     </View>
   )
 }

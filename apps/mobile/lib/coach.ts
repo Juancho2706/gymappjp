@@ -82,6 +82,49 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
   return mapCoachRow(data)
 }
 
+/**
+ * Señal del banner de verificación (FCN W3.11): `verified` / `unverified` / `unknown`.
+ * `unknown` = no se pudo preguntar (sin red, RLS, columna fuera del schema cache).
+ */
+export type CoachEmailVerification = 'verified' | 'unverified' | 'unknown'
+
+/**
+ * ¿El coach probó su casilla? (`coaches.email_verified_at`).
+ *
+ * Consulta APARTE y no una columna más de `COACH_PROFILE_COLUMNS` por dos razones:
+ *  - El camino FELIZ del dashboard no arma el coach con este módulo sino con la respuesta de
+ *    `/api/mobile/coach/dashboard` (`lib/coach-dashboard.ts`), que no sirve este campo: sumarlo al
+ *    perfil daría `undefined` justo donde el banner tiene que decidir.
+ *  - Un `select` con una columna que el schema cache todavía no conoce falla ENTERO. Ese fallo
+ *    tumbaría el perfil que usan los GATES de acceso; acá, aislado, solo apaga un banner.
+ *
+ * FAIL-CLOSED AL SILENCIO (mismo criterio que la web): cualquier duda devuelve `unknown` y el
+ * banner NO se pinta. Molestar con «verifica tu correo» a quien ya lo verificó es peor que no
+ * avisarle a quien no.
+ *
+ * La lectura va con el JWT del coach: la columna tiene GRANT SELECT para `authenticated` y la
+ * policy `coaches_select_own` la acota a su propia fila.
+ */
+export async function getCoachEmailVerification(): Promise<CoachEmailVerification> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return 'unknown'
+
+    const { data, error } = await supabase
+      .from('coaches')
+      .select('email_verified_at')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (error || !data) return 'unknown'
+    return (data as { email_verified_at: string | null }).email_verified_at == null
+      ? 'unverified'
+      : 'verified'
+  } catch {
+    return 'unknown'
+  }
+}
+
 type CoachRow = {
   id: string
   full_name: string
