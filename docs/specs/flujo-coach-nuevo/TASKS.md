@@ -778,6 +778,14 @@ bienvenida igual, y el build 59 (1.1.2, en review de Apple) migra a esos usuario
 > el POST de W3.13b contra un server viejo daría 404 silencioso, y el fail-safe de W3.2b tolera
 > server nuevo + binario viejo (pantalla de más, «Ya confirmé» entra). Tren pendiente de GO del
 > owner; gate de salida incluye el repro manual del takeover.
+>
+> **🟢 TREN W3+W4 EJECUTADO (26-08 tarde, GO del owner «dale go»):** push `c70d895e` + `e0355dee` →
+> deploy web PROD READY (`dpl_3PVBFRAQ…`, smoke: /register 200 y los DOS endpoints google-link
+> responden 401 sin credencial) → OTAs DESPUÉS del web (orden invertido cumplido): runtime 1.1.2
+> android `33012067682` + ios `33012077551`, y **port a 1.1.1 SÍ procedió esta vez** (rama
+> `ota/1.1.1-20260826` = `96cc2496`, cherry-picks LIMPIOS de W3.2b+W4 — los archivos son del piso)
+> android `33012150472` + ios `33012160951`. **Los 4 SUCCESS.** QA device del owner ACUMULADO
+> (pidió juntarlo); pendientes vivos en el cierre de cada wave.
 
 **D1 = A: respondida por el owner el 23-08** ⇒ esta wave tiene luz verde. G-ENV y G-AUTH quedaron **resueltos el 23-08** (arriba): Turnstile, Upstash y el
 tope por IP están vivos, y el linking de identidades no se configura — se cubre con **W3.13**, que viaja en
