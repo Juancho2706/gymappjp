@@ -49,7 +49,7 @@ import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
 import { SessionMorphProvider } from '../components/alumno/workout/v3/session-morph'
-import { isBiometricLockEnabled } from '../lib/biometric'
+import { observeAppStateForRelock, shouldArmBiometricLock } from '../lib/biometric'
 import { useUpdates } from 'expo-updates'
 import { checkForOtaUpdate, promptReloadOnce } from '../lib/ota'
 import { registerRestNotificationEvents } from '../components/alumno/workout/timers/rest-remote-commands'
@@ -218,16 +218,26 @@ function RootLayoutNav() {
 
   // Ola 0: bloqueo biométrico opt-in. Si hay sesión y el usuario lo activó, bloquear al
   // entrar y al volver de background. Siempre con escape a contraseña (BiometricLock).
+  //
+  // 🔴 26-08 — loop de Face ID reportado por una alumna: acá se armaba el bloqueo en CADA
+  // transición a 'active', y el propio prompt biométrico genera esa transición al cerrarse
+  // ⇒ desbloquear re-armaba el bloqueo, que reabría el prompt, para siempre. Peor: se
+  // disparaba en el instante de activar el toggle en el perfil (ese `authenticate` de
+  // confirmación también vuelve a 'active' con la pref ya guardada), o sea el loop empezaba
+  // justo al prender la feature. Ahora el veredicto lo da `observeAppStateForRelock`, que
+  // exige un background REAL e ignora el ruido del prompt (ver lib/biometric.ts).
   const [locked, setLocked] = useState(false)
   useEffect(() => {
     if (!session?.user.id) { setLocked(false); return }
-    isBiometricLockEnabled().then((on) => { if (on) setLocked(true) }).catch(() => {})
+    shouldArmBiometricLock().then((on) => { if (on) setLocked(true) }).catch(() => {})
   }, [session?.user.id])
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active' && session?.user.id) {
-        isBiometricLockEnabled().then((on) => { if (on) setLocked(true) }).catch(() => {})
-      }
+      // `observeAppStateForRelock` es un reducer con estado: hay que pasarle TODOS los cambios,
+      // no solo los 'active', porque es el que ve el background y decide si contó como salida.
+      if (!observeAppStateForRelock(s)) return
+      if (!session?.user.id) return
+      shouldArmBiometricLock().then((on) => { if (on) setLocked(true) }).catch(() => {})
     })
     return () => sub.remove()
   }, [session?.user.id])
