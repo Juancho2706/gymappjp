@@ -44,7 +44,14 @@ export async function sendFreeCoachOnboardingEmails(params: {
     const { subject, html } = buildFreeCoachWelcomeEmail({
         coachName: params.coachName,
         brandName: params.brandName,
-        dashboardUrl: `${params.appUrl}/coach/dashboard`,
+        // FCN W3.7 (= W8.1.10 de coach-onboarding-v2): el CTA de la bienvenida aterriza en la GUÍA,
+        // no en el panel vacío. `/coach/guia` es «Tus primeros pasos» (marca en 60 s, alumno de
+        // ejemplo, nudge de persona) desde que el owner la sacó del dashboard el 22-08; volver del
+        // correo al dashboard dejaba al coach del día 1 justo en la pantalla que la guía existe
+        // para evitar. El NOMBRE del parámetro sigue siendo `dashboardUrl` porque es el contrato de
+        // `buildFreeCoachWelcomeEmail` (plantilla compartida, fuera del alcance de W3.7): lo que
+        // cambia es el DESTINO.
+        dashboardUrl: `${params.appUrl}/coach/guia`,
         clientsUrl: `${params.appUrl}/coach/clients`,
         subscriptionUrl: `${params.appUrl}/coach/subscription`,
     })

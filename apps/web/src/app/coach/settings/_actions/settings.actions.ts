@@ -11,6 +11,7 @@ import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { isThemePresetKey } from '@/lib/brand-presets'
 import { isLoginLayoutKey, parseLoaderConfig } from '@/lib/brand-composer'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { BRAND_CHECKBOX_KEEP } from '../_lib/brand-form-values'
 
 /**
  * white-label W1b — validación de las 3 columnas nuevas (aditivas):
@@ -37,6 +38,16 @@ export async function updateBrandSettingsAction(
     _prev: BrandSettingsState,
     formData: FormData
 ): Promise<BrandSettingsState> {
+    /**
+     * W3.4 — «aplicar mi marca a mi propio panel» es el ÚNICO campo de este formulario con tres
+     * estados posibles en el request: `'on'` (el checkbox de `BrandSettingsForm` marcado), ausente
+     * (ese mismo checkbox DESMARCADO ⇒ `false` explícito, y sigue mandando) y `BRAND_CHECKBOX_KEEP`
+     * (la tarjeta de la guía, que no tiene checkbox y no opina). Con `KEEP` la columna no se toca:
+     * ni siquiera entra al `update`.
+     */
+    const brandColorsCoachRaw = formData.get('use_brand_colors_coach')
+    const keepBrandColorsCoach = brandColorsCoachRaw === BRAND_CHECKBOX_KEEP
+
     const raw = {
         full_name: formData.get('full_name') as string,
         brand_name: formData.get('brand_name') as string,
@@ -44,7 +55,7 @@ export async function updateBrandSettingsAction(
         // igual recorta la que venga pegada y deja '' → null.
         instagram_handle: (formData.get('instagram_handle') as string | null)?.trim() ?? '',
         primary_color: formData.get('primary_color') as string,
-        use_brand_colors_coach: formData.get('use_brand_colors_coach') === 'on',
+        use_brand_colors_coach: brandColorsCoachRaw === 'on',
         welcome_message: (formData.get('welcome_message') as string | null)?.trim() ?? '',
         loader_text: (formData.get('loader_text') as string | null)?.trim() ?? '',
         use_custom_loader: formData.get('use_custom_loader') === 'on',
@@ -137,7 +148,11 @@ export async function updateBrandSettingsAction(
     }
     if (brandingAllowed) {
         updatePayload.primary_color = parsed.data.primary_color
-        updatePayload.use_brand_colors_coach = parsed.data.use_brand_colors_coach
+        // W3.4: sin opinión (guía) ⇒ la columna NO entra al update. Escribirla acá con el valor
+        // reenviado por la tarjeta era lo que apagaba la marca del panel al guardar desde la guía.
+        if (!keepBrandColorsCoach) {
+            updatePayload.use_brand_colors_coach = parsed.data.use_brand_colors_coach
+        }
         updatePayload.loader_text = parsed.data.loader_text || null
         updatePayload.use_custom_loader = parsed.data.use_custom_loader
         // W-brand B2/B4: whitelist EXPLÍCITA — brand_secondary_color / accent_light / accent_dark /

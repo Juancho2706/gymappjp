@@ -9,6 +9,7 @@ import { isBrandingAllowed } from '@eva/tiers'
 import { getPersonaScreenContext } from '../onboarding/persona/_data/persona.queries'
 import { GUIDE_ROUTE, shouldRedirectToGuide } from '../guia/_lib/guide-first-entry'
 import { parseOnboardingGuide } from './_lib/onboarding-guide-state'
+import { getCoachEmailVerified } from './_data/email-verification.queries'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -46,8 +47,12 @@ export default async function CoachDashboardPage() {
 
     // Conteo activo real (mismo servicio que el cap gate) solo para el banner del plan gratuito;
     // React.cache lo deduplica con el layout /coach. Los otros tiers no muestran ese banner.
-    const activeClientCount =
-        subscriptionTier === 'free' ? await getActiveStandaloneClientCount(coach.id) : null
+    // W3.11: la señal del banner de verificación viaja en la MISMA ola (una lectura por PK sobre la
+    // fila que el request ya trajo) para no agregar una espera secuencial al TTFB del panel.
+    const [activeClientCount, emailVerified] = await Promise.all([
+        subscriptionTier === 'free' ? getActiveStandaloneClientCount(coach.id) : Promise.resolve(null),
+        getCoachEmailVerified(coach.id),
+    ])
 
     return (
         <Suspense fallback={<BrandCoachLoadingShell />}>
@@ -64,6 +69,7 @@ export default async function CoachDashboardPage() {
                 activeClientCount={activeClientCount}
                 coachMaxClients={coach.max_clients}
                 coachCreatedAt={coach.created_at ?? null}
+                emailVerified={emailVerified}
             />
         </Suspense>
     )

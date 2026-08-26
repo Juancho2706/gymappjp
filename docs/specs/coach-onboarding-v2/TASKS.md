@@ -239,7 +239,7 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
 - [ ] W8.1.9 **(absorbida por [vive-tu-app-directo](../vive-tu-app-directo/TASKS.md) W4 — se ejecuta allá)** Panel admin: `admin/(panel)/clients/_actions/client-actions.ts:82-89`, `coach-detail.queries.ts:143-148`,
   `sistema.queries.ts:91` con `is_demo = false` + migración aditiva que reescribe `get_admin_coaches_paginated`
   (`cl.is_demo = false`). Caso LIVE `00109d66`: Free con demo = cupo 1/1, 0 reales. [db-live-01/02, tasks-truth-06]
-- [ ] W8.1.10 Bienvenida Free y D+1 apuntan a `/coach/guia` con copy por persona (`PERSONA_COPY`) y sin
+- [x] W8.1.10 **(26-08 — ejecutada como W3.7 de [flujo-coach-nuevo](../flujo-coach-nuevo/TASKS.md): la bienvenida Free apunta a `/coach/guia`. El D+1 quedó en `/coach/clients?invite=1` por decisión POSTERIOR de FCN W2.5 —la puerta de solicitudes deja de recomendarse—, y el copy por persona + el hook de cancelación al primer alumno real NO se hicieron: viven en W6 de esta misma spec)** Bienvenida Free y D+1 apuntan a `/coach/guia` con copy por persona (`PERSONA_COPY`) y sin
   pitch de nutrición a quien la apagó; cancelar `day2_pro`/`day14_last_call` al primer alumno real (hook
   declarado en embudo W2.10). Acordado con BROCITO: mismas `template_key`. [w6-w7-03/04/19]
 - [ ] W8.1.11 Bajos con evidencia: buscador global sin etiqueta demo (`coach-search.service.ts:74`) · FAB del

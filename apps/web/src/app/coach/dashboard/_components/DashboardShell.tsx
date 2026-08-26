@@ -8,6 +8,7 @@ import { CoachBrandAvatar, EvaBrandFallback } from '@/components/coach/CoachBran
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { AmbientBrandGlow } from '@/components/coach/AmbientBrandGlow'
 import { BillingBanners } from './banners/BillingBanners'
+import { VerifyEmailBanner } from './banners/VerifyEmailBanner'
 import { RegistrationMirror } from '../../_components/RegistrationMirror'
 import { PulseHero } from './PulseHero'
 import { PriorityCard } from './PriorityCard'
@@ -60,6 +61,12 @@ interface Props {
     coachMaxClients?: number | null
     /** `coaches.created_at`: ancla del grandfather de pricing v2 si faltara la columna. */
     coachCreatedAt?: string | null
+    /**
+     * `coaches.email_verified_at` ya resuelto a booleano por el RSC (W3.11). `false` ⇒ se pinta el
+     * banner de verificación blanda. La señal NUNCA es `auth.users.email_confirmed_at`: bajo D1 = A
+     * el alta nace `email_confirm: true` y esa columna queda seteada para todos.
+     */
+    emailVerified?: boolean
     workspaces: WorkspaceSummary[]
 }
 
@@ -73,6 +80,7 @@ export function DashboardShell({
     activeClientCount,
     coachMaxClients,
     coachCreatedAt,
+    emailVerified = true,
     workspaces,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
@@ -129,7 +137,11 @@ export function DashboardShell({
                 {/* Billing / tier banners (functional — not part of the design tree). `empty:hidden`
                     colapsa el bloque (y su margen) cuando no hay ningún banner que mostrar → sin
                     aire muerto extra bajo el notch para coaches sin avisos. */}
-                <div className="mb-4 empty:hidden">
+                <div className="mb-4 flex flex-col gap-2 empty:hidden">
+                    {/* W3.11 — verificación blanda: primero de la pila porque es el único aviso que
+                        habla de perder la CUENTA (sin correo probado no hay reset de clave), y el
+                        único que no bloquea nada. Sin CTA de pago (regla de tiendas iOS). */}
+                    {!emailVerified && <VerifyEmailBanner />}
                     <BillingBanners
                         subscriptionStatus={data.subscriptionStatus}
                         currentPeriodEnd={data.currentPeriodEnd}

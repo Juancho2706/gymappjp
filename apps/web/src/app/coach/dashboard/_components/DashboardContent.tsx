@@ -17,6 +17,7 @@ export async function DashboardContent({
     activeClientCount,
     coachMaxClients,
     coachCreatedAt,
+    emailVerified,
 }: {
     userId: string
     coachName: string
@@ -39,6 +40,11 @@ export async function DashboardContent({
     coachMaxClients?: number | null
     /** `coaches.created_at` — ancla del grandfather de pricing v2 si falta la columna. */
     coachCreatedAt?: string | null
+    /**
+     * `coaches.email_verified_at` resuelto a booleano (W3.11). `false` ⇒ banner de verificación
+     * blanda. NUNCA sale de `auth.users.email_confirmed_at`: bajo D1 = A nace seteada para todos.
+     */
+    emailVerified?: boolean
 }) {
     // Onboarding v2 — la guía del día 1 (checklist, «Tu marca en 60 s», alumno de ejemplo, tira
     // del pie) YA NO VIVE ACÁ: se mudó a `/coach/guia` (decisión del owner 22-08, el dashboard del
@@ -67,6 +73,7 @@ export async function DashboardContent({
             activeClientCount={activeClientCount}
             coachMaxClients={coachMaxClients}
             coachCreatedAt={coachCreatedAt}
+            emailVerified={emailVerified}
             workspaces={workspaces}
         />
     )

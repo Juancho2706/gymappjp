@@ -6,16 +6,19 @@ import type { DripTemplate } from './drip-templates'
 type BuildDripTemplates = typeof import('./drip-templates').buildDripTemplates
 type DripContext = Parameters<BuildDripTemplates>[0]
 
-const { scheduleCoachEmailMock, addResendAudienceContactMock, buildDripTemplatesMock, real } = vi.hoisted(() => ({
-    scheduleCoachEmailMock: vi.fn(),
-    addResendAudienceContactMock: vi.fn(),
-    buildDripTemplatesMock: vi.fn(),
-    // Holder del módulo REAL: el mock delega en él salvo cuando el test quiere una lista incompleta.
-    real: { build: null as null | ((ctx: unknown) => DripTemplate[]) },
-}))
+const { scheduleCoachEmailMock, cancelCoachEmailsMock, addResendAudienceContactMock, buildDripTemplatesMock, real } =
+    vi.hoisted(() => ({
+        scheduleCoachEmailMock: vi.fn(),
+        cancelCoachEmailsMock: vi.fn(),
+        addResendAudienceContactMock: vi.fn(),
+        buildDripTemplatesMock: vi.fn(),
+        // Holder del módulo REAL: el mock delega en él salvo cuando el test quiere una lista incompleta.
+        real: { build: null as null | ((ctx: unknown) => DripTemplate[]) },
+    }))
 
 vi.mock('@/services/email/coach-email-ledger.service', () => ({
     scheduleCoachEmail: scheduleCoachEmailMock,
+    cancelCoachEmails: cancelCoachEmailsMock,
 }))
 
 vi.mock('./send-email', () => ({
@@ -28,7 +31,13 @@ vi.mock('./drip-templates', async (importOriginal) => {
     return { ...actual, buildDripTemplates: buildDripTemplatesMock }
 })
 
-import { scheduleFreeCoachDripSequence, DRIP_SCHEDULE } from './send-drip-sequence'
+import {
+    cancelDripForUnverifiedCoach,
+    scheduleFreeCoachDripSequence,
+    sweepUnverifiedCoachDrips,
+    DRIP_SCHEDULE,
+    DRIP_TEMPLATE_KEYS,
+} from './send-drip-sequence'
 
 const admin = {} as SupabaseClient<Database>
 
@@ -231,5 +240,148 @@ describe('scheduleFreeCoachDripSequence — resumen', () => {
             failed: 4,
             failures: expect.arrayContaining([{ key: 'day1_value', error: 'boom' }]),
         })
+    })
+})
+
+/**
+ * FCN W3.8 — la higiene que introduce D1 = A. El coach free entra sin abrir el correo, así que una
+ * dirección mal tipeada queda viva recibiendo cuatro correos: cuatro rebotes duros contra la
+ * reputación del dominio.
+ *
+ * LO QUE ESTOS TESTS PROTEGEN es DE DÓNDE sale la señal. Si alguien la vuelve a leer de
+ * `auth.users.email_confirmed_at`, bajo D1 = A nace seteada para TODOS y esta higiene no saltaría
+ * jamás a nadie: quedaría escrita y muerta (regla 11 del SPEC). La prueba de la casilla es
+ * `coaches.email_verified_at`, y acá se pinnea contra esa columna.
+ */
+describe('cancelDripForUnverifiedCoach (W3.8)', () => {
+    const COACH_ID = '11111111-1111-4111-8111-111111111111'
+    const NOW = new Date('2026-08-26T12:00:00.000Z')
+    const HACE_2_DIAS = '2026-08-24T12:00:00.000Z'
+    const HACE_2_HORAS = '2026-08-26T10:00:00.000Z'
+
+    /** Cliente mínimo: `from('coaches').select().eq().maybeSingle()`. */
+    function adminWith(result: { data?: unknown; error?: { message: string } }) {
+        const maybeSingle = vi.fn(async () => ({ data: result.data ?? null, error: result.error ?? null }))
+        const select = vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle })) }))
+        return { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient<Database>
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        cancelCoachEmailsMock.mockResolvedValue({ cancelled: 3, alreadySent: 1, failed: 0 })
+    })
+
+    it('sin `email_verified_at` y pasadas 24 h CANCELA las 4 keys de la serie (y solo esas)', async () => {
+        const admin = adminWith({ data: { email_verified_at: null, created_at: HACE_2_DIAS } })
+
+        await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({
+            cancelled: 3,
+            alreadySent: 1,
+            failed: 0,
+        })
+        expect(cancelCoachEmailsMock).toHaveBeenCalledWith(admin, COACH_ID, DRIP_TEMPLATE_KEYS)
+        // NUNCA `'*'`: eso se llevaría puesto cualquier otro correo agendado del coach.
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalledWith(admin, COACH_ID, '*')
+        expect(DRIP_TEMPLATE_KEYS).toEqual(['day1_value', 'day2_pro', 'day7_nutrition', 'day14_last_call'])
+    })
+
+    // El salto se decide contra la COLUMNA. Con GoTrue nadie tendría `email_verified_at` en null.
+    it('con `email_verified_at` seteado NO cancela nada', async () => {
+        const admin = adminWith({
+            data: { email_verified_at: '2026-08-25T09:00:00.000Z', created_at: HACE_2_DIAS },
+        })
+
+        await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({ skipped: 'verified' })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    it('sin verificar pero dentro de las 24 h todavía no se toca la serie', async () => {
+        const admin = adminWith({ data: { email_verified_at: null, created_at: HACE_2_HORAS } })
+
+        await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({ skipped: 'too_soon' })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    // Fail-CLOSED: el error barato es un correo de más; el caro es dejar sin drip a un coach
+    // legítimo porque la DB tosió.
+    it('si la fila no se puede leer NO cancela (fail-closed) y loguea sin PII', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const admin = adminWith({ error: { message: 'connection reset' } })
+
+        await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({ skipped: 'unreadable' })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+        expect(JSON.stringify(warn.mock.calls)).not.toContain('@')
+    })
+
+    it('coach inexistente: nada que cancelar', async () => {
+        const admin = adminWith({ data: null })
+
+        await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({ skipped: 'not_found' })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+})
+
+describe('sweepUnverifiedCoachDrips (W3.8)', () => {
+    const NOW = new Date('2026-08-26T12:00:00.000Z')
+
+    /** Cliente mínimo del barrido: `select().is().gte().lt()` resuelve la lista. */
+    function adminWithCandidates(result: { data?: Array<{ id: string }>; error?: { message: string } }) {
+        const filters = { is: '', gte: '', lt: '' }
+        const thenable = {
+            data: result.data ?? null,
+            error: result.error ?? null,
+        }
+        const chain = {
+            is: vi.fn((col: string) => {
+                filters.is = col
+                return chain
+            }),
+            gte: vi.fn((_col: string, value: string) => {
+                filters.gte = value
+                return chain
+            }),
+            lt: vi.fn((_col: string, value: string) => {
+                filters.lt = value
+                return Promise.resolve(thenable)
+            }),
+        }
+        const admin = {
+            from: vi.fn(() => ({ select: vi.fn(() => chain) })),
+        } as unknown as SupabaseClient<Database>
+        return { admin, filters }
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        cancelCoachEmailsMock.mockResolvedValue({ cancelled: 2, alreadySent: 0, failed: 0 })
+    })
+
+    it('barre a los candidatos y suma el resultado de cada cancelación', async () => {
+        const { admin, filters } = adminWithCandidates({ data: [{ id: 'a' }, { id: 'b' }] })
+
+        await expect(sweepUnverifiedCoachDrips(admin, NOW)).resolves.toEqual({
+            candidates: 2,
+            cancelled: 4,
+            alreadySent: 0,
+            failed: 0,
+        })
+        // El candidato es «sin la columna probada» y con el alta fuera de la gracia de 24 h.
+        expect(filters.is).toBe('email_verified_at')
+        expect(filters.lt).toBe('2026-08-25T12:00:00.000Z')
+        expect(filters.gte).toBe('2026-07-27T12:00:00.000Z')
+        expect(cancelCoachEmailsMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('si la lista falla el barrido no cancela nada y devuelve ceros', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        const { admin } = adminWithCandidates({ error: { message: 'timeout' } })
+
+        await expect(sweepUnverifiedCoachDrips(admin, NOW)).resolves.toEqual({
+            candidates: 0,
+            cancelled: 0,
+            alreadySent: 0,
+            failed: 0,
+        })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
     })
 })

@@ -14,6 +14,7 @@ import {
     createLogoUploadUrlAction,
     updateBrandSettingsAction,
 } from '../../settings/_actions/settings.actions'
+import { BRAND_CHECKBOX_KEEP } from '../../settings/_lib/brand-form-values'
 import type { CoachBrandDraft } from '../_data/dashboard.queries'
 
 /**
@@ -145,7 +146,13 @@ export function BrandQuickCard({
             fd.set('login_layout_key', brand.loginLayoutKey)
             fd.set('loader_config', brand.loaderConfig)
             // Los checkbox del form de Mi Marca viajan como 'on'/ausente.
-            if (brand.useBrandColorsCoach) fd.set('use_brand_colors_coach', 'on')
+            // W3.4 — EXCEPCIÓN: «usar mi marca también en mi panel» viaja como KEEP, no como el
+            // estado actual. Esta tarjeta no tiene ese checkbox, así que reenviarlo la convertía en
+            // un escritor silencioso: el coach en `false` reescribía `false` cada vez que guardaba
+            // su marca desde la guía, y se llevaba puesto el `true` con el que nacen los coaches
+            // nuevos (W3.3) y el backfill de W3.5. Ausencia = `false` explícito en el action; el
+            // único que puede apagar el toggle es su checkbox de Opciones › Mi Marca.
+            fd.set('use_brand_colors_coach', BRAND_CHECKBOX_KEEP)
             if (brand.useCustomLoader) fd.set('use_custom_loader', 'on')
             if (brand.neutralTint) fd.set('neutral_tint', 'on')
             if (brand.welcomeModalEnabled) fd.set('welcome_modal_enabled', 'on')

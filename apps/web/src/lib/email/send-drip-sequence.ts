@@ -3,7 +3,7 @@ import type { Database } from '@/lib/database.types'
 import { addResendAudienceContact } from './send-email'
 import { buildDripTemplates, type DripTemplate, type DripTemplateKey } from './drip-templates'
 import { siteBaseUrl } from './subscription-url'
-import { scheduleCoachEmail } from '@/services/email/coach-email-ledger.service'
+import { cancelCoachEmails, scheduleCoachEmail } from '@/services/email/coach-email-ledger.service'
 
 type FreeDripInput = {
     /** Service-role client: el ledger de correos se escribe con service_role, nunca con la sesión. */
@@ -134,6 +134,131 @@ export async function scheduleFreeCoachDripSequence(input: FreeDripInput): Promi
 
 function errMessage(err: unknown): string {
     return err instanceof Error ? err.message : String(err)
+}
+
+// ── Higiene: el drip no le sigue hablando a una casilla que nadie probó (FCN W3.8) ──────────────
+
+/**
+ * Las CUATRO keys de la serie, derivadas del calendario. Una sola fuente: agregar un correo al
+ * `DRIP_SCHEDULE` lo mete solo en la cancelación, sin un segundo listado que se desincronice.
+ */
+export const DRIP_TEMPLATE_KEYS: readonly string[] = DRIP_SCHEDULE.map(({ key }) => key)
+
+/** Gracia desde el alta antes de dar la casilla por no probada: 24 h (`DAY_MS` ya son 24 h). */
+export const UNVERIFIED_DRIP_GRACE_MS = DAY_MS
+
+/**
+ * Ventana hacia atrás del barrido. Más viejo que el D+14 no puede tener nada agendado, así que
+ * mirar más atrás solo agrega consultas al ledger por coaches que nunca van a tener filas.
+ */
+export const UNVERIFIED_DRIP_LOOKBACK_MS = 30 * DAY_MS
+
+export type UnverifiedDripHygieneResult =
+    | { skipped: 'verified' | 'too_soon' | 'not_found' | 'unreadable' }
+    | { cancelled: number; alreadySent: number; failed: number }
+
+/**
+ * Cancela lo que quede AGENDADO de la serie si el coach no probó su casilla pasadas 24 h.
+ *
+ * POR QUÉ (SPEC §9 R4): con D1 = A el alta free nace sin abrir el correo, así que una dirección mal
+ * tipeada queda viva y recibiendo cuatro correos a lo largo de dos semanas. Son cuatro rebotes duros
+ * por coach fantasma contra la reputación del dominio en Resend.
+ *
+ * LA SEÑAL ES `coaches.email_verified_at`, NUNCA `auth.users.email_confirmed_at` (regla 11 del SPEC).
+ * `auth.admin.createUser({ email_confirm: true })` sella la columna de GoTrue EN LA CREACIÓN: bajo
+ * D1 = A nace seteada para todos y este salto no saltaría a nadie — la higiene quedaría escrita y
+ * muerta. La prueba real de la casilla la escribe `service_role` en `coaches.email_verified_at`
+ * (W3.0) al volver de un `verifyOtp` OK o al entrar por Google.
+ *
+ * CÓMO SE «SALTA», ya que no hay filtro en el momento del envío: `scheduleFreeCoachDripSequence`
+ * agenda los cuatro correos DE UNA VEZ en el alta, con el `scheduled_at` de Resend. Saltar a las
+ * 24 h es CANCELAR lo agendado por su `provider_message_id` del ledger (`cancelCoachEmails`), que es
+ * el mismo mecanismo que ya usa el webhook de pagos cuando el coach compra.
+ *
+ * FAIL-CLOSED: si la fila del coach no se puede leer NO se cancela nada. El error de más barato es
+ * un correo de más a una casilla dudosa; el caro es dejar sin drip a un coach legítimo por un
+ * hipo de la DB.
+ *
+ * Nunca lanza: `cancelCoachEmails` no lanza por contrato y la lectura va por `error`, no por throw.
+ */
+export async function cancelDripForUnverifiedCoach(
+    admin: SupabaseClient<Database>,
+    coachId: string,
+    now: Date = new Date()
+): Promise<UnverifiedDripHygieneResult> {
+    const { data, error } = await admin
+        .from('coaches')
+        .select('email_verified_at, created_at')
+        .eq('id', coachId)
+        .maybeSingle()
+
+    if (error) {
+        console.warn('[drip-hygiene] no se pudo leer el coach — no se cancela nada (fail-closed)', {
+            coachId,
+            message: error.message,
+        })
+        return { skipped: 'unreadable' }
+    }
+    if (!data) return { skipped: 'not_found' }
+    // Probó la casilla: el drip sigue su curso.
+    if (data.email_verified_at) return { skipped: 'verified' }
+
+    // Sin `created_at` no se puede probar que pasaron las 24 h ⇒ misma decisión que fail-closed.
+    const createdAtMs = data.created_at ? new Date(data.created_at).getTime() : NaN
+    if (!Number.isFinite(createdAtMs)) return { skipped: 'too_soon' }
+    if (now.getTime() - createdAtMs < UNVERIFIED_DRIP_GRACE_MS) return { skipped: 'too_soon' }
+
+    // Solo las keys de la serie: `'*'` se llevaría por delante cualquier otro correo agendado del
+    // coach (nudges de cupo, correos de comportamiento), que no es lo que esta higiene decide.
+    return await cancelCoachEmails(admin, coachId, DRIP_TEMPLATE_KEYS)
+}
+
+export type UnverifiedDripSweepSummary = {
+    candidates: number
+    cancelled: number
+    alreadySent: number
+    failed: number
+}
+
+/**
+ * Barrido de la higiene anterior: coaches sin casilla probada cuya alta ya pasó las 24 h.
+ *
+ * Los candidatos salen de `coaches` (no del ledger) porque el predicado es del coach; a los que no
+ * tengan nada agendado, `cancelCoachEmails` les devuelve ceros sin tocar Resend. La ventana
+ * (`UNVERIFIED_DRIP_LOOKBACK_MS`) evita arrastrar para siempre a todo el histórico sin verificar.
+ *
+ * Es la función que un cron diario llama; no tiene caller todavía (el endpoint vive fuera del
+ * alcance de W3.8) y por eso nunca lanza y devuelve un resumen contable.
+ */
+export async function sweepUnverifiedCoachDrips(
+    admin: SupabaseClient<Database>,
+    now: Date = new Date()
+): Promise<UnverifiedDripSweepSummary> {
+    const summary: UnverifiedDripSweepSummary = { candidates: 0, cancelled: 0, alreadySent: 0, failed: 0 }
+
+    const { data, error } = await admin
+        .from('coaches')
+        .select('id')
+        .is('email_verified_at', null)
+        .gte('created_at', new Date(now.getTime() - UNVERIFIED_DRIP_LOOKBACK_MS).toISOString())
+        .lt('created_at', new Date(now.getTime() - UNVERIFIED_DRIP_GRACE_MS).toISOString())
+
+    if (error) {
+        console.error('[drip-hygiene] barrido abortado: no se pudieron listar los candidatos', {
+            message: error.message,
+        })
+        return summary
+    }
+
+    summary.candidates = data?.length ?? 0
+    for (const row of data ?? []) {
+        const result = await cancelCoachEmails(admin, row.id, DRIP_TEMPLATE_KEYS)
+        summary.cancelled += result.cancelled
+        summary.alreadySent += result.alreadySent
+        summary.failed += result.failed
+    }
+
+    return summary
 }
 
 /**

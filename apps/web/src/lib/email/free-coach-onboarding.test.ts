@@ -71,7 +71,8 @@ describe('sendFreeCoachOnboardingEmails', () => {
         expect(buildFreeCoachWelcomeEmailMock).toHaveBeenCalledWith({
             coachName: 'Coach Test',
             brandName: 'Antigravity Pro',
-            dashboardUrl: 'https://www.eva-app.cl/coach/dashboard',
+            // W3.7: el CTA aterriza en la GUÍA, no en el panel vacío.
+            dashboardUrl: 'https://www.eva-app.cl/coach/guia',
             clientsUrl: 'https://www.eva-app.cl/coach/clients',
             subscriptionUrl: 'https://www.eva-app.cl/coach/subscription',
         })
@@ -89,6 +90,22 @@ describe('sendFreeCoachOnboardingEmails', () => {
             brandName: 'Antigravity Pro',
             inviteCode: 'X5UD9X44',
         })
+    })
+
+    /**
+     * W3.7 (= W8.1.10 de coach-onboarding-v2). El CTA de la bienvenida Free tiene que caer en la
+     * GUÍA: `/coach/guia` es «Tus primeros pasos» desde que salió del dashboard (owner 22-08), y
+     * mandar al coach del día 1 al panel vacío es exactamente lo que la guía existe para evitar.
+     */
+    it('el CTA de la bienvenida apunta a /coach/guia, NUNCA al dashboard', async () => {
+        await sendFreeCoachOnboardingEmails(PARAMS)
+
+        expect(buildFreeCoachWelcomeEmailMock).toHaveBeenCalledWith(
+            expect.objectContaining({ dashboardUrl: 'https://www.eva-app.cl/coach/guia' })
+        )
+        expect(buildFreeCoachWelcomeEmailMock).not.toHaveBeenCalledWith(
+            expect.objectContaining({ dashboardUrl: 'https://www.eva-app.cl/coach/dashboard' })
+        )
     })
 
     it('si AMBAS patas rechazan resuelve igual (nunca rompe el alta) y loguea sin PII', async () => {
