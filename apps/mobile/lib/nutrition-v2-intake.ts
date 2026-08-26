@@ -76,6 +76,11 @@ export interface BuildIntakeInput {
   deviceId: string
   /** UUID generado UNA vez al crear la intencion; conservado si se reintenta/encola. */
   operationId: string
+  /**
+   * Clave YA construida. Solo la usa el camino PRESCRITO, que la arma SIN `deviceId`
+   * (`prescribedIntakeIdempotencyKey`). Ausente ⇒ se deriva de (clientId, deviceId, operationId).
+   */
+  idempotencyKey?: string
   localDate: string
   occurredAt: string
   timezone: string
@@ -143,6 +148,31 @@ export function prescribedIntentOperationId(input: {
   return `presc-${input.localDate}-${input.prescriptionItemId}-a${attempt}`
 }
 
+/**
+ * Idempotency key del camino PRESCRITO. A diferencia del resto de las claves de esta capa, NO
+ * lleva `deviceId`.
+ *
+ * El dedup del servidor ya esta scopeado por `client_id` (short-circuit por
+ * `client_id + idempotency_key`), asi que meter el dispositivo solo servia para que el MISMO
+ * alumno, marcando el MISMO item del MISMO dia desde dos telefonos —o desde el navegador, o
+ * despues de reinstalar, que rota el `deviceId`— generara dos claves distintas y el dia terminara
+ * con el aporte duplicado. La intencion no cambia porque cambie el aparato.
+ *
+ * Sin `deviceId` la clave queda `intake-presc-<dia>-<item>-a<intento>`: exactamente la misma
+ * cadena que emite la web (`nutrition-today.logic.ts::prescribedIntakeIdempotencyKey`), de modo
+ * que las dos superficies colapsan en una sola escritura.
+ *
+ * El resto de las claves (alimento libre, correcciones, retiros) conservan `deviceId`: ahi la
+ * identidad ES el gesto de este dispositivo, y repetirlo es una intencion valida.
+ */
+export function prescribedIntakeIdempotencyKey(operationId: string): string {
+  const key = `intake-${operationId}`.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-')
+  if (key.length < 8 || key.length > 200) {
+    throw new Error('Invalid nutrition idempotency key length')
+  }
+  return key
+}
+
 function snapshotPayload(snapshot: NutritionIntakeSnapshotInput) {
   return {
     name: snapshot.name,
@@ -179,12 +209,14 @@ export function buildRecordIntakeMutation(input: BuildIntakeInput): NutritionInt
     daySnapshotId: input.daySnapshotId ?? null,
     planVersionId: input.planVersionId ?? null,
     prescriptionItemId: input.prescriptionItemId ?? null,
-    idempotencyKey: nutritionV2IntakeIdempotencyKey({
-      clientId: input.clientId,
-      deviceId: input.deviceId,
-      operationId: input.operationId,
-      kind: 'intake',
-    }),
+    idempotencyKey:
+      input.idempotencyKey ??
+      nutritionV2IntakeIdempotencyKey({
+        clientId: input.clientId,
+        deviceId: input.deviceId,
+        operationId: input.operationId,
+        kind: 'intake',
+      }),
     note: input.note ?? null,
     snapshot: snapshotPayload(input.snapshot),
   })
@@ -267,6 +299,8 @@ export function buildAteAsPrescribedMutation(input: {
     clientId: input.clientId,
     deviceId: input.deviceId,
     operationId: input.operationId,
+    // Clave SIN deviceId: la intencion es (alumno, dia, item), no (aparato, dia, item).
+    idempotencyKey: prescribedIntakeIdempotencyKey(input.operationId),
     localDate: input.localDate,
     occurredAt: input.occurredAt,
     timezone: input.timezone,

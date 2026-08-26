@@ -43,6 +43,9 @@ import { getClientBasePath } from '@/lib/client/base-path'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
+/** Uuid nulo para los scopes sin coach directo (plan de team/org): castea bien y no matchea. */
+const NIL_UUID = '00000000-0000-0000-0000-000000000000'
+
 interface Props {
   params: Promise<{ coach_slug: string }>
 }
@@ -66,7 +69,10 @@ export default async function ClientNutritionPage({ params }: Props) {
 
   const prefsInput = {
     domain: 'nutrition' as const,
-    coachId: String(plan.coach_id ?? ''),
+    // Plan de team/org (`coach_id` null): nil uuid (válido, no matchea ninguna fila) en vez de ''
+    // — evita `invalid input syntax for type uuid: ""` en coach_feature_prefs; el resolver cae al
+    // scope team/org igual. Mismo patrón que api/mobile/nutrition/micros/route.ts.
+    coachId: String(plan.coach_id ?? NIL_UUID),
     clientId: user.id,
     planId: String(plan.id),
     clientTeamId: clientScope.teamId,
@@ -109,7 +115,8 @@ export default async function ClientNutritionPage({ params }: Props) {
     getMicroTargetsForClient(plan.coach_id == null ? null : String(plan.coach_id), user.id),
     getNutritionProEnabledForClient(String(plan.id)),
     resolveNutritionDomainEnabled({
-      coachId: String(plan.coach_id ?? ''),
+      // Nil uuid en vez de '' — mismo patrón de `prefsInput` (evita el cast a uuid roto).
+      coachId: String(plan.coach_id ?? NIL_UUID),
       clientId: user.id,
       clientTeamId: clientScope.teamId,
       clientOrgId: clientScope.orgId,

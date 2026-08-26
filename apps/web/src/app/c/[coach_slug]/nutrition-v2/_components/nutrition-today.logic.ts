@@ -5,6 +5,7 @@ import {
   scaleSnapshotMacros,
   type NutritionMacroTotalsLike,
 } from '@eva/nutrition-v2'
+import type { StringStorageLike } from './portion-marks.logic'
 import type {
   FoodCatalogItem,
   NutritionFoodRowModel,
@@ -48,6 +49,117 @@ export function newIdempotencyKey(prefix: 'intake' | 'correction' | 'void' | 'cl
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`
   return `${prefix}-${uuid}`
+}
+
+// ── Camino PRESCRITO: una intención, una clave (NUT-003) ─────────────────────────
+// "Me comí ESTE item prescrito ESTE día" tiene identidad lógica propia, así que su clave se DERIVA
+// de ella en vez de sortearse por gesto. Con un uuid por gesto el único dedup del servidor
+// (short-circuit por `client_id + idempotency_key`) nunca matchea: dos toques, o el MISMO toque
+// repetido desde una pestaña con el read-model viejo, insertaban dos registros y el día terminaba
+// con el aporte duplicado — el caso medido el 2026-08-25 (una franja marcada 3 veces, +1350 kcal).
+// Es la misma semántica que RN ya usa (`apps/mobile/lib/nutrition-v2-intake.ts`
+// ::prescribedIntentOperationId), con la MISMA forma de clave, así que un alumno que marca en el
+// teléfono y en el navegador tampoco duplica.
+//
+// El alimento LIBRE, las correcciones y los retiros siguen con `newIdempotencyKey`: registrar dos
+// veces el mismo alimento libre es una intención válida y colapsarla sería mentir.
+
+/**
+ * Clave de idempotencia determinista del "Lo comí" prescrito.
+ *
+ * `attempt` (>= 1) sube SOLO al retirar un registro del item, nunca al reintentar: el
+ * short-circuit del RPC no mira `entry_status`, así que reusar la clave de una entry ya retirada
+ * devolvería su id sin escribir nada y el item quedaría inconsumible el resto del día (el mismo
+ * hallazgo que QA 2026-08-10 obligó a resolver en el camino de reemplazos). Lo lleva el mapa local
+ * de más abajo — mismo patrón que el `attempt` del marcar-porción (`portion-marks.logic.ts`).
+ */
+export function prescribedIntakeIdempotencyKey(input: {
+  localDate: string
+  prescriptionItemId: string
+  attempt?: number
+}): string {
+  const attempt = input.attempt ?? 1
+  if (!Number.isInteger(attempt) || attempt < 1) {
+    throw new Error('prescribedIntakeIdempotencyKey: attempt debe ser entero >= 1')
+  }
+  // Normalizada igual que `buildNutritionIdempotencyKey` (el builder de RN) para que las dos
+  // superficies emitan exactamente la misma cadena aunque un id llegue en mayúsculas.
+  return `intake-presc-${input.localDate}-${input.prescriptionItemId}-a${attempt}`
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')
+}
+
+/** Mapa local de attempts del camino prescrito, por `(fecha, item prescrito)`. */
+export type PrescribedAttemptMap = Record<string, number>
+
+export function prescribedAttemptKey(localDate: string, prescriptionItemId: string): string {
+  return `${localDate}|${prescriptionItemId}`
+}
+
+/** Attempt vigente para una key (arranca en 1). */
+export function prescribedAttemptFor(map: PrescribedAttemptMap, key: string): number {
+  const value = map[key]
+  return Number.isInteger(value) && value >= 1 ? value : 1
+}
+
+/** Incrementa el attempt del item: se llama en CADA retiro de un registro suyo. */
+export function bumpPrescribedAttempt(
+  map: PrescribedAttemptMap,
+  key: string,
+): PrescribedAttemptMap {
+  return { ...map, [key]: prescribedAttemptFor(map, key) + 1 }
+}
+
+/** Poda entradas de otras fechas (el mapa solo importa para el día vigente). */
+export function prunePrescribedAttemptMap(
+  map: PrescribedAttemptMap,
+  localDate: string,
+): PrescribedAttemptMap {
+  const pruned: PrescribedAttemptMap = {}
+  for (const [key, value] of Object.entries(map)) {
+    if (key.startsWith(`${localDate}|`) && Number.isInteger(value) && value >= 1) {
+      pruned[key] = value
+    }
+  }
+  return pruned
+}
+
+export function prescribedAttemptStorageKey(clientId: string): string {
+  return `eva-nutrition-prescribed-attempts:${clientId}`
+}
+
+/**
+ * El mapa se PERSISTE (no basta un ref): si el alumno deshace y recarga la pantalla antes de
+ * volver a marcar, un contador en memoria volvería a 1 y la clave chocaría con la entry retirada.
+ */
+export function loadPrescribedAttemptMap(
+  storage: StringStorageLike | null,
+  clientId: string,
+  localDate: string,
+): PrescribedAttemptMap {
+  if (!storage) return {}
+  try {
+    const raw = storage.getItem(prescribedAttemptStorageKey(clientId))
+    if (!raw) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {}
+    return prunePrescribedAttemptMap(parsed as PrescribedAttemptMap, localDate)
+  } catch {
+    return {}
+  }
+}
+
+export function savePrescribedAttemptMap(
+  storage: StringStorageLike | null,
+  clientId: string,
+  map: PrescribedAttemptMap,
+): void {
+  if (!storage) return
+  try {
+    storage.setItem(prescribedAttemptStorageKey(clientId), JSON.stringify(map))
+  } catch {
+    // Storage lleno/bloqueado: el attempt sigue vivo en memoria durante la sesión.
+  }
 }
 
 /** Todas las franjas del dia como opciones {code,label} (sin franjas hardcodeadas). */
@@ -286,21 +398,31 @@ export function buildVoidPayload(input: {
 
 // ── Bulk-mark de franja ("Comí toda esta comida") ────────────────────────────────
 // Reusa 1:1 el camino del "Lo comí" individual (mismo buildPrescribedIntakePayload por item,
-// key fresca por item) para que el snapshot congelado y los totales sean idénticos. El
-// "qué es elegible" lo decide el helper puro compartido (bulkMarkSlotState).
+// misma clave determinista por item) para que el snapshot congelado y los totales sean idénticos.
+// El "qué es elegible" lo decide el helper puro compartido (bulkMarkSlotState) — que depende de un
+// read-model fresco, y por eso la clave es la que de verdad impide el doble registro.
 
-/** Payloads de registro para N items prescritos de una franja (uno por item, key propia). */
+/** Payloads de registro para N items prescritos de una franja (uno por item, clave por item). */
 export function buildBulkPrescribedPayloads(input: {
   context: Context
   slot: NutritionMealSlotRead
   items: PrescriptionItemRead[]
+  /** Attempts locales por item (ver `prescribedAttemptKey`); vacío ⇒ primer intento del día. */
+  attempts?: PrescribedAttemptMap
 }): NutritionIntakeMutation[] {
   return input.items.map((item) =>
     buildPrescribedIntakePayload({
       context: input.context,
       slot: input.slot,
       item,
-      idempotencyKey: newIdempotencyKey('intake'),
+      idempotencyKey: prescribedIntakeIdempotencyKey({
+        localDate: input.context.date,
+        prescriptionItemId: item.id,
+        attempt: prescribedAttemptFor(
+          input.attempts ?? {},
+          prescribedAttemptKey(input.context.date, item.id),
+        ),
+      }),
     }),
   )
 }

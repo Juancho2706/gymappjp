@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
     // coach, el alumno no ve nada de nutricion -> el cliente movil oculta la seccion.
     const domainEnabled = await resolveNutritionDomainEnabled(
         {
-            coachId: ctx.coachId ?? '',
+            // Nil uuid, mismo patron de :79/:89 — con '' PostgREST revienta el cast a uuid (22P02).
+            coachId: ctx.coachId ?? '00000000-0000-0000-0000-000000000000',
             clientId,
             clientTeamId: ctx.teamId,
             clientOrgId: ctx.orgId,

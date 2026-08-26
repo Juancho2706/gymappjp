@@ -13,11 +13,15 @@ import {
   nutritionV2EntryFactor,
   nutritionV2IntakeIdempotencyKey,
   optimisticIntakeRow,
+  prescribedIntakeIdempotencyKey,
   prescribedIntakeTotals,
   prescribedIntentOperationId,
   shouldQueueNutritionV2Error,
 } from '../apps/mobile/lib/nutrition-v2-intake'
-import { buildPrescribedIntakePayload } from '../apps/web/src/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic'
+import {
+  buildPrescribedIntakePayload,
+  prescribedIntakeIdempotencyKey as webPrescribedIntakeIdempotencyKey,
+} from '../apps/web/src/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic'
 import {
   buildScannedFoodIntakeMutation,
   scannedFoodUnitOptions,
@@ -511,6 +515,47 @@ describe('nutrition v2 intake - operationId determinista del camino prescrito', 
         item: prescriptionItem,
       })
     expect(build().idempotencyKey).toBe(build().idempotencyKey)
+  })
+
+  // N4: el indice del servidor ya scopea por client_id, asi que el deviceId dentro de la clave
+  // solo lograba que el MISMO alumno duplicara al marcar desde dos aparatos (o tras reinstalar,
+  // que rota el deviceId).
+  it('la key prescrita NO cambia con el dispositivo', () => {
+    const ate = (deviceId: string) =>
+      buildAteAsPrescribedMutation({
+        clientId: CLIENT,
+        deviceId,
+        operationId: prescribedIntentOperationId({
+          localDate: '2026-07-15',
+          prescriptionItemId: prescriptionItem.id,
+        }),
+        localDate: '2026-07-15',
+        occurredAt: NOW,
+        timezone: 'America/Santiago',
+        slotCode: 'lunch',
+        planVersionId: VERSION,
+        daySnapshotId: null,
+        item: prescriptionItem,
+      })
+    expect(ate('device-a').idempotencyKey).toBe(ate('device-b').idempotencyKey)
+    expect(ate('device-a').idempotencyKey).not.toContain('device-a')
+  })
+
+  it('el alimento LIBRE conserva el deviceId en la key (repetirlo es intencion valida)', () => {
+    const free = (deviceId: string) => buildRecordIntakeMutation({ ...baseRecord, deviceId })
+    expect(free('device-a').idempotencyKey).not.toBe(free('device-b').idempotencyKey)
+  })
+
+  it('web y RN emiten EXACTAMENTE la misma key para (dia, item)', () => {
+    const rn = prescribedIntakeIdempotencyKey(
+      prescribedIntentOperationId({ localDate: '2026-07-15', prescriptionItemId: PRESC }),
+    )
+    const web = webPrescribedIntakeIdempotencyKey({
+      localDate: '2026-07-15',
+      prescriptionItemId: PRESC,
+    })
+    expect(rn).toBe(web)
+    expect(rn).toBe(`intake-presc-2026-07-15-${PRESC}-a1`)
   })
 })
 

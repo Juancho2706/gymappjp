@@ -87,6 +87,12 @@ interface MarkInput {
   portions: 0.5 | 1
 }
 
+/**
+ * Payload CONGELADO del gesto: se arma una sola vez y el reintento reenvía este mismo objeto, así
+ * la idempotency key del server (que sale de ordinal + attempt) no puede cambiar entre intentos.
+ */
+type MarkRequest = Parameters<typeof markPortionIntakeAction>[0]
+
 export interface PortionMarksApi {
   /** Cobertura efectiva (server + delta optimista) de un target de la franja. */
   coverageFor: (slotCode: string, target: NutritionSlotExchangeTargetRead) => EffectivePortionCoverage
@@ -274,109 +280,120 @@ export function usePortionMarks({
 
   const mark = useCallback(
     (input: MarkInput) => {
-      // Función interna nombrada: el "Reintentar" del toast re-ejecuta el MISMO gesto
-      // (recomputa ordinal/attempt sobre el estado actual ⇒ misma key ⇒ dedup).
-      function runMark({ slot, target, portions }: MarkInput): void {
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        // Web PWA sin cola offline: honesto y sin optimismo fantasma (UX-c).
-        toast(PORTIONS_COPY.student.offline)
-        return
-      }
-      const slotCode = slot.code
-      const groupCode = target.groupCode
-      const activeCount = activeSyntheticMarks(slot.intakeItems, groupCode).length
-      const cellPending = pendingInCell(pendingRef.current, slotCode, groupCode)
-      const ordinal = nextPortionOrdinal(activeCount, cellPending.length)
-      const aKey = portionAttemptKey(localDate, slotCode, groupCode, ordinal)
-      const attempt = attemptFor(attemptMapRef.current ?? {}, aKey)
-      const key = buildNutritionPortionIntakeKey({
-        clientId,
-        deviceId,
-        localDate,
-        slotCode,
-        groupCode,
-        ordinal,
-        attempt,
-      })
+      /**
+       * Envía un gesto YA construido. El "Reintentar" del toast reenvía EXACTAMENTE este payload
+       * —misma key, mismo ordinal, mismo attempt— en vez de recalcularlos sobre el estado del
+       * momento: si el servidor sí había guardado pero la respuesta se perdió, y entremedio entró
+       * un refresh o una marca vecina, un ordinal recalculado producía una key NUEVA y la misma
+       * porción entraba dos veces.
+       */
+      function submitMark(key: string, request: MarkRequest): void {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          // Web PWA sin cola offline: honesto y sin optimismo fantasma (UX-c).
+          toast(PORTIONS_COPY.student.offline)
+          return
+        }
+        const { slotCode, groupCode, ordinal, attempt, portions } = request
 
-      const record: MarkRecord = { key, slotCode, groupCode, ordinal, portions, entryId: null }
-      marksRef.current.set(key, record)
-      commitPending([
-        ...pendingRef.current,
-        {
-          key,
+        const record: MarkRecord = { key, slotCode, groupCode, ordinal, portions, entryId: null }
+        marksRef.current.set(key, record)
+        commitPending([
+          ...pendingRef.current,
+          {
+            key,
+            slotCode,
+            groupCode,
+            groupName: request.groupName,
+            portions,
+            ordinal,
+            attempt,
+            entryId: null,
+          },
+        ])
+
+        const retryCopy = splitRetryCopy(PORTIONS_COPY.student.markFailed)
+        const onFailure = (message: string) => {
+          marksRef.current.delete(key)
+          undoRequestedRef.current.delete(key)
+          removePending(key)
+          toast.error(message, {
+            duration: 6000,
+            // Reintento del MISMO gesto: reenvía el payload congelado ⇒ misma key ⇒ dedup si
+            // el server sí guardó.
+            action: { label: retryCopy.retryLabel, onClick: () => submitMark(key, request) },
+          })
+        }
+
+        void markPortionIntakeAction(request)
+          .then((res) => {
+            if (!res.ok) {
+              onFailure(humanizeStudentWriteError(res.error, retryCopy.message))
+              return
+            }
+            const entryId = res.data.entryId
+            record.entryId = entryId
+            commitPending(pendingRef.current.map((m) => (m.key === key ? { ...m, entryId } : m)))
+            if (undoRequestedRef.current.has(key)) {
+              undoRequestedRef.current.delete(key)
+              void doUndo(key)
+              return
+            }
+            captureIntake('portion_chip')
+            // Snackbar AGRUPADO: una sola pastilla que se ACTUALIZA con el total de la ráfaga
+            // ("3 porciones marcadas · Deshacer") en vez de apilar una por marca tapando la franja
+            // siguiente. Su "Deshacer" revierte el lote completo, que es lo que el contador promete.
+            burstRef.current = [...burstRef.current, { key, portions }]
+            const burstPortions = burstRef.current.reduce((sum, m) => sum + m.portions, 0)
+            toast(markedBurstMessage(burstPortions), {
+              id: MARK_TOAST_ID,
+              duration: MARK_TOAST_MS,
+              action: { label: PORTIONS_COPY.student.undo, onClick: () => undoBurst() },
+              onAutoClose: clearBurst,
+              onDismiss: clearBurst,
+            })
+            scheduleRefresh()
+          })
+          .catch(() => {
+            const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+            onFailure(offline ? PORTIONS_COPY.student.offline : retryCopy.message)
+          })
+      }
+
+      /** Congela el gesto: ordinal y attempt se resuelven UNA vez, acá. */
+      function runMark({ slot, target, portions }: MarkInput): void {
+        const slotCode = slot.code
+        const groupCode = target.groupCode
+        const activeCount = activeSyntheticMarks(slot.intakeItems, groupCode).length
+        const cellPending = pendingInCell(pendingRef.current, slotCode, groupCode)
+        const ordinal = nextPortionOrdinal(activeCount, cellPending.length)
+        const aKey = portionAttemptKey(localDate, slotCode, groupCode, ordinal)
+        const attempt = attemptFor(attemptMapRef.current ?? {}, aKey)
+        const key = buildNutritionPortionIntakeKey({
+          clientId,
+          deviceId,
+          localDate,
+          slotCode,
+          groupCode,
+          ordinal,
+          attempt,
+        })
+        submitMark(key, {
+          clientId,
+          localDate,
+          timezone: today.timezone,
           slotCode,
           groupCode,
           groupName: target.groupName,
           portions,
           ordinal,
           attempt,
-          entryId: null,
-        },
-      ])
-
-      const retryCopy = splitRetryCopy(PORTIONS_COPY.student.markFailed)
-      const onFailure = (message: string) => {
-        marksRef.current.delete(key)
-        undoRequestedRef.current.delete(key)
-        removePending(key)
-        toast.error(message, {
-          duration: 6000,
-          // Reintento del MISMO gesto: recomputa ordinal/attempt sobre el estado
-          // actual (sin la marca fallida) ⇒ misma key ⇒ dedup si el server sí guardó.
-          action: { label: retryCopy.retryLabel, onClick: () => runMark({ slot, target, portions }) },
-        })
-      }
-
-      void markPortionIntakeAction({
-        clientId,
-        localDate,
-        timezone: today.timezone,
-        slotCode,
-        groupCode,
-        groupName: target.groupName,
-        portions,
-        ordinal,
-        attempt,
-        deviceId,
-        ref: {
-          calories: target.ref.calories,
-          proteinG: target.ref.proteinG,
-          carbsG: target.ref.carbsG,
-          fatsG: target.ref.fatsG,
-        },
-      })
-        .then((res) => {
-          if (!res.ok) {
-            onFailure(humanizeStudentWriteError(res.error, retryCopy.message))
-            return
-          }
-          const entryId = res.data.entryId
-          record.entryId = entryId
-          commitPending(pendingRef.current.map((m) => (m.key === key ? { ...m, entryId } : m)))
-          if (undoRequestedRef.current.has(key)) {
-            undoRequestedRef.current.delete(key)
-            void doUndo(key)
-            return
-          }
-          captureIntake('portion_chip')
-          // Snackbar AGRUPADO: una sola pastilla que se ACTUALIZA con el total de la ráfaga
-          // ("3 porciones marcadas · Deshacer") en vez de apilar una por marca tapando la franja
-          // siguiente. Su "Deshacer" revierte el lote completo, que es lo que el contador promete.
-          burstRef.current = [...burstRef.current, { key, portions }]
-          const burstPortions = burstRef.current.reduce((sum, m) => sum + m.portions, 0)
-          toast(markedBurstMessage(burstPortions), {
-            id: MARK_TOAST_ID,
-            duration: MARK_TOAST_MS,
-            action: { label: PORTIONS_COPY.student.undo, onClick: () => undoBurst() },
-            onAutoClose: clearBurst,
-            onDismiss: clearBurst,
-          })
-          scheduleRefresh()
-        })
-        .catch(() => {
-          const offline = typeof navigator !== 'undefined' && navigator.onLine === false
-          onFailure(offline ? PORTIONS_COPY.student.offline : retryCopy.message)
+          deviceId,
+          ref: {
+            calories: target.ref.calories,
+            proteinG: target.ref.proteinG,
+            carbsG: target.ref.carbsG,
+            fatsG: target.ref.fatsG,
+          },
         })
       }
       runMark(input)

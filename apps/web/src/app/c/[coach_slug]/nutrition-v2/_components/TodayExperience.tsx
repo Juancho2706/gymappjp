@@ -63,17 +63,24 @@ import {
   buildOptimisticSubstitutionEntry,
   buildPrescribedIntakePayload,
   buildVoidPayload,
+  bumpPrescribedAttempt,
   consumedEntries,
   consumedEntryForItem,
   contextFromToday,
   estimateCatalogIntakeTotals,
   formatIntakeClock,
+  loadPrescribedAttemptMap,
   mealSlotOptions,
   newIdempotencyKey,
   outOfPlanEntries,
+  prescribedAttemptFor,
+  prescribedAttemptKey,
+  prescribedIntakeIdempotencyKey,
   resolveItemDisplayNote,
+  savePrescribedAttemptMap,
   slotFreeEntries,
   slotPortionMarksTotal,
+  type PrescribedAttemptMap,
   type TodayOptimisticAction,
 } from './nutrition-today.logic'
 import { usePortionMarks, type PortionMarksApi } from './PortionMarks'
@@ -250,10 +257,45 @@ export function TodayExperience({
    * definición — se reinicia con la pantalla, igual que la intención del alumno.
    */
   const swipeCycleRef = useRef<Record<string, number>>({})
+  /**
+   * Attempts del camino PRESCRITO (NUT-003). La clave del "Lo comí" ya no es un uuid por gesto
+   * sino la intención (día + item), así que un doble toque —o el mismo toque desde una pestaña con
+   * el read-model viejo— colapsa en el RPC. El attempt sube SOLO al retirar un registro del item:
+   * sin eso la clave chocaría con la entry retirada y el item quedaría inconsumible el resto del
+   * día. Persistido, porque deshacer y recargar antes de volver a marcar es un camino real.
+   */
+  const attemptStorage = typeof window !== 'undefined' ? window.localStorage : null
+  const prescribedAttemptsRef = useRef<PrescribedAttemptMap | null>(null)
+  if (prescribedAttemptsRef.current === null) {
+    prescribedAttemptsRef.current = loadPrescribedAttemptMap(
+      attemptStorage,
+      clientId,
+      serverToday.localDate,
+    )
+  }
   const captureIntake = useCaptureStudentNutritionIntake()
   const captureCorrection = useCaptureStudentNutritionCorrection()
 
   const ctx = useMemo(() => contextFromToday(today, clientId), [today, clientId])
+
+  /** Attempt vigente del item para armar su clave (1 = todavía no se retiró nada suyo hoy). */
+  function prescribedAttempt(prescriptionItemId: string): number {
+    return prescribedAttemptFor(
+      prescribedAttemptsRef.current ?? {},
+      prescribedAttemptKey(ctx.date, prescriptionItemId),
+    )
+  }
+
+  /**
+   * Quema la clave del item tras retirar uno de sus registros: el próximo "Lo comí" usa una clave
+   * nueva en vez de rebotar contra el short-circuit del RPC (que no mira `entry_status`).
+   */
+  function burnPrescribedAttempt(prescriptionItemId: string | null | undefined) {
+    if (!prescriptionItemId) return
+    const key = prescribedAttemptKey(ctx.date, prescriptionItemId)
+    prescribedAttemptsRef.current = bumpPrescribedAttempt(prescribedAttemptsRef.current ?? {}, key)
+    savePrescribedAttemptMap(attemptStorage, clientId, prescribedAttemptsRef.current)
+  }
   const entries = useMemo(() => consumedEntries(today), [today])
   const slotOptions = useMemo(() => mealSlotOptions(today), [today])
   // "Fuera del plan" (auditoría H4): lo que no calza en ninguna franja renderizada. El set de
@@ -322,7 +364,12 @@ export function TodayExperience({
   ) {
     if (state.eligible.length === 0) return
     const id = `bulk:${slot.id}`
-    const payloads = buildBulkPrescribedPayloads({ context: ctx, slot, items: state.eligible })
+    const payloads = buildBulkPrescribedPayloads({
+      context: ctx,
+      slot,
+      items: state.eligible,
+      attempts: prescribedAttemptsRef.current ?? {},
+    })
     // Delta optimista (H2): una entry por item elegible, alineada 1:1 con `payloads`.
     const optimisticEntries = state.eligible.map((item, index) =>
       buildOptimisticIntakeEntry({
@@ -393,6 +440,10 @@ export function TodayExperience({
       try {
         const res = await voidSlotIntakeBatchAction({ payloads: undo })
         if (res.ok) {
+          // `undo[i]` ↔ `payloads[i]` (mismo emparejado por índice que buildBulkUndoPayloads).
+          for (let i = 0; i < undo.length; i += 1) {
+            burnPrescribedAttempt(payloads[i].prescriptionItemId)
+          }
           await syncTodayFromServer(undoDeltas)
           toast.success(`Deshice el registro de ${slotName}.`)
         } else {
@@ -480,7 +531,10 @@ export function TodayExperience({
             : `Registraste el reemplazo · ${label}`,
           {
             duration: 6000,
-            action: { label: 'Deshacer', onClick: () => handleSubstitutionUndo(res.id) },
+            action: {
+              label: 'Deshacer',
+              onClick: () => handleSubstitutionUndo(res.id, itemEntry.prescriptionItemId),
+            },
           },
         )
         // Copy honesto: el alumno pidió una cantidad y el plan de su coach no la permitía.
@@ -517,8 +571,12 @@ export function TodayExperience({
     handleSubstitute(itemEntry, option, null)
   }
 
-  /** Deshacer del toast: mismo camino de retiro que el resto (append-only, nada se borra). */
-  function handleSubstitutionUndo(entryId: string) {
+  /**
+   * Deshacer del toast: mismo camino de retiro que el resto (append-only, nada se borra).
+   * Si el reemplazo CORRIGIÓ un "Lo comí" previo, la clave prescrita de ese registro quedó quemada
+   * (`corrected`), así que retirarlo devuelve el item a la fila y hay que estrenar clave.
+   */
+  function handleSubstitutionUndo(entryId: string, prescriptionItemId: string) {
     const undoDelta: TodayOptimisticAction = { kind: 'void', entryId }
     startTransition(async () => {
       applyTodayDelta(undoDelta)
@@ -532,6 +590,7 @@ export function TodayExperience({
           },
         })
         if (res.ok) {
+          burnPrescribedAttempt(prescriptionItemId)
           await syncTodayFromServer([undoDelta])
           toast.success('Deshice el reemplazo.')
         } else {
@@ -676,7 +735,11 @@ export function TodayExperience({
             context: ctx,
             slot,
             item,
-            idempotencyKey: newIdempotencyKey('intake'),
+            idempotencyKey: prescribedIntakeIdempotencyKey({
+              localDate: ctx.date,
+              prescriptionItemId: item.id,
+              attempt: prescribedAttempt(item.id),
+            }),
           })
           runMutation(
             `eat:${item.id}`,
@@ -897,6 +960,9 @@ export function TodayExperience({
                 }),
               () => {
                 captureCorrection('voided')
+                // Retirar un registro prescrito QUEMA su clave: el próximo "Lo comí" del item
+                // necesita una nueva o el RPC devolvería el id de esta entry retirada.
+                burnPrescribedAttempt(dialog.entry.prescriptionItemId)
                 closeDialog()
               },
               { kind: 'void', entryId: dialog.entry.id },
