@@ -1,17 +1,26 @@
 ---
-status: active
+status: closed
 owner: product-engineering
-last_verified: "2026-08-23"
+last_verified: "2026-08-26"
 canonical: false
 ---
 
 # SPEC — «Vive tu app» directo: entrar con un toque, volver con un toque
 
-**Estado: EN DISEÑO — propuesta para «go» del owner (2026-08-23), revisada por panel adversarial (4 lentes:
-seguridad de sesión, RN/tiendas/App Links, producto, implementabilidad) el mismo día. Enmienda a
-[coach-onboarding-v2 §5 y §6](../coach-onboarding-v2/SPEC.md) y absorbe las tareas abiertas W8.1.2 (parcial),
-W8.1.9 y W8.6.2 de [su TASKS](../coach-onboarding-v2/TASKS.md). Evidencia de base: auditoría del caso Job
-Palacios (23-08, artifact «Vive tu app en móvil» `3b1616d9`) + 6 informes de lectura del código.**
+> **CERRADA — 2026-08-26.** Implementada completa en la ola del 25→26-08 (commits `c251a49c`,
+> `8d435570`, `fd979428`, `8dffbbff`, `e7ed1de9` + tandas de la sesión hermana; ver
+> [TASKS](TASKS.md) con evidencia por tarea). OTAs (runtimes 1.1.2 y port 1.1.1) ANTES del deploy
+> web, cutovers fijados a `2026-08-26T06:00:00Z`. **QA device del owner consumido el 26-08:
+> matriz completa aprobada** (entrar/volver con un toque en desktop y celu, chip «Entró hace X»
+> en web y RN, auto-alta bloqueada, `/admin/coaches` con activos=cupo). Observación cosmética
+> derivada: el alumno demo de rehab mostraba ejercicios sin video — fix en curso fuera de esta
+> spec (blueprint demo + resolver prefiere media). Deudas post-cierre anotadas en TASKS: V2.13
+> (test manual GoTrue recovery-vs-vta) y V5.4 (insight PostHog).
+
+**Enmienda a [coach-onboarding-v2 §5 y §6](../coach-onboarding-v2/SPEC.md); absorbió las tareas abiertas
+W8.1.2 (parcial), W8.1.9 y W8.6.2 de [su TASKS](../coach-onboarding-v2/TASKS.md). Evidencia de base:
+auditoría del caso Job Palacios (23-08, artifact «Vive tu app en móvil» `3b1616d9`) + 6 informes de
+lectura del código. Revisada por panel adversarial (4 lentes) el 23-08.**
 
 ## Origen
 

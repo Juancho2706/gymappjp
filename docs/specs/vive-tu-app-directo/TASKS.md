@@ -389,19 +389,24 @@ pinnea. **W1+W2 = un solo deploy web; OTA de RN antes.**
   `demo_client_count` al `RETURNS TABLE` y los tipos nunca se regeneraron; el typecheck no lo nota porque el
   llamador usa `(admin.rpc as any)`. Justo el agujero que V4.6 vino a tapar. **Regenerar `database.types.ts`
   sigue siendo deuda abierta** (prioridad 5 de [CURRENT](../../status/CURRENT.md)), no de esta ola.
-- [~] V4.8 Gate W4: vitest `apps/web/src/app/admin apps/web/src/app/api/cron/cap-nudge` + QA visual
+- [x] V4.8 Gate W4: vitest `apps/web/src/app/admin apps/web/src/app/api/cron/cap-nudge` + QA visual
   `/admin/coaches` con `jpl` (Free + demo + 1 real) ⇒ `1/1`; un Free solo con demo ⇒ `0/1`; Sistema sin demos.
   **Resultado real 26-08:** vitest **VERDE** — 9 archivos / **67 tests**, con `admin.queries.test.ts` (nuevo,
-  10 asserts) confirmado corriendo; `pnpm typecheck` **VERDE**. **Pendiente: la QA visual del owner**
-  (necesita sesión de admin en PROD). Números de referencia ya medidos en LIVE para esa QA: **84** alumnos
+  10 asserts) confirmado corriendo; `pnpm typecheck` **VERDE**. **QA visual del owner: APROBADA el 26-08**
+  («punto D ok») sobre PROD. Números de referencia medidos en LIVE para esa QA: **84** alumnos
   reales no archivados en toda la plataforma, **14** demos, **13** archivados — y Sistema, que antes mostraba
   **111**, ahora debe mostrar 84 (V4.4b cerró un drift de 27 alumnos entre el dashboard y Sistema).
 
 ## W5 — QA device + cierre (jefe + owner)
 
-- [ ] V5.1 Matriz de QA del PLAN con evidencia (capturas/video), en especial **Android con la app instalada**
+- [x] V5.1 Matriz de QA del PLAN con evidencia (capturas/video), en especial **Android con la app instalada**
   (web móvil y RN), «atrás» con sesión demo, «Cerrar sesión» del nav y `/volver-al-panel` vencido.
-- [~] V5.2 **OTA primero** (`mobile-ota.yml`, rama con master mergeado; explainer v2 + `AppState` + native-intent),
+  **APROBADA por el owner el 26-08 (declaración en chat, sin capturas):** entrar con un toque
+  (desktop + celu), portal demo navegable, volver al panel con un toque, chip «Entró hace X» en web
+  y RN, auto-alta bloqueada. **Observación derivada (fuera de esta spec):** el alumno demo de rehab
+  mostraba ejercicios sin video — fix en curso (blueprint `demo-content/rehab.ts` + resolver de
+  `demo-writers.ts` prefiere media + UPDATE de los demos ya sembrados).
+- [x] V5.2 **OTA primero** (`mobile-ota.yml`, rama con master mergeado; explainer v2 + `AppState` + native-intent),
   **deploy web después**; `VIVE_TU_APP_ENTERED_CUTOVER` = timestamp del deploy. Sin cambios nativos ⇒ no hay binario.
   **CUTOVERs fijados el 26-08 (los tres al MISMO instante, `2026-08-26T06:00:00Z`):**
   · `VIVE_TU_APP_ENTERED_CUTOVER` = `'2026-08-26T06:00:00.000Z'` en
@@ -412,15 +417,16 @@ pinnea. **W1+W2 = un solo deploy web; OTA de RN antes.**
   · `FIRST_LOGIN_SIGNAL_CUTOVER` **RN** = `'2026-08-26T06:00:00Z'` en
   `apps/mobile/components/coach/directory/directory-shared.ts:47` (commit `e7ed1de9`) — la constante está
   duplicada a propósito (RN no importa de `apps/web`) y **las dos tienen que moverse juntas**.
-  **Pendiente:** la evidencia del OTA (grupos de `mobile-ota.yml` a los runtimes 1.1.1 y 1.1.2) y del deploy
-  web, con el orden respetado. Ojo con la tensión declarada por el worker `rn`: el explainer v2 promete el
-  botón «Volver a la app» que solo existe con V2.4 desplegada, así que la OTA no puede ir **muy** antes.
-- [~] V5.3 `docs/status/CURRENT.md` (sub-viñeta 0 + `last_verified`), `docs/status/MOBILE_PARITY.md` (blockquote
+  **Evidencia cerrada el 26-08, orden respetado (OTA → deploy):** OTAs por `mobile-ota.yml` runs
+  `32935229542`/`32935231608` (runtime 1.1.2) y `32935315684` (port solo-roster a 1.1.1, commit
+  `e76fe33e`), los tres SUCCESS; deploy web PROD después (`dpl_6dptdSmNhxMwY7rmZbRhUo2RcY3x`, alias
+  eva-app.cl, READY).
+- [x] V5.3 `docs/status/CURRENT.md` (sub-viñeta 0 + `last_verified`), `docs/status/MOBILE_PARITY.md` (blockquote
   fechado «explainer v2, `AppState`, `eva://coach/guia`; **Requiere OTA + QA device**» + `last_verified "fecha @ sha"`),
   `docs/testing/TEST_STATUS.md` (fila consolidada de la corrida completa). **Hechos el 26-08: `CURRENT.md`
   (sub-viñeta 0 corregida + `last_verified`) y `MOBILE_PARITY.md` (blockquote de la ola + `last_verified
-  "2026-08-26 @ e7ed1de9"`).** **Pendiente:** `docs/testing/TEST_STATUS.md`, que escribe el jefe con el
-  resultado real de la suite completa post-merge.
+  "2026-08-26 @ e7ed1de9"`).** **`TEST_STATUS.md` también hecho el 26-08** (sección «Última corrida
+  completa: 2026-08-26», 589 archivos / 7.747 tests, commit `79537147`).
 - [ ] V5.4 Insight PostHog «Paso 2: pidió → entró → volvió» por `device` y `mode` + `student_login_coach_account`
   + `add_student_self_blocked`. Deuda que se cobra de paso si hay margen: W8.5.2 (espejo a PostHog desde
   `recordOnboardingEvent`). **La deuda W8.5.2 ya estaba cerrada** (el espejo vive en `recordOnboardingEvent`)
