@@ -468,6 +468,9 @@ describe('registerAction', () => {
     expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
       id: 'u-free',
       subscription_tier: 'free',
+      // W3.3: la marca nace PRENDIDA. Se pinnea el VALOR escrito, no el DEFAULT de la columna —
+      // que sigue en `false` a propósito, para que esto sea testeable sin la base.
+      use_brand_colors_coach: true,
       // PR #28 (drip fix): web free signup nace 'pending_email' hasta confirmar el correo (no 'active').
       subscription_status: 'pending_email',
       payment_provider: 'admin',
@@ -478,9 +481,72 @@ describe('registerAction', () => {
       trial_used_email: 'coach@example.com',
     }))
     expect(createClientMock).not.toHaveBeenCalled()
+    // W3.9: sin campaña en la URL, la atribución queda en NULL explícito (nunca '').
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      utm_source: null,
+      utm_campaign: null,
+    }))
     // El `eid` (event_id de dedup Meta CAPI/pixel, commit 7df9aa6c) es aleatorio por registro.
     expect(redirectMock).toHaveBeenCalledWith(
       expect.stringMatching(/^\/verify-email\?email=coach%40example\.com&eid=.+/)
     )
+  })
+
+  // ── W3.3 (flujo-coach-nuevo): marca prendida al nacer ───────────────────────────────────────
+  // El `insert` es UNO solo para free y para pago, así que el pin del camino pago cubre el otro
+  // extremo del mismo objeto. El DEFAULT de la columna sigue en `false`: lo que manda es el valor.
+  it('W3.3: el alta con tier pago también nace con la marca prendida', async () => {
+    const { insertQuery } = paidHappyPathMocks()
+
+    await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(/^REDIRECT:/)
+
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      use_brand_colors_coach: true,
+    }))
+  })
+
+  // ── W3.9: atribución del alta ────────────────────────────────────────────────────────────────
+  // La escribe el SERVIDOR (las columnas no tienen grant a `authenticated`/`anon`), leyendo los
+  // hidden inputs que `register/page.tsx` llena con lo que traía la URL del anuncio.
+  it('W3.9: utm_source/utm_campaign de la URL llegan a la fila del coach', async () => {
+    const { insertQuery } = paidHappyPathMocks()
+    const formData = buildRegisterFormData()
+    formData.set('utm_source', 'meta')
+    formData.set('utm_campaign', 'coaches-ago')
+
+    await expect(registerAction({}, formData)).rejects.toThrow(/^REDIRECT:/)
+
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      utm_source: 'meta',
+      utm_campaign: 'coaches-ago',
+    }))
+  })
+
+  it('W3.9: el valor se sanea (espacios colapsados, tope de largo) y el vacío queda NULL', async () => {
+    const { insertQuery } = paidHappyPathMocks()
+    const formData = buildRegisterFormData()
+    formData.set('utm_source', '  meta \n ads  ')
+    // Un query param es entrada de cualquiera: la columna no puede usarse como buzón.
+    formData.set('utm_campaign', 'x'.repeat(400))
+
+    await expect(registerAction({}, formData)).rejects.toThrow(/^REDIRECT:/)
+
+    const inserted = insertQuery.insert.mock.calls[0][0] as Record<string, unknown>
+    expect(inserted.utm_source).toBe('meta ads')
+    expect(inserted.utm_campaign).toHaveLength(120)
+  })
+
+  it('W3.9: un utm vacío no escribe cadena vacía — escribe NULL', async () => {
+    const { insertQuery } = paidHappyPathMocks()
+    const formData = buildRegisterFormData()
+    formData.set('utm_source', '   ')
+    formData.set('utm_campaign', '')
+
+    await expect(registerAction({}, formData)).rejects.toThrow(/^REDIRECT:/)
+
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      utm_source: null,
+      utm_campaign: null,
+    }))
   })
 })

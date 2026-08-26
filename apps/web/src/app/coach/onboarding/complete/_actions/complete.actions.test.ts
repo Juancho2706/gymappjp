@@ -147,7 +147,14 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
         const { redirectedTo } = await run()
 
         expect(redirectedTo).toBe('/coach/dashboard?welcome=free&eid=evt-1&ph=srv')
-        expect(inserts[0]).toMatchObject({ id: USER_ID, subscription_status: 'active', invite_code: INVITE_CODE })
+        expect(inserts[0]).toMatchObject({
+            id: USER_ID,
+            subscription_status: 'active',
+            invite_code: INVITE_CODE,
+            // W3.3 (flujo-coach-nuevo): la marca nace PRENDIDA en las tres altas. Se pinnea el
+            // valor escrito, no el DEFAULT de la columna (que sigue en `false` a propósito).
+            use_brand_colors_coach: true,
+        })
         expect(sendFreeCoachOnboardingEmailsMock).toHaveBeenCalledWith({
             // Service-role: el ledger de correos no se escribe con la sesión del coach.
             admin: adminStub,

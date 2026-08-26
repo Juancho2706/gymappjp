@@ -143,6 +143,12 @@ export async function completeOAuthOnboarding(
         slug,
         invite_code: inviteCode,
         primary_color: '#1462DC',
+        // W3.3: la marca nace PRENDIDA, igual que en las otras dos altas. Se escribe el VALOR acá
+        // en vez de mover el `DEFAULT false` de la columna: así queda testeable y no depende del
+        // default. Sin esto el coach entra a un panel con los colores de EVA aunque acaba de
+        // escribir su marca, y el splash RN borra la caché de marca cuando el valor es `false`
+        // (`apps/mobile/lib/branding.ts:257-261`).
+        use_brand_colors_coach: true,
         // Google accounts are already email-confirmed — free tier is active immediately
         subscription_status: isFreeTier ? 'active' : 'pending_payment',
         subscription_tier: selectedTier,

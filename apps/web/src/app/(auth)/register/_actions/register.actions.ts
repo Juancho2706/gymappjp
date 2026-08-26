@@ -27,6 +27,7 @@ import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-co
 import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
+import { resolveRegistrationUtm } from '@/lib/auth/registration-utm'
 
 export type RegisterState = {
     error?: string
@@ -75,6 +76,16 @@ export async function registerAction(
     const acceptMarketing = formData.get('accept_marketing') === 'on'
     const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'free'
     const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
+    // W3.9 (atribución del alta): los dos hidden inputs que planta `register/page.tsx` con lo que
+    // venía en la URL del anuncio. Se SANEAN acá —vienen de un query param, o sea de cualquiera— y
+    // los escribe el servidor en la fila del coach: la identidad anónima de PostHog se recrea por
+    // sesión y por eso 24 de 25 personas quedaban con `$initial_utm_source = none`.
+    // Retención declarada en el `COMMENT ON COLUMN` de la migración (dato personal, Ley 21.719:
+    // vive lo que vive la cuenta y se borra con la fila).
+    const { utmSource, utmCampaign } = resolveRegistrationUtm({
+        utmSource: formData.get('utm_source'),
+        utmCampaign: formData.get('utm_campaign'),
+    })
     // Add-ons opcionales del signup (plan 05 F5.5): CSV de MODULE_KEYS. Se validan contra la
     // whitelist + coherencia D8 (nutrition_exchanges solo en tier con nutrición). El monto se
     // calcula SOLO server-side en create-preference; acá solo se decide qué módulos viajan.
@@ -223,6 +234,17 @@ export async function registerAction(
             slug,
             invite_code: inviteCode,
             primary_color: '#1462DC',
+            // W3.3: la marca nace PRENDIDA. Se escribe el VALOR en el alta en vez de mover el
+            // `DEFAULT false` de la columna —una migración nueva sería legal, pero así queda
+            // testeable y no depende del default—. Sin esto el coach nuevo entra a un panel con los
+            // colores de EVA aunque acaba de escribir su marca, y el splash RN ni siquiera cruza en
+            // el segundo arranque: `apps/mobile/lib/branding.ts:257-261` BORRA la caché de marca
+            // cuando el valor es `false`.
+            use_brand_colors_coach: true,
+            // W3.9: atribución del alta, escrita solo por el servidor (la columna no tiene grant a
+            // `authenticated`/`anon`). `null` explícito cuando el alta no trajo UTM.
+            utm_source: utmSource,
+            utm_campaign: utmCampaign,
             // ── A1 (ola checkout 25-08): NINGUNA alta nace bloqueada ni con un plan que no pagó ──────
             // Antes, un alta con tier pago se insertaba con `subscription_status='pending_payment'` +
             // el tier pago + su cupo, ANTES de cobrar un peso. `pending_payment` es bloqueo DURO sin

@@ -34,6 +34,14 @@ export async function captureCoachRegisteredServer(input: {
     method: RegistrationMethod
     platform: RegistrationPlatform
     billingCycle?: string | null
+    /**
+     * Atribución del alta (W3.9 de `docs/specs/flujo-coach-nuevo`), ya saneada por
+     * `lib/auth/registration-utm.ts`. Van al evento SOLO cuando existen: así el alta sin campaña
+     * no ensucia el esquema con dos propiedades nulas, y el contrato de los callers que no miden
+     * atribución no cambia en absoluto. No es PII: es de dónde vino el clic, no quién lo hizo.
+     */
+    utmSource?: string | null
+    utmCampaign?: string | null
 }): Promise<void> {
     // `capturePostHogServerEvent` nunca lanza y corta a 1,5 s: se puede esperar en el camino
     // crítico de un alta sin arriesgar la respuesta. El `await` es obligatorio igual que con los
@@ -48,6 +56,8 @@ export async function captureCoachRegisteredServer(input: {
             platform: input.platform,
             pricing_version: PRICING_VERSION,
             source: 'server',
+            ...(input.utmSource ? { utm_source: input.utmSource } : {}),
+            ...(input.utmCampaign ? { utm_campaign: input.utmCampaign } : {}),
         },
     })
 }

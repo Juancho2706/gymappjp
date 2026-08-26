@@ -239,6 +239,12 @@ export default function RegisterPage() {
     const [couponCode, setCouponCode] = useState('')
     const [couponFieldOpen, setCouponFieldOpen] = useState(false)
     const [couponAutoApplied, setCouponAutoApplied] = useState(false)
+    // W3.9 (atribución): lo que traía la URL del anuncio, para que viaje al server action en el
+    // submit. Es SOLO transporte —el saneo y la escritura son server-side— y no se pinta en
+    // ninguna parte: el `utm_source` de la fila del coach es hoy la única forma de saber qué
+    // campaña trajo un alta (la identidad anónima de PostHog se recrea por sesión).
+    const [utmSource, setUtmSource] = useState('')
+    const [utmCampaign, setUtmCampaign] = useState('')
     // Captcha: `captchaState` lo alimentan los callbacks del widget; `captchaNotice` es el aviso
     // inline junto al widget (freno client-side o rechazo del server por turnstile_*).
     const [captchaState, setCaptchaState] = useState<CaptchaState>('pending')
@@ -297,6 +303,12 @@ export default function RegisterPage() {
             setCouponFieldOpen(true)
             setCouponAutoApplied(true)
         }
+
+        // W3.9: la atribución se lee UNA vez, del landing del alta, y se guarda en estado para que
+        // el submit la lleve en el FormData. No se persiste en el navegador ni se manda a ningún
+        // lado desde acá: quien la escribe es el servidor, en la fila del coach.
+        setUtmSource(params.get('utm_source') ?? '')
+        setUtmCampaign(params.get('utm_campaign') ?? '')
 
         const rawTier = params.get('tier')
         const queryCycle = params.get('cycle')
@@ -505,6 +517,11 @@ export default function RegisterPage() {
                     {/* Sin add-ons en el signup: los módulos vienen incluidos en el plan (CEO 2026-07-17). */}
                     <input type="hidden" name="addons" value="" />
                     <input type="hidden" name="coupon_code" value={couponCode} />
+                    {/* W3.9: atribución del alta. El servidor los sanea y los escribe en la fila
+                        del coach (`coaches.utm_source` / `utm_campaign`, sin grant a authenticated).
+                        Vacíos cuando el alta no vino de una campaña. */}
+                    <input type="hidden" name="utm_source" value={utmSource} />
+                    <input type="hidden" name="utm_campaign" value={utmCampaign} />
                     {/* Honeypot — bots fill this, humans don't */}
                     <input
                         name="website"
