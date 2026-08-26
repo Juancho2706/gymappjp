@@ -906,7 +906,10 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   W3.3 solo sirve a quien nazca mañana. **Aceptación:** guardar la marca desde la guía **nunca** apaga el
   toggle; el checkbox explícito de `BrandSettingsForm.tsx:752` sigue mandando.
   **Gate:** `npx vitest run apps/web/src/app/coach/settings apps/web/src/app/coach/dashboard`.
-- [ ] **W3.5** · **ARREGLA** (DB · Opus, 0,5 h) Backfill acotado: `use_brand_colors_coach = true` **solo** para coaches con
+- [x] **W3.5** · **DESCARTADA por orden del owner (26-08):** «la gente que ya está registrada no los
+  fastidies, que sea para los nuevos de acá en adelante» ⇒ ningún backfill de marca sobre coaches
+  existentes; la marca prendida queda solo para las altas nuevas (W3.3). Si algún día se quiere,
+  el diseño acotado de abajo sigue siendo el correcto. ~~Backfill acotado: `use_brand_colors_coach = true` **solo** para coaches con~~
   `use_brand_colors_coach IS DISTINCT FROM true` **y cero alumnos reales** (`is_demo = false`,
   `is_archived = false`). Protocolo aditivo-en-LIVE. **No tocar a coaches con alumnos activos**: les cambiaría
   el panel de golpe. **Aceptación:** el conteo de filas afectadas se documenta acá antes y después.
@@ -986,9 +989,14 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   **Declarar retención**: es dato personal (Ley 21.719).
   **Aceptación:** un alta desde el ad deja el `utm_source` en la fila. **Gate:** protocolo aditivo-en-LIVE +
   `actions.test.ts`.
-- [ ] **W3.10** · **ARREGLA** (jefe, 0,5 h) Decidir con el owner qué se hace con las **2 filas `pending_email` que ya
+- [x] **W3.10** · **ARREGLA** (jefe, 0,5 h) Decidir con el owner qué se hace con las **2 filas `pending_email` que ya
   existen** en LIVE, una con un dominio imposible: contactar, borrar o dejar. Un minuto de decisión, no una
   tarea de código. **Aceptación:** la decisión escrita acá.
+  **Decisión (26-08): DEJAR.** Al presentarle el caso ya eran **3** filas (`cristoball-coach` 22-08,
+  `esteban` 23-08 con `gmail.con` imposible, `doblementefit` 24-08 — segundo intento de un coach que
+  ya tiene cuenta activa `doblementefit-20de5n`). La orden del owner del mismo día («la gente que ya
+  está registrada no los fastidies») cubre el caso: no se contacta ni se borra; siguen su camino
+  viejo por `proxy.ts` (pending_email → /verify-email) y mueren solas si nunca confirman.
 - [ ] **W3.11** · **ARREGLA** (web · Opus, 1,5 h, **después de W3.0**) **La «verificación blanda» de D1 gana una
   superficie.** D1 = A promete «el correo sigue saliendo, no bloquea», pero hoy lo único que existe es el
   correo (W3.1 d) y la higiene del drip (W3.8): nada en el panel le dice al coach que su correo no está
