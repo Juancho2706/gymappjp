@@ -767,13 +767,17 @@ bienvenida igual, y el build 59 (1.1.2, en review de Apple) migra a esos usuario
 
 ## W3 — Que el coach entre sin correo (2 workers: `web-alta` Opus, `marca-correos` Opus)
 
-> **🔴 CANDADO DE DEPLOY (26-08, vigente):** la rama tiene commiteados W3.0(a)(b) DB, W3.2, W3.2b,
-> W3.3, W3.4, W3.7, W3.8 (+ su cron `drip-hygiene`), W3.9, W3.11 y W3.12 — pero **W3.0(c), W3.1 y
-> W3.13 NO están en el árbol** (el ejecutor del núcleo quedó bloqueado esperando la confirmación
-> explícita del owner para retirar la verificación obligatoria de correo del alta free). El
-> `email_confirm: true` que W3.2 ya mete en la ruta RN abre el pre-account-takeover que W3.13
-> cierra ⇒ **NADA de esta wave se promueve a `master` hasta que W3.0c+W3.1+W3.13 estén commiteadas
-> en el mismo tren.** Orden del tren al desplegar: OTA de RN (W3.2b) ANTES o JUNTO al deploy web.
+> **🟢 CANDADO LEVANTADO (26-08 tarde):** el owner dio la autorización expresa el mismo día
+> («Sí: autorizo quitar la verificación obligatoria de correo del alta free (email_confirm true),
+> con el anti-takeover W3.13 en el mismo tren, igual la gente que ya esta registrada no los
+> fastidies, que sea para los nuevos de aca en adelante») y **W3.0c + W3.1 + W3.13 están
+> commiteadas**, más **W3.13b** (gemelo RN del anti-takeover, no estaba en el plan: el binario
+> entra con Google por `google-signin.ts` sin pasar por el endpoint cookie-based — tercera puerta
+> tapada con endpoint Bearer + call site fire-and-forget). **ORDEN DEL TREN al desplegar
+> (invertido respecto a W2, con razón): deploy web PRIMERO, OTA de RN inmediatamente después** —
+> el POST de W3.13b contra un server viejo daría 404 silencioso, y el fail-safe de W3.2b tolera
+> server nuevo + binario viejo (pantalla de más, «Ya confirmé» entra). Tren pendiente de GO del
+> owner; gate de salida incluye el repro manual del takeover.
 
 **D1 = A: respondida por el owner el 23-08** ⇒ esta wave tiene luz verde. G-ENV y G-AUTH quedaron **resueltos el 23-08** (arriba): Turnstile, Upstash y el
 tope por IP están vivos, y el linking de identidades no se configura — se cubre con **W3.13**, que viaja en
@@ -797,7 +801,7 @@ esperan su merge. **W3.6, W3.6b y W3.6c arrancan cuando W3.9 haya mergeado.**
 Sentry EVA-NEXTJS-1H/1J). Se **commitean antes de que W3 arranque**, y la única coordinación que queda es de
 orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay nadie con quien acordar nada.
 
-- [ ] **W3.0** · **MIDE** (DB · Opus, 1 h) **La señal de correo verificado, sin la cual D1 = A nace muerta.**
+- [x] **W3.0** · **MIDE** (DB · Opus, 1 h) **La señal de correo verificado, sin la cual D1 = A nace muerta.**
   `auth.admin.createUser({ email_confirm: true })` escribe `auth.users.email_confirmed_at = now()` **en la
   creación**: con W3.1 aplicada, **todas** las altas free nacen «confirmadas» y quedan inertes la higiene del
   drip (W3.8), el banner (W3.11) y el guardarraíl «altas `active` sin correo verificado a 7 días ≤ 15 %»
@@ -839,7 +843,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   `email_verified_at` no nulo exactamente en las filas con `auth.users.email_confirmed_at` no nulo (conteo
   antes/después pegado acá); `apps/web/src/lib/database.types.ts` **regenerado**.
   **Gate:** evidencia de las tres corridas + `pnpm typecheck`.
-- [ ] **W3.1** · **ARREGLA** (web · Opus, 5 h) **Matar el muro del correo en el alta free.** Entrada:
+- [x] **W3.1** · **ARREGLA** (web · Opus, 5 h) **Matar el muro del correo en el alta free.** Entrada:
   `apps/web/src/app/(auth)/register/_actions/register.actions.ts`.
   (a) `:194` → `email_confirm: true` para free (hoy es `email_confirm: !isFreeTier`; el camino de pago **ya**
   lo hace). **Consecuencia que W3.0 cubre y esta tarea NO puede ignorar:** ese flag sella
@@ -866,7 +870,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   **Gate:** `apps/web/src/app/(auth)/register/actions.test.ts` **ACTUALIZADO** — el archivo **existe** (9
   tests) y pinnea lo que cambia (`:342` espera `REDIRECT:/verify-email`, `:353` espera `pending_email`).
   **Prohibido crear un `register.actions.test.ts` al lado**: partiría la cobertura del alta en dos archivos.
-- [ ] **W3.2** · **ARREGLA** (web · Opus, 2 h) Espejo del alta sin muro en el camino RN, **lado servidor**. Entrada:
+- [x] **W3.2** · **ARREGLA** (web · Opus, 2 h) Espejo del alta sin muro en el camino RN, **lado servidor**. Entrada:
   `apps/web/src/app/api/mobile/auth/register-coach-free/route.ts:120` (`email_confirm: false`), el `.insert()`
   de `:137-152` y `:144-145` (`pending_email`). **La respuesta gana un campo explícito
   `status: 'active' | 'pending_email'`**, para que un binario viejo contra un server nuevo no tenga que
@@ -877,7 +881,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   **Aceptación:** la respuesta trae `status: 'active'` para un alta free nueva; el reenvío por `uid` sigue
   funcionando para las filas viejas.
   **Gate:** `npx vitest run apps/web/src/app/api/mobile/auth` + `pnpm typecheck`.
-- [ ] **W3.2b** · **ARREGLA** (RN · Opus, 1,5 h, **OTA a 1.1.1/1.1.2**) La gemela RN de W3.2. Entrada:
+- [x] **W3.2b** · **ARREGLA** (RN · Opus, 1,5 h, **OTA a 1.1.1/1.1.2**) La gemela RN de W3.2. Entrada:
   `apps/mobile/app/(auth)/register.tsx:189`. Si la respuesta de `registerCoachFree` trae `status: 'active'`:
   `signInWithPassword` con las credenciales del alta (ya en memoria, `rememberPendingSignup`) y
   `router.replace` al panel, sin pasar por `/(auth)/verify-email`. **El escape ya existe y nadie lo nombraba:**
@@ -889,7 +893,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   confirmada**…)». En la versión con OTA, el copy pasa a «Ya puedes entrar».
   **Aceptación:** un alta free desde el binario 1.1.2 aterriza en el panel sin ver `/verify-email`.
   **Gate:** `tsc` mobile + `expo export --platform android` + matriz de QA punto 1.
-- [ ] **W3.3** · **ARREGLA** (web · Opus, 1 h) **Marca prendida al nacer**: `use_brand_colors_coach: true` en el payload de
+- [x] **W3.3** · **ARREGLA** (web · Opus, 1 h) **Marca prendida al nacer**: `use_brand_colors_coach: true` en el payload de
   las **tres** altas — `register.actions.ts:219-243`,
   `apps/web/src/app/coach/onboarding/complete/_actions/complete.actions.ts:129` y
   `apps/web/src/app/api/mobile/auth/register-coach-free/route.ts:144`. **Se escribe el valor en el alta en vez
@@ -898,7 +902,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   **Aceptación:** un coach nuevo ve su marca en su panel y su splash RN cruza a su marca en el segundo
   arranque (hoy `apps/mobile/lib/branding.ts:257-261` **borra** la caché cuando el valor es `false`).
   **Gate:** `actions.test.ts` + `complete.actions.test.ts` actualizados.
-- [ ] **W3.4** · **ARREGLA** (web · Opus, 1 h) **El camino de escritura deja de apagar la marca.** Entrada:
+- [x] **W3.4** · **ARREGLA** (web · Opus, 1 h) **El camino de escritura deja de apagar la marca.** Entrada:
   `apps/web/src/app/coach/dashboard/_components/BrandQuickCard.tsx:148`
   (`if (brand.useBrandColorsCoach) fd.set('use_brand_colors_coach', 'on')`) y
   `apps/web/src/app/coach/settings/_actions/settings.actions.ts:47` (`=== 'on'`, o sea ausencia ⇒ `false`).
@@ -914,7 +918,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   `is_archived = false`). Protocolo aditivo-en-LIVE. **No tocar a coaches con alumnos activos**: les cambiaría
   el panel de golpe. **Aceptación:** el conteo de filas afectadas se documenta acá antes y después.
   **Gate:** `BEGIN … ROLLBACK` → `apply_migration` → `get_advisors`.
-- [ ] **W3.6** · **ARREGLA** (web · Opus, 1,5 h) Microfricciones del formulario. Entrada:
+- [x] **W3.6** · **ARREGLA** (web · Opus, 1,5 h) Microfricciones del formulario. Entrada:
   `apps/web/src/app/(auth)/register/page.tsx:565` (`type="password"` sin ojo de ver; `:567` **ya** tiene
   `autoComplete="new-password"`) y `apps/web/src/lib/auth/platform-email.ts`. Reusar
   `apps/web/src/components/auth/PasswordInput.tsx`. Guardia de dominio mal tipeado (`gmail.` + `con`,
@@ -927,7 +931,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   commit.
   **Aceptación:** `platform-email.test.ts` extendido con los dominios mal tipeados; el honeypot sigue intacto.
   **Gate:** `npx vitest run apps/web/src/lib/auth` + `pnpm lint`.
-- [ ] **W3.6b** · **ARREGLA** (web · Opus, 1 h) **Dentro del webview de Meta, el botón de Google deja de ser un callejón.**
+- [x] **W3.6b** · **ARREGLA** (web · Opus, 1 h) **Dentro del webview de Meta, el botón de Google deja de ser un callejón.**
   [SPEC §1.2 H2](SPEC.md): el único camino que nace `active` es Google, y Instagram lo bloquea justo donde
   aterriza el ad. El fix de Turnstile de esta sesión **no toca ese botón**: `GoogleSignInButton` se renderiza sin
   condición en `apps/web/src/app/(auth)/register/page.tsx:766`, mientras `isMetaWebView` solo aparece en
@@ -939,7 +943,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   sesión** ⇒ se ejecuta **después de ese commit** y **después de W3.9**.
   **Aceptación:** con UA `Instagram` / `FBAN` / `FBAV` no se pinta un botón de Google que no puede funcionar.
   **Gate:** `pnpm lint` + `pnpm typecheck` + punto 1 de la matriz de QA.
-- [ ] **W3.6c** · **ARREGLA** (web · Sonnet, 0,5 h) **El último Turnstile implícito del árbol.** Entrada:
+- [x] **W3.6c** · **ARREGLA** (web · Sonnet, 0,5 h) **El último Turnstile implícito del árbol.** Entrada:
   `apps/web/src/app/join/[invite_code]/_components/LeadRequestForm.tsx`, que hoy carga la API con render
   **implícito** y sin un solo callback: `:67` (`<Script src="…/turnstile/v0/api.js">`) y `:165`
   (`<div className="cf-turnstile" data-sitekey={siteKey} …>`). Es el mismo patrón que el fix de hoy sacó de
@@ -960,13 +964,13 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   **Gate:** `pnpm lint` + `pnpm typecheck` + `npx vitest run apps/web/src/app/join` (la suite existe:
   `join-request.actions.test.ts`, que setea y borra `cf-turnstile-response` en `:79` y `:259`) + punto 13 de
   la matriz de QA.
-- [ ] **W3.7** · **ARREGLA** (correos · Opus, 1,5 h) **= W8.1.10 de [coach-onboarding-v2](../coach-onboarding-v2/TASKS.md)**:
+- [x] **W3.7** · **ARREGLA** (correos · Opus, 1,5 h) **= W8.1.10 de [coach-onboarding-v2](../coach-onboarding-v2/TASKS.md)**:
   la bienvenida Free apunta a `/coach/guia`, no al dashboard. Entrada:
   `apps/web/src/lib/email/free-coach-onboarding.ts:47` (`dashboardUrl: ${params.appUrl}/coach/dashboard`).
   Se ejecuta acá porque W3.1 cambia **quién** dispara la bienvenida. **El id no se renombra**; se marca
   `- [x]` en ese TASKS con referencia cruzada.
   **Aceptación:** el CTA del correo aterriza en la guía. **Gate:** `npx vitest run apps/web/src/lib/email`.
-- [ ] **W3.8** · **ARREGLA** (correos · Opus, 1,5 h, **después de W3.0**) Higiene que introduce W3.1: el **drip** (no la
+- [x] **W3.8** · **ARREGLA** (correos · Opus, 1,5 h, **después de W3.0**) Higiene que introduce W3.1: el **drip** (no la
   bienvenida, que es transaccional) se salta al coach con **`coaches.email_verified_at IS NULL`** pasadas
   24 h, para no quemar la reputación de Resend con rebotes. Entrada:
   `apps/web/src/lib/email/send-drip-sequence.ts`.
@@ -981,7 +985,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   **No se toca la cadencia** (D11 = Sí ya decidió que el drip por calendario muere con W6 de onboarding-v2).
   **Aceptación:** test que pinnea el salto contra `email_verified_at`, no contra GoTrue.
   **Gate:** `npx vitest run apps/web/src/lib/email apps/web/src/services/email`.
-- [ ] **W3.9** · **MIDE** (web · Opus, 2 h) Capturar `utm_source` y `utm_campaign` en el alta (columnas nuevas aditivas
+- [x] **W3.9** · **MIDE** (web · Opus, 2 h) Capturar `utm_source` y `utm_campaign` en el alta (columnas nuevas aditivas
   en `coaches`, escritas por el servidor) y mandarlos en el `coach_registered` de servidor. Entrada:
   `apps/web/src/app/(auth)/register/page.tsx` (hidden inputs) + `register.actions.ts` + el alta RN.
   Hoy la atribución solo se puede hacer cruzando timestamps a mano: 24 de 25 personas tienen
@@ -997,7 +1001,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   ya tiene cuenta activa `doblementefit-20de5n`). La orden del owner del mismo día («la gente que ya
   está registrada no los fastidies») cubre el caso: no se contacta ni se borra; siguen su camino
   viejo por `proxy.ts` (pending_email → /verify-email) y mueren solas si nunca confirman.
-- [ ] **W3.11** · **ARREGLA** (web · Opus, 1,5 h, **después de W3.0**) **La «verificación blanda» de D1 gana una
+- [x] **W3.11** · **ARREGLA** (web · Opus, 1,5 h, **después de W3.0**) **La «verificación blanda» de D1 gana una
   superficie.** D1 = A promete «el correo sigue saliendo, no bloquea», pero hoy lo único que existe es el
   correo (W3.1 d) y la higiene del drip (W3.8): nada en el panel le dice al coach que su correo no está
   verificado ni qué pierde. Con `email_confirm: true` y un dominio mal tipeado la cuenta queda **viva e
@@ -1013,7 +1017,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   columna); el guardarraíl «`active` sin `email_verified_at` a 7 días ≤ 15 %» se puede leer en la consulta de
   W0.1.
   **Gate:** `npx vitest run apps/web/src/app/coach/dashboard` + `pnpm typecheck`.
-- [ ] **W3.12** · **AGREGA** (web · Sonnet, 0,5 h) **MEJORA (opcional).** Sentry **EVA-NEXTJS-19 «Failed to find Server
+- [x] **W3.12** · **AGREGA** (web · Sonnet, 0,5 h) **MEJORA (opcional).** Sentry **EVA-NEXTJS-19 «Failed to find Server
   Action»** — 15 eventos desde el 07-08, según el juicio del jefe del 23-08 — le pega a quien tiene una
   pestaña abierta servida por un deploy viejo y manda el formulario contra el nuevo. **W3 ES un deploy sobre
   `/register`**, la pantalla con más tráfico pagado del producto: el coach que llegó del ad y está tipeando
@@ -1030,7 +1034,7 @@ orden: **W3.6 / W3.6b / W3.6c / W3.9 arrancan después de ese commit.** No hay n
   **Aceptación:** con el error simulado, la página recarga una vez y **no** vuelve a recargar.
   **Gate:** `pnpm lint` + `pnpm typecheck`. Es MEJORA: si la wave va apretada, se corta sin tocar nada más.
 
-- [ ] **W3.13** · **ARREGLA** (web · Opus, 1,5 h, **seguridad; misma cadena que W3.1**)
+- [x] **W3.13** · **ARREGLA** (web · Opus, 1,5 h, **seguridad; misma cadena que W3.1**)
   **El pre-account takeover que abre D1 = A.** Resuelto G-AUTH: el enlace automático por correo **no es
   configurable** y Supabase borra las identidades **sin confirmar** al enlazar una nueva. Hoy eso nos salva
   (el alta free nace `email_confirm: false` ⇒ la identidad del intruso se borra sola). **Con W3.1 aplicada
