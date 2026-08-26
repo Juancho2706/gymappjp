@@ -660,6 +660,10 @@ espera su **merge**.
   solicitudes.
   **Aceptación:** `drip-templates.test.ts` actualizado; cero apariciones de «se registra solo» en
   `apps/web/src/lib/email`. **Gate:** `npx vitest run apps/web/src/lib/email`.
+  **Pendiente declarado (26-08, ejecutada en `fa49d2b7`):** `{alumno}` salió como «alumno» literal —
+  la persona del coach no llega a la cadena del drip (`buildDripTemplates` ← `send-drip-sequence` ←
+  `free-coach-onboarding` ← `complete.actions.ts`, y ese último archivo es de W3.0/W3.3). Threadear
+  la persona y pasar el bloque a `personaNoun` entra con W3, no antes.
 - [ ] **W2.6** · **ARREGLA** (correos · Opus, 1,5 h) Correo de bienvenida del alumno: **acceso arriba, clave abajo** y
   `replyTo` del coach. Entrada: `apps/web/src/lib/email/transactional-templates.ts:20-67` (el CTA vive en
   `:57` y la línea «responde este correo» en `:61`) y el call site
