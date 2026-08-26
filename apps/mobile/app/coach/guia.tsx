@@ -597,11 +597,6 @@ export default function CoachGuiaScreen() {
           persona={panelListoPersona}
           alsoOther={params.also_other === '1'}
           onClose={() => setPanelListoOpen(false)}
-          onGoMiPanel={() => {
-            setPanelListoOpen(false)
-            // Mismo literal que el chip de persona de arriba: Opciones › Mi panel (W8.2.2).
-            router.push('/coach/settings/mi-panel')
-          }}
         />
       )}
     </View>
