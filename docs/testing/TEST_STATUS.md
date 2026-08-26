@@ -92,6 +92,8 @@ relaciones existentes.
 
 Las cifras de las dos tablas de arriba son evidencia fechada de julio (3.940 y 4.130 tests): **no describen la suite de hoy**. Las últimas registradas por las sesiones que efectivamente las corrieron, según [CURRENT.md](../status/CURRENT.md): **5.776** (Guía Viva), **5.889** (Pricing v2) y **5.933** (retiro del par viejo), las tres del 2026-08-17. El saneo documental del 19-08 **no volvió a correr la suite completa**, así que aquí no se declara ningún verde nuevo: quien la corra actualiza esta sección con fecha, SHA y resultado.
 
+**Última corrida completa: 2026-08-26** (cierre de la ola VTA + FCN W0/W1, pre-push): **589 archivos / 7.747 tests — 7.741 passed, 4 skipped, 2 corregidos en la misma tanda** (los gemelos de `client-status`/`directory-status` pinneaban «corte en el futuro» con la constante real, que ese mismo día se fijó al ISO del deploy; re-corridos 37/37 verdes). Además: `pnpm typecheck` y `tsc` mobile 0 errores, lint 0 errores (517 warnings preexistentes), `docs:check`, `check:tokens`, boundaries y `expo export --platform android` VERDES, todos sobre el árbol asentado.
+
 ## Comandos locales
 
 Instalación reproducible:
