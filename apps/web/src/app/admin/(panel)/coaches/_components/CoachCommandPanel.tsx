@@ -737,7 +737,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                     onOpenChange={setConfirmDelete}
                     title="¿Eliminar coach permanentemente?"
                     description={`Vas a eliminar a ${coach.brand_name || coach.full_name || coach.slug}.`}
-                    blastRadius={`Borra el usuario y todos sus datos, incluidos ${coach.client_count} alumno${coach.client_count !== 1 ? 's' : ''}. Irreversible.`}
+                    blastRadius={`Borra el usuario y todos sus datos, incluidos ${coach.client_count} alumno${coach.client_count !== 1 ? 's reales' : ' real'} y su alumno de ejemplo. Irreversible.`}
                     severity="danger"
                     confirmLabel="Eliminar coach"
                     requireText={coach.slug}

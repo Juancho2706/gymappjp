@@ -92,7 +92,9 @@ export interface CoachDetail {
     coach: CoachDetailCoachRow
     /** Email de auth.users (la tabla `coaches` NO tiene columna email). */
     email: string | null
+    /** Alumnos REALES (sin el demo sembrado por onboarding). */
     clientCount: number
+    /** Los que ocupan cupo: reales y no archivados (D3 = A). */
     activeClientCount: number
     /** Precio de LISTA mensualizado del plan (incluye descuento de ciclo, sin cupón). */
     listMonthlyClp: number
@@ -140,12 +142,23 @@ export const getCoachDetail = cache(async (coachId: string): Promise<CoachDetail
             .eq('id', coachId)
             .maybeSingle(),
         admin.auth.admin.getUserById(coachId),
-        admin.from('clients').select('id', { count: 'exact', head: true }).eq('coach_id', coachId),
+        // El alumno DEMO (el que se siembra solo al abrir la cuenta) NO cuenta como alumno:
+        // un Free con demo + 1 real leía 2/1 y disparaba el cap-nudge por un cupo inexistente.
+        // Misma regla que `get_admin_coaches_paginated` (migración 20260826010542) — las dos
+        // columnas son NOT NULL default false, así que `.eq(..., false)` == el COALESCE del RPC.
         admin
             .from('clients')
             .select('id', { count: 'exact', head: true })
             .eq('coach_id', coachId)
-            .eq('is_active', true),
+            .eq('is_demo', false),
+        // D3 = A: "activos" acá significa lo MISMO que el cupo que cobra el plan
+        // (`is_archived = false`), no `is_active` — un alumno pausado sigue ocupando lugar.
+        admin
+            .from('clients')
+            .select('id', { count: 'exact', head: true })
+            .eq('coach_id', coachId)
+            .eq('is_demo', false)
+            .eq('is_archived', false),
         admin
             .from('billing_snapshots')
             .select('id, charged_at, total_clp, discount_clp, coupon_code, kind, provider')

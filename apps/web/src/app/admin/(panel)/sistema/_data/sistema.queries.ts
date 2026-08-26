@@ -88,7 +88,11 @@ export async function getSistemaData(): Promise<SistemaData> {
             admin.from('coaches')
                 .select('id, subscription_status, payment_provider, current_period_end', { count: 'exact' }),
             // clients SI es tabla grande: se queda como count head (no traemos filas).
-            admin.from('clients').select('id', { count: 'exact', head: true }),
+            // Sin demos ni archivados: el KPI "Alumnos" mide gente real usando la plataforma,
+            // no los alumnos de ejemplo que se siembran solos en cada alta de coach.
+            admin.from('clients').select('id', { count: 'exact', head: true })
+                .eq('is_demo', false)
+                .eq('is_archived', false),
             admin.from('admin_audit_logs').select('id', { count: 'exact', head: true })
                 .gte('created_at', new Date(checkedAt.getTime() - 24 * 60 * 60 * 1000).toISOString()),
             // NO fusionable con la de arriba: esta busca el ultimo registro SIN ventana

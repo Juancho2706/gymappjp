@@ -147,7 +147,11 @@ export function CoachDetailActions({ coachId, slug, clientCount }: Props) {
         delete: {
             title: '¿Eliminar este coach para siempre?',
             description: 'Borra al coach de Supabase Auth y de la plataforma, junto con sus alumnos, planes de nutrición, alimentos y comidas guardadas. No hay deshacer ni respaldo automático.',
-            blastRadius: `Borra el usuario, sus ${clientCount} alumnos y todos sus datos. Irreversible.`,
+            // `clientCount` ya NO incluye al alumno de ejemplo (getCoachDetail filtra is_demo desde
+            // W4 de «Vive tu app» directo): el demo se borra igual, así que se nombra aparte para
+            // que el alcance declarado siga siendo el alcance real. Mismo copy que el confirm del
+            // listado (`CoachCommandPanel`).
+            blastRadius: `Borra el usuario y todos sus datos, incluidos ${clientCount} alumno${clientCount !== 1 ? 's reales' : ' real'} y su alumno de ejemplo. Irreversible.`,
             severity: 'danger',
             confirmLabel: 'Eliminar definitivamente',
             requireText: slug,
