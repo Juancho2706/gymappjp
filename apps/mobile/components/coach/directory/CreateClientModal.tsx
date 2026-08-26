@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -17,6 +17,7 @@ import {
   generateGuidedTempPassword,
   guidedCapNote,
   guidedFormHint,
+  guidedInvitePayload,
   guidedTitle,
   hasShareableLink,
   isCoachOwnEmail,
@@ -31,7 +32,7 @@ import {
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { ApiError, apiFetch } from '../../../lib/api'
-import { openWhatsApp, shareLogin } from '../../../lib/client-actions'
+import { shareLogin } from '../../../lib/client-actions'
 import { capWallCopy, shouldOpenAtCapWall } from '../../../lib/client-cap'
 import { postCoachOnboardingEvent, useCoachOnboarding } from '../../../lib/coach-dashboard'
 import { getCachedCoachPersonaStatus } from '../../../lib/coach-persona'
@@ -60,7 +61,18 @@ type FieldErrors = {
   age_confirmed?: string[]
 }
 
-type SuccessInfo = { clientName: string; phone: string; loginUrl: string | null }
+/**
+ * Lo que el alta acaba de crear, tal como se lo va a contar al alumno. `email` y `tempPassword` se
+ * congelan ACÁ, en el momento de la creación, y no se leen del formulario al mandar: `handleClose`
+ * vacía el formulario y el mensaje se arma después de eso en más de un camino.
+ */
+type SuccessInfo = {
+  clientName: string
+  phone: string
+  loginUrl: string | null
+  email: string
+  tempPassword: string
+}
 
 type CreateWorkspace = {
   kind: 'standalone' | 'team_owner' | 'team_member' | 'enterprise'
@@ -433,11 +445,14 @@ export function CreateClientModal({
       })
       // Alumno creado: refrescar la cartera por debajo.
       onCreated()
+      // La credencial que el mensaje puede llevar: el correo normalizado que se mandó al servidor y
+      // la clave temporal que ese alta acaba de fijar (generada en guiado, tipeada en el clásico).
+      const credential = { email: parsed.data.email.toLowerCase(), tempPassword: parsed.data.temp_password }
       if (guided) {
         // En guiado el paso 2 llega SIEMPRE, con teléfono o sin él: sin teléfono el canal sigue
         // existiendo (la hoja de compartir y el link copiado no lo necesitan, y `wa.me` sin número
-        // abre el selector de contactos).
-        setSuccess({ clientName: res.clientName, phone: res.newClientPhone ?? '', loginUrl: res.loginUrl })
+        // abre el selector de contactos — por eso ese caso va sin credencial).
+        setSuccess({ clientName: res.clientName, phone: res.newClientPhone ?? '', loginUrl: res.loginUrl, ...credential })
         setPhase(GUIDED_PHASE[nextGuidedStep(1, 'created')])
         // Ledger del onboarding (dedupe duro server-side). El `stepKey` REAL viaja en la metadata
         // porque el endpoint todavía valida la lista de la guía v1 — ver el docblock de
@@ -449,7 +464,7 @@ export function CreateClientModal({
           surface: 'rn_guided_invite',
         })
       } else if (res.newClientPhone) {
-        setSuccess({ clientName: res.clientName, phone: res.newClientPhone, loginUrl: res.loginUrl })
+        setSuccess({ clientName: res.clientName, phone: res.newClientPhone, loginUrl: res.loginUrl, ...credential })
         setPhase('success')
       } else {
         handleClose()
@@ -491,14 +506,27 @@ export function CreateClientModal({
   }
 
   /**
-   * Alta de siempre: el CTA de WhatsApp del estado de éxito. El TEXTO ya no se arma acá — sale de
-   * `clientInviteMessage` vía `openWhatsApp` (plantilla por persona de `@eva/schemas`), igual que
-   * el WhatsApp de la ficha y del directorio. Antes decía «Soy tu coach… tu link para acceder a tu
-   * plan», un quinto copy suelto que ignoraba la persona del coach.
+   * Alta de siempre: el CTA de WhatsApp del estado de éxito. El TEXTO no se arma acá — sale de la
+   * plantilla por persona de `@eva/schemas`, igual que el WhatsApp de la ficha y del directorio.
+   * Antes decía «Soy tu coach… tu link para acceder a tu plan», un quinto copy suelto que ignoraba
+   * la persona del coach.
+   *
+   * Este estado solo existe cuando el alumno trae teléfono, así que el mensaje sale con la
+   * credencial adentro; igual la decide `guidedInvitePayload` y no un `if` de acá — regla 4 de
+   * `docs/specs/flujo-coach-nuevo/SPEC.md §5`.
    */
   function sendWhatsApp() {
     if (!success) return
-    openWhatsApp(success.phone, success.clientName, success.loginUrl ?? '', persona).catch(() => {})
+    const { whatsappUrl } = guidedInvitePayload({
+      channel: 'whatsapp',
+      phone: success.phone,
+      persona,
+      clientName: success.clientName,
+      loginUrl: success.loginUrl ?? '',
+      email: success.email,
+      tempPassword: success.tempPassword,
+    })
+    if (whatsappUrl) Linking.openURL(whatsappUrl).catch(() => {})
     handleClose()
   }
 
@@ -531,16 +559,31 @@ export function CreateClientModal({
     }
     if (picked === 'whatsapp') {
       emitPicked()
-      openWhatsApp(success.phone, success.clientName, loginUrl, persona).catch(() => {})
+      // Con teléfono va la credencial adentro; sin teléfono el destino es `wa.me/?text=` —el
+      // selector de contactos— y el mismo payload la saca solo (regla 4 de SPEC §5).
+      const { whatsappUrl } = guidedInvitePayload({
+        channel: 'whatsapp',
+        phone: success.phone,
+        persona,
+        clientName: success.clientName,
+        loginUrl,
+        email: success.email,
+        tempPassword: success.tempPassword,
+      })
+      if (whatsappUrl) Linking.openURL(whatsappUrl).catch(() => {})
       setPhase(GUIDED_PHASE[nextGuidedStep(2, 'channel_chosen')])
       return
     }
     if (picked === 'share') {
       emitPicked()
+      // La hoja del sistema NUNCA lleva credencial: el destinatario se elige después de mandar el
+      // texto. `shareLogin` arma el mensaje sin correo ni clave por construcción —no recibe esos
+      // campos—, así que acá no hay nada que filtrar y nada que se pueda olvidar de filtrar.
       shareLogin(success.clientName, loginUrl, persona).catch(() => {})
       setPhase(GUIDED_PHASE[nextGuidedStep(2, 'channel_chosen')])
       return
     }
+    // Copiar el link: al portapapeles va el link pelado, jamás el mensaje con la clave.
     Clipboard.setStringAsync(loginUrl)
       .then(() => {
         setLinkCopied(true)

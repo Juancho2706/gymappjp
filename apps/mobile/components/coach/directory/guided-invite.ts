@@ -80,13 +80,107 @@ export function guidedChannelCopy(persona: Persona | null | undefined): GuidedCh
     ]
 }
 
-/** Mensaje con el que se invita: la plantilla de la persona (`@eva/schemas`), nunca un texto propio. */
+/**
+ * Mensaje con el que se invita: la plantilla de la persona (`@eva/schemas`), nunca un texto propio.
+ *
+ * `email` + `tempPassword` producen la variante CON credencial. Quién los pasa NO es el componente:
+ * es `guidedInvitePayload`, que aplica la regla del canal.
+ */
 export function guidedInviteMessage(input: {
     persona: Persona | null | undefined
     clientName: string
     loginUrl: string
+    email?: string | null
+    tempPassword?: string | null
 }): string {
     return clientInviteMessage(input)
+}
+
+/**
+ * Mínimo de dígitos para dar por bueno un teléfono como destinatario CON NOMBRE (`wa.me/<digits>`).
+ * Mismo umbral que `lib/temp-password-copy.ts` y la barra flotante del detalle de alumno: un número
+ * corto o a medio tipear no identifica a nadie, y errar hacia «sin credencial» solo cuesta una línea
+ * del mensaje, mientras errar al revés cuesta la cuenta de un tercero.
+ */
+const MIN_PHONE_DIGITS = 10
+
+/** Dígitos tal como los pide `wa.me`: sin `+`, sin espacios ni guiones. */
+function phoneDigits(phone: string | null | undefined): string {
+    return (phone ?? '').replace(/\D/g, '')
+}
+
+/**
+ * ¿Este canal puede llevar la credencial adentro? — regla 4 de
+ * `docs/specs/flujo-coach-nuevo/SPEC.md §5`: **una credencial nunca viaja a un destinatario sin
+ * nombre.**
+ *
+ * `whatsapp` CON teléfono usable es el único destino con nombre: la URL queda `wa.me/<digits>` y el
+ * mensaje llega a esa persona y a nadie más. Los otros tres casos no saben a quién le hablan:
+ * - `share` abre la hoja del sistema y el destinatario se elige DESPUÉS (puede ser un grupo, o el
+ *   chat equivocado);
+ * - `link` deja el texto en el portapapeles, que se pega donde sea;
+ * - `whatsapp` sin teléfono cae en `wa.me/?text=`, que abre el selector de contactos — un toque
+ *   equivocado entrega acceso a datos de salud de un tercero (Ley 21.719).
+ *
+ * En esos tres el mensaje igual sale: pierde la clave, no el link. La clave ya viajó por el correo
+ * de bienvenida, que el alta manda sola.
+ */
+export function channelCarriesCredential(channel: GuidedInviteChannel, phone?: string | null): boolean {
+    return channel === 'whatsapp' && phoneDigits(phone).length >= MIN_PHONE_DIGITS
+}
+
+export interface GuidedInvitePayload {
+    /** El texto que de verdad sale por ese canal. */
+    message: string
+    /**
+     * ¿El mensaje lleva usuario y clave ADENTRO? No es «el canal lo permite»: es lo que de verdad
+     * salió. Un canal habilitado sin credencial que mandar (respuesta vieja del alta, clave todavía
+     * no generada) da `false`, porque el flag no puede prometer más de lo que dice el texto.
+     */
+    withCredential: boolean
+    /**
+     * `wa.me/<digits>?text=<mensaje>` — SOLO del canal `whatsapp`; `null` en los otros dos. El
+     * mensaje entero pasa por `encodeURIComponent`, igual que `lib/client-actions.ts`.
+     */
+    whatsappUrl: string | null
+}
+
+/**
+ * Qué se manda por cada canal. Es la regla 4 hecha función: el componente pide un payload y no tiene
+ * cómo filtrar una credencial por el canal equivocado — no hay un `if` suyo que pueda salir mal.
+ *
+ * La URL vive acá y no en el componente por el mismo motivo que `tempPasswordWhatsappUrl`
+ * (`lib/temp-password-copy.ts`, el otro camino que manda una clave a un teléfono): si el destino y
+ * el texto se arman juntos, un test puede pinnear que la clave y el `wa.me/<digits>` aparecen
+ * SIEMPRE de a dos, sin montar react-native.
+ */
+export function guidedInvitePayload(input: {
+    channel: GuidedInviteChannel
+    phone?: string | null
+    persona: Persona | null | undefined
+    clientName: string
+    loginUrl: string
+    email?: string | null
+    tempPassword?: string | null
+}): GuidedInvitePayload {
+    const permitida = channelCarriesCredential(input.channel, input.phone)
+    const correo = permitida ? (input.email ?? '').trim() : ''
+    const clave = permitida ? (input.tempPassword ?? '').trim() : ''
+    // Los dos o ninguno, igual que `clientInviteMessage`: acá solo se adelanta para que el flag
+    // diga lo mismo que el texto.
+    const withCredential = Boolean(correo && clave)
+    const message = guidedInviteMessage({
+        persona: input.persona,
+        clientName: input.clientName,
+        loginUrl: input.loginUrl,
+        email: correo || null,
+        tempPassword: clave || null,
+    })
+    const whatsappUrl =
+        input.channel === 'whatsapp'
+            ? `https://wa.me/${phoneDigits(input.phone)}?text=${encodeURIComponent(message)}`
+            : null
+    return { message, withCredential, whatsappUrl }
 }
 
 /** Bajada del paso 1: lo mínimo que hace falta, dicho con el vocabulario de la persona. */

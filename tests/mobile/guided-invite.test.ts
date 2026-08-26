@@ -13,12 +13,14 @@ import { PERSONAS, personaNoun } from '@eva/schemas'
 import {
   GUIDED_INVITE_CHANNELS,
   GUIDED_STEP_COUNT,
+  channelCarriesCredential,
   generateGuidedTempPassword,
   guidedAhaNote,
   guidedCapNote,
   guidedChannelCopy,
   guidedFormHint,
   guidedInviteMessage,
+  guidedInvitePayload,
   guidedPreviewTitle,
   guidedStepLabel,
   guidedTitle,
@@ -33,6 +35,10 @@ import {
 } from '../../apps/mobile/components/coach/directory/guided-invite'
 
 const LINK = 'https://www.eva-app.cl/c/QAEMB/login'
+const CORREO = 'ana@correo.com'
+const CLAVE = 'Eva123456!'
+/** Teléfono chileno completo: 11 dígitos, el destino con nombre de `wa.me/<digits>`. */
+const TELEFONO = '+56 9 1234 5678'
 
 describe('indicador de pasos', () => {
   it('nombra el paso y el total sin escribirlos a mano', () => {
@@ -70,6 +76,99 @@ describe('mensaje de la invitación', () => {
       expect(msg).toContain(LINK)
       expect(msg).not.toMatch(/\bEVA\b/)
     }
+  })
+
+  it('con correo y clave lleva el bloque de acceso completo (SPEC §6, variante CON teléfono)', () => {
+    const msg = guidedInviteMessage({
+      persona: 'strength',
+      clientName: 'Ana',
+      loginUrl: LINK,
+      email: CORREO,
+      tempPassword: CLAVE,
+    })
+    expect(msg).toBe(
+      'Hola Ana, te invité a mi app: ahí te dejo tu rutina y vamos siguiendo tus avances.\n' +
+        `Entra acá: ${LINK}\n` +
+        `Tu usuario: ${CORREO}\n` +
+        `Tu clave temporal: ${CLAVE} — la cambias apenas entres.`,
+    )
+  })
+})
+
+/**
+ * Regla 4 de `docs/specs/flujo-coach-nuevo/SPEC.md §5`: **una credencial nunca viaja a un
+ * destinatario sin nombre.** Es la regla que el componente no puede decidir a mano —un `if` suyo
+ * mal escrito manda la clave de un alumno al chat equivocado, con datos de salud de un tercero
+ * adentro (Ley 21.719)—, así que vive en `guidedInvitePayload` y se pinnea acá.
+ */
+describe('credencial por canal (regla 4 de SPEC §5)', () => {
+  const invitado = { persona: 'strength' as const, clientName: 'Ana', loginUrl: LINK, email: CORREO, tempPassword: CLAVE }
+
+  it('WhatsApp CON teléfono es el único destino con nombre: ahí sí va la credencial', () => {
+    expect(channelCarriesCredential('whatsapp', TELEFONO)).toBe(true)
+    const payload = guidedInvitePayload({ channel: 'whatsapp', phone: TELEFONO, ...invitado })
+    expect(payload.withCredential).toBe(true)
+    expect(payload.message).toContain(LINK)
+    expect(payload.message).toContain(CORREO)
+    expect(payload.message).toContain(CLAVE)
+    // El destino queda `wa.me/<digits>`: esa persona y nadie más.
+    expect(payload.whatsappUrl?.startsWith('https://wa.me/56912345678?text=')).toBe(true)
+  })
+
+  it('WhatsApp SIN teléfono cae en el selector de contactos ⇒ mensaje sin clave', () => {
+    for (const phone of [undefined, null, '', '   ', '123']) {
+      expect(channelCarriesCredential('whatsapp', phone)).toBe(false)
+      const payload = guidedInvitePayload({ channel: 'whatsapp', phone, ...invitado })
+      expect(payload.withCredential).toBe(false)
+      expect(payload.message).toContain(LINK)
+      expect(payload.message).not.toContain(CLAVE)
+      expect(payload.message).toContain('te mandé tu clave al correo')
+    }
+    // `wa.me/?text=` sin dígitos: exactamente el caso que la regla 4 obliga a mandar sin credencial.
+    const sinNumero = guidedInvitePayload({ channel: 'whatsapp', phone: null, ...invitado })
+    expect(sinNumero.whatsappUrl?.startsWith('https://wa.me/?text=')).toBe(true)
+  })
+
+  it('compartir y copiar el link van SIN credencial aunque haya teléfono', () => {
+    // La hoja del sistema elige destinatario DESPUÉS de escribir el texto, y el portapapeles se
+    // pega donde sea: en los dos casos el mensaje ya salió antes de saber a quién le habla.
+    for (const channel of ['share', 'link'] as const) {
+      expect(channelCarriesCredential(channel, TELEFONO)).toBe(false)
+      const payload = guidedInvitePayload({ channel, phone: TELEFONO, ...invitado })
+      expect(payload.withCredential).toBe(false)
+      expect(payload.message).toContain(LINK)
+      expect(payload.message).not.toContain(CLAVE)
+      expect(payload.message).not.toContain(CORREO)
+      // Solo el canal WhatsApp arma URL: los otros dos no tienen dónde meterla.
+      expect(payload.whatsappUrl).toBeNull()
+    }
+  })
+
+  it('sin credencial que mandar, WhatsApp con teléfono igual manda el link', () => {
+    // El canal la permitiría, pero no hay nada que mandar (respuesta vieja del alta, clave todavía
+    // sin generar): el flag dice `false` porque el texto tampoco la lleva.
+    for (const credencial of [{}, { email: CORREO }, { tempPassword: CLAVE }]) {
+      const payload = guidedInvitePayload({
+        channel: 'whatsapp',
+        phone: TELEFONO,
+        persona: 'nutrition',
+        clientName: 'Ana',
+        loginUrl: LINK,
+        ...credencial,
+      })
+      expect(channelCarriesCredential('whatsapp', TELEFONO)).toBe(true)
+      expect(payload.withCredential).toBe(false)
+      expect(payload.message).toContain(LINK)
+      expect(payload.message).not.toContain(CLAVE)
+      expect(payload.message).not.toContain('undefined')
+    }
+  })
+
+  it('el mensaje entero va codificado: la URL no arrastra saltos de línea ni espacios crudos', () => {
+    const { whatsappUrl, message } = guidedInvitePayload({ channel: 'whatsapp', phone: TELEFONO, ...invitado })
+    expect(message).toContain('\n')
+    expect(whatsappUrl).not.toMatch(/[\s\n]/)
+    expect(decodeURIComponent((whatsappUrl ?? '').split('?text=')[1] ?? '')).toBe(message)
   })
 })
 
