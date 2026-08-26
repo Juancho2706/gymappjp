@@ -225,7 +225,7 @@ export async function getAllCoachesPaginated(params: {
             billing_cycle: r.billing_cycle, payment_provider: r.payment_provider,
             max_clients: r.max_clients, current_period_end: r.current_period_end,
             trial_ends_at: r.trial_ends_at, created_at: r.created_at,
-            client_count: 0, active_client_count: 0,
+            client_count: 0, active_client_count: 0, demo_client_count: 0,
             days_until_expiry: r.current_period_end
                 ? Math.floor((new Date(r.current_period_end).getTime() - Date.now()) / 86400000)
                 : null,
@@ -254,6 +254,9 @@ export async function getAllCoachesPaginated(params: {
         created_at: r.created_at,
         client_count: Number(r.client_count),
         active_client_count: Number(r.active_client_count),
+        // `?? 0`: la columna es nueva en la RPC — si el entorno todavía corre una versión previa
+        // el listado degrada a "sin demos" en vez de pintar NaN junto al cupo.
+        demo_client_count: Number(r.demo_client_count ?? 0),
         days_until_expiry: r.days_until_expiry,
         utilization_pct: Number(r.utilization_pct),
         last_activity_at: r.last_activity_at,

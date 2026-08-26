@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users, Plus, StickyNote, Settings2 } from 'lucide-react'
+import { Trash2, AlertTriangle, ChevronDown, ChevronsUpDown, ChevronUp, Users, Plus, StickyNote, Settings2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
@@ -148,6 +148,91 @@ function NotesPopover({ coachId, onClose }: { coachId: string; onClose: () => vo
                 </button>
             </div>
         </div>
+    )
+}
+
+/**
+ * Chip con la CANTIDAD de alumnos demo. Vive dentro de la columna «Demo», que ya dice de qué
+ * se trata: acá solo va el número (el conteo del cupo YA viene sin demos desde la RPC — bug
+ * 23-08: Job Palacios se veía 2/1 en Free por su propio alumno demo). Cero demos ⇒ cero render.
+ */
+function DemoClientsChip({ count }: { count: number }) {
+    if (count <= 0) return null
+    return (
+        <span
+            title={`${count} alumno${count !== 1 ? 's' : ''} demo (no ocupa${count === 1 ? '' : 'n'} cupo)`}
+            className="rounded-md border border-subtle bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted"
+        >
+            +{count}
+        </span>
+    )
+}
+
+/**
+ * Columna propia «Demo» (pedido del owner 26-08): responde de un vistazo si el coach tiene o no
+ * cargado el alumno de muestra. Antes el dato solo existía como chip pegado al cupo, así que el
+ * "no lo tiene" era invisible (ausencia de chip) y no se podía barrer la lista con la vista.
+ * Sí = "Sí" + cuántos · No = guion muted. No ocupa cupo en ningún caso.
+ */
+function DemoClientsCell({ count }: { count: number }) {
+    if (count <= 0) return <span className="text-xs text-muted">—</span>
+    return (
+        <span className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-body">Sí</span>
+            <DemoClientsChip count={count} />
+        </span>
+    )
+}
+
+/**
+ * Encabezado ordenable de «Última actividad» (pedido del owner 26-08: ver quién entró hace más
+ * tiempo / hace menos, sin leer 50 filas). Misma mecánica y mismos tokens que `AdminSortHeader`
+ * (`?sort=…&dir=asc|desc` + reset de página, que `page.tsx` ya pasa a la RPC como p_sort/p_dir),
+ * pero NO lo reusa porque esta columna lleva su InfoTooltip y el tooltip renderiza un <button>
+ * (PopoverTrigger de Radix) que no puede vivir DENTRO del botón de orden sin anidar interactivos.
+ * `sortKey = 'activity'` = `coach_last_active_at` en la RPC (migración 20260826022428).
+ */
+function ActivitySortHeader() {
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+
+    const isActive = searchParams.get('sort') === 'activity'
+    const currentDir = searchParams.get('dir') ?? 'desc'
+
+    function handleClick() {
+        const params = new URLSearchParams(searchParams.toString())
+        if (isActive) {
+            params.set('dir', currentDir === 'desc' ? 'asc' : 'desc')
+        } else {
+            params.set('sort', 'activity')
+            params.set('dir', 'desc')
+        }
+        params.set('page', '1')
+        router.push(`${pathname}?${params.toString()}`)
+    }
+
+    const Icon = !isActive ? ChevronsUpDown : currentDir === 'desc' ? ChevronDown : ChevronUp
+    const ariaSort: 'ascending' | 'descending' | 'none' = !isActive
+        ? 'none'
+        : currentDir === 'desc'
+            ? 'descending'
+            : 'ascending'
+
+    return (
+        <th aria-sort={ariaSort} className="select-none whitespace-nowrap px-3 py-2 text-left">
+            <span className="flex items-center gap-1">
+                <button
+                    type="button"
+                    onClick={handleClick}
+                    className="flex cursor-pointer items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-muted transition-colors hover:text-body focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                >
+                    Última actividad
+                    <Icon className={`h-3 w-3 ${isActive ? 'text-[var(--sport-500)]' : ''}`} />
+                </button>
+                <InfoTooltip content="Última vez que el coach realizó una acción en la plataforma (guardar plan, agregar ejercicio, etc.). Click en el encabezado para ordenar de más reciente a más antigua y viceversa." />
+            </span>
+        </th>
     )
 }
 
@@ -344,7 +429,7 @@ export function CoachTable({ coaches, total }: Props) {
                             </div>
 
                             <div className="mt-1 flex items-center justify-between gap-3 text-xs">
-                                <span className="text-muted">
+                                <span className="flex items-center gap-1.5 text-muted">
                                     Alumnos{' '}
                                     <span className="font-mono tabular-nums text-body">
                                         {c.active_client_count}/{c.max_clients ?? '?'}
@@ -356,6 +441,11 @@ export function CoachTable({ coaches, total }: Props) {
                                         ? <LastActivityDays iso={c.coach_last_active_at} />
                                         : <span className="text-xs text-muted">nunca</span>}
                                 </span>
+                            </div>
+
+                            {/* Equivalente móvil de la columna «Demo» de la tabla desktop. */}
+                            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                                Demo <DemoClientsCell count={c.demo_client_count} />
                             </div>
 
                             <button
@@ -416,10 +506,11 @@ export function CoachTable({ coaches, total }: Props) {
                                 <AdminSortHeader label="Alumnos" sortKey="clients" />
                                 <th className="px-3 py-2 text-left">
                                     <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-muted">
-                                        Última actividad
-                                        <InfoTooltip content="Última vez que el coach realizó una acción en la plataforma (guardar plan, agregar ejercicio, etc.)." />
+                                        Demo
+                                        <InfoTooltip content="¿El coach tiene cargado el alumno de muestra/ejemplo? Los alumnos demo NO ocupan cupo del plan: el contador de Alumnos ya los excluye." />
                                     </span>
                                 </th>
+                                <ActivitySortHeader />
                                 <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-muted">Registrado</th>
                                 <th className="px-3 py-2 text-right text-[11px] font-medium uppercase tracking-widest text-muted">Acc.</th>
                             </tr>
@@ -427,7 +518,7 @@ export function CoachTable({ coaches, total }: Props) {
                         <tbody className="divide-y divide-[var(--border-subtle)]">
                             {coaches.length === 0 && (
                                 <tr>
-                                    <td colSpan={12}>
+                                    <td colSpan={13}>
                                         <AdminEmptyState icon={Users} title="Sin coaches" description="Ajusta los filtros para ver resultados." />
                                     </td>
                                 </tr>
@@ -508,6 +599,9 @@ export function CoachTable({ coaches, total }: Props) {
                                             <span className="font-mono text-xs tabular-nums text-body">
                                                 {c.active_client_count}/{c.max_clients ?? '?'}
                                             </span>
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <DemoClientsCell count={c.demo_client_count} />
                                         </td>
                                         <td className="px-3 py-2.5">
                                             {c.coach_last_active_at ? (

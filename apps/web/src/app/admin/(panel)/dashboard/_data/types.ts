@@ -77,6 +77,12 @@ export interface CoachListItem {
     created_at: string
     client_count: number
     active_client_count: number
+    /**
+     * Alumnos DEMO del coach (el que se le crea solo al abrir la cuenta). La RPC ya los deja fuera
+     * de `client_count`/`active_client_count` —el cupo mostrado es real—, pero el admin necesita
+     * ver que existen para no leer "0 alumnos" en un coach que sí tiene la cuenta poblada.
+     */
+    demo_client_count: number
     days_until_expiry: number | null
     utilization_pct: number
     last_activity_at: string | null
