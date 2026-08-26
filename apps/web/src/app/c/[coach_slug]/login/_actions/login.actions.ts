@@ -8,6 +8,13 @@ import type { Tables } from '@/lib/database.types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import { setLastWorkspace } from '@/services/auth/workspace.service'
 import { getClientBasePath } from '@/lib/client/base-path'
+import { recordStudentFirstLogin } from '@/services/client/student-login-signal.service'
+import {
+    COACH_ACCOUNT_ACTION,
+    coachAccountMessage,
+    type StudentLoginAction,
+} from '@/lib/auth/student-login-messages'
+import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
@@ -16,6 +23,10 @@ export type ClientLoginState = {
     error?: string
     success?: boolean
     redirectUrl?: string
+    /** Discrimina el error para que el form pueda tratarlo distinto («Vive tu app» directo §4). */
+    kind?: 'coach_account'
+    /** Salida acompañando al mensaje: el form la pinta como link. */
+    action?: StudentLoginAction
 }
 
 export async function clientLoginAction(
@@ -47,9 +58,52 @@ export async function clientLoginAction(
         return { error: 'Error al obtener sesión.' }
     }
 
-    // R3 (auditoria 2026-06-11): estas lecturas pasan RLS del alumno recien logueado
-    // (coaches tiene SELECT publico; clients permite self) → cliente user-scoped, sin service key.
+    // R3 (auditoria 2026-06-11, corregido 2026-08-26): las lecturas de `coaches` y `clients` de
+    // acá pasan RLS del usuario recien logueado (coaches tiene SELECT publico y self; clients
+    // permite self) → cliente user-scoped. El UNICO service_role del archivo es el de
+    // `organization_members` mas abajo, acotado a la verificacion org+coach+activo.
+
+    // «Vive tu app» directo §4 (D4 = B): el coach que entra con SU cuenta al login de sus alumnos
+    // no es un extraño. Va ANTES de resolver el slug a proposito — con el slug de OTRO coach, la
+    // rama `!coach` de abajo lo despachaba con «Coach no encontrado.», que es el mismo callejon.
+    // Se cierra la sesion (local: solo este dispositivo) porque este login no tiene fail-counter,
+    // turnstile ni jitter; dejarla abierta lo convertiria en un segundo login de coach sin defensas.
+    const { data: selfCoachData, error: selfCoachError } = await supabase
+        .from('coaches')
+        .select('id, persona, slug, invite_code')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    if (selfCoachError) {
+        console.error('[LoginAction] Error checking coach account:', selfCoachError)
+    }
+
+    const selfCoach = selfCoachData as Pick<Coach, 'id' | 'persona' | 'slug' | 'invite_code'> | null
+
     const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
+
+    if (selfCoach) {
+        await supabase.auth.signOut({ scope: 'local' })
+        // `own_slug` sale de comparar contra el propio identificador del coach: saber si llegó a su
+        // marca o a la de otro cambia el diagnostico y no cuesta una query extra. Sin correo ni slug
+        // en las props (regla 5 de la SPEC: la analitica no lleva PII).
+        await capturePostHogServerEvent({
+            event: 'student_login_coach_account',
+            distinctId: selfCoach.id,
+            properties: {
+                surface: 'web',
+                own_slug: INVITE_CODE_RE.test(coach_slug)
+                    ? selfCoach.invite_code === coach_slug
+                    : selfCoach.slug === coach_slug,
+            },
+        })
+        return {
+            kind: 'coach_account',
+            error: coachAccountMessage(selfCoach.persona),
+            action: COACH_ACCOUNT_ACTION,
+        }
+    }
+
     const coachQuery = supabase.from('coaches').select('id')
     const { data: coachData, error: coachError } = await (
         INVITE_CODE_RE.test(coach_slug)
@@ -64,7 +118,7 @@ export async function clientLoginAction(
     const coach = coachData as Pick<Coach, 'id'> | null
 
     if (!coach) {
-        await supabase.auth.signOut()
+        await supabase.auth.signOut({ scope: 'local' })
         return { error: 'Coach no encontrado.' }
     }
 
@@ -139,9 +193,18 @@ export async function clientLoginAction(
     }
 
     if (!client) {
-        await supabase.auth.signOut()
+        // `scope: 'local'` (SPEC §4): el alcance global deslogueaba al alumno en TODOS sus
+        // dispositivos por equivocarse de slug.
+        await supabase.auth.signOut({ scope: 'local' })
         return { error: 'No tienes acceso a esta plataforma.' }
     }
+
+    // V3.13 / FCN W1.4: la señal de la North Star se sella ANTES de cualquier redirect — también el
+    // alumno pausado que logra loguearse ENTRÓ. El servicio exige service_role a propósito (la columna
+    // es default-deny por columna: este action user-scoped no podría escribirla), nunca lanza, y se
+    // ESPERA — una promesa flotante se pierde cuando Vercel congela la invocación al responder
+    // (SPEC §5 regla 3). El id es la PK de `clients`, no el uid de auth.
+    await recordStudentFirstLogin(createServiceRoleClient(), client.id)
 
     // Alumno pausado o archivado: NO se cierra la sesion. Entra y aterriza en la pantalla de cuenta
     // suspendida, que explica el estado con la marca de su coach/equipo y ofrece el contacto. Cerrar
@@ -157,9 +220,12 @@ export async function clientLoginAction(
         await setLastWorkspace(supabase, matchedWorkspace)
     }
 
+    // Mismo criterio que la rama `suspended` de arriba: el base path real (el alumno de pool/team
+    // vive bajo `/t/[team_slug]`), no `/c` hardcodeado, que lo volcaba a la marca personal del coach.
+    const base = await getClientBasePath(coach_slug)
     const redirectUrl = client.force_password_change
-        ? `/c/${coach_slug}/change-password`
-        : `/c/${coach_slug}/dashboard`
+        ? `${base}/change-password`
+        : `${base}/dashboard`
 
     return { success: true, redirectUrl }
 }
