@@ -23,7 +23,6 @@ import { isBrandingAllowed, showsEvaBadge, type SubscriptionTier } from '@eva/ti
 import { supabase } from '../../lib/supabase'
 import { ApiError, validateStudentWorkspace } from '../../lib/api'
 import { translateAuthError } from '../../lib/auth-errors'
-import { signOutAndCleanup } from '../../lib/auth-actions'
 import { getStudentAccountStatus } from '../../lib/student-account-status'
 import {
   GoogleSignInError,
@@ -217,17 +216,27 @@ export default function LoginScreen() {
         // login dejaba al alumno sin explicación ni contacto.
         if (apiError?.code === 'ACCOUNT_PAUSED') {
           await getStudentAccountStatus().catch(() => {})
-          await signOutAndCleanup({ preserveStudentAccountStatus: true }).catch(() => {})
+          // Cierre LOCAL, no `signOutAndCleanup` (W4.1): ese helper cierra con scope GLOBAL
+          // (`lib/auth-actions.ts:69`) porque sirve al logout DELIBERADO, donde revocar el
+          // refresh token en todos los dispositivos es la política segura del teléfono perdido.
+          // Este es el camino de ERROR: una cuenta pausada no es un logout deliberado y no puede
+          // echar al usuario de sus otras sesiones. La limpieza por-usuario que importa acá no se
+          // pierde: el estado server-verified ya quedó cacheado arriba y el janitor de
+          // `registerSessionCacheJanitor` borra la nutrición V2 del usuario saliente con el
+          // `SIGNED_OUT` que dispara este mismo signOut.
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
           setLoading(false)
           router.replace('/alumno/suspended')
           return
         }
-        // Un scope denegado o un token confirmado como inválido no debe dejar sesión viva.
+        // Un scope denegado o un token confirmado como inválido no debe dejar sesión viva —
+        // pero equivocarse de login (credenciales de coach en la puerta del alumno) tampoco
+        // puede revocarle el refresh token en TODOS sus dispositivos: scope local (W4.1).
         if (
           apiError?.status === 403 ||
           apiError?.code === 'INVALID_TOKEN'
         ) {
-          await supabase.auth.signOut().catch(() => {})
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
         }
         setError(studentWorkspaceErrorCopy(apiError))
         setLoading(false)

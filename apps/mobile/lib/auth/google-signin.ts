@@ -184,8 +184,14 @@ export async function resolveGoogleCoachDestination(
   return intent === 'register' ? { kind: 'onboarding' } : { kind: 'no-account' }
 }
 
-/** Cierra la sesión nativa de Google + Supabase (para el caso login sin cuenta coach). */
+/**
+ * Cierra la sesión nativa de Google + Supabase (para el caso login sin cuenta coach).
+ *
+ * Scope LOCAL a propósito (FCN W4.1, gemelo del fix de login.tsx): este helper solo se llama en el
+ * CAMINO DE ERROR del login con Google — no es un logout deliberado, y un signOut global le
+ * revocaría al usuario el refresh token en todos sus dispositivos por haberse equivocado de puerta.
+ */
 export async function signOutGoogleAndSupabase(): Promise<void> {
   await GoogleSignin.signOut().catch(() => {})
-  await supabase.auth.signOut().catch(() => {})
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
 }
