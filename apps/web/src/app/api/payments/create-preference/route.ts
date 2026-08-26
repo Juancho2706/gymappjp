@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
@@ -51,7 +52,52 @@ const schema = z.object({
     gateway: z.enum(['mercadopago', 'flow']).default('mercadopago'),
 })
 
+/**
+ * Desarma el error de un gateway para poder AGRUPARLO y BUSCARLO. Los providers lanzan un Error
+ * plano con todo el detalle embutido en el texto, p. ej.:
+ *
+ *   MercadoPago subscription creation failed (400) [x-request-id: cfb8b…]:
+ *   {"message":"Payer is associated with a different site","code":"guest_site_mismatch","status":400}
+ *
+ * Sentry agrupa por mensaje: sin extraer el `code`, cada x-request-id abriría un issue nuevo y
+ * "el checkout se rompió otra vez" sería imposible de contar. Devuelve null en los campos que no
+ * aparezcan (Flow y los fallos de red no traen este formato) — nunca lanza.
+ */
+function parseGatewayError(message: string): {
+    status: number | null
+    code: string | null
+    detail: string | null
+    requestId: string | null
+} {
+    const statusMatch = message.match(/\((\d{3})\)/)
+    const requestIdMatch = message.match(/x-request-id:\s*([^\]]+)\]/)
+    let code: string | null = null
+    let detail: string | null = null
+    const jsonStart = message.indexOf('{')
+    if (jsonStart !== -1) {
+        try {
+            const body = JSON.parse(message.slice(jsonStart)) as Record<string, unknown>
+            if (typeof body.code === 'string') code = body.code
+            else if (typeof body.error === 'string') code = body.error
+            if (typeof body.message === 'string') detail = body.message
+        } catch {
+            // Cuerpo no-JSON (HTML de un 5xx, texto suelto): status/requestId siguen sirviendo.
+        }
+    }
+    return {
+        status: statusMatch ? Number(statusMatch[1]) : null,
+        code,
+        detail,
+        requestId: requestIdMatch ? requestIdMatch[1].trim() : null,
+    }
+}
+
 export async function POST(request: Request) {
+    // Contexto para el reporte del catch: se puebla apenas se conoce y NO cambia ninguna respuesta.
+    // Sin esto el fallo del money path llega a Sentry sin coach ni gateway y no se puede accionar.
+    let coachIdForLog: string | null = null
+    let gatewayForLog: string = 'mercadopago'
+    let tierForLog: string | null = null
     try {
         const supabase = await createClient()
         const {
@@ -61,6 +107,7 @@ export async function POST(request: Request) {
         if (!user?.id || !user.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
+        coachIdForLog = user.id
 
         const rl = await rateLimitPayment(user.id)
         if (!rl.ok) {
@@ -83,6 +130,8 @@ export async function POST(request: Request) {
         const tier = parsed.data.tier as SubscriptionTier
         const billingCycle = parsed.data.billingCycle as BillingCycle
         const gateway = parsed.data.gateway
+        gatewayForLog = gateway
+        tierForLog = tier
 
         // Fail-closed del gate de dinero: con Flow apagado NINGÚN request puede enrutar a Flow, aunque
         // el body lo pida. El gate real es server-side; la UI comparte el MISMO flag inlined (FLOW_ENABLED
@@ -653,9 +702,45 @@ export async function POST(request: Request) {
         })
     } catch (error) {
         const message = error instanceof Error ? error.message : 'No se pudo iniciar el flujo de suscripción.'
+        const gatewayError = parseGatewayError(message)
         // Diagnosticabilidad (incidente go-live 2026-07-09): el 500 devolvia el mensaje al cliente pero
         // NO quedaba en los logs de Vercel → imposible saber que paso server-side. Money path: loguear.
-        console.error('[payments.create-preference] failed', { message })
+        console.error('[payments.create-preference] failed', {
+            coachId: coachIdForLog,
+            gateway: gatewayForLog,
+            tier: tierForLog,
+            gatewayStatus: gatewayError.status,
+            gatewayCode: gatewayError.code,
+            gatewayRequestId: gatewayError.requestId,
+            message,
+        })
+        // …y ADEMAS a Sentry (auditoria 25-08): el unico fallo real de checkout de la campana
+        // (25-08 15:08:54Z, MP 400 `guest_site_mismatch`) existia SOLO en los logs de Vercel — cero
+        // issues en Sentry, cero alertas. Un fallo del money path tiene que despertar a alguien.
+        // `fingerprint` explicito: un issue por gateway+code, estable aunque el texto cambie (los
+        // x-request-id del mensaje partirian el grouping en un issue por intento). Tags = dimensiones
+        // buscables de cardinalidad acotada; el coach_id (uuid) va a `extra`, que no se indexa.
+        Sentry.captureException(error, {
+            level: 'error',
+            tags: {
+                area: 'payments-checkout',
+                gateway: gatewayForLog,
+                gateway_status: gatewayError.status != null ? String(gatewayError.status) : 'none',
+                gateway_code: gatewayError.code ?? 'none',
+            },
+            extra: {
+                coach_id: coachIdForLog,
+                tier: tierForLog,
+                gateway_detail: gatewayError.detail,
+                gateway_request_id: gatewayError.requestId,
+                message,
+            },
+            fingerprint: [
+                'payments-create-preference',
+                gatewayForLog,
+                gatewayError.code ?? String(gatewayError.status ?? 'unknown'),
+            ],
+        })
         // Flow VALIDA la entregabilidad real del email del pagador (no solo el formato) en
         // customer/create — confirmado en QA E2E: un buzon no entregable devuelve
         // `code=501 "email is not valid"`. Sin este mapeo el coach ve un 500 opaco; con el, un

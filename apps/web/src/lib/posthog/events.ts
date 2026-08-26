@@ -346,11 +346,13 @@ export function useCaptureCoachNutritionTemplateApplied() {
  *   pricing_viewed       → /pricing quedo visible (pageview propio del funnel; ver PricingTracker)
  *   pricing_plan_clicked → click en el CTA de un plan de /pricing ({ tier })
  *   checkout_started     → el usuario confirmo y se pide la preference/enrolamiento al server
+ *   checkout_failed      → el server NO devolvio checkout: el paso murio antes de la pasarela
  *   checkout_confirmed   → la confirmacion aterrizo visible (processing / flow-processing /
  *                          upgrade-processing); result separa activacion inmediata de cambio agendado
  *
- * Los checkout_* preceden una navegacion DURA (redirect a MP/Webpay o al dashboard): van con
- * send_instantly + sendBeacon para que el evento no muera con la pagina (el batch normal si moriria).
+ * checkout_started y checkout_confirmed preceden una navegacion DURA (redirect a MP/Webpay o al
+ * dashboard): van con send_instantly + sendBeacon para que el evento no muera con la pagina (el batch
+ * normal si moriria). checkout_failed NO — un fallo deja la pantalla pintando el error, sin unload.
  */
 export type CheckoutGateway = 'mercadopago' | 'flow'
 export type CheckoutStartSource = 'subscription' | 'reactivate' | 'register'
@@ -374,6 +376,53 @@ export function useCaptureCheckoutStarted() {
                 },
                 { send_instantly: true, transport: 'sendBeacon' }
             )
+        },
+        [ph]
+    )
+}
+
+/**
+ * checkout_failed — el checkout murio ANTES de la pasarela: create-preference no devolvio un
+ * `checkoutUrl` usable (4xx/5xx del server, respuesta sin URL, o la red se cayo en el POST).
+ *
+ * Es el gemelo de `register_failed` para el paso del dinero, y cierra el hueco mas caro del embudo:
+ * entre `checkout_started` y `checkout_confirmed` no habia NADA. Caso medido el 25-08 15:08:54 UTC:
+ * un coach apreto Confirmar en /coach/subscription, MercadoPago devolvio 400 `guest_site_mismatch`
+ * ("Payer is associated with a different site"), el 500 quedo SOLO en los logs de Vercel y el embudo
+ * de PostHog no registro nada — leido en PostHog, ese coach «vio el precio y no compro».
+ *
+ *   code:    causa estable. El `code` del server cuando existe (OVER_CAPACITY, UPGRADE_IN_FLIGHT,
+ *            NET_NOT_CHARGEABLE, GATEWAY_SWITCH_PENDING, FLOW_PLAN_CHANGE_UNSUPPORTED,
+ *            GATEWAY_EMAIL_REJECTED, FEATURE_DISABLED); `http_<status>` cuando el server respondio
+ *            un error SIN code (el 500 del catch generico cae aca); `missing_checkout_url` cuando
+ *            respondio 200 sin URL; `unknown` cuando ni siquiera hubo respuesta parseable (red).
+ *   message: el texto que VE el coach, recortado. Sirve para leer la causa real de los `http_500`
+ *            (ahi viaja el mensaje crudo del gateway) sin abrir los logs de Vercel.
+ *
+ * SIN `send_instantly`: un fallo NO precede una navegacion — la pantalla se queda pintando el error,
+ * asi que el batch normal alcanza. Sin PII (el mensaje del gateway nunca lleva el email del pagador).
+ */
+const CHECKOUT_FAILED_MESSAGE_MAX = 300
+
+export function useCaptureCheckoutFailed() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: {
+            tier: SubscriptionTier
+            billingCycle: string
+            gateway: CheckoutGateway
+            source: CheckoutStartSource
+            code: string
+            message: string
+        }) => {
+            ph?.capture('checkout_failed', {
+                tier: props.tier,
+                billing_cycle: props.billingCycle,
+                gateway: props.gateway,
+                source: props.source,
+                error_code: props.code,
+                error_message: props.message.slice(0, CHECKOUT_FAILED_MESSAGE_MAX),
+            })
         },
         [ph]
     )

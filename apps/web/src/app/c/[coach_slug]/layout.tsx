@@ -26,6 +26,8 @@ import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { buildSealCssVars } from '@/lib/seal-vars'
 import { AppSeal } from '@/components/AppSeal'
 import { STUDENT_ACCESS_COPY, STUDENT_ACCESS_STATE_HEADER } from '@/lib/student-access'
+import { IdentifyStudentOnMount } from '@/components/analytics/IdentifyStudentOnMount'
+import { getClientRootUser } from './_data/client-root.queries'
 
 interface Props {
     children: React.ReactNode
@@ -390,6 +392,12 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                    <WorkoutLaunchProvider>
                     <OfflineNutritionQueueSync />
                     <OfflineWorkoutQueueSync />
+                    {/* Identidad de Sentry del alumno. Aislada bajo <Suspense> por la MISMA razón
+                        que los gates del nav: ningún await de este cuerpo debe frenar a `children`.
+                        No pinta nada (el componente cliente devuelve null). */}
+                    <Suspense fallback={null}>
+                        <StudentSentryIdentity />
+                    </Suspense>
                     {/* QW1 TTFB: los 3 gates del nav son lecturas a DB (3 hops c/u antes del
                         dedupe). Aislados aca, el shell + la page streamean primero y el nav entra
                         cuando resuelven. El fallback solo reserva el ancho del sidebar desktop —
@@ -470,6 +478,18 @@ export default async function ClientBrandLayout({ children, params }: Props) {
             </div>
         </>
     )
+}
+
+/**
+ * Puente de identidad alumno → Sentry. `getClientRootUser` es `cache()` sobre `auth.getClaims()`
+ * (verificación LOCAL del JWT, sin round-trip a GoTrue) y el resto del árbol `/c` ya lo llama en el
+ * mismo request, así que esto NO agrega una consulta. Sin sesión (p. ej. `/c/‹slug›/login`) devuelve
+ * null y no se identifica a nadie.
+ */
+async function StudentSentryIdentity() {
+    const user = await getClientRootUser()
+    if (!user) return null
+    return <IdentifyStudentOnMount userId={user.id} />
 }
 
 function generateFaviconSvg(brandName: string, color: string): string {

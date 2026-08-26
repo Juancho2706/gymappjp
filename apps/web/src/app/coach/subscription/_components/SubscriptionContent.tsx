@@ -26,7 +26,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
-import { useCaptureCheckoutStarted } from '@/lib/posthog/events'
+import { useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Check, CheckCircle2, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './CouponRedeemCard'
@@ -121,6 +121,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const searchParams = useSearchParams()
     // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
+    // Gemelo de checkout_started para la ruta de upgrade: sin esto un cambio de plan que el server
+    // rechaza (OVER_CAPACITY, 400 del gateway...) se lee en el embudo como un abandono voluntario.
+    const captureCheckoutFailed = useCaptureCheckoutFailed()
     // Refs para hacer scroll-into-view del banner relevante al setearse (off-screen en móvil).
     const blockedMsgRef = useRef<HTMLDivElement | null>(null)
     const feedbackBannerRef = useRef<HTMLDivElement | null>(null)
@@ -340,6 +343,10 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             gateway,
             source: 'subscription',
         })
+        // Causa estable para checkout_failed. Se fija ANTES de cada throw porque el catch solo ve el
+        // Error (el `code` del server viaja en el payload, no en el mensaje). 'unknown' = ni siquiera
+        // hubo respuesta parseable (red caida / JSON roto).
+        let failureCode = 'unknown'
         try {
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
@@ -350,6 +357,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             })
             const payload = await response.json()
             if (!response.ok) {
+                failureCode = typeof payload.code === 'string' ? payload.code : `http_${response.status}`
                 // 409 OVER_CAPACITY: el server bloquea bajar a un tier con menos cupo que tus
                 // alumnos activos. Mostramos su mensaje (incluye los números N/M) en el banner.
                 if (payload.code === 'OVER_CAPACITY') {
@@ -368,10 +376,22 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 }
                 throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')
             }
-            if (!payload.checkoutUrl) throw new Error('No se recibió URL de checkout')
+            if (!payload.checkoutUrl) {
+                failureCode = 'missing_checkout_url'
+                throw new Error('No se recibió URL de checkout')
+            }
             window.location.href = payload.checkoutUrl
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Error inesperado')
+            const message = err instanceof Error ? err.message : 'Error inesperado'
+            captureCheckoutFailed({
+                tier: selectedTier,
+                billingCycle: selectedCycle,
+                gateway,
+                source: 'subscription',
+                code: failureCode,
+                message,
+            })
+            setError(message)
             setSaving(false)
         }
     }

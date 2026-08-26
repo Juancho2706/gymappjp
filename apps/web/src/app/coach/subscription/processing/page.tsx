@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
-import { useCaptureCheckoutConfirmed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
+import { useCaptureCheckoutConfirmed, useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -100,6 +100,9 @@ export default function SubscriptionProcessingPage() {
     // E1 (P8) — funnel de checkout en PostHog, gated por consentimiento (no-op sin opt-in).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
     const captureCheckoutConfirmed = useCaptureCheckoutConfirmed()
+    // Gemelo de checkout_started: sin esto un checkout que muere antes de la pasarela es
+    // INDISTINGUIBLE en el embudo de uno que el coach abandono en MercadoPago.
+    const captureCheckoutFailed = useCaptureCheckoutFailed()
     // Para checkout_confirmed SOLO va lo que la URL trae de verdad: la vuelta estandar de MP llega
     // sin tier/cycle y el fallback visual 'starter'/'monthly' de esta pantalla contaminaria el dato.
     const tierForFunnel =
@@ -132,6 +135,10 @@ export default function SubscriptionProcessingPage() {
             gateway: 'mercadopago',
             source: 'register',
         })
+        // Causa estable para checkout_failed. Se fija ANTES de cada throw porque el catch solo ve
+        // el Error (el `code` del server viaja en el payload, no en el mensaje). 'unknown' = ni
+        // siquiera hubo respuesta parseable (red caida / JSON roto).
+        let failureCode = 'unknown'
         try {
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
@@ -145,15 +152,26 @@ export default function SubscriptionProcessingPage() {
             const raw = await response.text()
             const payload = raw ? JSON.parse(raw) : {}
             if (!response.ok) {
+                failureCode = typeof payload.code === 'string' ? payload.code : `http_${response.status}`
                 throw new Error(payload.error ?? 'No se pudo iniciar el checkout.')
             }
             if (!payload.checkoutUrl) {
+                failureCode = 'missing_checkout_url'
                 throw new Error('No se recibió URL de checkout.')
             }
             setStatusText('Redirigiendo a MercadoPago...')
             window.location.href = payload.checkoutUrl
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.')
+            const message = err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.'
+            captureCheckoutFailed({
+                tier: tierFromUrl,
+                billingCycle: cycleFromUrl,
+                gateway: 'mercadopago',
+                source: 'register',
+                code: failureCode,
+                message,
+            })
+            setError(message)
             setCanRetry(true)
         }
     }

@@ -135,15 +135,27 @@ const MORPH_LAUNCH_TTL_MS = 10000
  *  reciente— salta DIRECTO a la fase 'start'. `markMorphLaunch`/`consumeMorphLaunch` son funciones a
  *  nivel MÓDULO, así que el `Date.now()` de la marca no cae en el lint react-compiler de los handlers. */
 let pendingMorphLaunch: number | null = null
+/** Sólo telemetría: qué pasó con la marca en ESTE despegue. Es lo que separa las dos lecturas del
+ *  aviso `exec-v3-despegue-force-ready-sin-escena`:
+ *   - 'none'  ⇒ nadie consumió la marca ⇒ el ejecutor ni montó en 4,6 s (lento de verdad).
+ *   - 'fresh' ⇒ el ejecutor montó vía-morph y aun así no avisó ⇒ la CARGA tardó (lento de verdad).
+ *   - 'stale' ⇒ la marca no servía (venció el TTL o un aborto la limpió) ⇒ `signalMorphSceneReady()`
+ *               no se llama NUNCA por contrato (`ExecutorV3` la gatea con `viaMorphRef`) ⇒ falso
+ *               positivo del TTL, no lentitud. */
+type MorphConsumeState = 'none' | 'fresh' | 'stale'
+let morphConsumeState: MorphConsumeState = 'none'
 export function markMorphLaunch(): void {
   pendingMorphLaunch = Date.now()
+  morphConsumeState = 'none'
 }
 /** Consume la marca (una sola vez). true ⇒ marca presente y con <TTL ⇒ arrancar en 'start' saltando el
  *  SessionIntro. SIEMPRE limpia la marca (aunque esté vencida), así una lectura tardía no la reusa. */
 export function consumeMorphLaunch(): boolean {
   const ts = pendingMorphLaunch
   pendingMorphLaunch = null
-  return ts != null && Date.now() - ts < MORPH_LAUNCH_TTL_MS
+  const fresh = ts != null && Date.now() - ts < MORPH_LAUNCH_TTL_MS
+  morphConsumeState = fresh ? 'fresh' : 'stale'
+  return fresh
 }
 /** Limpia la marca sin consumirla como "vía-morph". Se llama al ABORTAR el Despegue antes de navegar
  *  (back de hardware / error de nav): si no, la marca queda rancia y la próxima entrada al ejecutor
@@ -295,6 +307,9 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
           exec={exec}
           origin={active.origin}
           planId={active.planId}
+          /* `nonce` es el `Date.now()` del tap (ver `startMorph`): sirve de reloj cero de la
+             ceremonia para la telemetría del fallback. */
+          startedAt={active.nonce}
           label={active.label}
           coachLogoUrl={coachLogoUrl}
           coachInitial={coachInitial}
@@ -519,6 +534,7 @@ function DespegueOverlay({
   exec,
   origin,
   planId,
+  startedAt,
   label,
   coachLogoUrl,
   coachInitial,
@@ -529,6 +545,8 @@ function DespegueOverlay({
   exec: ExecTheme
   origin: MorphOrigin
   planId: string
+  /** Epoch del tap que arrancó la ceremonia (`active.nonce`). Sólo telemetría. */
+  startedAt: number
   label?: string
   coachLogoUrl: string | null
   coachInitial: string
@@ -734,12 +752,16 @@ function DespegueOverlay({
   // Telemetría: el fallback habilitó el tap SIN que el ejecutor avisara "escena lista" (sceneReady=false).
   // Señal de que la escena tardó más que READY_FALLBACK_MS (device lento / carga colgada) — no atrapa al
   // alumno (el tap ya está), pero deja rastro para diagnosticar.
+  // `elapsedMs` es el tiempo REAL desde el tap, no la constante del timer: el fallback se programa al
+  // montar el Modal, así que incluye lo que tardó el propio montaje y en Android suele pasarse de 4600.
+  // `viaMorph` dice qué pasó con la marca vía-morph y es lo que separa "lento de verdad" ('none'/'fresh')
+  // de "falso positivo del TTL" ('stale', donde el ejecutor NUNCA iba a avisar por contrato).
   useEffect(() => {
     if (forceReady && !sceneReady) {
       try {
         Sentry.captureMessage('exec-v3-despegue-force-ready-sin-escena', {
           level: 'warning',
-          extra: { planId },
+          extra: { planId, elapsedMs: Date.now() - startedAt, viaMorph: morphConsumeState },
         })
       } catch {
         // Sentry no inicializado → no-op silencioso.
